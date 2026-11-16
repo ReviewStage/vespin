@@ -1,5 +1,5 @@
 /**
- * repository-pull-request-procedures.test.ts -- a pull request read, changed, or chaptered by its repository and number refuses a non-member exactly as it refuses a number the repository holds none under.
+ * repository-pull-request-procedures.test.ts -- a pull request read, changed, or chaptered by its repository and number refuses a non-member exactly as it refuses a number the repository holds none under, and an image its overview names is served to a member alone.
  *
  * Over the real `GitHubApp`, a GitHub the test scripts, and the account and
  * workspace rows on a real dialect. The member reads the pull request and
@@ -22,6 +22,7 @@ import {
 } from "@repo/features/pull-request-write-wire";
 import { HTTP_METHOD } from "@repo/wire";
 import { Clock, type Context, Effect, Layer, Option } from "effect";
+import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { pullRequestChaptersProcedures } from "../chapters/pull-request-chapters-procedures.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
@@ -29,6 +30,7 @@ import { hostedFetch } from "../orpc/handler.js";
 import type { WebServices } from "../runtime.js";
 import { githubReaching, openGithubUser, standingGithubRow } from "../testing/github-app-fake.js";
 import type { GitHubApp } from "./github-app.js";
+import { pullRequestsApp } from "./pull-requests-app.js";
 import { repositoryPullRequestProcedures } from "./repository-pull-request-procedures.js";
 
 const ORIGIN = "https://app.test";
@@ -57,9 +59,21 @@ const REVIEW_OPTIONS_READ = {
 /** The chapters' read, which asks GitHub nothing of the number, so a member's missing one answers as no chapters rather than as none found. */
 const CHAPTERS_READ = { method: HTTP_METHOD.GET, path: "/api/pull-requests/chapters" } as const;
 
+/** A public image on GitHub's image proxy, as a pull request's rendering names one. */
+const CAMO = "https://camo.githubusercontent.com/abc123/68747470733a2f2f";
+
+/** The image's bytes: a PNG's signature. */
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+
 /** `acme/relay`'s pull request 42, open, its head's checks none, as GitHub's API answers each; nothing for any other read. */
 function relayRead(sent: { readonly url: string }): Response | undefined {
   const path = new URL(sent.url).pathname;
+
+  if (sent.url === CAMO) {
+    return new Response(PNG, {
+      headers: { "content-type": "image/png", "content-length": String(PNG.byteLength) },
+    });
+  }
 
   if (path === "/repos/acme/relay/pulls/42") {
     return Response.json({
@@ -209,6 +223,74 @@ it.layer(getTestDB())("a pull request by its repository and number", (it) => {
           teams: [],
         });
         assert.deepEqual(yield* ask(REVIEW_OPTIONS_READ, outsider, 42), notFound);
+      }),
+  );
+  it.effect(
+    "an image a pull request's overview names is served to a member of the workspace, and refused to anyone else before it is read",
+    () =>
+      Effect.gen(function* () {
+        const github = githubReaching(
+          [{ id: 7803, login: "acme", repositories: [{ owner: "acme", name: "relay" }] }],
+          undefined,
+          {},
+          relayRead,
+        );
+
+        const member = yield* openGithubUser();
+        const outsider = `user-${randomUUID()}`;
+        yield* (yield* Database)
+          .insert(user)
+          .values({ id: outsider, name: "Test User", email: `${outsider}@app.test` });
+
+        const workspace = yield* openInstallationWorkspace(member, {
+          installationId: 7803,
+          accountId: 9803,
+          accountLogin: "acme",
+        });
+
+        const services = Layer.mergeAll(
+          Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
+          Layer.succeed(Database, yield* Database),
+          Layer.succeed(Clock.Clock, yield* Clock.Clock),
+          github.layer,
+        );
+
+        const { handler, dispose } = HttpRouter.toWebHandler(
+          pullRequestsApp({
+            resolveUserId: (incoming: Request) =>
+              Effect.succeed(
+                Option.fromNullishOr(
+                  incoming.headers.get("authorization")?.match(/^Bearer (user-.+)$/u)?.[1],
+                ),
+              ),
+          }).pipe(HttpRouter.provideRequest(services)),
+          { disableLogger: true },
+        );
+
+        const image = (userId: string) =>
+          Effect.gen(function* () {
+            const url = new URL("/api/pull-requests/github-image", ORIGIN);
+            url.searchParams.append(GITHUB_REPOSITORIES_QUERY.WORKSPACE_ID, workspace);
+            url.searchParams.append(GITHUB_REPOSITORIES_QUERY.REPOSITORY, "acme/relay");
+            url.searchParams.append("src", CAMO);
+
+            const response = yield* Effect.promise(() =>
+              handler(new Request(url, { headers: { authorization: `Bearer ${userId}` } })),
+            );
+
+            return {
+              status: response.status,
+              bytes: new Uint8Array(yield* Effect.promise(() => response.arrayBuffer())),
+            };
+          });
+
+        assert.deepEqual(yield* image(member), { status: HOSTED_HTTP_STATUS.OK, bytes: PNG });
+        const asked = github.sent.length;
+        const refused = yield* image(outsider);
+        assert.equal(refused.status, HOSTED_HTTP_STATUS.NOT_FOUND);
+        // The outsider is refused before GitHub, or the image, is asked for anything.
+        assert.equal(github.sent.length, asked);
+        yield* Effect.promise(() => dispose());
       }),
   );
 });

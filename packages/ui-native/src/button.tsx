@@ -4,6 +4,7 @@ import {
   HStack,
   Image,
   Menu,
+  Overlay,
   Picker,
   Button as SwiftUIButton,
   Text,
@@ -14,6 +15,7 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
   accessibilityElement,
+  accessibilityHidden,
   accessibilityHint,
   accessibilityLabel,
   accessibilityValue,
@@ -26,21 +28,25 @@ import {
   frame,
   labelsHidden,
   monospacedDigit,
+  opacity,
   padding,
   pickerStyle,
   strokeBorder,
   tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
-import type { TaskStatus } from "@repo/features/task-wire";
-import { Fragment, type ReactNode } from "react";
+import { labelFill } from "@repo/features/label-fill";
+import { TASK_PRIORITY_WORDS, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
+import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
+import { Fragment, type ReactElement, type ReactNode } from "react";
+import { useColorScheme } from "react-native";
+import { useScaledSize } from "./accessibility.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { choiceColor, type MenuChoice } from "./list-row.js";
-import { Avatar, type Face, TaskStatusMark, ToneGlyph } from "./marks.js";
+import { choiceContent, type MenuChoice } from "./list-row.js";
+import { Avatar, type Face, TaskPriorityMark, TaskStatusMark, ToneGlyph } from "./marks.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How a button stands: filled for the one act a screen is for, outlined beside it, words alone, or Liquid Glass over content. */
@@ -54,8 +60,9 @@ export const BUTTON_LOOK = {
 
 export type ButtonLook = (typeof BUTTON_LOOK)[keyof typeof BUTTON_LOOK];
 
-/** How big a button is drawn: a row's, or a screen's own act. */
+/** How big a button is drawn: a capsule inside a list row, a row's, or a screen's own act. */
 export const BUTTON_SIZE = {
+  SMALL: "small",
   REGULAR: "regular",
   LARGE: "large",
 } as const;
@@ -73,6 +80,8 @@ type ButtonProps = {
   readonly symbol?: Glyph | undefined;
   readonly look?: ButtonLook | undefined;
   readonly size?: ButtonSize | undefined;
+  /** Whether it spans the width it stands in, as the one or two acts at a sheet's foot do. */
+  readonly wide?: boolean | undefined;
   /** Whether the act deletes or undoes something, which the system draws red. */
   readonly destructive?: boolean | undefined;
   readonly disabled?: boolean | undefined;
@@ -101,12 +110,20 @@ export function Button(props: ButtonProps) {
 
   return (
     <SwiftUIButton
-      {...actContent(label, symbol)}
+      {...(props.wide === true
+        ? {
+            children: (
+              <Text modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY })]}>{label}</Text>
+            ),
+          }
+        : actContent(label, symbol))}
       role={props.destructive === true ? "destructive" : "default"}
       onPress={props.onPress}
       modifiers={[
         buttonStyle(look),
         controlSize(size),
+        // Note that a small button stands in a list row as a capsule, as the App Store's Get and Settings' Add do.
+        ...(size === BUTTON_SIZE.SMALL ? [SwiftModifiers.buttonBorderShape("capsule")] : []),
         ...(accent ? [tint(filled ? colors.ACCENT : colors.TEXT)] : []),
         ...(filled ? [foregroundStyle(colors.ON_ACCENT)] : []),
         disabledModifier(props.disabled === true),
@@ -134,6 +151,35 @@ function capsuleModifiers(colors: BrandColors, filled: boolean) {
           }),
         ]),
   ];
+}
+
+/**
+ * A pressable capsule's 44 pt target: the capsule itself, centered in a frame
+ * as wide as it and Apple's least height of 44 pt, which a menu or a button
+ * takes as its label, so a press dims the capsule as a native control
+ * answers it. It stands in an overlay over the capsule's own place, which
+ * holds the capsule drawn clear (`CapsulePlace`), so the target lays out
+ * nothing and the capsule stands beside its neighbors at its drawn 28 pt.
+ * Note that a shape padded past the capsule's frame and padded back took no
+ * press past it on the Mac, since SwiftUI hit-tests a view only inside its
+ * own frame.
+ */
+function CapsuleTarget({ children }: { readonly children: ReactNode }) {
+  return (
+    <HStack
+      modifiers={[
+        frame({ maxWidth: Number.POSITIVE_INFINITY, minHeight: PRESS_SIZE }),
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+      ]}
+    >
+      {children}
+    </HStack>
+  );
+}
+
+/** The capsule's place in the layout: the capsule drawn clear and hidden from VoiceOver, under the target that draws it again over it. */
+function CapsulePlace({ children }: { readonly children: ReactNode }) {
+  return <HStack modifiers={[opacity(0), accessibilityHidden(true)]}>{children}</HStack>;
 }
 
 /**
@@ -235,52 +281,65 @@ function segmentWords(scope: Scope): string {
   return scope.count === undefined ? scope.label : `${scope.label} ${scope.count}`;
 }
 
-/**
- * A list's scopes as the system's segmented control under the screen's
- * title, as Mail and the App Store switch between a list's views, over the
- * list they scope. It stands over the list rather than in it, so it stays
- * when the scope chosen lists nothing. Note that the system draws it, in
- * its own glass and its own selection, so it reads as iOS's rather than a
- * row of capsules of our own. In a split view's list column, whose 320 pt
- * cut the segments' words short, it stands as the system's menu picker
- * instead: one button naming the scope chosen, opening the others.
- */
-export function ScopePicker({
-  label,
-  scopes,
-  look = SCOPE_LOOK.SEGMENTED,
-  children,
-}: {
+/** A list's scopes as a `ScopePicker` or a `RowList` stands them: what the control chooses, heard by VoiceOver, its scopes, and its look. */
+export type ListScopes = {
   /** What the control chooses, heard by VoiceOver before the scope chosen and kept off screen, such as "Filter". */
   readonly label: string;
   readonly scopes: readonly Scope[];
   readonly look?: ScopeLook | undefined;
-  /** The list the control scopes, or what stands in its place while it lists nothing. */
-  readonly children: ReactNode;
-}) {
+};
+
+/**
+ * A list's scopes as the system draws them, in its own glass and its own
+ * selection, so they read as iOS's rather than a row of capsules of our
+ * own: its segmented control, as Mail and the App Store switch between a
+ * list's views, or, in a split view's list column, whose 320 pt cut the
+ * segments' words short, its menu picker, one button naming the scope
+ * chosen and opening the others.
+ */
+export function ScopeControl({ label, scopes, look = SCOPE_LOOK.SEGMENTED }: ListScopes) {
   const chosen = scopes.find((scope) => scope.selected);
 
   return (
+    <Picker<string>
+      label={label}
+      selection={chosen?.label ?? ""}
+      onSelectionChange={(label) => scopes.find((scope) => scope.label === label)?.onPress()}
+      modifiers={[
+        pickerStyle(look),
+        labelsHidden(),
+        ...(look === SCOPE_LOOK.MENU
+          ? [frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]
+          : []),
+        padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT, bottom: SPACE.TIGHT * 2 }),
+      ]}
+    >
+      {scopes.map((scope) => (
+        <Text key={scope.label} modifiers={[tag(scope.label)]}>
+          {segmentWords(scope)}
+        </Text>
+      ))}
+    </Picker>
+  );
+}
+
+/**
+ * A list's scopes standing over what they scope while it lists nothing, so
+ * another scope is one tap away from an empty one, or over a form's fields.
+ * A list that has rows stands its scopes as its own first row instead
+ * (`RowList`'s `scopes`), so they scroll away with the rows, as Mail's
+ * categories do, and the rows meet the bar's own edge.
+ */
+export function ScopePicker({
+  children,
+  ...control
+}: ListScopes & {
+  /** What the control scopes: what stands in a list's place while it lists nothing, or a form. */
+  readonly children: ReactNode;
+}) {
+  return (
     <VStack spacing={0}>
-      <Picker<string>
-        label={label}
-        selection={chosen?.label ?? ""}
-        onSelectionChange={(label) => scopes.find((scope) => scope.label === label)?.onPress()}
-        modifiers={[
-          pickerStyle(look),
-          labelsHidden(),
-          ...(look === SCOPE_LOOK.MENU
-            ? [frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]
-            : []),
-          padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT, bottom: SPACE.TIGHT * 2 }),
-        ]}
-      >
-        {scopes.map((scope) => (
-          <Text key={scope.label} modifiers={[tag(scope.label)]}>
-            {segmentWords(scope)}
-          </Text>
-        ))}
-      </Picker>
+      <ScopeControl {...control} />
       {children}
     </VStack>
   );
@@ -291,6 +350,8 @@ type FieldChipProps = {
   readonly label: string;
   /** A task's status, whose ring leads the chip. */
   readonly status?: TaskStatus | undefined;
+  /** A task's priority, whose bars lead the chip. */
+  readonly priority?: TaskPriority | undefined;
   /** A person, whose face leads the chip, their picture where one is known. */
   readonly face?: Face | undefined;
   /** A glyph leading the chip where neither does, in the muted ink. */
@@ -309,17 +370,24 @@ export type FieldMenu = {
 };
 
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
-function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
+function fieldMark(props: FieldChipProps, colors: BrandColors, glyphSize: number): ReactNode {
   if (props.status !== undefined) return <TaskStatusMark status={props.status} />;
 
+  if (props.priority !== undefined) return <TaskPriorityMark priority={props.priority} />;
+
   if (props.face !== undefined) {
-    return <Avatar name={props.face.name} picture={props.face.picture} size={MARK_SIZE.FACE} />;
+    return (
+      <Avatar
+        name={props.face.name}
+        id={props.face.id}
+        picture={props.face.picture}
+        size={MARK_SIZE.FACE}
+      />
+    );
   }
 
   if (props.symbol !== undefined) {
-    return (
-      <Image {...glyphImage(props.symbol)} size={MARK_SIZE.GLYPH - 2} color={colors.TEXT_MUTED} />
-    );
+    return <Image {...glyphImage(props.symbol)} size={glyphSize} color={colors.TEXT_MUTED} />;
   }
 
   if (props.mark !== undefined) {
@@ -342,6 +410,7 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
  */
 export function FieldChip(props: FieldChipProps) {
   const colors = useColors();
+  const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
   const { menu } = props;
 
   const capsule = (
@@ -354,28 +423,51 @@ export function FieldChip(props: FieldChipProps) {
           : []),
       ]}
     >
-      {fieldMark(props, colors)}
+      {fieldMark(props, colors, glyphSize)}
       <CapsuleWords label={props.label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
     </HStack>
   );
 
   if (menu === undefined) return capsule;
 
+  // Note that the menu stands over the capsule's place, its label the capsule centered in a 44 pt target, so its press reaches past the capsule's drawn edges and dims the capsule seen.
+  return (
+    <Overlay>
+      <CapsulePlace>{capsule}</CapsulePlace>
+      <Overlay.Content>
+        <FieldValuesMenu menu={menu} label={props.label} capsule={capsule} />
+      </Overlay.Content>
+    </Overlay>
+  );
+}
+
+/** A field chip's menu of its values over the capsule, heard as the field's name and its value. */
+function FieldValuesMenu({
+  menu,
+  label,
+  capsule,
+}: {
+  readonly menu: FieldMenu;
+  readonly label: string;
+  readonly capsule: ReactElement;
+}) {
+  const colors = useColors();
+
   return (
     <Menu
-      label={capsule}
+      label={<CapsuleTarget>{capsule}</CapsuleTarget>}
       modifiers={[
         // Note that a borderless menu takes only its own press, since a list row holding the system's buttons hands any press on it to all of them.
         buttonStyle("borderless"),
         // Note that the field's name and its value are one label, "Status, Todo", because Maestro and Voice Control match a label and never a value.
-        accessibilityLabel(`${menu.label}, ${props.label}`),
+        accessibilityLabel(`${menu.label}, ${label}`),
       ]}
     >
       {menu.choices.map((choice, at) => (
         <Toggle
           // Note that a choice is keyed by its place, since two members may share a name.
           key={at}
-          {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
+          {...choiceContent(choice, colors)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />
@@ -393,6 +485,59 @@ export function StatusChip({
   readonly menu?: FieldMenu | undefined;
 }) {
   return <FieldChip label={TASK_STATUS_WORDS[status]} status={status} menu={menu} />;
+}
+
+/** A task's priority as a field's chip, its bars leading its name, as the panel's chip draws it. */
+export function PriorityChip({
+  priority,
+  menu,
+}: {
+  readonly priority: TaskPriority;
+  readonly menu?: FieldMenu | undefined;
+}) {
+  return <FieldChip label={TASK_PRIORITY_WORDS[priority]} priority={priority} menu={menu} />;
+}
+
+/**
+ * A label filled with its provider's color, as the panel's header draws a
+ * pull request's labels: in the light appearance its color solid, edged a
+ * shade darker, its words dark or white by how light it reads, and in the
+ * dark a tint of it, its words in the color lifted to read
+ * (`@repo/features/label-fill`). A color spelled any other way than six hex
+ * digits draws the plain chip. It takes no press, and is heard as its name.
+ */
+export function LabelChip({ name, color }: { readonly name: string; readonly color: string }) {
+  const colors = useColors();
+  const dark = useColorScheme() === "dark";
+  const inks = labelFill(color);
+  const shown = inks === undefined ? undefined : dark ? inks.dark : inks.light;
+
+  return (
+    <HStack
+      modifiers={[
+        ...(shown === undefined
+          ? capsuleModifiers(colors, false)
+          : [
+              padding(CAPSULE_PADDING),
+              background(shown.fill, SwiftModifiers.shapes.capsule()),
+              strokeBorder({
+                content: shown.edge,
+                // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+                shape: "capsule",
+                style: { lineWidth: HAIRLINE },
+              }),
+            ]),
+        accessibilityElement("ignore"),
+        accessibilityLabel(name),
+      ]}
+    >
+      <CapsuleWords
+        label={name}
+        ink={shown?.words ?? colors.TEXT_BODY}
+        countInk={colors.TEXT_MUTED}
+      />
+    </HStack>
+  );
 }
 
 /** How far each face of a face pile tucks under the one after it, in points. */
@@ -422,44 +567,55 @@ type FollowingChipProps = {
 export function FollowingChip({ label, faces, more, hint, heard, onPress }: FollowingChipProps) {
   const colors = useColors();
 
+  const capsule = (
+    <HStack spacing={SPACE.TIGHT + 2} modifiers={capsuleModifiers(colors, false)}>
+      {faces.length === 0 ? null : (
+        <HStack spacing={-FACE_OVERLAP}>
+          {faces.map((face, at) => (
+            <Avatar
+              // Note that a face is keyed by its place, since two followers may share a name.
+              key={at}
+              name={face.name}
+              id={face.id}
+              picture={face.picture}
+              size={MARK_SIZE.FACE}
+            />
+          ))}
+          {more === 0 ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.TIME, weight: "medium" }),
+                monospacedDigit(),
+                foregroundStyle(colors.TEXT_MUTED),
+                padding({ leading: FACE_OVERLAP + 2 }),
+              ]}
+            >
+              {`+${more}`}
+            </Text>
+          )}
+        </HStack>
+      )}
+      <CapsuleWords label={label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
+    </HStack>
+  );
+
+  // Note that the button stands over the capsule's place, its label the capsule centered in a 44 pt target, so its press reaches past the capsule's drawn edges and dims the capsule seen.
   return (
-    <SwiftUIButton
-      onPress={onPress}
-      modifiers={[
-        buttonStyle("borderless"),
-        accessibilityLabel(label),
-        accessibilityValue(heard),
-        accessibilityHint(hint),
-      ]}
-    >
-      <HStack spacing={SPACE.TIGHT + 2} modifiers={capsuleModifiers(colors, false)}>
-        {faces.length === 0 ? null : (
-          <HStack spacing={-FACE_OVERLAP}>
-            {faces.map((face, at) => (
-              <Avatar
-                // Note that a face is keyed by its place, since two followers may share a name.
-                key={at}
-                name={face.name}
-                picture={face.picture}
-                size={MARK_SIZE.FACE}
-              />
-            ))}
-            {more === 0 ? null : (
-              <Text
-                modifiers={[
-                  font({ textStyle: TYPE_ROLE.TIME, weight: "medium" }),
-                  monospacedDigit(),
-                  foregroundStyle(colors.TEXT_MUTED),
-                  padding({ leading: FACE_OVERLAP + 2 }),
-                ]}
-              >
-                {`+${more}`}
-              </Text>
-            )}
-          </HStack>
-        )}
-        <CapsuleWords label={label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
-      </HStack>
-    </SwiftUIButton>
+    <Overlay>
+      <CapsulePlace>{capsule}</CapsulePlace>
+      <Overlay.Content>
+        <SwiftUIButton
+          onPress={onPress}
+          modifiers={[
+            buttonStyle("borderless"),
+            accessibilityLabel(label),
+            accessibilityValue(heard),
+            accessibilityHint(hint),
+          ]}
+        >
+          <CapsuleTarget>{capsule}</CapsuleTarget>
+        </SwiftUIButton>
+      </Overlay.Content>
+    </Overlay>
   );
 }

@@ -11,13 +11,13 @@ import { linkPressOf } from "./use-open-link.js";
 /**
  * pull-request-chip.tsx -- a pull request as a compact chip: GitHub's mark in GitHub's color for where it stands, and its number.
  *
- * The plan's Agents list ends an agent's row with it (`plan-agents.tsx`),
+ * The plan's Agents list ends an agent's row with it (`overview-agents.tsx`),
  * and a related task's row ends with one for each of the task's open pull
  * requests (`task-list-row.tsx`), so a pull request reads the same in both.
  * It hangs the card its owner hands, the pull request's one card
  * (`pull-request-card.tsx`), its title its hint. A press opens the pull
- * request as its owner says, in its agent's Pull request tab where the
- * window can, or its page on GitHub where the account opens pull requests
+ * request as its owner says, in its Pull request tab where the window
+ * can, or its page on GitHub where the account opens pull requests
  * there (`pull-request-opens.ts`), so the browser never follows its address
  * itself; it is still a link to its page, so a right-click offers its
  * address.

@@ -14,6 +14,7 @@ import {
 import { cn } from "../../cn.js";
 import { FoldChevronIcon } from "../../icons/lucide-glyphs.js";
 import { type DisclosureMotion, disclosureMotion, useDisclosure } from "../../use-disclosure.js";
+import { CARD_CORNER, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
 import { useListMotionReplay } from "../list-motion/list-motion.js";
 
 /**
@@ -310,6 +311,25 @@ export const DISCLOSURE_LOOK = {
   DOCK: "dock",
 } as const;
 
+/**
+ * A fold in a card's look stands in a `Card`, clipped to its corner so its
+ * head's hover fill follows it: the hover's wash for a card, the surface a
+ * list's card stands on for a dock; a plain fold stands bare.
+ */
+function inCard(look: DisclosureLook | undefined, fold: React.JSX.Element): React.JSX.Element {
+  if (look === undefined || look === DISCLOSURE_LOOK.PLAIN) return fold;
+
+  return (
+    <Card
+      look={look === DISCLOSURE_LOOK.DOCK ? CARD_LOOK.SURFACE : CARD_LOOK.TINT}
+      corner={CARD_CORNER.CONTROL}
+      padding={CARD_PADDING.FLUSH}
+    >
+      {fold}
+    </Card>
+  );
+}
+
 export type DisclosureLook = (typeof DISCLOSURE_LOOK)[keyof typeof DISCLOSURE_LOOK];
 
 type DisclosureProps = {
@@ -365,7 +385,7 @@ export function Disclosure({
     </DisclosureScope>
   );
 
-  if (!framed) return fold;
+  if (!framed) return inCard(skin, fold);
 
   // Note that a card's hairline and wash go round the frame, so the controls beside its head stand inside the card.
   return (
@@ -549,7 +569,8 @@ function Frame({
 }): React.JSX.Element {
   const cells = { lead: lead !== undefined, actions: actions !== undefined };
 
-  return (
+  return inCard(
+    look,
     <div
       className="ui-disclosure-frame"
       data-look={look}
@@ -571,7 +592,7 @@ function Frame({
           {actions}
         </div>
       )}
-    </div>
+    </div>,
   );
 }
 

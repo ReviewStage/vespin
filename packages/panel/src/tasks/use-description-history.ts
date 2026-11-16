@@ -1,6 +1,6 @@
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import type {
-  DescriptionDocument,
+  Description,
   DescriptionRevisionLine,
   DescriptionRevisionsAnswer,
 } from "@repo/features/task-wire";
@@ -61,8 +61,8 @@ type VersionRead =
   | { readonly kind: typeof HISTORY_READ.FAILED }
   | {
       readonly kind: typeof HISTORY_READ.READY;
-      readonly document: DescriptionDocument;
-      readonly previous: DescriptionDocument | null;
+      readonly description: Description;
+      readonly previous: Description | null;
     };
 
 /** The version the version history draws: its revision, whether it is the description as it stands, and its content as read. */
@@ -196,7 +196,7 @@ function versionRead(version: UseQueryResult<TasksRevisionAnswer>): VersionRead 
 
   return {
     kind: HISTORY_READ.READY,
-    document: version.data.revision.document,
+    description: version.data.revision.description,
     previous: version.data.revision.previous,
   };
 }

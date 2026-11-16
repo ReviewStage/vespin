@@ -22,7 +22,9 @@ export const READING_WIDTH = 720;
 
 /** The sizes the marks are drawn at, in points. */
 export const MARK_SIZE = {
-  /** The unread dot, in the row's margin. */
+  /** The unread dot, in the row's margin: the strongest mark a row carries, as Mail's is. */
+  UNREAD: 9,
+  /** A row's end dot, such as a task's thread that needs you. */
   DOT: 6,
   /** A row's leading mark, a status ring or an ask's glyph, and a chip's. */
   GLYPH: 14,
@@ -34,6 +36,8 @@ export const MARK_SIZE = {
   AVATAR: 28,
   /** A teammate's face among a row's end marks, and on a chip. */
   FACE: 16,
+  /** A person's photo in a system menu's glyph place, as the glyphs beside it stand. */
+  MENU_PHOTO: 20,
   /** The account's photo in a bar, inside the round glass the bar's other buttons stand in. */
   BAR_FACE: 32,
   /**
@@ -43,6 +47,8 @@ export const MARK_SIZE = {
    * wider than the ⋯ beside it.
    */
   COLUMN_BAR_FACE: 26,
+  /** The column a sidebar row's glyph stands centered in, as wide as Mail's mailbox glyphs, so every place's name starts at one edge. */
+  SIDEBAR_LEAD: 28,
 } as const;
 
 /** The least a press stands as, in points, as Apple's guidelines ask of a target, whatever size its mark is drawn at. */
@@ -52,6 +58,22 @@ export const PRESS_SIZE = 44;
 export const RADIUS = {
   CARD: 14,
   TAG: 6,
+  /** A sidebar row's selection, a rounded fill set in from the sidebar's edges, as Mail's selected mailbox stands. */
+  SIDEBAR_ROW: 10,
+} as const;
+
+/**
+ * A sidebar row's measures, as Mail's mailboxes stand on iPadOS 26: about
+ * 38 pt tall at the standard size, its selection's fill set in from the
+ * sidebar's edges, and its glyph and words padded inside that fill.
+ */
+export const SIDEBAR_ROW = {
+  /** Between the sidebar's edge and the row's selection fill. */
+  EDGE: 10,
+  /** Between the selection fill's side and the glyph or the count. */
+  SIDE: 10,
+  /** The row's top and bottom inside its fill. */
+  VERTICAL: 8,
 } as const;
 
 /**
@@ -61,7 +83,7 @@ export const RADIUS = {
  */
 export const ROW_INSET = {
   /** The row's own leading inset, the dot's margin. */
-  LEADING: SPACE.EDGE - MARK_SIZE.DOT - SPACE.TIGHT,
+  LEADING: SPACE.EDGE - MARK_SIZE.UNREAD - SPACE.TIGHT,
   /** Where the words, and the hairline under them, start from the screen's edge. */
   TEXT: SPACE.EDGE + MARK_SIZE.LEAD + SPACE.ROW,
   /** A row's top and bottom. */

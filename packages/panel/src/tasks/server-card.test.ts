@@ -122,7 +122,7 @@ async function settle(): Promise<void> {
 function agentOf(status: AgentStatus, disabledServers: readonly string[]): AgentSummary {
   return {
     id: AGENT_ID,
-    planId: TASK_ID,
+    taskId: TASK_ID,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Triage the backlog",

@@ -13,7 +13,7 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
-    "@tanstack/db": "0.15.2",
+    "@tanstack/db": "1.0.0-rc.1.5",
     "effect": "catalog:"
   },
   "devDependencies": {

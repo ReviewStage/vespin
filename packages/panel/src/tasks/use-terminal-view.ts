@@ -3,10 +3,8 @@ import {
   type TerminalAction,
   type TerminalState,
 } from "@repo/features/terminal-model";
-import { forkEffect } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { Store, useSelector } from "@tanstack/react-store";
-import { Duration, Effect } from "effect";
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useSideBundles } from "../bundle-loader.js";
 import type { TerminalFind } from "../terminal/contract.js";
@@ -18,14 +16,8 @@ import { useOpenLink } from "./use-open-link.js";
  *
  * The session outlives the tab's drawing (`terminal-session.ts`), so a tab
  * hidden takes the screen out of its box and nothing more, and one shown
- * again puts the same screen back. While the tab is shown, its window's page
- * visible and focused, the session says so every minute, which holds a
- * cloud sandbox past the host's idle bound for someone reading a quiet
- * shell; a tab behind others, or in a window nobody is using, says nothing.
+ * again puts the same screen back.
  */
-
-/** How often a shown tab says it is shown: well inside the host's ten idle minutes. */
-const SAY_SHOWN_EVERY = Duration.minutes(1);
 
 /** A terminal as its tab draws it. */
 export interface TerminalView {
@@ -43,15 +35,6 @@ export interface TerminalView {
 
 /** Where a tab with no terminal yet stands. */
 const NO_TERMINAL = new Store<TerminalState>({ kind: TERMINAL_STATE.CONNECTING });
-
-/** Says the session's tab is shown every minute it stands in a page visible and focused. */
-function sayingShown(session: TerminalSession): Effect.Effect<void> {
-  const say = Effect.sync(() => {
-    if (document.visibilityState === "visible" && document.hasFocus()) session.sayShown();
-  });
-
-  return Effect.forever(Effect.andThen(Effect.sleep(SAY_SHOWN_EVERY), say));
-}
 
 export function useTerminalView(
   session: TerminalSession | undefined,
@@ -81,13 +64,6 @@ export function useTerminalView(
 
     return () => session.hide();
   }, [session, shown, module, element]);
-
-  // Note that the beat is the tab's own fiber, so it ends with the tab hidden or let go.
-  useEffect(() => {
-    if (session === undefined || !shown) return;
-
-    return forkEffect(sayingShown(session));
-  }, [session, shown]);
 
   const onAction = useCallback((action: TerminalAction) => session?.act(action), [session]);
 

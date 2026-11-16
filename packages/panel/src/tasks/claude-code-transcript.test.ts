@@ -157,14 +157,14 @@ const CLI_CALLS: readonly {
     tool: "Glob",
     input: { pattern: "src/**/*.ts" },
     output: `${CHECKOUT}/src/invoice.ts\n${CHECKOUT}/src/export.ts`,
-    line: ["Searched", "src/**/*.ts"],
+    line: ["Found files", "src/**/*.ts"],
     body: [`${CHECKOUT}/src/export.ts`],
   },
   {
     tool: "Grep",
     input: { pattern: "invoiceTotal", output_mode: "files_with_matches" },
     output: "Found 1 file\nsrc/invoice.ts",
-    line: ["Searched", "invoiceTotal"],
+    line: ["Searched for", "invoiceTotal"],
     body: ["Found 1 file"],
   },
   {
@@ -330,7 +330,7 @@ test("Claude Code's TodoWrite is drawn as the agent's to-do list, a completed it
   }
 });
 
-test("Claude Code's task calls are drawn as the agent's to-do list as it stood after each, the newest folded until pressed", () => {
+test("Claude Code's task calls are drawn as the agent's to-do list as it stood after each, folded with the turn's calls until pressed", () => {
   const { container } = drawn(
     [
       storedPart(
@@ -351,11 +351,13 @@ test("Claude Code's task calls are drawn as the agent's to-do list as it stood a
     true,
   );
 
-  // The newest list stands folded on a row of its own; the calls before it fold with the turn, as a whole list's writes do.
-  const lines = [...container.querySelectorAll("summary")];
-  const newest = lines.at(-1) ?? assert.fail("the newest list is a fold's line");
-  assert.ok(newest.textContent?.includes("1 of 2 done"), newest.textContent ?? "");
+  // The task calls fold together as any calls do; the newest list stands folded inside.
+  const fold = container.querySelector("summary") ?? assert.fail("the calls are a fold");
+  assert.ok(fold.textContent?.includes("3 tool calls"), fold.textContent ?? "");
   assert.ok(!container.textContent?.includes("Export the invoices"), container.textContent ?? "");
+  act(() => fold.click());
+  const newest = [...container.querySelectorAll("summary")].at(-1) ?? assert.fail("a list's line");
+  assert.ok(newest.textContent?.includes("1 of 2 done"), newest.textContent ?? "");
   act(() => newest.click());
   const words = container.textContent ?? "";
 

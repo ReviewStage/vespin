@@ -28,7 +28,9 @@ import {
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReactNode } from "react";
+import { useAnnounced } from "./accessibility.js";
 import { AddPress, type ComposerMenu } from "./composer.js";
 import {
   type AttachedPicture,
@@ -41,7 +43,8 @@ import { GlassBar, GlassDock, useDockRoom } from "./glass-bar.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
-import { choiceColor, type MenuChoice } from "./list-row.js";
+import { choiceContent, type MenuChoice } from "./list-row.js";
+import { HarnessMark } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -67,16 +70,31 @@ type MenuChipProps = {
   /** What is picked, as the capsule says it: a repository, a model and its effort, where an agent runs. */
   readonly label: string;
   readonly symbol?: Glyph | undefined;
+  /** The harness the picked model runs in, whose mark leads the words in the glyph's place, as the panel's model chip leads with it. */
+  readonly harness?: ModelProvider | undefined;
   readonly menu: ChipMenu;
   /** The name a flow finds the capsule by. */
   readonly testId?: string | undefined;
 };
 
 /** The capsule's words, its glyph before them where it has one, in the capsule's small type. */
-function chipLabel(label: string, symbol: Glyph | undefined): ReactNode {
+function chipLabel(
+  label: string,
+  symbol: Glyph | undefined,
+  harness: ModelProvider | undefined,
+): ReactNode {
   const words = (
     <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), lineLimit(1)]}>{label}</Text>
   );
+
+  if (harness !== undefined) {
+    return (
+      <HStack spacing={SPACE.TIGHT + 2}>
+        <HarnessMark provider={harness} />
+        {words}
+      </HStack>
+    );
+  }
 
   if (symbol === undefined) return words;
 
@@ -96,13 +114,13 @@ function chipLabel(label: string, symbol: Glyph | undefined): ReactNode {
  * the menus within it. Drawn in the ink, never the accent, as a bordered
  * button is.
  */
-export function MenuChip({ label, symbol, menu, testId }: MenuChipProps) {
+export function MenuChip({ label, symbol, harness, menu, testId }: MenuChipProps) {
   const colors = useColors();
   const actions = menu.actions ?? [];
 
   return (
     <Menu
-      label={chipLabel(label, symbol)}
+      label={chipLabel(label, symbol, harness)}
       modifiers={[
         buttonStyle("bordered"),
         SwiftModifiers.buttonBorderShape("capsule"),
@@ -118,7 +136,7 @@ export function MenuChip({ label, symbol, menu, testId }: MenuChipProps) {
           {group.choices.map((choice) => (
             <Toggle
               key={choice.label}
-              {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
+              {...choiceContent(choice, colors)}
               isOn={choice.on}
               onIsOnChange={() => choice.onPress()}
             />
@@ -150,6 +168,8 @@ export type ComposeWords = {
   readonly onWords: (words: string) => void;
   /** The name a flow finds the field by. */
   readonly testId: string;
+  /** Takes words pasted long enough to come as a file, answering whether it did; they paste as words where none is given. */
+  readonly onLongPaste?: ((words: string) => boolean) | undefined;
 };
 
 /** What the sheet's + adds: a menu of what it offers, or its one act, such as a picture, and the name a flow finds it by. */
@@ -184,6 +204,24 @@ type ComposeSheetProps = {
   readonly chips: ReactNode;
 };
 
+/**
+ * What a start, the picker, or a read said, in the muted line under the
+ * words, as the panel's composer says it. Note that VoiceOver is told it at
+ * once, since it stands because something did not go, such as a refused
+ * start, and the reader pressed Start in the sheet's bar, far from where it
+ * appears.
+ */
+function ComposeNote({ words }: { readonly words: string }) {
+  const colors = useColors();
+  useAnnounced(words, true);
+
+  return (
+    <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}>
+      {words}
+    </Text>
+  );
+}
+
 /** The sheet's page: the line over the words, what heads them, the words, the skills a `/` offers, the pictures attached, and the notes, clear of the bar at its foot, taking a drop of pictures. */
 function ComposePage(props: ComposeSheetProps) {
   const colors = useColors();
@@ -210,6 +248,7 @@ function ComposePage(props: ComposeSheetProps) {
             placeholder={words.placeholder}
             words={words.words}
             onWords={words.onWords}
+            onLongPaste={words.onLongPaste}
             autoFocus
             testId={words.testId}
             look={WORDS_LOOK.PAGE}
@@ -219,9 +258,7 @@ function ComposePage(props: ComposeSheetProps) {
           )}
           <AttachedPictures pictures={pictures} onDetach={onDetach} />
           {notes.map((note) => (
-            <Text key={note} modifiers={muted}>
-              {note}
-            </Text>
+            <ComposeNote key={note} words={note} />
           ))}
         </VStack>
       </ScrollView>

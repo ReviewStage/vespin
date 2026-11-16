@@ -41,6 +41,8 @@ import {
   soundStateViewSchema,
   subscriptionLabelParamsSchema,
   subscriptionOrderParamsSchema,
+  voiceSessionAnswerViewSchema,
+  voiceSessionParamsSchema,
 } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { ACT } from "@repo/sync";
@@ -221,6 +223,14 @@ export const ACCOUNT_ASK_ACTS = declaredActs({
     input: dictationTranscribeParamsSchema,
     output: dictationTranscribeAnswerViewSchema,
     refusal: "Could not transcribe the recording on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: UNANSWERED,
+  }),
+  VOICE_OPEN: hostAct({
+    input: voiceSessionParamsSchema,
+    output: voiceSessionAnswerViewSchema,
+    refusal: "Could not start the call on this system.",
     panelOnly: true,
     door: ACT.REMOTE_WORK,
     unanswered: UNANSWERED,

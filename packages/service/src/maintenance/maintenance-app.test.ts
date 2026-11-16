@@ -10,8 +10,9 @@ import { type HttpClient, HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { afterEach, vi } from "vitest";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
-import { GitHubApp } from "../github/github-app.js";
+import type { GitHubApp } from "../github/github-app.js";
 import { type ModelCatalog, modelCatalogOf } from "../providers/model-catalog.js";
+import { fixtureGitHubApp, overNoGitHub } from "../testing/github-app-fake.js";
 import { recordingSentry, type SentItem, sentOfType } from "../testing/sentry-transport.js";
 import { maintenanceApp } from "./maintenance-app.js";
 import { MAINTENANCE_SWEEP_PATH } from "./maintenance-bounds.js";
@@ -71,7 +72,7 @@ const sweep = (
   database: Layer.Layer<DatabaseServices> = noDatabase,
   reached: Layer.Layer<HttpClient.HttpClient | GitHubApp | ModelCatalog> = Layer.mergeAll(
     noNetwork,
-    GitHubApp.layer(undefined),
+    overNoGitHub(fixtureGitHubApp(undefined)),
     modelCatalogOf([]),
   ),
 ) =>

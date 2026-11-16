@@ -1,7 +1,8 @@
 /**
  * intro-cards.tsx -- the card a page opens with on its first visit, at the
  * width of a page's column and in a narrow one, where its presses drop
- * under its words; Got it rolls it up as the line under it closes over it,
+ * under its words, and one with no docs page to send the reader to, which
+ * offers Got it alone; Got it rolls it up as the line under it closes over it,
  * and Show again brings it back.
  */
 
@@ -25,7 +26,16 @@ const DOCS = "https://vespin.dev/docs/inbox";
 const stay = (): void => undefined;
 
 /** One card over a line of the page it heads, in a reveal area, with a press that brings it back. */
-function Sample({ glyph, children }: { glyph: ReactNode; children: string }): React.JSX.Element {
+function Sample({
+  glyph,
+  learnMore = DOCS,
+  children,
+}: {
+  glyph: ReactNode;
+  /** The docs page Learn more opens; none for a card the docs say nothing of. */
+  learnMore?: string | null;
+  children: string;
+}): React.JSX.Element {
   const [shown, setShown] = useState(true);
   const area = useRef<HTMLDivElement>(null);
 
@@ -35,7 +45,7 @@ function Sample({ glyph, children }: { glyph: ReactNode; children: string }): Re
         <IntroCard
           shown={shown}
           glyph={glyph}
-          learnMore={DOCS}
+          learnMore={learnMore ?? undefined}
           open={stay}
           onDismiss={() => setShown(false)}
         >
@@ -62,6 +72,10 @@ function Cards(): React.JSX.Element {
       <Sample glyph={<GLYPH.AUTOMATION />}>
         Automations start agents on a schedule, or when GitHub, Sentry, or a webhook says something
         happened.
+      </Sample>
+      <Sample glyph={<GLYPH.DESCRIPTION />} learnMore={null}>
+        You and the task's agents keep this description current: edit it, or comment and mention an
+        agent to steer them.
       </Sample>
     </>
   );

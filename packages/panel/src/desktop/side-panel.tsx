@@ -12,11 +12,16 @@ import {
   GLYPH_STATE,
   type GlyphState,
 } from "@repo/features/glyph-state";
-import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import {
+  LINK_DESTINATION,
+  type NumberedAddress,
+  pullRequestAddressOf,
+} from "@repo/features/link-grammar";
 import type { ModelChoice } from "@repo/features/models-wire";
 import type { PageLine, PagePlace } from "@repo/features/page-wire";
 import { cardTitle } from "@repo/features/plain-words";
-import type { TaskStatus } from "@repo/features/task-wire";
+import type { TaskPullRequestLine } from "@repo/features/task-wire";
+import type { TaskNames } from "@repo/features/tasks-model";
 import { TERMINAL_ASK, TERMINAL_TARGET, terminalTarget } from "@repo/features/terminal-entry";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import {
@@ -81,6 +86,7 @@ import {
   STRIP_TAB_KIND,
   type StripTab,
   type SubagentStripTab,
+  samePullRequestAddress,
   sameTab,
   subagentTab,
   TAB_WORDS,
@@ -113,13 +119,14 @@ import { useLinkItems } from "../copy-link-item.js";
 import { FindScope } from "../find-in-tab.js";
 import { drawnVisibly, focusSeek } from "../focus-seek.js";
 import { panelTabPlace } from "../links-at-hand.js";
-import { pagesQuery, pullRequestPublishedQuery } from "../live-reads.js";
+import { pagesQuery, repositoryPullRequestPublishedQuery } from "../live-reads.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { LINK_ROUTED_PLACE } from "../places/link-places.js";
 import { ADDRESS, type Address } from "../places/pressed-address.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { stateEndMark } from "../state-glyph.js";
 import { useSteadyDoors } from "../steady-door.js";
+import { useNamedTask, useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { agentName, subagentActor } from "../tasks/agent-model.js";
 import { AgentActorRef, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { AgentSubagentTab, type BriefTask, type TranscriptCards } from "../tasks/agent-tab.js";
@@ -132,6 +139,7 @@ import {
   lastFinished,
 } from "../tasks/agent-tab-card.js";
 import { useAgentsElsewhere } from "../tasks/agents-elsewhere.js";
+import { ofPullRequest } from "../tasks/by-pull-request.js";
 import { useChangesPeopleOf } from "../tasks/changes-people.js";
 import { TaskChipCard } from "../tasks/chip-cards.js";
 import {
@@ -148,11 +156,12 @@ import {
 } from "../tasks/cloud-browser-tabs.js";
 import { FileView, type TreeShown } from "../tasks/file-view.js";
 import { OpenFileTabProvider } from "../tasks/open-file-tab.js";
+import { OpenPullRequestProvider } from "../tasks/open-pull-request.js";
 import { PagePane } from "../tasks/page-pane.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
-import { ofPullRequestTab, pullRequestOfTab } from "../tasks/pull-request-number.js";
+import type { PullRequestMarked } from "../tasks/pull-request-mark.js";
 import { type RunTabLook, runEndMark, useRunTabLooks } from "../tasks/run-action-shells.js";
-import { stripTabTakesFind, stripTabTitle } from "../tasks/strip-tab-kinds.js";
+import { stripTabTakesFind, stripTabTitle, UNREAD_TAB_NAMES } from "../tasks/strip-tab-kinds.js";
 import {
   AgentGlyph,
   agentEndMark,
@@ -177,6 +186,7 @@ import type { AgentsControl, HeldPeople } from "../tasks/use-agents.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { OnLeavingHere, PullRequestsOnGitHub } from "../tasks/use-open-link.js";
 import {
+  type ChangesKindTab,
   DRAWN_KINDS,
   type DrawnTabs,
   drawsChanges,
@@ -194,6 +204,7 @@ import {
   type SidePanelTab,
   sameHolder,
 } from "../tasks/use-side-panel.js";
+import { useTaskPullRequests } from "../tasks/use-task-work.js";
 import { type ShellTab, useOpenTerminalTab } from "../tasks/use-terminal-session.js";
 import { useWindowAccount } from "../tasks/window-account.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
@@ -302,6 +313,9 @@ type PanelLeaving = (typeof PANEL_LEAVING)[keyof typeof PANEL_LEAVING];
 /** A task with no page, the same array every render. */
 const NO_PAGES: readonly PageLine[] = [];
 
+/** No name typed: what a panel told of no other task draws its tabs' tasks under. */
+const NO_TYPED_NAMES: TaskNames = new Map();
+
 /**
  * What the panel stands beside: a plan's page, whose panel holds every kind
  * of tab, or the window's Inbox, where it stands for the
@@ -363,13 +377,9 @@ const BESIDE_WORDS = {
   PATH: "Tab's task",
 } as const;
 
-/** The tasks a tab of another task names, by its chip, and the door to that task, the tab still chosen in its panel. */
+/** The names being typed for tasks, which the task a tab of another task names is drawn under (`useNamedTask`), and the door to that task, the tab still chosen in its panel. */
 export interface TaskOfTab {
-  readonly tasks: readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly status?: TaskStatus | undefined;
-  }[];
+  readonly typedNames: TaskNames;
   readonly onShowPanelTab: (taskId: string, tab: SidePanelTab) => void;
 }
 
@@ -397,6 +407,7 @@ function tabTaskOf(
     case STRIP_TAB_KIND.TRANSCRIPT:
     case STRIP_TAB_KIND.SUBAGENT:
     case STRIP_TAB_KIND.CHANGES:
+    case STRIP_TAB_KIND.TURN_CHANGES:
     case STRIP_TAB_KIND.TERMINAL:
     case STRIP_TAB_KIND.LOCAL:
     case STRIP_TAB_KIND.CLOUD_BROWSER:
@@ -525,12 +536,13 @@ export interface TerminalOffer {
   readonly showsOnChord: boolean;
 }
 
-/** An agent's Changes tab as the "+" offers it: the agent, its name as its own tab wears it, and the pull request the tab draws. */
+/** A pull request's tab as the "+" offers it: the pull request by its repository and number, as the task's line names it, and the agent of the task that opened it, its name as its own tab wears it, and its pull request as listed, where one did. */
 export interface ChangesOffer {
-  readonly agentId: string;
-  readonly agent: AgentSummary;
-  readonly label: string;
-  readonly pullRequest: AgentPullRequest;
+  readonly address: NumberedAddress;
+  readonly pullRequest: NamedPullRequest;
+  readonly agent: AgentSummary | undefined;
+  readonly label: string | undefined;
+  readonly listed: AgentPullRequest | undefined;
 }
 
 /** What the chosen tab's body hands its toolbar's ⋯ (`useHandedTabActions`), and the tab it was drawn for, which alone offers them. */
@@ -568,9 +580,6 @@ function cloudBrowserTitleOf(drawn: DrawnCloudBrowser): string {
   return (URL.canParse(tab.address) ? new URL(tab.address).host : "") || TAB_WORDS.BROWSER;
 }
 
-/** No Changes tab open on the task, the same array every render. */
-const NO_OPEN_CHANGES: readonly ChangesStripTab[] = [];
-
 /**
  * The task's agents in the order started, an archived one among them, since
  * the pull request an agent opened, merged or not, stays the task's once the
@@ -591,102 +600,148 @@ function everyTaskAgent(
   return [...listed, ...archived].sort((one, other) => one.createdAt - other.createdAt);
 }
 
+/** A pull request as the panel names its tab: its number, title, and where it stands, and its page. */
+type NamedPullRequest = PullRequestMarked & Pick<AgentPullRequest, "title" | "url">;
+
+/** How the panel names each pull request by its repository and number, where anything it holds names it. */
+type PullRequestNames = (pullRequest: NumberedAddress) => NamedPullRequest | undefined;
+
 /**
- * The agent whose Changes tab stands for the agent's pull request: among the
- * agents on that pull request, in the order started, the first whose tab is
- * open on the task (`open`), else the first; the agent itself where its pull
- * request is not yet held. Note that an open tab is preferred, because the
- * agents' pull requests are read apart, so a later agent's may land first
- * and its tab be opened before an earlier one shares it.
+ * The agent of the task whose listed pull request is the one given, in the
+ * order the agents started, and that pull request as the list carries it;
+ * none where none of them opened it. Note that it is drawn alone, the
+ * agent beside the pull request on its card, and never what a tab opens.
  */
-function changesAgentOf(
+export function listedAgentOf(
   agents: AgentsControl,
-  agentId: string,
-  open: readonly ChangesStripTab[],
-): string {
-  const url = agents.pullRequests.get(agentId)?.url;
+  pullRequest: NumberedAddress,
+): { readonly agent: AgentSummary; readonly pullRequest: AgentPullRequest } | undefined {
+  for (const agent of everyTaskAgent(agents)) {
+    const listed = agents.pullRequests.get(agent.id);
+    const address = listed === undefined ? undefined : pullRequestAddressOf(listed.url);
 
-  if (url === undefined) return agentId;
+    if (
+      listed !== undefined &&
+      address !== undefined &&
+      samePullRequestAddress(address, pullRequest)
+    ) {
+      return { agent, pullRequest: listed };
+    }
+  }
 
-  const sharing = everyTaskAgent(agents).filter(
-    (agent) => agents.pullRequests.get(agent.id)?.url === url,
+  return undefined;
+}
+
+/** The Pull request tabs among `tabs`, each under its tab's key (`tabKey`), by its pull request, as who each names is read (`useChangesPeopleOf`). */
+function pullRequestTabsKeyed(
+  tabs: readonly (ChangesKindTab | ChangesStripTab)[],
+): readonly (readonly [string, NumberedAddress])[] {
+  return tabs.flatMap((tab) =>
+    tab.kind === STRIP_TAB_KIND.CHANGES ? [[tabKey(tab), tab.changes] as const] : [],
   );
-
-  const opened = sharing.find((agent) =>
-    open.some((tab) => tab.changes === agent.id && tab.number === undefined),
-  );
-
-  return (opened ?? sharing[0])?.id ?? agentId;
 }
 
 /**
- * The task's agents' Changes tabs on offer, in the order the agents
- * started, an archived one among them (`everyTaskAgent`): one for each
- * agent with a pull request, merged or not, its tab open in the
- * task's column or not, and none for an agent that has opened none yet,
- * whose tab would only say so. Note that two agents on one pull request
- * offer it once, under the agent whose tab stands for it (`changesAgentOf`),
- * because a row is named by the pull request and both tabs would draw the
- * same files. `open` is the Changes tabs open on the task.
+ * The task's pull requests as the "+" and ⌘K offer them: one row for each
+ * pull request the task's lines name by its page, those still open first as
+ * the lines stand, each once however many of its agents opened it, with the
+ * agent whose listed pull request it is beside it where one is.
  */
 export function changesOffers(
+  lines: readonly TaskPullRequestLine[],
   agents: AgentsControl,
-  open: readonly ChangesStripTab[] = NO_OPEN_CHANGES,
 ): readonly ChangesOffer[] {
-  const offered = new Set<string>();
-  const every = everyTaskAgent(agents);
+  const offered: NumberedAddress[] = [];
 
-  return every.flatMap((each) => {
-    const pullRequest = agents.pullRequests.get(each.id);
+  return lines.flatMap((line) => {
+    const address = line.url === undefined ? undefined : pullRequestAddressOf(line.url);
 
-    if (pullRequest === undefined || offered.has(pullRequest.url)) return [];
-    offered.add(pullRequest.url);
-    const agentId = changesAgentOf(agents, each.id, open);
-    const agent = every.find((other) => other.id === agentId) ?? each;
-    // The row shows the pull request as the agent its tab stands for last read it, as its tab's card does.
-    const shown = agents.pullRequests.get(agent.id) ?? pullRequest;
-    const label = agentName(agent, agents.models);
+    if (line.url === undefined || address === undefined) return [];
 
-    return [{ agentId: agent.id, agent, label, pullRequest: shown }];
+    if (offered.some((each) => samePullRequestAddress(each, address))) return [];
+    offered.push(address);
+    const listed = listedAgentOf(agents, address);
+
+    return [
+      {
+        address,
+        pullRequest: { ...line, url: line.url },
+        agent: listed?.agent,
+        label: listed === undefined ? undefined : agentName(listed.agent, agents.models),
+        listed: listed?.pullRequest,
+      },
+    ];
   });
 }
 
-/**
- * The Pull request tab an agent's pull request chip opens: the one that stands for its
- * pull request (`changesAgentOf`), as `changesOffers` offers it, so the chip
- * and the "+" never stand two tabs on one pull request's files, whichever
- * agent's read landed first. `open` is the Changes tabs open on the task.
- */
-export function changesTabOf(
-  agents: AgentsControl,
-  agentId: string,
-  open: readonly ChangesStripTab[],
-  number?: number,
-): ChangesStripTab {
-  // A pull request named by its number that is the agent's own is its own tab, so it never stands in two.
-  if (number !== undefined && agents.pullRequests.get(agentId)?.number !== number) {
-    return changesTab(agentId, number);
-  }
-
-  return changesTab(changesAgentOf(agents, agentId, open));
+/** Opens a pull request's tab, by its repository and number, on the view given: the conversation its chip asks for, or the files a link to its changes does. A chip is a link, so the tab opens as a link does (`onOpen`). */
+export function showPullRequest(
+  panel: Pick<SidePanelControl, "onOpen" | "onPullRequestView">,
+  pullRequest: NumberedAddress,
+  view: PullRequestView,
+): void {
+  const tab = changesTab(pullRequest);
+  panel.onPullRequestView(tab, view);
+  panel.onOpen(tab);
 }
 
 /**
- * Opens an agent's Pull request tab, the one that stands for its pull
- * request (`changesTabOf`), on the view given: the conversation its pull
- * request's chip asks for, or the files a link to its changes does. A chip
- * is a link, so the tab opens as a link does (`onOpen`).
+ * How the panel names each of its Pull request tabs: by the task's line for
+ * its pull request, which the task list carries live, and for one no line
+ * names, as a link to another repository's opens, by what the host holds of
+ * it as GitHub has it now (`repositoryPullRequestPublishedQuery`), held
+ * through the task's workspace for every such tab the strip holds, since
+ * only the tab shown reads it on its own.
  */
-export function showPullRequest(
-  panel: Pick<SidePanelControl, "changes" | "onOpen" | "onPullRequestView">,
-  agents: AgentsControl,
-  agentId: string,
-  view: PullRequestView,
-  number?: number,
-): void {
-  const tab = changesTabOf(agents, agentId, panel.changes, number);
-  panel.onPullRequestView(tab, view);
-  panel.onOpen(tab);
+function usePullRequestNames(taskId: string, tabs: readonly ChangesKindTab[]): PullRequestNames {
+  const lines = useTaskPullRequests(taskId);
+  const workspaceId = useTaskListRow(useTaskListCollections().tasks, taskId)?.workspaceId;
+
+  const named = useMemo(
+    () =>
+      lines.flatMap((line) => {
+        const address = line.url === undefined ? undefined : pullRequestAddressOf(line.url);
+
+        return line.url === undefined || address === undefined
+          ? []
+          : [{ address, pullRequest: { ...line, url: line.url } }];
+      }),
+    [lines],
+  );
+
+  const lineOf = (address: NumberedAddress) =>
+    named.find((each) => samePullRequestAddress(each.address, address))?.pullRequest;
+
+  // Note that the tabs are handed on as one array while they name the same pull requests, so a draw that changed none holds none anew.
+  const unnamed = useSteadyDoors(
+    workspaceId === undefined
+      ? []
+      : tabs.flatMap((tab) =>
+          tab.kind === STRIP_TAB_KIND.CHANGES && lineOf(tab.changes) === undefined
+            ? [{ workspaceId, ...tab.changes }]
+            : [],
+        ),
+  );
+
+  const read = useQueries({
+    queries: unnamed.map((key) => repositoryPullRequestPublishedQuery(key)),
+    combine: (reads) =>
+      reads.flatMap((each, at) => {
+        const key = unnamed[at];
+        const answer = each.data;
+
+        return key === undefined ||
+          answer === undefined ||
+          "failure" in answer ||
+          answer.pullRequest === null
+          ? []
+          : [{ address: key, pullRequest: answer.pullRequest }];
+      }),
+  });
+
+  return (address) =>
+    lineOf(address) ??
+    read.find((each) => samePullRequestAddress(each.address, address))?.pullRequest;
 }
 
 /**
@@ -704,7 +759,7 @@ export interface PanelCards {
   readonly shownAgent: string | undefined;
   /** Opens an agent's tab in the plan's column, as a pull request's card offers. */
   readonly onOpenAgent: (agentId: string) => void;
-  /** Who each agent's pull request names, as its Changes tab last read them. */
+  /** Who each pull request names, as its tab last read them, by its tab's key (`tabKey`). */
   readonly people: ReadonlyMap<string, HeldPeople>;
 }
 
@@ -806,16 +861,17 @@ function kindRow(tab: FixedSidePanelTab, plan: PlanStanding | undefined): MenuRo
  * row wears its tab's own look (`tab-look.tsx`). Picking a row whose tab is
  * open chooses that tab rather than opening another, as a browser's tab
  * search does, so no row says it is open. Then, under Pull requests,
- * each agent's pull request (`changesOffers`), named as its Pull request tab
- * is, by its number and title (a kind still spelled `changes`, as the tab
- * of its files alone was), with the agent whose it is beside it, found by
- * the agent's name too, which opens the agent's Pull request tab. The task's coding agents are opened
+ * each of the task's pull requests (`changesOffers`), named as its Pull
+ * request tab is, by its number and title (a kind still spelled `changes`,
+ * as the tab of an agent's files alone was), with the agent that opened it
+ * beside it where one of the task's did, found by the agent's name too,
+ * which opens the pull request's tab. The task's coding agents are opened
  * from the task's column's own "+" (`main-tabs.tsx`).
  */
 export function panelEntries(input: {
   panel: SidePanelControl;
   kinds: readonly FixedSidePanelTab[];
-  /** The agents' Changes tabs on offer; none where the caller offers none. */
+  /** The task's pull requests on offer; none where the caller offers none. */
   changes?: readonly ChangesOffer[];
   /** The plan's pages, each by its newest version, which the "+" offers; none where the caller offers none. */
   pages?: readonly PageLine[];
@@ -855,32 +911,38 @@ export function panelEntries(input: {
 
   // Note that a pull request's row is named by its page, because an agent's
   // id already names the agent's own row in the task's summary.
-  const changesRows = changes.map(({ agentId, label, pullRequest }) => {
+  const changesRows = changes.map(({ address, label, pullRequest, agent, listed }) => {
     const look = tabLook({ kind: TAB_KIND.CHANGES, pullRequest });
+    const tab = changesTab(address);
 
     const card =
-      cards === undefined
+      cards === undefined || agent === undefined || listed === undefined
         ? undefined
         : hungCard({
             kind: TAB_KIND.CHANGES,
-            subject: agentSubject(cards.agents, agentId, cards.held, cards.shownAgent === agentId),
+            subject: agentSubject(
+              cards.agents,
+              agent.id,
+              cards.held,
+              cards.shownAgent === agent.id,
+            ),
             models: cards.agents.models,
-            pullRequest,
-            people: peopleOf(cards.people.get(agentId), pullRequest),
-            onOpenAgent: () => cards.onOpenAgent(agentId),
+            pullRequest: listed,
+            people: peopleOf(cards.people.get(tabKey(tab)), listed),
+            onOpenAgent: () => cards.onOpenAgent(agent.id),
           });
 
     return {
       row: {
         id: pullRequest.url,
         ...look,
-        detail: label,
-        terms: [look.label, label],
+        ...(label === undefined ? undefined : { detail: label }),
+        terms: label === undefined ? [look.label] : [look.label, label],
         section: ADD_SECTION.PULL_REQUESTS,
         replayMasked: true,
       },
       card,
-      onPick: () => panel.onChoose(changesTab(agentId)),
+      onPick: () => panel.onChoose(tab),
     };
   });
 
@@ -990,17 +1052,15 @@ export function panelOffers(input: {
   viewedAgent: string | undefined;
   /** The tabs the holder's agents' cloud browsers hold, each offered to open in the strip; none where the caller reads none. */
   listedBrowsers?: readonly ListedCloudBrowser[] | undefined;
+  /** The task's pull requests as its lines name them, each offered once. */
+  pullRequests: readonly TaskPullRequestLine[];
   plan?: PlanStanding | undefined;
   cards: PanelCards;
 }): AddEntry[] {
   const { holder, account, taskId, panel, agents, onNewTerminal, cards } = input;
-  // Note that a task's strip under one agent offers that agent's things alone, as it draws them.
+  // Note that a task's strip under one agent offers that agent's things alone, as it draws them, but its pull requests, which are the task's.
   const only = holder === SIDE_PANEL_HOLDER.TASK ? panel.agent : undefined;
   const mine = (agentId: string) => only === undefined || agentId === only;
-
-  const changes = panel.changes.filter(
-    (each) => drawsChanges(each, { taskAgents: agents.heldIds }) && mine(each.changes),
-  );
 
   const ownerOf = (agentId: string): CloudBrowserOwner => {
     const subject = agentSubject(agents, agentId, cards.held, false);
@@ -1021,7 +1081,7 @@ export function panelOffers(input: {
   return panelEntries({
     panel,
     kinds: offeredPanelKinds(holder),
-    changes: changesOffers(agents, changes).filter((offer) => mine(offer.agentId)),
+    changes: changesOffers(input.pullRequests, agents),
     pages: input.pages,
     // Note that a panel that draws no Terminal, the Inbox's among them, offers none.
     ...(onNewTerminal === undefined || holder === SIDE_PANEL_HOLDER.INBOX
@@ -1060,17 +1120,24 @@ function hungCard(subject: CardSubject): ReactNode {
   return tabCard(subject) ?? undefined;
 }
 
-/** A Pull request tab's look, named by its pull request's number and title as the task's agents last read it, wearing its mark for where it stands. */
-function changesLook(tab: ChangesStripTab, agents: AgentsControl): KindLook {
+/** A Pull request tab's look, named by its pull request's number and title as the panel names it (`PullRequestNames`), wearing its mark for where it stands, and by its number alone until then; a turn's Changes tab by its own word. */
+function changesLook(tab: ChangesKindTab, names: PullRequestNames): KindLook {
   // A turn's changes wear the changes' glyph under their own name, since no pull request stands behind them.
-  if (tab.turn !== undefined) {
+  if (tab.kind === STRIP_TAB_KIND.TURN_CHANGES) {
     return {
       ...tabLook({ kind: TAB_KIND.CHANGES, pullRequest: undefined }),
       label: TAB_WORDS.TURN_CHANGES,
     };
   }
 
-  return tabLook({ kind: TAB_KIND.CHANGES, pullRequest: pullRequestOfTab(agents, tab) });
+  const named = names(tab.changes);
+
+  return named === undefined
+    ? {
+        ...tabLook({ kind: TAB_KIND.CHANGES, pullRequest: undefined }),
+        label: UNREAD_TAB_NAMES.pullRequest(tab),
+      }
+    : tabLook({ kind: TAB_KIND.CHANGES, pullRequest: named });
 }
 
 /**
@@ -1130,7 +1197,9 @@ function stripTabs(input: {
   agentsOf: (agentId: string) => AgentsControl;
   subagents: readonly DrawnSubagent[];
   files: readonly OpenFile[];
-  changes: readonly ChangesStripTab[];
+  changes: readonly ChangesKindTab[];
+  /** How the panel names each pull request its tabs show. */
+  names: PullRequestNames;
   pages: readonly DrawnPage[];
   terminals: readonly TerminalStripTab[];
   locals: readonly LocalStripTab[];
@@ -1146,7 +1215,7 @@ function stripTabs(input: {
   pagePlace: PagePlace;
   /** Whether the Inbox kind holds one thread, as it does beside the window's Inbox, and is named Thread. */
   thread: boolean;
-  /** Who each agent's pull request names, as its Changes tab last read them. */
+  /** Who each pull request names, as its tab last read them, by its tab's key (`tabKey`). */
   people: ReadonlyMap<string, HeldPeople>;
   /** The account signed in, whose cloud Browser draft a closed draft's tab lets go. */
   account: string | undefined;
@@ -1222,29 +1291,29 @@ function stripTabs(input: {
     close: () => panel.onClose(fileTab(path)),
   }));
 
-  // A Changes tab hangs its pull request's card, naming the agent whose it is.
+  // A Pull request tab hangs its pull request's card, naming the task's agent that opened it, where one did; a turn's Changes tab hangs none.
   const changesTabs = changes.map((tab) => {
-    const own = agentsOf(tab.changes);
-    const subject = agentSubject(own, tab.changes, held, shownAgent === tab.changes);
-    const pullRequest = pullRequestOfTab(own, tab);
+    const listed =
+      tab.kind === STRIP_TAB_KIND.CHANGES ? listedAgentOf(agents, tab.changes) : undefined;
 
-    const changesCard = hungCard({
-      kind: TAB_KIND.CHANGES,
-      subject,
-      models,
-      pullRequest,
-      people:
-        pullRequest === undefined
-          ? undefined
-          : peopleOf(input.people.get(tab.changes), pullRequest),
-      onOpenAgent: () => onOpenAgent(tab.changes),
-    });
+    const changesCard =
+      listed === undefined
+        ? undefined
+        : hungCard({
+            kind: TAB_KIND.CHANGES,
+            subject: agentSubject(agents, listed.agent.id, held, shownAgent === listed.agent.id),
+            models,
+            pullRequest: listed.pullRequest,
+            people: peopleOf(input.people.get(tabKey(tab)), listed.pullRequest),
+            onOpenAgent: () => onOpenAgent(listed.agent.id),
+          });
 
     return {
       tab,
       look: look(tab, {
-        ...changesLook(tab, own),
-        labelReplayUnmasked: pullRequest === undefined,
+        ...changesLook(tab, input.names),
+        labelReplayUnmasked:
+          tab.kind === STRIP_TAB_KIND.TURN_CHANGES || input.names(tab.changes) === undefined,
         card: changesCard,
       }),
       close: () => panel.onClose(tab),
@@ -1427,6 +1496,7 @@ function PanelTabs({
   subagents,
   files,
   changes,
+  names,
   pages,
   terminals,
   locals,
@@ -1458,8 +1528,10 @@ function PanelTabs({
   subagents: readonly DrawnSubagent[];
   /** The open file tabs, in the strip's order. */
   files: readonly OpenFile[];
-  /** The open Changes tabs of the task's agents, in the order opened. */
-  changes: readonly ChangesStripTab[];
+  /** The open Pull request and turn Changes tabs the task draws, in the order opened. */
+  changes: readonly ChangesKindTab[];
+  /** How the panel names each pull request its tabs show. */
+  names: PullRequestNames;
   /** The open page tabs, each with the page as the place it stands on lists it, in the order opened. */
   pages: readonly DrawnPage[];
   /** The open Terminal tabs of the task's agents, in the order opened. */
@@ -1488,7 +1560,7 @@ function PanelTabs({
   transcriptDoors: TranscriptDoors | undefined;
 }): React.JSX.Element {
   const copied = useTranscriptCopier();
-  const people = useChangesPeopleOf(useMemo(() => changes.map((tab) => tab.changes), [changes]));
+  const people = useChangesPeopleOf(useMemo(() => pullRequestTabsKeyed(changes), [changes]));
   const account = useWindowAccount();
   const shellTabs = useMemo(() => [...terminals, ...locals], [terminals, locals]);
   const runLookOf = useRunTabLooks(shellTabs, shown);
@@ -1503,6 +1575,7 @@ function PanelTabs({
     subagents,
     files,
     changes,
+    names,
     pages,
     terminals,
     locals,
@@ -2245,6 +2318,7 @@ function TabContent({
   onCloseTab,
   pullRequestViews,
   onPullRequestView,
+  onOpenPullRequest,
   cloudBrowsers,
   cloudDrafts,
   transcript,
@@ -2286,8 +2360,10 @@ function TabContent({
   onCloseTab: (tab: SidePanelTab) => void;
   /** What each Pull request tab shows, by agent and number (`SidePanelControl.pullRequestViews`). */
   pullRequestViews: SidePanelControl["pullRequestViews"];
-  /** Chooses what an agent's Pull request tab shows. */
+  /** Chooses what a Pull request tab shows. */
   onPullRequestView: SidePanelControl["onPullRequestView"];
+  /** Opens another pull request in a tab of the panel, as a Pull request tab's stack offers (`open-pull-request.ts`). */
+  onOpenPullRequest: (pullRequest: NumberedAddress) => void;
   /** The holder's cloud Browser tabs, which a cloud Browser tab reads its tab from. */
   cloudBrowsers: readonly DrawnCloudBrowser[];
   /** Lands on the tab a draft opened, the draft let go of; or discards a draft. */
@@ -2301,6 +2377,8 @@ function TabContent({
   onTabActions: (tab: SidePanelTab, actions: TabActionGroups | undefined) => void;
 }): React.JSX.Element | null {
   const directory = useMemberDirectory();
+  // The workspace the task holding the strip reads its pull requests through.
+  const workspaceId = useTaskListRow(useTaskListCollections().tasks, taskId)?.workspaceId;
 
   // Note that no fixed kind is drawn now (`DRAWN_KINDS`): the plan's, the Inbox's, and Comments stand elsewhere.
   if (Predicate.isString(tab)) return null;
@@ -2364,50 +2442,57 @@ function TabContent({
       return <SpinnerRegion delay label={readingWords("the page")} />;
     }
 
+    // A turn's changes stand in a tab of their own, read on the agent's machine, with no pull request behind them.
+    case STRIP_TAB_KIND.TURN_CHANGES:
+      return (
+        <LazyBoundary
+          key={tabKey(tab)}
+          fallback={<SpinnerRegion delay label={readingWords("the turn's changes")} />}
+          loaded={pullRequestTabLoaded}
+        >
+          <TURN_CHANGES_TAB
+            agentId={tab.turnChanges}
+            messageId={tab.turn}
+            shown={shown}
+            tree={fileTree}
+          />
+        </LazyBoundary>
+      );
     case STRIP_TAB_KIND.CHANGES: {
-      // A turn's changes stand in a tab of their own, read on the agent's machine, with no pull request behind them.
-      if (tab.turn !== undefined) {
-        return (
-          <LazyBoundary
-            key={tabKey(tab)}
-            fallback={<SpinnerRegion delay label={readingWords("the turn's changes")} />}
-            loaded={pullRequestTabLoaded}
-          >
-            <TURN_CHANGES_TAB
-              agentId={tab.changes}
-              messageId={tab.turn}
-              shown={shown}
-              tree={fileTree}
-            />
-          </LazyBoundary>
-        );
+      // A task the list does not hold yet names no workspace to read the pull request through, which it soon will.
+      if (workspaceId === undefined) {
+        return <SpinnerRegion delay label={readingWords("the pull request")} />;
       }
 
       // Note that a link in a pull request's own tab, to its earlier entries or a reply, leaves for GitHub, because the tab already is that pull request.
       return (
         <PullRequestsOnGitHub key={tabKey(tab)}>
-          {/* A file chosen with ⌘ in its Changes tree opens in a File tab of its own, where the panel reads File tabs by the task (`open-file-tab.ts`). */}
-          <OpenFileTabProvider
-            value={codeFilesRead ? (path) => onBrowseFile(undefined, path, true) : undefined}
-          >
-            {/* The tab is a chunk of its own, read the first time one is drawn or its card hangs (`pages-on-demand.ts`). */}
-            <LazyBoundary
-              fallback={<SpinnerRegion delay label={readingWords("the pull request")} />}
-              loaded={pullRequestTabLoaded}
+          <OpenPullRequestProvider value={onOpenPullRequest}>
+            {/* A file chosen with ⌘ in its Changes tree opens in a File tab of its own, where the panel reads File tabs by the task (`open-file-tab.ts`). */}
+            <OpenFileTabProvider
+              value={codeFilesRead ? (path) => onBrowseFile(undefined, path, true) : undefined}
             >
-              <PULL_REQUEST_TAB
-                agentId={tab.changes}
-                number={tab.number}
-                control={agentsOf(tab.changes)}
-                shown={shown}
-                repository={repository}
-                tree={fileTree}
-                view={ofPullRequestTab(pullRequestViews, tab) ?? PULL_REQUEST_VIEW.CONVERSATION}
-                onView={(view) => onPullRequestView(tab, view)}
-                onActions={(actions) => onTabActions(tab, actions)}
-              />
-            </LazyBoundary>
-          </OpenFileTabProvider>
+              {/* The tab is a chunk of its own, read the first time one is drawn or its card hangs (`pages-on-demand.ts`). */}
+              <LazyBoundary
+                fallback={<SpinnerRegion delay label={readingWords("the pull request")} />}
+                loaded={pullRequestTabLoaded}
+              >
+                <PULL_REQUEST_TAB
+                  pullRequest={{ workspaceId, ...tab.changes }}
+                  taskId={taskId}
+                  control={agents}
+                  shown={shown}
+                  repository={repository}
+                  tree={fileTree}
+                  view={
+                    ofPullRequest(pullRequestViews, tab.changes) ?? PULL_REQUEST_VIEW.CONVERSATION
+                  }
+                  onView={(view) => onPullRequestView(tab, view)}
+                  onActions={(actions) => onTabActions(tab, actions)}
+                />
+              </LazyBoundary>
+            </OpenFileTabProvider>
+          </OpenPullRequestProvider>
         </PullRequestsOnGitHub>
       );
     }
@@ -2842,17 +2927,8 @@ export function SidePanel({
 
   const { tab } = panel;
 
-  // A Pull request tab naming another pull request by its number is named by
-  // that pull request, which the host holds for each such tab the strip
-  // draws (`numberedPullRequests`), since only the tab shown holds it on its own.
-  // Note that the tabs are handed on as one array while they name the same pull requests, so a draw that changed none holds none anew.
-  const numberedTabs = useSteadyDoors(
-    panel.changes.flatMap(({ changes: agentId, number }) =>
-      number === undefined ? [] : [{ agentId, number }],
-    ),
-  );
-
-  useQueries({ queries: numberedTabs.map((key) => pullRequestPublishedQuery(key)) });
+  // Each Pull request tab is named by its pull request as the task's lines name it, or as the host holds what GitHub says of it.
+  const pullRequestNames = usePullRequestNames(taskId, panel.changes);
   // Whether a File or Changes tab's tree is open, for every one of them
   // alike and for the window's life, as an editor's explorer stands across
   // its tabs.
@@ -2898,7 +2974,7 @@ export function SidePanel({
   // The file tabs of files opened on the task, in the strip's order.
   const files = panel.files.filter((file) => file.browsedOn === taskId);
 
-  // An agent's Changes tab stands while the agent is the task's, archived or not, as its pull request does.
+  // A pull request's tab stands on the task it was opened on; a turn's Changes tab while its agent is the task's, archived or not.
   const changes = panel.changes.filter((each) =>
     drawsChanges(each, { taskAgents: agents.heldIds }),
   );
@@ -2927,7 +3003,6 @@ export function SidePanel({
 
   // A Pull request, Terminal, or Local tab draws its agent where the agent stands, through the place's agents where they list it.
   const agentsOf = useAgentsElsewhere(agents, [
-    ...changes.map((each) => each.changes),
     ...terminals.map((each) => each.terminal),
     ...locals.map((each) => each.local),
   ]);
@@ -3044,7 +3119,7 @@ export function SidePanel({
           agent: (agentId) => taskAgentLabel(agents, agentId) ?? TAB_WORDS.AGENT,
           subagent: (subagent) => subagents.find((each) => sameTab(each.tab, subagent))?.label,
           file: (path) => path,
-          pullRequest: (changes) => changesLook(changes, agentsOf(changes.changes)).label,
+          pullRequest: (changes) => changesLook(changes, pullRequestNames).label,
           page: (page) => pageTabs.find((each) => sameTab(each.tab, page))?.line.title,
           browser: cloudBrowserLabel,
         });
@@ -3054,10 +3129,10 @@ export function SidePanel({
   const ownTask = taskId;
   const tabTask = tab === undefined ? undefined : tabTaskOf(tab, panel.pages, files);
 
-  const besideTask =
-    tabTask === undefined || tabTask === ownTask
-      ? undefined
-      : taskOfTab?.tasks.find((each) => each.id === tabTask);
+  const besideTask = useNamedTask(
+    tabTask === undefined || tabTask === ownTask || taskOfTab === undefined ? undefined : tabTask,
+    taskOfTab?.typedNames ?? NO_TYPED_NAMES,
+  );
 
   const keys = shown && leaving === PANEL_LEAVING.NONE;
   // An agent another place holds, pressed in the tab shown, opens in the middle as the window goes
@@ -3088,10 +3163,16 @@ export function SidePanel({
   // The panel's "+" asks for a new shell where the panel already holds the keys.
   const openTerminal = useOpenTerminal(panel, noFocusMove);
   const openLocal = useOpenTerminalTab(TERMINAL_KIND.LOCAL, panel, noFocusMove);
-  const offeredChanges = panel.changes;
+  const taskPullRequests = useTaskPullRequests(taskId);
 
   const changesPeople = useChangesPeopleOf(
-    useMemo(() => offeredChanges.map((tab) => tab.changes), [offeredChanges]),
+    useMemo(
+      () =>
+        changesOffers(taskPullRequests, agents).map(
+          ({ address }) => [tabKey(changesTab(address)), address] as const,
+        ),
+      [taskPullRequests, agents],
+    ),
   );
 
   const offers = panelOffers({
@@ -3107,6 +3188,7 @@ export function SidePanel({
     onNewLocal: localsHere ? (agentId: string) => openLocal(agentId, true) : undefined,
     viewedAgent,
     listedBrowsers,
+    pullRequests: taskPullRequests,
     cards: {
       agents,
       held: drawnTranscripts,
@@ -3200,6 +3282,7 @@ export function SidePanel({
           subagents={subagents}
           files={files}
           changes={changes}
+          names={pullRequestNames}
           pages={pageTabs}
           terminals={terminals}
           locals={locals}
@@ -3278,6 +3361,9 @@ export function SidePanel({
               onCloseTab={panel.onClose}
               pullRequestViews={panel.pullRequestViews}
               onPullRequestView={panel.onPullRequestView}
+              onOpenPullRequest={(pullRequest) =>
+                showPullRequest(panel, pullRequest, PULL_REQUEST_VIEW.CONVERSATION)
+              }
               cloudBrowsers={cloudBrowsers}
               cloudDrafts={cloudDrafts}
               transcript={transcript}
@@ -3476,7 +3562,7 @@ function PanelFrame({
       ) : null}
       <aside
         ref={aside}
-        className="side-panel relative flex min-w-0 max-w-side-panel flex-none flex-col border-l border-border bg-well"
+        className="side-panel relative flex min-w-0 max-w-side-panel flex-none flex-col border-l border-border"
         aria-label={label}
         inert={leaving !== PANEL_LEAVING.NONE}
         data-full-screen={String(panel.fullScreen)}

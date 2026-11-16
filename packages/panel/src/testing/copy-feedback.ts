@@ -28,12 +28,14 @@ import {
   type ReactNode,
   useContext,
   useEffect,
+  useState,
 } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
 import { useDraftsOwner } from "../composer-drafts.js";
 import { LiveReadSubscription } from "../live-reads.js";
+import { TaskListCollectionsProvider } from "../task-list-collections.js";
 import { appStateQuery, followAppState } from "../use-app-state.js";
 import { seedLanded } from "./landed-reads.js";
 
@@ -103,25 +105,28 @@ const OnTestClient = createContext(false);
 /**
  * The document's one subscription for the tree, refused under another: two
  * would each write what they read, and the later write would stand over
- * the one the test meant.
+ * the one the test meant. It hands the task list's collections it feeds to
+ * the tree, as the window's root does, so they are made with the first
+ * frame and stopped with the tree.
  */
-function TestAppStateSubscription(): null {
+function TestAppStateSubscription({ children }: { children: ReactNode }): ReactElement {
   if (useContext(OnTestClient)) {
     throw new Error("withQueryClient is nested in another: draw the tree through one.");
   }
 
   const client = useQueryClient();
+  const [following] = useState(() => followAppState(client));
+
   useEffect(() => {
-    const following = followAppState(client);
     // A tree draws nothing that waits on the first read, so one refused is told as a window's later one is, and the next delivery asks again.
     following.written.catch((cause: unknown) => {
       console.error("The window's state could not be read; the next delivery asks again.", cause);
     });
 
     return following.stop;
-  }, [client]);
+  }, [following]);
 
-  return null;
+  return createElement(TaskListCollectionsProvider, { collections: following.taskList, children });
 }
 
 /**
@@ -136,9 +141,12 @@ export function withQueryClient(element: ReactNode): ReactElement {
   return createElement(
     QueryClientProvider,
     { client: testQueryClient },
-    createElement(TestAppStateSubscription),
     createElement(LiveReadSubscription),
-    createElement(OnTestClient.Provider, { value: true }, element),
+    createElement(
+      TestAppStateSubscription,
+      null,
+      createElement(OnTestClient.Provider, { value: true }, element),
+    ),
   );
 }
 
