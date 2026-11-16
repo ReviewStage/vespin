@@ -541,15 +541,19 @@ export function hostsOf(userId: string): HostEffect<readonly HostRow[]> {
 
 /** Removes the account's enrolled machine, or a host its approve made, and refuses its secret and its agents' runner bearers from now on, answering the transaction it was removed in; none where the account lists no such machine. */
 export function removeHost(userId: string, id: string): HostEffect<string | undefined> {
-  return Effect.gen(function* () {
-    const now = yield* DateTime.nowAsDate;
-    const [removed] = yield* stampRemoved({ userId, id, now });
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        const now = yield* DateTime.nowAsDate;
+        const [removed] = yield* stampRemoved({ userId, id, now });
 
-    if (removed === undefined) return undefined;
-    yield* retireRunners({ userId, deviceId: id });
+        if (removed === undefined) return undefined;
+        yield* retireRunners({ userId, deviceId: id });
 
-    return removed.txid;
-  });
+        return removed.txid;
+      }),
+    ),
+  );
 }
 
 /** The conversations of the account's agents pinned to its device, whose runners a removed host can no longer settle. */
