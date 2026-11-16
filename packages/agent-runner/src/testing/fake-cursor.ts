@@ -70,7 +70,10 @@ function settler() {
  * A fake SDK that plays `runs` in order, one for each message sent or
  * summary asked. `release` lets the held run going end as scripted.
  */
-export function fakeCursor(runs: readonly FakeRun[]) {
+export function fakeCursor(
+  runs: readonly FakeRun[],
+  options: { readonly signedIn?: boolean } = {},
+) {
   const record: CursorRecord = {
     created: [],
     resumed: [],
@@ -184,6 +187,7 @@ export function fakeCursor(runs: readonly FakeRun[]) {
 
       return agentOf(options, agentId);
     },
+    signedIn: async () => options.signedIn ?? true,
     setEnvironment: (changes) => {
       record.environment.push(changes);
     },

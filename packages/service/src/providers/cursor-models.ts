@@ -35,14 +35,15 @@
  *
  * Who is offered them is `withCursorModels`'s to say: an account with Cursor agents on
  * (`EXPERIMENT.CURSOR`, each person's own choice), on a client that reads
- * Cursor as a provider (`CURSOR_CLIENT_API_VERSION`).
+ * Cursor as a provider (`CURSOR_CLIENT_API_VERSION`); a Mac that runs Cursor
+ * lists it among its providers on the same terms (`macsWithCursor`).
  */
 
 import type { CursorModelSelection } from "@repo/agent-runner/protocol";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { PROVIDER_KEY_UNREADABLE } from "@repo/database/models/provider-key-seal";
 import { modelIdAtSpeed } from "@repo/features/model-effort";
-import { MODEL_PROVIDER, MODEL_SPEED, NO_EFFORT } from "@repo/features/models-wire";
+import { type MacOffer, MODEL_PROVIDER, MODEL_SPEED, NO_EFFORT } from "@repo/features/models-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { Clock, Context, Duration, Effect, Layer, Option, type Redacted, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
@@ -435,6 +436,21 @@ export function withCursorModels(
   cursorModels: readonly CursorModel[],
 ): readonly OfferedModel[] {
   return offersCursor(offer) ? [...models, ...cursorModels.flatMap(catalogEntriesOf)] : models;
+}
+
+/**
+ * The account's devices as the client asking is offered them: Cursor among
+ * a device's providers only where the offer holds (`offersCursor`), since a
+ * client that reads no Cursor refuses a whole answer naming it, and one
+ * offered no Cursor model has no Start for a device to take.
+ */
+export function macsWithCursor(macs: readonly MacOffer[], offer: CursorOffer): readonly MacOffer[] {
+  if (offersCursor(offer)) return macs;
+
+  return macs.map((mac) => ({
+    ...mac,
+    providers: mac.providers.filter((provider) => provider !== MODEL_PROVIDER.CURSOR),
+  }));
 }
 
 /** The Cursor model a catalog id names, at the speed it names; none for an id that names none of them. */

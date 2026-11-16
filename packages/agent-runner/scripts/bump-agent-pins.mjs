@@ -7,7 +7,8 @@
  * and where that is newer than the pin, it rewrites every place the release
  * lives together, as `tools/oxlint/vespin/guards/agent-pins.ts` holds them:
  * `src/pins.ts`'s sandbox pin and `HOST_CLI_VERSION`, each host pin's
- * address, size, SHA-256, and file digests, the image's `ARG`s
+ * address, size, SHA-256, and file digests, and each of its parts'
+ * (`AgentToolPin.PARTS`, the Mac's Cursor SDK's), the image's `ARG`s
  * (`apps/web/agent-image/Dockerfile`), and, for Claude and Cursor, this
  * package's SDK dependency and the lockfile, whose platform packages
  * (`@cursor/sdk-linux-x64` and its siblings) move with the SDK, and for
@@ -18,7 +19,11 @@
  * held to npm's SHA-512 integrity before anything is read off it, and a
  * signed build's Developer ID team is read off its Mach-O signature and must
  * be the team pinned already, as must the programs a pin digests, so
- * a release that changes either stops the bump for a person to decide. Each
+ * a release that changes either stops the bump for a person to decide. A
+ * pin's parts are read alike: its platform package moves with the release,
+ * a dependency moves to the release its new manifest names exactly, or stays
+ * where it still meets the range named, and a release that names a range its
+ * part no longer meets, or a dependency no part pins, stops the bump. Each
  * bump it makes is printed to stdout as one line of JSON
  * (`{"tool","from","to"}`, and Claude's `claude` beside it); everything else
  * goes to stderr.
@@ -26,7 +31,16 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Predicate } from "effect";
@@ -84,8 +98,8 @@ const TOOLS = {
     title: "Cursor SDK",
     package: CURSOR_SDK,
     current: () => pins.CURSOR_SDK_PIN.VERSION,
-    // Note that the image installs the SDK from npm, its platform package beside it, so no host pin is read off an archive yet.
-    hostPins: [],
+    // Note that the image installs the SDK from npm, its platform package beside it, so the Mac's pin alone is read off archives.
+    hostPins: [["CURSOR_SDK_MAC_PIN", pins.CURSOR_SDK_MAC_PIN, CURSOR_SDK, ""]],
   },
 };
 
@@ -268,10 +282,124 @@ async function fetchArchive(name, version, archive) {
   return bytes;
 }
 
+/** A part's npm package and archive file name, read off its address (`<registry>/<name>/-/<file>`). */
+function partOf(archive) {
+  const match = /^https:\/\/registry\.npmjs\.org\/(.+)\/-\/([^/]+)$/u.exec(archive);
+
+  if (!match) throw new Error(`${archive} is no npm tarball address`);
+
+  return { name: match[1], file: match[2] };
+}
+
+/** Whether a stable `x.y.z` meets an npm range of the shapes npm's manifests here name: exact, `^x.y.z`, or such joined by `||`; any other shape meets none, which stops the bump. */
+function meets(version, range) {
+  return range.split("||").some((each) => {
+    const want = each.trim();
+
+    if (stable(want)) return want === version;
+
+    if (!want.startsWith("^") || !stable(want.slice(1))) return false;
+    const [have, floor] = [stable(version), stable(want.slice(1))];
+    // Note that a caret holds the first part that is not zero, as npm reads it.
+    const held = floor.findIndex((part) => part !== 0);
+    const fixed = held === -1 ? 3 : held + 1;
+
+    return (
+      have.slice(0, fixed).join() === floor.slice(0, fixed).join() && !newer(want.slice(1), version)
+    );
+  });
+}
+
+/** A manifest's dependencies a host must keep beside it: its own and its peers, an optional peer left out. */
+function requiredOf(manifest) {
+  const optional = manifest.peerDependenciesMeta ?? {};
+
+  const peers = Object.entries(manifest.peerDependencies ?? {}).filter(
+    ([name]) => optional[name]?.optional !== true,
+  );
+
+  return [...Object.entries(manifest.dependencies ?? {}), ...peers];
+}
+
 /**
- * A host pin as the new release reads: its address, size, and digests, each
- * read off the archive, its kept layout, team, and executables checked to be
- * the pin's own.
+ * The release each of a pin's parts is at the new release: its platform
+ * package at the release itself, and every dependency at the one the new
+ * manifests name, read from the release's own manifest and then each part's
+ * in order, so a dependency's own dependency is found. Fails where a
+ * manifest names a dependency no part pins, or a range its part no longer
+ * meets and names no exact release.
+ */
+async function partReleases(label, pin, name, to) {
+  const manifests = [await registryJson(`${name}/${to}`)];
+  const parts = pin.PARTS.map((part) => ({ part, ...partOf(part.ARCHIVE) }));
+  const releases = [];
+
+  for (const each of parts) {
+    if (each.name === `${name}-darwin-arm64`) {
+      releases.push({ ...each, version: to });
+      continue;
+    }
+
+    const named = manifests.flatMap(requiredOf).find(([dependency]) => dependency === each.name);
+
+    if (named === undefined) throw new Error(`${label}: no new manifest names ${each.name}`);
+    const [, range] = named;
+    const current = each.file.slice(each.file.lastIndexOf("-") + 1, -".tgz".length);
+    const version = stable(range) ? range : meets(current, range) ? current : undefined;
+
+    if (version === undefined) {
+      throw new Error(`${label}: ${each.name}@${current} no longer meets ${range}`);
+    }
+
+    releases.push({ ...each, version });
+    manifests.push(await registryJson(`${each.name}/${version}`));
+  }
+
+  // Note that a dependency no part keeps would be missing on the Mac, so it stops the bump for a person to pin it.
+  const kept = new Set(parts.map((each) => each.name));
+  const missing = manifests.flatMap(requiredOf).find(([dependency]) => !kept.has(dependency));
+
+  if (missing !== undefined) throw new Error(`${label}: nothing pins ${missing[0]}@${missing[1]}`);
+
+  return releases;
+}
+
+/**
+ * Each of a pin's parts at its new release, fetched and held to npm's
+ * integrity, and unpacked where the kept build keeps it under `root`.
+ */
+async function readParts(label, pin, name, to, root, scratch) {
+  if (pin.PARTS === undefined) return [];
+  const reads = [];
+
+  for (const [index, each] of (await partReleases(label, pin, name, to)).entries()) {
+    const file = each.file.replace(/-\d+\.\d+\.\d+\.tgz$/u, `-${each.version}.tgz`);
+    const archive = `${REGISTRY}/${each.name}/-/${file}`;
+    say(`  ${label}.PARTS: ${archive}`);
+    const bytes = await fetchArchive(each.name, each.version, archive);
+    const unpacked = path.join(scratch, `part-${index}`);
+    mkdirSync(unpacked);
+    writeFileSync(path.join(unpacked, "archive.tgz"), bytes);
+    run("tar", ["-xzf", "archive.tgz"], unpacked);
+    mkdirSync(path.dirname(path.join(root, each.part.INTO)), { recursive: true });
+    renameSync(path.join(unpacked, each.part.ROOT), path.join(root, each.part.INTO));
+    reads.push({
+      part: each.part,
+      name: each.name,
+      from: each.file,
+      file,
+      sha256: sha256(bytes),
+      bytes: bytes.length,
+    });
+  }
+
+  return reads;
+}
+
+/**
+ * A host pin as the new release reads: its address, size, and digests, and
+ * its parts', each read off its archive, its kept layout, team, and
+ * executables checked to be the pin's own.
  */
 async function readHostPin([label, pin, name, suffix], from, to) {
   const archive = pin.ARCHIVE.replaceAll(from, to);
@@ -283,22 +411,34 @@ async function readHostPin([label, pin, name, suffix], from, to) {
     writeFileSync(path.join(scratch, "archive.tgz"), bytes);
     run("tar", ["-xzf", "archive.tgz"], scratch);
     const root = path.join(scratch, pin.ROOT);
+    const parts = await readParts(label, pin, name, to, root, scratch);
     const pinned = Object.keys(pin.FILES ?? {}).sort();
-    const kept = pinnedExecutables(root, pin.MEMBERS, pinned);
+    const members = [...pin.MEMBERS, ...(pin.PARTS ?? []).map((part) => part.INTO)];
+    const kept = pinnedExecutables(root, members, pinned);
 
-    if (kept.join() !== pinned.join()) {
+    // Note that a pin may digest a file that runs without being executable, an SDK's entry or a native module, which need only stand.
+    const unpinned = kept.filter((file) => !pinned.includes(file));
+
+    const absent = pinned.filter(
+      (file) => !statSync(path.join(root, file), { throwIfNoEntry: false })?.isFile(),
+    );
+
+    if (unpinned.length > 0 || absent.length > 0) {
       throw new Error(`${label} keeps executables ${kept.join(", ")}, not ${pinned.join(", ")}`);
     }
 
-    const team = pin.TEAM && machOTeam(path.join(root, pin.BINARY));
+    for (const signed of pin.TEAM === undefined ? [] : (pin.SIGNED ?? [pin.BINARY])) {
+      const team = machOTeam(path.join(root, signed));
 
-    if (team !== pin.TEAM) throw new Error(`${label} is signed by ${team}, not ${pin.TEAM}`);
+      if (team !== pin.TEAM)
+        throw new Error(`${label}'s ${signed} is signed by ${team}, not ${pin.TEAM}`);
+    }
 
     const files = Object.fromEntries(
       pinned.map((file) => [file, sha256(readFileSync(path.join(root, file)))]),
     );
 
-    return { label, pin, sha256: sha256(bytes), bytes: bytes.length, files };
+    return { label, pin, sha256: sha256(bytes), bytes: bytes.length, files, parts };
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
@@ -319,7 +459,24 @@ function replaceOnce(text, from, to, where) {
   return text.replace(from, () => to);
 }
 
-/** `pins.ts` with a host pin's size and digests moved to what its new release reads. */
+/** `pins.ts` with a part's archive, size, and digest moved to what its new release reads: a dependency's file name where it moved. */
+function writePart(text, read) {
+  const archive = `npmArchive("${read.name}", "${read.from}")`;
+
+  const named =
+    read.file === read.from
+      ? text
+      : replaceOnce(text, archive, `npmArchive("${read.name}", "${read.file}")`, "pins.ts");
+
+  return replaceOnce(
+    replaceOnce(named, `"${read.part.SHA256}"`, `"${read.sha256}"`, "pins.ts"),
+    `BYTES: ${sizeLiteral(read.part.BYTES)},`,
+    `BYTES: ${sizeLiteral(read.bytes)},`,
+    "pins.ts",
+  );
+}
+
+/** `pins.ts` with a host pin's size and digests, and its parts', moved to what its new release reads. */
 function writeHostPin(text, read) {
   let next = replaceOnce(text, `"${read.pin.SHA256}"`, `"${read.sha256}"`, "pins.ts");
   next = replaceOnce(
@@ -333,7 +490,7 @@ function writeHostPin(text, read) {
     next = replaceOnce(next, `"${read.pin.FILES[file]}"`, `"${digest}"`, "pins.ts");
   }
 
-  return next;
+  return read.parts.reduce(writePart, next);
 }
 
 /** A file rewritten through `edit`, with what it wrote. */
@@ -367,6 +524,7 @@ function versionEdits(tool, from, to, claude) {
           `export const CURSOR_SDK_PIN = {\n  VERSION: "${from}",`,
           `export const CURSOR_SDK_PIN = {\n  VERSION: "${to}",`,
         ],
+        [`CURSOR_SDK: "${from}"`, `CURSOR_SDK: "${to}"`],
       ],
       image: [[`ARG CURSOR_SDK_VERSION=${from}\n`, `ARG CURSOR_SDK_VERSION=${to}\n`]],
     };

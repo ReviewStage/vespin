@@ -1,5 +1,5 @@
 /**
- * cursor-sessions.ts -- a coding agent's sessions on Cursor: the runner in its Cursor mode, which runs Cursor's SDK in its own process on the account's Cursor API key.
+ * cursor-sessions.ts -- a coding agent's sessions on Cursor: the runner in its Cursor mode, which runs Cursor's SDK in its own process on the account's Cursor API key in the cloud, and on a Mac's own Cursor sign-in there.
  *
  * The `cursor` implementation of `AgentSessions`
  * (`sessions/agent-sessions.ts`), on the launch machinery every native
@@ -16,8 +16,8 @@
  *   fresh session a new one, which the runner makes the agent under. The
  *   runner keeps the agent's store at the transcripts route under the
  *   project `cursor`, and resumes it from there in a sandbox made anew.
- * - Every turn is paid by the account's Cursor API key (Cursor keeps no
- *   plan here), declared as `CURSOR_API_KEY`: a placeholder minted for the
+ * - Every turn in the cloud is paid by the account's Cursor API key (Cursor
+ *   keeps no plan here), declared as `CURSOR_API_KEY`: a placeholder minted for the
  *   launch, swapped for the key at the sandbox's firewall on both hosts
  *   Cursor's SDK sends it to, `api2.cursor.sh`, where it is exchanged for
  *   the hour's token every other call carries, and `api.cursor.com`
@@ -31,8 +31,12 @@
  *   (`rewind.ts`), and a continued or forked one carries no session of its
  *   source's (`takeover.ts`), so it starts a fresh one handed the source's
  *   steps.
- * - A Mac runs no Cursor agent yet: its layout names no SDK, which refuses
- *   the launch.
+ * - A local agent runs on its Mac's own Cursor sign-in
+ *   (`AGENT_PAYER.MAC_SIGN_IN`), the key Cursor's SDK keeps there once the
+ *   member signs in (`vespin-host cursor-login`), so its launch is handed no
+ *   credential, and the runner hands the SDK none. It runs the SDK the Mac
+ *   registered (`MachineLayout`'s `cursorSdk`); a device that registered
+ *   none, a Linux host or a host from before it, refuses the launch.
  * - A `model` line with the agent's model as Cursor takes it goes ahead of
  *   every message, as the other harnesses' lines do.
  */
@@ -49,6 +53,7 @@ import {
 import type { Agent } from "@repo/database/models/agent-store";
 import { PROVIDER_KEY_UNREADABLE } from "@repo/database/models/provider-key-seal";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { AGENT_PAYER } from "@repo/features/agent-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { Effect, type Redacted } from "effect";
@@ -120,13 +125,21 @@ function cursor(options: RunnerSessionsOptions): RunnerHarness<{ readonly _tag: 
   const { userId } = options;
 
   /**
-   * The account's Cursor API key, declared as `CURSOR_API_KEY`; a Preview's
-   * stand-in where the key is gone or unreadable (`accounts/own-api-key.ts`);
-   * refused where neither is.
+   * No credential on a device, whose Cursor runs on the Mac's own sign-in;
+   * else the account's Cursor API key, declared as `CURSOR_API_KEY`; a
+   * Preview's stand-in where the key is gone or unreadable
+   * (`accounts/own-api-key.ts`); refused where neither is.
    */
   const launch = (agent: Agent, _layout: MachineLayout) =>
     Effect.gen(function* () {
       const turn = yield* launchPayerOf(userId, agent, MODEL_PROVIDER.CURSOR);
+
+      if (turn.payer === AGENT_PAYER.MAC_SIGN_IN) {
+        const onMachineLogin: HarnessLaunch = { env: {} };
+
+        return onMachineLogin;
+      }
+
       const environment = yield* HostedEnvironment;
 
       const key = yield* ownApiKeyOf(
@@ -163,7 +176,7 @@ function cursor(options: RunnerSessionsOptions): RunnerHarness<{ readonly _tag: 
     Effect.gen(function* () {
       const model = yield* selectionOf(agent);
 
-      // Note that a Mac names no SDK, since it runs no Cursor agent yet.
+      // Note that a device runs only the SDK it registered, and one that registered none runs no Cursor agent.
       if (layout.cursorSdk === undefined) return yield* new LaunchRefused({ reason: "no cursor" });
 
       const mode = launchPermissionMode(agent);

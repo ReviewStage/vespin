@@ -7,6 +7,7 @@ import {
   NO_TOGGLES,
   openCuts,
   SHOWN_MEDIA,
+  shownFiles,
   TRANSCRIPT_ITEM,
   transcriptItems,
   transcriptOriginOf,
@@ -64,7 +65,7 @@ describe("transcriptItems", () => {
     });
   });
 
-  it("draws the pictures a line carried over its words, one kept apart read by its id, leaving a file that is no picture to the panel", () => {
+  it("draws the pictures a line carried over its words, one kept apart read by its id, and its other files as chips under them", () => {
     const shot = "data:image/png;base64,iVBORw0KGgo=";
 
     const items = transcriptItems(
@@ -75,7 +76,19 @@ describe("transcriptItems", () => {
           parts: [
             { type: "text", text: "The button is cut off." },
             { type: "file", mediaType: "image/png", filename: "bug.png", url: shot },
+            {
+              type: "file",
+              mediaType: "text/markdown",
+              filename: "notes.md",
+              url: "data:text/markdown;base64,YQpiCg==",
+            },
             { type: "file", mediaType: "application/pdf", filename: "plan.pdf", url: "" },
+            {
+              type: "file",
+              mediaType: "text/plain",
+              filename: "broken.txt",
+              url: "data:text/plain;base64,%%%",
+            },
             {
               type: "file",
               mediaType: "image/png",
@@ -96,7 +109,48 @@ describe("transcriptItems", () => {
         { name: "bug.png", url: shot, pictureId: undefined },
         { name: "kept.png", url: undefined, pictureId: "picture-9" },
       ],
+      files: [
+        { name: "notes.md", base64: "YQpiCg==", size: "2 lines" },
+        { name: "plan.pdf", base64: undefined, size: undefined },
+        { name: "broken.txt", base64: "%%%" },
+      ],
     });
+  });
+
+  it("keeps each line's files apart where two lines reach one turn while it runs", () => {
+    const note = (id: string, name: string) => ({
+      id,
+      role: MESSAGE_ROLE.USER,
+      parts: [
+        { type: "text" as const, text: id },
+        {
+          type: "file" as const,
+          mediaType: "text/plain",
+          filename: name,
+          url: "data:text/plain;base64,YQ==",
+        },
+      ],
+      arrivedIn: { journalId: "turn", afterStep: 1 },
+    });
+
+    const items = transcriptItems(
+      [
+        { id: "ask", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Go." }] },
+        note("first", "a.txt"),
+        note("second", "b.txt"),
+        {
+          id: "turn",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [{ type: "step-start" }, { type: "text", text: "Working." }],
+        },
+      ],
+      { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
+    );
+
+    expect(shownFiles(items).map(({ message, file }) => [message, file.name])).toEqual([
+      ["first", "a.txt"],
+      ["second", "b.txt"],
+    ]);
   });
 
   it("opens an automation's transcript on its run's prompt, from the automation and its pull request, with the pictures it carried, leaving later lines as sent", () => {

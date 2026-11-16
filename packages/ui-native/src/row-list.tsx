@@ -6,6 +6,7 @@ import {
   Image,
   List,
   Menu,
+  Overlay,
   Section,
   Spacer,
   Text,
@@ -36,6 +37,7 @@ import {
   listStyle,
   monospacedDigit,
   onGeometryChange,
+  padding,
   refreshable,
   scrollContentBackground,
   scrollContentMargins,
@@ -720,9 +722,17 @@ export function ListSection({
       <HStack modifiers={[dropLink(onDropLink)]}>{pressable}</HStack>
     );
 
+  // Note that a lone + stands over the header's trailing end rather than beside it, so its 44 pt target lays out nothing and the header keeps its title's height, as a section with no + does; a press is taken across the whole of the overlay's own frame, where a target padded back to its glyph's height answered only inside it. The header keeps the +'s width clear at its end, so a long title or count at a large text size wraps before it rather than running under it. A section with words beside its +, such as Show all, stands them in a row after the header, since their width is the words'.
   const header =
     dropped === undefined || (add === undefined && more === undefined) ? (
       dropped
+    ) : more === undefined && add !== undefined ? (
+      <Overlay alignment="trailing">
+        <HStack modifiers={[padding({ trailing: ADD_TARGET.WIDTH })]}>{dropped}</HStack>
+        <Overlay.Content>
+          <SectionAddButton add={add} />
+        </Overlay.Content>
+      </Overlay>
     ) : (
       <HStack spacing={0}>
         {dropped}
