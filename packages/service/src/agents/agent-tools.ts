@@ -475,6 +475,7 @@ const START_REFUSAL_WORDS: ReadonlyMap<string, string> = new Map([
 const LOCAL_AGENT_REFUSAL_WORDS = {
   [LOCAL_AGENT_REFUSAL.MAC_AWAY]: `Not started: the device it would run on is offline, so it cannot take an agent (its vespin-host is not connected). Try again once it is back, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.CODEX]: `Not started: the device it would run on has no Codex set up yet, so it cannot run this model. Start on a Claude model, or in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
+  [LOCAL_AGENT_REFUSAL.CURSOR]: `Not started: the device it would run on has no Cursor set up: Cursor runs only on a Mac whose host is up to date. Start on another model, or in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.NO_HARNESS]: `Not started: the device it would run on cannot run this model. Start on another model, or in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.PREPARING]: `Not started: the device it would run on is still getting ready for local agents, downloading Claude Code, Codex, and GitHub's CLI. Try again in a few minutes, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.SETUP_FAILED]: `Not started: the device it would run on couldn't set up local agents, since its download of Claude Code, Codex, or GitHub's CLI failed. It tries again by itself, so try again in a few minutes, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,

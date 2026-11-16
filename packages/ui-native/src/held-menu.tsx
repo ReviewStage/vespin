@@ -1,7 +1,11 @@
 // held-menu.tsx -- the menu a long press opens on a picture, a recording, a file, or a message, as iOS's own apps open one: its acts in the system's menu over the thing lifted, and the full-screen viewer's share button holding the same acts.
 
 import { Button, ContextMenu, Host, Image, Menu, RNHostView } from "@expo/ui/swift-ui";
-import { accessibilityIdentifier, accessibilityLabel } from "@expo/ui/swift-ui/modifiers";
+import {
+  accessibilityIdentifier,
+  accessibilityLabel,
+  menuOrder,
+} from "@expo/ui/swift-ui/modifiers";
 import type { DraftCopy } from "@repo/features/draft-text";
 import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
 import { StyleSheet, View } from "react-native";
@@ -175,7 +179,12 @@ export function HeldActsButton({ acts }: { readonly acts: readonly HeldAct[] }) 
             color="white"
           />
         }
-        modifiers={[accessibilityLabel(SHARE_LABEL), accessibilityIdentifier("viewer-share")]}
+        modifiers={[
+          accessibilityLabel(SHARE_LABEL),
+          accessibilityIdentifier("viewer-share"),
+          // Note that the menu keeps its acts in the held thing's own order, Copy, Save to Photos, then Share…, though it opens upward from the viewer's foot, where the system would turn it over.
+          menuOrder("fixed"),
+        ]}
       >
         <HeldActButtons acts={acts} />
       </Menu>

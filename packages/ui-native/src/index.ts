@@ -158,6 +158,7 @@ export {
   ROW_ACTION_TONE,
   type RowAction,
   type RowActionTone,
+  type RowMenuGroup,
   type RowSubmenu,
   type RowSwipe,
   type TaskFold,
@@ -190,9 +191,13 @@ export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-
 
 export { useMinute } from "./minute.js";
 
+export { useNoticeFootRoom } from "./notice-lift.js";
+
 export { SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
+
+export { PictureSet, type SetPicture } from "./picture-set.js";
 
 export { ProblemLine } from "./problem-line.js";
 

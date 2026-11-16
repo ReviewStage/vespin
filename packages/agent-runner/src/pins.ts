@@ -9,7 +9,7 @@
  * app-server protocol types are generated from the same Codex
  * (`scripts/generate-codex-protocol.mjs`). A bump moves them together.
  * What a device fetches or carries of its own, a host's Node, and the
- * Claude Code, Codex, and GitHub CLI every host keeps for its agents to
+ * Claude Code, Codex, and GitHub CLI every host, and the Cursor SDK every Mac, keeps for its agents to
  * run on the box itself, is an `AgentToolPin` checked by size, digest, and
  * signature where it has one before it is kept (`@repo/host`'s
  * `localAgentTool`). Erasable syntax alone, so Node runs the generator over
@@ -188,6 +188,29 @@ export interface AgentToolPin {
    * the developer's could have written it since its archive was checked.
    */
   readonly FILES?: Readonly<Record<string, string>>;
+  /**
+   * The files under the kept folder `codesign` checks against `TEAM`, where
+   * the build that runs is not `BINARY` itself; `BINARY` alone where absent.
+   */
+  readonly SIGNED?: readonly string[];
+  /**
+   * Further archives the kept build is made of, each kept whole under a
+   * folder of its own inside it, as npm lays a package's dependencies out
+   * beside it; none for a tool that is one archive.
+   */
+  readonly PARTS?: readonly AgentToolPart[];
+}
+
+/** One more archive of a tool's kept build (`AgentToolPin.PARTS`), checked by its own size and digest before anything of it is kept. */
+export interface AgentToolPart {
+  /** The archive by its https address, a gzipped tar. */
+  readonly ARCHIVE: string;
+  readonly SHA256: string;
+  readonly BYTES: number;
+  /** The archive's folder kept, whole. */
+  readonly ROOT: string;
+  /** Where under the kept build it is kept. */
+  readonly INTO: string;
 }
 
 /**
@@ -247,13 +270,19 @@ export const NODE_MAC_PIN: AgentToolPin = {
 };
 
 /**
- * The Agent SDK release every host's own Claude Code is, and the Codex and
- * GitHub CLI releases beside it, each written out in its pins below rather
- * than read off `CLAUDE_CODE_PIN` and `CODEX_PIN`, so a bump fails the
+ * The Agent SDK release every host's own Claude Code is, and the Codex,
+ * Cursor SDK, and GitHub CLI releases beside it, each written out in its pins
+ * below rather than read off `CLAUDE_CODE_PIN`, `CODEX_PIN`, and
+ * `CURSOR_SDK_PIN`, so a bump fails the
  * repository check (`tools/oxlint/vespin/guards/agent-pins.ts`) until each
  * pin's address, size, and digests are read off the new release too.
  */
-const HOST_CLI_VERSION = { CLAUDE_CODE: "0.3.325", CODEX: "0.169.0", GH: "2.103.3" } as const;
+const HOST_CLI_VERSION = {
+  CLAUDE_CODE: "0.3.325",
+  CODEX: "0.169.0",
+  CURSOR_SDK: "1.4.0",
+  GH: "2.103.3",
+} as const;
 
 /**
  * Claude Code on a Mac host, This Mac's among them: the macOS arm64 build of
@@ -294,6 +323,102 @@ export const CODEX_MAC_PIN: AgentToolPin = {
     "bin/codex-code-mode-host": "10feae2abe764bcf2273e241ace67aecc360eb8c28a82a2988bf1d8498a9bacf",
     "codex-path/rg": "2caf75aae63d8fd944456686d5241f4864f5e2a930e0a93434e121873f7ff6bf",
   },
+};
+
+/** Where npm keeps a package's archive, by its name and the archive's own file name. */
+const npmArchive = (name: string, file: string): string =>
+  `https://registry.npmjs.org/${name}/-/${file}`;
+
+/**
+ * Cursor's SDK on a Mac host: the sandbox's release (`CURSOR_SDK_PIN.VERSION`),
+ * as npm keeps it, kept as the SDK's own package folder with what npm would
+ * install beside it under its `node_modules`: the macOS arm64 platform
+ * package, signed by Cursor (its `rg`, its sandbox, and its tree-sitter
+ * bindings), and the SDK's dependencies and its `zod` peer at the releases
+ * the sandbox's install resolves. The runner imports the SDK's entry
+ * (`BINARY`) from here, so the SDK finds every one of them beside itself as
+ * it looks for them. The SDK reads the Mac's own Cursor sign-in, which its
+ * `Cursor.auth.login()` keeps at `~/.cursor/sdk/auth.json`.
+ */
+export const CURSOR_SDK_MAC_PIN: AgentToolPin = {
+  NAME: "cursor-sdk",
+  VERSION: HOST_CLI_VERSION.CURSOR_SDK,
+  ARCHIVE: npmArchive("@cursor/sdk", `sdk-${HOST_CLI_VERSION.CURSOR_SDK}.tgz`),
+  SHA256: "a4cb4580916c60b1870fa9879542cc106bd531beb73f409bfdb94295db856425",
+  BYTES: 4_832_140,
+  ROOT: "package",
+  MEMBERS: ["package.json", "dist"],
+  BINARY: "dist/esm/index.js",
+  TEAM: "DCNK4UB866",
+  SIGNED: [
+    "node_modules/@cursor/sdk-darwin-arm64/bin/rg",
+    "node_modules/@cursor/sdk-darwin-arm64/bin/cursorsandbox",
+  ],
+  FILES: {
+    "dist/esm/index.js": "8dbaf5a53f69c08b7845efad9ca1ef9d3c8fcf2e00051578edac3fea776459b4",
+    "node_modules/@cursor/sdk-darwin-arm64/bin/rg":
+      "0e0f0d4dd175deae3ec5b88486a77210bd71d4edb22e917582062ae90dd541ba",
+    "node_modules/@cursor/sdk-darwin-arm64/bin/cursorsandbox":
+      "6070d808e304b9a08d4f271e85bcc009a72fd443d3f9a4cc685cb7ca4a694484",
+    "node_modules/@cursor/sdk-darwin-arm64/vendor/tree-sitter/binding.node":
+      "d8543f4774829b3ee40f6deec01217cb0614dbf278536835bbaf21a83d30d8f8",
+    "node_modules/@cursor/sdk-darwin-arm64/vendor/tree-sitter-bash/binding.node":
+      "6571991eed6ce9ad68bc952a3116010dd9df6287e114a75cb347101b774892fd",
+  },
+  PARTS: [
+    {
+      ARCHIVE: npmArchive(
+        "@cursor/sdk-darwin-arm64",
+        `sdk-darwin-arm64-${HOST_CLI_VERSION.CURSOR_SDK}.tgz`,
+      ),
+      SHA256: "fc9ee1ef51cc056e9b9ca2e125a6d67a9ba06fd03b394076badc283763eb21b5",
+      BYTES: 3_510_646,
+      ROOT: "package",
+      INTO: "node_modules/@cursor/sdk-darwin-arm64",
+    },
+    {
+      ARCHIVE: npmArchive("@bufbuild/protobuf", "protobuf-1.10.0.tgz"),
+      SHA256: "2219bc26e399a6e8ee56a3daf8a3bf47f4e935f425c22b812d991316dd665266",
+      BYTES: 189_348,
+      ROOT: "package",
+      INTO: "node_modules/@bufbuild/protobuf",
+    },
+    {
+      ARCHIVE: npmArchive("@connectrpc/connect", "connect-1.7.0.tgz"),
+      SHA256: "cdcd4386d3f4d750bcfe5b56d1247eb6c2ed0b2ddd3e496517033f925cfe5206",
+      BYTES: 104_162,
+      ROOT: "package",
+      INTO: "node_modules/@connectrpc/connect",
+    },
+    {
+      ARCHIVE: npmArchive("@connectrpc/connect-web", "connect-web-1.7.0.tgz"),
+      SHA256: "8c3fe6386c920e95cec20f483d228c2ba91e084fc99f9002a4445cd9707e700c",
+      BYTES: 8_004,
+      ROOT: "package",
+      INTO: "node_modules/@connectrpc/connect-web",
+    },
+    {
+      ARCHIVE: npmArchive("@statsig/js-client", "js-client-3.31.0.tgz"),
+      SHA256: "21d69db8b144ea65fd283aaac108398046a32885e10b65358e66aac290e42ec7",
+      BYTES: 231_613,
+      ROOT: "package",
+      INTO: "node_modules/@statsig/js-client",
+    },
+    {
+      ARCHIVE: npmArchive("@statsig/client-core", "client-core-3.31.0.tgz"),
+      SHA256: "7b598abbc7b16ab5f519da5b2747fa503e888b83c2d04a4eb2ae3efae7adba76",
+      BYTES: 41_491,
+      ROOT: "package",
+      INTO: "node_modules/@statsig/client-core",
+    },
+    {
+      ARCHIVE: npmArchive("zod", "zod-4.6.7.tgz"),
+      SHA256: "84efd155bed93270286e793fc951be270b536cbd5b0eeb111f0fa3967201d698",
+      BYTES: 1_141_941,
+      ROOT: "package",
+      INTO: "node_modules/zod",
+    },
+  ],
 };
 
 /** GitHub's CLI on a Mac host, as cli/cli's release keeps its macOS arm64 build, a zip, signed by GitHub. */

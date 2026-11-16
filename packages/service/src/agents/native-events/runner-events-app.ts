@@ -106,6 +106,7 @@ import {
 } from "../workspace-mcp/bearer.js";
 import { claudeCodeMoments } from "./claude-code-moments.js";
 import { codexMoments } from "./codex-moments.js";
+import { cursorMoments } from "./cursor-moments.js";
 import {
   NATIVE_MOMENT,
   type NativeHeld,
@@ -229,6 +230,23 @@ function estimatedTokens(json: string): number {
  * as the moments of the run, with what the projection holds as it is read.
  */
 type NativeReader = (message: WireValue, held: NativeHeld) => readonly NativeMoment[];
+
+/** The native harnesses whose runners post here. */
+type PostingHarness = Exclude<ConversationRuntime, typeof CONVERSATION_RUNTIME.RETIRED>;
+
+/** How each native harness's messages are read. */
+const NATIVE_READER = {
+  [CONVERSATION_RUNTIME.CLAUDE_CODE]: claudeCodeMoments,
+  [CONVERSATION_RUNTIME.CODEX]: codexMoments,
+  [CONVERSATION_RUNTIME.CURSOR]: cursorMoments,
+} as const satisfies Record<PostingHarness, NativeReader>;
+
+/** The harness a conversation's events are read as: its own, and Claude Code's for one on none, as a conversation from before runtimes read. */
+function harnessReadAs(runtime: ConversationRuntime | undefined): PostingHarness {
+  return runtime === undefined || runtime === CONVERSATION_RUNTIME.RETIRED
+    ? CONVERSATION_RUNTIME.CLAUDE_CODE
+    : runtime;
+}
 
 /** What the batch is applied for: the conversation, its agent, and what that agent runs on. */
 interface Applying {
@@ -1051,9 +1069,8 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
 
   if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(target.userId, agent.value.id));
-  const runtime = Option.map(routing, (row) => row.runtime);
-  const codex = Option.contains(runtime, CONVERSATION_RUNTIME.CODEX);
-  const reader = read ?? (codex ? codexMoments : claudeCodeMoments);
+  const harness = harnessReadAs(Option.getOrUndefined(Option.map(routing, (row) => row.runtime)));
+  const reader = read ?? NATIVE_READER[harness];
   const refusedFor = { agentId: agent.value.id, conversationId: target.conversationId };
 
   const body = yield* readBodyBytesEffect(MAX_BODY_BYTES).pipe(
@@ -1147,7 +1164,6 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   const { runtimeSessionId } = admitted.value;
 
   for (const failed of applied.value.failed) {
-    const harness = codex ? CONVERSATION_RUNTIME.CODEX : CONVERSATION_RUNTIME.CLAUDE_CODE;
     yield* sayTurnFailed(failed, harness, applying.payer, {
       agentId: agent.value.id,
       conversationId: target.conversationId,

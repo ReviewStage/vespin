@@ -56,7 +56,9 @@ export function nativeRuntimeOfSession(sessionId: string): NativeRuntime | undef
  * again and only a new agent goes on from.
  */
 export function harnessOf(runtime: ConversationRuntime | undefined): NativeRuntime | undefined {
-  return runtime === CONVERSATION_RUNTIME.CLAUDE_CODE || runtime === CONVERSATION_RUNTIME.CODEX
+  return runtime === CONVERSATION_RUNTIME.CLAUDE_CODE ||
+    runtime === CONVERSATION_RUNTIME.CODEX ||
+    runtime === CONVERSATION_RUNTIME.CURSOR
     ? runtime
     : undefined;
 }

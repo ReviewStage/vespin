@@ -16,6 +16,7 @@ import { fakeAppPlatform } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
+import { useAgentPermissionMode } from "./agent-approvals.js";
 import { AgentModelChip } from "./agent-model-chip.js";
 
 /**
@@ -32,7 +33,8 @@ import { AgentModelChip } from "./agent-model-chip.js";
  * says a choice nothing of the reader's pays for cannot run; a running
  * agent's never does. A chip handed the agent's permission mode names it
  * off Full access and offers the modes from its menu's Permissions row,
- * which stands while the catalog could not be read too.
+ * which stands while the catalog could not be read too; a Cursor agent's
+ * offers no Ask for approval, and says why.
  */
 
 const MODELS: readonly CatalogModel[] = [
@@ -394,6 +396,7 @@ test("a chip handed the agent's permission mode names it off Full access, and it
           usage: undefined,
           permissions: {
             mode: "ask",
+            modes: ["ask", "auto", "full_access"],
             applies: undefined,
             note: undefined,
             choose: (mode) => chosen.push(mode),
@@ -431,6 +434,63 @@ test("a chip handed the agent's permission mode names it off Full access, and it
   assert.deepEqual(chosen, ["auto"]);
 });
 
+test("a Cursor agent's Permissions offer Approve for me and Full access, never Ask for approval, and say why", () => {
+  const view = document.createElement("div");
+  document.body.append(view);
+  const root = createRoot(view);
+  roots.push(root);
+
+  function CursorChip() {
+    const permissions = useAgentPermissionMode({
+      agent: { id: "agent-1", runtime: AGENT_RUNTIME.CURSOR },
+      write: () => new Promise(() => undefined),
+    });
+
+    return createElement(AgentModelChip, {
+      model: {
+        choice: { model: "cursor/composer-2.5", effort: "default" },
+        note: undefined,
+        choose: () => undefined,
+        runtime: AGENT_RUNTIME.CURSOR,
+      },
+      models: undefined,
+      modelsFailed: true,
+      readModels: () => undefined,
+      usage: undefined,
+      permissions,
+    });
+  }
+
+  act(() => root.render(withQueryClient(createElement(CursorChip))));
+
+  const chip = view.querySelector<HTMLButtonElement>(".agent-model-chip button");
+  assert.ok(chip);
+  act(() => chip.click());
+
+  const permissions =
+    [...document.querySelectorAll<HTMLElement>('[aria-haspopup="listbox"]')].find((row) =>
+      row.textContent?.startsWith("Permissions"),
+    ) ?? assert.fail("the menu offers Permissions");
+
+  act(() => permissions.click());
+
+  const modes =
+    document.querySelector<HTMLElement>('[aria-label="Permissions"][role="listbox"]') ??
+    assert.fail("Permissions opens its modes");
+
+  const offered = [...modes.querySelectorAll<HTMLElement>('[role="option"]')].map(
+    (option) => option.textContent ?? "",
+  );
+
+  assert.deepEqual(
+    ["Ask for approval", "Approve for me", "Full access"].filter((label) =>
+      offered.some((option) => option.startsWith(label)),
+    ),
+    ["Approve for me", "Full access"],
+  );
+  assert.match(modes.parentElement?.textContent ?? "", /Cursor agents can't ask for approval/u);
+});
+
 test("the menu offers Permissions while the catalog could not be read, the one place the mode is changed", () => {
   const view = document.createElement("div");
   document.body.append(view);
@@ -452,6 +512,7 @@ test("the menu offers Permissions while the catalog could not be read, the one p
           usage: undefined,
           permissions: {
             mode: "full_access",
+            modes: ["ask", "auto", "full_access"],
             applies: undefined,
             note: undefined,
             choose: () => undefined,

@@ -332,3 +332,34 @@ export const CODEX_TOOL = {
   SUBAGENT: "collabAgentToolCall",
   IMAGE_VIEW: "imageView",
 } as const;
+
+/**
+ * Cursor's own tools, by the names its transcript stores their calls under:
+ * the SDK's own tool name (`read`, `shell`, `task`) behind `cursor` and
+ * capitalized, since its bare names (`grep`, `glob`) are the names of tools
+ * of ours a stored call of another kind already holds. A coding agent
+ * running on Cursor does its shell, file, search, todo, and delegation work
+ * through these. A call to our own MCP server, which Cursor reaches as a
+ * custom tool named as Claude Code names it (`mcp__team__read_inbox`), is
+ * stored under our tool's name, one to an integration's server as that
+ * integration's call, and one to any other MCP server as `cursorMcp`
+ * (`cursor-moments.ts`).
+ */
+export const CURSOR_TOOL = {
+  SHELL: "cursorShell",
+  READ: "cursorRead",
+  WRITE: "cursorWrite",
+  EDIT: "cursorEdit",
+  DELETE: "cursorDelete",
+  LS: "cursorLs",
+  GLOB: "cursorGlob",
+  GREP: "cursorGrep",
+  SEM_SEARCH: "cursorSemSearch",
+  READ_LINTS: "cursorReadLints",
+  WEB_SEARCH: "cursorWebSearch",
+  WEB_FETCH: "cursorWebFetch",
+  UPDATE_TODOS: "cursorUpdateTodos",
+  CREATE_PLAN: "cursorCreatePlan",
+  TASK: "cursorTask",
+  MCP: "cursorMcp",
+} as const;

@@ -34,7 +34,12 @@ import {
   type UserIdResolver,
 } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
-import { withCursorModels } from "../providers/cursor-models.js";
+import {
+  CursorModelCatalog,
+  macsWithCursor,
+  offersCursor,
+  withCursorModels,
+} from "../providers/cursor-models.js";
 import { ModelCatalog, offeredToAccount } from "../providers/model-catalog.js";
 
 export interface ModelsProcedureSeams {
@@ -64,12 +69,26 @@ export function modelsProcedures(seams: ModelsProcedureSeams) {
         accountExperimentOn(context.userId, EXPERIMENT.CURSOR),
       );
 
-      const offered = withCursorModels(offeredToAccount(models, fastOffer), {
+      const cursorOffer = {
         experimentOn: cursorOn,
         apiVersion: presentedClient(context.request.headers)?.apiVersion,
-      });
+      };
 
-      const macs = yield* hostedStoreOrUnavailable(macOffers(context.userId));
+      // Cursor's own list is read with the account's key only where it is offered at all.
+      const cursorModels = offersCursor(cursorOffer)
+        ? yield* (yield* CursorModelCatalog).forAccount(context.userId)
+        : [];
+
+      const offered = withCursorModels(
+        offeredToAccount(models, fastOffer),
+        cursorOffer,
+        cursorModels,
+      );
+
+      const macs = macsWithCursor(
+        yield* hostedStoreOrUnavailable(macOffers(context.userId)),
+        cursorOffer,
+      );
 
       return {
         models: yield* hostedStoreOrUnavailable(markedUnconnected(context.userId, offered)),
