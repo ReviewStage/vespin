@@ -1349,7 +1349,12 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
           {mode === undefined ? null : (
             <ListSection
               title={PERMISSION_MODE_WORDS.GROUP}
-              footer={mode.note ?? PERMISSION_MODE_WORDS.APPLIES}
+              footer={
+                mode.note ??
+                [mode.missing, PERMISSION_MODE_WORDS.APPLIES]
+                  .filter((words) => words !== undefined)
+                  .join(" ")
+              }
               footerTone={footerToneOf(mode.note)}
             >
               <PickRows
