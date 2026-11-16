@@ -3,6 +3,7 @@
 import { dateChipText } from "@repo/features/date-mention";
 import { type Draft, draftKindOf, readDraft } from "@repo/features/draft-text";
 import {
+  type Entity,
   type EntityKind,
   entityOfDestination,
   entityOfMention,
@@ -118,6 +119,8 @@ export interface MarkdownChip {
   readonly target: LinkTarget;
   /** The GitHub pull request's or issue's page it names, by which its standing is read; none for any other chip. */
   readonly github?: string | undefined;
+  /** The entity it names, by its ids, by which the app finds its mark (`ChipMarkOf`); none for a date. */
+  readonly of?: Entity | undefined;
 }
 
 /**
@@ -189,6 +192,12 @@ export interface MarkdownReading {
    * join a paragraph's lines with a space, as Markdown reads them.
    */
   readonly typed?: boolean | undefined;
+  /**
+   * Whether raw HTML in the words stays unseen, as GitHub's own page hides a
+   * pull request body's comments, templates and tags; elsewhere it is drawn
+   * as the words it was written with.
+   */
+  readonly hidesHtml?: boolean | undefined;
 }
 
 /** A line break inside a paragraph's words, which Markdown reads as a space. */
@@ -252,10 +261,17 @@ function linkTarget(href: string): LinkTarget {
     : { kind: LINK_TARGET.WEB, href };
 }
 
-function chipOf(entity: EntityKind, name: string, target: LinkTarget): MarkdownChip {
+function chipOf(
+  entity: EntityKind,
+  name: string,
+  target: LinkTarget,
+  of?: Entity | undefined,
+): MarkdownChip {
   const word = entityWordHeard(entity, name);
 
-  return { entity, name, heard: word === undefined ? name : `${word} ${name}`, target };
+  const chip = { entity, name, heard: word === undefined ? name : `${word} ${name}`, target };
+
+  return of === undefined ? chip : { ...chip, of };
 }
 
 /** No names held: the app reads none for a chip yet, so a place is called by its label, or by its kind where it has none. */
@@ -278,8 +294,9 @@ function linkChip(href: string, label: string, reading: MarkdownReading): Markdo
 
   if (chip.kind === LINK_CHIP.PLACE) {
     const look = placeChipLook(chip.link.place, chip.name, NO_NAMES);
+    const entity = entityOfDestination(chip.link.place);
 
-    return chipOf(entityOfDestination(chip.link.place).kind, look.name, linkTarget(href));
+    return chipOf(entity.kind, look.name, linkTarget(href), entity);
   }
 
   if (chip.mention.kind === MENTION_KIND.DATE) {
@@ -288,7 +305,8 @@ function linkChip(href: string, label: string, reading: MarkdownReading): Markdo
     return chipOf(MENTION_KIND.DATE, name, { kind: LINK_TARGET.NONE });
   }
 
-  const drawn = chipOf(entityOfMention(chip.mention).kind, chip.name, linkTarget(href));
+  const entity = entityOfMention(chip.mention);
+  const drawn = chipOf(entity.kind, chip.name, linkTarget(href), entity);
   const github = githubAddressOf(chip.mention);
 
   return github === undefined ? drawn : { ...drawn, github };
@@ -423,6 +441,8 @@ function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): Markdo
   switch (node.type) {
     case "text":
     case "html":
+      if (node.type === "html" && reader.reading.hidesHtml === true) return [];
+
       return wordsRun(
         reader.reading.typed === true ? node.value : node.value.replace(SOFT_BREAK, " "),
         marks,
@@ -568,7 +588,9 @@ function blockOf(node: RootContent, reader: Reader): MarkdownBlock[] {
     case "thematicBreak":
       return [{ kind: MARKDOWN_BLOCK.RULE }];
     case "html":
-      return [{ kind: MARKDOWN_BLOCK.PARAGRAPH, runs: wordsRun(node.value, PLAIN) }];
+      return reader.reading.hidesHtml === true
+        ? []
+        : [{ kind: MARKDOWN_BLOCK.PARAGRAPH, runs: wordsRun(node.value, PLAIN) }];
     case "footnoteDefinition":
       return blocksOf(node.children, reader);
     // Note that a definition is read through by its references, and front matter is no message's.
@@ -654,6 +676,19 @@ export function heardLine(
   const hearing = { chip: chipHeard, suggestion: suggestionHeard };
 
   return runs.some(holdsChip) ? runs.map((run) => heardRun(run, hearing)).join("") : undefined;
+}
+
+/**
+ * Whether Markdown draws anything at all once read, such as a pull request
+ * body that holds only a template's HTML comments. Note that the reader's
+ * repository, clock and zone only name chips and dates, never whether a
+ * block stands, so none is asked for.
+ */
+export function markdownShows(
+  words: string,
+  { hidesHtml }: Pick<MarkdownReading, "hidesHtml">,
+): boolean {
+  return markdownBlocks(words, { repository: null, now: 0, zone: "UTC", hidesHtml }).length > 0;
 }
 
 /** Markdown as the blocks the app draws, read as the panel reads it; words nested too deep to parse safely are one block of plain text. */

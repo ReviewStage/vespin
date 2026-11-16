@@ -57,6 +57,9 @@ import {
 } from "./transcript-model.js";
 import { Video } from "./video.js";
 
+/** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart. */
+const RUN_GAP = 1;
+
 /** How far a row a fold or a group holds stands in, for each step it is held. */
 const DEPTH_INSET = 18;
 
@@ -121,9 +124,10 @@ const styles = StyleSheet.create({
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
   saidHeld: { alignSelf: "stretch", alignItems: "flex-end" },
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
+  stamp: { alignSelf: "center", fontWeight: "500", paddingBottom: SPACE.TIGHT },
   said: {
     maxWidth: "82%",
-    borderRadius: 18,
+    borderRadius: RADIUS.BUBBLE,
     paddingHorizontal: SPACE.ROW + 4,
     paddingVertical: SPACE.ROW,
   },
@@ -133,7 +137,7 @@ const styles = StyleSheet.create({
   chip: {
     flexShrink: 1,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 6,
+    borderRadius: RADIUS.TAG,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
@@ -142,7 +146,7 @@ const styles = StyleSheet.create({
     gap: SPACE.TIGHT + 2,
     paddingTop: SPACE.TIGHT,
   },
-  block: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
+  block: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.BLOCK, overflow: "hidden" },
   blockTitle: { paddingHorizontal: SPACE.ROW, paddingTop: 6 },
   blockText: { padding: SPACE.ROW, paddingTop: SPACE.TIGHT },
   media: { gap: SPACE.ROW },
@@ -600,7 +604,7 @@ function retryOf(drawing: RowDrawing, id: string): (() => void) | undefined {
   return retry === undefined ? undefined : () => retry(id);
 }
 
-/** One thing a call showed, as its kind draws it: a picture, a recording in the system's player, or a sound clip in its strip; a picture or a recording whose bytes could not be read offers Try again. */
+/** One thing a call showed, as its kind draws it: a picture, a recording in the system's player, or a sound clip in its strip; one whose bytes could not be read offers Try again. */
 function ShownMediaView({
   shown,
   source,
@@ -623,8 +627,7 @@ function ShownMediaView({
         />
       );
     case SHOWN_MEDIA.AUDIO:
-      // Note that a clip whose bytes could not be read stands as one on its way, since its strip offers no Try again yet.
-      return <AudioClip source={source ?? undefined} label={shown.label} />;
+      return <AudioClip source={source} label={shown.label} onRetry={onRetry} />;
     case SHOWN_MEDIA.PICTURE:
       return <Picture source={source} alt={shown.label} onRetry={onRetry} />;
   }
@@ -646,11 +649,23 @@ function TranscriptRow({
   switch (item.kind) {
     case TRANSCRIPT_ITEM.SAID:
       return (
-        <View style={[styles.row, styles.saidRow]}>
+        <View
+          style={[
+            styles.row,
+            styles.saidRow,
+            item.joinsAbove ? { paddingTop: RUN_GAP } : null,
+            item.joinsBelow ? { paddingBottom: RUN_GAP } : null,
+          ]}
+        >
+          {item.stamp === undefined ? null : (
+            <Text style={[styles.stamp, { fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }]}>
+              {item.stamp}
+            </Text>
+          )}
           {item.from === undefined ? null : (
             <OriginFrom parts={item.from} onOpenLink={drawing.onOpenLink} />
           )}
-          {item.sender === undefined ? null : (
+          {item.sender === undefined || item.joinsAbove ? null : (
             <Text
               accessibilityRole="header"
               style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT }}
@@ -685,11 +700,6 @@ function TranscriptRow({
             </CopyWordsMenu>
           )}
           {item.body === undefined ? null : <OriginBody body={item.body} />}
-          {item.sent === undefined ? null : (
-            <Text style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}>
-              {item.sent}
-            </Text>
-          )}
         </View>
       );
     case TRANSCRIPT_ITEM.FOOT:

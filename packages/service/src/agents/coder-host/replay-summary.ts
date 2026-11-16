@@ -15,8 +15,9 @@ import {
   base64Bytes,
   isInlinedText,
 } from "@repo/features/agent-wire";
-import { MODEL_PROVIDER, type ModelChoice, type ModelProvider } from "@repo/features/models-wire";
+import { MODEL_PROVIDER, type ModelChoice } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import type { ModelApiProvider } from "@repo/features/provider-key-wire";
 import { failureKind } from "@repo/runtime/effect";
 import { generateText, type LanguageModel } from "ai";
 import { Duration, Effect, Option, Redacted } from "effect";
@@ -119,7 +120,7 @@ export interface SummaryModel {
 const OTHER_PROVIDER_SUMMARY = {
   [MODEL_PROVIDER.ANTHROPIC]: "claude-sonnet-5-5",
   [MODEL_PROVIDER.OPENAI]: "gpt-6.1-sol",
-} as const satisfies Record<ModelProvider, string>;
+} as const satisfies Record<ModelApiProvider, string>;
 
 const OTHER_PROVIDER_SUMMARY_EFFORT = "low";
 
@@ -141,7 +142,7 @@ export type SummaryModelOf = (
 
 /** The provider's own options for the lowest effort, with no thinking asked for. */
 function summaryOptions(
-  provider: ModelProvider,
+  provider: ModelApiProvider,
   effort: string,
 ): Record<string, Record<string, string>> {
   return provider === MODEL_PROVIDER.ANTHROPIC
@@ -489,7 +490,11 @@ export const productionSummaryModel = (
     if (named === undefined) return undefined;
     const environment = yield* HostedEnvironment;
 
-    const own = yield* ownKeyOf(userId, named.provider, environment).pipe(
+    // Note that a Cursor agent's summary is written on another provider's key, since Cursor's key buys no model call outside its agents.
+    const preferred =
+      named.provider === MODEL_PROVIDER.CURSOR ? MODEL_PROVIDER.ANTHROPIC : named.provider;
+
+    const own = yield* ownKeyOf(userId, preferred, environment).pipe(
       Effect.catch((failure) =>
         Effect.as(
           Effect.logWarning(`a replay summary's key could not be read: ${failureKind(failure)}`),

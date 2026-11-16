@@ -48,7 +48,7 @@ export interface TriggerDelivery extends TriggerRequest {
   readonly payload: UnparsedWireValue;
 }
 
-/** What an event is about, by the provider's own id, which the trigger's cooldown keys on. */
+/** What an event is about, by the provider's own id, which its run's history names. */
 interface TriggerSubject {
   readonly id: string;
   readonly title?: string;

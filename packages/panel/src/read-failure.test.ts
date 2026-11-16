@@ -2,11 +2,8 @@
 
 import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import {
-  AGENT_CALL_FAILURE,
-  type AgentChangesAnswerView,
-  INBOX_SCOPE_KIND,
-} from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import type { RepositoryChangesAnswerView } from "@repo/features/pull-request-view";
 import {
   DESCRIPTION_ACTOR,
   type DescriptionRevisionLine,
@@ -42,7 +39,7 @@ import { drawnSidebar } from "./testing/desktop-sidebar.js";
 import { DOCUMENT_TASK } from "./testing/document-task.js";
 import { overEveryTask } from "./testing/history-rows.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
-import { agentsControl, tasksControl } from "./testing/tasks-control.js";
+import { tasksControl } from "./testing/tasks-control.js";
 import { windowRouter } from "./testing/window-router.js";
 
 /**
@@ -254,7 +251,7 @@ test("the Inbox's list says its feed could not be read as the sidebar does, and 
 test("a side panel tab whose read failed says so alike, and Retry reads them again", async () => {
   let reads = 0;
 
-  const readChanges = (): Promise<AgentChangesAnswerView> => {
+  const readChanges = (): Promise<RepositoryChangesAnswerView> => {
     reads += 1;
 
     return Promise.resolve(reads === 1 ? UNANSWERED : { pullRequest: null });
@@ -264,8 +261,7 @@ test("a side panel tab whose read failed says so alike, and Retry reads them aga
 
   const page = await mount(
     createElement(ChangesTabReading, {
-      agentId: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-      control: agentsControl({}),
+      pullRequest: { workspaceId: "workspace-acme", repository: "acme/relay", number: 42 },
       shown: true,
       repository: null,
       tree: { open: false, onToggle: ignore },

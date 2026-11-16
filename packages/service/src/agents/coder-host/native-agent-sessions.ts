@@ -39,6 +39,7 @@ import { workspaceStepOf } from "../written-mentions.js";
 import { agentAuthorship } from "./checkout.js";
 import { claudeCodeSessions } from "./claude-code-sessions.js";
 import { codexSessions } from "./codex-sessions.js";
+import { cursorSessions } from "./cursor-sessions.js";
 import { agentCoderInstructions, CODER_HARNESS, type CoderHarness } from "./instructions.js";
 import type { RunnerServices, RunnerSessionsOptions } from "./runner-sessions.js";
 import { NativeAgentSessions } from "./runtime-sessions.js";
@@ -164,6 +165,14 @@ export function nativeAgentSessionsLayer(
                 ...optionsFor(account, origin, CODER_HARNESS.CODEX),
                 tokenUrl: new URL(RUNNER_TOKEN_PATH, origin).href,
               }).pipe(Effect.provideContext(context)),
+            );
+          }
+
+          if (runtime === CONVERSATION_RUNTIME.CURSOR) {
+            return Option.some(
+              cursorSessions(optionsFor(account, origin, CODER_HARNESS.CURSOR)).pipe(
+                Effect.provideContext(context),
+              ),
             );
           }
 

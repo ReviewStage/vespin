@@ -25,7 +25,7 @@ test("a link to a pull request a listed task's agent opened names that task and 
   assert.equal(listedPullRequestOf("https://github.com/acme/relay/pull/7", tasks), undefined);
 });
 
-test("a pull request named without its agent, as a service before it sends one, is not found", () => {
+test("a pull request named without its agent, as a service before it sends one, still names its task", () => {
   const tasks = [{ taskId: TASK, pullRequests: [{ url: URL }] }];
-  assert.equal(listedPullRequestOf(URL, tasks), undefined);
+  assert.deepEqual(listedPullRequestOf(URL, tasks), { taskId: TASK, agentId: undefined });
 });
