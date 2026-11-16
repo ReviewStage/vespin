@@ -153,6 +153,7 @@ import { type ListedMember, useListedMembers, useMemberPictures } from "../membe
 import { useMenuPhotos } from "../menu-photos.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns } from "../place-columns.js";
+import { usePushStood } from "../push-stood.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useTasksCollection } from "../sidebar-pick.js";
@@ -2513,7 +2514,9 @@ export function TaskScreen() {
   const handed = useHandToSplit(SPLIT_TAB.TASKS, handing) && handing !== undefined;
   // Note that the open is told apart by the task's id, as the split view's is, so a number found and handed over on an unfold carries the same open; a number not yet found shows no task to count.
   useSurfaceOpen(handed || handing === undefined ? undefined : PRODUCT_SURFACE.TASK, handing);
-  useTaskReadOnOpen(handed ? undefined : overview?.task.id);
+  // Note that the read waits for the push to end, since the list it redraws under a push still running left the page unpushed (`usePushStood`).
+  const stood = usePushStood();
+  useTaskReadOnOpen(handed || !stood ? undefined : overview?.task.id);
 
   return (
     <>
