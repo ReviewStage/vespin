@@ -986,7 +986,9 @@ function listedTask(
  * and one canceled, so the list draws every status's mark. Note that those
  * last two are named with Markdown's marks, and with letters beyond Latin
  * and an emoji, so a search's bold title shows every mark as typed and
- * lands on the right letters.
+ * lands on the right letters. With the reference journey's high, its tasks
+ * stand at every priority, an urgent launch and a sub-task weighed by no one
+ * among them, so the list draws every priority's mark too.
  */
 const LISTED_TASKS: readonly TaskSummary[] = [
   listedTask(LISTED.COPY, "Invite email copy", {
@@ -996,6 +998,7 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     updatedAt: LANDED - 3 * HOUR,
     parentTaskId: TASK.INVITES,
     blocks: [LISTED.LAUNCH],
+    priority: TASK_PRIORITY.NONE,
   }),
   listedTask(LISTED.LANDING, "Invite landing page", {
     repository: "ada/relay",
@@ -1021,6 +1024,7 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     updatedAt: LANDED - 7 * HOUR,
     blocked: true,
     blockedBy: [LISTED.COPY],
+    priority: TASK_PRIORITY.URGENT,
   }),
   // Note that the account follows a teammate's task, which the Tasks list draws under Following.
   listedTask(LISTED.BILLING, "Billing export", {
@@ -2173,6 +2177,42 @@ export function inboxRemindersAppState(
   return {
     ...state,
     [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.TASK]: reminded } },
+  };
+}
+
+/** The read marks a fixture run made, by the item's id: whether each stands unread. */
+export type InboxReadMarks = ReadonlyMap<string, boolean>;
+
+/**
+ * The document with the read marks a fixture run made laid over the staged
+ * feed's items, as the host draws one the moment it is asked, so a fixture
+ * run's Inbox row turns read or unread under a flow's swipe. The very
+ * document where none was made, and every unmarked item kept as it was.
+ */
+export function inboxReadMarksAppState(
+  state: AppStateSnapshot,
+  marks: InboxReadMarks,
+): AppStateSnapshot {
+  const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.TASK];
+
+  if (marks.size === 0 || fed === undefined) return state;
+
+  const marked = Object.fromEntries(
+    Object.entries(fed).map(([taskId, items]) => [
+      taskId,
+      items.map((item) => {
+        const unread = marks.get(item.id);
+
+        return unread === undefined || (item.unread === true) === unread
+          ? item
+          : { ...item, unread };
+      }),
+    ]),
+  );
+
+  return {
+    ...state,
+    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.TASK]: marked } },
   };
 }
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, createElement, useRef } from "react";
+import { act, createElement, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { leavingPlace } from "../../testing/leaving-place.js";
@@ -374,6 +374,46 @@ test("a row listed again before its exit has played stands again, and comes back
     [{ opacity: 0 }, { opacity: 1 }],
     [{ transform: "translateX(-16px)" }, { transform: "none" }],
   ]);
+});
+
+test("a row listed again by its own list before the motion took its exit stands, rather than playing an exit that nothing lets go", () => {
+  for (const [name, value] of Object.entries(TOKENS)) {
+    document.documentElement.style.setProperty(name, value);
+  }
+
+  let relist: (keys: readonly string[]) => void = () => undefined;
+
+  // Note that the list holds its rows itself, so a change of its own draws it while the motion around it hears nothing.
+  function OwnRows(): React.JSX.Element {
+    const [keys, setKeys] = useState<readonly string[]>(["A", "B", "C"]);
+    relist = setKeys;
+
+    return createElement(Rows, { keys });
+  }
+
+  function Moving(): React.JSX.Element {
+    const box = useRef<HTMLDivElement>(null);
+
+    return createElement(ListMotion, {
+      root: box,
+      children: createElement("div", { ref: box }, createElement(OwnRows)),
+    });
+  }
+
+  root = createRoot(document.body.appendChild(document.createElement("div")));
+  act(() => root?.render(createElement(Moving)));
+  act(() => relist(["A", "C"]));
+
+  act(() => {
+    relist(["A", "B", "C"]);
+    root?.render(createElement(Moving));
+  });
+  act(() => {
+    for (const each of played) each.finish();
+  });
+
+  expect(drawn()).toEqual([["A", "B", "C"]]);
+  expect(rowOf("B")?.hasAttribute("inert")).toBe(false);
 });
 
 test("a row its list places itself, as a virtual run does, stands again where it is placed, not over the run's first row", () => {
