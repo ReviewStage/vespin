@@ -110,6 +110,7 @@ import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns, useInFront } from "../place-columns.js";
+import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
@@ -136,9 +137,6 @@ const INBOX_TITLE = "Inbox";
 
 /** The act under a read that failed, as the app's other failures say it, rather than the panel's Retry. */
 const TRY_AGAIN = "Try again";
-
-/** The compact list's search, which it never narrows by: the Search tab finds threads there. */
-const UNSEARCHED: Pick<InboxHeld, "search" | "setSearch"> = { search: "", setSearch: () => {} };
 
 /** What a pushed thread's screen says where the feed, once read, holds no such thread, such as one a link names that was deleted. */
 const THREAD_NOT_FOUND = "This thread isn't in your inbox";
@@ -1007,24 +1005,34 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
 
 // A compact window: the list under its scopes' segmented control, the account's photo
 // opening Settings and the workspace switcher beside it at the bar's leading
-// edge, and its ⋯ menu as a round glass button at its trailing one, each row
-// pushing its thread as the Stack's next screen. Note that it stands no
-// search of its own, since a compact window's tab bar, or the folded Duo's
-// rail, always stands the Search tab beside it, whose Inbox scope finds the
-// same threads, as Photos keeps one search; a regular window's list column
-// keeps its field, and the words typed there wait over a fold.
-function InboxStackList({ remind: held }: Pick<InboxHeld, "remind">) {
+// edge, and its search and its ⋯ menu as round
+// glass buttons at its trailing one, each row pushing its thread as the Stack's
+// next screen.
+function InboxStackList(held: InboxHeld) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
 
-  const { show, search, listing, acts, scopes, menu, remind, choosing, chooseStart } =
-    useInboxScreen({ ...UNSEARCHED, remind: held });
+  const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing, chooseStart } =
+    useInboxScreen(held);
+
+  const field = useRefilledSearchField(search);
 
   // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
   return (
     <>
-      <Stack.Screen options={{ title: choosing?.title ?? INBOX_TITLE }} />
+      <Stack.Screen options={{ title: choosing?.title ?? INBOX_TITLE }}>
+        {choosing !== undefined ? null : (
+          <Stack.SearchBar
+            ref={field}
+            placeholder={SEARCH_INBOX}
+            placement="integratedButton"
+            allowToolbarIntegration={false}
+            onChangeText={(event) => setSearch(event.nativeEvent.text)}
+            onCancelButtonPress={() => setSearch("")}
+          />
+        )}
+      </Stack.Screen>
       {choosing !== undefined ? null : <SettingsBarButton switcher={switcher} />}
       <Stack.Toolbar placement="right">
         {choosing !== undefined ? (
@@ -1233,7 +1241,7 @@ export function InboxListScreen() {
       {sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
         <InboxSplitScreen selected={selected} select={select} held={held} />
       ) : (
-        <InboxStackList remind={remind} />
+        <InboxStackList {...held} />
       )}
       {remind.sheet}
     </>
