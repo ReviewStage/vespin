@@ -14,7 +14,6 @@ import { pageFrameUrl } from "@repo/features/page-frame";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
-import type { AppStateSnapshot } from "@repo/host/app-state";
 import { ProviderMark } from "@repo/ui";
 import { ACTOR_KIND, type Actor, SOMEONE_REASON } from "@repo/ui/actor-model";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
@@ -26,7 +25,7 @@ import { afterEach, beforeAll, beforeEach, test } from "vitest";
 import { taskCards } from "../desktop/side-panel.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { signedInAs } from "../testing/app-state.js";
+import { type ListedAppState, signedInAs } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { heardWords } from "../testing/heard-words.js";
 import { focusRestOn, restOn } from "../testing/hint-rest.js";
@@ -737,7 +736,7 @@ test("a message or a start another agent was sent shows its words whole under it
 });
 
 /** Main's document holding one agent on another task, running on Codex, as the plan list carries it. */
-function stateHoldingCodexAgent(agentId: string): AppStateSnapshot {
+function stateHoldingCodexAgent(agentId: string): ListedAppState {
   const snapshot = signedInAs({ id: "user-sam", email: "sam@example.com", name: "Sam Okafor" });
 
   return {
@@ -833,7 +832,7 @@ test("a call that showed or read a page hangs the page's card as its tab does, p
   const taskId = "task-pricing";
   const snapshot = signedInAs({ id: "user-sam", email: "sam@example.com", name: "Sam Okafor" });
 
-  const state: AppStateSnapshot = {
+  const state: ListedAppState = {
     ...snapshot,
     tasks: { ...IDLE_TASKS_VIEW, activeTaskId: taskId },
     [LIVE_READ.PAGES]: {
@@ -1084,6 +1083,30 @@ test("a call on one of its owner's several accounts ends in the account's chip, 
   assert.ok(row, "the call's row is a fold's line");
   assert.match(row.textContent ?? "", /^Ran\s*save_issue\s*Acme$/u);
   assert.equal(row.querySelector(".tool-place")?.textContent?.trim(), "Acme");
+});
+
+test("a search of a server's tools names the server by its chip after the verb, then the query, and ends in no tag", () => {
+  const { container } = drawn(
+    assistant([
+      toolPart("connection_search", { connection: "slack", query: "send message" }, { tools: [] }),
+    ]),
+    true,
+  );
+
+  const row = container.querySelector<HTMLElement>(
+    '[data-call-id="call-connection_search"] summary',
+  );
+
+  assert.ok(row, "the call's row is a fold's line");
+  assert.match(row.textContent ?? "", /^Searched\s*Slack\s*tools for “send message”$/u);
+  const chip = row.querySelector(".tool-chip");
+  assert.equal(chip?.textContent?.trim(), "Slack");
+  assert.equal(
+    chip?.querySelector("svg")?.outerHTML,
+    renderToStaticMarkup(createElement(ProviderMark, { provider: INTEGRATION_PROVIDER.SLACK })),
+    "the chip wears Slack's mark",
+  );
+  assert.equal(row.querySelector(".tool-place"), null, "the row ends in no tag");
 });
 
 test("a connection_execute with no integration's call under it keeps its own row", () => {

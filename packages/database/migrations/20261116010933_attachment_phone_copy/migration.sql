@@ -1,0 +1,2 @@
+ALTER TABLE "attachment" DROP CONSTRAINT "attachment_mp4_copy";--> statement-breakpoint
+ALTER TABLE "attachment" ADD CONSTRAINT "attachment_phone_copy" CHECK ("mp4_bytes" is null or ("content_type" in ('video/webm', 'audio/ogg') and octet_length("mp4_bytes") <= 4000000));

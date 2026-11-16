@@ -23,7 +23,8 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { HOST_LIVE, type TaskListStanding } from "@repo/features/tasks-view";
+import type { TaskListParts } from "@repo/features/tasks-view";
+import { HOST_LIVE } from "@repo/features/tasks-view";
 import { formatInstant } from "@repo/features/time-format";
 import {
   type AccountExperiment,
@@ -39,7 +40,7 @@ import {
   workspaceExperimentChoicesFrom,
 } from "@repo/settings";
 import { type AppSettingsView, appSettingsView } from "@repo/settings/wire";
-import { Predicate, Struct } from "effect";
+import { Predicate } from "effect";
 import type { ReadonlyRecord } from "effect/Record";
 import {
   type AppHistories,
@@ -50,7 +51,6 @@ import {
   type AppStateSnapshot,
   type AppTranscript,
   OWN_TRANSCRIPT,
-  type TaskListParts,
   withAppStateDelivery,
 } from "./app-state.js";
 
@@ -227,19 +227,14 @@ export function sameAccount(
 
 export const selectAccess = (state: AppStateSnapshot) => state.access;
 export const selectAudio = (state: AppStateSnapshot) => state.audio;
-export const selectTasks = (state: AppStateSnapshot) => state.tasks;
 
-/** What main holds of the account's tasks but the list itself, which a window reads from its task list's collections; the same object across a delivery moving only the list, as the document's sharing keeps it (`shareAppState`). */
-export const selectTaskListStanding = (state: AppStateSnapshot): TaskListStanding =>
-  Struct.omit(state.tasks, ["tasks"]);
+/** What main holds of the account's tasks but the list itself, which a window reads from its task list's collections. */
+export const selectTasks = (state: AppStateSnapshot) => state.tasks;
 
 export const selectInbox = (state: AppStateSnapshot) => state.inbox;
 export const selectInboxWaiting = (state: AppStateSnapshot) => state.inbox.waiting;
 export const selectInboxTasks = (state: AppStateSnapshot) => state.inbox.tasks;
 export const selectFailedRuns = (state: AppStateSnapshot) => state.inbox.failedRuns;
-
-export const selectPullRequestPublished = (state: AppStateSnapshot) =>
-  state[LIVE_READ.PULL_REQUEST_PUBLISHED];
 
 export const selectMachineCommands = (state: AppStateSnapshot) => state.machineCommands;
 

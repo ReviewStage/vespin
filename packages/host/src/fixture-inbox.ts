@@ -34,6 +34,7 @@ import {
   type AgentTranscriptOlderAnswer,
   type AgentTranscriptOlderParams,
   INBOX_SCOPE_KIND,
+  MEMORY_SAVE_FAILURE,
 } from "@repo/features/agent-view";
 import {
   AGENT_ATTACHMENT_TYPE,
@@ -122,6 +123,9 @@ import {
 import {
   COMMENT_SUBJECT,
   DESCRIPTION_COMMENT_CALL_FAILURE,
+  type ListedTasksView,
+  TASK_CALL_FAILURE,
+  type TaskListParts,
   type TasksView,
 } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -324,6 +328,9 @@ function item(
 }
 
 const OPEN = { status: INBOX_ASK_STATUS.OPEN } as const;
+
+/** The PDF the reference task's description keeps as it keeps a picture, by the id the service keeps it under, so a description's file chip has one to draw. */
+const DESCRIPTION_PDF = "e738b0a4-c3f5-4a1d-b8d5-6f7182930b45";
 
 /** The recorded thread's files: a still its words draw, the recording sent after them, and the test plan as a PDF, by the attachment each is read by. */
 const RECORDED = {
@@ -978,7 +985,12 @@ function listedTask(
  * in a second repository, so the list draws its repositories' headings,
  * one the account keeps in a section of its own, a teammate's it
  * follows, which the list draws under Following, and one filed for later
- * and one canceled, so the list draws every status's mark.
+ * and one canceled, so the list draws every status's mark. Note that those
+ * last two are named with Markdown's marks, and with letters beyond Latin
+ * and an emoji, so a search's bold title shows every mark as typed and
+ * lands on the right letters. With the reference journey's high, its tasks
+ * stand at every priority, an urgent launch and a sub-task weighed by no one
+ * among them, so the list draws every priority's mark too.
  */
 const LISTED_TASKS: readonly TaskSummary[] = [
   listedTask(LISTED.COPY, "Invite email copy", {
@@ -988,6 +1000,7 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     updatedAt: LANDED - 3 * HOUR,
     parentTaskId: TASK.INVITES,
     blocks: [LISTED.LAUNCH],
+    priority: TASK_PRIORITY.NONE,
   }),
   listedTask(LISTED.ALERTS, "Usage alerts", {
     repository: "ada/ledger",
@@ -1004,6 +1017,7 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     updatedAt: LANDED - 7 * HOUR,
     blocked: true,
     blockedBy: [LISTED.COPY],
+    priority: TASK_PRIORITY.URGENT,
   }),
   // Note that the account follows a teammate's task, which the Tasks list draws under Following.
   listedTask(LISTED.BILLING, "Billing export", {
@@ -1019,14 +1033,14 @@ const LISTED_TASKS: readonly TaskSummary[] = [
       { userId: ADA.userId, assignee: false, machines: false },
     ],
   }),
-  listedTask(LISTED.EXPORT, "Ledger CSV export", {
+  listedTask(LISTED.EXPORT, "Ledger *CSV* export (v2_final)", {
     repository: "ada/ledger",
     status: TASK_STATUS.BACKLOG,
     number: 48,
     updatedAt: LANDED - 2 * DAY,
     priority: TASK_PRIORITY.LOW,
   }),
-  listedTask(LISTED.DIGEST_V1, "Daily digest email", {
+  listedTask(LISTED.DIGEST_V1, "Daily digest 日報 for Zoë 📬", {
     repository: "ada/relay",
     status: TASK_STATUS.CANCELED,
     number: 49,
@@ -1129,6 +1143,9 @@ const MEMBERS: WorkspaceMembersAnswer = {
     },
   ],
 };
+
+/** What a memory's save answers in a run that refuses writes, as the service answers one it refused: the workspace holds all it may. */
+export const MEMORY_SAVE_REFUSED = { failure: MEMORY_SAVE_FAILURE.MEMORY_FULL } as const;
 
 /** The id a memory the fixture is asked to keep anew is kept under. */
 export const NEW_MEMORY_ID = "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a64";
@@ -1472,7 +1489,7 @@ function ownInvites(task: TaskSummary): TaskSummary {
  * tasks after it, so every task holding an item is listed. The same list
  * under any other profile.
  */
-export function inboxTasksView(profile: string, list: TasksView): TasksView {
+export function inboxTasksView(profile: string, list: ListedTasksView): ListedTasksView {
   if (!STAGED_PROFILES.has(profile)) return list;
 
   const listed = list.tasks.some((task) => task.id === TASK.INVITES)
@@ -1576,8 +1593,11 @@ const INVITES_DESCRIPTION = [
   "",
   "- Task: [@Usage alerts](https://vespin.dev/personal/task/45)",
   "- Pull request: [@#128 Invite a teammate by email](https://github.com/ada/relay/pull/128)",
+  "- Follow-up: [@#131 Let an owner resend an invite that expired from the members page, with a fresh link](https://github.com/ada/relay/pull/131)",
   "- File: [@invite.ts](https://github.com/ada/relay/blob/HEAD/src/members/invite.ts)",
   "- Date: [@Nov 16, 2026](mention://date/2026-11-16)",
+  "",
+  `![Invite flow spec](https://vespin.dev/personal/task/${FIXTURE_IDS.TASK}/files/${DESCRIPTION_PDF})`,
   "",
   "## Checks",
   "",
@@ -2156,6 +2176,42 @@ export function inboxRemindersAppState(
   };
 }
 
+/** The read marks a fixture run made, by the item's id: whether each stands unread. */
+export type InboxReadMarks = ReadonlyMap<string, boolean>;
+
+/**
+ * The document with the read marks a fixture run made laid over the staged
+ * feed's items, as the host draws one the moment it is asked, so a fixture
+ * run's Inbox row turns read or unread under a flow's swipe. The very
+ * document where none was made, and every unmarked item kept as it was.
+ */
+export function inboxReadMarksAppState(
+  state: AppStateSnapshot,
+  marks: InboxReadMarks,
+): AppStateSnapshot {
+  const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.TASK];
+
+  if (marks.size === 0 || fed === undefined) return state;
+
+  const marked = Object.fromEntries(
+    Object.entries(fed).map(([taskId, items]) => [
+      taskId,
+      items.map((item) => {
+        const unread = marks.get(item.id);
+
+        return unread === undefined || (item.unread === true) === unread
+          ? item
+          : { ...item, unread };
+      }),
+    ]),
+  );
+
+  return {
+    ...state,
+    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.TASK]: marked } },
+  };
+}
+
 /** The words a fixture run saved, by the memory's id: one of its own corrected, or a new one under the id the save answered. */
 export type SavedMemoryWords = ReadonlyMap<string, string>;
 
@@ -2318,7 +2374,7 @@ function standsOn(agent: AgentSummary, change: AgentChange): boolean {
 /** The reader's pins with each pin the run set or took off laid over, by the agent's task. */
 function pinnedAgents(
   pins: NonNullable<TasksView["taskAgentPins"]>,
-  agents: NonNullable<TasksView["taskAgents"]>,
+  agents: NonNullable<TaskListParts["taskAgents"]>,
   choices: AgentChoices,
 ): NonNullable<TasksView["taskAgentPins"]> {
   const kept = pins.filter(({ agentId }) => choices.get(agentId)?.pinned !== false);
@@ -2344,7 +2400,7 @@ function pinsStand(pins: NonNullable<TasksView["taskAgentPins"]>, choices: Agent
  * draws a change the moment it is asked; the list handed in where every
  * agent already stands so, so laying it again changes nothing.
  */
-export function chosenTasksView(list: TasksView, choices: AgentChoices): TasksView {
+export function chosenTasksView(list: ListedTasksView, choices: AgentChoices): ListedTasksView {
   const agents = list.taskAgents ?? [];
   const pins = list.taskAgentPins ?? [];
 
@@ -2462,6 +2518,11 @@ const ANSWERS: StagedAnswers = {
 
     return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
   },
+  // Note that the reference task's PDF is read as the service reads a description's file, and any other is not there.
+  [ACT_KIND.TASKS_PICTURE_READ]: ({ taskId, attachmentId }) =>
+    taskId === FIXTURE_IDS.TASK && attachmentId === DESCRIPTION_PDF
+      ? { contentType: AGENT_ATTACHMENT_TYPE.PDF, base64: FIXTURE_PLAN_PDF }
+      : { failure: TASK_CALL_FAILURE.NOT_FOUND },
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
   // Note that a version of the reference journey's description is read as the service reads one, and a restore is taken as the service takes one, though nothing here moves.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { agentTab, changesTab, fileTab, followedAgent, stampedViewed } from "./tab-strip-model.js";
+import { agentTab, fileTab, followedAgent, stampedViewed } from "./tab-strip-model.js";
 
 /**
  * tab-strip-model.test.ts -- the agent whose tab follows its run is the one
@@ -23,7 +23,7 @@ test("an agent's tab follows its run only while the plan's column shows it on sc
     "the plan's page is not shown",
   );
   assert.equal(
-    followedAgent(changesTab("agent-1"), { shown: true, covered: false }),
+    followedAgent(fileTab("README.md"), { shown: true, covered: false }),
     undefined,
     "another tab is shown",
   );

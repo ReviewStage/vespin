@@ -2,7 +2,15 @@
 
 import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
-import { frame, type ModifierConfig, onGeometryChange, padding } from "@expo/ui/swift-ui/modifiers";
+import {
+  background,
+  frame,
+  glassEffect,
+  type ModifierConfig,
+  onGeometryChange,
+  padding,
+  strokeBorder,
+} from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
@@ -56,7 +64,7 @@ export const BAR_HEAD_INSET = {
   top: SPACE.TIGHT + 2,
 } as const;
 
-/** The most of the window's height what heads a bar takes before it scrolls inside the bar, so the content under the bar stays in reach at the largest text sizes. */
+/** The most of the window's height above the keyboard what heads a bar takes before it scrolls inside the bar, so the content under the bar stays in reach at the largest text sizes and with the keyboard up. */
 const HEAD_SHARE = 0.35;
 
 const styles = StyleSheet.create({
@@ -89,25 +97,37 @@ function moveWithKeyboard({ duration, easing }: KeyboardEvent) {
   });
 }
 
-/** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. */
-function useKeyboardHeight(): number {
-  const [height, setHeight] = useState(0);
+/** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. Where `moves` is given, the next layout moves with the keyboard on its own curve. Note that it starts from the keyboard standing as it mounts, so a piece drawn while the keyboard is up, such as a composer's head a refused send adds, reads it at once rather than at the keyboard's next move. */
+function useKeyboardHeight(moves = true): number {
+  const [height, setHeight] = useState(() =>
+    Keyboard.isVisible() ? (Keyboard.metrics()?.height ?? 0) : 0,
+  );
+
   useEffect(() => {
     const rising = Keyboard.addListener("keyboardWillShow", (event) => {
-      moveWithKeyboard(event);
+      if (moves) moveWithKeyboard(event);
       setHeight(event.endCoordinates.height);
     });
 
     const falling = Keyboard.addListener("keyboardWillHide", (event) => {
-      moveWithKeyboard(event);
+      if (moves) moveWithKeyboard(event);
       setHeight(0);
     });
+
+    // Note that the height is read again once the keyboard has stood or gone, since a piece mounted while it moved read where it stood before, which React Native holds until the move ends.
+    const stood = Keyboard.addListener("keyboardDidShow", (event) =>
+      setHeight(event.endCoordinates.height),
+    );
+
+    const gone = Keyboard.addListener("keyboardDidHide", () => setHeight(0));
 
     return () => {
       rising.remove();
       falling.remove();
+      stood.remove();
+      gone.remove();
     };
-  }, []);
+  }, [moves]);
 
   return height;
 }
@@ -148,11 +168,49 @@ function useFieldGround(radius: number): readonly ModifierConfig[] {
 }
 
 /**
+ * The glass a SwiftUI piece floating over the screen stands in, rounded as a
+ * bar is, such as the failure notice and a split view's composer: the
+ * system's glass, or, where Liquid Glass is unavailable or the reader turned
+ * on Reduce Transparency, the same solid stand-in a `GlassBar` draws, the
+ * surface's ground inside the quiet ink's hairline, rather than whatever the
+ * system makes of glass the reader asked not to see through.
+ */
+export function useBarGlass(): readonly ModifierConfig[] {
+  const colors = useColors();
+  const solid = useReduceTransparency() || !isLiquidGlassAvailable();
+
+  return solid
+    ? [
+        background(
+          colors.SURFACE,
+          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: BAR_RADIUS }),
+        ),
+        strokeBorder({
+          content: colors.TEXT_MUTED,
+          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+          shape: "roundedRectangle",
+          cornerRadius: BAR_RADIUS,
+          style: { lineWidth: StyleSheet.hairlineWidth },
+        }),
+      ]
+    : [
+        glassEffect({
+          glass: { variant: "regular" },
+          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+          shape: "roundedRectangle",
+          cornerRadius: BAR_RADIUS,
+        }),
+      ];
+}
+
+/**
  * What heads a bar inside its glass, such as a composer's held call and
  * queued messages, inset as the row's marks are. Note that it scrolls in
- * place once it would stand taller than a share of the window
- * (`HEAD_SHARE`), because at the largest text sizes a held call's words and
- * its Deny and Allow alone grew the bar over the whole screen it docks on.
+ * place once it would stand taller than a share of the window the keyboard
+ * leaves (`HEAD_SHARE`), because at the largest text sizes a held call's
+ * words and its Deny and Allow alone grew the bar over the whole screen it
+ * docks on, and with the keyboard up on the folded iPhone Duo a share of the
+ * whole window left the transcript a line or two.
  */
 export function BarHead({
   children,
@@ -163,8 +221,9 @@ export function BarHead({
   readonly filled?: boolean;
 }) {
   const { height: window } = useWindowDimensions();
+  const keyboard = useKeyboardHeight(false);
   const [tall, setTall] = useState(0);
-  const most = Math.round(window * HEAD_SHARE);
+  const most = Math.round(Math.max(0, window - keyboard) * HEAD_SHARE);
   const ground = useFieldGround(BAR_RADIUS - BAR_EDGE);
 
   // Note that a filled head spans the bar's width, as the field's pill under it does, rather than hugging its words.

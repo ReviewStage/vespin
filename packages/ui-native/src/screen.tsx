@@ -3,6 +3,7 @@
 import { Host, Spacer } from "@expo/ui/swift-ui";
 import { tint } from "@expo/ui/swift-ui/modifiers";
 import type { ReactNode } from "react";
+import { BAR_KIND, barSubtitle } from "./interactions.js";
 import { useColors } from "./tokens/colors.js";
 
 /** The ground a screen stands on, by the role that paints it: a list's, or a grouped form's (Settings' pages). */
@@ -16,20 +17,27 @@ export type ScreenGround = (typeof SCREEN_GROUND)[keyof typeof SCREEN_GROUND];
  * system's, and tints what it holds in the brand's ink, so a link or a
  * plain button is never the system's blue, and copper is left for what a
  * piece asks for by name: what wants the reader, a picked option, a switch
- * that is on, and a primary act.
+ * that is on, and a primary act. A subtitle stands under the title of the
+ * stack's bar the screen is pushed under, as Mail names its filter under
+ * Inbox; a split view's column takes its own on its `ColumnBar`.
  */
 export function Screen({
   children,
+  subtitle,
   ground = SCREEN_GROUND.PLAIN,
 }: {
   readonly children: ReactNode;
+  readonly subtitle?: string | undefined;
   /** The ground it stands on: a list's, or a grouped form's, so a form's page reads, fails, and lies empty on the ground its form stands on, never flashing a list's under it first. */
   readonly ground?: ScreenGround;
 }) {
   const colors = useColors();
 
   return (
-    <Host style={{ flex: 1, backgroundColor: colors[ground] }} modifiers={[tint(colors.TEXT)]}>
+    <Host
+      style={{ flex: 1, backgroundColor: colors[ground] }}
+      modifiers={[tint(colors.TEXT), barSubtitle(BAR_KIND.STACK, subtitle)]}
+    >
       {children}
     </Host>
   );
