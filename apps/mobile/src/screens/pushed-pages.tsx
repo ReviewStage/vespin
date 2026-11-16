@@ -19,6 +19,7 @@ export function PushedPageView({ page }: { readonly page: PushedPage }) {
           id={page.agentId}
           suggestedBy={page.suggestedBy}
           button={page.button}
+          brief={page.brief}
           inColumn
         />
       );
@@ -54,6 +55,7 @@ export function PushedPageView({ page }: { readonly page: PushedPage }) {
           from={page.from}
           to={page.to}
           quote={page.quote}
+          again={page.again}
           inColumn
         />
       );

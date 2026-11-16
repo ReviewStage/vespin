@@ -1,5 +1,6 @@
 // glyph.ts -- every glyph the app draws, by what it marks: the panel's own Lucide glyph for each place and its own task status marks from the app's asset catalog, and the few iOS draws its own way as SF Symbols.
 
+import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
 import {
   TASK_SECTION_GLYPH,
   TASK_SECTION_ICON_KIND,
@@ -94,6 +95,7 @@ export const GLYPH = {
   NO_REPOSITORY: lucide(LUCIDE_SYMBOL.FOLDER_X),
   SKILL: lucide(LUCIDE_SYMBOL.BOOK_OPEN),
   MEMORY: lucide(LUCIDE_SYMBOL.LIGHTBULB),
+  CLOUD: lucide(LUCIDE_SYMBOL.CLOUD),
   HOST: lucide(LUCIDE_SYMBOL.SERVER),
   MAC: lucide(LUCIDE_SYMBOL.LAPTOP),
   ISSUE_OPEN: lucide(LUCIDE_SYMBOL.CIRCLE_DOT),
@@ -218,10 +220,14 @@ export const GLYPH = {
   FILTER: system("line.3.horizontal.decrease.circle"),
   FILTERED: system("line.3.horizontal.decrease.circle.fill"),
   DISCLOSURE: system("chevron.forward"),
+  // A sheet's step back to the step before it, the back chevron iOS draws in a navigation bar.
+  BACK: system("chevron.backward"),
   // A Settings row that leaves the app ends in iOS's own small arrow out, and a row that opens a menu in its up-and-down chevron, as a menu picker's value does.
   GOES_OUT: system("arrow.up.forward"),
   MENU_OPENS: system("chevron.up.chevron.down"),
   STOP_TURN: system("stop.fill"),
+  // A sheet's confirm, the system's checkmark in its prominent bar button, as iOS 26's own sheets close on it.
+  CONFIRM: system("checkmark"),
   // A task's status ring, the panel's own mark.
   STATUS_BACKLOG: statusMark(TASK_STATUS_SYMBOL.BACKLOG),
   STATUS_TODO: statusMark(TASK_STATUS_SYMBOL.TODO),
@@ -269,6 +275,20 @@ const SECTION_GLYPH: Readonly<Record<TaskSectionGlyph, Glyph>> = {
 /** Whether a glyph's name is one the section icon picker suggests. */
 function isSectionGlyph(name: string): name is TaskSectionGlyph {
   return Object.hasOwn(SECTION_GLYPH, name);
+}
+
+/**
+ * Where an agent runs, as the panel's runs-on mark draws it (`runs-on.tsx`):
+ * the cloud's glyph, a Linux server's, or the laptop for a Mac and for a
+ * device whose platform isn't known, as the panel draws a teammate's.
+ */
+export function runsOnGlyph(place: {
+  readonly cloud: boolean;
+  readonly platform?: DevicePlatform | undefined;
+}): Glyph {
+  if (place.cloud) return GLYPH.CLOUD;
+
+  return place.platform === DEVICE_PLATFORM.LINUX ? GLYPH.HOST : GLYPH.MAC;
 }
 
 /**
