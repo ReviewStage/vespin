@@ -387,11 +387,10 @@ function useSheetStart(
 /**
  * New task's and New agent's start, as the panel's sends it: the sheet
  * closes the moment Start is pressed, and the start goes on as a write,
- * opening the task's page once it lands, with its agent's pushed over it
- * where one started, as the sheet opened them before it closed at once. A
- * start refused is said in the failure notice, whose Try again sends the
- * same start again. Note that this never makes a second task or agent,
- * because the task's id and its agent's key are minted once per sheet
+ * opening the task's page once it lands, where its new agent stands among
+ * its agents. A start refused is said in the failure notice, whose Try again
+ * sends the same start again. Note that this never makes a second task or
+ * agent, because the task's id and its agent's key are minted once per sheet
  * (`useStartTask`, `useFileTask`, `useStartAgent`), and the service answers
  * a start it already made with the same one. Pictures the service would
  * refuse still hold the sheet, saying why under its words.
@@ -437,10 +436,8 @@ function useClosingStart(
       const answer = started.answer;
 
       if (!went || answer === undefined || "refused" in answer) return;
-      // Note that the agent is pushed over its task's page, so Back from it lands on the task, as the panel opens an agent from its task.
+      // Note that only the task's page opens, its new agent standing in its Agents section, because a second route pushed over it races the split view's hand-off and leaves the task behind.
       router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })));
-
-      if (answer.agentId !== undefined) router.push(onTab(iosAgentRoute(answer.agentId)));
     });
   };
 
