@@ -54,7 +54,7 @@ onFlowComplete:
       - takeScreenshot: ipad-sidebar-tasks
       - tapOn:
           id: "search-tab"
-      - assertVisible: "Find a task, an Inbox item, or an agent."
+      - assertVisible: "Search Vespin"
       - waitForAnimationToEnd
       - takeScreenshot: ipad-sidebar-search
       - tapOn: "Inbox"

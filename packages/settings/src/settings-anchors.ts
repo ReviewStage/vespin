@@ -38,6 +38,7 @@ export const SETTINGS_SEARCH_ROW = {
   ALWAYS_ALLOWED: "always-allowed",
   API_KEY_ANTHROPIC: "api-key-anthropic",
   API_KEY_OPENAI: "api-key-openai",
+  API_KEY_CURSOR: "api-key-cursor",
   /** Skills' first group, whose heading holds its Add skill. */
   ADD_SKILL: "add-skill",
   /** Our MCP & CLI page's Connected, the outside agents the account let in. */
@@ -94,4 +95,5 @@ export const EXPERIMENT_ANCHOR = {
   [EXPERIMENT.VOICE]: "experiment-voice",
   [EXPERIMENT.GOALS]: "experiment-goals",
   [EXPERIMENT.MOVE_AGENTS]: "experiment-move-agents",
+  [EXPERIMENT.CURSOR]: "experiment-cursor",
 } as const satisfies Record<Experiment, string>;
