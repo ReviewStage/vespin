@@ -42,6 +42,7 @@ import {
   type BarAction,
   type BarMenu,
   type BarSubtitle,
+  BUTTON_LOOK,
   CallCardRow,
   type ColumnBar,
   Composer,
@@ -56,7 +57,6 @@ import {
   FORM_SPACING,
   footerToneOf,
   GLYPH,
-  GlassDock,
   type Glyph,
   glyphSymbol,
   HeldCallBanner,
@@ -65,6 +65,7 @@ import {
   MenuPickRow,
   MenuRow,
   type MenuRowAct,
+  NO_GROUND,
   NO_TOGGLES,
   openCuts,
   PickRows,
@@ -84,6 +85,8 @@ import {
   transcriptOriginOf,
   useAnnounced,
   useColors,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
   withSending,
   withWaitingLine,
 } from "@repo/ui-native";
@@ -129,15 +132,16 @@ import {
   useDetailPush,
   useHandToDetail,
 } from "../detail-stack.js";
+import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
+import { useInFront } from "../place-columns.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
+import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { PageScreen } from "./page-screens.js";
 
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
@@ -296,6 +300,7 @@ function AgentComposerBar({
   inColumn = false,
   call,
   otherCall,
+  shown,
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
@@ -310,6 +315,8 @@ function AgentComposerBar({
   readonly call: ComposerCall | undefined;
   /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
+  /** Whether its column stands in front, which the composer at a column's foot tells the app's notice; the docked composer's dock is told by its screen. */
+  readonly shown: boolean;
 }) {
   const said = composer.note ?? note;
   const { banner, waiting } = approvals;
@@ -366,7 +373,7 @@ function AgentComposerBar({
     head,
   };
 
-  return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
+  return inColumn ? <ComposerFoot {...props} shown={shown} /> : <Composer {...props} />;
 }
 
 /**
@@ -696,6 +703,8 @@ export function AgentConversation({
   readonly inColumn?: boolean | undefined;
 }) {
   useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
+  // Whether the page stands in front in a split view's detail, its tab shown and no page pushed over it, which its composer at the column's foot tells the notice.
+  const inFront = useInFront();
   const toDetail = useDetailPush();
   const detailLeave = useDetailLeave();
   const router = useRouter();
@@ -965,6 +974,7 @@ export function AgentConversation({
       call={talk.call}
       otherCall={otherCall}
       inColumn={inColumn}
+      shown={inFront && !covered}
     />
   );
 
@@ -977,7 +987,9 @@ export function AgentConversation({
         title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
         symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
         loading: !failed,
-        action: failed ? { label: TRANSCRIPT_WORDS.RETRY, onPress: retry } : undefined,
+        action: failed
+          ? { label: TRANSCRIPT_WORDS.RETRY, look: BUTTON_LOOK.BORDERED, onPress: retry }
+          : undefined,
       }}
       older={older}
       heldCall={approvals.heldCall}
@@ -986,7 +998,8 @@ export function AgentConversation({
       onOpenLink={openLink}
       onToggle={(item) => setToggles((held) => toggledAt(held, item))}
       onOpenPage={openPage}
-      mediaSource={(pictureId) => media.get(pictureId)}
+      mediaSource={(pictureId) => media.sources.get(pictureId)}
+      onRetryMedia={media.retry}
       onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
       onOpenAddress={openInSafari}
       onOpenPullRequest={(item) => openPullRequest(item.number)}
@@ -1198,7 +1211,7 @@ export function AgentConversation({
         ) : null}
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
-      <GlassDock bar={composerBar}>{transcriptView}</GlassDock>
+      <FocusedDock bar={composerBar}>{transcriptView}</FocusedDock>
       {asks}
     </>
   );
@@ -1401,6 +1414,7 @@ const PORTS_WORDS = { DONE: "Done" } as const;
  */
 export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
   const colors = useColors();
+  const half = useSheetAtHalf();
   const router = useRouter();
   const ports = useAgentPorts(agentId);
 
@@ -1430,7 +1444,7 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.GROUPED },
+          contentStyle: { backgroundColor: half ? NO_GROUND : colors.GROUPED },
         }}
       />
       <Stack.Toolbar placement="right">
@@ -1442,8 +1456,8 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
           onPress={() => router.back()}
         />
       </Stack.Toolbar>
-      <Screen>
-        <SettingsForm spacing={FORM_SPACING.COMPACT}>
+      <Screen clear={half}>
+        <SettingsForm clear={half} spacing={FORM_SPACING.COMPACT}>
           <ListSection
             footer={ports.note ?? (ports.rows.length === 0 ? ports.none : ports.linkNote)}
             footerTone={footerToneOf(ports.note)}

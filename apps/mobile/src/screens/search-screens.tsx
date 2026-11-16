@@ -5,8 +5,6 @@ import type { InboxItem } from "@repo/features/inbox-wire";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import {
-  noResultsWords,
-  SEARCH_FINDS,
   SEARCH_FOUND_KIND,
   SEARCH_FOUND_TITLE,
   SEARCH_SCOPE,
@@ -15,7 +13,12 @@ import {
   scopedFound,
   searchPlaceholder,
 } from "@repo/features/search-found-model";
-import { CHOOSE_AN_ITEM_WORDS, readingWords } from "@repo/features/words";
+import {
+  CHOOSE_AN_ITEM_WORDS,
+  NO_RESULTS_HINT,
+  noResultsForWords,
+  readingWords,
+} from "@repo/features/words";
 import {
   type BarMenu,
   type ColumnBar,
@@ -31,6 +34,9 @@ import {
   ScopePicker,
   Screen,
   UNDER_SPLIT_SCREEN,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import {
@@ -52,8 +58,6 @@ import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
-import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { AgentConversation } from "./agent-screens.js";
 import { PLUS_TAB, SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
@@ -242,7 +246,13 @@ function FoundList({
           count={found.agents.length}
         >
           {shown.agents.map((line) => (
-            <TaskAgentRow key={line.agent.id} line={line} onArchive={onArchiveAgent} />
+            <TaskAgentRow
+              key={line.agent.id}
+              line={line}
+              task={found.tasksById.get(line.agent.taskId)}
+              named
+              onArchive={onArchiveAgent}
+            />
           ))}
         </ListSection>
       )}
@@ -250,10 +260,8 @@ function FoundList({
   );
 }
 
-/** What Search draws before anything is typed, in either window. */
-const SEARCH_IDLE = (
-  <EmptyState title={SEARCH_TITLE} symbol={GLYPH.SEARCH} description={SEARCH_FINDS} />
-);
+/** What Search draws before anything is typed, in either window: nothing, as Apple's own search screens wait on the field. */
+const SEARCH_IDLE = null;
 
 /**
  * What the Search tab reads and draws once something is typed, in either
@@ -315,13 +323,17 @@ function useSearchScreen(
   // Note that a scope that found nothing says so only once the lists it searches have answered and the finding has caught up with what is typed; until then it says what it reads, or keeps the last query's rows, as the panel's ⌘K does.
   const empty = none && (reading !== undefined || found.current);
 
-  // Note that the scopes stand as the results' first row, so they scroll away with them, and over a scope that found nothing, so another is one tap away.
+  // Note that the scopes stand as the results' first row, so they scroll away with them, and over a scope that found nothing, so another is one tap away, a miss saying it in Apple's own words under the query.
   const results = empty ? (
     <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
       {reading !== undefined ? (
         <EmptyState title={reading} symbol={GLYPH.SEARCH} loading />
       ) : (
-        <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
+        <EmptyState
+          title={noResultsForWords(query)}
+          symbol={GLYPH.SEARCH}
+          description={NO_RESULTS_HINT}
+        />
       )}
     </ScopePicker>
   ) : (
