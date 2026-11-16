@@ -53,3 +53,39 @@ export function sandboxSizeWords(vcpus: number): string {
 export function sandboxVcpusOf(raw: string): SandboxVcpus | undefined {
   return SANDBOX_VCPU_SIZES.find((size) => String(size) === raw);
 }
+
+/** What a call killed out of memory offers the members who manage its workspace (`outOfMemoryOffer`). */
+export const OUT_OF_MEMORY_OFFER = {
+  /** The next size up, theirs to choose. */
+  RAISE: "raise",
+  /** The workspace already opens its sandboxes larger than the command ran with. */
+  RAISED: "raised",
+  /** The command ran at the largest size there is. */
+  NONE: "none",
+} as const;
+
+export type OutOfMemoryOffer =
+  | {
+      readonly kind: typeof OUT_OF_MEMORY_OFFER.RAISE;
+      readonly vcpus: SandboxVcpus;
+      readonly memoryGb: number;
+    }
+  | { readonly kind: typeof OUT_OF_MEMORY_OFFER.RAISED; readonly memoryGb: number }
+  | { readonly kind: typeof OUT_OF_MEMORY_OFFER.NONE };
+
+/**
+ * What a command killed out of memory at `killedGb` offers, by the vCPUs
+ * its workspace's sandboxes open with now: where that is already larger than
+ * the command ran with, its size now; otherwise the next size up from it;
+ * and nothing past the largest.
+ */
+export function outOfMemoryOffer(killedGb: number, vcpus: number): OutOfMemoryOffer {
+  const standingGb = sandboxMemoryGb(vcpus);
+
+  if (standingGb > killedGb) return { kind: OUT_OF_MEMORY_OFFER.RAISED, memoryGb: standingGb };
+  const next = SANDBOX_VCPU_SIZES.find((size) => size > vcpus);
+
+  if (next === undefined) return { kind: OUT_OF_MEMORY_OFFER.NONE };
+
+  return { kind: OUT_OF_MEMORY_OFFER.RAISE, vcpus: next, memoryGb: sandboxMemoryGb(next) };
+}

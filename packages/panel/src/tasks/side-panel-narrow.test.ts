@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import {
-  AGENT_STATUS,
-  type AgentSummary,
-  CHANGED_FILE_STATUS,
-  CHECK_SUMMARY,
-  PULL_REQUEST_STATE,
-} from "@repo/features/agent-wire";
+import { CHANGED_FILE_STATUS, CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
@@ -15,7 +9,6 @@ import { answeringChanges, fakeActPort, fakeActPortCalls } from "../testing/app-
 import { ChangesTabReading } from "../testing/changes-tab.js";
 import { layContainersAt } from "../testing/container-width.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { agentsControl } from "../testing/tasks-control.js";
 
 /**
  * The side panel's Changes tab at its narrowest, 280px, where it has no room
@@ -25,20 +18,6 @@ import { agentsControl } from "../testing/tasks-control.js";
  * stylesheets are laid once for a panel that wide
  * (`testing/container-width.ts`) and what is drawn is read through them.
  */
-
-/** The plan the tab stands on. */
-const TASK = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
-
-const AGENT: AgentSummary = {
-  id: "1e3c5a7b-9d2f-4b6e-8a1c-3e5f7a9b1d2c",
-  taskId: TASK,
-  model: "anthropic/claude-opus-5.5",
-  effort: "high",
-  title: "Expiry job",
-  createdAt: 1,
-  status: AGENT_STATUS.COMPLETED,
-  turnId: null,
-};
 
 const PULL_REQUEST = {
   number: 42,
@@ -100,17 +79,9 @@ async function drawChangesTab(): Promise<HTMLElement> {
     ),
   });
 
-  const control = agentsControl({
-    agents: [AGENT],
-    agentIds: [AGENT.id],
-    models: [],
-    pullRequests: new Map([[AGENT.id, PULL_REQUEST]]),
-  });
-
   const tab = await mounted(
     createElement(ChangesTabReading, {
-      agentId: AGENT.id,
-      control,
+      pullRequest: { workspaceId: "workspace-acme", repository: "acme/relay", number: 42 },
       shown: true,
       repository: "acme/relay",
       tree: { open: true, onToggle: () => undefined },
