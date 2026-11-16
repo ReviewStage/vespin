@@ -41,8 +41,9 @@ import { dataUrlBytes, dataUrlMediaType, useBlobUrl } from "../video-player/vide
  * it; it is decoration, hidden from a reader, and lets the press through to
  * the slider under it. Before the waveform stands Play, a round disc in the
  * text's ink, larger than the controls beside it, as a voice message's Play
- * is the one press it exists for; after it, how far it has run of how long,
- * its speed in the time's muted ink, which a press walks round a voice
+ * is the one press it exists for. Right after Play stands how far it has
+ * run of how long, as a video's bar has it, and after the waveform its
+ * speed in the time's muted ink, which a press walks round a voice
  * message's 1×, 1.5×, and 2×,
  * and Expand where the place has a viewer to open. There is no volume
  * control and no mute: the system's volume is the one a reader already
@@ -60,8 +61,8 @@ import { dataUrlBytes, dataUrlMediaType, useBlobUrl } from "../video-player/vide
  * viewer to open hands `onExpand`: Expand pauses it here and opens the
  * viewer, which grows from the card as it grows from a picture's tile. In
  * the viewer (`VIEWER`) it uses the room as Quick Look does: its waveform
- * tall across the place, Play centered under it with the time on one side
- * and the speed on the other, and no Expand; and it plays at once, unless motion is held still
+ * tall across the place, Play centered under it with the time right after
+ * it and the speed after the time, and no Expand; and it plays at once, unless motion is held still
  * (`motionHeld`: reduced motion or a capture run), where it waits for Play.
  * A clip keeps its place wherever it is drawn, as a recording does
  * (`useMediaPlace`): the viewer an Expand opens goes on from where the card
@@ -483,18 +484,21 @@ export function AudioPlayer({
       {viewer ? (
         <>
           {scrubber}
-          {/* The time and the speed stand beside Play in columns of one width either side, so Play stands at the waveform's middle. */}
+          {/* Play stands at the waveform's middle, between columns of one width, the time right after it as a video's bar has it, and the speed after the time. */}
           <span className="ui-audio-player-controls grid w-full grid-cols-[1fr_auto_1fr] items-center gap-ui-16">
-            <span className="flex justify-self-end">{shownTime}</span>
+            <span aria-hidden="true" />
             {play}
-            <span className="flex justify-self-start">{speed}</span>
+            <span className="flex items-center gap-ui-16 justify-self-start">
+              {shownTime}
+              {speed}
+            </span>
           </span>
         </>
       ) : (
         <>
           {play}
-          {scrubber}
           {shownTime}
+          {scrubber}
           {speed}
           {expand === undefined ? null : (
             <PlayerButton label={AUDIO_LABEL.EXPAND} icon={<ExpandIcon />} onPress={expand} />
