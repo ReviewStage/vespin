@@ -65,6 +65,7 @@ import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
 import {
   chatGptDeviceLoginRequestSchema,
   chatGptDeviceStartRequestSchema,
+  modelApiProviderSchema,
   PROVIDER_KEY_PROVIDER,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
@@ -674,9 +675,9 @@ export type AllowedCommandsWriteAnswerView = typeof allowedCommandsWriteAnswerVi
 /** Writing the default, as the window asks it: the choice to keep. */
 export const agentDefaultWriteParamsSchema = modelChoiceSchema;
 
-/** Writing whose API key chapters run on, as the window asks it: the provider to keep. */
+/** Writing whose API key chapters run on, as the window asks it: the provider to keep, one whose key buys a model call. */
 export const chaptersProviderWriteParamsSchema = EffectSchema.Struct({
-  provider: modelProviderSchema,
+  provider: modelApiProviderSchema,
 });
 
 export type ChaptersProviderWriteParams = typeof chaptersProviderWriteParamsSchema.Type;

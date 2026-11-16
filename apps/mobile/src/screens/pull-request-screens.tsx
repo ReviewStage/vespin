@@ -503,7 +503,7 @@ export function PullRequestPage({
           }
           sentence={
             pullRequest !== undefined && isLivePullRequest(pullRequest)
-              ? mergeSentence(pullRequest, action)
+              ? mergeSentence(pullRequest, action, { queueShown: true })
               : undefined
           }
           opened={
@@ -567,6 +567,7 @@ export function PullRequestPage({
               detail={checkDetail(check)}
               standing={CHECK_WORDS[check.state]}
               face={checkFace(check)}
+              opens={check.url ?? undefined}
             />
           ))
         )}
@@ -592,7 +593,7 @@ export function PullRequestPage({
                 : PULL_REQUEST_READ_WORDS.READING_CONVERSATION
               : PULL_REQUEST_READ_WORDS.commentCount(conversationCount(conversation))
           }
-          detail={url === undefined ? undefined : MENU_WORDS.OPEN_ON_GITHUB}
+          opens={url}
         />
       </ListSection>
     </RowList>,
