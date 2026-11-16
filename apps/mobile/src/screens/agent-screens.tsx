@@ -13,6 +13,7 @@ import {
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentStateWords } from "@repo/features/glyph-state";
+import { iosAppRouteOf } from "@repo/features/ios-app-links";
 import { agentActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
 import { agentName, modelLabel } from "@repo/features/model-label";
@@ -29,7 +30,7 @@ import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions
 import { MESSAGE_SUGGESTION_REFUSAL, sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TRANSCRIPT_COPY, type TranscriptCopy } from "@repo/features/transcript-copy";
-import { MCP_SERVER_LABEL, VERB } from "@repo/features/words";
+import { MCP_SERVER_LABEL, PATH_OPENS, VERB } from "@repo/features/words";
 import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
 import { PERMISSION_MODE_WORDS } from "@repo/settings";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
@@ -142,7 +143,7 @@ import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-
 import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useOnOwnTab } from "../tab-route.js";
+import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { PageScreen } from "./page-screens.js";
 
@@ -711,6 +712,7 @@ export function AgentConversation({
   const detailLeave = useDetailLeave();
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
+  const onTab = useOnTab();
   const navigation = useNavigation();
   const openLink = useOpenLink();
   const colors = useColors();
@@ -927,6 +929,17 @@ export function AgentConversation({
   // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
   // Note that Copy transcript waits only for the transcript's first answer, failed or not, since the copy reads the whole transcript itself.
   const copiable = held !== undefined;
+  const taskId = shown?.taskId;
+
+  // Note that the agent's task opens as a page pushed over it, as a thread's path opens its task and the panel's crumbs do: beside the list in a split view's detail, else on the stack the reader stands in. A compact stack's title holds no menu, so Open task leads the ⋯ menu.
+  const openTask =
+    taskId === undefined
+      ? undefined
+      : () => {
+          if (toDetail({ kind: PUSHED_PAGE.TASK, taskId })) return;
+          router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
+        };
+
   const copyable = address !== undefined || copiable;
   const openable = address !== undefined || openOptions !== undefined;
   const talk = useAgentTalk(id, shown?.taskId);
@@ -1089,8 +1102,15 @@ export function AgentConversation({
     <>
       <Stack.Screen options={screenOptions} />
       <Stack.Toolbar placement="right">
-        {copyable || openable ? (
+        {copyable || openable || openTask !== undefined ? (
           <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
+            {openTask === undefined ? null : (
+              <Stack.Toolbar.Menu inline>
+                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.TASK)} onPress={openTask}>
+                  {PATH_OPENS.TASK}
+                </Stack.Toolbar.MenuAction>
+              </Stack.Toolbar.Menu>
+            )}
             {/* Note that the groups keep the panel's order (`agentMenuGroups`): the copies, then the name, then where it opens, then archiving, and Permanently delete last and alone. */}
             {copyable ? (
               <Stack.Toolbar.Menu inline>
