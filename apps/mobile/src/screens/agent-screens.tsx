@@ -53,7 +53,6 @@ import {
   DetailPage,
   drawnCallIds,
   GLYPH,
-  GlassDock,
   type Glyph,
   glyphSymbol,
   HeldCallBanner,
@@ -85,7 +84,7 @@ import {
   withWaitingLine,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   useAgentMedia,
@@ -126,6 +125,7 @@ import {
   useDetailPush,
   useHandToDetail,
 } from "../detail-stack.js";
+import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useInFront } from "../place-columns.js";
@@ -678,8 +678,6 @@ export function AgentConversation({
   readonly inColumn?: boolean | undefined;
 }) {
   useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
-  // Whether the agent's page is the one in front of its stack, which its docked composer tells the app's notice.
-  const focused = useIsFocused();
   // Whether the page stands in front in a split view's detail, its tab shown and no page pushed over it, which its composer at the column's foot tells the notice.
   const inFront = useInFront();
   const toDetail = useDetailPush();
@@ -1159,9 +1157,7 @@ export function AgentConversation({
         ) : null}
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
-      <GlassDock bar={composerBar} shown={focused}>
-        {transcriptView}
-      </GlassDock>
+      <FocusedDock bar={composerBar}>{transcriptView}</FocusedDock>
       {asks}
     </>
   );

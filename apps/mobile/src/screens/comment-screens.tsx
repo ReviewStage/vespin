@@ -14,15 +14,15 @@ import {
   DetailPage,
   EmptyState,
   GLYPH,
-  GlassDock,
   PATH_PART,
   Screen,
   ThreadPage,
   useColors,
 } from "@repo/ui-native";
-import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactNode, useMemo, useState } from "react";
 import { PUSHED_PAGE, useDetailCovered, useDetailLeave, useHandToDetail } from "../detail-stack.js";
+import { FocusedDock } from "../focus-shown.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import { useInFront } from "../place-columns.js";
@@ -125,8 +125,6 @@ export function CommentThread({
   readonly taskId: string;
   readonly inColumn?: boolean | undefined;
 }) {
-  // Whether the page is the one in front, which its composer tells the app's notice: of its stack where it's docked, and of its column, its tab shown and nothing pushed over it, at a column's foot.
-  const focused = useIsFocused();
   const columnShown = useInFront();
   const covered = useDetailCovered();
   const inFront = columnShown && !covered;
@@ -192,9 +190,9 @@ export function CommentThread({
           <EmptyState title={WORDS.NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         </Screen>
       ) : (
-        <GlassDock bar={<Composer {...composer} />} shown={focused}>
+        <FocusedDock bar={<Composer {...composer} />}>
           <Screen>{page()}</Screen>
-        </GlassDock>
+        </FocusedDock>
       )}
     </>
   );
@@ -244,8 +242,6 @@ export function NewComment({
   readonly quote: string;
   readonly inColumn?: boolean | undefined;
 }) {
-  // Whether the page is the one in front, which its composer tells the app's notice: of its stack where it's docked, and of its column, its tab shown and nothing pushed over it, at a column's foot.
-  const focused = useIsFocused();
   const columnShown = useInFront();
   const covered = useDetailCovered();
   const inFront = columnShown && !covered;
@@ -339,9 +335,9 @@ export function NewComment({
       {block === undefined ? (
         <Screen>{empty}</Screen>
       ) : (
-        <GlassDock bar={<Composer {...composer} />} shown={focused}>
+        <FocusedDock bar={<Composer {...composer} />}>
           <Screen>{page()}</Screen>
-        </GlassDock>
+        </FocusedDock>
       )}
     </>
   );

@@ -45,7 +45,6 @@ import {
   BUTTON_LOOK,
   EmptyState,
   GLYPH,
-  GlassDock,
   glyphSymbol,
   isBarMenu,
   LIST_LOOK,
@@ -88,6 +87,7 @@ import {
   useStackRoot,
   useStandFocusedDetailFront,
 } from "../detail-stack.js";
+import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
@@ -661,8 +661,6 @@ function ThreadDetail({
 
   const navigation = useNavigation();
   const inFront = useInFront();
-  // Whether the thread's screen is the one in front of its stack, which its docked composer tells the app's notice, beside its column standing in front: a two-column split provides no `InFront`, so that alone stays true behind another tab or a pushed page.
-  const focused = useIsFocused();
 
   // Whether this thread stands in front now, read when a start answers rather than when it was sent, since the reader may have switched tabs meanwhile.
   const front = useRef(inFront);
@@ -848,7 +846,7 @@ function ThreadDetail({
                 item={item}
                 answer={answer}
                 agentName={agentName}
-                inColumn={{ shown: inFront && focused }}
+                inColumn={{ inFront }}
               />
             ),
           })}
@@ -890,12 +888,9 @@ function ThreadDetail({
           ))}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
-      <GlassDock
-        shown={focused}
-        bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}
-      >
+      <FocusedDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
         <Screen>{page}</Screen>
-      </GlassDock>
+      </FocusedDock>
       {remind.sheet}
     </>
   );
