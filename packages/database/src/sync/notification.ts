@@ -67,6 +67,13 @@ export const TOPIC = {
    * that workspace and never its members' task lists.
    */
   WORKSPACE_SKILLS: "workspace-skills",
+  /**
+   * A GitHub repository, by GitHub's own id for it, which a rename or a
+   * transfer keeps: what GitHub's deliveries say moved of its pull requests,
+   * which no account owns, so a Pull request tab follows them by the
+   * repository and selects its own number.
+   */
+  GITHUB_REPOSITORY: "github-repository",
   TASK: "task",
   /**
    * A task's parent, by the parent's id, named by each write to a child of

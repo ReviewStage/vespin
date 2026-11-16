@@ -1,6 +1,7 @@
 import type { AgentPullRequest } from "@repo/features/agent-wire";
 import { NEEDS_YOU, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
+import { type NumberedAddress, pullRequestAddressOf } from "@repo/features/link-grammar";
 import { agentLastMovedAt, inAgentListOrder } from "@repo/features/task-agents-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -184,6 +185,16 @@ function PlanAgentRow({
   );
 }
 
+/** Opens the pull request an agent's row names, by the repository and number its page names; nothing where it names none. */
+function openListed(
+  pullRequest: Pick<AgentPullRequest, "url"> | undefined,
+  open: (pullRequest: NumberedAddress) => void,
+): void {
+  const address = pullRequest === undefined ? undefined : pullRequestAddressOf(pullRequest.url);
+
+  if (address !== undefined) open(address);
+}
+
 /** The task's archived agents, folded under Archived at the foot of a phone's agents, each a listed agent's row, settled; nothing while none is archived. */
 function PlanArchivedAgents({
   agents,
@@ -198,7 +209,7 @@ function PlanArchivedAgents({
   /** Whether its rows draw their ⋯. */
   more: boolean;
   onOpen: (agentId: string) => void;
-  onOpenPullRequest: (agentId: string) => void;
+  onOpenPullRequest: (pullRequest: NumberedAddress) => void;
 }): React.JSX.Element | null {
   const [unfolded, setUnfolded] = useKept(KEPT.UNFOLDED, false);
   const archived = agents.archived ?? [];
@@ -240,7 +251,9 @@ function PlanArchivedAgents({
                 chosen={selection.chosenOf(agent.id)}
                 settled
                 onPress={() => onOpen(agent.id)}
-                onOpenPullRequest={() => onOpenPullRequest(agent.id)}
+                onOpenPullRequest={() =>
+                  openListed(agents.pullRequests.get(agent.id), onOpenPullRequest)
+                }
               />
             );
           })}
@@ -257,7 +270,8 @@ function PlanArchivedAgents({
  * newest, or its head alone where it lists none and offers New agent;
  * nothing where it offers neither.
  * A row's press is handed to `onOpenAgent` by its agent's id, and
- * `onOpenPullRequest` opens an agent's pull request as its own chip does.
+ * `onOpenPullRequest` opens an agent's pull request as its own chip does, by
+ * its repository and number.
  */
 export function OverviewAgents({
   agents,
@@ -283,7 +297,7 @@ export function OverviewAgents({
   /** Whether the task's page is on screen, which each row's menu asks on. */
   shown: boolean;
   onOpenAgent: (agentId: string) => void;
-  onOpenPullRequest: (agentId: string) => void;
+  onOpenPullRequest: (pullRequest: NumberedAddress) => void;
   /** New agent, the + standing at rest on the group's head as the strip's "+" offers it (`newAgentStarts`); none on a task that starts no agent. */
   newAgent: MenuAction | undefined;
   /** A phone's additions; none elsewhere. */
@@ -380,7 +394,9 @@ export function OverviewAgents({
                     shown={shown}
                     more={more}
                     chosen={selection.chosenOf(entry.row.id)}
-                    onOpenPullRequest={() => onOpenPullRequest(entry.row.id)}
+                    onOpenPullRequest={() =>
+                      openListed(agents.pullRequests.get(entry.row.id), onOpenPullRequest)
+                    }
                   />
                 ))}
               </TaskRows>
