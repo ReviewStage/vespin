@@ -149,6 +149,7 @@ test("the workspace's experiments and the account's own stand in two groups, eac
       "Move agents",
       "Rewind restores files",
       "Skills",
+      "Starter tasks",
       "Turn changes",
     ],
   );
@@ -235,6 +236,7 @@ test("an experiment's Send feedback opens the dialog about that experiment", () 
     EXPERIMENT.MOVE_AGENTS,
     EXPERIMENT.REWIND_FILES,
     EXPERIMENT.SKILLS,
+    EXPERIMENT.STARTER_TASKS,
     EXPERIMENT.TURN_CHANGES,
   ]);
 });

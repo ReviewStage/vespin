@@ -5,21 +5,23 @@
  * nothing, so a new workspace's Home names a few narrow jobs instead, each
  * one the app does well and others don't: an app built and shared by link
  * from the agent's own sandbox, a site walked through and recorded in its
- * browser, three workers racing one fix, a morning briefing an automation
- * posts to the Inbox, and the threads left open in Codex and Claude Code on
- * the member's own Mac turned into Inbox items. Each ends in something to
- * open, a link, a video, a pull request, or Inbox items, rather than a chat
- * to read. A job is offered only where the workspace has what it needs (a
- * repository, a Mac), and no more than `STARTER_BOUNDS.SHOWN` at once, in
- * the order declared here, so the jobs that use what the member connected
- * come first. Its prompt is the words a press writes into the box, which the
- * member reads, edits, and starts; one that needs something typed, such as
- * the site's address, ends where it goes.
+ * browser, three workers racing one fix, one small fix opened as a pull
+ * request, a morning briefing an automation posts to the Inbox, and the
+ * threads left open in Codex and Claude Code on the member's own Mac turned
+ * into Inbox items. Each ends in something to open, a link, a video, a pull
+ * request, or Inbox items, rather than a chat to read. Those the workspace
+ * can run come first, in the order declared here; one needing a repository
+ * the workspace has none of is still offered after them, where its card
+ * asks for GitHub, since connecting it is the way to run it, while one
+ * needing a Mac is offered only to a member who has one, since that is no
+ * press away. Its prompt is the words a press writes into the box, which
+ * the member reads, edits, and starts; one that needs something typed, such
+ * as the site's address, ends where it goes. Home offers them behind
+ * `EXPERIMENT.STARTER_TASKS`.
  */
 
-/** How many starters Home shows at once, and how many tasks the workspace holds before it shows none. */
+/** How many tasks the workspace holds before Home shows no starters. */
 export const STARTER_BOUNDS = {
-  SHOWN: 3,
   UNTIL_TASKS: 3,
 } as const;
 
@@ -34,8 +36,9 @@ export type StarterNeed = (typeof STARTER_NEED)[keyof typeof STARTER_NEED];
 
 /** Each starter, by the name it is known by. */
 export const STARTER = {
-  CODEX_HISTORY: "codex-history",
+  AGENT_HISTORY: "agent-history",
   RACE_FIXES: "race-fixes",
+  SMALL_FIX: "small-fix",
   DAILY_BRIEFING: "daily-briefing",
   LIVE_APP: "live-app",
   SITE_WALKTHROUGH: "site-walkthrough",
@@ -56,10 +59,9 @@ export interface StarterTask {
 /** Every starter, in the order Home offers them. */
 export const STARTER_TASKS: readonly StarterTask[] = [
   {
-    starter: STARTER.CODEX_HISTORY,
-    name: "Clean up your Codex history",
-    detail:
-      "Turns the Codex and Claude Code threads on your Mac that are still waiting on you into Inbox items.",
+    starter: STARTER.AGENT_HISTORY,
+    name: "Clean up your Codex and Claude Code threads",
+    detail: "Turns the threads on your Mac that are still waiting on you into Inbox items.",
     needs: STARTER_NEED.MAC,
     prompt:
       "Read my Codex and Claude Code history on this Mac (~/.codex/sessions and ~/.claude/projects). Find the threads that stopped on an open question or unfinished work, and post one Inbox thread for each: where it stood, in a line, and the one decision it needs from me. Then show me a page listing the threads that look finished, so I can archive them. Only read those files; don't change or delete anything.",
@@ -72,6 +74,14 @@ export const STARTER_TASKS: readonly StarterTask[] = [
     needs: STARTER_NEED.REPOSITORY,
     prompt:
       "Find one real bug or rough edge in this repository that's worth fixing. Then start three workers, each fixing it a different way, compare their diffs and test results, and open a pull request with the best one. Tell me in a few lines why it won.",
+  },
+  {
+    starter: STARTER.SMALL_FIX,
+    name: "Fix one small thing",
+    detail: "Picks one small, safe fix in this repository and opens a pull request for it.",
+    needs: STARTER_NEED.REPOSITORY,
+    prompt:
+      "Look through this repository and pick one small, safe fix worth making: a failing test, a broken link in the docs, a stale TODO, or a lint error. Tell me in a line why you picked it, make the fix, and open a pull request.",
   },
   {
     starter: STARTER.DAILY_BRIEFING,
@@ -102,18 +112,39 @@ export const STARTER_TASKS: readonly StarterTask[] = [
   },
 ];
 
-/** The starters a workspace is offered: those whose needs it has, in order, at most `STARTER_BOUNDS.SHOWN`. */
+/** A starter as Home offers it: whether the workspace can run it now, or must connect GitHub first. */
+export interface OfferedStarter {
+  readonly task: StarterTask;
+  readonly runnable: boolean;
+}
+
+/**
+ * The starters a workspace is offered: those it can run, in order, then
+ * those needing a repository it lacks, where GitHub can be connected
+ * (`connectable`); one needing a Mac only where the member has one.
+ */
 export function startersFor(has: {
   /** Whether the workspace reaches a repository. */
   readonly repository: boolean;
+  /** Whether the workspace could be given one, its GitHub connected or its repositories chosen. */
+  readonly connectable: boolean;
   /** Whether the member has a Mac an agent can run on. */
   readonly mac: boolean;
-}): readonly StarterTask[] {
+}): readonly OfferedStarter[] {
   const met = {
     [STARTER_NEED.NONE]: true,
     [STARTER_NEED.REPOSITORY]: has.repository,
     [STARTER_NEED.MAC]: has.mac,
   } as const satisfies Record<StarterNeed, boolean>;
 
-  return STARTER_TASKS.filter((task) => met[task.needs]).slice(0, STARTER_BOUNDS.SHOWN);
+  const runnable = STARTER_TASKS.filter((task) => met[task.needs]);
+
+  const waiting = has.connectable
+    ? STARTER_TASKS.filter((task) => task.needs === STARTER_NEED.REPOSITORY && !has.repository)
+    : [];
+
+  return [
+    ...runnable.map((task) => ({ task, runnable: true })),
+    ...waiting.map((task) => ({ task, runnable: false })),
+  ];
 }

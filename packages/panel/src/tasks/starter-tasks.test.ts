@@ -4,18 +4,34 @@ import { STARTER, startersFor } from "./starter-tasks.js";
 describe("startersFor", () => {
   it.each([
     {
-      has: { repository: false, mac: false },
-      offered: [STARTER.LIVE_APP, STARTER.SITE_WALKTHROUGH],
+      has: { repository: false, connectable: false, mac: false },
+      offered: [
+        [STARTER.LIVE_APP, true],
+        [STARTER.SITE_WALKTHROUGH, true],
+      ],
     },
     {
-      has: { repository: true, mac: false },
-      offered: [STARTER.RACE_FIXES, STARTER.DAILY_BRIEFING, STARTER.LIVE_APP],
+      has: { repository: false, connectable: true, mac: true },
+      offered: [
+        [STARTER.AGENT_HISTORY, true],
+        [STARTER.LIVE_APP, true],
+        [STARTER.SITE_WALKTHROUGH, true],
+        [STARTER.RACE_FIXES, false],
+        [STARTER.SMALL_FIX, false],
+        [STARTER.DAILY_BRIEFING, false],
+      ],
     },
     {
-      has: { repository: false, mac: true },
-      offered: [STARTER.CODEX_HISTORY, STARTER.LIVE_APP, STARTER.SITE_WALKTHROUGH],
+      has: { repository: true, connectable: false, mac: false },
+      offered: [
+        [STARTER.RACE_FIXES, true],
+        [STARTER.SMALL_FIX, true],
+        [STARTER.DAILY_BRIEFING, true],
+        [STARTER.LIVE_APP, true],
+        [STARTER.SITE_WALKTHROUGH, true],
+      ],
     },
-  ])("offers only what $has can run, at most three", ({ has, offered }) => {
-    expect(startersFor(has).map((task) => task.starter)).toEqual(offered);
+  ])("offers what $has can run first, then what needs GitHub connected", ({ has, offered }) => {
+    expect(startersFor(has).map(({ task, runnable }) => [task.starter, runnable])).toEqual(offered);
   });
 });
