@@ -3,7 +3,6 @@ import { causeKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
 import { Cause, Clock, Data, Effect, type Redacted } from "effect";
 import type { SandboxReleaseSweep } from "../agents/session-sandboxes.js";
-import { GitHubBackground } from "../github/github-rate-gate.js";
 import {
   bearerMatchesSecret,
   errorResponse,
@@ -39,6 +38,10 @@ interface MaintenanceSweeps {
   refreshLiveActivities: (now: number) => SweepRead<number>;
   /** Marks away every host whose beat went past fresh and is not marked yet, so the hosts read wakes as it goes quiet, answering how many (`device-store.ts`'s `markAwayDevices`). */
   markAwayHosts: (now: number) => SweepRead<number>;
+  /** Marks away from its commands every machine whose app stopped listening and is not marked yet, so the machines read wakes as it goes quiet, answering how many (`device-store.ts`'s `markCommandsAwayDevices`). */
+  markCommandsAway: (now: number) => SweepRead<number>;
+  /** Takes down every machine ask that stood past its keep, answering how many (`machine-command-ask-store.ts`'s `pruneMachineAsks`). */
+  pruneMachineAsks: (now: number) => SweepRead<number>;
   /** Queues the release of the cloud agents' sandboxes unused past their keep, and of those whose release stands unfinished, a sweep's worth, or only logs them where deleting is off (`agents/session-sandboxes.ts`'s `releaseUnusedSandboxes`). */
   releaseSandboxes: (now: number) => SweepRead<SandboxReleaseSweep>;
 }
@@ -77,6 +80,10 @@ interface MaintenanceSweepAnswer {
   liveActivities: Swept<number>;
   /** Hosts that went quiet, marked away. */
   awayHosts: Swept<number>;
+  /** Machines whose app stopped listening for commands, marked away. */
+  commandsAway: Swept<number>;
+  /** Machine asks that stood past their keep, taken down. */
+  machineAsks: Swept<number>;
   /** Cloud agents' sandboxes due for release, and the releases published. */
   sandboxReleases: Swept<SandboxReleaseSweep>;
 }
@@ -122,6 +129,8 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
     heldPushes: yield* isolated("releaseHeldPushes", sweeps.releaseHeldPushes(now)),
     liveActivities: yield* isolated("refreshLiveActivities", sweeps.refreshLiveActivities(now)),
     awayHosts: yield* isolated("markAwayHosts", sweeps.markAwayHosts(now)),
+    commandsAway: yield* isolated("markCommandsAway", sweeps.markCommandsAway(now)),
+    machineAsks: yield* isolated("pruneMachineAsks", sweeps.pruneMachineAsks(now)),
     sandboxReleases: yield* isolated("releaseSandboxes", sweeps.releaseSandboxes(now)),
   };
 });
@@ -153,13 +162,10 @@ export const handleMaintenanceSweep = /* @__PURE__ */ Effect.fn("web/handleMaint
     // an issue on a sweep that keeps failing, while the sweeps after it ran and the answer says which.
     const ran: MaintenanceSweepAnswer | SweepsFailed = yield* options.monitor
       .run(
-        // Note that no member waits on a sweep, so what it asks GitHub waits in the background lane (`github-rate-gate.ts`).
-        Effect.flatMap(
-          sweepAll(options).pipe(Effect.provideService(GitHubBackground, true)),
-          (answer) =>
-            Object.values(answer).some((swept) => swept === SWEEP_FAILED)
-              ? Effect.fail(new SweepsFailed({ answer }))
-              : Effect.succeed(answer),
+        Effect.flatMap(sweepAll(options), (answer) =>
+          Object.values(answer).some((swept) => swept === SWEEP_FAILED)
+            ? Effect.fail(new SweepsFailed({ answer }))
+            : Effect.succeed(answer),
         ),
       )
       .pipe(

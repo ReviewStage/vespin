@@ -57,7 +57,7 @@ import { cn } from "../cn.js";
 import { FileText } from "../components/file-text/file-text.js";
 import { INLINE_REF_FIT, InlineRefFitScope } from "../components/inline-ref/inline-ref-fit.js";
 import { QUOTE_CLASS } from "../quote-face.js";
-import { ALERT_KIND, alertKindOf, alertQuotes, MarkdownAlert } from "./markdown-alerts.js";
+import { alertKindOf, alertQuotes, MarkdownAlert } from "./markdown-alerts.js";
 import { MARKDOWN_CLASS, markdownClass } from "./markdown-class.js";
 import {
   type MarkdownTaskBox,
@@ -70,8 +70,6 @@ import {
   taskInput,
 } from "./markdown-tasks.js";
 
-export type { AlertKind } from "./markdown-alerts.js";
-
 export type {
   MarkdownTaskBox,
   MarkdownTaskTick,
@@ -80,8 +78,6 @@ export type {
 } from "./markdown-tasks.js";
 
 export { TaskBox } from "./markdown-tasks.js";
-
-export { ALERT_KIND };
 
 /** How a place's words are drawn: as a note, a transcript, or a site's document. */
 export const MARKDOWN_LOOK = {
@@ -117,13 +113,20 @@ function streamdownStep(name: "raw" | "sanitize" | "harden"): MarkdownStep {
 /** The Markdown steps a transcript is read with where it names none: GitHub's dialect and a fence's meta, as Streamdown reads them. */
 export const TRANSCRIPT_REMARK_STEPS: MarkdownSteps = Object.values(defaultRemarkPlugins);
 
+/** The steps over raw HTML by name, named because their inferred type reaches a type of `unified`, which declarations cannot name. */
+interface MarkdownHtmlSteps {
+  readonly PARSE: MarkdownStep;
+  readonly SANITIZE: MarkdownStep;
+  readonly HARDEN: MarkdownStep;
+}
+
 /**
  * The steps a drawn tree takes over raw HTML, each by name, for a place that
  * lists its own between them: the parse, the sanitizer, and the link
  * hardening, a transcript's three where it names none. A site document
  * written in this repository takes the parse alone, its HTML being ours.
  */
-export const MARKDOWN_HTML_STEP = {
+export const MARKDOWN_HTML_STEP: MarkdownHtmlSteps = {
   PARSE: streamdownStep("raw"),
   SANITIZE: streamdownStep("sanitize"),
   HARDEN: streamdownStep("harden"),

@@ -21,17 +21,13 @@ import {
   type ListedAgent,
   listedAgentOfPage,
 } from "@repo/features/agent-wire";
-import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { isPlayedType } from "@repo/features/conversation-picture-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppHostRead, AppStateSnapshot, AppTranscript } from "@repo/host/app-state";
-import {
-  type FollowedAgent,
-  selectFollowedAgent,
-  selectTranscript,
-} from "@repo/host/app-state-reads";
+import { type FollowedAgent, selectTranscript } from "@repo/host/app-state-reads";
 import {
   BUZZ,
   latestStep,
@@ -44,9 +40,14 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cachedVideo } from "../cached-media.js";
+import { cachedPlayed } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs, useHostFollow } from "../host/host-provider.js";
+import {
+  useHostActs,
+  useHostFollow,
+  useTaskListCollections,
+  useTaskListRow,
+} from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
 
 /** What an agent's recordings are named under among the app's caches. */
@@ -95,9 +96,7 @@ function agentOfAnswer(answer: AgentPageAnswerView): ListedAgent | undefined {
 
 /** The agent as the task list follows it, by its id; none until the list holds it. */
 export function useFollowedAgent(agentId: string): FollowedAgent | undefined {
-  const select = useMemo(() => selectFollowedAgent(agentId), [agentId]);
-
-  return useQuery({ ...appStateQuery, select }).data;
+  return useTaskListRow(useTaskListCollections().agents, agentId);
 }
 
 /**
@@ -146,15 +145,9 @@ const NO_PULL_REQUESTS: readonly AgentPullRequest[] = [];
 
 /** The pull requests the agent opened, as the task list holds them now; none before it holds them. */
 export function useAgentPullRequests(agentId: string): readonly AgentPullRequest[] {
-  const select = useMemo(
-    () => (state: AppStateSnapshot) =>
-      (state.tasks.agentPullRequests ?? [])
-        .filter((each) => each.agentId === agentId)
-        .map(({ pullRequest }) => pullRequest),
-    [agentId],
-  );
+  const listed = useTaskListRow(useTaskListCollections().agentPullRequests, agentId);
 
-  return useQuery({ ...appStateQuery, select }).data ?? NO_PULL_REQUESTS;
+  return useMemo(() => (listed === undefined ? NO_PULL_REQUESTS : [listed.pullRequest]), [listed]);
 }
 
 /**
@@ -268,28 +261,28 @@ function mediaReadFailed(agentId: string, pictureId: string, cause: unknown, aga
   );
 }
 
-/** One picture or recording the agent showed, read through the host into what it is drawn from. */
+/** One picture, recording, or sound clip the agent showed, read through the host into what it is drawn from. */
 async function agentMediaSource(
   acts: ReturnType<typeof useHostActs>,
   agentId: string,
   pictureId: string,
 ): Promise<string> {
-  // Note that a recording is asked for as its MP4 copy, which the system's player plays, where the service kept one.
+  // Note that a recording, or an Ogg clip, is asked for as its MP4 copy, which the system's player plays, where the service kept one; anything else is answered as it is.
   const read = await acts[ACT_KIND.AGENTS_PICTURE]({ agentId, pictureId, playable: MP4_TYPE });
 
   if (!("base64" in read)) throw new Error(`The picture was not read: ${read.failure}.`);
 
-  return isVideoType(read.contentType)
-    ? cachedVideo(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64)
+  return isPlayedType(read.contentType)
+    ? cachedPlayed(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64)
     : `data:${read.contentType};base64,${read.base64}`;
 }
 
 /**
- * What each picture and recording the agent showed is drawn from, by its
- * id, read once through the host as the panel reads one
+ * What each picture, recording, and sound clip the agent showed is drawn
+ * from, by its id, read once through the host as the panel reads one
  * (`ACT_KIND.AGENTS_PICTURE`): a picture as a `data:` address, and a
- * recording, its MP4 copy where the service kept one, as a file of the
- * app's caches, written whole before it is drawn, since the system's player
+ * recording or a clip, its MP4 copy where the service kept one, as a file of
+ * the app's caches, written whole before it is drawn, since the system's player
  * reads a file; one on its way, or that could not be read, is absent. Note
  * that each is asked for once while the agent's page stands, however often
  * the transcript moves; that one whose read failed is tried again on its
@@ -442,10 +435,19 @@ export type PageRead =
   | { readonly html: string; readonly title: string }
   | { readonly failed: true };
 
-/** One version of a page the agent showed on its task, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading until the task is known. */
-export function usePageHtml(taskId: string | undefined, pageId: string, version: number): PageRead {
+/** A page's read as it stands, and the ask to read it again after it failed. */
+export interface PageHtml {
+  readonly read: PageRead;
+  readonly again: () => void;
+}
+
+/** One version of a page the agent showed on its task, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading until the task is known, and read again on `again` after a read that failed. */
+export function usePageHtml(taskId: string | undefined, pageId: string, version: number): PageHtml {
   const acts = useHostActs();
   const [read, setRead] = useState<PageRead>({ reading: true });
+  // Note that each ask to read again counts up, which the read below depends on, so Try again reads the page anew rather than leaving the failure standing.
+  const [asked, setAsked] = useState(0);
+  const again = useCallback(() => setAsked((was) => was + 1), []);
   useEffect(() => {
     let current = true;
     setRead({ reading: true });
@@ -470,9 +472,9 @@ export function usePageHtml(taskId: string | undefined, pageId: string, version:
     return () => {
       current = false;
     };
-  }, [acts, taskId, pageId, version]);
+  }, [acts, taskId, pageId, version, asked]);
 
-  return read;
+  return { read, again };
 }
 
 /** The older read asked last: of which agent, below where, and whether it failed. */

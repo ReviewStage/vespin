@@ -1,0 +1,18 @@
+{
+  // tsconfig.package.json -- the base a package's tsconfig extends: a composite project that emits its declarations.
+  //
+  // A package is a project reference of every workspace that imports it, so
+  // its dependents read the declarations it emits here rather than its
+  // source: each workspace's `tsc` holds its own files and the `.d.ts` of
+  // what it imports, never every package beneath it. Turbo's `typecheck`
+  // runs a package before its dependents (`^typecheck`) and caches this
+  // folder, the incremental build info beside it, so a hit restores it.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "rootDir": "${configDir}",
+    "outDir": "${configDir}/node_modules/.cache/tsbuild"
+  }
+}

@@ -148,6 +148,19 @@ const ON_CODEX_API_KEY: AgentRuntimeChoice = {
   payer: AGENT_PAYER.API_KEY,
 };
 
+/** Cursor on the account's own Cursor API key, the only credential its agents run on. */
+const ON_CURSOR_API_KEY: AgentRuntimeChoice = {
+  runtime: CONVERSATION_RUNTIME.CURSOR,
+  payer: AGENT_PAYER.API_KEY,
+};
+
+/** The runtime and payer each provider's API key runs its agents on. */
+const ON_API_KEY = {
+  [MODEL_PROVIDER.ANTHROPIC]: ON_CLAUDE_CODE_API_KEY,
+  [MODEL_PROVIDER.OPENAI]: ON_CODEX_API_KEY,
+  [MODEL_PROVIDER.CURSOR]: ON_CURSOR_API_KEY,
+} as const satisfies Record<ModelProvider, AgentRuntimeChoice>;
+
 const ON_CODEX: AgentRuntimeChoice = {
   runtime: CONVERSATION_RUNTIME.CODEX,
   payer: AGENT_PAYER.CHATGPT_SUBSCRIPTION,
@@ -157,12 +170,14 @@ const ON_CODEX: AgentRuntimeChoice = {
 const PROVIDER_RUNTIME = {
   [MODEL_PROVIDER.ANTHROPIC]: CONVERSATION_RUNTIME.CLAUDE_CODE,
   [MODEL_PROVIDER.OPENAI]: CONVERSATION_RUNTIME.CODEX,
+  [MODEL_PROVIDER.CURSOR]: CONVERSATION_RUNTIME.CURSOR,
 } as const satisfies Record<ModelProvider, NativeRuntime>;
 
-/** The payer each provider's plan is recorded as. */
+/** The payer each provider's plan is recorded as; Cursor's agents run on its API key alone, so a Cursor agent with none is recorded on the key it lacks. */
 const PLAN_PAYER = {
   [MODEL_PROVIDER.ANTHROPIC]: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
   [MODEL_PROVIDER.OPENAI]: AGENT_PAYER.CHATGPT_SUBSCRIPTION,
+  [MODEL_PROVIDER.CURSOR]: AGENT_PAYER.API_KEY,
 } as const satisfies Record<ModelProvider, AgentPayer>;
 
 /** Who pays for an agent's turn, and which of its starter's subscriptions or API keys, by its row's id; a Preview's stand-in names none. */
@@ -264,9 +279,12 @@ function soonestReset(plans: readonly ProviderKeyRow[], now: number): ProviderKe
   return soonest?.row ?? plans[0];
 }
 
-/** The plan's runtime and payer for a model of the provider's: Claude Code for Anthropic's, Codex for OpenAI's. */
-const onPlanOf = (provider: string): AgentRuntimeChoice =>
-  provider === MODEL_PROVIDER.ANTHROPIC ? ON_CLAUDE_CODE : ON_CODEX;
+/** The plan's runtime and payer for a model of the provider's: Claude Code for Anthropic's, Codex for OpenAI's; Cursor keeps no plan, so its key's. */
+const ON_PLAN = {
+  [MODEL_PROVIDER.ANTHROPIC]: ON_CLAUDE_CODE,
+  [MODEL_PROVIDER.OPENAI]: ON_CODEX,
+  [MODEL_PROVIDER.CURSOR]: ON_CURSOR_API_KEY,
+} as const satisfies Record<ModelProvider, AgentRuntimeChoice>;
 
 /**
  * Whether an API key pays for the account's agents on the provider's
@@ -317,13 +335,13 @@ const providerRuntimeChoice = Effect.fnUntraced(function* (
   const environment = yield* deploymentEnvironment;
   const plans = keptPlans(userId, provider, environment?.providerKeyEncryptionKeys, rows);
 
-  if (plans.length > 0) return onPlanOf(provider);
+  if (plans.length > 0) return ON_PLAN[provider];
 
   // Our key pays for no coding agent, so an account with no API key of the provider's is refused by name.
   if (!(yield* keepsApiKey(userId, provider, rows, environment)))
     return yield* Effect.fail(new AgentCredentialMissing({ provider }));
 
-  return provider === MODEL_PROVIDER.ANTHROPIC ? ON_CLAUDE_CODE_API_KEY : ON_CODEX_API_KEY;
+  return ON_API_KEY[provider];
 });
 
 /**
@@ -363,15 +381,23 @@ const MAC_PROVIDERS: readonly ModelProvider[] = [MODEL_PROVIDER.ANTHROPIC, MODEL
 /** Whether the Mac runs Codex agents: it registered a Codex it checked against the pin. */
 const runsCodex = (device: Device): boolean => device.codexExecutable !== null;
 
-/** Whether the machine runs a Start of the provider's models: Claude Code's anywhere, Codex's where it checked a Codex. */
+/** Whether the machine runs a Start of the provider's models: Claude Code's anywhere, Codex's where it checked a Codex, and Cursor's on none yet. */
 function macRunsProvider(device: Device, provider: ModelProvider): boolean {
-  return provider === MODEL_PROVIDER.ANTHROPIC || runsCodex(device);
+  switch (provider) {
+    case MODEL_PROVIDER.ANTHROPIC:
+      return true;
+    case MODEL_PROVIDER.OPENAI:
+      return runsCodex(device);
+    case MODEL_PROVIDER.CURSOR:
+      return false;
+  }
 }
 
 /** The provider whose models a native runtime runs, which the Mac a Start names must list. */
 const RUNTIME_PROVIDER = {
   [CONVERSATION_RUNTIME.CLAUDE_CODE]: MODEL_PROVIDER.ANTHROPIC,
   [CONVERSATION_RUNTIME.CODEX]: MODEL_PROVIDER.OPENAI,
+  [CONVERSATION_RUNTIME.CURSOR]: MODEL_PROVIDER.CURSOR,
 } as const satisfies Record<NativeRuntime, ModelProvider>;
 
 /**
@@ -456,9 +482,14 @@ export const agentMachineChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
     return yield* new LocalAgentRefused({ reason: SETUP_REFUSAL[offer.setup] });
   }
 
-  // Note that a Mac runs only the providers it lists, so Codex on one that lists none of OpenAI's is refused by name.
+  // Note that a Mac runs only the providers it lists, so Codex on one that lists none of OpenAI's is refused by name, and Cursor, which no Mac runs yet, as no harness.
   if (!offer.providers.includes(RUNTIME_PROVIDER[runtime])) {
-    return yield* new LocalAgentRefused({ reason: LOCAL_AGENT_REFUSAL.CODEX });
+    const reason =
+      runtime === CONVERSATION_RUNTIME.CODEX
+        ? LOCAL_AGENT_REFUSAL.CODEX
+        : LOCAL_AGENT_REFUSAL.NO_HARNESS;
+
+    return yield* new LocalAgentRefused({ reason });
   }
 
   if (inRepository && !(yield* signsInOwnGithub(userId, offer.deviceId))) {

@@ -3,8 +3,7 @@
  *
  * One line, the height of the pull request's and the Inbox's rows and on the
  * same card: the person's face, "Add Charles Lin as a follower?", Not now,
- * and Add. Whom it offers is `follow-offer.ts`'s to say; it stands only
- * while the task's workspace has Following on. Add asks the service to add
+ * and Add. Whom it offers is `follow-offer.ts`'s to say. Add asks the service to add
  * them (their machines off), and the row goes once the task's followers
  * name them; Not now is kept for that person on that task in this window's
  * own storage, so it never asks about them there again.
@@ -14,7 +13,6 @@ import { FAILURE_SURFACE, failureAboutOf } from "@repo/features/shown-failure";
 import { FOLLOWING_WORDS, followerRefusedNote } from "@repo/features/task-followers-model";
 import type { FollowerCallFailure } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { EXPERIMENT } from "@repo/settings";
 import {
   BUTTON_SIZE,
   BUTTON_VARIANT,
@@ -26,16 +24,14 @@ import {
   STATUS_TONE,
 } from "@repo/ui";
 import { personActor } from "@repo/ui/actor-model";
-import { useQuery } from "@tanstack/react-query";
 import { Schema } from "effect";
-import { type ReactNode, useCallback, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { askAct, toastActFailure } from "../act.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { useMemberDirectory } from "../member-directory.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { showToast } from "../toast.js";
-import { appStateQuery, selectListedTasks } from "../use-app-state.js";
 import { keptKey, useKept } from "../use-kept.js";
-import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { type FollowOfferInput, followOffer } from "./follow-offer.js";
 
@@ -76,26 +72,15 @@ function addRefused(
   });
 }
 
-/** The task's workspace and followers, as the listed tasks hold them; none for a task not listed. */
+/** The task as the listed tasks hold it, its workspace and followers read; none for a task not listed. */
 function useListedTask(taskId: string) {
-  const select = useCallback(
-    (state: Parameters<typeof selectListedTasks>[0]) => {
-      const task = selectListedTasks(state).tasks.find((each) => each.id === taskId);
-
-      return task === undefined
-        ? undefined
-        : { workspaceId: task.workspaceId, followers: task.followers };
-    },
-    [taskId],
-  );
-
-  return useQuery({ ...appStateQuery, select }).data;
+  return useTaskListRow(useTaskListCollections().tasks, taskId);
 }
 
 /**
  * The offer to add a person the reader's newest line to the agent mentioned
  * as a follower of the task, over its box; nothing while there is none to
- * offer or the task's workspace has Following off.
+ * offer.
  */
 export function FollowOfferDock({
   taskId,
@@ -104,21 +89,18 @@ export function FollowOfferDock({
   readerId,
 }: Pick<FollowOfferInput, "messages" | "pending" | "readerId"> & { taskId: string }): ReactNode {
   const task = useListedTask(taskId);
-  const following = useWorkspaceExperiment(task?.workspaceId, EXPERIMENT.FOLLOWING);
   const { members, former } = useMemberDirectory();
   const [declined, , changeDeclined] = useKept(KEPT.DECLINED, NONE_DECLINED);
   const [adding, setAdding] = useState<string | undefined>(undefined);
 
-  const offered = following
-    ? followOffer({
-        messages,
-        pending,
-        readerId,
-        followers: task?.followers,
-        members,
-        declined: declined[taskId] ?? NO_ONE,
-      })
-    : undefined;
+  const offered = followOffer({
+    messages,
+    pending,
+    readerId,
+    followers: task?.followers,
+    members,
+    declined: declined[taskId] ?? NO_ONE,
+  });
 
   // Note that only a member is ever offered (`followOffer`), so the name is theirs as the directory reads it.
   const member = members?.find((each) => each.userId === offered);

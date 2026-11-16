@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { AGENT_BOUNDS } from "@repo/features/agent-wire";
 import {
   DESCRIPTION_COMMENT_ACTION,
   DESCRIPTION_COMMENT_ACTOR,
@@ -31,7 +32,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { useAppKeymap } from "../app-commands.js";
 import { type AnyAct, FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
-import { readExperiments, writeExperiments } from "../testing/app-state.js";
+import {
+  handState,
+  readExperiments,
+  writeExperiments,
+  writeListedTasks,
+} from "../testing/app-state.js";
 import { attachmentChipName } from "../testing/attachment-chip.js";
 import {
   composerEditor,
@@ -48,6 +54,7 @@ import { AGENT } from "../testing/desktop-inbox.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { restOn } from "../testing/hint-rest.js";
 import { relayout } from "../testing/resize-observer.js";
+import { listedAgent } from "../testing/tasks-control.js";
 import { DescriptionBody } from "./description-body.js";
 import { COMMENTS_FILTER, CommentFocusScope, PageComments } from "./description-comments.js";
 import { descriptionEditMutation } from "./description-edit-mutation.js";
@@ -81,7 +88,7 @@ const TEXT = [
   "",
 ].join("\n\n");
 
-const PLAN: Task = { ...DOCUMENT_TASK, document: { body: TEXT, assumptions: [] } };
+const PLAN: Task = { ...DOCUMENT_TASK, description: { body: TEXT, assumptions: [] } };
 
 const ID = {
   OPEN: "0f9b5f6e-6a8e-4c51-9a0e-2c1f2f0b7a11",
@@ -188,7 +195,7 @@ function drawn(
   const notes = new Map<string, string>();
 
   const control: DescriptionCommentsControl = {
-    planId: PLAN.id,
+    taskId: PLAN.id,
     threads,
     read,
     failed: false,
@@ -680,7 +687,7 @@ test("the button beside a list comments on the bullet under the pointer, a paren
     "\n\n",
   );
 
-  const listed: Task = { ...DOCUMENT_TASK, document: { body: text, assumptions: [] } };
+  const listed: Task = { ...DOCUMENT_TASK, description: { body: text, assumptions: [] } };
   const { container, started } = wide(() => drawn("page", [], () => true, listed));
 
   const second = [...container.querySelectorAll("li")].find((li) =>
@@ -961,7 +968,41 @@ test("on a plan's page a reply is written in the agent box's editor, its words p
   );
 });
 
-test("a reply pasted past the comment's cap is cut to the room left and the card says so, until the words change, and the counter stands from four fifths of the cap", () => {
+test("a long paste into a reply lands as a text file's chip where it was pasted, and the reply keeps none of its words", async () => {
+  installEditorLayout();
+
+  const { container } = drawn(
+    "page",
+    [THREADS[0] ?? assert.fail("no thread")],
+    () => true,
+    PLAN,
+    undefined,
+    PAGE_MENTIONS,
+  );
+
+  act(() =>
+    container
+      .querySelector<HTMLElement>(`mark.description-comment-mark[data-threads~="${ID.OPEN}"]`)
+      ?.click(),
+  );
+  const card = container.querySelector<HTMLElement>(`.comment-card[data-thread="${ID.OPEN}"]`);
+  assert.ok(card);
+  const log = Array.from({ length: 40 }, (_, line) => `error ${String(line)}`).join("\n");
+
+  pasteInComposer(card, log);
+  await act(async () => undefined);
+
+  const editor = composerEditor(card);
+  assert.equal(editor.textContent?.includes("error"), false, "the words stay out of the reply");
+
+  const chip =
+    card.querySelector('[aria-label="Open Pasted text 1.txt"]') ??
+    assert.fail("the paste stands as a chip");
+
+  assert.ok(editor.contains(chip), "the chip stands in the words");
+});
+
+test("a reply pasted past the comment's cap and too large for a file is cut to the room left and the card says so, until the words change, and the counter stands from four fifths of the cap", () => {
   installEditorLayout();
 
   const { container } = drawn(
@@ -984,7 +1025,8 @@ test("a reply pasted past the comment's cap is cut to the room left and the card
   const note = () => card.querySelector(".ui-composer-foot-note")?.textContent;
   assert.equal(card.querySelector(".ui-length-counter"), null);
 
-  pasteInComposer(card, "x".repeat(cap + 100));
+  // Note that this runs longer than most, because only words past a text file's bound stay words to be cut.
+  pasteInComposer(card, "x".repeat(AGENT_BOUNDS.MAX_TEXT_BYTES + 1));
   assert.equal(note(), pasteCutWords(cap));
   assert.equal(
     card.querySelector(".ui-length-counter")?.textContent,
@@ -1294,7 +1336,7 @@ test("a thread being started gives its card's place to the thread as its words a
   );
 });
 
-test("a thread's resolve reads as its writer's own line, drawn as a comment's head, an agent of another task named as the workspace's list names it, and an empty tab says how a thread starts", () => {
+test("a thread's resolve reads as its writer's own line, drawn as a comment's head, an agent of another task named as the workspace's list names it, and an empty tab says how a thread starts", async () => {
   const resolvedBy = (id: string, writer: DescriptionCommentThread["entries"][number]["writer"]) =>
     threadOn(id, "teammate", "A guest, too?", {
       status: DESCRIPTION_COMMENT_STATUS.RESOLVED,
@@ -1315,11 +1357,13 @@ test("a thread's resolve reads as its writer's own line, drawn as a comment's he
   });
 
   // The agent works on another task, so only the window's list across the workspace holds it.
+  handState(experimentsOn(EXPERIMENT.DESCRIPTIONS));
+  writeListedTasks({ taskAgents: [listedAgent(AGENT)] });
+
   const agents: EditAgents = {
     control: {
       agents: [],
       archived: [],
-      listed: [AGENT],
       models: [],
       me: "u-dean",
       pullRequests: new Map(),
@@ -1339,6 +1383,10 @@ test("a thread's resolve reads as its writer's own line, drawn as a comment's he
     agents,
   );
 
+  // The list is read from the bridge once the tree is drawn.
+  await act(async () => {
+    for (let tick = 0; tick < 10; tick += 1) await Promise.resolve();
+  });
   assert.ok(container.querySelector(".ui-empty-state")?.textContent?.includes("No comments"));
   act(() => resolvedChoice(container)?.click());
 
@@ -1384,7 +1432,7 @@ async function caretInThread() {
   installEditorLayout();
 
   const control: DescriptionCommentsControl = {
-    planId: PLAN.id,
+    taskId: PLAN.id,
     threads: THREADS,
     read: true,
     failed: false,
@@ -2292,7 +2340,7 @@ test("a thread resolved fades out of a page's column where its row stood, out of
           withQueryClient(
             createElement(PageComments, {
               control: {
-                planId: PLAN.id,
+                taskId: PLAN.id,
                 threads,
                 read: true,
                 failed: false,

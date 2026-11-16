@@ -3,5 +3,34 @@
   "compilerOptions": {
     "types": ["node", "electron"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "../../packages/panel/src/stylesheet.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "../../packages/panel/src/stylesheet.d.ts"],
+  "references": [
+    {
+      "path": "../../packages/brand"
+    },
+    {
+      "path": "../../packages/credentials"
+    },
+    {
+      "path": "../../packages/features"
+    },
+    {
+      "path": "../../packages/gateway"
+    },
+    {
+      "path": "../../packages/host"
+    },
+    {
+      "path": "../../packages/panel"
+    },
+    {
+      "path": "../../packages/settings"
+    },
+    {
+      "path": "../../packages/ui"
+    },
+    {
+      "path": "../../packages/wire"
+    }
+  ]
 }

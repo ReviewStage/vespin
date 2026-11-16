@@ -125,7 +125,7 @@ async function drawn(node: ReactElement): Promise<HTMLElement> {
 
 /** A description whose text holds `fence` under a heading. */
 function taskWith(fence: string): Task {
-  return { ...DOCUMENT_TASK, document: { body: `## Flow\n\n${fence}\n`, assumptions: [] } };
+  return { ...DOCUMENT_TASK, description: { body: `## Flow\n\n${fence}\n`, assumptions: [] } };
 }
 
 /** A Mermaid fence around `code`. */
@@ -172,7 +172,7 @@ function Version({ previous, now }: { previous: string; now: string }): ReactNod
       read: {
         kind: HISTORY_READ.READY,
         previous: { body: previous, assumptions: [] },
-        document: { body: now, assumptions: [] },
+        description: { body: now, assumptions: [] },
       },
     },
     restore,

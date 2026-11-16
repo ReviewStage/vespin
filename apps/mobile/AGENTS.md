@@ -306,8 +306,9 @@ pull request with UI shows its screenshots to the developer in a thread.
   keeps the system's tab bar with stack navigation. A regular one, whether
   it is an iPad's, the unfolded iPhone Duo's, or a Split View pane, stands
   list and detail side by side in `NavigationSplitView`, and New task is
-  the list column bar's one trailing compose button, beside its search and
-  ⋯, rather than the tab bar's round +, which only a compact window keeps.
+  the compose button leading the detail's bar, as Mail stands compose over
+  the message, rather than the tab bar's round +, which only a compact
+  window keeps (Search's own two columns hold it in Search's bar).
   Where the window is wide enough for three columns, an iPad's in
   landscape, it hides the tab bar and stands the app sidebar first, as
   Mail stands its mailboxes (`src/screens/app-sidebar.tsx`): the workspace

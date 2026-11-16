@@ -233,7 +233,7 @@ export const descriptionCommentsCursorSchema = filledText(
   DESCRIPTION_COMMENT_BOUNDS.MAX_CURSOR_CHARS,
 );
 
-/** A description's comments as they stand (GET `/api/plans/{id}/comments`): every thread, oldest first, and the cursor to read on from. */
+/** A description's comments as they stand (GET `/api/tasks/{id}/comments`): every thread, oldest first, and the cursor to read on from. */
 export const descriptionCommentsAnswerSchema = EffectSchema.Struct({
   threads: EffectSchema.Array(descriptionCommentThreadSchema),
   cursor: EffectSchema.String,
@@ -245,7 +245,7 @@ export type DescriptionCommentsAnswer = typeof descriptionCommentsAnswerSchema.T
 const ANCHOR_TEXT = EffectSchema.String.check(EffectSchema.isMaxLength(TASK_BOUNDS.MAX_BODY_CHARS));
 
 /**
- * A thread started (POST `/api/plans/{id}/comments`): its first comment, the
+ * A thread started (POST `/api/tasks/{id}/comments`): its first comment, the
  * words it is anchored to, and the description's text the anchor is measured in,
  * which the service carries over to the text as it stands, so a thread
  * started in an editor with words not yet saved lands on the same words. The
@@ -316,7 +316,7 @@ export type DescriptionCommentStartRequest = typeof descriptionCommentDescriptio
 /** A thread started on a page of the description's task. */
 export type DescriptionCommentPageStart = typeof descriptionCommentPageStartSchema.Type;
 
-/** A thread started (POST `/api/plans/{id}/comments`): on the description's words, or on one of its task's pages. */
+/** A thread started (POST `/api/tasks/{id}/comments`): on the description's words, or on one of its task's pages. */
 export const descriptionCommentStartRequestSchema = EffectSchema.Union([
   descriptionCommentDescriptionStartSchema,
   descriptionCommentPageStartSchema,
@@ -324,7 +324,7 @@ export const descriptionCommentStartRequestSchema = EffectSchema.Union([
 
 export type DescriptionCommentStart = typeof descriptionCommentStartRequestSchema.Type;
 
-/** What a member does to one thread (POST `/api/plans/{id}/comments/{thread}`). */
+/** What a member does to one thread (POST `/api/tasks/{id}/comments/{thread}`). */
 export const DESCRIPTION_COMMENT_ACTION = {
   REPLY: "reply",
   EDIT: "edit",

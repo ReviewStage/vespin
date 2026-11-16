@@ -284,6 +284,8 @@ function CallStep({
       kind={call.kind}
       provider={call.provider}
       server={server}
+      connection={call.connection}
+      account={call.account}
       subject={call.subject}
       description={call.description}
       files={call.files}
@@ -293,6 +295,7 @@ function CallStep({
       input={call.input}
       output={call.output}
       errorText={view.errorText}
+      refused={call.refused}
     />
   );
 }
@@ -504,7 +507,7 @@ export function ReplayCard({
             openPlace(
               taskId === undefined
                 ? { kind: LINK_DESTINATION.AGENT, agentId }
-                : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId },
+                : { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId },
             );
 
   const left = leftOutLine(replay);

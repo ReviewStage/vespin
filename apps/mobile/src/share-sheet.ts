@@ -35,7 +35,7 @@ import {
 import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
 import { SERVICE_ORIGIN } from "./host/compose-mobile.js";
-import { APP_VERSION } from "./host/host-provider.js";
+import { APP_VERSION, useListedTasks } from "./host/host-provider.js";
 
 /** Where the share sheet's Start goes, named as this build. */
 const SHARE_SERVICE = {
@@ -47,6 +47,7 @@ const SHARE_SERVICE = {
 function useSnapshotJson(accountId: string | undefined): string | undefined {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const chosenId = useChosenWorkspace(workspaces).chosen?.id;
+  const tasks = useListedTasks();
 
   const select = useCallback(
     (state: AppStateSnapshot) =>
@@ -57,7 +58,7 @@ function useSnapshotJson(accountId: string | undefined): string | undefined {
               accountId,
               chosenId,
               state.tasks.workspaces,
-              state.tasks.tasks,
+              tasks,
               (workspaceId) =>
                 selectRepositoryList(workspaceId)(state)?.rows?.repositories.map(
                   ({ fullName }) => fullName,
@@ -65,7 +66,7 @@ function useSnapshotJson(accountId: string | undefined): string | undefined {
               SHARE_SERVICE,
             ),
           ),
-    [accountId, chosenId],
+    [accountId, chosenId, tasks],
   );
 
   return useQuery({ ...appStateQuery, select }).data;

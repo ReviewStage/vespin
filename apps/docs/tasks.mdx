@@ -1,0 +1,42 @@
+---
+title: "Tasks"
+description: "A task's Overview, sub-tasks, agents, pages, and each agent's browser"
+---
+
+A task is one piece of work, from the sentence that starts it to its merged pull requests. It holds the work's agents and their pull requests, its sub-tasks, its pages, and its Inbox threads.
+
+Press <kbd>⌘N</kbd> (<kbd>⌥⌘N</kbd> in a browser) to start one. Press <kbd>⌘⏎</kbd> on an empty box to make a task with no agent.
+
+## The Overview
+
+The task's name, at the top of the task, opens its **Overview**: its status, priority, and assignee, its sub-tasks, its agents, and its pages.
+
+<Frame>
+  <img src="/images/tasks-overview.png" alt="A task's Overview: Teammate invitations with its status, priority, and assignee, five sub-tasks two of them done, and two agents with their pull requests" />
+</Frame>
+
+## Sub-tasks and relations
+
+A sub-task is a task of its own that works in its parent's repository. A task can also be blocked by another. A block is advice: nothing stops a blocked task's agents from starting.
+
+## Agents
+
+Every agent on a task works in the task's repository. Press <kbd>⌘T</kbd> to start another. A cloud agent works in its own sandbox, set up in [Cloud environment](/cloud-environment), and asks before acting as its [permissions](/permissions) say.
+
+## Pages
+
+An agent can show you an interactive page, such as a chart, a table, or a mockup. A comment on a page goes to the agent that wrote it. **Start a review** to send several at once.
+
+## The agent's browser {#the-agents-browser}
+
+A cloud agent has its own browser, a Chromium in its sandbox, which it uses to check pages it built or to reach a site you sign in to. Open its tabs from **+** in the task's side panel. A tab the agent opens stays out of your panel until you do.
+
+<Frame>
+  <img src="/images/tasks-browser.png" alt="An agent's Browser tab beside its conversation: Relay's accept page live, You're driving and Hand back over it, and the agent asking you to sign in for it" />
+</Frame>
+
+**Take over** to drive a tab yourself. The agent waits until you **Hand back**, or until 60 seconds after your last input.
+
+To sign in for the agent, open a **New browser tab**, sign in, and hand it back. The cookies stay in that agent's sandbox for as long as it lasts.
+
+Screenshots and recordings the agent takes appear in its conversation, which every member who can open the task can see.

@@ -21,7 +21,11 @@
  * `machine/sandbox-machine.ts`): `booting_since` set as it opens the
  * sandbox, LIVE again where it stood released, and cleared once its runner
  * is handed its first lines, which is a use, or once the open failed; a
- * discard, which deletes the sandbox, marks it RELEASED. A sweep leaves a
+ * discard, which deletes the sandbox, marks it RELEASED. A stop the service
+ * makes as nothing holds the sandbox (`@repo/service`'s
+ * `sandboxStoppedIfUnheld`) moves its last use back to the instant its run
+ * would have ended at, so the task list reads it off at once with no column
+ * of its own, while it stays LIVE for the release sweep. A sweep leaves a
  * sandbox booting alone, since its boot keeps the last use it began from,
  * unless the boot began before the sweep's cutoff and never ended. The task
  * list reads the row of the agent's current session (`sandboxNamedFor`).
@@ -34,6 +38,7 @@ import {
   and,
   asc,
   eq,
+  gt,
   inArray,
   isNotNull,
   isNull,
@@ -54,6 +59,8 @@ import {
   type AgentSandboxState,
   agentSandboxTable,
 } from "../schemas/agent-sandbox.js";
+import { conversations } from "../schemas/storage.js";
+import { forgetAgentSandboxHolds } from "./agent-sandbox-holds.js";
 import { forgetTurnSnapshotsOfAgent, forgetTurnSnapshotsOfSandbox } from "./turn-state.js";
 
 type SandboxUseEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
@@ -133,10 +140,11 @@ const StateSchema = Schema.Literals([
   AGENT_SANDBOX_STATE.RELEASED,
 ]);
 
-/** A sandbox a release names: its name, its agent, the agent's conversation, when it was last used, and its state. */
+/** A sandbox a release names: its name, its agent and the agent's starter, the agent's conversation, when it was last used, and its state. */
 const ReleaseRowSchema = Schema.Struct({
   sandboxName: Schema.String,
   agentId: Schema.String,
+  userId: Schema.String,
   conversationId: Schema.String,
   usedAt: Schema.Date,
   state: StateSchema,
@@ -196,6 +204,7 @@ const findRelease = SqlSchema.findOneOption({
         .select({
           sandboxName: agentSandboxTable.sandboxName,
           agentId: agentSandboxTable.agentId,
+          userId: agentTable.userId,
           conversationId: agentTable.conversationId,
           usedAt: agentSandboxTable.usedAt,
           state: agentSandboxTable.state,
@@ -203,6 +212,50 @@ const findRelease = SqlSchema.findOneOption({
         .from(agentSandboxTable)
         .innerJoin(agentTable, eq(agentTable.id, agentSandboxTable.agentId))
         .where(eq(agentSandboxTable.sandboxName, sandboxName)),
+    ),
+});
+
+const RunningSandboxSchema = Schema.Struct({
+  agentId: Schema.String,
+  userId: Schema.String,
+  conversationId: Schema.String,
+  sessionId: Schema.String,
+});
+
+/** A workspace's agent whose current session's sandbox may be running, as a stop for a new size names it. */
+export type RunningAgentSandbox = typeof RunningSandboxSchema.Type;
+
+const findRunningOfWorkspace = SqlSchema.findAll({
+  Request: Schema.Struct({ organizationId: Schema.String, usedSince: Schema.Date }),
+  Result: RunningSandboxSchema,
+  execute: ({ organizationId, usedSince }) =>
+    Database.use((db) =>
+      db
+        .select({
+          agentId: agentTable.id,
+          userId: agentTable.userId,
+          conversationId: agentTable.conversationId,
+          sessionId: sql<string>`${conversations.runtimeSessionId}`,
+        })
+        .from(agentTable)
+        .innerJoin(conversations, eq(conversations.id, agentTable.conversationId))
+        .innerJoin(
+          agentSandboxTable,
+          and(
+            eq(agentSandboxTable.sandboxName, sandboxNamedFor(conversations.runtimeSessionId)),
+            eq(agentSandboxTable.agentId, agentTable.id),
+          ),
+        )
+        .where(
+          and(
+            eq(agentTable.organizationId, organizationId),
+            isNotNull(conversations.runtimeSessionId),
+            eq(agentSandboxTable.state, AGENT_SANDBOX_STATE.LIVE),
+            // Note that a sandbox booting is its delivery's, which opens it at the size standing.
+            isNull(agentSandboxTable.bootingSince),
+            gt(agentSandboxTable.usedAt, usedSince),
+          ),
+        ),
     ),
 });
 
@@ -276,6 +329,26 @@ const markReleased = SqlSchema.void({
     ),
 });
 
+const markStopped = SqlSchema.void({
+  Request: Schema.Struct({ sandboxName: Schema.String, usedAt: Schema.Date }),
+  execute: ({ sandboxName, usedAt }) =>
+    Database.use((db) =>
+      db
+        .update(agentSandboxTable)
+        // Note that the last use moves back, never on, so a stop never reads a sandbox in use later than it was.
+        .set({
+          usedAt: sql`least(${agentSandboxTable.usedAt}, ${usedAt.toISOString()}::timestamptz)`,
+        })
+        .where(
+          and(
+            eq(agentSandboxTable.sandboxName, sandboxName),
+            eq(agentSandboxTable.state, AGENT_SANDBOX_STATE.LIVE),
+            isNull(agentSandboxTable.bootingSince),
+          ),
+        ),
+    ),
+});
+
 /**
  * The name of the sandbox opened for the session the expression gives, as
  * `@repo/service`'s `agentSandboxName` names it: the prefix and the first
@@ -309,8 +382,11 @@ export function recordAgentSandboxBootFailed(sandboxName: string): SandboxUseEff
 
 /** The sandbox deleted by its session's discard, its row RELEASED. */
 export function recordAgentSandboxDiscarded(sandboxName: string): SandboxUseEffect<void> {
-  // The snapshots its agent's turns hold went with its disk.
-  return Effect.andThen(forgetTurnSnapshotsOfSandbox(sandboxName), markReleased({ sandboxName }));
+  // The snapshots its agent's turns hold went with its disk, and every hold on it with its run.
+  return Effect.andThen(
+    Effect.andThen(forgetTurnSnapshotsOfSandbox(sandboxName), forgetAgentSandboxHolds(sandboxName)),
+    markReleased({ sandboxName }),
+  );
 }
 
 /**
@@ -336,6 +412,21 @@ export function recordAgentSandboxOpen(
 /** The sandbox's row used at `at`, where an open recorded one and it was written before the cutoff. */
 export function recordAgentSandboxUse(use: AgentSandboxUse): SandboxUseEffect<void> {
   return updateUse(use);
+}
+
+/**
+ * The LIVE sandbox stopped as nothing held it, its disk kept: its last use
+ * moved back to `usedAt`, the instant its caller reckons its run would have
+ * begun its idle window at to end now, so the task list, which reads a
+ * sandbox running until its idle window past its last use, reads it off at
+ * once, and the next open, boot, or use writes it again past the write
+ * cutoff; every hold on it let go, since its shells ended with its run.
+ */
+export function recordAgentSandboxStopped(
+  sandboxName: string,
+  usedAt: Date,
+): SandboxUseEffect<void> {
+  return Effect.andThen(forgetAgentSandboxHolds(sandboxName), markStopped({ sandboxName, usedAt }));
 }
 
 /**
@@ -368,7 +459,7 @@ export function markAgentSandboxReleasing(
   return Effect.map(markReleasing({ sandboxName, usedBy }), (rows) => rows.length > 0);
 }
 
-/** The sandbox's row as a release reads it again, with its agent and the agent's conversation; none where the row or its agent is gone. */
+/** The sandbox's row as a release or a stop reads it again, with its agent, the agent's starter, and the agent's conversation; none where the row or its agent is gone. */
 export function agentSandboxRelease(
   sandboxName: string,
 ): SandboxUseEffect<Option.Option<AgentSandboxRelease>> {
@@ -380,11 +471,28 @@ export function settleAgentSandboxRelease(
   sandboxName: string,
   state: typeof AGENT_SANDBOX_STATE.LIVE | typeof AGENT_SANDBOX_STATE.RELEASED,
 ): SandboxUseEffect<void> {
-  // A sandbox deleted took the snapshots its agent's turns hold with it.
+  // A sandbox deleted took the snapshots its agent's turns hold with it, and every hold on it.
   return Effect.andThen(
     state === AGENT_SANDBOX_STATE.RELEASED
-      ? forgetTurnSnapshotsOfSandbox(sandboxName)
+      ? Effect.andThen(
+          forgetTurnSnapshotsOfSandbox(sandboxName),
+          forgetAgentSandboxHolds(sandboxName),
+        )
       : Effect.void,
     settleReleasing({ sandboxName, state }),
   );
+}
+
+/**
+ * The workspace's agents whose current session's sandbox stands LIVE, not
+ * booting, and was used after `usedSince`, so may still be running: the ones
+ * a change of the workspace's sandbox size stops where nothing keeps them up
+ * (`@repo/service`'s `workspace-sandbox-size.ts`). A sandbox past that is
+ * stopped already, and resizes as it next opens.
+ */
+export function runningAgentSandboxesOf(
+  organizationId: string,
+  usedSince: Date,
+): SandboxUseEffect<readonly RunningAgentSandbox[]> {
+  return findRunningOfWorkspace({ organizationId, usedSince });
 }
