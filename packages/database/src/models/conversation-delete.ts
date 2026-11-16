@@ -14,7 +14,8 @@ import { conversations } from "../schemas/storage.js";
  * agent's, with it. Deleting the account cascades everything at once. The
  * sandbox a deleted conversation's session ran in is not deleted here: the
  * caller retires the session first, which deletes its sandbox
- * (`retire-sessions.ts`).
+ * (`retire-sessions.ts`). Note that a retire is best effort, so one that
+ * fails or times out leaves the sandbox and the delete goes on.
  *
  * Note that the cascade's cost is the conversation's own size: each child
  * table finds the rows it deletes through its conversation's or its turn's
