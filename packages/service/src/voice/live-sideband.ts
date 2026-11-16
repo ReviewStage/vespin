@@ -37,6 +37,7 @@ import { EXCESS_KEYS, unparsedWire, valueFromJsonText, type WireValue } from "..
 import { SOCKET_CLOSE_CODE, voiceSocket } from "../http/socket.js";
 import { HOSTED_OPENAI_DEFAULTS } from "../providers/openai.js";
 import { LIVE_SESSION } from "./live-session.js";
+import { VOICE_CALL_LEASE } from "./voice-call-bounds.js";
 
 /** The session's events the lease reads, and the one it sends. */
 export const LIVE_SIDEBAND_EVENT = {
@@ -51,6 +52,9 @@ const HANDSHAKE_TIMEOUT_MS = 10_000;
 
 /** The statuses an attach is refused with for a while, which another attempt may get past; any other client error says the session will never be attached again. */
 const PASSING_REFUSALS: ReadonlySet<number> = new Set([408, 429]);
+
+/** What an outage answers, and what a session that closed while no one listened may go on answering instead of not found. */
+const UNAVAILABLE_STATUS = 503;
 
 /** What every event names: its type and its id, which a re-attach replays it under. */
 const LiveEventHeadSchema = Schema.Struct({ type: Schema.String, event_id: Schema.String });
@@ -87,9 +91,16 @@ interface LiveSidebandsService {
   ) => Effect.Effect<LiveSideband, SidebandRefused, Scope.Scope>;
 }
 
-/** Whether a refused attach says the session is gone for good, as a closed or expired session's is, rather than for now. */
-export function sessionGone(refused: SidebandRefused): boolean {
+/**
+ * Whether a refused attach, on a lease's `delivery` (the first being 1),
+ * says the session is gone for good, as a closed or expired session's is,
+ * rather than for now: a client error at once, and unavailable once the
+ * lease has come often enough that it is no passing outage.
+ */
+export function sessionGone(refused: SidebandRefused, delivery: number): boolean {
   const { status } = refused;
+
+  if (status === UNAVAILABLE_STATUS) return delivery >= VOICE_CALL_LEASE.UNAVAILABLE_DELIVERIES;
 
   return status !== undefined && status >= 400 && status < 500 && !PASSING_REFUSALS.has(status);
 }

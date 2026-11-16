@@ -45,6 +45,7 @@ import {
 } from "@repo/features/task-standing-words";
 import {
   foldedTaskRows,
+  NO_REPOSITORY_KEY,
   TASK_TREE_GROUP,
   type TaskTree,
   type TaskTreeGroup,
@@ -112,6 +113,7 @@ import {
   type RowAction,
   RowForEach,
   RowList,
+  type RowMenuGroup,
   type RowSubmenu,
   type RowSwipe,
   runsOnGlyph,
@@ -364,6 +366,7 @@ function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | u
     symbol: GLYPH.MOVE,
     choices: placing.sections.map((section) => ({
       label: section.title,
+      symbol: sectionGlyph(section.icon),
       on: section.id === standing,
       onPress: () => {
         if (section.id !== standing) placing.moveToSection(task.id, section.id);
@@ -488,20 +491,23 @@ function removeParentActs(task: TaskSummary, relations: TaskRelationWrites): rea
 type RowActsResult = {
   readonly trailingActions: readonly RowSwipe[];
   readonly leadingActions: readonly RowSwipe[];
-  readonly menuSubmenus: readonly RowSubmenu[];
   readonly menuActions: readonly RowAction[];
+  readonly menuGroups: readonly RowMenuGroup[];
 };
 
 /**
  * A row's acts, as the panel's row menu offers them on a phone: behind its
  * trailing swipe Mark done, offered on a task not yet done, which a full
  * swipe runs, and Status; behind its leading swipe Pin or Unpin, whichever
- * the task is not, which a full swipe runs; and in its long press menu,
- * after those, Task relation, which opens the Task relation sheet on a kind,
- * Move to section, and its repository (`placingSubmenus`), then Remove
- * parent, where it has one, and the panel's order: Copy link, which raises the share sheet, Rename, in
- * the system's name alert, Mark as read or unread, whichever the task is
- * not, Open in browser, and Permanently delete last, which asks first.
+ * the task is not, which a full swipe runs. Its long press menu groups them
+ * as the task page's ⋯ does (`taskMenu`), each group set apart by a divider:
+ * the swipes' acts with Mark as read or unread, whichever the task is not;
+ * then Task relation, which opens the Task relation sheet on a kind, Move to
+ * section, and its repository (`placingSubmenus`), with Remove parent where
+ * it has one; then Rename, in the system's name alert, its version history
+ * and Move to workspace where offered; then Copy link, which raises the
+ * share sheet, and Open in browser; and Permanently delete alone, last,
+ * which asks first.
  * Priority and assignee are set from the chips on the task's page
  * (`standingMenus`).
  */
@@ -523,41 +529,57 @@ function rowActs(
         onPress: () => listing.pin(task.id, !pinned),
       },
     ],
-    menuSubmenus: [relationSubmenu(task, openRelation), ...placingSubmenus(task, listing.placing)],
     menuActions: [
-      ...removeParentActs(task, listing.relations),
-      {
-        label: WORDS.COPY_LINK,
-        symbol: GLYPH.LINK,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => copyTaskLink(task, listing.workspace),
-      },
-      {
-        label: WORDS.RENAME,
-        symbol: GLYPH.RENAME,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => askRename(task, listing.rename),
-      },
-      ...rowActions(historyActions(task, listing.doors.history)),
       {
         label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
         symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => listing.markRead(task.id, !unread),
       },
-      ...rowActions(moveActions(listing.doors.moveDoor(task))),
+    ],
+    menuGroups: [
       {
-        label: VERB.OPEN_IN_BROWSER,
-        symbol: GLYPH.OPEN_EXTERNALLY,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () =>
-          openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
+        submenus: [relationSubmenu(task, openRelation), ...placingSubmenus(task, listing.placing)],
+        actions: removeParentActs(task, listing.relations),
       },
       {
-        label: WORDS.DELETE,
-        symbol: GLYPH.DELETE,
-        tone: ROW_ACTION_TONE.DESTRUCTIVE,
-        onPress: () => listing.askDelete(task),
+        actions: [
+          {
+            label: WORDS.RENAME,
+            symbol: GLYPH.RENAME,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => askRename(task, listing.rename),
+          },
+          ...rowActions(historyActions(task, listing.doors.history)),
+          ...rowActions(moveActions(listing.doors.moveDoor(task))),
+        ],
+      },
+      {
+        actions: [
+          {
+            label: WORDS.COPY_LINK,
+            symbol: GLYPH.LINK,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => copyTaskLink(task, listing.workspace),
+          },
+          {
+            label: VERB.OPEN_IN_BROWSER,
+            symbol: GLYPH.OPEN_EXTERNALLY,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () =>
+              openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
+          },
+        ],
+      },
+      {
+        actions: [
+          {
+            label: WORDS.DELETE,
+            symbol: GLYPH.DELETE,
+            tone: ROW_ACTION_TONE.DESTRUCTIVE,
+            onPress: () => listing.askDelete(task),
+          },
+        ],
       },
     ],
   };
@@ -648,6 +670,7 @@ export function TaskListRow({
       finished={taskFinished(task)}
       needsYou={look.needsYou}
       agents={look.agents}
+      blocked={task.blocked === true}
       taskKey={keyed ? keyOf(task, listing.workspace) : undefined}
       depth={depth}
       {...rowActs(task, look.unread, listing, openRelation)}
@@ -904,6 +927,8 @@ function GroupSection({
   return (
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
+      glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
+      repository={headPicture(group)}
       count={group.rows.length}
       foldable
       folded={hold.folded.has(group.key)}
@@ -1066,6 +1091,34 @@ function TasksTree({
       ))}
     </RowList>
   );
+}
+
+/**
+ * What a Tasks list group's header leads with, as the panel's sidebar
+ * heads each: a section with its own icon, a repository with the
+ * repository's mark, which stands in until its owner's picture draws
+ * (`headPicture`), the tasks with none with no-repository's; and nothing
+ * for Pinned and Following, whose words say what they are.
+ */
+function groupHeadGlyph(group: TaskTreeGroup): Glyph | undefined {
+  switch (group.kind) {
+    case TASK_TREE_GROUP.SECTION:
+      return sectionGlyph(group.icon);
+    case TASK_TREE_GROUP.REPOSITORY:
+      return group.key === NO_REPOSITORY_KEY ? GLYPH.NO_REPOSITORY : GLYPH.REPOSITORY;
+    case TASK_TREE_GROUP.PINNED:
+    case TASK_TREE_GROUP.FOLLOWING:
+      return undefined;
+  }
+}
+
+/** The repository whose owner's picture leads a repository group's header, as the panel's sidebar draws it; none for any other group, or the tasks with no repository. */
+function headPicture(group: TaskTreeGroup): string | undefined {
+  return group.kind === TASK_TREE_GROUP.REPOSITORY &&
+    group.title !== undefined &&
+    group.key !== NO_REPOSITORY_KEY
+    ? group.key
+    : undefined;
 }
 
 /** The glyph a collection's sidebar row leads with: Pinned's pin, Following's eye, and a section's own icon, as the panel's sidebar draws it (`sectionGlyph`). */
@@ -1513,6 +1566,13 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
                   status={other?.status}
                   faded={other !== undefined && taskFinished(other)}
                   relation={TASK_RELATION_WORDS[kind]}
+                  relationMark={{
+                    glyph: RELATION_KIND_SYMBOL[kind],
+                    // Note that a blocker wants the reader, as the panel's pill draws it, until it's known done or canceled; one the list doesn't hold was never shown done, so it still blocks and stands in the attention ink.
+                    attention:
+                      kind === TASK_RELATION_KIND.BLOCKED_BY &&
+                      (other === undefined || !taskFinished(other)),
+                  }}
                   trailingActions={relationSwipes(task.id, id, kind, relations)}
                 />
               );

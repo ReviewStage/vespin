@@ -20,7 +20,8 @@
  * the runner as Codex's own compaction (`thread/compact/start`), the words
  * after it dropped, since that takes none, and `/goal`, which the line asks
  * of the runner as a change of Codex's thread goal (`thread/goal/set` or
- * `thread/goal/clear`), read from the words after it.
+ * `thread/goal/clear`), read from the words after it. Cursor's SDK runs no
+ * command either, and summarizes its conversation for `/compact` alone.
  */
 
 import { SLASH_COMMAND } from "@repo/features/slash-command";
@@ -93,6 +94,16 @@ export function codexCommandRoute(name: string): CommandRoute {
   if (name === SLASH_COMMAND.COMPACT) return COMMAND_ROUTE.COMPACT;
 
   return name === SLASH_COMMAND.GOAL ? COMMAND_ROUTE.GOAL : COMMAND_ROUTE.WORDS;
+}
+
+/**
+ * How Cursor is handed a message opening with the command named: as the
+ * runner's summary of the conversation for `/compact` (`agent.summarize`),
+ * and as words for any other, `/goal` among them, since Cursor keeps no
+ * goal and runs no command from a message.
+ */
+export function cursorCommandRoute(name: string): CommandRoute {
+  return name === SLASH_COMMAND.COMPACT ? COMMAND_ROUTE.COMPACT : COMMAND_ROUTE.WORDS;
 }
 
 /**

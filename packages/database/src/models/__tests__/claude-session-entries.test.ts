@@ -155,6 +155,12 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
         assert.equal(yield* holdsSession(source.userId, source.conversationId, SESSION), true);
         assert.equal(yield* holdsSession(tail.userId, tail.conversationId, SESSION), false);
         assert.equal(yield* holdsSession(started.userId, started.conversationId, SESSION), false);
+        // A Cursor agent's store opens with the agent's row, whichever of its rows the store holds.
+        const cursor = { projectKey: "cursor", sessionId: "agent-cursor" };
+        yield* appendSessionEntries(tail.userId, tail.conversationId, cursor, [
+          { type: "agent", agent: { agentId: "agent-cursor" } },
+        ]);
+        assert.equal(yield* holdsSession(tail.userId, tail.conversationId, "agent-cursor"), true);
         yield* copySessionEntries(source, started.conversationId);
         assert.equal(yield* holdsSession(started.userId, started.conversationId, SESSION), true);
         assert.deepEqual(yield* loaded(started.userId, started.conversationId, MAIN), [

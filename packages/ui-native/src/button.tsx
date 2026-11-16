@@ -17,6 +17,7 @@ import {
   accessibilityElement,
   accessibilityHidden,
   accessibilityHint,
+  accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
   background,
@@ -639,6 +640,7 @@ export function FollowingChip({ label, faces, more, hint, heard, onPress }: Foll
             accessibilityLabel(label),
             accessibilityValue(heard),
             accessibilityHint(hint),
+            accessibilityIdentifier("following-chip"),
           ]}
         >
           <CapsuleTarget>{capsule}</CapsuleTarget>
