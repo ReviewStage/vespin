@@ -1,6 +1,8 @@
+import type { TaskListCollections } from "@repo/host/task-list-following";
 import { type ReactNode, useCallback } from "react";
 import { AutomationDirectory } from "../automation-directory.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 
@@ -14,9 +16,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
  */
 
 /** Whether an agent the window lists names the automation that started it: a listed task's, followed live, or the open task's, as Home's rows name it. */
-function namesAutomation(tasks: TasksControl): boolean {
-  const listed = new Set(tasks.tasks.map((task) => task.id));
-
+function namesAutomation(tasks: TasksControl, listed: TaskListCollections["tasks"]): boolean {
   const lines = (tasks.liveAgents ?? []).filter(
     (agent) => listed.has(agent.taskId) && agent.archivedAt === undefined,
   );
@@ -35,6 +35,7 @@ export function ListedAutomations({
   children: ReactNode;
 }): React.JSX.Element {
   const { open: onOpen } = useAutomationsDoor(tasks);
+  const listed = useTaskListCollections().tasks;
 
   const openAutomation = useCallback(
     (automationId: string) => onOpen({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
@@ -44,7 +45,7 @@ export function ListedAutomations({
   return (
     <AutomationDirectory
       workspace={tasks.workspace}
-      wanted={namesAutomation(tasks)}
+      wanted={namesAutomation(tasks, listed)}
       onOpen={openAutomation}
     >
       {children}

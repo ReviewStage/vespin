@@ -2,12 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
     "deploymentEnabled": {
-      "gh-readonly-queue/**": false,
-      "agent/**": false,
-      "luke/**": false,
-      "pr-assets": false,
-      "pr-assets-*": false,
-      "evidence/**": false
+      "main": true,
+      "**": false
     }
   },
   "services": {
@@ -234,6 +230,10 @@
         {
           "src": "/api/previews/sign-in",
           "dest": "/api/default.js?route=previews/sign-in"
+        },
+        {
+          "src": "/api/pull-requests/github-image",
+          "dest": "/api/default.js?route=pull-requests/github-image"
         },
         {
           "src": "/api/slack/events",

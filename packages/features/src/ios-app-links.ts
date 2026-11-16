@@ -162,7 +162,7 @@ export function iosPullRequestRoute(agentId: string, number: number): string {
  * (`(inbox)`, `(tasks)`, `(search)`), so one tab's link can open on another's
  * stack.
  */
-const IOS_TAB = {
+export const IOS_TAB = {
   INBOX: "inbox",
   TASKS: "tasks",
   SEARCH: "search",
@@ -221,6 +221,19 @@ export function iosRouteHidesTabs(pathname: string): boolean {
   if (`${route}/${first ?? ""}` !== IOS_ROUTE.AGENT || second === undefined) return false;
 
   return third === undefined || third === IOS_ROUTE.PULL_REQUEST;
+}
+
+/**
+ * The agent whose own page the route is, whose composer holds a voice
+ * call's presses while the call is into it; none on any other route,
+ * a page under the agent's included, such as a pull request it opened.
+ */
+export function iosRouteAgent(pathname: string): string | undefined {
+  const [tab, first, agentId, under] = pathname.split("/").filter((segment) => segment !== "");
+
+  if (`/${tab ?? ""}/${first ?? ""}` !== IOS_ROUTE.AGENT || under !== undefined) return undefined;
+
+  return agentId;
 }
 
 /**

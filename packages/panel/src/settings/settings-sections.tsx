@@ -124,6 +124,7 @@ function accountDrawn(input: SettingsSearchInput): boolean {
 export const SECTION = {
   MEMBERS: SETTINGS_SECTION.MEMBERS,
   WORKSPACE_CONNECTIONS: SETTINGS_SECTION.GITHUB_REPOSITORIES,
+  ENVIRONMENT_SANDBOX: SETTINGS_SEARCH_ROW.ENVIRONMENT_SANDBOX,
   ENVIRONMENT_VARIABLES: SETTINGS_SEARCH_ROW.ENVIRONMENT_VARIABLES,
   ENVIRONMENT_INSTALL: SETTINGS_SEARCH_ROW.ENVIRONMENT_INSTALL,
   ENVIRONMENT_SETUP: SETTINGS_SEARCH_ROW.ENVIRONMENT_SETUP,
@@ -194,6 +195,13 @@ const SETTINGS_SECTIONS = {
     page: SETTINGS_VIEW.WORKSPACE,
     head: WORKSPACE_CONNECTIONS,
     words: "integrations GitHub repositories connect choose manage disconnect organization",
+    drawn: workspaceShown,
+  },
+  [SECTION.ENVIRONMENT_SANDBOX]: {
+    found: SECTION_FOUND.HEAD,
+    page: SETTINGS_VIEW.ENVIRONMENT,
+    head: "Sandbox",
+    words: `sandbox size vcpus cpu cores memory ram gb machine larger bigger faster ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },
   [SECTION.ENVIRONMENT_VARIABLES]: {

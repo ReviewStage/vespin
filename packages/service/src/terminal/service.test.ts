@@ -63,6 +63,7 @@ const ADA_AGENT_READ: RelayAgent = {
   sessionId: undefined,
   repositoryCredential: Effect.die("no credential is minted before a sandbox stands"),
   memberToken: false,
+  environment: Effect.succeed({}),
 };
 
 /** The relay's world: Ada's agent, which Grace, of another workspace, does not reach; every reach kept, and nothing past the reach standing. */

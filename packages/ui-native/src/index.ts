@@ -17,6 +17,8 @@ export {
 
 export { AuthPage } from "./auth-page.js";
 
+export { type BarSubtitle, StackBarTitle } from "./bar-title.js";
+
 export { BRAND_MARK_ASSET, BrandMark } from "./brand-mark.js";
 
 export {
@@ -28,6 +30,9 @@ export {
   Chip,
   FieldChip,
   FollowingChip,
+  LabelChip,
+  type ListScopes,
+  PriorityChip,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
@@ -66,9 +71,10 @@ export {
   SkillSuggestions,
 } from "./composer-head.js";
 
-export { EmptyState, NoSelection } from "./empty-state.js";
+export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
 
 export {
+  FailureNoticeLayer,
   FailureNoticeProvider,
   type FailureNotices,
   useFailureNotices,
@@ -76,7 +82,9 @@ export {
 
 export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
 
-export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
+export { releaseFields } from "./field-focus.js";
+
+export { AttachRow, MenuPickRow, WORDS_LOOK, WordsField } from "./form-rows.js";
 
 export { GlassBar, GlassDock } from "./glass-bar.js";
 
@@ -86,6 +94,7 @@ export {
   glyphSymbol,
   type LucideSymbol,
   type MarkLook,
+  runsOnGlyph,
   sectionGlyph,
 } from "./glyph.js";
 
@@ -103,6 +112,8 @@ export { type Keeping, KeepingProvider } from "./held-menu.js";
 
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 
+export { INTEGRATION_MARK_ASSET, type IntegrationMarkAsset } from "./integration-marks.js";
+
 export {
   type HeldPicture,
   heldPicture,
@@ -116,6 +127,7 @@ export {
 export {
   NO_WRITES,
   newestValue,
+  takesRowBack,
   type WriteSent,
   type WritesBook,
   writeSent,
@@ -132,6 +144,8 @@ export {
   type TaskFold,
   TaskRow,
 } from "./list-row.js";
+
+export { MachineAskSheet } from "./machine-ask-sheet.js";
 
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 
@@ -155,11 +169,15 @@ export {
 
 export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
 
+export { useMinute } from "./minute.js";
+
 export { monogramOf } from "./monogram.js";
 
-export { RenameAsk, SwitchRow } from "./option-rows.js";
+export { SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
+
+export { ProblemLine } from "./problem-line.js";
 
 export {
   PROVIDER_MARK_ASSET,
@@ -191,9 +209,11 @@ export {
   WriteNoteRow,
 } from "./pull-request-page.js";
 
-export { RemindSheet } from "./remind-sheet.js";
+export { RemindPickSheet } from "./remind-sheet.js";
 
 export {
+  FOOTER_TONE,
+  type FooterTone,
   LIST_LOOK,
   type ListLook,
   ListSection,
@@ -206,7 +226,7 @@ export { AgentPreview, type PreviewAgent, TaskPreview, ThreadPreview } from "./r
 
 export { latestStep, type PreviewMessage, previewMessages } from "./row-preview-model.js";
 
-export { Screen, Spacer } from "./screen.js";
+export { SCREEN_GROUND, Screen, type ScreenGround, Spacer } from "./screen.js";
 
 export { ScreenFailure } from "./screen-failure.js";
 
@@ -220,6 +240,7 @@ export {
   type ConnectionLine,
   ConnectionRow,
   FollowerRow,
+  LoadingRow,
   MemberRow,
   type MemberRowAct,
   MenuRow,
@@ -242,24 +263,35 @@ export {
 
 export {
   type BarAction,
+  type BarFootItem,
   type BarMenu,
   type BarPath,
   type BarSearch,
   type ColumnBar,
+  DetailPage,
+  type DetailStack,
+  type DetailStackPage,
+  HostedFill,
+  isBarMenu,
   KeptColumns,
   type KeptView,
   menuWithout,
   SplitOverTabs,
   SplitView,
   scopeMenu,
+  scopeSubtitle,
   UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 
-export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
+export {
+  PRIORITY_MARK_SYMBOL,
+  PRIORITY_MARK_TONE,
+  STATUS_MARK_SYMBOL,
+} from "./status-mark-model.js";
 
 export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
-export { askForName, type NameAsk, shareLink, shareWords } from "./system-asks.js";
+export { askForName, type NameAsk, shareWords } from "./system-asks.js";
 
 export {
   AGENT_ROW_STATE,
@@ -299,7 +331,6 @@ export { MARK_SIZE, SPACE } from "./tokens/space.js";
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
 export {
-  AgentHead,
   AgentTranscript,
   type OlderPages,
   type TranscriptReveal,

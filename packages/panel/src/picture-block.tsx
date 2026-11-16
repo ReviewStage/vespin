@@ -5,11 +5,13 @@ import {
   ATTACHMENT_CHIP_STATE,
   AttachmentChip,
   type AttachmentChipState,
+  AudioPlayer,
   CARD_CORNER,
   CARD_ELEMENT,
   CARD_PADDING,
   Card,
   dataUrlMediaType,
+  isAudioDataUrl,
   isVideoDataUrl,
   PictureStandIn,
   PictureTile,
@@ -33,7 +35,8 @@ import { FileTypeIcon } from "./tasks/file-type-icon.js";
  * picture's address, so it draws empty there (`session-replay.ts`). A video an agent recorded plays in its place instead
  * (`@repo/ui`'s `VideoPlayer`), with the player's own controls, Full screen
  * among them, since a press on a video plays it; what a press on a picture
- * opens is its Expand. A PDF a description keeps as it keeps a picture is
+ * opens is its Expand. A sound clip an agent made plays in its place the
+ * same way, as its waveform under Play (`@repo/ui`'s `AudioPlayer`). A PDF a description keeps as it keeps a picture is
  * drawn as its file, a chip with its name, its alt text, and its size,
  * whose press opens it over the window, where its pages are drawn. Nothing here knows whose picture it is; the place
  * drawing one hands its state and what a press does.
@@ -181,6 +184,16 @@ export function PictureBlock({
     return (
       <span ref={ref} className={PICTURE_BLOCK_CLASS} data-state={state.kind} data-video="">
         <VideoPlayer dataUrl={state.url} label={alt} onExpand={onOpen} />
+        {said}
+      </span>
+    );
+  }
+
+  // A sound clip plays where it stands, as a video does, and what a press on a picture opens is its Expand.
+  if (state.kind === PICTURE_STATE.READY && isAudioDataUrl(state.url)) {
+    return (
+      <span ref={ref} className={PICTURE_BLOCK_CLASS} data-state={state.kind} data-audio="">
+        <AudioPlayer dataUrl={state.url} label={alt} onExpand={onOpen} />
         {said}
       </span>
     );
