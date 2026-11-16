@@ -143,6 +143,7 @@ import { type ListedMember, useListedMembers, useMemberPictures } from "../membe
 import { useMenuPhotos } from "../menu-photos.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns } from "../place-columns.js";
+import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
@@ -1868,9 +1869,6 @@ function OverviewPage({
 /** The tree's search words and how to change them, held by the tab's root screen above its two layouts. */
 type TasksSearch = { readonly search: string; readonly setSearch: (search: string) => void };
 
-/** The compact tree's search, which it never narrows by: the Search tab finds tasks there. */
-const UNSEARCHED_TASKS: TasksSearch = { search: "", setSearch: () => {} };
-
 /**
  * The list screens' search, the listing under it, its status set asking
  * first where it stops agents and its delete asking always, with the
@@ -1885,21 +1883,27 @@ function useTasksScreen({ search, setSearch }: TasksSearch) {
 }
 
 // A compact window: the tree, the account's photo opening Settings and the
-// workspace switcher beside it at the bar's leading edge, each row pushing its
-// task as the Stack's next screen. Note that it stands no search of its own,
-// since a compact window's tab bar, or the folded Duo's rail, always stands
-// the Search tab beside it, whose Tasks scope finds the same tasks, as Music
-// and the App Store keep one search; a regular window's list column keeps its
-// field, and the words typed there wait over a fold.
-function TasksStackList() {
+// workspace switcher beside it at the bar's leading edge and its search a round glass button at its trailing one, each
+// row pushing its task as the Stack's next screen.
+function TasksStackList(words: TasksSearch) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
-  const { search, listing, status, deletion, refreshTasks } = useTasksScreen(UNSEARCHED_TASKS);
+  const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
+  const field = useRefilledSearchField(search);
 
   return (
     <>
-      <Stack.Screen options={{ title: TASKS_TITLE }} />
+      <Stack.Screen options={{ title: TASKS_TITLE }}>
+        <Stack.SearchBar
+          ref={field}
+          placeholder={SEARCH_TASKS}
+          placement="integratedButton"
+          allowToolbarIntegration={false}
+          onChangeText={(event) => setSearch(event.nativeEvent.text)}
+          onCancelButtonPress={() => setSearch("")}
+        />
+      </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
       <Screen>
         <TasksTree
@@ -2120,7 +2124,7 @@ export function TasksListScreen() {
   return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
     <TasksSplitScreen selected={selected} select={select} words={{ search, setSearch }} />
   ) : (
-    <TasksStackList />
+    <TasksStackList search={search} setSearch={setSearch} />
   );
 }
 
