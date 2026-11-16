@@ -20,7 +20,6 @@ import {
 } from "@repo/features/agent-view";
 import { AGENT_CURSOR_START, AGENT_STATUS, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { MACHINE_ASK_DECISION } from "@repo/features/machine-ask-wire";
-import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import type { WireBoundaryInput } from "@repo/wire";
 import { Effect } from "effect";
 import { AGENT_ACT_KIND, AGENT_ACTS, type PortActKind } from "../contract/index.js";
@@ -105,10 +104,8 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_DELETE]: "Could not delete the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_SHOWN]: "Could not note which agent is shown on this system.",
   [AGENT_ACT_KIND.AGENTS_PAGE]: "Could not read the agent on this system.",
-  [AGENT_ACT_KIND.AGENTS_CHANGES]: "Could not read the agent's changes on this system.",
   [AGENT_ACT_KIND.AGENTS_TURN_CHANGES]: "Could not read the turn's changes on this system.",
   [AGENT_ACT_KIND.AGENTS_GITHUB_IMAGE]: "Could not read the pull request's image on this system.",
-  [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: "Could not change the pull request on this system.",
   [AGENT_ACT_KIND.AGENTS_PREFERENCES_RETRY]:
     "Could not read your preferences again on this system.",
   [AGENT_ACT_KIND.AGENTS_SET_DEFAULT_MACHINE]:
@@ -169,16 +166,10 @@ const PAYLOAD: Readonly<Record<keyof typeof AGENT_ACTS, WireBoundaryInput>> = {
   AGENTS_PIN: { agentId: AGENT_ID, pinned: true },
   AGENTS_DELETE: { agentId: AGENT_ID },
   AGENTS_PAGE: { agentId: AGENT_ID },
-  AGENTS_CHANGES: { agentId: AGENT_ID },
   AGENTS_TURN_CHANGES: { agentId: AGENT_ID, messageId: "line-1" },
   AGENTS_GITHUB_IMAGE: {
     agentId: AGENT_ID,
     src: "https://github.com/user-attachments/assets/0f1e2d3c",
-  },
-  AGENTS_PULL_REQUEST_ACTION: {
-    agentId: AGENT_ID,
-    number: 41,
-    request: { action: PULL_REQUEST_ACTION.CONVERT_TO_DRAFT },
   },
 };
 

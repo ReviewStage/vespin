@@ -226,7 +226,13 @@ export interface LocalAgentCommand {
  */
 export interface LocalAgentClis {
   /** Where each is kept under the device's state, named before it is fetched. */
-  readonly paths: { readonly claude: string; readonly codex: string; readonly gh: string };
+  readonly paths: {
+    readonly claude: string;
+    readonly codex: string;
+    readonly gh: string;
+    /** Cursor's SDK entry, where the device keeps one: a Mac's, and no Linux host's. */
+    readonly cursor?: string | undefined;
+  };
   /**
    * Each had now where it can be: the build kept where it still stands as
    * checked, and otherwise the pinned build fetched and checked. It runs
@@ -264,7 +270,13 @@ export interface LocalAgentPlatformSeam {
   /** The process a runner is started as, given what it runs and the environment made for it: straight on the box in the agent's folder (`local-agent-box.ts`'s `agentOnBox`). */
   readonly launch: (runner: LocalAgentRunner) => LocalAgentCommand;
   /** What every runner runs on, which the device registers: the host's own Node and the CLIs it keeps (`clis.paths`). */
-  readonly tools: { readonly node: string; readonly claude: string; readonly codex: string };
+  readonly tools: {
+    readonly node: string;
+    readonly claude: string;
+    readonly codex: string;
+    /** Cursor's SDK entry, which a Cursor agent's runner imports; none where the device keeps none. */
+    readonly cursorSdk?: string | undefined;
+  };
   readonly runnerBundle: string;
   readonly runnerEnv: Readonly<Record<string, string>>;
   /** The machine's own temp folder as the daemon's user sees it (`os.tmpdir()`), under which its agents' shared files stand (`deviceAgentTempFolder`). */

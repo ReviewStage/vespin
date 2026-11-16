@@ -268,3 +268,6 @@ export const SIGN_IN_FAILURE_WORDS = {
   [SIGN_IN_FAILURE.OFFLINE]: "You're offline. Connect to the internet, then sign in.",
   [SIGN_IN_FAILURE.UNFINISHED]: "Sign-in didn't finish. Try again.",
 } as const satisfies Record<SignInFailure, string>;
+
+/** What a page's path opens, as the panel's crumbs open a thread's or an agent's task, and a thread's agent. */
+export const PATH_OPENS = { TASK: "Open task", AGENT: "Open agent" } as const;

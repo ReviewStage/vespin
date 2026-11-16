@@ -108,7 +108,6 @@ import {
   SOMEONE_REASON,
 } from "@repo/ui/actor-model";
 import { MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
-import { USAGE_LIMIT_AGENT, type UsageLimitNotice } from "@repo/wire/ui-messages";
 import { Predicate } from "effect";
 
 /**
@@ -558,11 +557,6 @@ export function endLineParts(
   }
 }
 
-/** The harness a usage limit's notice names, by the provider of the agent's model: Codex for OpenAI's, Claude for any other. */
-export function usageLimitAgentOf(provider: ModelProvider | undefined): UsageLimitNotice["agent"] {
-  return provider === MODEL_PROVIDER.OPENAI ? USAGE_LIMIT_AGENT.CODEX : USAGE_LIMIT_AGENT.CLAUDE;
-}
-
 /** Whether a refusal a note keeps is the plan's usage limit's (`AGENT_PLAN_LIMIT_REACHED`). */
 export function refusedAtLimit(cause: unknown): boolean {
   return (
@@ -906,11 +900,14 @@ function credentialMissingFailure(
   };
 }
 
-/**
- * The plan that pays for an agent on a provider's own harness, which only
- * its plan runs (`agent-runtime-choice.ts`); none for an agent on the
- * retired runtime, which a key paid for.
- */
+/** What pays for an agent on each runtime where nothing else says: its harness's plan, or for Cursor, which runs on its API key alone, that key, as the service records it (`agent-runtime-choice.ts`). */
+const PLAN_PAYER = {
+  [AGENT_RUNTIME.RETIRED]: undefined,
+  [AGENT_RUNTIME.CLAUDE_CODE]: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+  [AGENT_RUNTIME.CODEX]: AGENT_PAYER.CHATGPT_SUBSCRIPTION,
+  [AGENT_RUNTIME.CURSOR]: AGENT_PAYER.API_KEY,
+} as const satisfies Record<AgentRuntime, AgentPayer | undefined>;
+
 /** Who pays for the agent: the page's payer, then the settled turns', then the plan its harness runs on where neither names one. */
 export function paidByOf(
   payer: AgentPayer | undefined,
@@ -920,12 +917,13 @@ export function paidByOf(
   return payer ?? usage?.payer ?? planPayerOf(runtime);
 }
 
+/**
+ * The plan that pays for an agent on a provider's own harness, which only
+ * its plan runs, or a Cursor agent's API key (`agent-runtime-choice.ts`);
+ * none for an agent on the retired runtime, which a key paid for.
+ */
 export function planPayerOf(runtime: AgentRuntime | undefined): AgentPayer | undefined {
-  if (runtime === AGENT_RUNTIME.CLAUDE_CODE) return AGENT_PAYER.CLAUDE_SUBSCRIPTION;
-
-  if (runtime === AGENT_RUNTIME.CODEX) return AGENT_PAYER.CHATGPT_SUBSCRIPTION;
-
-  return undefined;
+  return runtime === undefined ? undefined : PLAN_PAYER[runtime];
 }
 
 /** What a message refused by the Claude plan that pays for its agent says. */
@@ -1367,26 +1365,35 @@ export function offeredModels(models: readonly CatalogModel[]): readonly Offered
 
 /**
  * The base models a menu lists before anything is searched: the newest of
- * each lead family the catalog offers, and the one chosen, which stays on
- * screen however old; every model where the catalog offers no lead family,
- * so the list is never empty for want of a search.
+ * each lead family the catalog offers, every Cursor model, and the one
+ * chosen, which stays on screen however old; every model where the catalog
+ * offers no lead family, so the list is never empty for want of a search.
+ * Note that Cursor's are listed whole, because they are the account's own
+ * list as its Cursor key reads it, families of every provider among them,
+ * which a lead family of Anthropic's or OpenAI's would otherwise hide.
  */
 export function unsearchedModels(
   models: readonly CatalogModel[],
   chosen: string | undefined,
 ): ReadonlySet<string> {
-  const offered = offeredModels(models).map((each) => each.model.id);
+  const offered = offeredModels(models).map((each) => each.model);
+  const cursor = offered.filter((model) => model.provider === MODEL_PROVIDER.CURSOR);
+  const others = offered.filter((model) => model.provider !== MODEL_PROVIDER.CURSOR);
   const leads = new Map<number, string>();
 
-  for (const id of offered) {
+  for (const { id } of others) {
     const family = familyRank(id);
 
     if (family < LEAD_FAMILIES.length && !leads.has(family)) leads.set(family, id);
   }
 
-  if (leads.size === 0) return new Set(offered);
+  const listed = leads.size === 0 ? others.map((model) => model.id) : [...leads.values()];
 
-  return new Set([...leads.values(), ...(chosen === undefined ? [] : [chosen])]);
+  return new Set([
+    ...listed,
+    ...cursor.map((model) => model.id),
+    ...(chosen === undefined ? [] : [chosen]),
+  ]);
 }
 
 /** Why the Fast row rests for the base model chosen, or nothing where its fast version is offered: withheld because the key's organization was never granted fast mode, or none listed. */

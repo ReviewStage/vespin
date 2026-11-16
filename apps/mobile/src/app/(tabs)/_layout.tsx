@@ -10,8 +10,11 @@ import {
   CallAccessory,
   GLYPH,
   SplitOverTabs,
+  TAB_BAR_ROOM,
   UNDER_SPLIT_SCREEN,
   useColors,
+  useNoticeFootRoom,
+  useTabRail,
   useThreeColumns,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -121,6 +124,9 @@ function useTabStanding(segments: readonly string[], threeColumns: boolean): Tab
 // the switch, so a fold, a rotation, or a resize keeps the open thread or
 // task. Nor is it on wherever the app sidebar stands, so a phone-idiom window
 // that wide never shows the system's tab sidebar beside it.
+// Each tab carries an id of its own (`inbox-tab`, `tasks-tab`, `search-tab`),
+// as the app sidebar's places do, since a list's title, a back button, and a
+// split view's search field share their names, and a flow taps a tab by it.
 export default function TabsLayout() {
   const colors = useColors();
   const router = useRouter();
@@ -143,6 +149,9 @@ export default function TabsLayout() {
 
   // Note that the Inbox's Select mode hides the bar only while the Inbox's own list stands, so a link that opens another place never leaves the bar hidden over it.
   const choosing = useInboxChoosingOn() && atRoot && placeOfRoute(standing) === SIDEBAR_PLACE.INBOX;
+  // Note that the app's notice stands over a compact window's tab bar, or Select mode's toolbar standing in its place, and over nothing where a conversation hides the bar or the tabs stand as a rail at the side, as on the folded iPhone Duo; a conversation's composer says its own height.
+  const tabRail = useTabRail();
+  useNoticeFootRoom(iconOnly && !appSidebar && !conversation && !tabRail ? TAB_BAR_ROOM : 0);
 
   const tabs = (
     <NativeTabs
@@ -159,7 +168,12 @@ export default function TabsLayout() {
           <CallWayBack shown={shownAgent} />
         </NativeTabs.BottomAccessory>
       ) : null}
-      <NativeTabs.Trigger name="(inbox)" accessibilityLabel="Inbox" contentStyle={underSplit}>
+      <NativeTabs.Trigger
+        name="(inbox)"
+        accessibilityLabel="Inbox"
+        testID="inbox-tab"
+        contentStyle={underSplit}
+      >
         <NativeTabs.Trigger.Icon xcasset={GLYPH.INBOX} />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Inbox</NativeTabs.Trigger.Label>
         {/* Note that the badge is left out at none rather than marked hidden, since NativeTabs draws a badge that holds a value whatever its hidden says. */}
@@ -167,11 +181,15 @@ export default function TabsLayout() {
           <NativeTabs.Trigger.Badge>{String(waiting)}</NativeTabs.Trigger.Badge>
         )}
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="(tasks)" accessibilityLabel="Tasks" contentStyle={underSplit}>
+      <NativeTabs.Trigger
+        name="(tasks)"
+        accessibilityLabel="Tasks"
+        testID="tasks-tab"
+        contentStyle={underSplit}
+      >
         <NativeTabs.Trigger.Icon xcasset={GLYPH.TASK} />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Tasks</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
-      {/* Note that the Search tab carries an id of its own, since a list's round search button and a split view's search field are named Search too, and a flow taps the tab by it. */}
       <NativeTabs.Trigger
         name="(search)"
         role="search"

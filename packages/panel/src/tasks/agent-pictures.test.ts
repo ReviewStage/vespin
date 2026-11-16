@@ -756,7 +756,7 @@ test("a sound clip the agent showed with show_media plays where it stands as its
     assert.ok(inline, "the clip plays where it stands, named by its caption");
     assert.deepEqual(
       [...inline.querySelectorAll("button")].map((each) => each.getAttribute("aria-label")),
-      ["Play", "Expand"],
+      ["Play", "Playback speed: 1×", "Expand"],
     );
     assert.deepEqual(
       [...container.querySelectorAll("img")].map((image) => image.getAttribute("src")),

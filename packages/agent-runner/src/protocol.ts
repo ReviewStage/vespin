@@ -577,7 +577,7 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   /**
    * Whether the CLI keeps the main conversation's prompt cache for an hour
    * rather than five minutes (`CLAUDE_CODE_PROMPT_CACHE_TTL`), for an agent
-   * of the half the service runs it on; a runner from before this key ignores it.
+   * the service runs it on (one paid by an API key); a runner from before this key ignores it.
    */
   promptCacheHour: Schema.optionalKey(Schema.Boolean),
   /** Our coder instructions, appended to Claude Code's own system prompt. */
@@ -1102,6 +1102,17 @@ export const CONNECTION_LOST_DETAIL = {
   GAVE_UP: " could not be reached, and did not answer again within the wait",
   LOST_AGAIN: " could not be reached again before the model answered",
 } as const;
+
+/** The `vespin-host` command that signs a Mac in to Cursor (`@repo/host/daemon`'s `cursorLogin`), the sign-in its local Cursor agents run on. */
+export const CURSOR_LOGIN_COMMAND = "cursor-login";
+
+/**
+ * What a Cursor launch on a host ends `FAILED` with where the machine holds
+ * no Cursor sign-in, or one that expired, which the service reads as the
+ * machine not signed in (`coder-host/status.ts`): words that say how the
+ * member signs in there.
+ */
+export const CURSOR_SIGNED_OUT_DETAIL = `Cursor isn't signed in on this Mac. Run vespin-host ${CURSOR_LOGIN_COMMAND} in Terminal there and approve the sign-in in your browser, then send a message.`;
 
 /** What a launch ends with where its provider's connection failed it, by which way (`CONNECTION_LOST_DETAIL`). */
 export function connectionLostFailure(

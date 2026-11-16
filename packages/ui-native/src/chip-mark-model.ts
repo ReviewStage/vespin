@@ -1,21 +1,18 @@
 // chip-mark-model.ts -- which mark a chip leads with for the entity it names, from what the app holds of it, as the panel's `entity-mark.tsx` reads it.
 
 import { ENTITY_KIND, type Entity } from "@repo/features/entity-kind";
-import { inboxLineKind } from "@repo/features/inbox-list-model";
-import type { InboxItem } from "@repo/features/inbox-wire";
 import { providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { TASK_STATUS_TONE } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { Glyph } from "./glyph.js";
-import { INBOX_LINE_LOOK } from "./inbox-line-model.js";
 import { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
 import type { StatusTone } from "./tokens/status-tone.js";
 import type { SwitcherWorkspace } from "./workspace-tile.js";
 
 /** The kinds of mark a chip may lead with beyond its kind's own glyph. */
 export const CHIP_MARK = {
-  /** A glyph in a tone, such as a task's status ring or what a thread asks. */
+  /** A glyph in a tone, such as a task's status ring. */
   GLYPH: "glyph",
   /** A person's photo, or their letters where none is held. */
   FACE: "face",
@@ -47,7 +44,6 @@ export interface ChipMarksHeld {
   readonly member: (
     userId: string,
   ) => { readonly name: string; readonly picture: string | undefined } | undefined;
-  readonly inboxItem: (itemId: string) => InboxItem | undefined;
   /** A workspace by its slug, a former one included, as its tile draws it. */
   readonly workspace: (slug: string) => SwitcherWorkspace | undefined;
 }
@@ -62,8 +58,7 @@ function taskMark(status: TaskStatus | undefined): ChipMark | undefined {
 /**
  * The mark a chip leads with for `entity`, as the panel's chip does: a task
  * (or a version of its description) its status ring in its tone, an agent
- * its harness's mark, a person their face, a thread the glyph of what it
- * asks, and a workspace its tile. Every other kind, and any the app holds
+ * its harness's mark, a person their face, and a workspace its tile. Every other kind, and any the app holds
  * nothing of, keeps its kind's own glyph.
  */
 export function chipMarkOf(entity: Entity, held: ChipMarksHeld): ChipMark | undefined {
@@ -83,15 +78,6 @@ export function chipMarkOf(entity: Entity, held: ChipMarksHeld): ChipMark | unde
       const member = held.member(entity.userId);
 
       return member === undefined ? undefined : { kind: CHIP_MARK.FACE, ...member };
-    }
-
-    case ENTITY_KIND.INBOX_ITEM: {
-      const item = held.inboxItem(entity.itemId);
-      const look = item === undefined ? undefined : INBOX_LINE_LOOK[inboxLineKind(item)];
-
-      return look === undefined
-        ? undefined
-        : { kind: CHIP_MARK.GLYPH, glyph: look.symbol, tone: look.tone };
     }
 
     case ENTITY_KIND.WORKSPACE: {

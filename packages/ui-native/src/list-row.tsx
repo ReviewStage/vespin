@@ -3,6 +3,7 @@
 import {
   Button,
   ContextMenu,
+  Divider,
   HStack,
   Image,
   Menu,
@@ -41,12 +42,12 @@ import { type InboxLineKind, NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
-import { TASK_PRIORITY_WORDS, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
-import { TASK_PRIORITY, type TaskPriority, type TaskStatus } from "@repo/features/task-wire";
+import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
+import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
-import { type ReactElement, type ReactNode, useContext } from "react";
+import { Fragment, type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
@@ -57,7 +58,6 @@ import {
   type Face,
   FailedMark,
   NeedsYouDot,
-  TaskPriorityMark,
   TaskStatusMark,
   ToneGlyph,
   UnreadDot,
@@ -141,6 +141,8 @@ export type RowAction = {
 /** A choice of a menu, checked where it stands, beside its glyph where it has one, such as a status's mark, in its tone where it has one. */
 export type MenuChoice = {
   readonly label: string;
+  /** What tells the choice apart where two may share a label, such as two tasks of one name; the label where none is given. */
+  readonly id?: string | undefined;
   readonly symbol?: Glyph | undefined;
   /** The tone the glyph is drawn in, as a status's mark is in the panel's menu; the menu's own ink where none is given. */
   readonly tone?: StatusTone | undefined;
@@ -155,11 +157,29 @@ export type RowSubmenu = {
   readonly label: string;
   readonly symbol: Glyph;
   readonly choices: readonly MenuChoice[];
+  /** Menus one level further down, after its choices, such as a task's repository inside More. */
+  readonly submenus?: readonly RowSubmenu[] | undefined;
   readonly actions?: readonly RowAction[] | undefined;
 };
 
 /** What a swipe reveals: an act, or a menu of choices, such as a task's Status, which opens where the act would run. */
 export type RowSwipe = RowAction | RowSubmenu;
+
+/** A group of a row's long press menu, set apart from the groups around it by a divider, as Mail's and Reminders' row menus group their acts: its menus, then its acts. */
+export type RowMenuGroup = {
+  readonly submenus?: readonly RowSubmenu[] | undefined;
+  readonly actions?: readonly RowAction[] | undefined;
+};
+
+/** A group's key in its menu: its first piece's words, which a menu holds once. */
+function menuGroupKey(group: RowMenuGroup): string {
+  return group.submenus?.[0]?.label ?? group.actions?.[0]?.label ?? "";
+}
+
+/** Whether a group holds anything to draw. */
+function menuGroupFilled(group: RowMenuGroup): boolean {
+  return (group.submenus?.length ?? 0) + (group.actions?.length ?? 0) > 0;
+}
 
 /** Whether a swipe's piece is a menu of choices rather than one act. */
 function isSubmenu(swipe: RowSwipe): swipe is RowSubmenu {
@@ -176,8 +196,10 @@ type RowActs = {
   readonly leadingActions?: readonly RowSwipe[] | undefined;
   /** Menus the long press menu holds after the swipes' acts, such as a task's Status. */
   readonly menuSubmenus?: readonly RowSubmenu[] | undefined;
-  /** Acts the long press menu alone holds, last, such as Pin or Open in browser. */
+  /** Acts the long press menu alone holds, after its menus and in the swipes' group, such as Pin or Open in browser. */
   readonly menuActions?: readonly RowAction[] | undefined;
+  /** The long press menu's further groups, after the swipes' group, each set apart by a divider, such as a task's ways to organize it and, last, Permanently delete. */
+  readonly menuGroups?: readonly RowMenuGroup[] | undefined;
   /** What the long press lifts over its menu, a glance at what the row opens (`ThreadPreview`, `TaskPreview`, `AgentPreview`), as the system's own apps lift one. */
   readonly preview?: ReactElement | undefined;
   /** Its vespin.dev link, which a drag carries out of the row: into another app as a URL, or onto a section here (`ListSection`'s `onDropLink`). */
@@ -216,9 +238,7 @@ type TaskRowProps = RowActs & {
   readonly id: string;
   readonly name: string;
   readonly status: TaskStatus;
-  /** Its priority, whose mark leads the line before its status, as the panel's List row leads with it; none where the list draws no priority. */
-  readonly priority?: TaskPriority | undefined;
-  /** Whether the task has news unread, which carries the dot and sets its name in semibold. */
+  /** Whether the task has news unread, which sets its name in semibold, as the panel's task rows say it, with no dot. */
   readonly unread?: boolean | undefined;
   /** Whether the task is done or canceled, which mutes its name, as a search finds one. */
   readonly finished?: boolean | undefined;
@@ -226,6 +246,8 @@ type TaskRowProps = RowActs & {
   readonly needsYou?: boolean | undefined;
   /** What its agents say at the line's end, as the panel's row end says it: failed, at work, or its pull request. */
   readonly agents?: TaskAgentsStatus | undefined;
+  /** Whether a task it waits on is still open, which its end marks with a stop sign in the muted ink and says as Blocked, as the panel's rows do. */
+  readonly blocked?: boolean | undefined;
   /** Its key, `ACME-42`, which ends the line. */
   readonly taskKey?: string | undefined;
   /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its chevron's press does. Its caller holds it, since a recycled row holds no state (`RowForEach`). */
@@ -286,6 +308,7 @@ function rowSubmenu(submenu: RowSubmenu, colors: BrandColors, ink?: string) {
           onIsOnChange={() => choice.onPress()}
         />
       ))}
+      {(submenu.submenus ?? []).map((inner) => rowSubmenu(inner, colors, ink))}
       {(submenu.actions ?? []).map((action) => actionButton(action, colors))}
     </Menu>
   );
@@ -360,12 +383,13 @@ export function rowPlacement(
   selected = false,
   vertical: number = ROW_INSET.VERTICAL,
   indent = 0,
+  leading: number = ROW_INSET.LEADING,
 ) {
   return [
     listRowBackground("clear"),
     listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
     padding({
-      leading: ROW_INSET.LEADING - ROW_INSET.FILL,
+      leading: leading - ROW_INSET.FILL,
       trailing: SPACE.EDGE - ROW_INSET.FILL,
       top: vertical,
       bottom: vertical,
@@ -464,7 +488,7 @@ function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
  * is destructive, and in
  * the menu a long press opens, the trailing ones first, so a person who
  * never swipes still finds them; that menu then holds its submenus and the
- * acts only it offers. A row with a link is dragged out as it, on an iPad
+ * acts only it offers, and after a divider each of its further groups. A row with a link is dragged out as it, on an iPad
  * into another app or onto a section. A row with a preview lifts it over the menu, which
  * then leads with Open. Note that SwiftUI's preview takes no tap of its own,
  * a tap on it closing the menu, so Open is what opens the row from there. A
@@ -479,18 +503,22 @@ export function RowFrame({
   leadingActions = [],
   menuSubmenus = [],
   menuActions = [],
+  menuGroups = [],
   preview,
   link,
   vertical,
   indent,
+  leading,
   place = ROW_PLACE.LIST,
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
   /** The row's top and bottom inset, where it stands roomier than the list's own, as an Inbox thread does. */
   readonly vertical?: number | undefined;
-  /** How much further in than the list's own its words, and so its hairline, start, in points, as a second mark before them sets them. */
+  /** How far past the list's text column the row's words start, where it stands in deeper, a second mark leads it, or its lead grows, so its hairline starts under them. */
   readonly indent?: number | undefined;
+  /** The row's leading inset: the unread dot's margin where none is given, or the list's edge for a row that draws no dot (`ROW_INSET.PLAIN`). */
+  readonly leading?: number | undefined;
   /** Whether it stands as a list's row or a sidebar's. */
   readonly place?: RowPlace | undefined;
 }) {
@@ -504,7 +532,7 @@ export function RowFrame({
     tag(id),
     ...(place === ROW_PLACE.SIDEBAR
       ? sidebarRowPlacement(colors, selected)
-      : rowPlacement(colors, selected, vertical, indent)),
+      : rowPlacement(colors, selected, vertical, indent, leading)),
     ...(heard === undefined
       ? []
       : [
@@ -517,23 +545,36 @@ export function RowFrame({
     ...(open === undefined ? [] : [cellFocusRingOff()]),
   ];
 
-  if (swiped.length + menuSubmenus.length + menuActions.length === 0 && preview === undefined) {
+  const groups = menuGroups.filter(menuGroupFilled);
+  const ownGroup = swiped.length + menuSubmenus.length + menuActions.length > 0;
+
+  if (!ownGroup && groups.length === 0 && preview === undefined) {
     return <HStack modifiers={frameModifiers}>{row}</HStack>;
   }
 
-  // Note that Open stands as its words alone, since it opens the thread or task in the app, where the open-in-Safari glyph said it leaves.
-  const opening =
-    preview === undefined || open === undefined ? null : (
-      <Button {...actContent(VERB.OPEN, undefined)} onPress={() => open(id)} />
-    );
+  const opening: readonly RowAction[] =
+    preview === undefined || open === undefined
+      ? []
+      : [
+          // Note that Open stands as words alone, since it opens the row in the app; the arrow out marks only what leaves it, such as Open in browser.
+          { label: VERB.OPEN, tone: ROW_ACTION_TONE.NEUTRAL, onPress: () => open(id) },
+        ];
 
   const menu = (
     <ContextMenu>
       <ContextMenu.Items>
-        {opening}
+        {opening.map((action) => actionButton(action, colors))}
+        {opening.length > 0 && ownGroup ? <Divider /> : null}
         {swiped.map((swipe) => swipeMenuButton(swipe, colors))}
         {menuSubmenus.map((submenu) => rowSubmenu(submenu, colors))}
         {menuActions.map((action) => actionButton(action, colors))}
+        {groups.map((group, at) => (
+          <Fragment key={menuGroupKey(group)}>
+            {at === 0 && opening.length === 0 && !ownGroup ? null : <Divider />}
+            {(group.submenus ?? []).map((submenu) => rowSubmenu(submenu, colors))}
+            {(group.actions ?? []).map((action) => actionButton(action, colors))}
+          </Fragment>
+        ))}
       </ContextMenu.Items>
       <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
       {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
@@ -600,6 +641,7 @@ function TitleWords({
  * row's chevron there.
  */
 export function RowHead({
+  dot = true,
   unread,
   faded,
   fold,
@@ -611,6 +653,8 @@ export function RowHead({
   end,
   trail,
 }: {
+  /** Whether the unread dot stands in the margin; a task's row draws none, its unread name standing in semibold alone, as the panel's task rows do. */
+  readonly dot?: boolean | undefined;
   readonly unread: boolean;
   readonly faded: boolean;
   /** A parent's fold chevron, standing before its lead mark; none for a row that folds nothing. */
@@ -641,31 +685,37 @@ export function RowHead({
   );
 
   // Note that at an accessibility size the line's end stands under the title rather than beside it, as Mail's rows stack their date, so the title keeps the row's width rather than wrapping a word to a line, and the dot stands on the title's first line rather than centered on the whole stack.
+  const line = (
+    <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
+      {/* Note that the fold and the marks stand centered on each other, so the chevron, laid out at no height, sits beside the ring rather than on the row's top edge where an accessibility size aligns the line to its top. */}
+      <HStack spacing={SPACE.ROW} alignment="center">
+        {fold}
+        {mark === undefined ? null : (
+          <HStack modifiers={[frame({ width: leadWidth })]}>{mark}</HStack>
+        )}
+        <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+      </HStack>
+      {beside}
+      {stacked ? (
+        <VStack alignment="leading" spacing={2}>
+          {words}
+          {end}
+        </VStack>
+      ) : (
+        words
+      )}
+      <Spacer />
+      {stacked ? null : end}
+      {trail}
+    </HStack>
+  );
+
+  if (!dot) return line;
+
   return (
     <HStack spacing={SPACE.TIGHT} alignment={stacked ? "firstTextBaseline" : "center"}>
       <UnreadDot unread={unread} faded={faded} />
-      <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
-        {/* Note that the fold and the marks stand centered on each other, so the chevron, laid out at no height, sits beside the ring rather than on the row's top edge where an accessibility size aligns the line to its top. */}
-        <HStack spacing={SPACE.ROW} alignment="center">
-          {fold}
-          {mark === undefined ? null : (
-            <HStack modifiers={[frame({ width: leadWidth })]}>{mark}</HStack>
-          )}
-          <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
-        </HStack>
-        {beside}
-        {stacked ? (
-          <VStack alignment="leading" spacing={2}>
-            {words}
-            {end}
-          </VStack>
-        ) : (
-          words
-        )}
-        <Spacer />
-        {stacked ? null : end}
-        {trail}
-      </HStack>
+      {line}
     </HStack>
   );
 }
@@ -857,16 +907,25 @@ function agentsHeard(agents: TaskAgentsStatus | undefined): string | undefined {
   }
 }
 
-/** What a task row is heard as: its name, then unread, its status, its priority where it has one, a thread that needs you, its agents, its key, and whether its sub-tasks are open. */
+/** What a task row is heard as: its name, then unread, its status, a thread that needs you, its agents, its key, and whether its sub-tasks are open. */
 function taskHeard(props: TaskRowProps): RowHeard {
-  const { name, status, priority, unread = false, needsYou = false, agents, taskKey, fold } = props;
+  const {
+    name,
+    status,
+    unread = false,
+    needsYou = false,
+    blocked = false,
+    agents,
+    taskKey,
+    fold,
+  } = props;
 
   return {
     label: name,
     value: [
       unread && UNREAD_WORDS,
       TASK_STATUS_WORDS[status],
-      priority !== undefined && priority !== TASK_PRIORITY.NONE && TASK_PRIORITY_WORDS[priority],
+      blocked && BLOCKED_WORDS,
       needsYou && NEEDS_YOU.LABEL,
       agentsHeard(agents),
       taskKey,
@@ -874,6 +933,9 @@ function taskHeard(props: TaskRowProps): RowHeard {
     ],
   };
 }
+
+/** What a blocked task's row says, the panel's word for its mark (`@repo/ui`'s `BLOCKED_WORDS`). */
+const BLOCKED_WORDS = "Blocked";
 
 /** What a task row's end says first: a thread that needs the reader, then a failed agent, one at work, or its pull request's state. */
 function TaskEndMark({ needsYou = false, agents }: Pick<TaskRowProps, "needsYou" | "agents">) {
@@ -953,47 +1015,45 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
 }
 
 /**
- * One task on a single line, as Linear's rows stand: the dot while it has
- * news, its priority's mark where its list draws one, its status ring, its
- * name in 15 pt, and at the line's end what its agents say and its key. A
+ * One task on a single line, as Linear's rows stand: its status ring, its
+ * name in 15 pt, semibold while it has news, and at the line's end what its
+ * agents say and its key, as the panel's task rows draw it, with no unread
+ * dot and no priority's mark, which the task's own Priority chip says. Its
+ * ring stands at the list's edge, where an Inbox row's ring stands past the
+ * dot's margin, so the two lists' marks and words line up. A
  * task with sub-tasks leads with the panel's fold before its marks, whose
  * press opens them; its caller draws them as rows
  * of their own under it, a level deeper. Note that SwiftUI's disclosure is
  * not used, because a press on its row folds it rather than picking the row.
  */
 export function TaskRow(props: TaskRowProps) {
-  const {
-    id,
-    name,
-    status,
-    priority,
-    unread = false,
-    finished = false,
-    taskKey,
-    fold,
-    depth = 0,
-  } = props;
+  const { id, name, status, unread = false, finished = false, taskKey, fold, depth = 0 } = props;
 
   const colors = useColors();
   // Note that each level of sub-tasks stands in past a parent's fold, its column the lead's scaled width, so a sub-task's mark stands under its parent's at every size.
   const lead = useScaledSize(MARK_SIZE.LEAD);
-  // Note that the priority's column is the lead's, grown with Dynamic Type as the lead grows, so the hairline still starts under the name at an accessibility size; it is an offset past the list's own words, which a sub-task's depth adds to.
-  const priorityColumn = lead + SPACE.ROW;
+  const column = lead + SPACE.ROW;
+  // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth and past a parent's fold, each a column of the lead's scaled width, and by however much the lead has grown.
+  const grown = lead - MARK_SIZE.LEAD;
+  const indent = (depth + (fold === undefined ? 0 : 1)) * column + grown;
 
   const row: ReactElement = (
-    <HStack modifiers={[padding({ leading: depth * (lead + SPACE.ROW) })]}>
+    <HStack modifiers={[padding({ leading: depth * column })]}>
       <RowHead
+        dot={false}
         unread={unread}
         faded={finished}
         fold={
           fold === undefined ? undefined : <SubTaskFold open={fold.open} onPress={fold.onToggle} />
         }
-        mark={priority === undefined ? undefined : <TaskPriorityMark priority={priority} />}
         lead={<TaskStatusMark status={status} />}
         title={name}
         ink={titleInk(colors, unread, finished)}
         end={
           <HStack spacing={SPACE.TIGHT + 2}>
+            {props.blocked === true ? (
+              <ToneGlyph glyph={GLYPH.BLOCKED_BY} tone={STATUS_TONE.NEUTRAL} hidden />
+            ) : null}
             <TaskEndMark needsYou={props.needsYou} agents={props.agents} />
             {taskKey === undefined ? null : (
               <Text
@@ -1031,7 +1091,8 @@ export function TaskRow(props: TaskRowProps) {
       {...props}
       id={id}
       row={row}
-      indent={priority === undefined ? undefined : priorityColumn}
+      indent={indent}
+      leading={ROW_INSET.PLAIN}
       menuActions={[...folding, ...(props.menuActions ?? [])]}
       heard={props.heard ?? taskHeard(props)}
     />

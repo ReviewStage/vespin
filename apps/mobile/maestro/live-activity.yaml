@@ -5,9 +5,10 @@
 # agents working and an ask waiting. The minimal presentation shows only
 # beside another app's activity, so its preview stands for it
 # (`live-activity/AgentsLiveActivity.swift`). An iPad has no Live
-# Activities, so its shots show the Home Screen. The island's words are the
-# system's, not the app's, so each wait on them is optional: a run where
-# Maestro cannot read them still shoots what the screen draws.
+# Activities, so its shots show the Home Screen and it asserts none of the
+# activity's words; on an iPhone each presentation's words are required, each
+# where that presentation draws them: the rows on the Lock Screen, the count
+# alone on the compact island, and "3 working" with the rows once expanded.
 appId: dev.vespin.ios
 ---
 - launchApp:
@@ -15,7 +16,9 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       liveActivity: "true"
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - pressKey: Home
 - waitForAnimationToEnd
 # A swipe down from the top's left opens Notification Center, which draws the
@@ -28,28 +31,34 @@ appId: dev.vespin.ios
 - tapOn:
     text: "Allow"
     optional: true
-- extendedWaitUntil:
-    visible: "Resend expired invites"
-    timeout: 10000
-    optional: true
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - extendedWaitUntil:
+          visible: "Resend expired invites"
+          timeout: 10000
+      - assertVisible: "3 working"
 - waitForAnimationToEnd
 - takeScreenshot: live-activity-lock-screen
 - pressKey: Home
 # The island draws the app's activity once the app is in the background,
-# after its own animation in.
-- extendedWaitUntil:
-    visible: "3 working"
-    timeout: 10000
-    optional: true
+# after its own animation in. Note that the compact island says the count
+# alone, with no words to wait on, so it waits for the island to settle.
 - waitForAnimationToEnd
 - takeScreenshot: live-activity-compact
 # A long press on the island expands it.
 - longPressOn:
     point: "50%,4%"
-- extendedWaitUntil:
-    visible: "Fix the token refresh"
-    timeout: 5000
-    optional: true
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - extendedWaitUntil:
+          visible: "Fix the token refresh"
+          timeout: 5000
+      - assertVisible: "3 working"
+      - assertVisible: "1 needs you"
 - takeScreenshot: live-activity-expanded
 - pressKey: Home
 # Launched again without the argument, the fixture run ends its activity, so
@@ -57,4 +66,6 @@ appId: dev.vespin.ios
 - launchApp:
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000

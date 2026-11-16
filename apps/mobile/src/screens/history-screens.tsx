@@ -25,6 +25,7 @@ import {
   Screen,
   useColors,
   useFailureNotices,
+  useMinute,
   VERSION_WRITER,
   VersionRow,
   type VersionWriter,
@@ -47,6 +48,7 @@ import {
   useTaskHistory,
   useTaskVersion,
 } from "../tasks/use-history.js";
+import { useTaskOverview } from "../tasks/use-tasks.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** The route a version is opened on: the task by its id, and the version by its number in the query. */
@@ -132,7 +134,7 @@ export function History({
     return model === undefined ? undefined : providerOf(model);
   };
 
-  const now = Date.now();
+  const now = useMinute();
   const revisions = history.page?.revisions ?? [];
   const earlier = history.page?.earlier;
   const newest = revisions[0]?.seq;
@@ -316,7 +318,7 @@ export function Version({
   const navigation = useNavigation();
   const acts = useHostActs();
   const write = useWrite();
-  const openLink = useOpenLink();
+  const openLink = useOpenLink(useTaskOverview(taskId)?.task.workspaceId);
   const notices = useFailureNotices();
   const version = useTaskVersion(taskId, seq);
   const [restoring, setRestoring] = useState(false);
@@ -402,14 +404,15 @@ export function Version({
   const name = at === undefined ? VERSION_HISTORY_WORDS.TITLE : dayAndTimeText(at);
 
   if (inColumn) {
+    // Note that Restore stands dimmed on the description as it stands, heard as already current, as the compact bar keeps it, rather than leaving the column's bar.
     const restoreAct = {
-      label: VERSION_HISTORY_WORDS.RESTORE,
+      label: current ? VERSION_HISTORY_WORDS.ALREADY_CURRENT : VERSION_HISTORY_WORDS.RESTORE,
       symbol: GLYPH.RESTORE,
-      disabled: read === undefined || restoring,
+      disabled: current || read === undefined || restoring,
       onPress: restore,
     };
 
-    return <DetailPage bar={{ name, acts: current ? [] : [restoreAct] }}>{body}</DetailPage>;
+    return <DetailPage bar={{ name, acts: [restoreAct] }}>{body}</DetailPage>;
   }
 
   return (

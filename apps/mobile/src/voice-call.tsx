@@ -21,9 +21,8 @@
  * agent's transcript is held followed, so the way back to it says what the
  * agent does from any screen, and the call stands in a Live Activity of its
  * own (`live-activity/call-activity.ts`), whose mutes and End call act on it
- * from the Lock Screen and the Dynamic Island. Nothing here starts while the Voice
- * experiment is off, signed out, or behind the update screen, and any of
- * them ends a call under way, since no End call stands then. No audio
+ * from the Lock Screen and the Dynamic Island. Nothing here starts while
+ * signed out or behind the update screen, and either ends a call under way, since no End call stands then. No audio
  * leaves the phone but to the session, and none is stored or counted.
  */
 
@@ -48,12 +47,7 @@ import {
 import { callLineWords } from "@repo/features/voice-call-words";
 import { DEFAULT_LIVE_VOICE } from "@repo/features/voices";
 import { ACT_KIND } from "@repo/host/acts";
-import {
-  selectAppSettingsView,
-  selectExperiment,
-  selectTranscript,
-} from "@repo/host/app-state-reads";
-import { EXPERIMENT } from "@repo/settings";
+import { selectAppSettingsView, selectTranscript } from "@repo/host/app-state-reads";
 import {
   BUZZ,
   buzz,
@@ -104,7 +98,7 @@ interface StandingVoiceCall extends VoiceCallState {
 
 /** The phone's call and what a screen may do with it. */
 interface PhoneVoiceCall {
-  /** Whether calls are offered at all: the Voice experiment is on. */
+  /** Whether calls are offered at all: signed in, with no update screen in front of every other. */
   readonly offered: boolean;
   /** The call standing; nothing when none does. */
   readonly call: StandingVoiceCall | undefined;
@@ -244,19 +238,12 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
   const notices = useFailureNotices();
   const queryClient = useQueryClient();
 
-  const { data: offered = false } = useQuery({
-    ...appStateQuery,
-    select: selectExperiment(EXPERIMENT.VOICE),
-  });
-
   // Note that a call is offered only where its presses can stand: signed in, and with no update screen in front of every other.
-  const { data: screensStand = false } = useQuery({
+  const { data: callable = false } = useQuery({
     ...appStateQuery,
     select: (state) =>
       state.account.status === ACCOUNT_STATUS.SIGNED_IN && state.network.updateNeeded !== true,
   });
-
-  const callable = offered && screensStand;
 
   const [call, setCall] = useState<VoiceCallState | undefined>(undefined);
 
@@ -291,7 +278,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
     }),
   );
 
-  // Note that the Voice experiment turned off, a sign-out, or the update screen ends a call under way, because no screen draws its End call then; the provider going away hangs up too.
+  // Note that a sign-out or the update screen ends a call under way, because no screen draws its End call then; the provider going away hangs up too.
   useEffect(() => {
     if (!callable) session.hangUp();
   }, [callable, session]);

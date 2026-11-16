@@ -128,6 +128,8 @@ export function localAgentRefusalWords(
       return `${name} is offline, so this agent can't start there. ${DEVICE_WAKE[devicePlatformOf(device ?? {})]}, ${RUN_IN_CLOUD}.`;
     case LOCAL_AGENT_REFUSAL.CODEX:
       return `${name} can't run Codex agents yet. Wait for its Codex download to finish, choose a Claude model, ${RUN_IN_CLOUD}.`;
+    case LOCAL_AGENT_REFUSAL.CURSOR:
+      return `${name} can't run Cursor agents. Update its host if it's a Mac, choose a Claude or Codex model, ${RUN_IN_CLOUD}.`;
     case LOCAL_AGENT_REFUSAL.NO_HARNESS:
       return `${name} can't run this model's agents. Choose a Claude or Codex model, ${RUN_IN_CLOUD}.`;
     case LOCAL_AGENT_REFUSAL.PREPARING:

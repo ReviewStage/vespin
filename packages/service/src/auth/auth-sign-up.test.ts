@@ -123,7 +123,14 @@ it.effect(
             .filter((request) => request.pathname === pathname)
             .map((request): WireValue => JSON.parse(request.body ?? "{}"));
 
-        assert.deepEqual(sentTo("/contacts"), [{ email: ADA.email }]);
+        assert.deepEqual(sentTo("/contacts"), [
+          {
+            email: ADA.email,
+            first_name: "Ada",
+            segments: [{ id: "c290144d-226c-4ad4-ab7b-0cf0cca8cd8d" }],
+            topics: [{ id: "011d1425-2e35-4da4-87f1-f23c4921a019", subscription: "opt_in" }],
+          },
+        ]);
         assert.deepEqual(sentTo("/events/send"), [
           { event: "vespin.signed_up", email: ADA.email, payload: { greeting: "Hey Ada," } },
         ]);

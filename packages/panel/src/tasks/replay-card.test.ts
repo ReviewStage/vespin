@@ -9,7 +9,6 @@ import {
   type Replay,
   toolStep,
 } from "@repo/features/agent-replay";
-import { PULL_REQUEST_PART } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
   AGENT_STATUS,
@@ -25,7 +24,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
 import { copyingInto, fakeAppPlatform } from "../testing/app-platform.js";
-import { handHostReads, holdPullRequestParts } from "../testing/app-state.js";
+import { handHostReads, holdAgentPullRequests } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
@@ -132,10 +131,9 @@ async function drawn(
   ];
 
   // The host holds what the source published, its branch among it.
-  holdPullRequestParts(handHostReads({}).deliverParts, {
-    [PULL_REQUEST_PART.PUBLISHED]: () =>
-      Promise.resolve({ repository: "acme/app", branch: "luke/start-from", pullRequest: null }),
-  });
+  holdAgentPullRequests(handHostReads({}).deliverParts, () =>
+    Promise.resolve({ repository: "acme/app", branch: "luke/start-from", pullRequest: null }),
+  );
   pushedTranscripts(() => [
     {
       messages: [...messages],

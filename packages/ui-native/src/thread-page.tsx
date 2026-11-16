@@ -44,6 +44,7 @@ import { actContent } from "./glyph-label.js";
 import { CopyWordsSwiftMenu } from "./held-menu.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
+import { PictureSet, type SetPicture } from "./picture-set.js";
 import {
   BAR_ITEM_MENU,
   type BarFootItem,
@@ -51,6 +52,7 @@ import {
   BarMenuItem,
   barActItems,
 } from "./split-view.js";
+import { threadRuns } from "./thread-group-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -61,6 +63,9 @@ export const PATH_PART = " › ";
 
 /** Between a writer's face and their name. */
 const WRITER_GAP = SPACE.TIGHT * 2;
+
+/** Between one message and the next of the same run, closer than between runs, as Messages draws a speaker's bubbles. */
+const RUN_GAP = SPACE.TIGHT * 2;
 
 /** How far a message's words stand in from the page's edge: past the writer's face, under the name, where a row's words start. */
 const WORDS_INSET = SPACE.EDGE + MARK_SIZE.WRITER + WRITER_GAP;
@@ -132,8 +137,19 @@ export type ThreadMessage = {
   readonly media: readonly ThreadMedia[];
   /** What the answer it carries says it was, "Chose Both", and whether it went ahead, a check in the done tone, or held back, a turn back in the muted ink. */
   readonly stamp?: { readonly words: string; readonly ahead: boolean } | undefined;
+  /** What happened to the thread after it, such as a member resolving it or the agent withdrawing its ask. */
+  readonly after?: readonly ThreadEvent[] | undefined;
   /** The form's values the answer filled, each field's name and what was put in it, which stand under the stamp, as the panel lists them. */
   readonly values?: readonly { readonly label: string; readonly words: string }[] | undefined;
+};
+
+/** A line of what happened to a thread: who did it, what they did in the panel's words, when, and an agent's why for a withdrawn ask. */
+type ThreadEvent = {
+  readonly key: string;
+  readonly who: { readonly name: string; readonly agent: boolean };
+  readonly did: string;
+  readonly at: number | undefined;
+  readonly reason?: string | undefined;
 };
 
 type ThreadPageProps = {
@@ -150,6 +166,8 @@ type ThreadPageProps = {
   /** Whether the title is the words the thread stands on, such as a description's comment, quoted as the panel's thread quotes them: muted, regular, and cut to two lines, rather than a heading of its own. */
   readonly quoted?: boolean | undefined;
   readonly messages: readonly ThreadMessage[];
+  /** What happened to the thread before every message read, such as a close on a thread nobody wrote on, drawn under its heading. */
+  readonly opening?: readonly ThreadEvent[] | undefined;
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */
   readonly repository?: string | null | undefined;
   /** Opens a link or a chip pressed, by the address it was written as, where the app draws it or in Safari. */
@@ -277,6 +295,28 @@ export function PathTitle({
   );
 }
 
+/** A message's files in runs: each run of pictures side by side as one set, and each other file alone, in the order the message carried them. */
+function mediaRuns(media: readonly ThreadMedia[]): readonly (readonly ThreadMedia[])[] {
+  const runs: ThreadMedia[][] = [];
+
+  for (const each of media) {
+    const last = runs.at(-1);
+    const joins = each.kind === THREAD_MEDIA.PICTURE && last?.[0]?.kind === THREAD_MEDIA.PICTURE;
+
+    if (joins) last.push(each);
+    else runs.push([each]);
+  }
+
+  return runs;
+}
+
+/** A picture of a run as its set draws it; none for a file of another kind, which a run of pictures never holds. */
+function setPicture(media: ThreadMedia): readonly SetPicture[] {
+  return media.kind === THREAD_MEDIA.PICTURE
+    ? [{ key: media.key, source: media.source, alt: media.alt, onRetry: media.onRetry }]
+    : [];
+}
+
 /** A file after a message's words, as its kind draws it. */
 function MediaView({ media }: { readonly media: ThreadMedia }) {
   switch (media.kind) {
@@ -337,6 +377,65 @@ function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["sta
   );
 }
 
+/**
+ * A line of what happened to the thread among its messages, as the panel's
+ * thread draws one: a glyph in the face's column, whoever did it, what
+ * they did and when, in the muted ink, and an agent's why for a
+ * withdrawn ask under it, where the messages' words start.
+ */
+function EventLine({
+  event,
+  now,
+}: {
+  readonly event: ThreadEvent;
+  readonly now?: number | undefined;
+}) {
+  const colors = useColors();
+  const resolved = !event.who.agent;
+  const moment = now ?? Date.now();
+  const when = event.at === undefined ? undefined : sinceText(event.at, moment);
+  const heard = `${event.who.name} ${event.did}${event.at === undefined ? "" : `, ${sinceHeard(event.at, moment)}`}${event.reason === undefined ? "" : `. ${event.reason}`}`;
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={SPACE.TIGHT}
+      modifiers={[
+        padding({ horizontal: SPACE.EDGE }),
+        accessibilityElement("ignore"),
+        accessibilityLabel(heard),
+      ]}
+    >
+      <HStack spacing={WRITER_GAP} alignment="firstTextBaseline">
+        <Image
+          {...glyphImage(resolved ? GLYPH.RESOLVED : GLYPH.UNDO)}
+          size={MARK_SIZE.GLYPH - 2}
+          color={colors.TEXT_MUTED}
+          modifiers={[frame({ width: MARK_SIZE.WRITER }), accessibilityHidden()]}
+        />
+        {/* Note that the line is one text, never a nested one, since `@expo/ui`'s native text keeps a nested child's first words. */}
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {`${event.who.name} ${event.did}${when === undefined ? "" : ` · ${when}`}`}
+        </Text>
+        <Spacer />
+      </HStack>
+      {event.reason === undefined ? null : (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            padding({ leading: MARK_SIZE.WRITER + WRITER_GAP }),
+          ]}
+        >
+          {event.reason}
+        </Text>
+      )}
+    </VStack>
+  );
+}
+
 /** The values an answer filled, one a line under its stamp, where the message's words start: each field's name muted, then what was put in it, as the panel's answered thread lists them; past an accessibility size the value stands under its name rather than beside it, so neither wraps to a narrow column, and each is heard as one element. */
 function AnswerValues({ values }: { readonly values: NonNullable<ThreadMessage["values"]> }) {
   const colors = useColors();
@@ -388,9 +487,10 @@ function AnswerValues({ values }: { readonly values: NonNullable<ThreadMessage["
   );
 }
 
-/** One message, flat on the page: the writer's face or tile, name in 13 pt semibold and time, and under them its words and files. */
+/** One message, flat on the page: the writer's face or tile, name in 13 pt semibold and time where it leads its run, and under them its words and files. */
 function MessageView({
   message,
+  head,
   repository,
   onOpenLink,
   pictureSource,
@@ -403,55 +503,87 @@ function MessageView({
   "path" | "status" | "pathActions" | "pathInHead" | "title" | "messages" | "ask" | "menu" | "foot"
 > & {
   readonly message: ThreadMessage;
+  /** Whether it leads its run, which names who wrote it and when; the messages after it stand under that head with none of their own. */
+  readonly head: boolean;
 }) {
   const colors = useColors();
   const large = useAccessibilitySize();
   const { writer } = message;
   const moment = now ?? Date.now();
 
-  // Note that the writer's line is heard as one heading, who and when, so VoiceOver's Headings rotor steps from message to message, and that a long press on the message offers Copy message, a picture's, a recording's, or a file's own menu standing over it.
+  const name = (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" }),
+        foregroundStyle(colors.TEXT),
+        lineLimit(large ? 3 : 1),
+      ]}
+    >
+      {writer.name}
+    </Text>
+  );
+
+  const time = (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.TIME }),
+        monospacedDigit(),
+        foregroundStyle(colors.TEXT_MUTED),
+      ]}
+    >
+      {sinceText(message.at, moment)}
+    </Text>
+  );
+
+  // Note that the writer's line is heard as one heading, who and when, so VoiceOver's Headings rotor steps from run to run, that a message after its run's head is a container labeled who and when, so VoiceOver says it on entering the message as Messages reads the sender on every bubble, while the message's lines, links and files stay elements of their own, and that past the accessibility sizes the time stands under the name rather than beside it, as Mail's and Settings' do, so a long name keeps its width, and that a long press on the message offers Copy message, a picture's, a recording's, or a file's own menu standing over it.
   return (
     <CopyWordsSwiftMenu words={message.words}>
-      <VStack alignment="leading" spacing={SPACE.TIGHT}>
-        <HStack
-          spacing={WRITER_GAP}
-          modifiers={[
-            padding({ horizontal: SPACE.EDGE }),
-            accessibilityElement("ignore"),
-            accessibilityLabel(`${writer.name}, ${sinceHeard(message.at, moment)}`),
-            accessibilityAddTraits(["isHeader"]),
-          ]}
-        >
-          {writer.agent ? (
-            <AgentTile name={writer.name} harness={writer.harness} size={MARK_SIZE.WRITER} />
-          ) : (
-            <Avatar
-              name={writer.name}
-              id={writer.id}
-              picture={writer.picture}
-              size={MARK_SIZE.WRITER}
-            />
-          )}
-          <Text
+      <VStack
+        alignment="leading"
+        spacing={SPACE.TIGHT}
+        modifiers={
+          head
+            ? []
+            : [
+                accessibilityElement("contain"),
+                accessibilityLabel(`${writer.name}, ${sinceHeard(message.at, moment)}`),
+              ]
+        }
+      >
+        {head ? (
+          <HStack
+            spacing={WRITER_GAP}
             modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" }),
-              foregroundStyle(colors.TEXT),
-              lineLimit(large ? 2 : 1),
+              padding({ horizontal: SPACE.EDGE }),
+              accessibilityElement("ignore"),
+              accessibilityLabel(`${writer.name}, ${sinceHeard(message.at, moment)}`),
+              accessibilityAddTraits(["isHeader"]),
             ]}
           >
-            {writer.name}
-          </Text>
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.TIME }),
-              monospacedDigit(),
-              foregroundStyle(colors.TEXT_MUTED),
-            ]}
-          >
-            {sinceText(message.at, moment)}
-          </Text>
-          <Spacer />
-        </HStack>
+            {writer.agent ? (
+              <AgentTile name={writer.name} harness={writer.harness} size={MARK_SIZE.WRITER} />
+            ) : (
+              <Avatar
+                name={writer.name}
+                id={writer.id}
+                picture={writer.picture}
+                size={MARK_SIZE.WRITER}
+              />
+            )}
+            {large ? (
+              <VStack alignment="leading" spacing={2}>
+                {name}
+                {time}
+              </VStack>
+            ) : (
+              <>
+                {name}
+                {time}
+              </>
+            )}
+            <Spacer />
+          </HStack>
+        ) : null}
         {message.stamp === undefined ? null : <AnswerStamp stamp={message.stamp} />}
         {message.values === undefined ? null : <AnswerValues values={message.values} />}
         <RNHostView matchContents={{ vertical: true }}>
@@ -468,9 +600,13 @@ function MessageView({
                 linkStanding={linkStanding}
               />
             )}
-            {message.media.map((media) => (
-              <MediaView key={media.key} media={media} />
-            ))}
+            {mediaRuns(message.media).map((run) =>
+              run.length === 1 && run[0] !== undefined ? (
+                <MediaView key={run[0].key} media={run[0]} />
+              ) : (
+                <PictureSet key={run[0]?.key} pictures={run.flatMap(setPicture)} />
+              ),
+            )}
           </View>
         </RNHostView>
       </VStack>
@@ -499,6 +635,7 @@ export function ThreadPage(props: ThreadPageProps) {
     title,
     quoted,
     messages,
+    opening,
     ask,
     acts = [],
     menu,
@@ -543,11 +680,28 @@ export function ThreadPage(props: ThreadPageProps) {
               standing={standing}
               path={pathInHead ? pathTitle : undefined}
             />
-            {messages.map((message) => (
-              <MessageView key={message.id} message={message} {...drawing} />
+            {(opening ?? []).map((event) => (
+              <EventLine key={event.key} event={event} now={drawing.now} />
             ))}
+            {/* Note that a run's messages stand under its first one's head, and a line of what happened after a message ends its run, so it stands between runs. */}
+            {threadRuns(messages).map((run) => (
+              <VStack key={run[0]?.id} alignment="leading" spacing={RUN_GAP}>
+                {run.map((message, index) => (
+                  <VStack key={message.id} alignment="leading" spacing={SPACE.EDGE}>
+                    <MessageView message={message} head={index === 0} {...drawing} />
+                    {(message.after ?? []).map((event) => (
+                      <EventLine key={event.key} event={event} now={drawing.now} />
+                    ))}
+                  </VStack>
+                ))}
+              </VStack>
+            ))}
+            {/* Note that the ask stands where the messages' words do, past the writers' faces, so a notice's Got it and a card line up under what they answer. */}
             {ask === undefined ? null : (
-              <VStack alignment="leading" modifiers={[padding({ horizontal: SPACE.EDGE })]}>
+              <VStack
+                alignment="leading"
+                modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}
+              >
                 {ask}
               </VStack>
             )}
