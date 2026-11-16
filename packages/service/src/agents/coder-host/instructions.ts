@@ -166,7 +166,7 @@ function namingLines(repository: string | null, ownTask: OwnTask, workspace: str
  * token. A line on a gated tool of ours is told by whether the agent's
  * standing is offered it (`../tool-catalog/catalog.ts`'s `offers`): its
  * pull request by `open_pull_request`, its description by
- * `edit_description`. The repository's own `AGENTS.md` or `CLAUDE.md` is
+ * `edit_description`, its reply by `end_turn`. The repository's own `AGENTS.md` or `CLAUDE.md` is
  * not named, since each harness loads its own.
  */
 export function coderInstructions(
@@ -183,6 +183,7 @@ export function coderInstructions(
 ): string {
   const describes = offers(standing, EDIT_DESCRIPTION_TOOL.name);
   const publishes = repository !== null && offers(standing, AGENT_TOOL.OPEN_PULL_REQUEST);
+  const endsTurns = offers(standing, AGENT_TOOL.END_TURN);
   const shell = harness === CODER_HARNESS.CLAUDE_CODE ? "Bash" : "your shell";
   const branch = startBranch === null ? "" : ` on \`${startBranch}\``;
 
@@ -198,7 +199,9 @@ export function coderInstructions(
     UNCLEAR_LINE,
     ...(publishes ? publishLines(authorship, startBranch, memberToken) : []),
     `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\` and post it in a thread.`,
-    "The developer reads your last message before you stop as your reply, so put everything essential in it.",
+    endsTurns
+      ? `End every turn by calling \`${AGENT_TOOL.END_TURN}\` last: its summary is what the developer reads as your reply.`
+      : "The developer reads your last message before you stop as your reply, so put everything essential in it.",
     `When you need something from the developer, or have something ready for them to look at, post it in a thread with \`${INBOX_TOOLS.POST.name}\`. If someone writes to you on a thread, reply on that thread, not just in your final message.`,
     ...(describes
       ? [
