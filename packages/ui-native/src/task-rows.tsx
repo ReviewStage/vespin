@@ -393,7 +393,7 @@ type RelationRowProps = {
   readonly status: TaskStatus | undefined;
   /** How the task stands to this one: "Blocked by", "Blocks"; or, in a picker, its key or why it cannot be picked; none where its section says it, as a task's Sub-tasks does. */
   readonly relation?: string | undefined;
-  /** Whether it cannot be picked, which mutes its words, as a picker dims a task that cannot take the relation. */
+  /** Whether its words stand muted: a finished task's, as the panel mutes a settled row's name, or one a picker cannot pick, as it dims a task that cannot take the relation. */
   readonly faded?: boolean | undefined;
   /** What a swipe from the trailing edge reveals, such as Remove relation. */
   readonly trailingActions?: readonly RowSwipe[] | undefined;
@@ -741,6 +741,8 @@ type WordsRowProps = {
   readonly fileAt?: ((written: string) => MarkdownFile | undefined) | undefined;
   /** What GitHub holds of a pull request or issue a chip in the words names, by its page, which the chip says where it stands. */
   readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
+  /** Whether raw HTML in the words stays unseen, as GitHub's page hides a pull request body's comments and tags. */
+  readonly hidesHtml?: boolean | undefined;
   /** How the words stand against the version before them, where they are a version's section, which a bar at their leading edge marks; none where they are read alone. */
   readonly change?: VersionUnit["change"] | undefined;
 };
@@ -861,6 +863,7 @@ export function WordsRow({
   videoAt,
   fileAt,
   linkStanding,
+  hidesHtml,
   change = VERSION_CHANGE.SAME,
 }: WordsRowProps) {
   const colors = useColors();
@@ -877,6 +880,7 @@ export function WordsRow({
             videoAt={videoAt}
             fileAt={fileAt}
             linkStanding={linkStanding}
+            hidesHtml={hidesHtml}
             headings
           />
         </ChangedWords>
