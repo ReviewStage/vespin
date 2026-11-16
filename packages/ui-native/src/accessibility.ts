@@ -109,10 +109,16 @@ export function useScaledSize(points: number): number {
   return points * Math.min(SCALED_RANGE.MAX, Math.max(SCALED_RANGE.MIN, fontScale));
 }
 
-/** Tells VoiceOver something that happened out of the reader's sight, such as a send refused; nothing where VoiceOver is off. */
+/**
+ * Tells VoiceOver something that happened out of the reader's sight, such as
+ * a send refused; nothing where VoiceOver is off. Note that it waits for what
+ * VoiceOver is saying rather than cutting it off, so two notes appearing at
+ * once, such as a refused start beside a model list that could not be read,
+ * are both heard.
+ */
 function announce(words: string): void {
   if (words.trim() === "") return;
-  AccessibilityInfo.announceForAccessibility(words);
+  AccessibilityInfo.announceForAccessibilityWithOptions(words, { queue: true });
 }
 
 /**

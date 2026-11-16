@@ -35,7 +35,7 @@
  * (`browserModelOutput`) and its base64 is left out of the stored
  * conversation (`storedBrowserOutput`); the transcript's copy, the page at
  * its own size and good quality (`BROWSER_KEPT_SCREENSHOT`), is kept beside
- * the transcript the call is written to as `show_image`'s pictures are
+ * the transcript the call is written to as `show_media`'s pictures are
  * (`@repo/database/models/conversation-pictures`), deleted with that
  * conversation, and the step names it by id (`picture`), or says why it was
  * not kept (`omitted`). Nothing a page holds is logged or traced here: a
@@ -107,27 +107,21 @@ export const BROWSER_TOOL = {
   description:
     "Drive a real browser, a Chromium in your own sandbox, whose tabs the developer can watch " +
     "and take over in its Browser tab. Your own dev server is at localhost " +
-    "there, such as http://localhost:3000/. Each call takes up to " +
-    `${BROWSER_AGENT_LIMITS.MAX_ACTIONS} actions, run in order: list the tabs, open one at an ` +
-    "address, navigate, go back or forward, click, type, choose an option in a dropdown, press " +
-    "a key, scroll, wait, take a screenshot to see the page, take a snapshot to read it as " +
-    "text with a ref beside each element, read its console, or close it. To show the developer " +
-    "a flow you built or tested, record it: record starts a video of whatever the browser shows, " +
-    "your pointer drawn on the page while it records, " +
-    `up to ${BROWSER_AGENT_LIMITS.RECORDING_MAX_SECONDS} seconds and across calls, and ` +
-    "stop_recording, with a caption, stops it and keeps it in your transcript, where it plays; " +
-    "stop it before your turn ends, or it is lost. Its answer names the path the video stays at in " +
-    "your sandbox until your next recording, by which you can post it to a thread. Take a snapshot for " +
+    "there, such as http://localhost:3000/. Use it for what the developer should see or finish " +
+    "themselves, such as a flow to show them or a sign-in, and keep your own checks on Playwright " +
+    "from your shell. Each call takes up to " +
+    `${BROWSER_AGENT_LIMITS.MAX_ACTIONS} actions, run in order. Take a snapshot for ` +
     "the refs before you click or type on an element. Choose in a native dropdown, a select " +
     "the snapshot shows as a combobox or listbox, with select on its ref and the option's " +
-    "label, rather than clicking it or its options, whose popup no click reaches. An action that leaves out its tab acts on the tab the action before " +
-    "it acted on in the same call only, so open and go on in one call; a new call names its " +
-    "tab. While the developer drives a tab, actions on " +
-    "it are refused until they hand it back: wait, or ask them. You may find a tab the " +
-    "developer opened in your browser, such as one they signed in on for you, which the tabs " +
-    "answered say they opened: use it once they hand it back. Answers each step that ran and " +
-    "the tabs it acted on as they now stand, or `not-run` and why, such as the browser not " +
-    "being reachable.",
+    "label, since no click reaches its popup. An action that leaves out its tab acts on the tab " +
+    "the action before it acted on in the same call only, so open and go on in one call; a new " +
+    "call names its tab. To show the developer a flow, record it: record starts a video of what " +
+    `the browser shows, your pointer drawn on it, up to ${BROWSER_AGENT_LIMITS.RECORDING_MAX_SECONDS} seconds and across calls, ` +
+    "and stop_recording, with a caption, keeps it in your transcript; stop it before your turn " +
+    "ends, or it is lost. Its answer names the video's path in your sandbox until your next " +
+    "recording, by which you can post it to a thread. While the developer drives a tab, actions on " +
+    "it are refused until they hand it back: wait, or ask them. A tab the developer opened in your " +
+    "browser, such as one they signed in on for you, is yours to use once they hand it back.",
   inputSchema: BROWSER_INPUT,
 } as const;
 

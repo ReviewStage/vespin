@@ -2,9 +2,9 @@ import { openProviderKey, parseKeyRing } from "@repo/database/models/provider-ke
 import { listProviderKeyRows, type ProviderKeyRow } from "@repo/database/models/provider-key-store";
 import type { TaskStoreEffect } from "@repo/database/models/task-store";
 import {
+  MODEL_API_PROVIDERS,
+  type ModelApiProvider,
   PROVIDER_KEY_KIND,
-  PROVIDER_KEY_PROVIDER,
-  type ProviderKeyProvider,
 } from "@repo/features/provider-key-wire";
 import { Effect, type Redacted, Result } from "effect";
 import { type AccountKeyEnvironment, previewKeysOf } from "../../accounts/own-api-key.js";
@@ -39,8 +39,8 @@ function openedRow(
 }
 
 /**
- * Every API key of the account's own that opens, the preferred provider's
- * first: the keys a call beside its agents may spend on, such as a pull
+ * Every API key of the account's own that opens and buys a model call
+ * (`MODEL_API_PROVIDERS`), the preferred provider's first: the keys a call beside its agents may spend on, such as a pull
  * request's chapters, whose Generate offers each. None where it holds
  * none. Our own key is never one; on a Preview, its stand-ins, the
  * preferred provider's first, answer for an admin of ours where no key of
@@ -49,16 +49,13 @@ function openedRow(
  */
 export function ownKeysOf(
   userId: string,
-  preferred: ProviderKeyProvider,
+  preferred: ModelApiProvider,
   environment: AccountKeyEnvironment,
 ): TaskStoreEffect<readonly OwnKey[]> {
   return Effect.gen(function* () {
     const rows = yield* listProviderKeyRows(userId, PROVIDER_KEY_KIND.API_KEY);
 
-    const order = [
-      preferred,
-      ...Object.values(PROVIDER_KEY_PROVIDER).filter((other) => other !== preferred),
-    ];
+    const order = [preferred, ...MODEL_API_PROVIDERS.filter((other) => other !== preferred)];
 
     const own = order.flatMap((provider) => {
       const row = rows.find((each) => each.provider === provider);
@@ -94,7 +91,7 @@ export function ownKeysOf(
  */
 export function ownKeyOf(
   userId: string,
-  preferred: ProviderKeyProvider,
+  preferred: ModelApiProvider,
   environment: AccountKeyEnvironment,
 ): TaskStoreEffect<OwnKey | undefined> {
   return Effect.map(ownKeysOf(userId, preferred, environment), (keys) => keys[0]);
