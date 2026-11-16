@@ -65,6 +65,7 @@ import {
   TaskRows,
   useAgentArchiveAsk,
   useTaskDetail,
+  useTaskRowDoors,
 } from "./task-screens.js";
 
 /** The Search tab's name, at its head. */
@@ -272,7 +273,8 @@ function useSearchScreen(
   const router = useRouter();
   const found = useSearchFound(query);
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
-  const { listing, status, deletion } = useListingAsks(found.listing);
+  const doors = useTaskRowDoors(found.listing.workspace?.id);
+  const { listing, status, deletion } = useListingAsks(found.listing, doors);
   const remind = useRemind();
   const archiveAsk = useAgentArchiveAsk();
   const routes = foundRoutes(found);
