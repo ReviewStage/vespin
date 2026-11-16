@@ -326,6 +326,10 @@ type ListSectionProps = {
   readonly mark?: MarkLook | undefined;
   /** Whether a press on its header folds it in place, a chevron leading the header. */
   readonly foldable?: boolean | undefined;
+  /** Whether a foldable section stands folded, where its screen holds that across a change of layout; it holds its own where none is given. */
+  readonly folded?: boolean | undefined;
+  /** Called with whether a press folded the section, where its screen holds `folded`. */
+  readonly onFold?: ((folded: boolean) => void) | undefined;
   /** A line under the section, in the system's footnote. */
   readonly footer?: string | undefined;
   /** What the footer says: a note on the section, in the footnote's own ink, or why a send did not go, as every refusal reads (`ProblemLine`) and told to VoiceOver at once. */
@@ -519,15 +523,24 @@ export function ListSection({
   progress,
   mark,
   foldable = false,
+  folded: held,
+  onFold,
   footer,
   footerTone = FOOTER_TONE.NOTE,
   onDropLink,
   add,
   children,
 }: ListSectionProps) {
-  const [folded, setFolded] = useState(false);
+  const [own, setOwn] = useState(false);
+  const folded = held ?? own;
   const look = useContext(ListLookContext);
   const reduceMotion = useReduceMotion();
+
+  const setFolded = (next: boolean) => {
+    setOwn(next);
+    onFold?.(next);
+  };
+
   // Note that a header holding none shows no count, as Mail's groups stand, rather than a 0 beside its title.
   const shown = count === 0 ? undefined : count;
 
@@ -547,7 +560,7 @@ export function ListSection({
       label
     ) : (
       <Button
-        onPress={() => setFolded((was) => !was)}
+        onPress={() => setFolded(!folded)}
         modifiers={[
           buttonStyle("plain"),
           accessibilityAddTraits(["isHeader"]),
