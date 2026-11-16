@@ -286,6 +286,8 @@ export const LOCAL_AGENT_REFUSAL = {
   CODEX: "codex",
   /** The model runs on no native harness here, so no runner would launch on the Mac. */
   NO_HARNESS: "no-harness",
+  /** The model runs on Cursor, whose SDK the device keeps none of: a Linux host, a host from before Cursor on the Mac, or one whose download has not finished. A build from before it reads the refusal as one naming no reason. */
+  CURSOR: "cursor",
   /** The device is still fetching what its agents run on, the first time (`DEVICE_SETUP.PREPARING`), so it takes no agent yet. */
   PREPARING: "preparing",
   /** The device could not fetch what its agents run on (`DEVICE_SETUP.FAILED`), so it takes no agent until it tries again. */
@@ -457,7 +459,7 @@ export const AGENT_FAILURE = {
   ABANDONED: "abandoned",
   /** The account's own API key for the model's provider was refused, out of quota, or can no longer be read; it is replaced in Settings. */
   PROVIDER_KEY: "provider_key",
-  /** A local agent's machine is not signed in to the agent's harness, Claude Code or Codex, or its sign-in was refused; it is signed in on that machine. */
+  /** A local agent's machine is not signed in to the agent's harness, Claude Code, Codex, or Cursor, or its sign-in was refused; it is signed in on that machine. */
   MACHINE_SIGN_IN: "machine_sign_in",
   /** The agent's session never started, so no turn ran; a new agent is the way on. */
   NOT_STARTED: "not_started",

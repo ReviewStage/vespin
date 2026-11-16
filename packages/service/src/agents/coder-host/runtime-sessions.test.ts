@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
+import { writeAccountPreferences } from "@repo/database/models/account-store";
 import {
   type Agent,
   createAgent,
@@ -44,6 +45,7 @@ import {
 } from "@repo/features/provider-key-wire";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { memorySandbox } from "@repo/sandbox/testing";
+import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { eq } from "drizzle-orm";
@@ -273,6 +275,10 @@ function runtimes() {
 }
 
 const RELAY = { owner: "Acme", name: "Relay" } as const;
+
+/** Where a synthetic Mac keeps the Cursor SDK it checked. */
+const CURSOR_SDK =
+  "/Users/fixture/.local/state/vespin-host/agent-tools/cursor-sdk/1.4.0/dist/esm/index.js";
 
 /** Where a synthetic Mac keeps the Codex it checked. */
 const CODEX_EXECUTABLE =
@@ -1414,7 +1420,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "a Start naming one of its starter's devices runs only with that device there lately, pinned to it on the model's harness, on the machine's own login with nothing saved in Vespin; Codex on a device with none checked, a repository on a host from before it works in every repository on its own GitHub sign-in, or the device gone or away, is refused by name and leaves no agent",
+      "a Start naming one of its starter's devices runs only with that device there lately, pinned to it on the model's harness, on the machine's own login with nothing saved in Vespin; Codex on a device with none checked, Cursor on one that keeps no Cursor SDK, a repository on a host from before it works in every repository on its own GitHub sign-in, or the device gone or away, is refused by name and leaves no agent",
       () =>
         Effect.gen(function* () {
           const cases = [
@@ -1432,6 +1438,20 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               model: "openai/gpt-5.5",
               refused: undefined,
               runs: ["codex", AGENT_PAYER.MAC_SIGN_IN],
+            },
+            {
+              name: "a Cursor model on a Mac that keeps Cursor's SDK",
+              mac: true,
+              cursor: true,
+              model: "cursor/grok-4.7",
+              refused: undefined,
+              runs: ["cursor", AGENT_PAYER.MAC_SIGN_IN],
+            },
+            {
+              name: "a Cursor model on a Mac that keeps no Cursor SDK",
+              mac: true,
+              model: "cursor/grok-4.7",
+              refused: LOCAL_AGENT_REFUSAL.CURSOR,
             },
             {
               name: "the device gone",
@@ -1471,6 +1491,8 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           for (const each of cases) {
             const { owner, workspaceId } = yield* openStarter(false);
             const deviceId = randomUUID();
+            // Note that Cursor's models are offered only with the account's Cursor agents on.
+            yield* writeAccountPreferences(owner, { experiments: { [EXPERIMENT.CURSOR]: true } });
 
             if (each.mac) {
               yield* registerDevice(owner, {
@@ -1478,6 +1500,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
                 name: "Studio",
                 ...DEVICE_LAYOUT,
                 ...("codex" in each ? { codexExecutable: CODEX_EXECUTABLE } : undefined),
+                ...("cursor" in each ? { cursorSdk: CURSOR_SDK } : undefined),
                 ...("setup" in each ? { setup: each.setup } : undefined),
                 capabilities: "predatesOwnSignIn" in each ? [] : [DEVICE_CAPABILITY.GITHUB_SIGN_IN],
               });
@@ -1824,15 +1847,27 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "a Mac is offered as running Claude models whatever the account saved in Vespin, since its agents run on its own logins, and GPT models only on a Mac that checked a Codex",
+      "a Mac is offered as running Claude models whatever the account saved in Vespin, since its agents run on its own logins, GPT models only on a Mac that checked a Codex, and Cursor's only on one that keeps Cursor's SDK",
       () =>
         Effect.gen(function* () {
           const cases = [
-            { name: "no Codex checked", codex: false, providers: [MODEL_PROVIDER.ANTHROPIC] },
+            {
+              name: "no Codex checked",
+              codex: false,
+              cursor: false,
+              providers: [MODEL_PROVIDER.ANTHROPIC],
+            },
             {
               name: "a Codex checked",
               codex: true,
+              cursor: false,
               providers: [MODEL_PROVIDER.ANTHROPIC, MODEL_PROVIDER.OPENAI],
+            },
+            {
+              name: "Cursor's SDK kept",
+              codex: false,
+              cursor: true,
+              providers: [MODEL_PROVIDER.ANTHROPIC, MODEL_PROVIDER.CURSOR],
             },
           ] as const;
 
@@ -1843,6 +1878,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               name: "Studio",
               ...DEVICE_LAYOUT,
               ...(each.codex ? { codexExecutable: CODEX_EXECUTABLE } : undefined),
+              ...(each.cursor ? { cursorSdk: CURSOR_SDK } : undefined),
             });
 
             const offers = yield* macOffers(owner).pipe(

@@ -3,6 +3,7 @@
 import type { InboxThreadMessage } from "@repo/features/inbox-list-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { plainWords } from "@repo/features/plain-words";
+import { CALL_KIND, madeCallLine } from "@repo/features/turn-rows";
 import { TRANSCRIPT_ITEM, type TranscriptItem } from "./transcript-model.js";
 
 /** How many of a thread's newest messages its preview draws: enough to read where it stands at a glance, as Mail's preview shows a message's start. */
@@ -59,7 +60,7 @@ export function previewMessages(
     .slice(-PREVIEW_MESSAGES);
 }
 
-/** An item's step as the preview says it, where it is one of the agent's own: its words, a call's line, or a fold's summary. */
+/** An item's step as the preview says it, where it is one of the agent's own: its words, a call's line or the card it stands as, or a fold's summary. */
 function stepOf(item: TranscriptItem): string | undefined {
   switch (item.kind) {
     case TRANSCRIPT_ITEM.WORDS:
@@ -72,6 +73,11 @@ function stepOf(item: TranscriptItem): string | undefined {
 
     case TRANSCRIPT_ITEM.FOLD:
       return item.summary;
+    // Note that a card a call stands as alone says the call as its row would, its verb then what it showed or opened, since the call's own line is left out.
+    case TRANSCRIPT_ITEM.PAGE:
+      return `${madeCallLine(CALL_KIND.SHOW_PAGE).verb} ${item.title}`;
+    case TRANSCRIPT_ITEM.PULL_REQUEST:
+      return `${madeCallLine(CALL_KIND.OPEN_PULL_REQUEST).verb} ${item.title}`;
     default:
       return undefined;
   }
@@ -79,8 +85,9 @@ function stepOf(item: TranscriptItem): string | undefined {
 
 /**
  * The agent's latest step, as the panel's card says one: its last words as
- * plain words, or its last call's line, or the fold its last calls stand
- * in; a line someone sent it, what a call showed, and the line a working
+ * plain words, or its last call's line, or the card a call stands as alone
+ * (a page it showed, a pull request it opened), or the fold its last calls
+ * stand in; a line someone sent it, what a call showed, and the line a working
  * transcript ends on are passed over. Nothing where it has done nothing yet.
  */
 export function latestStep(items: readonly TranscriptItem[]): string | undefined {

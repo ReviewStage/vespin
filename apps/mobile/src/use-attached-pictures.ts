@@ -218,6 +218,12 @@ export interface AttachedPictures {
   readonly pasteText: (words: string) => boolean;
 }
 
+/** Where a holder's pictures are kept beyond its screen, such as a comment's draft: the pictures it opens on, and where each change goes. */
+export interface KeptPictures {
+  readonly held: readonly HeldPicture[];
+  readonly keep: (pictures: readonly HeldPicture[]) => void;
+}
+
 /**
  * The pictures a composer or a sheet attaches, saying what the picker or a
  * bound refused through `onNote`, and nothing once a picture is taken off.
@@ -228,13 +234,18 @@ export function useAttachedPictures(
   onNote: (note: string | undefined) => void,
   opensWith?: readonly string[],
   bounds: PictureBounds = MESSAGE_PICTURES,
+  kept?: KeptPictures,
 ): AttachedPictures {
-  const [pictures, setPictures] = useState<readonly HeldPicture[]>([]);
+  const [pictures, setPictures] = useState<readonly HeldPicture[]>(() => kept?.held ?? []);
   // The pictures held now, which a picker answering later adds to, so pictures a refused send put back while it stood open are kept.
   const held = useRef(pictures);
   useEffect(() => {
     held.current = pictures;
   }, [pictures]);
+
+  // Note that the pictures are handed to their keeper as they change, so a screen drawn anew opens on them.
+  const keep = useEffectEvent((now: readonly HeldPicture[]) => kept?.keep(now));
+  useEffect(() => keep(pictures), [pictures]);
 
   // Pictures as read, or none for one that could not be, named past every picture held now and added after them, saying the first that could not be read, or else what a bound refuses. Note that the held pictures are written at once, so a second drop landing before the next render adds after this one rather than over it.
   const add = (contents: readonly (ReadPicture | undefined)[], unreadable = 0) => {
@@ -365,7 +376,7 @@ export function useAttachedPictures(
       setPictures(next);
       onNote(undefined);
     },
-    // Note that `take` and `putBack` write the held pictures at once too, so a paste landing before the next render builds on what they left.
+    // Note that `take` and `putBack` write the held pictures at once, so a second send before the next render takes none and can't hand them back twice, and a paste landing before the next render builds on what they left.
     take: () => {
       const taken = held.current;
       held.current = [];
@@ -373,8 +384,17 @@ export function useAttachedPictures(
 
       return taken;
     },
+    // Note that the pictures are numbered again in order, since a picture attached while the send was out was named from none held, and two of one name would both go; a pasted text file keeps its own name.
     putBack: (carried) => {
-      const next = [...carried, ...held.current];
+      let number = 0;
+
+      const next = [...carried, ...held.current].map((picture) => {
+        if (isText(picture.file)) return picture;
+        number += 1;
+
+        return { ...picture, file: { ...picture.file, name: pictureName(number) } };
+      });
+
       held.current = next;
       setPictures(next);
     },

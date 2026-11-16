@@ -27,6 +27,9 @@ env:
 - extendedWaitUntil:
     visible: "Add a way to resend an invite that expired."
     timeout: 30000
+# The file the account sent with that line stands as its chip over the
+# line's bubble, its kind and its count of lines under its name.
+- assertVisible: "expired-invites.csv.*3 lines"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-latest

@@ -284,7 +284,7 @@ function ComposePage(props: ComposeSheetProps) {
   const muted = [font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)];
 
   return (
-    <Host style={{ flex: 1, backgroundColor: colors.GROUPED }} modifiers={[tint(colors.TEXT)]}>
+    <Host style={{ flex: 1, backgroundColor: colors.GROUND }} modifiers={[tint(colors.TEXT)]}>
       <ScrollView modifiers={[scrollDismissesKeyboard("immediately")]}>
         <VStack
           alignment="leading"

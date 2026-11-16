@@ -51,6 +51,28 @@ export function useLiftBars(): LiftBarsHeld {
 /** Hands a place's bars to the screens drawn in it, so a sheet's notice hears only the bars drawn in the sheet. */
 export const LiftBarsProvider = LiftBars.Provider;
 
+/** Sets the room the window's own bar takes at its foot, which the notice stands over where no screen pins a bar of its own. */
+const FootRoom = createContext<((room: number) => void) | undefined>(undefined);
+
+/** Hands the root's foot room setter to the layout that knows where the window's bar stands. */
+export const FootRoomProvider = FootRoom.Provider;
+
+/**
+ * Tells the app's notice how much room the window's own bar takes at its
+ * foot, such as a compact window's tab bar, or Select mode's toolbar in its
+ * place: none where no bar stands there, as over a conversation, which hides
+ * the tab bar, or beside a rail. Note that it is set by the one layout that
+ * already follows where the bar stands, rather than read from the route at
+ * the root, so a navigation re-renders nothing under the notice's provider
+ * but the banner, and only when the room changes.
+ */
+export function useNoticeFootRoom(room: number): void {
+  const set = useContext(FootRoom);
+
+  useEffect(() => set?.(room), [set, room]);
+  useEffect(() => () => set?.(0), [set]);
+}
+
 /**
  * Tells the notice of the place it is drawn in that a bar stands at the
  * screen's foot, so the notice stands over it rather than over the field
