@@ -81,6 +81,14 @@ workspace" on acme/ledger), "Retry failed webhook deliveries" (Webhook retries,
 Claude Opus 5.5; PR #209, merged), and "Build the onboarding checklist"
 (Onboarding checklist, GPT-6.1 Sol; PR #131 on acme/web).
 
+Since 0.35.0 Usage-based billing (ACME-40, urgent, in progress) is Theo's,
+followed by Dean and Dana, with sub-tasks Daily usage rollup (Theo),
+Projected invoice in Settings › Billing (Dana), and 30-day notice email for
+plan changes (Priya), and agents Meter API calls per workspace and Show
+usage on the invoice. Dean also follows Rotate webhook signing secrets
+(Dana's) and Onboarding checklist (Priya's), so the three stand under the
+sidebar's Following group.
+
 Subagents: "Find unfiltered membership reads" (Claude Sonnet 5.5, medium),
 and Vespin's own "Invite link expiry". The next pull request in this world is
 #217. Model ids come from the release's own model catalog, never invented.
@@ -188,3 +196,22 @@ a finished one ran minutes. Yesterday's call ran 12 minutes 41 seconds.
 - **acme's Slack**: channels `#relay-eng` (on `acme/relay`), `#web` (`acme/web`), `#billing` (`acme/ledger`), `#general` and `#design`, with Vespin's bot connected and `acme/relay` its default repository. In it, Dean's `@Vespin` in `#relay-eng` asked for the accept page to name its workspace ("Join acme on Relay"), which the agent did on #219.
 - **Relay's Invite teammates page** (`fixture-stage.ts`'s `SHOT_PAGE`, version 3), the page the Add teammate invitations agent showed: an email field holding sam@acme.dev, Member, a full-width Send invite, and Pending invites for priya@, theo@ and jordan@acme.dev.
 - **Inbox items waiting on Dean**: the Invite emails agent's decide on how long an invite link lasts (24 hours, 7 days recommended, 30 days), the Meter API calls agent's to-do to add `STRIPE_METER_KEY` to acme/ledger's secrets, and the Retry failed webhook deliveries agent's notice that #231 is ready for review.
+
+## Added in 0.30.0 to 0.33.0
+
+- **#214's Pull request tab** (`pr-214-live.ts` in `staging/releases/v0.30.0.patch`): open and Ready on `main ← agent/teammate-invitations`, four checks passing (typecheck, lint, test, migrations), Dana's withdraw thread resolved, then her approval "Looks good. Ship it." and Jordan's "Tested the accept page with an expired link too."
+- **Dean's plans and keys** (`plans-keys.ts`, 0.31.0), in the order they pay: Claude Max (at its 5-hour limit), Claude Pro, the "acme team key" (`sk-ant-…7Q2m`), and a second Anthropic key (`…c41d`); for Codex, his ChatGPT plan as dean@acme.dev and an OpenAI key. 0.32.0's model menu shows the Max plan paying, 38% of its 5-hour and 61% of its weekly window.
+- **Approvals** (0.32.0, 0.33.0): the Add teammate invitations agent runs on Claude Code under Ask for approval. After #214, Dean asked it to migrate his local database (held on `pnpm drizzle-kit migrate`), and later for a test of an expired link (held on `pnpm test src/members`, whose Always allow keeps `pnpm test *`).
+- **Dean's machines** (`machines.ts`, 0.33.0): This Mac (Dean's MacBook Pro, running agents), Dean's Mac mini, and the Linux servers `acme-build` and `relay-staging`, all online.
+- **Dana's `member-roles.pdf`** (`member-roles-pdf.ts`, rendered from `staging/releases/v0.33.0-member-roles.html`): two pages of who may invite, withdraw, resend, remove, and change roles in a Relay workspace, in acme's teal, which Dean attached to a message asking whether #214 lets a member resend their own invites.
+
+## Added in 0.34.0
+
+- **acme's automations**: Morning Sentry triage (weekdays at 9:00), Update docs after a merge (on a pull request merged into acme/relay's default branch), Dana's Write release notes (on a release published in acme/relay or acme/web), and Dean's own Check Postmark's domain verification, once, a week out at 9:00 (`automations.ts`).
+- **acme/relay's run actions**: Dev server (`pnpm dev`, the default), Members tests (`pnpm test src/members`), Seed pending invites (`pnpm db:seed --invites`), and Email previews (`pnpm email:dev`).
+- **Issue #231 "Expired invite link shows a 404"** (acme/relay): Dana asked the `vespin-agent` bot to take it, and its agent opened #232 "Show an expired invite link as no longer valid", adding Ask for a new invite (`v0.34.0-github-mention.html`).
+- **The Add teammate invitations agent's later lines** (`mention-transcript.ts`): Dean asked it to seed two pending invites on staging, the Update docs after a merge automation sent it #213's rename, Theo's Handle Postmark bounces agent (#222) asked it to keep the state names, and Dana's `@vespin` comment on #214 sent it back to work on the expired link.
+
+## Added in 0.36.0
+
+- **acme's cloud environment** (`sandbox-size.ts`): its sandboxes moved up to 4 vCPUs · 8 GB; its variables are `DATABASE_URL`, `POSTMARK_SERVER_TOKEN`, `SENTRY_AUTH_TOKEN`, and `STRIPE_SECRET_KEY`; every sandbox installs Postgres's and Redis's clients, the Stripe CLI, and pnpm 10.20.0, and acme/ledger and acme/relay each run their own setup (0.29.0's scripts).

@@ -48,6 +48,7 @@ import {
   type AgentSummary,
   LOCAL_AGENT_REFUSAL,
 } from "@repo/features/agent-wire";
+import { HOSTED_API_VERSION } from "@repo/features/client-identity";
 import { descriptionMarkdown } from "@repo/features/description-markdown";
 import type { GitHubAccess } from "@repo/features/github-repositories-wire";
 import { automationRun } from "@repo/features/model-label";
@@ -55,7 +56,7 @@ import { agentFallbackChoice, type ModelChoice } from "@repo/features/models-wir
 import type { Task } from "@repo/features/task-wire";
 import { bothInOrder, causeKind, failureKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
-import { EXPERIMENT } from "@repo/settings";
+import { EXPERIMENT, experimentOn } from "@repo/settings";
 import {
   MESSAGE_CHANNEL,
   type SlackLineMetadata,
@@ -85,6 +86,7 @@ import {
 } from "../../http/http-effect.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { agentSpansAnnotated } from "../../observability/sentry.js";
+import { withCursorModels } from "../../providers/cursor-models.js";
 import {
   ModelCatalog,
   ModelChoiceRefused,
@@ -331,8 +333,15 @@ const modelChoicesRead = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   const fastOffer = yield* hostedStoreOrUnavailable(accountFastOffer(userId, keys));
 
+  // Note that this build's own version is the client here, since these choices are checked and listed in the service and never cross the wire whole.
+  const cursor = {
+    experimentOn:
+      preferences !== undefined && experimentOn(preferences.experiments, EXPERIMENT.CURSOR),
+    apiVersion: HOSTED_API_VERSION,
+  };
+
   const offered = yield* hostedStoreOrUnavailable(
-    markedUnconnected(userId, offeredToAccount(read, fastOffer), keys),
+    markedUnconnected(userId, withCursorModels(offeredToAccount(read, fastOffer), cursor), keys),
   );
 
   const stored = preferences?.agent;
@@ -393,7 +402,7 @@ interface StartLanding {
  * the workspace's installation, or refused: as not found where GitHub names
  * no commit for it, and as GitHub unanswered where it could not be asked.
  */
-export const confirmedBranch = Effect.fnUntraced(function* (
+const confirmedBranch = Effect.fnUntraced(function* (
   workspaceId: string,
   repository: string,
   member: string | undefined,
@@ -406,9 +415,9 @@ export const confirmedBranch = Effect.fnUntraced(function* (
   );
 
   if (Option.isNone(reached)) return yield* Effect.fail(HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE);
-  const { repository: confirmed, token } = reached.value;
+  const { repository: confirmed, bearer } = reached.value;
 
-  const head = yield* readBranchHead(token, confirmed, branch).pipe(
+  const head = yield* readBranchHead(bearer, confirmed, branch).pipe(
     Effect.mapError(() => HOSTED_REFUSAL.GITHUB_UNANSWERED),
   );
 
@@ -1128,9 +1137,9 @@ export const requestedChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
 /**
  * The account's agent started on the task, or in the workspace with no
  * task, as a request asks it, through `startAgent`: the agent's own
- * Start (`POST /api/plans/{id}/agents`), a Start from an agent in its own
+ * Start (`POST /api/tasks/{id}/agents`), a Start from an agent in its own
  * place (`POST /api/agents/{id}/agents`), and a task's start that names an
- * agent (`POST /api/plans`) all take it, so they refuse and answer alike.
+ * agent (`POST /api/tasks`) all take it, so they refuse and answer alike.
  * A choice the catalog refuses is refused as invalid; an empty note is none,
  * its files carrying it alone. The agent's summary is read as it stands once
  * the Start is done, with the first turn its opening queued, a new agent and

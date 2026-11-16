@@ -17,7 +17,7 @@
 
 import { Predicate } from "effect";
 import { ATTACHMENT_VIEW, attachmentView } from "./attachment-model.js";
-import { isVideoType } from "./conversation-picture-wire.js";
+import { isPlayedType } from "./conversation-picture-wire.js";
 import { fileMarker, fileMarkers, isPictureName, markersAsNames } from "./file-marker.js";
 import { fillInWords, WRITE_AN_ANSWER } from "./inbox-ask-words.js";
 import {
@@ -437,7 +437,10 @@ const itemLines = new WeakMap<InboxItem, ItemLine>();
  * once and kept with the item, as its search words are (`inboxItemWords`),
  * because every row of a long Inbox asks for it as it draws, and an item
  * that changes arrives as a new one; who said it, and the steps a draft
- * ticks, are the row's to add (`inboxPreview`).
+ * ticks, are the row's to add (`inboxPreview`). Note that a thread that is
+ * its agent's turn (`inboxAgentsTurn`) says the member's follow-up rather than
+ * the ask still open, because it waits on no reader and no count holds it, and
+ * a row saying the ask would read as one more waiting than the Inbox counts.
  */
 function itemLine(item: InboxItem): ItemLine {
   const held = itemLines.get(item);
@@ -462,7 +465,7 @@ function itemLine(item: InboxItem): ItemLine {
         member: undefined,
         pieces: [INBOX_SETTLED_STANDING.RESOLVED],
       }
-    : asking !== undefined && knownAsk(asking.ask)
+    : asking !== undefined && knownAsk(asking.ask) && !inboxAgentsTurn(item)
       ? {
           kind: ASK_LINE[asking.ask.type],
           ask: asking.ask,
@@ -1342,6 +1345,38 @@ const NOTHING_OPEN = "Nothing open";
 /** What Questions says holding no question that waits on the reader, whomever Addressed to names. */
 const NOTHING_QUESTIONS = "No questions wait on you";
 
+/** What an empty scope's press says where another scope holds something: Open from Questions, else All. */
+export const INBOX_SHOW_INSTEAD = {
+  [INBOX_SHOW.OPEN]: "Show open",
+  [INBOX_SHOW.ALL]: "Show all",
+} as const;
+
+/** A scope an empty one's press turns to, and what the press says. */
+export interface InboxScopeInstead {
+  readonly show: keyof typeof INBOX_SHOW_INSTEAD;
+  readonly label: string;
+}
+
+/**
+ * The scope an empty one offers instead: from Questions, Open where it holds
+ * anything; else All where it holds anything; none from All, or where nothing
+ * else holds anything. Every client's empty Inbox offers the same way on.
+ */
+export function inboxScopeInstead(
+  show: InboxShow,
+  counts: InboxCounts,
+): InboxScopeInstead | undefined {
+  if (show === INBOX_SHOW.NEEDS_ME && counts[INBOX_SHOW.OPEN] > 0) {
+    return { show: INBOX_SHOW.OPEN, label: INBOX_SHOW_INSTEAD[INBOX_SHOW.OPEN] };
+  }
+
+  if (show !== INBOX_SHOW.ALL && counts[INBOX_SHOW.ALL] > 0) {
+    return { show: INBOX_SHOW.ALL, label: INBOX_SHOW_INSTEAD[INBOX_SHOW.ALL] };
+  }
+
+  return undefined;
+}
+
 /** What the list says where its scope and Addressed to leave out every item it holds, by whom Addressed to names. */
 export const INBOX_SHOW_EMPTY = {
   [INBOX_WHOSE.MINE]: {
@@ -1378,8 +1413,9 @@ export interface InboxCommentFiles {
  * attached: a picture its words already draw left out, since it stands
  * where they draw it, as an agent's pictures do, then the pictures and
  * every other file apart, as each is drawn in its own way. A WebM an agent
- * recorded is drawn as a picture is, played in its place (`inbox-pictures.tsx`),
- * so one the words draw is not named again as a file. Note that only
+ * recorded, or a sound clip it made, is drawn as a picture is, played in its
+ * place (`inbox-pictures.tsx`), so one the words draw is not named again as a
+ * file. Note that only
  * a picture the words draw as one is left out (`picturesDrawn`): a file
  * they only link to, quote in code, or name as a picture though it is
  * none is still drawn here, so it can still be opened.
@@ -1391,7 +1427,7 @@ export function inboxCommentFiles(
 ): InboxCommentFiles {
   const picture = (file: InboxMessageFile) =>
     attachmentView({ name: file.name, mediaType: file.mediaType, url: "" }) ===
-      ATTACHMENT_VIEW.IMAGE || isVideoType(file.mediaType);
+      ATTACHMENT_VIEW.IMAGE || isPlayedType(file.mediaType);
 
   const drawn = new Set(
     words === undefined ? [] : picturesDrawn(words, itemId).map((each) => each.attachmentId),
@@ -1439,10 +1475,11 @@ export function inboxMemberName(
   return readerId !== undefined && member.userId === readerId ? MEMBER_WORDS.YOU : member.name;
 }
 
-/** How a file after a message's words is drawn: a picture, a video in a player, or any other file, such as a PDF, as its chip that opens it. */
+/** How a file after a message's words is drawn: a picture, a video in a player, a sound clip in its player, or any other file, such as a PDF, as its chip that opens it. */
 export const INBOX_MEDIA = {
   PICTURE: "picture",
   VIDEO: "video",
+  AUDIO: "audio",
   FILE: "file",
 } as const;
 
@@ -1474,21 +1511,31 @@ export interface InboxThreadMessage {
   readonly drawn: readonly InboxDrawnMedia[];
   /** What the answer it carries says it was, in the past, as the panel's stamp says it: "Chose Both", "Done 3/3"; none on a message that answers nothing. */
   readonly stamp?: AnswerStamp | undefined;
+  /** The form's values the answer it carries filled, one a line in the form's order, each field's name and what was put in it ("yes" or "no" for a yes or no), as the panel lists them under the stamp; none where it filled none. */
+  readonly values?: readonly InboxAnswerValue[] | undefined;
 }
 
-/** One of the item's own files a message's words draw in place, and how: a picture, or a video it carried, played where the words name it. */
+/** One field an answer filled: its name, and what was put in it, in words. */
+export interface InboxAnswerValue {
+  readonly label: string;
+  readonly words: string;
+}
+
+/** One of the item's own files a message's words draw in place, and how: a picture, or a video or sound clip it carried, played where the words name it. */
 export interface InboxDrawnMedia {
-  readonly kind: typeof INBOX_MEDIA.PICTURE | typeof INBOX_MEDIA.VIDEO;
+  readonly kind: Exclude<InboxMediaKind, typeof INBOX_MEDIA.FILE>;
   readonly attachmentId: string;
 }
 
-/** A file's kind as a thread draws it after its words: a picture, a video, or a file of any other kind, such as a PDF, as its chip. */
+/** A file's kind as a thread draws it after its words: a picture, a video, a sound clip, or a file of any other kind, such as a PDF, as its chip. */
 function mediaKindOf(file: InboxMessageFile): InboxMediaKind {
   const view = attachmentView({ name: file.name, mediaType: file.mediaType, url: "" });
 
   if (view === ATTACHMENT_VIEW.IMAGE) return INBOX_MEDIA.PICTURE;
 
   if (view === ATTACHMENT_VIEW.VIDEO) return INBOX_MEDIA.VIDEO;
+
+  if (view === ATTACHMENT_VIEW.AUDIO) return INBOX_MEDIA.AUDIO;
 
   return INBOX_MEDIA.FILE;
 }
@@ -1497,11 +1544,11 @@ function mediaKindOf(file: InboxMessageFile): InboxMediaKind {
  * Each message of an item's thread, in its order, as a client draws it
  * without the panel's member directory: the agent's under `agentName`, a
  * member's under their name (`inboxMemberName`), and after its words its
- * pictures, videos, and other files, a picture its words draw already left
- * out (`inboxCommentFiles`), each named in `drawn` instead with what it is:
- * a video the message carried, a WebM an agent recorded among them, is
- * played where its words name it, as the panel plays one, and anything else
- * they name is a picture. Note that a WebM stands as the video it is, though
+ * pictures, videos, sound clips, and other files, a picture its words draw
+ * already left out (`inboxCommentFiles`), each named in `drawn` instead with
+ * what it is: a video or a sound clip the message carried, a WebM an agent
+ * recorded among them, is played where its words name it, as the panel plays
+ * one, and anything else they name is a picture. Note that a WebM stands as the video it is, though
  * the panel draws it where its pictures stand, since a player is what plays
  * it; and that a file of another kind, such as a PDF, stands after the words
  * as its chip whether or not they name it, as the panel's chips stand.
@@ -1520,10 +1567,10 @@ export function inboxThreadMessages(
 
       const kind = file === undefined ? INBOX_MEDIA.PICTURE : mediaKindOf(file);
 
-      return { kind: kind === INBOX_MEDIA.VIDEO ? kind : INBOX_MEDIA.PICTURE, attachmentId };
+      return { kind: kind === INBOX_MEDIA.FILE ? INBOX_MEDIA.PICTURE : kind, attachmentId };
     });
 
-    // Note that a picture or video the words draw stands where they draw it alone, an MP4 among them, which the panel's file split keeps after the words.
+    // Note that a picture, video, or sound clip the words draw stands where they draw it alone, an MP4 among them, which the panel's file split keeps after the words.
     const drawnIds = new Set(drawn.map(({ attachmentId }) => attachmentId));
 
     // An open ask's options stand on its card with their files, which the message draws nowhere else.
@@ -1554,11 +1601,20 @@ export function inboxThreadMessages(
         userId: agent ? undefined : message.member?.userId,
       },
       at: message.createdAt,
-      words: message.text,
+      // Note that a marker naming one of its files is said as the file's name, since the file stands as its own picture or chip after the words.
+      words: markersAsNames(message.text),
       typed: !agent,
       media,
       drawn,
       ...(answers === undefined ? undefined : { stamp: sentStamp(answers, asked?.ask) }),
+      ...((answers?.values ?? []).length === 0
+        ? undefined
+        : {
+            values: (answers?.values ?? []).map(({ label, value }) => ({
+              label,
+              words: fieldValueWords(value),
+            })),
+          }),
     };
   });
 }
@@ -1601,4 +1657,258 @@ export function waitingByAgent(
     byAgent.set(item.agentId, [...(byAgent.get(item.agentId) ?? []), item]);
 
   return byAgent;
+}
+
+/**
+ * Whether a member resolved the item without an answer while that close
+ * stands, as its row's card says it (`inboxSettledStanding`), which the
+ * thread says in a line of its own among its messages (`ThreadEvent`).
+ */
+function resolvedByMember(item: InboxItem): boolean {
+  return inboxSettledStanding(item) === INBOX_SETTLED_STANDING.RESOLVED;
+}
+
+/** What a line of what happened to the thread says: a member resolved it, or the agent withdrew or replaced one of its asks. */
+export const INBOX_THREAD_EVENT = {
+  RESOLVED: "resolved",
+  WITHDRAWN: "withdrawn",
+  REPLACED: "replaced",
+} as const;
+
+/** The member who resolved the thread, by their id, and by the name the read gives them where it gives one. */
+export interface InboxCloser {
+  readonly userId: string;
+  readonly name: string | undefined;
+}
+
+/**
+ * A line of what happened to the thread, drawn among its messages: a member
+ * resolving it without an answer, by whom where that is known, and the note
+ * the close carried, where it carried one; the agent withdrawing an ask, and why; or the agent replacing one, by the
+ * post that replaced it where the thread read carries it. Each says when,
+ * where that is known, and is keyed by what it is about: the ask's message,
+ * or the item for the standing close of a thread that held no ask open.
+ */
+export type InboxThreadEventLine = { readonly key: string } & (
+  | {
+      readonly kind: typeof INBOX_THREAD_EVENT.RESOLVED;
+      readonly closer: InboxCloser | undefined;
+      readonly note: InboxMessage | undefined;
+      readonly at: number | undefined;
+    }
+  | {
+      readonly kind: typeof INBOX_THREAD_EVENT.WITHDRAWN;
+      readonly reason: string;
+      readonly at: number | undefined;
+    }
+  | {
+      readonly kind: typeof INBOX_THREAD_EVENT.REPLACED;
+      readonly by: InboxMessage | undefined;
+      readonly at: number | undefined;
+    }
+);
+
+/** Each line of what happened to the thread, by the index of the message it follows; -1 before every message read. */
+export type InboxThreadEventsAfter = ReadonlyMap<number, readonly InboxThreadEventLine[]>;
+
+/** Where a line dated `at` stands: after the last message written by then, and never before the message at `from` it is about. */
+function standsAfter(
+  thread: readonly InboxMessage[],
+  from: number,
+  at: number | undefined,
+): number {
+  if (at === undefined) return from;
+
+  return Math.max(
+    from,
+    thread.findLastIndex((message) => message.createdAt <= at),
+  );
+}
+
+/**
+ * The note a member's close carried, which the service writes as their
+ * message in the close's own write, so stamped with the close's very time:
+ * a member's message written then that answers nothing, by the closer where
+ * the close names one; none where the close carried no note.
+ */
+function closeNote(
+  thread: readonly InboxMessage[],
+  at: number | undefined,
+  closerId: string | undefined,
+): InboxMessage | undefined {
+  if (at === undefined) return undefined;
+
+  return thread.find(
+    (message) =>
+      message.author === INBOX_MESSAGE_AUTHOR.MEMBER &&
+      message.answers === undefined &&
+      message.createdAt === at &&
+      (closerId === undefined || message.member?.userId === closerId),
+  );
+}
+
+/** Who a close names by id, by the name the item or the close's note gives them; the note's writer where the close names nobody. */
+function closerOf(
+  item: InboxItem,
+  closerId: string | undefined,
+  note: InboxMessage | undefined,
+): InboxCloser | undefined {
+  if (closerId === undefined) return note?.member;
+  const named = [item.closedBy, note?.member].find((ref) => ref?.userId === closerId);
+
+  return { userId: closerId, name: named?.name };
+}
+
+/**
+ * Where the post that replaced the ask at `index` stands: the agent's next
+ * post that asks, since a follow-up asking nothing on a thread still asking
+ * leaves its ask open; or, where none does, its next post, as a deployment
+ * that replaced an ask with a post asking nothing left it; -1 where the
+ * thread read carries neither.
+ */
+function replacingPost(thread: readonly InboxMessage[], index: number): number {
+  const later = (message: InboxMessage, at: number) =>
+    at > index && message.author === INBOX_MESSAGE_AUTHOR.AGENT;
+
+  const asked = thread.findIndex((message, at) => later(message, at) && message.ask !== undefined);
+
+  return asked === -1 ? thread.findIndex(later) : asked;
+}
+
+/**
+ * Whether the ask at `index` is the one the member's close that still
+ * stands withdrew, with no why: the ask withdrawn at the close's stamp, or,
+ * for an ask withdrawn before its time was kept, the latest ask, since a
+ * post asking since would have opened the item again.
+ */
+function withdrawnByStandingClose(
+  item: InboxItem,
+  thread: readonly InboxMessage[],
+  index: number,
+): boolean {
+  const ask = thread[index]?.ask;
+
+  if (!resolvedByMember(item) || ask?.status !== INBOX_ASK_STATUS.WITHDRAWN) return false;
+
+  if (ask.withdrawnReason !== undefined) return false;
+
+  if (ask.withdrawnAt !== undefined) return ask.withdrawnAt === item.settledAt;
+
+  return thread.findLastIndex((message) => message.ask !== undefined) === index;
+}
+
+/**
+ * The line a settled ask's message gives the thread, and where it stands:
+ * for a replaced one, just before the post that replaced it
+ * (`replacingPost`), dated as that post, or right after it where the thread
+ * read no longer carries that post; for one withdrawn with why, where it was
+ * withdrawn; and for one withdrawn with none, which a member's close leaves,
+ * the line saying who resolved it without an answer, where they did. The
+ * ask names its closer for good, since the item forgets them once a post
+ * opens it again; one withdrawn before closers were kept on the ask is
+ * named by the close that still stands where it is that close's
+ * (`withdrawnByStandingClose`), else by the note it carried.
+ */
+function askEvent(
+  item: InboxItem,
+  thread: readonly InboxMessage[],
+  index: number,
+): { readonly after: number; readonly line: InboxThreadEventLine } | undefined {
+  const message = thread[index];
+  const ask = message?.ask;
+
+  if (message === undefined || ask === undefined) return undefined;
+  const key = message.id;
+
+  if (ask.status === INBOX_ASK_STATUS.REPLACED) {
+    const next = replacingPost(thread, index);
+    const by = next === -1 ? undefined : thread[next];
+    const line = { key, kind: INBOX_THREAD_EVENT.REPLACED, by, at: by?.createdAt } as const;
+
+    return { after: next === -1 ? index : next - 1, line };
+  }
+
+  if (ask.status !== INBOX_ASK_STATUS.WITHDRAWN) return undefined;
+
+  if (ask.withdrawnReason !== undefined) {
+    const reason = ask.withdrawnReason;
+    const line = { key, kind: INBOX_THREAD_EVENT.WITHDRAWN, reason, at: ask.withdrawnAt } as const;
+
+    return { after: standsAfter(thread, index, ask.withdrawnAt), line };
+  }
+
+  const standing = withdrawnByStandingClose(item, thread, index);
+  const at = ask.withdrawnAt ?? (standing ? item.settledAt : undefined);
+  const closerId = ask.withdrawnBy ?? (standing ? item.closedBy?.userId : undefined);
+  const note = closeNote(thread, at, closerId);
+
+  const line = {
+    key,
+    kind: INBOX_THREAD_EVENT.RESOLVED,
+    closer: closerOf(item, closerId, note),
+    note,
+    at,
+  } as const;
+
+  return { after: standsAfter(thread, index, at), line };
+}
+
+/**
+ * Every line of what happened to the thread, by the message each follows:
+ * what became of each settled ask (`askEvent`), a member's close among them;
+ * then, where a member's close stands that withdrew no ask, as a notice's,
+ * that close, after the last message written by the time of the close,
+ * since a settled item still takes messages, or at the thread's end where
+ * that time is not known.
+ */
+export function inboxThreadEvents(
+  item: InboxItem,
+  thread: readonly InboxMessage[],
+): InboxThreadEventsAfter {
+  const events = new Map<number, InboxThreadEventLine[]>();
+
+  const add = (after: number, line: InboxThreadEventLine) => {
+    events.set(after, [...(events.get(after) ?? []), line]);
+  };
+
+  thread.forEach((_, index) => {
+    const event = askEvent(item, thread, index);
+
+    if (event !== undefined) add(event.after, event.line);
+  });
+  const askless = !thread.some((_, index) => withdrawnByStandingClose(item, thread, index));
+
+  if (resolvedByMember(item) && askless) {
+    const settled = item.settledAt;
+
+    const after =
+      settled === undefined
+        ? thread.length - 1
+        : thread.findLastIndex((message) => message.createdAt <= settled);
+
+    const note = closeNote(thread, settled, item.closedBy?.userId);
+    add(after, {
+      key: item.id,
+      kind: INBOX_THREAD_EVENT.RESOLVED,
+      closer: closerOf(item, item.closedBy?.userId, note),
+      note,
+      at: settled,
+    });
+  }
+
+  return events;
+}
+
+/** The messages a close's line draws as its note, which the thread draws there rather than as messages of their own. */
+export function inboxCloseNotes(events: InboxThreadEventsAfter): ReadonlySet<string> {
+  const notes = new Set<string>();
+
+  for (const lines of events.values()) {
+    for (const line of lines) {
+      if (line.kind === INBOX_THREAD_EVENT.RESOLVED && line.note !== undefined)
+        notes.add(line.note.id);
+    }
+  }
+
+  return notes;
 }

@@ -21,6 +21,7 @@ import {
   type Effect,
   Layer,
   Logger,
+  type Option,
   type Path,
   type Result,
   type Stream,
@@ -31,6 +32,7 @@ import type { HttpClient } from "effect/http/HttpClient";
 import type { ChildProcessSpawner } from "effect/process";
 import type { AccountSourceSeam } from "../account-source.js";
 import type { ComputerUseHelperSeam } from "../computer-use-helper.js";
+import type { LaunchdJob } from "../daemon/launchd-job.js";
 import type { RunMode as RunModeFacts } from "../run-mode.js";
 import type { SecretCipher as SecretCipherSeam } from "../settings-store.js";
 
@@ -102,6 +104,19 @@ export class SettingsChangedElsewhere extends Context.Service<
   SettingsChangedElsewhere,
   Stream.Stream<void>
 >()("@repo/host/SettingsChangedElsewhere") {}
+
+/**
+ * Each moment the shell asks the account's kept lists written
+ * (`entity-store.ts`): on the phone, the app going to the background. A host
+ * handed it writes the lists that moved only then and as the store closes,
+ * never on the store's own timer, because the phone seals the file in
+ * JavaScript, about half a second a save for a large account, which a timer
+ * firing while the member taps would stand in front of the tap. It is
+ * optional: the desktop seals with the system's own cipher and provides none.
+ */
+export class KeptListsDue extends Context.Service<KeptListsDue, Stream.Stream<void>>()(
+  "@repo/host/KeptListsDue",
+) {}
 
 /**
  * A terminal's relay WebSocket. It arrives rather than being built here,
@@ -332,6 +347,12 @@ export interface ThisMacHostSeam {
   >;
   /** Where macOS stands on the agent now. */
   readonly status: Effect.Effect<ThisMacAgentStatus>;
+  /** launchd's count of the agent's runs and how its last run exited, as `launchctl print` states them; none where launchd holds no such job or could not be asked. */
+  readonly job: Effect.Effect<
+    Option.Option<LaunchdJob>,
+    never,
+    ChildProcessSpawner.ChildProcessSpawner
+  >;
   /** Whether this app's own version registered the agent; another's leaves it running the bundle an update replaced until it is registered again. */
   readonly registeredHere: Effect.Effect<boolean>;
   /** The agent registered, which starts the host, the job the account install loaded booted out first so two never run; a failure says why in our own words, never a command's output. */

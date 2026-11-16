@@ -1,7 +1,7 @@
 // detail-only.ts -- whether a window wide enough for three columns stands its detail alone, as Mail's expand button stands a message, one answer for the detail bar's button and the menu bar's ⌃⌘F.
 
+import { useThreeColumns } from "@repo/ui-native";
 import { useSyncExternalStore } from "react";
-import { useThreeColumns } from "./use-window-size-class.js";
 
 /** Whether the detail stands alone, for this launch. */
 let held = false;
@@ -38,5 +38,6 @@ export function useDetailOnly(): UseDetailOnlyResult {
   const threeColumns = useThreeColumns();
   const alone = useSyncExternalStore(subscribe, () => held) && threeColumns;
 
-  return { alone, setAlone: choose, toggle: () => choose(!alone) };
+  // Note that the toggle reads the value held at the press rather than this render's, because a held ⌃⌘F repeats before React draws the last one.
+  return { alone, setAlone: choose, toggle: () => choose(!held) };
 }

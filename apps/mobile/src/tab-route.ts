@@ -1,10 +1,9 @@
 // tab-route.ts -- which tab's stack a thread, a task, or an agent opens on: the tab standing in a compact window, so Back returns where it was opened from, and the item's own tab in a regular one, whose split view selects it beside its list.
 
 import { type IosTab, iosRouteOnTab, iosTabOfGroup } from "@repo/features/ios-app-links";
+import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
 import { useSegments } from "expo-router";
 import { createContext, useCallback, useContext } from "react";
-import { useWindowSizeClass } from "./use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "./window-size-class.js";
 
 /** The tab whose stack a screen stands on, which each tab's stack layout hands its screens; none outside the tabs. */
 export const OwnTabContext = createContext<IosTab | undefined>(undefined);

@@ -7,7 +7,7 @@ import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { beginAgentBoot } from "@repo/database/models/agent-boot-store";
 import { pointBrowserTab, upsertBrowserTab } from "@repo/database/models/agent-browser-tabs";
 import { recordAgentSandboxBooting } from "@repo/database/models/agent-sandboxes";
-import { createAgent } from "@repo/database/models/agent-store";
+import { createAgent, pinAgent } from "@repo/database/models/agent-store";
 import { startDescriptionCommentThread } from "@repo/database/models/description-comments";
 import { approveHostPairing, openHostPairing } from "@repo/database/models/host-pairing-store";
 import { enrollOwnDevice, removeHost } from "@repo/database/models/host-store";
@@ -29,7 +29,12 @@ import {
   writeSlackDefaultRepository,
 } from "@repo/database/models/slack-installation-store";
 import { writePage } from "@repo/database/models/task-pages";
-import { createTask, createTaskCommitted, deleteTask } from "@repo/database/models/task-store";
+import {
+  createTask,
+  createTaskCommitted,
+  deleteTask,
+  updateTask,
+} from "@repo/database/models/task-store";
 import { ensurePersonalWorkspace } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
@@ -92,6 +97,7 @@ import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import {
   PULL_REQUEST_CHAPTERS_READ,
   pullRequestChaptersOfLive,
+  REPOSITORY_PULL_REQUEST_CHAPTERS_READ,
 } from "@repo/features/pull-request-chapters-live";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
 import { SOUND_CLIP_SLOT, SOUND_CLIP_TYPE } from "@repo/features/sound-clip-wire";
@@ -99,6 +105,7 @@ import { TASK_HISTORY_READ } from "@repo/features/task-history-live";
 import { TASK_LIST_READ } from "@repo/features/task-list-live";
 import { TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
+import { TASK_STATUS } from "@repo/features/task-wire";
 import { TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
 import {
   WORKSPACE_INTEGRATIONS_READ,
@@ -421,8 +428,8 @@ it.layer(getTestDB())("the account's live reads", (it) => {
         "automations",
         "failedRuns",
         "items",
-        "planless",
-        "plans",
+        "taskless",
+        "tasks",
       ]);
 
       for (const [part, sealed] of Object.entries(answer.queries)) {
@@ -446,18 +453,39 @@ it.layer(getTestDB())("the account's live reads", (it) => {
         assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
         const answer = Schema.decodeUnknownSync(TASK_LIST_READ.answer)(answered.body);
         assert.equal(answer.url, LIVE_POLL_URL);
-        assert.deepEqual(Object.keys(answer.queries).toSorted(), ["agents", "issues", "plans"]);
+        assert.deepEqual(Object.keys(answer.queries).toSorted(), ["agents", "issues", "tasks"]);
 
         const rows = Schema.decodeUnknownSync(TASK_LIST_READ.rows)({
-          plans: answer.queries.plans.rows,
+          tasks: answer.queries.tasks.rows,
           agents: answer.queries.agents.rows,
           issues: answer.queries.issues?.rows,
         });
 
         assert.deepEqual(
-          rows.plans.map((plan) => plan.id),
+          rows.tasks.map((task) => task.id),
           [started.id],
         );
+      }),
+  );
+
+  it.effect(
+    "a read whose query names an id that spells none answers not found, as its contract declares",
+    () =>
+      Effect.gen(function* () {
+        const dana = yield* openUser;
+
+        for (const path of [
+          "/api/live/task-rows?id=not-a-task",
+          "/api/live/task-relations?id=not-a-task",
+          "/api/live/task-page?workspaceId=acme&beforeId=not-a-task",
+          "/api/live/mac-commands?device=not-a-device",
+        ]) {
+          assert.deepEqual(
+            yield* ask({ bearer: dana, path }),
+            { status: HOSTED_HTTP_STATUS.NOT_FOUND, body: { error: HOSTED_API_ERROR.NOT_FOUND } },
+            path,
+          );
+        }
       }),
   );
 });
@@ -1155,6 +1183,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
         assert.deepEqual(Object.keys(answer.queries).toSorted(), [
           "agent",
           "boot",
+          "calls",
           "conversation",
           "launch",
           "messages",
@@ -1225,7 +1254,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
         yield* beginAgentBoot(agent.id, new Date(0), undefined);
         const sql = yield* SqlClient.SqlClient;
 
-        // The boot's statement as Realtime runs it for `reader`, the agent's own transcript followed.
+        // The boot's statement run as raw SQL for `reader`, the agent's own transcript followed.
         const bootRowsFor = (reader: string) => {
           const statement = Option.getOrThrow(
             agentTranscriptRead.statements({
@@ -2107,11 +2136,11 @@ const CHAPTERS_ENVIRONMENT: HostedEnvironmentValues = {
   previewApiKeys: {},
 };
 
-/** The procedures answering an agent's pull request's chapters as `bearer`, over the store and GitHub. */
+/** The procedures answering a pull request's chapters as `bearer`, over the store and GitHub: through an agent, or by the workspace, repository, and number. */
 const askChapters = (options: {
   readonly bearer: string;
-  readonly agentId: string;
-  readonly number: number;
+  readonly path: string;
+  readonly query: Readonly<Record<string, string>>;
   readonly github: FakeGitHub;
 }) =>
   Effect.gen(function* () {
@@ -2127,9 +2156,9 @@ const askChapters = (options: {
       workspaces: yield* fakeWorkspaceSeams,
     });
 
-    const url = new URL("/api/live/pull-request-chapters", ORIGIN);
-    url.searchParams.set("id", options.agentId);
-    url.searchParams.set("number", String(options.number));
+    const url = new URL(options.path, ORIGIN);
+
+    for (const [name, value] of Object.entries(options.query)) url.searchParams.set(name, value);
     url.searchParams.set(LIVE_USER_QUERY, options.bearer);
 
     const response = yield* hostedAnswer(
@@ -2191,9 +2220,9 @@ it.layer(getTestDB())("the account's integrations' live read", (it) => {
   );
 });
 
-it.layer(getTestDB())("an agent's pull request's chapters' live read", (it) => {
+it.layer(getTestDB())("a pull request's chapters' live read", (it) => {
   it.effect(
-    "a member is answered the agent's own workspace's newest chapters polled, with whether they can generate them, and an account outside it is not found though its own workspace keeps chapters of the same pull request",
+    "a member is answered the workspace's newest chapters polled, through the agent and by the repository and number alike, with whether they can generate them, and an account outside it is not found either way though its own workspace keeps chapters of the same pull request",
     () =>
       Effect.gen(function* () {
         const owner = yield* openUser;
@@ -2239,11 +2268,40 @@ it.layer(getTestDB())("an agent's pull request's chapters' live read", (it) => {
         yield* claimed(yield* openWorkspace(stranger), stranger, "dec0de2", 2_000);
         const github = githubReaching([RELAY_INSTALLATION]);
 
-        const polled = yield* askChapters({ bearer: teammate, agentId, number: 7, github });
+        const throughAgent = {
+          path: "/api/live/pull-request-chapters",
+          query: { id: agentId, number: "7" },
+          github,
+        };
+
+        const byRepository = {
+          path: "/api/live/repository-pull-request-chapters",
+          query: { workspaceId: task.workspaceId, repository: RELAY_FULL_NAME, number: "7" },
+          github,
+        };
+
+        const polled = yield* askChapters({ bearer: teammate, ...throughAgent });
         assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);
         const answer = Schema.decodeUnknownSync(PULL_REQUEST_CHAPTERS_READ.answer)(polled.body);
         assert.equal(answer.url, LIVE_POLL_URL);
-        assert.deepEqual(pullRequestChaptersOfLive(answer.queries.chapters.rows ?? [], 7, answer), {
+        const read = pullRequestChaptersOfLive(answer.queries.chapters.rows ?? [], 7, answer);
+        // Read by the repository and number, the pull request answers the same chapters as through the agent.
+        const repositoryPolled = yield* askChapters({ bearer: teammate, ...byRepository });
+        assert.equal(repositoryPolled.status, HOSTED_HTTP_STATUS.OK);
+
+        const repositoryAnswer = Schema.decodeUnknownSync(
+          REPOSITORY_PULL_REQUEST_CHAPTERS_READ.answer,
+        )(repositoryPolled.body);
+
+        assert.deepEqual(
+          pullRequestChaptersOfLive(
+            repositoryAnswer.queries.chapters.rows ?? [],
+            7,
+            repositoryAnswer,
+          ),
+          read,
+        );
+        assert.deepEqual(read, {
           pullRequest: {
             number: 7,
             generatable: true,
@@ -2260,10 +2318,14 @@ it.layer(getTestDB())("an agent's pull request's chapters' live read", (it) => {
             },
           },
         });
-        assert.deepEqual(yield* askChapters({ bearer: stranger, agentId, number: 7, github }), {
+
+        const notFound = {
           status: HOSTED_HTTP_STATUS.NOT_FOUND,
           body: { error: HOSTED_API_ERROR.NOT_FOUND },
-        });
+        };
+
+        assert.deepEqual(yield* askChapters({ bearer: stranger, ...throughAgent }), notFound);
+        assert.deepEqual(yield* askChapters({ bearer: stranger, ...byRepository }), notFound);
       }),
   );
 });
@@ -2396,8 +2458,8 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         const agentId = yield* openTaskAgent(dana, kept.workspaceId, kept.id);
         const erinsGone = yield* startTask(erin, { name: "Billing" });
         const whole = yield* askTasks(dana, "");
-        const past = whole.plans.sync?.next;
-        assert.ok(past !== undefined && whole.plans.sync?.past === undefined);
+        const past = whole.tasks.sync?.next;
+        assert.ok(past !== undefined && whole.tasks.sync?.past === undefined);
 
         const added = yield* startTask(dana, { name: "Onboarding" });
         yield* deleteTask(dana, deleted.id);
@@ -2406,17 +2468,17 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         yield* deleteTask(erin, erinsGone.id);
         const moved = yield* askTasks(dana, past);
 
-        assert.deepEqual(idsOf(moved.plans), [added.id]);
-        assert.deepEqual(moved.plans.gone, [deleted.id]);
+        assert.deepEqual(idsOf(moved.tasks), [added.id]);
+        assert.deepEqual(moved.tasks.gone, [deleted.id]);
         assert.deepEqual(idsOf(moved.agents), [agentId]);
-        assert.equal(moved.plans.sync?.past, past);
+        assert.equal(moved.tasks.sync?.past, past);
         const erins = new Set([erinsGone.id, erinsAdded.id]);
 
         for (const part of Object.values(moved)) {
           assert.ok(![...idsOf(part), ...(part.gone ?? [])].some((id) => erins.has(id)));
         }
 
-        const next = moved.plans.sync?.next;
+        const next = moved.tasks.sync?.next;
         assert.ok(next !== undefined);
         const quiet = yield* Effect.forkChild(askTasks(dana, next));
         yield* TestClock.adjust(Duration.seconds(25));
@@ -2426,7 +2488,40 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
           [],
           "a hold nothing moved ends with nothing",
         );
-        assert.equal(held.plans.sync?.past, next);
+        assert.equal(held.tasks.sync?.past, next);
+      }),
+  );
+
+  it.effect(
+    "a Done task past the live window leaves with its unpin, and its agent with the agent's, each answered gone, and the pin back brings both",
+    () =>
+      Effect.gen(function* () {
+        const dana = yield* openUser;
+        const shipped = yield* startTask(dana, { name: "Old invitations" });
+        const agentId = yield* openTaskAgent(dana, shipped.workspaceId, shipped.id);
+        const db = yield* Database;
+        yield* db
+          .update(task)
+          .set({ status: TASK_STATUS.DONE, updatedAt: new Date(0), completedAt: new Date(0) })
+          .where(eq(task.id, shipped.id));
+        yield* updateTask(dana, shipped.id, { pinned: true });
+        yield* pinAgent(dana, agentId, true);
+        // The list is read years after the rows were written, so the task stands only by its pins.
+        yield* TestClock.setTime(Date.parse("2040-01-01T00:00:00Z"));
+        const whole = yield* askTasks(dana, "");
+        assert.deepEqual(idsOf(whole.tasks), [shipped.id]);
+        assert.deepEqual(idsOf(whole.agents), [agentId]);
+
+        yield* updateTask(dana, shipped.id, { pinned: false });
+        yield* pinAgent(dana, agentId, false);
+        const unpinned = yield* askTasks(dana, whole.tasks.sync?.next);
+        assert.deepEqual(unpinned.tasks.gone, [shipped.id]);
+        assert.deepEqual(unpinned.agents.gone, [agentId]);
+
+        yield* updateTask(dana, shipped.id, { pinned: true });
+        const repinned = yield* askTasks(dana, unpinned.tasks.sync?.next);
+        assert.deepEqual(idsOf(repinned.tasks), [shipped.id]);
+        assert.deepEqual(idsOf(repinned.agents), [agentId]);
       }),
   );
 
@@ -2496,7 +2591,7 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         yield* startTask(dana, { name: "Teammate invitations" });
         const erins = yield* startTask(erin, { name: "Billing" });
         const erinsAgent = yield* openTaskAgent(erin, erins.workspaceId, erins.id);
-        const past = (yield* askTasks(dana, "")).plans.sync?.next;
+        const past = (yield* askTasks(dana, "")).tasks.sync?.next;
         assert.ok(past !== undefined);
         const looking = yield* Queue.unbounded<void>();
 
@@ -2520,9 +2615,9 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         yield* TestClock.adjust(Duration.seconds(1));
         const moved = yield* Fiber.join(asked);
 
-        assert.deepEqual(idsOf(moved.plans), [added.id]);
+        assert.deepEqual(idsOf(moved.tasks), [added.id]);
         assert.deepEqual(idsOf(moved.agents), []);
-        assert.equal(moved.plans.sync?.past, past);
+        assert.equal(moved.tasks.sync?.past, past);
       }),
   );
 
@@ -2533,16 +2628,16 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
     Effect.gen(function* () {
       const dana = yield* openUser;
       const started = yield* startTask(dana, { name: "Teammate invitations" });
-      const past = (yield* askTasks(dana, "")).plans.sync?.next;
+      const past = (yield* askTasks(dana, "")).tasks.sync?.next;
       assert.ok(past !== undefined);
 
       if (joins) yield* joinWorkspace(yield* openWorkspace(yield* openUser), dana);
 
       const answered = yield* askTasks(dana, joins ? past : "1");
 
-      assert.deepEqual(idsOf(answered.plans), [started.id]);
-      assert.equal(answered.plans.sync?.past, undefined);
-      assert.ok(answered.plans.sync?.next !== undefined);
+      assert.deepEqual(idsOf(answered.tasks), [started.id]);
+      assert.equal(answered.tasks.sync?.past, undefined);
+      assert.ok(answered.tasks.sync?.next !== undefined);
     }),
   );
 });

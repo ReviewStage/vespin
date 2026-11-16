@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { eq } from "drizzle-orm";
@@ -8,7 +8,7 @@ import { Database } from "../../core/query.js";
 import { agentTable } from "../../schemas/agent.js";
 import { AGENT_SANDBOX_STATE, agentSandboxTable } from "../../schemas/agent-sandbox.js";
 import { user } from "../../schemas/auth.js";
-import { turns } from "../../schemas/storage.js";
+import { conversations, turns } from "../../schemas/storage.js";
 import { getTestDB, openTaskAgent, startTask } from "../../testing/index.js";
 import {
   markAgentSandboxReleasing,
@@ -17,6 +17,7 @@ import {
   recordAgentSandboxOpen,
   recordAgentSandboxUse,
   releasableAgentSandboxes,
+  runningAgentSandboxesOf,
   settleAgentSandboxRelease,
 } from "../agent-sandboxes.js";
 
@@ -49,6 +50,31 @@ const openAgent = Effect.gen(function* () {
 
   return yield* openTaskAgent(userId, task.workspaceId, task.id);
 });
+
+/**
+ * The agent's conversation given a session, and its sandbox opened at `at`
+ * under the name the service gives that session's sandbox: the prefix and
+ * the first 32 hex digits of the session id's SHA-256; the session's id.
+ */
+const sessionOpened = (agentId: string, at: Date) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const sessionId = `session-${randomUUID()}`;
+
+    const [agent] = yield* db
+      .select({ conversationId: agentTable.conversationId })
+      .from(agentTable)
+      .where(eq(agentTable.id, agentId));
+
+    yield* db
+      .update(conversations)
+      .set({ runtimeSessionId: sessionId })
+      .where(eq(conversations.id, agent?.conversationId ?? ""));
+    const digest = createHash("sha256").update(sessionId).digest("hex").slice(0, 32);
+    yield* recordAgentSandboxOpen(agentId, useAt(`agent-sandbox-${digest}`, at));
+
+    return sessionId;
+  });
 
 const rowOf = (sandboxName: string) =>
   Effect.flatMap(Database, (db) =>
@@ -126,6 +152,38 @@ it.layer(getTestDB())("when each cloud agent's sandbox was last used", (it) => {
         );
         yield* settleAgentSandboxRelease(name, AGENT_SANDBOX_STATE.RELEASED);
         assert.equal(yield* holdsSnapshot(released), false, "a release deletes the disk");
+      }),
+  );
+
+  it.effect(
+    "a workspace's running sandboxes are its agents' used since the cutoff, never another workspace's or one stopped since",
+    () =>
+      Effect.gen(function* () {
+        const running = yield* openAgent;
+        const stopped = yield* openAgent;
+        const elsewhere = yield* openAgent;
+        const db = yield* Database;
+
+        const [workspace] = yield* db
+          .select({ organizationId: agentTable.organizationId })
+          .from(agentTable)
+          .where(eq(agentTable.id, running));
+
+        const organizationId = workspace?.organizationId ?? "";
+        // Note that each agent opened its own workspace, so the stopped one is moved into the running one's.
+        yield* db.update(agentTable).set({ organizationId }).where(eq(agentTable.id, stopped));
+
+        const session = yield* sessionOpened(running, MINUTES_LATER);
+        yield* sessionOpened(stopped, OPENED);
+        yield* sessionOpened(elsewhere, MINUTES_LATER);
+
+        assert.deepEqual(
+          (yield* runningAgentSandboxesOf(organizationId, SECONDS_LATER)).map((each) => [
+            each.agentId,
+            each.sessionId,
+          ]),
+          [[running, session]],
+        );
       }),
   );
 

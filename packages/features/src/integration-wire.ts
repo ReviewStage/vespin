@@ -24,7 +24,10 @@ import { Schema as EffectSchema } from "effect";
  * carries a token. An account's label is its name at the provider (a
  * workspace's, an organization's), or the developer's own for it: it is an
  * identity at the provider, never a credential, and it is answered to the
- * desktop alone, never to a log line, a span, a counted event, or a fixture.
+ * desktop alone, never to a log line, a span, a counted event, or a fixture;
+ * but that the name of an account an agent's call ran on, among its
+ * provider's others, is kept on that call (`integrationRemoteCallSchema`'s
+ * `account`), which every member who can open the task reads.
  */
 
 /**
@@ -320,6 +323,8 @@ export const integrationRemoteCallSchema = EffectSchema.Struct({
   input: verbatimJsonSchema(WireValueSchema, { type: "object", additionalProperties: true }),
   /** The account it ran against, by connection name, where it was not the provider's first. */
   connection: EffectSchema.optionalKey(integrationConnectionNameSchema),
+  /** The account's name as its owner called it when the call ran, where they held more than one at the provider (`callAccountNames`); absent for the rest, and on a call kept from before it was recorded. */
+  account: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 export type IntegrationRemoteCall = typeof integrationRemoteCallSchema.Type;
@@ -465,6 +470,36 @@ export function integrationAccountNames(
   }
 
   return new Map(called);
+}
+
+/**
+ * The names a turn's calls of an integration's tool are stamped with, by
+ * connection: each account's name among its provider's others, kept only
+ * where the provider holds more than one, since a lone account is named by
+ * its provider's mark alone. Note that Linear's first place is the bare
+ * `linear` connection a workspace's own grant runs under too
+ * (`turnServers`), so it names no account.
+ */
+export function callAccountNames(
+  accounts: readonly {
+    readonly provider: IntegrationProvider;
+    readonly connection: string;
+    readonly label?: string | undefined;
+  }[],
+): ReadonlyMap<string, string> {
+  return new Map(
+    INTEGRATION_PROVIDER_LIST.flatMap((provider) => {
+      const held = accounts.filter((account) => account.provider === provider);
+
+      if (held.length < 2) return [];
+
+      return [...integrationAccountNames(held)].filter(
+        ([connection]) =>
+          provider !== INTEGRATION_PROVIDER.LINEAR ||
+          integrationConnectionOf(connection)?.place !== 1,
+      );
+    }),
+  );
 }
 
 /** A label as the developer names an account (POST): trimmed, never blank, and bounded. */

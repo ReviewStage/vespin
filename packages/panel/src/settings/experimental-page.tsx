@@ -32,7 +32,7 @@ import {
   useConfirmDialog,
   useMinute,
 } from "@repo/ui";
-import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
+import { ACTION_RESULT_STATUS, type ActionResult, actionRefused } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { FlaskConicalIcon } from "lucide-react";
 import { useState } from "react";
@@ -42,7 +42,7 @@ import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { MemberDirectory, usePerson } from "../member-directory.js";
 import { useOpenFeedback } from "../open-feedback.js";
-import { actionRefused, refusalToast, rowWrite } from "./row-write.js";
+import { refusalToast, rowWrite } from "./row-write.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import { SwitchRow } from "./switch-row.js";
 
@@ -95,12 +95,6 @@ const WORDS = {
 
 /** What turning each workspace experiment on or off changes for everyone in `workspace`, as its question says it. */
 const FLIP_WORDS = {
-  [EXPERIMENT.FOLLOWING]: {
-    on: (workspace: string) =>
-      `Shows who follows each task to everyone in ${workspace}, and lets each follower choose whether the task's agents may use their machines.`,
-    off: (workspace: string) =>
-      `Hides who follows each task for everyone in ${workspace}, and stops agents from reading followers.`,
-  },
   [EXPERIMENT.REPLY_BUTTONS]: {
     on: (workspace: string) =>
       `Lets agents in ${workspace} put suggestions in their replies, each of a new agent or a message to a running one, which someone opens filled in, edits, and sends.`,

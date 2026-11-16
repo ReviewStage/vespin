@@ -1,13 +1,15 @@
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 import { cn } from "../cn.js";
+import { MenuCardFrame } from "../components/card/card.js";
 
 /**
  * popover.tsx -- shadcn/ui's popover (style `base-nova`, on Base UI's popover), vendored and drawn as a menu's panel hung from the control that opened it.
  *
  * The component is shadcn's own source, kept as close to it as the window
  * allows, so a later `shadcn add popover` reads as a small diff. Our
- * changes: the popup is the menu's surface, edge, corner, lift, and motion
- * (`PopoverPanel`'s card), with no padding of its own, since what it holds
+ * changes: the popup is `@repo/ui`'s `Card` (`MenuCardFrame`, through Base
+ * UI's `render`), raised at a menu's corner on a menu's shadow, on the
+ * menu's motion (`PopoverPanel`'s card), with no padding of its own, since what it holds
  * lays itself out; it hangs on the window's own layer, over a dialog's card
  * where its control stands in one (`layer`), because the card clips what
  * stands inside it; and the positioner takes the control (`anchor`), since
@@ -54,8 +56,9 @@ function PopoverContent({
       >
         <PopoverPrimitive.Popup
           data-slot="popover-content"
+          render={(frame) => <MenuCardFrame {...frame} />}
           className={cn(
-            "ui-popover flex max-h-(--available-height) flex-col overflow-hidden rounded-menu border border-border-strong bg-popover text-popover-foreground shadow-menu animate-menu-in data-ending-style:pointer-events-none data-ending-style:animate-menu-leave",
+            "ui-popover flex max-h-(--available-height) flex-col overflow-hidden text-popover-foreground animate-menu-in data-ending-style:pointer-events-none data-ending-style:animate-menu-leave",
             className,
           )}
           {...props}

@@ -2,12 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "git": {
     "deploymentEnabled": {
-      "gh-readonly-queue/**": false,
-      "agent/**": false,
-      "luke/**": false,
-      "pr-assets": false,
-      "pr-assets-*": false,
-      "evidence/**": false
+      "main": true,
+      "**": false
     }
   },
   "services": {
@@ -132,8 +128,8 @@
           "dest": "/api/default.js?route=auth/[...all]&route-path=auth/$1"
         },
         {
-          "src": "/api/plans/([^/]+)/attachments/([^/]+)",
-          "dest": "/api/default.js?route=plans/attachment&id=$1&attachment=$2"
+          "src": "/api/tasks/([^/]+)/attachments/([^/]+)",
+          "dest": "/api/default.js?route=tasks/attachment&id=$1&attachment=$2"
         },
         {
           "src": "/api/agents/([^/]+)/subagents/([^/]+)/pictures/([^/]+)",
@@ -228,8 +224,16 @@
           "dest": "/api/default.js?route=maintenance/provider-keys-rewrap"
         },
         {
+          "src": "/api/maintenance/workspace-drives",
+          "dest": "/api/default.js?route=maintenance/workspace-drives"
+        },
+        {
           "src": "/api/previews/sign-in",
           "dest": "/api/default.js?route=previews/sign-in"
+        },
+        {
+          "src": "/api/pull-requests/github-image",
+          "dest": "/api/default.js?route=pull-requests/github-image"
         },
         {
           "src": "/api/slack/events",
@@ -525,6 +529,11 @@
     "maintenance-sweep": {
       "schedule": "* * * * *",
       "path": "/api/maintenance/sweep",
+      "requestMethod": "GET"
+    },
+    "workspace-drive-cleanup": {
+      "schedule": "0 8 * * *",
+      "path": "/api/maintenance/workspace-drives",
       "requestMethod": "GET"
     }
   },

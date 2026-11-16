@@ -92,8 +92,7 @@ export const CREATE_SECTION_TOOL = {
     "in: it stands in their sidebar alone, as one they made from the sidebar would, with the " +
     `title and the emoji given, and holds no task until ${AGENT_TOOL.UPDATE_TASK}'s sectionId moves one in. ` +
     "Make one when the developer asks for it, or to keep together the tasks you make for one " +
-    "piece of work that stands apart from yours; never otherwise on your own. Answers `accepted` with the " +
-    "section's id and title, or `rejected` and why.",
+    "piece of work that stands apart from yours; never otherwise on your own.",
   inputSchema: CREATE_SECTION_INPUT,
 } as const;
 
@@ -103,9 +102,7 @@ export const DELETE_SECTION_TOOL = {
     "Delete a section of your workspace's sidebar that the developer you work for keeps, by " +
     `its id as ${AGENT_TOOL.LIST_TASKS} answered it, as their Delete section would: the tasks ` +
     "in it go back under Tasks, and none of them is deleted. Delete one only when the developer " +
-    "asks for it. Answers `accepted` with the section's id and title and how many tasks went " +
-    "back under Tasks, with section null where no such section stands, as one already " +
-    "deleted, or `rejected` and why.",
+    "asks for it; section null in the answer is one already deleted.",
   inputSchema: DELETE_SECTION_INPUT,
 } as const;
 

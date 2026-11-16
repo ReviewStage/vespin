@@ -43,7 +43,7 @@ export const apiCommand = Command.make(
       Argument.withDescription("GET, POST, PUT, PATCH, or DELETE"),
     ),
     path: Argument.String("path").pipe(
-      Argument.withDescription("The procedure's route, its query included, such as /api/plans"),
+      Argument.withDescription("The procedure's route, its query included, such as /api/tasks"),
     ),
     input: Flag.String("input").pipe(
       Flag.withAlias("F"),

@@ -36,12 +36,13 @@ import {
   WORKSPACE_CALL_FAILURE,
   WORKSPACE_RENAMES,
   type WorkspaceCallFailure,
-  type WorkspaceCallResult,
 } from "./workspace-call.js";
 import {
   type WorkspaceEnvironmentAnswer,
+  type WorkspaceVariablesSaveRequest,
   workspaceVariableDeleteRequestSchema,
   workspaceVariablePutRequestSchema,
+  workspaceVariablesSaveRequestSchema,
 } from "./workspace-environment-wire.js";
 import {
   type WorkspaceInvitation,
@@ -56,7 +57,12 @@ import {
   workspaceRunActionsPutRequestSchema,
 } from "./workspace-sandbox-setup-wire.js";
 import {
+  type WorkspaceSandboxSizeAnswer,
+  workspaceSandboxSizePutRequestSchema,
+} from "./workspace-sandbox-size-wire.js";
+import {
   type Workspace,
+  type WorkspaceMachinesAnswer,
   type WorkspaceMember,
   type WorkspacePhotoType,
   workspaceCreateRequestSchema,
@@ -75,7 +81,7 @@ import {
 } from "./workspace-wire.js";
 
 /**
- * workspace-client.ts -- the account's workspaces as the host asks the service for them: the list, a workspace created, renamed, given a slug or a photo, or handed over, a GitHub organization connected or disconnected, and its members read, removed, given a role, or left.
+ * workspace-client.ts -- the account's workspaces as the host asks the service for them: the list, a workspace created, renamed, given a slug or a photo, or handed over, a GitHub organization connected or disconnected, its members read, removed, given a role, or left, and its members' machines read.
  *
  * Every call is the account call, so the bearer is read fresh per attempt
  * and a 401 is renewed and retried once. A workspace's photo is read apart
@@ -87,6 +93,9 @@ import {
  * is asked through `hostedCall`, so a refusal is read as its contract
  * declares it, in the words `workspace-call.ts` derives from them.
  */
+
+/** One workspace call's answer, or why there is none. */
+export type WorkspaceCallResult<Answer> = TaskCallResult<Answer, WorkspaceCallFailure>;
 
 export interface HostedWorkspaceClientOptions {
   /** What authorizes each call on the signed-in account, read fresh for every attempt. */
@@ -492,7 +501,7 @@ export class HostedWorkspaceClient {
     );
   }
 
-  /** The workspace's environment variables by name, never a value, as any member reads them. */
+  /** The workspace's environment variables, as any member reads them: never a secret's value. */
   environment(
     workspaceId: string,
   ): Effect.Effect<WorkspaceCallResult<WorkspaceEnvironmentAnswer>, never, HttpClient.HttpClient> {
@@ -502,7 +511,7 @@ export class HostedWorkspaceClient {
     );
   }
 
-  /** One environment variable set by an owner or admin, replacing a value of that name, answering the names as they then stand; a variable the service would refuse by shape never travels. */
+  /** One environment variable set by an owner or admin, replacing a value of that name, answering the variables as they then stand; a variable the service would refuse by shape never travels. */
   putVariable(
     workspaceId: string,
     name: string,
@@ -526,6 +535,20 @@ export class HostedWorkspaceClient {
   ): Effect.Effect<WorkspaceCallResult<MergeQueueAnswer>, never, HttpClient.HttpClient> {
     return resultOf(
       hostedCall(this.#hosted.workspaceMergeQueue.read, { workspaceId }),
+      (answer) => answer,
+    );
+  }
+
+  /** The machines of the workspace's members, or of one member where `userId` names one, as any member of it reads them: each one's id, name, platform, and whose it is. */
+  machines(
+    workspaceId: string,
+    userId?: string,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceMachinesAnswer>, never, HttpClient.HttpClient> {
+    return resultOf(
+      hostedCall(
+        this.#hosted.workspaces.machines,
+        userId === undefined ? { workspaceId } : { workspaceId, userId },
+      ),
       (answer) => answer,
     );
   }
@@ -597,7 +620,50 @@ export class HostedWorkspaceClient {
     );
   }
 
-  /** One environment variable deleted by an owner or admin, answering the names that remain. */
+  /** The workspace's cloud sandbox size, the vCPUs its agents' sandboxes open with, as any member reads it. */
+  sandboxSize(
+    workspaceId: string,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceSandboxSizeAnswer>, never, HttpClient.HttpClient> {
+    return resultOf(
+      hostedCall(this.#hosted.workspaceSandboxSize.read, { workspaceId }),
+      (answer) => answer,
+    );
+  }
+
+  /** The workspace's cloud sandbox size chosen by an owner or admin, answering the size as it then stands; a size the service would refuse by shape never travels. */
+  putSandboxSize(
+    workspaceId: string,
+    vcpus: number,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceSandboxSizeAnswer>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(workspaceSandboxSizePutRequestSchema)({ workspaceId, vcpus }),
+    );
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return resultOf(
+      hostedCall(this.#hosted.workspaceSandboxSize.put, admitted),
+      (answer) => answer,
+    );
+  }
+
+  /** Several environment variables set at once by an owner or admin, all or none, answering the variables as they then stand; a save the service would refuse by shape never travels. */
+  saveVariables(
+    request: WorkspaceVariablesSaveRequest,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceEnvironmentAnswer>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(workspaceVariablesSaveRequestSchema)(request),
+    );
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return resultOf(
+      hostedCall(this.#hosted.workspaceEnvironment.save, admitted),
+      (answer) => answer,
+    );
+  }
+
+  /** One environment variable deleted by an owner or admin, answering the variables that remain. */
   deleteVariable(
     workspaceId: string,
     name: string,

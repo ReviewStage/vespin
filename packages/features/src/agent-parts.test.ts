@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { test } from "vitest";
-import { computerIconsByCall } from "./agent-parts.js";
+import { AGENT_PART, agentPart, computerAppNamed, computerAppsOf } from "./agent-parts.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
+import { settledToolPart, TOOL_CALL_SETTLEMENT } from "./turn-run/index.js";
 
 /**
- * agent-parts.test.ts -- a computer call's row wears its app's real icon
- * even where its own answer kept none, borrowed from an earlier call on the
- * same app. Synthetic words.
+ * agent-parts.test.ts -- the apps a conversation's computer calls used, each
+ * named once: a call's row wears its app's real icon even where its own
+ * answer kept none, and every spelling of an app finds the same one.
+ * Synthetic words.
  */
 
 const ICON = {
@@ -20,6 +22,11 @@ const ICON = {
 
 function computer(callId: string, input: WireRecord, output: WireRecord): WireRecord {
   return { type: "tool-computer", toolCallId: callId, state: "output-available", input, output };
+}
+
+/** Each call's app's icon, by its call, as its row wears it. */
+function iconsByCall(messages: readonly AgentTranscriptMessage[]): [string, string | undefined][] {
+  return [...computerAppsOf(messages).byCall].map(([callId, app]) => [callId, app.icon]);
 }
 
 function turn(id: string, parts: readonly WireRecord[]): AgentTranscriptMessage {
@@ -49,11 +56,131 @@ test("a computer call that kept no icon wears the one an earlier call on its app
     ]),
   ];
 
-  assert.deepEqual(
-    [...computerIconsByCall(messages)],
-    [
-      ["read-1", ICON.id],
-      ["click-1", ICON.id],
-    ],
-  );
+  assert.deepEqual(iconsByCall(messages), [
+    ["read-1", ICON.id],
+    ["click-1", ICON.id],
+    ["click-2", undefined],
+  ]);
+});
+
+test("an app is one however a call spells it, the Mac's name in any case or its bundle id, so a call still running wears its icon at once and a mention by its bundle id finds the Mac's name", () => {
+  const running = (callId: string, app: string): WireRecord => ({
+    type: "tool-computer",
+    toolCallId: callId,
+    state: "input-available",
+    input: { action: "click", app, element_index: 7 },
+  });
+
+  const messages = [
+    turn("turn-1", [
+      computer(
+        "read-1",
+        { action: "get_app_state", app: "Calculator" },
+        {
+          status: "ran",
+          app: {
+            name: "Calculator",
+            bundleId: "com.apple.calculator",
+            refused: false,
+            icon: { picture: ICON },
+          },
+        },
+      ),
+    ]),
+    turn("turn-2", [running("click-1", "calculator"), running("click-2", "com.apple.calculator")]),
+  ];
+
+  const apps = computerAppsOf(messages);
+
+  assert.deepEqual(iconsByCall(messages), [
+    ["read-1", ICON.id],
+    ["click-1", ICON.id],
+    ["click-2", ICON.id],
+  ]);
+  assert.equal(new Set(apps.byCall.values()).size, 1);
+  assert.equal(computerAppNamed(apps, "COM.APPLE.CALCULATOR")?.name, "Calculator");
+});
+
+test("the same app on two machines is two apps, each keeping its machine, and a spelling on a machine finds that machine's", () => {
+  const on = (id: string, name: string) => ({
+    id,
+    name,
+    owner: { userId: "user-1", name: "Ada" },
+  });
+
+  const simulator = (callId: string, machine: ReturnType<typeof on>): WireRecord =>
+    computer(
+      callId,
+      { action: "get_app_state", app: "Simulator" },
+      {
+        status: "ran",
+        app: { name: "Simulator", bundleId: "com.apple.iphonesimulator", refused: false },
+        machine,
+      },
+    );
+
+  const apps = computerAppsOf([
+    turn("turn-1", [
+      simulator("read-1", on("mac-1", "Studio")),
+      simulator("read-2", on("mac-2", "Laptop")),
+    ]),
+  ]);
+
+  const one = apps.byCall.get("read-1");
+  const other = apps.byCall.get("read-2");
+
+  assert.equal(one?.machine?.name, "Studio");
+  assert.equal(other?.machine?.name, "Laptop");
+  assert.notEqual(one?.id, other?.id);
+  assert.equal(computerAppNamed(apps, "simulator", "mac-1"), one);
+  assert.equal(computerAppNamed(apps, "com.apple.iphonesimulator", "mac-2"), other);
+});
+
+test("one name that is two apps on two machines finds each machine's own app by that name", () => {
+  const editor = (callId: string, bundleId: string, machine: string): WireRecord =>
+    computer(
+      callId,
+      { action: "get_app_state", app: "Editor" },
+      {
+        status: "ran",
+        app: { name: "Editor", bundleId, refused: false },
+        machine: { id: machine, name: machine, owner: { userId: "user-1", name: "Ada" } },
+      },
+    );
+
+  const apps = computerAppsOf([
+    turn("turn-1", [
+      editor("read-1", "com.one.editor", "mac-1"),
+      editor("read-2", "com.two.editor", "mac-2"),
+    ]),
+  ]);
+
+  assert.equal(computerAppNamed(apps, "editor", "mac-2")?.bundleId, "com.two.editor");
+});
+
+test("a command the service settled as killed out of memory reads the sandbox's memory off its stored part, and another call reads none", () => {
+  const started = {
+    type: "tool-Bash",
+    toolCallId: "call_typecheck",
+    state: "input-available",
+    input: { command: "pnpm typecheck" },
+  } as const;
+
+  const failed = {
+    state: TOOL_CALL_SETTLEMENT.OUTPUT_ERROR,
+    output: "Exit code 137",
+    errorText: "Exit code 137",
+    status: "rejected",
+  } as const;
+
+  const read = (part: ReturnType<typeof settledToolPart>) => {
+    const drawn = agentPart(JSON.parse(JSON.stringify(part)));
+
+    return drawn.kind === AGENT_PART.TOOL ? drawn.outOfMemory : "not a call";
+  };
+
+  assert.deepEqual(read(settledToolPart(started, { ...failed, outOfMemory: { memoryGb: 4 } })), {
+    memoryGb: 4,
+  });
+  assert.equal(read(settledToolPart(started, failed)), undefined);
 });

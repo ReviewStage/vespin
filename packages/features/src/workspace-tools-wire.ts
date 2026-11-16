@@ -1,11 +1,12 @@
 /**
- * workspace-tools-wire.ts -- whose Mac an agent's `run_on_mac` runs on, and whether it would run there now, as the agent's composer reads it.
+ * workspace-tools-wire.ts -- whose Mac an agent's `run_on_mac` runs on, whether it would run there now, and the machines its default may be set to, as the agent's composer reads it.
  *
  * The Mac is the machine a call would go to now, as the service routes it:
- * the agent's default machine, or else the one it runs on, or else its
- * task's assignee's, or its starter's, that listened last. `run_on_mac` is
- * answered off where the service would refuse a call now. An agent its catalog offers no `run_on_mac`, one that
- * runs on a device, is answered nothing. A new read, which a released
+ * the agent's default machine, or else its owner's default machine in
+ * Settings; none where a local agent's command would land on the machine it
+ * runs on, which refuses it. `run_on_mac` is answered off where the service
+ * would refuse a call now. An agent its catalog offers no `run_on_mac` is
+ * answered nothing. A new read, which a released
  * desktop never calls, so each field may change with the panel that reads
  * it.
  */
@@ -48,9 +49,34 @@ const runOnMacStandingSchema = EffectSchema.Union([runOnMacOnSchema, runOnMacOff
 
 export type RunOnMacStanding = typeof runOnMacStandingSchema.Type;
 
-/** Where the agent's `run_on_mac` stands; nothing for an agent offered none. */
+/** A machine the agent's default may be set to: its id and name, whose it is, and whether it listened for commands lately. */
+const defaultMachineSchema = EffectSchema.Struct({
+  id: EffectSchema.String,
+  name: EffectSchema.String,
+  owner: runOnMacOwnerSchema,
+  online: EffectSchema.Boolean,
+});
+
+export type DefaultMachine = typeof defaultMachineSchema.Type;
+
+/** Where the agent's `run_on_mac` stands, and the machines its default may be set to, those of the people who let the task's agents use them; nothing for an agent offered none. */
 export const workspaceToolsAnswerSchema = EffectSchema.Struct({
   runOnMac: EffectSchema.optionalKey(runOnMacStandingSchema),
+  machines: EffectSchema.optionalKey(EffectSchema.Array(defaultMachineSchema)),
 });
+
+/** The machine an agent's terminal commands and computer use go to when a call names none, by its id. */
+export const defaultMachineRequestSchema = EffectSchema.Struct({
+  machineId: EffectSchema.String,
+});
+
+/** A task's followers' machines, each with whose it is, whether its owner lets the task's agents use it, and whether it listened lately, as a follower's card lists them. */
+export const taskMachinesAnswerSchema = EffectSchema.Struct({
+  machines: EffectSchema.Array(
+    EffectSchema.Struct({ ...defaultMachineSchema.fields, lets: EffectSchema.Boolean }),
+  ),
+});
+
+export type TaskMachinesAnswer = typeof taskMachinesAnswerSchema.Type;
 
 export type WorkspaceToolsAnswer = typeof workspaceToolsAnswerSchema.Type;
