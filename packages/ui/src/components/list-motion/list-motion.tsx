@@ -30,7 +30,9 @@
  * entry listed again before its exit finished, an Undo, stands again and
  * comes back the way it went. A row arriving rides the pair every arriving
  * element rides, opacity over `--ui-duration-quick` and its travel on
- * `--ui-spring`, rows that arrive together a `--ui-row-stagger` apart. A
+ * `--ui-spring`, rows that arrive together a `--ui-row-stagger` apart, and is
+ * unrolled from its top edge on that spring as it slides in, so it never
+ * stands over the row it pushes down while that row glides out of its way. A
  * list that was not drawn before the change, a fold opened, draws its rows
  * at once, and nothing plays the first time a list is drawn. While what the
  * lists draw is still being read (`reading`), as an Inbox's reads land one
@@ -681,7 +683,15 @@ interface MoveTiming {
   readonly close: KeyframeAnimationOptions | undefined;
 }
 
-/** Plays a row's arrival, the way it would leave played back on the spring, added onto any motion of its own, as it fades in, `step` staggers after the first; only the fade where it does not travel. */
+/**
+ * Plays a row's arrival, the way it would leave played back on the spring,
+ * added onto any motion of its own, as it fades in, `step` staggers after
+ * the first; only the fade where it does not travel. A row sliding in is
+ * unrolled from its top edge on that same spring too, which the rows it
+ * pushed down glide on, so its foot and the top of the row under it travel
+ * as one edge and its words never stand over a row still on its way out of
+ * its place.
+ */
 function arrive(mover: Element, step: number, away: Keyframe, timing: MoveTiming): void {
   if (timing.arrive === undefined) return;
   const delay = timing.wait + Math.min(step, STAGGER_STEPS) * timing.stagger;
@@ -695,6 +705,13 @@ function arrive(mover: Element, step: number, away: Keyframe, timing: MoveTiming
     delay,
     fill: "backwards",
     composite: unrolls ? "replace" : "add",
+  });
+
+  if (timing.way !== LIST_MOTION_WAY.SLIDE) return;
+  mover.animate([{ clipPath: ROLLED_UP }, { clipPath: UNROLLED }], {
+    ...timing.travel,
+    delay,
+    fill: "backwards",
   });
 }
 

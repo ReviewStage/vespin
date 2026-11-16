@@ -243,7 +243,7 @@ test("nothing plays the first time a list is drawn", () => {
   expect(played).toEqual([]);
 });
 
-test("a row arriving fades in and slides in from the leading edge, and the row it pushed down glides from where it stood", () => {
+test("a row arriving fades in, slides in from the leading edge, and unrolls on the beat the row it pushed down glides from where it stood on, so it never stands over that row", () => {
   const show = draw([["A", "B"]]);
 
   show([["A", "N", "B"]]);
@@ -251,11 +251,21 @@ test("a row arriving fades in and slides in from the leading edge, and the row i
   expect(motionsOf(rowOf("N"))).toEqual([
     [{ opacity: 0 }, { opacity: 1 }],
     [{ transform: "translateX(-16px)" }, { transform: "none" }],
+    [{ clipPath: "inset(0 0 100% 0)" }, { clipPath: "inset(0)" }],
   ]);
   expect(motionsOf(rowOf("B"))).toEqual([
     [{ transform: `translate(0px, ${-ROW}px)` }, { transform: "none" }],
   ]);
   expect(motionsOf(rowOf("A"))).toEqual([]);
+  const unroll = played.find(
+    (each) => each.element === rowOf("N") && "clipPath" in (each.keyframes[0] ?? {}),
+  );
+  const glide = played.find((each) => each.element === rowOf("B"));
+  expect([unroll?.timing.duration, unroll?.timing.easing, unroll?.timing.delay]).toEqual([
+    glide?.timing.duration,
+    glide?.timing.easing,
+    glide?.timing.delay,
+  ]);
 });
 
 test("a row pushed down in a list a transform around it draws at half its size glides as far as its layout moved it, not as far as it is drawn", () => {
@@ -373,6 +383,7 @@ test("a row listed again before its exit has played stands again, and comes back
   expect(motionsOf(back)).toEqual([
     [{ opacity: 0 }, { opacity: 1 }],
     [{ transform: "translateX(-16px)" }, { transform: "none" }],
+    [{ clipPath: "inset(0 0 100% 0)" }, { clipPath: "inset(0)" }],
   ]);
 });
 
@@ -460,7 +471,7 @@ test("a row arriving or leaving below the window's foot plays nothing, and one l
 
   show([["A", ...many]]);
 
-  expect(motionsOf(rowOf("R0"))).toHaveLength(2);
+  expect(motionsOf(rowOf("R0"))).not.toEqual([]);
   expect(motionsOf(rowOf("R39"))).toEqual([]);
 
   played = [];
