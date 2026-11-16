@@ -319,6 +319,18 @@ test("rows arriving together, and a row arriving while the row under them still 
   expect(clipOf("N")).toBe(`inset(0 0 ${2 * ROW}px 0)`);
 });
 
+test("an arriving row stops standing behind the row it pushed down once a later change stands that row above it", () => {
+  vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] });
+  drawGlides = true;
+  const show = draw([["A", "B"]]);
+
+  show([["A", "N", "B"]]);
+  show([["B", "A", "N"]]);
+  vi.advanceTimersToNextFrame();
+
+  expect(clipOf("N")).toBe("");
+});
+
 test("a row pushed down in a list a transform around it draws at half its size glides as far as its layout moved it, not as far as it is drawn", () => {
   const show = draw([["A", "B"]]);
   const box = document.querySelector("ul")?.parentElement;

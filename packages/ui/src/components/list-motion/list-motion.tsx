@@ -743,8 +743,8 @@ const following = new WeakMap<HTMLElement, () => void>();
  * where the row is drawn rather than foretold from the glide this change
  * plays, because a change landing while rows still move adds its glide onto
  * theirs, which no one glide's timing describes. It stops once `until` has
- * passed and that row runs no motion, or either row is gone, and gives the
- * row its own clip back.
+ * passed and that row runs no motion, once a later change stands that row
+ * above it, or once either row is gone, and gives the row its own clip back.
  */
 function followUnder(
   root: HTMLElement,
@@ -770,8 +770,13 @@ function followUnder(
     );
   };
 
+  // Note that the rows are told apart where the layout stands them, since the one under is drawn at the arriving row's top as its glide sets off.
+  const laidTop = (row: HTMLElement) =>
+    row.getBoundingClientRect().top - shiftOf(row).y * drawnScale(root).y;
+
   const step = () => {
-    if (!(mover.isConnected && under.isConnected)) {
+    // Note that a change that stood the row it followed above it, or took either away, leaves nothing to stand behind.
+    if (!(mover.isConnected && under.isConnected) || laidTop(under) <= laidTop(mover) + STILL) {
       release();
 
       return;
