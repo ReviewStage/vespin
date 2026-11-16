@@ -248,13 +248,20 @@ const MP4_BOX = {
   MDAT: "mdat",
   AVC1: "avc1",
   HDLR: "hdlr",
+  MDIA: "mdia",
 } as const;
 
 /** The media handler an MP4 track's `hdlr` names a sound track by. */
 const MP4_SOUND_HANDLER = "soun";
 
+/** The media handler an MP4 track's `hdlr` names a video track by. */
+const MP4_VIDEO_HANDLER = "vide";
+
 /** Where a handler box's type stands past its own type: its version and flags, then four bytes the format leaves zero. */
 const HDLR_TYPE_AFTER = 4 + 4 + 4;
+
+/** Where a handler box's type stands in its body: past its version and flags, and four bytes the format leaves zero. */
+const HDLR_TYPE_IN_BODY = 4 + 4;
 
 /**
  * Where a track header's width stands past its version byte and flags: its
@@ -365,6 +372,40 @@ export function mp4Dimensions(bytes: Uint8Array): VideoDimensions | undefined {
   }
 
   return undefined;
+}
+
+/**
+ * The media handler each track of an MP4's index (`moov`) names, wherever
+ * the index stands among the file's top-level boxes: a track's media
+ * (`mdia`) holds its handler (`hdlr`), whose type follows its version,
+ * flags, and four bytes the format leaves zero (`HDLR_TYPE_IN_BODY`). Nothing where the bytes
+ * hold no index.
+ */
+function mp4TrackHandlers(bytes: Uint8Array): readonly string[] {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const index = mp4Boxes(view, bytes, 0, bytes.length).find((box) => box.type === MP4_BOX.MOOV);
+
+  if (index === undefined) return [];
+
+  return mp4Boxes(view, bytes, index.body, index.end)
+    .filter((box) => box.type === MP4_BOX.TRAK)
+    .flatMap((track) => mp4Boxes(view, bytes, track.body, track.end))
+    .filter((box) => box.type === MP4_BOX.MDIA)
+    .flatMap((media) => mp4Boxes(view, bytes, media.body, media.end))
+    .filter((box) => box.type === MP4_BOX.HDLR && box.body + HDLR_TYPE_IN_BODY + 4 <= box.end)
+    .map((handler) => fourCc(bytes, handler.body + HDLR_TYPE_IN_BODY));
+}
+
+/**
+ * Whether a whole MP4 is a sound clip, an M4A: its index, wherever it
+ * stands, names a sound track and no video track. A file that also holds a
+ * video is no clip, whether or not it is a video a player streams.
+ */
+export function mp4IsSoundOnly(bytes: Uint8Array): boolean {
+  if (!startsLikeMp4(bytes)) return false;
+  const handlers = mp4TrackHandlers(bytes);
+
+  return handlers.includes(MP4_SOUND_HANDLER) && !handlers.includes(MP4_VIDEO_HANDLER);
 }
 
 /**

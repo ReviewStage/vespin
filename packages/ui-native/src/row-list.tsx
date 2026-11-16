@@ -21,13 +21,13 @@ import {
   listRowBackground,
   listRowInsets,
   listRowSeparator,
-  listSectionMargins,
   listSectionSpacing,
   listStyle,
   monospacedDigit,
   onGeometryChange,
   refreshable,
   scrollContentBackground,
+  scrollContentMargins,
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -161,12 +161,18 @@ function ScopeRow({ scopes }: { readonly scopes: ListScopes }) {
  * A list of `ListRow`s, each picked by its id. Note that a list on a screen
  * of its own keeps no selection, since a pick pushes the row's own screen and
  * the row should not stand selected on the way back. A plain list wider than
- * the reading width, such as a pull request's page across an iPad, centers
- * its sections in it, as iOS's readable content guide does, while the list
- * still scrolls from either edge. In Select mode the list stands in
- * SwiftUI's own edit mode, as Mail's Select does: a round check leads each
- * row, a tap ticks it rather than opening it, two fingers dragged down tick
- * a run, and the rows' swipes step aside, as the system's do.
+ * the reading width stands its rows in a centered column of that width, as
+ * iOS's readable content guide stands a page, so a pull request's page across
+ * a landscape iPad reads as a column rather than rows 1,400 pt long. Note
+ * that the column is the list's content margins (`scrollContentMargins`,
+ * SwiftUI's `contentMargins` through the app's `@expo/ui` patch), never a
+ * frame, so the list keeps the whole width and a drag, a trackpad or a pull
+ * to refresh in the ground beside the column scrolls it, as Mail's and
+ * Settings' do; `listSectionMargins` moved no plain list's rows. In
+ * Select mode the list stands in SwiftUI's own edit mode, as Mail's Select
+ * does: a round check leads each row, a tap ticks it rather than opening it,
+ * two fingers dragged down tick a run, and the rows' swipes step aside, as
+ * the system's do.
  */
 export function RowList({
   look,
@@ -215,7 +221,7 @@ export function RowList({
         scrollContentBackground("hidden"),
         ...listGround(colors, look),
         onGeometryChange(({ width: next }) => setWidth(next)),
-        ...(sides > 0 ? [listSectionMargins({ edges: "horizontal", length: sides })] : []),
+        ...(sides > 0 ? [scrollContentMargins({ edges: "horizontal", length: sides })] : []),
         // Note that a page's sections stand as close as the system lets them, since its small headers already part them.
         ...(look === LIST_LOOK.DETAIL ? [listSectionSpacing("compact")] : []),
         // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.

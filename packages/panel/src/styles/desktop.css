@@ -249,7 +249,7 @@ body,
 ) .title-bar-controls:not([data-edge]),
 .desktop-shell:has(.side-panel:not([data-inbox-shown="false"] > [data-page="inbox"] *))
   .title-bar-controls[data-edge="end"] {
-  --title-bar-ground: var(--ui-color-well);
+  --title-bar-ground: var(--ui-color-ground);
 }
 
 /* Every page stands its top row on the frame (shell.css), so the toggle at
@@ -742,14 +742,6 @@ body,
   > .side-panel:not([data-full-screen="true"]) {
   margin-left: 0;
   border-left: 1px solid var(--ui-color-border);
-}
-
-:where(:root):not([data-ui-room="narrow"])
-  .desktop-shell
-  > .desktop-main
-  .desktop-task:has(> .desktop-task-main)
-  > .side-panel {
-  --side-panel-ground: var(--ui-color-ground);
 }
 
 :where(:root):not([data-ui-room="narrow"])
@@ -1490,11 +1482,12 @@ body,
    it, or its sheet does where the shell stands it on one (shell.css), and
    whatever in a tab must paint a ground of its own paints this one (a Pull
    request tab's stuck headings and folding header, the list of changed
-   files), so none shows as a strip or a sheet of another ground. A page that stands the panel on
-   another ground changes this one name (`.desktop-task` beside its
-   conversation, below). */
+   files), so none shows as a strip or a sheet of another ground. Note that
+   it is the window's own ground, the conversation's beside it, on every
+   page, because on the well, the sidebar's shade, the panel read as a
+   second, darker window beside the Inbox's conversation. */
 .side-panel {
-  --side-panel-ground: var(--ui-color-well);
+  --side-panel-ground: var(--ui-color-ground);
   background: var(--side-panel-ground);
 }
 
