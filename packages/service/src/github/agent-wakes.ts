@@ -248,6 +248,9 @@ const UNNAMED_CHECKS_ROOM = 120;
 /** What GitHub appends to an App's login, which a failed check is told by and an App's words told apart by. */
 const BOT_LOGIN_SUFFIX = "[bot]";
 
+/** The most unarchived agents one delivery reads, newest started first, to find the one it tells. */
+const MAXIMUM_AGENTS_PER_WAKE = 10;
+
 /** How each review verdict reads in the line, by GitHub's own word for it. */
 const VERDICT_WORDS: ReadonlyMap<string, string> = new Map([
   ["approved", "approved"],
@@ -1168,29 +1171,35 @@ function checksCompletedKey(wake: AgentWake, checks: HeadChecks): string {
   return JSON.stringify([AGENT_WAKE.CHECKS_COMPLETED, wake.repository, wake.sha, outcomes]);
 }
 
-/**
- * The agent a delivery is about, as a list of none or one: the newest
- * unarchived one on its branches, or, for a comment, whose pull request it
- * is, so a continued or forked agent and its source never both act on it.
- */
+/** The unarchived agents a delivery is about, newest started first: those on its branches, or, for a comment, those whose pull request it is. */
 function agentsOf(wake: AgentWake) {
-  const newest = { unarchivedOnly: true };
+  const unarchived = { unarchivedOnly: true };
 
   if (wake.branches.length > 0) {
-    return listAgentsOnBranches(wake.repository, wake.branches, 1, newest);
+    return listAgentsOnBranches(
+      wake.repository,
+      wake.branches,
+      MAXIMUM_AGENTS_PER_WAKE,
+      unarchived,
+    );
   }
 
   if (wake.pullRequest === undefined) return Effect.succeed<readonly OwnedAgent[]>([]);
 
-  return listAgentsOnPullRequest(wake.repository, wake.pullRequest, 1, newest);
+  return listAgentsOnPullRequest(
+    wake.repository,
+    wake.pullRequest,
+    MAXIMUM_AGENTS_PER_WAKE,
+    unarchived,
+  );
 }
 
 /**
- * Tells the newest unarchived agent the delivery is about, where
- * `agentIsWoken` admits it, through the sessions `sessionsFor` answers for
- * its owner, under the delivery's id; answers how many were told. A check
- * line reaches it only where it stands on that head (`standsOnHead`), and
- * every check finished only where they all did, under its own key
+ * Tells the newest unarchived agent the delivery is about, for a check line
+ * the newest standing on that head (`standsOnHead`), where `agentIsWoken`
+ * admits it, through the sessions `sessionsFor` answers for its owner, under
+ * the delivery's id; answers how many were told. Every check finished is
+ * told only where they all did, under its own key
  * (`checksCompletedKey`). A check line's checks are read on the told
  * agent's token (`headChecksFor`). A send refused is
  * logged by its kind alone, and the delivery is still answered, as the
@@ -1209,17 +1218,20 @@ export const wakeAgents = /* @__PURE__ */ Effect.fn("web/githubWakeAgents")(func
   const ofChecks = checksCompleted || wake.kind === AGENT_WAKE.CHECK_FAILED;
 
   const told = yield* Effect.gen(function* () {
-    const agents = yield* agentsOf(wake);
+    const found = yield* agentsOf(wake);
+
+    // Checks on a commit an agent has pushed past, or on another branch the commit is on, are not its.
+    const candidates = ofChecks
+      ? yield* Effect.filter(found, (owned) => standsOnHead(wake, owned))
+      : found;
+
+    // Only the newest, so a continued or forked agent and its source never both act on one pull request.
+    const agents = candidates.slice(0, 1);
     const turns = yield* latestTurnsOfReached(agents.map(({ agent }) => agent.conversationId));
 
-    const admitted = agents.filter(({ agent }) =>
+    const woken = agents.filter(({ agent }) =>
       agentIsWoken(wake, agent, turns.get(agent.conversationId), appLogin, now),
     );
-
-    // Checks on a commit an agent has pushed past, or on a branch it only ended a turn on, are not its.
-    const woken = ofChecks
-      ? yield* Effect.filter(admitted, (owned) => standsOnHead(wake, owned))
-      : admitted;
 
     // Read on the told agent's token: the review's inline comments, its rendering, and the head's checks.
     const inline = yield* inlineCommentsOf(wake, woken[0]);

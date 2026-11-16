@@ -1290,7 +1290,8 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
         const unread = yield* openAgent;
         yield* endedTurn(unread.owner, unread.agent.conversationId, MADE_AT - 60_000);
         yield* publishedAt(unread.owner, unread.agent.id, HEAD);
-        // An agent that ended its turn on the branch with no pull request at the failed commit is not told.
+        // A newer agent that ended its turn on a branch at the failed commit with no pull request there is not told.
+        yield* TestClock.adjust("1 second");
         const branchOnly = yield* openAgent;
         yield* endedTurn(branchOnly.owner, branchOnly.agent.conversationId, MADE_AT - 60_000);
 
@@ -1321,15 +1322,17 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
           APP_BOT,
         ).pipe(Effect.provide(failing));
 
-        const untold = yield* wakeAgents(
+        // Nor does it stand in for the agent whose pull request is at that commit on another branch the commit is on.
+        const past = yield* wakeAgents(
           agentSessions.sessionsFor,
-          failedOn(branchOnly.ref),
+          { ...failedOn(branchOnly.ref), branches: [branchOnly.ref, read.ref] },
           randomUUID(),
           APP_BOT,
         ).pipe(Effect.provide(holding));
 
-        assert.equal(untold, 0);
-        const [named, told] = agentSessions.sent;
+        const [named, told, onHead, ...more] = agentSessions.sent;
+        assert.deepEqual([past, more.length], [1, 0]);
+        assert.ok(sentText(onHead?.message.message).includes(read.ref));
 
         const close =
           "Read why with `gh`, fix the cause, and push, then wait on your checks as your instructions say.";
