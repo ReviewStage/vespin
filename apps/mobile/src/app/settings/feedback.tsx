@@ -141,10 +141,13 @@ export default function FeedbackScreen() {
   const pictures = kind === FEEDBACK_KIND.FEEDBACK ? feedbackPictures : promptPictures;
   const message = words[kind];
 
+  // Note that a picture still being read counts as drafted, so Back asks before it drops a pick that hasn't landed yet.
   const drafted =
     Object.values(words).some((each) => each.trim() !== "") ||
     feedbackPictures.files !== undefined ||
-    promptPictures.files !== undefined;
+    promptPictures.files !== undefined ||
+    feedbackPictures.reading ||
+    promptPictures.reading;
 
   const kept = useKeptWords(drafted);
 
