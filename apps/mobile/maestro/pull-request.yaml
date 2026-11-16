@@ -15,11 +15,18 @@ appId: dev.vespin.ios
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
 - assertVisible: "Add a way to resend an invite that expired."
-# The card offers Merge beside Review, which asks first.
-- scrollUntilVisible:
-    element: "Merge"
-    direction: UP
-    centerElement: true
+# The card offers Merge beside Review, which asks first. Note that the
+# transcript is dragged at three quarters across the screen rather than at
+# its center, which on a landscape iPad is the list column beside it.
+- repeat:
+    while:
+      notVisible: "Merge"
+    times: 10
+    commands:
+      - swipe:
+          start: "75%, 35%"
+          end: "75%, 75%"
+          duration: 400
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-card
 - tapOn: "Merge"
@@ -45,10 +52,13 @@ appId: dev.vespin.ios
     timeout: 5000
 # Merging is the press under the heading, in every window, and it asks
 # first, as the card's Merge does, scrolled back up to after the reviewer.
+# Note that the list is let settle first, since a tap on a list still
+# gliding only stops it and presses nothing.
 - scrollUntilVisible:
     element: "Squash and merge"
     direction: UP
     timeout: 5000
+- waitForAnimationToEnd
 - tapOn: "Squash and merge"
 - assertVisible: "Merge this pull request?"
 - waitForAnimationToEnd
