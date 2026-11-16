@@ -176,7 +176,7 @@ function statusLines(ownTask: OwnTask, publishes: boolean): string[] {
   const merged = publishes ? "every pull request of yours merged or closed, " : "";
 
   return [
-    `Once your task's work is finished, mark it Done with \`${AGENT_TOOL.UPDATE_TASK}\` before your last message: ${merged}no ask still open on the task, and no other agent on the task still at work. Work that needed no pull request, such as an answer, a report, or a run that found nothing to do, is finished once you reply; while it waits on the developer, leave it In progress.`,
+    `Once your task's work is finished, mark it Done with \`${AGENT_TOOL.UPDATE_TASK}\` before your last message: ${merged}no ask still open on the task, and no other agent on the task still at work. Work that needed no pull request, such as an answer, a report, or a run that found nothing to do, is finished once its result is ready; while it waits on the developer, leave it In progress.`,
     ...(publishes
       ? [
           `Where you queued your pull request to merge, book a wakeup with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` to see it land, since no message tells you it merged, then mark the task Done.`,
