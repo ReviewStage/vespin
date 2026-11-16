@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import { type RunningBuild, UPDATE_FAILURE, UPDATE_STATUS, type UpdateSnapshot } from "./update.js";
-import { UPDATE_ROW_ACTION, updateInSidebar, updateRow } from "./update-row.js";
+import { UPDATE_ROW_ACTION, updateInSidebar, updateNeededLine, updateRow } from "./update-row.js";
 
 const RELEASE: RunningBuild = { packaged: true };
 
@@ -178,4 +178,20 @@ test("a packaged build that cannot install itself keeps the way to the releases 
   assert.equal(row.title, "Version 0.11.0");
   assert.equal(row.action, UPDATE_ROW_ACTION.GET);
   assert.equal(row.current, false);
+});
+
+test("while the service refuses the build, the screen's line says where the update stands in plain words, or nothing beside Restart", () => {
+  const current = supported({ status: UPDATE_STATUS.IDLE, upToDate: true });
+
+  const downloading = supported({
+    status: UPDATE_STATUS.DOWNLOADING,
+    latestVersion: "0.2.0",
+    progress: { percent: 41.7, transferredBytes: 41, totalBytes: 100 },
+  });
+
+  const ready = supported({ status: UPDATE_STATUS.READY, latestVersion: "0.2.0" });
+
+  assert.equal(updateNeededLine(current, RELEASE), "The update isn't out yet.");
+  assert.equal(updateNeededLine(downloading, RELEASE), "Downloading… 42%");
+  assert.equal(updateNeededLine(ready, RELEASE), undefined);
 });

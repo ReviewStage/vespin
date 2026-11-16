@@ -8,9 +8,15 @@ import {
 } from "@repo/features/pull-request-chapters-live";
 import type { PullRequestChaptersAnswer } from "@repo/features/pull-request-chapters-wire";
 import { Data, Effect, Option, type Scope } from "effect";
-import { type AppChapters, NO_CHAPTERS } from "./app-state.js";
+import {
+  type AppChapters,
+  type AppRepositoryPullRequestHeld,
+  NO_CHAPTERS,
+  NO_KEYS_HELD,
+} from "./app-state.js";
 import { type HeldAnswers, type HeldSlice, heldSlice } from "./live-collection.js";
 import { pushLive } from "./live-push.js";
+import type { RepositoryPullRequestKey } from "./pull-request-parts.js";
 
 /**
  * chapters-follow.ts -- each agent's pull request's chapters the windows hold, followed over the service's held poll and told whole on their app-state slice.
@@ -23,6 +29,10 @@ import { pushLive } from "./live-push.js";
  * the reader can generate chapters, and on what, beside the rows on every answer, since
  * it comes from the reader's own keys, which no statement reads, so the
  * follow draws it anew from each answer rather than only the first.
+ * A tab that names its pull request by its repository and number, with no
+ * agent, holds its chapters the same way by the workspace, the repository,
+ * and the number, followed on the service's read of them by repository
+ * (`heldRepositoryChapters`).
  */
 
 /** Whose chapters: one agent's pull request, by the agent's id and the pull request's number. */
@@ -36,10 +46,15 @@ interface ChaptersUnanswered {
   readonly failure: string;
 }
 
-export interface ChaptersFollowDependencies {
+/** Whose chapters a follow reads, by whatever names the pull request: its number among it. */
+interface ChaptersOf {
+  readonly number: number;
+}
+
+export interface ChaptersFollowDependencies<Key extends ChaptersOf = ChaptersKey> {
   /** The read of `key` sealed for `userId`, its rows inline at the poll address where it polls, held past `after` where it names one. */
   readonly seal: (
-    key: ChaptersKey,
+    key: Key,
     poll: boolean,
     userId: string,
     after?: string,
@@ -49,6 +64,12 @@ export interface ChaptersFollowDependencies {
   /** Whether the account gate stands open, so a follow may read. */
   readonly gate: () => boolean;
   readonly tell: (held: AppChapters) => void;
+}
+
+/** How the chapters of the pull requests named by their repository and number are followed: as an agent's are, and told on their own slice. */
+export interface RepositoryChaptersFollowDependencies
+  extends Omit<ChaptersFollowDependencies<RepositoryPullRequestKey>, "tell"> {
+  readonly tell: (held: AppRepositoryPullRequestHeld<PullRequestChaptersAnswer>) => void;
 }
 
 /** A refusal that names nothing the account reaches, after which the read is followed no longer. */
@@ -64,9 +85,9 @@ function goneAfter(failure: string): boolean {
  * what the reader can generate on is drawn as the answer is sealed, over
  * the rows last taken.
  */
-function followChapters(
-  dependencies: ChaptersFollowDependencies,
-  key: ChaptersKey,
+function followChapters<Key extends ChaptersOf>(
+  dependencies: Omit<ChaptersFollowDependencies<Key>, "tell">,
+  key: Key,
   answers: HeldAnswers<PullRequestChaptersAnswer>,
 ): Effect.Effect<void> {
   // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
@@ -122,6 +143,25 @@ export function heldChapters(
   return heldSlice<typeof LIVE_READ.PULL_REQUEST_CHAPTERS, ChaptersKey>({
     empty: NO_CHAPTERS,
     path: (key) => [key.agentId, String(key.number)],
+    gate: dependencies.gate,
+    follow: (key, answers) => followChapters(dependencies, key, answers),
+    tell: dependencies.tell,
+  });
+}
+
+/**
+ * The held lifetime over every pull request's chapters the windows hold by
+ * its repository and number, told whole on their own slice, as an agent's
+ * are (`heldChapters`): one the service refused for good, a workspace the
+ * account is not a member of, is told failed and followed no longer until
+ * every window lets it go and one holds it anew.
+ */
+export function heldRepositoryChapters(
+  dependencies: RepositoryChaptersFollowDependencies,
+): Effect.Effect<HeldSlice<RepositoryPullRequestKey>, never, Scope.Scope> {
+  return heldSlice<typeof LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS, RepositoryPullRequestKey>({
+    empty: NO_KEYS_HELD,
+    path: (key) => [key.workspaceId, key.repository, String(key.number)],
     gate: dependencies.gate,
     follow: (key, answers) => followChapters(dependencies, key, answers),
     tell: dependencies.tell,
