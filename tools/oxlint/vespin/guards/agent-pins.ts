@@ -14,12 +14,15 @@ import { loadModule, type RepositoryGuard, readJson, record, text } from "./guar
  * digests read off its release, so one left behind by a bump is refused on
  * every host as it fetches; and the agents' image
  * (`apps/web/agent-image/Dockerfile`) installs the Agent SDK, Claude Code,
- * Codex, and Playwright the pins name, its `ARG`s written out beside them.
+ * Codex, Cursor's SDK, and Playwright the pins name, its `ARG`s written out
+ * beside them; and the Cursor SDK the runner types itself against is the one
+ * `CURSOR_SDK_PIN` has the image install.
  * A pin moved on one side alone builds, typechecks, and fails only in a
  * hosted sandbox.
  */
 
 const SDK = "@anthropic-ai/claude-agent-sdk";
+const CURSOR_SDK = "@cursor/sdk";
 const RUNNER = "packages/agent-runner";
 const DOCKERFILE = "apps/web/agent-image/Dockerfile";
 
@@ -28,6 +31,7 @@ const IMAGE_ARGS = {
   CLAUDE_AGENT_SDK_VERSION: "CLAUDE_CODE_PIN.SDK_VERSION",
   CLAUDE_CODE_VERSION: "CLAUDE_CODE_PIN.VERSION",
   CODEX_VERSION: "CODEX_PIN.VERSION",
+  CURSOR_SDK_VERSION: "CURSOR_SDK_PIN.VERSION",
   PLAYWRIGHT_VERSION: "PLAYWRIGHT_PIN.VERSION",
 } as const;
 
@@ -49,6 +53,9 @@ export interface AgentPins {
   readonly pinnedCodex: string;
   readonly hostClaudePins: readonly HostCliPin[];
   readonly hostCodexPins: readonly HostCliPin[];
+  /** The Cursor SDK the runner's `package.json` names, which it is typed against. */
+  readonly runnerCursorSdkDependency: string | undefined;
+  readonly pinnedCursorSdk: string;
   readonly pinnedPlaywright: string;
   /** The Dockerfile's `ARG`s by name, as their defaults read. */
   readonly imageArgs: Readonly<Record<string, string>>;
@@ -76,6 +83,11 @@ export function pinProblems(pins: AgentPins): readonly string[] {
     pins.pinnedClaude,
   );
   differ("CODEX_PROTOCOL_VERSION against CODEX_PIN.VERSION", pins.codexProtocol, pins.pinnedCodex);
+  differ(
+    `${RUNNER}/package.json's ${CURSOR_SDK} against CURSOR_SDK_PIN.VERSION`,
+    pins.runnerCursorSdkDependency,
+    pins.pinnedCursorSdk,
+  );
   const hostPins = [
     { pins: pins.hostClaudePins, against: "CLAUDE_CODE_PIN.SDK_VERSION", pinned: pins.pinnedSdk },
     { pins: pins.hostCodexPins, against: "CODEX_PIN.VERSION", pinned: pins.pinnedCodex },
@@ -93,6 +105,7 @@ export function pinProblems(pins: AgentPins): readonly string[] {
     CLAUDE_AGENT_SDK_VERSION: pins.pinnedSdk,
     CLAUDE_CODE_VERSION: pins.pinnedClaude,
     CODEX_VERSION: pins.pinnedCodex,
+    CURSOR_SDK_VERSION: pins.pinnedCursorSdk,
     PLAYWRIGHT_VERSION: pins.pinnedPlaywright,
   };
   for (const [arg, pin] of Object.entries(IMAGE_ARGS) as [keyof typeof IMAGE_ARGS, string][]) {
@@ -144,8 +157,12 @@ async function readPins(root: string): Promise<AgentPins> {
   const claude = record(pins.CLAUDE_CODE_PIN, "CLAUDE_CODE_PIN");
   const codex = record(pins.CODEX_PIN, "CODEX_PIN");
   const playwright = record(pins.PLAYWRIGHT_PIN, "PLAYWRIGHT_PIN");
+  const cursor = record(pins.CURSOR_SDK_PIN, "CURSOR_SDK_PIN");
   const generated = await loadModule(root, `${RUNNER}/src/codex-protocol/generated-from.ts`);
-  const runner = record(readJson(root, `${RUNNER}/package.json`).dependencies, "dependencies");
+  const manifest = readJson(root, `${RUNNER}/package.json`);
+  const runner = record(manifest.dependencies, "dependencies");
+  const runnerDev = record(manifest.devDependencies, "devDependencies");
+  const cursorDependency = runnerDev[CURSOR_SDK];
   const sdk = installedManifest(root, RUNNER, SDK);
   const dependency = runner[SDK];
   return {
@@ -158,6 +175,8 @@ async function readPins(root: string): Promise<AgentPins> {
     pinnedCodex: text(codex.VERSION, "CODEX_PIN.VERSION"),
     hostClaudePins: hostCliPins(pins, "CLAUDE_CODE_MAC_PIN", "CLAUDE_CODE_LINUX_PINS"),
     hostCodexPins: hostCliPins(pins, "CODEX_MAC_PIN", "CODEX_LINUX_PINS"),
+    runnerCursorSdkDependency: typeof cursorDependency === "string" ? cursorDependency : undefined,
+    pinnedCursorSdk: text(cursor.VERSION, "CURSOR_SDK_PIN.VERSION"),
     pinnedPlaywright: text(playwright.VERSION, "PLAYWRIGHT_PIN.VERSION"),
     imageArgs: dockerfileArgs(root),
   };
