@@ -20,6 +20,7 @@ import { listWorkspaces } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { account, user } from "@repo/database/schemas/auth";
 import { githubInstallation } from "@repo/database/schemas/github-installation";
+import { githubPullRequestMove } from "@repo/database/schemas/github-pull-request-move";
 import { turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { fakeWorkspaceSeams, getTestDB, leaveWorkspace, startTask } from "@repo/database/testing";
@@ -46,9 +47,10 @@ import { TASK_STATUS } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN, TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
 import { and, eq } from "drizzle-orm";
-import { Clock, DateTime, Effect, Layer, Option, Redacted } from "effect";
+import { Clock, DateTime, Duration, Effect, Layer, Option, Redacted } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
+import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { WorkspaceDriveFills, workspaceDriveName } from "../agents/workspace-drive.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
@@ -1691,6 +1693,75 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         );
 
         assert.deepEqual(started, []);
+      }),
+  );
+  it.effect(
+    "a review, a comment on a pull request, and a status on its head each note the pull request moved, and a comment on an issue notes nothing",
+    () =>
+      Effect.gen(function* () {
+        const sighted = {
+          id: 900_000_000 + Math.floor(Math.random() * 90_000_000),
+          full_name: RELAY_FULL_NAME,
+          updated_at: "2026-11-16T00:00:00Z",
+        };
+
+        /** When the row last moved, in epoch milliseconds; none before a delivery noted it. */
+        const movedAt = (rows: readonly { readonly at: Date }[]) => rows[0]?.at.getTime() ?? 0;
+
+        const moves = () =>
+          Database.use((db) =>
+            db
+              .select({ number: githubPullRequestMove.number, at: githubPullRequestMove.movedAt })
+              .from(githubPullRequestMove)
+              .where(eq(githubPullRequestMove.repositoryId, sighted.id)),
+          );
+
+        /** The instant each delivery below is read at, a minute after the one before. */
+        const deliver = (event: string, payload: WireBoundaryInput) =>
+          Effect.andThen(
+            TestClock.adjust(Duration.minutes(1)),
+            answer(githubReaching([]), SECRET, delivery(event, payload)),
+          );
+
+        const pullRequest = { number: 41, head: { sha: "c0ffee1" } };
+        yield* deliver("pull_request_review", {
+          action: "submitted",
+          repository: sighted,
+          pull_request: pullRequest,
+        });
+        const reviewed = yield* moves();
+        assert.deepEqual(
+          reviewed.map((row) => row.number),
+          [41],
+        );
+
+        yield* deliver("issue_comment", {
+          action: "created",
+          repository: sighted,
+          issue: { number: 9 },
+          comment: { id: 1, body: "Ignored" },
+        });
+        yield* deliver("issue_comment", {
+          action: "created",
+          repository: sighted,
+          issue: { number: 41, pull_request: { url: "ignored" } },
+          comment: { id: 2, body: "Ignored" },
+        });
+        const commented = yield* moves();
+        assert.deepEqual(
+          commented.map((row) => row.number),
+          [41],
+        );
+        assert.ok(movedAt(commented) > movedAt(reviewed));
+
+        yield* deliver("status", {
+          repository: sighted,
+          sha: "c0ffee1",
+          state: "success",
+          branches: [],
+        });
+        const checked = yield* moves();
+        assert.ok(movedAt(checked) > movedAt(commented));
       }),
   );
 });
