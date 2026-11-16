@@ -2,12 +2,10 @@
 
 import {
   AGENT_ATTACHMENT_TYPE,
-  AGENT_STATUS,
   type AgentAttachment,
   hasWordsOrFiles,
 } from "@repo/features/agent-wire";
 import { attachmentText } from "@repo/features/attachment-model";
-import { AGENT_STATUS_WORDS } from "@repo/features/automation-list-model";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
@@ -49,7 +47,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useNavigation, useRouter } from "expo-router";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
@@ -356,9 +354,6 @@ type UseSheetStartResult = {
   readonly go: (start: () => Promise<StartAnswer>, refusal?: string | undefined) => void;
 };
 
-/** What the sheet says while an agent's start is out, as the panel names an agent starting. */
-const STARTING_WORDS = AGENT_STATUS_WORDS[AGENT_STATUS.STARTING];
-
 type Started = { answer?: StartAnswer };
 
 /** A route in a navigator's state, as React Navigation hands it: its key, its params, and the navigator under it. */
@@ -438,11 +433,9 @@ function useSheetStart(
   const onTab = useOnTab();
   const write = useWrite();
   const [starting, setStarting] = useState(false);
-  // Note that a start out is also held in a ref, so two presses in one frame, which both read the render's state, start one task.
-  const sending = useRef(false);
 
   const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
-    if (sending.current) return;
+    if (starting) return;
 
     if (refusal !== undefined) {
       setNote(refusal);
@@ -451,7 +444,6 @@ function useSheetStart(
       return;
     }
 
-    sending.current = true;
     setStarting(true);
     setNote(undefined);
     const started: Started = {};
@@ -468,23 +460,20 @@ function useSheetStart(
         inPlace: setNote,
         went: BUZZ.SUCCESS,
       },
-    ).then((went) => {
-      const answer = started.answer;
+    )
+      .then((went) => {
+        const answer = started.answer;
 
-      // Note that only a start that didn't land lowers the guard, because the sheet stays for another press; one that landed keeps it up while the sheet slides away, so a press during the slide starts nothing.
-      if (!went || answer === undefined || "refused" in answer) {
-        sending.current = false;
-        setStarting(false);
+        if (!went || answer === undefined || "refused" in answer) return;
+        kept.release();
+        router.dismiss();
+        router.navigate(
+          onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })),
+        );
 
-        return;
-      }
-
-      kept.release();
-      router.dismiss();
-      router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })));
-
-      if (answer.agentId !== undefined) router.push(onTab(iosAgentRoute(answer.agentId)));
-    });
+        if (answer.agentId !== undefined) router.push(onTab(iosAgentRoute(answer.agentId)));
+      })
+      .finally(() => setStarting(false));
   };
 
   return { starting, go };
@@ -661,7 +650,6 @@ export function NewAgentScreen({
         kept={kept}
       />
       <ComposeSheet
-        busy={starting ? { says: STARTING_WORDS } : undefined}
         title={
           opened === undefined
             ? undefined
