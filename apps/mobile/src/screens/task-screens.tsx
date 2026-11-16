@@ -137,7 +137,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { type ReactElement, type ReactNode, useMemo, useState } from "react";
+import { type ReactElement, type ReactNode, useEffect, useMemo, useState } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import {
@@ -159,7 +159,7 @@ import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.
 import { SettingsBarButton } from "../settings-button.js";
 import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
-import { stackMenuItems } from "../stack-bar-menu.js";
+import { stackMenuItems, useSteadyBarMenu } from "../stack-bar-menu.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
@@ -2472,6 +2472,17 @@ function numberedIn(id: string, workspace: string | undefined): boolean {
   );
 }
 
+/** The task a page's New agent starts on and how it starts one, as the newest draw holds them, read by the bar's press. */
+type NewAgentNow = {
+  task: TaskSummary | undefined;
+  newAgent: (task: TaskSummary) => void;
+};
+
+/** New agent on the task the newest draw holds, where it holds one. */
+function pressNewAgent(now: NewAgentNow): void {
+  if (now.task !== undefined) now.newAgent(now.task);
+}
+
 /**
  * The Tasks tab's pushed screen: one task's Overview, named by the route's
  * `id`, its path small in the bar and its ⋯ beside it, read as it opens. A
@@ -2502,7 +2513,8 @@ export function TaskScreen() {
   const read = useTasksRead();
   const history = useHistoryDoor(overview?.task.workspaceId);
 
-  const menu =
+  // Note that the bar's menu is kept the same across draws while it stands alike (`useSteadyBarMenu`), so a draw after the bar stands, such as the task's read mark moving its row, never hands the system's menu new items under the old.
+  const menu = useSteadyBarMenu(
     overview === undefined
       ? undefined
       : taskMenu(overview, {
@@ -2511,7 +2523,39 @@ export function TaskScreen() {
           history,
           openRelation,
           moveDoor,
-        });
+        }),
+  );
+
+  const [newAgentNow] = useState<NewAgentNow>(() => ({ task: overview?.task, newAgent }));
+
+  useEffect(() => {
+    newAgentNow.task = overview?.task;
+    newAgentNow.newAgent = newAgent;
+  });
+
+  // Note that the bar's items are the same elements across draws while its menu stands alike, because the stack reads the bar's options by its children's identity, and a draw that handed it new ones, as the task's read mark landing after the push did, rebuilt the system's ⋯ under a menu about to open, whose acts then pressed nothing.
+  const barItems = useMemo(
+    () =>
+      menu === undefined
+        ? undefined
+        : [
+            <Stack.Toolbar.Menu
+              key={menu.label}
+              icon={glyphSymbol(menu.symbol)}
+              accessibilityLabel={menu.label}
+            >
+              {stackMenuItems(menu)}
+            </Stack.Toolbar.Menu>,
+            // Note that New agent stands as a glyph before ⋯, as a split view's detail bar stands a page's main act; it is written after ⋯ because a right bar's first item stands at its edge.
+            <Stack.Toolbar.Button
+              key={WORDS.NEW_AGENT}
+              icon={glyphSymbol(GLYPH.AGENT)}
+              accessibilityLabel={WORDS.NEW_AGENT}
+              onPress={() => pressNewAgent(newAgentNow)}
+            />,
+          ],
+    [menu, newAgentNow],
+  );
 
   // Note that a number a link names in its workspace is handed to the split view only once found, as the task's id, since the split view's selection names no workspace; one not found stays here to say so.
   const handing = numberedIn(id, workspace) ? found.taskId : id;
@@ -2535,17 +2579,7 @@ export function TaskScreen() {
         }}
       />
       {menu === undefined || overview === undefined ? null : (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-            {stackMenuItems(menu)}
-          </Stack.Toolbar.Menu>
-          {/* Note that New agent stands as a glyph before ⋯, as a split view's detail bar stands a page's main act; it is written after ⋯ because a right bar's first item stands at its edge. */}
-          <Stack.Toolbar.Button
-            icon={glyphSymbol(GLYPH.AGENT)}
-            accessibilityLabel={WORDS.NEW_AGENT}
-            onPress={() => newAgent(overview.task)}
-          />
-        </Stack.Toolbar>
+        <Stack.Toolbar placement="right">{barItems}</Stack.Toolbar>
       )}
       <Screen>
         {overview !== undefined ? (
