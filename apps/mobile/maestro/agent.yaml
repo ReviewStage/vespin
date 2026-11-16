@@ -83,7 +83,7 @@ appId: dev.vespin.ios
 - takeScreenshot: agent-pictures
 # The pull request it opened after them, as its card with Review.
 - scrollUntilVisible:
-    element: "#128 Invite a teammate by email"
+    element: ".*#128 Invite a teammate by email.*"
     direction: DOWN
 - waitForAnimationToEnd:
     timeout: 5000
