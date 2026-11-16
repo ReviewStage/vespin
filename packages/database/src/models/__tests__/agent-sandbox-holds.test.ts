@@ -14,6 +14,7 @@ import {
   recordAgentSandboxTerminalEnded,
   recordAgentSandboxTerminalOpened,
   releaseAgentSandboxBeat,
+  WORK_BEATS,
 } from "../agent-sandbox-holds.js";
 import { recordAgentSandboxDiscarded, recordAgentSandboxOpen } from "../agent-sandboxes.js";
 
@@ -124,5 +125,23 @@ it.layer(getTestDB())("what a member holds open in an agent's sandbox", (it) => 
         yield* recordAgentSandboxBeat(held, mac, MINUTES_LATER);
         assert.equal(yield* agentSandboxHeld(held, MINUTES_LATER), true, "a beat holds it again");
       }),
+  );
+
+  it.effect("a chat shown holds its sandbox, but not for work a member does in it", () =>
+    Effect.gen(function* () {
+      const held = yield* openSandbox;
+      const chat = { kind: AGENT_SANDBOX_BEAT_KIND.CHAT, holder: randomUUID() };
+      yield* recordAgentSandboxBeat(held, chat, OPENED);
+
+      assert.equal(yield* agentSandboxHeld(held, MINUTE_LATER), true);
+      assert.equal(yield* agentSandboxHeld(held, MINUTE_LATER, WORK_BEATS), false);
+
+      yield* recordAgentSandboxBeat(
+        held,
+        { kind: AGENT_SANDBOX_BEAT_KIND.VIEW, holder: randomUUID() },
+        OPENED,
+      );
+      assert.equal(yield* agentSandboxHeld(held, MINUTE_LATER, WORK_BEATS), true);
+    }),
   );
 });

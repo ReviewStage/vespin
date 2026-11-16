@@ -41,6 +41,7 @@ import { GLYPH, type MarkLook } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Avatar, FACE_KIND, type Face, ToneGlyph } from "./marks.js";
+import { GoesMark, PUSH_ROW_GOES } from "./settings-form.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -247,7 +248,27 @@ type MarkRowProps = {
   readonly standing?: string | undefined;
   /** Whose row it is, by their face, where the panel draws one: a reviewer, or the App that runs a check. */
   readonly face?: { readonly of: Face; readonly stands: MarkFace } | undefined;
+  /** The address a press on it opens out of the app, such as a check's run, marked at its end by the arrow out; none where it takes no press. */
+  readonly opens?: string | undefined;
 };
+
+/** What a row that opens an address out of the app is heard to do, in the arrow's place: GitHub by name where the address is GitHub's, since a check's run may be another CI's page. */
+const OPENS_HEARD = {
+  GITHUB: "Opens on GitHub",
+  WEB: "Opens on the web",
+} as const;
+
+/** GitHub's own host, which a pull request's page and most checks' runs stand on. */
+const GITHUB_HOST = "github.com";
+
+/** What a press on a row opening `address` is heard to do. */
+function opensHeard(address: string): string {
+  const host = URL.canParse(address) ? new URL(address).hostname : "";
+
+  return host === GITHUB_HOST || host.endsWith(`.${GITHUB_HOST}`)
+    ? OPENS_HEARD.GITHUB
+    : OPENS_HEARD.WEB;
+}
 
 /**
  * A row of a pull request's page, such as a check or a reviewer: its mark
@@ -256,10 +277,10 @@ type MarkRowProps = {
  * hairline under the words. A reviewer's face takes the lead column, its
  * mark moving to the line's end before its words, as the panel's facepile
  * wears where each stands; a check's App stands by its avatar beside the
- * mark. The row is heard as one element: its name, where it stands, and
- * then its words.
+ * mark. A row that opens an address out of the app ends in its arrow. The row is heard as one
+ * element: its name, where it stands, its words, and where a press goes.
  */
-export function MarkRow({ id, mark, title, detail, standing, face }: MarkRowProps) {
+export function MarkRow({ id, mark, title, detail, standing, face, opens }: MarkRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(MARK_SIZE.FACE);
   const glyph = <ToneGlyph glyph={mark.symbol} tone={mark.tone} textStyle={TYPE_ROLE.ROW_TITLE} />;
@@ -302,6 +323,7 @@ export function MarkRow({ id, mark, title, detail, standing, face }: MarkRowProp
           words
         )
       }
+      trail={opens === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.OUT} />}
     />
   );
 
@@ -309,7 +331,10 @@ export function MarkRow({ id, mark, title, detail, standing, face }: MarkRowProp
     <RowFrame
       id={id}
       row={row}
-      heard={{ label: title, value: [standing !== detail && standing, detail] }}
+      heard={{
+        label: title,
+        value: [standing !== detail && standing, detail, opens !== undefined && opensHeard(opens)],
+      }}
     />
   );
 }
@@ -454,6 +479,16 @@ export function MergeActRow({
   );
 }
 
+/** What a `WordsAsk` field takes, and the keyboard it raises for it. */
+export const WORDS_ASK_KIND = {
+  /** A name, capitalized and corrected as the system does. */
+  NAME: "name",
+  /** An email address, on the address keyboard, with nothing capitalized or corrected. */
+  EMAIL: "email",
+} as const;
+
+export type WordsAskKind = (typeof WORDS_ASK_KIND)[keyof typeof WORDS_ASK_KIND];
+
 type ConfirmAskProps = {
   /** The question, as the panel's confirm asks it: "Remove from the merge queue?" */
   readonly title: string;
@@ -469,6 +504,8 @@ type ConfirmAskProps = {
    * an act that cannot be undone.
    */
   readonly gate?: string | undefined;
+  /** What the gate's words are, which picks the keyboard its field raises, such as the address keyboard for an account's address. */
+  readonly gateKind?: WordsAskKind | undefined;
   readonly presented: boolean;
   readonly onAct: () => void;
   /** Called as the alert goes, by its act or Cancel. */
@@ -498,6 +535,7 @@ export function ConfirmAsk({
   act,
   destructive = false,
   gate,
+  gateKind = WORDS_ASK_KIND.NAME,
   presented,
   onAct,
   onDismiss,
@@ -530,7 +568,11 @@ export function ConfirmAsk({
               text={typed}
               placeholder={gate}
               onTextChange={setWords}
-              modifiers={[autocorrectionDisabled(), textInputAutocapitalization("never")]}
+              modifiers={[
+                ...(gateKind === WORDS_ASK_KIND.EMAIL ? [keyboardType("email-address")] : []),
+                autocorrectionDisabled(),
+                textInputAutocapitalization("never"),
+              ]}
             />
           )}
           <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={onDismiss} />
@@ -550,16 +592,6 @@ export function ConfirmAsk({
     </Host>
   );
 }
-
-/** What a `WordsAsk` field takes, and the keyboard it raises for it. */
-export const WORDS_ASK_KIND = {
-  /** A name, capitalized and corrected as the system does. */
-  NAME: "name",
-  /** An email address, on the address keyboard, with nothing capitalized or corrected. */
-  EMAIL: "email",
-} as const;
-
-export type WordsAskKind = (typeof WORDS_ASK_KIND)[keyof typeof WORDS_ASK_KIND];
 
 /** One of a `WordsAsk`'s acts beside Cancel, handed the words typed. */
 export interface WordsAskAct {

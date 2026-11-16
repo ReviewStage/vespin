@@ -1,7 +1,7 @@
 // detail-stack.ts -- the pages each place pushes over its detail inside the detail's own column, in a window wide enough for three columns, as Mail opens a message's related pages beside its list with a Back there.
 
 import { IOS_TAB, type IosTab, iosRouteOnTab } from "@repo/features/ios-app-links";
-import { type Href, useIsFocused, useRouter } from "expo-router";
+import { type Href, useFocusEffect, useIsFocused, useRouter } from "expo-router";
 import {
   createContext,
   useCallback,
@@ -42,6 +42,8 @@ export type PushedPage =
       /** The suggestion a box opened the agent on, as the route's `suggestedBy` and `button` name it. */
       readonly suggestedBy?: string | undefined;
       readonly button?: string | undefined;
+      /** The words a start sheet started the agent on, which name it until the list or its transcript does. */
+      readonly brief?: string | undefined;
     }
   | {
       readonly kind: typeof PUSHED_PAGE.PULL_REQUEST;
@@ -75,6 +77,8 @@ export type PushedPage =
       readonly from: string;
       readonly to: string;
       readonly quote: string;
+      /** The thread id a refused start went under, whose field this opens again. */
+      readonly again?: string | undefined;
     }
   | { readonly kind: typeof PUSHED_PAGE.HISTORY; readonly taskId: string }
   | {
@@ -206,10 +210,19 @@ function replaceDetail(place: SidebarPlace, key: string, page: PushedPage): void
 }
 
 /** An agent route's params, as `AgentScreen` reads them. */
-type AgentRouteParams = { id: string; suggestedBy?: string; button?: string };
+type AgentRouteParams = { id: string; suggestedBy?: string; button?: string; brief?: string };
 
 /** A version route's params, as `VersionScreen` reads them. */
 type VersionRouteParams = { id: string; seq: string; at?: string; newest?: string };
+
+/** A new comment's route params, `again` only where it reopens a refused start's field. */
+type NewCommentRouteParams = {
+  task: string;
+  from: string;
+  to: string;
+  quote: string;
+  again?: string;
+};
 
 /** The route a compact window or a portrait iPad pushes for a page, on the tab `tab` names, with the params its screen reads. */
 function routeOf(page: PushedPage, tab: IosTab): Href {
@@ -224,6 +237,8 @@ function routeOf(page: PushedPage, tab: IosTab): Href {
       if (page.suggestedBy !== undefined) params.suggestedBy = page.suggestedBy;
 
       if (page.button !== undefined) params.button = page.button;
+
+      if (page.brief !== undefined) params.brief = page.brief;
 
       return { pathname: on("/tasks/agent/[id]"), params };
     }
@@ -259,11 +274,19 @@ function routeOf(page: PushedPage, tab: IosTab): Href {
         pathname: on("/tasks/comments/[id]"),
         params: { id: page.threadId, task: page.taskId },
       };
-    case PUSHED_PAGE.NEW_COMMENT:
-      return {
-        pathname: on("/tasks/comments/new"),
-        params: { task: page.taskId, from: page.from, to: page.to, quote: page.quote },
+    case PUSHED_PAGE.NEW_COMMENT: {
+      const params: NewCommentRouteParams = {
+        task: page.taskId,
+        from: page.from,
+        to: page.to,
+        quote: page.quote,
       };
+
+      if (page.again !== undefined) params.again = page.again;
+
+      return { pathname: on("/tasks/comments/new"), params };
+    }
+
     case PUSHED_PAGE.HISTORY:
       return { pathname: on("/tasks/history/[id]"), params: { id: page.taskId } };
     case PUSHED_PAGE.VERSION: {
@@ -381,6 +404,80 @@ export function useDetailCovered(): boolean {
 
     return key === undefined ? top !== undefined : top !== key;
   });
+}
+
+/** The place whose detail stands in front, as the split view showing it says: the three-column split, or a two-column tab root; none while no split view stands in front. */
+let front: SidebarPlace | undefined;
+
+/** Names the place whose detail stands in front, so the menu bar's Back pops its pages; none as its split view steps behind or leaves. */
+function standDetailFront(place: SidebarPlace | undefined): void {
+  if (front === place) return;
+  front = place;
+
+  for (const listener of listeners) listener();
+}
+
+/**
+ * Stands a place's detail in front while its split view is shown, so the
+ * menu bar's Back pops the pages pushed over it. Note that stepping back
+ * clears the front only while this place still holds it, because another
+ * split view, such as the next tab's, may already have named its own in the
+ * same switch.
+ */
+export function useStandDetailFront(place: SidebarPlace, shown: boolean): void {
+  useEffect(() => {
+    if (!shown) return;
+    standDetailFront(place);
+
+    return () => {
+      if (front === place) standDetailFront(undefined);
+    };
+  }, [place, shown]);
+}
+
+/**
+ * Stands a tab root's detail in front while its tab is focused and `shown`
+ * holds, as `useStandDetailFront` does. Note that it hears focus through an
+ * effect rather than reading it, because a read would draw the whole root
+ * again on every tab switch, and hand the split view its columns anew.
+ */
+export function useStandFocusedDetailFront(place: SidebarPlace, shown: boolean): void {
+  useFocusEffect(
+    useCallback(() => {
+      if (!shown) return;
+      standDetailFront(place);
+
+      return () => {
+        if (front === place) standDetailFront(undefined);
+      };
+    }, [place, shown]),
+  );
+}
+
+/** How the detail in front stands, for the menu bar's Back: no split view in front, its own page alone, or a page pushed over it. */
+export const DETAIL_FRONT = {
+  NONE: "none",
+  ROOT: "root",
+  PUSHED: "pushed",
+} as const;
+
+export type DetailFront = (typeof DETAIL_FRONT)[keyof typeof DETAIL_FRONT];
+
+/** How the detail in front stands, which the menu bar's Back pops only while a page is pushed over it, as the column's own Back would. */
+export function useDetailFront(): DetailFront {
+  return useSyncExternalStore(subscribe, () => {
+    if (front === undefined) return DETAIL_FRONT.NONE;
+
+    return stackOf(front).pages.length > 0 ? DETAIL_FRONT.PUSHED : DETAIL_FRONT.ROOT;
+  });
+}
+
+/** Pops the top page off the detail in front, as its column's Back does; nothing where none is pushed. */
+export function popDetailFront(): void {
+  if (front === undefined) return;
+  const top = stackOf(front).pages.at(-1);
+
+  if (top !== undefined) popDetail(front, top.key);
 }
 
 /** Whether a tab's route (its segments under the tab's group) is a page the detail's stack stands, as an agent's or a pull request's. */

@@ -271,7 +271,7 @@ function mount(
       const at =
         tab.boundFor === undefined
           ? undefined
-          : taskAtOf(tab.boundFor, tab.tasks, tab.workspaces, tab.workspace, undefined);
+          : taskAtOf(tab.boundFor, LISTED_TASKS, tab.workspaces, tab.workspace, undefined);
 
       if (at === undefined) home.onOpen();
       else taskRoute.onOpen(at, true);

@@ -16,6 +16,8 @@ import {
   AccountHead,
   ActionRow,
   ConfirmAsk,
+  FOOTER_TONE,
+  footerToneOf,
   ListSection,
   LoadingRow,
   SCREEN_GROUND,
@@ -23,6 +25,7 @@ import {
   SettingsForm,
   ToggleRow,
   useAsyncAction,
+  WORDS_ASK_KIND,
 } from "@repo/ui-native";
 import { actionRefused } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
@@ -110,6 +113,7 @@ export default function AccountScreen() {
             footer={
               usage.refusal ?? supportPress.refusal ?? (supportShown ? support?.words : undefined)
             }
+            footerTone={footerToneOf(usage.refusal ?? supportPress.refusal)}
           >
             {settings === undefined ? (
               <LoadingRow words={readingWords("your settings")} />
@@ -150,10 +154,10 @@ export default function AccountScreen() {
               />
             ) : null}
           </ListSection>
-          <ListSection footer={signOut.refusal}>
+          <ListSection footer={signOut.refusal} footerTone={FOOTER_TONE.FAILURE}>
             <ActionRow label={VERB.SIGN_OUT} destructive centered onPress={signOutNow} />
           </ListSection>
-          <ListSection footer={deletion.refusal}>
+          <ListSection footer={deletion.refusal} footerTone={FOOTER_TONE.FAILURE}>
             <ActionRow
               label={DELETE_ACCOUNT}
               destructive
@@ -169,6 +173,7 @@ export default function AccountScreen() {
         act={DELETE_ACCOUNT}
         destructive
         gate={account.email}
+        gateKind={WORDS_ASK_KIND.EMAIL}
         presented={asking}
         onAct={() => {
           setAsking(false);

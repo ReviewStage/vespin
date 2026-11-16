@@ -42,6 +42,8 @@ import {
   settingRowsForPage,
 } from "@repo/settings";
 import {
+  FOOTER_TONE,
+  footerToneOf,
   ListSection,
   MenuPickRow,
   rejectionWords,
@@ -237,7 +239,11 @@ export default function AgentsScreen() {
     <Screen ground={SCREEN_GROUND.GROUPED}>
       <SettingsForm>
         {current === undefined && newAgentRows.length === 0 ? null : (
-          <ListSection title={DEFAULT_WORDS.SECTION} footer={refusalOf(newAgentRows, write.said)}>
+          <ListSection
+            title={DEFAULT_WORDS.SECTION}
+            footer={refusalOf(newAgentRows, write.said)}
+            footerTone={FOOTER_TONE.FAILURE}
+          >
             {current === undefined || standard === undefined ? null : (
               <Fragment key={defaultRound}>
                 <MenuPickRow
@@ -300,7 +306,11 @@ export default function AgentsScreen() {
           </ListSection>
         )}
         {preferenceRows.map((row) => (
-          <ListSection key={row.entry.id} footer={refusalOf([row]) ?? detailOf(row)}>
+          <ListSection
+            key={row.entry.id}
+            footer={refusalOf([row]) ?? detailOf(row)}
+            footerTone={footerToneOf(refusalOf([row]))}
+          >
             {pickRow(row)}
           </ListSection>
         ))}
