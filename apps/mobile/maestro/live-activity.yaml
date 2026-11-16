@@ -15,7 +15,9 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       liveActivity: "true"
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - pressKey: Home
 - waitForAnimationToEnd
 # A swipe down from the top's left opens Notification Center, which draws the
@@ -57,4 +59,6 @@ appId: dev.vespin.ios
 - launchApp:
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000

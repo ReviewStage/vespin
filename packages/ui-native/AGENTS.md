@@ -130,10 +130,14 @@ builds a control of its own.
   screen and a list stand on the brand's `GROUND` and `SIDEBAR`, never the
   system's grays, and so do a split view's list and detail columns
   themselves (`containerBackground`) and a sheet or popover to its edge
-  (`presentationBackground`), but for a short route sheet at half height in
-  a compact window, which iOS floats as Liquid Glass and which stands on
-  that glass alone (see Grouped forms) unless the reader reduces
-  transparency; a split view's sidebar paints nothing, so it
+  (`presentationBackground`), every sheet and popover, an iPhone's card as
+  much as an iPad's form sheet, lifted in dark onto the panel's dialog fill
+  (`useColors`'s lifted theme, under `ElevatedGround` or `useColors(true)`),
+  every ground in it included, as iOS lifts presented content, so it never
+  stands as black as the page behind it. The one exception is a short route
+  sheet at half height in a compact window, which iOS floats as Liquid Glass
+  and which stands on that glass alone, unlifted (see Grouped forms), unless
+  the reader reduces transparency; a split view's sidebar paints nothing, so it
   stands clear on the system's floating glass pane, as Mail's does; lists stand plain, as the panel's do, never as
   inset cards (a page of one thing's sections, such as a task's, stands
   `LIST_LOOK.DETAIL`, the system's grouped list, so its headers scroll away
@@ -244,6 +248,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   split view's list keeps selected stands on a rounded `SELECTED` fill set in
   from the column's edges (`ROW_INSET.FILL`), its hairlines stepping aside, as
   Mail's selected message does; its words don't move.
+- **A list with nothing to show** still stands, its `EmptyState` its one
+  row (`RowList`'s `empty`), as iOS stands its content-unavailable view in a
+  list's place: a pull anywhere still reads it again, and the state's own
+  press, such as Try again, still takes a tap. A screen never swaps its list
+  for the state.
 - **Select mode** (`RowList`'s `choosing`) is SwiftUI's own edit mode, as
   Mail's Select: a round check leads each row, a tap ticks it, two fingers
   dragged down tick a run, and the swipes step aside. Its screen names the
@@ -251,7 +260,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   foot, a compact window's tab bar stepping aside for it.
 - **Group headers** (`ListSection`) are small and muted with a count, or
   finished of all as `2/5` (`progress`); a `foldable` one folds in place on
-  a press, its chevron on the left, its rows easing away and back; and one given `add` ends in a muted +,
+  a press, its chevron on the left, its rows easing away and back; one given a `glyph` leads its title
+  with what the group is, as the panel's sidebar leads a section with its icon and a repository with its
+  owner's picture (`RepositoryPicture`, its glyph standing in until it draws); and one given `add` ends in a muted +,
   one act or the system's menu of several, as Reminders' groups add, so an
   empty section stands as its header alone rather than a list of add rows.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
@@ -281,9 +292,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   or remind) read as iOS Settings' cards: their rows stand in the panel's
   raised fill (`RAISED`, the brand's `OVERLAY`) on the form's own ground
   (`GROUPED`: the chip's hover gray in light, black in dark), and the sheet
-  around them stands on `GROUPED` too, but for a short sheet at half height,
-  which iOS floats as Liquid Glass: there the glass is its one ground
-  (`Screen` and `SettingsForm` `clear`), as Apple's half sheets stand. A row a press takes somewhere is the
+  around them stands on `GROUPED` too; a lifted sheet's form stands on the
+  dialog fill (`SURFACE`) with its rows on the hairline's gray (`CHIP_EDGE`),
+  but for a short sheet at half height, which iOS floats as Liquid Glass:
+  there the glass is its one ground (`Screen` and `SettingsForm` `clear`), as
+  Apple's half sheets stand. A row a press takes somewhere is the
   system's default button, so it flashes the row's gray while held, as
   Settings' rows do; a choice among a few is `PickRows`, each a row with
   what it does under its name where it says and the picked one checked in

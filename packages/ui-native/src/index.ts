@@ -158,6 +158,7 @@ export {
   ROW_ACTION_TONE,
   type RowAction,
   type RowActionTone,
+  type RowMenuGroup,
   type RowSubmenu,
   type RowSwipe,
   type TaskFold,
@@ -342,6 +343,7 @@ export { BRAND_COLOR } from "./tokens/brand-colors.js";
 export {
   type BarScheme,
   type BrandColors,
+  ElevatedGround,
   STATUS_TONE,
   type StatusTone,
   toneColor,

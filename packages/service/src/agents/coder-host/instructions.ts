@@ -46,6 +46,7 @@ const UNCLEAR_LINE =
 export const CODER_HARNESS = {
   CLAUDE_CODE: CONVERSATION_RUNTIME.CLAUDE_CODE,
   CODEX: CONVERSATION_RUNTIME.CODEX,
+  CURSOR: CONVERSATION_RUNTIME.CURSOR,
 } as const;
 
 export type CoderHarness = (typeof CODER_HARNESS)[keyof typeof CODER_HARNESS];
@@ -182,7 +183,7 @@ export function coderInstructions(
 ): string {
   const describes = offers(standing, EDIT_DESCRIPTION_TOOL.name);
   const publishes = repository !== null && offers(standing, AGENT_TOOL.OPEN_PULL_REQUEST);
-  const shell = harness === CODER_HARNESS.CODEX ? "your shell" : "Bash";
+  const shell = harness === CODER_HARNESS.CLAUDE_CODE ? "Bash" : "your shell";
   const branch = startBranch === null ? "" : ` on \`${startBranch}\``;
 
   const read =

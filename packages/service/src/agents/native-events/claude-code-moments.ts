@@ -1,4 +1,4 @@
-import type { RunnerMessage } from "@repo/agent-runner/protocol";
+import type { ClaudeCodeMessage } from "@repo/agent-runner/protocol";
 import { CLAUDE_CODE_TOOL, claudeCodeWorkspaceTool } from "@repo/features/agent-tools";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { integrationOfRemoteTool } from "@repo/features/integration-wire";
@@ -305,7 +305,7 @@ const SDK_MESSAGE = {
 } as const;
 
 /** Every `system` subtype of the pinned SDK, as its message union spells them. */
-type SdkSystemSubtype = Extract<RunnerMessage, { type: "system" }>["subtype"];
+type SdkSystemSubtype = Extract<ClaudeCodeMessage, { type: "system" }>["subtype"];
 
 /** The `system` subtypes read here. */
 const SYSTEM_SUBTYPE = {
@@ -414,7 +414,7 @@ const BILLING_REFUSED = "billing_error";
  * are the CLI's, never the model's.
  */
 const RATE_LIMITED = "rate_limit" satisfies NonNullable<
-  Extract<RunnerMessage, { type: "assistant" }>["error"]
+  Extract<ClaudeCodeMessage, { type: "assistant" }>["error"]
 >;
 
 /** What Claude Code puts before any MCP server's tool, the server's name and `__` following it (`mcp__linear__list_issues`). */

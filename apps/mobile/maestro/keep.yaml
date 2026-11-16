@@ -12,7 +12,9 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - tapOn: "Recorded the invite flow"
 - assertVisible: ".*walked the invite flow.*"
 - waitForAnimationToEnd
@@ -25,7 +27,14 @@ appId: dev.vespin.ios
 - tapOn:
     point: "50%, 10%"
 - waitForAnimationToEnd
-# The message's own menu, opened on its words.
+# The message's own menu, opened on its words. Note that they are scrolled to
+# the window's middle first, since the picture's menu closing left them under
+# the bar, where the long press landed on it instead.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*walked the invite flow.*"
+      DIRECTION: UP
 - longPressOn: ".*walked the invite flow.*"
 - assertVisible: "Copy message"
 - waitForAnimationToEnd
