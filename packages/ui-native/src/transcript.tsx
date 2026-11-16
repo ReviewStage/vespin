@@ -80,6 +80,9 @@ const OPEN_SETTLE_MS = 100;
 /** The longest the list stands hidden as it opens, in milliseconds, however its rows go on landing. */
 const OPEN_CAP_MS = 400;
 
+/** How near its end a scroll must report the list, in points, for it to count as standing at its newest row as it opens. */
+const OPEN_END_SLACK = 1;
+
 /** How far the list stands from its newest row before Jump to latest is offered, in points. */
 const LATEST_REACH = 240;
 
@@ -1093,6 +1096,16 @@ export function AgentTranscript({
   // Whether the list has settled at its newest row as it opened, before which it stands hidden, so the reader never sees it draw its rows in and chase its end.
   const [opened, setOpened] = useState(false);
   const settling = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // The content's height as the list last reported it, where the last scroll found the list, and whether the open waits on a scroll to land at the end, so the list shows only once it stands there.
+  const contentHeight = useRef(0);
+
+  const lastScroll = useRef<{ readonly height: number; readonly gap: number } | undefined>(
+    undefined,
+  );
+
+  const seeking = useRef(false);
+
   // The calls' rows as they stand, and the call a reader was sent to whose row has not yet taken VoiceOver's focus.
   const calls = useRef(new Map<string, HostInstance>());
   const sentTo = useRef<string | undefined>(undefined);
@@ -1151,15 +1164,37 @@ export function AgentTranscript({
     olderNow.current = older;
   }, [older]);
 
-  // Note that only the reader's own scroll up reads an older page, never the list's scroll as it opens, and a read that failed waits for Try again.
-  const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    setAway(fromEnd(event.nativeEvent) > LATEST_REACH);
-    const pages = olderNow.current;
-
-    if (anchored.current || pages === undefined || pages.reading || pages.failed) return;
-
-    if (event.nativeEvent.contentOffset.y < OLDER_REACH) pages.onRead();
+  // Note that the list shows once, and stays shown.
+  const show = useCallback(() => {
+    clearTimeout(settling.current);
+    seeking.current = false;
+    setOpened(true);
   }, []);
+
+  // Note that only the reader's own scroll up reads an older page, never the list's scroll as it opens, and a read that failed waits for Try again.
+  const onScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const gap = fromEnd(event.nativeEvent);
+      setAway(gap > LATEST_REACH);
+      lastScroll.current = { height: event.nativeEvent.contentSize.height, gap };
+
+      // Note that an open waiting on its scroll shows once the scroll reports the list at its end, at the content's latest height, since a scroll to an end estimated before the rows there were measured stood mid-list for a frame.
+      if (
+        seeking.current &&
+        gap <= OPEN_END_SLACK &&
+        lastScroll.current.height === contentHeight.current
+      ) {
+        show();
+      }
+
+      const pages = olderNow.current;
+
+      if (anchored.current || pages === undefined || pages.reading || pages.failed) return;
+
+      if (event.nativeEvent.contentOffset.y < OLDER_REACH) pages.onRead();
+    },
+    [show],
+  );
 
   const onScrollSettled = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     anchored.current = fromEnd(event.nativeEvent) < ANCHOR_REACH;
@@ -1216,33 +1251,56 @@ export function AgentTranscript({
       list.current?.getScrollResponder()?.scrollToEnd({ animated: !reduceMotion });
   }, [keyboard, reduceMotion]);
 
-  // Note that the list shows at its newest row in one frame: scrolled to its end once more, then shown the frame after, so the scroll has landed before anything draws.
+  // Note that the list shows at its newest row: where the last scroll already found it there, at once, and else once the scroll to its end reports landing (`onScroll`); a list a reveal sent elsewhere shows where it stands.
   const open = useCallback(() => {
     clearTimeout(settling.current);
 
-    if (anchored.current) list.current?.getScrollResponder()?.scrollToEnd({ animated: false });
-    requestAnimationFrame(() => setOpened(true));
-  }, []);
+    if (!anchored.current) {
+      show();
 
-  // Note that the list opens once its rows stop landing, or at the cap however they go on, so a long transcript never stands blank.
+      return;
+    }
+
+    const last = lastScroll.current;
+
+    if (last !== undefined && last.gap <= OPEN_END_SLACK && last.height === contentHeight.current) {
+      show();
+
+      return;
+    }
+
+    seeking.current = true;
+    list.current?.getScrollResponder()?.scrollToEnd({ animated: false });
+  }, [show]);
+
+  // Note that the list shows at the cap however its rows go on landing, so a long transcript never stands blank: scrolled to its end once more, then shown the frame after.
   useEffect(() => {
     if (opened || !measured || !hasRows) return;
-    const cap = setTimeout(open, OPEN_CAP_MS);
+
+    const cap = setTimeout(() => {
+      if (anchored.current) list.current?.getScrollResponder()?.scrollToEnd({ animated: false });
+      requestAnimationFrame(show);
+    }, OPEN_CAP_MS);
 
     return () => clearTimeout(cap);
-  }, [opened, measured, hasRows, open]);
+  }, [opened, measured, hasRows, show]);
 
   useEffect(() => () => clearTimeout(settling.current), []);
 
   // Note that a row landing, or a fold opened, at the newest row keeps it in view, while one landing as the reader reads back leaves their place.
-  const onContentSizeChange = useCallback(() => {
-    // Note that the scroller itself is asked, since the list's own end is an estimate until every row has been measured.
-    if (anchored.current) list.current?.getScrollResponder()?.scrollToEnd({ animated: false });
+  const onContentSizeChange = useCallback(
+    (_width: number, height: number) => {
+      contentHeight.current = height;
 
-    if (opened || !hasRows) return;
-    clearTimeout(settling.current);
-    settling.current = setTimeout(open, OPEN_SETTLE_MS);
-  }, [opened, hasRows, open]);
+      // Note that the scroller itself is asked, since the list's own end is an estimate until every row has been measured.
+      if (anchored.current) list.current?.getScrollResponder()?.scrollToEnd({ animated: false });
+
+      if (opened || !hasRows) return;
+      clearTimeout(settling.current);
+      settling.current = setTimeout(open, OPEN_SETTLE_MS);
+    },
+    [opened, hasRows, open],
+  );
 
   return (
     <View
