@@ -30,7 +30,13 @@ import { AudioClip } from "./audio-clip.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { FileChip } from "./file-chip.js";
-import { DOCK_FOLLOWS_KEYBOARD, useDockKeyboard, useDockRoom } from "./glass-bar.js";
+import {
+  BAR_EDGE,
+  BAR_MARGIN,
+  DOCK_FOLLOWS_KEYBOARD,
+  useDockKeyboard,
+  useDockRoom,
+} from "./glass-bar.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
@@ -43,7 +49,7 @@ import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, TEXT_SIZE } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
@@ -86,8 +92,8 @@ const LATEST_REACH = 240;
 /** How near its newest row the list stands to keep it in view as rows land, in points. */
 const ANCHOR_REACH = 48;
 
-/** How wide the round control that brings the newest row into view stands, in points: the system's least target. */
-const JUMP_SIZE = 44;
+/** How wide the round control that brings the newest row into view stands, in points: the system's least target, as wide as Send's press frame, so it stands centered over Send. */
+const JUMP_SIZE = PRESS_SIZE;
 
 /** What the control that brings the newest row into view says. */
 const JUMP_TO_LATEST = "Jump to latest";
@@ -937,7 +943,8 @@ function TranscriptRow({
  * Liquid Glass holding a down arrow, standing only once the reader has
  * scrolled back, over the list's foot at the end of the rows' words, as the
  * panel's way back stands in its log's corner, so it covers at most a
- * line's end rather than the middle of the words. Note that where Liquid Glass is unavailable, before iOS 26, or the
+ * line's end rather than the middle of the words, and centered over the
+ * composer's Send, the bar's last press. Note that where Liquid Glass is unavailable, before iOS 26, or the
  * reader turned on Reduce Transparency, it is drawn solid on the surface's
  * ground inside the quiet ink rather than a hand-drawn copy of glass.
  */
@@ -947,7 +954,7 @@ function JumpToLatest({
   onPress,
 }: {
   readonly bottom: number;
-  /** How far in from the list's trailing edge it stands: where the rows' words end. */
+  /** How far in from the list's trailing edge it stands: where the composer's bar stands its last press. */
   readonly end: number;
   readonly onPress: () => void;
 }) {
@@ -1301,7 +1308,7 @@ export function AgentTranscript({
       {away && opened ? (
         <JumpToLatest
           bottom={jumpFoot}
-          end={right + sides + SPACE.EDGE}
+          end={right + sides + BAR_MARGIN + BAR_EDGE}
           onPress={() => {
             anchored.current = true;
             // Note that the jump scrolls at once where the reader asked for less motion.
