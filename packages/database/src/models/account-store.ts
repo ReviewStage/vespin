@@ -8,7 +8,8 @@ import {
   chaptersProviderOf,
 } from "@repo/features/chapters-model-choice";
 import { LINK_OPEN_LIST, type LinkOpen } from "@repo/features/link-open";
-import type { ModelChoice, ModelProvider } from "@repo/features/models-wire";
+import type { ModelChoice } from "@repo/features/models-wire";
+import type { ModelApiProvider } from "@repo/features/provider-key-wire";
 import { type LiveVoice, LiveVoiceSchema } from "@repo/features/voices";
 import {
   type AccountExperiment,
@@ -241,7 +242,7 @@ export function accountExperimentOn(
 /** Whose API key the account's chapters run on first where it saved both: the provider of the model it last picked, Anthropic's where it picked none. */
 export function accountChaptersProvider(
   userId: string,
-): Effect.Effect<ModelProvider, StoreFailure, DatabaseServices> {
+): Effect.Effect<ModelApiProvider, StoreFailure, DatabaseServices> {
   return Effect.map(readAccountPreferences(userId), (row) =>
     chaptersProviderOf(chaptersModelFrom(row?.chaptersModel)),
   );

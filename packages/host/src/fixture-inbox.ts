@@ -124,6 +124,7 @@ import {
   COMMENT_SUBJECT,
   DESCRIPTION_COMMENT_CALL_FAILURE,
   type ListedTasksView,
+  TASK_CALL_FAILURE,
   type TaskListParts,
   type TasksView,
 } from "@repo/features/tasks-view";
@@ -328,6 +329,9 @@ function item(
 }
 
 const OPEN = { status: INBOX_ASK_STATUS.OPEN } as const;
+
+/** The PDF the reference task's description keeps as it keeps a picture, by the id the service keeps it under, so a description's file chip has one to draw. */
+const DESCRIPTION_PDF = "e738b0a4-c3f5-4a1d-b8d5-6f7182930b45";
 
 /** The recorded thread's files: a still its words draw, the recording sent after them, and the test plan as a PDF, by the attachment each is read by. */
 const RECORDED = {
@@ -1600,8 +1604,11 @@ const INVITES_DESCRIPTION = [
   "",
   "- Task: [@Usage alerts](https://vespin.dev/personal/task/45)",
   "- Pull request: [@#128 Invite a teammate by email](https://github.com/ada/relay/pull/128)",
+  "- Follow-up: [@#131 Let an owner resend an invite that expired from the members page, with a fresh link](https://github.com/ada/relay/pull/131)",
   "- File: [@invite.ts](https://github.com/ada/relay/blob/HEAD/src/members/invite.ts)",
   "- Date: [@Nov 16, 2026](mention://date/2026-11-16)",
+  "",
+  `![Invite flow spec](https://vespin.dev/personal/task/${FIXTURE_IDS.TASK}/files/${DESCRIPTION_PDF})`,
   "",
   "## Checks",
   "",
@@ -1665,11 +1672,34 @@ const INVITES_HISTORY: DescriptionRevisionsAnswer = {
   ],
 };
 
-/** The reference journey's description as one of its versions left it: whole at the newest, its opening alone before. */
+/**
+ * Ada's draft of the reference journey's description, before its agent took
+ * it on: a goal of one line, and a question the agent's version answered and
+ * struck, so the newest version reads against it as sections written in,
+ * changed and struck.
+ */
+const INVITES_DRAFT = [
+  "## Context",
+  "",
+  "Only an admin can add someone to a workspace.",
+  "",
+  "## Open questions",
+  "",
+  "- Should an invite expire?",
+  "",
+  "## Goal",
+  "",
+  "- A member invites a teammate by email.",
+  "",
+].join("\n");
+
+/** The reference journey's description as one of its versions left it: whole at the newest, Ada's draft before it, and the draft's opening first. */
 function invitesVersionBody(seq: number): string {
   const newest = INVITES_HISTORY.revisions[0]?.seq;
 
-  return seq === newest ? INVITES_DESCRIPTION : (INVITES_DESCRIPTION.split("\n\n")[0] ?? "");
+  if (seq === newest) return INVITES_DESCRIPTION;
+
+  return seq === 1 ? (INVITES_DRAFT.split("\n\n## Open questions")[0] ?? "") : INVITES_DRAFT;
 }
 
 /** The pages the reference journey's agent showed, as its task's page lists them. */
@@ -1787,6 +1817,21 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
   },
 ];
 
+/** The threads a fixture run started on the invites task's description, by id, so a reply or a resolve on one finds it as it does a staged thread. */
+const STARTED_THREADS = new Map<string, DescriptionCommentThread>();
+
+/** The number the next reply the run keeps is given its id by, past every id the fixture stages, so each kept reply is keyed apart. */
+let nextReplyId = 1000;
+
+/** Keeps a started thread as it now stands, moved on a revision, and answers it. */
+function keepStarted(thread: DescriptionCommentThread): DescriptionCommentThread {
+  const kept = { ...thread, revision: thread.revision + 1, updatedAt: Date.now() };
+
+  STARTED_THREADS.set(kept.id, kept);
+
+  return kept;
+}
+
 /** Each held comments slice with the reference journey's description threads laid over it, one object for each. */
 const STAGED_COMMENTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS],
@@ -1801,11 +1846,16 @@ function stagedComments(
 
   if (staged !== undefined) return staged;
 
+  // Note that a thread a fixture run started stands after the staged ones, as the host drew it, so the new comment's thread opens on its page.
+  const started = (held[COMMENT_SUBJECT.DESCRIPTION][TASK.INVITES]?.rows ?? []).filter(
+    (thread) => !INVITES_THREADS.some((each) => each.id === thread.id),
+  );
+
   const laid = {
     ...held,
     [COMMENT_SUBJECT.DESCRIPTION]: {
       ...held[COMMENT_SUBJECT.DESCRIPTION],
-      [TASK.INVITES]: { rows: INVITES_THREADS },
+      [TASK.INVITES]: { rows: [...INVITES_THREADS, ...started] },
     },
   };
 
@@ -2522,6 +2572,11 @@ const ANSWERS: StagedAnswers = {
 
     return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
   },
+  // Note that the reference task's PDF is read as the service reads a description's file, and any other is not there.
+  [ACT_KIND.TASKS_PICTURE_READ]: ({ taskId, attachmentId }) =>
+    taskId === FIXTURE_IDS.TASK && attachmentId === DESCRIPTION_PDF
+      ? { contentType: AGENT_ATTACHMENT_TYPE.PDF, base64: FIXTURE_PLAN_PDF }
+      : { failure: TASK_CALL_FAILURE.NOT_FOUND },
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
   // Note that a version of the reference journey's description is read as the service reads one, and a restore is taken as the service takes one, though nothing here moves.
@@ -2529,7 +2584,8 @@ const ANSWERS: StagedAnswers = {
     revision: {
       seq,
       description: { body: invitesVersionBody(seq), assumptions: [] },
-      previous: null,
+      // The version before it, which the version is drawn against; the first has none.
+      previous: seq > 1 ? { body: invitesVersionBody(seq - 1), assumptions: [] } : null,
     },
   }),
   [ACT_KIND.TASKS_RESTORE]: () => true,
@@ -2689,25 +2745,73 @@ const ANSWERS: StagedAnswers = {
   // Note that a rename and a delete are taken as the service takes them, though nothing here moves, so the window draws its own write.
   [ACT_KIND.TASKS_RENAME]: () => true,
   [ACT_KIND.TASKS_DELETE]: () => true,
-  // Note that a reply is taken as the service takes one, answered with its thread as it then stands, though nothing here moves.
+  // Note that a new comment on the invites task's description is taken as the service takes one, answered with its thread under the id the window chose, so a flow sees the thread open with the words as its first comment.
+  [ACT_KIND.TASKS_COMMENT_START]: ({ taskId, start }) => {
+    if (taskId !== TASK.INVITES || !("scope" in start)) {
+      return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
+    }
+
+    const at = Date.now();
+
+    const thread: DescriptionCommentThread = {
+      id: start.id ?? fixtureId(307),
+      scope: start.scope,
+      quote: start.quote,
+      anchor: start.anchor,
+      section: "Goal",
+      status: DESCRIPTION_COMMENT_STATUS.OPEN,
+      entries: [
+        {
+          id: fixtureId(308),
+          kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+          writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+          words: start.words,
+          at,
+        },
+      ],
+      createdAt: at,
+      updatedAt: at,
+      revision: 1,
+    };
+
+    STARTED_THREADS.set(thread.id, thread);
+
+    return { thread };
+  },
+  // Note that a reply is taken as the service takes one, on a staged thread or one the run started, answered with its thread as it then stands, though nothing here moves.
   [ACT_KIND.TASKS_COMMENT_ACT]: ({ taskId, threadId, action }) => {
-    const thread = INVITES_THREADS.find((each) => each.id === threadId);
+    const thread =
+      INVITES_THREADS.find((each) => each.id === threadId) ?? STARTED_THREADS.get(threadId);
 
     if (taskId !== TASK.INVITES || thread === undefined) {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
     }
 
+    const started = STARTED_THREADS.has(thread.id);
+
+    // Note that a thread the run started keeps what was done to it, its replies and whether it stands resolved, so a later answer carries them; a staged thread answers as it stands.
+    if (started && action.action === DESCRIPTION_COMMENT_ACTION.RESOLVE) {
+      return { thread: keepStarted({ ...thread, status: DESCRIPTION_COMMENT_STATUS.RESOLVED }) };
+    }
+
+    if (started && action.action === DESCRIPTION_COMMENT_ACTION.REOPEN) {
+      return { thread: keepStarted({ ...thread, status: DESCRIPTION_COMMENT_STATUS.OPEN }) };
+    }
+
     if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) return { thread };
 
+    // Note that a reply kept on a started thread takes an id of its own, since the thread's rows are keyed by their entries' ids; a staged thread's one reply, never kept, keeps its fixed id.
     const reply = {
-      id: fixtureId(306),
+      id: started ? fixtureId(nextReplyId++) : fixtureId(306),
       kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
       writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
       words: action.words,
       at: Date.now(),
     };
 
-    return { thread: { ...thread, entries: [...thread.entries, reply] } };
+    const replied = { ...thread, entries: [...thread.entries, reply] };
+
+    return { thread: started ? keepStarted(replied) : replied };
   },
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,

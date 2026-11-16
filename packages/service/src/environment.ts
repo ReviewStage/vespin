@@ -19,6 +19,7 @@ const TITLE_MODEL_ENVIRONMENT = {
 const PREVIEW_API_KEY_ENVIRONMENT = {
   [PROVIDER_KEY_PROVIDER.ANTHROPIC]: "PREVIEW_ANTHROPIC_API_KEY",
   [PROVIDER_KEY_PROVIDER.OPENAI]: "PREVIEW_OPENAI_API_KEY",
+  [PROVIDER_KEY_PROVIDER.CURSOR]: "PREVIEW_CURSOR_API_KEY",
 } as const satisfies Record<ProviderKeyProvider, string>;
 
 /** A Preview's stand-in API key for each provider it holds one for; none on any other deployment. */
@@ -140,6 +141,9 @@ export const hostedEnvironment = Layer.effect(
         ),
         [PROVIDER_KEY_PROVIDER.OPENAI]: Config.option(
           Config.Redacted(PREVIEW_API_KEY_ENVIRONMENT[PROVIDER_KEY_PROVIDER.OPENAI]),
+        ),
+        [PROVIDER_KEY_PROVIDER.CURSOR]: Config.option(
+          Config.Redacted(PREVIEW_API_KEY_ENVIRONMENT[PROVIDER_KEY_PROVIDER.CURSOR]),
         ),
       }),
     }),
