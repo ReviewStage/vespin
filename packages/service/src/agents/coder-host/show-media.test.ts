@@ -192,7 +192,7 @@ it.layer(getTestDB())("show_media", (it) => {
     () =>
       Effect.gen(function* () {
         const target = yield* openConversation;
-        const tooLarge = new Uint8Array(CONVERSATION_PICTURE_BOUNDS.MAX_BYTES + 1);
+        const tooLarge = new Uint8Array(2_000_000);
         tooLarge.set(pngBytes(10, 10));
 
         const sandbox = sandboxWith({
