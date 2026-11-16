@@ -45,7 +45,7 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useNavigationContainerRef, useRouter } from "expo-router";
+import { Stack, useNavigation, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
@@ -347,12 +347,30 @@ function focusedIn(route: RouteNode | undefined): RouteNode | undefined {
   return focusedIn(state.routes[state.index ?? state.routes.length - 1]);
 }
 
-/** The route focused under the sheet on top of the root stack: what the sheet uncovers as it goes. */
-function focusedUnderSheet(root: NavigatorState | undefined): RouteNode | undefined {
-  if (root === undefined) return undefined;
-  const under = (root.index ?? root.routes.length - 1) - 1;
+/** A navigator, as React Navigation hands it, read only for its state and the navigator over it. */
+type Navigator = {
+  readonly getState: () => NavigatorState;
+  readonly getParent: () => Navigator | undefined;
+};
 
-  return under < 0 ? undefined : focusedIn(root.routes[under]);
+/**
+ * The navigator a sheet was presented on: the first, from the sheet's own up,
+ * with a route beneath its top. Note that it is found by walking up, because
+ * a sheet may stand in a stack of its own, as New task's layout does.
+ */
+function presentingNavigator(own: Navigator): Navigator {
+  const state = own.getState();
+  const parent = own.getParent();
+
+  return (state.index ?? 0) > 0 || parent === undefined ? own : presentingNavigator(parent);
+}
+
+/** Where the reader stands in a navigator, `back` routes below its top: the focused route there, by key and params. */
+function standingIn(navigator: Navigator, back: number): Standing {
+  const state = navigator.getState();
+  const at = (state.index ?? state.routes.length - 1) - back;
+
+  return standingOf(at < 0 ? undefined : focusedIn(state.routes[at]));
 }
 
 /** Where a route stands, by its key and its params, which React Navigation keeps serializable. */
@@ -443,7 +461,7 @@ function useClosingStart(
   setNote: (note: string | undefined) => void,
 ): UseSheetStartResult {
   const router = useRouter();
-  const navigation = useNavigationContainerRef();
+  const navigation: Navigator = useNavigation();
   const onTab = useOnTab();
   const write = useWrite();
   // Note that a start goes once, so a second press while the sheet slides away sends nothing.
@@ -460,9 +478,10 @@ function useClosingStart(
     }
 
     setSent(true);
-    // Note that where the reader stands is kept as Start is pressed: the sheet, and the route it uncovers.
-    const sheet = standingOf(navigation.getCurrentRoute());
-    const uncovered = standingOf(focusedUnderSheet(navigation.getRootState()));
+    // Note that where the reader stands is kept as Start is pressed, in the navigator the sheet was presented on: the sheet, and the route it uncovers.
+    const presenting = presentingNavigator(navigation);
+    const sheet = standingIn(presenting, 0);
+    const uncovered = standingIn(presenting, 1);
     kept.release();
     router.dismiss();
     const started: Started = {};
@@ -484,7 +503,7 @@ function useClosingStart(
 
       if (!went || answer === undefined || "refused" in answer) return;
       // Note that the task opens only while the reader stands where Start left them, on the same route with the same row selected, so a page they opened or a row they picked meanwhile stands.
-      const now = standingOf(navigation.getCurrentRoute());
+      const now = standingIn(presenting, 0);
 
       if (!sameStanding(sheet, now) && !sameStanding(uncovered, now)) return;
       // Note that only the task's page opens, its new agent standing in its Agents section, because a second route pushed over it races the split view's hand-off and leaves the task behind.
