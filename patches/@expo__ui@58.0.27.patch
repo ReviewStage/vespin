@@ -87,6 +87,63 @@ index 35e91fc87448e062bc43cec99c3e82a8b2b517b5..9d743fc2bac2e3812a3d59203a38bb5f
      };
  }
  /**
+diff --git a/build/swift-ui/Toolbar/index.d.ts b/build/swift-ui/Toolbar/index.d.ts
+index aeb1191459d01444aadc4ccbc78d77592347a02b..51ad45fbcb5d347d28dfa884a7ea62e5c0306e03 100644
+--- a/build/swift-ui/Toolbar/index.d.ts
++++ b/build/swift-ui/Toolbar/index.d.ts
+@@ -24,6 +24,10 @@ export type ToolbarItemPlacement = 'automatic' | 'principal' | 'navigation' | 'p
+  * @see Official [SwiftUI documentation](https://developer.apple.com/documentation/swiftui/toolbaritemvisibilitypriority).
+  */
+ export type ToolbarItemVisibilityPriority = 'automatic' | 'low' | 'high';
++/**
++ * How much room a `ToolbarSpacer` takes, matching SwiftUI's `SpacerSizing`.
++ */
++export type ToolbarSpacerSizing = 'flexible' | 'fixed';
+ export interface ToolbarItemProps {
+     /**
+      * The semantic placement of the item within the toolbar.
+@@ -37,6 +41,12 @@ export interface ToolbarItemProps {
+      * @platform ios 27.0+
+      */
+     visibilityPriority?: ToolbarItemVisibilityPriority;
++    /**
++     * A `ToolbarSpacer` of this sizing placed just before the item, in the same placement, such as
++     * a flexible one that stands a keyboard toolbar's lone item at its trailing edge, which iOS 26
++     * otherwise centers. Ignored before iOS 26.
++     */
++    spacerBefore?: ToolbarSpacerSizing;
+     /**
+      * The content of the item.
+      */
+@@ -65,7 +75,7 @@ declare function ToolbarContent(props: ToolbarContentProps): import("react").JSX
+  * @platform ios
+  * @platform tvos
+  */
+-export declare function ToolbarItem({ placement, visibilityPriority, children, }: ToolbarItemProps): import("react").JSX.Element;
++export declare function ToolbarItem({ placement, visibilityPriority, spacerBefore, children, }: ToolbarItemProps): import("react").JSX.Element;
+ /**
+  * Adds a toolbar to the view it wraps, matching SwiftUI's `toolbar(content:)`.
+  *
+diff --git a/build/swift-ui/Toolbar/index.js b/build/swift-ui/Toolbar/index.js
+index 6b1d39173397dae66068978459c640cb256908c5..79d422dab4f5a175ed15426e9bc71bf6aab7ea50 100644
+--- a/build/swift-ui/Toolbar/index.js
++++ b/build/swift-ui/Toolbar/index.js
+@@ -29,12 +29,13 @@ const ToolbarNativeView = requireNativeView('ExpoUI', 'ToolbarView');
+  *
+  * @platform ios
+  * @platform tvos
+- */ export function ToolbarItem({ placement = 'automatic', visibilityPriority = 'automatic', children }) {
++ */ export function ToolbarItem({ placement = 'automatic', visibilityPriority = 'automatic', spacerBefore, children }) {
+     return /*#__PURE__*/ _jsx(Slot, {
+         name: "item",
+         extraProps: {
+             placement,
+-            visibilityPriority
++            visibilityPriority,
++            spacerBefore
+         },
+         children: children
+     });
 diff --git a/build/swift-ui/modifiers/index.d.ts b/build/swift-ui/modifiers/index.d.ts
 index 482ba8f30f4f393a2d56708cc25314d25db2b521..ed414d5c1929ff271f350e8a0ed60f5cd6332b72 100644
 --- a/build/swift-ui/modifiers/index.d.ts
@@ -355,6 +412,76 @@ index 07a856574df36a69b802bd483caf4e33ae05a976..96144798f4a0de5176074149fd73e378
      register("listSectionMargins") { params, appContext, _ in
        return try ListSectionMargins(from: params, appContext: appContext)
      }
+diff --git a/ios/ToolbarView.swift b/ios/ToolbarView.swift
+index 7d5046d74247691b139f0ef570d3aa2ba409f8a8..773073b88843f93ea666855201532702c1897a52 100644
+--- a/ios/ToolbarView.swift
++++ b/ios/ToolbarView.swift
+@@ -38,10 +38,50 @@ private struct ToolbarItemLayer: View {
+   let content: AnyView
+ 
+   var body: some View {
+-    placed(content, on: base, placement: placement(from: props), visibilityPriority: visibilityPriority(from: props))
++    let placement = placement(from: props)
++    let visibilityPriority = visibilityPriority(from: props)
++
++    if let spacerBefore = spacerBefore(from: props) {
++      spaced(content, on: base, placement: placement, visibilityPriority: visibilityPriority, spacerBefore: spacerBefore)
++    } else {
++      placed(content, on: base, placement: placement, visibilityPriority: visibilityPriority)
++    }
+   }
+ }
+ 
++/**
++ How much room a spacer placed before an item takes, matching SwiftUI's `SpacerSizing`.
++ */
++internal enum ToolbarSpacerSizingOptions: String {
++  case flexible
++  case fixed
++}
++
++/// Places the item after a `ToolbarSpacer` in the same placement and the same toolbar, so the two keep their order; before iOS 26, which has no `ToolbarSpacer`, the item alone.
++@ViewBuilder
++private func spaced(
++  _ content: AnyView,
++  on base: AnyView,
++  placement: ToolbarItemPlacement,
++  visibilityPriority: ToolbarItemVisibilityPriorityOptions?,
++  spacerBefore: ToolbarSpacerSizingOptions
++) -> some View {
++#if os(iOS) && compiler(>=6.2) // Xcode 26
++  if #available(iOS 26.0, *) {
++    base.toolbar {
++      ToolbarSpacer(spacerBefore == .fixed ? .fixed : .flexible, placement: placement)
++      ToolbarItem(placement: placement) {
++        content
++      }
++    }
++  } else {
++    placed(content, on: base, placement: placement, visibilityPriority: visibilityPriority)
++  }
++#else
++  placed(content, on: base, placement: placement, visibilityPriority: visibilityPriority)
++#endif
++}
++
+ internal struct ToolbarView: ExpoSwiftUI.View {
+   @ObservedObject var props: ToolbarViewProps
+ 
+@@ -110,6 +150,13 @@ private func placement(from props: SlotViewProps) -> ToolbarItemPlacement {
+   return placement.toPlacement()
+ }
+ 
++private func spacerBefore(from props: SlotViewProps) -> ToolbarSpacerSizingOptions? {
++  guard let rawSizing = props.extraProps?["spacerBefore"] as? String else {
++    return nil
++  }
++  return ToolbarSpacerSizingOptions(rawValue: rawSizing)
++}
++
+ private func visibilityPriority(from props: SlotViewProps) -> ToolbarItemVisibilityPriorityOptions? {
+   guard let rawPriority = props.extraProps?["visibilityPriority"] as? String else {
+     return nil
 diff --git a/src/swift-ui/List/index.tsx b/src/swift-ui/List/index.tsx
 index a4ebca663b0b1cda3ca92420dd956a012c928567..5902bc8f155b81bc4a2efe566d88c48c2fd9ce2a 100644
 --- a/src/swift-ui/List/index.tsx
@@ -411,3 +538,45 @@ index a4ebca663b0b1cda3ca92420dd956a012c928567..5902bc8f155b81bc4a2efe566d88c48c
      children: React.ReactNode;
    };
  
+diff --git a/src/swift-ui/Toolbar/index.tsx b/src/swift-ui/Toolbar/index.tsx
+index 51956878d1d4f7f5fed879f8e3ffee2080a556c0..ee55f72c17a43ff0e32c6564d603732220679f9f 100644
+--- a/src/swift-ui/Toolbar/index.tsx
++++ b/src/swift-ui/Toolbar/index.tsx
+@@ -48,6 +48,11 @@ export type ToolbarItemPlacement =
+  */
+ export type ToolbarItemVisibilityPriority = 'automatic' | 'low' | 'high';
+ 
++/**
++ * How much room a `ToolbarSpacer` takes, matching SwiftUI's `SpacerSizing`.
++ */
++export type ToolbarSpacerSizing = 'flexible' | 'fixed';
++
+ export interface ToolbarItemProps {
+   /**
+    * The semantic placement of the item within the toolbar.
+@@ -61,6 +66,12 @@ export interface ToolbarItemProps {
+    * @platform ios 27.0+
+    */
+   visibilityPriority?: ToolbarItemVisibilityPriority;
++  /**
++   * A `ToolbarSpacer` of this sizing placed just before the item, in the same placement, such as
++   * a flexible one that stands a keyboard toolbar's lone item at its trailing edge, which iOS 26
++   * otherwise centers. Ignored before iOS 26.
++   */
++  spacerBefore?: ToolbarSpacerSizing;
+   /**
+    * The content of the item.
+    */
+@@ -101,10 +112,11 @@ function ToolbarContent(props: ToolbarContentProps) {
+ export function ToolbarItem({
+   placement = 'automatic',
+   visibilityPriority = 'automatic',
++  spacerBefore,
+   children,
+ }: ToolbarItemProps) {
+   return (
+-    <Slot name="item" extraProps={{ placement, visibilityPriority }}>
++    <Slot name="item" extraProps={{ placement, visibilityPriority, spacerBefore }}>
+       {children}
+     </Slot>
+   );
