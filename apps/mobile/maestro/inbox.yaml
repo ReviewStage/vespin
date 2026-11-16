@@ -77,10 +77,11 @@ env:
       - scrollUntilVisible:
           element: "Who can withdraw an invite\\?"
           direction: UP
-# A thread opens on its path small in the bar and its title as the page's
-# heading, then each message: the agent's tile, name and time over its words,
-# its picture drawn where the words name it, and its recording after the
-# message that sent it, played in place from its MP4 copy.
+# A thread opens named in a compact window's bar, as Messages names a
+# conversation, and under its path and title in a split view's detail, as
+# Mail's message stands; then each message: the agent's tile, name and time
+# over its words, its picture drawn where the words name it, and its recording
+# after the message that sent it, played in place from its MP4 copy.
 - tapOn: "Recorded the invite flow"
 - assertVisible: ".*walked the invite flow.*"
 - waitForAnimationToEnd
