@@ -14,6 +14,7 @@ import {
 } from "./transcript-model.js";
 
 const PICTURE = { id: "picture-1", mediaType: "image/png", width: 320, height: 180, byteCount: 10 };
+const SHOT = "data:image/png;base64,iVBORw0KGgo=";
 const CLIP = { id: "clip-1", mediaType: "audio/mpeg", width: 0, height: 0, byteCount: 10 };
 
 describe("transcriptItems", () => {
@@ -98,7 +99,7 @@ describe("transcriptItems", () => {
     });
   });
 
-  it("opens an automation's transcript on its run's prompt, from the automation and its pull request, leaving later lines as sent", () => {
+  it("opens an automation's transcript on its run's prompt, from the automation and its pull request, with the pictures it carried, leaving later lines as sent", () => {
     const origin = transcriptOriginOf({
       automationId: undefined,
       automationName: "Morning triage",
@@ -119,7 +120,10 @@ describe("transcriptItems", () => {
         {
           id: "fired",
           role: MESSAGE_ROLE.USER,
-          parts: [{ type: "text", text: "Triage the new issues.\n\nFired by pull request #42." }],
+          parts: [
+            { type: "text", text: "Triage the new issues.\n\nFired by pull request #42." },
+            { type: "file", mediaType: "image/png", filename: "crash.png", url: SHOT },
+          ],
         },
         { id: "later", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Thanks." }] },
       ],
@@ -142,6 +146,7 @@ describe("transcriptItems", () => {
           { words: "#42 Crash on launch", address: "https://github.com/ada/relay/pull/42" },
         ],
         body: '{"event":"opened"}',
+        pictures: [{ name: "crash.png", url: SHOT, pictureId: undefined }],
       },
       { kind: TRANSCRIPT_ITEM.SAID, words: "Thanks.", sender: undefined },
     ]);
