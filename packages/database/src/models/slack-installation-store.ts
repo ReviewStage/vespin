@@ -1,5 +1,5 @@
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { and, asc, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, lte, ne, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Option, type Redacted, Result, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
@@ -61,7 +61,8 @@ import type { TaskStoreEffect } from "./task-store.js";
  * installation keeps of the bot: its user id and id, the app, its scopes,
  * and the Enterprise Grid org (`saveSlackBotToken`), opened for one call at
  * a time (`openSlackBot`) and forgotten when Slack revokes it
- * (`deleteSlackBotToken`) or the installation is deleted. A token is only
+ * (`deleteSlackBotToken`) or the installation is deleted, as Slack's
+ * uninstall of the app from the team does (`deleteSlackTeamInstallations`). A token is only
  * ever handed out `Redacted`, and nothing here logs it or its seal.
  *
  * Settings holds the installation and the channels' repositories as a live
@@ -234,6 +235,19 @@ const deleteInstallation = SqlSchema.findAll({
         .delete(slackInstallation)
         .where(eq(slackInstallation.organizationId, organizationId))
         .returning(TXID_RETURNING),
+    ),
+});
+
+/** Every installation of the team created no later than the moment given, deleted, answering the workspaces it stood in. */
+const deleteTeamInstallations = SqlSchema.findAll({
+  Request: Schema.Struct({ teamId: Schema.String, before: Schema.Date }),
+  Result: Schema.Struct({ organizationId: Schema.String }),
+  execute: ({ teamId, before }) =>
+    Database.use((db) =>
+      db
+        .delete(slackInstallation)
+        .where(and(eq(slackInstallation.teamId, teamId), lte(slackInstallation.createdAt, before)))
+        .returning({ organizationId: slackInstallation.organizationId }),
     ),
 });
 
@@ -794,6 +808,22 @@ export function deleteSlackInstallation(
   organizationId: string,
 ): TaskStoreEffect<Option.Option<string>> {
   return Effect.map(deleteInstallation(organizationId), txidOf);
+}
+
+/**
+ * Deletes the installation of every workspace connected to the team that
+ * stood when Slack said our app left it, each member's Slack id with it,
+ * answering the workspaces it was deleted in. One linked after that moment
+ * is the team's install again and stands, so a late or repeated uninstall
+ * never takes it.
+ */
+export function deleteSlackTeamInstallations(
+  teamId: string,
+  uninstalledAt: Date,
+): TaskStoreEffect<readonly string[]> {
+  return Effect.map(deleteTeamInstallations({ teamId, before: uninstalledAt }), (rows) =>
+    rows.map((row) => row.organizationId),
+  );
 }
 
 /**

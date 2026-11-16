@@ -43,10 +43,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-import {
-  deleteSlackInstallation,
-  slackTeamWorkspaces,
-} from "@repo/database/models/slack-installation-store";
+import { deleteSlackTeamInstallations } from "@repo/database/models/slack-installation-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_REPLY, knownAsk } from "@repo/features/inbox-wire";
 import { causeKind } from "@repo/runtime/effect";
@@ -165,13 +162,14 @@ const UrlVerificationSchema = Schema.Struct({
 });
 
 /**
- * An uninstall or a revoke as far as it is read: the team, and for a
- * revoke, the bot users whose tokens went; a revoke of user tokens alone
+ * An uninstall or a revoke as far as it is read: the team, when Slack
+ * says it happened (whole seconds since the epoch), and for a revoke, the bot users whose tokens went; a revoke of user tokens alone
  * names no bot.
  */
 const LifecycleEventSchema = Schema.Struct({
   type: Schema.Literal(SLACK_REQUEST_TYPE.EVENT_CALLBACK),
   team_id: Schema.String,
+  event_time: Schema.Number,
   event: Schema.Struct({
     type: Schema.Literals(Object.values(SLACK_LIFECYCLE_EVENT)),
     tokens: Schema.optionalKey(
@@ -243,13 +241,17 @@ function endsInstallation(lifecycle: LifecycleEvent): boolean {
   return (event.tokens?.bot ?? []).length > 0;
 }
 
-/** Deletes the installation of every workspace connected to the team, its bot token and its members' Slack ids going with it. */
-const forgetTeam = /* @__PURE__ */ Effect.fnUntraced(function* (teamId: string) {
-  const workspaces = yield* hostedStoreOrUnavailable(slackTeamWorkspaces(teamId));
-
-  for (const organizationId of workspaces) {
-    yield* hostedStoreOrUnavailable(deleteSlackInstallation(organizationId));
-  }
+/**
+ * Deletes the installation of every workspace connected to the team that
+ * stood when the event happened, its bot token and its members' Slack ids
+ * going with it, in one statement. Note that one linked after it is the
+ * team's install again and stands, because Slack may deliver an event
+ * late or more than once (its retries run up to minutes later).
+ */
+const forgetTeam = /* @__PURE__ */ Effect.fnUntraced(function* (lifecycle: LifecycleEvent) {
+  // Note that the event's whole second is taken as its end, so an install made in that second is gone with it.
+  const happened = new Date((lifecycle.event_time + 1) * 1000);
+  yield* hostedStoreOrUnavailable(deleteSlackTeamInstallations(lifecycle.team_id, happened));
 });
 
 /** The request's JSON: interactivity's under its form field, an event's as the body is. */
@@ -459,8 +461,8 @@ const eventsEndpoint = Effect.gen(function* () {
   if (Result.isSuccess(lifecycle)) {
     yield* Effect.logInfo("A Slack request was heard", { kind: lifecycle.success.event.type });
 
-    // Note that a retry is acted on too, since a delete of what is already gone does nothing.
-    if (endsInstallation(lifecycle.success)) yield* forgetTeam(lifecycle.success.team_id);
+    // Note that a retry is acted on too, since the delete takes only what stood when the event happened.
+    if (endsInstallation(lifecycle.success)) yield* forgetTeam(lifecycle.success);
 
     return hostedJsonResponse(200, {});
   }

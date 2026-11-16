@@ -1006,6 +1006,7 @@ it.layer(SUITE)("our Slack route", (it) => {
             type: "event_callback",
             team_id: "T0001",
             event_id: `Ev${randomUUID()}`,
+            event_time: 0,
             event: { type: "app_uninstalled" },
           }),
         );

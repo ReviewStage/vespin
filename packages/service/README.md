@@ -424,7 +424,9 @@ minutes from its clock, before it reads anything of the body; a deployment
 missing the secret answers unavailable. It answers Slack's `url_verification`
 challenge, and an `app_uninstalled` event, or a `tokens_revoked` event that
 names a bot token, deletes the installation of every workspace connected to
-that team, with its bot token and its members' Slack ids. The Slack app must
+that team, with its bot token and its members' Slack ids, unless it was linked
+after the event's `event_time`, so a late or repeated delivery never takes a
+reinstall. The Slack app must
 also subscribe to those two events.
 
 An owner or admin names the repository a Slack start defaults to under
