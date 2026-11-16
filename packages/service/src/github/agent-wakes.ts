@@ -248,9 +248,6 @@ const UNNAMED_CHECKS_ROOM = 120;
 /** What GitHub appends to an App's login, which a failed check is told by and an App's words told apart by. */
 const BOT_LOGIN_SUFFIX = "[bot]";
 
-/** The most agents one delivery reads, newest started first, of which the newest unarchived is told. */
-const MAXIMUM_AGENTS_PER_WAKE = 10;
-
 /** How each review verdict reads in the line, by GitHub's own word for it. */
 const VERDICT_WORDS: ReadonlyMap<string, string> = new Map([
   ["approved", "approved"],
@@ -1171,15 +1168,21 @@ function checksCompletedKey(wake: AgentWake, checks: HeadChecks): string {
   return JSON.stringify([AGENT_WAKE.CHECKS_COMPLETED, wake.repository, wake.sha, outcomes]);
 }
 
-/** The agents a delivery is about: those on its branches, or, for a comment, those whose pull request it is. */
+/**
+ * The agent a delivery is about, as a list of none or one: the newest
+ * unarchived one on its branches, or, for a comment, whose pull request it
+ * is, so a continued or forked agent and its source never both act on it.
+ */
 function agentsOf(wake: AgentWake) {
+  const newest = { unarchivedOnly: true };
+
   if (wake.branches.length > 0) {
-    return listAgentsOnBranches(wake.repository, wake.branches, MAXIMUM_AGENTS_PER_WAKE);
+    return listAgentsOnBranches(wake.repository, wake.branches, 1, newest);
   }
 
   if (wake.pullRequest === undefined) return Effect.succeed<readonly OwnedAgent[]>([]);
 
-  return listAgentsOnPullRequest(wake.repository, wake.pullRequest, MAXIMUM_AGENTS_PER_WAKE);
+  return listAgentsOnPullRequest(wake.repository, wake.pullRequest, 1, newest);
 }
 
 /**
@@ -1206,9 +1209,7 @@ export const wakeAgents = /* @__PURE__ */ Effect.fn("web/githubWakeAgents")(func
   const ofChecks = checksCompleted || wake.kind === AGENT_WAKE.CHECK_FAILED;
 
   const told = yield* Effect.gen(function* () {
-    // Only the newest unarchived agent, so a continued or forked one and its source never both act.
-    const newest = (yield* agentsOf(wake)).filter(({ agent }) => agent.archivedAt === null)[0];
-    const agents = newest === undefined ? [] : [newest];
+    const agents = yield* agentsOf(wake);
     const turns = yield* latestTurnsOfReached(agents.map(({ agent }) => agent.conversationId));
 
     const admitted = agents.filter(({ agent }) =>

@@ -1980,18 +1980,25 @@ const OnBranchesSchema = Schema.Struct({
   repository: Schema.String,
   branches: Schema.Array(Schema.String),
   limit: Schema.Number,
+  unarchivedOnly: Schema.Boolean,
 });
 
 const OnPullRequestSchema = Schema.Struct({
   repository: Schema.String,
   number: Schema.Number,
   limit: Schema.Number,
+  unarchivedOnly: Schema.Boolean,
 });
+
+/** The condition that an agent stands unarchived, where the read asks for only those; none otherwise. */
+function unarchivedWhere(unarchivedOnly: boolean) {
+  return unarchivedOnly ? isNull(agentTable.archivedAt) : undefined;
+}
 
 const findAgentsOnBranches = SqlSchema.findAll({
   Request: OnBranchesSchema,
   Result: AgentOnRepositoryRowSchema,
-  execute: ({ repository, branches, limit }) =>
+  execute: ({ repository, branches, limit, unarchivedOnly }) =>
     Database.use((db) =>
       db
         .select({
@@ -2005,6 +2012,7 @@ const findAgentsOnBranches = SqlSchema.findAll({
           and(
             namesDeliveredRepository(agentTable.repository, repository),
             inArray(agentTable.branch, [...branches]),
+            unarchivedWhere(unarchivedOnly),
           ),
         )
         .orderBy(desc(agentTable.createdAt), asc(agentTable.id))
@@ -2016,7 +2024,7 @@ const findAgentsOnBranches = SqlSchema.findAll({
 const findAgentsOnExtraBranches = SqlSchema.findAll({
   Request: OnBranchesSchema,
   Result: AgentOnRepositoryRowSchema,
-  execute: ({ repository, branches, limit }) =>
+  execute: ({ repository, branches, limit, unarchivedOnly }) =>
     Database.use((db) =>
       db
         .select({
@@ -2031,6 +2039,7 @@ const findAgentsOnExtraBranches = SqlSchema.findAll({
           and(
             namesDeliveredRepository(agentRepository.repository, repository),
             inArray(agentRepository.headBranch, [...branches]),
+            unarchivedWhere(unarchivedOnly),
           ),
         )
         .orderBy(desc(agentTable.createdAt), asc(agentTable.id))
@@ -2057,7 +2066,7 @@ const ON_LINKED_COLUMNS = {
 const findAgentsOnLinkedBranches = SqlSchema.findAll({
   Request: OnBranchesSchema,
   Result: AgentOnLinkedRowSchema,
-  execute: ({ repository, branches, limit }) =>
+  execute: ({ repository, branches, limit, unarchivedOnly }) =>
     Database.use((db) =>
       db
         .select(ON_LINKED_COLUMNS)
@@ -2067,6 +2076,7 @@ const findAgentsOnLinkedBranches = SqlSchema.findAll({
           and(
             namesDeliveredRepository(agentPullRequest.repository, repository),
             inArray(agentPullRequest.headBranch, [...branches]),
+            unarchivedWhere(unarchivedOnly),
           ),
         )
         .orderBy(desc(agentTable.createdAt), asc(agentTable.id))
@@ -2078,7 +2088,7 @@ const findAgentsOnLinkedBranches = SqlSchema.findAll({
 const findAgentsOnPullRequest = SqlSchema.findAll({
   Request: OnPullRequestSchema,
   Result: AgentOnLinkedRowSchema,
-  execute: ({ repository, number, limit }) =>
+  execute: ({ repository, number, limit, unarchivedOnly }) =>
     Database.use((db) =>
       db
         .select(ON_LINKED_COLUMNS)
@@ -2088,6 +2098,7 @@ const findAgentsOnPullRequest = SqlSchema.findAll({
           and(
             namesDeliveredRepository(agentPullRequest.repository, repository),
             eq(agentPullRequest.number, number),
+            unarchivedWhere(unarchivedOnly),
           ),
         )
         .orderBy(desc(agentTable.createdAt), asc(agentTable.id))
@@ -2774,7 +2785,8 @@ function linkedFound(rows: readonly (typeof AgentOnLinkedRowSchema.Type)[]): rea
  * pull request it linked from one of them whichever branch it stands on now
  * (`agent_pull_request`), each agent once on each repository, the
  * repository matched as GitHub matches one, its case aside, and the branch
- * exactly. This is the one read that names no account, since GitHub's
+ * exactly, an archived one left out where `unarchivedOnly` asks, before the
+ * limit. This is the one read that names no account, since GitHub's
  * delivery names a repository and a branch and nothing of who started an
  * agent on them; what each answers is read again on its owner's own token.
  */
@@ -2782,9 +2794,10 @@ export function listAgentsOnBranches(
   repository: string,
   branches: readonly string[],
   limit: number,
+  options: { readonly unarchivedOnly?: boolean } = {},
 ): AgentStoreEffect<readonly OwnedAgent[]> {
   if (branches.length === 0) return Effect.succeed([]);
-  const request = { repository, branches, limit };
+  const request = { repository, branches, limit, unarchivedOnly: options.unarchivedOnly ?? false };
 
   return Effect.map(
     Effect.all([
@@ -2810,15 +2823,17 @@ export function listAgentsOnBranches(
  * started first and at
  * most `limit` of them: what a delivery about a pull request finds them by
  * where it names no branch, as a comment's does, on their own repository or
- * an extra one, matched as the read by branches matches. Like that read, it
+ * an extra one, matched as the read by branches matches, an archived one
+ * left out where `unarchivedOnly` asks, before the limit. Like that read, it
  * names no account.
  */
 export function listAgentsOnPullRequest(
   repository: string,
   number: number,
   limit: number,
+  options: { readonly unarchivedOnly?: boolean } = {},
 ): AgentStoreEffect<readonly OwnedAgent[]> {
-  const request = { repository, number, limit };
+  const request = { repository, number, limit, unarchivedOnly: options.unarchivedOnly ?? false };
 
   return Effect.map(findAgentsOnPullRequest(request), (linked) =>
     ownedNewestFirst(linkedFound(linked), limit),
