@@ -73,6 +73,7 @@ import {
   PULL_REQUEST_CHAPTERS_READ,
   REPOSITORY_PULL_REQUEST_CHAPTERS_READ,
 } from "../pull-request-chapters-live.js";
+import { REPOSITORY_PULL_REQUEST_MOVED_READ } from "../pull-request-moved-live.js";
 import { SIDEBAR_READ } from "../sidebar-live.js";
 import { TASK_HISTORY_READ } from "../task-history-live.js";
 import {
@@ -130,6 +131,7 @@ export const liveContract = {
   [REPOSITORY_PULL_REQUEST_CHAPTERS_READ.name]: liveProcedure(
     REPOSITORY_PULL_REQUEST_CHAPTERS_READ,
   ),
+  [REPOSITORY_PULL_REQUEST_MOVED_READ.name]: liveProcedure(REPOSITORY_PULL_REQUEST_MOVED_READ),
   [INTEGRATION_STATUSES_READ.name]: liveProcedure(INTEGRATION_STATUSES_READ),
   [ACCOUNT_PREFERENCES_READ.name]: liveProcedure(ACCOUNT_PREFERENCES_READ),
 };

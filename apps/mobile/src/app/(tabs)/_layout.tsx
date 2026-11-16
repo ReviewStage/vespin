@@ -1,4 +1,4 @@
-// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, in a compact window, the prominent round + that opens New task, and over it the way back to a voice call standing; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation or while the Inbox stands in Select mode.
+// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation or while the Inbox stands in Select mode.
 
 import {
   type IosTab,
@@ -12,6 +12,9 @@ import {
   SplitOverTabs,
   UNDER_SPLIT_SCREEN,
   useColors,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { usePathname, useRouter, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
@@ -21,14 +24,12 @@ import { isStackedRoute, useStackToRoutes } from "../../detail-stack.js";
 import { useInboxChoosingOn } from "../../inbox/inbox-choosing.js";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
-import { placeOfRoute, SIDEBAR_PLACE } from "../../screens/app-sidebar.js";
+import { PLUS_TAB, placeOfRoute, SIDEBAR_PLACE } from "../../screens/app-sidebar.js";
 import { AppSplit } from "../../screens/app-split.js";
 import { PageDrawerProvider } from "../../screens/detail-stack-column.js";
 import { PushedPageView } from "../../screens/pushed-pages.js";
 import { useSidebarChoiceLapse } from "../../sidebar-shown.js";
-import { useThreeColumns, useWindowSizeClass } from "../../use-window-size-class.js";
 import { useStandingCallCard } from "../../voice-call.js";
-import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
 
 /**
  * The way back to a call standing, in the tab bar's bottom accessory, full
@@ -91,11 +92,14 @@ function useTabStanding(segments: readonly string[], threeColumns: boolean): Tab
 // stands Search last in the bar beside it. The round + opens New task as a
 // sheet over whatever tab stands, rather than standing a tab of its own: it
 // is held unselectable (`disabled`, which keeps its look and only stops the
-// system selecting it), and its press opens the sheet. It stands only in a
-// compact window, the iPhone's and the folded Duo's: a regular one, an
-// iPad's or the open Duo's, stands New task as the compose button leading
-// its detail's bar instead (`useComposeAction`), as Mail does, so a window
-// never offers it twice.
+// system selecting it), and its press opens the sheet. It stands on an
+// iPhone, the Duo folded or open, its rail included, and never on an iPad,
+// which stands New task as the compose button leading its detail's or its
+// list's bar instead (`useComposeAction`), as Mail does, so a window never
+// offers it twice. Note that it reads the device's idiom (`PLUS_TAB`) rather
+// than the window, because expo-router keys the tabs' view on the names of
+// the tabs that stand: a + hidden by the window would mount every tab again,
+// its pages and drafts dropped, on each fold, rotation, or resize.
 //
 // The bar is `sidebarAdaptable` on an iPhone, which the iPhone Duo is in
 // either posture: folded, iOS 27 stands its tabs as a glass rail on the
@@ -183,7 +187,7 @@ export default function TabsLayout() {
         name="new-task"
         prominent
         disabled
-        hidden={!iconOnly}
+        hidden={!PLUS_TAB}
         accessibilityLabel="New task"
         listeners={{ tabPress: () => router.push("/start-task") }}
       >

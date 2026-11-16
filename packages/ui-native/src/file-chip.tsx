@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     gap: SPACE.ROW,
     paddingHorizontal: SPACE.ROW + 2,
     paddingVertical: SPACE.TIGHT * 2,
-    borderRadius: RADIUS.TAG * 2,
+    borderRadius: RADIUS.TILE,
     borderWidth: StyleSheet.hairlineWidth,
   },
   words: { flexShrink: 1, gap: 1 },
@@ -317,7 +317,7 @@ export function FileChip({ name, mediaType, source, size, onRetry }: FileChipPro
           accessibilityLabel={heard}
           accessibilityHint={unread ? READS_AGAIN : viewed ? FILE_WORDS.OPENS : FILE_WORDS.SHARES}
           accessibilityState={{ busy: source === undefined }}
-          style={[styles.chip, { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE }]}
+          style={[styles.chip, { backgroundColor: colors.CARD, borderColor: colors.CHIP_EDGE }]}
         >
           {source === undefined ? (
             <ActivityIndicator color={colors.TEXT_MUTED} style={{ width: MARK_SIZE.LEAD }} />

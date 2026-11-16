@@ -6,10 +6,15 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import {
   BAR_TITLE,
   type BrandColors,
+  ChipMarkProvider,
   FailureNoticeLayer,
   FailureNoticeProvider,
   KeepingProvider,
+  NO_GROUND,
+  TAB_BAR_ROOM,
   useColors,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
@@ -27,12 +32,12 @@ import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 import { useShareSheet } from "../share-sheet.js";
+import { SHORT_SHEET_DETENTS } from "../sheet-stack.js";
 import { holdSplash } from "../splash.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useChipMarks } from "../tasks/chip-marks.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
 import { VoiceCallProvider } from "../voice-call.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
@@ -61,9 +66,6 @@ function navigationTheme(colors: BrandColors, dark: boolean) {
     },
   };
 }
-
-/** A short sheet's heights in a compact window, as fractions of the screen: UIKit's medium, then its large. */
-const SHORT_SHEET_DETENTS = [0.5, 1];
 
 /** The presentations that stand a screen in a sheet over the root, which would hide a notice drawn there. */
 const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set(["modal", "formSheet"]);
@@ -180,6 +182,8 @@ function GuardedScreens() {
         presentation: "formSheet" as const,
         sheetAllowedDetents: SHORT_SHEET_DETENTS,
         sheetGrabberVisible: true,
+        // Note that the route under the sheet's own stack paints no ground, so at half height the sheet's glass shows through to its screen, which paints none there either (`useSheetAtHalf`).
+        contentStyle: { backgroundColor: NO_GROUND },
       };
 
   return (
@@ -249,7 +253,9 @@ function GuardedScreens() {
 function KeptScreens() {
   return (
     <KeepingProvider keeping={useKeeping()}>
-      <GuardedScreens />
+      <ChipMarkProvider markOf={useChipMarks()}>
+        <GuardedScreens />
+      </ChipMarkProvider>
     </KeepingProvider>
   );
 }
@@ -264,6 +270,8 @@ function KeptScreens() {
  * drew light beside the dark tab bar.
  */
 export default function RootLayout() {
+  // Note that a compact window's tab bar floats at its foot, which the notice stands over; a regular window's tabs stand at its top or its side.
+  const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const dark = useColorScheme() === "dark";
   const colors = useColors();
   const theme = useMemo(() => navigationTheme(colors, dark), [colors, dark]);
@@ -271,7 +279,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={theme}>
       <HostProvider>
-        <FailureNoticeProvider>
+        <FailureNoticeProvider footRoom={compact ? TAB_BAR_ROOM : 0}>
           <VoiceCallProvider>
             <KeptScreens />
           </VoiceCallProvider>
