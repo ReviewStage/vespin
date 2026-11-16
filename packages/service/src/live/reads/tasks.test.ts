@@ -726,15 +726,10 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           startedByAgentId: local.id,
         });
 
-        // Tasks made for the owner by a coding agent, and by the notetaker on their call.
+        // A task made for the owner by a coding agent.
         const followUp = yield* startTask(owner, {
           name: "Invite emails",
           origin: { actor: DESCRIPTION_ACTOR.AGENT, agentId: done.id },
-        });
-
-        const fromCall = yield* startTask(owner, {
-          name: "Audit log export",
-          origin: { actor: DESCRIPTION_ACTOR.NOTETAKER },
         });
 
         // The follow-up made a child of the first plan.
@@ -781,12 +776,8 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         const read = yield* liveListOf(owner, NOW);
         const originOf = (taskId: string) => read.tasks.find((each) => each.id === taskId)?.origin;
         assert.deepEqual(
-          [originOf(plan.id), originOf(followUp.id), originOf(fromCall.id)],
-          [
-            undefined,
-            { actor: DESCRIPTION_ACTOR.AGENT, agentId: done.id },
-            { actor: DESCRIPTION_ACTOR.NOTETAKER },
-          ],
+          [originOf(plan.id), originOf(followUp.id)],
+          [undefined, { actor: DESCRIPTION_ACTOR.AGENT, agentId: done.id }],
         );
 
         const parentOf = (taskId: string) =>

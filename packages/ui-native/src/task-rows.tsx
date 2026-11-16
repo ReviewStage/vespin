@@ -47,7 +47,6 @@ import { sinceHeard } from "@repo/features/time-format";
 import type { ReactElement, ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
-import { BrandMark } from "./brand-mark.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -545,15 +544,14 @@ export function LinkRow({
   );
 }
 
-/** Who wrote a version, by the mark its row leads with: a person, an agent, the app's own notetaker, or the history from before versions were kept. */
+/** Who wrote a version, by the mark its row leads with: a person, an agent, or the history from before versions were kept. */
 export const VERSION_WRITER = {
   PERSON: "person",
   AGENT: "agent",
-  PRODUCT: "product",
   EARLIER: "earlier",
 } as const;
 
-/** A version's writer as its mark draws them: a person by their face, an agent by its tile, name and harness's mark where it is known, and the notetaker and the earlier history by marks of their own. */
+/** A version's writer as its mark draws them: a person by their face, an agent by its tile, name and harness's mark where it is known, and the earlier history by a mark of its own. */
 export type VersionWriter =
   | { readonly kind: typeof VERSION_WRITER.PERSON; readonly face: Face }
   | {
@@ -561,10 +559,9 @@ export type VersionWriter =
       readonly name: string;
       readonly harness: ModelProvider | undefined;
     }
-  | { readonly kind: typeof VERSION_WRITER.PRODUCT }
   | { readonly kind: typeof VERSION_WRITER.EARLIER };
 
-/** A version's writer's mark at a row's lead, as the panel's version rows lead: a person's face, an agent's tile with its harness's mark, the app's own mark (`BrandMark`), or the history glyph for the history before versions were kept; each grows with Dynamic Type, as a face does. */
+/** A version's writer's mark at a row's lead, as the panel's version rows lead: a person's face, an agent's tile with its harness's mark, or the history glyph for the history before versions were kept; each grows with Dynamic Type, as a face does. */
 function VersionMark({ writer }: { readonly writer: VersionWriter }) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.LEAD);
@@ -574,8 +571,6 @@ function VersionMark({ writer }: { readonly writer: VersionWriter }) {
       return <Avatar name={writer.face.name} picture={writer.face.picture} size={size} />;
     case VERSION_WRITER.AGENT:
       return <AgentTile name={writer.name} harness={writer.harness} size={size} />;
-    case VERSION_WRITER.PRODUCT:
-      return <BrandMark size={size} />;
     case VERSION_WRITER.EARLIER:
       return <LeadGlyph symbol={GLYPH.HISTORY} ink={colors.TEXT_MUTED} />;
   }

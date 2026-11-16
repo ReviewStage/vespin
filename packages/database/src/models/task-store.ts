@@ -269,7 +269,6 @@ function newestAgentColumn<T>(column: typeof agentTable.machine | typeof agentTa
 /** Who made a task, as its row holds it. */
 const TaskCreatorActorSchema = Schema.Literals([
   DESCRIPTION_ACTOR.DEVELOPER,
-  DESCRIPTION_ACTOR.NOTETAKER,
   DESCRIPTION_ACTOR.AGENT,
 ]);
 

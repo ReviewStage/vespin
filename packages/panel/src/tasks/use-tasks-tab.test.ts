@@ -710,11 +710,16 @@ function _undoButton(): HTMLButtonElement {
   return undo;
 }
 
-/** One revision as the history lists it, written by the app on a call. */
+/** One revision as the history lists it, written by a teammate. */
 function revisionLine(seq: number) {
   return {
     seq,
-    lastEdit: { actor: DESCRIPTION_ACTOR.NOTETAKER, at: 10 * seq, duringCall: false },
+    lastEdit: {
+      actor: DESCRIPTION_ACTOR.DEVELOPER,
+      by: { userId: "user-charles", name: "Charles Pan" },
+      at: 10 * seq,
+      duringCall: false,
+    },
     startedAt: 10 * seq,
     changes: 2,
   };

@@ -43,7 +43,7 @@ interface TaskCommentsSubject {
  * their rows decoded and joined as the desktop does, beside
  * `readDescriptionCommentThreads`, the held read a surface read them with. The two
  * agree for the description's own threads and for a page's, as threads are
- * started, answered by a member and an agent, sent to the app, edited,
+ * started, answered by a member and an agent, sent to an agent, edited,
  * resolved, reopened, and deleted, files among them, and for an account
  * that does not reach the task.
  *
@@ -120,13 +120,26 @@ it.layer(getTestDB())("a task's comments followed live", (it) => {
 
         yield* saveDescriptionText(owner, taskId, DESCRIPTION_TEXT);
 
+        const agent = yield* createAgent(owner, {
+          taskId,
+          idempotencyKey: randomUUID(),
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          descriptionSnapshot: "# Invites",
+          prompt: null,
+          repository: "acme/relay",
+          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+        });
+
+        const agentId = Option.getOrThrow(agent).agent.id;
+
         const page = (write: { readonly pageId?: string; readonly html: string }) =>
           Effect.map(
             writePage(
               owner,
               taskPageOwner(taskId),
               { title: "Invite funnel", ...write },
-              { kind: PAGE_SHOWER.APP },
+              { kind: PAGE_SHOWER.AGENT, agentId },
             ),
             Option.getOrThrow,
           );
@@ -199,17 +212,6 @@ it.layer(getTestDB())("a task's comments followed live", (it) => {
           words: "Better.",
         });
 
-        const agent = yield* createAgent(owner, {
-          taskId,
-          idempotencyKey: randomUUID(),
-          model: "anthropic/claude-opus-5.5",
-          effort: "high",
-          descriptionSnapshot: "# Invites",
-          prompt: null,
-          repository: "acme/relay",
-          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-        });
-
         yield* later;
 
         const reply = threadOf(
@@ -221,11 +223,7 @@ it.layer(getTestDB())("a task's comments followed live", (it) => {
         ).entries.at(-1);
 
         yield* actOnDescriptionCommentThread(
-          {
-            actor: DESCRIPTION_COMMENT_ACTOR.AGENT,
-            userId: owner,
-            agentId: Option.getOrThrow(agent).agent.id,
-          },
+          { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, userId: owner, agentId },
           taskId,
           started.id,
           {
@@ -237,7 +235,7 @@ it.layer(getTestDB())("a task's comments followed live", (it) => {
         yield* actOnDescriptionCommentThread(member(owner), taskId, started.id, {
           action: DESCRIPTION_COMMENT_ACTION.ASK,
           clientKey: randomUUID(),
-          to: { actor: DESCRIPTION_COMMENT_ACTOR.APP },
+          to: { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId },
         });
         yield* actOnDescriptionCommentThread(member(teammate), taskId, onElement.id, {
           action: DESCRIPTION_COMMENT_ACTION.RESOLVE,

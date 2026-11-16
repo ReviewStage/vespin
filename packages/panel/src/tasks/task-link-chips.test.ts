@@ -183,7 +183,12 @@ test("the description's version history, off the plan's page, reads a version's 
       viewing: {
         line: {
           seq: 2,
-          lastEdit: { actor: DESCRIPTION_ACTOR.NOTETAKER, at: 0, duringCall: false },
+          lastEdit: {
+            actor: DESCRIPTION_ACTOR.DEVELOPER,
+            by: { userId: "user-charles", name: "Charles Pan" },
+            at: 0,
+            duringCall: false,
+          },
           startedAt: 0,
           changes: 1,
         },
