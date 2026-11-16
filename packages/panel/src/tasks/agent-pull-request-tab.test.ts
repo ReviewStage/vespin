@@ -73,6 +73,7 @@ import {
   PAGE,
   PIXEL,
   PULL_REQUEST,
+  PULL_REQUEST_KEY,
   pill,
   pillOf,
   pillPress,
@@ -904,7 +905,7 @@ test("a reaction is pressed to take the reader's own back, waits on its change w
   await vi.waitFor(() =>
     assert.deepEqual(world.changes, [
       [
-        AGENT.id,
+        PULL_REQUEST_KEY,
         { action: PULL_REQUEST_ACTION.REMOVE_REACTION, subject: "PR_42", content: REACTION.HEART },
       ],
     ]),
@@ -1025,7 +1026,7 @@ test("Add reaction opens one row of GitHub's eight, each named, the arrows movin
   assert.equal(entry.querySelector('[role="toolbar"]') === null, true, "a pick closes the row");
   await vi.waitFor(() =>
     assert.deepEqual(world.changes.at(-1), [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       { action: PULL_REQUEST_ACTION.ADD_REACTION, subject: "IC_2", content: REACTION.ROCKET },
     ]),
   );
@@ -2025,7 +2026,9 @@ test("a draft's pill offers Ready for review, and Close pull request in red, whi
 
   await pressAction(tab, "Ready for review");
 
-  assert.deepEqual(world.changes, [[AGENT.id, { action: PULL_REQUEST_ACTION.READY_FOR_REVIEW }]]);
+  assert.deepEqual(world.changes, [
+    [PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.READY_FOR_REVIEW }],
+  ]);
   assert.equal(pill(tab).textContent, "Open");
   assert.deepEqual(offered(tab), ["Convert to draft", "Close pull request"]);
   assert.equal(tab.querySelector(".pull-request-write-note") === null, true);
@@ -2359,7 +2362,7 @@ test("a pull request ready to merge offers the first method the repository allow
   );
   assert.deepEqual(world.changes, [
     [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       { action: PULL_REQUEST_ACTION.MERGE, method: MERGE_METHOD.REBASE, headSha: "c0ffee1" },
     ],
   ]);
@@ -2446,7 +2449,7 @@ test("auto-merge is offered while checks run, and turned off once on; a merge qu
       await answerQuestion(question.answer);
     }
 
-    assert.deepEqual(world.changes, [[AGENT.id, request]], label);
+    assert.deepEqual(world.changes, [[PULL_REQUEST_KEY, request]], label);
     act(() => world.root?.unmount());
     world.root = undefined;
   }
@@ -2621,7 +2624,7 @@ test("Review opens a panel whose choice and words are submitted for the agent as
 
   assert.deepEqual(world.changes, [
     [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       {
         action: PULL_REQUEST_ACTION.SUBMIT_REVIEW,
         event: REVIEW_EVENT.APPROVE,
@@ -2678,7 +2681,7 @@ test("Enter submits the review from its words, while Shift+Enter only adds a lin
 
   assert.deepEqual(world.changes, [
     [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       {
         action: PULL_REQUEST_ACTION.SUBMIT_REVIEW,
         event: REVIEW_EVENT.COMMENT,
@@ -2728,7 +2731,7 @@ test("a merged pull request still takes a review, sent for the agent as one on a
   writeReview(panel, "Late, but LGTM");
   await submitReview(panel, "Approve");
   assert.deepEqual(world.changes.at(-1), [
-    AGENT.id,
+    PULL_REQUEST_KEY,
     {
       action: PULL_REQUEST_ACTION.SUBMIT_REVIEW,
       event: REVIEW_EVENT.APPROVE,
@@ -3245,7 +3248,7 @@ test("the reviewer picker lists the repository's teams then its people, the auth
 
   assert.deepEqual(world.changes, [
     [
-      AGENT.id,
+      PULL_REQUEST_KEY,
       { action: PULL_REQUEST_ACTION.REQUEST_REVIEW, reviewer: { kind: "user", name: "priyan" } },
     ],
   ]);
@@ -3274,7 +3277,7 @@ test("the reviewer picker lists the repository's teams then its people, the auth
   );
   await pickRow("Platform");
   assert.deepEqual(world.changes.at(-1), [
-    AGENT.id,
+    PULL_REQUEST_KEY,
     {
       action: PULL_REQUEST_ACTION.REMOVE_REVIEW_REQUEST,
       reviewer: { kind: "team", name: "platform" },
@@ -3387,8 +3390,8 @@ test("the label picker lists the repository's labels, those on the pull request 
   await pickRow("docs");
 
   assert.deepEqual(world.changes, [
-    [AGENT.id, { action: PULL_REQUEST_ACTION.REMOVE_LABEL, label: "bug" }],
-    [AGENT.id, { action: PULL_REQUEST_ACTION.ADD_LABEL, label: "docs" }],
+    [PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.REMOVE_LABEL, label: "bug" }],
+    [PULL_REQUEST_KEY, { action: PULL_REQUEST_ACTION.ADD_LABEL, label: "docs" }],
   ]);
 });
 

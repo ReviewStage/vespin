@@ -84,22 +84,35 @@ export function standingTaskList(initial: ListedTasks): StandingTaskList {
   };
 }
 
-/** `children` over the window's task collections standing on every task `tasks` holds, written again as each draw hands another list, before the frame is painted. */
+/** `children` over the window's task collections standing on every task `tasks` holds, and the pull requests their lines name, written again as each draw hands another list, before the frame is painted. */
 function StandingEvery({
   tasks,
+  taskPullRequests,
   children,
 }: {
   tasks: readonly TaskSummary[];
+  taskPullRequests: ListedTasks["taskPullRequests"];
   children: ReactNode;
 }): ReactElement {
-  const [taskList] = useState(() => standingTaskList({ tasks }));
+  const [taskList] = useState(() => standingTaskList({ tasks, taskPullRequests }));
 
-  useLayoutEffect(() => taskList.stand({ tasks }), [taskList, tasks]);
+  useLayoutEffect(
+    () => taskList.stand({ tasks, taskPullRequests }),
+    [taskList, tasks, taskPullRequests],
+  );
 
   return taskList.provide(children);
 }
 
-/** `element` over task collections holding every task a test's tab lists (`listedTasks`), as the window's root feeds them beside the tab it draws. */
-export function overEveryTask(tasks: TasksControl, element: ReactNode): ReactElement {
-  return createElement(StandingEvery, { tasks: listedTasksOf(tasks), children: element });
+/** `element` over task collections holding every task a test's tab lists (`listedTasks`), and the pull requests their lines name where given, as the window's root feeds them beside the tab it draws. */
+export function overEveryTask(
+  tasks: TasksControl,
+  element: ReactNode,
+  taskPullRequests?: ListedTasks["taskPullRequests"],
+): ReactElement {
+  return createElement(StandingEvery, {
+    tasks: listedTasksOf(tasks),
+    taskPullRequests,
+    children: element,
+  });
 }
