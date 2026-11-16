@@ -3,29 +3,27 @@ import { type InboxListed, NEEDS_YOU, taskHolder } from "@repo/features/inbox-li
 import type { InboxItem } from "@repo/features/inbox-wire";
 import type { AppInboxItems, AppInboxSlice, AppInboxWaitingItem } from "@repo/host/app-state";
 import { HoverCard, HoverCardHead, HoverCardNote, Time, useMinute } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo } from "react";
 import { inboxItemsQuery } from "../live-reads.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { appStateQuery, selectInbox } from "../use-app-state.js";
-import { InboxItemCard, inboxItemGlyph } from "./inbox-item-parts.js";
+import { InboxItemCard } from "./inbox-item-parts.js";
 import { useMentionedPlace } from "./mentioned-place.js";
 
 /**
- * inbox-item-chip.tsx -- a chip of an Inbox item: what it asks as its glyph and its Inbox row's own card, whatever the item's standing.
+ * inbox-item-chip.tsx -- a chip of an Inbox item: its Inbox row's own card, whatever the item's standing.
  *
  * A link to an item names the task that holds it and the item, or, as an
  * older link does, the agent that posted it, or the item alone. Main's
  * document holds only what waits, in brief, so the item is drawn from the
  * account's feed of every item (`live-reads.ts`), which the host holds for
- * the session, as the Inbox draws it: the glyph its row's second line leads
- * with for what it asks (`inboxLineGlyph`), never its agent's tile, which
- * would draw it as a chip of the agent, and the card its row hangs
- * (`InboxItemCard`), waiting or answered. Until the feed is read, where it
+ * the session, as the Inbox draws it: the card its row hangs
+ * (`InboxItemCard`), waiting or answered. Its glyph is the Inbox's own,
+ * whatever it asks (`entity-mark.tsx`). Until the feed is read, where it
  * holds nothing of the item, as of one settled past its bound, or where the
- * window does not hold its task, the chip draws the thread's glyph, and the
- * card main's brief makes of an item still waiting, else its own card.
+ * window does not hold its task, the chip draws the card main's brief makes
+ * of an item still waiting, else its own card.
  */
 
 /** Where a link to an item says it stands: under a task, under the agent that posted it, or nowhere, by its id alone. */
@@ -131,18 +129,6 @@ export function useInboxItemTitle(place: InboxItemPlace): string | undefined {
   const waiting = useWaitingBrief(place.itemId);
 
   return listed?.item.title ?? waiting?.title;
-}
-
-/**
- * An item's glyph on its chip: what it asks, as its row's second line leads
- * with it (`inboxLineGlyph`), so the chip reads as a thread rather than as
- * the agent that posted it, whose tile its card still wears; the thread's
- * glyph where it asks nothing, and until the item is read.
- */
-export function InboxItemChipGlyph({ place }: { place: InboxItemPlace }): ReactNode {
-  const listed = useLinkedItem(place);
-
-  return listed === undefined ? <GLYPH.THREAD /> : inboxItemGlyph(listed.item);
 }
 
 /** An item's card on its chip: the card its Inbox row hangs, whether it waits or not; while its inbox is read, or where that failed, the brief card of an item still waiting; else `fallback`. */
