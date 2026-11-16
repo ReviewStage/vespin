@@ -1,5 +1,7 @@
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { PANEL_ASSET_BASE } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { EntityGlyph } from "@repo/panel/entities/entity-glyph";
 import {
   BUTTON_VARIANT,
   ButtonLink,
@@ -15,7 +17,7 @@ import {
   TerminalIcon,
   WaveformIcon,
 } from "@repo/ui";
-import { KanbanIcon, ServerIcon, TargetIcon, WorkflowIcon } from "@repo/ui/icons";
+import { KanbanIcon, ServerIcon, TargetIcon } from "@repo/ui/icons";
 import { GUIDES_PATH } from "./guides";
 import {
   DOCS_URL,
@@ -87,7 +89,7 @@ const MORE_FEATURES: readonly LandingMoreItem[] = [
   },
   {
     id: "automations",
-    icon: <WorkflowIcon />,
+    icon: <EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />,
     title: "Automations",
     words: "Start agents on a schedule, on GitHub and Sentry events, or from a webhook.",
   },

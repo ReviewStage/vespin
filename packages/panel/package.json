@@ -39,6 +39,7 @@
     "./call/call-card-of": "./src/call/call-card-of.js",
     "./composer-drafts": "./src/composer-drafts.js",
     "./desktop/product-identity": "./src/desktop/product-identity.js",
+    "./entities/entity-glyph": "./src/entities/entity-glyph.js",
     "./failure-report": "./src/failure-report.js",
     "./keyboard-modality": "./src/keyboard-modality.js",
     "./live-reads": "./src/live-reads.js",
