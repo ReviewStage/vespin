@@ -262,10 +262,20 @@ function writerOf(
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT) {
     const known = writer.agentId === undefined ? undefined : agents.get(writer.agentId);
 
-    return { name: known?.name ?? PRODUCT_NAME, agent: true, harness: known?.harness };
+    return {
+      name: known?.name ?? PRODUCT_NAME,
+      agent: true,
+      id: writer.agentId,
+      harness: known?.harness,
+    };
   }
 
-  return { name: writer.by?.name ?? SOMEONE, agent: false, picture: pictureOf(writer.by?.userId) };
+  return {
+    name: writer.by?.name ?? SOMEONE,
+    agent: false,
+    id: writer.by?.userId,
+    picture: pictureOf(writer.by?.userId),
+  };
 }
 
 /** A comment's files as its message draws them after its words, in the order attached: a picture as a picture, any other file as its chip, one that could not be read offering Try again. */
