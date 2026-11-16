@@ -120,8 +120,9 @@ export default function FeedbackScreen() {
   // Why the note did not go, or what a bound or the picker refused, said under the field as every refusal reads, until the words change.
   const [note, setNote] = useState<string | undefined>(undefined);
   // Whether the last note went, said under the field until the reader writes again.
-  const [thanked, setThanked] = useState(false);
-  useAnnounced(thanked ? FEEDBACK_WORDS.SENT : undefined);
+  // The kind whose note just went, which alone says so, since words edited or a kind switched to while it was out were never sent.
+  const [thanked, setThanked] = useState<FeedbackKind | undefined>(undefined);
+  useAnnounced(thanked === kind ? FEEDBACK_WORDS.SENT : undefined);
   const [sending, setSending] = useState(false);
   // Whether a send is out, read at the press itself.
   const out = useRef(false);
@@ -212,10 +213,10 @@ export default function FeedbackScreen() {
       const edited = held.current.words[kind] !== message;
 
       for (const id of sent) detach(id);
-      // Note that a note that went says so under the field, told to VoiceOver, and the page stays to say it, since the app's notice stands under the Settings sheet this page is drawn in, and a buzz alone is never heard with haptics off or by VoiceOver.
-      setThanked(true);
 
+      // Note that a note that went says so under the field, told to VoiceOver, and the page stays to say it, since the app's notice stands under the Settings sheet this page is drawn in, and a buzz alone is never heard with haptics off or by VoiceOver; words edited while it was out were never sent, so they keep their count instead.
       if (!edited) {
+        setThanked(kind);
         setWords((current) => ({ ...current, [kind]: "" }));
 
         // Note that the field is drawn afresh only while the page still stands, because a new field takes the keyboard as it appears, and a List torn down around a field taking focus aborts the app.
@@ -231,7 +232,7 @@ export default function FeedbackScreen() {
     onPress: () => {
       setKind(choice.value);
       setNote(undefined);
-      setThanked(false);
+      setThanked(undefined);
     },
   }));
 
@@ -264,7 +265,7 @@ export default function FeedbackScreen() {
           <SettingsForm>
             {/* Note that the field's count stands under it once its words near the bound, as the panel's counter does, and a refusal stands there instead in the danger's ink. */}
             <ListSection
-              footer={note ?? (thanked ? FEEDBACK_WORDS.SENT : counted(message))}
+              footer={note ?? (thanked === kind ? FEEDBACK_WORDS.SENT : counted(message))}
               footerTone={note === undefined ? FOOTER_TONE.NOTE : FOOTER_TONE.FAILURE}
             >
               {/* Note that each kind's field stands apart, so a change of kind shows that kind's own words, and is drawn afresh once its words were sent. */}
@@ -278,7 +279,7 @@ export default function FeedbackScreen() {
                     setWords((held) => ({ ...held, [kind]: typed }));
                     // Note that writing again takes away what stood under the field, so a refusal that no longer holds never hides the count.
                     setNote(undefined);
-                    setThanked(false);
+                    setThanked(undefined);
                   }}
                   autoFocus
                   testId={TEST_IDS.WORDS}
