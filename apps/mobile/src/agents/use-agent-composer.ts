@@ -385,6 +385,13 @@ export function useAgentComposer(
       ? undefined
       : queue.paused;
 
+  // Note that a message the queue no longer lists, sent on as the turn ended, asks nothing more, so its Delete never goes for a message already gone.
+  const deletingListed = deleting !== undefined && held.some((message) => message.id === deleting);
+
+  useEffect(() => {
+    if (deleting !== undefined && !deletingListed) setDeleting(undefined);
+  }, [deleting, deletingListed]);
+
   const move = (from: number, to: number) => {
     const order = held.map((message) => message.id);
     const [taken] = order.splice(from, 1);
@@ -429,11 +436,12 @@ export function useAgentComposer(
       title: QUEUE_DELETE_QUESTION.TITLE,
       message: QUEUE_DELETE_QUESTION.BODY,
       act: QUEUE_DELETE_QUESTION.VERB,
-      presented: deleting !== undefined,
+      presented: deletingListed,
       onAct: () => {
         setDeleting(undefined);
 
-        if (deleting !== undefined) change({ change: QUEUE_CHANGE.DELETE, messageId: deleting });
+        if (deleting !== undefined && deletingListed)
+          change({ change: QUEUE_CHANGE.DELETE, messageId: deleting });
       },
       onDismiss: () => setDeleting(undefined),
     },
