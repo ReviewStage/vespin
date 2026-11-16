@@ -1,6 +1,7 @@
 import {
   Activity,
   AppWindow,
+  AudioWaveform,
   BookBookmark,
   BookOpen,
   Bot,
@@ -16,6 +17,7 @@ import {
   Cloud,
   CornerDownRight,
   Cpu,
+  DollarSign,
   Eraser,
   Eye,
   EyeOff,
@@ -42,6 +44,7 @@ import {
   ListTodo,
   ListTree,
   Lock,
+  LockKeyhole,
   MemoryStick,
   MessageSquareHeart,
   MessagesSquare,
@@ -162,12 +165,18 @@ export const GLYPH = {
   PRIVATE_CHANNEL: lucideGlyph(Lock),
   // A provider's API key, pasted from its console, beside a plan that signs in.
   API_KEY: lucideGlyph(KeyRound),
+  // An environment variable, as a shell names one by its `$`.
+  VARIABLE: lucideGlyph(DollarSign),
+  // A value no one can read back once it is saved, as a secret variable's.
+  SECRET: lucideGlyph(LockKeyhole),
   // A thread, the Inbox's item, where no ask of its own says more.
   THREAD: lucideGlyph(MessagesSquare),
   TERMINAL: TerminalIcon,
   MEMORY: MemoryIcon,
   MCP_SERVER: McpIcon,
   CALL: WaveformIcon,
+  // A sound clip an agent made, where a thumb has no frame of it to draw.
+  SOUND_CLIP: lucideGlyph(AudioWaveform),
   SETTINGS: GearIcon,
   TIME: lucideGlyph(Clock),
   // A day, as a date's chip and its picker name it; a time of day is TIME's.

@@ -20,8 +20,8 @@
  * (`ActorMark`); and when GitHub estimates it merges. Its stage, its checks
  * in words, and its author are spoken to a reader after its name. A
  * row opens its pull request as the window opens a GitHub address
- * (`useOpenLink`): in its agent's Pull request tab where a listed task's
- * agent opened it, else on GitHub. The pull request the page was opened for,
+ * (`useOpenLink`): in its Pull request tab where a listed task's
+ * lines name it, else on GitHub. The pull request the page was opened for,
  * from its Queued, is the row marked.
  *
  * The queues are read through the host as the page opens and again every

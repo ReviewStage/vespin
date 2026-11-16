@@ -739,11 +739,10 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
     images: Schema.optionalKey(
       describeWire(
         Schema.Array(wireUuidSchema).check(Schema.isMaxLength(AGENT_BOUNDS.MAX_ATTACHMENTS)),
-        "Pictures handed to the agent with its first message, which it sees as images: at most " +
-          `${AGENT_BOUNDS.MAX_ATTACHMENTS} attachment ids, each a picture of your own ` +
-          `conversation, such as one ${AGENT_TOOL.SHOW_IMAGE} kept; each at most ${megabytesOf(AGENT_BOUNDS.MAX_IMAGE_BYTES)} and all of them ` +
-          `${megabytesOf(AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES)} together, since a larger one is ` +
-          "refused, never made smaller. Leave it out to hand none.",
+        "Pictures handed to the agent with its first message: at most " +
+          `${AGENT_BOUNDS.MAX_ATTACHMENTS} attachment ids of pictures in your own ` +
+          `conversation, such as one ${AGENT_TOOL.SHOW_MEDIA} kept, each at most ${megabytesOf(AGENT_BOUNDS.MAX_IMAGE_BYTES)} and all of them ` +
+          `${megabytesOf(AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES)} together; a larger one is refused.`,
       ),
     ),
     title: Schema.optionalKey(
@@ -779,15 +778,12 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
         START_RUNS_ON,
         `Where the agent runs: ${IN_THE_CLOUD_WORDS} for the cloud, or ` +
           `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, device: "<name>" })} for one of the ` +
-          "member's own devices (a Mac or a host) by its name, in any case, or " +
-          `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, deviceId: "<id>" })} by its id, which ` +
-          "must be registered and online; a name that matches none of the member's devices, or " +
-          "more than one, is refused with their devices listed by name, id, and whether each is " +
-          "online. " +
-          "With from, another place than that agent's moves it there. " +
-          "Leave it out for where the agent it starts from runs, with from; else where the " +
-          "member's newest agent on the task runs; else where the member last chose to run one; " +
-          "else the cloud.",
+          "member's own devices (a Mac or a host) by its name, or " +
+          `${JSON.stringify({ machine: AGENT_MACHINE.DEVICE, deviceId: "<id>" })} by its id; it must be online, ` +
+          "and a name matching none of their devices, or several, is refused with the devices listed. " +
+          "Left out: where the agent it starts from runs, with from; else where the member's newest agent " +
+          "on the task runs; else where the member last chose to run one; else the cloud. " +
+          "With from, another place than that agent's moves it there.",
       ),
     ),
     from: Schema.optionalKey(
@@ -806,11 +802,11 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
             ),
           ),
         }),
-        "Another agent of your workspace to take over from, on its own task: the new " +
-          `agent is handed its brief and its transcript (with ${PRODUCT_NAME}'s summary of the steps that ` +
-          "do not fit) and a copy of its work, runs on its model unless you name one, and hears " +
-          "the note after them; it takes no prompt and no branch. Without messageId it continues " +
-          "the agent, which is stopped; with one it forks the agent at that message, which goes on.",
+        "Another agent of your workspace to take over from, on its own task: the new agent is " +
+          `handed its brief, its transcript (with ${PRODUCT_NAME}'s summary of the steps that do not fit), ` +
+          "and a copy of its work, runs on its model unless you name one, and hears the note after them; " +
+          "it takes no prompt and no branch. Without messageId it continues the agent, which is stopped; " +
+          "with one it forks the agent at that message, which goes on.",
       ),
     ),
   });
@@ -919,24 +915,14 @@ const readStart = Schema.decodeUnknownResult(START_AGENT_CALL);
 export const LIST_AGENTS_TOOL = {
   name: AGENT_TOOL.LIST_AGENTS,
   description:
-    "List the agents of your workspace, on any task and started by any member, " +
-    "yourself left out: each with its id, its title (how the developer sees it named), the model " +
-    "and effort it runs on with the model's name to say it by, its status (starting, running, " +
-    "completed, failed, canceled) and why where it failed, its repository and the branch its " +
-    "sandbox is on if a turn " +
-    "has ended, one line of what it last did, its task (id and name; null for " +
-    "one you cannot open) and whether that is the task you work on, and whether the agent is " +
-    "archived. The agents " +
-    "that matter to you come first: the agent that started you and the agents you started, " +
-    "then those on your task; then the rest of the workspace, the newest started first, at most " +
-    `${WORKSPACE_AGENTS_LIST_LIMIT} a page, with nextOffset where more stand, which offset ` +
-    "reads the next page by. Pass words to search the whole workspace by words of an agent's " +
-    "title or its task's name, thisTask for only your task's agents, or a taskId for another " +
-    "task's; narrow it by archived, by mine or startedBy for whose agents, by automation or " +
-    "automationId for an automation's runs, and by taskStatus, such as done, for where their " +
-    "task stands. Call it to find the agent you " +
-    "or the developer mean. Failed covers a session that ended for good, which no message " +
-    "reaches again: tell the developer, or start a new agent to go on from its work. An agent " +
+    "List the agents of your workspace, on any task and started by any member, yourself left out: " +
+    "each with its id, title, model and effort, status (starting, running, completed, failed, canceled) " +
+    "and why where it failed, its branch, one line of what it last did, its task and whether that is yours, " +
+    "and whether it is archived. The agents that matter to you come first: the agent that started you and " +
+    "the agents you started, then those on your task, then the rest, the newest started first, at most " +
+    `${WORKSPACE_AGENTS_LIST_LIMIT} a page, with nextOffset where more stand. ` +
+    "Failed covers a session that ended for good, which no message reaches again: tell the " +
+    "developer, or start a new agent to go on from its work. An agent " +
     "still running long after its last activity may have lost its session; a message to it " +
     "refused as ended for good settles it as failed.",
   inputSchema: AGENT_LIST_INPUT,
@@ -944,29 +930,22 @@ export const LIST_AGENTS_TOOL = {
 
 /** How a read of an agent says a page of its transcript, which the coding agent's and the member MCP's descriptions share. */
 export const TRANSCRIPT_PAGE_WORDS =
-  "a page of its whole transcript, oldest first: each line sent to it under who sent it (a " +
-  "member by name, the developer, an agent, an automation, or GitHub), what it said, and which " +
-  "tools it called on what, a call's output left out, each entry cut to " +
+  "a page of its whole transcript: each line sent to it under who sent it, what it said, and which " +
+  "tools it called on what, outputs left out, each entry cut to " +
   `${AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS} characters and the page to ` +
-  `${AGENT_TOOL_BOUNDS.PAGE_CHARS}, and each of its own with the messageId of the message it ` +
-  "stands in. The " +
-  "newest page comes first; pass the page's older as before to read back the page before it, " +
-  `and its newer as after to read on; from ${TRANSCRIPT_FROM.START} reads its first page. Older ` +
-  "is left out where the page opens the transcript, and newer where it reaches the newest " +
-  "entry. To find what someone said, or why the agent did something, page back from the " +
-  "newest, or on from the start, until you reach it.";
+  `${AGENT_TOOL_BOUNDS.PAGE_CHARS}, each of its own with the messageId of the message it ` +
+  "stands in. The newest page comes first; pass the page's older as before to read back, " +
+  `its newer as after to read on, or from ${TRANSCRIPT_FROM.START} for its first page.`;
 
 /** `read_agent` as a coding agent is offered it, which reads a page of the whole transcript as text and pages through the rest. */
 export const CODER_READ_AGENT_TOOL = {
   name: AGENT_TOOL.READ_AGENT,
   description:
     "Read one agent of your workspace by its id, on any task and started by any member: " +
-    `what ${AGENT_TOOL.LIST_AGENTS} says of it, the branch it pushed and the pull request from it ` +
-    `as GitHub holds them, and ${TRANSCRIPT_PAGE_WORDS} ${AGENT_TOOL.START_AGENT}'s from names ` +
-    "a messageId to fork the agent there. Read one to learn why an agent went quiet, what it is " +
-    "stuck on, what it did, or what was said to it and why, before you message it or decide " +
-    "what comes next. It only reads: the agent is not told. Answers `accepted` with the " +
-    "reading, or `rejected` and why.",
+    `what ${AGENT_TOOL.LIST_AGENTS} says of it, the branch it pushed and its pull request, ` +
+    `and ${TRANSCRIPT_PAGE_WORDS} Read one to learn why an agent went quiet, what it is ` +
+    "stuck on, or what was said to it, before you message it or decide what comes next. " +
+    "The agent is not told.",
   inputSchema: CODER_READ_AGENT_INPUT,
 } as const;
 
@@ -995,28 +974,19 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
 
   return (
     "Start a new agent on the task you work on, or on another task of your workspace by " +
-    `its taskId as ${AGENT_TOOL.LIST_TASKS} answered it, exactly as the developer would: ` +
-    `${START_HANDED_WORDS[words]} Start it on the task you work on, taskId left ` +
-    "out, for any part of that task's work, even one that runs apart from yours, so its " +
-    "branch, pull request, and transcript stand under that task; name another task only for " +
-    "work unrelated to it, or where the developer asked for that, and for work that should " +
-    `stand as a task of its own, make it with ${AGENT_TOOL.CREATE_TASK} first. ` +
-    "This one call carries everything the agent is told as " +
-    "it starts, and the agent sets to work on it at once, so never follow it with a message to " +
-    "the agent it started; message it only when there is something new to say. Its checkout is " +
-    "the repository's default branch, or the branch named, which must already be on GitHub. " +
-    "It runs on the " +
-    "model and effort named, or on the member's default with neither. Answers `accepted` with " +
-    "the agent's id, title, model, the model's name to say it by, effort, and status once its session " +
-    "is open, or `rejected` and why " +
-    "nothing was started; a rejected model or effort lists the choices. " +
-    `${AGENT_TOOL.LIST_MODELS} lists them before you name one. With from, it starts from ` +
-    "another agent instead: continue an agent (or worker) " +
-    "that failed, ended, or ran out of context, which is handed over and stopped, or fork one " +
-    "at a messageId to try another direction while it goes on. An agent already continued may " +
-    "be continued again, and the answer then names the earlier continuations by their id and " +
-    "title (earlierContinuations). A start from another agent " +
-    "copies its work and summarizes its transcript, so it may take a minute to answer."
+    `its taskId, exactly as the developer would: ${START_HANDED_WORDS[words]} ` +
+    "Start it on the task you work on, taskId left out, for any part of that task's work, even one " +
+    "that runs apart from yours, so its branch, pull request, and transcript stand under that task; " +
+    "name another task only for work unrelated to it, or where the developer asked for that, and for " +
+    `work that should stand as a task of its own, make it with ${AGENT_TOOL.CREATE_TASK} first. ` +
+    "This one call carries everything the agent is told as it starts, and it sets to work at once, " +
+    "so never follow it with a message to the agent unless there is something new to say. " +
+    `A rejected model or effort lists the choices, which ${AGENT_TOOL.LIST_MODELS} lists beforehand. ` +
+    "With from, it starts from another agent instead: it continues an agent (or worker) that failed, " +
+    "ended, or ran out of context, which is stopped, or forks one at a messageId to try another " +
+    "direction while it goes on; one already continued may be continued again, and the answer names " +
+    "the earlier continuations (earlierContinuations). A start from another agent copies its work " +
+    "and summarizes its transcript, so it may take a minute to answer."
   );
 }
 
@@ -1026,11 +996,9 @@ export const LIST_MODELS_TOOL = {
   name: AGENT_TOOL.LIST_MODELS,
   description:
     `List the models you may start an agent on with ${AGENT_TOOL.START_AGENT}, as the ` +
-    `member you act for is offered them: each with its catalog id, which ${AGENT_TOOL.START_AGENT}'s ` +
-    "model takes, the model's name to say it by, and the efforts it lists, one of which its " +
-    "effort takes; and the member's default model and effort, which a start naming neither runs " +
-    "on, and whether it is still offered. Call it before you name a model or an effort to " +
-    `${AGENT_TOOL.START_AGENT}, such as one the developer named in their own words. Name an ` +
+    "member you act for is offered them: each with its catalog id, its name, and its efforts, " +
+    "and the member's default, which a start naming neither runs on. Call it before you name a " +
+    "model or an effort, such as one the developer named in their own words. Name an " +
     `agentId to list instead what that agent may move to with ${AGENT_TOOL.UPDATE_AGENT}: an ` +
     "agent on Claude Code runs Claude models alone, and one on Codex GPT models alone, with no " +
     "fast version.",
@@ -1046,30 +1014,19 @@ export const UPDATE_TASK_TOOL = {
   name: AGENT_TOOL.UPDATE_TASK,
   description:
     "Change a task of your workspace by its id, as the developer's own task menu would, on behalf " +
-    "of the developer you work for: rename it, set or clear its repository, set where it stands " +
-    "(its status) or how much it matters (its priority), assign it to a member of the " +
-    "workspace or to no one, pin or unpin it in their sidebar, move it into one of their sidebar " +
-    "sections or back out of it (sectionId), put it under a parent task or " +
-    "take it out from under one, or add and take away the tasks " +
-    "it is blocked by and the tasks it blocks; name at least one change, " +
-    "and several go in one call. Mark a task whose work is " +
-    "done Done, with status done, as the menu's Mark done does, such as one whose pull requests " +
-    "merged, or one the developer asked you to clean up; that withdraws every ask still open on its " +
-    "threads, so mark it done only once you no longer need them, and archives every other " +
-    "agent on the task, an idle one at once and one still at work once its turn ends; a " +
-    "change of its status off Done brings them back, while a turn that reopens the task " +
-    "does not; never a teammate's " +
-    "task still in use unless the developer asked for it. A task is never archived: a settled " +
-    `one stands Done or Canceled, which ${AGENT_TOOL.LIST_TASKS} lists by status. A block is ` +
-    "Linear's: the blocker's work comes first and the task it blocks waits on it, as one child " +
-    "task builds on another. It is advice, never a lock, so nothing refuses to start a blocked " +
-    "task. Both tasks must be in your workspace, a task never blocks itself, and a block that " +
-    "would close a cycle is refused. A child task works in its parent's repository, so a " +
-    "parent working in another is refused, as is one under which the task would descend from " +
-    "itself. Answers `accepted` with the task as it now stands, its " +
-    "parentTaskId, blockedBy, and blocks among it where the call changed them, `already` true where every " +
-    "change named already stood, or `rejected` and " +
-    "why. Then say which tasks you changed and how.",
+    "of the developer you work for; name at least one change, and several go in one call. Mark a task " +
+    "Done, with status done, once its work is done, such as when its pull requests merged, or where " +
+    "the developer asked you to clean up: that withdraws every ask still open on its threads, so mark " +
+    "it done only once you no longer need them, and archives every other agent on the task, an idle " +
+    "one at once and one still at work once its turn ends; a change of its status off Done brings " +
+    "them back, while a turn that reopens the task does not. Never change a teammate's task still " +
+    "in use unless the developer asked for it. A task is never archived: a settled one stands Done " +
+    "or Canceled. A block is Linear's: the blocker's work comes first and the task it blocks waits " +
+    "on it, as advice, never a lock. Both tasks must be in your workspace, a task never blocks " +
+    "itself, and a block that would close a cycle is refused. A child task works in its parent's " +
+    "repository, so a parent working in another is refused, as is one under which the task would " +
+    "descend from itself. Answers the task as it now stands, `already` true where every change " +
+    "named already stood. Then say which tasks you changed and how.",
   inputSchema: UPDATE_TASK_INPUT,
 } as const;
 
@@ -1077,14 +1034,11 @@ export const STOP_AGENT_TOOL = {
   name: AGENT_TOOL.STOP_AGENT,
   description:
     "Stop an agent of your workspace by its id, as the developer's Stop button would: " +
-    "its turn under way is canceled and its status reads canceled, while the agent stays " +
-    "available, its transcript and branch kept, and a later message starts a new turn. Stop " +
-    "an agent you or the developer started that is going the wrong way, or one the developer " +
-    "asked you to stop; never a teammate's agent still in use unless the developer asked for " +
-    "it. No " +
-    "agent stops itself. Answers `accepted` with the " +
-    "agent's status now and whether it was stopped, `stopped` false for an agent already " +
-    "idle, which changes nothing, or `rejected` and why. Then say which agent you stopped and why.",
+    "its turn under way is canceled, while the agent, its transcript, and its branch stay, and a " +
+    "later message starts a new turn. Stop an agent you or the developer started that is going the " +
+    "wrong way, or one the developer asked you to stop; never a teammate's agent still in use " +
+    "unless the developer asked for it. No agent stops itself. `stopped` false is an agent " +
+    "already idle, which changes nothing. Then say which agent you stopped and why.",
   inputSchema: READ_AGENT_INPUT,
 } as const;
 
@@ -1106,13 +1060,11 @@ const readPageAsked = Schema.decodeUnknownResult(READ_PAGE_INPUT);
 export const READ_PAGE_TOOL = {
   name: AGENT_TOOL.READ_PAGE,
   description:
-    "Read a page an agent showed in your workspace, by its id: its title, the version read " +
-    "(the newest unless you name one) and the newest there is, its task and whether that is " +
-    "the task you work on, and its HTML as it " +
-    "stands, cut on a line at " +
-    `${READ_PAGE_CHARS} characters with how many were left out. Read a page the developer ` +
-    "pointed you at, or one another agent showed, before you build on it or revise it; to " +
-    `revise a page of your own task, show it again with ${AGENT_TOOL.SHOW_PAGE} and its id.`,
+    "Read a page an agent showed in your workspace, by its id: its title, its version and the " +
+    "newest there is, its task, and its HTML, cut on a line at " +
+    `${READ_PAGE_CHARS} characters. Read a page the developer pointed you at, or one another agent ` +
+    "showed, before you build on it or revise it; revise a page of your own task by showing it " +
+    `again with ${AGENT_TOOL.SHOW_PAGE} and its id.`,
   inputSchema: READ_PAGE_INPUT,
 } as const;
 
@@ -1216,10 +1168,9 @@ const UPDATE_AGENT_INPUT = Schema.Struct({
   archived: Schema.optionalKey(
     describeWire(
       Schema.Boolean,
-      "true to archive it, as the developer's Archive agent would: it leaves the sidebar, its " +
-        "task's tabs, and every list but the archived ones, takes no message, and is not woken, " +
-        "its transcript, branch, and pull request kept; refused while it is still working, " +
-        "and never yourself. false to bring an archived one back.",
+      "true to archive it, as the developer's Archive agent would: it leaves every list but the " +
+        "archived ones, takes no message, and is not woken, its transcript, branch, and pull request " +
+        "kept; refused while it is still working, and never yourself. false brings it back.",
     ),
   ),
   reason: Schema.optionalKey(
@@ -1239,19 +1190,14 @@ const readUpdateAsked = Schema.decodeUnknownResult(UPDATE_AGENT_INPUT);
 export const UPDATE_AGENT_TOOL = {
   name: AGENT_TOOL.UPDATE_AGENT,
   description:
-    "Change an agent of your workspace by its id, as the developer's own menu, model " +
-    "chip, and composer would, for the developer you work for: rename it (empty clears the " +
-    "title), move it to another model and effort, and context window, from its next step, as " +
-    `${AGENT_TOOL.LIST_MODELS} lists them, pin or unpin it in that ` +
-    "developer's sidebar, replace the list of MCP servers switched off for it, archive it " +
-    "or bring it back. Name at least " +
-    "one change; an archive is checked first, and the rest land together or not at all. Archive an idle helper agent whose work is done, such as one " +
-    "whose pull request merged, or one the developer asked you to clean up, with a short reason " +
-    "its archived banner shows beside your name; one still working is refused until its turn " +
-    "ends, and no agent archives itself. Change a teammate's agent still in use only where the developer " +
-    "asked for it. Answers `accepted` " +
-    "with the agent as it then stands, whether archived among " +
-    "it, or `rejected` and why; a rejected model or effort lists the choices. Then say which " +
+    "Change an agent of your workspace by its id, as the developer's own menu, model chip, and " +
+    "composer would, for the developer you work for: rename it, move it to another model, effort, " +
+    "and context window from its next step, pin it, replace the MCP servers switched off for it, " +
+    "or archive it or bring it back. An archive is checked first, and the rest land together or " +
+    "not at all. Archive an idle helper agent whose work is done, such as one whose pull request " +
+    "merged, or one the developer asked you to clean up, with a short reason; one still working " +
+    "is refused, and no agent archives itself. Change a teammate's agent still in use only where " +
+    "the developer asked for it. A rejected model or effort lists the choices. Then say which " +
     "agent you changed and how.",
   inputSchema: UPDATE_AGENT_INPUT,
 } as const;
@@ -1289,20 +1235,12 @@ export const LIST_TASKS_TOOL = {
   name: AGENT_TOOL.LIST_TASKS,
   description:
     "List the tasks of your workspace, started by any member, the Done and Canceled ones " +
-    "among them: each with its id, its key (such as ACME-42), its name, where " +
-    "it stands (its status) and how much it matters (its priority), who it is assigned to (its " +
-    "assignee's mention link, null for no one), " +
-    "the repository its agents work in (null for none yet), who started it, whether it is " +
-    "the task you work on, its followers (each with their name and id, whether " +
-    "they are its assignee, and whether its agents may use their machines; absent where your " +
-    "workspace keeps none), the sectionId of the sidebar section the " +
-    "developer you work for keeps it in (null for none, under Tasks), the newest first and at most " +
-    `${TASKS_LIST_LIMIT} a page, with ` +
-    "nextOffset where more stand; and beside them every section that developer keeps in this " +
-    "workspace's sidebar, each with its id and title. Narrow it by words of a task's name with " +
-    `nameContains, by where it stands with status, and by who it is assigned to with assignee. Call it to find the task to start an agent on with ${AGENT_TOOL.START_AGENT}'s ` +
-    `taskId, to narrow ${AGENT_TOOL.LIST_AGENTS} to one, or to find the task and the section ` +
-    `${AGENT_TOOL.UPDATE_TASK}'s sectionId names, and ${AGENT_TOOL.DELETE_SECTION}.`,
+    "among them: each with its id, its key (such as ACME-42), its name, status, priority, " +
+    "assignee's mention link, repository, who started it, whether it is the task you work on, " +
+    "its followers (each with their name and id, and whether its agents may use their machines), " +
+    "and the sectionId of the sidebar section the developer you work for keeps it in, the newest " +
+    `first and at most ${TASKS_LIST_LIMIT} a page, with nextOffset where more stand; and beside ` +
+    "them every section that developer keeps in this workspace's sidebar, by its id and title.",
   inputSchema: LIST_TASKS_INPUT,
 } as const;
 

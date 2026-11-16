@@ -193,6 +193,7 @@ export interface WorkspacesClient {
     | "setTokenRepository"
     | "environment"
     | "putVariable"
+    | "saveVariables"
     | "deleteVariable"
     | "sandboxSetup"
     | "mergeQueue"
@@ -1488,23 +1489,28 @@ function workspaceAsked<Answer>(
   });
 }
 
-/** A workspace's environment's acts: its variables' names listed, and one put or deleted. */
+/** A workspace's environment's acts: its variables listed, one put, several saved, or one deleted. */
 function workspaceEnvironmentActs(
   reach: WorkspacesReach,
 ): Pick<
   HostActTable<typeof WORKSPACE_ACTS>,
-  "WORKSPACE_ENVIRONMENT_LIST" | "WORKSPACE_ENVIRONMENT_PUT" | "WORKSPACE_ENVIRONMENT_DELETE"
+  | "WORKSPACE_ENVIRONMENT_LIST"
+  | "WORKSPACE_ENVIRONMENT_PUT"
+  | "WORKSPACE_ENVIRONMENT_SAVE"
+  | "WORKSPACE_ENVIRONMENT_DELETE"
 > {
   const { client } = reach.dependencies;
 
   // Note that the environment is asked of the service on each act and held
-  // nowhere here, because no answer carries a value and Settings reads the
-  // names again after each write.
+  // nowhere here, because a config's value is in its answers and Settings
+  // reads the variables again after each write.
   return {
     WORKSPACE_ENVIRONMENT_LIST: ({ workspaceId }) =>
       workspaceAsked(reach, client.workspaces.environment(workspaceId)),
     WORKSPACE_ENVIRONMENT_PUT: ({ workspaceId, name, value }) =>
       workspaceAsked(reach, client.workspaces.putVariable(workspaceId, name, value)),
+    WORKSPACE_ENVIRONMENT_SAVE: (request) =>
+      workspaceAsked(reach, client.workspaces.saveVariables(request)),
     WORKSPACE_ENVIRONMENT_DELETE: ({ workspaceId, name }) =>
       workspaceAsked(reach, client.workspaces.deleteVariable(workspaceId, name)),
   };

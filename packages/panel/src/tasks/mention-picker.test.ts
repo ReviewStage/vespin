@@ -66,6 +66,7 @@ function mounted(chosen: MentionNode[] = []) {
       room,
       side: MENTION_MENU_SIDE.ABOVE,
       onChoose: (mention) => chosen.push(mention),
+      onRetype: () => undefined,
     });
 
     return createElement("div", { ref: room }, latest.menu);
@@ -200,6 +201,7 @@ async function mountedOnDescription(chosen: MentionNode[]) {
       room,
       side: MENTION_MENU_SIDE.BELOW,
       onChoose: (mention) => chosen.push(mention),
+      onRetype: () => undefined,
     });
 
     return createElement("div", { ref: room }, latest.menu);
@@ -604,6 +606,7 @@ test("in New task's box, which no member directory stands around, the @ list off
       room,
       side: MENTION_MENU_SIDE.BELOW,
       onChoose: () => undefined,
+      onRetype: () => undefined,
     });
 
     return createElement("div", { ref: room }, latest.menu);

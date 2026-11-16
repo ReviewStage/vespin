@@ -31,7 +31,8 @@ import { NATIVE_ENDING, NATIVE_MOMENT, type NativeMoment } from "./native-moment
  * harness's messages, the same for Claude Code and Codex: a line we handed
  * the harness, the launch waiting on work in flight, the connection to the
  * model's provider lost and answering again, the agent's turn over
- * with the launch kept warm, and the launch's end. A
+ * with the launch kept warm, a command killed out of memory, and the
+ * launch's end. A
  * tool's answer is settled the same way whichever harness ran it: our own
  * tool's as the JSON it answered, any other's as the text the model read.
  */
@@ -161,6 +162,10 @@ const readConnectionRestored = Schema.decodeUnknownOption(
 /** A move of the agent's goal the runner read where the harness's own stream says none (`claude-goals.ts`), its fields the goal notice's own. */
 const readGoal = Schema.decodeUnknownOption(GoalNoticeSchema);
 
+const readOutOfMemory = Schema.decodeUnknownOption(
+  Schema.Struct({ callId: Schema.String, memoryGb: Schema.Int.check(Schema.isGreaterThan(0)) }),
+);
+
 const readEnd = Schema.decodeUnknownOption(
   Schema.Struct({
     reason: Schema.Literals(Object.values(RUNNER_END)),
@@ -278,6 +283,15 @@ export function runnerMoments(message: WireValue): Option.Option<readonly Native
       return Option.some(
         Option.match(readGoal(message), {
           onSome: (notice): readonly NativeMoment[] => [{ kind: NATIVE_MOMENT.GOAL, notice }],
+          onNone: () => [],
+        }),
+      );
+    case RUNNER_EVENT.OUT_OF_MEMORY:
+      return Option.some(
+        Option.match(readOutOfMemory(message), {
+          onSome: ({ callId, memoryGb }): readonly NativeMoment[] => [
+            { kind: NATIVE_MOMENT.OUT_OF_MEMORY, callId, memoryGb },
+          ],
           onNone: () => [],
         }),
       );

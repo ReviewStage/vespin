@@ -6,15 +6,17 @@ import { describe, expect, it } from "vitest";
 import {
   NO_TOGGLES,
   openCuts,
+  SHOWN_MEDIA,
   TRANSCRIPT_ITEM,
   transcriptItems,
   transcriptOriginOf,
 } from "./transcript-model.js";
 
 const PICTURE = { id: "picture-1", mediaType: "image/png", width: 320, height: 180, byteCount: 10 };
+const CLIP = { id: "clip-1", mediaType: "audio/mpeg", width: 0, height: 0, byteCount: 10 };
 
 describe("transcriptItems", () => {
-  it("leaves the agent's thinking out and draws the pictures it showed under the turn", () => {
+  it("leaves the agent's thinking out and draws what it showed under the turn, a sound clip played rather than drawn", () => {
     const items = transcriptItems(
       [
         {
@@ -31,8 +33,13 @@ describe("transcriptItems", () => {
               type: "tool-show_image",
               toolCallId: "shots",
               state: "output-available",
-              input: { images: [{ path: "/shots/dialog.png", caption: "The dialog" }] },
-              output: { status: "accepted", pictures: [PICTURE] },
+              input: {
+                images: [
+                  { path: "/shots/dialog.png", caption: "The dialog" },
+                  { path: "/sounds/chime.mp3", caption: "The chime" },
+                ],
+              },
+              output: { status: "accepted", pictures: [PICTURE, CLIP] },
             },
             { type: "text", text: "Here it is." },
           ],
@@ -48,7 +55,10 @@ describe("transcriptItems", () => {
       TRANSCRIPT_ITEM.WORDS,
     ]);
     expect(items[1]).toMatchObject({
-      media: [{ id: "picture-1", caption: "The dialog", label: "The dialog", video: false }],
+      media: [
+        { id: "picture-1", caption: "The dialog", label: "The dialog", kind: SHOWN_MEDIA.PICTURE },
+        { id: "clip-1", caption: "The chime", label: "The chime", kind: SHOWN_MEDIA.AUDIO },
+      ],
     });
   });
 
