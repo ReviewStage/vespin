@@ -1045,6 +1045,44 @@ test("on Needs you, an item answered on another Mac slides out from where its ro
   assert.equal(page.querySelector("[data-leaving]"), null);
 });
 
+test("on Open, the last pinned task's item answered on another Mac takes Pinned with it: the section slides out with its row, out of reach while it goes, and the rows under Everything else stay drawn where they stand, under no heading once it has gone", async () => {
+  window.localStorage.removeItem(WHOSE_KEY);
+  const played = playListMotions();
+  const { page } = mount({ chosen: ON_THRESHOLD });
+  await settle();
+  showScope(page, "Open");
+  act(() => world.setTasks([BILLING, { ...INVITES, pinnedAt: 5 }]));
+  await settle();
+
+  const heads = () =>
+    [...page.querySelectorAll(".inbox-tasks .ui-group-header-head")].map(
+      (head) => head.textContent,
+    );
+
+  assert.ok(heads()[0]?.startsWith("Pinned"), "the pinned task's item stands under Pinned");
+  const staying = rowNamed(page, "Alert at 80%?");
+  await answerExpiryElsewhere();
+
+  const pinned = [...page.querySelectorAll<HTMLElement>("[data-leaving]")].find(
+    (each) =>
+      each.querySelector(".ui-group-header-head")?.textContent?.startsWith("Pinned") === true,
+  );
+
+  assert.ok(pinned, "Pinned is drawn on while it goes");
+  assert.equal(pinned.querySelector(ROW_TITLE)?.textContent, "Expire after 7 days?");
+  assert.ok(pinned.hasAttribute("inert"), "out of reach");
+  const exit = played.find((each) => each.element === pinned);
+  assert.deepEqual(exit?.keyframes.at(-1), { opacity: 0, transform: "translateX(-16px)" });
+  assert.ok(rowNamed(page, "Alert at 80%?") === staying, "the row staying is never drawn anew");
+
+  act(() => {
+    for (const each of played.splice(0)) each.finish();
+  });
+  assert.deepEqual(heads(), [], "one run stands under no heading");
+  assert.deepEqual(listed(page), ["▸ *Alert at 80%?"]);
+  assert.equal(page.querySelector("[data-leaving]"), null);
+});
+
 /** A read the test answers when it chooses. */
 interface PendingRead {
   readonly promise: Promise<ReadOutcome>;

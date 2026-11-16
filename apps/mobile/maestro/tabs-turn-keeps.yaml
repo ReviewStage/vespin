@@ -1,0 +1,64 @@
+# tabs-turn-keeps.yaml -- an agent's page pushed over a task on the Tasks tab, and the words typed in its composer, kept as an iPhone turns on its side and back, where the window crosses between compact and regular and the tab bar must keep the tabs it stands, so no tab is mounted again.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+# Note that each wait for the screen to settle is capped at five seconds,
+# because the page draws its agent still running, whose mark never stops
+# moving, so an uncapped wait always ran to Maestro's fifteen.
+onFlowStart:
+  - setOrientation: PORTRAIT
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+# Launched on the host's Inbox fixture, so nothing reaches a server and
+# nothing typed is sent. Note that the agent's page is reached through the
+# Tasks tab's own stack rather than by its launch argument, which stands it
+# over the tabs, where a tab mounted again would leave it be.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Inbox"
+    timeout: 30000
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Teammate invitations"
+- scrollUntilVisible:
+    element: "Build teammate invitations"
+    direction: DOWN
+- tapOn: "Build teammate invitations"
+- extendedWaitUntil:
+    visible: "Send a follow-up"
+    timeout: 15000
+# A compact window only, whose tab bar steps aside over a conversation: an
+# iPad stands regular whichever way it turns, with Search in its sidebar or
+# its bar, and `draft-rotate.yaml` holds its turn.
+- runFlow:
+    when:
+      notVisible: "Search"
+    commands:
+      - tapOn:
+          id: "composer-field"
+      - inputText: "Keep this draft through the turn."
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - takeScreenshot: tabs-turn-portrait
+      # The task's page under the agent's stays a page through the turn, since
+      # only the screen in front hands itself to the split view.
+      - setOrientation: LANDSCAPE_LEFT
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - takeScreenshot: tabs-turn-landscape
+      - assertVisible: "Keep this draft through the turn."
+      - setOrientation: PORTRAIT
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - takeScreenshot: tabs-turn-back
+      - assertVisible: "Keep this draft through the turn."

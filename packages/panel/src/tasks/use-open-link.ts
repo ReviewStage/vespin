@@ -1,6 +1,7 @@
 import {
   LINK_DESTINATION,
   type LinkDestination,
+  type NumberedAddress,
   openableLinkOf,
   type ReadLink,
   taskNumberOf,
@@ -70,12 +71,11 @@ import { numberedTaskIdNow } from "./use-link-standing.js";
  * an agent a message's sender names or a review thread a Pull request tab
  * jumps to, is asked of it the same way (`useOpenPlace`,
  * `OpenAddressesHere`); a task opens a pull
- * request one of its agents opened in that agent's Pull request tab, and any
- * other pull request of its repository no listed task's agent opened in a
- * Pull request tab by its number, rather than on GitHub
+ * request its own lines name, and any other no listed task's lines name, in a
+ * Pull request tab by its repository and number, rather than on GitHub
  * (`openPullRequestsHere`). Past the place, the window opens
- * a pull request any listed task's agent opened in that agent's Pull request
- * tab, on its task (`ListedPullRequests`), wherever it is pressed:
+ * a pull request any listed task's lines name in its Pull request
+ * tab, on that task (`ListedPullRequests`), wherever it is pressed:
  * a thread, a version, a task's card, or another task. Inside a pull
  * request's own tab, a link leaves for GitHub (`PullRequestsOnGitHub`), and
  * everywhere it does where the account chose to open pull requests on
@@ -94,9 +94,10 @@ export type PagesHere = {
   readonly taskId: string;
 } & Holding;
 
-/** The tasks the window lists, as their rows name their pull requests. */
+/** The tasks the window lists, as their rows name their pull requests, and the window's door to a pull request's tab on one of them. */
 export interface Listed {
   readonly tasks: Parameters<typeof listedPullRequestOf>[1];
+  readonly onOpen: (taskId: string, pullRequest: NumberedAddress) => void;
 }
 
 const OpenLinkContext = createContext<((link: ReadLink) => void) | undefined>(undefined);
@@ -175,19 +176,22 @@ type ListedTasksReader = () => Listed;
 const ListedTasksContext = createContext<ListedTasksReader | undefined>(undefined);
 
 /**
- * Hands everything under it the tasks the window lists, whose pull requests open in their Pull request tabs. Note that it hands a reader
- * standing across draws rather than the list, which is read as a link is
- * opened, because the list is new on every patch to any listed task, and
- * every part opening links would be drawn again with it.
+ * Hands everything under it the tasks the window lists, whose pull requests
+ * open in their Pull request tabs on those tasks, through `onOpen`. Note
+ * that it hands a reader standing across draws rather than the list, which
+ * is read as a link is opened, because the list is new on every patch to
+ * any listed task, and every part opening links would be drawn again with it.
  */
 export function ListedPullRequests({
   tasks,
+  onOpen,
   children,
 }: {
   tasks: Listed["tasks"];
+  onOpen: Listed["onOpen"];
   children: ReactNode;
 }): ReactNode {
-  const read = useSteadyDoor((): Listed => ({ tasks }));
+  const read = useSteadyDoor((): Listed => ({ tasks, onOpen }));
 
   return createElement(ListedTasksContext.Provider, { value: read }, children);
 }
@@ -238,7 +242,7 @@ const PAGE_BESIDE: Readonly<Partial<Record<LinkDestinationName, PagePlaceBeside>
 };
 
 /**
- * What an address pressed on a task's page or an agent's opens beside it: a
+ * What an address pressed on a task's page opens beside it: a
  * pull request as `pullRequestBeside` opens it, and a place of the app by
  * the declaration its route matched (`PAGE_BESIDE`); any other address is
  * the window's.
@@ -262,14 +266,13 @@ function besidePages(address: Address, here: PagesHere): Route {
 
 /**
  * A task's page's opener for what it opens beside it
- * (`besidePages`): a pull request of one of its agents', in that agent's Pull
- * request tab through `open`, or another of its repository, by its number in
- * its first agent's; and a page of another place through `openPage`, read on
- * that place; any other address is the window's.
+ * (`besidePages`): a pull request, by its repository and number, in its
+ * Pull request tab through `open`; and a page of another place through
+ * `openPage`, read on that place; any other address is the window's.
  */
 export function openPullRequestsHere(
   here: PagesHere,
-  open: (agentId: string, number?: number) => void,
+  open: (pullRequest: NumberedAddress) => void,
   openPage: (pageId: string, place: PagePlace) => void,
 ): OpenAddressHere {
   return (address) => {
@@ -287,7 +290,7 @@ export function openPullRequestsHere(
     }
 
     if (thing.kind !== THING.PULL_REQUEST) return false;
-    open(thing.agentId, thing.number);
+    open(thing.pullRequest);
 
     return true;
   };
@@ -328,43 +331,40 @@ function external(address: Address): Route {
 }
 
 /**
- * An address no surface took: a place in the app goes there, a listed
- * task's or agent's pull request to its Pull request tab, on the place its
- * link matches on the route tree, unless the account opens pull requests on
- * GitHub, and anything else, or everything outside the window
- * (`opensPlaces`), leaves for the browser.
+ * An address no surface took: a place in the app goes there, a pull request
+ * a listed task's lines name to its Pull request tab on that task, unless
+ * the account opens pull requests on GitHub, and anything else, or
+ * everything outside the window (`opensPlaces`), leaves for the browser.
  */
 export function throughWindow(
   address: Address,
   opensPlaces: boolean,
   listed: Listed | undefined,
-  router: LinkRouter | undefined,
 ): Route {
   if (!opensPlaces) return external(address);
 
   if (address.kind === ADDRESS.PLACE) return go(address.link);
 
-  const opened =
-    address.kind === ADDRESS.PULL_REQUEST && address.onGitHub !== true && listed !== undefined
-      ? listedPullRequestOf(address.href, listed.tasks)
-      : undefined;
+  if (address.kind !== ADDRESS.PULL_REQUEST || address.onGitHub === true || listed === undefined) {
+    return external(address);
+  }
 
-  if (opened === undefined) return external(address);
+  const opened = listedPullRequestOf(address.href, listed.tasks);
 
-  const changes: ReadLink = {
-    workspace: "",
-    place: { kind: LINK_DESTINATION.CHANGES, taskId: opened.taskId, agentId: opened.agentId },
-  };
-
-  // Note that the window goes to the Pull request tab's place as its route reads it, as a link to it would.
-  return go(placeAddress(changes, router).routed?.link ?? changes);
+  return opened === undefined
+    ? external(address)
+    : {
+        kind: ROUTE.ON_TASK,
+        taskId: opened.taskId,
+        pullRequest: { repository: address.repository, number: address.number },
+      };
 }
 
 /**
- * The address with the listed agent that opened the pull request it names,
- * however its page is spelled, among the tasks the window lists, so a place asked of it first leaves another task's to the
- * window, and with whether the account opens pull requests on GitHub; any
- * other address as it is.
+ * The address with the listed task whose lines name the pull request it
+ * names, however its page is spelled, so a place asked of it first leaves
+ * another task's to the window, and with whether the account opens pull
+ * requests on GitHub; any other address as it is.
  */
 function withListedAgent(address: Address, listed: Listed | undefined, onGitHub: boolean): Address {
   if (address.kind !== ADDRESS.PULL_REQUEST) return address;
@@ -375,27 +375,28 @@ function withListedAgent(address: Address, listed: Listed | undefined, onGitHub:
   return { ...named, listed: listedPullRequestOf(address.href, listed.tasks) };
 }
 
-/** Opens an address where the place it is pressed on opens it, else where the window does (`throughWindow`): a place in the app there, a listed task's pull request in its Pull request tab, anything else in the browser. */
+/** Opens an address where the place it is pressed on opens it, else where the window does (`throughWindow`): a place in the app there, a listed task's pull request in its Pull request tab on that task, anything else in the browser. */
 function openAddress(
   address: Address,
   doors: {
     readonly openPlace: ((link: ReadLink) => void) | undefined;
     readonly openHere: OpenAddressHere | undefined;
     readonly listed: ListedTasksReader | undefined;
-    readonly router: LinkRouter | undefined;
     /** Whether the account opens pull requests on GitHub, read as the press lands. */
     readonly onGitHub: boolean;
   },
 ): void {
-  const { openPlace, openHere, listed, router, onGitHub } = doors;
+  const { openPlace, openHere, listed, onGitHub } = doors;
   const listing = listed?.();
   const named = withListedAgent(address, listing, onGitHub);
 
   if (openHere?.(named) === true) return;
-  const routed = throughWindow(named, openPlace !== undefined, listing, router);
+  const routed = throughWindow(named, openPlace !== undefined, listing);
 
   if (routed.kind === ROUTE.GO) {
     openPlace?.(routed.link);
+  } else if (routed.kind === ROUTE.ON_TASK) {
+    listing?.onOpen(routed.taskId, routed.pullRequest);
   } else if (routed.kind !== ROUTE.EXTERNAL) {
     return;
   } else if (isGitHubAddress(routed.href)) {
@@ -441,7 +442,6 @@ export function useOpenPlace(): ((place: LinkDestination) => void) | undefined {
               openPlace,
               openHere,
               listed: undefined,
-              router,
               onGitHub: false,
             }),
     [openPlace, openHere, router],
@@ -457,7 +457,7 @@ export function opensAsLink(href: string): boolean {
   return openableLinkOf(href) !== undefined;
 }
 
-/** Opens a link {@link opensAsLink} admits: where the place it is pressed on opens it, else an app link in the window where it can be, a listed task's or a listed agent's on no task's pull request in its Pull request tab, anything else in the browser, over the capability it belongs to (`throughWindow`). */
+/** Opens a link {@link opensAsLink} admits: where the place it is pressed on opens it, else an app link in the window where it can be, a listed task's pull request in its Pull request tab on that task, anything else in the browser, over the capability it belongs to (`throughWindow`). */
 export function useOpenLink(): (href: string) => void {
   const openPlace = useContext(OpenLinkContext);
   const openHere = useContext(OpenHereContext);
@@ -470,7 +470,7 @@ export function useOpenLink(): (href: string) => void {
     (href: string) =>
       openAddress(
         addressOf(href, router, (link) => byListedTaskId(link, queryClient, collections)),
-        { openPlace, openHere, listed, router, onGitHub: pullRequestsOnGitHubNow(queryClient) },
+        { openPlace, openHere, listed, onGitHub: pullRequestsOnGitHubNow(queryClient) },
       ),
     [openPlace, openHere, listed, queryClient, collections, router],
   );

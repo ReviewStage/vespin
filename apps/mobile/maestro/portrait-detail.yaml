@@ -16,7 +16,9 @@ onFlowComplete:
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 # A regular window in portrait stands "Choose an item" beside the Inbox's
@@ -26,7 +28,10 @@ onFlowComplete:
       visible: "Choose an item"
     commands:
       - setOrientation: PORTRAIT
-      - tapOn: "Tasks"
+      - runFlow:
+          file: subflows/tab.yaml
+          env:
+            TAB: Tasks
       - tapOn: "Teammate invitations"
       - assertVisible: "Agents"
       - waitForAnimationToEnd:

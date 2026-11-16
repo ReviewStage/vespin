@@ -1,6 +1,7 @@
 // detail-stack.ts -- the pages each place pushes over its detail inside the detail's own column, in a window wide enough for three columns, as Mail opens a message's related pages beside its list with a Back there.
 
 import { IOS_TAB, type IosTab, iosRouteOnTab } from "@repo/features/ios-app-links";
+import { useThreeColumns } from "@repo/ui-native";
 import { type Href, useFocusEffect, useIsFocused, useRouter } from "expo-router";
 import {
   createContext,
@@ -18,7 +19,6 @@ import {
   type SidebarPlace,
 } from "./screens/app-sidebar.js";
 import { useOwnTab } from "./tab-route.js";
-import { useThreeColumns } from "./use-window-size-class.js";
 
 /** What a page pushed over the detail is, as the route a compact window pushes for it names it. */
 export const PUSHED_PAGE = {
@@ -42,6 +42,8 @@ export type PushedPage =
       /** The suggestion a box opened the agent on, as the route's `suggestedBy` and `button` name it. */
       readonly suggestedBy?: string | undefined;
       readonly button?: string | undefined;
+      /** The words a start sheet started the agent on, which name it until the list or its transcript does. */
+      readonly brief?: string | undefined;
     }
   | {
       readonly kind: typeof PUSHED_PAGE.PULL_REQUEST;
@@ -75,6 +77,8 @@ export type PushedPage =
       readonly from: string;
       readonly to: string;
       readonly quote: string;
+      /** The thread id a refused start went under, whose field this opens again. */
+      readonly again?: string | undefined;
     }
   | { readonly kind: typeof PUSHED_PAGE.HISTORY; readonly taskId: string }
   | {
@@ -206,10 +210,19 @@ function replaceDetail(place: SidebarPlace, key: string, page: PushedPage): void
 }
 
 /** An agent route's params, as `AgentScreen` reads them. */
-type AgentRouteParams = { id: string; suggestedBy?: string; button?: string };
+type AgentRouteParams = { id: string; suggestedBy?: string; button?: string; brief?: string };
 
 /** A version route's params, as `VersionScreen` reads them. */
 type VersionRouteParams = { id: string; seq: string; at?: string; newest?: string };
+
+/** A new comment's route params, `again` only where it reopens a refused start's field. */
+type NewCommentRouteParams = {
+  task: string;
+  from: string;
+  to: string;
+  quote: string;
+  again?: string;
+};
 
 /** The route a compact window or a portrait iPad pushes for a page, on the tab `tab` names, with the params its screen reads. */
 function routeOf(page: PushedPage, tab: IosTab): Href {
@@ -224,6 +237,8 @@ function routeOf(page: PushedPage, tab: IosTab): Href {
       if (page.suggestedBy !== undefined) params.suggestedBy = page.suggestedBy;
 
       if (page.button !== undefined) params.button = page.button;
+
+      if (page.brief !== undefined) params.brief = page.brief;
 
       return { pathname: on("/tasks/agent/[id]"), params };
     }
@@ -259,11 +274,19 @@ function routeOf(page: PushedPage, tab: IosTab): Href {
         pathname: on("/tasks/comments/[id]"),
         params: { id: page.threadId, task: page.taskId },
       };
-    case PUSHED_PAGE.NEW_COMMENT:
-      return {
-        pathname: on("/tasks/comments/new"),
-        params: { task: page.taskId, from: page.from, to: page.to, quote: page.quote },
+    case PUSHED_PAGE.NEW_COMMENT: {
+      const params: NewCommentRouteParams = {
+        task: page.taskId,
+        from: page.from,
+        to: page.to,
+        quote: page.quote,
       };
+
+      if (page.again !== undefined) params.again = page.again;
+
+      return { pathname: on("/tasks/comments/new"), params };
+    }
+
     case PUSHED_PAGE.HISTORY:
       return { pathname: on("/tasks/history/[id]"), params: { id: page.taskId } };
     case PUSHED_PAGE.VERSION: {

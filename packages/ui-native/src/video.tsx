@@ -31,7 +31,7 @@ const OPEN_IN_SAFARI = "Open in Safari";
 const OPENS_FULL_SCREEN = "Opens the video full screen";
 
 const styles = StyleSheet.create({
-  frame: { width: "100%", borderRadius: RADIUS.MEDIA, overflow: "hidden" },
+  frame: { width: "100%", borderRadius: RADIUS.BLOCK, overflow: "hidden" },
   unplayable: {
     alignItems: "center",
     justifyContent: "center",

@@ -10,6 +10,7 @@
 export const MEDIA_READ_WORDS = {
   PICTURE_FAILED: "Couldn't load image",
   VIDEO_FAILED: "Couldn't load video",
+  AUDIO_FAILED: "Couldn't load audio",
   FILE_FAILED: "Couldn't load file",
   COULD_NOT_READ: "could not be read.",
   NOT_AVAILABLE: "not available",
