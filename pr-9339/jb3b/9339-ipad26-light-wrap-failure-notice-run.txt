@@ -1,0 +1,53 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad26 - iOS 26.5 - ABD9B3FE-4859-40A8-85F9-63B98B47142F
+ > Flow wrap-failure-notice
+Set orientation ${ORIENT}...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Run failure-notice.yaml...
+  Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, refuseWrites=true})... COMPLETED
+  Tap on "Tasks"... COMPLETED
+  Assert that "Weekly digest email" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Long press on "Weekly digest email"... COMPLETED
+  Tap on "Unpin"... COMPLETED
+  Assert that "The task could not be unpinned\..*" is visible... COMPLETED
+  Assert that id: failure-notice-retry is visible... COMPLETED
+  Take screenshot failure-notice... COMPLETED
+  Tap on id: failure-notice-retry... COMPLETED
+  Assert that "The task could not be unpinned\..*" is visible... COMPLETED
+  Assert that "Pinned" is visible... COMPLETED
+  Run flow when "Select a task" is not visible...
+    Swiping in DOWN direction on id: failure-notice... COMPLETED
+  Run flow when "Select a task" is not visible... COMPLETED
+  Run flow when "Select a task" is visible...
+  Run flow when "Select a task" is visible... SKIPPED
+  Assert that "The task could not be unpinned\..*" is not visible... COMPLETED
+  Long press on "Weekly digest email"... COMPLETED
+  Tap on "Mark done"... COMPLETED
+  Tap on "Stop agent"... COMPLETED
+  Assert that "The task could not be marked done\..*" is visible... COMPLETED
+  Assert that "Weekly digest email" is visible... COMPLETED
+  Take screenshot failure-notice-mark-done... COMPLETED
+  Tap on "Tasks"... COMPLETED
+  Tap on "Billing export"... COMPLETED
+  Tap on "Following"... COMPLETED
+  Tap on "Add a follower"... FAILED
+Run failure-notice.yaml... FAILED
+
+Element not found: Text matching regex: Add a follower
+
+Element with Text matching regex: Add a follower not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state.
+- This could be a real regression that needs to be addressed.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/jb3b/9339/9339-ipad26-light/wrap-failure-notice/2026-11-16_025112
