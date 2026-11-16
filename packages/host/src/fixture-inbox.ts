@@ -196,27 +196,6 @@ const ADA = { userId: "user-ada", name: "Ada Lovelace" } as const;
 /** A teammate, the workspace's admin, who is assigned a task the account follows. */
 const GRACE = { userId: "user-grace", name: "Grace Hopper" } as const;
 
-/** A thread resolved or reopened as the service answers one: at the status asked for, with the line saying so by Ada at its end. */
-function settledThread(
-  thread: DescriptionCommentThread,
-  action: typeof DESCRIPTION_COMMENT_ACTION.RESOLVE | typeof DESCRIPTION_COMMENT_ACTION.REOPEN,
-): DescriptionCommentThread {
-  const resolving = action === DESCRIPTION_COMMENT_ACTION.RESOLVE;
-
-  const line = {
-    id: fixtureId(resolving ? 307 : 308),
-    kind: resolving ? DESCRIPTION_COMMENT_ENTRY.RESOLVED : DESCRIPTION_COMMENT_ENTRY.REOPENED,
-    writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
-    at: Date.now(),
-  };
-
-  return {
-    ...thread,
-    status: resolving ? DESCRIPTION_COMMENT_STATUS.RESOLVED : DESCRIPTION_COMMENT_STATUS.OPEN,
-    entries: [...thread.entries, line],
-  };
-}
-
 /**
  * The sign-in pictures the fixture's people stand in with: organizations'
  * logos on GitHub's avatar host, which the apps may load pictures from,
@@ -264,6 +243,7 @@ const LISTED = {
   BILLING: "c526e869-a1d2-4efb-96bd-d2e3f405162c",
   EXPORT: "d637f97a-b2e3-4f0c-87ce-e3f405162737",
   DIGEST_V1: "e748a08b-c3f4-4a1d-98df-f405162738f4",
+  LANDING: "f859b19c-d405-4b2e-a9e0-0516273849a5",
 } as const;
 
 /** The agents that posted the items, one at work on each task. */
@@ -1002,7 +982,8 @@ function listedTask(
 /**
  * The account's tasks that hold no item, which fill out its Tasks list as
  * the sidebar stands it: a sub-task under the reference journey's, which
- * the launch's checklist waits on, a task
+ * the launch's checklist waits on, and a done one, which the journey waited
+ * on, so its page draws a finished related task beside open ones, a task
  * in a second repository, so the list draws its repositories' headings,
  * one the account keeps in a section of its own, a teammate's it
  * follows, which the list draws under Following, and one filed for later
@@ -1022,6 +1003,15 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     parentTaskId: TASK.INVITES,
     blocks: [LISTED.LAUNCH],
     priority: TASK_PRIORITY.NONE,
+  }),
+  listedTask(LISTED.LANDING, "Invite landing page", {
+    repository: "ada/relay",
+    status: TASK_STATUS.DONE,
+    number: 50,
+    updatedAt: LANDED - 1 * DAY,
+    completedAt: LANDED - 1 * DAY,
+    parentTaskId: TASK.INVITES,
+    blocks: [TASK.INVITES],
   }),
   listedTask(LISTED.ALERTS, "Usage alerts", {
     repository: "ada/ledger",
@@ -1636,7 +1626,7 @@ function invitesDocument(listed: TaskSummary): Task {
   return {
     ...task,
     description: { body: INVITES_DESCRIPTION, assumptions: [] },
-    blockedBy: [LISTED.ALERTS],
+    blockedBy: [LISTED.ALERTS, LISTED.LANDING],
     blocks: [],
   };
 }
@@ -1682,11 +1672,34 @@ const INVITES_HISTORY: DescriptionRevisionsAnswer = {
   ],
 };
 
-/** The reference journey's description as one of its versions left it: whole at the newest, its opening alone before. */
+/**
+ * Ada's draft of the reference journey's description, before its agent took
+ * it on: a goal of one line, and a question the agent's version answered and
+ * struck, so the newest version reads against it as sections written in,
+ * changed and struck.
+ */
+const INVITES_DRAFT = [
+  "## Context",
+  "",
+  "Only an admin can add someone to a workspace.",
+  "",
+  "## Open questions",
+  "",
+  "- Should an invite expire?",
+  "",
+  "## Goal",
+  "",
+  "- A member invites a teammate by email.",
+  "",
+].join("\n");
+
+/** The reference journey's description as one of its versions left it: whole at the newest, Ada's draft before it, and the draft's opening first. */
 function invitesVersionBody(seq: number): string {
   const newest = INVITES_HISTORY.revisions[0]?.seq;
 
-  return seq === newest ? INVITES_DESCRIPTION : (INVITES_DESCRIPTION.split("\n\n")[0] ?? "");
+  if (seq === newest) return INVITES_DESCRIPTION;
+
+  return seq === 1 ? (INVITES_DRAFT.split("\n\n## Open questions")[0] ?? "") : INVITES_DRAFT;
 }
 
 /** The pages the reference journey's agent showed, as its task's page lists them. */
@@ -1804,6 +1817,21 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
   },
 ];
 
+/** The threads a fixture run started on the invites task's description, by id, so a reply or a resolve on one finds it as it does a staged thread. */
+const STARTED_THREADS = new Map<string, DescriptionCommentThread>();
+
+/** The number the next reply the run keeps is given its id by, past every id the fixture stages, so each kept reply is keyed apart. */
+let nextReplyId = 1000;
+
+/** Keeps a started thread as it now stands, moved on a revision, and answers it. */
+function keepStarted(thread: DescriptionCommentThread): DescriptionCommentThread {
+  const kept = { ...thread, revision: thread.revision + 1, updatedAt: Date.now() };
+
+  STARTED_THREADS.set(kept.id, kept);
+
+  return kept;
+}
+
 /** Each held comments slice with the reference journey's description threads laid over it, one object for each. */
 const STAGED_COMMENTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS],
@@ -1818,11 +1846,16 @@ function stagedComments(
 
   if (staged !== undefined) return staged;
 
+  // Note that a thread a fixture run started stands after the staged ones, as the host drew it, so the new comment's thread opens on its page.
+  const started = (held[COMMENT_SUBJECT.DESCRIPTION][TASK.INVITES]?.rows ?? []).filter(
+    (thread) => !INVITES_THREADS.some((each) => each.id === thread.id),
+  );
+
   const laid = {
     ...held,
     [COMMENT_SUBJECT.DESCRIPTION]: {
       ...held[COMMENT_SUBJECT.DESCRIPTION],
-      [TASK.INVITES]: { rows: INVITES_THREADS },
+      [TASK.INVITES]: { rows: [...INVITES_THREADS, ...started] },
     },
   };
 
@@ -2551,7 +2584,8 @@ const ANSWERS: StagedAnswers = {
     revision: {
       seq,
       description: { body: invitesVersionBody(seq), assumptions: [] },
-      previous: null,
+      // The version before it, which the version is drawn against; the first has none.
+      previous: seq > 1 ? { body: invitesVersionBody(seq - 1), assumptions: [] } : null,
     },
   }),
   [ACT_KIND.TASKS_RESTORE]: () => true,
@@ -2711,32 +2745,79 @@ const ANSWERS: StagedAnswers = {
   // Note that a rename and a delete are taken as the service takes them, though nothing here moves, so the window draws its own write.
   [ACT_KIND.TASKS_RENAME]: () => true,
   [ACT_KIND.TASKS_DELETE]: () => true,
-  // Note that a reply, a resolve, and a reopen are each taken as the service takes one, answered with the thread as it then stands, though nothing here moves; any other act is answered with the thread unchanged.
+  // Note that a new comment on the invites task's description is taken as the service takes one, answered with its thread under the id the window chose, so a flow sees the thread open with the words as its first comment.
+  [ACT_KIND.TASKS_COMMENT_START]: ({ taskId, start }) => {
+    if (taskId !== TASK.INVITES || !("scope" in start)) {
+      return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
+    }
+
+    const at = Date.now();
+
+    const thread: DescriptionCommentThread = {
+      id: start.id ?? fixtureId(307),
+      scope: start.scope,
+      quote: start.quote,
+      anchor: start.anchor,
+      section: "Goal",
+      status: DESCRIPTION_COMMENT_STATUS.OPEN,
+      entries: [
+        {
+          id: fixtureId(308),
+          kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+          writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+          words: start.words,
+          at,
+        },
+      ],
+      createdAt: at,
+      updatedAt: at,
+      revision: 1,
+    };
+
+    STARTED_THREADS.set(thread.id, thread);
+
+    return { thread };
+  },
+  // Note that a reply is taken as the service takes one, on a staged thread or one the run started, answered with its thread as it then stands, though nothing here moves.
   [ACT_KIND.TASKS_COMMENT_ACT]: ({ taskId, threadId, action }) => {
-    const thread = INVITES_THREADS.find((each) => each.id === threadId);
+    const thread =
+      INVITES_THREADS.find((each) => each.id === threadId) ?? STARTED_THREADS.get(threadId);
 
     if (taskId !== TASK.INVITES || thread === undefined) {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
     }
 
+    const started = STARTED_THREADS.has(thread.id);
+
+    // Note that a resolve or a reopen answers the thread at the status asked, as the service answers one, so the host never draws it back as it stood; a thread the run started keeps it, with its replies, so a later answer carries them.
     if (
       action.action === DESCRIPTION_COMMENT_ACTION.RESOLVE ||
       action.action === DESCRIPTION_COMMENT_ACTION.REOPEN
     ) {
-      return { thread: settledThread(thread, action.action) };
+      const status =
+        action.action === DESCRIPTION_COMMENT_ACTION.RESOLVE
+          ? DESCRIPTION_COMMENT_STATUS.RESOLVED
+          : DESCRIPTION_COMMENT_STATUS.OPEN;
+
+      const settled = { ...thread, status };
+
+      return { thread: started ? keepStarted(settled) : settled };
     }
 
     if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) return { thread };
 
+    // Note that a reply kept on a started thread takes an id of its own, since the thread's rows are keyed by their entries' ids; a staged thread's one reply, never kept, keeps its fixed id.
     const reply = {
-      id: fixtureId(306),
+      id: started ? fixtureId(nextReplyId++) : fixtureId(306),
       kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
       writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
       words: action.words,
       at: Date.now(),
     };
 
-    return { thread: { ...thread, entries: [...thread.entries, reply] } };
+    const replied = { ...thread, entries: [...thread.entries, reply] };
+
+    return { thread: started ? keepStarted(replied) : replied };
   },
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,

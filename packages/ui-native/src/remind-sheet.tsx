@@ -51,7 +51,8 @@ type RemindPickSheetProps = {
  * of nothing, beside its screen rather than inside it, as every ask does.
  */
 export function RemindPickSheet({ presented, pick, onPick, onDismiss }: RemindPickSheetProps) {
-  const colors = useColors();
+  // Note that the sheet stands over the window, so in dark it draws on the lifted ground, as iOS lifts what it presents.
+  const colors = useColors(true);
   const [picked, setPicked] = useState(() => new Date(pick.opensAt));
 
   // Note that each opening starts again from its own opening moment, so an earlier pick that was canceled doesn't stand.

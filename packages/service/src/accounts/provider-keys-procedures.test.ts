@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { generateKeyPairSync, type KeyObject, randomUUID, sign } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { writeAccountPreferences } from "@repo/database/models/account-store";
 import {
   listProviderKeyRows,
   setPlanStatus,
@@ -13,6 +14,7 @@ import {
 } from "@repo/database/schemas/account-provider-key";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
+import { CLIENT_HEADER, CLIENT_PLATFORM } from "@repo/features/client-identity";
 import {
   CHATGPT_DEVICE_LOGIN,
   type ChatGptDevicePollAnswer,
@@ -28,6 +30,7 @@ import {
   type ProviderKeysAnswer,
   providerKeysAnswerSchema,
 } from "@repo/features/provider-key-wire";
+import { EXPERIMENT } from "@repo/settings";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import {
@@ -160,6 +163,7 @@ type ProviderAnswers = ReadonlyMap<string, number>;
 const ACCEPTING: ProviderAnswers = new Map([
   [KEY.ANTHROPIC, HTTP_STATUS.OK],
   [KEY.OPENAI, HTTP_STATUS.OK],
+  [KEY.CURSOR, HTTP_STATUS.OK],
 ]);
 
 /** The key a recorded check carried, read from whichever header its provider reads. */
@@ -270,7 +274,14 @@ const answer = (
 
 function request(
   userId: string | undefined,
-  init: { method?: string; body?: WireBoundaryInput; query?: string; path?: string } = {},
+  init: {
+    method?: string;
+    body?: WireBoundaryInput;
+    query?: string;
+    path?: string;
+    /** The hosted API version the asking build names itself by; none, as a build from before the headers. */
+    apiVersion?: number | undefined;
+  } = {},
 ) {
   const url = new URL(init.path ?? KEYS_PATH, ORIGIN);
 
@@ -281,13 +292,26 @@ function request(
     headers: {
       ...(userId === undefined ? undefined : { authorization: `Bearer ${userId}` }),
       ...(init.body === undefined ? undefined : { "content-type": "application/json" }),
+      ...(init.apiVersion === undefined
+        ? undefined
+        : {
+            [CLIENT_HEADER.CLIENT]: `${CLIENT_PLATFORM.DESKTOP}/1.0.0`,
+            [CLIENT_HEADER.API_VERSION]: String(init.apiVersion),
+          }),
     },
     ...(init.body === undefined ? undefined : { body: JSON.stringify(init.body) }),
   });
 }
 
-const save = (userId: string, provider: ProviderKeyProvider, key: string) =>
-  request(userId, { method: "PUT", body: { provider, key } });
+const save = (userId: string, provider: ProviderKeyProvider, key: string, apiVersion?: number) =>
+  request(userId, { method: "PUT", body: { provider, key }, apiVersion });
+
+/** The first hosted API version whose builds read a Cursor key. */
+const CURSOR_READ = 4;
+
+/** The account with its Cursor experiment on, as a builder of Cursor turns it on. */
+const turnCursorOn = (userId: string) =>
+  writeAccountPreferences(userId, { experiments: { [EXPERIMENT.CURSOR]: true } });
 
 const remove = (userId: string, provider: string, kind?: string) =>
   request(userId, {
@@ -614,6 +638,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           provider: new Map([[failing, HTTP_STATUS.SERVER_ERROR]]),
         });
 
+        yield* turnCursorOn(owner);
         const invalid = yield* ask(save(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, refused));
         const unreachable = yield* ask(save(owner, PROVIDER_KEY_PROVIDER.OPENAI, failing));
         const misplaced = yield* ask(save(owner, PROVIDER_KEY_PROVIDER.OPENAI, KEY.ANTHROPIC));
@@ -661,6 +686,57 @@ it.layer(getTestDB())("the provider keys route", (it) => {
             assert.ok(!answered.text.includes(key));
           }
         }
+      }),
+  );
+
+  it.effect(
+    "a Cursor key is refused as an invalid request, unasked and unkept, until the account turns Cursor on, and kept once it has",
+    () =>
+      Effect.gen(function* () {
+        const { owner, ask, checks } = yield* openAccounts({ ring: KEK.ONE });
+
+        const refused = yield* ask(
+          save(owner, PROVIDER_KEY_PROVIDER.CURSOR, KEY.CURSOR, CURSOR_READ),
+        );
+
+        assert.deepEqual(
+          { status: refused.status, body: refused.body },
+          refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
+        );
+        assert.deepEqual(checks, [], "Cursor is never asked about a key it may not keep");
+        assert.deepEqual(keysOf(yield* ask(request(owner, { apiVersion: CURSOR_READ }))).keys, []);
+
+        yield* turnCursorOn(owner);
+
+        const kept = yield* ask(save(owner, PROVIDER_KEY_PROVIDER.CURSOR, KEY.CURSOR, CURSOR_READ));
+
+        assert.deepEqual(
+          keysOf(kept).keys.map((key) => [key.provider, key.status]),
+          [[PROVIDER_KEY_PROVIDER.CURSOR, PROVIDER_KEY_STATUS.VERIFIED]],
+        );
+      }),
+  );
+
+  it.effect(
+    "a build that cannot read a Cursor key, one below Cursor's API version or one naming none, is answered the account's other keys without it",
+    () =>
+      Effect.gen(function* () {
+        const { owner, ask } = yield* openAccounts({ ring: KEK.ONE });
+        yield* turnCursorOn(owner);
+        yield* ask(save(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, KEY.ANTHROPIC, CURSOR_READ));
+        yield* ask(save(owner, PROVIDER_KEY_PROVIDER.CURSOR, KEY.CURSOR, CURSOR_READ));
+
+        const providersFor = (apiVersion: number | undefined) =>
+          Effect.map(ask(request(owner, { apiVersion })), (answered) =>
+            keysOf(answered).keys.map((key) => key.provider),
+          );
+
+        assert.deepEqual(yield* providersFor(CURSOR_READ - 1), [PROVIDER_KEY_PROVIDER.ANTHROPIC]);
+        assert.deepEqual(yield* providersFor(undefined), [PROVIDER_KEY_PROVIDER.ANTHROPIC]);
+        assert.deepEqual(yield* providersFor(CURSOR_READ), [
+          PROVIDER_KEY_PROVIDER.ANTHROPIC,
+          PROVIDER_KEY_PROVIDER.CURSOR,
+        ]);
       }),
   );
 

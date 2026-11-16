@@ -28,8 +28,10 @@ export type ChoiceMedia = {
   readonly kind: ChoiceMediaKind;
   /** Its caption, a page's title, or an address's words, under its tile. */
   readonly title: string;
-  /** The file a picture, a recording, or a sound clip is drawn from; none while its bytes are on their way. */
-  readonly source?: string | undefined;
+  /** The file a picture, a recording, or a sound clip is drawn from; none while its bytes are on their way, and `null` where they could not be read. */
+  readonly source?: string | null | undefined;
+  /** Reads a picture, a recording, or a sound clip whose bytes could not be read again. */
+  readonly onRetry?: (() => void) | undefined;
   /** Opens a page or an address, or a recording the system's player cannot read. */
   readonly onOpen?: (() => void) | undefined;
 };
@@ -66,7 +68,7 @@ const styles = StyleSheet.create({
   symbol: {
     width: "100%",
     aspectRatio: TILE_ASPECT,
-    borderRadius: RADIUS.TAG * 2,
+    borderRadius: RADIUS.TILE,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -101,16 +103,22 @@ function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
     // Note that a sound clip's strip takes the row's width, since half of a phone's leaves its bar no room beside its time.
     <View style={large || piece.kind === CHOICE_MEDIA.AUDIO ? styles.wholeTile : styles.tile}>
       {piece.kind === CHOICE_MEDIA.PICTURE ? (
-        <Picture source={piece.source} alt={piece.title} tileAspect={TILE_ASPECT} />
+        <Picture
+          source={piece.source}
+          alt={piece.title}
+          tileAspect={TILE_ASPECT}
+          onRetry={piece.onRetry}
+        />
       ) : piece.kind === CHOICE_MEDIA.VIDEO ? (
         <Video
           source={piece.source}
           label={piece.title}
           onOpenElsewhere={piece.onOpen}
           tileAspect={TILE_ASPECT}
+          onRetry={piece.onRetry}
         />
       ) : piece.kind === CHOICE_MEDIA.AUDIO ? (
-        <AudioClip source={piece.source} label={piece.title} />
+        <AudioClip source={piece.source} label={piece.title} onRetry={piece.onRetry} />
       ) : (
         <SymbolTile piece={piece} />
       )}

@@ -48,6 +48,7 @@ import {
   type AgentSummary,
   LOCAL_AGENT_REFUSAL,
 } from "@repo/features/agent-wire";
+import { HOSTED_API_VERSION } from "@repo/features/client-identity";
 import { descriptionMarkdown } from "@repo/features/description-markdown";
 import type { GitHubAccess } from "@repo/features/github-repositories-wire";
 import { automationRun } from "@repo/features/model-label";
@@ -55,7 +56,7 @@ import { agentFallbackChoice, type ModelChoice } from "@repo/features/models-wir
 import type { Task } from "@repo/features/task-wire";
 import { bothInOrder, causeKind, failureKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
-import { EXPERIMENT } from "@repo/settings";
+import { EXPERIMENT, experimentOn } from "@repo/settings";
 import {
   MESSAGE_CHANNEL,
   type SlackLineMetadata,
@@ -85,6 +86,7 @@ import {
 } from "../../http/http-effect.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { agentSpansAnnotated } from "../../observability/sentry.js";
+import { withCursorModels } from "../../providers/cursor-models.js";
 import {
   ModelCatalog,
   ModelChoiceRefused,
@@ -331,8 +333,15 @@ const modelChoicesRead = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   const fastOffer = yield* hostedStoreOrUnavailable(accountFastOffer(userId, keys));
 
+  // Note that this build's own version is the client here, since these choices are checked and listed in the service and never cross the wire whole.
+  const cursor = {
+    experimentOn:
+      preferences !== undefined && experimentOn(preferences.experiments, EXPERIMENT.CURSOR),
+    apiVersion: HOSTED_API_VERSION,
+  };
+
   const offered = yield* hostedStoreOrUnavailable(
-    markedUnconnected(userId, offeredToAccount(read, fastOffer), keys),
+    markedUnconnected(userId, withCursorModels(offeredToAccount(read, fastOffer), cursor), keys),
   );
 
   const stored = preferences?.agent;

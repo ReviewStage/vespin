@@ -37,6 +37,7 @@ import {
 import type { TaskStatus } from "@repo/features/task-wire";
 import {
   Fragment,
+  memo,
   type ReactElement,
   type ReactNode,
   useEffect,
@@ -131,6 +132,8 @@ export type BarMenu = {
   readonly actions: readonly BarMenuAction[];
   /** Menus within it, after its acts, such as a task's Status. */
   readonly submenus?: readonly BarMenu[] | undefined;
+  /** Whether the menu stands dimmed and opens on nothing, as a bar's act does while it can't act. */
+  readonly disabled?: boolean | undefined;
   /** Groups after its acts and menus, each set apart by a rule, such as a task's ⋯ setting Permanently delete apart. */
   readonly groups?: readonly BarMenuGroup[] | undefined;
 };
@@ -253,8 +256,14 @@ function MenuActs({ group }: { readonly group: BarMenuGroup }) {
   );
 }
 
-/** A bar's menu as SwiftUI's: each choice a toggle the system checks, then a rule, then each act, then each group behind a rule of its own. */
-export function BarMenuButton({
+/**
+ * A bar's menu as SwiftUI's: each choice a toggle the system checks, then a
+ * rule, then each act, then each group behind a rule of its own. Note that it
+ * is drawn again only for a menu changed, because a menu of many choices,
+ * such as one listing every open task, would otherwise build each of them
+ * anew on every key typed beside it.
+ */
+export const BarMenuButton = memo(function BarMenuButton({
   menu,
   modifiers = [],
 }: {
@@ -265,10 +274,13 @@ export function BarMenuButton({
   const colors = useColors();
 
   return (
-    <Menu label={menuLabel(menu.label, menu.symbol)} modifiers={[...modifiers]}>
+    <Menu
+      label={menuLabel(menu.label, menu.symbol)}
+      modifiers={[...modifiers, disabled(menu.disabled === true)]}
+    >
       {menu.choices.map((choice) => (
         <Toggle
-          key={choice.label}
+          key={choice.id ?? choice.label}
           {...choiceContent(choice, colors)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
@@ -284,7 +296,7 @@ export function BarMenuButton({
       ))}
     </Menu>
   );
-}
+});
 
 /** A bar's menu standing in its bar, such as a column's ⋯, its glyph alone in the bar's glass. */
 export function BarMenuItem({ menu }: { readonly menu: BarMenu }) {
