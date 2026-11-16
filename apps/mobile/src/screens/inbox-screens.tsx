@@ -779,8 +779,7 @@ function ThreadDetail({
       }
 
       if (each.kind === INBOX_MEDIA.AUDIO) {
-        // Note that a clip whose bytes could not be read stands as one on its way, since its strip offers no Try again yet.
-        return { kind: THREAD_MEDIA.AUDIO, key, source: source ?? undefined, label: each.name };
+        return { kind: THREAD_MEDIA.AUDIO, key, source, label: each.name, onRetry };
       }
 
       if (each.kind === INBOX_MEDIA.FILE) {

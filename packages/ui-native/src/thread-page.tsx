@@ -98,9 +98,10 @@ export type ThreadMedia =
   | {
       readonly kind: typeof THREAD_MEDIA.AUDIO;
       readonly key: string;
-      /** The clip's file under the app's caches, named by its type's extension; none while its bytes are on their way. */
-      readonly source: string | undefined;
+      /** The clip's file under the app's caches, named by its type's extension; none while its bytes are on their way, and `null` where they could not be read. */
+      readonly source: string | null | undefined;
       readonly label: string;
+      readonly onRetry: () => void;
     }
   | {
       readonly kind: typeof THREAD_MEDIA.FILE;
@@ -282,7 +283,7 @@ function MediaView({ media }: { readonly media: ThreadMedia }) {
         />
       );
     case THREAD_MEDIA.AUDIO:
-      return <AudioClip source={media.source} label={media.label} />;
+      return <AudioClip source={media.source} label={media.label} onRetry={media.onRetry} />;
     case THREAD_MEDIA.FILE:
       return (
         <FileChip

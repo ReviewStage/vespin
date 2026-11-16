@@ -598,7 +598,7 @@ function retryOf(drawing: RowDrawing, id: string): (() => void) | undefined {
   return retry === undefined ? undefined : () => retry(id);
 }
 
-/** One thing a call showed, as its kind draws it: a picture, a recording in the system's player, or a sound clip in its strip; a picture or a recording whose bytes could not be read offers Try again. */
+/** One thing a call showed, as its kind draws it: a picture, a recording in the system's player, or a sound clip in its strip; one whose bytes could not be read offers Try again. */
 function ShownMediaView({
   shown,
   source,
@@ -621,8 +621,7 @@ function ShownMediaView({
         />
       );
     case SHOWN_MEDIA.AUDIO:
-      // Note that a clip whose bytes could not be read stands as one on its way, since its strip offers no Try again yet.
-      return <AudioClip source={source ?? undefined} label={shown.label} />;
+      return <AudioClip source={source} label={shown.label} onRetry={onRetry} />;
     case SHOWN_MEDIA.PICTURE:
       return <Picture source={source} alt={shown.label} onRetry={onRetry} />;
   }

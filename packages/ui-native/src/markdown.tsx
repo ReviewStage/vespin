@@ -1135,8 +1135,9 @@ function PictureBlock({
 
   const label = alt.trim() === "" ? video.label : alt;
 
-  // Note that a clip whose bytes could not be read stands as one on its way, since its strip offers no Try again yet.
-  if (video.audio === true) return <AudioClip source={video.source ?? undefined} label={label} />;
+  if (video.audio === true) {
+    return <AudioClip source={video.source} label={label} onRetry={video.onRetry} />;
+  }
 
   return (
     <Video

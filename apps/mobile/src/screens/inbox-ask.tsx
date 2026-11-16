@@ -110,7 +110,12 @@ function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedi
       const source = doors.source(piece.attachmentId);
 
       if (isAudioType(piece.mediaType)) {
-        return { kind: CHOICE_MEDIA.AUDIO, title: piece.caption ?? SOUND_CLIP_WORD, source };
+        return {
+          kind: CHOICE_MEDIA.AUDIO,
+          title: piece.caption ?? SOUND_CLIP_WORD,
+          source,
+          onRetry: () => doors.retry(piece.attachmentId),
+        };
       }
 
       return {

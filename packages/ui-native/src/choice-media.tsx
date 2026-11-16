@@ -30,7 +30,7 @@ export type ChoiceMedia = {
   readonly title: string;
   /** The file a picture, a recording, or a sound clip is drawn from; none while its bytes are on their way, and `null` where they could not be read. */
   readonly source?: string | null | undefined;
-  /** Reads a picture or a recording whose bytes could not be read again. */
+  /** Reads a picture, a recording, or a sound clip whose bytes could not be read again. */
   readonly onRetry?: (() => void) | undefined;
   /** Opens a page or an address, or a recording the system's player cannot read. */
   readonly onOpen?: (() => void) | undefined;
@@ -118,8 +118,7 @@ function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
           onRetry={piece.onRetry}
         />
       ) : piece.kind === CHOICE_MEDIA.AUDIO ? (
-        // Note that a clip whose bytes could not be read stands as one on its way, since its strip offers no Try again yet.
-        <AudioClip source={piece.source ?? undefined} label={piece.title} />
+        <AudioClip source={piece.source} label={piece.title} onRetry={piece.onRetry} />
       ) : (
         <SymbolTile piece={piece} />
       )}
