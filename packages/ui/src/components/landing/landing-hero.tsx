@@ -1,6 +1,6 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
-import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
 import {
   CheckCheckIcon,
@@ -37,7 +37,6 @@ import { Comment, type CommentAuthor } from "../comment/comment.js";
 import { ComposerBody } from "../composer-frame/composer-body.js";
 import { ComposerFoot } from "../composer-frame/composer-foot.js";
 import { ComposerFrame } from "../composer-frame/composer-frame.js";
-import { DetailPage } from "../detail-page/detail-page.js";
 import { Disclosure, DisclosureBody, DisclosureSummary } from "../disclosure/disclosure.js";
 import { GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { GROUP_HEADING, GROUP_LOOK, GroupHeader } from "../group-header/group-header.js";
@@ -57,7 +56,6 @@ import {
 import { useMenu } from "../menu/menu.js";
 import { MoreButton } from "../more-button/more-button.js";
 import { NAV_ITEM_VARIANT, NavItem } from "../nav-item/nav-item.js";
-import { PAGE_FRAME } from "../page-frame/page-frame.js";
 import {
   PROGRESS_COUNT_LOOK,
   PROGRESS_RING_TONE,
@@ -80,27 +78,31 @@ import { WorkingMark } from "../working-mark/working-mark.js";
 import {
   DESKTOP_PLACE,
   DesktopPlaces,
-  REPOSITORY,
   useLandingMember,
   WorkspaceFace,
 } from "./landing-desktop.js";
 import { PullRequestCard } from "./landing-scenes.js";
-import { MINUTE, STORY_NOW, still } from "./landing-story.js";
+import { MINUTE, STORY_NOW, still, useTimeline, useTyping } from "./landing-story.js";
 
 /**
- * landing-hero.tsx -- the hero's app: our Mac app as it stands today, at its own size, which a reader clicks through.
+ * landing-hero.tsx -- the hero's app: our Mac app as it stands today, at its own size, playing a short story on a loop.
  *
  * It is a replica, drawn from the very `@repo/ui` components the panel
  * draws its shell with and laid out as the panel lays them
  * (`packages/panel/src/desktop/desktop-shell.tsx` and the pages under it,
  * whose geometry `landing.css`'s hero app restates): the frame and its
- * traffic lights, the sidebar's places and My tasks, Home's composer over
- * the Inbox, the Inbox beside an opened thread, and a task's tabs over its
- * agent's transcript. It is drawn at the web app's own surface, dark and
- * compact, at one to one wherever the page is wide enough, and scaled down
- * whole on a phone. Nothing is sent anywhere: what the reader writes stays
- * in this component's state, where Home's composer starts a task, a thread
- * takes an answer or a reply, and a task a follow-up.
+ * traffic lights, the sidebar's places and My tasks, the Inbox beside an
+ * opened thread, and a task's tabs over its agent's transcript. It is drawn
+ * at the web app's own surface, dark and compact, at one to one wherever
+ * the page is wide enough, and scaled down whole on a phone.
+ *
+ * It is a picture, never a control: nothing in it takes a press, a key, or
+ * a scroll. It plays one story on the scene clock (`useTimeline`): the
+ * member asks the task's agent for a follow-up, the agent works through its
+ * calls, asks a question in the Inbox, the member answers it there, and the
+ * agent finishes and opens its pull request. A transcript grows from its
+ * foot, its oldest turns passing under its top edge, as the app's does
+ * while it follows a running agent.
  */
 
 /** The surface the app draws at: the Mac app's own, dark. */
@@ -109,7 +111,7 @@ const APP_SURFACE = surfaceAttributes(PROFILE.DESKTOP, THEME.DARK);
 /** The least width the app lays itself out at; a narrower stage scales it down whole. */
 const LEAST_WIDTH = 1040;
 
-const FIRST_NAME = "Sam";
+const _FIRST_NAME = "Sam";
 
 type View =
   | { readonly place: typeof DESKTOP_PLACE.HOME }
@@ -142,7 +144,13 @@ type Line =
       readonly answered?: string;
     }
   | { readonly kind: typeof LINE.AGENT; readonly id: string; readonly words: string }
-  | { readonly kind: typeof LINE.CALLS; readonly id: string; readonly calls: readonly Call[] }
+  | {
+      readonly kind: typeof LINE.CALLS;
+      readonly id: string;
+      readonly calls: readonly Call[];
+      /** Whether its calls stand open, as a turn still running shows them. */
+      readonly open?: boolean;
+    }
   | {
       readonly kind: typeof LINE.WORKED;
       readonly id: string;
@@ -193,69 +201,7 @@ const TASKS: readonly Task[] = [
     progress: { done: 3, total: 4 },
     agent: "Teammate invitations",
     asks: 1,
-    lines: [
-      {
-        kind: LINE.AGENT,
-        id: "plan",
-        words:
-          "I split this into four sub-tasks: the memberships schema, the invite and accept endpoints, the accept page, and the emails. The first two are merged, and I started an agent on the accept page while I wire the emails.",
-      },
-      {
-        kind: LINE.CALLS,
-        id: "calls",
-        calls: [
-          { id: "plan", icon: <GLYPH.FILE />, verb: "Read", subject: "plan.md" },
-          { id: "start", icon: <PlayIcon />, verb: "Started an agent", subject: "Accept page" },
-          {
-            id: "mail",
-            icon: <GLYPH.FILE />,
-            verb: "Edited",
-            subject: "server/mail/invite-email.tsx",
-          },
-        ],
-      },
-      {
-        kind: LINE.AGENT,
-        id: "sent",
-        words:
-          "Invites now go out through Postmark and expire after seven days. A second accept of the same link reads as no longer valid, and a test opens one link twice at once. #217 is open with the emails.",
-      },
-      { kind: LINE.WORKED, id: "worked", seconds: 37, at: "Today, 3:55 PM" },
-      {
-        kind: LINE.YOU,
-        id: "answer",
-        words: "Chose \u201cBoth\u201d.",
-        at: "Today, 4:02 PM",
-        answered: "Who can withdraw an invite?",
-      },
-      {
-        kind: LINE.CALLS,
-        id: "withdraw",
-        calls: [
-          {
-            id: "route",
-            icon: <GLYPH.FILE />,
-            verb: "Edited",
-            subject: "server/routes/invites/withdraw.ts",
-          },
-          { id: "test", icon: <PlayIcon />, verb: "Ran", subject: "pnpm test invites" },
-        ],
-      },
-      {
-        kind: LINE.AGENT,
-        id: "done",
-        words:
-          "Both the member who sent an invite and any admin can withdraw it now, and the audit log records who did. I pushed it to #217 and the checks are running.",
-      },
-      { kind: LINE.WORKED, id: "worked-2", seconds: 21, at: "Today, 4:03 PM", last: true },
-      {
-        kind: LINE.YOU,
-        id: "reminder",
-        words: "Also send a reminder if an invite hasn't been accepted after three days.",
-        at: "Today, 4:24 PM",
-      },
-      { kind: LINE.WORKING, id: "working" },
-    ],
+    lines: [],
     pullRequest: {
       title: "#217 feat(invites): invite teammates by email",
       added: 412,
@@ -533,26 +479,6 @@ const ITEMS: readonly Item[] = [
 /** The reader's answer to the question: the option picked, the note, and whether it was sent. */
 type Answer = { readonly pick: string | null; readonly note: string; readonly sent: boolean };
 
-/** Something the reader wrote, by the id it is listed by. */
-type Said = { readonly id: number; readonly words: string };
-
-/** `map` with `key` set to `value`. */
-function withEntry<Value>(
-  map: ReadonlyMap<string, Value>,
-  key: string,
-  value: Value,
-): ReadonlyMap<string, Value> {
-  return new Map(map).set(key, value);
-}
-
-/** The name a task started from Home takes: its first sentence, a few words of it at most. */
-function taskName(words: string): string {
-  const sentence = words.split(/[.!?\n]/)[0] ?? words;
-  const named = sentence.trim().split(/\s+/).slice(0, 6).join(" ");
-
-  return named.length > 0 ? named.charAt(0).toUpperCase() + named.slice(1) : "New task";
-}
-
 /** An agent's face: its name on Claude's square. */
 function agentFace(name: string): React.JSX.Element {
   return (
@@ -592,34 +518,6 @@ function useAppFit() {
   }, []);
 
   return { ref, scale, style: cssCustomProperties({ "--ui-hero-app-fit": scale }) };
-}
-
-/**
- * Scrolls the element `ref` names to its end each time `count`, how many
- * lines it holds, grows, so a message the reader sends stands in view
- * rather than under the scroll's edge.
- */
-function useScrollToEnd(ref: RefObject<HTMLDivElement | null>, count: number): void {
-  const seen = useRef(count);
-  useEffect(() => {
-    const log = ref.current;
-    const grew = count > seen.current;
-
-    seen.current = count;
-
-    if (log === null || !grew) return;
-
-    log.scrollTo({ top: log.scrollHeight, behavior: "smooth" });
-  }, [ref, count]);
-}
-
-/** Stands the element `ref` names at its end as it first draws, as a transcript opens on its latest turn. */
-function useOpenAtEnd(ref: RefObject<HTMLDivElement | null>): void {
-  useEffect(() => {
-    const log = ref.current;
-
-    if (log !== null) log.scrollTop = log.scrollHeight;
-  }, [ref]);
 }
 
 /** A composer's field: its words, as they change, sent with Return. */
@@ -948,24 +846,8 @@ function answerLine(pick: string | null): string {
   return "badge" in option ? `${option.label} (recommended)` : option.label;
 }
 
-/** An opened Inbox item: its subject, its agent's words, the reader's answer and replies, and the box under them. */
-function InboxThread({
-  item,
-  answer,
-  setAnswer,
-  replies,
-  reply,
-  onReply,
-  onSend,
-}: {
-  item: Item;
-  answer: Answer;
-  setAnswer: (update: (answer: Answer) => Answer) => void;
-  replies: readonly Said[];
-  reply: string;
-  onReply: (words: string) => void;
-  onSend: () => void;
-}): React.JSX.Element {
+/** An opened Inbox item: its subject, its agent's words, the member's answer once sent, and the box under them. */
+function InboxThread({ item, answer }: { item: Item; answer: Answer }): React.JSX.Element {
   const member = useLandingMember();
   const question = item.id === QUESTION_ID;
   const asking = question && !answer.sent;
@@ -995,30 +877,19 @@ function InboxThread({
             </Comment>
           </li>
         ) : null}
-        {replies.map((said) => (
-          <li key={said.id} className="ui-hero-comment ui-hero-enter">
-            <Comment author={member} at={STORY_NOW} now={STORY_NOW}>
-              <Text>{said.words}</Text>
-            </Comment>
-          </li>
-        ))}
         <li className="ui-hero-comment">
           <Comment author={member} nameRef="You">
             {asking ? (
               <AgentComposer
                 label="Add a note"
                 words={answer.note}
-                onWords={(note) => setAnswer((now) => ({ ...now, note }))}
-                onSend={() => setAnswer((now) => ({ ...now, note: now.note.trim(), sent: true }))}
+                onWords={still}
+                onSend={still}
                 sendable={answer.pick !== null}
                 head={
                   <div className="ui-hero-draft-ask">
                     <div className="ui-hero-draft-ask-options">
-                      <QuestionChoices
-                        pick={answer.pick}
-                        readOnly={false}
-                        onPick={(pick) => setAnswer((now) => ({ ...now, pick }))}
-                      />
+                      <QuestionChoices pick={answer.pick} readOnly={false} onPick={still} />
                     </div>
                     <IconButton
                       icon={<GLYPH.CLOSE />}
@@ -1032,10 +903,10 @@ function InboxThread({
             ) : (
               <AgentComposer
                 label="Reply"
-                words={reply}
-                onWords={onReply}
-                onSend={onSend}
-                sendable={reply.trim() !== ""}
+                words=""
+                onWords={still}
+                onSend={still}
+                sendable={false}
               />
             )}
           </Comment>
@@ -1140,7 +1011,7 @@ function TranscriptLine({ line }: { line: Line }): React.JSX.Element {
       );
     case LINE.CALLS:
       return (
-        <Disclosure>
+        <Disclosure defaultOpen={line.open === true}>
           <DisclosureSummary>
             {line.calls.length === 1 ? "1 tool call" : `${line.calls.length} tool calls`}
           </DisclosureSummary>
@@ -1163,26 +1034,10 @@ function TranscriptLine({ line }: { line: Line }): React.JSX.Element {
   }
 }
 
-/** A task's page: its name on the frame, its agent's tab and the task's checks beside it, the transcript, the dock of its pull request and Inbox, and the follow-up box. */
-function TaskPage({
-  task,
-  followUp,
-  onFollowUp,
-  onSend,
-  onInbox,
-}: {
-  task: Task;
-  followUp: string;
-  onFollowUp: (words: string) => void;
-  onSend: () => void;
-  onInbox: () => void;
-}): React.JSX.Element {
+/** A task's page: its name on the frame, its agent's tab and the task's checks beside it, the transcript, the dock of its pull request and Inbox, and the follow-up box holding `followUp`. */
+function TaskPage({ task, followUp }: { task: Task; followUp: string }): React.JSX.Element {
   const started = task.lines.length > 0;
-  const log = useRef<HTMLDivElement>(null);
   const checks = useMenu(false);
-
-  useOpenAtEnd(log);
-  useScrollToEnd(log, task.lines.length);
 
   return (
     <div className="ui-hero-page ui-hero-task">
@@ -1221,7 +1076,7 @@ function TaskPage({
         </span>
       </div>
       <section className="ui-hero-sheet ui-hero-agent" aria-label={task.name}>
-        <div ref={log} className="ui-hero-log">
+        <div className="ui-hero-log">
           {started ? (
             task.lines.map((line) => <TranscriptLine key={line.id} line={line} />)
           ) : (
@@ -1247,15 +1102,15 @@ function TaskPage({
                 leading={<GLYPH.INBOX />}
                 title="Inbox"
                 meta={<span className="ui-hero-asks">{task.asks}</span>}
-                onPress={onInbox}
+                onPress={still}
               />
             </List>
           )}
           <AgentComposer
             label={started ? "Send a follow-up" : "Ask to make changes"}
             words={followUp}
-            onWords={onFollowUp}
-            onSend={onSend}
+            onWords={still}
+            onSend={still}
             sendable={followUp.trim() !== ""}
             working={task.working}
           />
@@ -1265,158 +1120,208 @@ function TaskPage({
   );
 }
 
-/** Home: the welcome over the new task's composer, and `inbox` under it. */
-function HomePage({
-  draft,
-  onDraft,
-  onStart,
-  inbox,
-}: {
-  draft: string;
-  onDraft: (words: string) => void;
-  onStart: () => void;
-  inbox: ReactNode;
-}): React.JSX.Element {
-  return (
-    <div className="ui-hero-page ui-hero-home">
-      <section className="ui-hero-sheet" aria-label="Home">
-        <DetailPage frame={PAGE_FRAME.PAGE} title={`Welcome back, ${FIRST_NAME}`}>
-          <div className="ui-hero-new-task">
-            <span className="ui-hero-new-task-head">
-              <Chip look={CHIP_LOOK.FIELD} chevron onClick={still}>
-                <ChipName>
-                  <span className="ui-hero-chip-words">
-                    <GLYPH.REPOSITORY />
-                    {REPOSITORY}
-                  </span>
-                </ChipName>
-              </Chip>
-            </span>
-            <AgentComposer
-              label="Describe the task"
-              words={draft}
-              onWords={onDraft}
-              onSend={onStart}
-              sendable={draft.trim() !== ""}
-              rows={3}
-            />
-          </div>
-          {inbox}
-        </DetailPage>
-      </section>
-    </div>
-  );
+/** The story's beats, in order, each held its own while (`STORY_BEATS`). */
+const BEAT = {
+  OPEN: 0,
+  TYPE: 1,
+  SEND: 2,
+  READ: 3,
+  EDIT: 4,
+  TEST: 5,
+  ASK: 6,
+  INBOX: 7,
+  PICK: 8,
+  ANSWER: 9,
+  BACK: 10,
+  FIX: 11,
+  DONE: 12,
+} as const;
+
+/** How long each beat holds, in milliseconds, by its place in `BEAT`: long enough to read what it adds. */
+const STORY_BEATS: readonly number[] = [
+  1600, 4200, 900, 800, 800, 1000, 2000, 1400, 1100, 1300, 1100, 1300, 4000,
+];
+
+/** The follow-up the member types to the task's agent. */
+const FOLLOW_UP = "Also send a reminder if an invite hasn't been accepted after three days.";
+
+/** The option the member picks in the Inbox. */
+const PICKED = "both";
+
+/** The task's transcript as the story opens: the ask, the plan, its calls, and the first turn's end. */
+const OPENING: readonly Line[] = [
+  {
+    kind: LINE.YOU,
+    id: "ask",
+    words: "Invite teammates by email. Links should expire after a week.",
+    at: "Today, 3:41 PM",
+  },
+  {
+    kind: LINE.AGENT,
+    id: "plan",
+    words:
+      "I split this into four sub-tasks: the memberships schema, the invite and accept endpoints, the accept page, and the emails. The first two are merged, and I started an agent on the accept page while I wire the emails.",
+  },
+  {
+    kind: LINE.CALLS,
+    id: "calls",
+    calls: [
+      { id: "plan", icon: <GLYPH.FILE />, verb: "Read", subject: "plan.md" },
+      { id: "start", icon: <PlayIcon />, verb: "Started an agent", subject: "Accept page" },
+      { id: "mail", icon: <GLYPH.FILE />, verb: "Edited", subject: "server/mail/invite-email.tsx" },
+    ],
+  },
+  {
+    kind: LINE.AGENT,
+    id: "sent",
+    words:
+      "Invites now go out through Postmark and expire after seven days. A second accept of the same link reads as no longer valid. #217 is open with the emails.",
+  },
+  { kind: LINE.WORKED, id: "worked", seconds: 37, at: "Today, 3:55 PM" },
+];
+
+/** The reminder turn's calls, one more at each beat from reading to testing. */
+const REMINDER_CALLS: readonly Call[] = [
+  { id: "read", icon: <GLYPH.FILE />, verb: "Read", subject: "server/mail/invite-email.tsx" },
+  { id: "job", icon: <GLYPH.FILE />, verb: "Edited", subject: "server/jobs/invite-reminders.ts" },
+  { id: "test", icon: <PlayIcon />, verb: "Ran", subject: "pnpm test invites" },
+];
+
+/** The turn after the answer: its calls. */
+const WITHDRAW_CALLS: readonly Call[] = [
+  {
+    id: "route",
+    icon: <GLYPH.FILE />,
+    verb: "Edited",
+    subject: "server/routes/invites/withdraw.ts",
+  },
+  { id: "test", icon: <PlayIcon />, verb: "Ran", subject: "pnpm test invites" },
+];
+
+/** The task's transcript at `beat`: the opening, then each line the story has reached. */
+function storyLines(beat: number): readonly Line[] {
+  const lines: Line[] = [...OPENING];
+  const reached = (at: number) => beat >= at;
+
+  if (reached(BEAT.SEND))
+    lines.push({ kind: LINE.YOU, id: "reminder", words: FOLLOW_UP, at: "Today, 4:24 PM" });
+
+  if (reached(BEAT.READ)) {
+    const shown = Math.min(beat - BEAT.READ + 1, REMINDER_CALLS.length);
+
+    lines.push({
+      kind: LINE.CALLS,
+      id: "reminder-calls",
+      calls: REMINDER_CALLS.slice(0, shown),
+      open: true,
+    });
+  }
+
+  if (reached(BEAT.ASK)) {
+    lines.push({
+      kind: LINE.AGENT,
+      id: "ask-withdraw",
+      words:
+        "The reminder job is in. Before I wire the withdraw route: who should be able to withdraw an invite? I asked in your Inbox.",
+    });
+  }
+
+  if (reached(BEAT.BACK)) {
+    lines.push({
+      kind: LINE.YOU,
+      id: "answer",
+      words: "Chose \u201cBoth\u201d.",
+      at: "Today, 4:26 PM",
+      answered: "Who can withdraw an invite?",
+    });
+  }
+
+  if (reached(BEAT.FIX))
+    lines.push({ kind: LINE.CALLS, id: "withdraw-calls", calls: WITHDRAW_CALLS, open: true });
+
+  if (reached(BEAT.DONE)) {
+    lines.push({
+      kind: LINE.AGENT,
+      id: "done",
+      words:
+        "An invite left unaccepted gets one reminder after three days, and its sender or any admin can withdraw it. #217 is ready for review.",
+    });
+    lines.push({
+      kind: LINE.WORKED,
+      id: "worked-2",
+      seconds: 52,
+      at: "Today, 4:27 PM",
+      last: true,
+    });
+  }
+
+  // Note that the agent works from the sent follow-up to its answer and again after it, so its working line stands at the foot then.
+  const working =
+    (reached(BEAT.SEND) && !reached(BEAT.ASK)) || (reached(BEAT.BACK) && !reached(BEAT.DONE));
+
+  if (working) lines.push({ kind: LINE.WORKING, id: "working" });
+
+  return lines;
 }
 
-/** The live Mac app the hero shows, opened on Home. */
+/** A task the story is still writing, before it is handed to the page. */
+type StoryTask = { -readonly [Key in keyof Task]: Task[Key] };
+
+/** The open task at `beat`: its transcript, whether its agent works, its Inbox count, its sub-tasks, and its pull request once ready. */
+function storyTask(task: Task, beat: number): Task {
+  const done = beat >= BEAT.DONE;
+  const { asks: _asks, pullRequest, ...rest } = task;
+
+  const shown: StoryTask = {
+    ...rest,
+    lines: storyLines(beat),
+    working: beat >= BEAT.SEND && !done && !(beat >= BEAT.ASK && beat < BEAT.BACK),
+    status: done ? TASK_STATUS.DONE : TASK_STATUS.IN_PROGRESS,
+    progress: { done: done ? 4 : 3, total: 4 },
+  };
+
+  // Note that the question counts on the agent's tab only while it waits on the member.
+  if (beat >= BEAT.ASK && beat < BEAT.ANSWER) shown.asks = 1;
+
+  if (done && pullRequest !== undefined) shown.pullRequest = pullRequest;
+
+  return shown;
+}
+
+/** Where the story stands the app at `beat`: the task, the Inbox while the member answers, and the task again. */
+function storyView(beat: number): View {
+  return beat >= BEAT.INBOX && beat < BEAT.BACK
+    ? { place: DESKTOP_PLACE.INBOX }
+    : { place: DESKTOP_PLACE.TASK, task: OPEN_TASK };
+}
+
+/** The Mac app the hero shows, playing its story on a loop: a picture, inert. */
 export function LandingHeroApp(): React.JSX.Element {
   const fit = useAppFit();
-  const [view, setView] = useState<View>({ place: DESKTOP_PLACE.TASK, task: OPEN_TASK });
-  const [tasks, setTasks] = useState<readonly Task[]>(TASKS);
-  const [openItem, setOpenItem] = useState<string>(QUESTION_ID);
-  const [answer, setAnswer] = useState<Answer>({ pick: null, note: "", sent: false });
-  const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(new Map());
-  const [replies, setReplies] = useState<ReadonlyMap<string, readonly Said[]>>(new Map());
-  const nextId = useRef(0);
-  const thread = useRef<HTMLDivElement>(null);
+  const app = useRef<HTMLDivElement>(null);
+  const beat = useTimeline(app, STORY_BEATS);
+  const typed = useTyping(FOLLOW_UP, beat === BEAT.TYPE, false);
+  const view = storyView(beat);
+  const tasks = TASKS.map((task) => (task.id === OPEN_TASK ? storyTask(task, beat) : task));
 
-  useScrollToEnd(thread, (replies.get(openItem)?.length ?? 0) + (answer.sent ? 1 : 0));
-
-  const draft = (key: string) => drafts.get(key) ?? "";
-
-  const setDraft = (key: string) => (words: string) =>
-    setDrafts((all) => withEntry(all, key, words));
-
-  const fresh = () => {
-    nextId.current += 1;
-
-    return nextId.current;
+  const answer: Answer = {
+    pick: beat >= BEAT.PICK ? PICKED : null,
+    note: "",
+    sent: beat >= BEAT.ANSWER,
   };
 
-  const sendReply = (key: string) => () => {
-    const words = draft(key).trim();
-
-    if (words === "") return;
-    const said = { id: fresh(), words };
-
-    setReplies((all) => withEntry(all, key, [...(all.get(key) ?? []), said]));
-    setDraft(key)("");
-  };
-
-  const sendFollowUp = (taskId: string) => () => {
-    const words = draft(taskId).trim();
-
-    if (words === "") return;
-    const id = fresh();
-
-    setTasks((all) =>
-      all.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              working: true,
-              agent: task.lines.length > 0 ? task.agent : taskName(words),
-              lines: [
-                ...task.lines.filter((line) => line.kind !== LINE.WORKING),
-                { kind: LINE.YOU, id: `you-${id}`, words, at: "Just now" },
-                { kind: LINE.WORKING, id: `working-${id}` },
-              ],
-            }
-          : task,
-      ),
-    );
-    setDraft(taskId)("");
-  };
-
-  const startTask = () => {
-    const words = draft(DESKTOP_PLACE.HOME).trim();
-
-    if (words === "") return;
-    const id = `new-${fresh()}`;
-
-    const task: Task = {
-      id,
-      name: taskName(words),
-      list: LIST.MINE,
-      status: TASK_STATUS.IN_PROGRESS,
-      working: true,
-      ago: 0,
-      agent: taskName(words),
-      lines: [
-        { kind: LINE.YOU, id: "ask", words, at: "Just now" },
-        { kind: LINE.WORKING, id: "working" },
-      ],
-    };
-
-    setTasks((all) => [task, ...all]);
-    setDraft(DESKTOP_PLACE.HOME)("");
-    setView({ place: DESKTOP_PLACE.TASK, task: id });
-  };
+  // Note that the question reaches the Inbox only when the agent asks it.
+  const items = ITEMS.filter((item) => item.id !== QUESTION_ID || beat >= BEAT.ASK);
 
   const settledLine = (item: Item) =>
     item.id === QUESTION_ID && answer.sent ? answerLine(answer.pick) : null;
 
-  const needYou = ITEMS.filter(
+  const needYou = items.filter(
     (item) => item.ask !== ASK.SETTLED && item.ask !== ASK.NOTICE && settledLine(item) === null,
   ).length;
 
-  const inboxRows = (current: string | null, onOpen: (id: string) => void) => (
-    <List label="Inbox items">
-      {ITEMS.map((item) => (
-        <InboxRow
-          key={item.id}
-          item={item}
-          task={tasks.find((task) => task.id === item.task)}
-          settled={settledLine(item)}
-          current={item.id === current}
-          onOpen={() => onOpen(item.id)}
-        />
-      ))}
-    </List>
-  );
-
   const inboxPage = (): ReactNode => {
-    const item = ITEMS.find((each) => each.id === openItem);
+    const item = items.find((each) => each.id === QUESTION_ID);
     const task = tasks.find((each) => each.id === item?.task);
 
     return (
@@ -1434,7 +1339,20 @@ export function LandingHeroApp(): React.JSX.Element {
               <IconButton icon={<CheckCheckIcon />} label="Mark all read" onClick={still} />
               <IconButton icon={<SlidersHorizontalIcon />} label="View options" onClick={still} />
             </div>
-            <div className="ui-hero-inbox-rows">{inboxRows(openItem, setOpenItem)}</div>
+            <div className="ui-hero-inbox-rows">
+              <List label="Inbox items">
+                {items.map((each) => (
+                  <InboxRow
+                    key={each.id}
+                    item={each}
+                    task={tasks.find((owner) => owner.id === each.task)}
+                    settled={settledLine(each)}
+                    current={each.id === QUESTION_ID}
+                    onOpen={still}
+                  />
+                ))}
+              </List>
+            </div>
           </div>
         </nav>
         <section className="ui-hero-inbox-item" aria-label="Inbox item">
@@ -1458,19 +1376,8 @@ export function LandingHeroApp(): React.JSX.Element {
               actions={<MoreButton thing="thread" onClick={still} />}
             />
           </div>
-          <div ref={thread} className="ui-hero-inbox-item-body">
-            {item === undefined ? null : (
-              <InboxThread
-                key={item.id}
-                item={item}
-                answer={answer}
-                setAnswer={setAnswer}
-                replies={replies.get(item.id) ?? []}
-                reply={draft(item.id)}
-                onReply={setDraft(item.id)}
-                onSend={sendReply(item.id)}
-              />
-            )}
+          <div className="ui-hero-inbox-item-body">
+            {item === undefined ? null : <InboxThread item={item} answer={answer} />}
           </div>
         </section>
       </div>
@@ -1478,59 +1385,26 @@ export function LandingHeroApp(): React.JSX.Element {
   };
 
   const page = (): ReactNode => {
-    switch (view.place) {
-      case DESKTOP_PLACE.HOME:
-        return (
-          <HomePage
-            draft={draft(DESKTOP_PLACE.HOME)}
-            onDraft={setDraft(DESKTOP_PLACE.HOME)}
-            onStart={startTask}
-            inbox={
-              <section className="ui-hero-home-section">
-                <GroupHeader
-                  heading={GROUP_HEADING.H2}
-                  label="Inbox"
-                  count={{ value: needYou, noun: "need you", tone: STATUS_TONE.ATTENTION }}
-                />
-                {inboxRows(null, (id) => {
-                  setOpenItem(id);
-                  setView({ place: DESKTOP_PLACE.INBOX });
-                })}
-              </section>
-            }
-          />
-        );
-      case DESKTOP_PLACE.INBOX:
-        return inboxPage();
-      case DESKTOP_PLACE.TASK: {
-        const task = tasks.find((each) => each.id === view.task);
+    if (view.place === DESKTOP_PLACE.INBOX) return inboxPage();
 
-        if (task === undefined) return null;
+    const task = tasks.find((each) => each.id === OPEN_TASK);
 
-        return (
-          <TaskPage
-            key={task.id}
-            task={task}
-            followUp={draft(task.id)}
-            onFollowUp={setDraft(task.id)}
-            onSend={sendFollowUp(task.id)}
-            onInbox={() => setView({ place: DESKTOP_PLACE.INBOX })}
-          />
-        );
-      }
-    }
+    if (task === undefined) return null;
+
+    return <TaskPage task={task} followUp={beat === BEAT.TYPE ? typed : ""} />;
   };
 
   return (
     <section
       ref={fit.ref}
       className="ui-hero-app-room"
-      aria-label="The Mac app, live: click through it"
+      role="img"
+      aria-label="The Mac app: an agent works through a follow-up, asks a question in the Inbox, is answered, and opens its pull request"
       style={fit.style}
       data-scaled={fit.scale < 1}
     >
-      <div className="ui-hero-app" {...APP_SURFACE}>
-        <Sidebar view={view} tasks={tasks} needYou={needYou} go={setView} />
+      <div ref={app} className="ui-hero-app" inert {...APP_SURFACE}>
+        <Sidebar view={view} tasks={tasks} needYou={needYou} go={still} />
         <main className="ui-hero-main" data-page={view.place}>
           {page()}
         </main>

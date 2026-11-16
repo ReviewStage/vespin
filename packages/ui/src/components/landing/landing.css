@@ -402,7 +402,7 @@
     flex: 1;
     flex-direction: column;
     min-height: 0;
-    overflow-y: auto;
+    overflow: hidden;
     scrollbar-width: none;
   }
 
@@ -573,7 +573,7 @@
   .ui-hero-inbox-item-body {
     flex: 1;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
     padding: var(--ui-section-gap) var(--ui-hero-reading-room) var(--ui-hero-inset);
   }
 
@@ -728,13 +728,18 @@
     display: inline-flex;
   }
 
+  /* The log grows from its foot, its oldest turns passing under a faded
+     top edge, as the app's does while it follows a running agent; nothing
+     in the hero scrolls. */
   .ui-hero-log {
     display: flex;
     flex: 1;
     flex-direction: column;
     gap: var(--ui-block-gap);
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
+    justify-content: flex-end;
+    mask-image: linear-gradient(to bottom, transparent, black 64px);
     padding: var(--ui-section-gap) var(--ui-hero-reading-room) var(--ui-block-gap);
   }
 
