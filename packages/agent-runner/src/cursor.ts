@@ -154,7 +154,7 @@ const LAUNCH_STATE = {
 /**
  * Where the launch stands: idle, warm where its turn is over and its IDLE
  * posted or it started warm; or a run going, a summary's or a message's,
- * stopping once a Stop cancelled it.
+ * stopping once a Stop canceled it.
  */
 type LaunchState =
   | { readonly kind: typeof LAUNCH_STATE.IDLE; readonly warm: boolean }
@@ -384,7 +384,7 @@ const startSummary = Effect.fn("agent-runner/cursor/startSummary")(function* (
   yield* follow(launch, run);
 });
 
-/** Steers a message into the run going, Cursor's answer signalled once it comes, so a Stop meanwhile is not held up. */
+/** Steers a message into the run going, Cursor's answer signaled once it comes, so a Stop meanwhile is not held up. */
 const steer = Effect.fn("agent-runner/cursor/steer")(function* (
   launch: CursorLaunch,
   run: CursorRun,
@@ -610,7 +610,7 @@ const takeRunEnded = Effect.fn("agent-runner/cursor/takeRunEnded")(function* (
   if (signal.status === "error") return ended(RUNNER_END.FAILED, signal.error ?? "the run failed");
 
   if (signal.status === "cancelled") {
-    return ended(RUNNER_END.FAILED, signal.error ?? "the run was cancelled");
+    return ended(RUNNER_END.FAILED, signal.error ?? "the run was canceled");
   }
 
   return yield* settle(launch);
@@ -791,7 +791,7 @@ export const runCursor = Effect.fn("agent-runner/runCursor")(function* (
     }
   }).pipe(Effect.catch((error) => Effect.succeed(ended(RUNNER_END.FAILED, error.detail))));
 
-  // A run the end cut short is cancelled, and the agent let go, before the launch's last event.
+  // A run the end cut short is canceled, and the agent let go, before the launch's last event.
   if (launch.state.kind === LAUNCH_STATE.RUN) {
     const { run } = launch.state;
     yield* Effect.tryPromise(() => run.cancel()).pipe(

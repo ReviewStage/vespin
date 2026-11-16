@@ -90,7 +90,7 @@ export function fakeCursor(runs: readonly FakeRun[]) {
     played += 1;
     const number = played;
     const held = settler();
-    let cancelled = false;
+    let canceled = false;
     release = held.settle;
 
     if (script.held !== true) held.settle();
@@ -122,13 +122,13 @@ export function fakeCursor(runs: readonly FakeRun[]) {
 
         return {
           id: `run-${number}`,
-          status: cancelled ? "cancelled" : (script.status ?? "finished"),
+          status: canceled ? "cancelled" : (script.status ?? "finished"),
           ...(script.error === undefined ? undefined : { error: { message: script.error } }),
         };
       },
       cancel: async () => {
         record.cancels += 1;
-        cancelled = true;
+        canceled = true;
         held.settle();
       },
       steer: async (text) => {
