@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place; and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -56,6 +56,16 @@ public final class NativeInteractionsModule: Module {
     OnDestroy {
       ModifierName.all.forEach { ViewModifierRegistry.unregister($0) }
     }
+
+    // Note that the keyboard is lowered by ending editing in every window of every scene, forced, since a SwiftUI field such as a split view's search, unlike React Native's, has no focus JavaScript can reach, and an action sent to the first responder never reached the search field of a split view's column on an iPad. It answers whether any field let go, and logs it, so a run on the simulator shows whether a pick reached it.
+    AsyncFunction("lowerKeyboard") { () -> Bool in
+      let windows = UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .flatMap { $0.windows }
+      let lowered = windows.reduce(false) { ended, window in window.endEditing(true) || ended }
+      NSLog("[Vespin] lowerKeyboard ended editing: %@", lowered ? "yes" : "no")
+      return lowered
+    }.runOnQueue(.main)
   }
 }
 

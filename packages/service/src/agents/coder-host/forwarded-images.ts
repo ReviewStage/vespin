@@ -6,7 +6,7 @@ import {
   AGENT_BOUNDS,
   type AgentAttachment,
 } from "@repo/features/agent-wire";
-import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { isPlayedType } from "@repo/features/conversation-picture-wire";
 import type { InboxImageType } from "@repo/features/inbox-wire";
 import { Effect, Option, Result } from "effect";
 
@@ -32,8 +32,8 @@ import { Effect, Option, Result } from "effect";
 const FORWARDED_IMAGE_REFUSAL = {
   /** The id names no picture the forwarder may hand on. */
   UNREACHED: "unreached",
-  /** The id names a video the forwarder recorded, which no message carries as a file. */
-  VIDEO: "video",
+  /** The id names a video or a sound clip the forwarder made, which no message carries as a file. */
+  PLAYED: "played",
   /** The picture is past one image's bound. */
   TOO_LARGE: "too-large",
   /** The pictures together are past one message's bound. */
@@ -42,7 +42,7 @@ const FORWARDED_IMAGE_REFUSAL = {
 
 export type ForwardedImageRefusal =
   | { readonly kind: typeof FORWARDED_IMAGE_REFUSAL.UNREACHED; readonly id: string }
-  | { readonly kind: typeof FORWARDED_IMAGE_REFUSAL.VIDEO; readonly id: string }
+  | { readonly kind: typeof FORWARDED_IMAGE_REFUSAL.PLAYED; readonly id: string }
   | {
       readonly kind: typeof FORWARDED_IMAGE_REFUSAL.TOO_LARGE;
       readonly id: string;
@@ -105,7 +105,8 @@ export function forwardedImages(
 
       const { contentType, bytes } = picture.value;
 
-      if (isVideoType(contentType)) return Result.fail({ kind: FORWARDED_IMAGE_REFUSAL.VIDEO, id });
+      if (isPlayedType(contentType))
+        return Result.fail({ kind: FORWARDED_IMAGE_REFUSAL.PLAYED, id });
 
       if (bytes.byteLength > AGENT_BOUNDS.MAX_IMAGE_BYTES) {
         return Result.fail({
@@ -139,10 +140,10 @@ export function forwardedImageRefusalWords(refusal: ForwardedImageRefusal): stri
         `attachment ${refusal.id} is no picture you can hand on. Name a picture of your own ` +
         `conversation, such as one ${AGENT_TOOL.SHOW_IMAGE} kept.`
       );
-    case FORWARDED_IMAGE_REFUSAL.VIDEO:
+    case FORWARDED_IMAGE_REFUSAL.PLAYED:
       return (
-        `attachment ${refusal.id} is a video, and only a picture, a PNG, JPEG, or WebP, is ` +
-        "handed to another agent."
+        `attachment ${refusal.id} is a video or a sound clip, and only a picture, a PNG, JPEG, ` +
+        "or WebP, is handed to another agent."
       );
     case FORWARDED_IMAGE_REFUSAL.TOO_LARGE:
       return (

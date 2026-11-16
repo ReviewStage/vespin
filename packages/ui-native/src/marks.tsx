@@ -23,6 +23,7 @@ import {
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { NEEDS_YOU } from "@repo/features/inbox-list-model";
+import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import {
   TASK_PRIORITY_WORDS,
@@ -34,6 +35,7 @@ import { useState } from "react";
 import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
 import { monogramOf } from "./monogram.js";
 import {
   PRIORITY_MARK_BARRED,
@@ -373,6 +375,29 @@ export function HarnessMark({
     <Image
       assetName={HARNESS_MARK_ASSET[provider]}
       modifiers={[resizable(), frame({ width: size, height: size }), accessibilityHidden()]}
+    />
+  );
+}
+
+/** An integration's mark, as the panel leads a call of its tool with it: the provider's own vector at `size`, a template mark in `ink`, unheard beside the words it leads. */
+export function IntegrationMark({
+  provider,
+  size,
+  ink,
+}: {
+  readonly provider: IntegrationProvider;
+  readonly size: number;
+  readonly ink: string;
+}) {
+  return (
+    <Image
+      assetName={INTEGRATION_MARK_ASSET[provider]}
+      modifiers={[
+        resizable(),
+        frame({ width: size, height: size }),
+        foregroundStyle(ink),
+        accessibilityHidden(),
+      ]}
     />
   );
 }

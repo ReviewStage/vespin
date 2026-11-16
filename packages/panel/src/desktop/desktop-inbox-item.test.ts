@@ -188,6 +188,7 @@ test("a paste past an item's reply cap and too large for a file is cut to the ro
   const note = () => pane.querySelector(".ui-composer-foot-note")?.textContent;
   assert.equal(pane.querySelector(".ui-length-counter"), null);
 
+  // Note that this runs a few seconds, because only words past a text file's 3 MB bound stay words to be cut.
   pasteInComposer(pane, "x".repeat(AGENT_BOUNDS.MAX_TEXT_BYTES + 1));
   await settle();
   assert.equal(composerEditor(pane).textContent?.length, cap);
