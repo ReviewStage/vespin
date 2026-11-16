@@ -888,6 +888,7 @@ function ThreadDetail({
       {...(inStack
         ? {}
         : {
+            pathInHead: true,
             acts,
             menu: menuWithout(menu, acts),
             foot: (
