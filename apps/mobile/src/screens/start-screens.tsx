@@ -38,12 +38,12 @@ import {
   buzz,
   Chip,
   type ChipMenuGroup,
-  ComposeSheet,
   ConfirmAsk,
   FieldChip,
   GLYPH,
   type Glyph,
   glyphSymbol,
+  MENU_CHIP_LOOK,
   MenuChip,
   type PickOption,
   runsOnGlyph,
@@ -57,6 +57,7 @@ import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { useCloseSheet } from "../close-sheet.js";
+import { FocusedComposeSheet } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useListedTasks } from "../host/host-provider.js";
 import { useOnTab } from "../tab-route.js";
@@ -138,7 +139,7 @@ const LANDING = {
 
 type Landing = (typeof LANDING)[keyof typeof LANDING];
 
-/** The sheet's bar: its name, Cancel at its leading edge, and Start at its trailing one, lit once there are words or pictures to send and while no start is out, with File for later before it on New task; and the ask a Cancel or a swipe down raises while the sheet holds a draft. */
+/** The sheet's bar: its name, the system's ✕ at its leading edge (Cancel to VoiceOver), and Start at its trailing one, lit once there are words or pictures to send and while no start is out, with File for later before it on New task; and the ask the ✕ or a swipe down raises while the sheet holds a draft. */
 function SheetBar({
   title,
   ready,
@@ -169,7 +170,12 @@ function SheetBar({
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={close}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        {/* Note that the sheet closes with the system's ✕, as Mail's compose sheet does, its word kept for VoiceOver. */}
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={WORDS.CANCEL}
+          onPress={close}
+        />
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         {file === undefined ? null : (
@@ -253,10 +259,13 @@ function ModelChip({ pick }: { readonly pick: ModelPick }) {
     });
   }
 
+  const harness = pick.shown === undefined ? undefined : providerOf(pick.shown.model);
+
   return (
     <MenuChip
+      look={MENU_CHIP_LOOK.DOCK}
       label={effort === undefined ? model : `${model}${JOINED}${effort}`}
-      harness={pick.shown === undefined ? undefined : providerOf(pick.shown.model)}
+      {...(harness === undefined ? {} : { harness })}
       menu={{ groups }}
     />
   );
@@ -284,6 +293,7 @@ function RunsOnChip({
 
   return (
     <MenuChip
+      look={MENU_CHIP_LOOK.DOCK}
       label={labelOf(options, runsOn) ?? WORDS.RUNS_ON}
       symbol={glyphOf(runsOn)}
       menu={{
@@ -318,12 +328,19 @@ function RepositoryChip({
   readonly tree: TaskSummary | undefined;
 }) {
   if (tree !== undefined) {
-    return <FieldChip label={tree.repository ?? NO_REPOSITORY} symbol={GLYPH.REPOSITORY} />;
+    return (
+      <MenuChip
+        look={MENU_CHIP_LOOK.DOCK}
+        label={tree.repository ?? NO_REPOSITORY}
+        symbol={GLYPH.REPOSITORY}
+      />
+    );
   }
 
   if (repository.options.length > 0) {
     return (
       <MenuChip
+        look={MENU_CHIP_LOOK.DOCK}
         label={labelOf(repository.options, repository.picked) ?? WORDS.REPOSITORY}
         symbol={GLYPH.REPOSITORY}
         menu={{
@@ -342,7 +359,7 @@ function RepositoryChip({
   return (
     <>
       {repository.picked === undefined ? null : (
-        <FieldChip label={repository.picked} symbol={GLYPH.REPOSITORY} />
+        <MenuChip look={MENU_CHIP_LOOK.DOCK} label={repository.picked} symbol={GLYPH.REPOSITORY} />
       )}
       {repository.failed === undefined ? null : (
         <Chip label={WORDS.TRY_AGAIN} symbol={GLYPH.RETRY} onPress={repository.retry} />
@@ -696,7 +713,7 @@ export function NewAgentScreen({
         onStart={start}
         kept={kept}
       />
-      <ComposeSheet
+      <FocusedComposeSheet
         title={
           opened === undefined
             ? undefined
@@ -1005,7 +1022,7 @@ export function NewTaskScreen({
         file={{ ready: filed !== undefined && placed && !starting, onFile: file }}
         kept={kept}
       />
-      <ComposeSheet
+      <FocusedComposeSheet
         head={<RelationChip pick={relation} />}
         words={{
           placeholder: WORDS.TASK_PLACEHOLDER,

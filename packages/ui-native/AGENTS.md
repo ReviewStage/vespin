@@ -45,17 +45,24 @@ builds a control of its own.
   answer's fields, and `AskNote` for what a send that did not go said),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
   for its checks and reviewers, `WriteNoteRow`, `MergeActRow` for its
-  merge under its heading), `ConfirmAsk` (the system's
-  alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
+  merge under its heading), `ConfirmAsk` (the question
+  an act asks first: the system's action sheet from the screen's foot in a
+  compact window, its act first, and its alert in a regular one or where
+  words must be typed), `WordsAsk` (the system's alert words are typed in,
+  such as an invitation's address), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a form's words,
   pictures and choices, `ComposeSheet` for a sheet that starts work (its
-  words filling the page, and the + and `MenuChip` capsule menus in glass
-  over the keyboard),
+  words filling the page, and the + and `MenuChip` capsule menus over the
+  keyboard, each the system's own glass button in a `DockRow` with no bar
+  around them, each capsule led by the panel's glyph or a model's harness
+  mark),
   `SwitchRow` for an agent's options, `askForName` (the system's alert a name is
   typed in, its act preferred, for a task and an agent alike),
   `AccountButton`, `FailureNoticeProvider` (the app's one notice that a
-  write did not go: a banner of Liquid Glass sliding down from the top with
-  the refusal's words and Try again, said aloud by VoiceOver, faded rather
+  write did not go: a banner of Liquid Glass rising at the window's foot,
+  over the composer or the compact tab bar there (`useNoticeLift`), as Mail
+  and Messages stand Undo, so it never covers the heading or search field it
+  speaks of, with the refusal's words and Try again, said aloud by VoiceOver, faded rather
   than slid where the reader reduces motion, standing over the app's root
   view (not a `FullWindowOverlay`, whose window never drew on iOS 27.2), and
   said once for a stretch offline, `failure-notice-model.ts`),
@@ -186,9 +193,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   small and inline, since its bar also holds the switcher, ⋯ and the
   sidebar button. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading
-  under it; a split view's detail column draws the same path in its bar. A
-  thread's path opens its task and its agent, as the panel's crumbs do: in a
-  split view's bar the path is a menu of them under a small chevron, as iOS's
+  under it; a split view's detail column draws the same path in its bar, but
+  for a thread's, which heads the page over its title (`pathInHead`), so the
+  column's narrow bar holds the thread's acts and the path's words stand uncut.
+  A thread's path opens its task and its agent, as the panel's crumbs do: in a
+  split view the path is a menu of them under a small chevron, as iOS's
   title menus stand (`PathTitle`'s `actions`), and in a compact window, whose
   stack's title holds no menu, they lead its ⋯ menu. An
   agent's page names the agent in the bar in the ink instead, as Messages
@@ -217,8 +226,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   list with the switcher, its tile and its name, and stands no Settings gear: Settings
   opens from the switcher's menu and ⌘,, as Notion's and Linear's iPad sidebars keep it, and
   the account's photo leads the sidebar's bar only until the switcher can draw. Nothing draws a
-  copy of glass, and glass is one layer: a bar's own, or one glass view
-  (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest). A
+  copy of glass, and glass is one layer: a bar's own, one glass view
+  (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest), or a
+  control's own glass button style in a `DockRow`, never inside a bar. A
   glass that holds buttons takes no press of its own (not `interactive`),
   so only the button under a finger or the pointer reacts, and no button
   is handed a hover effect: the system draws its own on each style, where
@@ -293,7 +303,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, a
   row per option checked at its end in copper once picked, as `PickRows`
   checks one, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
-  with Mark done and Couldn't do it under it; `AnswerFields`, a row per
+  with Mark done and Couldn't do it under it, at the system's regular size,
+  Mark done filled as the card's one act and Couldn't do it its words
+  alone, the two stacked past the accessibility sizes; `AnswerFields`, a row per
   field: a text or number field under its label, the field plain inside the
   card and prompting "Required" or "Optional" while empty, a number field's
   pad standing one Done over it for the card, a select's menu picker
@@ -302,8 +314,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   a `Form` scrolls on its own inside the thread's scroll; a card's hairlines
   start where its rows' words do, as iOS insets a list's separator) and the pull request
   (`PullRequestCard`: its state's glyph, its title, its lines in green and
-  red, and its acts as pills; a press on it opens its own page), each on
-  `SURFACE` inside a hairline.
+  red, and its acts as pills; a press on it opens its own page). An ask's
+  card and a file's chip stand on `CARD`, the soft gray in light, so they
+  read off the page's white as iOS's own cards do rather than by a faint
+  hairline alone; the pull request card stands on `SURFACE`; each inside a
+  hairline.
 - **A pull request's page** reads as the panel's Pull request tab, from the
   same model (`@repo/features/pull-request-model`): its state as a chip in
   GitHub's color, the merge queue's in the attention ink with its place

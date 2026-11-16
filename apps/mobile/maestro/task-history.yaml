@@ -31,6 +31,7 @@ appId: dev.vespin.ios
 - tapOn: "Earlier"
 - waitForAnimationToEnd
 - assertVisible: "Context"
+- assertVisible: "Goal"
 - takeScreenshot: task-version
 - tapOn: "Restore this version"
 # Note that the notice is checked at once, since it stands six seconds and a

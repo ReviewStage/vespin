@@ -6,11 +6,15 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import {
   BAR_TITLE,
   type BrandColors,
+  ChipMarkProvider,
   FailureNoticeLayer,
   FailureNoticeProvider,
   KeepingProvider,
   NO_GROUND,
+  TAB_BAR_ROOM,
   useColors,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
@@ -31,10 +35,9 @@ import { useShareSheet } from "../share-sheet.js";
 import { SHORT_SHEET_DETENTS } from "../sheet-stack.js";
 import { holdSplash } from "../splash.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useChipMarks } from "../tasks/chip-marks.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
 import { VoiceCallProvider } from "../voice-call.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
@@ -250,7 +253,9 @@ function GuardedScreens() {
 function KeptScreens() {
   return (
     <KeepingProvider keeping={useKeeping()}>
-      <GuardedScreens />
+      <ChipMarkProvider markOf={useChipMarks()}>
+        <GuardedScreens />
+      </ChipMarkProvider>
     </KeepingProvider>
   );
 }
@@ -265,6 +270,8 @@ function KeptScreens() {
  * drew light beside the dark tab bar.
  */
 export default function RootLayout() {
+  // Note that a compact window's tab bar floats at its foot, which the notice stands over; a regular window's tabs stand at its top or its side.
+  const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const dark = useColorScheme() === "dark";
   const colors = useColors();
   const theme = useMemo(() => navigationTheme(colors, dark), [colors, dark]);
@@ -272,7 +279,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={theme}>
       <HostProvider>
-        <FailureNoticeProvider>
+        <FailureNoticeProvider footRoom={compact ? TAB_BAR_ROOM : 0}>
           <VoiceCallProvider>
             <KeptScreens />
           </VoiceCallProvider>

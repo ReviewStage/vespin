@@ -22,27 +22,19 @@ env:
 - extendedWaitUntil:
     visible: "Add a way to resend an invite that expired."
     timeout: 30000
-# The card offers Merge beside Review, which asks first.
-- runFlow:
-    file: subflows/scroll-to.yaml
-    env:
-      ELEMENT: Merge
-      DIRECTION: UP
-# Note that the transcript is drawn up a quarter of the window where Merge
-# stands no higher than the dock's held approval, whose note heads the dock,
-# because a short window, the iPhone Duo's, centers the card under the dock,
-# where the tap lands on it instead.
-- runFlow:
-    when:
-      notVisible:
-        text: "Merge"
-        above: "Sending a message denies the waiting approval."
+# The card offers Merge beside Review, which asks first. Note that the
+# transcript is dragged at three quarters across the screen rather than at
+# its center, which on a landscape iPad is the list column beside it.
+- repeat:
+    while:
+      notVisible: "Merge"
+    times: 10
     commands:
       - swipe:
-          start: "50%, 60%"
-          end: "50%, 35%"
-          duration: 800
-      - waitForAnimationToEnd
+          start: "75%, 35%"
+          end: "75%, 75%"
+          duration: 400
+- waitForAnimationToEnd
 - takeScreenshot: pull-request-card
 - tapOn: "Merge"
 - assertVisible: "Merge this pull request?"
@@ -55,11 +47,38 @@ env:
 - extendedWaitUntil:
     visible: "Ready to merge"
     timeout: 30000
-- assertVisible: "grace"
+# Its description, as its agent wrote it, under the heading.
+- assertVisible: "Adds Invite by email.*"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-ready
+# Note that the description stands above the checks, so the reviewer's row,
+# the page's last, may stand below the fold on a phone and is scrolled to,
+# dragged at three quarters across as the card is, so a landscape iPad's
+# drag lands on the page rather than the list column beside it.
+- repeat:
+    while:
+      notVisible: "grace"
+    times: 10
+    commands:
+      - swipe:
+          start: "75%, 75%"
+          end: "75%, 35%"
+          duration: 400
+- assertVisible: "grace"
 # Merging is the press under the heading, in every window, and it asks
-# first, as the card's Merge does.
+# first, as the card's Merge does, scrolled back up to after the reviewer.
+# Note that the list is let settle first, since a tap on a list still
+# gliding only stops it and presses nothing.
+- repeat:
+    while:
+      notVisible: "Squash and merge"
+    times: 10
+    commands:
+      - swipe:
+          start: "75%, 35%"
+          end: "75%, 75%"
+          duration: 400
+- waitForAnimationToEnd
 - tapOn: "Squash and merge"
 - assertVisible: "Merge this pull request?"
 - waitForAnimationToEnd

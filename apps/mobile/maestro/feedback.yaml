@@ -16,7 +16,7 @@ appId: dev.vespin.ios
     timeout: 30000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: ".*, Settings"
+- tapOn: "Settings, .*"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Send feedback"
@@ -42,7 +42,8 @@ appId: dev.vespin.ios
 # app's notice stands under the Settings sheet; Back then leaves without asking.
 - assertVisible: "Feedback sent. Thank you."
 - takeScreenshot: feedback-sent
-- tapOn: "Back"
+- tapOn:
+    id: "BackButton"
 - waitForAnimationToEnd
 # Settings' list stands again, Email us beside Send feedback in its last group.
 # Note that the list is scrolled to it, because a short window, the iPhone

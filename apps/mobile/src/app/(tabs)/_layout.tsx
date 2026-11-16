@@ -12,6 +12,9 @@ import {
   SplitOverTabs,
   UNDER_SPLIT_SCREEN,
   useColors,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { usePathname, useRouter, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
@@ -26,9 +29,7 @@ import { AppSplit } from "../../screens/app-split.js";
 import { PageDrawerProvider } from "../../screens/detail-stack-column.js";
 import { PushedPageView } from "../../screens/pushed-pages.js";
 import { useSidebarChoiceLapse } from "../../sidebar-shown.js";
-import { useThreeColumns, useWindowSizeClass } from "../../use-window-size-class.js";
 import { useStandingCallCard } from "../../voice-call.js";
-import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
 
 /**
  * The way back to a call standing, in the tab bar's bottom accessory, full
