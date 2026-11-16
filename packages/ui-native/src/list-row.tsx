@@ -513,7 +513,7 @@ export function RowFrame({
   readonly row: ReactElement;
   /** The row's top and bottom inset, where it stands roomier than the list's own, as an Inbox thread does. */
   readonly vertical?: number | undefined;
-  /** How much further in than the list's own its words, and so its hairline, start, in points, as a second mark before them sets them. */
+  /** How far past the list's text column the row's words start, where it stands in deeper, a second mark leads it, or its lead grows, so its hairline starts under them. */
   readonly indent?: number | undefined;
   /** Whether it stands as a list's row or a sidebar's. */
   readonly place?: RowPlace | undefined;
@@ -1028,11 +1028,15 @@ export function TaskRow(props: TaskRowProps) {
   const colors = useColors();
   // Note that each level of sub-tasks stands in past a parent's fold, its column the lead's scaled width, so a sub-task's mark stands under its parent's at every size.
   const lead = useScaledSize(MARK_SIZE.LEAD);
-  // Note that the priority's column is the lead's, grown with Dynamic Type as the lead grows, so the hairline still starts under the name at an accessibility size; it is an offset past the list's own words, which a sub-task's depth adds to.
-  const priorityColumn = lead + SPACE.ROW;
+  const dot = useScaledSize(MARK_SIZE.UNREAD);
+  const column = lead + SPACE.ROW;
+  // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth, past a parent's fold and the priority's mark, each a column of the lead's scaled width, and by however much the unread dot's column and the lead have grown, since the dot holds its width even while hidden.
+  const grown = lead - MARK_SIZE.LEAD + dot - MARK_SIZE.UNREAD;
+  const marks = (fold === undefined ? 0 : 1) + (priority === undefined ? 0 : 1);
+  const indent = depth * column + marks * column + grown;
 
   const row: ReactElement = (
-    <HStack modifiers={[padding({ leading: depth * (lead + SPACE.ROW) })]}>
+    <HStack modifiers={[padding({ leading: depth * column })]}>
       <RowHead
         unread={unread}
         faded={finished}
@@ -1085,7 +1089,7 @@ export function TaskRow(props: TaskRowProps) {
       {...props}
       id={id}
       row={row}
-      indent={priority === undefined ? undefined : priorityColumn}
+      indent={indent}
       menuActions={[...folding, ...(props.menuActions ?? [])]}
       heard={props.heard ?? taskHeard(props)}
     />

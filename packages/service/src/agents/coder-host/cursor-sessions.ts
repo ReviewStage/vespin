@@ -55,7 +55,7 @@ import { Effect, type Redacted } from "effect";
 import { ownApiKeyOf } from "../../accounts/own-api-key.js";
 import { HostedEnvironment } from "../../environment.js";
 import { SERVER_AGENT_HARNESS } from "../../events/server-events.js";
-import { cursorModelSelectionOf } from "../../providers/cursor-models.js";
+import { CursorModelCatalog, cursorModelSelectionOf } from "../../providers/cursor-models.js";
 import {
   LaunchRefused,
   type MachineLayout,
@@ -105,14 +105,15 @@ function apiKeyCredential(key: Redacted.Redacted<string>): RunnerCredential {
   };
 }
 
-/** The agent's model as Cursor's SDK takes it, refused where it is not one of Cursor's. */
-function selectionOf(agent: Agent) {
-  const selection = cursorModelSelectionOf(agent.model, agent.effort);
+/** The agent's model as Cursor's SDK takes it, read against the Cursor models its starter is offered; refused where it is none of them. */
+const selectionOf = Effect.fnUntraced(function* (agent: Agent) {
+  const cursorModels = yield* (yield* CursorModelCatalog).forAccount(agent.userId);
+  const selection = cursorModelSelectionOf(cursorModels, agent.model, agent.effort);
 
-  return selection === undefined
-    ? Effect.fail(new LaunchRefused({ reason: "model" }))
-    : Effect.succeed(selection);
-}
+  if (selection === undefined) return yield* new LaunchRefused({ reason: "model" });
+
+  return selection;
+});
 
 /** Cursor as the shared launch drives it, for one account. */
 function cursor(options: RunnerSessionsOptions): RunnerHarness<{ readonly _tag: string }> {
