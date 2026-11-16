@@ -6,14 +6,12 @@
 import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { EXPERIMENT } from "@repo/settings";
-import { experimentsOn } from "@repo/settings/testing";
 import { OPENAI_KEY_MISSING_NOTE } from "@repo/ui/microphone-access";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { fakeActPort } from "./testing/app-bridge.js";
-import { handState, withExperiments, writeExperiments } from "./testing/app-state.js";
+import { handState, withExperiments } from "./testing/app-state.js";
 import { settleQueries } from "./testing/copy-feedback.js";
 import { ToastHost } from "./toast.js";
 import { useVoiceCall, type VoiceCall, VoiceCallProvider } from "./voice-call.js";
@@ -103,15 +101,14 @@ function Caller(): null {
   return null;
 }
 
-/** The call's provider, as the window's root holds it, with the Voice experiment as given. */
-async function mounted(voiceOn = true): Promise<void> {
-  const experiments = voiceOn ? experimentsOn(EXPERIMENT.VOICE) : {};
-  handState(experiments);
+/** The call's provider, as the window's root holds it. */
+async function mounted(): Promise<void> {
+  handState({});
   root = createRoot(document.body.appendChild(document.createElement("div")));
   act(() =>
     root?.render(
       withExperiments(
-        experiments,
+        {},
         createElement(
           Fragment,
           null,
@@ -291,27 +288,4 @@ test("a second call ends the first", async () => {
   assert.ok(first.closed, "the first call's peer is dropped");
   assert.notEqual(first, second);
   assert.equal(call.call?.stage, "connecting");
-});
-
-test("turning the Voice experiment off ends a call under way, its session closed and the microphone let go", async () => {
-  await mounted();
-  const peer = await called();
-  act(() => peer.channel.started());
-
-  writeExperiments({});
-  await settleQueries();
-
-  assert.deepEqual(peer.channel.told(), [said("session.close")]);
-  assert.equal(call.call, undefined);
-  assert.ok(peer.closed, "the peer is dropped");
-  assert.ok(microphone.stopped, "the microphone is let go");
-});
-
-test("nothing calls while the Voice experiment is off", async () => {
-  await mounted(false);
-  act(() => call.start({ agentId: AGENT_ID, taskId: TASK_ID }));
-  await settleQueries();
-
-  assert.equal(FakePeer.made.length, 0);
-  assert.equal(call.call, undefined);
 });

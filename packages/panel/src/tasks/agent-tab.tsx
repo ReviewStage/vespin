@@ -392,13 +392,7 @@ import { useAgentQueue, useQueueEditing } from "./use-agent-queue.js";
 import { type AgentTranscriptControl, useAgentTranscript } from "./use-agent-transcript.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useKnownNames, useTaskStatus } from "./use-known-names.js";
-import {
-  CallEnds,
-  CallStarts,
-  NO_CALL_MARKS,
-  useVoiceShown,
-  VoiceLineRow,
-} from "./voice-call-rows.js";
+import { CallEnds, CallStarts, VoiceLineRow } from "./voice-call-rows.js";
 import { type CutBody, useWholePart, useWholePartDoor, WholePartsProvider } from "./whole-parts.js";
 import { WorkedFor, WorkingLine } from "./working-time.js";
 
@@ -2705,17 +2699,14 @@ function useReplySaid({
  * reached it, and the reply a running turn is still writing.
  */
 function transcriptPlacing(
-  held: readonly AgentTranscriptMessage[],
+  messages: readonly AgentTranscriptMessage[],
   working: boolean,
   undelivered: ReadonlySet<string>,
   unsent: ReadonlySet<string>,
   replayed: boolean,
-  voiceShown: boolean,
   standingCalls: readonly AgentStandingCall[],
   fromStart: boolean,
 ) {
-  // Note that the voice's lines on a call are drawn only where the Voice experiment is on, the caller's standing as any line of theirs where it is off.
-  const messages = voiceShown ? held : held.filter((message) => !isVoiceLine(message));
   const todos = todosPlace(messages, working);
 
   // Note that the opening is read only where the transcript's start is held, because a window of its newest messages, or a line still on its way before any page, would take a teammate's line for the brief and name its starter over it.
@@ -2737,7 +2728,7 @@ function transcriptPlacing(
   const newest = working ? placed.findLast((row) => isAgentTurn(row.message))?.message : undefined;
 
   const writing = newest?.finishedAt === undefined ? newest?.id : undefined;
-  const calls = voiceShown ? callMarksOf(placed, standingCalls) : NO_CALL_MARKS;
+  const calls = callMarksOf(placed, standingCalls);
 
   return { todos, first, opening, placed, writing, calls };
 }
@@ -2869,7 +2860,6 @@ function AgentTranscriptView({
   const { members, former } = useMemberDirectory();
   const undelivered = useUndeliveredLines();
   const unsent = useUnsentLines();
-  const voiceShown = useVoiceShown();
   // Note that the voice may talk on after the turn, so the current turn is the agent's newest, whatever row stands last.
   const lastTurn = messages.findLast(isAgentTurn);
 
@@ -2909,17 +2899,8 @@ function AgentTranscriptView({
   // Read through once for the messages held, so a draw that brings no page reads none of them again.
   const placing = useMemo(
     () =>
-      transcriptPlacing(
-        messages,
-        working,
-        undelivered,
-        unsent,
-        replayed,
-        voiceShown,
-        standingCalls,
-        fromStart,
-      ),
-    [messages, working, undelivered, unsent, replayed, voiceShown, standingCalls, fromStart],
+      transcriptPlacing(messages, working, undelivered, unsent, replayed, standingCalls, fromStart),
+    [messages, working, undelivered, unsent, replayed, standingCalls, fromStart],
   );
 
   // Each line that reached a turn, with who sent it, kept from draw to draw while neither moved.

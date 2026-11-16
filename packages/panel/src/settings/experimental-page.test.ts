@@ -149,7 +149,6 @@ test("the workspace's experiments and the account's own stand in two groups, eac
       "Rewind restores files",
       "Skills",
       "Turn changes",
-      "Voice",
     ],
   );
 });
@@ -235,7 +234,6 @@ test("an experiment's Send feedback opens the dialog about that experiment", () 
     EXPERIMENT.REWIND_FILES,
     EXPERIMENT.SKILLS,
     EXPERIMENT.TURN_CHANGES,
-    EXPERIMENT.VOICE,
   ]);
 });
 
