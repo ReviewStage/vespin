@@ -97,6 +97,7 @@ export const WRITE_SUBJECT = {
   TASK_PARENT: "task-parent",
   TASK_SECTION: "task-section",
   TASK_FOLLOWING: "task-following",
+  TASK_COMMENT: "task-comment",
   TASK_WORKSPACE: "task-workspace",
 } as const;
 

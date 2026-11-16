@@ -86,6 +86,7 @@
 import {
   AGENT_USER,
   CODEX_PIN,
+  CURSOR_SDK_ENTRY,
   RUNNER_DIRECTORY,
   RUNNER_UNIT,
   SANDBOX_TOOLS_DIRECTORY,
@@ -260,6 +261,7 @@ const SANDBOX_LAYOUT: MachineLayout = {
   sharedFiles: SHARED_FILES_DIRECTORY,
   claudeExecutable: undefined,
   codexExecutable: CODEX_PIN.LINK,
+  cursorSdk: CURSOR_SDK_ENTRY,
   codexHome: CODEX_PIN.HOME,
   linesRead: true,
   diskSessions: false,

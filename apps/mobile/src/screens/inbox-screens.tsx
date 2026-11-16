@@ -22,6 +22,7 @@ import {
   inboxPreview,
   inboxScopeInstead,
   inboxSettledStanding,
+  inboxThreadEventsShown,
   inboxThreadMessages,
   isDone,
   isUnread,
@@ -43,6 +44,7 @@ import {
   SELECTION_WORDS,
   selectedWords,
 } from "@repo/features/words";
+import { ACT_KIND } from "@repo/host/acts";
 import { INBOX_FEED, type InboxFeed, selectWorkspaces } from "@repo/host/app-state-reads";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -71,7 +73,6 @@ import {
   type RowSubmenu,
   SCOPE_LOOK,
   type Scope,
-  ScopePicker,
   Screen,
   SplitView,
   scopeMenu,
@@ -90,7 +91,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
 import {
   PUSHED_PAGE,
@@ -100,7 +101,8 @@ import {
 } from "../detail-stack.js";
 import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
+import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
+import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import {
   useInboxActs,
@@ -112,7 +114,7 @@ import {
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
 import { useKeeping } from "../keeping.js";
-import { type PictureOf, useMemberPictures } from "../member-pictures.js";
+import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns, useInFront } from "../place-columns.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
@@ -220,6 +222,8 @@ type InboxRowsProps = {
   readonly choosing?: RowChoosing | undefined;
   /** The Inbox's scopes, standing as the list's first row; none beside the app sidebar, where they stand as the bar's filter. */
   readonly scopes?: ListScopes | undefined;
+  /** What stands over the list while it lists no thread: why, and the way on. */
+  readonly empty?: ReactNode | undefined;
   /** Starts Select mode with the threads the system ticked at once, such as by a two-finger drag. */
   readonly onChooseStart: (ids: readonly string[]) => void;
 };
@@ -244,6 +248,7 @@ function InboxRows({
   onResolve,
   choosing,
   scopes,
+  empty,
   onChooseStart,
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
@@ -257,6 +262,7 @@ function InboxRows({
       onRefresh={onRefresh}
       choosing={choosing}
       scopes={scopes}
+      empty={empty}
       onChooseStart={onChooseStart}
     >
       <InboxItemRows
@@ -663,6 +669,26 @@ function ThreadDetail({
     [item, agentName, readerId],
   );
 
+  const hostActs = useHostActs();
+
+  // Note that the closers are named from the thread's own workspace's members, followed here, since a link may open a thread outside the workspace the phone works in.
+  useLiveFollow(holder.task.workspaceId, (id) =>
+    hostActs[ACT_KIND.WORKSPACE_MEMBERS_FOLLOW]({ workspaceId: id }),
+  );
+
+  const memberFace = useMemberFaces(holder.task.workspaceId);
+
+  // What happened to the thread, by the message each line follows, -1 before every message read, as the panel's thread draws it, a member named as the thread's own workspace names them, since a link may open a thread of another workspace than the one chosen.
+  const events = useMemo(
+    () =>
+      inboxThreadEventsShown(item, {
+        agentName,
+        readerId,
+        memberName: (userId) => memberFace(userId)?.name,
+      }),
+    [item, agentName, readerId, memberFace],
+  );
+
   // Note that a file its words draw, or its open ask's options carry, is read beside the files drawn after them, since its bytes come the same way.
   const media = useMemo(
     () => [
@@ -800,8 +826,9 @@ function ThreadDetail({
 
   const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
 
-  const drawn: readonly ThreadMessage[] = messages.map((message) => ({
+  const drawn: readonly ThreadMessage[] = messages.map((message, index) => ({
     ...message,
+    after: events.get(index),
     writer: {
       ...message.writer,
       id: message.writer.agent ? undefined : message.writer.userId,
@@ -898,6 +925,7 @@ function ThreadDetail({
       pathActions={pathActions}
       title={cardTitle(item.title)}
       messages={drawn}
+      opening={events.get(-1)}
       repository={holder.task.repository}
       onOpenLink={openLink}
       pictureSource={pictureSource}
@@ -1198,8 +1226,9 @@ function InboxStackList(held: InboxHeld) {
       </Stack.Toolbar>
       {choosing === undefined ? null : (
         <Stack.Toolbar placement="bottom">
-          {choosing.acts.flatMap((act, at) => [
-            ...(at === 0 ? [] : [<Stack.Toolbar.Spacer key={at} />]),
+          {/* Note that the acts stand side by side between two flexible spaces, so iOS 26 draws them in one glass capsule centered over the foot, as Files and Mail group their edit bar's acts, never a glass circle each spread across it. */}
+          <Stack.Toolbar.Spacer />
+          {choosing.acts.map((act) =>
             // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass.
             isBarMenu(act) ? (
               <Stack.Toolbar.Menu
@@ -1222,41 +1251,40 @@ function InboxStackList(held: InboxHeld) {
                 )}
               </Stack.Toolbar.Button>
             ),
-          ])}
+          )}
+          <Stack.Toolbar.Spacer />
         </Stack.Toolbar>
       )}
       <Screen>
-        {listing.listed.length === 0 ? (
-          <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-            <InboxEmpty
-              show={show}
-              search={search}
-              feed={listing.feed}
-              counts={listing.counts}
-              onRetry={() => void acts.refresh()}
-              onShow={choose}
-            />
-          </ScopePicker>
-        ) : (
-          <InboxRows
-            scopes={{ label: SCOPE_LABEL, scopes }}
-            look={LIST_LOOK.PLAIN}
-            listed={listing.listed}
-            readerId={listing.readerId}
-            onSelect={(id) => {
-              heldOrder = listing.listed.map(({ item }) => item.id);
-              router.push(
-                onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })),
-              );
-            }}
-            onRefresh={acts.refresh}
-            onMark={acts.mark}
-            remindMenu={remind.itemMenu}
-            onResolve={acts.resolve}
-            choosing={choosing?.rows}
-            onChooseStart={chooseStart}
-          />
-        )}
+        {/* Note that the list stands even with no thread, its empty state its one row, so a pull still reads the Inbox again. */}
+        <InboxRows
+          scopes={{ label: SCOPE_LABEL, scopes }}
+          look={LIST_LOOK.PLAIN}
+          listed={listing.listed}
+          readerId={listing.readerId}
+          onSelect={(id) => {
+            heldOrder = listing.listed.map(({ item }) => item.id);
+            router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })));
+          }}
+          onRefresh={acts.refresh}
+          onMark={acts.mark}
+          remindMenu={remind.itemMenu}
+          onResolve={acts.resolve}
+          choosing={choosing?.rows}
+          onChooseStart={chooseStart}
+          empty={
+            listing.listed.length === 0 ? (
+              <InboxEmpty
+                show={show}
+                search={search}
+                feed={listing.feed}
+                counts={listing.counts}
+                onRetry={() => void acts.refresh()}
+                onShow={choose}
+              />
+            ) : undefined
+          }
+        />
       </Screen>
     </>
   );
@@ -1297,44 +1325,39 @@ function InboxSplitScreen({
   const threeColumns = useThreeColumns();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
 
-  const rows =
-    listing.listed.length === 0 ? (
-      <InboxEmpty
-        show={show}
-        search={search}
-        feed={listing.feed}
-        counts={listing.counts}
-        onRetry={() => void acts.refresh()}
-        onShow={choose}
-      />
-    ) : (
-      <InboxRows
-        scopes={threeColumns ? undefined : { label: SCOPE_LABEL, scopes, look: SCOPE_LOOK.MENU }}
-        look={LIST_LOOK.PLAIN}
-        listed={listing.listed}
-        readerId={listing.readerId}
-        selected={selected}
-        onSelect={select}
-        onRefresh={acts.refresh}
-        onMark={acts.mark}
-        remindMenu={remind.itemMenu}
-        onResolve={acts.resolve}
-        choosing={choosing?.rows}
-        onChooseStart={chooseStart}
-      />
-    );
+  const rows = (
+    <InboxRows
+      scopes={threeColumns ? undefined : { label: SCOPE_LABEL, scopes, look: SCOPE_LOOK.MENU }}
+      look={LIST_LOOK.PLAIN}
+      listed={listing.listed}
+      readerId={listing.readerId}
+      selected={selected}
+      onSelect={select}
+      onRefresh={acts.refresh}
+      onMark={acts.mark}
+      remindMenu={remind.itemMenu}
+      onResolve={acts.resolve}
+      choosing={choosing?.rows}
+      onChooseStart={chooseStart}
+      empty={
+        listing.listed.length === 0 ? (
+          <InboxEmpty
+            show={show}
+            search={search}
+            feed={listing.feed}
+            counts={listing.counts}
+            onRetry={() => void acts.refresh()}
+            onShow={choose}
+          />
+        ) : undefined
+      }
+    />
+  );
 
   // Note that beside the app sidebar the scopes leave the list for Mail's filter button in its bar, so the list starts at its first thread; a two-column window keeps the menu picker over the list.
   const list = {
-    // Note that a list with rows stands its scopes as its first row, so they scroll away with the rows, and one listing nothing keeps them over its empty state.
-    view:
-      threeColumns || listing.listed.length > 0 ? (
-        rows
-      ) : (
-        <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
-          {rows}
-        </ScopePicker>
-      ),
+    // Note that the list stands its scopes as its first row, so they scroll away with the rows, over its empty state too, which stands as its one row.
+    view: rows,
     // Note that Select mode names how many are chosen in the column's title, leads its bar with Select all, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
     bar:
       choosing === undefined
