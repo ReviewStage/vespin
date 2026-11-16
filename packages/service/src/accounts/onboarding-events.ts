@@ -2,10 +2,10 @@
  * onboarding-events.ts -- an account's sign-up and task activity, told to Resend for its onboarding emails.
  *
  * The nudge a new account is sent is Resend's automation ("No-task nudge"),
- * not the service's: it starts on the event `vespin.signed_up` and on day 3
- * sends one note to an account that has started no task (`has_task`) and
- * that the founder has not marked as already talking to (`in_conversation`,
- * set by hand in Resend, never here). An account that started a task hears
+ * not the service's: it starts on the event `vespin.signed_up` and sends a
+ * note on day 3 and another on day 7, each only to an account that has
+ * started no task (`has_task`) and that the founder has not marked as
+ * already talking to (`in_conversation`, set by hand in Resend, never here). An account that started a task hears
  * from the founder directly instead, so a note never lands on someone already
  * in a conversation. The service tells Resend these things and nothing else:
  *
