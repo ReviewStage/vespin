@@ -446,6 +446,8 @@ env:
     optional: true
 - assertVisible: "Archive agent?"
 - takeScreenshot: task-agent-archive-ask
-- tapOn: "Cancel"
-- assertNotVisible: "Archive agent?"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Archive agent?"
 - assertVisible: "Fix ledger rounding"
