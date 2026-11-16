@@ -52,6 +52,7 @@ function sandboxWith(
 ): ShowMediaBinding["sandbox"] {
   return () =>
     Promise.resolve({
+      checkout: CHECKOUT,
       phoneAudio: () => Promise.resolve(phoneAudio ?? null),
       readFile: ({ path }: { path: string }) => {
         const bytes = files[path];
@@ -120,7 +121,7 @@ it.layer(getTestDB())("show_media", (it) => {
 
         const answer = readShown(
           yield* show(
-            { target, sandbox, checkout: CHECKOUT },
+            { target, sandbox },
             {
               images: [
                 { path: "shots/members.png", caption: "Members page" },
@@ -163,7 +164,7 @@ it.layer(getTestDB())("show_media", (it) => {
           "/tmp/b.png": pngBytes(20, 20),
         });
 
-        const binding = { target, sandbox, checkout: CHECKOUT };
+        const binding = { target, sandbox };
 
         const [earlier] = readShown(
           yield* show(binding, { images: [{ path: "/tmp/b.png", caption: "B" }] }),
@@ -201,7 +202,7 @@ it.layer(getTestDB())("show_media", (it) => {
           [`${CHECKOUT}/huge.png`]: tooLarge,
         });
 
-        const binding = { target, sandbox, checkout: CHECKOUT };
+        const binding = { target, sandbox };
 
         const withSecond = (path: string) => ({
           images: [
@@ -247,7 +248,7 @@ it.layer(getTestDB())("show_media", (it) => {
 
         const answer = readShown(
           yield* show(
-            { target, sandbox, checkout: CHECKOUT },
+            { target, sandbox },
             {
               images: [
                 { path: "/tmp/video/flow.webm", caption: "Inviting a member" },
@@ -285,7 +286,7 @@ it.layer(getTestDB())("show_media", (it) => {
 
         const answer = readShown(
           yield* show(
-            { target, sandbox, checkout: CHECKOUT },
+            { target, sandbox },
             { images: [{ path: "/tmp/recordings/simulator.mp4", caption: "Signing in" }] },
           ),
         );
@@ -310,10 +311,7 @@ it.layer(getTestDB())("show_media", (it) => {
       const sandbox = sandboxWith({ [`${CHECKOUT}/flow.mkv`]: webmBytes(640, 480, "matroska") });
 
       assert.deepEqual(
-        yield* show(
-          { target, sandbox, checkout: CHECKOUT },
-          { images: [{ path: "flow.mkv", caption: "Not a WebM" }] },
-        ),
+        yield* show({ target, sandbox }, { images: [{ path: "flow.mkv", caption: "Not a WebM" }] }),
         refused(`${SHOW_MEDIA_REFUSAL.NOT_IMAGE} flow.mkv`),
       );
     }),
@@ -325,10 +323,7 @@ it.layer(getTestDB())("show_media", (it) => {
       const sandbox = sandboxWith({ [`${CHECKOUT}/shots/members.png`]: pngBytes(1200, 720) });
 
       const answer = readShown(
-        yield* show(
-          { target, sandbox, checkout: CHECKOUT },
-          { path: "shots/members.png", caption: "Members page" },
-        ),
+        yield* show({ target, sandbox }, { path: "shots/members.png", caption: "Members page" }),
       );
 
       assert.deepEqual(
@@ -343,7 +338,7 @@ it.layer(getTestDB())("show_media", (it) => {
     () =>
       Effect.gen(function* () {
         const target = yield* openConversation;
-        const binding = { target, sandbox: sandboxWith({}), checkout: CHECKOUT };
+        const binding = { target, sandbox: sandboxWith({}) };
 
         const many = Array.from(
           { length: CONVERSATION_PICTURE_BOUNDS.MAX_PER_CALL + 1 },
@@ -385,7 +380,6 @@ it.layer(getTestDB())("show_media", (it) => {
       const binding = {
         target,
         sandbox: sandboxWith({ [`${CHECKOUT}/one.png`]: pngBytes(10, 10) }),
-        checkout: CHECKOUT,
       };
 
       assert.deepEqual(
@@ -421,7 +415,6 @@ it.layer(getTestDB())("show_media", (it) => {
             [`${CHECKOUT}/first.png`]: pngBytes(10, 10, 1),
             [`${CHECKOUT}/second.png`]: pngBytes(10, 10, 2),
           }),
-          checkout: CHECKOUT,
         };
 
         const answer = yield* show(binding, {
@@ -452,7 +445,7 @@ it.layer(getTestDB())("show_media", (it) => {
 
         const answer = readShown(
           yield* show(
-            { target, sandbox, checkout: CHECKOUT },
+            { target, sandbox },
             {
               images: [
                 { path: "/tmp/voice.m4a", caption: "The greeting, as an M4A" },

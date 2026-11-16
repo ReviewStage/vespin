@@ -45,6 +45,8 @@ import type { InboxImage } from "../../inbox/inbox-store.js";
  * (`../machine/agent-machine.ts`'s `writeFile`).
  */
 interface InboxSandbox {
+  /** Where the agent's checkout stands in it, which a relative path is resolved from. */
+  readonly checkout: string;
   readonly readFile: (options: {
     readonly path: string;
   }) => PromiseLike<ReadableStream<Uint8Array> | null>;
@@ -173,19 +175,17 @@ function streamRefused<Type extends string>(
 /**
  * The picture at the path, read from the sandbox and held to the terms'
  * bound and the three types, or the one sentence refusing it in the terms'
- * words. A path is resolved from the checkout: inside it when relative, as
- * written when absolute.
+ * words. A path is resolved from the sandbox's checkout: inside it when
+ * relative, as written when absolute.
  */
 export function readSandboxImage<Type extends string>(
   door: InboxSandboxDoor,
-  checkout: string,
   path: string,
   terms: SandboxImageTerms<Type>,
 ): Effect.Effect<Result.Result<SandboxImage<Type>, string>> {
-  const resolved = posix.resolve(checkout, path);
-
   return Effect.gen(function* () {
     const sandbox = yield* Effect.tryPromise(() => door());
+    const resolved = posix.resolve(sandbox.checkout, path);
     const stream = yield* Effect.tryPromise(() => sandbox.readFile({ path: resolved }));
 
     if (stream === null) return refused<Type>(terms.refusals.NO_FILE, path);
@@ -204,20 +204,18 @@ export function readSandboxImage<Type extends string>(
  */
 export function phoneCopyOfSandbox(
   door: InboxSandboxDoor,
-  checkout: string,
   path: string,
   contentType: PostedFileType,
 ): Effect.Effect<Uint8Array | undefined> {
   const video = contentType === CONVERSATION_MEDIA_TYPE.WEBM;
 
   if (!video && contentType !== CONVERSATION_MEDIA_TYPE.OGG) return Effect.succeed(undefined);
-  const resolved = posix.resolve(checkout, path);
 
   return Effect.tryPromise(async () => {
     const sandbox = await door();
     const made = video ? sandbox.phoneVideo : sandbox.phoneAudio;
 
-    return (await made?.({ path: resolved })) ?? undefined;
+    return (await made?.({ path: posix.resolve(sandbox.checkout, path) })) ?? undefined;
   }).pipe(Effect.catch(() => Effect.succeed(undefined)));
 }
 
@@ -263,7 +261,6 @@ function settledPosted<Type extends PostedFileType>(
  */
 function readSandboxPosted<Type extends PostedFileType>(
   door: InboxSandboxDoor,
-  checkout: string,
   path: string,
   refusals: SandboxImageRefusals,
   sniff: (head: Uint8Array) => Type | undefined,
@@ -271,7 +268,7 @@ function readSandboxPosted<Type extends PostedFileType>(
   const terms = { maxBytes: INBOX_BOUNDS.MAX_VIDEO_BYTES, refusals, sniff };
 
   const read = Effect.map(
-    readSandboxImage(door, checkout, path, terms),
+    readSandboxImage(door, path, terms),
     Result.flatMap((file) => {
       if (file.bytes.byteLength > postedBytesOf(file.contentType)) {
         return refused<Type>(refusals.TOO_LARGE, path);
@@ -288,7 +285,7 @@ function readSandboxPosted<Type extends PostedFileType>(
   return Effect.flatMap(read, (file) =>
     Result.isFailure(file)
       ? Effect.succeed<Result.Result<SandboxPostedFile<Type | typeof AUDIO_TYPE.M4A>, string>>(file)
-      : Effect.map(phoneCopyOfSandbox(door, checkout, path, file.success.contentType), (mp4Bytes) =>
+      : Effect.map(phoneCopyOfSandbox(door, path, file.success.contentType), (mp4Bytes) =>
           Result.succeed({ ...file.success, mp4Bytes }),
         ),
   );
@@ -303,11 +300,10 @@ function readSandboxPosted<Type extends PostedFileType>(
  */
 export function readSandboxMedia(
   door: InboxSandboxDoor,
-  checkout: string,
   path: string,
   refusals: SandboxImageRefusals,
 ): Effect.Effect<Result.Result<InboxImage, string>> {
-  return readSandboxPosted(door, checkout, path, refusals, sniffMediaType);
+  return readSandboxPosted(door, path, refusals, sniffMediaType);
 }
 
 /**
@@ -318,9 +314,8 @@ export function readSandboxMedia(
  */
 export function readSandboxBodyFile(
   door: InboxSandboxDoor,
-  checkout: string,
   path: string,
   refusals: SandboxImageRefusals,
 ): Effect.Effect<Result.Result<SandboxPostedFile<PostedFileType>, string>> {
-  return readSandboxPosted(door, checkout, path, refusals, sniffPostedFileType);
+  return readSandboxPosted(door, path, refusals, sniffPostedFileType);
 }

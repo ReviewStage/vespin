@@ -894,6 +894,8 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
         ),
       ),
 
+    checkoutPath: () => Effect.succeed(CODER.CHECKOUT_PATH),
+
     // Note that the API writes as the sandbox's default user, so the file's mode is what lets `agent` read it.
     writeFile: (session, file) =>
       Effect.gen(function* () {
