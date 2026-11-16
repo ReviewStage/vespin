@@ -27,7 +27,8 @@
  * The queues are read through the host as the page opens and again every
  * half minute while it stands, since GitHub tells the app nothing as a queue
  * moves; the rows follow each pull request by its address under one
- * `ListMotion`, so a front that merged leaves and the line glides up. A
+ * `ListMotion`, so a front that merged leaves and the line glides up, each
+ * repository's queue under it gliding with its head as one. A
  * read that fails once it has answered keeps what it held, and one that
  * fails with nothing held says so with its Try again, never as an empty
  * queue.
@@ -394,7 +395,7 @@ function Queues({
 
   return (
     <ListMotion root={root} change={repositories}>
-      <Stack ref={root} gap={GAP.BLOCK}>
+      <Stack ref={root} gap={GAP.BLOCK} moves>
         {repositories.map((queue) => (
           <RepositoryQueue
             key={queue.repository}
