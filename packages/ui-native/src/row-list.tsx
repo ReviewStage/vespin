@@ -1,6 +1,16 @@
 // row-list.tsx -- a list of rows and its sections, as SwiftUI's own List draws them, each section under a small muted header that folds.
 
-import { Button, HStack, Image, List, Menu, Section, Spacer, Text } from "@expo/ui/swift-ui";
+import {
+  Button,
+  HStack,
+  Image,
+  List,
+  Menu,
+  Section,
+  Spacer,
+  Text,
+  ZStack,
+} from "@expo/ui/swift-ui";
 import type { ModifierConfig } from "@expo/ui/swift-ui/modifiers";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
@@ -13,6 +23,7 @@ import {
   animation,
   background,
   buttonStyle,
+  containerRelativeFrame,
   environment,
   font,
   foregroundStyle,
@@ -114,6 +125,8 @@ type RowListProps = {
   readonly searched?: string | undefined;
   /** The scopes it lists under, standing as its first row so they scroll away with the rows; none where it has none. */
   readonly scopes?: ListScopes | undefined;
+  /** What the list says while it holds no rows, such as an `EmptyState` saying why; none while it holds rows. */
+  readonly empty?: ReactNode | undefined;
   /**
    * Starts its Select mode with the rows the system ticked, where it has one:
    * iPadOS lets a list whose selection is a set tick several rows with no
@@ -176,6 +189,30 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
 }
 
 /**
+ * The one row a list with nothing to show holds: its empty state, on the
+ * list's ground with no hairline, at least three quarters of the list's height
+ * tall so it stands near the middle without making the list scroll. Note that it
+ * stands inside the list rather than over it, because SwiftUI's words and
+ * glyphs take a touch, so a pull begun on the state's title stopped there
+ * when it stood over the list; inside it, a pull anywhere scrolls the list.
+ */
+function EmptyRow({ children }: { readonly children: ReactNode }) {
+  // Note that ¾ of the list's height is the row's least, not its height: a clear spacer stands that tall behind the state, and the stack takes the taller of the two, so at the accessibility sizes in a short window the state grows past it and the list scrolls to its foot rather than squeezing it.
+  return (
+    <ZStack
+      modifiers={[
+        listRowBackground("clear"),
+        listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
+        listRowSeparator("hidden"),
+      ]}
+    >
+      <Spacer modifiers={[containerRelativeFrame({ axes: "vertical", count: 4, span: 3 })]} />
+      <HStack>{children}</HStack>
+    </ZStack>
+  );
+}
+
+/**
  * A list's scopes as its first row: the system's control on the list's own
  * ground, edge to edge with no hairline, so the rows scroll up under the bar
  * with it, as Mail's categories do, and a pull reads again from above it.
@@ -213,7 +250,10 @@ function ScopeRow({ scopes }: { readonly scopes: ListScopes }) {
  * two fingers dragged down tick a run, and the rows' swipes step aside, as
  * the system's do. A list that can start Select mode hands SwiftUI its edit
  * mode as a binding, so two fingers dragged down it start Select mode as
- * they do in Mail.
+ * they do in Mail. A list with
+ * nothing to show still stands, its empty state its one row, as iOS stands
+ * its content-unavailable view in a list's place, so a pull still reads it
+ * again and the state's own press, such as Try again, still takes a tap.
  */
 export function RowList({
   look,
@@ -223,6 +263,7 @@ export function RowList({
   choosing,
   searched,
   scopes,
+  empty,
   onChooseStart,
   children,
 }: RowListProps) {
@@ -307,6 +348,7 @@ export function RowList({
             {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
             {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
             <RowSearchedContext value={searchedWords}>{children}</RowSearchedContext>
+            {empty === undefined ? null : <EmptyRow>{empty}</EmptyRow>}
           </RowSelectedContext>
         </RowOpenContext>
       </ListLookContext>

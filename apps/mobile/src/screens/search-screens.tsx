@@ -35,7 +35,6 @@ import {
   NoSelection,
   RowList,
   type RowSubmenu,
-  ScopePicker,
   Screen,
   UNDER_SPLIT_SCREEN,
   useThreeColumns,
@@ -188,6 +187,7 @@ function FoundList({
   remindMenu,
   onArchiveAgent,
   scopes,
+  empty,
 }: {
   readonly found: SearchFound;
   /** What was typed, whose words each row's title sets in bold. */
@@ -206,6 +206,8 @@ function FoundList({
   readonly onArchiveAgent: (agentId: string) => void;
   /** The scopes the results list under, standing as the list's first row. */
   readonly scopes: ListScopes;
+  /** What stands over the list while the scope found nothing. */
+  readonly empty?: ReactNode | undefined;
 }) {
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   const pictureOf = useMemberPictures();
@@ -239,6 +241,7 @@ function FoundList({
       onRefresh={async () => {
         await Promise.all([refresh(), refreshTasks()]);
       }}
+      empty={empty}
     >
       {shown.tasks.length === 0 ? null : (
         <ListSection
@@ -349,20 +352,8 @@ function useSearchScreen(
   // Note that a scope that found nothing says so only once the lists it searches have answered and the finding has caught up with what is typed; until then it says what it reads, or keeps the last query's rows, as the panel's ⌘K does.
   const empty = none && (reading !== undefined || found.current);
 
-  // Note that the scopes stand as the results' first row, so they scroll away with them, and over a scope that found nothing, so another is one tap away, a miss saying it in Apple's own words under the query.
-  const results = empty ? (
-    <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-      {reading !== undefined ? (
-        <EmptyState title={reading} symbol={GLYPH.SEARCH} loading />
-      ) : (
-        <EmptyState
-          title={noResultsForWords(query)}
-          symbol={GLYPH.SEARCH}
-          description={NO_RESULTS_HINT}
-        />
-      )}
-    </ScopePicker>
-  ) : (
+  // Note that the scopes stand as the results' first row, so they scroll away with them, and over a scope that found nothing, so another is one tap away, a miss saying it in Apple's own words under the query. The list stands even where the scope found nothing, its words its one row, so a pull still reads the workspace again.
+  const results = (
     <FoundList
       scopes={{ label: SCOPE_LABEL, scopes }}
       found={found}
@@ -374,6 +365,17 @@ function useSearchScreen(
       onOpen={open}
       remindMenu={remind.itemMenu}
       onArchiveAgent={archiveAsk.archive}
+      empty={
+        !empty ? undefined : reading !== undefined ? (
+          <EmptyState title={reading} symbol={GLYPH.SEARCH} loading />
+        ) : (
+          <EmptyState
+            title={noResultsForWords(query)}
+            symbol={GLYPH.SEARCH}
+            description={NO_RESULTS_HINT}
+          />
+        )
+      }
     />
   );
 

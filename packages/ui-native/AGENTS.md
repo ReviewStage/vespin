@@ -248,6 +248,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   split view's list keeps selected stands on a rounded `SELECTED` fill set in
   from the column's edges (`ROW_INSET.FILL`), its hairlines stepping aside, as
   Mail's selected message does; its words don't move.
+- **A list with nothing to show** still stands, its `EmptyState` its one
+  row (`RowList`'s `empty`), as iOS stands its content-unavailable view in a
+  list's place: a pull anywhere still reads it again, and the state's own
+  press, such as Try again, still takes a tap. A screen never swaps its list
+  for the state.
 - **Select mode** (`RowList`'s `choosing`) is SwiftUI's own edit mode, as
   Mail's Select: a round check leads each row, a tap ticks it, two fingers
   dragged down tick a run, and the swipes step aside. Its screen names the
