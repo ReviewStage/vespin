@@ -15,7 +15,7 @@
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
-import { markedAs, type ReadMark } from "@repo/features/read-mark";
+import { markedAs, type ReadMark, type ReadMarked } from "@repo/features/read-mark";
 import {
   FOLLOWER_CALL_FAILURE,
   type ListedApart,
@@ -70,18 +70,33 @@ type KeptReadMark = { readonly mark: ReadMark; readonly at: number };
 /** The read marks each run's screens set on the fixture's tasks, by task, each map replaced whole as one is set. */
 type KeptReadMarks = ReadonlyMap<string, KeptReadMark>;
 
-/** The tasks of a list with the read marks a run set laid on them, as the host draws a mark: the list itself where no task's mark moved. */
+/** A task with a kept read mark laid on it: the very task where it stands so already. */
+function markedTask<Task extends ReadMarked>(task: Task, kept: KeptReadMark): Task {
+  const marked = markedAs(kept.mark, task, kept.at);
+  // SAFETY: the keys of a mark are the fields of `ReadMarked` it sets.
+  const keys = Object.keys(marked) as (keyof ReadMarked)[];
+
+  return keys.every((key) => task[key] === marked[key]) ? task : { ...task, ...marked };
+}
+
+/**
+ * The tasks of a list with the read marks a run set laid on them, as the
+ * host draws a mark: the list itself where no task's mark moved. Note that a
+ * task already standing as its mark says is kept, and a list none of whose
+ * tasks moved is kept whole, because the store tells the lists apart by
+ * identity, and each change it announces stages the fixture again: a fresh
+ * list on every stage never settled, and starved the JS thread.
+ */
 function markedTasksView(list: ListedTasksView, marks: KeptReadMarks): ListedTasksView {
   if (marks.size === 0) return list;
 
-  return {
-    ...list,
-    tasks: list.tasks.map((task) => {
-      const kept = marks.get(task.id);
+  const tasks = list.tasks.map((task) => {
+    const kept = marks.get(task.id);
 
-      return kept === undefined ? task : { ...task, ...markedAs(kept.mark, task, kept.at) };
-    }),
-  };
+    return kept === undefined ? task : markedTask(task, kept);
+  });
+
+  return tasks.every((task, place) => task === list.tasks[place]) ? list : { ...list, tasks };
 }
 
 /** The fixture's tasks laid over the list held beside the document, or the list held where it is staged already, its agents on the choices the run made and its rows on the read marks it set: the tasks slice, and the lists beside it. */
