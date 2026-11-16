@@ -531,6 +531,18 @@ test("⌘F finds a phrase across a far call's verb and subject, as its line read
   assert.equal(await farTally(farReply([shown]), "page: Pricing"), "1 of 1");
 });
 
+test("⌘F finds a far tool search's words as its row reads them, the server's name before them", async () => {
+  const searched = {
+    type: "tool-connection_search",
+    toolCallId: "m-7-search",
+    state: "output-available",
+    input: { connection: "slack", query: "send message" },
+    output: { tools: [] },
+  };
+
+  assert.equal(await farTally(farReply([searched]), "Searched Slack tools for"), "1 of 1");
+});
+
 test("⌘F counts nothing in a far integration call's connection_execute, which its row never draws", async () => {
   const wrapper = {
     type: "tool-connection_execute",

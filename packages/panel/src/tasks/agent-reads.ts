@@ -8,13 +8,17 @@
  * and a failure is answered at once, never tried again on its own.
  */
 
-import type { AgentChangesAnswerView, AgentMessagesParams } from "@repo/features/agent-view";
+import type { AgentMessagesParams } from "@repo/features/agent-view";
+import type { NumberedAddress } from "@repo/features/link-grammar";
+import type {
+  RepositoryChangesAnswerView,
+  RepositoryPullRequestParams,
+} from "@repo/features/pull-request-view";
 import type { TasksSkillsParams } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { queryOptions, skipToken } from "@tanstack/react-query";
 import { askAct } from "../act.js";
 import { QUERY_ROOT } from "../query-keys.js";
-import { pullRequestAsked } from "./pull-request-number.js";
 
 /** One agent by its id alone, as its own address or a row naming it reads it. */
 export function agentPageQueryOptions(agentId: string) {
@@ -64,18 +68,18 @@ export function repositorySkillsQueryOptions(params: TasksSkillsParams) {
   });
 }
 
-/** An agent's changes the service did not carry, as their query's error, carrying the answer it gave. */
+/** A pull request's changes the service did not carry, as their query's error, carrying the answer it gave. */
 export class ChangesFailed extends Error {
-  readonly answer: Extract<AgentChangesAnswerView, { readonly failure: unknown }>;
+  readonly answer: Extract<RepositoryChangesAnswerView, { readonly failure: unknown }>;
 
-  constructor(answer: Extract<AgentChangesAnswerView, { readonly failure: unknown }>) {
+  constructor(answer: Extract<RepositoryChangesAnswerView, { readonly failure: unknown }>) {
     super("The service did not carry this read of the changes.");
     this.answer = answer;
   }
 }
 
-/** An agent's changes as read, a failure thrown as `ChangesFailed`. */
-function landedChanges(answer: AgentChangesAnswerView) {
+/** A pull request's changes as read, a failure thrown as `ChangesFailed`. */
+function landedChanges(answer: RepositoryChangesAnswerView) {
   if ("failure" in answer) throw new ChangesFailed(answer);
 
   return answer;
@@ -99,25 +103,45 @@ export function agentTurnChangesQueryOptions(agentId: string, messageId: string)
   });
 }
 
+/** The key a pull request's changed files are kept under: its repository, whatever the case it is spelled in, and its number, since its files are the same whichever workspace reads them. */
+function pullRequestChangesKey(pullRequest: NumberedAddress) {
+  return [
+    QUERY_ROOT.PULL_REQUEST_CHANGES,
+    pullRequest.repository.toLowerCase(),
+    pullRequest.number,
+  ];
+}
+
 /**
- * An agent's changes, its pull request's files, or those of the pull request
- * of its repository by the number given. Its Changes tab reads them as it is
- * first shown, as its agent ends, and on Refresh, so the query is read on
- * those asks alone; a failure stands as the query's error, the changes last
- * read standing beside it.
+ * A pull request's changed files, read through the workspace given by its
+ * repository and number. Its Pull request tab reads them as Files changed
+ * or Chapters is first shown, as its head moves, and on Refresh, so the
+ * query is read on those asks alone; a failure stands as the query's error,
+ * the changes last read standing beside it.
  */
-export function agentChangesQueryOptions(agentId: string | undefined, number: number | undefined) {
+export function pullRequestChangesQueryOptions(pullRequest: RepositoryPullRequestParams) {
+  const { workspaceId, repository, number } = pullRequest;
+
   return queryOptions({
-    queryKey: [QUERY_ROOT.AGENT_CHANGES, agentId, number ?? null],
-    queryFn:
-      agentId === undefined
-        ? skipToken
-        : () =>
-            askAct(ACT_KIND.AGENTS_CHANGES, pullRequestAsked(agentId, number)).then(landedChanges),
+    queryKey: pullRequestChangesKey(pullRequest),
+    queryFn: () =>
+      askAct(ACT_KIND.PULL_REQUESTS_CHANGES, { workspaceId, repository, number }).then(
+        landedChanges,
+      ),
     staleTime: Number.POSITIVE_INFINITY,
     // Note that each answer is its own, an answer alike to the last included, since the tab reads the
     // marks again with every answer and lets go of a file read whole for the one before.
     structuralSharing: false,
+    retry: false,
+  });
+}
+
+/** A pull request's changed files as its Pull request tab last read them, read nowhere but there (`skipToken`). */
+export function heldChangesQueryOptions(pullRequest: NumberedAddress) {
+  return queryOptions<ReturnType<typeof landedChanges>>({
+    queryKey: pullRequestChangesKey(pullRequest),
+    queryFn: skipToken,
+    staleTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
 }

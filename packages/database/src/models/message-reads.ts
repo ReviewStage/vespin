@@ -821,8 +821,8 @@ const findNewestJournalOf = SqlSchema.findAll({
 
 /**
  * The newest turn journal of each conversation named, whoever owns it, keyed
- * by conversation: `listJournals`' newest for many at once, or only the last
- * `tailParts` of each one's parts where that is all its reader looks at. A
+ * by conversation, or only the last `tailParts` of each one's parts where
+ * that is all its reader looks at. A
  * conversation with none, or whose journal does not read, is absent. Only for
  * ids a gate already read, as `latestTurnsOfReached`.
  */

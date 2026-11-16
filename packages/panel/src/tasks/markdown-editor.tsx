@@ -304,6 +304,7 @@ export function MarkdownEditor({
     room,
     side: MENTION_MENU_SIDE.BELOW,
     onChoose: (mention) => handle.current?.chooseMention(mention),
+    onRetype: (words) => handle.current?.retypeMention(words),
   });
 
   const mentioning = picker.aria["aria-expanded"] === "true";

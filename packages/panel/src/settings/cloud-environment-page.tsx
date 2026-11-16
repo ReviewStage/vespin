@@ -16,7 +16,7 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
 /**
  * cloud-environment-page.tsx -- Settings › Cloud environment: what the workspace's cloud agents start with, their sandbox's size, its variables and then its scripts, on one page since all exist only for those agents.
  *
- * Sandbox comes first, then Variables, Add variable on its heading, then
+ * Sandbox comes first, then Variables, Add variables on its heading, then
  * Install software and Setup scripts, each section reading and
  * saving its own as it did on a page of its own.
  */
@@ -25,11 +25,14 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
 export function CloudEnvironmentPage({
   control,
   view,
+  readerId,
 }: {
   /** The account's workspaces, drawn while it is signed in. */
   control: WorkspaceSettingsControl | undefined;
   /** What the pages offer, absent until the settings have arrived. */
   view: SettingsSearchInput | undefined;
+  /** The signed-in account, whose own changes to a variable read as You. */
+  readerId: string | undefined;
 }): React.JSX.Element | null {
   if (control === undefined) return null;
   const workspace = shownWorkspace(control);
@@ -55,7 +58,7 @@ export function CloudEnvironmentPage({
   return (
     <Fragment key={workspace.id}>
       <SandboxSizeSection workspace={workspace} />
-      <EnvironmentVariablesSection workspace={workspace} />
+      <EnvironmentVariablesSection workspace={workspace} readerId={readerId} />
       <CloudSetupSections workspace={workspace} view={view} />
     </Fragment>
   );

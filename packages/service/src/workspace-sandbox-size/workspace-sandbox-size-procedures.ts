@@ -5,13 +5,14 @@
  * so it runs before an input is read), then runs the operation every door
  * shares (`workspace-sandbox-size.ts`): a workspace the caller is not in is
  * not found, and a choice by a member who is no owner or admin is not
- * permitted. Every answer is the size as
- * it then stands.
+ * permitted. Every answer is the size as it then stands, and a choice that
+ * changed it moves the workspace's idle
+ * sandboxes to it (`sandboxesMovedTo`).
  */
 
 import type { UserIdResolver } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
-import { chooseSandboxSize, readSandboxSize } from "./workspace-sandbox-size.js";
+import { chooseSandboxSize, readSandboxSize, sandboxesMovedTo } from "./workspace-sandbox-size.js";
 
 export interface WorkspaceSandboxSizeProcedureSeams {
   resolveUserId: UserIdResolver;
@@ -27,7 +28,11 @@ export function workspaceSandboxSizeProcedures(seams: WorkspaceSandboxSizeProced
     }),
 
     put: signedIn.put.effect(function* ({ input, context: { userId } }) {
-      return yield* chooseSandboxSize(userId, input.workspaceId, input.vcpus);
+      const standing = yield* readSandboxSize(userId, input.workspaceId);
+      const chosen = yield* chooseSandboxSize(userId, input.workspaceId, input.vcpus);
+      yield* sandboxesMovedTo(input.workspaceId, standing.vcpus, chosen.vcpus);
+
+      return chosen;
     }),
   };
 }
