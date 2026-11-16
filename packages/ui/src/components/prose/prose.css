@@ -124,9 +124,12 @@
   }
 
   /* A code span is the prose one above, on the note's own tint, a step
-     heavier because the thread's words are small, in a transcript's flow as
-     in a note's. */
+     heavier because the thread's words are small, and on the window's corner
+     role rather than the site's `em` one, in a transcript's flow as in a
+     note's and the editors that stand in for one, so code reads the same in
+     each. */
   .ui-markdown-flow :not(pre) > code {
+    border-radius: var(--ui-radius-6);
     font-weight: var(--ui-type-label-weight);
     letter-spacing: 0;
   }
