@@ -23,12 +23,10 @@
  * the transcript, which says why in its own words and offers each to make
  * the agent's pick.
  *
- * Third, a local agent runs no terminal command on its own machine through
- * a call, since its own shell runs there already; such a call is refused
- * however it got there. A Mac from before machines claimed commands listens
- * as its account alone, so where the owner's default is out of reach and
- * none of the owner's machines listens as a device but the account does,
- * the call is queued for the account, as it was before.
+ * Third, a Mac from before machines claimed commands listens as its
+ * account alone, so where the owner's default is out of reach and none of
+ * the owner's machines listens as a device but the account does, the call
+ * is queued for the account, as it was before.
  */
 
 import {
@@ -206,19 +204,11 @@ function refusal(
   };
 }
 
-/** Why the machine given cannot take a call of the kind given from an agent running on the machine of the id given, none where it runs on none, as data and in the model's words; none where it can. */
+/** Why the machine given cannot take a call of the kind given, as data and in the model's words; none where it can. */
 function whyNot(
   machine: Candidate,
   kind: MachineCommandKind,
-  ownId: string | null,
 ): { readonly code: MachineUnreached; readonly words: string } | undefined {
-  if (kind === MACHINE_COMMAND_KIND.SHELL && machine.id === ownId) {
-    return {
-      code: MACHINE_UNREACHED.OWN_SHELL,
-      words: `Not run: you run on ${machine.name} yourself, so run the command from your own shell.`,
-    };
-  }
-
   if (!machine.lets) {
     return {
       code: MACHINE_UNREACHED.NOT_LET,
@@ -271,7 +261,7 @@ export function routeOf(
   return Effect.gen(function* () {
     const routing = yield* machineRoutingOf(target);
     const candidates = yield* candidatesOf(routing);
-    const whyNotHere = (machine: Candidate) => whyNot(machine, kind, routing.deviceId);
+    const whyNotHere = (machine: Candidate) => whyNot(machine, kind);
     const reachable = candidates.filter((machine) => whyNotHere(machine) === undefined);
     const byId = (id: string | null) => candidates.find((machine) => machine.id === id);
 
@@ -320,13 +310,7 @@ export function routeOf(
       (machine) => machine.userId === routing.userId && machine.isDefault,
     );
 
-    const defaultWhy = ownersDefault === undefined ? undefined : whyNotHere(ownersDefault);
-
-    // Note that a local agent's own machine never takes its terminal command, so no older Mac listening as the account takes it in its place.
-    if (
-      ownersDefault !== undefined &&
-      (defaultWhy === undefined || defaultWhy.code === MACHINE_UNREACHED.OWN_SHELL)
-    ) {
+    if (ownersDefault !== undefined && whyNotHere(ownersDefault) === undefined) {
       return to(ownersDefault);
     }
 
