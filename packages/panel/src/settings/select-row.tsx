@@ -34,6 +34,7 @@ export function SelectRow<Value extends string | number>({
   placeholder,
   anchor,
   busy: restBusy,
+  locked,
   density,
   indent,
   leading,
@@ -77,6 +78,8 @@ export function SelectRow<Value extends string | number>({
    * rest so one save cannot finish behind the other.
    */
   busy?: boolean;
+  /** Why the reader may not change it, where they may not: the chip then opens no menu and hangs these words as its hover. */
+  locked?: string | undefined;
   /** How the row stands; in a settings card where none is named. */
   density?: SettingsRowDensity | undefined;
   /** Whether the row stands inset under the row above, one of its things. */
@@ -139,6 +142,7 @@ export function SelectRow<Value extends string | number>({
       replayUnmasked
       anchor={anchor}
       disabled={write?.busy === true || Boolean(restBusy)}
+      locked={locked}
       onPick={(id) => {
         if (pickOther?.(id) === true) return;
         const next = parse(id);

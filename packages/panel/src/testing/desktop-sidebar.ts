@@ -1,6 +1,5 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import type { TaskSummary } from "@repo/features/task-wire";
-import type { AppStateSnapshot } from "@repo/host/app-state";
 import { UPDATE_STATUS } from "@repo/settings/update";
 import {
   type ComponentProps,
@@ -15,6 +14,7 @@ import { SIDEBAR_OVERLAY } from "../desktop/sidebar-collapse.js";
 import { PANEL_TAB } from "../panel-tabs.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery } from "../use-app-state.js";
+import type { ListedAppState } from "./app-state.js";
 import { testQueryClientNow } from "./copy-feedback.js";
 import { standingTaskList } from "./history-rows.js";
 import { listedTasksOf } from "./tasks-control.js";
@@ -75,7 +75,7 @@ export function sidebarProps(tasks: TasksControl): ComponentProps<typeof Desktop
 
 /** `tasks` beside the pull requests main's document holds in the test's client, as the window's follow writes both. */
 function withHeldPullRequests(tasks: readonly TaskSummary[]) {
-  const held = testQueryClientNow().getQueryData<AppStateSnapshot>(appStateQuery.queryKey)?.tasks;
+  const held = testQueryClientNow().getQueryData<ListedAppState>(appStateQuery.queryKey)?.tasks;
 
   return {
     tasks,

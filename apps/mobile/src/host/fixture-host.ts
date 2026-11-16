@@ -13,13 +13,15 @@
  * the host wrote it, and a document already staged is handed nothing new.
  */
 
-import { ACT_KIND } from "@repo/host/acts";
+import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
-  type AppStateSnapshot,
-  RUN_PROFILE,
-  type RunProfile,
-  taskListPartsOf,
-} from "@repo/host/app-state";
+  FOLLOWER_CALL_FAILURE,
+  type ListedApart,
+  listedApart,
+  type TaskListParts,
+} from "@repo/features/tasks-view";
+import { ACT_KIND } from "@repo/host/acts";
+import { type AppStateSnapshot, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
 import type { AppStateStore } from "@repo/host/client";
 import type {
   ActPortClient,
@@ -31,11 +33,14 @@ import {
   type AgentChoices,
   agentChangeOf,
   chosenTasksView,
+  type InboxReadMarks,
   type InboxReminders,
   inboxActAnswer,
   inboxAppState,
+  inboxReadMarksAppState,
   inboxRemindersAppState,
   inboxTasksView,
+  MEMORY_SAVE_REFUSED,
   machineAskAppState,
   NEW_MEMORY_ID,
   olderPageAnswer,
@@ -53,18 +58,20 @@ import { Predicate } from "effect";
 const FIXTURE_WORKSPACE_IDS: readonly string[] = [FIXTURE_IDS.WORKSPACE];
 
 /** Each task list as staged, so a list staged already is never staged twice, which would list its tasks twice. */
-const stagedLists = new WeakSet<AppStateSnapshot["tasks"]>();
+const stagedLists = new WeakSet<TaskListParts>();
 
-/** The fixture's tasks laid over the list held, or the list held where it is staged already, its agents on the choices the run made; the list held where nothing moves. */
-function stagedTasks(held: AppStateSnapshot, choices: AgentChoices): AppStateSnapshot["tasks"] {
-  const listed = stagedLists.has(held.tasks)
-    ? held.tasks
-    : inboxTasksView(held.run.profile, held.tasks);
+/** The fixture's tasks laid over the list held beside the document, or the list held where it is staged already, its agents on the choices the run made: the tasks slice, and the lists beside it. */
+function stagedTasks(
+  held: AppStateSnapshot,
+  lists: TaskListParts,
+  choices: AgentChoices,
+): ListedApart {
+  const view = { ...held.tasks, ...lists };
+  const listed = stagedLists.has(lists) ? view : inboxTasksView(held.run.profile, view);
+  const apart = listedApart(chosenTasksView(listed, choices));
+  stagedLists.add(apart.lists);
 
-  const staged = chosenTasksView(listed, choices);
-  stagedLists.add(staged);
-
-  return staged;
+  return apart;
 }
 
 /** The moves each run's changes made to the fixture's pull requests, by the store the run stages, each map replaced whole as a change lands so a staging reads it anew. */
@@ -81,6 +88,12 @@ const REMINDERS = new WeakMap<object, InboxReminders>();
 
 /** No reminder set yet. */
 const NO_REMINDERS: InboxReminders = new Map();
+
+/** The Inbox read marks each fixture run made, by its store. */
+const INBOX_READ_MARKS = new WeakMap<object, InboxReadMarks>();
+
+/** No Inbox read mark made. */
+const NO_INBOX_READ_MARKS: InboxReadMarks = new Map();
 
 /** The runs that hold a machine's ask, as `-machineAsk true` asks, by the store each stages, since a stage after a press is asked with none of the launch's own. */
 const MACHINE_ASKED = new WeakSet<object>();
@@ -135,7 +148,7 @@ function stagedNetwork(held: AppStateSnapshot, updateNeeded: boolean): AppStateS
  * Ada's MacBook for an agent's command from then on (`maestro/machine-ask.yaml`).
  */
 export function stageFixture(
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   updateNeeded = false,
   machineAsk = false,
 ): void {
@@ -155,7 +168,10 @@ export function stageFixture(
   );
 
   const saved = savedMemoriesAppState(
-    inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS),
+    inboxReadMarksAppState(
+      inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS),
+      INBOX_READ_MARKS.get(state) ?? NO_INBOX_READ_MARKS,
+    ),
     MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
   );
 
@@ -163,18 +179,20 @@ export function stageFixture(
     ? machineAskAppState(saved, ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS)
     : saved;
 
+  const listed = stagedTasks(held, state.taskList(), CHOICES.get(state) ?? NO_CHOICES);
+
   const staged = {
     ...reminded,
-    tasks: stagedTasks(held, CHOICES.get(state) ?? NO_CHOICES),
+    tasks: listed.tasks,
     network: stagedNetwork(held, updateNeeded),
   };
 
-  state.update(stagedPatch(held, staged), taskListPartsOf(staged.tasks));
+  state.update(stagedPatch(held, staged), listed.lists);
 }
 
 /** Keeps a reminder the fixture took, set or cleared, and lays it over the document at once, as the host draws one; nothing for any other act. */
 function keepReminder(
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
@@ -185,9 +203,25 @@ function keepReminder(
   stageFixture(state);
 }
 
+/** Keeps an Inbox read mark the fixture took and lays it over the document at once, as the host draws one; nothing for any other act. */
+function keepInboxReadMark(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): void {
+  if (kind !== ACT_KIND.AGENTS_INBOX_READ_STATE) return;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const { itemId, unread } = payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_READ_STATE>;
+  INBOX_READ_MARKS.set(
+    state,
+    new Map(INBOX_READ_MARKS.get(state) ?? NO_INBOX_READ_MARKS).set(itemId, unread),
+  );
+  stageFixture(state);
+}
+
 /** Keeps a machine's ask the fixture answered and takes it off the document at once, as the service's read drops it (`machineAskAppState`); nothing for any other act. */
 function keepMachineAnswer(
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
@@ -200,7 +234,7 @@ function keepMachineAnswer(
 
 /** Keeps the words of a memory the fixture saved, over one of its own or as a new one, and lays them over the document at once (`savedMemoriesAppState`); nothing for any other act. */
 function keepMemory(
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
@@ -215,7 +249,7 @@ function keepMemory(
 
 /** Keeps a change of one of its agents the fixture took, its model, mode, servers, name, or pin, and lays it over the document at once, as the host draws one; nothing for any other act. */
 function keepChoice(
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
@@ -230,7 +264,7 @@ function keepChoice(
 
 /** Keeps how a change the fixture took moved its pull request, and lays it over the document at once; nothing for any other act. */
 function keepMove(
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
@@ -246,7 +280,7 @@ function keepMove(
 
 /** What a read of the invitations agent's older page answers, counted, its page laid over the document at once where it lands; none for any other act or transcript. */
 function olderRead(
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   profile: RunProfile,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
@@ -268,14 +302,22 @@ function olderRead(
  * The writes `-refuseWrites true` refuses, each answered as the host
  * answers once the service has refused it: a task's status and its pin
  * not kept, so the screens put the row back and say why, as they would
- * of a live refusal.
+ * of a live refusal, and a follower added or a memory deleted unanswered,
+ * so a flow sees the notice over Add a follower's sheet and Settings'.
  */
 const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>> = new Map<
   PortActKind,
   () => PortActResult<PortActKind>
 >([
+  // Note that a memory's save and a version's restore are refused too, so their notices and Try again show.
+  [ACT_KIND.MEMORIES_SAVE, () => MEMORY_SAVE_REFUSED],
+  [ACT_KIND.TASKS_RESTORE, () => false],
   [ACT_KIND.TASKS_SET_STANDING, () => false],
   [ACT_KIND.TASKS_PIN, () => false],
+  [ACT_KIND.TASKS_ADD_FOLLOWER, () => ({ failure: FOLLOWER_CALL_FAILURE.UNANSWERED })],
+  [ACT_KIND.MEMORIES_FORGET, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
+  // Note that a note to the people who make the app is refused too, so its footer's failure tone shows.
+  [ACT_KIND.FEEDBACK_SEND, () => ({ delivered: false })],
 ]);
 
 /** A member of `members` by a key known only at run time, as the fixture reads each one of the port before it answers or forwards it. */
@@ -307,7 +349,7 @@ function memberAt<Member>(
 export function fixtureActs(
   acts: ActPortClient,
   profile: RunProfile,
-  state: Pick<AppStateStore, "snapshot" | "update">,
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   refusesWrites = false,
 ): ActPortClient {
   return new Proxy(acts, {
@@ -335,6 +377,8 @@ export function fixtureActs(
         keepMove(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepReminder(state, kind as PortActKind, payload);
+        // SAFETY: as above.
+        keepInboxReadMark(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepChoice(state, kind as PortActKind, payload);
         // SAFETY: as above.

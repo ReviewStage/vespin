@@ -5,14 +5,14 @@
 import { ORPCError } from "@orpc/client";
 import type { AgentChangesAnswerView } from "@repo/features/agent-view";
 import type { TaskFileRequest } from "@repo/features/task-wire";
-import type { TasksFileAnswer } from "@repo/features/tasks-view";
 import {
-  type AppStateDelivery,
-  type AppStateRead,
-  TASK_LIST_PARTS,
-  type TaskListDelivery,
-  taskListPartsOf,
-} from "@repo/host/app-state";
+  type ListedApart,
+  type ListedTasksView,
+  listedApart,
+  type TasksFileAnswer,
+  type TasksView,
+} from "@repo/features/tasks-view";
+import type { AppStateDelivery, AppStateRead } from "@repo/host/app-state";
 import type { AppBridge } from "@repo/host/bridge";
 import {
   ACCOUNT_ASK_ACT_KIND,
@@ -28,6 +28,7 @@ import {
   type PortActKind,
   type PortActPayload,
   type PortActResult,
+  PULL_REQUEST_ACT_KIND,
   TASKS_ACT_KIND,
   WORKSPACE_ACT_KIND,
 } from "@repo/host/contract";
@@ -37,36 +38,40 @@ import { installActPortClient, installAppBridge } from "../app-bridge.js";
 let answering: Partial<AppBridge> = {};
 let answeringPort: Partial<FakeActPort> = {};
 
-/**
- * The task list's rows the host carries beside `delivery`, read off the task
- * list it carries: its lists whole where it carries the slice whole or gone,
- * its parts that moved where it carries them moved, none otherwise.
- */
-function taskListOf(delivery: AppStateDelivery): TaskListDelivery | undefined {
-  const { version } = delivery;
+/** A tasks slice a test wrote, held apart as the host holds it: the slice the document carries, and the task list's lists beside it (`ListedAppState`). */
+function heldApart(written: TasksView): ListedApart {
+  // SAFETY: a test writes the task list's lists into its documents' tasks slice (`ListedAppState`), which this is where it does.
+  const listed = written as Partial<ListedTasksView> & TasksView;
+
+  return listedApart({ ...listed, tasks: listed.tasks ?? [] });
+}
+
+/** `read` with the task list's lists a test wrote into it handed beside it, as the host answers a whole read. */
+function withListsBeside(read: AppStateRead): AppStateRead {
+  if (read.taskList !== undefined) return read;
+  const { tasks, lists } = heldApart(read.tasks);
+
+  return { ...read, tasks, taskList: lists };
+}
+
+/** `delivery` with the task list's lists a test wrote into its tasks slice handed beside it, as the host carries them. */
+function withRowsBeside(delivery: AppStateDelivery): AppStateDelivery {
   const whole = delivery.entries.tasks;
 
-  if (whole !== undefined) return { version, whole };
+  if (delivery.taskList !== undefined || whole === undefined) return delivery;
+  const { tasks, lists } = heldApart(whole);
 
-  if (delivery.gone?.includes("tasks") === true) return { version, whole: { tasks: [] } };
-
-  const moved = delivery.moved?.tasks?.filter((move) =>
-    TASK_LIST_PARTS.some((part) => part === move.key[0]),
-  );
-
-  return moved === undefined || moved.length === 0 ? undefined : { version, moved };
-}
-
-/** `read` with the task list's lists beside it, as the host answers a whole read, where a fake answered it without them. */
-function withListsBeside(read: AppStateRead): AppStateRead {
-  return read.taskList === undefined ? { ...read, taskList: taskListPartsOf(read.tasks) } : read;
+  return {
+    ...delivery,
+    entries: { ...delivery.entries, tasks },
+    taskList: { version: delivery.version, whole: lists },
+  };
 }
 
 /**
- * The document's whole read and deliveries with the task list's lists and
- * rows beside them, where a fake hands a document or a delivery it built by
- * hand without them, as the host carries the two in one (`AppStateRead`,
- * `appStateDelivery`).
+ * The document's whole read and deliveries with the task list's lists a
+ * test wrote into them handed beside them, as the host holds the two apart
+ * (`AppStateRead`, `appStateDelivery`).
  */
 function withTaskLists(calls: Partial<AppBridge>): Partial<AppBridge> {
   const { onAppState, requestAppState } = calls;
@@ -81,12 +86,7 @@ function withTaskLists(calls: Partial<AppBridge>): Partial<AppBridge> {
     ...(onAppState === undefined
       ? undefined
       : {
-          onAppState: (listener) =>
-            onAppState((delivery) => {
-              const taskList = delivery.taskList ?? taskListOf(delivery);
-
-              listener(taskList === undefined ? delivery : { ...delivery, taskList });
-            }),
+          onAppState: (listener) => onAppState((delivery) => listener(withRowsBeside(delivery))),
         }),
   };
 }
@@ -112,12 +112,14 @@ type HoldKind =
   | typeof TASKS_ACT_KIND.TASKS_PAGES_FOLLOW
   | typeof TASKS_ACT_KIND.TASKS_BROWSER_TABS_FOLLOW
   | typeof CHAPTERS_ACT_KIND.CHAPTERS_FOLLOW
+  | typeof CHAPTERS_ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW
   | typeof AGENT_ACT_KIND.HOSTS_PRESENCE_FOLLOW
   | typeof AGENT_ACT_KIND.HOSTS_FOLLOW
   | typeof AGENT_ACT_KIND.MACHINES_FOLLOW
   | typeof AGENT_ACT_KIND.AGENTS_MODELS_FOLLOW
   | typeof AGENT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW
   | typeof AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW
+  | typeof PULL_REQUEST_ACT_KIND.PULL_REQUESTS_PART_FOLLOW
   | typeof INTEGRATION_ACT_KIND.INTEGRATIONS_TOOLS_FOLLOW
   | typeof INTEGRATION_ACT_KIND.MCP_CLIENTS_FOLLOW
   | typeof ACCOUNT_ASK_ACT_KIND.PROVIDER_KEYS_FOLLOW
@@ -146,12 +148,14 @@ const QUIET_HOLDS: ReadonlySet<PortActKind> = new Set<HoldKind>([
   TASKS_ACT_KIND.TASKS_PAGES_FOLLOW,
   TASKS_ACT_KIND.TASKS_BROWSER_TABS_FOLLOW,
   CHAPTERS_ACT_KIND.CHAPTERS_FOLLOW,
+  CHAPTERS_ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW,
   AGENT_ACT_KIND.HOSTS_PRESENCE_FOLLOW,
   AGENT_ACT_KIND.HOSTS_FOLLOW,
   AGENT_ACT_KIND.MACHINES_FOLLOW,
   AGENT_ACT_KIND.AGENTS_MODELS_FOLLOW,
   AGENT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW,
   AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW,
+  PULL_REQUEST_ACT_KIND.PULL_REQUESTS_PART_FOLLOW,
   INTEGRATION_ACT_KIND.INTEGRATIONS_TOOLS_FOLLOW,
   INTEGRATION_ACT_KIND.MCP_CLIENTS_FOLLOW,
   ACCOUNT_ASK_ACT_KIND.PROVIDER_KEYS_FOLLOW,

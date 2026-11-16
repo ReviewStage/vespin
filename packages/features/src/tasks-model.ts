@@ -13,6 +13,7 @@ import {
   type StartCallFailure,
   TASK_CALL_FAILURE,
   TASK_PARENT_FAILURE,
+  type TaskListParts,
   type TasksView,
 } from "./tasks-view.js";
 import { IRREVERSIBLE_WORDS } from "./words.js";
@@ -109,7 +110,7 @@ export function documentRegion(
  * task was about and offer a few before it. The list is already newest
  * started first, and a task with no repository adds none.
  */
-export function recentRepositories(tasks: TasksView["tasks"]): string[] {
+export function recentRepositories(tasks: TaskListParts["tasks"]): string[] {
   const recent: string[] = [];
 
   for (const task of tasks) {
@@ -278,13 +279,6 @@ export function renamedTasks<Named extends { id: string; name: string }>(
   renames: TaskNames,
 ): readonly Named[] {
   return renames.size === 0 ? tasks : tasks.map((task) => renamedTask(task, renames));
-}
-
-/** The view with each name given drawn in place of the one it replaces in the list. */
-export function renamedView(view: TasksView, renames: TaskNames): TasksView {
-  if (renames.size === 0) return view;
-
-  return { ...view, tasks: renamedTasks(view.tasks, renames) };
 }
 
 /** The region with the name given for its task drawn in place of the one it replaces, as the list draws it. */

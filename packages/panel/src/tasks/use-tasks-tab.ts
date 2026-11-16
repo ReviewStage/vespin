@@ -34,7 +34,7 @@ import {
   type TasksPage,
   tasksPage,
 } from "@repo/features/tasks-model";
-import { TASK_CALL_FAILURE, TASKS_READ, type TaskListStanding } from "@repo/features/tasks-view";
+import { TASK_CALL_FAILURE, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppInboxTask } from "@repo/host/app-state";
@@ -451,7 +451,11 @@ export interface TasksControl {
   /** The task's page took the ask, so a later visit to the task opens the thread neither beside its words nor in its list again. */
   onCommentRevealed: (ask: number) => void;
   /** Opens the window's Inbox narrowed to one task's items, on the item named, or on nothing chosen: what a task's "needs you" count, or an agent's waiting threads, ask. */
-  onShowInbox: (narrowed: { readonly taskId: string; readonly itemId?: string }) => void;
+  onShowInbox: (narrowed: {
+    readonly taskId: string;
+    readonly itemId?: string;
+    readonly itemAgentId?: string;
+  }) => void;
   /** The task whose Inbox is on screen, or the agent whose own page's Inbox tab is, or none. */
   inboxShown: string | null;
   /** The window's Inbox: whether it stands in the task's place, the task chosen in it, and its presses. */
@@ -713,7 +717,7 @@ function readInboxItemHome(
 
 export function useTasksTab(input: {
   /** What main holds of the account's tasks but the list itself, which the window reads from its collections (`task-list-collections.tsx`); a fixture run's own stand in for them. */
-  tasks: TaskListStanding;
+  tasks: TasksView;
   run: { readonly fixtureMode: boolean; readonly profile: string };
   signedIn: boolean;
   /** The signed-in account's email, which the task last open is kept under; none while signed out. */
@@ -1446,10 +1450,15 @@ export function useTasksTab(input: {
     reportedAgent.current = shownAgent;
     tellShown({ agentId: shownAgent });
   }, [shownAgent, tellShown]);
-  // The agent on screen is kept warm for the next message while the page is visible.
+
+  // The agent on screen, or the one that posted the Inbox item on screen, is kept warm for the next message while the page is visible.
   // Note that it is looked up by its id alone, so a delivery that moves another agent walks no list here.
-  const shownListed = useTaskListRow(listCollections.agents, shownAgent ?? undefined);
-  useWarmAgent(shownListed ?? agents.agents?.find((agent) => agent.id === shownAgent));
+  const warmAgent =
+    shownAgent ??
+    (shownInbox === null || inboxChosen === undefined ? undefined : choiceItemAgentOf(inboxChosen));
+
+  const warmListed = useTaskListRow(listCollections.agents, warmAgent);
+  useWarmAgent(warmListed ?? agents.agents?.find((agent) => agent.id === warmAgent));
 
   // The host answers a press a round trip later, so where the tab is bound
   // is said at once, and a select that did not open the task takes its ask
@@ -3607,8 +3616,23 @@ export function useTasksTab(input: {
     // Only the ask shown is let go; a newer one stands until its own task shows it.
     onSectionRevealed: (ask) =>
       setSectionReveal((last) => (last?.reveal.ask === ask ? undefined : last)),
-    onShowInbox: ({ taskId, itemId }: { readonly taskId: string; readonly itemId?: string }) => {
-      const chosen = itemId === undefined ? undefined : { taskId, itemId, opened: true as const };
+    onShowInbox: ({
+      taskId,
+      itemId,
+      itemAgentId,
+    }: {
+      readonly taskId: string;
+      readonly itemId?: string;
+      readonly itemAgentId?: string;
+    }) => {
+      // Note that the agent that posted the item is named where the caller knows it, so it is kept warm as a row's choice keeps it.
+      const chosen =
+        itemId === undefined
+          ? undefined
+          : itemAgentId === undefined
+            ? { taskId, itemId, opened: true as const }
+            : { taskId, itemAgentId, itemId, opened: true as const };
+
       const home = listedRows.task(taskId)?.workspaceId;
       standInbox(inboxIn(home ?? listedWorkspace?.id, taskId), chosen);
     },

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { test } from "vitest";
-import { computerAppNamed, computerAppsOf } from "./agent-parts.js";
+import { AGENT_PART, agentPart, computerAppNamed, computerAppsOf } from "./agent-parts.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
+import { settledToolPart, TOOL_CALL_SETTLEMENT } from "./turn-run/index.js";
 
 /**
  * agent-parts.test.ts -- the apps a conversation's computer calls used, each
@@ -155,4 +156,31 @@ test("one name that is two apps on two machines finds each machine's own app by 
   ]);
 
   assert.equal(computerAppNamed(apps, "editor", "mac-2")?.bundleId, "com.two.editor");
+});
+
+test("a command the service settled as killed out of memory reads the sandbox's memory off its stored part, and another call reads none", () => {
+  const started = {
+    type: "tool-Bash",
+    toolCallId: "call_typecheck",
+    state: "input-available",
+    input: { command: "pnpm typecheck" },
+  } as const;
+
+  const failed = {
+    state: TOOL_CALL_SETTLEMENT.OUTPUT_ERROR,
+    output: "Exit code 137",
+    errorText: "Exit code 137",
+    status: "rejected",
+  } as const;
+
+  const read = (part: ReturnType<typeof settledToolPart>) => {
+    const drawn = agentPart(JSON.parse(JSON.stringify(part)));
+
+    return drawn.kind === AGENT_PART.TOOL ? drawn.outOfMemory : "not a call";
+  };
+
+  assert.deepEqual(read(settledToolPart(started, { ...failed, outOfMemory: { memoryGb: 4 } })), {
+    memoryGb: 4,
+  });
+  assert.equal(read(settledToolPart(started, failed)), undefined);
 });

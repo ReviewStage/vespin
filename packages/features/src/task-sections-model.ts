@@ -16,7 +16,7 @@ import {
   pinPositionsForInsert,
   pinPositionsForMove,
 } from "./pin-order.js";
-import { type TaskListView, taskInView, tasksAssignedTo } from "./task-list-model.js";
+import { taskFinished } from "./task-list-model.js";
 import {
   TASK_SECTION_WRITE,
   type TaskSection,
@@ -299,23 +299,18 @@ export function sectionedTasks(
 }
 
 /**
- * A section as the view leaves it: its tasks to do and in progress, its
- * finished sub-tasks while the view shows them (`taskInView`), and any
- * with no status, of those Assigned to holds, each
- * with its entry, in its order.
+ * A section as the sidebar draws it: every task the member put in it but
+ * the settled ones, whatever its status or whoever is on it, as a pin
+ * stands whatever the view, each with its entry, in its order. Note that a
+ * settled task leaves the section's rows rather than its entries, so it
+ * comes back if it is opened again, and stands under its parent while the
+ * view shows finished sub-tasks (`withSubTasks`).
  */
-export function sectionInView(
-  drawn: DrawnSection,
-  view: TaskListView,
-  readerId: string | undefined,
-): DrawnSection {
-  const held = new Set(tasksAssignedTo(drawn.tasks, view.assignedTo, readerId));
-  const shown = (task: TaskSummary) => held.has(task) && taskInView(task, view);
-
+export function sectionWithoutSettled(drawn: DrawnSection): DrawnSection {
   const kept = drawn.tasks.flatMap((task, at) => {
     const entry = drawn.entries[at];
 
-    return entry !== undefined && shown(task) ? [{ entry, task }] : [];
+    return entry !== undefined && !taskFinished(task) ? [{ entry, task }] : [];
   });
 
   return {
