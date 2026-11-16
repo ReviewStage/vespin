@@ -67,7 +67,7 @@ import {
   useTaskListCollections,
   useTaskListRow,
 } from "../host/host-provider.js";
-import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
+import { useFrontSteps, useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
 import { placeOfRoute, type SidebarPlace } from "../screens/app-sidebar.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
@@ -341,12 +341,17 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     tabs !== undefined &&
     (detailFront === DETAIL_FRONT.NONE ? tabStackBacks(tabs) : detailFront === DETAIL_FRONT.PUSHED);
 
+  // Note that K and J step from the thread in front through what its screen draws, which stands its own steps (`useStandFrontSteps`), so the menu keeps no list or scope of its own.
+  const steps = useFrontSteps();
+
   const enabled = [
     ...subject.enabled,
     ...(workspaces.length > 0 ? [MENU_COMMAND.SWITCH_WORKSPACE] : []),
     ...(sidebarStands ? [MENU_COMMAND.SIDEBAR] : []),
     ...(detailStands ? [MENU_COMMAND.DETAIL_ONLY] : []),
     ...(backs ? [MENU_COMMAND.BACK] : []),
+    ...(signedIn && steps.previous !== undefined ? [MENU_COMMAND.PREVIOUS_ITEM] : []),
+    ...(signedIn && steps.next !== undefined ? [MENU_COMMAND.NEXT_ITEM] : []),
   ];
 
   const toggled = [
@@ -468,6 +473,14 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         return;
       }
 
+      case MENU_COMMAND.PREVIOUS_ITEM:
+        if (steps.previous !== undefined) steps.go(steps.previous);
+
+        return;
+      case MENU_COMMAND.NEXT_ITEM:
+        if (steps.next !== undefined) steps.go(steps.next);
+
+        return;
       case MENU_COMMAND.MARK_DONE:
         if (working > 0) setAsking(ASK.MARK_DONE);
         else markDone();
