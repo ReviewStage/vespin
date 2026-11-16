@@ -1,0 +1,19 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad26 - iOS 26.5 - ABD9B3FE-4859-40A8-85F9-63B98B47142F
+ > Flow p9ragentfold1
+Set orientation ${ORIENT}...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot ${P}-1-launched... COMPLETED
+Tap on "Edited.*"... COMPLETED
+Assert that "Input" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot ${P}-2-call-open... COMPLETED
+Take screenshot ${P}-2b-before-second-tap... COMPLETED
