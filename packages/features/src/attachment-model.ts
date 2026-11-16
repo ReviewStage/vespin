@@ -1,4 +1,5 @@
 import { AGENT_ATTACHMENT_TYPE, base64Bytes } from "./agent-wire.js";
+import { isAudioType } from "./conversation-picture-wire.js";
 import { formatBytes } from "./number-format.js";
 import { countWords } from "./words.js";
 
@@ -22,10 +23,11 @@ export interface FileChip {
   readonly alt?: string | undefined;
 }
 
-/** How the viewer shows a file: as a picture, played as a video, as a PDF's pages, drawn as its Mermaid diagram, as its lines, or by its icon and name with a way to save it. */
+/** How the viewer shows a file: as a picture, played as a video or a sound clip, as a PDF's pages, drawn as its Mermaid diagram, as its lines, or by its icon and name with a way to save it. */
 export const ATTACHMENT_VIEW = {
   IMAGE: "image",
   VIDEO: "video",
+  AUDIO: "audio",
   PDF: "pdf",
   DIAGRAM: "diagram",
   TEXT: "text",
@@ -56,6 +58,8 @@ export function attachmentView(file: FileChip): AttachmentView {
   if (file.mediaType.startsWith("image/")) return ATTACHMENT_VIEW.IMAGE;
 
   if (PLAYED_VIDEO_TYPES.has(file.mediaType)) return ATTACHMENT_VIEW.VIDEO;
+
+  if (isAudioType(file.mediaType)) return ATTACHMENT_VIEW.AUDIO;
 
   if (file.mediaType === AGENT_ATTACHMENT_TYPE.PDF) return ATTACHMENT_VIEW.PDF;
 

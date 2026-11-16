@@ -22,7 +22,7 @@ import {
   wholeCallOf,
 } from "@repo/features/agent-parts";
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "@repo/features/agent-todos";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
@@ -248,7 +248,7 @@ import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { useForwardToast } from "./agent-forward.js";
 import { GoalConditions, GoalDock, GoalNoticeView } from "./agent-goal.js";
-import { useRoutedMachine } from "./agent-machines.js";
+import { useCallRoute } from "./agent-machines.js";
 import {
   agentLines,
   agentName,
@@ -778,6 +778,7 @@ function ToolCallView({
         connection={view.connection}
         account={view.account}
         machine={view.machine}
+        namedMachine={view.namedMachine}
         subject={view.subject}
         description={view.description}
         files={view.files}
@@ -939,34 +940,31 @@ function TodosRow({
   );
 }
 
-/** Where the transcript draws the agent's to-do lists: the call whose list stays out of a finished turn's fold, the call whose list the agent is at, none once it stops, and the list as it stood after each of Claude Code's task calls (`taskTodos`). */
+/** Where the transcript draws the agent's to-do lists: the call whose list the agent is at, none once it stops, and the list as it stood after each of Claude Code's task calls (`taskTodos`). */
 interface TodosPlace {
-  readonly kept: string | undefined;
   readonly live: string | undefined;
   readonly lists: ReadonlyMap<string, AgentTodos["todos"]>;
 }
 
 /** A transcript that holds no to-do list, as the brain's does not. */
 const NO_TODOS: TodosPlace = {
-  kept: undefined,
   live: undefined,
   lists: new Map(),
 };
 
-/** Whether two places draw the to-do lists alike: the same calls kept and live, and each task call's list the one it was; none alike only with none. */
+/** Whether two places draw the to-do lists alike: the same call live, and each task call's list the one it was; none alike only with none. */
 function sameTodosPlace(a: TodosPlace | undefined, b: TodosPlace | undefined): boolean {
   if (a === undefined || b === undefined) return a === b;
 
-  return a.kept === b.kept && a.live === b.live && sameEntries(a.lists, b.lists);
+  return a.live === b.live && sameEntries(a.lists, b.lists);
 }
 
-/** Where the to-do lists are drawn for the transcript given: the newest kept, and live while the agent works. */
+/** Where the to-do lists are drawn for the transcript given: the newest live while the agent works. */
 function todosPlace(messages: readonly AgentTranscriptMessage[], working: boolean): TodosPlace {
   const lists = taskTodos(messages);
   const standing = newestTodos(messages, lists);
 
   return {
-    kept: standing?.callId,
     live: working ? standing?.callId : undefined,
     lists,
   };
@@ -1244,7 +1242,7 @@ function ToolPartView({
   }
 
   // A set of pictures the agent showed, or is showing, is drawn as itself; one refused keeps its row, where its error is read.
-  if (part.tool === AGENT_TOOL.SHOW_IMAGE && part.state !== TOOL_STATE.OUTPUT_ERROR) {
+  if (isShowMediaTool(part.tool) && part.state !== TOOL_STATE.OUTPUT_ERROR) {
     return <ShownPictures input={part.input} output={part.output} />;
   }
 
@@ -3682,7 +3680,7 @@ function AgentTabView({
     !composer.sending;
 
   const macOwner = useKept(macOwnerOf(agent.startedBy, members, readerId, former), sameFields);
-  const routedMachine = useRoutedMachine(agent.id);
+  const callRoute = useCallRoute(agent.id);
   const disabledServers = servers.disabled;
 
   const mentioned = useMemo(
@@ -3729,7 +3727,7 @@ function AgentTabView({
 
   return (
     <AgentTabFrame ref={tab} label={name}>
-      <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+      <CallPlaceProvider owner={macOwner} route={callRoute}>
         <AgentPicturesProvider value={pictures}>
           <ComputerAppsProvider value={computerApps}>
             <WholePartsProvider value={wholeParts}>
@@ -3859,7 +3857,7 @@ function AgentTabView({
         />
         <AgentPicturesProvider value={pictures}>
           {/* Note that the dock reads whose Mac the agent uses, as the transcript above it does, to offer Show only on that Mac. */}
-          <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+          <CallPlaceProvider owner={macOwner} route={callRoute}>
             <ComputerDock
               agentId={agent.id}
               messages={dockLines}
@@ -3903,7 +3901,7 @@ function AgentTabView({
               />
             )}
             {/* Note that the box's `@` reads whose Mac the agent uses, to list that Mac's apps or else the ones the reader's machines allow, named and drawn as the agent's calls kept them. */}
-            <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+            <CallPlaceProvider owner={macOwner} route={callRoute}>
               <AgentPicturesProvider value={pictures}>
                 <ComputerAppsProvider value={computerApps}>
                   <AgentComposer
@@ -4449,7 +4447,7 @@ export function AgentSubagentTab({
   const wholeParts = useWholePartDoor(agentId, callId);
   const { members, former } = useMemberDirectory();
   const macOwner = useKept(macOwnerOf(owner?.startedBy, members, control.me, former), sameFields);
-  const routedMachine = useRoutedMachine(agentId);
+  const callRoute = useCallRoute(agentId);
   // The worker's lines, its task first, and what its rows draw from, kept from draw to draw while none of it moved.
   const lines = useMemo(() => workerLines(task, transcript.messages), [task, transcript.messages]);
   const computerApps = useMemo(() => computerAppsOf(lines), [lines]);
@@ -4476,7 +4474,7 @@ export function AgentSubagentTab({
 
   return (
     <AgentTabFrame ref={tab} label={name}>
-      <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+      <CallPlaceProvider owner={macOwner} route={callRoute}>
         <AgentPicturesProvider value={pictures}>
           <ComputerAppsProvider value={computerApps}>
             <WholePartsProvider value={wholeParts}>

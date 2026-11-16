@@ -180,11 +180,6 @@ export function taskFilesProcedures(seams: TaskFilesProcedureSeams) {
             status: DESCRIPTION_ATTACHMENT_STATUS.REFUSED,
             body: { refused: DESCRIPTION_ATTACHMENT_REFUSAL.TOO_MANY },
           };
-        case DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY_VIDEOS:
-          return {
-            status: DESCRIPTION_ATTACHMENT_STATUS.REFUSED,
-            body: { refused: DESCRIPTION_ATTACHMENT_REFUSAL.TOO_MANY_VIDEOS },
-          };
         case DESCRIPTION_ATTACHMENT_KEEP.NO_TASK:
           return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       }

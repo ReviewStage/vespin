@@ -988,7 +988,9 @@ function listedTask(
  * and one canceled, so the list draws every status's mark. Note that those
  * last two are named with Markdown's marks, and with letters beyond Latin
  * and an emoji, so a search's bold title shows every mark as typed and
- * lands on the right letters.
+ * lands on the right letters. With the reference journey's high, its tasks
+ * stand at every priority, an urgent launch and a sub-task weighed by no one
+ * among them, so the list draws every priority's mark too.
  */
 const LISTED_TASKS: readonly TaskSummary[] = [
   listedTask(LISTED.COPY, "Invite email copy", {
@@ -998,6 +1000,7 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     updatedAt: LANDED - 3 * HOUR,
     parentTaskId: TASK.INVITES,
     blocks: [LISTED.LAUNCH],
+    priority: TASK_PRIORITY.NONE,
   }),
   listedTask(LISTED.ALERTS, "Usage alerts", {
     repository: "ada/ledger",
@@ -1014,6 +1017,7 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     updatedAt: LANDED - 7 * HOUR,
     blocked: true,
     blockedBy: [LISTED.COPY],
+    priority: TASK_PRIORITY.URGENT,
   }),
   // Note that the account follows a teammate's task, which the Tasks list draws under Following.
   listedTask(LISTED.BILLING, "Billing export", {

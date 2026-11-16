@@ -413,6 +413,10 @@ export const CHAPTERS_ACT_KIND = {
   CHAPTERS_FOLLOW: "chapters.follow",
   CHAPTERS_RETRY: "chapters.retry",
   CHAPTERS_GENERATE: "chapters.generate",
+  /** A pull request's chapters named by its repository and number rather than an agent, held followed as the agent's are (`LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS`), read again, and generated. */
+  CHAPTERS_REPOSITORY_FOLLOW: "chapters.repositoryFollow",
+  CHAPTERS_REPOSITORY_RETRY: "chapters.repositoryRetry",
+  CHAPTERS_REPOSITORY_GENERATE: "chapters.repositoryGenerate",
 } as const;
 
 /**
@@ -768,6 +772,23 @@ const PORT_FORWARD_ACT_KIND = {
 } as const;
 
 /**
+ * A Pull request tab's pull request named by its repository and number
+ * rather than an agent: its parts held while the tab shows them, which
+ * reach the panel on app state (`LIVE_READ.REPOSITORY_PULL_REQUEST` and its
+ * siblings), and read again as Try again asks; its changed files and an
+ * image its overview names, fetched by the host under the account, so the
+ * window holds no bearer and no address; and one change made on GitHub as
+ * the member.
+ */
+export const PULL_REQUEST_ACT_KIND = {
+  PULL_REQUESTS_PART_FOLLOW: "pullRequests.partFollow",
+  PULL_REQUESTS_PART_RETRY: "pullRequests.partRetry",
+  PULL_REQUESTS_CHANGES: "pullRequests.changes",
+  PULL_REQUESTS_GITHUB_IMAGE: "pullRequests.githubImage",
+  PULL_REQUESTS_ACTION: "pullRequests.action",
+} as const;
+
+/**
  * A coding agent's Terminal tab (`messages/terminal.ts`): its shells listed,
  * started, named, and ended, its sandbox resumed on the developer's click,
  * and a shell attached, detached as the panel closes the port. What a shell
@@ -987,6 +1008,7 @@ export const PORT_ACT_KIND = {
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
   ...PORT_FORWARD_ACT_KIND,
+  ...PULL_REQUEST_ACT_KIND,
   ...SETTINGS_ACT_KIND,
   ...TASKS_ACT_KIND,
   ...TERMINAL_ACT_KIND,
@@ -1022,8 +1044,9 @@ export type ActUse = (typeof ACT_USE)[keyof typeof ACT_USE];
  * a Terminal tab's or a live view's stream, whose bytes never reach app
  * state; `TASKS_REFRESH` is a WRITE, the task list's Try again, because the
  * host follows the list from the account gate opening and only a press asks
- * it again; `AGENTS_CHANGES`, `TASKS_TREE`, `TERMINAL_LIST`, and
- * `MAC_SHELL_ACTIONS` are FETCHes, though each answers what stands now, because each is asked again
+ * it again; `AGENTS_CHANGES`, `PULL_REQUESTS_CHANGES`, `TASKS_TREE`,
+ * `TERMINAL_LIST`, and `MAC_SHELL_ACTIONS` are FETCHes, though each answers
+ * what stands now, because each is asked again
  * whenever it is shown and nothing keeps it, as is `AGENTS_MESSAGES`, Copy
  * transcript's read on its press; `AGENTS_TRANSCRIPT_OLDER` is a WRITE,
  * because it lays an older page on the held transcript and answers only
@@ -1174,6 +1197,9 @@ export const PORT_ACT_USE = {
   CHAPTERS_FOLLOW: ACT_USE.READ,
   CHAPTERS_RETRY: ACT_USE.READ,
   CHAPTERS_GENERATE: ACT_USE.WRITE,
+  CHAPTERS_REPOSITORY_FOLLOW: ACT_USE.READ,
+  CHAPTERS_REPOSITORY_RETRY: ACT_USE.READ,
+  CHAPTERS_REPOSITORY_GENERATE: ACT_USE.WRITE,
 
   CLI_INSTALL: ACT_USE.WRITE,
 
@@ -1220,6 +1246,12 @@ export const PORT_ACT_USE = {
 
   PORT_FORWARD_SET: ACT_USE.WRITE,
   PORT_SHARE_SET: ACT_USE.WRITE,
+
+  PULL_REQUESTS_PART_FOLLOW: ACT_USE.READ,
+  PULL_REQUESTS_PART_RETRY: ACT_USE.READ,
+  PULL_REQUESTS_CHANGES: ACT_USE.FETCH,
+  PULL_REQUESTS_GITHUB_IMAGE: ACT_USE.FETCH,
+  PULL_REQUESTS_ACTION: ACT_USE.WRITE,
 
   SETTING_UPDATE: ACT_USE.WRITE,
   SETTINGS_RESET: ACT_USE.WRITE,

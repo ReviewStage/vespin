@@ -5,7 +5,6 @@ import type * as HttpClient from "effect/http/HttpClient";
 import {
   type AccountCallEffects,
   accountCall,
-  type CallAnswer,
   callAnswered,
   type HostedServiceOptions,
   jsonOf,
@@ -73,7 +72,6 @@ import {
   type DictationTranscribeParams,
   type GitHubTokenAnswerView,
   type GitHubTokenSaveParams,
-  githubImageTypeSchema,
   type HostDoneAnswerView,
   type HostsAnswerView,
   type LiveActivityEndedAnswerView,
@@ -166,16 +164,9 @@ import {
   HOSTED_DEADLINE,
   type HostedClient,
   type HostedDeadline,
-  HostedUnanswered,
   hostedClient,
-  hostedFailureFacts,
 } from "./hosted-link.js";
-import {
-  type ImageBody,
-  type ImageBodyUnread,
-  imageBodyOf,
-  imageBodyUnread,
-} from "./image-body.js";
+import { imageBodyOf } from "./image-body.js";
 import {
   INBOX_FILE_TYPE,
   type InboxAcknowledgeRequest,
@@ -229,6 +220,7 @@ import {
   pushDeviceUnregisterRequestSchema,
 } from "./push-device-wire.js";
 import type { RepositoryUnreached } from "./repository-reach-wire.js";
+import { imageAnswerOf, servedGitHubImage, servedRefusal, unansweredCall } from "./served-bytes.js";
 import { agentGitHubImagePath, agentPicturePath, inboxAttachmentPath } from "./service-paths.js";
 import {
   HOSTED_API_ERROR,
@@ -272,15 +264,6 @@ type Failed = {
   readonly localAgentRefusal?: LocalAgentRefusal;
   readonly refusedDevice?: RefusedDevice;
 };
-
-/** A served file's refusal: not found where the service said so; unanswered for anything else. */
-function servedRefusal(payload: UnparsedWireValue): Failed {
-  const refusal = Result.getOrUndefined(readServiceAnswer(hostedErrorSchema)(payload));
-
-  return refusal === HOSTED_API_ERROR.NOT_FOUND
-    ? { failure: AGENT_CALL_FAILURE.NOT_FOUND }
-    : UNANSWERED;
-}
 
 /** The refusals a Start's contract declares, which are the ones a refusal beside a task it made may be read as. */
 const START_DECLARED: ReadonlySet<string> = new Set(
@@ -331,31 +314,6 @@ function unansweredBare<Answer extends object>(answer: Answer): Answer {
 
   // SAFETY: a bare unanswered failure is a member of every answer a call here reads its refusals into.
   return bare as Answer;
-}
-
-/**
- * A call that never reached the service, unanswered with where it ended,
- * the network or its deadline among them, which the window reports and
- * never draws, so a read the network failed is not reported as the app's.
- */
-function unansweredCall(answer: Exclude<CallAnswer, { readonly response: Response }>): Failed {
-  const { fault, errorName } = answer;
-
-  const unanswered = new HostedUnanswered({
-    fault,
-    ...(errorName === undefined ? undefined : { errorName }),
-  });
-
-  return { ...UNANSWERED, cause: hostedFailureFacts(unanswered) };
-}
-
-/** An image's read as the window hears it: its bytes, a body the network cut as a call that never reached the service, or else unanswered. */
-function imageAnswerOf<Type extends string>(
-  read: ImageBody<Type> | ImageBodyUnread | undefined,
-): ImageBody<Type> | Failed {
-  if (read === undefined) return UNANSWERED;
-
-  return imageBodyUnread(read) ? unansweredCall(read) : read;
 }
 
 /** The idempotency key a write taken once under it is asked under, where one is given. */
@@ -1636,18 +1594,7 @@ export class HostedAgentClient {
     agentId: string,
     src: string,
   ): Effect.Effect<AgentGitHubImageView, never, HttpClient.HttpClient> {
-    return Effect.flatMap(
-      this.#call.send({ method: HTTP_METHOD.GET, path: agentGitHubImagePath(agentId, src) }),
-      (answer): Effect.Effect<AgentGitHubImageView> => {
-        if (!callAnswered(answer)) return Effect.succeed(unansweredCall(answer));
-
-        if (!answer.response.ok) {
-          return Effect.map(jsonOf(answer.response), (body) => servedRefusal(unparsedWire(body)));
-        }
-
-        return Effect.map(imageBodyOf(answer.response, githubImageTypeSchema), imageAnswerOf);
-      },
-    );
+    return servedGitHubImage(this.#call, agentGitHubImagePath(agentId, src));
   }
 
   /**

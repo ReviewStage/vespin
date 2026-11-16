@@ -114,6 +114,9 @@ const IOS = {
     "iOS floats no window over other apps; a call keeps on with the screen locked, and its way back stands over the tab bar",
   ),
   DIFF: byDesign("iOS v1 opens the diff on GitHub"),
+  REPOSITORY_PULL_REQUEST: notYet(
+    "iOS's pull request screen reads its pull request through its agent for now, not by its repository and number",
+  ),
   CHANGELOG: byDesign("iOS opens the changelog in its own Safari sheet (Settings › What's new)"),
   CONTACT_MAIL: byDesign("iOS writes the contact mail itself through openURL (Settings › Email)"),
   LINKS: byDesign("iOS opens a link through the system itself (openURL)"),
@@ -341,6 +344,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.CHAPTERS_FOLLOW]: panel(IOS.DIFF),
   [PORT_ACT_KIND.CHAPTERS_RETRY]: panel(IOS.DIFF),
   [PORT_ACT_KIND.CHAPTERS_GENERATE]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_RETRY]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_GENERATE]: panel(IOS.DIFF),
 
   [PORT_ACT_KIND.CLI_INSTALL]: desktopOnly(WEB.CLI, IOS.DESKTOP_ONLY),
 
@@ -387,6 +393,12 @@ export const CLIENT_PARITY = {
 
   [PORT_ACT_KIND.PORT_FORWARD_SET]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.PORT_SHARE_SET]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
+
+  [PORT_ACT_KIND.PULL_REQUESTS_PART_FOLLOW]: panel(IOS.REPOSITORY_PULL_REQUEST),
+  [PORT_ACT_KIND.PULL_REQUESTS_PART_RETRY]: panel(IOS.REPOSITORY_PULL_REQUEST),
+  [PORT_ACT_KIND.PULL_REQUESTS_CHANGES]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.PULL_REQUESTS_GITHUB_IMAGE]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.PULL_REQUESTS_ACTION]: panel(IOS.REPOSITORY_PULL_REQUEST),
 
   [PORT_ACT_KIND.SETTING_UPDATE]: EVERYWHERE,
   [PORT_ACT_KIND.SETTINGS_RESET]: panel(IOS.SETTINGS),
