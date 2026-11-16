@@ -98,6 +98,11 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
  * pushed onto another tab's stack, as a compact window opens a thread's task
  * on the Inbox's, stays a page there once the window turns regular, as an
  * agent's page does, because that tab's root has no list to select it in.
+ * Note that only the screen in front hands over, as `useSplitSelection`
+ * pushes only from it, because the hand-off pops every page above the root:
+ * an unfold under a page pushed over this one, or under a sheet, would close
+ * them and drop their drafts. A screen behind hands over once it next comes
+ * in front, and keeps drawing until it does.
  */
 export function useHandToSplit(tab: SplitTab, id: string | undefined): boolean {
   const router = useRouter();
@@ -105,9 +110,13 @@ export function useHandToSplit(tab: SplitTab, id: string | undefined): boolean {
   const own = useOwnTab();
   const handing = regular && (own === undefined || own === iosRouteTab(tab));
 
-  useEffect(() => {
-    if (handing && id !== undefined) router.dismissTo({ pathname: tab, params: { selected: id } });
-  }, [handing, router, tab, id]);
+  // Note that the hand-off runs as a focus effect rather than on a read of focus, as the roots hear theirs (#9516), so a screen behind never redraws on a page pushed over it or popped.
+  useFocusEffect(
+    useCallback(() => {
+      if (handing && id !== undefined)
+        router.dismissTo({ pathname: tab, params: { selected: id } });
+    }, [handing, router, tab, id]),
+  );
 
   return handing;
 }
