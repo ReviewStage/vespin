@@ -26,28 +26,39 @@ appId: dev.vespin.ios
     point: "50%, 90%"
 - waitForAnimationToEnd
 # The scopes' segmented control over the list, Open chosen: All lists the settled threads
-# too. A regular window's list column holds them as a menu picker instead,
-# named for the scope chosen, so the flow opens it first there.
+# too. A regular window holds them as a menu instead, so the flow opens it
+# first there: beside the landscape iPad's sidebar it's the bar's Filter
+# button, and a two-column window's list column names it for the scope chosen.
 - runFlow:
     when:
       visible: "Choose an item"
     commands:
-      - tapOn: "Open.*"
+      - tapOn: "(Filter|Open.*)"
 - tapOn: "All"
 - scrollUntilVisible:
     element: "Which day the digest goes out"
     direction: DOWN
 - waitForAnimationToEnd
 - takeScreenshot: inbox-all
+# Note that the scopes stand as the list's first row, so they scroll away with
+# the rows: a compact window's list is scrolled back to its very top, past the
+# first row, which would otherwise stop under the glass bar.
 - scrollUntilVisible:
     element: "Recorded the invite flow"
     direction: UP
+- runFlow:
+    when:
+      notVisible: "Choose an item"
+    commands:
+      - scrollUntilVisible:
+          element: "Open.*"
+          direction: UP
 - waitForAnimationToEnd
 - runFlow:
     when:
       visible: "Choose an item"
     commands:
-      - tapOn: "All"
+      - tapOn: "(Filter|All)"
 - tapOn: "Open.*"
 # The thread comes first, before the row's swipes and its long press: a row
 # a swipe opened takes the next tap to close its actions, and its files, the
@@ -222,7 +233,7 @@ appId: dev.vespin.ios
     when:
       visible: "Choose an item"
     commands:
-      - tapOn: "Open.*"
+      - tapOn: "(Filter|Open.*)"
 - tapOn: "Reminders"
 - assertVisible: "Recorded the invite flow"
 - assertVisible: "Reminder .*"
@@ -232,7 +243,7 @@ appId: dev.vespin.ios
     when:
       visible: "Choose an item"
     commands:
-      - tapOn: "Reminders"
+      - tapOn: "(Filter|Reminders)"
 - tapOn: "Open.*"
 - waitForAnimationToEnd
 # The search, a round glass button in the bar, narrows the list to
