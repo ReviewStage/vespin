@@ -34,6 +34,15 @@
     font-size: 0.9em;
   }
 
+  /* A span's line box stands inside its line's. Note that a span inherits
+     its line's leading, and a mono face's ascent runs taller than the
+     words' at the same leading, so a line set in pixels (a message box's)
+     would grow to hold it; at `1` it never does, and its tint, which paints
+     the face's own box and the padding, stays where it was. */
+  .ui-prose :not(pre) > code {
+    line-height: 1;
+  }
+
   .ui-prose pre code {
     padding: 0;
     border-radius: 0;

@@ -1634,7 +1634,8 @@ summary button[data-tool-agent-ref]:focus-visible {
    description, a card's branches, or a message box's words, is the prose's
    (`.ui-prose code`, `@repo/ui`'s prose.css) in its padding, tint, face and
    size, and the corner role nearest its own, so code reads the same wherever
-   words carry it. */
+   words carry it. Its line height is the prose's too (below it), so it
+   never sets its line taller. */
 .transcript-inline-code,
 .pull-request-description-text :not(pre) > code,
 .card-code,
@@ -1644,6 +1645,7 @@ summary button[data-tool-agent-ref]:focus-visible {
   background: var(--ui-prose-tint, var(--ui-color-fill-hover));
   font-family: var(--ui-font-mono);
   font-size: 0.9em;
+  line-height: 1;
 }
 
 /* On a phone a table too wide for the column would otherwise squeeze each
