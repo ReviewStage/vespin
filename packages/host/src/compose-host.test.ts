@@ -7,7 +7,7 @@ import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { GATEWAY_ERROR, GATEWAY_METHOD } from "@repo/gateway";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { HOST_CAPABILITY } from "@repo/settings";
-import { Effect, Layer, Path, Result } from "effect";
+import { Effect, Layer, Option, Path, Result } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import type { AccountSourceHost } from "./account-source.js";
 import { hostAssemblyLayer } from "./compose-host.js";
@@ -125,6 +125,7 @@ describe("the host's platform concerns", () => {
               registers: false,
               status: Effect.succeed(THIS_MAC_AGENT_STATUS.NOT_FOUND),
               registeredHere: Effect.succeed(false),
+              job: Effect.succeed(Option.none()),
               register: Effect.succeed(Result.fail("no agent in a fixture")),
               unregister: Effect.succeed(Result.fail("no agent in a fixture")),
               loaded: Effect.succeed(false),
