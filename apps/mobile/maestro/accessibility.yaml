@@ -123,8 +123,9 @@ env:
     id: "workspace-switcher"
 # Note that the switcher is waited for before its list is scrolled to the
 # account's row, which at this text size a short window, the iPhone Duo's,
-# stands below its foot, and that an iPad's switcher, a popover a swipe off
-# it closes, is not scrolled at all.
+# stands below its foot, and that an iPad's switcher, a popover down the
+# window's leading quarter that a swipe off it closes, is scrolled by a drag
+# inside it, its rows at this size running three pages.
 - extendedWaitUntil:
     visible: "Ada Lovelace, Personal workspace"
     timeout: 10000
@@ -135,6 +136,19 @@ env:
       - scrollUntilVisible:
           element: ".*, Settings"
           direction: DOWN
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - repeat:
+          times: 6
+          while:
+            notVisible: ".*, Settings"
+          commands:
+            - swipe:
+                start: "20%, 45%"
+                end: "20%, 18%"
+                duration: 1000
 - tapOn: ".*, Settings"
 - waitForAnimationToEnd:
     timeout: 5000

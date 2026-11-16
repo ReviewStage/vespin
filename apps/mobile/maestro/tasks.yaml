@@ -306,10 +306,20 @@ env:
     point: "50%, 90%"
 - waitForAnimationToEnd
 # Its ⋯ holds the panel's acts: Copy link, Rename, New sub-task, Open in
-# browser, and Permanently delete, red and last, which asks first.
-- tapOn: "More"
-- assertVisible: "Copy link"
+# browser, and Permanently delete, red and last, which asks first. Note that
+# a regular window's bar stands New sub-task as a glyph beside ⋯ instead
+# (`bar-act.yaml`), so there ⋯ is opened once it is found.
+- runFlow:
+    file: subflows/bar-act.yaml
+    env:
+      ACT: New sub-task
 - assertVisible: "New sub-task"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn: "More"
+- assertVisible: "Copy link"
 - assertVisible: "Permanently delete"
 - takeScreenshot: task-more-menu
 - tapOn: "Permanently delete"
