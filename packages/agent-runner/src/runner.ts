@@ -420,7 +420,7 @@ function queryOptions(
       [RUNNER_ENV.BEARER]: undefined,
       [CLAUDE_CODE_MCP_STARTUP_WAIT]: "0",
       // Note that the main conversation alone keeps its cache for an hour, and only where the config asks for it,
-      // whatever the runner's own environment holds, so the other half keeps the CLI's default.
+      // whatever the runner's own environment holds, so any other launch keeps the CLI's default.
       [PROMPT_CACHE_TTL.MAIN]: config.promptCacheHour === true ? "1h" : undefined,
       [PROMPT_CACHE_TTL.ALL]: undefined,
       ...(config.promptCacheHour === true
