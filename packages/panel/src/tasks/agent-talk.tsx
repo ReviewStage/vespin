@@ -14,13 +14,11 @@
  * agent's as ever, so a typed line goes to the agent as any line does. A
  * narrow box folds Talk into its ⋯ as it folds Dictate; the call's
  * presses stay (`CallComposerControls`). Nothing of
- * it stands while the Voice experiment is off, nor in any box but an
- * agent's own tab's.
+ * it stands in any box but an agent's own tab's.
  */
 
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TALK_LABEL } from "@repo/features/voice-call-words";
-import { EXPERIMENT } from "@repo/settings";
 import {
   CallComposerControls,
   CONFIRM_LOSS,
@@ -30,11 +28,9 @@ import {
   WaveformIcon,
 } from "@repo/ui";
 import { neverBusyAct } from "@repo/ui/confirm-state";
-import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { confirmFailure } from "../failure-report.js";
 import { useOpenAiKeyMissing } from "../openai-key.js";
-import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { useVoiceCall } from "../voice-call.js";
 import { OVERFLOW_PRESS, type OverflowOffer } from "./message-box.js";
 import type { DictationControl } from "./use-dictation.js";
@@ -62,14 +58,13 @@ export interface AgentTalk {
 
 /**
  * The box's calls into the agent `into` names, as above; none while the
- * Voice experiment is off or the box calls no agent. A press ends the box's
+ * box calls no agent. A press ends the box's
  * dictation first, keeping its words where any were recorded.
  */
 export function useAgentTalk(
   into: TalkInto | undefined,
   dictation: DictationControl,
 ): AgentTalk | undefined {
-  const on = useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.VOICE) }).data;
   const voice = useVoiceCall();
   const keyMissing = useOpenAiKeyMissing();
   const { call } = voice;
@@ -88,7 +83,7 @@ export function useAgentTalk(
     confirmFailure(FAILURE_SURFACE.VOICE_CALL),
   );
 
-  if (on !== true || into === undefined) return undefined;
+  if (into === undefined) return undefined;
 
   // Note that a key missing is the call's own to answer, which opens Settings › Agents, so it never asks to end another call first.
   const talk = () => {

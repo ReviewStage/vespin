@@ -61,7 +61,7 @@ export const SETTING_SECTION = {
   GENERAL: "general",
   /** Whether this copy of the app counts how its features are used, a group of its own on Account, under who is signed in. */
   PRIVACY: "privacy",
-  /** The voice a call speaks with, a card of its own on Agents under the harnesses' cards, drawn while the Voice experiment is on. */
+  /** The voice a call speaks with, a card of its own on Agents under the harnesses' cards. */
   VOICE: "voice",
   /** How an agent's message box sends while its turn runs, and who authors its commits, a group of its own on Preferences, under General. */
   AGENTS: "agents",

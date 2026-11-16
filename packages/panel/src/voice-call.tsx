@@ -25,8 +25,7 @@
  * window's own, and the speaker's mute silencing that element on this device
  * alone. Whatever fails says why in a toast and lets the microphone go. A
  * call runs on the account's own OpenAI key, so with none saved a start
- * opens Settings › Agents instead. Nothing here starts while the Voice
- * experiment is off, and turning it off ends a call under way.
+ * opens Settings › Agents instead.
  *
  * The call's levels, how loud the caller and the voice each are, which the
  * mutes ring with (`CallMute`), are measured here: an analyzer on the
@@ -50,10 +49,9 @@ import {
 } from "@repo/features/voice-call-session";
 import { DEFAULT_LIVE_VOICE } from "@repo/features/voices";
 import { ACT_KIND } from "@repo/host/acts";
-import { EXPERIMENT } from "@repo/settings";
 import { type CallLevel, type CallLevels, STATUS_TONE } from "@repo/ui";
 import { OPENAI_KEY_MISSING_NOTE } from "@repo/ui/microphone-access";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { sendAct } from "./act.js";
 import { useOpenAiKeyMissing, useOpenApiKeys } from "./openai-key.js";
@@ -64,7 +62,7 @@ import {
   useOpenMicrophone,
 } from "./tasks/use-open-microphone.js";
 import { showToast } from "./toast.js";
-import { appStateQuery, selectAppSettingsView, selectExperiment } from "./use-app-state.js";
+import { appStateQuery, selectAppSettingsView } from "./use-app-state.js";
 
 /** The window's call and what a surface may do with it. */
 export interface VoiceCall {
@@ -287,7 +285,6 @@ function levelsOf(standing: { readonly current: Meters | undefined }): CallLevel
  * peer's handlers outlive the render that made them.
  */
 export function VoiceCallProvider({ children }: { children: ReactNode }): React.JSX.Element {
-  const on = useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.VOICE) }).data;
   const queryClient = useQueryClient();
   const keyMissing = useOpenAiKeyMissing();
   const openApiKeys = useOpenApiKeys();
@@ -344,18 +341,11 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
   );
 
   const start = (into: { readonly agentId: string; readonly taskId: string }) => {
-    if (on !== true) return;
-
     if (keyMissing) return openApiKeys();
     // Note that the meters' context is made here, in the press, since Safari runs one only from a gesture; the session's connect takes it at once.
     pressed.current = pressedContext();
     session.start(into);
   };
-
-  // Note that the Voice experiment turned off ends a call under way, because no surface draws its End call once the feature stands nowhere.
-  useEffect(() => {
-    if (on === false) session.hangUp();
-  }, [on, session]);
 
   // The window going away, or the provider with it, closes the session and drops the call.
   useEffect(() => {

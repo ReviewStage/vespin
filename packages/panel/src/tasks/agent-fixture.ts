@@ -111,7 +111,6 @@ import {
 } from "@repo/host/app-state";
 import type { PortActKind, PortActPayload, PortActResult } from "@repo/host/contract";
 import { FIXTURE_IDS, FIXTURE_PAGE } from "@repo/host/fixture-stage";
-import { EXPERIMENT } from "@repo/settings";
 import { agentTab, changesTab, fileTab, pageTab, terminalTab } from "@repo/ui/tab-strip-model";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { longRunHold, longRunPicture, longRunTranscript } from "./agent-long-run-fixture.js";
@@ -1051,7 +1050,7 @@ type AgentStage =
       readonly transcript?: TranscriptLength;
       /** Whether the agent holds a call on the member's answer (`HELD_CALL`). */
       readonly held?: true;
-      /** The calls into the agent after its turn, the Voice experiment on; none where it was never called. */
+      /** The calls into the agent after its turn; none where it was never called. */
       readonly voice?: VoiceStage;
     }
   | { readonly file: string }
@@ -1646,29 +1645,6 @@ function inboxAppState(state: AppStateSnapshot, workspaceId: string): AppStateSn
   };
 }
 
-/** Main's settings with the Voice experiment on, one object for each of main's. */
-const VOICE_SETTINGS = new WeakMap<
-  NonNullable<AppStateSnapshot["settings"]>,
-  NonNullable<AppStateSnapshot["settings"]>
->();
-
-/** Lays the Voice experiment on over main's settings, which a voice profile draws a call's lines behind. */
-function voiceSettings(
-  settings: NonNullable<AppStateSnapshot["settings"]>,
-): NonNullable<AppStateSnapshot["settings"]> {
-  let laid = VOICE_SETTINGS.get(settings);
-
-  if (laid === undefined) {
-    laid = {
-      ...settings,
-      experiments: { ...settings.experiments, [EXPERIMENT.VOICE]: true },
-    };
-    VOICE_SETTINGS.set(settings, laid);
-  }
-
-  return laid;
-}
-
 /**
  * Main's document as an agent profile draws it: the open task's pages held
  * with the page its agent showed, as the window's read of them holds them
@@ -1706,9 +1682,6 @@ export function agentAppState(
 
   return {
     ...state,
-    ...(voiceStage(stage) === undefined || state.settings === undefined
-      ? undefined
-      : { settings: voiceSettings(state.settings) }),
     [LIVE_READ.PAGES]: staged,
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT], stagedTranscript(stage)),
     [LIVE_READ.WORKSPACE_TOOLS]: stagedRunOnMac(state[LIVE_READ.WORKSPACE_TOOLS]),
