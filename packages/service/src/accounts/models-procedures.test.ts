@@ -13,9 +13,11 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
+import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { saveProviderKey } from "@repo/database/models/provider-key-store";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
+import { CLIENT_HEADER, CLIENT_PLATFORM, clientHeaders } from "@repo/features/client-identity";
 import { type CatalogModel, MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
   FAST_ACCESS,
@@ -23,6 +25,7 @@ import {
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
 } from "@repo/features/provider-key-wire";
+import { EXPERIMENT } from "@repo/settings";
 import type { WireBoundaryInput } from "@repo/wire";
 import { eq } from "drizzle-orm";
 import { type Context, Effect, Layer, Option, Redacted } from "effect";
@@ -164,11 +167,22 @@ const answer = (catalog: Layer.Layer<ModelCatalog>, request: Request) =>
 
 function request(
   path: string,
-  init: { method?: string; signedIn?: boolean; userId?: string } = {},
+  init: {
+    method?: string;
+    signedIn?: boolean;
+    userId?: string;
+    /** The headers the client names itself by; none, as a build from before them sends. */
+    client?: Readonly<Record<string, string>> | undefined;
+  } = {},
 ): Request {
   return new Request(new URL(path, ORIGIN), {
     method: init.method ?? "GET",
-    headers: init.signedIn === false ? {} : { authorization: `Bearer ${init.userId ?? USER_ID}` },
+    headers: {
+      ...init.client,
+      ...(init.signedIn === false
+        ? undefined
+        : { authorization: `Bearer ${init.userId ?? USER_ID}` }),
+    },
   });
 }
 
@@ -286,6 +300,49 @@ it.layer(getTestDB())("the models route", (it) => {
         assert.deepEqual(yield* offeredTo(catalog, "user-own-enabled"), offered);
         assert.deepEqual(yield* offeredTo(catalog, "user-own-unasked"), offered);
         assert.deepEqual(yield* offeredTo(catalog, "user-without-key"), offered);
+      }),
+  );
+
+  it.effect(
+    "Cursor's models follow the catalog's, each marked unconnected while no Cursor key pays, for an account with Cursor agents on and a client built to read Cursor, and never for an older client, one that names no version, or an account with it off",
+    () =>
+      Effect.gen(function* () {
+        const catalog = modelCatalogOf(CATALOG);
+        const desktop = clientHeaders({ platform: CLIENT_PLATFORM.DESKTOP, version: "1.0.0" });
+        // A build from before Cursor, which would refuse the whole answer over one Cursor entry.
+        const older = { ...desktop, [CLIENT_HEADER.API_VERSION]: "3" };
+
+        const cursorOf = (userId: string, client: Readonly<Record<string, string>> | undefined) =>
+          Effect.map(answer(catalog, request(MODELS, { userId, client })), (answered) => {
+            // SAFETY: the group answers the wire's models answer; the test reads the two fields it compares.
+            const { models } = answered.body as {
+              models: readonly { id: string; provider: string; credentialMissing?: boolean }[];
+            };
+
+            return models
+              .filter((model) => model.provider === MODEL_PROVIDER.CURSOR)
+              .map((model) => ({ id: model.id, unconnected: model.credentialMissing === true }));
+          });
+
+        yield* Effect.flatMap(Database, (db) =>
+          db
+            .insert(user)
+            .values({ id: "user-cursor", name: "Test User", email: "user-cursor@app.test" }),
+        );
+        yield* writeAccountPreferences("user-cursor", {
+          experiments: { [EXPERIMENT.CURSOR]: true },
+        });
+
+        assert.deepEqual(yield* cursorOf("user-cursor", desktop), [
+          { id: "cursor/composer-2.5", unconnected: true },
+          { id: "cursor/composer-2.5-fast", unconnected: true },
+          { id: "cursor/auto", unconnected: true },
+          { id: "cursor/grok-4.7", unconnected: true },
+          { id: "cursor/grok-4.7-fast", unconnected: true },
+        ]);
+        assert.deepEqual(yield* cursorOf("user-cursor", older), []);
+        assert.deepEqual(yield* cursorOf("user-cursor", undefined), []);
+        assert.deepEqual(yield* cursorOf("user-without-cursor", desktop), []);
       }),
   );
 });
