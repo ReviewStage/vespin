@@ -1,11 +1,12 @@
-# failure-notice.yaml -- a write the service refuses: the row put back, the failure notice sliding down with the refusal's words and Try again, Try again refused once more, and the notice swiped away.
+# failure-notice.yaml -- a write the service refuses: the row put back, the failure notice sliding down with the refusal's words and Try again, Try again refused once more, the notice swiped away, and a refusal inside Add a follower's sheet and inside Settings standing over that sheet.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
 ---
 # Launched on the host's Inbox fixture with `-refuseWrites true`, so the
-# fixture refuses a task's status and its pin as the service would
+# fixture refuses a task's status, its pin, its start, a follower added and a
+# memory deleted as the service would
 # (`src/host/fixture-host.ts`), and no server is reached.
 - launchApp:
     clearState: true
@@ -16,10 +17,12 @@ appId: dev.vespin.ios
 - assertVisible: "Weekly digest email"
 - waitForAnimationToEnd
 # Unpin from the row's long press menu is refused: the row stays pinned and
-# the notice says why, with Try again.
+# the notice says why, with Try again. Note that a notice offering Try again
+# says it as its button, not in its words (`failure-notice-model.ts`), so
+# each refusal is matched by its first sentence.
 - longPressOn: "Weekly digest email"
 - tapOn: "Unpin"
-- assertVisible: "The task could not be unpinned. Try again."
+- assertVisible: "The task could not be unpinned\\..*"
 - assertVisible:
     id: "failure-notice-retry"
 - takeScreenshot: failure-notice
@@ -27,7 +30,7 @@ appId: dev.vespin.ios
 # notice comes back in the same words.
 - tapOn:
     id: "failure-notice-retry"
-- assertVisible: "The task could not be unpinned. Try again."
+- assertVisible: "The task could not be unpinned\\..*"
 - assertVisible: "Pinned"
 # A swipe up puts the notice away before its time is up.
 - swipe:
@@ -35,7 +38,7 @@ appId: dev.vespin.ios
       id: "failure-notice"
     direction: UP
 - waitForAnimationToEnd
-- assertNotVisible: "The task could not be unpinned. Try again."
+- assertNotVisible: "The task could not be unpinned\\..*"
 # Mark done from the same menu asks first in the system's alert, since the
 # task's agent is at work and only the person can decide to stop it; once
 # confirmed, it is refused too: the task stays in the list and the notice
@@ -43,6 +46,58 @@ appId: dev.vespin.ios
 - longPressOn: "Weekly digest email"
 - tapOn: "Mark done"
 - tapOn: "Stop agent"
-- assertVisible: "The task could not be marked done. Try again."
+- assertVisible: "The task could not be marked done\\..*"
 - assertVisible: "Weekly digest email"
 - takeScreenshot: failure-notice-mark-done
+# A refusal inside a sheet draws in that sheet, over its backdrop, not
+# behind it: Add a follower stands over Billing export's Followers sheet,
+# and the fixture leaves the add unanswered, so the sheet stays and the
+# notice stands at its top edge.
+- tapOn: "Tasks"
+- tapOn: "Billing export"
+- tapOn: "Following"
+- tapOn: "Add a follower"
+- tapOn: "Alan Turing.*"
+- assertVisible: "Following could not be changed\\..*"
+- waitForAnimationToEnd
+- takeScreenshot: failure-notice-add-follower
+# Settings is a sheet with a stack of its own: a memory's Delete there is
+# refused, and the notice says so over Settings rather than under it.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      refuseWrites: "true"
+- assertVisible: "Recorded the invite flow"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Memory"
+- tapOn: "Memory"
+- waitForAnimationToEnd
+- longPressOn: "The staging database is reset every Sunday night."
+- tapOn: "Delete"
+- assertVisible: "Delete this memory?"
+- tapOn: "Delete memory"
+- assertVisible: "The memory could not be deleted\\..*"
+- waitForAnimationToEnd
+- takeScreenshot: failure-notice-settings
+# New task closes the moment Start is pressed, as the panel's does; its start
+# refused, the notice says so with Try again, which sends the same start.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      refuseWrites: "true"
+- assertVisible: "Recorded the invite flow"
+- tapOn: "New task"
+- assertVisible: "Describe the task"
+- inputText: "Write the invite reminder email."
+- hideKeyboard
+- tapOn: "Start"
+- assertNotVisible: "Describe the task"
+- assertVisible: "Try again"
+- waitForAnimationToEnd
+- takeScreenshot: failure-notice-start-refused

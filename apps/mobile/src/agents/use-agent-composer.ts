@@ -13,7 +13,8 @@
  * the phone draws the one record every window draws. One refused hands its
  * words and pictures back to the field, the refusal said over it in the
  * panel's words, its line let go (`AGENTS_UNSEND`), and the phone buzzes as
- * a refusal does.
+ * a refusal does. A paste long enough to bury the message is attached as a
+ * text file beside the pictures (`useAttachedPictures`' `pasteText`).
  * Stop is offered while the agent may still write (`agentStillWriting`),
  * starting or awaiting its turn included, as the panel offers it. A `/`
  * offers the skills of the agent's task's repository (`use-skill-offer.ts`).
@@ -91,7 +92,7 @@ export interface AgentComposer {
   readonly placeholder: string;
   readonly words: string;
   readonly onWords: (words: string) => void;
-  /** Whether Send stands lit with no words typed: a picture is attached. */
+  /** Whether Send stands lit with no words typed: a picture or a pasted file is attached. */
   readonly sendable: boolean;
   readonly send: () => void;
   /** Whether Send queues the message behind the turn rather than sending it to the agent now. */
@@ -100,6 +101,8 @@ export interface AgentComposer {
   readonly attach: () => void;
   /** Attaches pictures dropped on the composer, on an iPad, by the files the drop kept. */
   readonly dropPictures: (uris: readonly string[], unreadable: number) => void;
+  /** Takes a long paste as a text file beside the pictures, answering whether it did. */
+  readonly pasteText: (words: string) => boolean;
   readonly detach: (id: string) => void;
   /** Stops the turn under way; none while the agent rests. */
   readonly stop: (() => void) | undefined;
@@ -376,6 +379,7 @@ export function useAgentComposer(
     attached: pictures.attached,
     attach: pictures.attach,
     dropPictures: pictures.drop,
+    pasteText: pictures.pasteText,
     detach: pictures.detach,
     stop: writing ? stop : undefined,
     stopping,

@@ -215,15 +215,31 @@ const RELATION_CHIP_MARKS =
  * by the most it says. The trailing run needs none: it stands against the
  * time on every row, however wide it is.
  */
+const KEY_FIT: CSSProperties = {
+  fontFamily: "var(--ui-font-mono)",
+  minWidth: "calc(var(--ui-task-row-key-chars, 0) * 1ch)",
+};
+
+const RELATION_FIT: CSSProperties = {
+  minWidth: `calc(var(--ui-task-row-relation-chars, 0) * 1ch + ${RELATION_CHIP_MARKS})`,
+};
+
 const CELL_FIT: Partial<Record<TaskRowCell, CSSProperties>> = {
-  [TASK_ROW_CELL.KEY]: {
-    fontFamily: "var(--ui-font-mono)",
-    minWidth: "calc(var(--ui-task-row-key-chars, 0) * 1ch)",
-  },
-  [TASK_ROW_CELL.RELATION]: {
-    minWidth: `calc(var(--ui-task-row-relation-chars, 0) * 1ch + ${RELATION_CHIP_MARKS})`,
-  },
+  [TASK_ROW_CELL.KEY]: KEY_FIT,
+  [TASK_ROW_CELL.RELATION]: RELATION_FIT,
   [TASK_ROW_CELL.UPDATED]: { minWidth: `${UPDATED_CHARS}ch` },
+};
+
+/**
+ * How wide the columns stand at least on a row in its list's grid, where
+ * lists beside each other line their columns up (`TaskRows`'s `fit`): the
+ * key and the relation, as `CELL_FIT` says, and the time by the most it
+ * says, each none where no list sets its width.
+ */
+const LISTED_FIT: Partial<Record<TaskRowCell, CSSProperties>> = {
+  [TASK_ROW_CELL.KEY]: KEY_FIT,
+  [TASK_ROW_CELL.RELATION]: RELATION_FIT,
+  [TASK_ROW_CELL.UPDATED]: { minWidth: "calc(var(--ui-task-row-updated-chars, 0) * 1ch)" },
 };
 
 /** A cell over the row's press where it holds anything, and the press's own where it stands empty. */
@@ -290,11 +306,13 @@ const MORE = "ui-task-row-more z-1 flex items-center";
 /**
  * A row: a subgrid of the list's columns a little taller than a control,
  * filled under the pointer and while its menu is open, a draft's as a task's,
+ * and in the current fill, as a `ListRow`'s, where it is the one its page
+ * stands open on,
  * keeping a gutter at its start for its box (`SELECT_BOX_PLACE.GUTTER`), as
  * Linear's list does, so every row's name lines up whether or not it shows one.
  */
 const ROW_BOX =
-  "ui-task-row relative col-span-full grid min-h-tasks-list-row items-center rounded-control py-ui-2 text-foreground [transition:transform_var(--ui-duration-fast)_var(--ui-spring-fast),background-color_var(--ui-duration-hover)_var(--ui-motion-exit),opacity_var(--ui-duration-quick)_var(--ui-motion-exit)] data-[menu-open=true]:bg-muted data-[menu-open=true]:shadow-menu-open-edge hover:bg-muted";
+  "ui-task-row relative col-span-full grid min-h-tasks-list-row items-center rounded-control py-ui-2 text-foreground [transition:transform_var(--ui-duration-fast)_var(--ui-spring-fast),background-color_var(--ui-duration-hover)_var(--ui-motion-exit),opacity_var(--ui-duration-quick)_var(--ui-motion-exit)] data-[menu-open=true]:bg-muted data-[menu-open=true]:shadow-menu-open-edge hover:not-data-[current=true]:bg-muted data-[current=true]:bg-fill-current";
 
 /** A row standing in its list's grid: a subgrid of the list's columns. */
 const ROW_FRAME = `${ROW_BOX} grid-cols-subgrid`;
@@ -429,7 +447,7 @@ function RowCell({
   children: ReactNode;
 }): React.JSX.Element {
   const leading = column !== TRAIL && leads(column);
-  const fit = placed && column !== TRAIL ? CELL_FIT[column] : undefined;
+  const fit = column === TRAIL ? undefined : (placed ? CELL_FIT : LISTED_FIT)[column];
 
   return (
     <span
@@ -577,11 +595,15 @@ function mostChars(words: Iterable<string | undefined>): number {
  * differ stands as wide as the widest the list's tasks say there
  * (`CELL_FIT`), read from every task it lists rather than from the rows
  * drawn, so the names line up down the list and stand still as it scrolls.
+ * Lists standing one under another in their grids, a page's sections, take
+ * one fit read from all of their rows (`TaskRows`'s `fit`), so their keys,
+ * names, and times line up from list to list as well.
  */
 export function taskRowFit(rows: readonly TaskRowWords[]): CSSProperties {
   return cssCustomProperties({
     "--ui-task-row-key-chars": mostChars(rows.map((row) => row.key)),
     "--ui-task-row-relation-chars": mostChars(rows.map((row) => row.relation)),
+    "--ui-task-row-updated-chars": UPDATED_CHARS,
   });
 }
 
@@ -640,6 +662,7 @@ export function TaskRow({
   nest,
   fold,
   settled = false,
+  current = false,
   unread = false,
   hint,
   place,
@@ -684,6 +707,8 @@ export function TaskRow({
   fold?: ListRowFold | undefined;
   /** Whether it stands settled beside the rows still open, its name in the muted ink: a task done or canceled. */
   settled?: boolean | undefined;
+  /** Whether it is the one its page stands open on, as a `ListRow`'s current item, in the current fill and said current to a reader. */
+  current?: boolean | undefined;
   /** Whether its list counts it unread, its name standing in the heavier weight until it is read. */
   unread?: boolean | undefined;
   /** The owner's hint hung from the row's press and the words it raises, as a `ListRow`'s: its card, beside the row. */
@@ -780,6 +805,8 @@ export function TaskRow({
       {...nestedItem(depth, nest)}
       data-settled={settled ? "true" : undefined}
       data-unread={unread ? "true" : undefined}
+      data-current={current ? "true" : undefined}
+      aria-current={current ? "true" : undefined}
     >
       <NameCell settled={settled} depth={depth}>
         {fold === undefined ? (
@@ -931,6 +958,7 @@ export function TaskRows({
   selection,
   joinsWalk = false,
   moves = false,
+  fit,
   children,
 }: {
   /** The id a `SelectionBar` over it names; one is made where none is given. */
@@ -948,6 +976,8 @@ export function TaskRows({
   joinsWalk?: boolean | undefined;
   /** Whether its rows move as they arrive, leave, and change places, under a `ListMotion`. */
   moves?: boolean | undefined;
+  /** How wide its columns before the name stand (`taskRowFit`), where lists beside it must line their names up with its; each as wide as its own widest, unless said. */
+  fit?: CSSProperties | undefined;
   /** Its `TaskRow`s. */
   children: ReactNode;
 }): React.JSX.Element {
@@ -959,9 +989,12 @@ export function TaskRows({
       {...(joinsWalk ? {} : roving)}
       className={ROWS}
       aria-label={label}
-      style={cssCustomProperties({
-        "--tasks-list-columns": taskRowColumns(cells, more && edges !== TASK_ROW_EDGES.BARE),
-      })}
+      style={{
+        ...fit,
+        ...cssCustomProperties({
+          "--tasks-list-columns": taskRowColumns(cells, more && edges !== TASK_ROW_EDGES.BARE),
+        }),
+      }}
       {...(moves ? motionRows() : {})}
     >
       {children}
