@@ -44,6 +44,7 @@ import {
   selectedWords,
 } from "@repo/features/words";
 import { INBOX_FEED, type InboxFeed, selectWorkspaces } from "@repo/host/app-state-reads";
+import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   BAR_TITLE,
   type BarAction,
@@ -307,6 +308,12 @@ function InboxRowView({
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspaceStep = linkWorkspaceStep(holder.task.workspaceId, workspaces);
+  const keeping = useKeeping();
+
+  const link = linkOf(
+    { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
+    workspaceStep,
+  );
 
   // Note that only the thread's tail is read for its preview, since the preview draws its newest few messages alone.
   const messages = useMemo(
@@ -364,10 +371,16 @@ function InboxRowView({
           onPress: () => onMark(item.id, !unread),
         },
       ]}
-      link={linkOf(
-        { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
-        workspaceStep,
-      )}
+      link={link}
+      // Note that the long press offers Copy link after the swipes' acts, as the panel's row menu and the thread's ⋯ offer it.
+      menuActions={[
+        {
+          label: APP_SHORTCUTS[APP_COMMAND.COPY_LINK].label,
+          symbol: GLYPH.LINK,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => keeping.copyWords(link),
+        },
+      ]}
       preview={
         <ThreadPreview
           title={title}
