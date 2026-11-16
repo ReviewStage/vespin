@@ -1,9 +1,5 @@
 import { localAgentRefusalWords } from "@repo/features/agent-refusal-words";
-import {
-  AGENT_CALL_FAILURE,
-  type AgentChangesAnswerView,
-  type AgentTurnChangesAnswerView,
-} from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE, type AgentTurnChangesAnswerView } from "@repo/features/agent-view";
 import {
   type AgentChangedFile,
   CHANGED_FILE_STATUS,
@@ -13,6 +9,10 @@ import {
 } from "@repo/features/agent-wire";
 import { imageTypeOfPath } from "@repo/features/github-image";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
+import {
+  REPOSITORY_PULL_REQUEST_CALL_FAILURE,
+  type RepositoryChangesAnswerView,
+} from "@repo/features/pull-request-view";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TASK_FILE_REFUSAL, type TaskFileRefusal } from "@repo/features/task-wire";
 import { REFRESH_FAILED_WORDS } from "@repo/features/words";
@@ -75,9 +75,9 @@ import { failureShown, unreadShown } from "../failure-report.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { useRegained } from "../use-regained.js";
 import {
-  agentChangesQueryOptions,
   agentTurnChangesQueryOptions,
   ChangesFailed,
+  pullRequestChangesQueryOptions,
 } from "./agent-reads.js";
 import {
   type ChangesList,
@@ -148,8 +148,8 @@ import { ImageDiff, type ImageSides, imageDrawable } from "./image-diff.js";
 import { LineComment, type PendingReview } from "./line-comment.js";
 import { MinimizedThreads } from "./minimized-threads.js";
 import { useOpenFileTab } from "./open-file-tab.js";
-import { usePullRequestNumber } from "./pull-request-number.js";
-import type { PullRequestSource } from "./pull-request-source.js";
+import type { GitHubPictureScope } from "./pull-request-pictures.js";
+import { type PullRequestSource, usePullRequestSource } from "./pull-request-source.js";
 import { PullRequestWriteNote, type ReadAgain } from "./pull-request-writes.js";
 import { refusedAnswer, taskFileQueryOptions } from "./repository-reads.js";
 import { landable, type ThreadLanding, ThreadLandingProvider } from "./thread-reveal.js";
@@ -157,7 +157,7 @@ import { useViewSettingsSheet, VIEW_SETTINGS_SCOPE, ViewSettingsButton } from ".
 import { useViewedFiles, type ViewedFiles } from "./viewed-files.js";
 
 /**
- * agent-changes-tab.tsx -- the Files changed view of an agent's Pull request tab (`agent-pull-request-tab.tsx`): its pull request's files drawn as a File tab draws a file, the chosen file's unified diff under the same bar and beside the same tree.
+ * agent-changes-tab.tsx -- the Files changed view of a Pull request tab (`agent-pull-request-tab.tsx`): its pull request's files drawn as a File tab draws a file, the chosen file's unified diff under the same bar and beside the same tree.
  *
  * The files are read from GitHub afresh by the service on each ask, so
  * nothing here reads on a clock. The Pull request tab holds the reads, the
@@ -223,7 +223,9 @@ import { useViewedFiles, type ViewedFiles } from "./viewed-files.js";
  */
 
 /** A read that threw rather than answered, drawn as any other failed read. */
-const UNANSWERED: AgentChangesAnswerView = { failure: AGENT_CALL_FAILURE.UNANSWERED };
+const UNANSWERED: RepositoryChangesAnswerView = {
+  failure: REPOSITORY_PULL_REQUEST_CALL_FAILURE.UNANSWERED,
+};
 
 /** What the bar's ⋯ says. */
 const CHANGES_MENU_WORDS = {
@@ -1049,6 +1051,9 @@ export interface LineComments {
   readonly onWritten: ReadAgain;
 }
 
+/** No pull request, which a line comment drawn outside a Pull request tab, as none is, keeps its words under. */
+const NO_PULL_REQUEST = { repository: "", number: 0 } as const;
+
 /**
  * A line comment whose words the drafts store keeps as they are typed, by
  * where the comment stands (`lineCommentPlace`), so they outlast the tab
@@ -1061,8 +1066,8 @@ function DraftedLineComment({
 }: Omit<ComponentProps<typeof LineComment>, "body" | "onBody"> & {
   draft: CommentDraft;
 }): React.JSX.Element {
-  const number = usePullRequestNumber();
-  const { draft: kept, update } = useDraft(lineCommentPlace(comment.agentId, number, draft));
+  const pullRequest = usePullRequestSource()?.pullRequest ?? NO_PULL_REQUEST;
+  const { draft: kept, update } = useDraft(lineCommentPlace(pullRequest, draft));
 
   return (
     <LineComment
@@ -1083,7 +1088,6 @@ function DraftedLineComment({
  * holds is not drawn.
  */
 function useListCommenting(
-  agentId: string,
   files: readonly AgentChangedFile[],
   headSha: string | undefined,
   comments: LineComments | undefined,
@@ -1144,7 +1148,6 @@ function useListCommenting(
         content: (
           <DraftedLineComment
             draft={draft}
-            agentId={agentId}
             path={path}
             lines={lines}
             headSha={headSha}
@@ -1414,7 +1417,7 @@ function SourceToggle({
  * page names no repository.
  */
 function imagesOf(
-  agentId: string,
+  pictures: GitHubPictureScope,
   pullRequest: { readonly url: string; readonly headSha?: string; readonly baseSha?: string },
   read: number,
 ): ImageSides | undefined {
@@ -1423,7 +1426,7 @@ function imagesOf(
   if (repository === undefined) return undefined;
 
   return {
-    agentId,
+    pictures,
     repository,
     headSha: pullRequest.headSha,
     baseSha: pullRequest.baseSha,
@@ -1764,7 +1767,10 @@ function FilesList({
 }
 
 /** The pull request a changes answer names, with its files; none where it names none. */
-type ChangesPullRequest = Extract<AgentChangesAnswerView, { pullRequest: unknown }>["pullRequest"];
+type ChangesPullRequest = Extract<
+  RepositoryChangesAnswerView,
+  { pullRequest: unknown }
+>["pullRequest"];
 
 /**
  * The Files changed view's reads, held by the Pull request tab rather than
@@ -1775,7 +1781,7 @@ type ChangesPullRequest = Extract<AgentChangesAnswerView, { pullRequest: unknown
  */
 export interface ChangesReads {
   /** The changes as last answered, a good answer standing over any failure after it; a failure only where none has landed. */
-  readonly answer: AgentChangesAnswerView | undefined;
+  readonly answer: RepositoryChangesAnswerView | undefined;
   /** Whether the latest read failed after a good one landed, which leaves the good one drawn. */
   readonly refreshFailed: boolean;
   readonly out: boolean;
@@ -1788,35 +1794,30 @@ export interface ChangesReads {
 }
 
 /**
- * The agent's changes and the member's viewed marks on them, read as the
- * view first comes on screen (`shown`), again as the agent ends, on Refresh,
- * and as the app reaches the service again after one failed or went out;
- * the marks with each answer of the changes, so the two describe the same
- * push.
+ * The pull request's changes and the member's viewed marks on them, read as
+ * the view first comes on screen (`shown`), on Refresh, and as the app
+ * reaches the service again after one failed or went out; the marks with
+ * each answer of the changes, so the two describe the same push.
  */
-export function useChangesReads(
-  agentId: string,
-  source: PullRequestSource,
-  shown: boolean,
-): ChangesReads {
+export function useChangesReads(source: PullRequestSource, shown: boolean): ChangesReads {
   // Note that the query is read on the tab's own asks alone, as the docs' lazy query is, so it reads when the tab
-  // first shows and as the agent ends, never because another surface drew the same changes.
-  const changes = useQuery({ ...agentChangesQueryOptions(agentId, source.number), enabled: false });
+  // first shows, never because another surface drew the same changes.
+  const changes = useQuery({
+    ...pullRequestChangesQueryOptions(source.pullRequest),
+    enabled: false,
+  });
+
   const { refetch, isFetching: out, data: good, error } = changes;
   const ask = useCallback(() => void refetch(), [refetch]);
 
-  // The agent's standing the last read on its own was asked for, none before the tab first showed.
-  const readFor = useRef<{ readonly agentId: string; readonly ended: boolean } | undefined>(
-    undefined,
-  );
+  // Whether the tab has asked on its own yet, which it does the first time it shows.
+  const asked = useRef(false);
 
   useEffect(() => {
-    if (!shown) return;
-
-    if (readFor.current?.agentId === agentId && readFor.current.ended === source.ended) return;
-    readFor.current = { agentId, ended: source.ended };
+    if (!shown || asked.current) return;
+    asked.current = true;
     ask();
-  }, [shown, agentId, source.ended, ask]);
+  }, [shown, ask]);
 
   // A read that failed, or is still out and may have been sent while the connection was gone, is asked again.
   const failure =
@@ -1827,7 +1828,7 @@ export function useChangesReads(
   });
   // Note that a good answer stands over a failure after it, as the cache keeps it beside the error, because a
   // read that fails again must not take the files drawn away; the count follows what is drawn.
-  const answer: AgentChangesAnswerView | undefined = good ?? failure;
+  const answer: RepositoryChangesAnswerView | undefined = good ?? failure;
   const refreshFailed = good !== undefined && failure !== undefined;
 
   const reads = useRef<{ readonly of: unknown; readonly count: number }>({
@@ -1839,7 +1840,6 @@ export function useChangesReads(
   const pullRequest = answer !== undefined && "pullRequest" in answer ? answer.pullRequest : null;
 
   const viewedFiles = useViewedFiles(
-    agentId,
     source,
     pullRequest === null ? undefined : reads.current.count,
   );
@@ -1872,7 +1872,6 @@ export interface ChangesBarHost {
 }
 
 export function AgentChangesTab({
-  agentId,
   source,
   shown,
   repository,
@@ -1886,7 +1885,6 @@ export function AgentChangesTab({
   overscroll,
   host,
 }: {
-  agentId: string;
   /** Where the tab reads the pull request, whose task its files' texts are read through. */
   source: PullRequestSource;
   /** Whether the panel is on screen, which is when the tab reads. */
@@ -1942,9 +1940,17 @@ export function AgentChangesTab({
   const answered = reads.count;
 
   // Note that the images are named afresh only with an answer, because every changed image's entry is drawn from them.
+  const pictures = useMemo(
+    () => ({
+      workspaceId: source.pullRequest.workspaceId,
+      repository: source.pullRequest.repository,
+    }),
+    [source.pullRequest.workspaceId, source.pullRequest.repository],
+  );
+
   const images = useMemo(
-    () => (pullRequest === null ? undefined : imagesOf(agentId, pullRequest, answered)),
-    [agentId, pullRequest, answered],
+    () => (pullRequest === null ? undefined : imagesOf(pictures, pullRequest, answered)),
+    [pictures, pullRequest, answered],
   );
 
   const { closeOver } = room;
@@ -2014,13 +2020,7 @@ export function AgentChangesTab({
   );
   const texts = useFileTexts(source.place.taskId, repository, pullRequest, changed.files);
 
-  const commenting = useListCommenting(
-    agentId,
-    changed.files,
-    pullRequest?.headSha,
-    lineComments,
-    refresh,
-  );
+  const commenting = useListCommenting(changed.files, pullRequest?.headSha, lineComments, refresh);
 
   // A thread on a file the changes no longer hold is said gone once they are read; one on a file they hold is landed on in the list.
   const revealAsk = reveal?.ask;

@@ -6,14 +6,16 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import {
   BAR_TITLE,
   type BrandColors,
+  FailureNoticeLayer,
   FailureNoticeProvider,
   KeepingProvider,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
-import { useMemo } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useColorScheme } from "react-native";
+import { MachineAsks } from "../agents/machine-asks.js";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
@@ -63,6 +65,60 @@ function navigationTheme(colors: BrandColors, dark: boolean) {
 /** A short sheet's heights in a compact window, as fractions of the screen: UIKit's medium, then its large. */
 const SHORT_SHEET_DETENTS = [0.5, 1];
 
+/** The presentations that stand a screen in a sheet over the root, which would hide a notice drawn there. */
+const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set(["modal", "formSheet"]);
+
+/** What a root screen's layout is told of its screen's place in the stack: whether it is the one in front, and when that changes. */
+interface ScreenFocus {
+  readonly isFocused: () => boolean;
+  readonly addListener: (event: "focus" | "blur", listener: () => void) => () => void;
+}
+
+/** Whether the screen `navigation` names is the one in front, followed as it comes forward and goes behind. */
+function useScreenInFront(navigation: ScreenFocus): boolean {
+  const [inFront, setInFront] = useState(() => navigation.isFocused());
+
+  useEffect(() => {
+    const comes = navigation.addListener("focus", () => setInFront(true));
+    const goes = navigation.addListener("blur", () => setInFront(false));
+
+    return () => {
+      comes();
+      goes();
+    };
+  }, [navigation]);
+
+  return inFront;
+}
+
+/** A sheet's place for the failure notice, which holds the notice only while the sheet is in front, so a page opened over it, as a notification opens one, shows its own refusals. */
+function SheetNoticeLayer({
+  navigation,
+  children,
+}: {
+  readonly navigation: ScreenFocus;
+  readonly children: ReactNode;
+}) {
+  return <FailureNoticeLayer inFront={useScreenInFront(navigation)}>{children}</FailureNoticeLayer>;
+}
+
+/** A root screen, wrapped in a place of its own for the failure notice where it stands as a sheet, so a notice shows over the sheet rather than behind it. */
+function screenLayout({
+  options,
+  navigation,
+  children,
+}: {
+  readonly options: { readonly presentation?: string | undefined };
+  readonly navigation: ScreenFocus;
+  readonly children: ReactNode;
+}) {
+  return SHEET_PRESENTATIONS.has(options.presentation) ? (
+    <SheetNoticeLayer navigation={navigation}>{children}</SheetNoticeLayer>
+  ) : (
+    <>{children}</>
+  );
+}
+
 /**
  * The screens, each behind the account's standing: the tabs, Settings, and
  * the sheets that start a task or an agent or change an agent's model while an account is signed in, and the sign-in screen otherwise, so a
@@ -87,7 +143,8 @@ const SHORT_SHEET_DETENTS = [0.5, 1];
  * (`host-connect-link.ts`).
  * Over every screen stands the one notice of a write that did not go
  * (`use-write.ts`), which lets its offline word go once the service answers,
- * and every word with its Try again once the account it was said for is gone.
+ * and every word with its Try again once the account it was said for is gone;
+ * while a sheet stands, it stands in the sheet on top (`screenLayout`).
  */
 function GuardedScreens() {
   const { data: signedIn = false } = useQuery({
@@ -128,6 +185,8 @@ function GuardedScreens() {
   return (
     <>
       <MenuCommands signedIn={signedIn && !updateNeeded} />
+      {/* An ask one of the developer's machines holds for an agent, over whatever screen stands. */}
+      <MachineAsks signedIn={signedIn && !updateNeeded} />
       {/* Note that every sheet's bar takes the ink here as its default, so a sheet that sets no ink of its own never stands its title in the system's black on the dark ground; a sheet's own options still win, key by key. */}
       <Stack
         screenOptions={{
@@ -136,6 +195,7 @@ function GuardedScreens() {
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
         }}
+        screenLayout={screenLayout}
       >
         <Stack.Protected guard={signedIn && !updateNeeded}>
           <Stack.Screen name="index" />

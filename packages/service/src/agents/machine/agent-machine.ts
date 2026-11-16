@@ -561,6 +561,15 @@ export interface AgentMachineService {
     session: string,
     path: string,
   ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
+  /**
+   * An AAC M4A of the Ogg sound clip at the path, made as `phoneVideo`
+   * makes a recording's copy (`phone-video.ts`), for a player that plays no
+   * Ogg; nothing where the place has no encoder or the copy would not fit.
+   */
+  readonly phoneAudio: (
+    session: string,
+    path: string,
+  ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
 }
 
 /** What a machine does to a place it already opened: everything but where it keeps things, opening a place or running it again, checking out what the place does not hold yet, handing a runner its credentials, and launching a runner in it. */

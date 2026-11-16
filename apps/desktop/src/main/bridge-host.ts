@@ -1,5 +1,5 @@
 import type { ActPortHandler, ActSender } from "@repo/host/act-port";
-import type { AppStateSnapshot } from "@repo/host/app-state";
+import type { AppStateRead } from "@repo/host/app-state";
 import {
   ACT_PORT,
   BRIDGE,
@@ -42,7 +42,7 @@ export interface BridgeHostDependencies {
   services: Context.Context<never>;
   reports: ReportHandlers;
   /** The document as one window stands, which is the answer to its own bootstrap read. */
-  snapshotFor: (sender: WebContents) => Promise<AppStateSnapshot>;
+  snapshotFor: (sender: WebContents) => Promise<AppStateRead>;
 }
 
 type ErasedHandler = (context: BridgeContext, ...args: never[]) => void;

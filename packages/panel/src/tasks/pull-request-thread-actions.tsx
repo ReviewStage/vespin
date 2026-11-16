@@ -48,9 +48,8 @@ const THREAD_WORDS = {
   REOPENING: "Reopening",
 } as const;
 
-/** Which agent's pull request a tab's threads are on, and what to read again once one changes. */
+/** What to read again once one of a tab's threads changes. */
 interface ThreadWrites {
-  readonly agentId: string;
   readonly onWritten: ReadAgain;
 }
 
@@ -62,7 +61,7 @@ interface ThreadWritesHeld extends ThreadWrites {
 const ThreadWritesContext = createContext<ThreadWritesHeld | undefined>(undefined);
 
 /**
- * Gives every review thread drawn under it its controls, on the agent named,
+ * Gives every review thread drawn under it its controls, on the pull request of the tab around it,
  * and keeps the words of an edit closed unsent for as long as it stands, by
  * the comment's id, so one closed by Esc, or scrolled out of the list and
  * back, loses nothing.
@@ -79,7 +78,6 @@ export function ThreadWritesProvider({
   return (
     <ThreadWritesContext.Provider
       value={{
-        agentId: value.agentId,
         onWritten: value.onWritten,
         edits: edits.current,
       }}
@@ -89,7 +87,7 @@ export function ThreadWritesProvider({
   );
 }
 
-/** Which agent's pull request the tab around the caller writes to, and what it reads again after; none outside a tab. A reaction's controls take it too (`pull-request-reactions.tsx`). */
+/** What the tab around the caller reads again after a change to its pull request; none outside a tab. A reaction's controls take it too (`pull-request-reactions.tsx`). */
 export function useThreadWriting(): ThreadWritesHeld | undefined {
   return useContext(ThreadWritesContext);
 }
@@ -97,21 +95,20 @@ export function useThreadWriting(): ThreadWritesHeld | undefined {
 /** What a thread drawn outside a tab reads again once changed: nothing, since it offers no change. */
 export function noop(): void {}
 
-/** A thread's controls: the agent its pull request is the agent's, GitHub's id for it, and the one change it has out, which its Resolve and its reply share. */
+/** A thread's controls: GitHub's id for it, and the one change it has out, which its Resolve and its reply share. */
 export interface ThreadControls {
-  readonly agentId: string;
   readonly threadId: string;
   readonly writes: PullRequestWrites;
 }
 
-/** The controls of `thread`; none where the tab gives it no agent or the read named no id for it. */
+/** The controls of `thread`; none outside a tab that writes, or where the read named no id for it. */
 export function useThreadControls(thread: ReviewThread): ThreadControls | undefined {
   const writing = useThreadWriting();
-  const writes = usePullRequestWrites(writing?.agentId ?? "", writing?.onWritten ?? noop);
+  const writes = usePullRequestWrites(writing?.onWritten ?? noop);
 
   if (writing === undefined || thread.id === undefined) return undefined;
 
-  return { agentId: writing.agentId, threadId: thread.id, writes };
+  return { threadId: thread.id, writes };
 }
 
 /** Resolve, or Reopen where the thread is resolved, as a glyph at the head's end; nothing without controls. */
@@ -155,8 +152,8 @@ export function ThreadResolve({
 
 /** The reply's box, as a description's thread draws its own, in GitHub's Markdown: Enter sending, and Esc leaving it with its words kept. */
 function ReplyBox({ controls }: { controls: ThreadControls }): React.JSX.Element {
-  const { agentId, threadId, writes } = controls;
-  const { draft, update } = useDraft({ kind: DRAFT_PLACE.REVIEW_REPLY, agentId, threadId });
+  const { threadId, writes } = controls;
+  const { draft, update } = useDraft({ kind: DRAFT_PLACE.REVIEW_REPLY, threadId });
   const words = draft.text;
   const out = writes.pending;
   const sending = out === PULL_REQUEST_ACTION.REPLY_TO_THREAD;

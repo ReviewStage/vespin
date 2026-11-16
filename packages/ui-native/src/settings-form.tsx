@@ -48,7 +48,7 @@ import { actContent, GlyphImage } from "./glyph-label.js";
 import type { IntegrationMarkAsset } from "./integration-marks.js";
 import { Avatar } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
-import { useColors } from "./tokens/colors.js";
+import { type BrandColors, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
@@ -798,7 +798,7 @@ export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
             spacing={SPACE.ROW}
             modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
           >
-            <Avatar name={name} picture={picture} size={faceSize} />
+            <Avatar name={name} id={id} picture={picture} size={faceSize} />
             <VStack alignment="leading" spacing={1}>
               <Text modifiers={[foregroundStyle(off ? colors.TEXT_MUTED : colors.TEXT)]}>
                 {name}
@@ -904,6 +904,8 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
 type FollowerRowProps = {
   /** Their name, or You for the reader. */
   readonly name: string;
+  /** Their member id, which their letters' hue is read off. */
+  readonly id: string;
   readonly picture?: string | undefined;
   /** The muted word after their name, such as Assignee; none for none. */
   readonly role?: string | undefined;
@@ -920,7 +922,7 @@ type FollowerRowProps = {
  * press. VoiceOver hears it as one element, its name then its role and what
  * agents may do there, since the laptop alone says that on screen.
  */
-export function FollowerRow({ name, picture, role, machines, heard }: FollowerRowProps) {
+export function FollowerRow({ name, id, picture, role, machines, heard }: FollowerRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(ROW_FACE_SIZE);
 
@@ -934,7 +936,7 @@ export function FollowerRow({ name, picture, role, machines, heard }: FollowerRo
         ...spokenValue(role, heard),
       ]}
     >
-      <Avatar name={name} picture={picture} size={faceSize} />
+      <Avatar name={name} id={id} picture={picture} size={faceSize} />
       <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
       {role === undefined ? null : (
         <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>
@@ -1131,15 +1133,47 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
     </ContextMenu>
   );
 
-  if (removeAct === undefined) return <HStack modifiers={placed}>{menu}</HStack>;
+  if (remove === undefined) return <HStack modifiers={placed}>{menu}</HStack>;
 
   return (
     <SwipeActions modifiers={placed}>
       {menu}
       <SwipeActions.Actions edge="trailing" allowsFullSwipe={false}>
-        {removeAct}
+        <SwipeRemove
+          label={remove.label}
+          symbol={NOTE_REMOVE.SYMBOL}
+          onPress={remove.onPress}
+          colors={colors}
+        />
       </SwipeActions.Actions>
     </SwipeActions>
+  );
+}
+
+/**
+ * A row's swiped act that takes something away, filled with the danger fill
+ * that holds 4.5:1 under white. Note that it takes no destructive role,
+ * because SwiftUI takes a row out of its list the moment a destructive swipe
+ * is pressed, before an act that asks first, such as Disconnect, hears its
+ * answer, so a Cancel left the row gone; the long press menu keeps the role.
+ */
+function SwipeRemove({
+  label,
+  symbol,
+  onPress,
+  colors,
+}: {
+  readonly label: string;
+  readonly symbol?: Glyph | undefined;
+  readonly onPress: () => void;
+  readonly colors: BrandColors;
+}) {
+  return (
+    <SwiftUIButton
+      {...(symbol === undefined ? { label } : actContent(label, symbol))}
+      onPress={onPress}
+      modifiers={[tint(colors.DANGER_FILL)]}
+    />
   );
 }
 
@@ -1266,12 +1300,7 @@ export function ConnectionRow({ name, mark, lines, act, menu = [] }: ConnectionR
       {held}
       <SwipeActions.Actions edge="trailing" allowsFullSwipe={false}>
         {swiped.map((each) => (
-          <SwiftUIButton
-            key={each.label}
-            label={each.label}
-            role={NOTE_REMOVE.ROLE}
-            onPress={each.onPress}
-          />
+          <SwipeRemove key={each.label} label={each.label} onPress={each.onPress} colors={colors} />
         ))}
       </SwipeActions.Actions>
     </SwipeActions>

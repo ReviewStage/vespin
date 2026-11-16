@@ -1585,6 +1585,15 @@ const turnStarted = /* @__PURE__ */ Effect.fnUntraced(function* (
   return Result.succeed(started ? STORE_WRITE_EFFECT.WRITTEN : STORE_WRITE_EFFECT.REPEATED);
 });
 
+/**
+ * A journal still open as its turn ends belongs to a turn that answered
+ * nothing. A brain's keeps what it did, and the words its steps formed leave
+ * it, because a new session's seed reads them as said and the voice could
+ * speak them. A coding agent's keeps its words as well, because they are the
+ * partial work its tab shows and a Continue or a Fork replays. One the
+ * answer already closed is revised in place, because a reader may have taken
+ * it before the row settled, and what the row now says of it travels with it.
+ */
 const turnEnded = /* @__PURE__ */ Effect.fnUntraced(function* (
   context: WriterContext,
   event: Extract<RunEvent, { kind: typeof RUN_EVENT.TURN_ENDED }>,
@@ -1654,14 +1663,7 @@ const turnEnded = /* @__PURE__ */ Effect.fnUntraced(function* (
     });
   }
 
-  // A journal still open here belongs to a turn that answered nothing. A
-  // brain's keeps what it did and the words its steps formed leave it,
-  // because a new session's seed reads them as said and the voice could
-  // speak them. A coding agent's keeps its words as well, because they are
-  // the partial work its tab shows and a Continue or a Fork replays. One
-  // the answer already closed is revised in place, because a reader may
-  // have taken it before the row settled, and what the row now says of it
-  // travels with it.
+  // The turn's journal is closed as unanswered, or revised where the answer already closed it.
   const open = yield* journalRow(context, event.turnId);
 
   if (Option.isSome(open) && open.value.finishedAt !== null) {

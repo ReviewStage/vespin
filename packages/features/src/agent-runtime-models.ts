@@ -90,11 +90,16 @@ const CODEX_ON_API_KEY: RuntimeModelRule = {
   name: "Codex",
 };
 
-/** The harness Settings › Agents names the row of the provider's credentials by: Claude for Anthropic's, Codex for OpenAI's. */
+/** The harness Settings › Agents names the row of the provider's credentials by: Claude for Anthropic's, Codex for OpenAI's, Cursor for Cursor's. */
 export function harnessNameOf(provider: ModelProvider): string {
-  return provider === MODEL_PROVIDER.ANTHROPIC
-    ? (NATIVE_MODEL_RULE.claude_code?.name ?? "Claude")
-    : (NATIVE_MODEL_RULE.codex?.name ?? "Codex");
+  switch (provider) {
+    case MODEL_PROVIDER.ANTHROPIC:
+      return NATIVE_MODEL_RULE.claude_code?.name ?? "Claude";
+    case MODEL_PROVIDER.OPENAI:
+      return NATIVE_MODEL_RULE.codex?.name ?? "Codex";
+    case MODEL_PROVIDER.CURSOR:
+      return "Cursor";
+  }
 }
 
 /** What separates a catalog id's provider from its model. */

@@ -1,6 +1,6 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the app sidebar, the tree, and the task side by side in a regular one.
 
-import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionBlocks } from "@repo/features/description-blocks";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
@@ -51,6 +51,7 @@ import {
   taskTreeCollections,
 } from "@repo/features/task-tree-model";
 import {
+  TASK_PRIORITY,
   TASK_PRIORITY_ORDER,
   TASK_RELATION_KIND,
   TASK_STATUS,
@@ -80,6 +81,8 @@ import {
   BAR_TITLE,
   type BarAction,
   type BarMenu,
+  BUZZ,
+  buzz,
   type ColumnBar,
   ConfirmAsk,
   DetailPage,
@@ -96,6 +99,8 @@ import {
   menuWithout,
   NoSelection,
   PATH_PART,
+  PRIORITY_MARK_SYMBOL,
+  PRIORITY_MARK_TONE,
   RelationRow,
   ROW_ACTION_TONE,
   type RowAction,
@@ -103,12 +108,12 @@ import {
   RowList,
   type RowSubmenu,
   type RowSwipe,
+  runsOnGlyph,
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
   type StandingMenus,
   sectionGlyph,
-  shareLink,
   type TaskFold,
   TaskHead,
   TaskPreview,
@@ -118,17 +123,25 @@ import {
   WordsRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
-import { PUSHED_PAGE, useDetailLeave, useDetailPush, useStackRoot } from "../detail-stack.js";
+import {
+  PUSHED_PAGE,
+  useDetailLeave,
+  useDetailPush,
+  useStackRoot,
+  useStandFocusedDetailFront,
+} from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
+import { useMenuPhotos } from "../menu-photos.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns } from "../place-columns.js";
-import { useRefilledSearchField } from "../search-field.js";
+import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
@@ -146,6 +159,7 @@ import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import { useFoundTask } from "../tasks/use-found-task.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
+import { useDevicePlatform } from "../tasks/use-start.js";
 import {
   type ReadListing,
   type StatusQuestion,
@@ -166,10 +180,13 @@ import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
+  PLUS_TAB,
   SIDEBAR_PLACE,
   type SidebarPlace,
   type SidebarTasks,
+  useComposeAction,
   useListColumn,
+  usePortraitDetailBar,
 } from "./app-sidebar.js";
 import { useDetailStackColumn } from "./detail-stack-column.js";
 import { useFollowingChip } from "./following-screens.js";
@@ -245,15 +262,20 @@ function openOnWeb(destination: LinkDestination, workspace: Workspace | undefine
   openInSafari(linkOf(destination, workspace.slug ?? workspace.id));
 }
 
-/** A task's address on vespin.dev, as the panel's Copy link copies it, raised in the share sheet whose first row copies it. */
-function shareTaskLink(task: TaskSummary, workspace: Workspace | undefined): void {
+/** Copies a task's address on vespin.dev to the pasteboard at once, as the panel's Copy link and Safari's and Notes' do, with the system's tap of success, or says on the console why it could not. */
+function copyTaskLink(task: TaskSummary, workspace: Workspace | undefined): void {
   if (workspace === undefined) return;
-  shareLink(
+  setStringAsync(
     linkOf(
       { kind: LINK_DESTINATION.TASK, taskId: taskLinkStep(task) },
       workspace.slug ?? workspace.id,
     ),
-  );
+  )
+    .then(() => buzz(BUZZ.SUCCESS))
+    .catch((cause: unknown) => {
+      console.error("The task's link could not be copied.", cause);
+      buzz(BUZZ.ERROR);
+    });
 }
 
 /** Asks for a task's new name in the system's alert, opened on the name it has, and renames it to the name typed. */
@@ -468,7 +490,7 @@ function rowActs(
         label: WORDS.COPY_LINK,
         symbol: GLYPH.LINK,
         tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => shareTaskLink(task, listing.workspace),
+        onPress: () => copyTaskLink(task, listing.workspace),
       },
       {
         label: WORDS.RENAME,
@@ -579,6 +601,7 @@ export function TaskListRow({
       id={task.id}
       name={task.name}
       status={task.status ?? TASK_STATUS.TODO}
+      priority={task.priority ?? TASK_PRIORITY.NONE}
       unread={look.unread}
       finished={taskFinished(task)}
       needsYou={look.needsYou}
@@ -1036,7 +1059,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
       {
         label: WORDS.COPY_LINK,
         symbol: GLYPH.LINK,
-        onPress: () => shareTaskLink(task, overview.workspace),
+        onPress: () => copyTaskLink(task, overview.workspace),
       },
       {
         label: WORDS.RENAME,
@@ -1155,7 +1178,11 @@ function agentState(status: AgentStatus): AgentRowState {
  * most pressing first; and its assignee, the workspace's members, the reader
  * first, then No assignee; each with the one it holds checked.
  */
-function standingMenus(overview: TaskOverview, members: readonly ListedMember[]): StandingMenus {
+function standingMenus(
+  overview: TaskOverview,
+  members: readonly ListedMember[],
+  photoOf: (userId: string) => string | undefined,
+): StandingMenus {
   const { task } = overview;
   const assigneeId = task.assignee?.userId;
 
@@ -1165,6 +1192,8 @@ function standingMenus(overview: TaskOverview, members: readonly ListedMember[])
       label: WORDS.PRIORITY,
       choices: TASK_PRIORITY_ORDER.map((priority) => ({
         label: TASK_PRIORITY_WORDS[priority],
+        symbol: PRIORITY_MARK_SYMBOL[priority],
+        tone: PRIORITY_MARK_TONE[priority],
         on: task.priority === priority,
         onPress: () => overview.setPriority(task.id, priority),
       })),
@@ -1174,6 +1203,8 @@ function standingMenus(overview: TaskOverview, members: readonly ListedMember[])
       choices: [
         ...members.map((member) => ({
           label: member.name,
+          symbol: GLYPH.PERSON,
+          photo: photoOf(member.userId),
           on: member.userId === assigneeId,
           onPress: () => overview.setAssignee(task.id, member),
         })),
@@ -1195,22 +1226,28 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   const following = useFollowingChip(task.id);
   const members = useListedMembers(task.workspaceId);
 
+  const photoOf = useMenuPhotos(
+    pictureOf,
+    useMemo(() => members.map(({ userId }) => userId), [members]),
+  );
+
   return (
     <TaskHead
       name={task.name}
       status={task.status}
-      priority={task.priority === undefined ? undefined : TASK_PRIORITY_WORDS[task.priority]}
+      priority={task.priority}
       assignee={
         task.assignee === undefined || task.assignee === null
           ? { name: NO_ASSIGNEE_WORDS, nobody: true }
           : {
               name: task.assignee.name,
+              id: task.assignee.userId,
               picture: pictureOf(task.assignee.userId),
               nobody: false,
             }
       }
       following={following}
-      menus={standingMenus(overview, members)}
+      menus={standingMenus(overview, members, photoOf)}
       createdBy={
         task.createdBy === undefined
           ? undefined
@@ -1485,6 +1522,8 @@ export function TaskAgentRow({
   const name = agentName(agent);
   const harness = providerOf(agent.model);
   const runsOn = agentRunsOnWords(agent);
+  // Note that a device's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac.
+  const platform = useDevicePlatform(agent.mac?.deviceId);
 
   return (
     <AgentRow
@@ -1493,6 +1532,7 @@ export function TaskAgentRow({
       harness={harness}
       state={agentState(agent.status)}
       runsOn={runsOn}
+      runsOnGlyph={runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform })}
       waiting={waiting}
       pullRequest={
         pullRequest === undefined
@@ -1899,8 +1939,10 @@ function TasksStackList({
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
+  const compose = useComposeAction();
   const { search, setSearch, listing, refreshTasks } = screen;
   const field = useRefilledSearchField(search);
+  const placement = useHeldSearchPlacement(search);
 
   return (
     <>
@@ -1908,13 +1950,23 @@ function TasksStackList({
         <Stack.SearchBar
           ref={field}
           placeholder={SEARCH_TASKS}
-          placement="integratedButton"
+          placement={placement}
           allowToolbarIntegration={false}
           onChangeText={(event) => setSearch(event.nativeEvent.text)}
           onCancelButtonPress={() => setSearch("")}
         />
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
+      {/* Note that a narrow iPad window's tab bar has no round +, so its list's bar offers New task, as its wider windows' bars do. */}
+      {PLUS_TAB ? null : (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
+            accessibilityLabel={compose.label}
+            onPress={compose.onPress}
+          />
+        </Stack.Toolbar>
+      )}
       <Screen>
         <TasksTree
           listing={listing}
@@ -2097,6 +2149,9 @@ function TasksSplitScreen({
   useStackRoot(SIDEBAR_PLACE.TASKS, selected);
   // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
   const stack = useDetailStackColumn(SIDEBAR_PLACE.TASKS, { id: selected }, true);
+  // Note that the menu bar's Back pops the pages over this two-column detail while it's shown; three columns name theirs in `AppSplit`.
+  useStandFocusedDetailFront(SIDEBAR_PLACE.TASKS, !threeColumns);
+  const firstDetailBar = usePortraitDetailBar(detailBar);
   useHandColumns(
     SIDEBAR_PLACE.TASKS,
     threeColumns
@@ -2112,7 +2167,7 @@ function TasksSplitScreen({
           <SplitView
             {...first}
             detail={stack.wrap(detail)}
-            detailBar={detailBar}
+            detailBar={firstDetailBar}
             detailStack={stack.detailStack}
           />
         </Screen>
@@ -2203,8 +2258,6 @@ export function TaskScreen() {
   // Note that the open is told apart by the task's id, as the split view's is, so a number found and handed over on an unfold carries the same open; a number not yet found shows no task to count.
   useSurfaceOpen(handed || handing === undefined ? undefined : PRODUCT_SURFACE.TASK, handing);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
-
-  if (handed) return null;
 
   return (
     <>

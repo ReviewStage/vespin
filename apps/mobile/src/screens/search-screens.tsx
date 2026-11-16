@@ -22,6 +22,7 @@ import {
   GLYPH,
   glyphSymbol,
   LIST_LOOK,
+  type ListScopes,
   ListSection,
   NoSelection,
   RowList,
@@ -30,7 +31,7 @@ import {
   Screen,
   UNDER_SPLIT_SCREEN,
 } from "@repo/ui-native";
-import { Stack, useFocusEffect, useIsFocused, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
 import {
   type Dispatch,
   type ReactNode,
@@ -43,6 +44,7 @@ import {
 import { useDetailStack, useStackRoot } from "../detail-stack.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
+import { lowerKeyboard } from "../native-interactions-module.js";
 import { useHandColumns } from "../place-columns.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { useRefilledSearchField } from "../search-field.js";
@@ -53,7 +55,7 @@ import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { AgentConversation } from "./agent-screens.js";
-import { SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
+import { PLUS_TAB, SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
 import { useRemind } from "./inbox-remind.js";
 import { InboxItemRows, ThreadColumn } from "./inbox-screens.js";
 import {
@@ -149,14 +151,18 @@ type SearchWords = {
  */
 function FoundList({
   found,
+  query,
   scope,
   listing,
   selected,
   onOpen,
   remindMenu,
   onArchiveAgent,
+  scopes,
 }: {
   readonly found: SearchFound;
+  /** What was typed, whose words each row's title sets in bold. */
+  readonly query: string;
   readonly scope: SearchScope;
   /** The Tasks listing a task's row acts through, its status asking first where it stops agents. */
   readonly listing: TasksListing;
@@ -167,6 +173,8 @@ function FoundList({
   readonly remindMenu: (item: InboxItem) => RowSubmenu;
   /** Asks to archive an agent found, once it rests, as a task's Agents do. */
   readonly onArchiveAgent: (agentId: string) => void;
+  /** The scopes the results list under, standing as the list's first row. */
+  readonly scopes: ListScopes;
 }) {
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   const pictureOf = useMemberPictures();
@@ -177,6 +185,8 @@ function FoundList({
   return (
     <RowList
       look={LIST_LOOK.PLAIN}
+      searched={query}
+      scopes={scopes}
       selected={selected}
       onSelect={onOpen}
       onRefresh={async () => {
@@ -238,6 +248,7 @@ const SEARCH_IDLE = (
 function useSearchScreen(
   { query, scope, setScope }: SearchWords,
   pick?: SearchPicking | undefined,
+  leave?: () => void,
 ) {
   const router = useRouter();
   const found = useSearchFound(query);
@@ -249,17 +260,25 @@ function useSearchScreen(
   const onTab = useOnTab();
 
   const open = (id: string) => {
+    // Note that a pick lowers the keyboard the query raised, as Mail and Notes do, since a split view's field keeps its focus while the pick opens beside it.
+    lowerKeyboard();
     const picked = pick === undefined ? undefined : foundPick(found, id);
 
     if (pick !== undefined && picked !== undefined) {
       pick.choose(picked);
+      // Note that the keyboard is lowered again once the pick has drawn beside the results, since the column's field may take its focus back as its column draws anew.
+      requestAnimationFrame(lowerKeyboard);
 
       return;
     }
 
     const route = routes.get(id);
 
-    if (route !== undefined) router.push(onTab(route));
+    if (route === undefined) return;
+
+    // Note that the search is ended before the route opens, because a regular window opens it on its own tab, and the iPad's top tab bar, folded into the field while it is searched, stood folded over the tab it switched to, with no way back to Search; blurring the field alone left it folded.
+    leave?.();
+    router.push(onTab(route));
   };
 
   const shown = scopedFound(found, scope);
@@ -271,31 +290,38 @@ function useSearchScreen(
     onPress: () => setScope(each),
   }));
 
-  // Note that the scopes stand over a scope that found nothing, so another is one tap away.
-  const results = (
+  // Note that the scopes stand as the results' first row, so they scroll away with them, and over a scope that found nothing, so another is one tap away.
+  const results = none ? (
     <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-      {none ? (
-        <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
-      ) : (
-        <FoundList
-          found={found}
-          scope={scope}
-          listing={listing}
-          selected={pick?.picked?.id}
-          onOpen={open}
-          remindMenu={(item) => remind.menu([item])}
-          onArchiveAgent={archiveAsk.archive}
-        />
-      )}
+      <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
     </ScopePicker>
+  ) : (
+    <FoundList
+      scopes={{ label: SCOPE_LABEL, scopes }}
+      found={found}
+      query={query}
+      scope={scope}
+      listing={listing}
+      selected={pick?.picked?.id}
+      onOpen={open}
+      remindMenu={remind.itemMenu}
+      onArchiveAgent={archiveAsk.archive}
+    />
   );
 
   return { listing, results, status, deletion, remind, archiveAsk };
 }
 
 /** What a typed query finds under the Stack's bar, with the questions and sheets its rows' acts raise beside it. */
-function SearchStackFound(words: SearchWords) {
-  const { results, status, deletion, remind, archiveAsk } = useSearchScreen(words);
+function SearchStackFound({
+  leave,
+  ...words
+}: SearchWords & { readonly leave: (() => void) | undefined }) {
+  const { results, status, deletion, remind, archiveAsk } = useSearchScreen(
+    words,
+    undefined,
+    leave,
+  );
 
   return (
     <>
@@ -314,7 +340,8 @@ function SearchStackFound(words: SearchWords) {
  * anything is typed, and that nothing matches where nothing does. The field
  * is focused each time the tab opens on nothing typed, as the system's
  * Search tab does, so a query is typed at once; one left typed stands with
- * its results instead.
+ * its results instead. The keyboard's Search key lowers the keyboard, as
+ * Mail's does, so the results stand whole under the field.
  */
 function SearchStackScreen(words: SearchWords) {
   const { query, setQuery, scope } = words;
@@ -322,7 +349,6 @@ function SearchStackScreen(words: SearchWords) {
   const field = useRefilledSearchField(query);
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
-  // Note that a regular window's tab bar has no round +, so its Search offers New task in its bar, as the other tabs' lists do.
   const regular = useWindowSizeClass() !== WINDOW_SIZE_CLASS.COMPACT;
   // Note that what is typed is read through a ref the commit writes, so the focus effect runs only as the tab opens, never on a key or on Cancel clearing the field.
   const typed = useRef(query);
@@ -342,11 +368,13 @@ function SearchStackScreen(words: SearchWords) {
           ref={field}
           placeholder={placeholder}
           onChangeText={(event) => setQuery(event.nativeEvent.text)}
+          onSearchButtonPress={() => field.current?.blur()}
           onCancelButtonPress={() => setQuery("")}
         />
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
-      {regular ? (
+      {/* Note that an iPad's tab bar has no round +, so its Search offers New task in its bar, as its lists do. */}
+      {PLUS_TAB ? null : (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button
             icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
@@ -354,8 +382,16 @@ function SearchStackScreen(words: SearchWords) {
             onPress={compose.onPress}
           />
         </Stack.Toolbar>
-      ) : null}
-      {query.trim() === "" ? <Screen>{SEARCH_IDLE}</Screen> : <SearchStackFound {...words} />}
+      )}
+      {query.trim() === "" ? (
+        <Screen>{SEARCH_IDLE}</Screen>
+      ) : (
+        <SearchStackFound
+          {...words}
+          // Note that only a regular window ends the search, since it opens the pick on another tab, while a compact one pushes it on Search's own stack, whose results Back returns to.
+          leave={regular ? () => field.current?.cancelSearch() : undefined}
+        />
+      )}
     </>
   );
 }
@@ -496,7 +532,7 @@ function SearchSplitFound({
   const { detail, detailBar, asks } = useSearchDetail(
     picking.picked,
     listing,
-    (item) => remind.menu([item]),
+    remind.itemMenu,
     picking.choose,
   );
 
@@ -529,7 +565,6 @@ function usePickToRoute(threeColumns: boolean, { picked, choose }: SearchPicking
   const router = useRouter();
   const onTab = useOnTab();
   const stack = useDetailStack(SIDEBAR_PLACE.SEARCH);
-  const focused = useIsFocused();
   const was = useRef(threeColumns);
   // Note that the pick and its stack are read through a ref the commit writes, before the layout lets the stack go.
   const held = useRef({ picked, stacked: false });
@@ -537,17 +572,18 @@ function usePickToRoute(threeColumns: boolean, { picked, choose }: SearchPicking
     held.current = { picked, stacked: stack.pages.length > 0 };
   }, [picked, stack]);
 
-  // Note that only a focused Search hands its pick on, so a rotation while another tab shows leaves the pick for Search's return.
-  useEffect(() => {
-    if (!focused) return;
-    const before = was.current;
-    was.current = threeColumns;
-    const { picked: shown, stacked } = held.current;
+  // Note that only a focused Search hands its pick on, so a rotation while another tab shows leaves the pick for Search's return; focus is heard through an effect, because a read would draw Search's root again on every tab switch.
+  useFocusEffect(
+    useCallback(() => {
+      const before = was.current;
+      was.current = threeColumns;
+      const { picked: shown, stacked } = held.current;
 
-    if (!before || threeColumns || stacked || shown?.route === undefined) return;
-    router.push(onTab(shown.route));
-    choose(undefined);
-  }, [focused, threeColumns, router, onTab, choose]);
+      if (!before || threeColumns || stacked || shown?.route === undefined) return;
+      router.push(onTab(shown.route));
+      choose(undefined);
+    }, [threeColumns, router, onTab, choose]),
+  );
 }
 
 /** The Search tab's root screen: beside the app sidebar in a window wide enough for three columns, under the Stack's bar otherwise, the query and its scope held here so a rotation across the line keeps them. */
