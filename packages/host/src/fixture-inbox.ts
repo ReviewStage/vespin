@@ -1642,6 +1642,26 @@ const INVITES_DESCRIPTION = [
   "",
   `![The invite page](data:image/png;base64,${FIXTURE_PICTURE_PNG})`,
   "",
+  "---",
+  "",
+  "# Rollout",
+  "",
+  "### Order",
+  "",
+  "1. Ship behind the members flag.",
+  "2. Turn it on for the team's own workspace.",
+  "   - Watch the accept rate for a day.",
+  "3. Turn it on for everyone.",
+  "",
+  "The old admin-only path is ~~kept for a week~~ removed at once. Read the " +
+    "[invite spec](https://example.com/spec) first, then ask " +
+    `[@Build the invite flow](https://vespin.dev/personal/agent/${AGENT.INVITES}).`,
+  "",
+  "```mermaid",
+  "flowchart LR",
+  "  Invite --> Email --> Accept --> Member",
+  "```",
+  "",
 ].join("\n");
 
 /** The reference journey's task as its page reads it: its row's fields, its description, and the task it waits on. */
