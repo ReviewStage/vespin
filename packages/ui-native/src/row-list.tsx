@@ -1,18 +1,30 @@
 // row-list.tsx -- a list of rows and its sections, as SwiftUI's own List draws them, each section under a small muted header that folds.
 
-import { Button, HStack, Image, List, Menu, Section, Spacer, Text } from "@expo/ui/swift-ui";
+import {
+  Button,
+  HStack,
+  Image,
+  List,
+  Menu,
+  Section,
+  Spacer,
+  Text,
+  ZStack,
+} from "@expo/ui/swift-ui";
 import type { ModifierConfig } from "@expo/ui/swift-ui/modifiers";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   Animation,
   accessibilityAddTraits,
   accessibilityElement,
+  accessibilityHidden,
   accessibilityHint,
   accessibilityLabel,
   accessibilityValue,
   animation,
   background,
   buttonStyle,
+  containerRelativeFrame,
   environment,
   font,
   foregroundStyle,
@@ -42,12 +54,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { useAnnounced, useReduceMotion } from "./accessibility.js";
+import { useAnnounced, useReduceMotion, useScaledSize } from "./accessibility.js";
 import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
-import { ToneGlyph } from "./marks.js";
+import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
@@ -56,6 +68,9 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** Whether a foldable section stands open, in VoiceOver's own words for a disclosure. */
 const FOLD_HEARD = { OPEN: "Expanded", SHUT: "Collapsed" } as const;
+
+/** FNV-1a's 32-bit offset and prime, and the character `orderOf` puts between two ids so `ab`,`c` and `a`,`bc` differ. */
+const FNV = { OFFSET: 0x811c9dc5, PRIME: 0x01000193, SEPARATOR: 0x1f } as const;
 
 /** What a press on a foldable section's header is heard to do. */
 const FOLD_HINT = "Shows or hides the rows it holds";
@@ -111,6 +126,8 @@ type RowListProps = {
   readonly searched?: string | undefined;
   /** The scopes it lists under, standing as its first row so they scroll away with the rows; none where it has none. */
   readonly scopes?: ListScopes | undefined;
+  /** What the list says while it holds no rows, such as an `EmptyState` saying why; none while it holds rows. */
+  readonly empty?: ReactNode | undefined;
   /**
    * Starts its Select mode with the rows the system ticked, where it has one:
    * iPadOS lets a list whose selection is a set tick several rows with no
@@ -121,6 +138,27 @@ type RowListProps = {
   readonly onChooseStart?: ((ids: readonly string[]) => void) | undefined;
   readonly children: ReactNode;
 };
+
+/**
+ * A number standing for the rows' ids in their order, FNV-1a over each id's
+ * characters with a separator between ids, so it changes when a row comes,
+ * goes, or moves, and holds while the same rows only redraw.
+ */
+function orderOf<Item>(data: readonly Item[], keyOf: (item: Item) => string): number {
+  let hash: number = FNV.OFFSET;
+
+  for (const item of data) {
+    const key = keyOf(item);
+
+    for (let index = 0; index < key.length; index++) {
+      hash = Math.imul(hash ^ key.charCodeAt(index), FNV.PRIME);
+    }
+
+    hash = Math.imul(hash ^ FNV.SEPARATOR, FNV.PRIME);
+  }
+
+  return hash;
+}
 
 /**
  * The rows a two-finger drag chose: the selection the system reports, but
@@ -149,6 +187,30 @@ function selectedId(selection: readonly (string | number)[]): string | undefined
  */
 function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfig[] {
   return look === LIST_LOOK.SIDEBAR ? [] : [background(colors.GROUND)];
+}
+
+/**
+ * The one row a list with nothing to show holds: its empty state, on the
+ * list's ground with no hairline, at least three quarters of the list's height
+ * tall so it stands near the middle without making the list scroll. Note that it
+ * stands inside the list rather than over it, because SwiftUI's words and
+ * glyphs take a touch, so a pull begun on the state's title stopped there
+ * when it stood over the list; inside it, a pull anywhere scrolls the list.
+ */
+function EmptyRow({ children }: { readonly children: ReactNode }) {
+  // Note that ¾ of the list's height is the row's least, not its height: a clear spacer stands that tall behind the state, and the stack takes the taller of the two, so at the accessibility sizes in a short window the state grows past it and the list scrolls to its foot rather than squeezing it.
+  return (
+    <ZStack
+      modifiers={[
+        listRowBackground("clear"),
+        listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
+        listRowSeparator("hidden"),
+      ]}
+    >
+      <Spacer modifiers={[containerRelativeFrame({ axes: "vertical", count: 4, span: 3 })]} />
+      <HStack>{children}</HStack>
+    </ZStack>
+  );
 }
 
 /**
@@ -189,7 +251,10 @@ function ScopeRow({ scopes }: { readonly scopes: ListScopes }) {
  * two fingers dragged down tick a run, and the rows' swipes step aside, as
  * the system's do. A list that can start Select mode hands SwiftUI its edit
  * mode as a binding, so two fingers dragged down it start Select mode as
- * they do in Mail.
+ * they do in Mail. A list with
+ * nothing to show still stands, its empty state its one row, as iOS stands
+ * its content-unavailable view in a list's place, so a pull still reads it
+ * again and the state's own press, such as Try again, still takes a tap.
  */
 export function RowList({
   look,
@@ -199,6 +264,7 @@ export function RowList({
   choosing,
   searched,
   scopes,
+  empty,
   onChooseStart,
   children,
 }: RowListProps) {
@@ -283,6 +349,7 @@ export function RowList({
             {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
             {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
             <RowSearchedContext value={searchedWords}>{children}</RowSearchedContext>
+            {empty === undefined ? null : <EmptyRow>{empty}</EmptyRow>}
           </RowSelectedContext>
         </RowOpenContext>
       </ListLookContext>
@@ -310,8 +377,15 @@ type RowForEachProps<Item> = {
  * row drawn here holds no state of its own; its caller holds it by id.
  */
 export function RowForEach<Item>({ data, keyOf, children }: RowForEachProps<Item>) {
+  const reduceMotion = useReduceMotion();
+
+  // Note that a row that comes, goes, or moves slides the rows around it into place, as Mail's list does when a message is archived, rather than the list redrawing in its new order at once; with Reduce Motion on the rows stand in their new places at once, as the system's own lists do.
   return (
-    <List.ForEach data={data} keyExtractor={keyOf}>
+    <List.ForEach
+      data={data}
+      keyExtractor={keyOf}
+      modifiers={reduceMotion ? [] : [animation(Animation.default, orderOf(data, keyOf))]}
+    >
       {({ item }) => children(item)}
     </List.ForEach>
   );
@@ -324,8 +398,16 @@ type ListSectionProps = {
   readonly count?: number | undefined;
   /** A glyph in its tone before the count, saying how what it counts went, such as checks failing. */
   readonly mark?: MarkLook | undefined;
+  /** What the group is, before its title in the muted ink, as the panel's sidebar leads a section with its icon and a repository with its own mark; none where the words say it alone. */
+  readonly glyph?: Glyph | undefined;
+  /** The repository, `owner/name`, whose owner's picture stands in the glyph's place, as the panel's sidebar leads a repository's group; the glyph stands in until it draws. */
+  readonly repository?: string | undefined;
   /** Whether a press on its header folds it in place, a chevron leading the header. */
   readonly foldable?: boolean | undefined;
+  /** Whether a foldable section stands folded, where its screen holds that across a change of layout; it holds its own where none is given. */
+  readonly folded?: boolean | undefined;
+  /** Called with whether a press folded the section, where its screen holds `folded`. */
+  readonly onFold?: ((folded: boolean) => void) | undefined;
   /** A line under the section, in the system's footnote. */
   readonly footer?: string | undefined;
   /** What the footer says: a note on the section, in the footnote's own ink, or why a send did not go, as every refusal reads (`ProblemLine`) and told to VoiceOver at once. */
@@ -336,7 +418,17 @@ type ListSectionProps = {
   readonly progress?: SectionProgress | undefined;
   /** What a + at the header's end adds to the section, such as New sub-task; none where it adds nothing. */
   readonly add?: SectionAdd | undefined;
+  /** What a Show all at the header's end opens: every row the section holds a few of, as a search's section under All; none where it holds them all. */
+  readonly more?: SectionMore | undefined;
   readonly children: ReactNode;
+};
+
+/** A section's Show all: the words it draws, the words it is heard by, and what it opens. */
+type SectionMore = {
+  readonly label: string;
+  /** What it is heard as, naming what it shows: "Show all 12 tasks". */
+  readonly heard: string;
+  readonly onPress: () => void;
 };
 
 /** How many of a section's rows are finished of all of them, and the words a reader hears in the figures' place. */
@@ -367,15 +459,21 @@ function GroupHeader({
   count,
   progress,
   mark,
+  glyph,
+  repository,
   folded,
 }: {
   readonly title: string;
   readonly count: number | undefined;
   readonly progress: SectionProgress | undefined;
   readonly mark: MarkLook | undefined;
+  readonly glyph: Glyph | undefined;
+  readonly repository: string | undefined;
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
+  const chevron = useScaledSize(CHEVRON_SIZE);
+  const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
 
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
@@ -391,9 +489,19 @@ function GroupHeader({
       {folded === undefined ? null : (
         <Image
           {...glyphImage(folded ? GLYPH.FOLDED : GLYPH.UNFOLDED)}
-          size={CHEVRON_SIZE}
+          size={chevron}
           color={colors.TEXT_MUTED}
-          modifiers={[frame({ width: CHEVRON_SIZE + 2 })]}
+          modifiers={[frame({ width: chevron + 2 })]}
+        />
+      )}
+      {repository !== undefined ? (
+        <RepositoryPicture repository={repository} size={glyphSize} />
+      ) : glyph === undefined ? null : (
+        <Image
+          {...glyphImage(glyph)}
+          size={glyphSize}
+          color={colors.TEXT_MUTED}
+          modifiers={[accessibilityHidden()]}
         />
       )}
       <Text
@@ -443,6 +551,7 @@ function GroupHeader({
  */
 function SectionAddButton({ add }: { readonly add: SectionAdd }) {
   const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
   const [only, ...rest] = add.acts;
 
   if (only === undefined) return null;
@@ -451,7 +560,7 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
   const glyph = (
     <Image
       {...glyphImage(GLYPH.ADD)}
-      size={MARK_SIZE.GLYPH}
+      size={size}
       color={colors.TEXT_MUTED}
       modifiers={[
         frame({ minWidth: ADD_TARGET.WIDTH, minHeight: ADD_TARGET.HEIGHT, alignment: "trailing" }),
@@ -501,33 +610,75 @@ function SectionFooter({ words, tone }: { readonly words: string; readonly tone:
 }
 
 /**
+ * A section header's Show all, as Mail's and Music's search sections end:
+ * its words in the header's size, in the ink rather than muted so it reads as
+ * a press, beside the header so VoiceOver hears it apart from the heading.
+ */
+function SectionMoreButton({ more }: { readonly more: SectionMore }) {
+  const colors = useColors();
+
+  // Note that the target's frame and shape stand on the words, the button's label, since a borderless button answers only where its label is hit.
+  return (
+    <Button
+      onPress={more.onPress}
+      modifiers={[buttonStyle("borderless"), accessibilityLabel(more.heard)]}
+    >
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.GROUP_HEADER, weight: "medium" }),
+          foregroundStyle(colors.TEXT),
+          frame({ minHeight: ADD_TARGET.HEIGHT, alignment: "trailing" }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
+      >
+        {more.label}
+      </Text>
+    </Button>
+  );
+}
+
+/**
  * A section of a list or a form under a small muted header with its count,
  * as Linear's and Cursor's groups stand rather than the system's uppercase
  * caption. A foldable section folds in place on a press of its header, its
  * chevron turning to say so; it opens unfolded. A header given `onDropLink`
  * takes a row dragged onto it, on an iPad, and hands on the row's link. A
  * header given `add` ends in a + that adds to the section, so an empty
- * section stands as its header alone rather than a list of add rows. Its
- * rows fold away and come back with the system's quick ease, or at once
- * where the reader reduces motion. Note that SwiftUI's own
- * `Section(isExpanded:)` is not used, because it folds only in a sidebar
- * list, where the system draws its own chevron at the header's end.
+ * section stands as its header alone rather than a list of add rows. A
+ * header given `more` ends in a Show all that opens every row of a section
+ * the list cut short, as Mail's search sections do. Its rows fold away and
+ * come back with the system's quick ease, or at once where the reader
+ * reduces motion. Note that SwiftUI's own `Section(isExpanded:)` is not used,
+ * because it folds only in a sidebar list, where the system draws its own
+ * chevron at the header's end.
  */
 export function ListSection({
   title,
   count,
   progress,
   mark,
+  glyph,
+  repository,
   foldable = false,
+  folded: held,
+  onFold,
   footer,
   footerTone = FOOTER_TONE.NOTE,
   onDropLink,
   add,
+  more,
   children,
 }: ListSectionProps) {
-  const [folded, setFolded] = useState(false);
+  const [own, setOwn] = useState(false);
+  const folded = held ?? own;
   const look = useContext(ListLookContext);
   const reduceMotion = useReduceMotion();
+
+  const setFolded = (next: boolean) => {
+    setOwn(next);
+    onFold?.(next);
+  };
+
   // Note that a header holding none shows no count, as Mail's groups stand, rather than a 0 beside its title.
   const shown = count === 0 ? undefined : count;
 
@@ -538,6 +689,8 @@ export function ListSection({
         count={shown}
         progress={progress}
         mark={mark}
+        glyph={glyph}
+        repository={repository}
         folded={foldable ? folded : undefined}
       />
     );
@@ -547,7 +700,7 @@ export function ListSection({
       label
     ) : (
       <Button
-        onPress={() => setFolded((was) => !was)}
+        onPress={() => setFolded(!folded)}
         modifiers={[
           buttonStyle("plain"),
           accessibilityAddTraits(["isHeader"]),
@@ -568,12 +721,13 @@ export function ListSection({
     );
 
   const header =
-    dropped === undefined || add === undefined ? (
+    dropped === undefined || (add === undefined && more === undefined) ? (
       dropped
     ) : (
       <HStack spacing={0}>
         {dropped}
-        <SectionAddButton add={add} />
+        {more === undefined ? null : <SectionMoreButton more={more} />}
+        {add === undefined ? null : <SectionAddButton add={add} />}
       </HStack>
     );
 

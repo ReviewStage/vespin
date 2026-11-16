@@ -30,7 +30,7 @@ import {
   type StartNoteHeading,
   toolStep,
 } from "@repo/features/agent-replay";
-import { AGENT_TOOL, CLAUDE_CODE_TOOL, CODEX_TOOL } from "@repo/features/agent-tools";
+import { AGENT_TOOL, CLAUDE_CODE_TOOL, CODEX_TOOL, CURSOR_TOOL } from "@repo/features/agent-tools";
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
@@ -167,6 +167,13 @@ const CALL_WORDS: ReadonlyMap<string, CallWords> = new Map([
   [CLAUDE_CODE_TOOL.WEB_SEARCH, { verb: "Searched the web for", key: "query" }],
   [CODEX_TOOL.COMMAND_EXECUTION, { verb: "Ran", key: "command" }],
   [CODEX_TOOL.WEB_SEARCH, { verb: "Searched the web for", key: "query" }],
+  [CURSOR_TOOL.SHELL, { verb: "Ran", key: "command" }],
+  [CURSOR_TOOL.READ, { verb: "Read", key: "path" }],
+  [CURSOR_TOOL.WRITE, { verb: "Wrote", key: "path" }],
+  [CURSOR_TOOL.EDIT, { verb: "Edited", key: "path" }],
+  [CURSOR_TOOL.DELETE, { verb: "Deleted", key: "path" }],
+  [CURSOR_TOOL.GLOB, { verb: "Searched", key: "globPattern" }],
+  [CURSOR_TOOL.GREP, { verb: "Searched", key: "pattern" }],
   // Note that its verb is the transcript's own, which the replay card reads back as the pull request's line.
   [
     AGENT_TOOL.OPEN_PULL_REQUEST,
@@ -174,12 +181,15 @@ const CALL_WORDS: ReadonlyMap<string, CallWords> = new Map([
   ],
 ]);
 
-/** The tools that edit the one file their input names: the retired runtime's own, and Claude Code's. */
+/** The tools that edit the one file their input names: the retired runtime's own, Claude Code's, and Cursor's. */
 const ONE_FILE_EDITS: ReadonlySet<string> = new Set([
   AGENT_TOOL.WRITE_FILE,
   CLAUDE_CODE_TOOL.WRITE,
   CLAUDE_CODE_TOOL.EDIT,
   CLAUDE_CODE_TOOL.NOTEBOOK_EDIT,
+  CURSOR_TOOL.WRITE,
+  CURSOR_TOOL.EDIT,
+  CURSOR_TOOL.DELETE,
 ]);
 
 /** A patch header naming a file, as `apply_patch` spells one: a file added, updated, or deleted, or where an update moves it to. */

@@ -33,9 +33,9 @@ export type SidebarPlace = (typeof SIDEBAR_PLACE)[keyof typeof SIDEBAR_PLACE];
 
 /**
  * Each place's row and the tab root it opens, in the sidebar's order. Note
- * that Search carries the Search tab's own id, since the sidebar stands for
- * the tab bar a regular window hides, so a flow finds it the same way in
- * either window.
+ * that each carries its tab's own id, since the sidebar stands for the tab
+ * bar a regular window hides, so a flow finds it the same way in either
+ * window.
  */
 const PLACES = [
   {
@@ -43,14 +43,14 @@ const PLACES = [
     title: "Inbox",
     symbol: GLYPH.INBOX,
     route: "/inbox",
-    testId: undefined,
+    testId: "inbox-tab",
   },
   {
     id: SIDEBAR_PLACE.TASKS,
     title: "Tasks",
     symbol: GLYPH.TASK,
     route: "/tasks",
-    testId: undefined,
+    testId: "tasks-tab",
   },
   {
     id: SIDEBAR_PLACE.SEARCH,
@@ -164,8 +164,8 @@ export function useListColumn(list: ListColumn): FirstColumn {
 
   return {
     sidebar: list.view,
-    // Note that New task leads the detail's bar instead (`usePortraitDetailBar`), as in a landscape window and Mail, so the narrow list's bar keeps only its own acts, such as Select mode's Done.
-    sidebarBar: { ...list.bar, leading },
+    // Note that New task leads the detail's bar instead (`usePortraitDetailBar`), as in a landscape window and Mail, so the narrow list's bar keeps only its own acts, such as Select mode's Done, and acts it leads with, such as Select all, stand in the switcher's place, as on the iPhone, since a second leading item folds into the bar's overflow.
+    sidebarBar: { ...list.bar, leading: (list.bar.lead ?? []).length > 0 ? undefined : leading },
     sidebarShown: shown,
     onSidebarShownChange: setShown,
   };

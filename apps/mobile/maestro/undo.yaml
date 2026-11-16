@@ -17,27 +17,17 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-# Note that this row stands near the Open list's end, which can't scroll it to the middle, so it is scrolled to without centering, then lifted clear of the floating tab bar, which would take the tap.
-- scrollUntilVisible:
-    element: "acceptInvite can add a member twice"
-    direction: DOWN
-- swipe:
-    start: 50%, 70%
-    end: 50%, 40%
-- waitForAnimationToEnd
-- tapOn: "acceptInvite can add a member twice"
-# Note that the row is tapped again while the Inbox's scopes still stand, the list alone showing them, because a tap right after the list draws, as at launch on the folded Duo, can leave the list in front.
-- waitForAnimationToEnd
 - runFlow:
-    when:
-      visible: "Questions.*"
-    commands:
-      - tapOn: "acceptInvite can add a member twice"
+    file: subflows/open-row.yaml
+    env:
+      ROW: "acceptInvite can add a member twice"
 - assertVisible: "Got it"
 - waitForAnimationToEnd
 - takeScreenshot: got-it
 - tapOn: "Got it"
-# Note that the notice stands 6 seconds, so it is found by its words in one wait and Undo is pressed straight after, before it slides away under the bar's ⋯.
+# Note that the notice is checked at once and pressed after only its shot,
+# since it stands six seconds and a loaded runner has reached it after it
+# went.
 - extendedWaitUntil:
     visible: "Got it: “acceptInvite can add a member twice”"
     timeout: 5000
@@ -57,50 +47,21 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: got-it-undone
 
-# Resolve, from the thread's ⋯ menu: the thread settles, says so with Undo,
-# and Undo opens it again, the menu offering Resolve anew.
+# Resolve, from the thread's ⋯ menu or a wide window's bar: the thread
+# settles, says so with Undo, and Undo opens it again, Resolve offered anew.
 - launchApp:
     clearState: true
     arguments:
       fixture: inbox
-# Note that this row is the Open list's last, which fits without scrolling, so it is scrolled to without centering, which a list that cannot scroll never reaches. A last row rests under the floating tab bar, which took the tap, so the list is lifted from 70% to 40% first, as far as it scrolls.
-- scrollUntilVisible:
-    element: "What the expired invite page says"
-    direction: DOWN
-- swipe:
-    start: 50%, 70%
-    end: 50%, 40%
-- waitForAnimationToEnd
-- tapOn: "What the expired invite page says"
-# Note that the row is tapped again while the Inbox's scopes still stand, the list alone showing them, because a tap right after the list draws, as at launch on the folded Duo, can leave the list in front.
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "What the expired invite page says"
 - waitForAnimationToEnd
 - runFlow:
-    when:
-      visible: "Questions.*"
-    commands:
-      - tapOn: "What the expired invite page says"
-- waitForAnimationToEnd
-# Note that on an iPhone the thread's ⋯ is the one "More"; a split view's list has its own first, so where Resolve did not open the thread's is tapped by its place, a second time where that tap only closed the list's menu. Maestro 2.12 finds no "More" by a negative index.
-- extendedWaitUntil:
-    visible: "More"
-    timeout: 5000
-- tapOn: "More"
-- runFlow:
-    when:
-      notVisible: "Resolve"
-    commands:
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "More"
-          index: 1
-- runFlow:
-    when:
-      notVisible: "Resolve"
-    commands:
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "More"
-          index: 1
+    file: subflows/bar-act.yaml
+    env:
+      ACT: Resolve
 - tapOn: "Resolve"
 - extendedWaitUntil:
     visible: "Resolved “What the expired invite page says”"
@@ -112,22 +73,13 @@ appId: dev.vespin.ios
     notVisible:
       id: "failure-notice-undo"
     timeout: 5000
-- tapOn: "More"
+# Note that Resolve is checked as pressable, since a regular window's bar
+# keeps it standing, dimmed, once the thread is settled.
 - runFlow:
-    when:
-      notVisible: "Resolve"
-    commands:
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "More"
-          index: 1
-- runFlow:
-    when:
-      notVisible: "Resolve"
-    commands:
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "More"
-          index: 1
-- assertVisible: "Resolve"
+    file: subflows/bar-act.yaml
+    env:
+      ACT: Resolve
+- assertVisible:
+    text: "Resolve"
+    enabled: true
 - takeScreenshot: resolve-undone

@@ -10,13 +10,10 @@ import type { AutomationChangeParams, AutomationCreateParams } from "./automatio
 import {
   AUTOMATION_ACTION,
   AUTOMATION_BOUNDS,
-  AUTOMATION_DEFAULT_GUARDS,
-  AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS,
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
   type AutomationAction,
-  type AutomationGuards,
   type AutomationScope,
   type AutomationSummary,
   type AutomationTarget,
@@ -53,8 +50,7 @@ import {
  * schedule. A GitHub event is chosen by its kind, any label or branch filter
  * it was given kept as it was, since the editor does not show them; a
  * webhook is its kind alone, its secret the service's; an integration's
- * event is chosen with the filters the editor shows, and the hours it waits
- * before the same subject fires it again, which it writes into its guards. The repository the
+ * event is chosen with the filters the editor shows. The repository the
  * editor shows is the first, where a run starts; any others it was given
  * are kept behind it, and with none chosen a run works in no repository,
  * which a GitHub trigger, fired by a repository's events, cannot. A save sends only what changed, so a field the editor does not
@@ -84,8 +80,6 @@ export const DRAFT_FIELD = {
   REPOSITORY: "repository",
   /** An integration trigger's filters. */
   FILTERS: "filters",
-  /** An integration trigger's subject cooldown. */
-  COOLDOWN: "cooldown",
 } as const;
 
 type DraftField = (typeof DRAFT_FIELD)[keyof typeof DRAFT_FIELD];
@@ -139,10 +133,6 @@ export interface AutomationDraft {
   readonly slackDelivery: boolean;
   /** The owner's MCP servers a run's new agent is not handed, by connection name (`notion`, `notion-2`), as the agent box's servers button switches them. */
   readonly disabledServers: readonly string[];
-  /** The guards it runs under: a saved one's, the service's defaults otherwise. */
-  readonly guards: AutomationGuards | null;
-  /** The hours an integration trigger waits before the same subject fires it again, or nothing while its field holds no number. */
-  readonly subjectCooldownHours: number | undefined;
 }
 
 /** A GitHub trigger's settings as its editor holds them, each stated where the trigger leaves it to a default. */
@@ -308,33 +298,6 @@ function sameIntegrationTrigger(one: IntegrationTrigger, other: IntegrationTrigg
     sameSet(one.filters?.environment, other.filters?.environment) &&
     sameSet(one.filters?.level, other.filters?.level)
   );
-}
-
-/** A cooldown the guards take: a whole number of hours, from one to a week. */
-function cooldownAdmitted(hours: number | undefined): hours is number {
-  return (
-    hours !== undefined &&
-    Number.isInteger(hours) &&
-    hours >= 1 &&
-    hours <= AUTOMATION_BOUNDS.MAX_SUBJECT_COOLDOWN_HOURS
-  );
-}
-
-/** A saved automation's subject cooldown: its guards', or the service's default where they name none. */
-function cooldownOf(guards: AutomationGuards | null): number {
-  return guards?.subjectCooldownHours ?? AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS;
-}
-
-/** The guards a draft writes: its own, with its subject cooldown where an integration fires it; none where it keeps the service's. */
-function guardsOf(draft: AutomationDraft): AutomationGuards | null {
-  if (draft.triggerKind !== AUTOMATION_TRIGGER.INTEGRATION) return draft.guards;
-
-  if (!cooldownAdmitted(draft.subjectCooldownHours)) return draft.guards;
-
-  return {
-    ...(draft.guards ?? AUTOMATION_DEFAULT_GUARDS),
-    subjectCooldownHours: draft.subjectCooldownHours,
-  };
 }
 
 /** Whether one integration filter's values are within the wire's bounds: so many values, each so long. */
@@ -534,8 +497,6 @@ export function automationDraft(
       archiveSuccessful: true,
       slackDelivery: false,
       disabledServers: [],
-      guards: null,
-      subjectCooldownHours: AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS,
     };
   }
 
@@ -573,8 +534,6 @@ export function automationDraft(
     archiveSuccessful: automation.archiveSuccessful ?? false,
     slackDelivery: automation.slackDelivery ?? false,
     disabledServers: automation.action.disabledServers ?? [],
-    guards: automation.guards,
-    subjectCooldownHours: cooldownOf(automation.guards),
   };
 }
 
@@ -587,8 +546,8 @@ export function repositoryHeld(automation: AutomationSummary | undefined): boole
  * What stops a draft saving, at the field it is about: a name and a task
  * written, a schedule we read and that fires no more often than its
  * floor, a one-time one's date and time still to come unless it stands as
- * `opened` had it, so a spent one may still be renamed, an integration's filters within their bounds and its cooldown a
- * whole number of hours up to a week, and a repository chosen for a GitHub
+ * `opened` had it, so a spent one may still be renamed, an integration's filters within their bounds,
+ * and a repository chosen for a GitHub
  * trigger, whose events come from it, where none is held (`repositoryHeld`).
  */
 export function draftProblems(
@@ -634,11 +593,6 @@ export function draftProblems(
       ? `Keep each filter to ${AUTOMATION_BOUNDS.MAX_FILTER_VALUES} values of up to ${AUTOMATION_BOUNDS.MAX_FILTER_VALUE_CHARS} characters.`
       : undefined;
 
-  const cooldown =
-    integration && !cooldownAdmitted(draft.subjectCooldownHours)
-      ? `Wait a whole number of hours, from 1 to ${AUTOMATION_BOUNDS.MAX_SUBJECT_COOLDOWN_HOURS}.`
-      : undefined;
-
   const repository =
     !held && draft.repository === null && draft.triggerKind === AUTOMATION_TRIGGER.GITHUB
       ? "Choose the repository whose events start it."
@@ -655,8 +609,6 @@ export function draftProblems(
   if (repository !== undefined) problems[DRAFT_FIELD.REPOSITORY] = repository;
 
   if (filters !== undefined) problems[DRAFT_FIELD.FILTERS] = filters;
-
-  if (cooldown !== undefined) problems[DRAFT_FIELD.COOLDOWN] = cooldown;
 
   return problems;
 }
@@ -708,8 +660,6 @@ export function createRequestOf(
   draft: AutomationDraft,
   workspaceId: string,
 ): AutomationCreateParams {
-  const guards = guardsOf(draft);
-
   const made = {
     workspaceId,
     name: draft.name.trim(),
@@ -719,7 +669,6 @@ export function createRequestOf(
     target: targetOf(draft),
     archiveSuccessful: draft.archiveSuccessful,
     slackDelivery: draft.slackDelivery,
-    ...(guards === null ? undefined : { guards }),
   } as const;
 
   return { ...made, repositories: draftRepositories(draft) };
@@ -737,14 +686,7 @@ export function sameDraft(one: AutomationDraft, other: AutomationDraft): boolean
         sameFilters(one.githubFilters, other.githubFilters) &&
         sameSettings(one.githubSettings, other.githubSettings))) &&
     (one.triggerKind !== AUTOMATION_TRIGGER.INTEGRATION ||
-      (sameIntegrationTrigger(one.integrationTrigger, other.integrationTrigger) &&
-        one.subjectCooldownHours === other.subjectCooldownHours)) &&
-    // A new draft's guards, unset, are whatever the service sets, so they differ from none.
-    (one.guards === null ||
-      other.guards === null ||
-      (one.guards.maxConcurrentRuns === other.guards.maxConcurrentRuns &&
-        one.guards.dailyRunCap === other.guards.dailyRunCap &&
-        one.guards.subjectCooldownHours === other.guards.subjectCooldownHours)) &&
+      sameIntegrationTrigger(one.integrationTrigger, other.integrationTrigger)) &&
     sameScheduleOf(one, other) &&
     one.repository === other.repository &&
     one.owner === other.owner &&
@@ -787,12 +729,6 @@ export function changeOf(
   const triggerMoved =
     draft.triggerKind !== was.triggerKind || scheduleMoved || eventMoved || integrationMoved;
 
-  // Note that a cooldown is sent over the guards as saved, because a change's guards replace them whole.
-  const cooldownMoved =
-    draft.triggerKind === AUTOMATION_TRIGGER.INTEGRATION &&
-    cooldownAdmitted(draft.subjectCooldownHours) &&
-    draft.subjectCooldownHours !== was.subjectCooldownHours;
-
   const actionMoved =
     draft.prompt.trim() !== was.prompt ||
     !sameChoice(draft.choice, was.choice) ||
@@ -805,10 +741,6 @@ export function changeOf(
   if (draft.name.trim() !== was.name) change.name = draft.name.trim();
 
   if (triggerMoved) change.trigger = draftTrigger(draft);
-
-  if (cooldownMoved) {
-    change.guards = { ...automation.guards, subjectCooldownHours: draft.subjectCooldownHours };
-  }
 
   // Note that a change names its servers even where none are off, because a change that names none keeps the saved ones.
   if (actionMoved) change.action = { ...actionOf(draft), disabledServers: draft.disabledServers };

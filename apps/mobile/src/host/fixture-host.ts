@@ -14,6 +14,7 @@
  */
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { markedAs, type ReadMark } from "@repo/features/read-mark";
 import {
   FOLLOWER_CALL_FAILURE,
@@ -359,6 +360,9 @@ function olderRead(
   return answer;
 }
 
+/** What GitHub says of a pull request change the fixture refuses, as it words a merge it will not make. */
+const PULL_REQUEST_REFUSED_WORDS = "Pull Request is not mergeable";
+
 /**
  * A task's start answered as unanswered the first time its task's id is
  * sent, as a dropped connection leaves it, so a flow sees New task's notice
@@ -388,8 +392,9 @@ function startRefusedOnce(
  * of a live refusal (a task's start is refused on its first send alone,
  * `startRefusedOnce`), an agent's start unanswered, so a flow sees New
  * agent's notice with Try again once its sheet has closed, and a follower
- * added or a memory deleted unanswered, so a flow sees the notice over Add a
- * follower's sheet and Settings'.
+ * added, a memory deleted or a thread's reminder unanswered, so a flow sees
+ * the notice over Add a follower's sheet, Settings', and a thread's composer,
+ * the keyboard up or down.
  */
 const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>> = new Map<
   PortActKind,
@@ -403,8 +408,14 @@ const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>>
   [ACT_KIND.AGENTS_START, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
   [ACT_KIND.TASKS_ADD_FOLLOWER, () => ({ failure: FOLLOWER_CALL_FAILURE.UNANSWERED })],
   [ACT_KIND.MEMORIES_FORGET, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
+  [ACT_KIND.AGENTS_INBOX_REMIND, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
   // Note that a note to the people who make the app is refused too, so its footer's failure tone shows.
   [ACT_KIND.FEEDBACK_SEND, () => ({ delivered: false })],
+  // Note that a change to a pull request is refused as GitHub refuses one, its words beside, so the pull request page shows its write note.
+  [
+    ACT_KIND.AGENTS_PULL_REQUEST_ACTION,
+    () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.REFUSED, words: PULL_REQUEST_REFUSED_WORDS }),
+  ],
 ]);
 
 /** A member of `members` by a key known only at run time, as the fixture reads each one of the port before it answers or forwards it. */

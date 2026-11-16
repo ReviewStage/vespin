@@ -13,6 +13,7 @@ import { readForkCut, readNativeRewind } from "@repo/database/models/conversatio
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { readTaskHeader, readTaskWorkspace } from "@repo/database/models/task-store";
 import { storeWriter } from "@repo/database/models/writer";
+import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   type NoteFiles,
   type Replay,
@@ -797,7 +798,8 @@ const carriedSessionOf = Effect.fnUntraced(function* (
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(source.userId, source.id));
   const read = Option.getOrUndefined(routing);
 
-  if (read?.nativeSession == null) return undefined;
+  // Note that a Cursor session is never carried, since Cursor's store forks none yet: the new agent is handed the source's steps.
+  if (read?.nativeSession == null || read.runtime === CONVERSATION_RUNTIME.CURSOR) return undefined;
 
   if ((yield* runtime) !== read.runtime) return undefined;
 

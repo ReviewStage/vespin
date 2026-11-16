@@ -36,6 +36,7 @@ import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
 import { IntegrationMark } from "./marks.js";
+import { MEDIA_BOUNDS } from "./media-frame.js";
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
@@ -66,13 +67,6 @@ const LATEST_REACH = 240;
 
 /** How near its newest row the list stands to keep it in view as rows land, in points. */
 const ANCHOR_REACH = 48;
-
-/**
- * The widest a picture or a recording stands in the transcript, in points,
- * near the width Messages draws a photo at, so one shown never fills the
- * screen and the words around it stay in view.
- */
-const MEDIA_WIDTH = 280;
 
 /** How wide the round control that brings the newest row into view stands, in points: the system's least target. */
 const JUMP_SIZE = 44;
@@ -155,7 +149,8 @@ const styles = StyleSheet.create({
   blockTitle: { paddingHorizontal: SPACE.ROW, paddingTop: 6 },
   blockText: { padding: SPACE.ROW, paddingTop: SPACE.TIGHT },
   media: { gap: SPACE.ROW },
-  shown: { width: "100%", maxWidth: MEDIA_WIDTH, gap: SPACE.TIGHT },
+  // Note that each picture or recording sizes itself by the media's one rule (`mediaFrame`), and its caption wraps at the widest one stands.
+  shown: { maxWidth: MEDIA_BOUNDS.WIDTH, alignItems: "flex-start", gap: SPACE.TIGHT },
   page: {
     flexDirection: "row",
     alignItems: "center",
@@ -571,8 +566,10 @@ interface RowDrawing {
   readonly onOpenPage: (
     item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>,
   ) => void;
-  /** The address a picture or a recording is drawn from, by its id; none while its bytes are on their way. */
-  readonly mediaSource: (id: string) => string | undefined;
+  /** The address a picture or a recording is drawn from, by its id; none while its bytes are on their way, and `null` where they could not be read. */
+  readonly mediaSource: (id: string) => string | null | undefined;
+  /** Reads a picture or a recording whose bytes could not be read again, by its id. */
+  readonly onRetryMedia?: ((id: string) => void) | undefined;
   /** Opens a recording the system's player cannot play where it plays. */
   readonly onOpenElsewhere?: (() => void) | undefined;
   /** Opens a web address in Safari, such as a pull request's page on GitHub. */
@@ -594,23 +591,44 @@ interface RowDrawing {
 /** A pull request an agent opened, as the transcript lists it. */
 type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
 
-/** One thing a call showed, as its kind draws it: a picture, a recording in the system's player, or a sound clip in its strip. */
+/** What a picture a sent line kept by its id is drawn from, read as the agent's shown ones are; `null` for one the line names no way to, which stands as could not be read. */
+function saidSource(drawing: RowDrawing, pictureId: string | undefined): string | null | undefined {
+  return pictureId === undefined ? null : drawing.mediaSource(pictureId);
+}
+
+/** What reads a picture or a recording again, by its id, where the transcript offers it. */
+function retryOf(drawing: RowDrawing, id: string): (() => void) | undefined {
+  const retry = drawing.onRetryMedia;
+
+  return retry === undefined ? undefined : () => retry(id);
+}
+
+/** One thing a call showed, as its kind draws it: a picture, a recording in the system's player, or a sound clip in its strip; one whose bytes could not be read offers Try again. */
 function ShownMediaView({
   shown,
   source,
   onOpenElsewhere,
+  onRetry,
 }: {
   readonly shown: ShownMedia;
-  readonly source: string | undefined;
+  readonly source: string | null | undefined;
   readonly onOpenElsewhere: (() => void) | undefined;
+  readonly onRetry: (() => void) | undefined;
 }) {
   switch (shown.kind) {
     case SHOWN_MEDIA.VIDEO:
-      return <Video source={source} label={shown.label} onOpenElsewhere={onOpenElsewhere} />;
+      return (
+        <Video
+          source={source}
+          label={shown.label}
+          onOpenElsewhere={onOpenElsewhere}
+          onRetry={onRetry}
+        />
+      );
     case SHOWN_MEDIA.AUDIO:
-      return <AudioClip source={source} label={shown.label} />;
+      return <AudioClip source={source} label={shown.label} onRetry={onRetry} />;
     case SHOWN_MEDIA.PICTURE:
-      return <Picture source={source} alt={shown.label} />;
+      return <Picture source={source} alt={shown.label} onRetry={onRetry} />;
   }
 }
 
@@ -654,18 +672,32 @@ function TranscriptRow({
               {item.sender}
             </Text>
           )}
-          <CopyWordsMenu words={item.words}>
-            <View style={styles.saidHeld}>
-              <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
-                <Markdown
-                  words={item.words}
-                  typed
-                  repository={drawing.repository}
-                  onOpenLink={drawing.onOpenLink}
-                />
+          {/* Note that the pictures a line carried stand over its words at its end, as Messages and the panel stand a message's photos over its bubble, each by the media's one rule. */}
+          {(item.pictures ?? []).map((picture) => (
+            <Picture
+              key={picture.key}
+              source={picture.url ?? saidSource(drawing, picture.pictureId)}
+              alt={picture.name}
+              onRetry={
+                picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId)
+              }
+            />
+          ))}
+          {/* Note that a line of pictures alone draws no empty bubble under them, while a line of other files alone, which the phone leaves to the panel, keeps its bubble so the line still stands. */}
+          {item.words.trim() === "" && (item.pictures ?? []).length > 0 ? null : (
+            <CopyWordsMenu words={item.words}>
+              <View style={styles.saidHeld}>
+                <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
+                  <Markdown
+                    words={item.words}
+                    typed
+                    repository={drawing.repository}
+                    onOpenLink={drawing.onOpenLink}
+                  />
+                </View>
               </View>
-            </View>
-          </CopyWordsMenu>
+            </CopyWordsMenu>
+          )}
           {item.body === undefined ? null : <OriginBody body={item.body} />}
         </View>
       );
@@ -729,6 +761,7 @@ function TranscriptRow({
                 shown={shown}
                 source={drawing.mediaSource(shown.id)}
                 onOpenElsewhere={drawing.onOpenElsewhere}
+                onRetry={retryOf(drawing, shown.id)}
               />
               {shown.caption === "" ? null : (
                 <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>

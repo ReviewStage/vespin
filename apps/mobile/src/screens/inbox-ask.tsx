@@ -50,6 +50,7 @@ import {
 } from "@repo/ui-native";
 import { Predicate } from "effect";
 import type { ReactNode } from "react";
+import { useFocusShown } from "../focus-shown.js";
 import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
 import { REMIND_ME } from "./inbox-remind.js";
 
@@ -88,7 +89,10 @@ function typedValue(
 
 /** What an open ask's option media is opened and drawn by: each file's bytes as read, a page in the app or Safari, an address in Safari, and a recording the player cannot read on the web. */
 export interface OptionMediaDoors {
-  readonly source: (attachmentId: string) => string | undefined;
+  /** A file's bytes as read: none while on their way, and `null` where they could not be read. */
+  readonly source: (attachmentId: string) => string | null | undefined;
+  /** Reads a file whose bytes could not be read again. */
+  readonly retry: (attachmentId: string) => void;
   readonly openPage: (page: InboxOptionPage) => void;
   readonly openLink: (address: string) => void;
   readonly openVideoElsewhere: () => void;
@@ -107,13 +111,19 @@ function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedi
       const source = doors.source(piece.attachmentId);
 
       if (isAudioType(piece.mediaType)) {
-        return { kind: CHOICE_MEDIA.AUDIO, title: piece.caption ?? SOUND_CLIP_WORD, source };
+        return {
+          kind: CHOICE_MEDIA.AUDIO,
+          title: piece.caption ?? SOUND_CLIP_WORD,
+          source,
+          onRetry: () => doors.retry(piece.attachmentId),
+        };
       }
 
       return {
         kind: recording ? CHOICE_MEDIA.VIDEO : CHOICE_MEDIA.PICTURE,
         title: piece.caption ?? (recording ? RECORDING_WORD : PICTURE_WORD),
         source,
+        onRetry: () => doors.retry(piece.attachmentId),
         onOpen: recording ? doors.openVideoElsewhere : undefined,
       };
     }
@@ -292,15 +302,17 @@ export function ThreadComposer({
   item,
   answer,
   agentName,
-  inColumn = false,
+  inColumn,
 }: {
   readonly item: InboxItem;
   readonly answer: ThreadAnswer;
   /** The thread's agent's name, which the new thread's switch names. */
   readonly agentName: string;
-  /** Whether it stands at a SwiftUI column's foot, a split view's detail, rather than docked over the screen. */
-  readonly inColumn?: boolean;
+  /** Whether it stands at a SwiftUI column's foot, a split view's detail, rather than docked over the screen, and whether that column stands in front: the app's notice stands over its composer only while the column does and the thread's screen is the one in front of its stack. */
+  readonly inColumn?: { readonly inFront: boolean } | undefined;
 }) {
+  // Note that the thread's screen hears its focus here rather than reading it whole, so a change of focus draws only the composer again (`useFocusShown`).
+  const focused = useFocusShown();
   const { draft, onDraft, note, answerReady, send, asNew, setAsNew, start } = answer;
 
   const placeholder = asNew
@@ -330,7 +342,11 @@ export function ThreadComposer({
     },
   };
 
-  return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
+  return inColumn === undefined ? (
+    <Composer {...props} />
+  ) : (
+    <ComposerFoot {...props} shown={inColumn.inFront && focused} />
+  );
 }
 
 /** What the thread's ⋯ menu acts through: its read mark, Remind me's times, and its link copied. */
