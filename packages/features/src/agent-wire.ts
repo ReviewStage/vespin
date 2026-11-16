@@ -218,12 +218,17 @@ export const AGENT_RUNTIME = {
   RETIRED: "eve",
   CLAUDE_CODE: "claude_code",
   CODEX: "codex",
+  CURSOR: "cursor",
 } as const;
 
 export type AgentRuntime = (typeof AGENT_RUNTIME)[keyof typeof AGENT_RUNTIME];
 
 /** The runtimes that are a provider's own harness, which an agent's summary names. */
-export const NATIVE_AGENT_RUNTIMES = [AGENT_RUNTIME.CLAUDE_CODE, AGENT_RUNTIME.CODEX] as const;
+export const NATIVE_AGENT_RUNTIMES = [
+  AGENT_RUNTIME.CLAUDE_CODE,
+  AGENT_RUNTIME.CODEX,
+  AGENT_RUNTIME.CURSOR,
+] as const;
 
 export type NativeAgentRuntime = (typeof NATIVE_AGENT_RUNTIMES)[number];
 

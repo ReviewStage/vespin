@@ -2180,8 +2180,6 @@ export function TaskScreen() {
   useSurfaceOpen(handed || handing === undefined ? undefined : PRODUCT_SURFACE.TASK, handing);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
 
-  if (handed) return null;
-
   return (
     <>
       <Stack.Screen

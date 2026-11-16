@@ -518,18 +518,22 @@ function useClosingStart(
         refused: (answer) => ("refused" in answer ? answer.refused : undefined),
         retry: true,
         went: BUZZ.SUCCESS,
+        // Note that the landing runs once the start went, on its first send or a Try again, so a start taken on Try again opens its task too.
+        done: () => {
+          const answer = started.answer;
+
+          if (answer === undefined || "refused" in answer) return;
+          // Note that the task opens only while the reader stands where Start left them, on the same route with the same row selected, so a page they opened or a row they picked meanwhile stands.
+          const now = standingIn(presenting, 0);
+
+          if (!sameStanding(sheet, now) && !sameStanding(uncovered, now)) return;
+          // Note that only the task's page opens, its new agent standing in its Agents section, because a second route pushed over it races the split view's hand-off and leaves the task behind.
+          router.navigate(
+            onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })),
+          );
+        },
       },
-    ).then((went) => {
-      const answer = started.answer;
-
-      if (!went || answer === undefined || "refused" in answer) return;
-      // Note that the task opens only while the reader stands where Start left them, on the same route with the same row selected, so a page they opened or a row they picked meanwhile stands.
-      const now = standingIn(presenting, 0);
-
-      if (!sameStanding(sheet, now) && !sameStanding(uncovered, now)) return;
-      // Note that only the task's page opens, its new agent standing in its Agents section, because a second route pushed over it races the split view's hand-off and leaves the task behind.
-      router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })));
-    });
+    );
   };
 
   return { starting: sent, go };
