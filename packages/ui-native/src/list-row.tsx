@@ -975,13 +975,14 @@ const FOLD_TARGET = 44;
 /**
  * A parent's fold before its status ring, as the panel's chevron stands
  * before a task's name: it opens the sub-tasks under the row, while a press
- * on the row itself still opens the task. Note that the chevron lays out a
- * lead mark's square, so a sub-task's ring stands under its parent's and the
- * row stands no taller than its ring, but answers a press across a 44 pt
- * square, its overhang laid out at no size. It stands above the marks beside
- * it, so a press on its overhang is its own rather than the row's. While it
- * was laid out at no height, a press on it opened the row instead (j9614,
- * Nov 16).
+ * on the row itself still opens the task. Note that the button itself is
+ * the whole 44 pt square, since a borderless button in a selectable row
+ * takes a press only within its own frame, and the overhang is taken back
+ * outside it, so the row lays out a lead mark's square: a sub-task's ring
+ * stands under its parent's and the row stands no taller than its ring. It
+ * stands above the ring beside it, which its square reaches over. While
+ * the overhang was taken back inside the button, laying it out at no
+ * height, a press on it opened the row instead (j9614, Nov 16).
  */
 function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPress: () => void }) {
   const colors = useColors();
@@ -996,8 +997,9 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
       onPress={onPress}
       modifiers={[
         buttonStyle("borderless"),
-        zIndex(1),
         accessibilityLabel(open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS),
+        padding({ all: -overhang }),
+        zIndex(1),
       ]}
     >
       <Image
@@ -1007,7 +1009,6 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
         modifiers={[
           frame({ width: target, height: target }),
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-          padding({ all: -overhang }),
         ]}
       />
     </Button>
