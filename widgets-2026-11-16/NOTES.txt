@@ -1,0 +1,13 @@
+widgets-2026-11-16 -- jwidgets (59e1554d, the developer's audit, 13:24 UTC Nov 16), main 562c603ca4 JS over the Vn6 native app, iPhone 18 Pro (iOS 27.2 simulator), light and dark.
+CAPTURED
+- live-activity-lock-screen: Notification Center's Lock Screen presentation (main's live-activity.yaml).
+- live-activity-compact: the Dynamic Island compact (copper half ring, "3 working").
+- live-activity-expanded: the island expanded (3 working, 1 waiting on you, three rows with times and Stop).
+- wlock-1-lock-screen-live-activity: the REAL Lock Screen (Lock, then Home) with the activity; iOS's "Allow Live Activities from Vespin?" prompt stands under it, since the lane reinstalled the app (clearState).
+- wlock-4-lock-editor: the Lock Screen editor (Customize > Lock Screen), no Vespin widget yet.
+- wwidget-1..3: Home Screen edit, its menu, the widget gallery; wwidget-4: the gallery's search finding the Vespin app row.
+NOT CAPTURED (yet)
+- Home widget previews (small, medium) and the Home Screen with the widget: the tap on the gallery's "Vespin" result missed (it was asked by index 1; the row is index 0), so wwidget-5..9 show the search sheet; the later long press typed into the field ("VespinG"). Fix: tap the result row itself, then retry.
+- Lock Screen widgets (circular, rectangular, inline): the editor's button reads "ADD WIDGETS" in capitals, so the tap on "Add Widgets" missed; wlock-5/6 equal wlock-4. Fix: match it case-insensitively, then retry.
+- Tinted / Clear Home Screen: not reached, behind the widget sheet above. Retried with the fixes.
+- StandBy and Always On: not capturable on the simulator (no charging or landscape-idle state, no AOD).
