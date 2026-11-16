@@ -94,6 +94,9 @@ const PHONE = 390;
 
 let root: Root | undefined;
 
+/** The pull request whose tab the panel was left on, by its repository and number. */
+const PULL_REQUEST = { repository: "acme/relay", number: 42 };
+
 /** How wide the panel's stage is laid out, which jsdom, laying out nothing, leaves to the test. */
 let stageWidth = 0;
 
@@ -105,10 +108,10 @@ beforeEach(() => {
     JSON.stringify({
       open: true,
       tabs: ["plan", "inbox", "comments"],
-      tab: { changes: AGENT },
+      tab: { changes: PULL_REQUEST },
       width: 400,
       tasks: {
-        [DOCUMENT_TASK.id]: { opened: [], closed: [], changes: [{ changes: AGENT }] },
+        [DOCUMENT_TASK.id]: { opened: [], closed: [], changes: [{ changes: PULL_REQUEST }] },
       },
     }),
   );

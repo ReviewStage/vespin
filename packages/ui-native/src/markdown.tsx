@@ -23,6 +23,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AudioClip } from "./audio-clip.js";
+import { ChipMarkView, ChipSymbol, useChipMarkOf } from "./chip-mark.js";
+import type { ChipMarkOf } from "./chip-mark-model.js";
 import { DraftCard } from "./draft-card.js";
 import { FileChip } from "./file-chip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
@@ -165,12 +167,18 @@ type FirstLine = {
 /** Reports a list item's first line once it is laid out; none where nothing asks. */
 type OnFirstLine = ((line: FirstLine) => void) | undefined;
 
+/** A quote's rule, the line down its left. */
+const QUOTE_RULE = 3;
+
+/** How far a quote's words stand in from the column: its rule and its padding. */
+const QUOTE_INSET = QUOTE_RULE + SPACE.ROW;
+
 const styles = StyleSheet.create({
   marker: { position: "absolute", left: 0, top: 0 },
-  quote: { borderLeftWidth: 3, paddingLeft: SPACE.ROW },
-  well: { borderRadius: 8, padding: SPACE.ROW },
+  quote: { borderLeftWidth: QUOTE_RULE, paddingLeft: SPACE.ROW },
+  well: { borderRadius: RADIUS.BLOCK, padding: SPACE.ROW },
   tableBox: { alignSelf: "stretch", overflow: "hidden" },
-  table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
+  table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.BLOCK, overflow: "hidden" },
   row: { flexDirection: "row" },
   cell: { paddingHorizontal: SPACE.ROW, paddingVertical: 6 },
   chip: {
@@ -178,11 +186,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 3,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 6,
+    borderRadius: RADIUS.TAG,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
-  picture: { width: "100%", borderRadius: RADIUS.MEDIA },
+  picture: { width: "100%", borderRadius: RADIUS.BLOCK },
   pending: { alignItems: "center", justifyContent: "center" },
   viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
   viewerClose: { position: "absolute", padding: SPACE.ROW },
@@ -208,6 +216,8 @@ interface Drawing {
   readonly headings: boolean;
   /** What GitHub holds of the pull request or issue a chip's page names, as the host read it; none while unread or unanswered. */
   readonly linkStanding: (page: string) => LinkStanding | undefined;
+  /** The mark the app holds for the entity a chip names (`ChipMarkProvider`); none where it holds nothing. */
+  readonly markOf: ChipMarkOf;
   /** How a suggestion's link stands, by its button and the words it was written with; none where it is drawn as the plain link it is. */
   readonly suggestion: (link: ReplyButtonLink, words: string) => SuggestionLook | undefined;
 }
@@ -278,31 +288,6 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   }
 }
 
-/**
- * A chip's glyph in a `size`-point square in `color`, through the system's
- * symbol view, which the app's patch (`patches/expo-symbols@58.0.4.patch`)
- * lets read Lucide's custom symbols from the asset catalog as well as SF
- * Symbols, so a chip costs no SwiftUI host of its own.
- */
-function ChipGlyph({
-  glyph,
-  size,
-  color,
-}: {
-  readonly glyph: Glyph;
-  readonly size: number;
-  readonly color: string;
-}) {
-  return (
-    <SymbolView
-      name={glyphSymbol(glyph)}
-      size={size}
-      tintColor={color}
-      accessibilityElementsHidden
-    />
-  );
-}
-
 /** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere. */
 function MentionChip({
   chip,
@@ -316,6 +301,12 @@ function MentionChip({
   const size = TEXT_SIZE.FOOTNOTE;
   const standing = standingLook(chip, drawing);
   const heard = standing?.heard ?? chip.heard;
+
+  // Note that a GitHub page's standing wins over the entity's mark, since only the provider's answer says where it stands.
+  const mark =
+    standing === undefined && chip.of !== undefined ? drawing.markOf(chip.of) : undefined;
+
+  const markSize = size * fontScale;
 
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
@@ -333,11 +324,15 @@ function MentionChip({
           },
         ]}
       >
-        <ChipGlyph
-          glyph={standing?.glyph ?? ENTITY_SYMBOL[chip.entity]}
-          size={size * fontScale}
-          color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
-        />
+        {mark === undefined ? (
+          <ChipSymbol
+            glyph={standing?.glyph ?? ENTITY_SYMBOL[chip.entity]}
+            size={markSize}
+            color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
+          />
+        ) : (
+          <ChipMarkView mark={mark} size={markSize} colors={colors} />
+        )}
         <Text
           numberOfLines={1}
           style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
@@ -389,7 +384,7 @@ function SuggestionChip({
           },
         ]}
       >
-        <ChipGlyph
+        <ChipSymbol
           glyph={offered ? SUGGESTION_SYMBOL : ENTITY_SYMBOL[ENTITY_KIND.AGENT]}
           size={size * fontScale}
           color={colors.TEXT_MUTED}
@@ -402,7 +397,7 @@ function SuggestionChip({
         </Text>
         {offered ? null : (
           <>
-            <ChipGlyph
+            <ChipSymbol
               glyph={SUGGESTION_SYMBOL}
               size={size * fontScale}
               color={colors.TEXT_MUTED}
@@ -838,7 +833,13 @@ function ListItem({
       <View style={item.blocks.length === 0 ? { marginLeft: -indent } : styles.marker}>
         <Marker checked={item.checked} number={number} firstLine={firstLine} drawing={drawing} />
       </View>
-      <Blocks blocks={item.blocks} drawing={drawing} gap={NESTED_GAP} onFirstLine={onFirstLine} />
+      {/* Note that the item's chips are held to the width left beside its marker, so one in a list never runs past the column. */}
+      <Blocks
+        blocks={item.blocks}
+        drawing={{ ...drawing, lineWidth: drawing.lineWidth - indent }}
+        gap={NESTED_GAP}
+        onFirstLine={onFirstLine}
+      />
     </View>
   );
 }
@@ -1125,8 +1126,9 @@ function PictureBlock({
 
   const label = alt.trim() === "" ? video.label : alt;
 
-  // Note that a clip whose bytes could not be read stands as one on its way, since its strip offers no Try again yet.
-  if (video.audio === true) return <AudioClip source={video.source ?? undefined} label={label} />;
+  if (video.audio === true) {
+    return <AudioClip source={video.source} label={label} onRetry={video.onRetry} />;
+  }
 
   return (
     <Video
@@ -1169,7 +1171,12 @@ function BlockView({
     case MARKDOWN_BLOCK.QUOTE:
       return (
         <View style={[styles.quote, { borderColor: colors.CHIP_EDGE }]}>
-          <Blocks blocks={block.blocks} drawing={drawing} gap={NESTED_GAP} />
+          {/* Note that a quote's chips are held to the width inside its rule and padding. */}
+          <Blocks
+            blocks={block.blocks}
+            drawing={{ ...drawing, lineWidth: drawing.lineWidth - QUOTE_INSET }}
+            gap={NESTED_GAP}
+          />
         </View>
       );
     case MARKDOWN_BLOCK.TABLE:
@@ -1230,6 +1237,8 @@ type MarkdownProps = {
   readonly onOpenLink: (address: string) => void;
   /** Whether a person typed the words line by line, whose line breaks are kept; an agent's join as Markdown reads them. */
   readonly typed?: boolean | undefined;
+  /** Whether raw HTML in the words stays unseen, as GitHub's page hides a pull request body's comments and tags; it is drawn as written where none is given. */
+  readonly hidesHtml?: boolean | undefined;
   /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way, and `null` where it could not be read. Each is drawn from the address it names where none is given. */
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
   /** Reads a picture that could not be read again, by the address its words name it by; a picture that could not be read offers nothing where none is given. */
@@ -1295,13 +1304,17 @@ function noFile(): undefined {
  * message: the panel's parse (`@repo/features/markdown-tree`), read into
  * blocks by `markdown-model.ts`, in the brand's colors for the window's
  * scheme and at the reader's Dynamic Type size. It draws no scroller of its
- * own, so a screen stands it in its own.
+ * own, so a screen stands it in its own. Note that a chip is held to the
+ * width the words stand in, measured once they are laid out, since an open
+ * iPhone Duo's or an iPad's detail column is far narrower than the window;
+ * until then, to the window's width less a page's margins.
  */
 export function Markdown({
   words,
   repository = null,
   onOpenLink,
   typed,
+  hidesHtml,
   pictureSource = namedSource,
   onRetryPicture,
   videoAt = noVideo,
@@ -1312,16 +1325,26 @@ export function Markdown({
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
+  const markOf = useChipMarkOf();
+  const [measured, setMeasured] = useState<number | undefined>(undefined);
+  const [measuredAt, setMeasuredAt] = useState(width);
+
+  // Note that a change of the window's width, a fold, an unfold, or a turn, forgets the width measured, since words in a bubble that wraps its words are measured no wider than they stood and would hold their chips there for good.
+  if (measuredAt !== width) {
+    setMeasuredAt(width);
+    setMeasured(undefined);
+  }
 
   const blocks = useMemo(
-    () => markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed }),
-    [words, repository, typed],
+    () =>
+      markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed, hidesHtml }),
+    [words, repository, typed, hidesHtml],
   );
 
   const drawing: Drawing = {
     colors,
     fontScale,
-    lineWidth: width - SPACE.PAGE * 2,
+    lineWidth: measured ?? width - SPACE.PAGE * 2,
     openLink: onOpenLink,
     pictureSource,
     onRetryPicture,
@@ -1329,11 +1352,19 @@ export function Markdown({
     fileAt,
     headings,
     linkStanding,
+    markOf,
     suggestion,
   };
 
   return (
-    <View>
+    <View
+      onLayout={(event) => {
+        // Note that a width of none, as a view hidden behind another lays out, keeps the last, so no chip is held to nothing.
+        const laid = event.nativeEvent.layout.width;
+
+        if (laid > 0) setMeasured(laid);
+      }}
+    >
       <Blocks blocks={blocks} drawing={drawing} />
     </View>
   );

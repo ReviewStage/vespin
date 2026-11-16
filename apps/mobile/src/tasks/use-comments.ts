@@ -4,7 +4,7 @@
  * The threads are the panel's own read (`TASKS_COMMENTS_FOLLOW`), which the
  * host holds on the document while a screen holds it
  * (`LIVE_READ.DESCRIPTION_COMMENTS`), so a teammate's comment or an agent's
- * reply lands while the page is open. A reply is the panel's act
+ * reply lands while the page is open. A reply, a resolve and a reopen are the panel's act
  * (`TASKS_COMMENT_ACT` with `reply`), under a key minted for its words, so
  * one sent again after a lost answer is taken once; the host draws it over
  * the thread at once and takes it back where the service refused it.
@@ -34,6 +34,7 @@ import {
 } from "@repo/features/description-comment-wire";
 import { markersAsNames } from "@repo/features/file-marker";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { COMMENT_SUBJECT, TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
@@ -51,7 +52,7 @@ import {
   type HeldPicture,
   useAttachedPictures,
 } from "../use-attached-pictures.js";
-import { useWrite } from "../use-write.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** No threads read yet. */
 const NO_THREADS: readonly DescriptionCommentThread[] = [];
@@ -107,10 +108,8 @@ async function sourceOf(
 
 /**
  * A new thread's draft kept beside its block: the words typed, the start
- * sent under them and not yet answered as posted, so the same words sent
- * again after a lost answer go under the same key, and which edit of the
- * words it holds, so a send answered late lets the draft go only while it
- * still holds the words that send carried.
+ * sent under them that the service refused or never answered, so the same
+ * words sent again go under the same key, and why it did not go.
  */
 type StartDraft = {
   /** The block's words as the draft was typed on it, since an edited description can stand another block at the same offsets. */
@@ -119,7 +118,7 @@ type StartDraft = {
   /** The pictures picked for it and not yet sent. */
   readonly pictures: readonly HeldPicture[];
   readonly sent: SentStart | undefined;
-  readonly revision: number;
+  readonly note?: string | undefined;
 };
 
 /**
@@ -129,16 +128,6 @@ type StartDraft = {
  * screen.
  */
 const startDrafts = new Map<string, Map<number, Map<number, StartDraft>>>();
-
-/** The last edit numbered, across every draft, so a draft let go and typed again never takes an edit's number a send still waits to compare. */
-let lastEdit = 0;
-
-/** The next edit's number, never one given before. */
-function nextEdit(): number {
-  lastEdit += 1;
-
-  return lastEdit;
-}
 
 /** The draft kept at one block's offsets of a task, whatever block it was typed on; none kept, or no block yet read. */
 function heldDraftAt(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
@@ -193,6 +182,19 @@ export function useTaskComments(taskId: string | undefined): readonly Descriptio
   return threads;
 }
 
+/** Whether a task's description threads have been read once, so a thread it does not hold is one that is not there rather than one still on its way. */
+export function useTaskCommentsHeld(taskId: string | undefined): boolean {
+  const { data: held = false } = useQuery({
+    ...appStateQuery,
+    select: (state) =>
+      taskId !== undefined &&
+      state[LIVE_READ.DESCRIPTION_COMMENTS][COMMENT_SUBJECT.DESCRIPTION][taskId]?.rows !==
+        undefined,
+  });
+
+  return held;
+}
+
 /** Says on the console a comments read asked again that did not go; the page still says the read failed. */
 function commentsRetryLost(cause: unknown): void {
   console.error("Reading the comments again did not go.", cause);
@@ -241,10 +243,16 @@ export function threadOpen(thread: DescriptionCommentThread): boolean {
   return thread.status === DESCRIPTION_COMMENT_STATUS.OPEN;
 }
 
+/** An agent on the task as a comment's writer line names it: its name, and the harness whose mark its tile wears, where its model says. */
+export interface CommentAgent {
+  readonly name: string;
+  readonly harness: ModelProvider | undefined;
+}
+
 /** Who wrote an entry, as the panel's thread names them: a member by their name and picture, the app by its own, and a coding agent by the name its task lists it under. */
 function writerOf(
   entry: DescriptionCommentEntry,
-  agentNames: ReadonlyMap<string, string>,
+  agents: ReadonlyMap<string, CommentAgent>,
   pictureOf: PictureOf,
 ): ThreadMessage["writer"] {
   const { writer } = entry;
@@ -252,9 +260,9 @@ function writerOf(
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) return { name: PRODUCT_NAME, agent: true };
 
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT) {
-    const named = writer.agentId === undefined ? undefined : agentNames.get(writer.agentId);
+    const known = writer.agentId === undefined ? undefined : agents.get(writer.agentId);
 
-    return { name: named ?? PRODUCT_NAME, agent: true };
+    return { name: known?.name ?? PRODUCT_NAME, agent: true, harness: known?.harness };
   }
 
   return { name: writer.by?.name ?? SOMEONE, agent: false, picture: pictureOf(writer.by?.userId) };
@@ -286,13 +294,13 @@ function commentMedia(entry: DescriptionCommentEntry, media: CommentMedia): read
 /** A thread's comments as its page draws them, each by its writer, its words typed line by line, and the files it carries after them. */
 export function threadMessages(
   thread: DescriptionCommentThread,
-  agentNames: ReadonlyMap<string, string>,
+  agents: ReadonlyMap<string, CommentAgent>,
   pictureOf: PictureOf,
   media: CommentMedia,
 ): readonly ThreadMessage[] {
   return threadComments(thread).map((entry) => ({
     id: entry.id,
-    writer: writerOf(entry, agentNames, pictureOf),
+    writer: writerOf(entry, agents, pictureOf),
     at: entry.at,
     // Note that a marker naming one of its files is said as the file's name, since the file stands as its own picture or chip after the words.
     words: markersAsNames(entry.words ?? ""),
@@ -393,40 +401,6 @@ export interface CommentReply {
   readonly note: string | undefined;
 }
 
-/** A thread's reply typed and not yet sent: its words, and the pictures picked for it. */
-interface UnsentReply {
-  readonly words: string;
-  readonly pictures: readonly HeldPicture[];
-}
-
-/** No reply typed and nothing picked. */
-const NO_UNSENT_REPLY: UnsentReply = { words: "", pictures: [] };
-
-/**
- * Each thread's reply typed and not yet sent, by the task, then the thread,
- * so it outlives the screen that drew it, as a widening window hands a
- * thread from its tab's stack to a split view's detail, or a fold draws it
- * anew.
- */
-const unsentReplies = new Map<string, Map<string, UnsentReply>>();
-
-/** A thread's unsent reply, or none typed. */
-function unsentReplyOf(taskId: string, threadId: string): UnsentReply {
-  return unsentReplies.get(taskId)?.get(threadId) ?? NO_UNSENT_REPLY;
-}
-
-/** Keeps a change to a thread's unsent reply, or lets it go once it holds neither words nor pictures. */
-function keepUnsentReply(taskId: string, threadId: string, change: Partial<UnsentReply>): void {
-  const threads = unsentReplies.get(taskId) ?? new Map<string, UnsentReply>();
-  const next = { ...unsentReplyOf(taskId, threadId), ...change };
-
-  if (next.words === "" && next.pictures.length === 0) threads.delete(threadId);
-  else threads.set(threadId, next);
-
-  if (threads.size === 0) unsentReplies.delete(taskId);
-  else unsentReplies.set(taskId, threads);
-}
-
 /** A reply sent and not yet answered as posted: its words, the pictures it carried, and the key it went under. */
 interface SentReply {
   readonly words: string;
@@ -464,24 +438,20 @@ function sameSend(sent: SentReply | undefined, words: string, files: readonly Ag
 export function useCommentReply(taskId: string, threadId: string): CommentReply {
   const acts = useHostActs();
   const write = useWrite();
-  const [words, setWords] = useState(() => unsentReplyOf(taskId, threadId).words);
-  // Note that the reply is kept beside its thread as it changes, so a screen drawn anew for the thread opens on it.
-  useEffect(() => keepUnsentReply(taskId, threadId, { words }), [taskId, threadId, words]);
+  const [words, setWords] = useState("");
   // Note that the last reply sent is held outside render, so a second tap before the next render reuses its key and the service takes the reply once.
   const sent = useRef<SentReply | undefined>(undefined);
+  // The keys of the replies still out, so a second tap on the same reply before the next render sends nothing, while another reply still goes.
+  const out = useRef(new Set<string>());
   const [note, setNote] = useState<string | undefined>(undefined);
-
-  // Note that the pictures picked are kept with the words, so a rotation or a fold never drops one.
-  const pictures = useAttachedPictures(setNote, undefined, undefined, {
-    held: unsentReplyOf(taskId, threadId).pictures,
-    keep: (held) => keepUnsentReply(taskId, threadId, { pictures: held }),
-  });
+  const pictures = useAttachedPictures(setNote);
 
   return useMemo(() => {
     const send = () => {
       const kept = words.trim();
 
-      if (kept === "") return;
+      // Note that a picture still being read holds the send back, since it would land in the field after the reply had gone without it.
+      if (kept === "" || pictures.reading) return;
 
       // A picture past a bound holds the send back, saying why, as an agent's composer does.
       if (pictures.refusal !== undefined) {
@@ -492,12 +462,11 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
       }
 
       const files = pictures.files ?? [];
+      const again = sameSend(sent.current, kept, files) ? sent.current : undefined;
+      const key = again?.key ?? randomUUID();
 
-      const key =
-        sameSend(sent.current, kept, files) && sent.current !== undefined
-          ? sent.current.key
-          : randomUUID();
-
+      if (out.current.has(key)) return;
+      out.current.add(key);
       sent.current = { words: kept, files, key };
       setNote(undefined);
       setWords("");
@@ -530,21 +499,63 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
           },
           went: BUZZ.SUCCESS,
         },
-      ).then((went) => {
-        // Note that a reply answered after a later one went lets go of its key only while it is still the one held.
-        if (went && sent.current?.key === key) sent.current = undefined;
-      });
+      )
+        .then((went) => {
+          // Note that a reply answered after a later one went lets go of its key only while it is still the one held.
+          if (went && sent.current?.key === key) sent.current = undefined;
+        })
+        .finally(() => out.current.delete(key));
     };
 
     return {
       words,
       onWords: setWords,
       pictures,
-      sendable: words.trim() !== "",
+      sendable: words.trim() !== "" && !pictures.reading,
       send,
       note,
     };
   }, [acts, write, taskId, threadId, words, note, pictures]);
+}
+
+/**
+ * Resolves a thread that stands open, or reopens one resolved, as the
+ * panel's check on a thread's first comment does (`TASKS_COMMENT_ACT` with
+ * `resolve` or `reopen`): the host draws it on the press, and one refused is
+ * taken back and said in the notice, in the panel's words for it.
+ */
+export function useCommentSettle(taskId: string): (thread: DescriptionCommentThread) => void {
+  const acts = useHostActs();
+  const write = useWrite();
+
+  return (thread) => {
+    const action = threadOpen(thread)
+      ? DESCRIPTION_COMMENT_ACTION.RESOLVE
+      : DESCRIPTION_COMMENT_ACTION.REOPEN;
+
+    void write(
+      () =>
+        acts[ACT_KIND.TASKS_COMMENT_ACT]({
+          taskId,
+          threadId: thread.id,
+          action: { action },
+        }),
+      {
+        refused: (answer) =>
+          "thread" in answer || "deleted" in answer
+            ? undefined
+            : "refused" in answer
+              ? commentRefusalNote(answer.refused)
+              : COMMENT_NOTE.NOT_CHANGED,
+        unanswered: COMMENT_NOTE.NOT_CHANGED,
+        // Note that a resolve or reopen sent again lands the thread where it was asked to stand, so the notice offers Try again.
+        retry: true,
+        // Note that the thread is the write's subject, so a newer resolve or reopen voids an older one's Try again.
+        subject: { kind: WRITE_SUBJECT.TASK_COMMENT, id: thread.id },
+        went: BUZZ.SUCCESS,
+      },
+    );
+  };
 }
 
 /** The open threads standing on each block of a description, by the block's start, the oldest started first. */
@@ -567,20 +578,25 @@ export function threadsOnBlocks(
   return on;
 }
 
-/** A new thread's field on a block: its words, whether they may go, what a send that did not land said, and the send, which answers the thread's id once it is posted. */
+/** A new thread's field on a block: its words, whether they may go, what a send that was refused said, and the send, which answers the thread's id at once, before the service has. */
 export interface CommentStart {
   readonly words: string;
   readonly onWords: (words: string) => void;
   /** The pictures the thread's first comment carries, attached from Photos. */
   readonly pictures: AttachedPictures;
   readonly sendable: boolean;
-  readonly send: () => Promise<string | undefined>;
+  readonly send: (refused: (start: RefusedStart, noticed: boolean) => void) => string | undefined;
   readonly note: string | undefined;
 }
 
 /** A start sent and not yet answered as posted: its words, the key it went under, and the thread's id it named. */
-interface SentStart extends SentReply {
+export interface SentStart extends SentReply {
   readonly threadId: string;
+}
+
+/** A start the service refused or never answered: what was sent, and why it did not go. */
+export interface RefusedStart extends SentStart {
+  readonly note: string;
 }
 
 /**
@@ -588,11 +604,13 @@ interface SentStart extends SentReply {
  * comment starts one (`TASKS_COMMENT_START`): its first comment's words, the
  * block's quote and span, and the description's text the span is measured
  * in, which the service carries over to the text as it stands. It goes
- * under an id minted here, so the host draws the thread at once, and a key
- * kept for as long as the words stand, so the same words sent again after a
- * lost answer start one thread; a refusal keeps the words with why. The
- * words typed are kept for the block until they are sent, so a new comment
- * handed to another screen by a rotation opens on them.
+ * under an id minted here, so the host draws the thread at once and the
+ * send answers that id before the service does, and under a key kept for as
+ * long as the words stand, so the same words sent again after a lost answer
+ * start one thread. The words typed are kept for the block until they are
+ * sent, so a new comment handed to another screen by a rotation opens on
+ * them; a refusal keeps them again with its key and why, for the field it
+ * reopens, and is handed to `refused` with the id it went under.
  */
 export function useCommentStart(
   taskId: string,
@@ -603,16 +621,19 @@ export function useCommentStart(
   const write = useWrite();
   const [words, setLocal] = useState(() => startDraftOf(taskId, block)?.words ?? "");
   const [sent, setSentLocal] = useState(() => startDraftOf(taskId, block)?.sent);
-  const [sending, setSending] = useState(false);
-  const [note, setNote] = useState<string | undefined>(undefined);
-  // Note that a second tap before the next render reads no `sending` yet, so the send in flight is held here too, or two taps would start two threads.
+  const [note, setNote] = useState(() => startDraftOf(taskId, block)?.note);
+  // Note that a second tap before the screen has gone would start the thread twice, so the send in flight is held here.
   const inFlight = useRef(false);
   const quote = block?.quote;
+  // The pictures held now, as the keeper last heard them, which a send carries and a refusal keeps again.
+  const heldPictures = useRef<readonly HeldPicture[]>(startDraftOf(taskId, block)?.pictures ?? []);
 
   // Note that the pictures picked are kept with the draft's words, so a rotation or a fold never drops one.
   const pictures = useAttachedPictures(setNote, undefined, undefined, {
     held: startDraftOf(taskId, block)?.pictures ?? [],
     keep: (held) => {
+      heldPictures.current = held;
+
       if (block === undefined) return;
       const was = startDraftOf(taskId, block);
 
@@ -626,7 +647,7 @@ export function useCommentStart(
               words: was?.words ?? "",
               pictures: held,
               sent: was?.sent,
-              revision: was?.revision ?? nextEdit(),
+              note: was?.note,
             },
       );
     },
@@ -636,6 +657,7 @@ export function useCommentStart(
   const takeUp = useEffectEvent((kept: StartDraft) => {
     setLocal((was) => (was === "" ? kept.words : was));
     setSentLocal((was) => was ?? kept.sent);
+    setNote((was) => was ?? kept.note);
 
     if (pictures.attached.length === 0 && kept.pictures.length > 0) pictures.putBack(kept.pictures);
   });
@@ -663,7 +685,7 @@ export function useCommentStart(
               words: next,
               pictures: was?.pictures ?? [],
               sent: was?.sent,
-              revision: nextEdit(),
+              note: was?.note,
             },
       );
     },
@@ -671,10 +693,17 @@ export function useCommentStart(
   );
 
   return useMemo(() => {
-    const send = async (): Promise<string | undefined> => {
+    const send = (refused: (start: RefusedStart, noticed: boolean) => void): string | undefined => {
       const kept = words.trim();
 
-      if (kept === "" || inFlight.current || block === undefined || quote === undefined) {
+      // Note that a picture still being read holds the start back, since it would land after the thread had gone without it.
+      if (
+        kept === "" ||
+        inFlight.current ||
+        pictures.reading ||
+        block === undefined ||
+        quote === undefined
+      ) {
         return undefined;
       }
 
@@ -686,35 +715,31 @@ export function useCommentStart(
         return undefined;
       }
 
-      const files = pictures.files ?? [];
-      // The pictures this start carries, by id, so only they come off once it lands and any picked while it was out stay.
-      const carried = new Set(pictures.attached.map(({ id }) => id));
       inFlight.current = true;
-      const again = sameSend(sent, kept, files) ? sent : undefined;
-      const key = again?.key ?? randomUUID();
-      const threadId = again?.threadId ?? randomUUID();
-      const start = { words: kept, files, key, threadId };
+      const files = pictures.files ?? [];
+      const carried = heldPictures.current;
+      const repeated = sameSend(sent, kept, files) ? sent : undefined;
+
+      const start: SentStart = {
+        words: kept,
+        files,
+        key: repeated?.key ?? randomUUID(),
+        threadId: repeated?.threadId ?? randomUUID(),
+      };
+
       setSentLocal(start);
-      // Note that the start is kept with the draft, so a screen drawn anew by a rotation sends the same words again under the same key.
-      const held = startDraftOf(taskId, block);
-      const revision = held?.revision ?? 0;
-      keepStartDraft(taskId, block, {
-        quote: block.quote,
-        words: held?.words ?? words,
-        pictures: held?.pictures ?? [],
-        sent: start,
-        revision,
-      });
-      setSending(true);
       setNote(undefined);
 
-      const went = await write(
+      // Note that the draft goes as the send does, since the thread opens in the field's place; a refusal keeps it again below, so whichever field opens next, on this block, after a rotation or in a split view's detail, opens on the words under the same key.
+      if (startDraftOf(taskId, block) !== undefined) keepStartDraft(taskId, block, undefined);
+
+      void write(
         () =>
           acts[ACT_KIND.TASKS_COMMENT_START]({
             taskId: taskId,
             start: {
-              id: threadId,
-              clientKey: key,
+              id: start.threadId,
+              clientKey: start.key,
               scope: DESCRIPTION_COMMENT_SCOPE.BLOCK,
               quote,
               anchor: { from: block.from, to: block.to },
@@ -731,59 +756,42 @@ export function useCommentStart(
                 ? commentRefusalNote(answer.refused)
                 : COMMENT_NOTE.NOT_POSTED,
           unanswered: COMMENT_NOTE.NOT_POSTED,
-          inPlace: setNote,
+          inPlace: (why, noticed) => {
+            const now = heldDraftAt(taskId, block);
+
+            // Note that words typed toward this block since the send, in a field opened on it again, are kept over the refused ones, and so is a draft another block's words now stand under at these offsets; an earlier refusal's draft on this block gives way to this one.
+            const ours =
+              now === undefined ||
+              (now.quote === quote && (now.sent !== undefined || now.words.trim() === ""));
+
+            if (ours) {
+              keepStartDraft(taskId, block, {
+                quote,
+                words: kept,
+                pictures: carried,
+                sent: start,
+                note: why,
+              });
+            }
+
+            refused({ ...start, note: why }, noticed);
+          },
           went: BUZZ.SUCCESS,
         },
       ).finally(() => {
         inFlight.current = false;
-        setSending(false);
       });
 
-      if (!went) return undefined;
-
-      // Note that only the pictures that went come off, so one picked while the start was out stays in the field and the draft.
-      for (const id of carried) pictures.detach(id);
-      const now = heldDraftAt(taskId, block);
-      const left = (now?.pictures ?? []).filter(({ id }) => !carried.has(id));
-      // Note that a newer send's key, kept by a screen a rotation drew, stays with the draft until that send settles.
-      const pending = now?.sent?.threadId === threadId ? undefined : now?.sent;
-
-      // Note that the draft's words go only while they are still the words this send carried, so words typed meanwhile, on this screen or one a rotation drew, stay in the field and kept; and a draft another block's words now stand under at these offsets is left as it is.
-      if (now === undefined || now.revision === revision) {
-        setSentLocal(pending);
-        setLocal("");
-        keepStartDraft(
-          taskId,
-          block,
-          left.length === 0
-            ? undefined
-            : {
-                quote: block.quote,
-                words: "",
-                pictures: left,
-                sent: pending,
-                revision: nextEdit(),
-              },
-        );
-      } else if (now.quote !== block.quote) {
-        setSentLocal(undefined);
-        setLocal("");
-      } else {
-        setSentLocal(pending);
-        setLocal(now.words);
-        keepStartDraft(taskId, block, { ...now, pictures: left, sent: pending });
-      }
-
-      return threadId;
+      return start.threadId;
     };
 
     return {
       words,
       onWords: setWords,
       pictures,
-      sendable: words.trim() !== "" && !sending && quote !== undefined,
+      sendable: words.trim() !== "" && quote !== undefined && !pictures.reading,
       send,
       note,
     };
-  }, [acts, write, taskId, text, block, quote, words, setWords, sent, sending, note, pictures]);
+  }, [acts, write, taskId, text, block, quote, words, setWords, sent, note, pictures]);
 }

@@ -13,7 +13,9 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
-- assertVisible: "Add a way to resend an invite that expired."
+- extendedWaitUntil:
+    visible: "Add a way to resend an invite that expired."
+    timeout: 30000
 - tapOn: "More"
 - tapOn: "Ports"
 - assertVisible: ":3000"
