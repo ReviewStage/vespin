@@ -122,18 +122,6 @@ function launchCredential(
 /** A local agent's launch, on its machine's own Claude Code login: no credential of the account's. */
 const ON_MACHINE_LOGIN: HarnessLaunch = { env: {} };
 
-/**
- * The half of Claude Code agents whose launches keep the main conversation's
- * prompt cache for an hour rather than the CLI's default five minutes, its
- * subagents left on that default: those whose id, a UUID
- * as Postgres writes it, begins with one of these hex digits. Note that the
- * weekly agent audit reads this rule to tell the halves apart, recomputing it
- * from `agent.id` alone (`left(agent.id::text, 1) between '0' and '7'`), so
- * it changes only with the audit's query. An agent on a Claude subscription
- * is left out whatever its id, since the CLI already caches for an hour there.
- */
-const PROMPT_CACHE_HOUR_DIGITS: ReadonlySet<string> = new Set("01234567");
-
 /** The effort the CLI takes for the agent's own, where it names one of the SDK's. */
 function effortOf(effort: string): Effort | undefined {
   return Object.values(EFFORT).find((level) => level === effort);
@@ -279,8 +267,10 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
       // Note that the launch chose and recorded who pays before its config is written.
       const { payer } = yield* recordedPayer(agent);
 
-      const cacheHour =
-        payer === AGENT_PAYER.API_KEY && PROMPT_CACHE_HOUR_DIGITS.has(agent.id.charAt(0));
+      // Note that an agent paid by an API key keeps the main conversation's prompt cache for an hour rather than the
+      // CLI's default five minutes, its subagents left on that default, because a turn resumed within the hour then
+      // reads its prefix rather than writing it again; a Claude subscription already caches for an hour there.
+      const cacheHour = payer === AGENT_PAYER.API_KEY;
 
       const written: ClaudeCodeConfig = {
         harness: RUNNER_HARNESS.CLAUDE_CODE,
