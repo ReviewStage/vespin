@@ -20,9 +20,12 @@ import { PRODUCT_PLATFORM } from "./analytics/product-events.js";
  * on reads `show_media` and plays sound clips, in the transcript, a thread,
  * an ask's options, and a description alike, so a service that keeps a clip
  * may refuse the builds before it, which would draw one as a picture that
- * never loads.
+ * never loads. A build from 4 on reads Cursor as a model provider and an
+ * agent's runtime (`MODEL_PROVIDER.CURSOR`, `AGENT_RUNTIME.CURSOR`), so a
+ * service may offer Cursor's models and agents to it alone until the floor
+ * passes 3.
  */
-export const HOSTED_API_VERSION = 3;
+export const HOSTED_API_VERSION = 4;
 
 /** The headers a client names itself in: which app and version, as `platform/version`, and the hosted API version it was built against. */
 export const CLIENT_HEADER = {

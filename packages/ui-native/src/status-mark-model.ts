@@ -7,7 +7,7 @@ import {
   type TaskStatus,
 } from "@repo/features/task-wire";
 import { GLYPH, type Glyph } from "./glyph.js";
-import { STATUS_TONE, type StatusTone } from "./tokens/colors.js";
+import { STATUS_TONE, type StatusTone } from "./tokens/status-tone.js";
 
 /**
  * A ring that fills as work moves through it, as `@repo/ui`'s `task-marks.tsx`

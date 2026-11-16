@@ -1,6 +1,7 @@
 import type { UnparsedWireValue } from "@repo/wire";
 import { Schema } from "effect";
-import { MODEL_PROVIDER, type ModelProvider } from "./models-wire.js";
+import { MODEL_PROVIDER } from "./models-wire.js";
+import type { ModelApiProvider } from "./provider-key-wire.js";
 
 /**
  * chapters-model-choice.ts -- the Claude models chapters are told on, as the Chapters view names them and an account's preferences keep them.
@@ -64,7 +65,10 @@ export const OPENAI_CHAPTERS_MODEL_LABEL = {
 } as const;
 
 /** The provider's own id of the model a choice's tier runs on, on a key of that provider. */
-export function chaptersModelOn(provider: ModelProvider, modelId: ChaptersModelId): ChaptersPick {
+export function chaptersModelOn(
+  provider: ModelApiProvider,
+  modelId: ChaptersModelId,
+): ChaptersPick {
   return provider === MODEL_PROVIDER.ANTHROPIC ? modelId : OPENAI_CHAPTERS_MODEL[modelId];
 }
 
@@ -97,6 +101,6 @@ export function chaptersModelFrom(stored: UnparsedWireValue): ChaptersPick {
 const OPENAI_PICKS: ReadonlySet<ChaptersPick> = new Set(Object.values(OPENAI_CHAPTERS_MODEL));
 
 /** The provider whose key a pick runs on first: OpenAI's for one of its models, Anthropic's otherwise. */
-export function chaptersProviderOf(pick: ChaptersPick): ModelProvider {
+export function chaptersProviderOf(pick: ChaptersPick): ModelApiProvider {
   return OPENAI_PICKS.has(pick) ? MODEL_PROVIDER.OPENAI : MODEL_PROVIDER.ANTHROPIC;
 }
