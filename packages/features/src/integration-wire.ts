@@ -306,7 +306,7 @@ export function integrationOfRemoteTool(tool: string): IntegrationProvider | und
  * allows a tool's name, dots among them (Y Combinator's `hiring.list_jobs`),
  * and nothing shaped like a sentence.
  */
-const REMOTE_TOOL_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/;
+const REMOTE_TOOL_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/u;
 
 /**
  * A nested call of an integration's tool as a transcript stores it, under
