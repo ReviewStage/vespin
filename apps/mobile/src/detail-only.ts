@@ -38,5 +38,6 @@ export function useDetailOnly(): UseDetailOnlyResult {
   const threeColumns = useThreeColumns();
   const alone = useSyncExternalStore(subscribe, () => held) && threeColumns;
 
-  return { alone, setAlone: choose, toggle: () => choose(!alone) };
+  // Note that the toggle reads the value held at the press rather than this render's, because a held ⌃⌘F repeats before React draws the last one.
+  return { alone, setAlone: choose, toggle: () => choose(!held) };
 }
