@@ -178,16 +178,25 @@ export function iosAgentPullRequestOf(
   return repository === null ? undefined : { workspaceId: agent.workspaceId, repository, number };
 }
 
-/** The app's route for a pull request by the workspace whose installation reaches its repository, the repository's owner and name, and its number. */
-export function iosRepositoryPullRequestRoute(pullRequest: {
-  readonly workspaceId: string;
-  readonly repository: string;
-  readonly number: number;
-}): string {
+/** The query a pull request's route names the agent it was opened from by, which its screen offers to Handoff; the pull request is read by its repository alone. */
+const IOS_PULL_REQUEST_AGENT_PARAM = "agent";
+
+/** The app's route for a pull request by the workspace whose installation reaches its repository, the repository's owner and name, and its number, with the agent it was opened from where there is one. */
+export function iosRepositoryPullRequestRoute(
+  pullRequest: {
+    readonly workspaceId: string;
+    readonly repository: string;
+    readonly number: number;
+  },
+  agentId?: string,
+): string {
   const [owner = "", name = ""] = pullRequest.repository.split("/");
   const steps = [pullRequest.workspaceId, owner, name].map(encodeURIComponent);
+  const route = `${IOS_ROUTE.REPOSITORY_PULL_REQUEST}/${steps.join("/")}/${pullRequest.number}`;
 
-  return `${IOS_ROUTE.REPOSITORY_PULL_REQUEST}/${steps.join("/")}/${pullRequest.number}`;
+  return agentId === undefined
+    ? route
+    : `${route}?${new URLSearchParams({ [IOS_PULL_REQUEST_AGENT_PARAM]: agentId })}`;
 }
 
 /**

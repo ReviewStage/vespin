@@ -757,7 +757,7 @@ export function AgentConversation({
   const offers = usePullRequestsRead(open);
   // The pull request whose card's Merge is being asked about.
   const [merging, setMerging] = useState<PullRequestKey | undefined>(undefined);
-  const asked = merging === undefined ? undefined : offers.get(merging.number);
+  const asked = merging === undefined ? undefined : offers(merging);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId);
@@ -1008,7 +1008,7 @@ export function AgentConversation({
     }
 
     if (toDetail({ kind: PUSHED_PAGE.PULL_REQUEST, ...key, agentId: id })) return;
-    router.push(onOwnTab(iosRepositoryPullRequestRoute(key)));
+    router.push(onOwnTab(iosRepositoryPullRequestRoute(key, id)));
   };
 
   const composerBar = (
@@ -1055,7 +1055,7 @@ export function AgentConversation({
       pullRequestActs={(item) => {
         const key = keyOf(item.url);
 
-        return key === undefined || cardMergeOf(offers.get(item.number)) === undefined
+        return key === undefined || cardMergeOf(offers(key)) === undefined
           ? []
           : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
       }}

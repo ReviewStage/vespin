@@ -236,9 +236,6 @@ export function usePullRequestWrites(key: PullRequestKey): PullRequestWrites {
   return { pending, note, write: change };
 }
 
-/** No pull request read, held as one map so a screen that holds none reads the same each time. */
-const NO_PULL_REQUESTS: ReadonlyMap<number, AgentOverviewPullRequest> = new Map();
-
 /** The pull requests handed, as the same array while they are the same ones, so a follow over them is not opened again as the list is drawn again. */
 function useSameKeys(keys: readonly PullRequestKey[]): readonly PullRequestKey[] {
   const [held, setHeld] = useState(keys);
@@ -260,14 +257,15 @@ function useSameKeys(keys: readonly PullRequestKey[]): readonly PullRequestKey[]
 }
 
 /**
- * Each pull request named, as its own read answers it, by its number, held
- * followed while the screen is in focus, as a page drawing their cards
- * offers what each may do; one not read yet, or whose read failed, is
- * absent.
+ * Each pull request named, held followed while the screen is in focus, as a
+ * page drawing their cards offers what each may do, read back by its
+ * workspace, repository, and number, so a card of another repository under
+ * the same number never reads this one's; one not read yet, or whose read
+ * failed, reads as none.
  */
 export function usePullRequestsRead(
   keys: readonly PullRequestKey[],
-): ReadonlyMap<number, AgentOverviewPullRequest> {
+): (key: PullRequestKey) => AgentOverviewPullRequest | undefined {
   const acts = useHostActs();
   const follow = useHostFollow();
   const held = useSameKeys(keys);
@@ -293,18 +291,12 @@ export function usePullRequestsRead(
     select: useCallback((state: AppStateSnapshot) => state[LIVE_READ.REPOSITORY_PULL_REQUEST], []),
   }).data;
 
-  return useMemo(() => {
-    if (slice === undefined || held.length === 0) return NO_PULL_REQUESTS;
-    const read = new Map<number, AgentOverviewPullRequest>();
+  return useCallback(
+    (key: PullRequestKey) => {
+      const rows = slice === undefined ? undefined : partIn(slice, key)?.rows;
 
-    for (const key of held) {
-      const rows = partIn(slice, key)?.rows;
-
-      if (rows !== undefined && !("failure" in rows) && rows.pullRequest !== null) {
-        read.set(key.number, rows.pullRequest);
-      }
-    }
-
-    return read;
-  }, [slice, held]);
+      return rows === undefined || "failure" in rows ? undefined : (rows.pullRequest ?? undefined);
+    },
+    [slice],
+  );
 }

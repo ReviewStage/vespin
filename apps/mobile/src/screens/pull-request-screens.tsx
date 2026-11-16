@@ -363,7 +363,15 @@ export function PullRequestScreen() {
     owner = "",
     name = "",
     number = "",
-  } = useLocalSearchParams<{ workspace: string; owner: string; name: string; number: string }>();
+    agent,
+  } = useLocalSearchParams<{
+    workspace: string;
+    owner: string;
+    name: string;
+    number: string;
+    /** The agent it was opened from, which names it for Handoff. */
+    agent?: string;
+  }>();
 
   const key: PullRequestKey = {
     workspaceId: workspace,
@@ -371,11 +379,11 @@ export function PullRequestScreen() {
     number: Number(number),
   };
 
-  const handed = useHandToDetail({ kind: PUSHED_PAGE.PULL_REQUEST, ...key });
+  const handed = useHandToDetail({ kind: PUSHED_PAGE.PULL_REQUEST, ...key, agentId: agent });
 
   if (handed) return null;
 
-  return <PullRequestPage pullRequest={key} />;
+  return <PullRequestPage pullRequest={key} agentId={agent} />;
 }
 
 /**

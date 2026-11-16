@@ -1821,7 +1821,8 @@ export function TaskAgentRow({
                   agentId: agent.id,
                 } as const;
 
-                if (!toDetail(opened)) router.push(onTab(iosRepositoryPullRequestRoute(key)));
+                if (!toDetail(opened))
+                  router.push(onTab(iosRepositoryPullRequestRoute(key, agent.id)));
               },
             }
       }
