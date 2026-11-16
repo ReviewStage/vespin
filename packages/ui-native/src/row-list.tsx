@@ -63,6 +63,7 @@ import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
 import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
+import { useRollingCount } from "./rolling-count.js";
 import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
@@ -476,6 +477,7 @@ function GroupHeader({
   const colors = useColors();
   const chevron = useScaledSize(CHEVRON_SIZE);
   const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
+  const rolling = useRollingCount(progress?.done ?? count ?? 0);
 
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
@@ -524,6 +526,7 @@ function GroupHeader({
             monospacedDigit(),
             foregroundStyle(colors.TEXT_MUTED),
             accessibilityLabel(progress.heard),
+            ...rolling,
           ]}
         >
           {`${progress.done}/${progress.total}`}
@@ -534,6 +537,7 @@ function GroupHeader({
             font({ textStyle: TYPE_ROLE.GROUP_HEADER }),
             monospacedDigit(),
             foregroundStyle(colors.TEXT_MUTED),
+            ...rolling,
           ]}
         >
           {String(count)}
