@@ -70,7 +70,7 @@ import {
 import { pushThreadPost, pushThreadSettled } from "../../push/inbox-pushes.js";
 import { dmThreadPost, settleThreadDms, threadStandsOpen } from "../../slack/thread-dms.js";
 import { placeholderLinksWords } from "../link-rule.js";
-import { CODER } from "./bounds.js";
+
 import {
   type InboxSandboxDoor,
   readSandboxBodyFile,
@@ -770,7 +770,7 @@ function bodyFiles(
     const read: InboxBodyPicture[] = [];
 
     for (const path of paths) {
-      const file = yield* readSandboxBodyFile(sandbox, CODER.CHECKOUT_PATH, path, PICTURE_REFUSALS);
+      const file = yield* readSandboxBodyFile(sandbox, path, PICTURE_REFUSALS);
 
       if (Result.isFailure(file)) return Result.fail(file.failure);
       read.push({ ...file.success, path, name: posix.basename(path) || path });
@@ -819,7 +819,7 @@ function keptOptionMedia(
   const { path } = posted;
 
   return Effect.map(
-    readSandboxMedia(sandbox, CODER.CHECKOUT_PATH, path, OPTION_FILE_REFUSALS),
+    readSandboxMedia(sandbox, path, OPTION_FILE_REFUSALS),
     Result.map((read) => {
       const file = { ...read, id: randomUUID(), name: posix.basename(path) || path };
       const caption = posted.caption === undefined ? {} : { caption: posted.caption };

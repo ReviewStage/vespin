@@ -100,7 +100,6 @@ function showMediaRejected(reason: string): WireRecord {
 export interface ShowMediaBinding {
   readonly target: ConversationTarget;
   readonly sandbox: InboxSandboxDoor;
-  readonly checkout: string;
 }
 
 /** One file read and measured, ready to keep, with a recording's MP4 or an Ogg clip's M4A where its sandbox made one. */
@@ -121,7 +120,7 @@ function readPicture(
     Result.isFailure(read)
       ? Effect.succeed<Result.Result<ReadPicture, string>>(read)
       : Effect.map(
-          phoneCopyOfSandbox(binding.sandbox, binding.checkout, path, read.success.contentType),
+          phoneCopyOfSandbox(binding.sandbox, path, read.success.contentType),
           (mp4Bytes) => Result.succeed({ ...read.success, mp4Bytes }),
         ),
   );
@@ -133,7 +132,7 @@ function measuredPicture(
   path: string,
 ): Effect.Effect<Result.Result<ReadPicture, string>> {
   return Effect.map(
-    readSandboxImage(binding.sandbox, binding.checkout, path, {
+    readSandboxImage(binding.sandbox, path, {
       maxBytes: CONVERSATION_PICTURE_BOUNDS.MAX_BYTES,
       sniff: sniffMediaType,
       refusals: {
