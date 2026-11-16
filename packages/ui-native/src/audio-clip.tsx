@@ -13,7 +13,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useReduceMotion, useScaledSize } from "./accessibility.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
 import { KEPT_KIND } from "./keep-model.js";
@@ -39,6 +39,14 @@ const TIME_STEP_SECONDS = 0.25;
 
 /** The playhead's time as `playheadText` takes it. */
 const SECOND_MS = 1000;
+
+/**
+ * How far, in seconds, one glide runs the bar ahead of the player's last
+ * report: past the next report, so the bar never stands waiting on a late
+ * one, and no further, since each report starts the glide again and a
+ * native timing animation lays out its every frame before it runs.
+ */
+const GLIDE_SECONDS = TIME_STEP_SECONDS * 2;
 
 /** How tall the bar is drawn, and how tall the press around it stands, so a finger finds it. */
 const BAR_HEIGHT = 4;
@@ -86,22 +94,27 @@ type AudioClipProps = {
 /**
  * The bar's fill, as a share of the clip, gliding between the player's
  * reports of where it stands, which come a quarter second apart: while the
- * clip plays, the fill runs on the native driver toward the clip's end at
- * the clip's own pace, so it moves on every frame the screen draws, and each
- * report sets it back where the clip stands, so it never drifts from the
- * player. Paused, ended, or sought, it stands where the clip does.
+ * clip plays, the fill runs on the native driver at the clip's own pace a
+ * little past where the next report will set it (`GLIDE_SECONDS`), so it
+ * moves on every frame the screen draws, and each report sets it back where
+ * the clip stands, so it never drifts from the player. Paused, ended, or
+ * sought, it stands where the clip does, and where the reader reduces motion
+ * it steps with each report rather than gliding.
  */
-function useGlide(share: number, playing: boolean, secondsLeft: number): Animated.Value {
+function useGlide(at: number, duration: number, playing: boolean): Animated.Value {
+  const share = duration > 0 ? Math.min(1, at / duration) : 0;
   const [glide] = useState(() => new Animated.Value(share));
+  const reduceMotion = useReduceMotion();
 
   useEffect(() => {
     glide.setValue(share);
+    const seconds = Math.min(GLIDE_SECONDS, duration - at);
 
-    if (!playing || secondsLeft <= 0) return;
+    if (!playing || reduceMotion || seconds <= 0) return;
 
     const run = Animated.timing(glide, {
-      toValue: 1,
-      duration: secondsLeft * SECOND_MS,
+      toValue: share + seconds / duration,
+      duration: seconds * SECOND_MS,
       easing: Easing.linear,
       useNativeDriver: true,
     });
@@ -109,7 +122,7 @@ function useGlide(share: number, playing: boolean, secondsLeft: number): Animate
     run.start();
 
     return () => run.stop();
-  }, [glide, share, playing, secondsLeft]);
+  }, [glide, share, at, duration, playing, reduceMotion]);
 
   return glide;
 }
@@ -175,8 +188,7 @@ export function AudioClip({ source, label }: AudioClipProps) {
   const failed = playback.status === "error";
   const ready = source !== undefined && playback.status === "readyToPlay";
   const duration = playback.duration > 0 ? playback.duration : player.duration;
-  const share = duration > 0 ? Math.min(1, playback.at / duration) : 0;
-  const glide = useGlide(share, playback.playing, Math.max(0, duration - playback.at));
+  const glide = useGlide(playback.at, duration, playback.playing);
   const time = `${playheadText(playback.at * SECOND_MS)} / ${playheadText(duration * SECOND_MS)}`;
   const playWord = playback.playing ? PLAYBACK_WORD.PAUSE : PLAYBACK_WORD.PLAY;
 
