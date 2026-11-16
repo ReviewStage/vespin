@@ -25,6 +25,7 @@ import {
   localAgentRefusalSchema,
   refusedDeviceSchema,
 } from "./agent-wire.js";
+import { AUDIO_TYPE } from "./audio-signature.js";
 import { accountContract } from "./contract/account.js";
 import { agentPullRequestsContract } from "./contract/agent-pull-requests.js";
 import { agentsContract } from "./contract/agents.js";
@@ -64,6 +65,7 @@ import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
 import {
   chatGptDeviceLoginRequestSchema,
   chatGptDeviceStartRequestSchema,
+  modelApiProviderSchema,
   PROVIDER_KEY_PROVIDER,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
@@ -673,9 +675,9 @@ export type AllowedCommandsWriteAnswerView = typeof allowedCommandsWriteAnswerVi
 /** Writing the default, as the window asks it: the choice to keep. */
 export const agentDefaultWriteParamsSchema = modelChoiceSchema;
 
-/** Writing whose API key chapters run on, as the window asks it: the provider to keep. */
+/** Writing whose API key chapters run on, as the window asks it: the provider to keep, one whose key buys a model call. */
 export const chaptersProviderWriteParamsSchema = EffectSchema.Struct({
-  provider: modelProviderSchema,
+  provider: modelApiProviderSchema,
 });
 
 export type ChaptersProviderWriteParams = typeof chaptersProviderWriteParamsSchema.Type;
@@ -1446,11 +1448,12 @@ export type AgentPartView = typeof agentPartViewSchema.Type;
  */
 export const agentInboxAttachmentViewSchema = EffectSchema.Union([
   EffectSchema.Struct({
-    // A transcript's picture may be a WebM an agent recorded, read through this same view, or its MP4 copy to a window that plays MP4.
+    // A transcript's picture may be a WebM an agent recorded, read through this same view, its MP4 copy to a window that plays MP4, or a sound clip.
     contentType: EffectSchema.Literals([
       ...Object.values(AGENT_ATTACHMENT_TYPE),
       CONVERSATION_MEDIA_TYPE.WEBM,
       MP4_TYPE,
+      ...Object.values(AUDIO_TYPE),
     ]),
     base64: EffectSchema.String,
   }),

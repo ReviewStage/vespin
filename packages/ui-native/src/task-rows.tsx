@@ -30,16 +30,19 @@ import {
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
+import { VERSION_CHANGE_HEARD } from "@repo/features/description-history-words";
+import { VERSION_CHANGE, type VersionUnit } from "@repo/features/description-version-diff";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { needsYouWords } from "@repo/features/inbox-list-model";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
-import type { TaskStatus } from "@repo/features/task-wire";
+import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dropLink } from "./interactions.js";
@@ -53,7 +56,7 @@ import {
   type RowSwipe,
   rowPlacement,
 } from "./list-row.js";
-import { Markdown, type MarkdownVideo } from "./markdown.js";
+import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
 import {
   AgentTile,
   type Face,
@@ -63,6 +66,7 @@ import {
   WorkingMark,
 } from "./marks.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
+import { ProblemLine } from "./problem-line.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -153,8 +157,7 @@ function RowLine({ children }: { readonly children: ReactNode }) {
 type TaskHeadProps = {
   readonly name: string;
   readonly status: TaskStatus | undefined;
-  /** Its priority's name. */
-  readonly priority: string | undefined;
+  readonly priority: TaskPriority | undefined;
   /** Who it is assigned to, or the words for no one. */
   readonly assignee: Face & { readonly nobody: boolean };
   /** Who created it and when, the line under its chips: "Created by Ada Lovelace · Oct 5". */
@@ -191,7 +194,7 @@ export function TaskHead(props: TaskHeadProps) {
         priority={priority}
         assignee={assignee}
         following={following}
-        summary={createdBy}
+        byline={createdBy}
         menus={menus}
       />
     </VStack>
@@ -216,8 +219,12 @@ type AgentRowProps = {
   readonly state: AgentRowState;
   /** Where it runs: "Cloud", or the device's name. */
   readonly runsOn: string;
+  /** The glyph that leads where it runs, as the panel's row draws it: the cloud's, or its device's. */
+  readonly runsOnGlyph?: Glyph | undefined;
   /** How many of its threads wait on the reader; none said at none. */
   readonly waiting: number;
+  /** The task it works on, named first in its line where the list holds agents of many tasks, as ⌘K's agent rows name it; none on the task's own page. */
+  readonly task?: string | undefined;
   /** The pull request it opened, its state's glyph and number in its line, pressed to open it. */
   readonly pullRequest?:
     | {
@@ -230,6 +237,8 @@ type AgentRowProps = {
     | undefined;
   /** What a swipe from the trailing edge reveals, such as Stop or Archive, the first of it on a full swipe. */
   readonly trailingActions?: readonly RowSwipe[] | undefined;
+  /** What its long press menu holds past its swipes, as the panel's agent menu offers it: its links, then Archive. */
+  readonly menuActions?: readonly RowAction[] | undefined;
   /** What its long press lifts over its menu (`AgentPreview`). */
   readonly preview?: ReactElement | undefined;
 };
@@ -278,7 +287,8 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_LINE }),
-          foregroundStyle(working ? colors.TEXT_MUTED : colors.DANGER_TEXT),
+          // Note that Failed stands muted beside the failed mark, which already carries the red, as the panel marks a failed agent by its glyph alone.
+          foregroundStyle(colors.TEXT_MUTED),
         ]}
       >
         {working ? GLYPH_STATE_WORDS[GLYPH_STATE.WORKING] : GLYPH_STATE_WORDS[GLYPH_STATE.FAILED]}
@@ -294,7 +304,7 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
  * want you.
  */
 export function AgentRow(props: AgentRowProps) {
-  const { id, name, harness, state, runsOn, waiting, pullRequest } = props;
+  const { id, name, harness, state, runsOn, waiting, pullRequest, task } = props;
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
   const told = !resting || pullRequest !== undefined;
@@ -310,10 +320,38 @@ export function AgentRow(props: AgentRowProps) {
         lead={<AgentTile name={name} harness={harness} size={tile} />}
         title={name}
         ink={colors.TEXT}
-        end={<EndWords words={runsOn} />}
+        end={
+          <HStack spacing={SPACE.TIGHT}>
+            {props.runsOnGlyph === undefined ? null : (
+              <ToneGlyph glyph={props.runsOnGlyph} tone={STATUS_TONE.NEUTRAL} hidden />
+            )}
+            <EndWords words={runsOn} />
+          </HStack>
+        }
       />
-      {!told && waiting === 0 ? null : (
+      {!told && waiting === 0 && task === undefined ? null : (
         <RowLine>
+          {task === undefined ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+                lineLimit(stacked ? 2 : 1),
+              ]}
+            >
+              {task}
+            </Text>
+          )}
+          {task === undefined || (!told && waiting === 0) || stacked ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+              ]}
+            >
+              {LINE_PART.trim()}
+            </Text>
+          )}
           {resting ? null : <AgentStateWords working={state === AGENT_ROW_STATE.WORKING} />}
           {pullRequest === undefined ? null : <PullRequestLink pullRequest={pullRequest} />}
           {waiting === 0 ? null : (
@@ -332,7 +370,13 @@ export function AgentRow(props: AgentRowProps) {
   );
 
   return (
-    <RowFrame id={id} row={row} trailingActions={props.trailingActions} preview={props.preview} />
+    <RowFrame
+      id={id}
+      row={row}
+      trailingActions={props.trailingActions}
+      menuActions={props.menuActions}
+      preview={props.preview}
+    />
   );
 }
 
@@ -432,15 +476,49 @@ export function LinkRow({
         ...(detail === undefined ? [] : [accessibilityValue(detail)]),
       ]}
     >
-      <RowHead
-        unread={false}
-        faded={false}
-        lead={<LeadGlyph symbol={symbol} ink={ink} />}
-        title={label}
-        ink={ink}
-        end={detail === undefined ? null : <EndWords words={detail} />}
-      />
+      {/* Note that the shape stands on the row's own stack, the button's label, so a press on the row's blank run past its words still goes, since a borderless button answers only where its label is hit. */}
+      <HStack modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}>
+        <RowHead
+          unread={false}
+          faded={false}
+          lead={<LeadGlyph symbol={symbol} ink={ink} />}
+          title={label}
+          ink={ink}
+          end={detail === undefined ? null : <EndWords words={detail} />}
+        />
+      </HStack>
     </SwiftUIButton>
+  );
+}
+
+type FailedReadRowProps = {
+  /** What could not be read, such as the description. */
+  readonly label: string;
+  /** The act's words, such as Try again. */
+  readonly act: string;
+  readonly onPress: () => void;
+};
+
+/**
+ * A row saying a part of a page could not be read, as `ProblemLine` says
+ * every problem in the app: the alert glyph in the attention ink standing
+ * where a row's mark does, and the muted words beside it; then its one act at
+ * the row's end as the system's small bordered capsule in the ink, as Mail
+ * says a message could not be loaded. Note that only the capsule takes a
+ * press, so the row reads as a line that says, with the act beside it.
+ */
+export function FailedReadRow({ label, act, onPress }: FailedReadRowProps) {
+  const colors = useColors();
+
+  return (
+    <HStack spacing={SPACE.ROW} modifiers={rowPlacement(colors)}>
+      {/* Note that the line steps past the unread dot's margin, so its glyph stands where a row's lead mark does. */}
+      <HStack modifiers={[padding({ leading: MARK_SIZE.DOT + SPACE.TIGHT })]}>
+        <ProblemLine text={label} />
+      </HStack>
+      <Spacer />
+      <Button label={act} look={BUTTON_LOOK.BORDERED} size={BUTTON_SIZE.SMALL} onPress={onPress} />
+    </HStack>
   );
 }
 
@@ -542,9 +620,72 @@ type WordsRowProps = {
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
   /** The video a picture's address names, played in its place; none where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
+  /** The file a picture's address names, such as a description's PDF, drawn as its chip in its place. */
+  readonly fileAt?: ((written: string) => MarkdownFile | undefined) | undefined;
   /** What GitHub holds of a pull request or issue a chip in the words names, by its page, which the chip says where it stands. */
   readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
+  /** How the words stand against the version before them, where they are a version's section, which a bar at their leading edge marks; none where they are read alone. */
+  readonly change?: VersionUnit["change"] | undefined;
 };
+
+/** The bar a version's section wears by how it changed, as the panel's version page edges one: green for words written, red for words struck, which also stand dimmed. */
+const CHANGE_BAR = {
+  [VERSION_CHANGE.ADDED]: { color: "COMPLETE", dimmed: false },
+  [VERSION_CHANGE.CHANGED]: { color: "COMPLETE", dimmed: false },
+  [VERSION_CHANGE.REMOVED]: { color: "DANGER", dimmed: true },
+} as const satisfies Record<
+  keyof typeof VERSION_CHANGE_HEARD,
+  { readonly color: keyof BrandColors; readonly dimmed: boolean }
+>;
+
+/**
+ * How far a struck section's words fade, as the panel draws them in its quiet
+ * ink. Note that it fades no further than keeps the body's ink at WCAG's
+ * 4.5:1 on the ground, in the light theme and the dark: about 5:1 on white
+ * and 6.7:1 on near-black.
+ */
+const STRUCK_OPACITY = 0.62;
+
+/** How wide a changed section's bar stands, in points. */
+const CHANGE_BAR_WIDTH = 3;
+
+/** A changed section's row: its bar, then its words beside it. */
+const CHANGED_STYLE = StyleSheet.create({
+  row: { flexDirection: "row", gap: SPACE.ROW },
+  bar: { width: CHANGE_BAR_WIDTH, borderRadius: CHANGE_BAR_WIDTH / 2, alignSelf: "stretch" },
+  words: { flex: 1 },
+  struck: { opacity: STRUCK_OPACITY },
+});
+
+/**
+ * A version's section at its leading edge's bar, heard before the words as
+ * how the section changed, since the bar itself says nothing to VoiceOver.
+ */
+function ChangedWords({
+  change,
+  children,
+}: {
+  readonly change: VersionUnit["change"];
+  readonly children: ReactNode;
+}) {
+  const colors = useColors();
+
+  if (change === VERSION_CHANGE.SAME) return children;
+  const bar = CHANGE_BAR[change];
+
+  return (
+    <View style={CHANGED_STYLE.row}>
+      <View
+        accessible
+        accessibilityLabel={VERSION_CHANGE_HEARD[change]}
+        style={[CHANGED_STYLE.bar, { backgroundColor: colors[bar.color] }]}
+      />
+      <View style={[CHANGED_STYLE.words, bar.dimmed ? CHANGED_STYLE.struck : undefined]}>
+        {children}
+      </View>
+    </View>
+  );
+}
 
 /** The count of a block's open comment threads at its trailing edge, as a document's margin marks them, opening them on a press. */
 function CommentCount({ comments }: { readonly comments: WordsComments }) {
@@ -601,22 +742,27 @@ export function WordsRow({
   last = true,
   pictureSource,
   videoAt,
+  fileAt,
   linkStanding,
+  change = VERSION_CHANGE.SAME,
 }: WordsRowProps) {
   const colors = useColors();
 
   const host = (
     <RNHostView matchContents={{ vertical: true }}>
       <View>
-        <Markdown
-          words={words}
-          repository={repository}
-          onOpenLink={onOpenLink}
-          pictureSource={pictureSource}
-          videoAt={videoAt}
-          linkStanding={linkStanding}
-          headings
-        />
+        <ChangedWords change={change}>
+          <Markdown
+            words={words}
+            repository={repository}
+            onOpenLink={onOpenLink}
+            pictureSource={pictureSource}
+            videoAt={videoAt}
+            fileAt={fileAt}
+            linkStanding={linkStanding}
+            headings
+          />
+        </ChangedWords>
       </View>
     </RNHostView>
   );

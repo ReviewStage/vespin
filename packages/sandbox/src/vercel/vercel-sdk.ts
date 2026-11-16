@@ -214,6 +214,7 @@ const SANDBOX_CALL_SPAN = {
   [SANDBOX_CALL.INTERACTIVE]: "web/sandboxInteractive",
   [SANDBOX_CALL.SNAPSHOT]: "web/sandboxSnapshot",
   [SANDBOX_CALL.PORTS]: "web/sandboxUpdatePorts",
+  [SANDBOX_CALL.RESIZE]: "web/sandboxResize",
 } as const satisfies Record<SandboxCall, string>;
 
 /**
@@ -888,6 +889,42 @@ function vercelSandbox(
     run: (signal: AbortSignal, under: Effect.Success<ReturnType<typeof credentials>>) => Promise<A>,
   ) => Effect.flatMap(credentials(call), (under) => sdkCall(call, (signal) => run(signal, under)));
 
+  /**
+   * A stopped sandbox under the ask's name resized to the vCPUs the ask
+   * names, where it stands at another size, so the resume that follows
+   * opens it at the ask's size with its disk as it stood: Vercel resumes a
+   * sandbox at the size it was created with, and a size it is updated to
+   * applies to its next session. Note that one up, or on its way down,
+   * keeps its size, so a running turn is never resized under; it moves at
+   * its next open after it stops. A resize that failed is logged and the
+   * sandbox resumes at its own size, since the work it holds matters more
+   * than its size.
+   */
+  const resizedWhileStopped = (ask: SandboxCreate) => {
+    const { vcpus } = ask;
+
+    if (vcpus === undefined) return Effect.void;
+
+    return asked(SANDBOX_CALL.RESIZE, async (signal, under) => {
+      const standing = await SdkSandbox.get({
+        ...under,
+        name: ask.name,
+        resume: false,
+        signal,
+      }).catch(absentIfNotFound);
+
+      if (standing === undefined || standing.vcpus === vcpus) return;
+
+      if (STATUS_OF_VERCEL.get(standing.status) !== SANDBOX_STATUS.STOPPED) return;
+
+      await standing.update({ resources: { vcpus } }, { signal });
+    }).pipe(
+      Effect.catch((failure) =>
+        Effect.logWarning(`a stopped sandbox was not resized: ${failure._tag}`),
+      ),
+    );
+  };
+
   /** The named sandbox as it stands, without resuming it. */
   const found = (call: SandboxCall, name: string) =>
     asked(call, (signal, under) => SdkSandbox.get({ ...under, name, resume: false, signal }));
@@ -1019,85 +1056,88 @@ function vercelSandbox(
     getOrCreate: (ask, onCreate) =>
       said(
         Effect.map(
-          asked(SANDBOX_CALL.GET_OR_CREATE, async (signal, under) => {
-            // Note that a sandbox standing under the name resumes with the drive it was created with,
-            // so the drive an ask names is made ready only where none stands to resume, or where
-            // one stopped on a drive of its own is made again on it.
-            const replaced =
-              ask.drive !== undefined &&
-              "own" in ask.drive &&
-              (await replacedOnOwnDrive(ask.name, under, signal));
+          Effect.andThen(
+            resizedWhileStopped(ask),
+            asked(SANDBOX_CALL.GET_OR_CREATE, async (signal, under) => {
+              // Note that a sandbox standing under the name resumes with the drive it was created with,
+              // so the drive an ask names is made ready only where none stands to resume, or where
+              // one stopped on a drive of its own is made again on it.
+              const replaced =
+                ask.drive !== undefined &&
+                "own" in ask.drive &&
+                (await replacedOnOwnDrive(ask.name, under, signal));
 
-            if (ask.drive !== undefined && !replaced) {
-              const standing = await SdkSandbox.get({
-                ...under,
-                name: ask.name,
-                resume: true,
-                signal,
-                onResume: portsClosedOnResume(signal),
-              }).catch((cause: unknown) => {
-                if (noneToResume(cause)) return undefined;
-                throw cause;
-              });
-
-              if (standing !== undefined) return await idleTimed(standing, signal);
-            }
-
-            return await openedWithDrive(ask, under, signal, async (mounted, stands) => {
-              /** A sandbox this call created, set up as the ask says before it is handed back. */
-              const setUp = async (created: SdkSandbox) => {
-                stands();
-
-                if (ask.user !== undefined) await madeUser(created, ask.user, signal);
-                await onCreate?.({ ...openedOf(created), driveKept: mounted?.kept === true });
-              };
-
-              const gotOrCreated = () =>
-                SdkSandbox.getOrCreate({
-                  ...under,
-                  ...createParams(ask, mounted),
-                  resume: true,
-                  signal,
-                  onCreate: setUp,
-                  onResume: portsClosedOnResume(signal),
-                });
-
-              try {
-                const opened = await gotOrCreated().catch(async (cause: unknown) => {
-                  // A sandbox standing with its snapshot gone is replaced by a fresh one under its name.
-                  if (!snapshotGoneFailure(cause)) throw cause;
-
-                  if (!(await clearedStale(ask.name, under, signal))) throw cause;
-
-                  return await gotOrCreated();
-                });
-
-                stands();
-
-                return await idleTimed(opened, signal);
-              } catch (failure) {
-                // Note that the name is taken where the SDK tried again a create whose first answer was lost, so the sandbox holding it is the one this call created, which `onCreate` never saw; a drive still attached comes with the same status, and is the create's own refusal.
-                if (
-                  !(failure instanceof APIError) ||
-                  failure.response.status !== NAME_TAKEN_STATUS ||
-                  errorCode(failure.text ?? "") === DRIVE_CODE.ATTACHED
-                ) {
-                  throw failure;
-                }
-
-                const joined = await SdkSandbox.get({
+              if (ask.drive !== undefined && !replaced) {
+                const standing = await SdkSandbox.get({
                   ...under,
                   name: ask.name,
                   resume: true,
                   signal,
+                  onResume: portsClosedOnResume(signal),
+                }).catch((cause: unknown) => {
+                  if (noneToResume(cause)) return undefined;
+                  throw cause;
                 });
 
-                await setUp(joined);
-
-                return await idleTimed(joined, signal);
+                if (standing !== undefined) return await idleTimed(standing, signal);
               }
-            });
-          }),
+
+              return await openedWithDrive(ask, under, signal, async (mounted, stands) => {
+                /** A sandbox this call created, set up as the ask says before it is handed back. */
+                const setUp = async (created: SdkSandbox) => {
+                  stands();
+
+                  if (ask.user !== undefined) await madeUser(created, ask.user, signal);
+                  await onCreate?.({ ...openedOf(created), driveKept: mounted?.kept === true });
+                };
+
+                const gotOrCreated = () =>
+                  SdkSandbox.getOrCreate({
+                    ...under,
+                    ...createParams(ask, mounted),
+                    resume: true,
+                    signal,
+                    onCreate: setUp,
+                    onResume: portsClosedOnResume(signal),
+                  });
+
+                try {
+                  const opened = await gotOrCreated().catch(async (cause: unknown) => {
+                    // A sandbox standing with its snapshot gone is replaced by a fresh one under its name.
+                    if (!snapshotGoneFailure(cause)) throw cause;
+
+                    if (!(await clearedStale(ask.name, under, signal))) throw cause;
+
+                    return await gotOrCreated();
+                  });
+
+                  stands();
+
+                  return await idleTimed(opened, signal);
+                } catch (failure) {
+                  // Note that the name is taken where the SDK tried again a create whose first answer was lost, so the sandbox holding it is the one this call created, which `onCreate` never saw; a drive still attached comes with the same status, and is the create's own refusal.
+                  if (
+                    !(failure instanceof APIError) ||
+                    failure.response.status !== NAME_TAKEN_STATUS ||
+                    errorCode(failure.text ?? "") === DRIVE_CODE.ATTACHED
+                  ) {
+                    throw failure;
+                  }
+
+                  const joined = await SdkSandbox.get({
+                    ...under,
+                    name: ask.name,
+                    resume: true,
+                    signal,
+                  });
+
+                  await setUp(joined);
+
+                  return await idleTimed(joined, signal);
+                }
+              });
+            }),
+          ),
           openedOf,
         ),
       ),

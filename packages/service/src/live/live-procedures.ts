@@ -162,6 +162,21 @@
  * or failure in the agent's workspace (`pullRequestChaptersRead`), so
  * another member's Generate reaches an open view without a Refresh.
  *
+ * `GET /api/live/repository-pull-request-chapters?workspaceId=&repository=&number=`
+ * answers the same newest chapters of one pull request by its repository
+ * and number, after a token minted for the repository confirms the
+ * workspace reaches it, to a member of that workspace alone, as the read of
+ * them by the repository admits a reader; with the same beside, and woken
+ * the same way (`repositoryPullRequestChaptersRead`).
+ *
+ * `GET /api/live/repository-pull-request-moved?workspaceId=&repository=&number=`
+ * answers when GitHub last said one pull request moved, and its head as
+ * GitHub last named it, under the repository's GitHub id, to a member of
+ * the workspace once a token minted for the repository confirms the
+ * workspace reaches it; woken by every delivery naming one of the
+ * repository's pull requests (`repositoryPullRequestMovedRead`), so a Pull
+ * request tab reads its pull request again whoever opened it.
+ *
  * `GET /api/live/integration-statuses` answers every integration row the
  * account holds, each where it stands as stored, a sign-in counted under
  * way within its window from the instant the read is answered, with the
@@ -234,7 +249,11 @@ import { machineAsksRead } from "./reads/machine-asks.js";
 import { machineCommandsRead } from "./reads/machine-commands.js";
 import { machinesRead } from "./reads/machines.js";
 import { agentPagesRead, taskPagesRead } from "./reads/pages.js";
-import { pullRequestChaptersRead } from "./reads/pull-request-chapters.js";
+import {
+  pullRequestChaptersRead,
+  repositoryPullRequestChaptersRead,
+} from "./reads/pull-request-chapters.js";
+import { repositoryPullRequestMovedRead } from "./reads/pull-request-moved.js";
 import { agentInboxRead, taskInboxRead } from "./reads/scope-inbox.js";
 import { sidebarRead } from "./reads/sidebar.js";
 import { taskCommentsRead } from "./reads/task-comments.js";
@@ -990,6 +1009,12 @@ export function liveProcedures(seams: LiveProcedureSeams) {
 
     pullRequestChapters: signedIn.pullRequestChapters.effect(
       answerBoundRead(pullRequestChaptersRead),
+    ),
+    repositoryPullRequestChapters: signedIn.repositoryPullRequestChapters.effect(
+      answerBoundRead(repositoryPullRequestChaptersRead),
+    ),
+    repositoryPullRequestMoved: signedIn.repositoryPullRequestMoved.effect(
+      answerBoundRead(repositoryPullRequestMovedRead),
     ),
     integrationStatuses: signedIn.integrationStatuses.effect(
       answerBoundRead(integrationStatusesRead),

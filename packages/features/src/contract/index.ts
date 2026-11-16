@@ -45,6 +45,7 @@ import { workspaceGithubContract } from "./workspace-github.js";
 import { workspaceInvitationsContract } from "./workspace-invitations.js";
 import { workspaceMergeQueueContract } from "./workspace-merge-queue.js";
 import { workspaceSandboxSetupContract } from "./workspace-sandbox-setup.js";
+import { workspaceSandboxSizeContract } from "./workspace-sandbox-size.js";
 import { workspaceSentryContract } from "./workspace-sentry.js";
 import { workspaceSlackBotContract } from "./workspace-slack-bot.js";
 import { workspacesContract } from "./workspaces.js";
@@ -111,6 +112,7 @@ export type HostedContract = {
   voice: typeof voiceContract;
   workspaceEnvironment: typeof workspaceEnvironmentContract;
   workspaceSandboxSetup: typeof workspaceSandboxSetupContract;
+  workspaceSandboxSize: typeof workspaceSandboxSizeContract;
   workspaceGithub: typeof workspaceGithubContract;
   workspaceInvitations: typeof workspaceInvitationsContract;
   workspaceMergeQueue: typeof workspaceMergeQueueContract;
@@ -158,6 +160,7 @@ export const hostedContract: HostedContract = {
   voice: voiceContract,
   workspaceEnvironment: workspaceEnvironmentContract,
   workspaceSandboxSetup: workspaceSandboxSetupContract,
+  workspaceSandboxSize: workspaceSandboxSizeContract,
   workspaceGithub: workspaceGithubContract,
   workspaceInvitations: workspaceInvitationsContract,
   workspaceMergeQueue: workspaceMergeQueueContract,

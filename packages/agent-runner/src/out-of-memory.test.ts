@@ -1,5 +1,5 @@
 /**
- * out-of-memory.test.ts -- which of Claude Code's Bash calls are told as killed out of memory: the line its answer carries for the transcript, and the words the model reads beside it.
+ * out-of-memory.test.ts -- which of Claude Code's Bash calls are told as killed out of memory: the line its answer carries for the transcript, the event marking its call for the service, and the words the model reads beside it.
  */
 
 import type { HookInput, SDKMessage } from "@anthropic-ai/claude-agent-sdk";
@@ -57,7 +57,7 @@ async function runCall(
     session_id: "session",
   } satisfies SDKMessage;
 
-  const posted = watch.annotate(message);
+  const { killed, message: posted } = watch.annotate(message);
   const content = posted.type === "user" ? posted.message.content : undefined;
   const block = Array.isArray(content) ? content[0] : undefined;
 
@@ -65,6 +65,7 @@ async function runCall(
     context:
       told !== undefined && "hookSpecificOutput" in told ? told.hookSpecificOutput : undefined,
     shown: block?.type === "tool_result" ? block.content : undefined,
+    killed,
   };
 }
 
@@ -76,6 +77,7 @@ describe("claudeCodeMemoryWatch", () => {
       kills: [0, 1],
       memoryBytes: 4 * GB,
       line: "Killed: the sandbox ran out of memory (4 GB)",
+      marked: [{ type: "vespin_runner_out_of_memory", callId: CALL, memoryGb: 4 }],
     },
     {
       run: "killed out of memory where the size cannot be read",
@@ -83,6 +85,7 @@ describe("claudeCodeMemoryWatch", () => {
       kills: [3, 4],
       memoryBytes: undefined,
       line: "Killed: the sandbox ran out of memory",
+      marked: [],
     },
     {
       run: "killed by a plain SIGKILL, the count unchanged",
@@ -90,6 +93,7 @@ describe("claudeCodeMemoryWatch", () => {
       kills: [2, 2],
       memoryBytes: 4 * GB,
       line: undefined,
+      marked: [],
     },
     {
       run: "failing otherwise while the count rose for another process",
@@ -97,6 +101,7 @@ describe("claudeCodeMemoryWatch", () => {
       kills: [0, 1],
       memoryBytes: 4 * GB,
       line: undefined,
+      marked: [],
     },
     {
       run: "killed on a machine that keeps no count",
@@ -104,9 +109,12 @@ describe("claudeCodeMemoryWatch", () => {
       kills: [undefined, undefined],
       memoryBytes: undefined,
       line: undefined,
+      marked: [],
     },
-  ])("a command $run", async ({ answer, kills, memoryBytes, line }) => {
-    const { context, shown } = await runCall(answer, kills, memoryBytes);
+  ])("a command $run", async ({ answer, kills, memoryBytes, line, marked }) => {
+    const { context, shown, killed } = await runCall(answer, kills, memoryBytes);
+
+    expect(killed).toEqual(marked);
 
     if (line === undefined) {
       expect(context).toBeUndefined();
