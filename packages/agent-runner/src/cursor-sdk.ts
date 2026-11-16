@@ -1,8 +1,8 @@
 /**
- * cursor-sdk.ts -- the one door to Cursor's SDK: an agent made or resumed in the runner's own process, its runs, and the process's environment its shell inherits.
+ * cursor-sdk.ts -- the one door to Cursor's SDK: an agent made or resumed in the runner's own process, its runs, whether the SDK holds a sign-in of its own, and the process's environment its shell inherits.
  *
- * The SDK is imported from where the image installs it (the config's `sdk`,
- * `CURSOR_SDK_ENTRY`), never bundled, so it finds its platform package
+ * The SDK is imported from where the image installs it, or a Mac's host
+ * keeps it (the config's `sdk`, `CURSOR_SDK_ENTRY` in the cloud), never bundled, so it finds its platform package
  * beside itself as it looks for it. The handles are the part of the SDK's
  * `SDKAgent` and `Run` the runner uses, so a test hands scripted ones where
  * production hands the SDK's.
@@ -46,6 +46,8 @@ export interface CursorService {
     agentId: string,
     options: AgentOptions,
   ) => Promise<CursorAgentHandle>;
+  /** Whether the SDK at `sdk` holds a sign-in of its own that stands (`Cursor.auth.status()`), the one it runs on where it is handed no key. */
+  readonly signedIn: (sdk: string) => Promise<boolean>;
   /**
    * The runner's own environment changed as given, a variable set to none
    * taken out: the one the agent's shell inherits, since the SDK runs it
@@ -55,6 +57,9 @@ export interface CursorService {
 }
 
 type CursorModule = typeof import("@cursor/sdk");
+
+/** The SDK's word for a sign-in of its own that stands. */
+const SIGNED_IN = "logged-in";
 
 /** The SDK's agent as the runner's handle of it. */
 function handleOf(agent: SDKAgent): CursorAgentHandle {
@@ -80,6 +85,7 @@ function liveCursor(): CursorService {
     create: async (sdk, options) => handleOf(await (await load(sdk)).Agent.create(options)),
     resume: async (sdk, agentId, options) =>
       handleOf(await (await load(sdk)).Agent.resume(agentId, options)),
+    signedIn: async (sdk) => (await (await load(sdk)).Cursor.auth.status()).status === SIGNED_IN,
     setEnvironment: (changes) => {
       for (const [name, value] of Object.entries(changes)) {
         if (value === undefined) delete process.env[name];
