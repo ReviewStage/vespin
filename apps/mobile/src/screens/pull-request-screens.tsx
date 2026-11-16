@@ -87,7 +87,6 @@ const MENU_WORDS = {
   COPY_GITHUB_LINK: "Copy GitHub link",
   OPEN_ON_GITHUB: "Open on GitHub",
   REFRESH: "Refresh",
-  TRY_AGAIN: "Try again",
 } as const;
 
 /** The id the comments row stands under, beside the checks' and the reviewers'. */
@@ -478,12 +477,15 @@ export function PullRequestPage({
     const failed = failedOf(parts.pullRequest);
 
     return page(
-      <EmptyState
-        title={failed ? PULL_REQUEST_READ_WORDS.FAILED : PULL_REQUEST_READ_WORDS.READING}
-        symbol={failed ? GLYPH.FAILED : GLYPH.PULL_REQUEST}
-        loading={!failed}
-        action={failed ? { label: MENU_WORDS.TRY_AGAIN, onPress: () => void retry() } : undefined}
-      />,
+      failed ? (
+        <EmptyState
+          title={PULL_REQUEST_READ_WORDS.FAILED}
+          symbol={GLYPH.FAILED}
+          retry={() => void retry()}
+        />
+      ) : (
+        <EmptyState title={PULL_REQUEST_READ_WORDS.READING} symbol={GLYPH.PULL_REQUEST} loading />
+      ),
     );
   }
 

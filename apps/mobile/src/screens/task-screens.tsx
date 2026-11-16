@@ -65,6 +65,8 @@ import { provenanceText } from "@repo/features/time-format";
 import {
   CHOOSE_AN_ITEM_WORDS,
   countWords,
+  NO_RESULTS_HINT,
+  noResultsForWords,
   readFailedWords,
   readingWords,
   TERM,
@@ -270,11 +272,6 @@ const LINE_PART = " · ";
 
 /** No parent's sub-tasks stand open, as a section opens. */
 const NONE_OPEN: ReadonlySet<string> = new Set();
-
-/** What the list's search says where it finds nothing. */
-function noMatchWords(search: string): string {
-  return `No tasks match “${search}”.`;
-}
 
 /** A destination on vespin.dev in the workspace, opened in Safari, since the app draws no page for it yet. */
 function openOnWeb(destination: LinkDestination, workspace: Workspace | undefined): void {
@@ -958,7 +955,11 @@ function TasksTree({
     if (found.length === 0) {
       return (
         (treeEmpty(tree) ? notRead(read, onRefresh) : undefined) ?? (
-          <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />
+          <EmptyState
+            title={noResultsForWords(search)}
+            symbol={GLYPH.SEARCH}
+            description={NO_RESULTS_HINT}
+          />
         )
       );
     }

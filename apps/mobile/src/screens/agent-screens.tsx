@@ -42,6 +42,7 @@ import {
   type BarAction,
   type BarMenu,
   type BarSubtitle,
+  BUTTON_LOOK,
   CallCardRow,
   type ColumnBar,
   Composer,
@@ -977,7 +978,9 @@ export function AgentConversation({
         title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
         symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
         loading: !failed,
-        action: failed ? { label: TRANSCRIPT_WORDS.RETRY, onPress: retry } : undefined,
+        action: failed
+          ? { label: TRANSCRIPT_WORDS.RETRY, look: BUTTON_LOOK.BORDERED, onPress: retry }
+          : undefined,
       }}
       older={older}
       heldCall={approvals.heldCall}
