@@ -3,7 +3,6 @@
 import assert from "node:assert/strict";
 import { AUTOMATION_CALL_FAILURE } from "@repo/features/automation-view";
 import {
-  AUTOMATION_DEFAULT_GUARDS,
   AUTOMATION_FIRING,
   AUTOMATION_RUN_STATUS,
   AUTOMATION_SCOPE,
@@ -1118,7 +1117,7 @@ test("on a narrow stage each row says when it runs next before what fires it, un
   assert.ok(rowOf(page, "Dependency bumps").querySelector(".failed-mark"));
 });
 
-/** An automation fired by Sentry alerts from two projects at the error level, waiting six hours before the same issue runs again. */
+/** An automation fired by Sentry alerts from two projects at the error level. */
 const SENTRY_ALERTS = automation(11, {
   name: "Fix Sentry errors",
   trigger: {
@@ -1127,7 +1126,6 @@ const SENTRY_ALERTS = automation(11, {
     event: SENTRY_TRIGGER_EVENT.ALERT_TRIGGERED,
     filters: { project: ["web", "api"], level: [SENTRY_LEVEL.ERROR] },
   },
-  guards: { ...AUTOMATION_DEFAULT_GUARDS, subjectCooldownHours: 6 },
 });
 
 /** A Sentry issue's firing, as its run keeps it. Synthetic. */
@@ -1185,7 +1183,7 @@ test("a Sentry automation's runs wear Sentry's mark, its row says its event and 
   assert.deepEqual(opened, ["https://acme.sentry.io/issues/4711/"]);
 });
 
-test("a new Sentry automation is made on the event, filters, levels, and cooldown picked, the alert recommended and how to send it said", async () => {
+test("a new Sentry automation is made on the event, filters, and levels picked, the alert recommended and how to send it said", async () => {
   const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
   await settle();
 
@@ -1207,15 +1205,8 @@ test("a new Sentry automation is made on the event, filters, levels, and cooldow
     "a comma still to be followed stands as typed",
   );
 
-  type(page.querySelector("input[aria-label='Hours before the same issue runs again']"), "0");
   type(page.querySelector("input[aria-label='Automation name']"), "Fix new issues");
   writePrompt(page, "Fix the issue Sentry opened.");
-  act(() => button("Create automation").click());
-  await settle();
-  assert.equal(world.creates.length, 0);
-  assert.match(page.textContent ?? "", /Wait a whole number of hours, from 1 to 168\./u);
-
-  type(page.querySelector("input[aria-label='Hours before the same issue runs again']"), "12");
   act(() => button("Create automation").click());
   await settle();
 
@@ -1229,10 +1220,6 @@ test("a new Sentry automation is made on the event, filters, levels, and cooldow
       environment: ["production"],
       level: [SENTRY_LEVEL.FATAL, SENTRY_LEVEL.ERROR],
     },
-  });
-  assert.deepEqual(world.creates[0]?.guards, {
-    ...AUTOMATION_DEFAULT_GUARDS,
-    subjectCooldownHours: 12,
   });
 });
 
@@ -1263,7 +1250,7 @@ test("a Sentry filter over its bounds says so under its own row, never under Typ
   assert.equal(picker(page, "Type").getAttribute("aria-invalid"), null);
 });
 
-test("a saved Sentry automation opens on its filters and cooldown, and a cooldown changed saves over its guards alone", async () => {
+test("a saved Sentry automation opens on its filters", async () => {
   world.standing = [SENTRY_ALERTS];
   const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SENTRY_ALERTS.id });
   await settle();
@@ -1274,23 +1261,6 @@ test("a saved Sentry automation opens on its filters and cooldown, and a cooldow
     "web, api",
   );
   assert.equal(button("Error").getAttribute("aria-checked"), "true");
-
-  const hours = page.querySelector<HTMLInputElement>(
-    "input[aria-label='Hours before the same issue runs again']",
-  );
-
-  assert.equal(hours?.value, "6");
-
-  type(hours, "48");
-  act(() => button("Save").click());
-  await settle();
-
-  assert.deepEqual(world.changes, [
-    {
-      automationId: SENTRY_ALERTS.id,
-      change: { guards: { ...AUTOMATION_DEFAULT_GUARDS, subjectCooldownHours: 48 } },
-    },
-  ]);
 });
 
 test("where the workspace has no Sentry installed, a Sentry trigger offers Install Sentry in its rows' place, which installs on the workspace", async () => {
