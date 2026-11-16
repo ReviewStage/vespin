@@ -15,7 +15,12 @@
  * tools before it connects.
  */
 
-import { type ClaudeCodeConfig, type CodexConfig, RUNNER_ENV } from "./protocol.js";
+import {
+  type ClaudeCodeConfig,
+  type CodexConfig,
+  type CursorConfig,
+  RUNNER_ENV,
+} from "./protocol.js";
 
 /** The name our MCP server is registered under, so its tools reach the model as `mcp__team__<tool>` (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
 export const MCP_SERVER = "team";
@@ -66,7 +71,7 @@ export interface McpServer {
 
 /** The servers a launch's config hands its harness: ours first, then each integration, less one that would take our server's name. */
 export function mcpServersOf(
-  config: Pick<ClaudeCodeConfig | CodexConfig, "mcpUrl" | "integrations">,
+  config: Pick<ClaudeCodeConfig | CodexConfig | CursorConfig, "mcpUrl" | "integrations">,
 ): readonly McpServer[] {
   const ours: McpServer = {
     name: MCP_SERVER,
