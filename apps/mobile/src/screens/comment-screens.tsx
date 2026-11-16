@@ -2,7 +2,7 @@
 
 import { type DescriptionBlock, descriptionBlocks } from "@repo/features/description-blocks";
 import { COMMENT_NOTE } from "@repo/features/description-comment-notes";
-import { agentName } from "@repo/features/model-label";
+import { agentName, providerOf } from "@repo/features/model-label";
 import { readFailedWords, readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import {
@@ -214,8 +214,11 @@ export function CommentThread({
     };
   }, [standing, id, detail, router, onOwnTab]);
 
-  const agentNames = new Map(
-    (overview?.agents ?? []).map(({ agent }) => [agent.id, agentName(agent)] as const),
+  const agents = new Map(
+    (overview?.agents ?? []).map(
+      ({ agent }) =>
+        [agent.id, { name: agentName(agent), harness: providerOf(agent.model) }] as const,
+    ),
   );
 
   const task = overview?.task;
@@ -236,7 +239,7 @@ export function CommentThread({
         path={path}
         status={task?.status}
         title={quoteOf(thread.quote, thread.anchor !== undefined)}
-        messages={threadMessages(thread, agentNames, pictureOf)}
+        messages={threadMessages(thread, agents, pictureOf)}
         repository={task?.repository}
         onOpenLink={openLink}
         standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}

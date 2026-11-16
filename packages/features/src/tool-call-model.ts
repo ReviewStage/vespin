@@ -107,6 +107,8 @@ export interface ToolCallView {
   readonly appIcon?: string;
   /** For a terminal command or an action on an app, the machine its answer says it went to, which its row names; absent while it has not answered, and where its answer names none, as one from before machines were named. */
   readonly machine?: CallMachine;
+  /** For a terminal command or an action on an app, the id of the machine its input names, where it names one rather than the agent's default, which a row still unanswered names it by. */
+  readonly namedMachine?: string;
   /** For a call of an MCP server's tool, or a search of its tools, the server's name as its card gives it, which the row says it ran on. */
   readonly server?: string;
   /** For a call of an integration's own tool, the name of the account it ran on as its owner called it, where they held more than one at the provider, which every reader is shown; absent for the rest. */
@@ -115,6 +117,8 @@ export interface ToolCallView {
   readonly connection?: string;
   /** For a terminal command or an action on an app that ran nothing on its machine, how it came to run nothing, which its row says quietly in place of a failure; absent for the rest. */
   readonly notRun?: MachineNotRun;
+  /** Whether the service answered the call without doing it, as a pull request it refused or a browser call that ran nothing, which its row marks as failed though the call answered; absent for the rest. */
+  readonly refused?: true;
 }
 
 /** The escape every terminal color and cursor sequence starts with. */
@@ -311,8 +315,9 @@ const NOT_RUN_LABEL = {
 
 /**
  * The one quiet label a call that ran nothing wears at its line's end,
- * after the chip of the machine it was meant for: "Not answered",
- * "Declined", "Offline", or "Needs Screen Recording".
+ * after the chip of the machine it was meant for, or alone where the card
+ * under the row names that machine: "Not answered", "Declined",
+ * "Offline", or "Needs Screen Recording".
  */
 export function machineNotRunLabel(notRun: MachineNotRun): string {
   switch (notRun.outcome) {
@@ -410,7 +415,7 @@ function filesAt(input: WireValue | undefined): readonly string[] {
   return path === undefined || path === "" ? [] : [path];
 }
 
-/** The files a `show_image` call named, in order, as its row's subject. */
+/** The files a `show_media` or `show_image` call named, in order, as its row's subject. */
 function shownPaths(input: WireValue | undefined): string {
   const images = isRecord(input) && Array.isArray(input.images) ? input.images : [];
 
@@ -998,7 +1003,7 @@ function openedPullRequestView(
   return {
     kind: CALL_KIND.OPEN_PULL_REQUEST,
     subject: number === undefined ? title : `#${number} ${title}`,
-    ...(reason === undefined ? undefined : { description: PULL_REQUEST_REFUSED }),
+    ...(reason === undefined ? undefined : { description: PULL_REQUEST_REFUSED, refused: true }),
     input: input === undefined ? textBlock("") : jsonBlock(input),
     output: pullRequestAnswer(output, reason),
   };
@@ -1326,6 +1331,14 @@ const READ_WEB_SEARCH: ToolReader = ({ input, output }) => ({
 
 const READ_INBOX_CALL: ToolReader = ({ tool, input, output }) => inboxToolView(tool, input, output);
 
+/** A call that showed media from the agent's sandbox, under either name it is stored by, named by the files it showed. */
+const SHOWN_MEDIA_CALL: ToolReader = ({ input, output }) => ({
+  kind: CALL_KIND.SHOW_IMAGE,
+  subject: shownPaths(input),
+  input: input === undefined ? textBlock("") : jsonBlock(input),
+  output: output === undefined ? undefined : jsonBlock(output),
+});
+
 /** A memory tool's refusal, which answers `rejected` with its reason. */
 const MEMORY_REJECTED = "rejected";
 
@@ -1487,12 +1500,14 @@ const AGENT_TOOL_VIEWS = {
         : MACHINE_NOT_RUN_WORDS.COMMAND;
 
     const machine = callMachineOf(output);
+    const namedMachine = stringAt(input, "machine");
 
     return {
       kind: CALL_KIND.MACHINE_COMMAND,
       subject: command,
       ...(description === undefined ? undefined : { description }),
       ...(machine === undefined ? undefined : { machine }),
+      ...(namedMachine === undefined ? undefined : { namedMachine }),
       ...(notRun === undefined ? undefined : { notRun }),
       input: { kind: TOOL_BLOCK.COMMAND, text: command },
       output: output === undefined ? undefined : machineCommandOutput(output),
@@ -1510,12 +1525,14 @@ const AGENT_TOOL_VIEWS = {
 
     const icon = computerAppIcon(output);
     const machine = callMachineOf(output);
+    const namedMachine = stringAt(input, "machine");
 
     return {
       kind: CALL_KIND.COMPUTER,
       subject: computerAppName(input, output) ?? "",
       ...(description === undefined ? undefined : { description }),
       ...(machine === undefined ? undefined : { machine }),
+      ...(namedMachine === undefined ? undefined : { namedMachine }),
       ...(notRun === undefined ? undefined : { notRun }),
       ...(icon === undefined ? undefined : { appIcon: icon }),
       input: jsonBlock(input ?? {}),
@@ -1530,6 +1547,7 @@ const AGENT_TOOL_VIEWS = {
       kind: CALL_KIND.BROWSER,
       subject: words === undefined ? "" : (tab ?? ""),
       ...(words === undefined ? undefined : { description: words }),
+      ...(stringAt(output, "status") === BROWSER_NOT_RUN ? { refused: true } : undefined),
       input: input === undefined ? textBlock("") : jsonBlock(input),
       output: output === undefined ? undefined : browserOutput(output),
     };
@@ -1623,12 +1641,7 @@ const AGENT_TOOL_VIEWS = {
     input: input === undefined ? textBlock("") : jsonBlock(input),
     output: output === undefined ? undefined : jsonBlock(output),
   }),
-  [AGENT_TOOL.SHOW_IMAGE]: ({ input, output }) => ({
-    kind: CALL_KIND.SHOW_IMAGE,
-    subject: shownPaths(input),
-    input: input === undefined ? textBlock("") : jsonBlock(input),
-    output: output === undefined ? undefined : jsonBlock(output),
-  }),
+  [AGENT_TOOL.SHOW_MEDIA]: SHOWN_MEDIA_CALL,
   [AGENT_TOOL.SLEEP]: ({ input, output }) => {
     const seconds = isRecord(input) && isWireNumber(input.seconds) ? input.seconds : undefined;
 
@@ -1703,6 +1716,7 @@ const RETIRED_TOOL_VIEWS = {
   [RETIRED_TOOL.LIST_CODING_AGENTS]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_AGENTS, input, output, undefined),
   [RETIRED_TOOL.EDIT_PLAN]: AGENT_TOOL_VIEWS[AGENT_TOOL.EDIT_DESCRIPTION],
+  [RETIRED_TOOL.SHOW_IMAGE]: SHOWN_MEDIA_CALL,
   [RETIRED_TOOL.READ_CODING_AGENT]: ({ input, output }) =>
     namedCall(CALL_KIND.READ_AGENT, input, output, "agentId"),
   [RETIRED_TOOL.MESSAGE_CODING_AGENT]: ({ input, output }) =>

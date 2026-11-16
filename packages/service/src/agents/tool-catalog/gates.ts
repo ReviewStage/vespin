@@ -59,9 +59,8 @@ interface Gate {
 
 /**
  * Each gate as it is read and refused. Note that `SANDBOX` shuts on a
- * device alone, because a local agent's Mac runs no browser of ours, and it
- * already runs on one of the developer's own machines, where `run_on_mac`
- * would only reach itself. The refusals are the words each gate's doors
+ * device alone, because a local agent's machine runs no browser of ours
+ * and shares no ports of ours. The refusals are the words each gate's doors
  * refused with before the catalog refused for them (`catalog.ts`'s
  * `callTool`), but `SANDBOX`'s, which no door said, and an experiment's,
  * which names none (`EXPERIMENT_OFF_REFUSAL`); a tool whose door answered

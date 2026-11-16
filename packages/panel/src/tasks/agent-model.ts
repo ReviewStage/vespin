@@ -200,6 +200,7 @@ export function planNameOf(plan: SubscriptionKeySummary | undefined): string | u
 export const API_KEY_WORDS = {
   [MODEL_PROVIDER.ANTHROPIC]: "Anthropic API key",
   [MODEL_PROVIDER.OPENAI]: "OpenAI API key",
+  [MODEL_PROVIDER.CURSOR]: "Cursor API key",
 } as const satisfies Record<ModelProvider, string>;
 
 /** A key whose provider the choice does not say. */
@@ -805,6 +806,7 @@ export interface ConnectFailure {
 const CONNECT_CREDENTIALS = {
   [MODEL_PROVIDER.ANTHROPIC]: "a Claude plan or an Anthropic API key",
   [MODEL_PROVIDER.OPENAI]: "a Codex plan or an OpenAI API key",
+  [MODEL_PROVIDER.CURSOR]: "a Cursor API key",
 } as const satisfies Record<ModelProvider, string>;
 
 /**

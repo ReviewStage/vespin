@@ -12,9 +12,10 @@ import {
 } from "@repo/features/agent-ports-model";
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { agentStateWords } from "@repo/features/glyph-state";
 import { agentActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
-import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
+import { agentName, modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   MERGE_ACTION,
@@ -33,7 +34,6 @@ import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads"
 import { PERMISSION_MODE_WORDS } from "@repo/settings";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
-  AgentHead,
   AgentTranscript,
   AskNote,
   AttachedPictures,
@@ -41,6 +41,7 @@ import {
   BAR_TITLE,
   type BarAction,
   type BarMenu,
+  type BarSubtitle,
   CallCardRow,
   type ColumnBar,
   Composer,
@@ -51,6 +52,8 @@ import {
   DeniesWaiting,
   DetailPage,
   drawnCallIds,
+  FOOTER_TONE,
+  footerToneOf,
   GLYPH,
   GlassDock,
   type Glyph,
@@ -68,6 +71,7 @@ import {
   Screen,
   SettingsForm,
   SkillSuggestions,
+  StackBarTitle,
   SwitchRow,
   shownMediaIds,
   type TRANSCRIPT_ITEM,
@@ -355,6 +359,7 @@ function AgentComposerBar({
     onSend: composer.send,
     addMenu,
     onDropPictures: composer.dropPictures,
+    onLongPaste: composer.pasteText,
     onStop: composer.stop,
     stopping: composer.stopping,
     call,
@@ -445,9 +450,29 @@ function suggestedSendOf(
   };
 }
 
+/**
+ * The line under the agent's name in its bar: where it stands and the model
+ * it runs on, as the panel's tab and its model chip say them ("Working ·
+ * Opus 5.5"), a press on it opening Options, where the model is chosen;
+ * none before either is known.
+ */
+function agentSubtitle(
+  statusWords: string | undefined,
+  model: string | undefined,
+  openOptions: (() => void) | undefined,
+): BarSubtitle | undefined {
+  const words = [statusWords, model]
+    .filter((each) => each !== undefined && each !== "")
+    .join(" · ");
+
+  return words === "" ? undefined : { words, onPress: openOptions, label: ADD_WORDS.OPTIONS };
+}
+
 /** What the agent's bar in a split view's column offers, as its stack's bar and ⋯ offer it. */
 type AgentBarDoors = {
   readonly title: string;
+  /** Where the agent stands and its model, under its name in the bar's middle; none before either is known. */
+  readonly subtitle: BarSubtitle | undefined;
   readonly address: string | undefined;
   readonly actions: AgentActions;
   /** Whether the task list holds the agent, which every act on it reads. */
@@ -547,6 +572,7 @@ function columnBarOf(doors: AgentBarDoors): ColumnBar {
 
   return {
     name: doors.title,
+    subtitle: doors.subtitle,
     acts,
     menu: {
       label: MENU_WORDS.MORE,
@@ -560,13 +586,17 @@ function columnBarOf(doors: AgentBarDoors): ColumnBar {
         ...optionActs,
       ],
       submenus: [copy, ...run],
-      last: listed
+      groups: listed
         ? [
             {
-              label: MENU_WORDS.DELETE,
-              symbol: GLYPH.DELETE,
-              destructive: true,
-              onPress: doors.onDelete,
+              actions: [
+                {
+                  label: MENU_WORDS.DELETE,
+                  symbol: GLYPH.DELETE,
+                  destructive: true,
+                  onPress: doors.onDelete,
+                },
+              ],
             },
           ]
         : [],
@@ -797,6 +827,17 @@ export function AgentConversation({
       ? undefined
       : () => router.push({ pathname: "/agent-model", params: { agent: id } });
 
+  const statusWords = status === undefined ? undefined : agentStateWords(status);
+
+  const subtitle = agentSubtitle(
+    statusWords,
+    agent === undefined ? undefined : modelLabel(agent.model),
+    openOptions,
+  );
+
+  // Note that a change of state is told to VoiceOver as it lands, such as Working turning to Finished or Failed, since the bar's line changes out of the reader's sight.
+  useAnnounced(statusWords);
+
   const mode = useAgentMode(id);
   const pick = useAgentModelPick(id);
   const actions = useAgentActions(id, address);
@@ -909,14 +950,7 @@ export function AgentConversation({
     <AgentTranscript
       items={rows}
       reveal={reveal}
-      head={
-        <AgentHead
-          model={agent === undefined ? undefined : modelLabel(agent.model)}
-          harness={agent === undefined ? undefined : providerOf(agent.model)}
-          status={status}
-          onModel={openOptions}
-        />
-      }
+      head={null}
       empty={{
         title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
         symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
@@ -982,6 +1016,7 @@ export function AgentConversation({
       <DetailPage
         bar={columnBarOf({
           title,
+          subtitle,
           address,
           actions,
           listed: agent !== undefined,
@@ -1002,14 +1037,17 @@ export function AgentConversation({
     );
   }
 
+  const barOptions = { title, headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT } };
+
+  // Note that the agent's state and model stand under its name in the bar, as the panel's tab says them, since the line over the transcript scrolled out of sight as the page opened at its newest row.
+  const screenOptions =
+    subtitle === undefined
+      ? barOptions
+      : { ...barOptions, headerTitle: () => <StackBarTitle title={title} subtitle={subtitle} /> };
+
   return (
     <>
-      <Stack.Screen
-        options={{
-          title,
-          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
-        }}
-      />
+      <Stack.Screen options={screenOptions} />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
           {address === undefined ? null : (
@@ -1225,7 +1263,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
-          <ListSection footer={pick.note}>
+          <ListSection footer={pick.note} footerTone={FOOTER_TONE.FAILURE}>
             <MenuPickRow
               label={OPTIONS_WORDS.MODEL}
               options={pick.models}
@@ -1253,6 +1291,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
             <ListSection
               title={PERMISSION_MODE_WORDS.GROUP}
               footer={mode.note ?? PERMISSION_MODE_WORDS.APPLIES}
+              footerTone={footerToneOf(mode.note)}
             >
               <PickRows
                 options={mode.modes}
@@ -1265,7 +1304,11 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
               />
             </ListSection>
           )}
-          <ListSection title={MCP_SERVER_LABEL.many} footer={serversFooter}>
+          <ListSection
+            title={MCP_SERVER_LABEL.many}
+            footer={serversFooter}
+            footerTone={footerToneOf(servers.note)}
+          >
             {servers.servers.map((server) => (
               <SwitchRow
                 key={server.connection}
@@ -1353,6 +1396,7 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
         <SettingsForm>
           <ListSection
             footer={ports.note ?? (ports.rows.length === 0 ? ports.none : ports.linkNote)}
+            footerTone={footerToneOf(ports.note)}
           >
             {ports.rows.map((row) => (
               <MenuRow

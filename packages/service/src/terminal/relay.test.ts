@@ -171,6 +171,7 @@ function world(options: {
         : Effect.andThen(Deferred.await(options.tokensWait), answer);
     }),
     memberToken: options.memberToken ?? false,
+    environment: Effect.succeed({}),
   };
 
   const deps: RelayDependencies = {
@@ -241,6 +242,7 @@ it.effect(
           sessionId: undefined,
           repositoryCredential: Effect.die("no token"),
           memberToken: false,
+          environment: Effect.succeed({}),
         }),
         pty,
       });

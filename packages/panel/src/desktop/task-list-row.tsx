@@ -113,7 +113,7 @@ export function openPullRequests(pullRequests: readonly TaskPullRequestLine[]) {
 
 /** Each of a task's open pull requests as its chip, hanging its card; nothing where it has none. */
 function OpenPullRequests({ task }: { task: TaskSummary }): React.JSX.Element | null {
-  // Its page opens as a link to it does: in its agent's Pull request tab where the window knows the agent, else on GitHub.
+  // Its page opens as a link to it does: in its Pull request tab where the window opens one, else on GitHub.
   const openLink = useOpenLink();
   const open = openPullRequests(useTaskPullRequests(task.id));
 
@@ -210,7 +210,7 @@ export function TaskListRow({
 }): React.JSX.Element {
   const marked = useMarkedUnread(task.id);
   const pictures = useRepositoryPictures();
-  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const renaming = useMutation(useTaskRename(tasks.typedNamesNow));
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_TERMS));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const drawn = (cell: TaskRowCell) => cells.includes(cell);

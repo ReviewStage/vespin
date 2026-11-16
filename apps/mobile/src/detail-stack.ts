@@ -1,7 +1,7 @@
 // detail-stack.ts -- the pages each place pushes over its detail inside the detail's own column, in a window wide enough for three columns, as Mail opens a message's related pages beside its list with a Back there.
 
 import { IOS_TAB, type IosTab, iosRouteOnTab } from "@repo/features/ios-app-links";
-import { type Href, useIsFocused, useRouter } from "expo-router";
+import { type Href, useFocusEffect, useIsFocused, useRouter } from "expo-router";
 import {
   createContext,
   useCallback,
@@ -400,6 +400,80 @@ export function useDetailCovered(): boolean {
 
     return key === undefined ? top !== undefined : top !== key;
   });
+}
+
+/** The place whose detail stands in front, as the split view showing it says: the three-column split, or a two-column tab root; none while no split view stands in front. */
+let front: SidebarPlace | undefined;
+
+/** Names the place whose detail stands in front, so the menu bar's Back pops its pages; none as its split view steps behind or leaves. */
+function standDetailFront(place: SidebarPlace | undefined): void {
+  if (front === place) return;
+  front = place;
+
+  for (const listener of listeners) listener();
+}
+
+/**
+ * Stands a place's detail in front while its split view is shown, so the
+ * menu bar's Back pops the pages pushed over it. Note that stepping back
+ * clears the front only while this place still holds it, because another
+ * split view, such as the next tab's, may already have named its own in the
+ * same switch.
+ */
+export function useStandDetailFront(place: SidebarPlace, shown: boolean): void {
+  useEffect(() => {
+    if (!shown) return;
+    standDetailFront(place);
+
+    return () => {
+      if (front === place) standDetailFront(undefined);
+    };
+  }, [place, shown]);
+}
+
+/**
+ * Stands a tab root's detail in front while its tab is focused and `shown`
+ * holds, as `useStandDetailFront` does. Note that it hears focus through an
+ * effect rather than reading it, because a read would draw the whole root
+ * again on every tab switch, and hand the split view its columns anew.
+ */
+export function useStandFocusedDetailFront(place: SidebarPlace, shown: boolean): void {
+  useFocusEffect(
+    useCallback(() => {
+      if (!shown) return;
+      standDetailFront(place);
+
+      return () => {
+        if (front === place) standDetailFront(undefined);
+      };
+    }, [place, shown]),
+  );
+}
+
+/** How the detail in front stands, for the menu bar's Back: no split view in front, its own page alone, or a page pushed over it. */
+export const DETAIL_FRONT = {
+  NONE: "none",
+  ROOT: "root",
+  PUSHED: "pushed",
+} as const;
+
+export type DetailFront = (typeof DETAIL_FRONT)[keyof typeof DETAIL_FRONT];
+
+/** How the detail in front stands, which the menu bar's Back pops only while a page is pushed over it, as the column's own Back would. */
+export function useDetailFront(): DetailFront {
+  return useSyncExternalStore(subscribe, () => {
+    if (front === undefined) return DETAIL_FRONT.NONE;
+
+    return stackOf(front).pages.length > 0 ? DETAIL_FRONT.PUSHED : DETAIL_FRONT.ROOT;
+  });
+}
+
+/** Pops the top page off the detail in front, as its column's Back does; nothing where none is pushed. */
+export function popDetailFront(): void {
+  if (front === undefined) return;
+  const top = stackOf(front).pages.at(-1);
+
+  if (top !== undefined) popDetail(front, top.key);
 }
 
 /** Whether a tab's route (its segments under the tab's group) is a page the detail's stack stands, as an agent's or a pull request's. */

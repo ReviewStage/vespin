@@ -21,8 +21,3 @@ export const COMMAND_DESCRIPTION = Schema.optionalKey(
       '"Find where invites are sent".',
   ),
 );
-
-/** The line each model's instructions ask for it in. */
-export const COMMAND_DESCRIPTION_INSTRUCTION =
-  "Give every command a `description`, what it is for in 3 to 8 plain words, which the " +
-  "developer reads in place of the command.";

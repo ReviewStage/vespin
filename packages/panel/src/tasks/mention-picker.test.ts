@@ -13,7 +13,7 @@ import { LINK_DESTINATION, readLink } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { decodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
-import { IDLE_TASKS_VIEW, type TasksView } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
@@ -29,6 +29,7 @@ import {
   handState,
   holdAutomations,
   holdMembers,
+  type WrittenTasksView,
   withExperiments,
 } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
@@ -65,6 +66,7 @@ function mounted(chosen: MentionNode[] = []) {
       room,
       side: MENTION_MENU_SIDE.ABOVE,
       onChoose: (mention) => chosen.push(mention),
+      onRetype: () => undefined,
     });
 
     return createElement("div", { ref: room }, latest.menu);
@@ -199,6 +201,7 @@ async function mountedOnDescription(chosen: MentionNode[]) {
       room,
       side: MENTION_MENU_SIDE.BELOW,
       onChoose: (mention) => chosen.push(mention),
+      onRetype: () => undefined,
     });
 
     return createElement("div", { ref: room }, latest.menu);
@@ -318,7 +321,7 @@ test("on a plan, a Done task the window lists not is asked of the service as the
   });
   const listed = [task("plan-1", "workspace-stage", 1, "Ship the palette")];
 
-  const view = (tasks: readonly TaskSummary[]): TasksView => ({
+  const view = (tasks: readonly TaskSummary[]): WrittenTasksView => ({
     ...IDLE_TASKS_VIEW,
     workspaces: [workspace("workspace-stage", "Stage", "stage")],
     tasks,
@@ -603,6 +606,7 @@ test("in New task's box, which no member directory stands around, the @ list off
       room,
       side: MENTION_MENU_SIDE.BELOW,
       onChoose: () => undefined,
+      onRetype: () => undefined,
     });
 
     return createElement("div", { ref: room }, latest.menu);

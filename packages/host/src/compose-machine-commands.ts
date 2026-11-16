@@ -39,6 +39,7 @@ import {
   machineCommandResultSchema,
 } from "@repo/features/machine-command-wire";
 import { MACHINES_READ, machinesOfLiveRows } from "@repo/features/machine-live";
+import { MACHINE_REFUSAL_NEXT } from "@repo/features/machine-refusal-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
@@ -48,7 +49,7 @@ import {
   Deferred,
   Duration,
   Effect,
-  FiberHandle,
+  FiberMap,
   FiberSet,
   Option,
   Queue,
@@ -66,6 +67,7 @@ import {
   COMPUTER_HELPER_FAILURE,
   COMPUTER_HELPER_OP,
   type ComputerAppPin,
+  type ComputerCursorOwner,
   type ComputerHelperAnswer,
   type ComputerHelperRecording,
   type ComputerHelperRequest,
@@ -221,8 +223,8 @@ const DESCRIBE_WITHIN = Duration.seconds(10);
 /** How long the helper has to put the agent's cursor away, behind any action it is still on. */
 const RELEASE_WITHIN = Duration.seconds(10);
 
-/** Why a release is let go as its turn comes: another agent's action took the cursor meanwhile. */
-const CURSOR_TAKEN_WORDS = "another agent took the cursor.";
+/** Why a release is let go as its turn comes: the agent's next action took its cursor up again meanwhile. */
+const CURSOR_TAKEN_WORDS = "the agent took its cursor up again.";
 
 /** The actions that never move the agent's cursor, so never hand it to the agent asking. Note that an app's read is not among them, because it brings the cursor in where it shows nowhere yet. */
 const STILL_CURSOR: ReadonlySet<string> = new Set([
@@ -289,6 +291,8 @@ export interface MachineCommandsDependencies {
    * agent's cursor away; none leaves the cursor to the helper's own clock.
    */
   turnEnded?: (agentId: string) => Effect.Effect<void>;
+  /** An agent's name as the task list holds it now, which its cursor's tag shows; none where the list names no such agent. */
+  agentName?: (agentId: string) => string | undefined;
   /** This Mac as a device of the account, where this process can say which machine it runs on; none claims as the account alone. */
   device?: MachineCommandsDevice;
 }
@@ -398,21 +402,22 @@ function kindsOf(standing: GateStanding): readonly MachineCommandKind[] {
 /** What a shell command answers where Settings lets agents run no commands on this Mac, while it stands open for their actions on apps. */
 const COMMANDS_NEVER: MachineCommandRefusal = {
   refused:
-    "Not run: the developer doesn't let agents run commands on their Mac (Settings › This Mac is set to Never).",
+    "Not run: the developer doesn't let agents run commands on their Mac (Settings › This Mac is set to Never). " +
+    MACHINE_REFUSAL_NEXT.SETTING,
 };
 
 /** What a command taken as the setting was switched off, or the account signed out, answers. */
 const SWITCHED_OFF: MacShellResult = {
   exitCode: null,
   stdout: "",
-  stderr: "Not run: commands on this Mac were switched off as it arrived.",
+  stderr: `Not run: commands on this Mac were switched off as it arrived. ${MACHINE_REFUSAL_NEXT.LATER}`,
   truncated: false,
   timedOut: false,
 };
 
 /** What a command the developer declined answers. */
 const DECLINED: MachineCommandRefusal = {
-  refused: "Not run: the developer declined this command.",
+  refused: `Not run: the developer declined this command. ${MACHINE_REFUSAL_NEXT.DECLINED}`,
   outcome: MACHINE_REFUSAL.DECLINED,
 };
 
@@ -468,13 +473,16 @@ const WITHDRAWN_SETTLE = Duration.seconds(5);
 /** What a command the developer did not answer for answers: not run, since its ask closed, or was withdrawn, before anyone answered. */
 const UNANSWERED: MachineCommandRefusal = {
   refused:
-    "Not run: the developer did not answer in time whether to allow this command on their Mac.",
+    "Not run: the developer did not answer in time whether to allow this command on their Mac. " +
+    MACHINE_REFUSAL_NEXT.UNANSWERED,
   outcome: MACHINE_REFUSAL.UNANSWERED,
 };
 
 /** What a command asked under an account that signed out before it was answered answers. */
 const ACCOUNT_CHANGED: MachineCommandRefusal = {
-  refused: "Not run: the account signed in on the developer's Mac changed before it was allowed.",
+  refused:
+    "Not run: the account signed in on the developer's Mac changed before it was allowed. " +
+    MACHINE_REFUSAL_NEXT.LATER,
 };
 
 /** The grants as Settings shows them where there is no helper to read them. */
@@ -482,27 +490,32 @@ const NO_PERMISSIONS: ComputerPermissions = { screenRecording: false, accessibil
 
 /** Why an action does not run where Settings has agents use no apps on this Mac. */
 const APPS_OFF_WORDS =
-  "the developer switched off Settings › Let agents use apps on this Mac, so no app can be used.";
+  "the developer switched off Settings › Let agents use apps on this Mac, so no app can be used. " +
+  MACHINE_REFUSAL_NEXT.SETTING;
 
 /** What an action answers where Settings has agents use no apps on this Mac. */
 const APPS_SWITCHED_OFF: MachineCommandRefusal = { refused: `Not run: ${APPS_OFF_WORDS}` };
 
 /** What an action on an app the developer declined answers. */
 const APP_DECLINED: MachineCommandRefusal = {
-  refused: "Not run: the developer declined to let agents use this app.",
+  refused: `Not run: the developer declined to let agents use this app. ${MACHINE_REFUSAL_NEXT.DECLINED}`,
   outcome: MACHINE_REFUSAL.DECLINED,
 };
 
 /** What an action on an app the developer did not answer for in time answers. */
 const APP_UNANSWERED: MachineCommandRefusal = {
-  refused: "Not run: the developer did not answer in time whether agents may use this app.",
+  refused:
+    "Not run: the developer did not answer in time whether agents may use this app. " +
+    MACHINE_REFUSAL_NEXT.UNANSWERED,
   outcome: MACHINE_REFUSAL.UNANSWERED,
 };
 
 /** What an action on an app agents are never offered answers, by the app's name. */
 function neverOffered(app: string): MachineCommandRefusal {
   return {
-    refused: `Not run: agents are never offered ${app}, as with terminals, password managers, System Settings, and ${PRODUCT_NAME}.`,
+    refused:
+      `Not run: agents are never offered ${app}, as with terminals, password managers, System Settings, and ${PRODUCT_NAME}. ` +
+      MACHINE_REFUSAL_NEXT.WITHOUT,
   };
 }
 
@@ -540,19 +553,19 @@ function granted(permissions: ComputerPermissions, permission: ComputerPermissio
 /**
  * What an action answers where the Mac lacks a grant it needs: each grant
  * missing by name and where it is turned on, short enough to read on the
- * call's row, and asking the agent to pass it on, since nothing it does can
- * grant them.
+ * call's row, and asking the agent to pass it on when it next writes to
+ * them and carry on meanwhile, since nothing it does can grant them.
  */
 function permissionsMissing(
   missing: readonly [ComputerPermission, ...ComputerPermission[]],
 ): MachineCommandRefusal {
   const names = computerPermissionsNamed(missing);
-  const them = missing.length === 1 ? "it" : "them";
 
   return {
     refused:
-      `Not run: ${PRODUCT_NAME} on the developer's Mac needs ${names}. ` +
-      `Ask them to turn ${them} on in ${PRODUCT_NAME}'s Settings › This Mac.`,
+      `Not run: ${PRODUCT_NAME} on the developer's Mac needs ${names}, which they turn on in ` +
+      `${PRODUCT_NAME}'s Settings › This Mac. Mention this when you next write to them. ` +
+      MACHINE_REFUSAL_NEXT.LATER,
     missingPermissions: missing,
   };
 }
@@ -637,7 +650,7 @@ interface RecordingOwner {
   readonly conversationId: string;
 }
 
-/** Whom the agent's cursor stands for: the account and the agent whose action moved it last, none for a conversation that is no agent's. */
+/** Whom a cursor stands for: the account and the agent whose actions move it, none for a conversation that is no agent's. */
 interface CursorHolder {
   readonly userId: string;
   readonly agentId: string | undefined;
@@ -703,12 +716,13 @@ export function composeMachineCommands(
      */
     let recordingOwner: RecordingOwner | undefined;
     /**
-     * Whom the agent's cursor stands for, which the helper keeps one of for
-     * the whole Mac, and the watch on that agent's turn, which puts the
-     * cursor away as the turn ends; another agent's action takes both over.
+     * The cursors the helper draws, one for each agent whose actions move
+     * one, by the agent's id (none for the one cursor of conversations that
+     * are no agent's), and the watch on each agent's turn, by its id, which
+     * puts that agent's cursor alone away as the turn ends.
      */
-    let cursorHolder: CursorHolder | undefined;
-    let cursorWatch: FiberHandle.FiberHandle<void> | undefined;
+    const cursorHolders = new Map<string | undefined, CursorHolder>();
+    let cursorWatches: FiberMap.FiberMap<string> | undefined;
     /** The asks waiting on the developer, by the command's id, the earliest asked first, each with the account it was claimed for. */
 
     const asks = new Map<string, HeldAsk>();
@@ -1154,7 +1168,9 @@ export function composeMachineCommands(
 
         if (missing !== undefined) return yield* settled(command.id, missing);
         let app: ComputerApp | undefined;
-        let request: ComputerHelperRequest = action;
+        // Note that every action names its agent's cursor, a recording's start among them, which draws that cursor alone into its frames.
+        const cursor = cursorOwnerOf(command.agentId);
+        let request: ComputerHelperRequest = { ...action, ...cursor };
 
         // Note that only an action that names an app asks about it, since listing the apps and stopping a recording act on none.
         if ("app" in action) {
@@ -1168,7 +1184,7 @@ export function composeMachineCommands(
           if ("refused" in allowed) return yield* settled(command.id, allowed);
           app = allowed.app;
           // Note that the action names the app as it was allowed, never the agent's words for it, since those may find another app by the time it runs.
-          request = { ...action, ...allowed.pin };
+          request = { ...action, ...allowed.pin, ...cursor };
         }
 
         const left = deadline - (yield* Clock.currentTimeMillis);
@@ -1210,44 +1226,61 @@ export function composeMachineCommands(
       });
 
     /**
-     * The agent's cursor held for the agent whose action just ran: its turn
-     * watched, and the cursor put away as the turn ends, unless another
-     * agent's action took the cursor over first. An agent that already holds
-     * it keeps its watch.
+     * Whose cursor an action moves, as the helper is told it: the agent's id,
+     * and the name its tag shows where the task list names the agent; nothing
+     * for a conversation that is no agent's.
+     */
+    const cursorOwnerOf = (agentId: string | undefined): ComputerCursorOwner => {
+      if (agentId === undefined) return {};
+      const name = dependencies.agentName?.(agentId);
+
+      return name === undefined
+        ? { cursor_agent: agentId }
+        : { cursor_agent: agentId, cursor_name: name };
+    };
+
+    /**
+     * The agent's own cursor held for it as its action runs: its turn
+     * watched, and that cursor alone put away as the turn ends. An agent
+     * that already holds its cursor keeps its watch, and no other agent's
+     * action touches either.
      */
     const heldBy = (holder: CursorHolder) =>
       Effect.gen(function* () {
-        // Note that an agent already holding the cursor keeps its holder, whose watch puts the cursor away by that very holder.
-        if (cursorHolder?.userId === holder.userId && cursorHolder.agentId === holder.agentId)
-          return;
-        cursorHolder = holder;
+        const held = cursorHolders.get(holder.agentId);
 
-        if (cursorWatch === undefined) return;
+        // Note that an agent already holding its cursor keeps its holder, whose watch puts the cursor away by that very holder.
+        if (held?.userId === holder.userId) return;
+        cursorHolders.set(holder.agentId, holder);
         const { turnEnded } = dependencies;
 
         // Note that a conversation that is no agent's, or a Mac that cannot watch turns, leaves the cursor to the helper's own clock.
-        if (holder.agentId === undefined || turnEnded === undefined) {
-          return yield* FiberHandle.clear(cursorWatch);
-        }
+        if (cursorWatches === undefined || holder.agentId === undefined || turnEnded === undefined)
+          return;
 
-        yield* FiberHandle.run(
-          cursorWatch,
+        yield* FiberMap.run(
+          cursorWatches,
+          holder.agentId,
           Effect.andThen(turnEnded(holder.agentId), released(holder)),
         );
       });
 
-    /** The agent's cursor put away, where the holder given still holds it. */
+    /** The holder's cursor put away, where it still holds it. */
     const released = (holder: CursorHolder) =>
       Effect.gen(function* () {
-        if (cursorHolder !== holder || computer === undefined) return;
-        cursorHolder = undefined;
+        if (cursorHolders.get(holder.agentId) !== holder || computer === undefined) return;
+        cursorHolders.delete(holder.agentId);
 
-        // Note that another agent's action may take the cursor while the release waits its turn at the helper, so it is refused then rather than hiding that agent's cursor.
+        // Note that the agent's next action may take its cursor up again while the release waits its turn at the helper, so it is refused then rather than hiding the cursor that action moved.
         const free = Effect.sync(() =>
-          cursorHolder === undefined ? undefined : CURSOR_TAKEN_WORDS,
+          cursorHolders.has(holder.agentId) ? CURSOR_TAKEN_WORDS : undefined,
         );
 
-        yield* computer.helper.ask({ op: COMPUTER_HELPER_OP.RELEASE_CURSOR }, RELEASE_WITHIN, free);
+        yield* computer.helper.ask(
+          { op: COMPUTER_HELPER_OP.RELEASE_CURSOR, ...cursorOwnerOf(holder.agentId) },
+          RELEASE_WITHIN,
+          free,
+        );
       });
 
     /**
@@ -1786,11 +1819,9 @@ export function composeMachineCommands(
           allowedOnce.clear();
           recordingOwner = undefined;
 
-          // Note that the cursor of an account the gate left is put away at once, rather than by its turn's watch.
-          if (cursorHolder !== undefined) {
-            if (cursorWatch !== undefined) yield* FiberHandle.clear(cursorWatch);
-            yield* released(cursorHolder);
-          }
+          // Note that the cursors of an account the gate left are put away at once, rather than by their turns' watches.
+          if (cursorWatches !== undefined) yield* FiberMap.clear(cursorWatches);
+          yield* Effect.forEach([...cursorHolders.values()], released, { discard: true });
 
           yield* FiberSet.clear(running);
 
@@ -1819,7 +1850,7 @@ export function composeMachineCommands(
       const running = yield* FiberSet.make();
       const claims = yield* FiberSet.make();
       errands = yield* FiberSet.make();
-      cursorWatch = yield* FiberHandle.make<void>();
+      cursorWatches = yield* FiberMap.make<string>();
       // Note that the changes are subscribed to before the gate is first worked out, so one that lands meanwhile is heard rather than lost.
       const changes = yield* dependencies.changed;
       yield* gateMoved;
