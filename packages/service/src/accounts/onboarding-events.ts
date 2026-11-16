@@ -2,15 +2,12 @@
  * onboarding-events.ts -- an account's sign-up and task activity, told to Resend for its onboarding emails.
  *
  * The nudge a new account is sent is Resend's automation ("No-task nudge"),
- * not the service's: it starts on the event `vespin.signed_up`, stops for an
- * account that accepts a workspace invitation within the hour
- * (`vespin.invite_accepted`), since that person joined someone else's work
- * rather than starting their own, and on day 3 sends one note to an account
- * that has started no task (`has_task`) and that the founder has not marked
- * as already talking to (`in_conversation`, set by hand in Resend, never
- * here). An account that started a task hears from the founder directly
- * instead, so a note never lands on someone already in a conversation. The
- * service tells Resend these things and nothing else:
+ * not the service's: it starts on the event `vespin.signed_up` and on day 3
+ * sends one note to an account that has started no task (`has_task`) and
+ * that the founder has not marked as already talking to (`in_conversation`,
+ * set by hand in Resend, never here). An account that started a task hears
+ * from the founder directly instead, so a note never lands on someone already
+ * in a conversation. The service tells Resend these things and nothing else:
  *
  * - At sign-up, from the auth route (`auth-app.ts`), the contact is made by
  *   its address alone (https://resend.com/docs/api-reference/contacts/create-contact),
@@ -18,7 +15,8 @@
  *   on, and `vespin.signed_up` is sent with the greeting the automation's
  *   notes open with (`greetingOf`), the welcome email's own
  *   (https://resend.com/docs/api-reference/events/send-event).
- * - An invitation accepted, from the same route, sends `vespin.invite_accepted`.
+ * - An invitation accepted, from the same route, sends `vespin.invite_accepted`,
+ *   which no automation reads today.
  * - A task made through the one make every door shares
  *   (`task-create-relation.ts`) sets the contact's properties
  *   (https://resend.com/docs/api-reference/contacts/update-contact):
