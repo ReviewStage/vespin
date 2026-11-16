@@ -6,6 +6,7 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import {
   BAR_TITLE,
   type BrandColors,
+  ChipMarkProvider,
   FailureNoticeLayer,
   FailureNoticeProvider,
   KeepingProvider,
@@ -31,6 +32,7 @@ import { useShareSheet } from "../share-sheet.js";
 import { SHORT_SHEET_DETENTS } from "../sheet-stack.js";
 import { holdSplash } from "../splash.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
+import { useChipMarks } from "../tasks/chip-marks.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
 import { VoiceCallProvider } from "../voice-call.js";
@@ -250,7 +252,9 @@ function GuardedScreens() {
 function KeptScreens() {
   return (
     <KeepingProvider keeping={useKeeping()}>
-      <GuardedScreens />
+      <ChipMarkProvider markOf={useChipMarks()}>
+        <GuardedScreens />
+      </ChipMarkProvider>
     </KeepingProvider>
   );
 }
