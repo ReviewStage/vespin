@@ -14,7 +14,6 @@ import {
   CHECK_STATE,
   CHECK_SUMMARY,
   type CheckState,
-  type CheckSummary,
   CONVERSATION_ENTRY,
   type ConversationEntry,
   DEPLOYMENT_STATE,
@@ -38,7 +37,6 @@ import {
 import { type LinkStanding, PULL_REQUEST_MOMENT } from "@repo/features/link-standing-model";
 import { formatCount } from "@repo/features/number-format";
 import {
-  CHECK_SUMMARY_WORDS,
   CHECK_WORDS,
   checksCountOf,
   checksSummaryOf,
@@ -65,6 +63,7 @@ import {
   CHIP_LOOK,
   CHOICE_BAR_FOLD,
   CHOICE_BAR_LOOK,
+  CheckGlyph,
   Chip,
   ChipCount,
   ChipName,
@@ -74,6 +73,7 @@ import {
   CornerDot,
   type CountPart,
   CountParts,
+  checksCount,
   DETAIL_PAGE_INSET,
   DetailPage,
   DISCLOSURE_SUMMARY,
@@ -114,7 +114,6 @@ import {
   SpinnerRing,
   STATUS_TONE,
   Stack,
-  type StatusTone,
   TEXT_ELEMENT,
   TEXT_FONT,
   TEXT_VARIANT,
@@ -129,8 +128,6 @@ import {
 import { actorName } from "@repo/ui/actor-model";
 import { renderingText } from "@repo/ui/github-html";
 import {
-  CheckIcon,
-  CircleSlashIcon,
   ExternalLinkIcon,
   GLYPH,
   MessagesSquareIcon,
@@ -564,22 +561,6 @@ function landed<A>(part: Part<A>): A | undefined {
   return part.kind === PART.LANDED ? part.value : undefined;
 }
 
-/** The glyph a check wears for where it stands. */
-const CHECK_GLYPHS = {
-  [CHECK_STATE.FAILED]: <XIcon />,
-  [CHECK_STATE.PENDING]: <SpinnerRing />,
-  [CHECK_STATE.PASSED]: <CheckIcon />,
-  [CHECK_STATE.SKIPPED]: <CircleSlashIcon />,
-} as const satisfies Record<CheckState, ReactNode>;
-
-/** The ink a check's glyph wears for where it stands: passed green, failed red, and one still running or skipped quiet, a running one turning the ring every wait turns, since it is work under way rather than something that needs you. */
-const CHECK_INK = {
-  [CHECK_STATE.FAILED]: "text-destructive",
-  [CHECK_STATE.PENDING]: "text-muted-foreground",
-  [CHECK_STATE.PASSED]: "text-complete",
-  [CHECK_STATE.SKIPPED]: "text-muted-foreground",
-} as const satisfies Record<CheckState, string>;
-
 /** The tone and glyph a deployment wears, as a check's: ready as passed, deploying as running, failed as failed, and no longer serving as skipped. */
 const DEPLOYMENT_TONE = {
   [DEPLOYMENT_STATE.READY]: CHECK_STATE.PASSED,
@@ -855,12 +836,7 @@ function CheckLead({
 }): React.JSX.Element {
   return (
     <span className="inline-flex items-center gap-control-gap">
-      <span
-        className={`inline-grid size-check-glyph flex-none place-items-center [&>svg]:size-check-glyph ${CHECK_INK[tone]}`}
-        data-check-state={tone}
-      >
-        {CHECK_GLYPHS[tone]}
-      </span>
+      <CheckGlyph state={tone} />
       {avatarUrl === undefined ? null : (
         <CheckAvatar agentId={agentId} name={name} src={avatarUrl} />
       )}
@@ -2485,40 +2461,6 @@ function HeaderTitle({
   return (
     <PullRequestTitle title={title.title} number={pullRequestNumberLabel(title)} writes={writes} />
   );
-}
-
-/** The glyph the Checks tab wears for how its checks went, as the pull request's mark tells it; none where there are none. */
-const SUMMARY_GLYPHS = {
-  [CHECK_SUMMARY.FAILING]: <XIcon />,
-  [CHECK_SUMMARY.PENDING]: <SpinnerRing size={SPINNER_SIZE.SMALL} />,
-  [CHECK_SUMMARY.PASSING]: <CheckIcon />,
-  [CHECK_SUMMARY.NONE]: null,
-} as const satisfies Record<CheckSummary, ReactNode>;
-
-/** The tone the Checks tab's count takes for how its checks went, as its glyph does: a wait quiet, under the ring every wait turns. */
-const SUMMARY_TONES = {
-  [CHECK_SUMMARY.FAILING]: STATUS_TONE.DANGER,
-  [CHECK_SUMMARY.PENDING]: STATUS_TONE.NEUTRAL,
-  [CHECK_SUMMARY.PASSING]: STATUS_TONE.COMPLETE,
-  [CHECK_SUMMARY.NONE]: STATUS_TONE.NEUTRAL,
-} as const satisfies Record<CheckSummary, StatusTone>;
-
-/** What the Checks tab counts: how they went in its color from the first frame, and how many once read; nothing where neither stands. */
-function checksCount(
-  summary: CheckSummary,
-  count: number | undefined,
-): readonly CountPart[] | undefined {
-  const glyph = SUMMARY_GLYPHS[summary];
-
-  if (glyph === null && count === undefined) return undefined;
-  const text = count === undefined ? "" : formatCount(count);
-  const tone = SUMMARY_TONES[summary];
-
-  return [
-    glyph === null
-      ? { text, tone }
-      : { text, tone, glyph, glyphLabel: CHECK_SUMMARY_WORDS[summary] },
-  ];
 }
 
 /** What the Chapters tab says of where they stand, beside its glyph, to a reader who cannot see it. */

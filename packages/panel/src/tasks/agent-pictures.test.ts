@@ -77,9 +77,13 @@ function toolPart(tool: string, callId: string, input: WireRecord, output?: Wire
   };
 }
 
-function shown(callId: string, pictures: readonly ReturnType<typeof picture>[]): WireRecord {
+function shown(
+  callId: string,
+  pictures: readonly ReturnType<typeof picture>[],
+  tool = "show_image",
+): WireRecord {
   return toolPart(
-    "show_image",
+    tool,
     callId,
     {
       images: pictures.map((_, at) => ({
@@ -186,12 +190,12 @@ test("a set the agent showed in a finished turn is drawn, each picture read once
   );
 });
 
-test("two shown sets one after another are one set, and one picture alone is its own block", async () => {
+test("two shown sets one after another, under either name the tool is stored by, are one set, and one picture alone is its own block", async () => {
   const [first, second, alone] = [picture(800, 450), picture(800, 450), picture(600, 520)];
   assert.ok(first && second && alone);
 
   const joined = await drawn(
-    finished([shown("call-a", [first]), shown("call-b", [second]), text("Both.")]),
+    finished([shown("call-a", [first]), shown("call-b", [second], "show_media"), text("Both.")]),
   );
 
   const single = await drawn(finished([shown("call-c", [alone]), text("One.")]));
@@ -706,6 +710,66 @@ test("a WebM the agent showed plays where it stands, above the picture shown wit
       ["blob:video-1", "blob:video-2", "blob:video-3"],
       "each address is let go of as its video goes",
     );
+  } finally {
+    URL.createObjectURL = own.create;
+    URL.revokeObjectURL = own.revoke;
+  }
+});
+
+test("a sound clip the agent showed with show_media plays where it stands as its player, above the picture shown with it, and its Expand opens the viewer playing it", async () => {
+  const own = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+  // Note that jsdom makes no object URLs, so the window's own are stood in for, and put back after.
+  URL.createObjectURL = () => "blob:clip";
+  URL.revokeObjectURL = () => undefined;
+
+  try {
+    const clip = { ...picture(0, 0), mediaType: CONVERSATION_MEDIA_TYPE.WAV };
+    const still = picture(1200, 720);
+
+    const { container } = await drawn(
+      finished([
+        toolPart(
+          "show_media",
+          "call-show",
+          {
+            images: [
+              { path: "sounds/chime.wav", caption: "The new chime" },
+              { path: "shots/after.png", caption: "The settings row" },
+            ],
+          },
+          { status: "accepted", pictures: [clip, still] },
+        ),
+      ]),
+      false,
+      (id) =>
+        Promise.resolve(
+          id === clip.id
+            ? { contentType: CONVERSATION_MEDIA_TYPE.WAV, base64: "UklGRg==" }
+            : { contentType: INBOX_IMAGE_TYPE.PNG, base64: "iVBORw==" },
+        ),
+    );
+
+    const inline = container.querySelector(
+      '[role="group"][aria-label="Sound clip: The new chime"]',
+    );
+
+    assert.ok(inline, "the clip plays where it stands, named by its caption");
+    assert.deepEqual(
+      [...inline.querySelectorAll("button")].map((each) => each.getAttribute("aria-label")),
+      ["Play", "Expand"],
+    );
+    assert.deepEqual(
+      [...container.querySelectorAll("img")].map((image) => image.getAttribute("src")),
+      ["data:image/png;base64,iVBORw=="],
+      "the clip is never drawn as a picture, and the picture shown with it is",
+    );
+
+    act(() => inline.querySelector<HTMLButtonElement>('button[aria-label="Expand"]')?.click());
+    assert.ok(
+      document.querySelector('[role="dialog"] [role="group"][aria-label^="Sound clip"]'),
+      "its Expand opens the viewer, which plays the clip",
+    );
+    assert.equal(viewerPlace(document), "1 of 2");
   } finally {
     URL.createObjectURL = own.create;
     URL.revokeObjectURL = own.revoke;
