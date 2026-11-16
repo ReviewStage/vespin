@@ -180,9 +180,11 @@ import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
+  PLUS_TAB,
   SIDEBAR_PLACE,
   type SidebarPlace,
   type SidebarTasks,
+  useComposeAction,
   useListColumn,
   usePortraitDetailBar,
 } from "./app-sidebar.js";
@@ -1886,6 +1888,7 @@ function TasksStackList(words: TasksSearch) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
+  const compose = useComposeAction();
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const field = useRefilledSearchField(search);
 
@@ -1902,6 +1905,16 @@ function TasksStackList(words: TasksSearch) {
         />
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
+      {/* Note that a narrow iPad window's tab bar has no round +, so its list's bar offers New task, as its wider windows' bars do. */}
+      {PLUS_TAB ? null : (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
+            accessibilityLabel={compose.label}
+            onPress={compose.onPress}
+          />
+        </Stack.Toolbar>
+      )}
       <Screen>
         <TasksTree
           listing={listing}

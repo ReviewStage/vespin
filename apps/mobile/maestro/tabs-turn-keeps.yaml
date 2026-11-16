@@ -1,0 +1,48 @@
+# tabs-turn-keeps.yaml -- an agent's page and the words typed in its composer, kept as an iPhone turns on its side and back, where the window crosses between compact and regular and the tab bar must keep the tabs it stands, so no tab is mounted again.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+# Note that each wait for the screen to settle is capped at five seconds,
+# because the page draws its agent still running, whose mark never stops
+# moving, so an uncapped wait always ran to Maestro's fifteen.
+onFlowStart:
+  - setOrientation: PORTRAIT
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+# Launched on the host's Inbox fixture, opened on its invitations agent's page
+# as `draft-rotate.yaml` is, so nothing reaches a server and nothing typed is
+# sent. Note that the page is opened by its launch argument rather than from
+# a task's Agents, because a task's page behind it would hand itself to the
+# split view as the window turns regular and pop the page over it.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- extendedWaitUntil:
+    visible: "Send a follow-up"
+    timeout: 30000
+# A compact window only: an iPad stands regular whichever way it turns, and
+# `draft-rotate.yaml` holds its turn.
+- runFlow:
+    when:
+      notVisible: "Search"
+    commands:
+      - tapOn:
+          id: "composer-field"
+      - inputText: "Keep this draft through the turn."
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - takeScreenshot: tabs-turn-portrait
+      - setOrientation: LANDSCAPE_LEFT
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - takeScreenshot: tabs-turn-landscape
+      - assertVisible: "Keep this draft through the turn."
+      - setOrientation: PORTRAIT
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - takeScreenshot: tabs-turn-back
+      - assertVisible: "Keep this draft through the turn."

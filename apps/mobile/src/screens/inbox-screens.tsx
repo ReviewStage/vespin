@@ -114,7 +114,13 @@ import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, useListColumn, usePortraitDetailBar } from "./app-sidebar.js";
+import {
+  PLUS_TAB,
+  SIDEBAR_PLACE,
+  useComposeAction,
+  useListColumn,
+  usePortraitDetailBar,
+} from "./app-sidebar.js";
 import { useDetailStackColumn } from "./detail-stack-column.js";
 import {
   NO_THREAD_ACTS,
@@ -1002,6 +1008,7 @@ function InboxStackList(words: InboxSearch) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
+  const compose = useComposeAction();
 
   const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing, chooseStart } =
     useInboxScreen(words);
@@ -1033,6 +1040,14 @@ function InboxStackList(words: InboxSearch) {
           <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
             {toolbarMenuActions(menu)}
           </Stack.Toolbar.Menu>
+        )}
+        {/* Note that a narrow iPad window's tab bar has no round +, so its list's bar offers New task, as its wider windows' bars do. */}
+        {choosing !== undefined || PLUS_TAB ? null : (
+          <Stack.Toolbar.Button
+            icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
+            accessibilityLabel={compose.label}
+            onPress={compose.onPress}
+          />
         )}
       </Stack.Toolbar>
       {choosing === undefined ? null : (
