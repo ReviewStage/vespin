@@ -1309,7 +1309,7 @@ it.effect(
     }),
 );
 
-test("in a narrow room a task opened from a list lands on its plan, its Overview with the side panel shut over it whichever tab it last showed, and on the desktop's width it stands shut once a plan with no tab was passed through", () => {
+test("in a narrow room a task opened from a list lands on its plan, its Overview with the side panel shut over it whichever tab it last showed, and on the desktop's width it opens with the panel as it was left there", () => {
   for (const room of [SHELL_ROOM.NARROW, SHELL_ROOM.WIDE]) {
     window.localStorage.clear();
 
@@ -1328,16 +1328,12 @@ test("in a narrow room a task opened from a list lands on its plan, its Overview
       assert.equal(tab.control().sidePanel.open, false, "narrow shuts the panel");
       assert.equal(tab.control().mainTabs.tab, MAIN_TAB.OVERVIEW, "over the task's Overview");
     } else {
-      assert.equal(
-        tab.control().sidePanel.open,
-        false,
-        "a plan with no tab passed through shuts it",
-      );
+      assert.equal(tab.control().sidePanel.open, true, "the panel stands as it was left there");
     }
   }
 });
 
-test("a task opened from a list, gone back to from the sidebar, or named by a chip opens on the agent waiting on the developer, past the one at work", () => {
+test("a task opened from a list, gone back to from the sidebar, or named by a chip opens on the agent waiting on the developer, past the one at work, until a tab viewed on it is opened again as it was left", () => {
   const WAITING = "1b2c3d4e-5f60-4718-8293-a4b5c6d7e8f9";
   // One agent at work and one resting, the resting one's thread waiting on the developer, as the list followed live holds them.
   const waitingRow = { ...row(TASK.id, 1), agents: { total: 2, working: 1, pullRequestTotal: 0 } };
@@ -1394,6 +1390,16 @@ test("a task opened from a list, gone back to from the sidebar, or named by a ch
     tab.control().mainTabs.tab,
     agentTab(WAITING),
     "from the sidebar, the agent waiting",
+  );
+
+  act(() => tab.control().mainTabs.onChoose(agentTab(AGENT_ID)));
+  tab.stand({ tasks: elsewhere([waitingRow]) });
+  act(() => tab.control().onResume(TASK.id));
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
+  assert.deepEqual(
+    tab.control().mainTabs.tab,
+    agentTab(AGENT_ID),
+    "gone back to, the tab last viewed there, though an agent waits",
   );
 });
 
@@ -4401,7 +4407,7 @@ test("a task started, with an agent or without, leaves a hidden side panel hidde
   assert.equal(tab.control().sidePanel.open, false, "the plan does not open beside the agent");
 });
 
-test("New task's agent opens alone, no plan beside it, and the task left draws no panel until asked, since a tab standing opens none", async () => {
+test("New task's agent opens alone, no plan beside it, and the task left opens again with its panel as it was left", async () => {
   const started = { ...RUNNING_AGENT, taskId: OTHER_TASK_ID };
 
   const tab = mount(
@@ -4421,7 +4427,7 @@ test("New task's agent opens alone, no plan beside it, and the task left draws n
 
   tab.stand({ tasks: OPEN });
   await settle();
-  assert.deepEqual(panelOf(tab), { open: false, tab: FILE }, "the task left keeps its tab, shut");
+  assert.deepEqual(panelOf(tab), { open: true, tab: FILE }, "the task left opens on its tab again");
 });
 
 test("New task's agent stands on its task before the task's agents or its transcript are read", async () => {

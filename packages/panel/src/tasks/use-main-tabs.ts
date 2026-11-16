@@ -212,6 +212,8 @@ export interface MainTabsControl {
   onNewTabAnswered: () => void;
   /** When each of the open task's tabs was last viewed (`use-idle-tabs.ts`). */
   viewedAt: readonly ViewedAt<MainTab>[];
+  /** Whether the task given remembers a tab viewed on it, which it opens on again as it was left. */
+  remembers: (taskId: string) => boolean;
   /** Stamps the tabs viewed at `at` on the task given, and each of `standing` not stamped yet. */
   onViewedAt: (
     taskId: string,
@@ -751,6 +753,11 @@ export function useMainTabs(
     [update],
   );
 
+  const remembers = useCallback(
+    (on: string) => (choicesOn(state, on).recent?.length ?? 0) > 0,
+    [state],
+  );
+
   return {
     tabs,
     tab: shownIn(state, drawn),
@@ -764,6 +771,7 @@ export function useMainTabs(
     onNewTab,
     onNewTabAnswered,
     viewedAt: choicesOn(state, taskId).viewedAt ?? NO_STAMPS,
+    remembers,
     onViewedAt,
     onDoze,
     onWake,

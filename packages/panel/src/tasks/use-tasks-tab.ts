@@ -2217,8 +2217,9 @@ export function useTasksTab(input: {
     });
   };
 
-  // One the developer goes back to work on, from a sidebar row, ⌘K, or Recent, lands on its
-  // agent (`resumingAgentOf`); one with none, on the tab its column falls to, a new agent's draft
+  // One the developer goes back to work on, from a sidebar row, ⌘K, or Recent, opens as they
+  // left it, on the tab they last viewed there; one never viewed here lands on its agent
+  // (`resumingAgentOf`), or one with none on the tab its column falls to, a new agent's draft
   // where no agent's stands. In a narrow room the panel shuts over it, and the agent stands as a
   // screen over the task's details, which its header's Back, named for the task, returns to, a
   // task with no agent opening on its details.
@@ -2227,6 +2228,8 @@ export function useTasksTab(input: {
     const narrow = input.room === SHELL_ROOM.NARROW;
 
     if (narrow) sidePanel.onSetOpen(false);
+
+    if (mainTabs.remembers(taskId)) return;
     const agentId = resumingAgentOf(taskId, liveAgents, inboxWaiting);
 
     if (agentId !== undefined) mainTabs.onShow(taskId, agentTab(agentId));
