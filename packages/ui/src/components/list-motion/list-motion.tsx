@@ -169,16 +169,21 @@ export interface Drawn<T> {
   readonly leaving: boolean;
 }
 
-/** A leaving entry as handed to the motion: its key, and what lets it go once its exit has played. */
+/**
+ * A leaving entry as handed to the motion: its key, what lets it go once
+ * its exit has played, and what stands its element again, which the motion
+ * sets as it takes the element out and its list calls once it lists the
+ * entry again.
+ */
 interface Leaver {
   readonly key: string;
   readonly onLeft: () => void;
+  standAgain: (() => void) | undefined;
 }
 
-/** What the lists under one motion hand it in a commit: the entries that began to leave, the keys listed again before they had gone, and what asks it to read a commit it would not draw. */
+/** What the lists under one motion hand it in a commit: the entries that began to leave, and what asks it to read a commit it would not draw. */
 interface Leaves {
   readonly pending: Leaver[];
-  readonly returned: string[];
   readonly replay: () => void;
 }
 
@@ -220,6 +225,28 @@ const LeavesContext = createContext<Leaves | undefined>(undefined);
 
 /** The exits under way, by the element leaving, stopped where its entry is listed again. */
 const exits = new WeakMap<Element, Animation>();
+
+/**
+ * What a leaving element wears as `data-leaving`: marked as it begins to
+ * leave, then laid over its place as its exit plays, or gone at once
+ * (list-motion.css). Note that the place is the motion's own properties,
+ * never the element's `position`, `top` or `display`, because a row a run
+ * places itself (`VirtualRows`) wears those inline as its owner wrote them,
+ * which nothing writes again while unchanged, so the row stands again in
+ * its own place once the mark is taken off.
+ */
+const LEAVING = {
+  MARKED: "",
+  PLACED: "placed",
+  GONE: "gone",
+} as const;
+
+/** The motion's own properties a leaving element is laid over its place by (list-motion.css). */
+const LEAVING_PLACE = {
+  TOP: "--ui-leaving-top",
+  LEFT: "--ui-leaving-left",
+  WIDTH: "--ui-leaving-width",
+} as const;
 
 /** The commit each root is being played in, by the root, until the last motion over it has heard it. */
 const batches = new WeakMap<Element, Batch>();
@@ -296,20 +323,27 @@ export function useLeaving<T>(
     setHeld({ listed, drawn });
   }
 
-  const told = useRef(new Set<string>());
+  // The entries handed to the motion as leaving, by key, until they go or are listed again.
+  const told = useRef(new Map<string, Leaver>());
+  // Note that the list stands an entry listed again itself, in the commit that lists it, whether or not
+  // the motion reads that commit, because only the list knows it lists the entry again: an exit the
+  // motion took is stopped, and one it has not taken yet is never taken.
   useLayoutEffect(() => {
     const leaving = new Set(drawn.filter((entry) => entry.leaving).map((entry) => entry.key));
 
-    for (const key of told.current) {
+    for (const [key, leaver] of told.current) {
       if (leaving.has(key)) continue;
       told.current.delete(key);
 
-      if (drawn.some((entry) => entry.key === key)) leaves?.returned.push(key);
+      if (!drawn.some((entry) => entry.key === key)) continue;
+      leaver.standAgain?.();
+      const at = leaves?.pending.indexOf(leaver) ?? -1;
+
+      if (at >= 0) leaves?.pending.splice(at, 1);
     }
 
     for (const key of leaving) {
       if (told.current.has(key)) continue;
-      told.current.add(key);
 
       const onLeft = () =>
         setHeld((now) => ({
@@ -317,12 +351,14 @@ export function useLeaving<T>(
           drawn: now.drawn.filter((entry) => !(entry.leaving && entry.key === key)),
         }));
 
+      const leaver: Leaver = { key, onLeft, standAgain: undefined };
+      told.current.set(key, leaver);
+
       if (leaves === undefined) {
         onLeft();
         continue;
       }
 
-      const leaver = { key, onLeft };
       leaves.pending.push(leaver);
       // A list that drew on its own, its motion not drawn with it, lets the entry go at once.
       queueMicrotask(() => {
@@ -519,10 +555,7 @@ function standAgain(element: HTMLElement): void {
   exits.get(element)?.cancel();
   exits.delete(element);
 
-  for (const property of ["position", "top", "left", "width", "margin", "display"]) {
-    element.style.removeProperty(property);
-  }
-
+  for (const property of Object.values(LEAVING_PLACE)) element.style.removeProperty(property);
   element.removeAttribute("inert");
   element.removeAttribute("data-leaving");
 }
@@ -593,7 +626,7 @@ function playExits(
 
   for (const { element, onLeft } of leaving) {
     if (before.places.get(element)?.seen === true) continue;
-    element.style.display = "none";
+    element.setAttribute("data-leaving", LEAVING.GONE);
     onLeft();
   }
 
@@ -612,11 +645,10 @@ function playExits(
 
   for (const { each, top, left, width, opacity } of placed) {
     const { element, onLeft } = each;
-    element.style.position = "absolute";
-    element.style.top = `${top}px`;
-    element.style.left = `${left}px`;
-    element.style.width = `${width}px`;
-    element.style.margin = "0";
+    element.style.setProperty(LEAVING_PLACE.TOP, `${top}px`);
+    element.style.setProperty(LEAVING_PLACE.LEFT, `${left}px`);
+    element.style.setProperty(LEAVING_PLACE.WIDTH, `${width}px`);
+    element.setAttribute("data-leaving", LEAVING.PLACED);
 
     const out = element.animate(
       [
@@ -820,12 +852,9 @@ class ListMotionPlayer extends Component<
     _state: ListMotionPlayerState,
     batch: Batch | null,
   ): void {
-    const { pending, returned } = this.props.leaves;
-    const leavers = pending.splice(0);
+    const leavers = this.props.leaves.pending.splice(0);
     const root = this.props.root.current;
     root?.setAttribute(ROOT_ATTRIBUTE, "");
-
-    if (root !== null) this.standReturned(root, returned.splice(0));
 
     if (root === null || batch === null) {
       for (const leaver of leavers) leaver.onLeft();
@@ -900,24 +929,14 @@ class ListMotionPlayer extends Component<
     });
   }
 
-  /** Stands again each element whose entry was listed again before its exit finished. */
-  private standReturned(root: HTMLElement, keys: readonly string[]): void {
-    if (keys.length === 0) return;
-    const back = new Set(keys);
-
-    for (const mover of moversOf(root)) {
-      const key = mover.getAttribute(KEY_ATTRIBUTE);
-
-      if (key !== null && back.has(key) && mover.hasAttribute("data-leaving")) standAgain(mover);
-    }
-  }
-
   /**
    * The element each leaving entry is drawn as, marked out of reach at once,
    * before the lists' own effects run, so a row holding the keyboard is seen
    * to have lost it. An entry whose row now stands in another list moved
    * rather than left: its old element is let go at once, and the new one
    * glides across from it. An entry no element was found for goes at once.
+   * Each element taken is handed back to its entry's list, which stands it
+   * again should it list the entry again (`useLeaving`).
    */
   private leavingOf(root: HTMLElement, leavers: readonly Leaver[], before: Snapshot): Exit[] {
     const keyedNow = new Map<string, Element[]>();
@@ -930,7 +949,8 @@ class ListMotionPlayer extends Component<
 
     const leaving: Exit[] = [];
 
-    for (const { key, onLeft } of leavers) {
+    for (const leaver of leavers) {
+      const { key, onLeft } = leaver;
       const element = before.keyed.get(key);
 
       if (!(element instanceof HTMLElement) || !element.isConnected) {
@@ -938,11 +958,12 @@ class ListMotionPlayer extends Component<
         continue;
       }
 
+      leaver.standAgain = () => standAgain(element);
       element.toggleAttribute("inert", true);
-      element.setAttribute("data-leaving", "");
+      element.setAttribute("data-leaving", LEAVING.MARKED);
 
       if ((keyedNow.get(key) ?? []).some((other) => other !== element)) {
-        element.style.display = "none";
+        element.setAttribute("data-leaving", LEAVING.GONE);
         onLeft();
         continue;
       }
@@ -1017,7 +1038,6 @@ export function ListMotion({
 
   const [leaves] = useState<Leaves>(() => ({
     pending: [],
-    returned: [],
     replay: () => setReplays((count) => count + 1),
   }));
 

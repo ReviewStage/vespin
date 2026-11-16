@@ -199,9 +199,9 @@ const serveConsent = /* @__PURE__ */ Effect.fnUntraced(function* (
     if (Result.isFailure(bound)) continue;
     const server = bound.success;
     yield* Effect.provideService(HttpServer.serveEffect(app), HttpServer.HttpServer, server);
-    // A request is announced here rather than in the handler because this is
-    // where the old synchronous callback cleared its timer: the handler runs
-    // in a fiber of its own, which the deadline could reach first.
+    // A request is announced on the socket's event rather than in the
+    // handler, because the handler runs in a fiber of its own, which the
+    // deadline could reach first.
     yield* Effect.sync(() => node.on("request", onRequest));
     // The browser keeps its connection alive after the redirect, and a
     // socket it holds open would keep this port bound — which, on a

@@ -36,8 +36,8 @@ import { createTask, deleteTask } from "../task-store.js";
 /**
  * A description's pictures over a real dialect: kept by a member, read by every
  * member of the plan's workspace and by nobody else, held to the description's
- * bound, a video among them to a video's bound and the description's count of
- * videos, and refused on a plan the account does not reach.
+ * bound, a video among them to a video's bound, and refused on a plan the
+ * account does not reach.
  *
  * Synthetic accounts and pictures throughout.
  */
@@ -200,28 +200,6 @@ it.layer(getTestDB())("a description's pictures", (it) => {
         Exit.isFailure(yield* Effect.exit(keepDescriptionAttachment(owner, taskId, tooLong))),
       );
     }),
-  );
-
-  it.effect(
-    "a description keeps no more videos than its bound of them, and pictures still beside them",
-    () =>
-      Effect.gen(function* () {
-        const { owner, taskId } = yield* openSharedTask;
-
-        for (
-          let kept = 0;
-          kept < DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION;
-          kept += 1
-        ) {
-          keptId(yield* keepDescriptionAttachment(owner, taskId, VIDEO));
-        }
-
-        assert.equal(
-          (yield* keepDescriptionAttachment(owner, taskId, VIDEO)).status,
-          DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY_VIDEOS,
-        );
-        keptId(yield* keepDescriptionAttachment(owner, taskId, PICTURE));
-      }),
   );
 
   it.effect(

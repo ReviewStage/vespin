@@ -1,0 +1,11 @@
+{
+  "apiCallers": {
+    "packages/github/": "The module itself: every request the deployment sends GitHub's API leaves through it.",
+    "apps/web/server/preview-deployment.ts": "CI's preview probe, run by a workflow on the workflow's own token and never by the deployment, so it shares no identity, quota, or hold with the module.",
+    "packages/service/src/agents/sandbox-firewall.ts": "Names GitHub's hosts for the sandbox firewall to set an agent's credential on its own git and gh requests; it sends GitHub nothing itself."
+  },
+  "tokenOpeners": {
+    "packages/service/src/github/github-token.ts": "The `GitHubMemberTokens` implementation (`memberTokensOver`): the one place a member's saved token is opened, for `@repo/github` to use.",
+    "packages/service/src/github/github-app.ts": "Hands `memberTokensOver` to `@repo/github`'s member-token operations, and opens no token itself."
+  }
+}

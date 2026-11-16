@@ -17,6 +17,7 @@ import { LANDED, landedMark } from "../landed/landed.js";
 import { GAP, type Gap, Inline } from "../layout/layout.js";
 import { PROGRESS_SIZE, Progress, type ProgressTone } from "../progress/progress.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
+import { Tooltip } from "../tooltip/hint.js";
 import { type UsageMeterRow, UsageMeters } from "../usage-meters/usage-meters.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
 
@@ -123,10 +124,11 @@ export const SETTINGS_ROW_DENSITY = {
 
 export type SettingsRowDensity = (typeof SETTINGS_ROW_DENSITY)[keyof typeof SETTINGS_ROW_DENSITY];
 
-/** Where a row's edge stands: at the card's, or at the words of a parent row a mark leads. */
+/** Where a row's edge stands: at the card's, at the words of a parent row a mark leads, or a step further, under one of that row's own marked rows. */
 export const SETTINGS_ROW_INDENT = {
   NONE: "none",
   MARK: "mark",
+  MARK_TWICE: "mark-twice",
 } as const;
 
 export type SettingsRowIndent = (typeof SETTINGS_ROW_INDENT)[keyof typeof SETTINGS_ROW_INDENT];
@@ -351,7 +353,7 @@ export function SettingsRow({
 
   return (
     <div
-      className="ui-settings-row @container/ui-settings-row min-w-0 data-[indent=mark]:ms-settings-row-indent data-[editing=true]:rounded-control data-[editing=true]:ring-1 data-[editing=true]:ring-accent-fill data-[editing=true]:ring-inset"
+      className="ui-settings-row @container/ui-settings-row min-w-0 data-[indent=mark]:ms-settings-row-indent data-[indent=mark-twice]:ms-settings-row-indent-twice data-[editing=true]:rounded-control data-[editing=true]:ring-1 data-[editing=true]:ring-accent-fill data-[editing=true]:ring-inset"
       data-invalid={failed}
       data-editing={editing || undefined}
       data-density={density}
@@ -361,7 +363,7 @@ export function SettingsRow({
       data-led={led}
       {...landedMark(landed, LANDED.WITHIN)}
     >
-      <Item size={density} className={indent === SETTINGS_ROW_INDENT.MARK ? "ps-0" : undefined}>
+      <Item size={density} className={indent === SETTINGS_ROW_INDENT.NONE ? undefined : "ps-0"}>
         {end === undefined ? (
           <div className={cn(wraps ? LINE_CLASS.WRAPPING : LINE_CLASS.PLAIN, top)}>{words}</div>
         ) : (
@@ -559,12 +561,15 @@ export function SettingsSavedMark(): React.JSX.Element {
   );
 }
 
-/** The small mark beside a name while the feature it belongs to still needs a hand, its `note` the hover's and the screen reader's words. */
+/** The small mark beside a name while the feature it belongs to still needs a hand, its `note` the words of the tooltip it raises on hover and of the screen reader. */
 export function SettingsAttentionMark({ note }: { note: string }): React.JSX.Element {
   return (
-    <span className="ui-settings-attention-mark inline-flex flex-none text-attention" title={note}>
-      <AlertIcon />
-      <VisuallyHidden>({note})</VisuallyHidden>
-    </span>
+    <Tooltip label={note}>
+      {/* Note that a screen reader hears the note in the line's own words, so the mark takes no focus of its own. */}
+      <span className="ui-settings-attention-mark inline-flex flex-none text-attention">
+        <AlertIcon />
+        <VisuallyHidden>({note})</VisuallyHidden>
+      </span>
+    </Tooltip>
   );
 }

@@ -46,6 +46,7 @@ import {
   takeAgentMentionedServers,
 } from "@repo/database/models/agent-store";
 import {
+  callAccountNames,
   INTEGRATION_GRANT,
   INTEGRATION_GRANT_OF,
   INTEGRATION_LABEL_MAX,
@@ -189,6 +190,28 @@ function providerConnections(
         }
       : undefined),
   }));
+}
+
+/**
+ * The names the turn starting stamps on its calls of an integration's tool,
+ * by connection (`callAccountNames`), among the accounts it is handed: each
+ * standing connected or expired, read from the account's rows as the turn
+ * starts, so a call keeps the name its account went by when it ran.
+ */
+export function turnAccountNames(
+  userId: string,
+): Effect.Effect<Readonly<Record<string, string>>, StoreFailure, DatabaseServices> {
+  return Effect.map(readIntegrationConnections(userId), (rows) =>
+    Object.fromEntries(
+      callAccountNames(
+        rows.filter(handedRow).map((row) => ({
+          provider: row.provider,
+          connection: row.connectionName,
+          label: row.label,
+        })),
+      ),
+    ),
+  );
 }
 
 /**

@@ -185,10 +185,17 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
           organizationId: own,
           name: "A task the page never names",
           number: 1,
-          document: "",
+          description: "",
           createdAt: at(1),
         },
-        { userId, organizationId: own, name: "Older", number: 2, document: "", createdAt: at(45) },
+        {
+          userId,
+          organizationId: own,
+          name: "Older",
+          number: 2,
+          description: "",
+          createdAt: at(45),
+        },
       ])
       .returning({ id: task.id });
 
@@ -203,7 +210,7 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
         organizationId: sharedWorkspace,
         name: "Shared",
         number: sharedTaskNumbers,
-        document: "",
+        description: "",
         createdAt: at(200),
       })
       .returning({ id: task.id });

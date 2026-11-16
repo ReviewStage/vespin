@@ -4,9 +4,9 @@
  * GitHub serves any commit as a gzipped tar
  * (https://docs.github.com/en/rest/repos/contents#download-a-repository-archive-tar):
  * a public repository's straight from `codeload.github.com`, which asks no
- * token and is no request of the REST API, so it spends neither GitHub's
- * rate limit nor a lane of the rate gate (`github-rate-gate.ts`); a private
- * one's through `GET /repos/{owner}/{repo}/tarball/{ref}` on a token, which
+ * token and is no request of the REST API, so it spends none of GitHub's
+ * rate limit and goes around `@repo/github`; a private one's through
+ * `GET /repos/{owner}/{repo}/tarball/{ref}` on the bearer's client, which
  * GitHub answers with a redirect to the same archive. `git archive` names
  * the commit in the archive's pax global header (`comment`), so one
  * download both pins the ref and reads every file at it.
@@ -20,11 +20,10 @@
  */
 
 import { gunzipSync } from "node:zlib";
-import { Data, Effect, Option, type Redacted, Stream } from "effect";
-import type * as HttpClient from "effect/http/HttpClient";
+import { Data, Effect, Option, Predicate, Stream } from "effect";
+import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import type * as HttpClientResponse from "effect/http/HttpClientResponse";
-import { githubRead, send } from "./github-app.js";
+import { type GitHubBearer, readStream, repositoryParts } from "./github-app.js";
 
 /**
  * How much of an archive is read: what crosses the wire, and what it
@@ -150,8 +149,8 @@ function readTar(tar: Uint8Array): Option.Option<RepositoryArchive> {
 }
 
 /** The body off the wire up to the bound and one byte past it, so an archive past the bound is told apart from one at it. */
-function boundedBody(response: HttpClientResponse.HttpClientResponse) {
-  return response.stream.pipe(
+function boundedBody<E>(body: Stream.Stream<Uint8Array, E>) {
+  return body.pipe(
     Stream.mapAccum(
       () => 0,
       (seen, chunk: Uint8Array) => {
@@ -182,6 +181,53 @@ function refPath(ref: string): string {
   return ref.split("/").map(encodeURIComponent).join("/");
 }
 
+/** The archive's body as codeload serves a public repository's, with no token; refused as not found where it serves none. */
+function publicArchive(fullName: string, ref: string) {
+  return Effect.gen(function* () {
+    const client = yield* HttpClient.HttpClient;
+
+    const response = yield* client.execute(
+      HttpClientRequest.get(`${CODELOAD}/${fullName}/tar.gz/${refPath(ref)}`),
+    );
+
+    if (response.status === 404)
+      return yield* new ArchiveUnread({ reason: ARCHIVE_UNREAD.NOT_FOUND });
+
+    if (response.status !== 200) {
+      yield* Effect.logWarning(`An archive was not served: GitHub answered ${response.status}`);
+
+      return yield* new ArchiveUnread({ reason: ARCHIVE_UNREAD.UNANSWERED });
+    }
+
+    return Stream.mapError(
+      response.stream,
+      () => new ArchiveUnread({ reason: ARCHIVE_UNREAD.UNANSWERED }),
+    );
+  });
+}
+
+/** The archive's body as GitHub's API serves a private repository's on the bearer's client; refused as not found where it serves none. */
+function privateArchive(bearer: GitHubBearer, fullName: string, ref: string) {
+  return bearer.client
+    .request("GET /repos/{owner}/{repo}/tarball/{ref}", {
+      ...repositoryParts(fullName),
+      ref,
+      parseSuccessResponseBody: false,
+    })
+    .pipe(
+      Effect.catchTag("GitHubNotFound", () =>
+        Effect.fail(new ArchiveUnread({ reason: ARCHIVE_UNREAD.NOT_FOUND })),
+      ),
+      Effect.flatMap(readStream),
+      Effect.map((body) =>
+        Stream.fromReadableStream({
+          evaluate: () => body,
+          onError: () => new ArchiveUnread({ reason: ARCHIVE_UNREAD.UNANSWERED }),
+        }).pipe(Stream.filter(Predicate.isUint8Array)),
+      ),
+    );
+}
+
 /**
  * The repository's commit at the ref, read whole from its archive: a
  * public repository's from codeload with no token, a private one's through
@@ -190,28 +236,20 @@ function refPath(ref: string): string {
  */
 export function readRepositoryArchive(
   repository: { readonly fullName: string; readonly public: boolean },
-  bearer: Redacted.Redacted | null,
+  bearer: GitHubBearer | null,
   ref: string,
 ): Effect.Effect<RepositoryArchive, ArchiveUnread, HttpClient.HttpClient> {
-  const request = repository.public
-    ? HttpClientRequest.get(`${CODELOAD}/${repository.fullName}/tar.gz/${refPath(ref)}`)
-    : githubRead(`/repos/${repository.fullName}/tarball/${refPath(ref)}`, bearer);
-
   const unread = (reason: ArchiveUnreadReason) => new ArchiveUnread({ reason });
+
+  // Note that only a public repository is read without a bearer, from codeload.
+  const body =
+    repository.public || bearer === null
+      ? publicArchive(repository.fullName, ref)
+      : privateArchive(bearer, repository.fullName, ref);
 
   const read = Effect.scoped(
     Effect.gen(function* () {
-      const response = yield* send(request);
-
-      if (response.status === 404) return yield* unread(ARCHIVE_UNREAD.NOT_FOUND);
-
-      if (response.status !== 200) {
-        yield* Effect.logWarning(`An archive was not served: GitHub answered ${response.status}`);
-
-        return yield* unread(ARCHIVE_UNREAD.UNANSWERED);
-      }
-
-      const gzipped = yield* boundedBody(response);
+      const gzipped = yield* boundedBody(yield* body);
 
       if (gzipped.byteLength > ARCHIVE_BOUNDS.MAX_ARCHIVE_BYTES) {
         return yield* unread(ARCHIVE_UNREAD.TOO_LARGE);

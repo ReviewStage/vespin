@@ -34,7 +34,12 @@ import {
   QUIET_COMPOSER,
   typeInComposer,
 } from "../testing/composer.js";
-import { testQueryClientNow, withQueryClient, writeAppState } from "../testing/copy-feedback.js";
+import {
+  settleQueries,
+  testQueryClientNow,
+  withQueryClient,
+  writeAppState,
+} from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
@@ -115,8 +120,11 @@ function Box({
   onClear,
   startsGoal,
   model,
+  talksIn,
 }: {
   sender: MessageSender;
+  /** The task the box's agent works on, where the box calls its agent, as an agent's tab's does. */
+  talksIn?: string;
   skills?: SkillSource;
   /** What `/clear` does, where the box runs commands. */
   onClear?: () => Promise<boolean>;
@@ -146,6 +154,8 @@ function Box({
       onClear,
       startsGoal,
       model,
+      agentId: talksIn === undefined ? undefined : "agent-1",
+      talksIn,
     }),
     // What Continue would carry, as the tab hands it on.
     createElement("output", { "data-unsent": composer.unsent.words }),
@@ -160,6 +170,7 @@ async function mounted(
     readonly onClear?: () => Promise<boolean>;
     readonly startsGoal?: boolean;
     readonly model?: AgentModelControl;
+    readonly talksIn?: string;
   } = {},
 ) {
   const sent: { text: string; clientKey: string }[] = [];
@@ -218,6 +229,7 @@ test("a paste past the box's cap and too large for a file is cut to the room lef
   const note = () => box.container.querySelector(".ui-composer-foot-note")?.textContent;
   assert.equal(note(), undefined);
 
+  // Note that this runs a few seconds, because only words past a text file's 3 MB bound stay words to be cut.
   pasteInComposer(box.container, "x".repeat(AGENT_BOUNDS.MAX_TEXT_BYTES + 1));
   assert.equal(box.shown().length, cap, "the box holds what fits");
   assert.equal(note()?.includes(pasteCutWords(cap)), true, "and says the rest was cut");
@@ -291,7 +303,7 @@ test("words selected raise the format toolbar, its marks alone, and a message bo
 const TAKEN: AgentAgentAnswer = {
   agent: {
     id: "agent-1",
-    planId: "plan-1",
+    taskId: "plan-1",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,
@@ -1158,4 +1170,18 @@ test("while the agent's turn runs, a touch held on Send sends the other way: a b
   }
 
   assert.deepEqual(done, ["queued"]);
+});
+
+test("Talk stands beside Dictate only in a box that calls its agent, and only while the Voice experiment is on", async () => {
+  writeAppState(stateWith({ [EXPERIMENT.VOICE]: true }, {}));
+  const tab = await mounted(undefined, { talksIn: "plan-1" });
+  const other = await mounted();
+  assert.ok(tab.button("Dictate"));
+  assert.ok(tab.button("Talk"), "an agent's tab's box offers a call");
+  assert.equal(other.button("Talk")?.ariaLabel, undefined, "a box that calls no agent offers none");
+
+  writeAppState(stateWith({ [EXPERIMENT.VOICE]: false }, {}));
+  await settleQueries();
+  assert.equal(tab.button("Talk")?.ariaLabel, undefined, "nor does any box once Voice is off");
+  assert.ok(tab.button("Dictate"));
 });

@@ -149,27 +149,27 @@ afterEach(() => {
 });
 
 test("a message the queue refused comes back into the box it was queued from", async () => {
-  act(() => now().composer.setDraft("Please update the tests"));
+  act(() => now().composer.updateHeld((now) => ({ ...now, text: "Please update the tests" })));
   act(() => now().editing.queue());
   await answer(refused);
 
-  assert.equal(now().composer.draft, "Please update the tests");
+  assert.equal(now().composer.held.text, "Please update the tests");
 });
 
 test("a message the queue refused comes back ahead of the words and files written while it was out, in the tab drawn afresh meanwhile", async () => {
-  act(() => now().composer.setDraft("Please update the tests"));
-  act(() => now().composer.setAttachments(() => [SHOT]));
+  act(() => now().composer.updateHeld((now) => ({ ...now, text: "Please update the tests" })));
+  act(() => now().composer.updateHeld((now) => ({ ...now, attachments: [SHOT] })));
   act(() => now().editing.queue());
   // The tab is closed and opened again while the message is out.
   await act(async () =>
     roots[0]?.render(withQueryClient(createElement(Tab, { key: "opened again" }))),
   );
-  act(() => now().composer.setDraft("And the docs"));
-  act(() => now().composer.setAttachments(() => [SPEC]));
+  act(() => now().composer.updateHeld((now) => ({ ...now, text: "And the docs" })));
+  act(() => now().composer.updateHeld((now) => ({ ...now, attachments: [SPEC] })));
   await answer(refused);
 
-  assert.equal(now().composer.draft, "Please update the tests\nAnd the docs");
-  assert.deepEqual(now().composer.attachments, [SHOT, SPEC]);
+  assert.equal(now().composer.held.text, "Please update the tests\nAnd the docs");
+  assert.deepEqual(now().composer.held.attachments, [SHOT, SPEC]);
 });
 
 test("a refused message that would pass a message's bound beside the box's newer words leaves the box as it is, and Put back lays it in ahead once there is room", async () => {
@@ -177,13 +177,13 @@ test("a refused message that would pass a message's bound beside the box's newer
   roots.push(toasts);
   act(() => toasts.render(withQueryClient(createElement(ToastHost))));
   const long = "a".repeat(AGENT_BOUNDS.MAX_MESSAGE_CHARS - 4);
-  act(() => now().composer.setDraft(long));
+  act(() => now().composer.updateHeld((now) => ({ ...now, text: long })));
   act(() => now().editing.queue());
-  act(() => now().composer.setDraft("And the docs"));
+  act(() => now().composer.updateHeld((now) => ({ ...now, text: "And the docs" })));
   await answer(refused);
-  assert.equal(now().composer.draft, "And the docs");
+  assert.equal(now().composer.held.text, "And the docs");
 
-  act(() => now().composer.setDraft("Ok"));
+  act(() => now().composer.updateHeld((now) => ({ ...now, text: "Ok" })));
 
   const putBack = [...document.querySelectorAll<HTMLButtonElement>(".ui-toast button")].find(
     (button) => button.textContent === "Put back",
@@ -194,7 +194,7 @@ test("a refused message that would pass a message's bound beside the box's newer
   act(() => press.click());
   act(() => press.click());
 
-  assert.equal(now().composer.draft, `${long}\nOk`);
+  assert.equal(now().composer.held.text, `${long}\nOk`);
   assert.deepEqual(
     [...document.querySelectorAll(`${STANDING_TOAST} button`)].flatMap(({ textContent: label }) =>
       label === "Put back" ? [label] : [],
@@ -206,33 +206,33 @@ test("a refused message that would pass a message's bound beside the box's newer
 
 test("an edit the queue refused to save stays open with its new words, the box's own still kept aside", async () => {
   act(() => now().page({ messages: [message("m1", "Run tests")], revision: 1 }));
-  act(() => now().composer.setDraft("my own words"));
+  act(() => now().composer.updateHeld((now) => ({ ...now, text: "my own words" })));
   act(() => now().editing.edit(message("m1", "Run tests")));
   await answer({ queue: { messages: [message("m1", "Run tests")], revision: 2 } });
-  act(() => now().composer.setDraft("Run tests and fix failures"));
+  act(() => now().composer.updateHeld((now) => ({ ...now, text: "Run tests and fix failures" })));
   act(() => now().editing.save());
   await answer(refused);
 
   assert.equal(now().editing.editing, "m1");
-  assert.equal(now().composer.draft, "Run tests and fix failures");
+  assert.equal(now().composer.held.text, "Run tests and fix failures");
   act(() => now().editing.cancel());
-  assert.equal(now().composer.draft, "my own words");
+  assert.equal(now().composer.held.text, "my own words");
 });
 
 test("an edit of a message the queue would not hold, already on its way, closes and gives the box back", async () => {
-  act(() => now().composer.setDraft("my own words"));
+  act(() => now().composer.updateHeld((now) => ({ ...now, text: "my own words" })));
   act(() => now().editing.edit(message("m1", "Run tests")));
   await answer(refused);
 
   assert.equal(now().editing.editing, undefined);
-  assert.equal(now().composer.draft, "my own words");
+  assert.equal(now().composer.held.text, "my own words");
 });
 
 test("an edit steered is one change of the message it edits, with its new words, and nothing sent beside it", async () => {
   act(() => now().page({ messages: [message("m1", "Run tests")], revision: 1 }));
   act(() => now().editing.edit(message("m1", "Run tests")));
   await answer({ queue: { messages: [message("m1", "Run tests")], revision: 2 } });
-  act(() => now().composer.setDraft("Run tests and fix failures"));
+  act(() => now().composer.updateHeld((now) => ({ ...now, text: "Run tests and fix failures" })));
   act(() => now().editing.steer());
   await settle();
 
@@ -250,12 +250,27 @@ test("an edit whose message left the queue, sent or deleted elsewhere, closes an
   act(() => now().page({ messages: [message("m1", "Run tests")], revision: 1 }));
   act(() => now().editing.edit(message("m1", "Run tests")));
   await answer({ queue: { messages: [message("m1", "Run tests")], revision: 2 } });
-  act(() => now().composer.setDraft("Run tests and fix failures"));
+  act(() => now().composer.updateHeld((now) => ({ ...now, text: "Run tests and fix failures" })));
 
   act(() => now().page({ messages: [], revision: 3 }));
 
   assert.equal(now().editing.editing, undefined);
-  assert.equal(now().composer.draft, "Run tests and fix failures");
+  assert.equal(now().composer.held.text, "Run tests and fix failures");
+});
+
+test("an edit saved, its message handed off before the queue's answer lands, gives the box back", async () => {
+  act(() => now().page({ messages: [message("m1", "Run tests")], revision: 1 }));
+  act(() => now().composer.updateHeld((now) => ({ ...now, text: "my own words" })));
+  act(() => now().editing.edit(message("m1", "Run tests")));
+  await answer({ queue: { messages: [message("m1", "Run tests")], revision: 2 } });
+  act(() => now().composer.updateHeld((now) => ({ ...now, text: "Run tests and fix failures" })));
+  act(() => now().editing.save());
+  // The hold lifted, the agent idle, the service sends the message on, and the page says so first.
+  act(() => now().page({ messages: [], revision: 3 }));
+  await answer({ queue: { messages: [], revision: 3 } });
+
+  assert.equal(now().editing.editing, undefined);
+  assert.equal(now().composer.held.text, "my own words");
 });
 
 test("an edit takes the message's files into the box, read as its row draws them, and Save sends the box's words and files as the message", async () => {
@@ -268,9 +283,11 @@ test("an edit takes the message's files into the box, read as its row draws them
   act(() => now().editing.edit(queued));
   await answer({ queue: { messages: [{ ...queued, editing: true }], revision: 2 } });
 
-  assert.deepEqual(now().composer.attachments, [SHOT]);
-  act(() => now().composer.setDraft("Match this, smaller."));
-  act(() => now().composer.setAttachments((files) => [...files, SPEC]));
+  assert.deepEqual(now().composer.held.attachments, [SHOT]);
+  act(() => now().composer.updateHeld((now) => ({ ...now, text: "Match this, smaller." })));
+  act(() =>
+    now().composer.updateHeld((now) => ({ ...now, attachments: [...now.attachments, SPEC] })),
+  );
   act(() => now().editing.save());
   await settle();
 
@@ -284,7 +301,7 @@ test("an edit takes the message's files into the box, read as its row draws them
 
 test("a message queued with an image names the id its bytes stand under for the host to draw it by, and once the service answers it under an id of its own, the bytes the box held stand under that too, never read back", async () => {
   act(() => now().page({ messages: [], revision: 1 }));
-  act(() => now().composer.setAttachments(() => [SHOT]));
+  act(() => now().composer.updateHeld((now) => ({ ...now, attachments: [SHOT] })));
   act(() => now().editing.queue());
   await settle();
 

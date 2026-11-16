@@ -21,17 +21,13 @@ import {
   type ListedAgent,
   listedAgentOfPage,
 } from "@repo/features/agent-wire";
-import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { isPlayedType } from "@repo/features/conversation-picture-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppHostRead, AppStateSnapshot, AppTranscript } from "@repo/host/app-state";
-import {
-  type FollowedAgent,
-  selectFollowedAgent,
-  selectTranscript,
-} from "@repo/host/app-state-reads";
+import { type FollowedAgent, selectTranscript } from "@repo/host/app-state-reads";
 import {
   BUZZ,
   latestStep,
@@ -44,16 +40,21 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cachedVideo } from "../cached-media.js";
+import { cachedPlayed } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs, useHostFollow } from "../host/host-provider.js";
+import {
+  useHostActs,
+  useHostFollow,
+  useTaskListCollections,
+  useTaskListRow,
+} from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
 
 /** What an agent's recordings are named under among the app's caches. */
 const AGENT_MEDIA_PREFIX = "agent";
 
 /** No media read yet, held as one value so a page that holds none reads the same each time. */
-const NO_SOURCES: ReadonlyMap<string, string> = new Map();
+const NO_SOURCES: ReadonlyMap<string, string | null> = new Map();
 
 /** Says on the console a read the host refused, which the page draws without. */
 function refused(what: string): (cause: unknown) => void {
@@ -95,9 +96,7 @@ function agentOfAnswer(answer: AgentPageAnswerView): ListedAgent | undefined {
 
 /** The agent as the task list follows it, by its id; none until the list holds it. */
 export function useFollowedAgent(agentId: string): FollowedAgent | undefined {
-  const select = useMemo(() => selectFollowedAgent(agentId), [agentId]);
-
-  return useQuery({ ...appStateQuery, select }).data;
+  return useTaskListRow(useTaskListCollections().agents, agentId);
 }
 
 /**
@@ -146,15 +145,9 @@ const NO_PULL_REQUESTS: readonly AgentPullRequest[] = [];
 
 /** The pull requests the agent opened, as the task list holds them now; none before it holds them. */
 export function useAgentPullRequests(agentId: string): readonly AgentPullRequest[] {
-  const select = useMemo(
-    () => (state: AppStateSnapshot) =>
-      (state.tasks.agentPullRequests ?? [])
-        .filter((each) => each.agentId === agentId)
-        .map(({ pullRequest }) => pullRequest),
-    [agentId],
-  );
+  const listed = useTaskListRow(useTaskListCollections().agentPullRequests, agentId);
 
-  return useQuery({ ...appStateQuery, select }).data ?? NO_PULL_REQUESTS;
+  return useMemo(() => (listed === undefined ? NO_PULL_REQUESTS : [listed.pullRequest]), [listed]);
 }
 
 /**
@@ -278,29 +271,36 @@ function mediaReadFailed(agentId: string, pictureId: string, cause: unknown, aga
   );
 }
 
-/** One picture or recording the agent showed, read through the host into what it is drawn from. */
+/** One picture, recording, or sound clip the agent showed, read through the host into what it is drawn from. */
 async function agentMediaSource(
   acts: ReturnType<typeof useHostActs>,
   agentId: string,
   pictureId: string,
 ): Promise<string> {
-  // Note that a recording is asked for as its MP4 copy, which the system's player plays, where the service kept one.
+  // Note that a recording, or an Ogg clip, is asked for as its MP4 copy, which the system's player plays, where the service kept one; anything else is answered as it is.
   const read = await acts[ACT_KIND.AGENTS_PICTURE]({ agentId, pictureId, playable: MP4_TYPE });
 
   if (!("base64" in read)) throw new Error(`The picture was not read: ${read.failure}.`);
 
-  return isVideoType(read.contentType)
-    ? cachedVideo(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64)
+  return isPlayedType(read.contentType)
+    ? cachedPlayed(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64)
     : `data:${read.contentType};base64,${read.base64}`;
 }
 
+/** What an agent's pictures and recordings are drawn from, by id, and what reads one that failed again. */
+export interface AgentMedia {
+  readonly sources: ReadonlyMap<string, string | null>;
+  readonly retry: (pictureId: string) => void;
+}
+
 /**
- * What each picture and recording the agent showed is drawn from, by its
- * id, read once through the host as the panel reads one
+ * What each picture, recording, and sound clip the agent showed is drawn
+ * from, by its id, read once through the host as the panel reads one
  * (`ACT_KIND.AGENTS_PICTURE`): a picture as a `data:` address, and a
- * recording, its MP4 copy where the service kept one, as a file of the
- * app's caches, written whole before it is drawn, since the system's player
- * reads a file; one on its way, or that could not be read, is absent. Note
+ * recording or a clip, its MP4 copy where the service kept one, as a file of
+ * the app's caches, written whole before it is drawn, since the system's
+ * player reads a file; one on its way is absent, and one whose every try
+ * failed is `null`, which its Try again (`retry`) reads again. Note
  * that each is asked for once while the agent's page stands, however often
  * the transcript moves; that one whose read failed is tried again on its
  * own a few times after a pause (`mediaReads`), since a transcript that
@@ -308,16 +308,24 @@ async function agentMediaSource(
  * transcript's next change; and that each failure is written to the
  * device's log.
  */
-export function useAgentMedia(
-  agentId: string,
-  ids: readonly string[],
-): ReadonlyMap<string, string> {
+export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMedia {
   const acts = useHostActs();
 
   const [shown, setShown] = useState<{
     readonly agentId: string;
-    readonly sources: ReadonlyMap<string, string>;
+    readonly sources: ReadonlyMap<string, string | null>;
   }>({ agentId, sources: new Map() });
+
+  // Each source standing for the agent, `source` for an id, or none to stand it on its way again.
+  const stand = (pictureId: string, source: string | null | undefined) =>
+    setShown((held) => {
+      const sources = new Map(held.agentId === agentId ? held.sources : undefined);
+
+      if (source === undefined) sources.delete(pictureId);
+      else sources.set(pictureId, source);
+
+      return { agentId, sources };
+    });
 
   const [reads, setReads] = useState<MediaReads | undefined>(undefined);
 
@@ -325,15 +333,13 @@ export function useAgentMedia(
   useEffect(() => {
     const standing = mediaReads({
       read: (pictureId) => agentMediaSource(acts, agentId, pictureId),
-      landed: (pictureId, source) =>
-        setShown((held) => ({
-          agentId,
-          sources: new Map(held.agentId === agentId ? held.sources : undefined).set(
-            pictureId,
-            source,
-          ),
-        })),
-      failed: (pictureId, cause, again) => mediaReadFailed(agentId, pictureId, cause, again),
+      landed: (pictureId, source) => stand(pictureId, source),
+      // Note that a read whose every try failed stands failed, so it says so with Try again rather than spinning on.
+      failed: (pictureId, cause, again) => {
+        mediaReadFailed(agentId, pictureId, cause, again);
+
+        if (!again) stand(pictureId, null);
+      },
       pause: paused,
     });
 
@@ -344,7 +350,13 @@ export function useAgentMedia(
 
   useEffect(() => reads?.ask(ids), [reads, ids]);
 
-  return shown.agentId === agentId ? shown.sources : NO_SOURCES;
+  const retry = (pictureId: string) => {
+    stand(pictureId, undefined);
+    // Note that a read whose every try failed is let go (`mediaReads`), so asking for it again reads it afresh.
+    reads?.ask([pictureId]);
+  };
+
+  return { sources: shown.agentId === agentId ? shown.sources : NO_SOURCES, retry };
 }
 
 /** A cut part's whole read as held: the size it was asked at, and how it stands. */
@@ -452,10 +464,19 @@ export type PageRead =
   | { readonly html: string; readonly title: string }
   | { readonly failed: true };
 
-/** One version of a page the agent showed on its task, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading until the task is known. */
-export function usePageHtml(taskId: string | undefined, pageId: string, version: number): PageRead {
+/** A page's read as it stands, and the ask to read it again after it failed. */
+export interface PageHtml {
+  readonly read: PageRead;
+  readonly again: () => void;
+}
+
+/** One version of a page the agent showed on its task, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading until the task is known, and read again on `again` after a read that failed. */
+export function usePageHtml(taskId: string | undefined, pageId: string, version: number): PageHtml {
   const acts = useHostActs();
   const [read, setRead] = useState<PageRead>({ reading: true });
+  // Note that each ask to read again counts up, which the read below depends on, so Try again reads the page anew rather than leaving the failure standing.
+  const [asked, setAsked] = useState(0);
+  const again = useCallback(() => setAsked((was) => was + 1), []);
   useEffect(() => {
     let current = true;
     setRead({ reading: true });
@@ -480,9 +501,9 @@ export function usePageHtml(taskId: string | undefined, pageId: string, version:
     return () => {
       current = false;
     };
-  }, [acts, taskId, pageId, version]);
+  }, [acts, taskId, pageId, version, asked]);
 
-  return read;
+  return { read, again };
 }
 
 /** The older read asked last: of which agent, below where, and whether it failed. */

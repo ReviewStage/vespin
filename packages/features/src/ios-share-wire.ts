@@ -22,7 +22,7 @@
 import { Schema as EffectSchema, Option } from "effect";
 import { type ClientIdentity, clientHeaders } from "./client-identity.js";
 import { recentRepositories, workspaceReaches } from "./tasks-model.js";
-import type { TasksView } from "./tasks-view.js";
+import type { TaskListParts } from "./tasks-view.js";
 import type { Workspace } from "./workspace-wire.js";
 
 /** One workspace the sheet offers, and the repositories a task in it may start in, the one it starts in first. */
@@ -113,7 +113,7 @@ export function shareSnapshotOf(
   accountId: string,
   chosenWorkspaceId: string | undefined,
   workspaces: readonly Workspace[],
-  tasks: TasksView["tasks"],
+  tasks: TaskListParts["tasks"],
   listedOf: (workspaceId: string) => readonly string[] | undefined,
   service: { readonly origin: string; readonly client: ClientIdentity },
 ): ShareSnapshot {

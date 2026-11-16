@@ -10,6 +10,7 @@ import { afterEach, beforeEach, test } from "vitest";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { PullRequestLine, taskCardOf } from "./task-card.js";
 
@@ -71,7 +72,7 @@ function drawn(
     onSelect: opened,
   });
 
-  act(() => root.render(withQueryClient(taskCardOf(tasks, task, 10))));
+  act(() => root.render(withQueryClient(overEveryTask(tasks, taskCardOf(tasks, task, 10)))));
   const card = container.querySelector<HTMLElement>("[data-task-card]");
   assert.ok(card, "the card is drawn");
 

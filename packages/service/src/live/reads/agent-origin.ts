@@ -6,7 +6,7 @@
  * name of the member who asked for a run now as their account names them
  * now, under the agent's own rule of who may read it (`agentVisibleTo`), so
  * an agent the account does not reach, or one no run started, is no rows.
- * It reads no clock, as Realtime requires.
+ * It reads no clock, as a live read must (`live-statement.ts`).
  *
  * It is woken by the agent's own row, which nothing moves the run on once
  * the agent is made, and by what admits the reader to it. Note that a

@@ -72,6 +72,7 @@ import {
   type ModelProvider,
   type ModelSpeed,
   modelSpeedOf,
+  NO_EFFORT,
   standardModelIdOf,
 } from "@repo/features/models-wire";
 import { formatCompact, formatUsd } from "@repo/features/number-format";
@@ -200,6 +201,7 @@ export function planNameOf(plan: SubscriptionKeySummary | undefined): string | u
 export const API_KEY_WORDS = {
   [MODEL_PROVIDER.ANTHROPIC]: "Anthropic API key",
   [MODEL_PROVIDER.OPENAI]: "OpenAI API key",
+  [MODEL_PROVIDER.CURSOR]: "Cursor API key",
 } as const satisfies Record<ModelProvider, string>;
 
 /** A key whose provider the choice does not say. */
@@ -805,6 +807,7 @@ export interface ConnectFailure {
 const CONNECT_CREDENTIALS = {
   [MODEL_PROVIDER.ANTHROPIC]: "a Claude plan or an Anthropic API key",
   [MODEL_PROVIDER.OPENAI]: "a Codex plan or an OpenAI API key",
+  [MODEL_PROVIDER.CURSOR]: "a Cursor API key",
 } as const satisfies Record<ModelProvider, string>;
 
 /**
@@ -1249,7 +1252,7 @@ const PROVIDER_ORDER: readonly string[] = Object.values(MODEL_PROVIDER);
 
 /**
  * The model families the menus lead with, in the order they list them,
- * Anthropic's and then OpenAI's: the newest of each is listed before
+ * Anthropic's, then OpenAI's, then Cursor's: the newest of each is listed before
  * anything is searched, and every other version only once something is. A
  * new version needs nothing here; a new family is one word.
  */
@@ -1262,6 +1265,9 @@ const LEAD_FAMILIES: readonly string[] = [
   "sol",
   "luna",
   "terra",
+  "composer",
+  "auto",
+  "grok",
 ];
 
 /**
@@ -1447,7 +1453,8 @@ export function choiceModelId(offered: OfferedModel, speed: ModelSpeed): string 
  * says nothing.
  */
 function choiceDetail(effort: string, speed: ModelSpeed, standardTokens?: number): string {
-  const words = [effortLabel(effort)];
+  // A model with no effort of its own says none, so Composer 2.5 never reads "Default".
+  const words = effort === NO_EFFORT ? [] : [effortLabel(effort)];
 
   if (speed !== MODEL_SPEED.STANDARD) words.push(SPEED_WORD[speed]);
 
@@ -1580,6 +1587,8 @@ export interface TabTurn {
   readonly turnId: string | undefined;
   /** Whether the working line stands: the turn is open, a line sent has not been answered, or a rewind is out. */
   readonly working: boolean;
+  /** Whether the working line is drawn: the turn is open or a rewind is out. A line sent and not yet answered draws none, because the turn it queued is not known until its answer names it, though it holds `working`. */
+  readonly drawsLine: boolean;
   /** What the working line says the agent is doing. */
   readonly phase: WorkingPhase;
   /** When the usage limit its open turn waits on resets; none where it waits on none. */
@@ -1624,6 +1633,7 @@ export function tabTurnOf(agent: Pick<AgentSummary, "status" | "turn">, sends: T
   return {
     turnId: turn?.id,
     working: open || sends.unanswered || sends.rewinding,
+    drawsLine: open || sends.rewinding,
     phase: workingPhaseOf(turn, open, sends.rewinding),
     waitsUntil: open ? turn?.waitsUntil : undefined,
     status,

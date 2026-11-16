@@ -51,36 +51,27 @@ test("the /api/ rewrites are generated into the web service's routes, ahead of i
   );
 });
 
-/** Whether Vercel deploys a push to the branch, by the `git.deploymentEnabled` globs, where a branch no glob names deploys. */
+/** Whether Vercel deploys a push to the branch, by the `git.deploymentEnabled` globs: where any glob that matches it is `true`, else where none matching it is `false`. */
 function deploys(branch: string): boolean {
-  const refused = Object.entries(vercel.git.deploymentEnabled).some(
-    ([glob, enabled]) => !enabled && matchesGlob(branch, glob),
+  const matching = Object.entries(vercel.git.deploymentEnabled).filter(([glob]) =>
+    matchesGlob(branch, glob),
   );
 
-  return !refused;
+  return matching.length === 0 || matching.some(([, enabled]) => enabled);
 }
 
-test("a GitHub merge-queue branch, an agent's branch, a PR media branch, or an evidence branch is not deployed, and every other branch is", () => {
+test("a push deploys only on main, so a Preview is built only when asked for", () => {
+  assert.equal(deploys("main"), true);
+
   for (const branch of [
-    "gh-readonly-queue/main/pr-3551-d1c107a6f00dbb4b1e5bd2d1b8f3a5c7e9d01234",
-    "gh-readonly-queue/release/1.2/pr-7-0123456789abcdef0123456789abcdef01234567",
+    "feature/some-workspace",
+    "fix/pr-assets-upload",
     "agent/fix-relay",
-    "luke/fix-relay",
+    "gh-readonly-queue/main/pr-3551-d1c107a6f00dbb4b1e5bd2d1b8f3a5c7e9d01234",
     "pr-assets",
-    "pr-assets-card-redesign",
     "evidence/app-267",
   ]) {
     assert.equal(deploys(branch), false, branch);
-  }
-
-  for (const branch of [
-    "main",
-    "ci/vercel-no-merge-queue-deploys",
-    "feature/some-workspace",
-    "fix/pr-assets-upload",
-    "gh-readonly-queue",
-  ]) {
-    assert.equal(deploys(branch), true, branch);
   }
 });
 
@@ -339,7 +330,7 @@ test("a link to any place in Vespin, a workspace's Home and Board, a plan's, a s
 
   // An API path still reaches the oRPC route with the whole path it names, and an exception its own route with the id.
   for (const path of [
-    "/api/plans/x/description/revisions",
+    "/api/tasks/x/description/revisions",
     "/api/inbox/i1",
     "/api/automations/x1/runs",
     "/api/agents/a1",
@@ -453,7 +444,7 @@ const APP_PATHS = [
   "/acme/plan/3f6c1b2a-8d4e-4f10-9a7b-5c2d1e0fa21b",
   "/connect/BCDF-GHJK",
   "/api/auth/get-session",
-  "/api/plans/x/description/revisions",
+  "/api/tasks/x/description/revisions",
   "/api/pages/sandbox",
   "/api/default.js",
   "/sign-in.html",
@@ -575,7 +566,7 @@ test("every path the web app is served at sends its own Content Security Policy 
 
   // An API answer's headers are its handler's own; no page's route reaches it.
   for (const path of [
-    "/api/plans/x/description/revisions",
+    "/api/tasks/x/description/revisions",
     "/api/workspaces/w1/photo",
     "/api/auth/get-session",
   ]) {

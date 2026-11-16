@@ -75,6 +75,7 @@ import {
   IdSource,
   issuedTokenAccountSourceLayer,
   type KeepIssuedToken,
+  KeptListsDue,
   OAUTH_ACCOUNT_CLIENT,
   oauthAccountSourceLayerFor,
   RunMode,
@@ -88,7 +89,7 @@ import {
 } from "@repo/host/effect";
 import { effectServiceLayer } from "@repo/host/service-layer";
 import { plainCodeLines } from "@repo/host/task-code-remote";
-import { Cause, ConfigProvider, Context, Effect, Layer, Path, Stream } from "effect";
+import { Cause, ConfigProvider, Context, Effect, Layer, Path, Queue, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as HttpClient from "effect/http/HttpClient";
 import { fixtureActs, stageFixture } from "./fixture-host.js";
@@ -154,6 +155,8 @@ export interface MobileHostOptions {
   readonly fixture: RunProfile | undefined;
   /** Whether a fixture run stands as the service's refusal of an old build leaves the document, which `-updateNeeded true` asks; never in a live run. */
   readonly fixtureUpdateNeeded?: boolean | undefined;
+  /** Whether a fixture run holds an ask of Ada's MacBook for an agent's command, which `-machineAsk true` asks; never in a live run. */
+  readonly fixtureMachineAsk?: boolean | undefined;
   /** Whether a fixture run's act port refuses the writes a flow presses, which `-refuseWrites true` asks; never in a live run. */
   readonly fixtureRefusesWrites?: boolean | undefined;
   /** This build's version, as the app's config names it. */
@@ -196,6 +199,20 @@ function accountSeams(device: DeviceSeams) {
   );
 }
 
+/** Each time the app leaves the foreground, when the host writes the account's kept lists (`KeptListsDue`), rather than every thirty seconds while the member taps. */
+function appLeaves(device: DeviceSeams): Stream.Stream<void> {
+  return Stream.callback<void>((queue) =>
+    Effect.acquireRelease(
+      Effect.sync(() =>
+        device.onAppActiveChanged((active) => {
+          if (!active) Queue.offerUnsafe(queue, undefined);
+        }),
+      ),
+      (unsubscribe) => Effect.sync(unsubscribe),
+    ),
+  );
+}
+
 /** Every seam the host's kernel and assembly stand on, as the app answers it. */
 function seamLayers(options: MobileHostOptions) {
   const { stateRoot, appVersion, fixture, device } = options;
@@ -211,6 +228,7 @@ function seamLayers(options: MobileHostOptions) {
     Layer.succeed(ShutdownSignal, { notify: undefined }),
     Layer.succeed(ServiceOrigin, SERVICE_ORIGIN),
     Layer.succeed(TerminalSocket, device.openSocket),
+    Layer.succeed(KeptListsDue, appLeaves(device)),
   );
 }
 
@@ -325,10 +343,10 @@ const servedActPort = (
  * otherwise. The store drops a patch that says nothing new, so laying the
  * same data twice settles rather than loops.
  */
-const stagedFixture = (state: AppStateStore, updateNeeded: boolean) =>
+const stagedFixture = (state: AppStateStore, updateNeeded: boolean, machineAsk: boolean) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
-      stageFixture(state, updateNeeded);
+      stageFixture(state, updateNeeded, machineAsk);
       yield* publishAppStateChanges(
         state,
         () => Effect.sync(() => stageFixture(state, updateNeeded)),
@@ -387,6 +405,7 @@ const composedMobile = (options: MobileHostOptions) =>
       const notices = yield* linkClientNotices({
         state,
         host: operator.host,
+        taskList: assembly.taskListMoves,
         presenter: { openMachineCommandAsk: () => undefined, openPlace: () => undefined },
         onPanelFocusChanged: device.onAppActiveChanged,
         report,
@@ -478,7 +497,11 @@ export function composeMobile(
       const staged =
         options.fixture === undefined
           ? Layer.empty
-          : stagedFixture(mobile.state, options.fixtureUpdateNeeded === true);
+          : stagedFixture(
+              mobile.state,
+              options.fixtureUpdateNeeded === true,
+              options.fixtureMachineAsk === true,
+            );
 
       return Layer.provideMerge(staged, standing);
     }),

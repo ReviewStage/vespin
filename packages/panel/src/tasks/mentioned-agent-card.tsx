@@ -1,13 +1,13 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { LINK_DESTINATION, pullRequestAddressOf } from "@repo/features/link-grammar";
-import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
-import type { AppStateSnapshot } from "@repo/host/app-state";
 import { listedPullRequestOf } from "@repo/ui/pull-request-link";
+import { useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
-import { type ReactNode, useCallback } from "react";
+import type { ReactNode } from "react";
 import { tabCard } from "../desktop/tab-card.js";
-import { appStateQuery, selectTasks } from "../use-app-state.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import { AGENTS_LISTED, appStateQuery, selectAgentsListed } from "../use-app-state.js";
 import { type AgentSubject, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { type MentionedAgentsPlace, useMentionedPlace } from "./mentioned-place.js";
 import { TAB_KIND } from "./tab-look.js";
@@ -66,38 +66,26 @@ function agentOf(listed: Listed): AgentSummary | undefined {
 }
 
 /**
- * An agent as the task list carries it: among every task's agents, archived
- * ones among them. Note that the list carries a
- * task's agents only once it has answered live, so until then, and unless
- * it failed, an agent it does not name may still be among them.
+ * One agent as the task list carries it, among every task's agents, archived
+ * ones among them, for a card of it. Note that the list carries a task's
+ * agents only once it has answered live, so until then, and unless it
+ * failed, an agent it does not name may still be among them; reading until
+ * the first document arrives.
  */
-function listedAgentOf(tasks: TasksView | undefined, agentId: string): Listed {
-  const onTask = tasks?.taskAgents?.find((agent) => agent.id === agentId);
-
-  if (onTask !== undefined) return onTask;
-  const answered = tasks?.taskAgents !== undefined || tasks?.listStatus === TASKS_READ.FAILED;
-
-  return answered ? UNLISTED.ABSENT : UNLISTED.READING;
-}
-
-/** One agent as the task list carries it, for a card of it; reading until the first document arrives. */
 function useListedAgent(agentId: string): Listed {
-  const select = useCallback(
-    (state: AppStateSnapshot) => listedAgentOf(state.tasks, agentId),
-    [agentId],
-  );
+  const agent = useTaskListRow(useTaskListCollections().agents, agentId);
+  const listed = useQuery({ ...appStateQuery, select: selectAgentsListed }).data;
 
-  return useQuery({ ...appStateQuery, select }).data ?? UNLISTED.READING;
+  if (agent !== undefined) return agent;
+
+  return listed === undefined || listed === AGENTS_LISTED.READING
+    ? UNLISTED.READING
+    : UNLISTED.ABSENT;
 }
 
 /** The model one agent runs on, as the task list carries it, for a mark of it; none where it carries no such agent. */
 function useListedModel(agentId: string): string | undefined {
-  const select = useCallback(
-    (state: AppStateSnapshot) => agentOf(listedAgentOf(state.tasks, agentId))?.model,
-    [agentId],
-  );
-
-  return useQuery({ ...appStateQuery, select }).data;
+  return useTaskListRow(useTaskListCollections().agents, agentId)?.model;
 }
 
 /** What a mark draws of the model the list carries, or of none. */
@@ -123,7 +111,7 @@ function useTaskFoot(agent: AgentSummary | undefined): string | undefined {
   const tasks = useKnownNames().tasks;
 
   if (agent === undefined) return undefined;
-  const task = tasks.get(agent.planId);
+  const task = tasks.get(agent.taskId);
 
   return task === undefined ? TASK_WORDS.UNKNOWN : `On ${task}`;
 }
@@ -185,13 +173,14 @@ interface OwnedPullRequest {
 
 /** The agent that opened the pull request a link names, among the tasks the window lists; none where none of them did. */
 function useOwnedPullRequest(url: string): OwnedPullRequest | undefined {
-  const tasks = useQuery({ ...appStateQuery, select: selectTasks }).data;
-
-  if (tasks === undefined) return undefined;
+  const { taskPullRequests } = useTaskListCollections();
+  const { data: carried } = useLiveQuery((q) => q.from({ listed: taskPullRequests }));
   const number = pullRequestAddressOf(url)?.number;
-  const listed = listedPullRequestOf(url, tasks.taskPullRequests ?? []);
+  const listed = listedPullRequestOf(url, carried);
 
-  return listed === undefined ? undefined : { ...listed, number };
+  return listed?.agentId === undefined
+    ? undefined
+    : { agentId: listed.agentId, taskId: listed.taskId, number };
 }
 
 /**
@@ -231,7 +220,7 @@ function OwnedPullRequestCard({
     onOpenAgent: () =>
       openPlace?.({
         kind: LINK_DESTINATION.AGENT,
-        ...(taskId === undefined ? undefined : { planId: taskId }),
+        ...(taskId === undefined ? undefined : { taskId: taskId }),
         agentId,
       }),
   });

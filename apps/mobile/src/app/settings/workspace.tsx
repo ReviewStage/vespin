@@ -3,7 +3,7 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
-import { ACT_UNREACHED_WORDS } from "@repo/features/words";
+import { ACT_UNREACHED_WORDS, readingWords } from "@repo/features/words";
 import {
   INVITATION_ROLE,
   type WorkspaceInvitation,
@@ -30,11 +30,18 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   ActionRow,
+  BUZZ,
+  buzz,
   ConfirmAsk,
+  FOOTER_TONE,
+  footerToneOf,
   GLYPH,
   ListSection,
+  LoadingRow,
   MemberRow,
   type MemberRowAct,
+  MenuRow,
+  SCREEN_GROUND,
   Screen,
   SettingsForm,
   useAsyncAction,
@@ -43,17 +50,21 @@ import {
   WorkspaceRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { setStringAsync } from "expo-clipboard";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
-import { refusalOf, useWrite } from "../../use-write.js";
+import { refusalOf, useLatestWrites, useWrite } from "../../use-write.js";
 import { pickWorkspacePhoto } from "../../workspace-photo.js";
 import { selectPhotos, switcherWorkspace } from "../../workspace-switcher.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
+
+/** What an invitation's menu calls copying its accept link, as the panel's row's button says it. */
+const INVITE_LINK_WORDS = { COPY: "Copy link" } as const;
 
 /** The rename's alert: its title, its field's placeholder, and its act, the panel's words. */
 const RENAME_WORDS = {
@@ -144,8 +155,9 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
   // Note that each refusal says why in place, in the host's words through the one write door, never an error's own text.
   const write = useWrite();
   const rename = useAsyncAction(() => ACT_UNREACHED_WORDS);
-  const people = useAsyncAction(() => ACT_UNREACHED_WORDS);
-  const invite = useAsyncAction(() => ACT_UNREACHED_WORDS);
+  // Note that a member's role or removal, and an invitation sent or canceled, each go at once and say a refusal by their own row (a member's id, an invite's address or id), since the host draws them as they go and one row must not wait on, or hide, another's.
+  const people = useLatestWrites(() => ACT_UNREACHED_WORDS);
+  const invite = useLatestWrites(() => ACT_UNREACHED_WORDS);
   const leave = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const transfer = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const photo = useAsyncAction(() => ACT_UNREACHED_WORDS);
@@ -174,13 +186,14 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
   const dismiss = () => setAsking(undefined);
   // Note that Transfer ownership offers the first admin, as the panel's chooser stands on; another is made owner from their own row.
   const heir = members?.find((member) => member.role === WORKSPACE_ROLE.ADMIN);
-  const hasAdmin = heir !== undefined;
+  // Note that an owner with no admin to hand the workspace to has nothing to press here, so why they can't leave is said under Members.
+  const ownerAlone = owner && !personal && members !== undefined && heir === undefined;
 
   const actsOn = (member: WorkspaceMember): readonly MemberRowAct[] => {
     const may = memberActs(workspace, member, member.userId === readerId);
 
     const role = (next: typeof ASSIGNABLE_ROLE.ADMIN | typeof ASSIGNABLE_ROLE.MEMBER) => () =>
-      void people.run(() =>
+      void people.run(member.userId, undefined, () =>
         refusalOf(write, () =>
           acts[ACT_KIND.WORKSPACE_MEMBER_ROLE]({
             workspaceId,
@@ -219,14 +232,14 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
 
   const sendInvite = (role: (typeof INVITATION_ROLES)[number]) => (email: string) => {
     dismiss();
-    void invite.run(() =>
+    void invite.run(email, undefined, () =>
       refusalOf(write, () => acts[ACT_KIND.WORKSPACE_INVITE]({ workspaceId, email, role })),
     );
   };
 
   return (
     <>
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <SettingsForm>
           <ListSection
             footer={
@@ -234,6 +247,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                 .filter((refusal) => refusal !== undefined)
                 .join(" ") || undefined
             }
+            footerTone={FOOTER_TONE.FAILURE}
           >
             <WorkspaceRow
               workspace={switcherWorkspace(workspace, false, photos)}
@@ -242,32 +256,55 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             {manages && !personal ? (
               <ActionRow
                 label={RENAME_WORDS.ROW}
+                symbol={GLYPH.RENAME}
                 onPress={() => setAsking({ kind: ASKING.RENAME })}
               />
             ) : null}
-            {manages ? (
+            {manages && !hasPhoto ? (
               <ActionRow
-                label={hasPhoto ? PHOTO_WORDS.CHANGE : PHOTO_WORDS.ADD}
+                label={PHOTO_WORDS.ADD}
                 symbol={GLYPH.IMAGE}
                 disabled={photo.running}
                 onPress={pickPhoto}
               />
             ) : null}
             {manages && hasPhoto ? (
-              <ActionRow
-                label={PHOTO_WORDS.DELETE}
-                destructive
-                // Note that both photo rows wait while a pick or delete is out, since a second act would be dropped unseen.
-                disabled={photo.running}
-                onPress={() => setAsking({ kind: ASKING.PHOTO_REMOVE })}
+              // Note that a photo's Replace and Delete stand in one menu, as the panel's Change photo offers them, so no red row sits among the head's; the menu waits while a pick or delete is out, since a second act would be dropped unseen.
+              <MenuRow
+                label={PHOTO_WORDS.CHANGE}
+                symbol={GLYPH.IMAGE}
+                acts={
+                  photo.running
+                    ? []
+                    : [
+                        { label: PHOTO_WORDS.REPLACE, onPress: pickPhoto },
+                        {
+                          label: PHOTO_WORDS.DELETE,
+                          destructive: true,
+                          onPress: () => setAsking({ kind: ASKING.PHOTO_REMOVE }),
+                        },
+                      ]
+                }
               />
             ) : null}
           </ListSection>
           <ListSection
             title="Members"
             count={members?.length}
-            footer={held?.members?.failed === true ? WORKSPACE_READ_FAILED.MEMBERS : people.refusal}
+            footer={
+              held?.members?.failed === true
+                ? WORKSPACE_READ_FAILED.MEMBERS
+                : people.said.join(" ") || (ownerAlone ? LEAVE_WORDS.OWNER_NO_ADMIN : undefined)
+            }
+            footerTone={
+              held?.members?.failed === true || people.said.length > 0
+                ? FOOTER_TONE.FAILURE
+                : FOOTER_TONE.NOTE
+            }
           >
+            {members === undefined && held?.members?.failed !== true ? (
+              <LoadingRow words={readingWords("the members")} />
+            ) : null}
             {(members ?? []).map((member) => (
               <MemberRow
                 key={member.userId}
@@ -287,20 +324,36 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
               footer={
                 held?.invitations?.failed === true
                   ? WORKSPACE_READ_FAILED.INVITATIONS
-                  : invite.refusal
+                  : invite.said.join(" ") || undefined
               }
+              footerTone={FOOTER_TONE.FAILURE}
             >
               <ActionRow
                 label={INVITATION_WORDS.INVITE}
-                symbol={GLYPH.INVITE}
+                symbol={GLYPH.ADD}
                 onPress={() => setAsking({ kind: ASKING.INVITE })}
               />
+              {invitations === undefined && held?.invitations?.failed !== true ? (
+                <LoadingRow words={readingWords("the invitations")} />
+              ) : null}
               {(invitations ?? []).map((invitation) => (
                 <MemberRow
                   key={invitation.id}
                   name={invitation.email}
                   email={invitationLine(invitation)}
+                  invited
                   acts={[
+                    // Note that the service mails the accept link where the deployment names a sender, so Copy link sends it by hand, as the panel's row offers it.
+                    {
+                      label: INVITE_LINK_WORDS.COPY,
+                      symbol: GLYPH.LINK,
+                      onPress: () =>
+                        void setStringAsync(invitation.acceptUrl)
+                          .then(() => buzz(BUZZ.SUCCESS))
+                          .catch((cause: unknown) =>
+                            console.error("The invite link was not copied.", cause),
+                          ),
+                    },
                     {
                       label: INVITATION_WORDS.CANCEL,
                       destructive: true,
@@ -311,25 +364,26 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
               ))}
             </ListSection>
           ) : null}
-          {personal ? null : owner ? (
+          {owner && !personal && heir !== undefined ? (
             <ListSection
-              footer={
-                transfer.refusal ?? (hasAdmin ? LEAVE_WORDS.OWNER : LEAVE_WORDS.OWNER_NO_ADMIN)
-              }
+              footer={transfer.refusal ?? LEAVE_WORDS.OWNER}
+              footerTone={footerToneOf(transfer.refusal)}
             >
-              {heir === undefined ? null : (
-                <ActionRow
-                  label={TRANSFER_WORDS.VERB}
-                  symbol={GLYPH.MAKE_OWNER}
-                  onPress={() => setAsking({ kind: ASKING.TRANSFER, member: heir })}
-                />
-              )}
+              <ActionRow
+                label={TRANSFER_WORDS.VERB}
+                onPress={() => setAsking({ kind: ASKING.TRANSFER, member: heir })}
+              />
             </ListSection>
-          ) : (
-            <ListSection footer={leave.refusal ?? LEAVE_WORDS.LINE}>
+          ) : null}
+          {personal || owner ? null : (
+            <ListSection
+              footer={leave.refusal ?? LEAVE_WORDS.LINE}
+              footerTone={footerToneOf(leave.refusal)}
+            >
               <ActionRow
                 label={LEAVE_WORDS.VERB(workspace.name)}
                 destructive
+                centered
                 onPress={() => setAsking({ kind: ASKING.LEAVE })}
               />
             </ListSection>
@@ -386,7 +440,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
           if (asking?.kind !== ASKING.REMOVE) return;
           const { userId } = asking.member;
           dismiss();
-          void people.run(() =>
+          void people.run(userId, undefined, () =>
             refusalOf(write, () => acts[ACT_KIND.WORKSPACE_MEMBER_REMOVE]({ workspaceId, userId })),
           );
         }}
@@ -405,7 +459,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
           if (asking?.kind !== ASKING.CANCEL) return;
           const invitationId = asking.invitation.id;
           dismiss();
-          void invite.run(() =>
+          void invite.run(invitationId, undefined, () =>
             refusalOf(write, () =>
               acts[ACT_KIND.WORKSPACE_INVITATION_CANCEL]({ workspaceId, invitationId }),
             ),

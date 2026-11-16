@@ -23,7 +23,7 @@ export const ADMIN_LIMIT_UNIT = {
   COUNT: "count",
 } as const;
 
-export type AdminLimitUnit = (typeof ADMIN_LIMIT_UNIT)[keyof typeof ADMIN_LIMIT_UNIT];
+type AdminLimitUnit = (typeof ADMIN_LIMIT_UNIT)[keyof typeof ADMIN_LIMIT_UNIT];
 
 /** Which queue a queued turn rides to the function that runs it. */
 export const ADMIN_TURN_PIPELINE = {

@@ -46,7 +46,7 @@ const TEXT = [
   "",
 ].join("\n\n");
 
-const PLAN: Task = { ...DOCUMENT_TASK, document: { body: TEXT, assumptions: [] } };
+const PLAN: Task = { ...DOCUMENT_TASK, description: { body: TEXT, assumptions: [] } };
 
 /** The plan's own page's links, which say the page is the plan's own and so takes mentions and pictures. */
 const PAGE_LINKS = { workspace: "acme", onOpen: () => undefined, reveal: undefined };

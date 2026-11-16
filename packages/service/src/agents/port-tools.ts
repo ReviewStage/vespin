@@ -41,7 +41,7 @@ import { agentToolRejected } from "./agent-tools.js";
 import type { AgentSandbox } from "./terminal/agent-sandbox.js";
 
 /** Why a call changed nothing, in words the model can act on. */
-export const PORT_TOOL_REFUSAL = {
+const PORT_TOOL_REFUSAL = {
   UNREADABLE_SHARE:
     `Not shared: give a port from ${FORWARD_PORT.MIN} to ${FORWARD_PORT.MAX}, as ` +
     `${AGENT_TOOL.LIST_PORTS} lists them, or null to stop sharing.`,
@@ -77,9 +77,7 @@ export const LIST_PORTS_TOOL = {
   name: AGENT_TOOL.LIST_PORTS,
   description:
     "List the TCP ports a server listens on in your own sandbox, such as a dev server you " +
-    `started, the lowest first, to choose one to share with ${AGENT_TOOL.SHARE_PORT}. Answers ` +
-    "`accepted` with whether your sandbox is running, its ports, and labels saying what serves " +
-    "each port where it could be read (such as `storybook dev`), or `rejected` and why.",
+    `started, the lowest first, each labeled with what serves it where that could be read, to choose one to share with ${AGENT_TOOL.SHARE_PORT}.`,
   inputSchema: LIST_PORTS_INPUT,
 } as const;
 
@@ -90,8 +88,7 @@ export const SHARE_PORT_TOOL = {
     "such as a dev server you started, from their own browser: a member of your workspace " +
     "who can reach you opens it signed in. One port is shared at a time: " +
     "sharing another replaces the first, and the link lives only while your sandbox runs. " +
-    "Pass null to stop sharing. Answers `accepted` with the port and its link, or with shared " +
-    "null once sharing stopped, or `rejected` and why.",
+    "Pass null to stop sharing.",
   inputSchema: SHARE_PORT_INPUT,
 } as const;
 

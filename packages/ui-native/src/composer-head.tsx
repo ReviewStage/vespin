@@ -1,6 +1,6 @@
-// composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures attached to the message, each taken off on a press, and the skills a `/` offers.
+// composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures attached to the message as thumbnails and its pasted text files as tiles, each taken off by its ×, and the skills a `/` offers.
 
-import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, ScrollView, Text, VStack, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
@@ -10,9 +10,11 @@ import {
   foregroundStyle,
   frame,
   lineLimit,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
-import { Chip } from "./button.js";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { AvatarPhoto } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -50,30 +52,54 @@ function LineAct({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+  const glyph = useScaledSize(MARK_SIZE.GLYPH);
 
   return (
-    <Button
-      onPress={onPress}
-      modifiers={[
-        buttonStyle("plain"),
-        frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
-        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-        accessibilityLabel(label),
-      ]}
-    >
-      {symbol === undefined ? (
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
-            foregroundStyle(colors.TEXT_BODY),
-          ]}
-        >
-          {label}
-        </Text>
-      ) : (
-        <Image {...glyphImage(symbol)} size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
-      )}
+    <Button onPress={onPress} modifiers={[buttonStyle("plain"), accessibilityLabel(label)]}>
+      {/* Note that the press's frame and its shape stand on the label, not on the button, since a plain button takes a press only where its label is hit. */}
+      <HStack
+        modifiers={[
+          frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
+      >
+        {symbol === undefined ? (
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
+              foregroundStyle(colors.TEXT_BODY),
+            ]}
+          >
+            {label}
+          </Text>
+        ) : (
+          <Image {...glyphImage(symbol)} size={glyph} color={colors.TEXT_MUTED} />
+        )}
+      </HStack>
     </Button>
+  );
+}
+
+/** How many lines a queued message keeps at an accessibility size before it is cut. */
+const QUEUED_LINES_LARGE = 3;
+
+/** A queued message's Steer and Delete, where each is offered. */
+function QueuedActs({
+  id,
+  onSteer,
+  onDelete,
+}: {
+  readonly id: string;
+  readonly onSteer: QueuedLinesProps["onSteer"];
+  readonly onDelete: QueuedLinesProps["onDelete"];
+}) {
+  return (
+    <>
+      {onSteer === undefined ? null : <LineAct label={WORDS.STEER} onPress={() => onSteer(id)} />}
+      {onDelete === undefined ? null : (
+        <LineAct label={WORDS.DELETE} symbol={GLYPH.DELETE} onPress={() => onDelete(id)} />
+      )}
+    </>
   );
 }
 
@@ -85,6 +111,8 @@ function LineAct({
  */
 export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesProps) {
   const colors = useColors();
+  const large = useAccessibilitySize();
+  const glyph = useScaledSize(MARK_SIZE.GLYPH);
 
   if (lines.length === 0 && paused === undefined) return null;
 
@@ -97,43 +125,99 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
           {paused}
         </Text>
       )}
-      {lines.map((line) => (
-        <HStack key={line.id} spacing={SPACE.ROW} modifiers={[frame({ minHeight: PRESS_SIZE })]}>
-          <Image
-            {...glyphImage(GLYPH.QUEUED)}
-            size={MARK_SIZE.GLYPH}
-            color={colors.TEXT_MUTED}
-            modifiers={[accessibilityHidden()]}
-          />
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-              foregroundStyle(colors.TEXT_BODY),
-              lineLimit(1),
-              frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-            ]}
-          >
-            {line.words}
-          </Text>
-          {onSteer === undefined ? null : (
-            <LineAct label={WORDS.STEER} onPress={() => onSteer(line.id)} />
-          )}
-          {onDelete === undefined ? null : (
-            <LineAct label={WORDS.DELETE} symbol={GLYPH.DELETE} onPress={() => onDelete(line.id)} />
-          )}
-        </HStack>
-      ))}
+      {lines.map((line) => {
+        const words = (
+          <HStack spacing={SPACE.ROW} modifiers={[frame({ minHeight: PRESS_SIZE })]}>
+            <Image
+              {...glyphImage(GLYPH.QUEUED)}
+              size={glyph}
+              color={colors.TEXT_MUTED}
+              modifiers={[accessibilityHidden()]}
+            />
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_TITLE }),
+                foregroundStyle(colors.TEXT_BODY),
+                lineLimit(large ? QUEUED_LINES_LARGE : 1),
+                frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+              ]}
+            >
+              {line.words}
+            </Text>
+            {large ? null : <QueuedActs id={line.id} onSteer={onSteer} onDelete={onDelete} />}
+          </HStack>
+        );
+
+        // Note that at an accessibility size a queued message keeps a few lines and its acts stand under it, since on one line beside Steer and Delete it read as a few letters on the folded Duo's 466 pt.
+        return large ? (
+          <VStack key={line.id} alignment="trailing" spacing={0}>
+            {words}
+            <HStack spacing={SPACE.ROW}>
+              <QueuedActs id={line.id} onSteer={onSteer} onDelete={onDelete} />
+            </HStack>
+          </VStack>
+        ) : (
+          <VStack key={line.id} spacing={0}>
+            {words}
+          </VStack>
+        );
+      })}
     </VStack>
   );
 }
 
-/** What a press on an attached picture is heard to do, since its × alone says so on screen. */
-const DETACH_HINT = "Removes it from the message";
+/** A picture's thumbnail over a composer's field, as Messages draws one: a square cropped from it, its corners rounded as a card's; a pasted text file stands as a tile of the same size. */
+const THUMBNAIL = { SIZE: 56, CORNER: 10 } as const;
 
-/** One picture attached to the message, by the name the message carries it under ("Picture 1"). */
-export type AttachedPicture = { readonly id: string; readonly name: string };
+/** How large the × in a thumbnail's corner stands, the system's mini control, its mark small inside it. */
+const DETACH_MARK = 9;
 
-/** The pictures attached to the message as a row of capsules, each taken off the message on a press, scrolling sideways where they outrun the bar. */
+/** How far the × stands in from the thumbnail's corner. */
+const DETACH_INSET = SPACE.TIGHT;
+
+/** What a file's × is heard as, by the name it goes under ("Remove Picture 1", "Remove Pasted text 1.txt"). */
+function detachWords(name: string): string {
+  return `Remove ${name}`;
+}
+
+/** One file attached to the message, by the name the message carries it under ("Picture 1", "Pasted text 1.txt"): a picture with the address its thumbnail draws from, such as a `data:` address of its bytes, or a long paste taken as a text file, which has none. */
+export type AttachedPicture = {
+  readonly id: string;
+  readonly name: string;
+  readonly address?: string | undefined;
+};
+
+/** Does nothing, for a thumbnail's load and failure, which the composer has no use for: its own bytes are drawn, and the × stands either way. */
+function ignore() {}
+
+/** A pasted text file's tile, a thumbnail's size: the document glyph on the well. */
+function TextFileTile() {
+  const colors = useColors();
+
+  return (
+    <ZStack
+      modifiers={[
+        frame({ width: THUMBNAIL.SIZE, height: THUMBNAIL.SIZE }),
+        SwiftModifiers.background(
+          colors.WELL,
+          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: THUMBNAIL.CORNER }),
+        ),
+      ]}
+    >
+      <Image {...glyphImage(GLYPH.FILE_TEXT)} size={MARK_SIZE.LEAD} color={colors.TEXT_MUTED} />
+    </ZStack>
+  );
+}
+
+/**
+ * The files attached to the message as a row of thumbnails, a pasted text
+ * file as a tile of the same size, scrolling sideways where they outrun the
+ * bar, as Messages and the panel show what a message carries before it
+ * goes. Note that only the × in a thumbnail's corner takes the file off, so
+ * a press meant to look at a picture never removes it; VoiceOver hears each
+ * as its × alone, "Remove Picture 1", since the thumbnail says nothing a
+ * reader could act on.
+ */
 export function AttachedPictures({
   pictures,
   onDetach,
@@ -141,19 +225,45 @@ export function AttachedPictures({
   readonly pictures: readonly AttachedPicture[];
   readonly onDetach: (id: string) => void;
 }) {
+  const colors = useColors();
+
   if (pictures.length === 0) return null;
 
   return (
     <ScrollView axes="horizontal" showsIndicators={false}>
       <HStack spacing={SPACE.TIGHT * 2}>
         {pictures.map((picture) => (
-          <Chip
+          <ZStack
             key={picture.id}
-            label={picture.name}
-            symbol={GLYPH.REMOVE}
-            hint={DETACH_HINT}
-            onPress={() => onDetach(picture.id)}
-          />
+            alignment="topTrailing"
+            modifiers={[frame({ width: THUMBNAIL.SIZE, height: THUMBNAIL.SIZE })]}
+          >
+            {picture.address === undefined ? (
+              <TextFileTile />
+            ) : (
+              <AvatarPhoto
+                address={picture.address}
+                size={THUMBNAIL.SIZE}
+                corner={THUMBNAIL.CORNER}
+                onLoad={ignore}
+                onFail={ignore}
+              />
+            )}
+            <Button
+              onPress={() => onDetach(picture.id)}
+              modifiers={[
+                buttonStyle("borderedProminent"),
+                SwiftModifiers.buttonBorderShape("circle"),
+                SwiftModifiers.controlSize("mini"),
+                tint(colors.TEXT),
+                foregroundStyle(colors.GROUND),
+                SwiftModifiers.padding({ top: DETACH_INSET, trailing: DETACH_INSET }),
+                accessibilityLabel(detachWords(picture.name)),
+              ]}
+            >
+              <Image {...glyphImage(GLYPH.REMOVE)} size={DETACH_MARK} />
+            </Button>
+          </ZStack>
         ))}
       </HStack>
     </ScrollView>
@@ -192,6 +302,10 @@ export function SkillSuggestions({
   readonly onPick: (name: string) => void;
 }) {
   const colors = useColors();
+  const large = useAccessibilitySize();
+  const glyph = useScaledSize(MARK_SIZE.GLYPH);
+  // Note that at an accessibility size a skill's name and what it is for wrap rather than cut, and the list stands whole, since four rows of a fixed height showed about two.
+  const lines = large ? undefined : 1;
 
   if (skills.length === 0) {
     if (empty === undefined) return null;
@@ -211,12 +325,9 @@ export function SkillSuggestions({
         <Button
           key={skill.name}
           onPress={() => onPick(skill.name)}
-          modifiers={[
-            buttonStyle("plain"),
-            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-            accessibilityLabel(skill.word),
-          ]}
+          modifiers={[buttonStyle("plain"), accessibilityLabel(skill.word)]}
         >
+          {/* Note that the shape stands on the row's full-width frame, not on the button, so a press past the skill's words still picks it. */}
           <HStack
             spacing={SPACE.ROW}
             modifiers={[
@@ -225,15 +336,16 @@ export function SkillSuggestions({
                 maxWidth: Number.POSITIVE_INFINITY,
                 alignment: "leading",
               }),
+              SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
             ]}
           >
-            <Image {...glyphImage(GLYPH.SKILL)} size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
+            <Image {...glyphImage(GLYPH.SKILL)} size={glyph} color={colors.TEXT_MUTED} />
             <VStack alignment="leading" spacing={1}>
               <Text
                 modifiers={[
                   font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "medium" }),
                   foregroundStyle(colors.TEXT),
-                  lineLimit(1),
+                  ...(lines === undefined ? [] : [lineLimit(lines)]),
                 ]}
               >
                 {skill.word}
@@ -243,7 +355,7 @@ export function SkillSuggestions({
                   modifiers={[
                     font({ textStyle: TYPE_ROLE.ROW_LINE }),
                     foregroundStyle(colors.TEXT_MUTED),
-                    lineLimit(1),
+                    ...(lines === undefined ? [] : [lineLimit(lines)]),
                   ]}
                 >
                   {skill.detail}
@@ -256,7 +368,7 @@ export function SkillSuggestions({
     </VStack>
   );
 
-  if (skills.length <= SUGGESTIONS_SHOWN) return rows;
+  if (large || skills.length <= SUGGESTIONS_SHOWN) return rows;
 
   return (
     <ScrollView modifiers={[frame({ height: SUGGESTION_HEIGHT * SUGGESTIONS_SHOWN })]}>

@@ -96,7 +96,7 @@ const DISCARD_QUESTION: DialogQuestion = {
 
 /** One comment held in a member's review of a page, unsent. */
 export interface HeldComment {
-  readonly planId: string;
+  readonly taskId: string;
   readonly pageId: string;
   /** The key its thread is started under, which is its thread's id too. */
   readonly clientKey: string;
@@ -121,7 +121,7 @@ export interface HeldComment {
 
 /** A held comment as the renderer's storage keeps it: all of it but its files. */
 const keptHeldSchema = Schema.Struct({
-  planId: Schema.String,
+  taskId: Schema.String,
   pageId: Schema.String,
   clientKey: Schema.String,
   version: Schema.Number,
@@ -182,8 +182,8 @@ const COMMENT_REMOVAL = {
 } satisfies LocalWrite<AccountLines<HeldComment>, RemovedComment>;
 
 /** Whether a held comment is the page's, on the plan named. */
-function heldOn(comment: HeldComment, planId: string | undefined, pageId: string): boolean {
-  return comment.planId === planId && comment.pageId === pageId;
+function heldOn(comment: HeldComment, taskId: string | undefined, pageId: string): boolean {
+  return comment.taskId === taskId && comment.pageId === pageId;
 }
 
 /** The start of a held comment's thread, under its key, which names the thread. */
@@ -264,7 +264,7 @@ export interface PageReviewControl {
   /** Whether the last send stopped part way, until the next. */
   readonly failed: boolean;
   /** Holds a comment in the review, starting it where none was held. */
-  readonly hold: (comment: Omit<HeldComment, "planId" | "pageId">) => void;
+  readonly hold: (comment: Omit<HeldComment, "taskId" | "pageId">) => void;
   /** Writes a held comment's words and files anew. */
   readonly edit: (
     clientKey: string,
@@ -289,7 +289,7 @@ export function usePageReview(
   pageId: string,
   version: number,
 ): PageReviewControl {
-  const planId = control?.planId;
+  const taskId = control?.taskId;
   const all = useSelector(reviewLines.store);
   const setAll = reviewLines.set;
   // Note that a refused send has no words of its own: the panel says the one line it always does.
@@ -310,13 +310,13 @@ export function usePageReview(
   }, []);
 
   const held = useMemo(
-    () => all.filter((comment) => heldOn(comment, planId, pageId)),
-    [all, planId, pageId],
+    () => all.filter((comment) => heldOn(comment, taskId, pageId)),
+    [all, taskId, pageId],
   );
 
   const send = async (summary: string): Promise<boolean> => {
     // Note that an edit standing open would land after the words it changes went, so it is saved or canceled first.
-    if (control === undefined || planId === undefined || edits.size > 0) return false;
+    if (control === undefined || taskId === undefined || edits.size > 0) return false;
     const words = summary.trim();
 
     // Note that the summary is held before it goes, so a send that stops part way keeps it, under its key, for the next.
@@ -325,7 +325,7 @@ export function usePageReview(
         ? []
         : [
             {
-              planId,
+              taskId,
               pageId,
               clientKey: crypto.randomUUID(),
               version,
@@ -375,7 +375,7 @@ export function usePageReview(
     sending: sends.running,
     failed: sends.refusal === true,
     hold: (comment) => {
-      if (planId !== undefined) setAll((now) => [...now, { ...comment, planId, pageId }]);
+      if (taskId !== undefined) setAll((now) => [...now, { ...comment, taskId, pageId }]);
     },
     edit: (clientKey, words, attachments) =>
       setAll((now) =>
@@ -388,7 +388,7 @@ export function usePageReview(
     remove,
     discard: () => {
       sends.clear();
-      drop((comment) => !heldOn(comment, planId, pageId));
+      drop((comment) => !heldOn(comment, taskId, pageId));
     },
     send,
     editing: edits.size > 0,

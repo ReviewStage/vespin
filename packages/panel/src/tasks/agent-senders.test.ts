@@ -84,7 +84,7 @@ const SENDER_TASK = "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d";
 /** That agent as the task list carries it now: renamed since it sent the line, and moved to another model. */
 const SENDER_NOW: AgentSummary = {
   id: SENDER_ID,
-  planId: SENDER_TASK,
+  taskId: SENDER_TASK,
   model: "openai/gpt-6.1-sol",
   effort: "high",
   title: "Split view, merged",
@@ -97,7 +97,7 @@ const SENDER_NOW: AgentSummary = {
 
 const AGENT: AgentSummary = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
+  taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Invite flow",
@@ -111,8 +111,8 @@ const AGENT: AgentSummary = {
 /** The automation whose runs go to the same agent, which started it. */
 const TRIAGE: AutomationSummary = {
   id: "3f0e6f5c-7d1a-4f6e-9a55-000000000001",
-  planId: null,
-  planName: null,
+  taskId: null,
+  taskName: null,
   workspaceId: ACME.id,
   name: "Nightly triage",
   enabled: true,
@@ -211,6 +211,7 @@ async function drawnFor(
   messages: readonly AgentTranscriptMessage[] = MESSAGES,
   automations?: { readonly rows: readonly AutomationSummary[]; readonly opened: string[] },
   hosted: Partial<AppStateSnapshot> = {},
+  before?: string,
 ): Promise<readonly Element[]> {
   fakeActs({
     act: (): Promise<FakeActAnswer> =>
@@ -231,6 +232,7 @@ async function drawnFor(
   pushedTranscripts(() => [
     {
       messages: [...messages],
+      ...(before === undefined ? undefined : { before }),
       cursor: "7:0",
       status: AGENT_STATUS.COMPLETED,
       title: null,
@@ -288,8 +290,9 @@ async function sendersFor(
   reader: string,
   agent: AgentSummary = AGENT,
   messages: readonly AgentTranscriptMessage[] = MESSAGES,
+  before?: string,
 ): Promise<readonly Seen[]> {
-  const drawn = await drawnFor(reader, [], agent, messages);
+  const drawn = await drawnFor(reader, [], agent, messages, undefined, {}, before);
 
   return drawn.flatMap((message, index): Seen[] => {
     const sender = message.querySelector<HTMLElement>(`${SENDER} [data-actor-ref]`);
@@ -347,6 +350,20 @@ test("each member sees a teammate's face and name under the teammate's messages 
     ["dean", ACTOR_KIND.PERSON, "Dean Stratakos"],
     ...others,
   ]);
+});
+
+test("a window of the newest messages opening on a teammate's line names its sender, never the starter whose task stands on an older page", async () => {
+  const newest = [
+    { ...line("charles", "Not five.", { ...CHARLES, kind: MEMBER }), sentAt: CHARLES_SENT_AT },
+  ];
+
+  const charlesSees = await sendersFor(CHARLES.userId, AGENT, newest, "3");
+  act(() => root?.unmount());
+  const deanSees = await sendersFor(DEAN.userId, AGENT, newest, "3");
+  fakeAppBridge({});
+
+  assert.deepEqual(charlesSees, []);
+  assert.deepEqual(deanSees, [["charles", ACTOR_KIND.PERSON, "Charles Pan", CHARLES_PICTURE]]);
 });
 
 test("another agent's message wears the mark of the harness its model runs in, and the mark of no known harness where the service names no model", async () => {

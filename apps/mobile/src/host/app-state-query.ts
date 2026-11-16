@@ -10,6 +10,12 @@
  * drawn, so it is never stale and never read again; its `queryFn` answers
  * what the client already holds, and stands only for a reader on a client
  * nothing follows into, which refuses.
+ *
+ * The task list's collections (`@repo/host/task-list-following`), the
+ * panel's own, are fed beside it from the rows each delivery carries beside
+ * the document (its `taskList`), handed on before the document is written,
+ * so a list that reads its rows through a live query is told only the rows
+ * that moved, and is never behind the document.
  */
 
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -19,6 +25,7 @@ import {
   followAppStateOver,
   shareAppState,
 } from "@repo/host/app-state-reads";
+import { type TaskListCollections, taskListFollowing } from "@repo/host/task-list-following";
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
 
 /** The one key the document is held under in the app's client. */
@@ -38,16 +45,26 @@ export const appStateQuery = queryOptions({
   retry: false,
 });
 
+/** The document followed into the client, and the task list's collections fed from the same readings. */
+export interface FollowedAppStateInto extends FollowedAppState {
+  readonly taskList: TaskListCollections;
+}
+
 /**
  * Writes every reading of the document into `client`, from the moment it
  * is called until it is stopped, as the panel's root does for its window:
- * the first whole read, then each delivery laid over what is held.
+ * the first whole read, then each delivery laid over what is held. The task
+ * list's collections take the lists the whole read answers beside the
+ * document, and the rows each delivery carries beside it, heard from before
+ * the read is asked.
  */
 export function followAppStateInto(
   bridge: AppStateBridgeReads,
   client: QueryClient,
-): FollowedAppState {
-  return followAppStateOver(
+): FollowedAppStateInto {
+  const taskList = taskListFollowing();
+
+  const followed = followAppStateOver(
     bridge,
     (state) => {
       client.setQueryData(appStateQuery.queryKey, state);
@@ -57,5 +74,20 @@ export function followAppStateInto(
     (message, cause) => {
       console.error(message, cause);
     },
+    {
+      heard: ({ taskList: rows }) => {
+        if (rows !== undefined) taskList.deliver(rows);
+      },
+      read: (read, lists) => taskList.write(read.version, lists),
+    },
   );
+
+  return {
+    ...followed,
+    taskList: taskList.collections,
+    stop: () => {
+      followed.stop();
+      taskList.stop();
+    },
+  };
 }
