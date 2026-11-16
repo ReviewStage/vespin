@@ -107,12 +107,18 @@ export interface ToolCallView {
   readonly appIcon?: string;
   /** For a terminal command or an action on an app, the machine its answer says it went to, which its row names; absent while it has not answered, and where its answer names none, as one from before machines were named. */
   readonly machine?: CallMachine;
+  /** For a terminal command or an action on an app, the id of the machine its input names, where it names one rather than the agent's default, which a row still unanswered names it by. */
+  readonly namedMachine?: string;
   /** For a call of an MCP server's tool, or a search of its tools, the server's name as its card gives it, which the row says it ran on. */
   readonly server?: string;
+  /** For a call of an integration's own tool, the name of the account it ran on as its owner called it, where they held more than one at the provider, which every reader is shown; absent for the rest. */
+  readonly account?: string;
   /** For the same calls, the connection they ran on, which the window names by the account's own name where it holds more than one (`connection-names.tsx`); `server` stands where it does not know it. */
   readonly connection?: string;
   /** For a terminal command or an action on an app that ran nothing on its machine, how it came to run nothing, which its row says quietly in place of a failure; absent for the rest. */
   readonly notRun?: MachineNotRun;
+  /** Whether the service answered the call without doing it, as a pull request it refused or a browser call that ran nothing, which its row marks as failed though the call answered; absent for the rest. */
+  readonly refused?: true;
 }
 
 /** The escape every terminal color and cursor sequence starts with. */
@@ -296,6 +302,7 @@ const UNREACHED_LABEL = {
   [MACHINE_UNREACHED.DEFAULT_GONE]: "No default machine",
   [MACHINE_UNREACHED.UNKNOWN_MACHINE]: "Unknown machine",
   [MACHINE_UNREACHED.NO_MACHINE]: "No machine",
+  [MACHINE_UNREACHED.OWN_SHELL]: "Use own shell",
 } as const satisfies Record<MachineUnreached, string>;
 
 /** What a call that ran nothing says at its line's end, by how. */
@@ -308,8 +315,9 @@ const NOT_RUN_LABEL = {
 
 /**
  * The one quiet label a call that ran nothing wears at its line's end,
- * after the chip of the machine it was meant for: "Not answered",
- * "Declined", "Offline", or "Needs Screen Recording".
+ * after the chip of the machine it was meant for, or alone where the card
+ * under the row names that machine: "Not answered", "Declined",
+ * "Offline", or "Needs Screen Recording".
  */
 export function machineNotRunLabel(notRun: MachineNotRun): string {
   switch (notRun.outcome) {
@@ -382,6 +390,24 @@ export function computerAppIcon(output: WireValue | undefined): string | undefin
   return stringAt(output.app.icon.picture, "id");
 }
 
+/**
+ * Where a computer call's answer says the agent's cursor stands on the Mac,
+ * as a share of the app's last read window from its top left, and whether
+ * it pressed there, as every action that moves it does, rather than resting
+ * there as a read leaves it; none where the answer names none, as an action
+ * that moves no cursor, or an answer from before it named one.
+ */
+export function computerCursor(
+  output: WireValue | undefined,
+): { readonly x: number; readonly y: number; readonly pressed: boolean } | undefined {
+  if (!isRecord(output) || !isRecord(output.cursor)) return undefined;
+  const { xFraction, yFraction } = output.cursor;
+
+  if (!isWireNumber(xFraction) || !isWireNumber(yFraction)) return undefined;
+
+  return { x: xFraction, y: yFraction, pressed: isWireString(output.done) };
+}
+
 /** The one file a call's `filePath` names, as a list; none where it names none. */
 function filesAt(input: WireValue | undefined): readonly string[] {
   const path = stringAt(input, "filePath");
@@ -389,7 +415,7 @@ function filesAt(input: WireValue | undefined): readonly string[] {
   return path === undefined || path === "" ? [] : [path];
 }
 
-/** The files a `show_image` call named, in order, as its row's subject. */
+/** The files a `show_media` or `show_image` call named, in order, as its row's subject. */
 function shownPaths(input: WireValue | undefined): string {
   const images = isRecord(input) && Array.isArray(input.images) ? input.images : [];
 
@@ -481,7 +507,7 @@ export interface CallMachine {
 }
 
 /** The machine a `run_on_mac` or `computer` answer names it went to, or was refused on (`machine`); none where it names none. */
-function callMachineOf(output: WireValue | undefined): CallMachine | undefined {
+export function callMachineOf(output: WireValue | undefined): CallMachine | undefined {
   const machine = isRecord(output) ? output.machine : undefined;
   const id = stringAt(machine, "id");
   const name = stringAt(machine, "name");
@@ -977,7 +1003,7 @@ function openedPullRequestView(
   return {
     kind: CALL_KIND.OPEN_PULL_REQUEST,
     subject: number === undefined ? title : `#${number} ${title}`,
-    ...(reason === undefined ? undefined : { description: PULL_REQUEST_REFUSED }),
+    ...(reason === undefined ? undefined : { description: PULL_REQUEST_REFUSED, refused: true }),
     input: input === undefined ? textBlock("") : jsonBlock(input),
     output: pullRequestAnswer(output, reason),
   };
@@ -1183,8 +1209,12 @@ function remoteToolView(
   return {
     kind: CALL_KIND.MCP_TOOL,
     subject: remote.call.remoteTool,
-    server: connectionName(remote.call.connection ?? remote.provider),
+    server:
+      remote.call.account === undefined
+        ? connectionName(remote.call.connection ?? remote.provider)
+        : `${INTEGRATION_NAME[remote.provider]} · ${remote.call.account}`,
     connection: remote.call.connection ?? remote.provider,
+    ...(remote.call.account === undefined ? undefined : { account: remote.call.account }),
     provider: remote.provider,
     input: jsonBlock(remote.call.input),
     output: output === undefined ? undefined : jsonBlock(output),
@@ -1228,12 +1258,15 @@ function nativeMcpView(
   const call = nativeMcpCall(tool);
 
   if (call === undefined) return undefined;
+  // Note that a server that is an integration's connection wears its provider's mark, as a call of the integration's own tool does.
+  const provider = integrationConnectionOf(call.connection)?.provider;
 
   return {
     kind: CALL_KIND.MCP_TOOL,
     subject: call.name,
     server: call.server,
     connection: call.connection,
+    ...(provider === undefined ? undefined : { provider }),
     input: input === undefined ? textBlock("") : jsonBlock(input),
     output: output === undefined ? undefined : jsonBlock(output),
   };
@@ -1283,6 +1316,12 @@ const READ_SEARCH: ToolReader = ({ input, output }) => ({
   output: output === undefined ? undefined : wordsOutput(output, "content"),
 });
 
+/** What a search of files by their names says in place of the search's verb, since it finds files rather than words in them. */
+const FOUND_FILES = "Found files";
+
+/** A search of files by their names: a search, which says it found files before the pattern. */
+const READ_GLOB: ToolReader = (call) => ({ ...READ_SEARCH(call), description: FOUND_FILES });
+
 const READ_WEB_SEARCH: ToolReader = ({ input, output }) => ({
   kind: CALL_KIND.WEB_SEARCH,
   subject: stringAt(input, "query") ?? "",
@@ -1291,6 +1330,14 @@ const READ_WEB_SEARCH: ToolReader = ({ input, output }) => ({
 });
 
 const READ_INBOX_CALL: ToolReader = ({ tool, input, output }) => inboxToolView(tool, input, output);
+
+/** A call that showed media from the agent's sandbox, under either name it is stored by, named by the files it showed. */
+const SHOWN_MEDIA_CALL: ToolReader = ({ input, output }) => ({
+  kind: CALL_KIND.SHOW_IMAGE,
+  subject: shownPaths(input),
+  input: input === undefined ? textBlock("") : jsonBlock(input),
+  output: output === undefined ? undefined : jsonBlock(output),
+});
 
 /** A memory tool's refusal, which answers `rejected` with its reason. */
 const MEMORY_REJECTED = "rejected";
@@ -1453,12 +1500,14 @@ const AGENT_TOOL_VIEWS = {
         : MACHINE_NOT_RUN_WORDS.COMMAND;
 
     const machine = callMachineOf(output);
+    const namedMachine = stringAt(input, "machine");
 
     return {
       kind: CALL_KIND.MACHINE_COMMAND,
       subject: command,
       ...(description === undefined ? undefined : { description }),
       ...(machine === undefined ? undefined : { machine }),
+      ...(namedMachine === undefined ? undefined : { namedMachine }),
       ...(notRun === undefined ? undefined : { notRun }),
       input: { kind: TOOL_BLOCK.COMMAND, text: command },
       output: output === undefined ? undefined : machineCommandOutput(output),
@@ -1476,12 +1525,14 @@ const AGENT_TOOL_VIEWS = {
 
     const icon = computerAppIcon(output);
     const machine = callMachineOf(output);
+    const namedMachine = stringAt(input, "machine");
 
     return {
       kind: CALL_KIND.COMPUTER,
       subject: computerAppName(input, output) ?? "",
       ...(description === undefined ? undefined : { description }),
       ...(machine === undefined ? undefined : { machine }),
+      ...(namedMachine === undefined ? undefined : { namedMachine }),
       ...(notRun === undefined ? undefined : { notRun }),
       ...(icon === undefined ? undefined : { appIcon: icon }),
       input: jsonBlock(input ?? {}),
@@ -1496,6 +1547,7 @@ const AGENT_TOOL_VIEWS = {
       kind: CALL_KIND.BROWSER,
       subject: words === undefined ? "" : (tab ?? ""),
       ...(words === undefined ? undefined : { description: words }),
+      ...(stringAt(output, "status") === BROWSER_NOT_RUN ? { refused: true } : undefined),
       input: input === undefined ? textBlock("") : jsonBlock(input),
       output: output === undefined ? undefined : browserOutput(output),
     };
@@ -1529,7 +1581,7 @@ const AGENT_TOOL_VIEWS = {
     input: textBlock(stringAt(input, "content") ?? ""),
     output: output === undefined ? undefined : wordsOutput(output, "path"),
   }),
-  [AGENT_TOOL.GLOB]: READ_SEARCH,
+  [AGENT_TOOL.GLOB]: READ_GLOB,
   [AGENT_TOOL.GREP]: READ_SEARCH,
   [AGENT_TOOL.APPLY_PATCH]: ({ input, output }) => {
     const patchText = stringAt(input, "patchText") ?? "";
@@ -1589,12 +1641,7 @@ const AGENT_TOOL_VIEWS = {
     input: input === undefined ? textBlock("") : jsonBlock(input),
     output: output === undefined ? undefined : jsonBlock(output),
   }),
-  [AGENT_TOOL.SHOW_IMAGE]: ({ input, output }) => ({
-    kind: CALL_KIND.SHOW_IMAGE,
-    subject: shownPaths(input),
-    input: input === undefined ? textBlock("") : jsonBlock(input),
-    output: output === undefined ? undefined : jsonBlock(output),
-  }),
+  [AGENT_TOOL.SHOW_MEDIA]: SHOWN_MEDIA_CALL,
   [AGENT_TOOL.SLEEP]: ({ input, output }) => {
     const seconds = isRecord(input) && isWireNumber(input.seconds) ? input.seconds : undefined;
 
@@ -1669,6 +1716,7 @@ const RETIRED_TOOL_VIEWS = {
   [RETIRED_TOOL.LIST_CODING_AGENTS]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_AGENTS, input, output, undefined),
   [RETIRED_TOOL.EDIT_PLAN]: AGENT_TOOL_VIEWS[AGENT_TOOL.EDIT_DESCRIPTION],
+  [RETIRED_TOOL.SHOW_IMAGE]: SHOWN_MEDIA_CALL,
   [RETIRED_TOOL.READ_CODING_AGENT]: ({ input, output }) =>
     namedCall(CALL_KIND.READ_AGENT, input, output, "agentId"),
   [RETIRED_TOOL.MESSAGE_CODING_AGENT]: ({ input, output }) =>
@@ -1797,8 +1845,8 @@ export function placeOfTaskTarget(
   target: Extract<ToolTarget, { readonly kind: typeof TOOL_TARGET.TASK }>,
 ): LinkDestination {
   return target.agent === undefined
-    ? { kind: LINK_DESTINATION.TASK, planId: target.task }
-    : { kind: LINK_DESTINATION.AGENT, planId: target.task, agentId: target.agent };
+    ? { kind: LINK_DESTINATION.TASK, taskId: target.task }
+    : { kind: LINK_DESTINATION.AGENT, taskId: target.task, agentId: target.agent };
 }
 
 /** What the hover over a row says it opens, by its target's kind. */
@@ -1848,6 +1896,23 @@ function namedThread(call: TargetedCall): ToolTarget {
   return item === undefined
     ? { kind: TOOL_TARGET.INBOX, key }
     : { kind: TOOL_TARGET.INBOX, key, item };
+}
+
+/**
+ * The thread a read of one answered, by its id and key, which its chip is
+ * linked by; the whole Inbox for a read that answered none, or one of another
+ * agent's threads, which this agent's Inbox does not hold.
+ */
+function readThread(call: TargetedCall): ToolTarget {
+  const thread = isRecord(call.output) ? call.output.thread : undefined;
+  const item = stringAt(thread, "id");
+  const key = stringAt(thread, "key");
+
+  if (item === undefined || key === undefined || stringAt(thread, "agentId") !== undefined) {
+    return INBOX_TARGET;
+  }
+
+  return { kind: TOOL_TARGET.INBOX, key, item };
 }
 
 /** The agent a call names in its input, as a read of or a message to one does. */
@@ -2002,7 +2067,7 @@ const TOOL_TARGETS: ReadonlyMap<string, (call: TargetedCall) => ToolTarget | und
   [AGENT_TOOL.WITHDRAW_ASK, namedThread],
   [RETIRED_TOOL.CLOSE_INBOX_ITEM, () => INBOX_TARGET],
   [AGENT_TOOL.LIST_THREADS, () => INBOX_TARGET],
-  [AGENT_TOOL.READ_THREAD, () => INBOX_TARGET],
+  [AGENT_TOOL.READ_THREAD, readThread],
   [RETIRED_TOOL.READ_THREADS, () => INBOX_TARGET],
   [RETIRED_TOOL.READ_INBOX, () => INBOX_TARGET],
   [RETIRED_TOOL.REPLY_INBOX, () => INBOX_TARGET],
@@ -2057,13 +2122,13 @@ export function targetLink(target: ToolTarget, place: TargetPlace): string | und
 
   switch (target.kind) {
     case TOOL_TARGET.TASK:
-      return linked({ kind: LINK_DESTINATION.TASK, planId: target.task });
+      return linked({ kind: LINK_DESTINATION.TASK, taskId: target.task });
     case TOOL_TARGET.DESCRIPTION: {
       const taskId = place.holder?.taskId;
 
       return taskId === undefined
         ? undefined
-        : linked({ kind: LINK_DESTINATION.TASK, planId: taskId });
+        : linked({ kind: LINK_DESTINATION.TASK, taskId: taskId });
     }
 
     case TOOL_TARGET.PAGE: {
@@ -2071,7 +2136,7 @@ export function targetLink(target: ToolTarget, place: TargetPlace): string | und
 
       return taskId === undefined
         ? undefined
-        : linked({ kind: LINK_DESTINATION.PAGE, planId: taskId, pageId: target.page });
+        : linked({ kind: LINK_DESTINATION.PAGE, taskId: taskId, pageId: target.page });
     }
 
     case TOOL_TARGET.INBOX:

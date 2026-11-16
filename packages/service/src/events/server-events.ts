@@ -161,10 +161,11 @@ export const SERVER_AGENT_START_KIND = {
   CONTINUE: "continue",
 } as const;
 
-/** Which harness a Claude Code or Codex agent runs, as `conversations.runtime` spells it. */
+/** Which harness a coding agent runs, as `conversations.runtime` spells it. */
 export const SERVER_AGENT_HARNESS = {
   CLAUDE_CODE: "claude_code",
   CODEX: "codex",
+  CURSOR: "cursor",
 } as const;
 
 /**

@@ -4,7 +4,7 @@ import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { RESERVED_WORKSPACE_SLUGS } from "./link-home.js";
 import { machineCommandModeSchema } from "./machine-command-wire.js";
 import {
-  isVideoPicture,
+  isPlayedPicture,
   PICTURE_TYPE,
   type Picture,
   type PictureType,
@@ -172,7 +172,7 @@ export type WorkspacePhoto = Picture;
 export function workspacePhotoOfDataUrl(text: string): WorkspacePhoto | undefined {
   const picture = pictureOfDataUrl(text);
 
-  return picture === undefined || isVideoPicture(picture) ? undefined : picture;
+  return picture === undefined || isPlayedPicture(picture) ? undefined : picture;
 }
 
 /** A photo to set, as the `data:` URL it is kept as: one `workspacePhotoOfDataUrl` reads, within `WORKSPACE_PHOTO_BOUNDS.MAX_BYTES`. */

@@ -23,19 +23,21 @@ import {
   TAB_WORDS,
   type TerminalStripTab,
   type TranscriptStripTab,
+  type TurnChangesStripTab,
   type ViewedAt,
   viewedLast,
   withoutViewedAt,
 } from "@repo/ui/tab-strip-model";
-import { absurd, Option, Predicate, Schema } from "effect";
+import { absurd, Option, Predicate, Schema, SchemaTransformation } from "effect";
 import { InboxIcon } from "lucide-react";
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import {
-  type ByPullRequestTab,
-  ofPullRequestTab,
-  withPullRequestTab,
-} from "./pull-request-number.js";
+  type ByPullRequest,
+  NO_PULL_REQUESTS_KEPT,
+  ofPullRequest,
+  withPullRequest,
+} from "./by-pull-request.js";
 import { stripTabKept, stripTabPin, TAB_PIN } from "./strip-tab-kinds.js";
 import {
   type FixedSidePanelTab,
@@ -81,17 +83,18 @@ import { useWindowAccount } from "./window-account.js";
  * "+" or from a delegation's row in an agent's tab, is held to the open
  * task's work, or to the task's open agent tabs where one of them
  * delegated, so closing the agent's tab takes its workers' with it; it
- * closes, and it is kept nowhere, so a launch opens none. An agent's Pull request tab, kept as
- * `changes` for the tab that once showed its files alone, opened from the
- * pull request's chip at its tab's foot, the "+", the
+ * closes, and it is kept nowhere, so a launch opens none. A pull request's tab, kept as
+ * `changes` for the tab that once showed an agent's files alone, opened from a
+ * link to the pull request, its chip at an agent's tab's foot, the "+", the
  * task's summary, or ⌘K, shows the pull request's conversation, its checks, its chapters,
- * or its files (`PULL_REQUEST_VIEW`), the view each agent's tab shows held for the
+ * or its files (`PULL_REQUEST_VIEW`), the view each tab shows held for the
  * window's life and kept nowhere, and is
- * the one kind besides the fixed three kept as they are: one per agent,
- * since each agent works in a sandbox and a pull request of its own, it is
- * opened on the task it was opened on and held to that task's agents, and
- * it is kept with the task's other choices, so it stands, and stands
- * chosen, across a launch, and pins to the sidebar. A file's tab, opened from a
+ * the one kind besides the fixed three kept as they are: one per pull
+ * request, named by its repository and number and no agent, it is opened
+ * on the task it was opened on, and it is kept with the task's other
+ * choices, so it stands, and stands chosen, across a launch, and pins to
+ * the sidebar; an agent turn's Changes tab is kept beside it, held to the
+ * task's agents. A file's tab, opened from a
  * file named in place, is the one kind that stands many times, one per file:
  * it is held to the task it was opened on, closes, and is kept nowhere. A page's tab, opened from the
  * "+", stands once per page an agent wrote for the open task, held to the
@@ -171,10 +174,14 @@ export type SidePanelTab =
   | SubagentStripTab
   | FileStripTab
   | ChangesStripTab
+  | TurnChangesStripTab
   | TerminalStripTab
   | LocalStripTab
   | PageStripTab
   | CloudBrowserStripTab;
+
+/** A tab of the kinds a task keeps open as its own Changes: a pull request's, and an agent turn's changes. */
+export type ChangesKindTab = ChangesStripTab | TurnChangesStripTab;
 
 /** Where a File tab reads its file: through a task, or through a workspace's installation and the repository where it stands for no task. */
 export type FileReadPlace =
@@ -284,14 +291,68 @@ const VIEWED_KEPT = 50;
 /** A fixed kind as it is kept. */
 const sidePanelTabSchema = Schema.Literals(SIDE_PANEL_TABS);
 
-/** An agent's Changes tab as it is kept, on the task it was opened on, with the number of the pull request it names where it names one. */
+/**
+ * A kept list read leniently: each entry that still reads as `item`'s, one
+ * that no longer reads, as a Pull request tab an earlier version kept by
+ * its agent, let go alone rather than taking the whole record back to a
+ * first launch with it; written as `item` writes each.
+ */
+function keptList<Item extends Schema.Codec<unknown, unknown>>(item: Item) {
+  const reads = Schema.decodeUnknownOption(item);
+
+  return Schema.Array(Schema.Unknown).pipe(
+    Schema.decodeTo(
+      Schema.Array(item),
+      SchemaTransformation.transform({
+        decode: (entries) =>
+          // SAFETY: an entry is kept only where it decoded as `item`, so it stands in `item`'s encoded form.
+          entries.filter((entry) => Option.isSome(reads(entry))) as readonly Item["Encoded"][],
+        encode: (entries) => entries,
+      }),
+    ),
+  );
+}
+
+/** A kept value read leniently, as `keptList` reads each entry: none where it no longer reads as `item`'s. */
+function keptOne<Item extends Schema.Codec<unknown, unknown>>(item: Item) {
+  const reads = Schema.decodeUnknownOption(item);
+
+  return Schema.Unknown.pipe(
+    Schema.decodeTo(
+      Schema.UndefinedOr(item),
+      SchemaTransformation.transform({
+        decode: (entry) =>
+          // SAFETY: the entry is kept only where it decoded as `item`, so it stands in `item`'s encoded form.
+          (Option.isSome(reads(entry)) ? entry : undefined) as Item["Encoded"] | undefined,
+        encode: (entry) => entry,
+      }),
+    ),
+  );
+}
+
+/**
+ * A pull request's tab as it is kept, on the task it was opened on, by its
+ * repository and its number. Note that an earlier version kept it by the
+ * agent whose pull request it showed (`changes` an agent's id), which reads
+ * as no tab now and is dropped alone (`keptList`).
+ */
 const changesTabSchema = storedStripTab(STRIP_TAB_KIND.CHANGES, {
-  changes: Schema.String,
-  number: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))),
-  turn: Schema.optionalKey(Schema.String),
+  changes: Schema.Struct({
+    repository: Schema.String,
+    number: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+  }),
 });
 
-const anyTabSchema = Schema.Union([sidePanelTabSchema, changesTabSchema]);
+/** An agent turn's Changes tab as it is kept, on the task it was opened on, by the agent and the line that opened the turn. */
+const turnChangesTabSchema = storedStripTab(STRIP_TAB_KIND.TURN_CHANGES, {
+  turnChanges: Schema.String,
+  turn: Schema.String,
+});
+
+/** A tab of the Changes kinds as it is kept. */
+const changesKindTabSchema = Schema.Union([changesTabSchema, turnChangesTabSchema]);
+
+const anyTabSchema = Schema.Union([sidePanelTabSchema, changesKindTabSchema]);
 
 /**
  * How many tabs are kept pinned to the sidebar, the latest pinned. Note that
@@ -384,10 +445,9 @@ export function samePin(a: SidebarPin, b: SidebarPin): boolean {
   return sameHolder(a, b) && a.at === b.at;
 }
 
-/** What the open task's Pull request pins are named now, each by agent id, by the pull request's number and title; and a Pull request tab naming a pull request by its number likewise, by agent and then by number. */
+/** What the open task's Pull request pins are named now, by the pull request's number and title, each by its repository and number. */
 interface PinNames {
-  readonly pullRequests: ReadonlyMap<string, string>;
-  readonly numbered?: ByPullRequestTab<string>;
+  readonly pullRequests: ByPullRequest<string>;
 }
 
 /**
@@ -403,10 +463,10 @@ interface PinNames {
 const taskTabsSchema = Schema.Struct({
   opened: Schema.Array(sidePanelTabSchema),
   closed: Schema.Array(sidePanelTabSchema),
-  recent: Schema.optional(Schema.Array(anyTabSchema)),
-  order: Schema.optional(Schema.Array(anyTabSchema)),
-  changes: Schema.optional(Schema.Array(changesTabSchema)),
-  viewedAt: Schema.optional(Schema.Array(Schema.Struct({ tab: anyTabSchema, at: Schema.Number }))),
+  recent: Schema.optional(keptList(anyTabSchema)),
+  order: Schema.optional(keptList(anyTabSchema)),
+  changes: Schema.optional(keptList(changesKindTabSchema)),
+  viewedAt: Schema.optional(keptList(Schema.Struct({ tab: anyTabSchema, at: Schema.Number }))),
 });
 
 /** A task's own choices as the hook holds them: today's kinds alone, its open Changes tabs, and tabs viewed and an order that may hold any tab, which the record keeps only the kept kinds of. */
@@ -415,8 +475,8 @@ interface TaskTabs {
   readonly closed: readonly FixedSidePanelTab[];
   readonly recent?: readonly SidePanelTab[] | undefined;
   readonly order?: readonly SidePanelTab[] | undefined;
-  /** The agents' Changes tabs open on the task, in the order opened. */
-  readonly changes?: readonly ChangesStripTab[] | undefined;
+  /** The Pull request and turn Changes tabs open on the task, in the order opened. */
+  readonly changes?: readonly ChangesKindTab[] | undefined;
   /** When each tab was last viewed on the task, the latest last (`use-idle-tabs.ts`). */
   readonly viewedAt?: readonly ViewedAt<SidePanelTab>[] | undefined;
   /** The agent each tab a link or the "+" opened stands under where it is not the tab's own (`ownerOf`), kept for this launch alone. */
@@ -441,10 +501,10 @@ interface TabOwner {
 const sidePanelStateSchema = Schema.Struct({
   open: Schema.Boolean,
   tabs: Schema.Array(sidePanelTabSchema),
-  tab: Schema.optional(anyTabSchema),
+  tab: Schema.optional(keptOne(anyTabSchema)),
   width: Schema.Number,
   tasks: Schema.optional(Schema.Record(Schema.String, taskTabsSchema)),
-  pins: Schema.optional(Schema.Array(taskPinSchema)),
+  pins: Schema.optional(keptList(taskPinSchema)),
 });
 
 export type SidePanelState = typeof sidePanelStateSchema.Type;
@@ -459,7 +519,7 @@ export interface StagedSidePanel extends Omit<SidePanelState, "tab"> {
   readonly files?: readonly OpenFile[];
   readonly pages?: readonly OpenPage[];
   readonly terminals?: readonly TerminalStripTab[];
-  readonly pullRequestViews?: ByPullRequestTab<PullRequestView>;
+  readonly pullRequestViews?: ByPullRequest<PullRequestView>;
 }
 
 /**
@@ -487,8 +547,8 @@ interface HeldState extends Omit<SidePanelState, "tabs" | "tab" | "tasks" | "pin
   readonly openedCloudBrowsers: readonly string[];
   /** The agent whose Terminal tab was shown last on each task, by task. */
   readonly lastTerminals: Readonly<Record<string, string>>;
-  /** What each Pull request tab shows, by agent and then by the number it names (`pull-request-number.ts`), of those whose view was chosen; the overview otherwise. */
-  readonly pullRequestViews: ByPullRequestTab<PullRequestView>;
+  /** What each Pull request tab shows, by its repository and then its number (`by-pull-request.ts`), of those whose view was chosen; the overview otherwise. */
+  readonly pullRequestViews: ByPullRequest<PullRequestView>;
   readonly tasks: Readonly<Record<string, TaskTabs>>;
   readonly pins: readonly PinnedTab[];
 }
@@ -540,8 +600,8 @@ export interface SidePanelControl {
   subagents: readonly SubagentStripTab[];
   /** The open file tabs, in the strip's order; they follow the subagent tabs, and only those opened on the open task are drawn. */
   files: readonly OpenFile[];
-  /** The Changes tabs open on the open task, in the order opened, after the file tabs; only those of the task's agents are drawn. */
-  changes: readonly ChangesStripTab[];
+  /** The Pull request and turn Changes tabs open on the open task, in the order opened, after the file tabs; a turn's only while its agent is the task's. */
+  changes: readonly ChangesKindTab[];
   /** The open page tabs in the order opened, after the Changes tabs; only those of the open plan's pages are drawn. */
   pages: readonly OpenPage[];
   /** The open Terminal tabs in the order opened, after the page tabs; only those of the open task's agents are drawn. */
@@ -550,8 +610,8 @@ export interface SidePanelControl {
   locals: readonly LocalStripTab[];
   /** The agent whose Terminal tab was shown last on the open task, which ⌘J goes to among several. */
   lastTerminal: string | undefined;
-  /** What each Pull request tab shows, by agent and then by the number it names (`pull-request-number.ts`), of those whose view was chosen; the overview otherwise. */
-  pullRequestViews: ByPullRequestTab<PullRequestView>;
+  /** What each Pull request tab shows, by its repository and then its number (`by-pull-request.ts`), of those whose view was chosen; the overview otherwise. */
+  pullRequestViews: ByPullRequest<PullRequestView>;
   /** Chooses what a Pull request tab shows, its tab open or not. */
   onPullRequestView: (tab: ChangesStripTab, view: PullRequestView) => void;
   /** The open task's tabs of every kind as the strip draws them, in its order. */
@@ -609,7 +669,7 @@ export interface SidePanelControl {
   /** Pins the holder's tab to the sidebar under the name given, newest of the pins. */
   onPin: (holder: PinHolder, tab: PinnableTab, label: string) => void;
   onUnpin: (holder: PinHolder, tab: PinnableTab) => void;
-  /** Names each agent's Pull request pinned on the task as its tab is named now; one named nowhere keeps the name it has. */
+  /** Names each Pull request tab pinned on the task as its tab is named now; one named nowhere keeps the name it has. */
   onRenamePins: (taskId: string, names: PinNames) => void;
   /** Stands each pin dragged in the sidebar's Pinned section at its new place, named by the instant it was pinned, kept on this Mac; none stands it by that instant again. */
   onPlacePins: (places: ReadonlyMap<number, string | undefined>) => void;
@@ -715,7 +775,7 @@ export interface OpenPage extends PageStripTab {
 const NO_PAGES: readonly string[] = [];
 
 /** A task with no Changes tab open, the same array every render. */
-const NO_CHANGES: readonly ChangesStripTab[] = [];
+const NO_CHANGES: readonly ChangesKindTab[] = [];
 
 /** The bare panel's fixed tabs: none, the same array every render. */
 const NO_FIXED: readonly FixedSidePanelTab[] = [];
@@ -850,19 +910,18 @@ function withPinsPlaced(
   return pins.every((pin, at) => pin === held.pins[at]) ? held : { ...held, pins };
 }
 
-/** The name a pin of an agent's Changes tab wears as `names` names it, by agent id; none for any other pin, or one named nowhere. */
-function agentPinLabel(tab: PinnableTab, names: PinNames): string | undefined {
+/** The name a pin of a Pull request tab wears as `names` names it; none for any other pin, or one named nowhere. */
+function pullRequestPinLabel(tab: PinnableTab, names: PinNames): string | undefined {
   if (Predicate.isString(tab) || tab.kind !== STRIP_TAB_KIND.CHANGES) return undefined;
 
-  return tab.number === undefined
-    ? names.pullRequests.get(tab.changes)
-    : ofPullRequestTab(names.numbered ?? new Map(), tab);
+  return ofPullRequest(names.pullRequests, tab.changes);
 }
 
 /** The state with each agent's Changes pinned on the task named as `names` names it, and the state as it is where every one already was. */
 function withPinsRenamed(held: HeldState, taskId: string, names: PinNames): HeldState {
   const renamed = (pin: PinnedTab) => {
-    const label = "task" in pin && pin.task === taskId ? agentPinLabel(pin.tab, names) : undefined;
+    const label =
+      "task" in pin && pin.task === taskId ? pullRequestPinLabel(pin.tab, names) : undefined;
 
     return label === undefined || label === pin.label ? pin : { ...pin, label };
   };
@@ -918,11 +977,11 @@ function withViewedAt(
   });
 }
 
-/** The state with the agent's Changes tab open on the task, after those open there; as it was where it already is. */
+/** The state with the Changes tab open on the task, after those open there; as it was where it already is. */
 function withChangesOpened(
   held: HeldState,
   taskId: string | undefined,
-  tab: ChangesStripTab,
+  tab: ChangesKindTab,
 ): HeldState {
   return withTaskTabs(held, taskId, (was) => {
     const open = was.changes ?? NO_CHANGES;
@@ -967,6 +1026,7 @@ function withTabHeld(
 
   switch (tab.kind) {
     case STRIP_TAB_KIND.CHANGES:
+    case STRIP_TAB_KIND.TURN_CHANGES:
       return withChangesOpened(held, taskId, tab);
     case STRIP_TAB_KIND.SUBAGENT:
       return held.subagents.some((each) => sameTab(each, tab))
@@ -1081,6 +1141,7 @@ function withShownPlaced(
     case STRIP_TAB_KIND.TRANSCRIPT:
     case STRIP_TAB_KIND.SUBAGENT:
     case STRIP_TAB_KIND.CHANGES:
+    case STRIP_TAB_KIND.TURN_CHANGES:
     case STRIP_TAB_KIND.TERMINAL:
     case STRIP_TAB_KIND.LOCAL:
     case STRIP_TAB_KIND.CLOUD_BROWSER:
@@ -1116,6 +1177,7 @@ function withShownCarried(held: HeldState, on: string): HeldState {
     case STRIP_TAB_KIND.TRANSCRIPT:
     case STRIP_TAB_KIND.SUBAGENT:
     case STRIP_TAB_KIND.CHANGES:
+    case STRIP_TAB_KIND.TURN_CHANGES:
     case STRIP_TAB_KIND.TERMINAL:
     case STRIP_TAB_KIND.LOCAL:
     case STRIP_TAB_KIND.CLOUD_BROWSER:
@@ -1304,18 +1366,19 @@ export function drawsSubagent(
 }
 
 /**
- * Whether the task draws the agent's Changes tab: while the agent is the
- * task's, its own tab open in the task's column or not, since the "+"
- * opens it either way, or until the agents are read, as a delegated
- * worker's tab stands.
+ * Whether the task draws a Changes tab: a pull request's always, since it
+ * is no agent's, and an agent turn's while the agent is the task's, its own
+ * tab open in the task's column or not, or until the agents are read, as a
+ * delegated worker's tab stands.
  */
 export function drawsChanges(
-  tab: ChangesStripTab,
+  tab: ChangesKindTab,
   drawn: Pick<DrawnTabs, "taskAgents" | "heldAgents">,
 ): boolean {
+  if (tab.kind === STRIP_TAB_KIND.CHANGES) return true;
   const held = drawn.heldAgents ?? drawn.taskAgents;
 
-  return held === undefined || held.includes(tab.changes);
+  return held === undefined || held.includes(tab.turnChanges);
 }
 
 /**
@@ -1366,7 +1429,7 @@ function drawnFiles(held: HeldState, drawn: DrawnTabs): readonly string[] {
 }
 
 /** The Changes tabs open on the task that it draws (`drawsChanges`), in the order opened. */
-function drawnChanges(held: HeldState, drawn: DrawnTabs): readonly ChangesStripTab[] {
+function drawnChanges(held: HeldState, drawn: DrawnTabs): readonly ChangesKindTab[] {
   return (taskTabs(held, drawn.task.id).changes ?? NO_CHANGES).filter((each) =>
     drawsChanges(each, drawn),
   );
@@ -1403,16 +1466,16 @@ function drawnSubagents(held: HeldState, drawn: DrawnTabs): readonly SubagentStr
 }
 
 /**
- * The agent a tab is its own by: an agent's Pull request, Terminal, Local,
+ * The agent a tab is its own by: an agent turn's Changes, Terminal, Local,
  * transcript, and Browser tabs, and a worker's, its parent's; none for a
- * file, a page, or a fixed kind, which stand on the task.
+ * pull request, a file, a page, or a fixed kind, which stand on the task.
  */
 function agentOwnerOf(tab: SidePanelTab, drawn: DrawnTabs): string | undefined {
   if (isFixedTab(tab)) return undefined;
 
   switch (tab.kind) {
-    case STRIP_TAB_KIND.CHANGES:
-      return tab.changes;
+    case STRIP_TAB_KIND.TURN_CHANGES:
+      return tab.turnChanges;
     case STRIP_TAB_KIND.TERMINAL:
       return tab.terminal;
     case STRIP_TAB_KIND.LOCAL:
@@ -1423,6 +1486,7 @@ function agentOwnerOf(tab: SidePanelTab, drawn: DrawnTabs): string | undefined {
       return tab.delegation?.agent;
     case STRIP_TAB_KIND.CLOUD_BROWSER:
       return drawn.cloudBrowserAgents?.get(tab.cloudBrowser);
+    case STRIP_TAB_KIND.CHANGES:
     case STRIP_TAB_KIND.FILE:
     case STRIP_TAB_KIND.PAGE:
       return undefined;
@@ -1524,7 +1588,10 @@ const DRAWN_OF_KIND: Readonly<
     held.transcripts.filter((each) => drawsTranscript(each, drawn)),
   [STRIP_TAB_KIND.SUBAGENT]: drawnSubagents,
   [STRIP_TAB_KIND.FILE]: (held, drawn) => drawnFiles(held, drawn).map((file) => fileTab(file)),
-  [STRIP_TAB_KIND.CHANGES]: drawnChanges,
+  [STRIP_TAB_KIND.CHANGES]: (held, drawn) =>
+    drawnChanges(held, drawn).filter((each) => each.kind === STRIP_TAB_KIND.CHANGES),
+  [STRIP_TAB_KIND.TURN_CHANGES]: (held, drawn) =>
+    drawnChanges(held, drawn).filter((each) => each.kind === STRIP_TAB_KIND.TURN_CHANGES),
   [STRIP_TAB_KIND.PAGE]: (held, drawn) =>
     held.pages.filter((each) => drawn.pages.includes(each.page)),
   [STRIP_TAB_KIND.TERMINAL]: (held, drawn) =>
@@ -1606,6 +1673,7 @@ function withTabLetGo(held: HeldState, tab: SidePanelTab, drawn: DrawnTabs): Hel
         ? { ...held, subagents: held.subagents.filter((each) => !sameTab(each, tab)) }
         : undefined;
     case STRIP_TAB_KIND.CHANGES:
+    case STRIP_TAB_KIND.TURN_CHANGES:
       return withTaskTabs(held, drawn.task.id, (was) => ({
         ...was,
         changes: (was.changes ?? NO_CHANGES).filter((each) => !sameTab(each, tab)),
@@ -1719,6 +1787,7 @@ function absentOn(held: HeldState, choices: TaskTabs, tab: SidePanelTab): boolea
 
   switch (tab.kind) {
     case STRIP_TAB_KIND.CHANGES:
+    case STRIP_TAB_KIND.TURN_CHANGES:
       return !(choices.changes ?? NO_CHANGES).some((each) => sameTab(each, tab));
     case STRIP_TAB_KIND.FILE:
       return !held.files.some((each) => each.path === tab.file);
@@ -1735,7 +1804,7 @@ function absentOn(held: HeldState, choices: TaskTabs, tab: SidePanelTab): boolea
 }
 
 /**
- * The state with the tab written at the end of the order of `planId`, a
+ * The state with the tab written at the end of the order of `taskId`, a
  * task whose strip is not drawn here, where that strip is sure not to draw
  * it: a fixed tab closed there, a Changes tab not open there, or a file with
  * no tab open. Every other
@@ -1842,7 +1911,7 @@ function settled(state: SidePanelState): HeldState {
     locals: [],
     openedCloudBrowsers: [],
     lastTerminals: {},
-    pullRequestViews: new Map(),
+    pullRequestViews: NO_PULL_REQUESTS_KEPT,
     tasks: currentTasks(state.tasks),
     pins: pins.flatMap(heldPin).toSorted((a, b) => b.at - a.at),
   };
@@ -1860,6 +1929,7 @@ function stagesOpened(
     case STRIP_TAB_KIND.TERMINAL:
       return true;
     case STRIP_TAB_KIND.CHANGES:
+    case STRIP_TAB_KIND.TURN_CHANGES:
       return false;
     default:
       return absurd(tab);
@@ -1873,7 +1943,7 @@ function stagedHeld(staged: StagedSidePanel): HeldState {
     files = [],
     pages = [],
     terminals = [],
-    pullRequestViews = new Map(),
+    pullRequestViews = NO_PULL_REQUESTS_KEPT,
     ...kept
   } = staged;
 
@@ -1884,7 +1954,7 @@ function stagedHeld(staged: StagedSidePanel): HeldState {
 }
 
 /** Whether a chosen or viewed tab is kept across a launch (`stripTabKept`): a fixed tab or a Changes tab, the kinds that stand again after it. */
-function keptChoice(tab: SidePanelTab): tab is FixedSidePanelTab | ChangesStripTab {
+function keptChoice(tab: SidePanelTab): tab is FixedSidePanelTab | ChangesKindTab {
   return stripTabKept(tab).sidePanel;
 }
 
@@ -1941,7 +2011,7 @@ function storedText(): string | null {
   }
 }
 
-/** The kept preference, or the first launch's where none was kept or it no longer reads. */
+/** The kept preference, or the first launch's where none was kept or it no longer reads; a tab or a pin that no longer reads is let go alone (`keptList`). */
 function readStored(): HeldState {
   return settled(Option.getOrElse(decodeStored(storedText()), () => FIRST_LAUNCH));
 }
@@ -1962,7 +2032,7 @@ function shownTab(
   kept: SidePanelTab | undefined,
   tabs: readonly SidePanelTab[],
   drawn: Omit<DrawnTabs, "plan">,
-  changes: readonly ChangesStripTab[],
+  changes: readonly ChangesKindTab[],
 ): SidePanelTab | undefined {
   if (kept === undefined) return tabs[0];
 
@@ -1974,7 +2044,7 @@ function keptDrawn(
   kept: SidePanelTab,
   tabs: readonly SidePanelTab[],
   drawn: Omit<DrawnTabs, "plan">,
-  changes: readonly ChangesStripTab[],
+  changes: readonly ChangesKindTab[],
 ): boolean {
   if (isFixedTab(kept)) return tabs.includes(kept);
 
@@ -1984,6 +2054,7 @@ function keptDrawn(
     case STRIP_TAB_KIND.TRANSCRIPT:
       return drawsTranscript(kept, drawn);
     case STRIP_TAB_KIND.CHANGES:
+    case STRIP_TAB_KIND.TURN_CHANGES:
       return changes.some((each) => sameTab(each, kept));
     case STRIP_TAB_KIND.PAGE:
       return drawn.pages.includes(kept.page);
@@ -2499,9 +2570,12 @@ export function useSidePanel(
   const onPullRequestView = useCallback(
     (tab: ChangesStripTab, view: PullRequestView) =>
       update((held) =>
-        ofPullRequestTab(held.pullRequestViews, tab) === view
+        ofPullRequest(held.pullRequestViews, tab.changes) === view
           ? held
-          : { ...held, pullRequestViews: withPullRequestTab(held.pullRequestViews, tab, view) },
+          : {
+              ...held,
+              pullRequestViews: withPullRequest(held.pullRequestViews, tab.changes, view),
+            },
       ),
     [update],
   );

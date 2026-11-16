@@ -37,7 +37,6 @@ import {
   SettingsBlock,
   SettingsLine,
   SettingsRow,
-  SettingsRowActSlot,
   type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
   SettingsRowsFold,
@@ -54,22 +53,26 @@ import {
   useConfirmDialog,
   useSecond,
 } from "@repo/ui";
+import { LANDED, land } from "@repo/ui/landed";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { actMutation, pressMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
 import { confirmFailure } from "../failure-report.js";
+import { focusSeek } from "../focus-seek.js";
 import { hostsQuery, hostsRetryMutation } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
+import { type MachineLanding, useSettingsMachineLanding } from "../places/routed-exits.js";
 import { showToast } from "../toast.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { HostConnectDialog, useHostConnect } from "./host-connect-dialog.js";
 import {
   CommandMachineRow,
+  DefaultMachineRow,
   MachineAgentRows,
   machineAgentFacts,
   machineListedOf,
@@ -119,8 +122,9 @@ import { SECTION, settingsSectionHead } from "./settings-sections.js";
  * account's says so where turning it on or off is refused. A browser tab has no This
  * Mac, so it draws none.
  *
- * Under the list stands what agents may do on each of the member's
- * machines, a host or a Mac that only runs the app alike
+ * The list opens with the member's default machine, where agents' calls go
+ * that name none (`DefaultMachineRow`), and under each machine stands what
+ * agents may do on it, a host or a Mac that only runs the app alike
  * (`machine-settings-section.tsx`).
  *
  * The list is the host's (`LIVE_READ.HOSTS`): followed live while the page
@@ -233,6 +237,8 @@ const THIS_MAC_WORDS = {
   TURN_ON_FAILED: "Could not turn on this Mac. Try again.",
   NEEDS_APPROVAL: `macOS won't run agents on this Mac until you allow ${PRODUCT_NAME} in System Settings › General › Login Items.`,
   OPEN_LOGIN_ITEMS: "Open Login Items",
+  WONT_START: "Won't start",
+  WONT_START_DETAIL: `Agents can't run here, because the host quits as soon as it starts. Updating ${PRODUCT_NAME} may fix it.`,
   STILL_LISTED: `This Mac is off, but ${PRODUCT_NAME} couldn't remove it from your machines. Remove it from the list below.`,
   FOLDER_LEFT: "This Mac is off, but an agent's folder couldn't be deleted.",
 } as const;
@@ -306,8 +312,8 @@ function HostRow({
 /**
  * This Mac's row in the desktop app: Run agents on this Mac, on while its
  * host stands, what its host says while on, setting up until the service
- * lists it, failed while the app cannot start its host, and what it does
- * while off. Note that the row's words are This Mac,
+ * lists it, failed while the app cannot start its host, won't start while
+ * its host dies each time launchd starts it, and what it does while off. Note that the row's words are This Mac,
  * as every list of machines calls it, and the switch's own name says what
  * it sets.
  */
@@ -317,13 +323,14 @@ function ThisMacRow({
   on,
   needsApproval,
   setupFailed,
+  wontStart,
   facts,
   chevron,
   onChange,
 }: {
   /** What it lets agents do (`machineAgentFacts`). */
   facts: MachineAgentFacts | undefined;
-  /** The chevron of its settings' fold, after its switch. */
+  /** The chevron of its settings' fold, before its switch, as Computer use's stands before its own. */
   chevron: React.ReactNode;
   /** This Mac as the service lists it; none before it does. */
   host: HostLine | undefined;
@@ -333,13 +340,21 @@ function ThisMacRow({
   needsApproval: boolean;
   /** Whether the app could not start its host, and is trying again. */
   setupFailed: boolean;
+  /** Whether its host dies each time launchd starts it. */
+  wontStart: boolean;
   onChange: (next: boolean) => void;
 }): React.JSX.Element {
   const { mutate: openLoginItems } = useMutation(pressMutation(ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS));
-  // Note that a reader is told at once where this Mac's host could not be started, as the row turns to Failed.
+  // Note that a reader is told at once where this Mac's host could not be started, as the row turns to Failed or Won't start.
   useAnnounce(
     ANNOUNCE.ALERT,
-    on && setupFailed ? `${THIS_MAC} ${MACHINE_STANDING_WORDS[DEVICE_STANDING.FAILED]}` : "",
+    !on
+      ? ""
+      : setupFailed
+        ? `${THIS_MAC} ${MACHINE_STANDING_WORDS[DEVICE_STANDING.FAILED]}`
+        : wontStart
+          ? `${THIS_MAC} ${THIS_MAC_WORDS.WONT_START}`
+          : "",
   );
 
   const description = !on ? (
@@ -347,6 +362,10 @@ function ThisMacRow({
   ) : setupFailed ? (
     <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
       {MACHINE_STANDING_WORDS[DEVICE_STANDING.FAILED]}
+    </SettingsRowStateLine>
+  ) : wontStart ? (
+    <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
+      {THIS_MAC_WORDS.WONT_START}
     </SettingsRowStateLine>
   ) : host === undefined ? (
     <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN}>
@@ -367,10 +386,10 @@ function ThisMacRow({
         label={THIS_MAC}
         description={description}
         labelsControl
-        end={() => <SettingsRowActSlot />}
       >
         {(control) => (
           <>
+            {chevron}
             <Switch
               id={control.controlId}
               checked={on}
@@ -378,10 +397,20 @@ function ThisMacRow({
               describedBy={control["aria-describedby"]}
               onChange={(next) => onChange(next)}
             />
-            {chevron}
           </>
         )}
       </SettingsRow>
+      {/* Note that a host that dies as it starts says nothing itself, so the row says why agents can't run here. */}
+      {on && wontStart && !setupFailed ? (
+        <SettingsRow
+          label={null}
+          description={
+            <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
+              {THIS_MAC_WORDS.WONT_START_DETAIL}
+            </SettingsRowStateLine>
+          }
+        />
+      ) : null}
       {/* Note that macOS holds a registered agent until the member allows it, and only System Settings can, so the line opens it there. */}
       {on && needsApproval ? (
         <SettingsRow
@@ -498,6 +527,37 @@ function AddHostSection({
   );
 }
 
+/** The id a machine's rows wear on Machines, which a landing finds them by. */
+function machineRowsId(machineId: string): string {
+  return `settings-machine-${machineId}`;
+}
+
+/**
+ * Takes the view to the machine Machines was opened at and lights its rows,
+ * once each time it is asked for (`MachineLanding.ask`), as soon as the list
+ * draws it; a machine the list holds not is given up on quietly, the page
+ * standing as it opened. Its fold opens on the same ask (`SettingsRowsFold`'s
+ * `opened`).
+ */
+function useMachineLanding(landing: MachineLanding | undefined, drawn: boolean): void {
+  const landed = useRef<number | undefined>(undefined);
+  const machineId = landing?.machineId;
+  const ask = landing?.ask;
+
+  useEffect(() => {
+    if (!drawn || machineId === undefined || landed.current === ask) return undefined;
+    landed.current = ask;
+
+    return focusSeek({
+      find: () => document.getElementById(machineRowsId(machineId)),
+      act: (rows) => {
+        rows.scrollIntoView({ block: "start" });
+        land(rows, LANDED.WITHIN);
+      },
+    });
+  }, [drawn, machineId, ask]);
+}
+
 /** The Hosts page: the member's machines as the host holds them, or why they cannot be drawn, and Add a host, first while there is none. */
 export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Element | null {
   const { mutateAsync: sendHostsRemove, ...hostRemoving } = useMutation(
@@ -513,6 +573,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   const installScriptUrl = read.data?.installScriptUrl;
   // Note that each host's beat is the window's shared presence, read often enough that a host that keeps beating never reads offline.
   const book = useDevicePresence(signedIn);
+  const landing = useSettingsMachineLanding();
 
   // The ids of the hosts the first read for the account listed, so one that joins while the page stands is told apart as just connected.
   const [known, setKnown] = useState<
@@ -633,6 +694,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
 
   const listed = hosts?.map(machineOf) ?? [];
   const machineSettings = useMachineSettings(signedIn);
+
   const machineRemove = useMachineRemove();
   // Note that This Mac's host stands on its switch's row only while it is on; one the service still lists while it is off, as an uninstall that could not reach the service leaves it, stands as any host does, by its own name, with its Remove.
   const naming = thisMac?.enrolled === true ? thisMac : undefined;
@@ -701,6 +763,21 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
       : machineAgentFacts(machine, machineSettings.appsOf(machine.id));
   };
 
+  // Note that This Mac is its own device, which its host's record names where it has one, and otherwise the machine it is.
+  const thisMacId = thisMac?.deviceId ?? thisMacMachine?.id;
+
+  const drawnIds = [
+    thisMacId,
+    ...others.map((host) => host.id),
+    ...commandOnly.map((machine) => machine.id),
+  ];
+
+  useMachineLanding(landing, loaded && drawnIds.includes(landing?.machineId));
+
+  /** The ask that opens a machine's fold: the landing's, where Machines was opened at it. */
+  const openedFor = (id: string | undefined) =>
+    id !== undefined && landing?.machineId === id ? landing.ask : undefined;
+
   const list = (
     <SettingsSection {...settingsSectionHead(SECTION.HOSTS)}>
       {!signedIn ? (
@@ -709,69 +786,78 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
         <SettingsLine>{WORDS.NONE}</SettingsLine>
       ) : loaded ? (
         <>
+          <DefaultMachineRow machines={machines} thisMac={thisMac} />
           {thisMac === undefined ? null : (
-            <SettingsRowsFold
-              room={false}
-              label={MACHINES_WORDS.settingsOf(THIS_MAC)}
-              rows={agentRows(thisMacMachine?.id)}
-              head={(chevron) => (
-                <ThisMacRow
-                  host={listedMac}
-                  book={book}
-                  on={thisMacOn}
-                  needsApproval={thisMac.needsApproval === true}
-                  setupFailed={thisMac.setupFailed === true}
-                  facts={agentFacts(thisMacMachine?.id)}
-                  chevron={chevron}
-                  onChange={switchThisMac}
-                />
-              )}
-            />
+            <div id={thisMacId === undefined ? undefined : machineRowsId(thisMacId)}>
+              <SettingsRowsFold
+                room={false}
+                label={MACHINES_WORDS.settingsOf(THIS_MAC)}
+                opened={openedFor(thisMacId)}
+                rows={agentRows(thisMacMachine?.id)}
+                head={(chevron) => (
+                  <ThisMacRow
+                    host={listedMac}
+                    book={book}
+                    on={thisMacOn}
+                    needsApproval={thisMac.needsApproval === true}
+                    setupFailed={thisMac.setupFailed === true}
+                    wontStart={thisMac.wontStart === true}
+                    facts={agentFacts(thisMacMachine?.id)}
+                    chevron={chevron}
+                    onChange={switchThisMac}
+                  />
+                )}
+              />
+            </div>
           )}
           {others.map((host) => {
             const label = machineName(machineOf(host), named, naming);
 
             return (
-              <SettingsRowsFold
-                key={host.id}
-                room={false}
-                label={MACHINES_WORDS.settingsOf(label)}
-                rows={agentRows(host.id)}
-                head={(chevron) => (
-                  <HostRow
-                    host={host}
-                    label={label}
-                    book={book}
-                    joined={joinedNow(host)}
-                    facts={agentFacts(host.id)}
-                    chevron={chevron}
-                    onRemove={() => askRemove(host, label)}
-                    locked={removing.busy}
-                  />
-                )}
-              />
+              <div key={host.id} id={machineRowsId(host.id)}>
+                <SettingsRowsFold
+                  room={false}
+                  label={MACHINES_WORDS.settingsOf(label)}
+                  opened={openedFor(host.id)}
+                  rows={agentRows(host.id)}
+                  head={(chevron) => (
+                    <HostRow
+                      host={host}
+                      label={label}
+                      book={book}
+                      joined={joinedNow(host)}
+                      facts={agentFacts(host.id)}
+                      chevron={chevron}
+                      onRemove={() => askRemove(host, label)}
+                      locked={removing.busy}
+                    />
+                  )}
+                />
+              </div>
             );
           })}
           {commandOnly.map((machine) => {
             const label = machineName(machineListedOf(machine), named, naming);
 
             return (
-              <SettingsRowsFold
-                key={machine.id}
-                room={false}
-                label={MACHINES_WORDS.settingsOf(label)}
-                rows={agentRows(machine.id)}
-                head={(chevron) => (
-                  <CommandMachineRow
-                    machine={machine}
-                    label={label}
-                    facts={agentFacts(machine.id)}
-                    chevron={chevron}
-                    onRemove={() => machineRemove.ask(machine, label)}
-                    locked={machineRemove.busy}
-                  />
-                )}
-              />
+              <div key={machine.id} id={machineRowsId(machine.id)}>
+                <SettingsRowsFold
+                  room={false}
+                  label={MACHINES_WORDS.settingsOf(label)}
+                  opened={openedFor(machine.id)}
+                  rows={agentRows(machine.id)}
+                  head={(chevron) => (
+                    <CommandMachineRow
+                      machine={machine}
+                      label={label}
+                      facts={agentFacts(machine.id)}
+                      chevron={chevron}
+                      onRemove={() => machineRemove.ask(machine, label)}
+                      locked={machineRemove.busy}
+                    />
+                  )}
+                />
+              </div>
             );
           })}
           {machineSettings.failed ? (

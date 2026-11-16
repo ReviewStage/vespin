@@ -18,10 +18,9 @@ import { useKnownNames, useNamesOf, useWordTargets } from "./use-known-names.js"
 
 /**
  * use-known-names.test.ts -- every chip of a window reads the one set of
- * names main's document holds: two readers of the same document are handed
- * the same names, a delivery that moves neither the tasks nor the Inbox
- * hands them those names again, and one that adds a task hands them new
- * names naming it; the tasks' keys, likewise, are handed again until a key
+ * names the task list's collections hold: two readers of the same document
+ * are handed the same names, a delivery that moves no name hands them those
+ * names again, and one that adds a task hands them new names naming it; the tasks' keys, likewise, are handed again until a key
  * changes, whatever else about a task moves; a chip's names of its one task
  * are handed again until that task moves, whatever other task does; and an
  * untitled agent is named by the catalog around the reader. Synthetic tasks.
@@ -126,6 +125,16 @@ test("two readers of the same document are handed the same names", async () => {
   );
 });
 
+test("a delivery that moves no name hands every reader the same names again", async () => {
+  const { seen, deliver } = await twoReaders(holding([INVITES, BILLING], 1));
+  await vi.waitFor(() => expect(seen.get("one")?.tasks.get(BILLING.id)).toBe("Usage billing"));
+  const held = seen.get("one");
+
+  await deliver(holding([{ ...INVITES, updatedAt: AT + 1 }, BILLING], 2));
+  expect(seen.get("one")).toBe(held);
+  expect(seen.get("two")).toBe(held);
+});
+
 test("a task added hands every reader new names that name it", async () => {
   const { seen, deliver } = await twoReaders(holding([INVITES], 1));
   await deliver(holding([INVITES, BILLING], 2));
@@ -178,8 +187,10 @@ test("the tasks' keys are handed again for a delivery that moves no key, and ane
   };
 
   await vi.waitFor(() => expect([...(seen.at(-1)?.keys() ?? [])]).toEqual(["ACME-41"]));
+  const held = seen.at(-1);
 
   await deliver(listing([{ ...numbered(INVITES, 41), name: "Invites", updatedAt: AT + 1 }], 2));
+  expect(seen.at(-1)).toBe(held);
 
   await deliver(listing([numbered(INVITES, 41), numbered(BILLING, 42)], 3));
   await vi.waitFor(() => expect([...(seen.at(-1)?.keys() ?? [])]).toEqual(["ACME-41", "ACME-42"]));
@@ -199,7 +210,7 @@ test("an untitled agent is named by the catalog around the reader, as its tab an
   // The task's agent, as the list followed live holds it.
   const followed = {
     id: agentId,
-    planId: task.id,
+    taskId: task.id,
     title: null,
     model,
     effort: "high",

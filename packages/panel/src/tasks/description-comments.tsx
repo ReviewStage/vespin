@@ -700,7 +700,7 @@ function CommentEntry({
   // The edit's words, kept where they differ from the comment's, so a Cancel or an Esc finds them as the box reopens.
   const edited = useDraft({
     kind: DRAFT_PLACE.DESCRIPTION_COMMENT,
-    planId: doors.control.planId,
+    taskId: doors.control.taskId,
     on: { threadId: thread.id, entryId: entry.id },
   });
 
@@ -728,7 +728,7 @@ function CommentEntry({
 
   const copies = useLinkItems()({
     kind: LINK_DESTINATION.COMMENT,
-    planId: doors.control.planId,
+    taskId: doors.control.taskId,
     threadId: thread.id,
   });
 
@@ -901,7 +901,7 @@ function CommentEntry({
           <>
             <WordsDatesContext.Provider value={dates}>
               <PostedComment
-                planId={doors.control.planId}
+                taskId={doors.control.taskId}
                 files={entry.files ?? NO_FILES}
                 words={shown}
               />
@@ -909,7 +909,7 @@ function CommentEntry({
           </>
         ) : (
           <CommentEditField
-            planId={doors.control.planId}
+            taskId={doors.control.taskId}
             files={entry.files ?? NO_FILES}
             changes={editFiles}
             value={editing}
@@ -935,7 +935,7 @@ function CommentEntry({
  * the ids it took off and the files it added.
  */
 function CommentEditField({
-  planId,
+  taskId,
   files,
   attached = NO_ATTACHMENTS,
   changes: handed,
@@ -944,7 +944,7 @@ function CommentEditField({
   onSave,
   onCancel,
 }: {
-  planId: string;
+  taskId: string;
   /** The files the service keeps for the comment. */
   files: readonly DescriptionCommentFile[];
   /** The files the window holds for it as the edit opens, a held comment's not yet sent; none for a posted one's. */
@@ -959,7 +959,7 @@ function CommentEditField({
 }): React.JSX.Element {
   const [own, setOwn] = useState<EditFiles>({ dropped: [], attachments: attached });
   const changes = handed ?? { files: own, update: setOwn };
-  const { entries, idOf } = useCommentFileEntries(planId, files);
+  const { entries, idOf } = useCommentFileEntries(taskId, files);
 
   /** The box's files for what the edit changed: the comment's own it keeps, then those added. */
   const held = (edit: EditFiles) => [
@@ -1182,17 +1182,17 @@ function CommentBody({
 
 /** A posted comment's body as `CommentBody` draws it, each of its files read as the description's. */
 function PostedComment({
-  planId,
+  taskId,
   files,
   words,
   folded,
 }: {
-  planId: string;
+  taskId: string;
   files: readonly DescriptionCommentFile[];
   words: string;
   folded?: boolean | undefined;
 }): React.JSX.Element {
-  return <CommentBody chips={useCommentFileChips(planId, files)} words={words} folded={folded} />;
+  return <CommentBody chips={useCommentFileChips(taskId, files)} words={words} folded={folded} />;
 }
 
 /** What a field that may hold its words in the writer's review is handed. */
@@ -1701,7 +1701,7 @@ function ThreadCard({
           <WrittenComment writer={first.writer} agents={doors.agents} at={first.at} now={now}>
             <div className="comment-clamp line-clamp-3">
               <PostedComment
-                planId={doors.control.planId}
+                taskId={doors.control.taskId}
                 files={first.files ?? NO_FILES}
                 words={ownWordsOf(thread, first.words ?? "")}
                 folded
@@ -1788,7 +1788,7 @@ function ThreadCard({
           label={COMMENT_WORDS.REPLY}
           place={{
             kind: DRAFT_PLACE.DESCRIPTION_COMMENT,
-            planId: doors.control.planId,
+            taskId: doors.control.taskId,
             on: { threadId: thread.id },
           }}
           autoFocus={pressed}
@@ -1875,7 +1875,7 @@ function PendingCard({
       {head}
       <ReplyField
         label={COMMENT_WORDS.ADD}
-        place={{ kind: DRAFT_PLACE.DESCRIPTION_COMMENT, planId: doors.control.planId, on }}
+        place={{ kind: DRAFT_PLACE.DESCRIPTION_COMMENT, taskId: doors.control.taskId, on }}
         autoFocus
         onCancel={onCancel}
         variant={REPLY_VARIANT.FIRST}
@@ -2994,12 +2994,12 @@ export function useEditorComment(
 
 /** Holds which thread is open, the one being started, and the replies on their way, for the marks, the margin, and the list in its place. */
 export function CommentFocusScope({
-  planId,
+  taskId,
   children,
   reveal,
 }: {
   /** The description the focus is on; another description opened lets go of the open thread and the one being started. */
-  planId?: string | undefined;
+  taskId?: string | undefined;
   children: ReactNode;
   /** A thread to open, as a link to it asks; opened once per ask. */
   reveal?: { readonly thread: string; readonly ask: number } | undefined;
@@ -3008,11 +3008,11 @@ export function CommentFocusScope({
   const [revealed, setRevealed] = useState<CommentFocus["revealed"]>(undefined);
   // Note that the list stands across the descriptions opened, as a document app's comments view does, until it is put back.
   const [listing, setListing] = useState<CommentsFilter | undefined>(undefined);
-  const [focusedOn, setFocusedOn] = useState(planId);
+  const [focusedOn, setFocusedOn] = useState(taskId);
 
   // Note that the thread being started is let go in the render the description changes in, so it is never posted to another description.
-  if (focusedOn !== planId) {
-    setFocusedOn(planId);
+  if (focusedOn !== taskId) {
+    setFocusedOn(taskId);
     setFocused(UNFOCUSED);
     setRevealed(undefined);
   }
@@ -3049,7 +3049,7 @@ export function CommentFocusScope({
   }, [reveal, onReveal]);
 
   const focus = useMemo(() => {
-    const now = focusedOn === planId ? focused : UNFOCUSED;
+    const now = focusedOn === taskId ? focused : UNFOCUSED;
 
     return {
       active: activeOf(now),
@@ -3060,7 +3060,7 @@ export function CommentFocusScope({
       listing,
       onListing: setListing,
     };
-  }, [focused, onActive, onReveal, revealed, listing, focusedOn, planId]);
+  }, [focused, onActive, onReveal, revealed, listing, focusedOn, taskId]);
 
   return (
     <CommentFocusContext.Provider value={focus}>
@@ -3548,8 +3548,8 @@ function pageDraftOn(pageId: string) {
 }
 
 /** The draft a page's thread being started is written in, one for each page, the quotes it was started from among its words. */
-export function pageDraftPlace(planId: string, pageId: string): DescriptionCommentPlace {
-  return { kind: DRAFT_PLACE.DESCRIPTION_COMMENT, planId, on: pageDraftOn(pageId) };
+export function pageDraftPlace(taskId: string, pageId: string): DescriptionCommentPlace {
+  return { kind: DRAFT_PLACE.DESCRIPTION_COMMENT, taskId, on: pageDraftOn(pageId) };
 }
 
 /** A comment's words with `words` quoted after them, as the agent box's Reply lays a quote in, and an empty line under it to write on. */
@@ -4036,7 +4036,7 @@ export function PendingPageComment({
           <CommentBody chips={attachmentChips(comment.attachments)} words={words} />
         ) : (
           <CommentEditField
-            planId={comment.planId}
+            taskId={comment.taskId}
             files={NO_FILES}
             attached={comment.attachments}
             value={editing}

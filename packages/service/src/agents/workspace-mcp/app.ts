@@ -38,7 +38,11 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import { RENAMED_TOOL, WORKSPACE_MCP_SERVER } from "@repo/features/agent-tools";
+import {
+  RENAMED_TOOL,
+  WORKSPACE_MCP_SERVER,
+  WORKSPACE_MCP_WATCHED_META,
+} from "@repo/features/agent-tools";
 import { integrationConnectionOf } from "@repo/features/integration-wire";
 import { MACHINE_COMMAND_BOUNDS } from "@repo/features/machine-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -103,8 +107,8 @@ export function workspaceIntegrationMcpUrl(origin: string, connection: string): 
 
 /** The function the server is deployed as. */
 export const WORKSPACE_MCP_FUNCTION = {
-  /** The duration its bundle declares: the longest `run_on_mac` a call may wait on, and two minutes for the store and the Mac's answer around it. */
-  MAX_DURATION_SECONDS: MACHINE_COMMAND_BOUNDS.MAX_TIMEOUT_SECONDS + 120,
+  /** The duration its bundle declares: the longest ask and run a `run_on_mac` call may wait on, and 80 seconds for the claim, the store, and the Mac's answer around them; the platform's longest. */
+  MAX_DURATION_SECONDS: MACHINE_COMMAND_BOUNDS.ASK_AND_RUN_SECONDS + 80,
 } as const;
 
 /**
@@ -221,10 +225,11 @@ function unspokenVersion(request: Request): boolean {
   return named !== null && !WORKSPACE_MCP_PROTOCOL_VERSIONS.some((version) => version === named);
 }
 
-/** MCP's result of a tool call: what the tool answered, as content blocks, and whether it is the tool's own error. */
+/** MCP's result of a tool call: what the tool answered, as content blocks, whether it is the tool's own error, and what the transcript alone keeps of it (`WORKSPACE_MCP_WATCHED_META`). */
 interface McpToolCallResult {
   readonly content: readonly McpContent[];
   readonly isError: boolean;
+  readonly _meta?: { readonly [WORKSPACE_MCP_WATCHED_META]: UnparsedWireValue };
 }
 
 /**
@@ -344,7 +349,15 @@ function callWorkspaceTool(
     return callTool(admitted, name, input, context);
   }).pipe(
     Effect.provide(Layer.merge(doors.browser, doors.agentSandbox)),
-    Effect.map(({ content, isError }) => Result.succeed({ content, isError })),
+    Effect.map(({ content, isError, watched }) =>
+      Result.succeed({
+        content,
+        isError,
+        ...(watched === undefined
+          ? undefined
+          : { _meta: { [WORKSPACE_MCP_WATCHED_META]: watched } }),
+      }),
+    ),
     Effect.catchCause((cause) =>
       Effect.as(
         Effect.logWarning(`${PRODUCT_NAME} MCP tool ${name} failed: ${failureKind(cause)}`),

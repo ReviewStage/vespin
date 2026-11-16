@@ -1,6 +1,6 @@
 // inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, a notice's Got it, the composer that sends them with a note, replies, or starts a new thread with the agent, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
 
-import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
   fieldValueOf,
@@ -37,6 +37,7 @@ import {
   AskActs,
   AskNote,
   type BarAction,
+  type BarFootItem,
   type BarMenu,
   CHOICE_MEDIA,
   type Choice,
@@ -93,20 +94,26 @@ export interface OptionMediaDoors {
   readonly openVideoElsewhere: () => void;
 }
 
-/** What a picture's and a recording's tile is called where its agent gave it no caption. */
+/** What a picture's, a recording's, and a sound clip's tile is called where its agent gave it no caption, as the CLI names each. */
 const PICTURE_WORD = "Picture";
 const RECORDING_WORD = "Recording";
+const SOUND_CLIP_WORD = "Sound clip";
 
 /** One piece of an option's media as the card draws it: a file from its bytes as read, under its caption, and a page or an address opened through `doors`. */
 function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedia {
   switch (piece.type) {
     case INBOX_OPTION_MEDIA.FILE: {
       const recording = isVideoType(piece.mediaType);
+      const source = doors.source(piece.attachmentId);
+
+      if (isAudioType(piece.mediaType)) {
+        return { kind: CHOICE_MEDIA.AUDIO, title: piece.caption ?? SOUND_CLIP_WORD, source };
+      }
 
       return {
         kind: recording ? CHOICE_MEDIA.VIDEO : CHOICE_MEDIA.PICTURE,
         title: piece.caption ?? (recording ? RECORDING_WORD : PICTURE_WORD),
-        source: doors.source(piece.attachmentId),
+        source,
         onOpen: recording ? doors.openVideoElsewhere : undefined,
       };
     }
@@ -243,6 +250,7 @@ export function OpenAskCard({
             {
               label: ASK_PRESS.NOT_DONE,
               symbol: GLYPH.UNDO,
+              quiet: true,
               onPress: () => press(INBOX_REPLY.NOT_DONE),
             },
           ]}
@@ -334,19 +342,20 @@ export function ThreadComposer({
   return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
 }
 
-/** What the thread's ⋯ menu acts through: its read mark, its reminder's sheet, and its link copied. */
+/** What the thread's ⋯ menu acts through: its read mark, Remind me's times, and its link copied. */
 export interface ThreadMenuDoors {
   readonly onMark: (unread: boolean) => void;
-  readonly onRemind: () => void;
+  readonly remind: BarMenu;
   readonly onCopyLink: () => void;
 }
 
 /**
- * The thread's ⋯ menu, as the panel's row menu offers an item's acts in the
- * same order (`inbox-item-actions.tsx`): Copy link; Mark as read or unread,
- * whichever its mark is not, and Remind me, on any thread, open or settled;
- * and Resolve while it stands open. A new thread with the agent stays the
- * box's own, under its +.
+ * The thread's ⋯ menu, as the panel's row menu offers an item's acts
+ * (`inbox-item-actions.tsx`): Copy link; Mark as read or unread, whichever
+ * its mark is not; Resolve while it stands open; and Remind me's times, on
+ * any thread, open or settled, as a submenu last, since a bar's menu holds
+ * its submenus after its acts. A new thread with the agent stays the box's
+ * own, under its +.
  */
 export function threadMenu(item: InboxItem, answer: ThreadAnswer, doors: ThreadMenuDoors): BarMenu {
   const unread = isUnread(item);
@@ -370,16 +379,16 @@ export function threadMenu(item: InboxItem, answer: ThreadAnswer, doors: ThreadM
         symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
         onPress: () => doors.onMark(!unread),
       },
-      { ...REMIND_ME, onPress: doors.onRemind },
       ...resolve,
     ],
+    submenus: [doors.remind],
   };
 }
 
 /**
  * A thread's main acts as a wide window's detail bar stands them, in the
  * place of Mail's Reply and Trash: its read mark, whichever the thread's is
- * not, Remind me, and Resolve, dimmed once the thread is settled so the bar
+ * not, Remind me's times as a menu, and Resolve, dimmed once the thread is settled so the bar
  * keeps its shape. The rest stay in ⋯ (`menuWithout`); a compact window's
  * stack keeps every act in ⋯.
  */
@@ -387,7 +396,7 @@ export function threadActs(
   item: InboxItem,
   answer: ThreadAnswer,
   doors: ThreadMenuDoors,
-): readonly BarAction[] {
+): readonly BarFootItem[] {
   const unread = isUnread(item);
 
   return [
@@ -396,7 +405,7 @@ export function threadActs(
       symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
       onPress: () => doors.onMark(!unread),
     },
-    { ...REMIND_ME, onPress: doors.onRemind },
+    doors.remind,
     {
       label: RESOLVE,
       symbol: GLYPH.RESOLVED,

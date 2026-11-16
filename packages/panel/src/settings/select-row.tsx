@@ -7,6 +7,7 @@ import type {
   SettingsRowIndent,
 } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
+import { useEffect } from "react";
 import { refusalShown } from "../failure-report.js";
 import { PickerRow } from "./picker-row.js";
 import type { RowChange } from "./row-write.js";
@@ -19,7 +20,8 @@ const NO_MATCH = "No options match";
  * set, picked from the app's own menu with no search, since a set this short
  * is read whole. The visible name names the chip and the why describes it.
  * A row that writes takes its caller's write (`row-write.ts`), resting until
- * it answers, and a refused one stands under the row, in its own error line;
+ * it answers and drawing the pick ahead where the write reads one back, as a
+ * switch does, and a refused one stands under the row, in its own error line;
  * a row that moves a draft takes a plain change.
  */
 export function SelectRow<Value extends string | number>({
@@ -32,6 +34,7 @@ export function SelectRow<Value extends string | number>({
   placeholder,
   anchor,
   busy: restBusy,
+  locked,
   density,
   indent,
   leading,
@@ -75,6 +78,8 @@ export function SelectRow<Value extends string | number>({
    * rest so one save cannot finish behind the other.
    */
   busy?: boolean;
+  /** Why the reader may not change it, where they may not: the chip then opens no menu and hangs these words as its hover. */
+  locked?: string | undefined;
   /** How the row stands; in a settings card where none is named. */
   density?: SettingsRowDensity | undefined;
   /** Whether the row stands inset under the row above, one of its things. */
@@ -93,7 +98,14 @@ export function SelectRow<Value extends string | number>({
   pickOther?: ((id: string) => boolean) | undefined;
 }): React.JSX.Element {
   const run = write === undefined ? onChange : write.run;
-  const chosen = options.find((option) => option.value === value);
+  const ahead = write?.ahead;
+  const agreed = write !== undefined && !write.busy && ahead !== undefined && ahead.value === value;
+  // Note that a pick drawn ahead of its answer is let go of once the stored value agrees, so the row then follows the store again, other windows' changes included.
+  useEffect(() => {
+    if (agreed) write.settle();
+  }, [agreed, write]);
+  const shown = ahead === undefined ? value : ahead.value;
+  const chosen = options.find((option) => option.value === shown);
 
   return (
     <PickerRow
@@ -107,8 +119,8 @@ export function SelectRow<Value extends string | number>({
       leading={leading}
       width={width}
       action={action}
-      value={String(value)}
-      valueLabel={chosen?.label ?? String(value)}
+      value={String(shown)}
+      valueLabel={chosen?.label ?? String(shown)}
       valueReplayMasked={chosen?.masked === true}
       valueIcon={chosen?.faces ?? chosen?.icon}
       rows={options.map((option) => ({
@@ -130,6 +142,7 @@ export function SelectRow<Value extends string | number>({
       replayUnmasked
       anchor={anchor}
       disabled={write?.busy === true || Boolean(restBusy)}
+      locked={locked}
       onPick={(id) => {
         if (pickOther?.(id) === true) return;
         const next = parse(id);

@@ -28,13 +28,22 @@ import type { IntegrationToolsAnswer } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { ModelsAnswer } from "@repo/features/models-wire";
 import { PAGE_OWNER, type PagePlace } from "@repo/features/page-wire";
-import { IDLE_TASKS_VIEW, type TASK_CALL_FAILURE, type TasksView } from "@repo/features/tasks-view";
+import type { PullRequestChaptersAnswer } from "@repo/features/pull-request-chapters-wire";
+import type {
+  RepositoryPullRequestParams,
+  RepositoryPullRequestPartParams,
+} from "@repo/features/pull-request-view";
+import {
+  IDLE_TASKS_VIEW,
+  type TASK_CALL_FAILURE,
+  type TaskListParts,
+  type TasksView,
+} from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import {
   type AppAllowedCommandList,
   type AppAutomationReads,
   type AppBrowserTabs,
-  type AppChapters,
   type AppDescriptionComments,
   type AppGitHubToken,
   type AppHolderInboxes,
@@ -49,6 +58,8 @@ import {
   type AppProviderKeyList,
   type AppPullRequestParts,
   type AppRepositoryLists,
+  type AppRepositoryPullRequestHeld,
+  type AppRepositoryPullRequestParts,
   type AppSlackChannels,
   type AppStateDelivery,
   type AppStateSnapshot,
@@ -72,6 +83,7 @@ import {
   OWN_PULL_REQUEST,
   OWN_TRANSCRIPT,
   PULL_REQUEST_PART_READ,
+  REPOSITORY_PULL_REQUEST_PART_READ,
   UNREAD,
 } from "@repo/host/app-state";
 import {
@@ -79,6 +91,7 @@ import {
   AGENT_ACT_KIND,
   AUTOMATION_ACT_KIND,
   INTEGRATION_ACT_KIND,
+  PULL_REQUEST_ACT_KIND,
   SETTINGS_ACT_KIND,
   TASKS_ACT_KIND,
   WORKSPACE_ACT_KIND,
@@ -113,6 +126,16 @@ import {
   writeAppState,
 } from "./copy-feedback.js";
 import { onOutbox, resetOutbox, withOutbox } from "./outbox.js";
+
+/**
+ * Main's document as a test writes it, the task list's lists in its tasks
+ * slice, which the test's bridge hands the window beside the document, as
+ * the host holds them beside it (`app-bridge.ts`).
+ */
+export type ListedAppState = Omit<AppStateSnapshot, "tasks"> & { tasks: WrittenTasksView };
+
+/** A tasks slice as a test writes it: the document's, and any of the task list's lists beside it. */
+export type WrittenTasksView = TasksView & Partial<TaskListParts>;
 
 /** What the desktop offers: every capability there is. */
 export const DESKTOP_CAPABILITIES: readonly HostCapability[] = Object.values(HOST_CAPABILITY);
@@ -224,9 +247,17 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.PULL_REQUEST_PUBLISHED]: NO_KEYS_HELD,
     [LIVE_READ.PULL_REQUEST_VIEWED]: NO_KEYS_HELD,
     [LIVE_READ.REVIEW_OPTIONS]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: NO_KEYS_HELD,
     [LIVE_READ.DEVICE_PRESENCE]: NO_KEYS_HELD,
     [LIVE_READ.HOSTS]: NO_KEYS_HELD,
     [LIVE_READ.MACHINES]: NO_KEYS_HELD,
+    [LIVE_READ.MACHINE_ASKS]: NO_KEYS_HELD,
     [LIVE_READ.WORKSPACE_INVITATIONS]: NO_KEYS_HELD,
     [LIVE_READ.THIS_MAC_HOST]: NO_KEYS_HELD,
     [LIVE_READ.TRANSCRIPT]: NO_TRANSCRIPTS,
@@ -242,7 +273,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.AUTOMATION_RUNS]: NO_KEYS_HELD,
     [LIVE_READ.DESCRIPTION_COMMENTS]: NO_DESCRIPTION_COMMENTS,
     [LIVE_READ.HISTORY]: NO_KEYS_HELD,
-    [LIVE_READ.DESCRIPTION_DOCUMENT]: NO_KEYS_HELD,
+    [LIVE_READ.HELD_TASK]: NO_KEYS_HELD,
     machineCommands: { asks: [] },
     notifications: { status: NOTIFICATIONS_STATUS.UNKNOWN },
     sessionReplay: { permitted: false, halted: false },
@@ -264,7 +295,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
 function inCaseWorkspaces(
   snapshot: AppStateSnapshot,
   experiments: ExperimentChoices,
-  patch: Partial<AppStateSnapshot>,
+  patch: Partial<ListedAppState>,
 ): AppStateSnapshot {
   const tasks = withWorkspaceExperiments(snapshot.tasks, experiments);
 
@@ -276,7 +307,7 @@ function inCaseWorkspaces(
     tasks,
     ...(patch[LIVE_READ.INBOX_ITEMS] === undefined
       ? {
-          [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.PLAN]: {} } },
+          [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.TASK]: {} } },
         }
       : undefined),
     ...(patch[LIVE_READ.AUTOMATIONS] === undefined
@@ -300,7 +331,7 @@ export function deliveryOf(snapshot: AppStateSnapshot): AppStateDelivery {
 /** Main's document with the account's experiments as given and the slices patched, the window's facts among them. */
 export function stateWith(
   experiments: ExperimentChoices,
-  patch: Partial<AppStateSnapshot>,
+  patch: Partial<ListedAppState>,
 ): AppStateSnapshot {
   return inCaseWorkspaces({ ...idleDocument(experiments), ...patch }, experiments, patch);
 }
@@ -311,7 +342,7 @@ export function stateWith(
  * pins and sections, which a surface reads off the list
  * (`use-pin-writes.ts`), standing in the first frame.
  */
-export function writeListedTasks(listed: Partial<TasksView>): void {
+export function writeListedTasks(listed: Partial<WrittenTasksView>): void {
   const patched = (snapshot: AppStateSnapshot): AppStateSnapshot => ({
     ...snapshot,
     tasks: { ...snapshot.tasks, ...listed },
@@ -332,6 +363,41 @@ export function writeListedTasks(listed: Partial<TasksView>): void {
   );
 }
 
+/**
+ * Patches the task list of main's document as `writeListedTasks` does, and
+ * has the window's follow hear it, so the task list's collections stand on
+ * its rows as the window's do. Answers how to hand the next list, patched
+ * over the one held as main's push delivers it, inside the caller's `act`.
+ */
+export function followListedTasks(
+  listed: Partial<WrittenTasksView>,
+): (next: Partial<WrittenTasksView>) => void {
+  writeListedTasks(listed);
+  const listeners = new Set<(delivery: AppStateDelivery) => void>();
+  fakeAppBridge({
+    ...fakeAppBridgeCalls(),
+    onAppState: (heard) => {
+      listeners.add(heard);
+
+      return () => listeners.delete(heard);
+    },
+  });
+
+  return (next) => {
+    const held =
+      testQueryClientNow().getQueryData<AppStateSnapshot>(appStateQuery.queryKey) ??
+      stateWith({}, {});
+
+    const delivered = deliveryOf({
+      ...held,
+      version: held.version + 1,
+      tasks: { ...held.tasks, ...next },
+    });
+
+    for (const heard of listeners) heard(delivered);
+  };
+}
+
 /** Main's document for the account signed in as given, no experiment on. */
 export function signedInAs(account: {
   readonly id: string;
@@ -346,7 +412,7 @@ export function signedInAs(account: {
 /** Hands the window main's document with the account's experiments as given and the slices patched, beside whatever else the bridge already holds. */
 export function handState(
   experiments: ExperimentChoices,
-  patch: Partial<AppStateSnapshot> = {},
+  patch: Partial<ListedAppState> = {},
 ): void {
   const snapshot = stateWith(experiments, patch);
   fakeAppBridge({
@@ -376,7 +442,7 @@ export function readExperiments(experiments: ExperimentChoices): void {
  */
 export function writeExperiments(
   experiments: ExperimentChoices,
-  patch: Partial<AppStateSnapshot> = {},
+  patch: Partial<ListedAppState> = {},
 ): void {
   writeAppState(stateWith(experiments, patch));
 }
@@ -407,7 +473,7 @@ export function handCapabilities(
  */
 export function handSettings(
   settings: Partial<AppSettingsView> = {},
-  patch: Partial<AppStateSnapshot> = {},
+  patch: Partial<ListedAppState> = {},
 ): void {
   let view: AppSettingsView = Object.assign(settingsView(), settings);
   const listeners = new Set<(delivery: AppStateDelivery) => void>();
@@ -442,12 +508,14 @@ export interface HostReadsHanded {
   readonly deliverItems: (next: AppHostRead<AppInboxItems>) => void;
   readonly deliverHolders: (next: AppHolderInboxes) => void;
   readonly deliverPages: (next: AppPages) => void;
-  readonly deliverChapters: (next: AppChapters) => void;
+  readonly deliverChapters: (next: AppRepositoryChapters) => void;
   readonly deliverBrowserTabs: (next: AppBrowserTabs) => void;
   readonly deliverAutomations: (next: Partial<AppAutomationReads>) => void;
   readonly deliverComments: (next: AppDescriptionComments) => void;
   readonly deliverTools: (next: AppIntegrationTools) => void;
-  readonly deliverParts: (next: Partial<AppPullRequestParts>) => void;
+  readonly deliverParts: (
+    next: Partial<AppPullRequestParts> | Partial<AppRepositoryPullRequestParts>,
+  ) => void;
   /** The signed-in account's keys, held under its id. */
   readonly deliverKeys: (next: AppHostRead<AppProviderKeyList>) => void;
   /** The models the signed-in account is offered and its devices, held under its id. */
@@ -462,7 +530,7 @@ export interface HostReadsHanded {
   readonly deliverTokenRepositories: (next: AppTokenRepositories) => void;
   readonly deliverTranscripts: (next: AppTranscripts) => void;
   /** The account's task list, as the host lays it whole. */
-  readonly deliverTasks: (next: TasksView) => void;
+  readonly deliverTasks: (next: WrittenTasksView) => void;
   /** Main's read of the account's inbox, as the host lays it whole. */
   readonly deliverInbox: (next: AppInboxSlice) => void;
 }
@@ -492,7 +560,7 @@ function withAccountId(snapshot: AppStateSnapshot): AppStateSnapshot {
 export function handHostReads(first: {
   readonly items?: AppHostRead<AppInboxItems>;
   readonly holders?: AppHolderInboxes;
-  readonly chapters?: AppChapters;
+  readonly chapters?: AppRepositoryChapters;
   readonly tools?: AppIntegrationTools;
   readonly keys?: AppHostRead<AppProviderKeyList>;
   readonly allowedCommands?: AppHostRead<AppAllowedCommandList>;
@@ -529,7 +597,7 @@ export function handHostReads(first: {
         ...(first.holders === undefined ? undefined : { [LIVE_READ.HOLDER_INBOX]: first.holders }),
         ...(first.chapters === undefined
           ? undefined
-          : { [LIVE_READ.PULL_REQUEST_CHAPTERS]: first.chapters }),
+          : { [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: first.chapters }),
         ...(first.tools === undefined ? undefined : { [LIVE_READ.INTEGRATION_TOOLS]: first.tools }),
         ...(first.keys === undefined
           ? undefined
@@ -585,7 +653,7 @@ export function handHostReads(first: {
     deliverItems: (next) => deliver({ [LIVE_READ.INBOX_ITEMS]: next }),
     deliverHolders: (next) => deliver({ [LIVE_READ.HOLDER_INBOX]: next }),
     deliverPages: (next) => deliver({ [LIVE_READ.PAGES]: next }),
-    deliverChapters: (next) => deliver({ [LIVE_READ.PULL_REQUEST_CHAPTERS]: next }),
+    deliverChapters: (next) => deliver({ [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: next }),
     deliverBrowserTabs: (next) => deliver({ [LIVE_READ.BROWSER_TABS]: next }),
     deliverAutomations: (next) => deliver(next),
     deliverComments: (next) => deliver({ [LIVE_READ.DESCRIPTION_COMMENTS]: next }),
@@ -788,6 +856,99 @@ export function holdPullRequestParts(
       return quietHold();
     },
     [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_RETRY]: (params) => ask(params),
+  });
+
+  return asked;
+}
+
+/** The chapters of each pull request held by its repository and number, as the host holds them for the Pull request tabs. */
+export type AppRepositoryChapters = AppRepositoryPullRequestHeld<PullRequestChaptersAnswer>;
+
+/** What a test's service answers one part of a pull request named by its repository and number with, by the part, as the read it replaces did. */
+type RepositoryPartAnswerOf<Part extends PullRequestPart> =
+  AppHostReads[(typeof REPOSITORY_PULL_REQUEST_PART_READ)[Part]];
+
+/** How a test's service answers each part of a pull request named by its repository and number, by the part, for the pull request the tab names; a part it does not answer is held quietly. */
+export type RepositoryPullRequestPartAnswers = {
+  readonly [Part in PullRequestPart]?: (
+    pullRequest: RepositoryPullRequestParams,
+  ) => Promise<RepositoryPartAnswerOf<Part>>;
+};
+
+/**
+ * Answers the window's holds on the parts of a pull request named by its
+ * repository and number, and its Try again on one, as the host does,
+ * beside whatever acts the test answers by now, on the terms
+ * `holdPullRequestParts` answers an agent's: each laid at the workspace,
+ * the repository, and the number. Answers with every ask made, in order.
+ */
+export function holdRepositoryPullRequestParts(
+  deliver: HostReadsHanded["deliverParts"],
+  answers: RepositoryPullRequestPartAnswers,
+): readonly RepositoryPullRequestPartParams[] {
+  const asked: RepositoryPullRequestPartParams[] = [];
+
+  let held: AppRepositoryPullRequestParts = {
+    [LIVE_READ.REPOSITORY_PULL_REQUEST]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: NO_KEYS_HELD,
+  };
+
+  const ask = async (params: RepositoryPullRequestPartParams) => {
+    const answer = answers[params.part];
+
+    if (answer === undefined) return;
+    asked.push(params);
+    const read = REPOSITORY_PULL_REQUEST_PART_READ[params.part];
+    const { part: _part, ...pullRequest } = params;
+    const { workspaceId, repository } = pullRequest;
+    const number = String(pullRequest.number);
+
+    const landed: object = await answer(pullRequest).catch(() => ({
+      failure: AGENT_CALL_FAILURE.UNANSWERED,
+    }));
+
+    const slice: Readonly<
+      Record<string, Readonly<Record<string, Readonly<Record<string, AppHostRead<object>>>>>>
+    > = held[read];
+
+    const ofWorkspace = slice[workspaceId];
+    const ofRepository = ofWorkspace?.[repository];
+    const was = ofRepository?.[number]?.rows;
+
+    const kept =
+      params.part !== PULL_REQUEST_PART.VIEWED &&
+      "failure" in landed &&
+      was !== undefined &&
+      !("failure" in was);
+
+    if (kept) return;
+    // SAFETY: what lands for a part is that part's read (`RepositoryPartAnswerOf`), laid at its key's path.
+    held = {
+      ...held,
+      [read]: {
+        ...slice,
+        [workspaceId]: {
+          ...ofWorkspace,
+          [repository]: { ...ofRepository, [number]: { rows: landed } },
+        },
+      },
+    } as AppRepositoryPullRequestParts;
+    deliver(held);
+  };
+
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [PULL_REQUEST_ACT_KIND.PULL_REQUESTS_PART_FOLLOW]: (params) => {
+      // Note that the host lays what it read once the hold is taken, never inside it.
+      void Promise.resolve().then(() => ask(params));
+
+      return quietHold();
+    },
+    [PULL_REQUEST_ACT_KIND.PULL_REQUESTS_PART_RETRY]: (params) => ask(params),
   });
 
   return asked;
@@ -1194,7 +1355,7 @@ export type AccountReadHeld = IntegrationsHeld;
  * is adopted at, so it never puts another helper's later delivery behind it.
  */
 function heldForAccount<Rows>(
-  sliceOf: (held: Readonly<Record<string, AppHostRead<Rows>>>) => Partial<AppStateSnapshot>,
+  sliceOf: (held: Readonly<Record<string, AppHostRead<Rows>>>) => Partial<ListedAppState>,
   readOf: () => AppHostRead<Rows> | undefined,
 ): () => void {
   const handed = fakeAppBridgeCalls().requestAppState;

@@ -342,6 +342,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     remove: INTERNAL,
     // How far agents may reach into a member's machine is the member's own choice in the app, never an agent's.
     changeMachine: MEMBER_ONLY,
+    // Whether a machine runs what an agent asked is its owner's own answer, never an agent's.
+    answerMachineAsk: MEMBER_ONLY,
     removeMachine: INTERNAL,
     readPairing: INTERNAL,
     approvePairing: INTERNAL,
@@ -385,10 +387,13 @@ export const MEMBER_MCP_EXCLUSIONS = {
     workspaceInvitations: SCREEN_ONLY,
     hosts: SCREEN_ONLY,
     machines: SCREEN_ONLY,
+    machineAsks: SCREEN_ONLY,
     workspaceMemories: SCREEN_ONLY,
     installedSkills: SCREEN_ONLY,
     workspaceIntegrations: SCREEN_ONLY,
     pullRequestChapters: SCREEN_ONLY,
+    repositoryPullRequestChapters: SCREEN_ONLY,
+    repositoryPullRequestMoved: SCREEN_ONLY,
     integrationStatuses: SCREEN_ONLY,
     accountPreferences: SCREEN_ONLY,
   },
@@ -418,6 +423,9 @@ export const MEMBER_MCP_EXCLUSIONS = {
     join: INTERNAL,
     saveDeviceSettings: INTERNAL,
     saveDeviceAppLooks: INTERNAL,
+    ask: INTERNAL,
+    lapseAsk: INTERNAL,
+    closeAsk: INTERNAL,
   },
   pullRequests: { reviewOptions: SCREEN_ONLY },
   pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },
@@ -441,10 +449,13 @@ export const MEMBER_MCP_EXCLUSIONS = {
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
   workspaceMergeQueue: { read: NOT_YET_BUILT },
+  // Note that a size is a cost the workspace pays for every agent, so it is chosen in Settings until a member asks an agent to.
+  workspaceSandboxSize: { read: NOT_YET_BUILT, put: NOT_YET_BUILT },
   workspaceSentry: { install: NEEDS_BROWSER },
   // A call's session is the panel's own, which holds the microphone and the WebRTC peer.
   voice: { open: SCREEN_ONLY },
   workspaceSlackBot: { connect: NEEDS_BROWSER },
+  workspaceEnvironment: { save: NOT_YET_BUILT },
   workspaces: {
     // A workspace's machines stand in the @ list; an agent is handed a mentioned machine's id, and a refused call names the machines it could reach.
     machines: SCREEN_ONLY,

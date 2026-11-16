@@ -913,6 +913,9 @@ function markOutline(parts, half, grow, { roles, elements }) {
       outline.push(discOutline(center, part.r + grow));
     } else if (part.role === roles.FILL && part.element === elements.PATH) {
       outline.push(...fillOutlines(part.d).map((commands) => wound(commands, forward)));
+    } else if (part.role === roles.FILL && part.element === elements.RECT) {
+      const data = rectData((name) => part[name], part);
+      outline.push(...fillOutlines(data).map((commands) => wound(commands, forward)));
     } else if (part.role === roles.CUT && part.element === elements.PATH) {
       cuts.push(...cutPolylines(part.d));
     } else {
@@ -940,9 +943,9 @@ const scaledOutline = (commands, scale) =>
   }));
 
 /**
- * A task's status mark (`task-status-marks.mjs`) as an SF Symbols custom
- * symbol template, its parts one outline, so a cut leaves a hole, and its
- * line weighed at each weight as Lucide's stroke is.
+ * A task's status or priority mark (`task-status-marks.mjs`) as an SF
+ * Symbols custom symbol template, its parts one outline, so a cut leaves a
+ * hole, and its line weighed at each weight as Lucide's stroke is.
  */
 export function markTemplate(parts, { box, lineWidth, roles, elements }) {
   const scale = BOX / box;

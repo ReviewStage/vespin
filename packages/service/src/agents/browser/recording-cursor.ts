@@ -3,11 +3,11 @@
  *
  * A video's frames are the page's own, and the pointer the panel draws over
  * a cloud Browser tab's live view is no part of them
- * (`@repo/panel`'s `cloud-browser-cursor.tsx`), so the pointer is drawn into
+ * (`@repo/ui`'s `AgentPointer`), so the pointer is drawn into
  * the page instead, in the panel's look. Two recorders add it: the browser
  * tool's (`sandbox-recorder.ts`), to every page it records, and an agent's own
- * Playwright script, which the coder's instructions tell to add the image's
- * copy (`RECORDING_CURSOR_FILE`) before it records a flow. Both send input a
+ * Playwright script, which may add the image's copy
+ * (`/usr/local/share/agent-recording/cursor.js`) before it records a flow. Both send input a
  * page hears as a person's, so the one source follows either.
  *
  * Self-contained, since the image's build (`apps/web/scripts/agent-image.ts`)
@@ -27,15 +27,6 @@ function rgba(hex: string, alpha: string): string {
 
   return `rgba(${(value >> 16) & 255},${(value >> 8) & 255},${value & 255},${alpha})`;
 }
-
-/**
- * Where the sandbox image keeps the pointer's source, every user's to read,
- * for a script to hand Playwright's `page.addInitScript({ path })`.
- */
-export const RECORDING_CURSOR_FILE = {
-  DIRECTORY: "/usr/local/share/agent-recording",
-  PATH: "/usr/local/share/agent-recording/cursor.js",
-} as const;
 
 /**
  * The agent's pointer, drawn into each page while it is recorded: the
@@ -63,9 +54,9 @@ export const RECORDING_CURSOR_FILE = {
  * tokens are
  * no part of the page, so their values are written out here: the pointer's
  * copper and its glow from the brand's accent (`BRAND_PALETTE`), as the
- * panel's `--agent-pointer` and its `-on-dark` and `-glow` siblings are; hold
+ * `--ui-color-agent-pointer` and its `-on-dark` and `-glow` siblings are; hold
  * the rest to its `-edge` and `-shadow`,
- * to the `.cloud-browser-cursor` rules, and to `--ui-color-tooltip`, its edge,
+ * to the `.ui-agent-pointer` rules (`agent-pointer.css`), and to `--ui-color-tooltip`, its edge,
  * text, and chord inks, `--ui-tooltip-radius`, and `--ui-tooltip-shadow`; the
  * caps stand larger than a tooltip's words, which a compressed video blurs. Note that it does not sway while
  * still, as the panel's does while the agent works, because a video shows the

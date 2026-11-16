@@ -1,4 +1,8 @@
-import type { HostedAgentClient, HostedAgentPortsClient } from "@repo/features";
+import type {
+  HostedAgentClient,
+  HostedAgentPortsClient,
+  HostedPullRequestClient,
+} from "@repo/features";
 import type { AccountInboxAnswer } from "@repo/features/account-inbox-wire";
 import { ACCOUNT_PREFERENCES_READ } from "@repo/features/account-preferences-live";
 import { AGENT_ORIGIN_READ } from "@repo/features/agent-origin-live";
@@ -55,7 +59,12 @@ import { WRITE_UNTAKEN, writeUntakenOf } from "@repo/features/keyed-write";
 import { commitShaSchema } from "@repo/features/link-grammar";
 import { LIVE_READ, type LiveRead } from "@repo/features/live-wire";
 import type { ModelsAnswer } from "@repo/features/models-wire";
-import { PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
+import {
+  PULL_REQUEST_CHAPTERS_READ,
+  REPOSITORY_PULL_REQUEST_CHAPTERS_READ,
+} from "@repo/features/pull-request-chapters-live";
+import { REPOSITORY_PULL_REQUEST_MOVED_READ } from "@repo/features/pull-request-moved-live";
+import type { RepositoryPullRequestPartParams } from "@repo/features/pull-request-view";
 import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
 import { carried, GATEWAY_EVENT, GATEWAY_METHOD } from "@repo/gateway";
@@ -97,7 +106,7 @@ import {
   OWN_TRANSCRIPT,
   UNREAD,
 } from "./app-state.js";
-import { ChaptersKey, heldChapters } from "./chapters-follow.js";
+import { ChaptersKey, heldChapters, heldRepositoryChapters } from "./chapters-follow.js";
 import type { AccountAsksAgentAct, AccountAsksAgentFollow } from "./compose-account-asks.js";
 import type { Composer } from "./composer.js";
 import {
@@ -107,7 +116,10 @@ import {
   AGENT_INBOX_FOLLOWS,
   type CHAPTERS_ACTS,
   CHAPTERS_FOLLOWS,
+  type PULL_REQUEST_ACTS,
+  PULL_REQUEST_FOLLOWS,
 } from "./contract/index.js";
+import type { EntityStore } from "./entity-store.js";
 import type { HostMethodTable } from "./gateway-door.js";
 import { type AccountHeld, accountHeld, type HeldFetch, heldFetch } from "./held-fetch.js";
 import { type HostActTable, liveTold } from "./host-acts.js";
@@ -129,6 +141,7 @@ import {
   type KeptContent,
   type KeptKey,
   keptOfAgent,
+  RepositoryGitHubImageKey,
 } from "./kept-content.js";
 import {
   type AccountReads,
@@ -143,6 +156,10 @@ import {
   type PullRequestParts,
   type PullRequestPartsDependencies,
   pullRequestParts,
+  type RepositoryPullRequestKey,
+  type RepositoryPullRequestPartsDependencies,
+  repositoryKeyOf,
+  repositoryPullRequestParts,
 } from "./pull-request-parts.js";
 import { untaken } from "./queued-writes.js";
 import {
@@ -151,7 +168,8 @@ import {
   type ScopeInboxes,
   scopeInboxes,
 } from "./scope-inbox-follow.js";
-import { AGENT, type AgentRow } from "./task-list-collections.js";
+import { AGENT } from "./task-list-collections.js";
+import type { AgentRow } from "./task-list-rows.js";
 import {
   followTranscript,
   HELD_BYTES,
@@ -270,9 +288,26 @@ export type AgentClient = Pick<
   | "agentPicture"
 >;
 
+/** The service's side of a pull request named by its repository and number, as a Pull request tab asks it with no agent. */
+export type PullRequestClient = Pick<
+  HostedPullRequestClient,
+  | "pullRequest"
+  | "changes"
+  | "overviewPullRequest"
+  | "overviewChecks"
+  | "overviewConversation"
+  | "reviewOptions"
+  | "viewed"
+  | "action"
+  | "generateChapters"
+  | "githubImage"
+>;
+
 export interface AgentsDependencies extends AccountGateDependencies {
   kernel: Pick<HostKernel, "emit" | "now"> & AccountGateDependencies["kernel"];
   client: AgentClient;
+  /** The service's side of a pull request a Pull request tab names by its repository and number. */
+  pullRequests: PullRequestClient;
   /** The service's side of an agent's ports and its shared link, asked on the window's behalf. */
   ports: Pick<HostedAgentPortsClient, "list" | "shared" | "share" | "unshare">;
   /** The account signed in now, by its id, which every live read names; none where nobody is. */
@@ -289,7 +324,7 @@ export interface AgentsDependencies extends AccountGateDependencies {
    * Start is answered once the list carries it; none waits for nothing.
    */
   listed?: (txid: string | undefined) => Effect.Effect<void>;
-  /** The task list as each drawing of it stands, from the caller's listening on (`TasksComposer.pullRequestListings`), on which the Pull request tabs' parts are asked again; none moves nothing. */
+  /** What each drawing of the task list moved, from the caller's listening on (`TasksComposer.pullRequestListings`), on which the Pull request tabs' parts are asked again; none moves nothing. */
   pullRequestListings?: Effect.Effect<Stream.Stream<PullRequestListing>, never, Scope.Scope>;
   /**
    * The sync engine's pool, which an agent's row of the task list stands in
@@ -303,14 +338,16 @@ export interface AgentsDependencies extends AccountGateDependencies {
   openedOutside?: (agentId: string) => Effect.Effect<void>;
   /** Reads the tasks the account's Inbox holds items of into the task list where it holds them not (`TasksComposer.inboxNamed`); none reads nothing. */
   inboxNamed?: (taskIds: readonly string[]) => Effect.Effect<void>;
+  /** The signed-in account's lists kept on disk (`entity-store.ts`), which the Inbox is kept among and drawn from at a launch; none keeps nothing. */
+  entities?: () => EntityStore | undefined;
 }
 
 /** The tasks an account inbox answer holds items of, once each: those with an item waiting on the reader first, as they are counted, then every other holding one. */
 function inboxTaskIds(answer: AccountInboxAnswer): readonly string[] {
   return [
     ...new Set([
-      ...answer.items.map((item) => item.planId),
-      ...answer.plans.map((plan) => plan.planId),
+      ...answer.items.map((item) => item.taskId),
+      ...answer.tasks.map((task) => task.taskId),
     ]),
   ];
 }
@@ -321,7 +358,9 @@ type AgentsActs = HostActTable<typeof AGENT_INBOX_ACTS> &
   HostActTable<Omit<typeof AGENT_ACTS, "HOSTS_THIS_MAC_SET" | AccountAsksAgentAct>> &
   HostActTable<Omit<typeof AGENT_FOLLOWS, AccountAsksAgentFollow>> &
   HostActTable<typeof CHAPTERS_ACTS> &
-  HostActTable<typeof CHAPTERS_FOLLOWS>;
+  HostActTable<typeof CHAPTERS_FOLLOWS> &
+  HostActTable<typeof PULL_REQUEST_ACTS> &
+  HostActTable<typeof PULL_REQUEST_FOLLOWS>;
 
 export interface AgentsComposer extends Composer {
   /** The Inbox's acts, the agents' acts, and a pull request's chapters generated, answered directly as the panel's port asks them. */
@@ -381,6 +420,42 @@ function partsTold(emit: HostKernel["emit"]): PullRequestPartsDependencies["tell
     [LIVE_READ.PULL_REQUEST_PUBLISHED]: liveTold(emit, follow, LIVE_READ.PULL_REQUEST_PUBLISHED),
     [LIVE_READ.REVIEW_OPTIONS]: liveTold(emit, follow, LIVE_READ.REVIEW_OPTIONS),
     [LIVE_READ.PULL_REQUEST_VIEWED]: liveTold(emit, follow, LIVE_READ.PULL_REQUEST_VIEWED),
+  };
+}
+
+/** How each part of a pull request named by its repository and number is told: on its own slice, which its follow declares beside the pull request's. */
+function repositoryPartsTold(
+  emit: HostKernel["emit"],
+): RepositoryPullRequestPartsDependencies["tell"] {
+  const follow = PULL_REQUEST_FOLLOWS.PULL_REQUESTS_PART_FOLLOW;
+
+  return {
+    [LIVE_READ.REPOSITORY_PULL_REQUEST]: liveTold(emit, follow),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: liveTold(
+      emit,
+      follow,
+      LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS,
+    ),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: liveTold(
+      emit,
+      follow,
+      LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION,
+    ),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: liveTold(
+      emit,
+      follow,
+      LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED,
+    ),
+    [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: liveTold(
+      emit,
+      follow,
+      LIVE_READ.REPOSITORY_REVIEW_OPTIONS,
+    ),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: liveTold(
+      emit,
+      follow,
+      LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED,
+    ),
   };
 }
 
@@ -504,6 +579,25 @@ export function composeAgents(
       tell: liveTold(dependencies.kernel.emit, CHAPTERS_FOLLOWS.CHAPTERS_FOLLOW),
     });
 
+    const repositoryChapters = yield* heldRepositoryChapters({
+      seal: (key, poll, userId, after) =>
+        asked(
+          client.liveRead(
+            REPOSITORY_PULL_REQUEST_CHAPTERS_READ,
+            {
+              workspaceId: key.workspaceId,
+              repository: key.repository,
+              number: String(key.number),
+              userId,
+            },
+            poll ? { after } : undefined,
+          ),
+        ),
+      accountId: dependencies.accountId,
+      gate,
+      tell: liveTold(dependencies.kernel.emit, CHAPTERS_FOLLOWS.CHAPTERS_REPOSITORY_FOLLOW),
+    });
+
     const origins = yield* heldAgentOrigins({
       seal: (agentId, poll, userId, after) =>
         asked(
@@ -534,6 +628,9 @@ export function composeAgents(
             ),
           pool: dependencies.pool,
           accountWide,
+          ...(dependencies.entities === undefined
+            ? undefined
+            : { entities: dependencies.entities }),
         },
         userId,
         tellItems,
@@ -570,6 +667,39 @@ export function composeAgents(
       tell: partsTold(dependencies.kernel.emit),
     });
 
+    const { pullRequests } = dependencies;
+
+    // Note that a pull request named by its repository has no agent, so it is followed by what GitHub says of it alone.
+    const repositoryParts = yield* repositoryPullRequestParts({
+      gate,
+      focus: dependencies.focus,
+      ask: {
+        pullRequest: (key) => asked(pullRequests.overviewPullRequest(key)),
+        checks: (key) => asked(pullRequests.overviewChecks(key)),
+        conversation: (key) => asked(pullRequests.overviewConversation(key)),
+        published: (key) => asked(pullRequests.pullRequest(key)),
+        reviewOptions: (key) => asked(pullRequests.reviewOptions(key)),
+        viewed: (key) => asked(pullRequests.viewed(key)),
+      },
+      moved: {
+        seal: (key, poll, userId, after) =>
+          asked(
+            client.liveRead(
+              REPOSITORY_PULL_REQUEST_MOVED_READ,
+              {
+                workspaceId: key.workspaceId,
+                repository: key.repository,
+                number: String(key.number),
+                userId,
+              },
+              poll ? { after } : undefined,
+            ),
+          ),
+        accountId: dependencies.accountId,
+      },
+      tell: repositoryPartsTold(dependencies.kernel.emit),
+    });
+
     return composed(
       dependencies,
       http,
@@ -577,9 +707,9 @@ export function composeAgents(
       { inboxes, holders, accountWide },
       { accounts, followed: accountFollow },
       { reads: sessionReads, followItems, preferences, holdPreferences },
-      { chapters, origins },
+      { chapters, repositoryChapters, origins },
       fetched,
-      parts,
+      { parts, repositoryParts },
     );
   });
 }
@@ -619,8 +749,16 @@ interface SessionReads {
 interface LiveFollows {
   /** Every agent's pull request's chapters, by the agent and the number. */
   readonly chapters: HeldSlice<ChaptersKey>;
+  /** Every pull request's chapters named by its repository and number, by the workspace, the repository, and the number. */
+  readonly repositoryChapters: HeldSlice<RepositoryPullRequestKey>;
   /** Every agent's origin, by the agent. */
   readonly origins: HeldSlice<string>;
+}
+
+/** The parts of the pull requests the windows' Pull request tabs hold: through an agent, and by the repository and number. */
+interface PartsHeld {
+  readonly parts: PullRequestParts;
+  readonly repositoryParts: PullRequestParts<RepositoryPullRequestPartParams>;
 }
 
 /** The reads the host fetches for the windows that hold them, and the windows' holds on them. */
@@ -691,12 +829,12 @@ function composed(
   /** The session's account reads, every item the account reaches and its preferences among them. */
   { reads: sessionReads, followItems, preferences, holdPreferences }: SessionReads,
   /** The pull requests' chapters and the agents' origins the windows hold. */
-  { chapters, origins }: LiveFollows,
+  { chapters, repositoryChapters, origins }: LiveFollows,
   { tools, models, modelsHold }: FetchedReads,
   /** The parts of the pull requests the windows' Pull request tabs hold. */
-  parts: PullRequestParts,
+  { parts, repositoryParts }: PartsHeld,
 ): AgentsComposer {
-  const { client, kernel, kept } = dependencies;
+  const { client, kernel, kept, pullRequests } = dependencies;
   const gate = gateOf(dependencies);
   /** What a follow the gate keeps from the service is told; no account where the gate stands open but names none. */
   const gateKept = () => gateClosed(closedBy(dependencies) ?? GATE_CLOSED_BY.NO_ACCOUNT);
@@ -1091,6 +1229,21 @@ function composed(
   /** The Inbox's acts, the agents' (`AGENT_ACTS`), and a pull request's chapters generated (`CHAPTERS_ACTS`), answered as the panel's port asks them. */
   const acts: AgentsActs = {
     CHAPTERS_GENERATE: ({ agentId, number }) => asked(client.generateChapters(agentId, number)),
+    CHAPTERS_REPOSITORY_GENERATE: (key) => asked(pullRequests.generateChapters(key)),
+    // A pull request named by its repository and number (`PULL_REQUEST_ACTS`), asked with no agent.
+    PULL_REQUESTS_CHANGES: (key) => asked(pullRequests.changes(key)),
+    PULL_REQUESTS_ACTION: ({ request, ...key }) => asked(pullRequests.action(key, request)),
+    PULL_REQUESTS_GITHUB_IMAGE: ({ workspaceId, repository, src }) => {
+      const call = pullRequests.githubImage({ workspaceId, repository }, src);
+
+      return isKeptImage(src)
+        ? keptAsked(
+            new RepositoryGitHubImageKey({ workspaceId, repository, src }),
+            call,
+            (image) => ("base64" in image ? image : undefined),
+          )
+        : asked(call);
+    },
     AGENTS_DEFAULT_WRITE: declaredWrite(
       dependencies.pool,
       agentDefaultWritten((choice) => asked(client.writeDefault(choice)), dependencies.accountId),
@@ -1235,6 +1388,10 @@ function composed(
       hold: ({ agentId, number }) => chapters.hold(new ChaptersKey({ agentId, number })),
       retry: ({ agentId, number }) => chapters.retry(new ChaptersKey({ agentId, number })),
     },
+    CHAPTERS_REPOSITORY_FOLLOW: {
+      hold: (key) => repositoryChapters.hold(repositoryKeyOf(key)),
+      retry: (key) => repositoryChapters.retry(repositoryKeyOf(key)),
+    },
     // The models are held for the windows while any draws a model or a device, under the account signed in.
     AGENTS_MODELS_FOLLOW: {
       hold: () => modelsHold.hold,
@@ -1257,6 +1414,8 @@ function composed(
     },
     // A Pull request tab's parts are held for the windows while the tab shows.
     AGENTS_PULL_REQUEST_PART_FOLLOW: { hold: parts.hold, retry: parts.retry },
+    // A Pull request tab's parts of a pull request named by its repository and number, held as an agent's are.
+    PULL_REQUESTS_PART_FOLLOW: { hold: repositoryParts.hold, retry: repositoryParts.retry },
     // An agent's own tools are held for the windows while its servers popover shows.
     AGENTS_WORKSPACE_TOOLS_FOLLOW: {
       hold: ({ agentId }) => tools.hold(agentId),
@@ -1312,6 +1471,7 @@ function composed(
     yield* transcriptSlice.end;
     yield* holders.end;
     yield* chapters.end;
+    yield* repositoryChapters.end;
     yield* origins.end;
     yield* FiberHandle.clear(accountFollow);
 
@@ -1326,6 +1486,7 @@ function composed(
     yield* tools.end;
     yield* models.end;
     yield* parts.end;
+    yield* repositoryParts.end;
   });
 
   // Note that the models are held anew under whoever signed in, in place of the hold before, rather than followed again under the account they were held for.
@@ -1335,10 +1496,12 @@ function composed(
     yield* transcriptSlice.open;
     yield* holders.open;
     yield* chapters.open;
+    yield* repositoryChapters.open;
     yield* origins.open;
     yield* modelsHold.open;
     yield* tools.open;
     yield* parts.open;
+    yield* repositoryParts.open;
   });
 
   return {

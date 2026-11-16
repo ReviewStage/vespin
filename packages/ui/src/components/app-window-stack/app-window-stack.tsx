@@ -1,15 +1,19 @@
+import { type ReactNode, useEffect, useState } from "react";
 import { MinimizeIcon } from "../../icons/lucide-glyphs.js";
 import { PICTURE_STATE, type PictureState } from "../../picture-read.js";
+import { AgentPointer, type AgentPointerKind } from "../agent-pointer/agent-pointer.js";
 import { APP_ICON_SIZE, AppIcon } from "../app-icon/app-icon.js";
 import { BUTTON_SIZE, IconButton } from "../button/button.js";
 import { CARD_CORNER, CARD_LOOK, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
 import { CardPress } from "../card-press/card-press.js";
 import { CHIP_LOOK, CHIP_SIZE, Chip, ChipName, StaticChip } from "../chip/chip.js";
+import { MarkedWords, type WordsMark } from "../marked-words/marked-words.js";
 import { Menu, useMenu } from "../menu/menu.js";
 import { PictureStandIn } from "../picture-set/picture-set.js";
 import { PICTURE_TILE_FACE, PictureTile } from "../picture-tile/picture-tile.js";
 import { SPINNER_SIZE, SpinnerRing } from "../spinner/spinner.js";
 import { TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
+import { Tooltip } from "../tooltip/hint.js";
 import { WorkingMark } from "../working-mark/working-mark.js";
 
 /**
@@ -19,15 +23,24 @@ import { WorkingMark } from "../working-mark/working-mark.js";
  * the agent read of it. Every title in the stack, the front's and each one
  * behind it, says the same two things: the app, by its icon and name, and
  * the working mark where the agent is in it now. The front's name is a chip
- * that looks the same on every device; on the Mac the agent uses, where the
+ * that looks the same on every device and hangs the app's card where the
+ * caller hands one (`MacAppCard`); on the Mac the agent uses, where the
  * caller hands `onShowApp`, a press on it brings that app's own window
  * forward. The window stands in a frame of one size whatever its shape,
  * centered on a quiet ground, so the stack keeps still as the apps change,
  * and the picture runs to the card's edge, the card's corner rounding it. A
  * press on the picture opens it full size, where the caller lets the viewer
- * walk the other apps' windows too. A window not read yet holds the frame
- * with a spinner, one whose read did not land holds it with Retry and is no
- * press, and an app whose window the agent never read stands as its icon.
+ * walk the other apps' windows too. As the agent reads the window again, the
+ * last picture stands until the next has landed and decoded, then gives way
+ * to it in place, so the window never blanks between them; one whose next
+ * read does not land keeps the last. A window with no picture yet holds the
+ * frame with a spinner while it is read, or with Retry, and as no press,
+ * where its read did not land, and an app whose window the agent never read
+ * stands as its icon.
+ * Where the agent's cursor stands over the window in front, its pointer
+ * (`AgentPointer`) is drawn over the picture at that spot, gliding as the
+ * agent moves it, as its cursor does on the Mac; the picture may lag a press
+ * or two behind it, until the agent reads the window again.
  *
  * The other apps stand behind it as cards peeking out above it, stepping in
  * from the edge as a deck does, at most two: the one used last nearest as
@@ -69,14 +82,90 @@ const PILE_PLACE = [
 /** Each card behind the front window, by its depth from it: stepping in from the edge, the deeper the further. */
 const BEHIND_INSET = ["mx-app-window-peek", "mx-app-window-peek-twice"] as const;
 
-/** An app in the stack: what tells it apart from every other, such as its bundle id, its name, its icon's address, and its newest window, where the agent read one. Note that two apps may share a name, so the stack knows each by its id and only shows its name. */
+/** The agent's pointer over an app's window: where it stands as a share of the window from its top left, what it does there, the move it stands at, and whether it shows, as it does while the agent works. */
+export interface StackedPointer {
+  readonly x: number;
+  readonly y: number;
+  readonly kind: AgentPointerKind;
+  readonly move: string;
+  readonly shown: boolean;
+}
+
+/** An app in the stack: what tells it apart from every other, such as its bundle id, its name, its icon's address, and its newest window, where the agent read one, with the agent's pointer where it stands over that window. Note that two apps may share a name, so the stack knows each by its id and only shows its name. */
 export interface StackedApp {
   readonly id: string;
   readonly name: string;
   readonly iconSrc?: string | undefined;
   readonly window?:
-    | { readonly state: PictureState; readonly width: number; readonly height: number }
+    | {
+        readonly state: PictureState;
+        readonly width: number;
+        readonly height: number;
+        readonly pointer?: StackedPointer | undefined;
+      }
     | undefined;
+  /** The card its name's chip hangs (`MacAppCard`); none where the caller has none. */
+  readonly card?: ReactNode;
+  /** A mark set inside its name, before the part it marks: a teammate's face before their machine's name where its title names their machine ("Simulator on Theo's MacBook Pro"); none for the rest. */
+  readonly mark?: WordsMark | undefined;
+}
+
+/** A picture of an app's window that landed: its address, and the window's size as it was read. */
+interface LandedWindow {
+  readonly url: string;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Each app's last landed picture, by its id, with `app` landing at `picture`. */
+function landedWith(
+  landed: ReadonlyMap<string, LandedWindow>,
+  app: string,
+  picture: LandedWindow,
+): ReadonlyMap<string, LandedWindow> {
+  return new Map(landed).set(app, picture);
+}
+
+/**
+ * The picture of the front app's window to draw: the last one of that app
+ * that landed, held while the next is read, and given up for it only once it
+ * has decoded, so swapping the two draws no blank frame; none until one of
+ * this app's lands. Note that each app keeps its own, so an app brought back
+ * to the front shows its last while its next is read, that the first lands
+ * at once, with nothing to hold, and that a next picture that does not land,
+ * or does not decode, keeps the last.
+ */
+function useLandedWindow(app: StackedApp): LandedWindow | undefined {
+  const window = app.window;
+  const [landed, setLanded] = useState<ReadonlyMap<string, LandedWindow>>(new Map());
+  const held = landed.get(app.id);
+
+  const next =
+    window?.state.kind === PICTURE_STATE.READY
+      ? { url: window.state.url, width: window.width, height: window.height }
+      : undefined;
+
+  if (held === undefined && next !== undefined) setLanded(landedWith(landed, app.id, next));
+  const swap = held === undefined || next === undefined || held.url === next.url ? undefined : next;
+
+  useEffect(() => {
+    if (swap === undefined) return;
+    let stands = true;
+    const image = new Image();
+    image.src = swap.url;
+    image.decode().then(
+      () => {
+        if (stands) setLanded((was) => landedWith(was, app.id, swap));
+      },
+      () => undefined,
+    );
+
+    return () => {
+      stands = false;
+    };
+  }, [app.id, swap?.url, swap?.width, swap?.height]);
+
+  return held ?? next;
 }
 
 /** Apps as a pile of their icons, at most four, each overlapping the one before it, the first on top. */
@@ -92,19 +181,39 @@ function IconPile({ apps }: { apps: readonly StackedApp[] }): React.JSX.Element 
   );
 }
 
-/** The window in front, in its frame: its picture, a spinner while it is read, Retry where the read did not land, or the app's icon where none was read. */
-function WindowFace({ app }: { app: StackedApp }): React.JSX.Element {
+/** The window in front, in its frame: the last picture of it that landed, a spinner while its first is read, Retry where that read did not land, or the app's icon where none was read. */
+function WindowFace({
+  app,
+  landed,
+}: {
+  app: StackedApp;
+  landed: LandedWindow | undefined;
+}): React.JSX.Element {
   const window = app.window;
 
-  if (window?.state.kind === PICTURE_STATE.READY) {
+  if (landed !== undefined) {
+    const pointer = window?.pointer;
+
+    // Note that the pointer stands over the picture alone, which the tile's face hugs and positions.
     return (
-      <img
-        className="ui-app-window block h-auto max-h-app-window-tall w-auto max-w-full"
-        src={window.state.url}
-        width={window.width}
-        height={window.height}
-        alt=""
-      />
+      <>
+        <img
+          className="ui-app-window block h-auto max-h-app-window-tall w-auto max-w-full"
+          src={landed.url}
+          width={landed.width}
+          height={landed.height}
+          alt=""
+        />
+        {pointer === undefined ? null : (
+          <AgentPointer
+            x={pointer.x}
+            y={pointer.y}
+            kind={pointer.kind}
+            move={pointer.move}
+            shown={pointer.shown}
+          />
+        )}
+      </>
     );
   }
 
@@ -126,7 +235,26 @@ function WindowFace({ app }: { app: StackedApp }): React.JSX.Element {
   );
 }
 
-/** The app's icon and name, the same chip on every device; a press brings its own window forward where the caller can. */
+/** The window in front on its quiet ground: a press on its picture opens it, but where its first read did not land. */
+function FrontWindow({ app, onOpen }: { app: StackedApp; onOpen: () => void }): React.JSX.Element {
+  const landed = useLandedWindow(app);
+  // Note that a window whose read did not land is no press, since its Retry stands on it and the viewer holds no window it could not read.
+  const failed = landed === undefined && app.window?.state.kind === PICTURE_STATE.FAILED;
+
+  return (
+    <span className="ui-app-window-ground flex h-app-window-tall items-center justify-center bg-muted">
+      {failed ? (
+        <WindowFace app={app} landed={landed} />
+      ) : (
+        <PictureTile name={app.name} face={PICTURE_TILE_FACE.FLUSH} onOpen={onOpen}>
+          <WindowFace app={app} landed={landed} />
+        </PictureTile>
+      )}
+    </span>
+  );
+}
+
+/** The app's icon and name, the same chip on every device, hanging the app's card; a press brings its own window forward where the caller can. */
 function AppName({
   app,
   onShowApp,
@@ -137,27 +265,33 @@ function AppName({
   const face = (
     <>
       <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.LINE} />
-      <ChipName>{app.name}</ChipName>
+      <ChipName>
+        <MarkedWords words={app.name} mark={app.mark} />
+      </ChipName>
     </>
   );
 
   if (onShowApp === undefined) {
     return (
-      <StaticChip look={CHIP_LOOK.TOOLBAR} size={CHIP_SIZE.COMPACT}>
-        {face}
-      </StaticChip>
+      <Tooltip label={app.name} card={app.card}>
+        <StaticChip look={CHIP_LOOK.TOOLBAR} size={CHIP_SIZE.COMPACT}>
+          {face}
+        </StaticChip>
+      </Tooltip>
     );
   }
 
   return (
-    <Chip
-      look={CHIP_LOOK.TOOLBAR}
-      size={CHIP_SIZE.COMPACT}
-      aria-label={WORDS.SHOW_ON_MAC(app.name)}
-      onClick={() => onShowApp(app.id)}
-    >
-      {face}
-    </Chip>
+    <Tooltip label={app.name} card={app.card}>
+      <Chip
+        look={CHIP_LOOK.TOOLBAR}
+        size={CHIP_SIZE.COMPACT}
+        aria-label={WORDS.SHOW_ON_MAC(app.name)}
+        onClick={() => onShowApp(app.id)}
+      >
+        {face}
+      </Chip>
+    </Tooltip>
   );
 }
 
@@ -204,7 +338,7 @@ function BehindTitle({
             tone={using ? TEXT_TONE.DEFAULT : TEXT_TONE.MUTED}
             truncate
           >
-            {app.name}
+            <MarkedWords words={app.name} mark={app.mark} />
           </Text>
           {using ? <WorkingMark /> : null}
         </span>
@@ -293,8 +427,6 @@ export function AppWindowStack({
   // Note that past two apps behind, the nearest keeps its title and the rest pile into the deepest card.
   const titled = others.length > MOST_BEHIND ? others.slice(0, MOST_BEHIND - 1) : others;
   const piled = others.slice(titled.length);
-  // Note that a window whose read did not land is no press, since its Retry stands on it and the viewer holds no window it could not read.
-  const failed = front.window?.state.kind === PICTURE_STATE.FAILED;
 
   return (
     <section
@@ -331,15 +463,7 @@ export function AppWindowStack({
             onClick={onMinimize}
           />
         </div>
-        <span className="ui-app-window-ground flex h-app-window-tall items-center justify-center bg-muted">
-          {failed ? (
-            <WindowFace app={front} />
-          ) : (
-            <PictureTile name={front.name} face={PICTURE_TILE_FACE.FLUSH} onOpen={onOpen}>
-              <WindowFace app={front} />
-            </PictureTile>
-          )}
-        </span>
+        <FrontWindow app={front} onOpen={onOpen} />
       </Card>
     </section>
   );

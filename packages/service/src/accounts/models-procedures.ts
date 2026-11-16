@@ -10,12 +10,18 @@
  * account's agents run on, its own or ours, was never granted fast mode,
  * Anthropic's fast versions are withheld, each base model saying so. So the
  * caller is resolved first, and the read is answered to a signed-in
- * desktop alone. A catalog the instance cannot
+ * desktop alone. Cursor's models follow the catalog's for an account with
+ * Cursor agents on, and only to a client built to read Cursor as a provider
+ * (`cursor-models.ts`): an older one would refuse the whole answer over
+ * one. A catalog the instance cannot
  * read, or a store that cannot say which keys are the account's, is an
  * outage, answered as unavailable for the caller to ask again.
  */
 
+import { accountExperimentOn } from "@repo/database/models/account-store";
+import { presentedClient } from "@repo/features/client-identity";
 import { failureKind } from "@repo/runtime/effect";
+import { EXPERIMENT } from "@repo/settings";
 import { Effect } from "effect";
 import {
   accountFastOffer,
@@ -28,6 +34,7 @@ import {
   type UserIdResolver,
 } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
+import { withCursorModels } from "../providers/cursor-models.js";
 import { ModelCatalog, offeredToAccount } from "../providers/model-catalog.js";
 
 export interface ModelsProcedureSeams {
@@ -52,7 +59,16 @@ export function modelsProcedures(seams: ModelsProcedureSeams) {
       );
 
       const fastOffer = yield* hostedStoreOrUnavailable(accountFastOffer(context.userId));
-      const offered = offeredToAccount(models, fastOffer);
+
+      const cursorOn = yield* hostedStoreOrUnavailable(
+        accountExperimentOn(context.userId, EXPERIMENT.CURSOR),
+      );
+
+      const offered = withCursorModels(offeredToAccount(models, fastOffer), {
+        experimentOn: cursorOn,
+        apiVersion: presentedClient(context.request.headers)?.apiVersion,
+      });
+
       const macs = yield* hostedStoreOrUnavailable(macOffers(context.userId));
 
       return {

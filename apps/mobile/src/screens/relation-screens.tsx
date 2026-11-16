@@ -17,20 +17,25 @@ import {
   type TaskRelationKind,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { readingWords } from "@repo/features/words";
+import { readFailedWords, readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
+  BUTTON_LOOK,
   EmptyState,
   GLYPH,
   type Glyph,
+  glyphSymbol,
   LIST_LOOK,
   LinkRow,
   ListSection,
+  PUSH_ROW_GOES,
+  PushRow,
   RelationRow,
   RowList,
   Screen,
+  SettingsForm,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -39,9 +44,11 @@ import { useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskRelationWrites } from "../tasks/use-relations.js";
 import { useTaskOverview } from "../tasks/use-tasks.js";
+import { TaskMissing } from "./task-missing.js";
 
 /** The sheet's own words. */
 const WORDS = {
+  BACK: "Back",
   CANCEL: "Cancel",
   TASK_NOT_FOUND: "Task not found",
 } as const;
@@ -71,6 +78,12 @@ export function useOpenRelation(): OpenRelation {
 /** What the sheet says while the task's document, which holds its blocks where its row names none, is first read. */
 const READING_TASK = readingWords("the task");
 
+/** What the page says where the task's blocks could not be read, beside Try again. */
+const TASK_UNREAD = readFailedWords("the task");
+
+/** What a failed read offers. */
+const TRY_AGAIN = "Try again";
+
 /** Whether a route's word names one of the four kinds. */
 export function isRelationKind(word: string | undefined): word is TaskRelationKind {
   return TASK_RELATION_ORDER.some((kind) => kind === word);
@@ -86,7 +99,7 @@ interface Candidate {
 /**
  * The tasks the sheet offers for `kind`: the workspace's others, or those
  * a search finds by name, repository, or key, each one that cannot take the
- * kind kept with why, as the panel's menu dims it.
+ * kind kept with why, as the panel's menu dims it, after those that can.
  */
 function candidatesFor(
   subject: TaskRelationSubject,
@@ -103,7 +116,7 @@ function candidatesFor(
       ? tasks.filter((each) => each.workspaceId === subject.workspaceId)
       : searchedTasks({ tasks, workspaceId: subject.workspaceId, workspaceName, tokens });
 
-  return offered
+  const candidates = offered
     .filter((each) => each.id !== subject.id)
     .map((each) => ({
       task: each,
@@ -113,23 +126,30 @@ function candidatesFor(
           : taskKey(workspaceName, each.number),
       why: relationWhyNot(subject, each, kind, byId),
     }));
+
+  // Note that the tasks it can take stand first, each group in the list's order, so a phone's short sheet opens on what a press can pick rather than on rows dimmed with why.
+  return [
+    ...candidates.filter((each) => each.why === undefined),
+    ...candidates.filter((each) => each.why !== undefined),
+  ];
 }
 
-/** The kinds the sheet opens on where none is named, each by its glyph and what choosing it does. */
+/** The kinds the sheet opens on where none is named, each by its glyph and what choosing it does, as one grouped card of the form's own rows, each going on to its tasks, as a sheet that picks stands (the Move sheet's form). */
 function KindRows({ onKind }: { readonly onKind: (kind: TaskRelationKind) => void }) {
   return (
-    <RowList look={LIST_LOOK.PLAIN}>
+    <SettingsForm>
       <ListSection>
         {TASK_RELATION_ORDER.map((kind) => (
-          <LinkRow
+          <PushRow
             key={kind}
             symbol={RELATION_KIND_SYMBOL[kind]}
             label={TASK_RELATION_VERBS[kind].choose}
+            goes={PUSH_ROW_GOES.PAGE}
             onPress={() => onKind(kind)}
           />
         ))}
       </ListSection>
-    </RowList>
+    </SettingsForm>
   );
 }
 
@@ -158,6 +178,8 @@ export function TaskRelationScreen({
   const [chosen, setChosen] = useState<TaskRelationKind | undefined>(opened);
   const [search, setSearch] = useState("");
   const kind = chosen;
+  // Whether the kind was picked in this sheet rather than handed to it, so a step back to the kinds stands.
+  const stepped = opened === undefined && kind !== undefined;
 
   const bar = (
     <>
@@ -166,7 +188,8 @@ export function TaskRelationScreen({
           headerShown: true,
           headerTintColor: colors.TEXT,
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.SIDEBAR },
+          // Note that the kinds stand as a grouped card on the form's ground, and the tasks to pick from as a plain list on the sheet's.
+          contentStyle: { backgroundColor: kind === undefined ? colors.GROUPED : colors.SIDEBAR },
         }}
       >
         {/* Note that the title is the bar's own (`Stack.Title`), as its search and Cancel are, since the root stack's title for the sheet stood over one set in the options. */}
@@ -182,18 +205,40 @@ export function TaskRelationScreen({
           />
         )}
       </Stack.Screen>
-      <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
-      </Stack.Toolbar>
+      {stepped ? (
+        <>
+          {/* Note that a kind picked inside the sheet steps back to the kinds, as a pushed page's back chevron does, with Cancel moving to the other end. */}
+          <Stack.Toolbar placement="left">
+            <Stack.Toolbar.Button
+              icon={glyphSymbol(GLYPH.BACK)}
+              accessibilityLabel={WORDS.BACK}
+              onPress={() => {
+                setChosen(undefined);
+                setSearch("");
+              }}
+            />
+          </Stack.Toolbar>
+          <Stack.Toolbar placement="right">
+            <Stack.Toolbar.Button onPress={() => router.back()}>
+              {WORDS.CANCEL}
+            </Stack.Toolbar.Button>
+          </Stack.Toolbar>
+        </>
+      ) : (
+        <Stack.Toolbar placement="left">
+          <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        </Stack.Toolbar>
+      )}
     </>
   );
 
+  // Note that a task not yet read is on its way, so the sheet reads rather than say it is gone (`TaskMissing`).
   if (overview === undefined) {
     return (
       <>
         {bar}
         <Screen>
-          <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
+          <TaskMissing taskId={taskId} notFound={WORDS.TASK_NOT_FOUND} />
         </Screen>
       </>
     );
@@ -214,11 +259,22 @@ export function TaskRelationScreen({
   const subject = relationSubject(overview.task, overview.document, kind);
 
   if (subject === undefined) {
+    const retry = overview.documentRetry;
+
+    // Note that a read that failed says so with Try again, rather than a spinner that would wait on nothing.
     return (
       <>
         {bar}
         <Screen>
-          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
+          {retry === undefined ? (
+            <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />
+          ) : (
+            <EmptyState
+              title={TASK_UNREAD}
+              symbol={GLYPH.TASK}
+              action={{ label: TRY_AGAIN, onPress: retry, look: BUTTON_LOOK.BORDERED }}
+            />
+          )}
         </Screen>
       </>
     );
