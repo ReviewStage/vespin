@@ -322,14 +322,21 @@ type UseSheetStartResult = {
 
 type Started = { answer?: StartAnswer };
 
-/** A route in a navigator's state, as React Navigation hands it, read only for which route is focused under it. */
-type RouteNode = { readonly key?: string | undefined; readonly state?: NavigatorState | undefined };
+/** A route in a navigator's state, as React Navigation hands it: its key, its params, and the navigator under it. */
+type RouteNode = {
+  readonly key?: string | undefined;
+  readonly params?: object | undefined;
+  readonly state?: NavigatorState | undefined;
+};
 
 /** A navigator's state, as React Navigation hands it. */
 type NavigatorState = {
   readonly index?: number | undefined;
   readonly routes: readonly RouteNode[];
 };
+
+/** Where the reader stands: the focused route by its key, and its params as written, which a split view's pick moves. */
+type Standing = { readonly key: string | undefined; readonly params: string | undefined };
 
 /** The route focused inside `route`, as `getCurrentRoute` descends to it. */
 function focusedIn(route: RouteNode | undefined): RouteNode | undefined {
@@ -346,6 +353,16 @@ function focusedUnderSheet(root: NavigatorState | undefined): RouteNode | undefi
   const under = (root.index ?? root.routes.length - 1) - 1;
 
   return under < 0 ? undefined : focusedIn(root.routes[under]);
+}
+
+/** Where a route stands, by its key and its params, which React Navigation keeps serializable. */
+function standingOf(route: RouteNode | undefined): Standing {
+  return { key: route?.key, params: JSON.stringify(route?.params) };
+}
+
+/** Whether the reader stands where they stood: the same route, with the same row selected. */
+function sameStanding(was: Standing, now: Standing): boolean {
+  return was.key === now.key && was.params === now.params;
 }
 
 /**
@@ -444,8 +461,8 @@ function useClosingStart(
 
     setSent(true);
     // Note that where the reader stands is kept as Start is pressed: the sheet, and the route it uncovers.
-    const sheet = navigation.getCurrentRoute();
-    const uncovered = focusedUnderSheet(navigation.getRootState());
+    const sheet = standingOf(navigation.getCurrentRoute());
+    const uncovered = standingOf(focusedUnderSheet(navigation.getRootState()));
     kept.release();
     router.dismiss();
     const started: Started = {};
@@ -466,10 +483,10 @@ function useClosingStart(
       const answer = started.answer;
 
       if (!went || answer === undefined || "refused" in answer) return;
-      // Note that the task opens only while the reader stands where Start left them, because a route moves to a new object as a page opens or a row is picked, and what they opened meanwhile must stand.
-      const now = navigation.getCurrentRoute();
+      // Note that the task opens only while the reader stands where Start left them, on the same route with the same row selected, so a page they opened or a row they picked meanwhile stands.
+      const now = standingOf(navigation.getCurrentRoute());
 
-      if (now !== sheet && now !== uncovered) return;
+      if (!sameStanding(sheet, now) && !sameStanding(uncovered, now)) return;
       // Note that only the task's page opens, its new agent standing in its Agents section, because a second route pushed over it races the split view's hand-off and leaves the task behind.
       router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })));
     });
