@@ -403,14 +403,15 @@ export function Version({
   const name = at === undefined ? VERSION_HISTORY_WORDS.TITLE : dayAndTimeText(at);
 
   if (inColumn) {
+    // Note that Restore stands dimmed on the description as it stands, heard as already current, as the compact bar keeps it, rather than leaving the column's bar.
     const restoreAct = {
-      label: VERSION_HISTORY_WORDS.RESTORE,
+      label: current ? VERSION_HISTORY_WORDS.ALREADY_CURRENT : VERSION_HISTORY_WORDS.RESTORE,
       symbol: GLYPH.RESTORE,
-      disabled: read === undefined || restoring,
+      disabled: current || read === undefined || restoring,
       onPress: restore,
     };
 
-    return <DetailPage bar={{ name, acts: current ? [] : [restoreAct] }}>{body}</DetailPage>;
+    return <DetailPage bar={{ name, acts: [restoreAct] }}>{body}</DetailPage>;
   }
 
   return (
