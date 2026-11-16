@@ -315,6 +315,7 @@ describe("a host's daemon", () => {
           home: home,
           claudeExecutable: fakeClis().paths.claude,
           codexExecutable: fakeClis().paths.codex,
+          cursorSdk: fakeClis().paths.cursor,
         });
         expect(new Set(http.requests.map((request) => request.authorization))).toEqual(
           new Set([`Bearer ${DEVICE_SECRET}`]),

@@ -78,7 +78,7 @@ function settingsOfStored(stored: typeof StoredSettingsSchema.Type): MachineDevi
   };
 }
 
-/** One device as Start reads it: its id, the account it is, its name and platform, which machine it runs on and its model, none where its host never said, when it last beat, the Codex it checked, where it has one, and where its setup stands, none once it is ready. */
+/** One device as Start reads it: its id, the account it is, its name and platform, which machine it runs on and its model, none where its host never said, when it last beat, the Codex it checked and the Cursor SDK it keeps, where it has them, and where its setup stands, none once it is ready. */
 const DeviceSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
@@ -88,13 +88,14 @@ const DeviceSchema = Schema.Struct({
   model: Schema.NullOr(Schema.String),
   lastSeenAt: Schema.Date,
   codexExecutable: Schema.NullOr(Schema.String),
+  cursorSdk: Schema.NullOr(Schema.String),
   setup: Schema.NullOr(deviceSetupSchema),
   setupFailure: Schema.NullOr(Schema.String),
 });
 
 export type Device = typeof DeviceSchema.Type;
 
-/** Where a Mac keeps what its local agents need: its home folder, the folder its agents stand in where its host named one, the folders their shared files and attachments stand in, the CLI it bundles, and the Codex it checked, none where it has none. */
+/** Where a Mac keeps what its local agents need: its home folder, the folder its agents stand in where its host named one, the folders their shared files and attachments stand in, the CLI it bundles, and the Codex it checked and the Cursor SDK it keeps, none where it has none. */
 const DeviceLayoutSchema = Schema.Struct({
   home: Schema.String,
   agentsFolder: Schema.NullOr(Schema.String),
@@ -102,6 +103,7 @@ const DeviceLayoutSchema = Schema.Struct({
   attachmentsFolder: Schema.String,
   claudeExecutable: Schema.String,
   codexExecutable: Schema.NullOr(Schema.String),
+  cursorSdk: Schema.NullOr(Schema.String),
 });
 
 /** A Mac's layout and what its follower takes beyond the first lines, as a local agent's launch reads them. */
@@ -141,13 +143,17 @@ export function machineColumns(machine: {
   };
 }
 
-/** What a Mac registers with beside its id and name: its platform and architecture, which machine it runs on where its host read it, its layout, the folder its agents stand in where its host names one, its Codex where it checked one, what its follower takes beyond the first lines, none where it names none, and where its setup stands and why it failed, none once it is ready. */
-export type DeviceRegistration = Omit<DeviceLayout, "agentsFolder" | "codexExecutable"> &
+/** What a Mac registers with beside its id and name: its platform and architecture, which machine it runs on where its host read it, its layout, the folder its agents stand in where its host names one, its Codex where it checked one, its Cursor SDK where it keeps one, what its follower takes beyond the first lines, none where it names none, and where its setup stands and why it failed, none once it is ready. */
+export type DeviceRegistration = Omit<
+  DeviceLayout,
+  "agentsFolder" | "codexExecutable" | "cursorSdk"
+> &
   DeviceMachine & {
     readonly platform: DevicePlatform;
     readonly arch: DeviceArch;
     readonly agentsFolder?: string | undefined;
     readonly codexExecutable?: string | undefined;
+    readonly cursorSdk?: string | undefined;
     readonly capabilities?: readonly DeviceCapability[] | undefined;
     readonly setup?: DeviceSetup | undefined;
     readonly setupFailure?: string | undefined;
@@ -180,6 +186,7 @@ const upsertDevice = SqlSchema.findAll({
     attachmentsFolder,
     claudeExecutable,
     codexExecutable,
+    cursorSdk,
     capabilities,
     setup,
     setupFailure,
@@ -201,6 +208,7 @@ const upsertDevice = SqlSchema.findAll({
           attachmentsFolder,
           claudeExecutable,
           codexExecutable,
+          cursorSdk,
           capabilities: [...capabilities],
           setup,
           setupFailure,
@@ -220,6 +228,7 @@ const upsertDevice = SqlSchema.findAll({
             attachmentsFolder,
             claudeExecutable,
             codexExecutable,
+            cursorSdk,
             capabilities: [...capabilities],
             setup,
             setupFailure,
@@ -296,6 +305,7 @@ const findSeen = SqlSchema.findAll({
           model: device.model,
           lastSeenAt: device.lastSeenAt,
           codexExecutable: device.codexExecutable,
+          cursorSdk: device.cursorSdk,
           setup: device.setup,
           setupFailure: device.setupFailure,
         })
@@ -330,6 +340,7 @@ const findNamed = SqlSchema.findAll({
           model: device.model,
           lastSeenAt: device.lastSeenAt,
           codexExecutable: device.codexExecutable,
+          cursorSdk: device.cursorSdk,
           setup: device.setup,
           setupFailure: device.setupFailure,
         })
@@ -351,6 +362,7 @@ const findLayout = SqlSchema.findOneOption({
           attachmentsFolder: device.attachmentsFolder,
           claudeExecutable: device.claudeExecutable,
           codexExecutable: device.codexExecutable,
+          cursorSdk: device.cursorSdk,
           capabilities: device.capabilities,
           version: device.version,
         })
@@ -741,6 +753,8 @@ export function registerDevice(
         agentsFolder: registered.agentsFolder ?? null,
         // Note that a register naming no Codex clears the last one, since the Mac checks it on every start.
         codexExecutable: registered.codexExecutable ?? null,
+        // Likewise a register naming no Cursor SDK clears the last one, as a host moved back to a build from before it keeps none.
+        cursorSdk: registered.cursorSdk ?? null,
         // Note that a register naming none clears the last ones, as a desktop moved back to a build without them takes none.
         capabilities: registered.capabilities ?? [],
         // Likewise a register naming no setup is a device ready to take an agent, as every desktop from before the field is.

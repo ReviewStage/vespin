@@ -1,5 +1,5 @@
 /**
- * cursor.ts -- one launch of Cursor for an agent: Cursor's SDK run in the runner's own process on the account's Cursor API key, the agent made or resumed from its store, the service's lines turned into runs, steers, cancels, and summaries, every message the SDK streams posted out, and the launch ended, or kept warm, once the agent's turn is over.
+ * cursor.ts -- one launch of Cursor for an agent: Cursor's SDK run in the runner's own process on the account's Cursor API key in the cloud and on the machine's own Cursor sign-in on a host, the agent made or resumed from its store, the service's lines turned into runs, steers, cancels, and summaries, every message the SDK streams posted out, and the launch ended, or kept warm, once the agent's turn is over.
  *
  * One controller fiber owns the launch's state and acts on one signal at a
  * time, as Codex's does (`codex.ts`): a line the service wrote, a run ended,
@@ -45,7 +45,12 @@
  * bearer and every other credential, because the SDK runs the agent's shell
  * from this process, which every command inherits. In the cloud's sandbox
  * the key is a placeholder, swapped for the real one at the firewall on
- * Cursor's API, as OpenAI's is.
+ * Cursor's API, as OpenAI's is. On a host the launch is handed no key, and
+ * reads none the runner was started with: the SDK runs on the sign-in it
+ * keeps of its own on the machine (`~/.cursor/sdk/auth.json`, made by
+ * `vespin-host cursor-login`), and a machine with none, or one expired,
+ * ends the launch with words that say how to sign in
+ * (`CURSOR_SIGNED_OUT_DETAIL`).
  */
 
 import { randomUUID } from "node:crypto";
@@ -70,6 +75,7 @@ import { mcpServersOf } from "./mcp-servers.js";
 import {
   type CheckoutSnapshot,
   type ContentBlock,
+  CURSOR_SIGNED_OUT_DETAIL,
   type CursorConfig,
   type CursorModelSelection,
   INPUT_LINE,
@@ -111,9 +117,6 @@ const STORE_UNKEPT = "the agent's Cursor store could not be kept at the service"
 
 /** How many more times a launch's last mirror is sent where the service did not take it. */
 const STORE_RETRIES = 2;
-
-/** What a launch on a host ends with, since a host runs no Cursor agent yet. */
-const ON_HOST = "a host runs no Cursor agent yet";
 
 /** What a launch with no key to run Cursor on ends with. */
 const NO_KEY = "no Cursor API key was handed to the launch";
@@ -237,15 +240,15 @@ function modelSelectionOf(selection: CursorModelSelection): ModelSelection {
   };
 }
 
-/** The options the agent is made or resumed with: the checkout, the model, the store, our tools, and Auto-review where the mode is Auto. */
+/** The options the agent is made or resumed with: the key where the launch was handed one, the checkout, the model, the store, our tools, and Auto-review where the mode is Auto. */
 function agentOptions(
   config: CursorConfig,
-  apiKey: string,
+  apiKey: string | undefined,
   store: LocalAgentStore,
   customTools: Record<string, SDKCustomTool>,
 ): AgentOptions {
   return {
-    apiKey,
+    ...(apiKey === undefined ? undefined : { apiKey }),
     model: modelSelectionOf(config.model),
     local: {
       cwd: config.cwd,
@@ -697,10 +700,10 @@ const openStore = Effect.fn("agent-runner/cursor/openStore")(function* (
   return cursorStore(config.cwd, entries, transcripts);
 });
 
-/** The agent, resumed where its store holds it and made anew under the config's id otherwise; and whether it was made. */
+/** The agent, resumed where its store holds it and made anew under the config's id otherwise, on the key given or else the SDK's own sign-in; and whether it was made. */
 const openAgent = Effect.fn("agent-runner/cursor/openAgent")(function* (
   context: LaunchContext<CursorConfig>,
-  apiKey: string,
+  apiKey: string | undefined,
   store: CursorStore,
   tools: CursorTools,
 ) {
@@ -727,6 +730,15 @@ const openAgent = Effect.fn("agent-runner/cursor/openAgent")(function* (
   return { agent, made };
 });
 
+/** Whether the SDK at `sdk` holds a sign-in of the machine's own that stands; false where it cannot say. */
+const machineSignedIn = Effect.fn("agent-runner/cursor/machineSignedIn")(function* (sdk: string) {
+  const cursor = yield* CursorSdk;
+
+  return yield* Effect.tryPromise(() => cursor.signedIn(sdk)).pipe(
+    Effect.orElseSucceed(() => false),
+  );
+});
+
 /**
  * One Cursor launch, from its config to the moment its agent is let go.
  * Answers why it ended, and the failure where it failed.
@@ -736,12 +748,18 @@ export const runCursor = Effect.fn("agent-runner/runCursor")(function* (
 ) {
   const { config } = context;
   const snapshots = yield* CheckoutSnapshots;
-  const apiKey = context.env[RUNNER_ENV.CURSOR_API_KEY];
+  const onHost = runsOnHost(context.env);
+  // Note that a host's harnesses run on the machine's own logins, so a key the runner was started with there is never read.
+  const apiKey = onHost ? undefined : context.env[RUNNER_ENV.CURSOR_API_KEY];
 
-  // Note that a host's harnesses run on the machine's own logins, which Cursor's launch reads none of yet.
-  if (runsOnHost(context.env)) return ended(RUNNER_END.FAILED, ON_HOST);
+  if (!onHost && (apiKey === undefined || apiKey === "")) {
+    return ended(RUNNER_END.FAILED, NO_KEY);
+  }
 
-  if (apiKey === undefined || apiKey === "") return ended(RUNNER_END.FAILED, NO_KEY);
+  if (onHost && !(yield* machineSignedIn(config.sdk))) {
+    return ended(RUNNER_END.FAILED, CURSOR_SIGNED_OUT_DETAIL);
+  }
+
   const signals = yield* Queue.unbounded<Signal>();
   yield* context.cutOff.pipe(
     Effect.flatMap((why) => Queue.offer(signals, { kind: SIGNAL.CUT_OFF, why })),
