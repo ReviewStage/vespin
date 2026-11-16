@@ -29,6 +29,8 @@ export const FEEDBACK_WORDS = {
   SENDING: "Sending",
   /** What a send that did not go says where the service gave no reason of its own. */
   SEND_REFUSAL: "Could not send that. Try again.",
+  /** What a note that went says, thanking whoever wrote it. */
+  SENT: "Feedback sent. Thank you.",
   UNREADABLE: "That file could not be attached.",
   FULL: `You can attach up to ${FEEDBACK_LIMITS.MAX_IMAGES} screenshots.`,
   /** What a note past the endpoint's bound says, which a send would only have refused. */

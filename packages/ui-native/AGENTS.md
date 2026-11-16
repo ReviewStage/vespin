@@ -49,8 +49,10 @@ builds a control of its own.
   alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a form's words,
   pictures and choices, `ComposeSheet` for a sheet that starts work (its
-  words filling the page, and the + and `MenuChip` capsule menus in glass
-  over the keyboard),
+  words filling the page, and the + and `MenuChip` capsule menus over the
+  keyboard, each the system's own glass button in a `DockRow` with no bar
+  around them, each capsule led by the panel's glyph or a model's harness
+  mark),
   `SwitchRow` for an agent's options, `askForName` (the system's alert a name is
   typed in, its act preferred, for a task and an agent alike),
   `AccountButton`, `FailureNoticeProvider` (the app's one notice that a
@@ -125,7 +127,10 @@ builds a control of its own.
   screen and a list stand on the brand's `GROUND` and `SIDEBAR`, never the
   system's grays, and so do a split view's list and detail columns
   themselves (`containerBackground`) and a sheet or popover to its edge
-  (`presentationBackground`); a split view's sidebar paints nothing, so it
+  (`presentationBackground`), but for a short route sheet at half height in
+  a compact window, which iOS floats as Liquid Glass and which stands on
+  that glass alone (see Grouped forms) unless the reader reduces
+  transparency; a split view's sidebar paints nothing, so it
   stands clear on the system's floating glass pane, as Mail's does; lists stand plain, as the panel's do, never as
   inset cards (a page of one thing's sections, such as a task's, stands
   `LIST_LOOK.DETAIL`, the system's grouped list, so its headers scroll away
@@ -149,10 +154,10 @@ builds a control of its own.
   takes a bare SF Symbol's name; `apps/mobile`'s tab icons and toolbar
   items, which expo-router types as plain names, take `GLYPH.X` too
   (`glyphSymbol` where a symbol's name is asked for). SF Symbols stay only
-  where iOS draws the thing its own way (Share, the chevron at the end of a
-  Settings row that goes on, the small arrow out at the end of one that
-  leaves the app, and the up-and-down chevron at the end of one whose press
-  opens a menu) or where the panel draws a
+  where iOS draws the thing its own way (Share, a sheet's close, the chevron
+  at the end of a Settings row that goes on, the small arrow out at the end
+  of one that leaves the app, and the up-and-down chevron at the end of one
+  whose press opens a menu) or where the panel draws a
   mark of its own rather than a Lucide glyph (a check box, a face, an MCP
   server, the panel's product mark). A task's status ring is the panel's own
   mark, cut into the asset catalog from `@repo/brand`'s table
@@ -216,8 +221,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   list with the switcher, its tile and its name, and stands no Settings gear: Settings
   opens from the switcher's menu and ⌘,, as Notion's and Linear's iPad sidebars keep it, and
   the account's photo leads the sidebar's bar only until the switcher can draw. Nothing draws a
-  copy of glass, and glass is one layer: a bar's own, or one glass view
-  (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest). A
+  copy of glass, and glass is one layer: a bar's own, one glass view
+  (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest), or a
+  control's own glass button style in a `DockRow`, never inside a bar. A
   glass that holds buttons takes no press of its own (not `interactive`),
   so only the button under a finger or the pointer reacts, and no button
   is handed a hover effect: the system draws its own on each style, where
@@ -270,7 +276,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   or remind) read as iOS Settings' cards: their rows stand in the panel's
   raised fill (`RAISED`, the brand's `OVERLAY`) on the form's own ground
   (`GROUPED`: the chip's hover gray in light, black in dark), and the sheet
-  around them stands on `GROUPED` too. A row a press takes somewhere is the
+  around them stands on `GROUPED` too, but for a short sheet at half height,
+  which iOS floats as Liquid Glass: there the glass is its one ground
+  (`Screen` and `SettingsForm` `clear`), as Apple's half sheets stand. A row a press takes somewhere is the
   system's default button, so it flashes the row's gray while held, as
   Settings' rows do; a choice among a few is `PickRows`, each a row with
   what it does under its name where it says and the picked one checked in

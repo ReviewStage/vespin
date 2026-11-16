@@ -65,6 +65,8 @@ import { provenanceText } from "@repo/features/time-format";
 import {
   CHOOSE_AN_ITEM_WORDS,
   countWords,
+  NO_RESULTS_HINT,
+  noResultsForWords,
   readFailedWords,
   readingWords,
   TERM,
@@ -270,11 +272,6 @@ const LINE_PART = " · ";
 
 /** No parent's sub-tasks stand open, as a section opens. */
 const NONE_OPEN: ReadonlySet<string> = new Set();
-
-/** What the list's search says where it finds nothing. */
-function noMatchWords(search: string): string {
-  return `No tasks match “${search}”.`;
-}
 
 /** A destination on vespin.dev in the workspace, opened in Safari, since the app draws no page for it yet. */
 function openOnWeb(destination: LinkDestination, workspace: Workspace | undefined): void {
@@ -958,7 +955,11 @@ function TasksTree({
     if (found.length === 0) {
       return (
         (treeEmpty(tree) ? notRead(read, onRefresh) : undefined) ?? (
-          <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />
+          <EmptyState
+            title={noResultsForWords(search)}
+            symbol={GLYPH.SEARCH}
+            description={NO_RESULTS_HINT}
+          />
         )
       );
     }
@@ -1591,11 +1592,14 @@ export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
 export function TaskAgentRow({
   line,
   task,
+  named = false,
   onArchive,
 }: {
   readonly line: TaskAgentLine;
   /** The task it works on, which its preview names over it; none where the list does not hold it. */
   readonly task?: TaskSummary | undefined;
+  /** Whether its row names the task in its line, as a list of many tasks' agents does, such as Search's; its preview names it either way. */
+  readonly named?: boolean | undefined;
   /** Asks to archive the agent, once it rests (`useAgentArchiveAsk`); its row offers no Archive where none is given. */
   readonly onArchive?: ((agentId: string) => void) | undefined;
 }) {
@@ -1629,6 +1633,7 @@ export function TaskAgentRow({
       runsOn={runsOn}
       runsOnGlyph={runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform })}
       waiting={waiting}
+      task={named ? task?.name : undefined}
       pullRequest={
         pullRequest === undefined
           ? undefined

@@ -36,7 +36,13 @@ import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link
 import { agentName as agentNameOf, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
-import { CHOOSE_AN_ITEM_WORDS, SELECTION_WORDS, selectedWords } from "@repo/features/words";
+import {
+  CHOOSE_AN_ITEM_WORDS,
+  NO_RESULTS_HINT,
+  noResultsForWords,
+  SELECTION_WORDS,
+  selectedWords,
+} from "@repo/features/words";
 import { INBOX_FEED, type InboxFeed, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
@@ -180,11 +186,6 @@ function askFileKind(mediaType: string) {
   if (isVideoType(mediaType)) return INBOX_MEDIA.VIDEO;
 
   return isAudioType(mediaType) ? INBOX_MEDIA.AUDIO : INBOX_MEDIA.PICTURE;
-}
-
-/** What the list's search says where it finds nothing. */
-function noMatchWords(search: string): string {
-  return `No items match “${search}”.`;
 }
 
 type InboxRowsProps = {
@@ -425,7 +426,13 @@ function InboxEmpty({
   }
 
   if (search.trim() !== "") {
-    return <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />;
+    return (
+      <EmptyState
+        title={noResultsForWords(search)}
+        symbol={GLYPH.SEARCH}
+        description={NO_RESULTS_HINT}
+      />
+    );
   }
 
   const instead = inboxScopeInstead(show, counts);
