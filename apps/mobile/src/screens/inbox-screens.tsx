@@ -68,6 +68,7 @@ import {
   Screen,
   SplitView,
   scopeMenu,
+  scopeSubtitle,
   THREAD_MEDIA,
   type ThreadMedia,
   type ThreadMessage,
@@ -139,6 +140,12 @@ const SCOPE_LABEL = "Filter";
 
 /** The scopes whose pill carries its count, the two that say how much waits. */
 const COUNTED_SCOPES: ReadonlySet<InboxShow> = new Set([INBOX_SHOW.NEEDS_ME, INBOX_SHOW.OPEN]);
+
+/** The scopes that narrow Open, which the filter button stands filled for and the bar names under its title, as Mail's filters do; All widens it instead, so it names no filter. */
+const NARROWING_SCOPES: ReadonlySet<InboxShow> = new Set([
+  INBOX_SHOW.NEEDS_ME,
+  INBOX_SHOW.REMINDERS,
+]);
 
 /** The bar's menu of the Inbox's other acts, a round glass ⋯ as iOS draws a toolbar's menu. */
 const MORE = { label: "More", symbol: GLYPH.MORE } as const;
@@ -1152,8 +1159,10 @@ function InboxSplitScreen({
       choosing === undefined
         ? {
             title: INBOX_TITLE,
+            // Note that beside the app sidebar the scope leaves the list for the filter button, so the bar names a narrowing one under its title, as Mail's "Filtered by: Unread"; elsewhere the scopes stand over the list and say it themselves.
+            titleLine: threeColumns ? scopeSubtitle(scopes, NARROWING_SCOPES.has(show)) : undefined,
             filter: threeColumns
-              ? scopeMenu(SCOPE_LABEL, scopes, show !== INBOX_SHOW.OPEN)
+              ? scopeMenu(SCOPE_LABEL, scopes, NARROWING_SCOPES.has(show))
               : undefined,
             menu,
             search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },

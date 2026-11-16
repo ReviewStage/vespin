@@ -94,6 +94,7 @@ export {
   glyphSymbol,
   type LucideSymbol,
   type MarkLook,
+  runsOnGlyph,
   sectionGlyph,
 } from "./glyph.js";
 
@@ -278,6 +279,7 @@ export {
   SplitOverTabs,
   SplitView,
   scopeMenu,
+  scopeSubtitle,
   UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 

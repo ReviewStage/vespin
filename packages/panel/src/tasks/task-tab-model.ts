@@ -42,7 +42,7 @@ export type FixedSidePanelTab = (typeof SIDE_PANEL_TAB)[keyof typeof SIDE_PANEL_
 /** Every kind of tab, in the order the "+" offers them and a task whose order holds none of them stands them in. */
 export const SIDE_PANEL_TABS: readonly FixedSidePanelTab[] = Object.values(SIDE_PANEL_TAB);
 
-/** Which of an agent's Pull request tab's tabs it shows under its fixed header: the description and conversation, the checks, the chapters, or the changed files. */
+/** Which of a Pull request tab's tabs it shows under its fixed header: the description and conversation, the checks, the chapters, or the changed files. */
 export const PULL_REQUEST_VIEW = {
   CONVERSATION: "conversation",
   CHECKS: "checks",
