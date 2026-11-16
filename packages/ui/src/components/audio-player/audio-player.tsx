@@ -7,8 +7,18 @@ import { motionHeld } from "../../motion-timing.js";
 import { notePictureOrigin } from "../../picture-expand.js";
 import { usePlayingFrames } from "../../playing-frames.js";
 import { WAVEFORM_FLOOR, waveformPeaks } from "../../waveform.js";
-import { BUTTON_VARIANT, IconButton } from "../button/button.js";
+import { BUTTON_CORNERS, BUTTON_VARIANT, ICON_BUTTON_SIZE, IconButton } from "../button/button.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, Card } from "../card/card.js";
+import {
+  MEDIA_PILL,
+  MEDIA_SPEEDS,
+  mediaKey,
+  NORMAL_SPEED,
+  nextSpeed,
+  SpeedButton,
+  setSpeed,
+  toggleOf,
+} from "../media-controls/media-controls.js";
 import { SLIDER_LENGTH, SLIDER_LOOK, Slider } from "../slider/slider.js";
 import { Tooltip } from "../tooltip/hint.js";
 import { dataUrlBytes, dataUrlMediaType, useBlobUrl } from "../video-player/video-player.js";
@@ -25,23 +35,33 @@ import { dataUrlBytes, dataUrlMediaType, useBlobUrl } from "../video-player/vide
  * over it (`SLIDER_LOOK.BARE`) takes a press or a drag anywhere along it to
  * seek there and the slider's own keys to step it; the keyboard's ring
  * stands around the waveform while the slider holds the focus
- * (`audio-player.css`). Beside it stand Play and Pause, how far it has run of how long,
+ * (`audio-player.css`). While a pointer is over the waveform, where the
+ * device hovers, a thin line stands at the pointer with the time a press
+ * there would go to in the window's hint pill beside it, as SoundCloud draws
+ * it; it is decoration, hidden from a reader, and lets the press through to
+ * the slider under it. Before the waveform stands Play, a round disc in the
+ * text's ink, larger than the controls beside it, as a voice message's Play
+ * is the one press it exists for; after it, how far it has run of how long,
+ * its speed in the time's muted ink, which a press walks round a voice
+ * message's 1×, 1.5×, and 2×,
  * and Expand where the place has a viewer to open. There is no volume
  * control and no mute: the system's volume is the one a reader already
  * reaches for, as for a recording's sound (`../video-player/`).
  *
- * While focus is in the player its keys are a video's: Space or K plays or
- * pauses, the left and right arrows seek five seconds, and Home and End go
- * to the start and the end, each kept from the place around it, such as
- * the viewer whose arrows walk its files; a button's own Space presses the
+ * While focus is in the player its keys are a video's
+ * (`../media-controls/`): Space or K plays or pauses, the left and right
+ * arrows seek five seconds, Home and End go to the start and the end, and
+ * < and > step the speed, each kept from the place around it, such as the
+ * viewer whose arrows walk its files; a button's own Space presses the
  * button.
  *
  * Where a picture would be drawn, it plays in place (`INLINE`) in a card a
  * picture's stand-in wide, at most its column's width. A place that has a
  * viewer to open hands `onExpand`: Expand pauses it here and opens the
  * viewer, which grows from the card as it grows from a picture's tile. In
- * the viewer (`VIEWER`) it stands as wide as the place makes it, its
- * waveform taller, and plays at once, unless motion is held still
+ * the viewer (`VIEWER`) it uses the room as Quick Look does: its waveform
+ * tall across the place, Play centered under it with the time on one side
+ * and the speed on the other, and no Expand; and it plays at once, unless motion is held still
  * (`motionHeld`: reduced motion or a capture run), where it waits for Play.
  * A clip keeps its place wherever it is drawn, as a recording does
  * (`useMediaPlace`): the viewer an Expand opens goes on from where the card
@@ -78,21 +98,6 @@ const WAVEFORM_HEIGHT = 100;
 /** The milliseconds in a second, for the playhead in the one clock a clip is told in. */
 const MS_PER_SECOND = 1_000;
 
-/** How far an arrow key seeks, in seconds. */
-const ARROW_SEEK_S = 5;
-
-/** The keys that play or pause the player while focus is in it. */
-const TOGGLE_KEYS: ReadonlySet<string> = new Set([" ", "k", "K"]);
-
-/** How far each arrow seeks, in seconds, while focus is in the player. */
-const SEEK_KEYS: ReadonlyMap<string, number> = new Map([
-  ["ArrowLeft", -ARROW_SEEK_S],
-  ["ArrowRight", ARROW_SEEK_S],
-]);
-
-/** Where Home and End send the clip: its start, or its end. */
-const END_KEYS = { START: "Home", END: "End" } as const;
-
 /** The rate a clip is decoded at for its waveform, which only its loudness is read from. */
 const DECODE_RATE = 44_100;
 
@@ -115,6 +120,7 @@ interface Playback {
   readonly playing: boolean;
   readonly at: number;
   readonly duration: number;
+  readonly speed: number;
 }
 
 /** Each clip's waveform, by its `data:` URL, the latest drawn last. */
@@ -189,45 +195,7 @@ function useWaveform(dataUrl: string): readonly number[] | undefined {
   return read;
 }
 
-/** Plays a paused clip, or pauses a playing one. */
-function toggleOf(audio: HTMLAudioElement | null): void {
-  if (audio === null) return;
-
-  if (audio.paused) audio.play().catch(() => undefined);
-  else audio.pause();
-}
-
-/** Where a clip ends, in seconds, or where it stands while its length is not yet known. */
-function endOf(audio: HTMLAudioElement): number {
-  return Number.isFinite(audio.duration) ? audio.duration : audio.currentTime;
-}
-
-/**
- * Answers a key pressed while focus is in the player: plays or pauses,
- * seeks, or goes to an end, and keeps the key from the place around it.
- * Note that Space on one of its buttons is left to the button, which it
- * presses.
- */
-function playerKey(event: React.KeyboardEvent<HTMLElement>, audio: HTMLAudioElement | null): void {
-  if (audio === null || event.metaKey || event.ctrlKey || event.altKey) return;
-  const onButton = event.target instanceof HTMLButtonElement;
-  const seek = SEEK_KEYS.get(event.key);
-
-  if (TOGGLE_KEYS.has(event.key) && !(onButton && event.key === " ")) {
-    if (!event.repeat) toggleOf(audio);
-  } else if (seek !== undefined) {
-    audio.currentTime = Math.min(endOf(audio), Math.max(0, audio.currentTime + seek));
-  } else if (event.key === END_KEYS.START || event.key === END_KEYS.END) {
-    audio.currentTime = event.key === END_KEYS.START ? 0 : endOf(audio);
-  } else {
-    return;
-  }
-
-  event.preventDefault();
-  event.stopPropagation();
-}
-
-/** One of the player's buttons, its name its hint. */
+/** One of the player's quiet buttons, its name its hint. */
 function PlayerButton({
   label,
   icon,
@@ -241,6 +209,60 @@ function PlayerButton({
     <Tooltip label={label}>
       <IconButton icon={icon} label={label} variant={BUTTON_VARIANT.QUIET} onClick={onPress} />
     </Tooltip>
+  );
+}
+
+/** Play, or Pause while it plays: the player's one large press, a round disc in the text's ink, its name its hint. */
+function PlayButton({
+  playing,
+  onPress,
+}: {
+  playing: boolean;
+  onPress: () => void;
+}): React.JSX.Element {
+  const label = playing ? AUDIO_LABEL.PAUSE : AUDIO_LABEL.PLAY;
+
+  return (
+    <Tooltip label={label}>
+      <IconButton
+        icon={playing ? <PauseIcon /> : <PlayIcon />}
+        label={label}
+        variant={BUTTON_VARIANT.INK}
+        corners={BUTTON_CORNERS.ROUND}
+        size={ICON_BUTTON_SIZE.LARGE}
+        onClick={onPress}
+      />
+    </Tooltip>
+  );
+}
+
+/** The time a clip told in minutes and seconds: "0:04". */
+function clipTime(seconds: number): string {
+  return playheadText(seconds * MS_PER_SECOND);
+}
+
+/**
+ * The line over the waveform at `at` (a share of its width), in the accent
+ * so it reads over played and unplayed bars alike, and the time a
+ * press there would go to, in the hint pill beside it, on the side with
+ * room: after the line in the waveform's first half, before it in its
+ * second. Only where the device hovers; a touch screen draws none. It is
+ * hidden from a reader and lets a press through to the slider under it.
+ */
+function HoverTime({ at, duration }: { at: number; duration: number }): React.JSX.Element {
+  const side = at < 0.5 ? "left-ui-4" : "right-ui-4";
+
+  return (
+    <span
+      className="ui-audio-player-hover pointer-events-none absolute inset-y-0 hidden [@media(hover:hover)]:block"
+      style={{ left: `${String(at * 100)}%` }}
+      aria-hidden="true"
+    >
+      <span className="absolute inset-y-0 left-0 w-px -translate-x-1/2 bg-accent-fill" />
+      <span className={`absolute top-1/2 -translate-y-1/2 ${side} ${MEDIA_PILL}`}>
+        {clipTime(at * duration)}
+      </span>
+    </span>
   );
 }
 
@@ -296,7 +318,7 @@ function Waveform({
   );
 }
 
-/** A sound clip played in place of a picture or in the viewer: Play, its waveform as the scrubber, its time, and Expand. */
+/** A sound clip played in place of a picture or in the viewer: Play, its waveform as the scrubber, its time, its speed, and Expand. */
 export function AudioPlayer({
   dataUrl,
   label,
@@ -308,23 +330,40 @@ export function AudioPlayer({
   label: string;
   /** Where it plays, which sets how large it stands and whether it starts at once. */
   place?: AudioPlayerPlace | undefined;
-  /** Opens the clip in the viewer; without one, the player offers no Expand. */
+  /** Opens the clip in the viewer; without one, and in the viewer itself, the player offers no Expand. */
   onExpand?: (() => void) | undefined;
 }): React.JSX.Element {
   const url = useBlobUrl(dataUrl);
   const peaks = useWaveform(dataUrl);
   const audio = useRef<HTMLAudioElement>(null);
   const frame = useRef<HTMLSpanElement>(null);
-  const [playback, setPlayback] = useState<Playback>({ playing: false, at: 0, duration: 0 });
+
+  const [playback, setPlayback] = useState<Playback>({
+    playing: false,
+    at: 0,
+    duration: 0,
+    speed: NORMAL_SPEED,
+  });
+
+  // Where the pointer stands over the waveform, a share of its width, while it hovers there.
+  const [hover, setHover] = useState<number>();
   const viewer = place === AUDIO_PLAYER_PLACE.VIEWER;
   // Note that whether it starts is read once, as it mounts, because a clip hears autoplay only then.
   const [starts] = useState(() => viewer && !motionHeld());
   const kept = useMediaPlace(dataUrl);
 
-  const read = (shown: HTMLAudioElement) => {
+  // Note that a read keeps the place unless `moved` says it moved nothing, as a change of speed, which must not claim another player's place.
+  const read = (shown: HTMLAudioElement, moved = true) => {
     const duration = Number.isFinite(shown.duration) ? shown.duration : 0;
-    setPlayback({ playing: !shown.paused, at: Math.min(shown.currentTime, duration), duration });
-    kept.keep(shown);
+
+    setPlayback({
+      playing: !shown.paused,
+      at: Math.min(shown.currentTime, duration),
+      duration,
+      speed: shown.playbackRate,
+    });
+
+    if (moved) kept.keep(shown);
   };
 
   // Once its length is known, the clip goes to where it was left, or its start.
@@ -338,11 +377,11 @@ export function AudioPlayer({
     if (audio.current !== null) read(audio.current);
   });
 
-  const time = `${playheadText(playback.at * MS_PER_SECOND)} / ${playheadText(playback.duration * MS_PER_SECOND)}`;
+  const time = `${clipTime(playback.at)} / ${clipTime(playback.duration)}`;
   const played = playback.duration === 0 ? 0 : playback.at / playback.duration;
 
   const expand =
-    onExpand === undefined
+    onExpand === undefined || viewer
       ? undefined
       : () => {
           audio.current?.pause();
@@ -351,18 +390,70 @@ export function AudioPlayer({
           onExpand();
         };
 
+  // A pointer over the waveform says where a press would go; a finger, which hovers nothing, says nothing.
+  const follow = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType === "touch") return;
+    const box = event.currentTarget.getBoundingClientRect();
+    setHover(
+      box.width === 0
+        ? undefined
+        : Math.min(1, Math.max(0, (event.clientX - box.left) / box.width)),
+    );
+  };
+
+  const play = <PlayButton playing={playback.playing} onPress={() => toggleOf(audio.current)} />;
+
+  const speed = (
+    <SpeedButton
+      speed={playback.speed}
+      variant={BUTTON_VARIANT.SUBTLE}
+      onPress={() => setSpeed(audio.current, nextSpeed(MEDIA_SPEEDS.CLIP, playback.speed))}
+    />
+  );
+
+  const shownTime = (
+    <span className="ui-audio-player-time flex-none text-caption text-muted-foreground tabular-nums">
+      {time}
+    </span>
+  );
+
+  const scrubber = (
+    <span
+      className={`ui-audio-player-scrubber relative block min-w-0 ${viewer ? "h-audio-player-viewer w-full" : "h-ui-32 flex-1"}`}
+      onPointerMove={follow}
+      onPointerLeave={() => setHover(undefined)}
+    >
+      <Waveform peaks={peaks} played={played} />
+      <Slider
+        label={AUDIO_LABEL.SEEK}
+        value={playback.at}
+        max={playback.duration}
+        step={0.1}
+        length={SLIDER_LENGTH.FILL}
+        look={SLIDER_LOOK.BARE}
+        valueText={time}
+        onChange={(at) => {
+          if (audio.current !== null) audio.current.currentTime = at;
+        }}
+      />
+      {hover === undefined || playback.duration === 0 ? null : (
+        <HoverTime at={hover} duration={playback.duration} />
+      )}
+    </span>
+  );
+
   const player = (
     // biome-ignore lint/a11y/useSemanticElements: a player holds a clip and its controls, not a form's controls, so it is no `<fieldset>`.
     <span
       ref={frame}
       // Note that the card's inset is the video bar's, so Play and Expand stand as far from its edge as a video's do.
-      className={`ui-audio-player-frame flex w-full items-center gap-ui-8 focus:outline-none ${viewer ? "" : "p-ui-6"}`}
+      className={`ui-audio-player-frame flex w-full focus:outline-none ${viewer ? "flex-col gap-ui-16" : "items-center gap-ui-8 p-ui-6"}`}
       data-playing={playback.playing}
       tabIndex={-1}
       role="group"
       aria-label={label === "" ? AUDIO_LABEL.PLAYER : `${AUDIO_LABEL.CLIP}: ${label}`}
       // Note that the player hears a key before the control it lands on, because the scrubber steps on an arrow itself.
-      onKeyDownCapture={(event) => playerKey(event, audio.current)}
+      onKeyDownCapture={(event) => mediaKey(event, audio.current, MEDIA_SPEEDS.CLIP)}
     >
       {/* Note that the clip carries no captions track, because no maker of an agent's clips writes one. */}
       {/* biome-ignore lint/a11y/useMediaCaption: an agent's sound clip has no captions to carry. */}
@@ -385,36 +476,30 @@ export function AudioPlayer({
         }}
         onPause={(event) => read(event.currentTarget)}
         onEnded={(event) => read(event.currentTarget)}
+        onRateChange={(event) => read(event.currentTarget, false)}
         // A new address resets the old one's time before its own loads, which is no place of the old clip's.
         onEmptied={kept.forget}
       />
-      <PlayerButton
-        label={playback.playing ? AUDIO_LABEL.PAUSE : AUDIO_LABEL.PLAY}
-        icon={playback.playing ? <PauseIcon /> : <PlayIcon />}
-        onPress={() => toggleOf(audio.current)}
-      />
-      <span
-        className={`ui-audio-player-scrubber relative block min-w-0 flex-1 ${viewer ? "h-ui-64" : "h-ui-32"}`}
-      >
-        <Waveform peaks={peaks} played={played} />
-        <Slider
-          label={AUDIO_LABEL.SEEK}
-          value={playback.at}
-          max={playback.duration}
-          step={0.1}
-          length={SLIDER_LENGTH.FILL}
-          look={SLIDER_LOOK.BARE}
-          valueText={time}
-          onChange={(at) => {
-            if (audio.current !== null) audio.current.currentTime = at;
-          }}
-        />
-      </span>
-      <span className="ui-audio-player-time flex-none text-caption text-muted-foreground tabular-nums">
-        {time}
-      </span>
-      {expand === undefined ? null : (
-        <PlayerButton label={AUDIO_LABEL.EXPAND} icon={<ExpandIcon />} onPress={expand} />
+      {viewer ? (
+        <>
+          {scrubber}
+          {/* The time and the speed stand beside Play in columns of one width either side, so Play stands at the waveform's middle. */}
+          <span className="ui-audio-player-controls grid w-full grid-cols-[1fr_auto_1fr] items-center gap-ui-16">
+            <span className="flex justify-self-end">{shownTime}</span>
+            {play}
+            <span className="flex justify-self-start">{speed}</span>
+          </span>
+        </>
+      ) : (
+        <>
+          {play}
+          {scrubber}
+          {shownTime}
+          {speed}
+          {expand === undefined ? null : (
+            <PlayerButton label={AUDIO_LABEL.EXPAND} icon={<ExpandIcon />} onPress={expand} />
+          )}
+        </>
       )}
     </span>
   );
