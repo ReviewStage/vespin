@@ -93,6 +93,9 @@ const NO_REMINDERS: InboxReminders = new Map();
 /** The Inbox read marks each fixture run made, by its store. */
 const INBOX_READ_MARKS = new WeakMap<object, InboxReadMarks>();
 
+/** The tasks whose first start the fixture refused, by their id, kept for the run whose document it is. */
+const STARTS_REFUSED = new WeakMap<object, ReadonlySet<string>>();
+
 /** No Inbox read mark made. */
 const NO_INBOX_READ_MARKS: InboxReadMarks = new Map();
 
@@ -300,11 +303,33 @@ function olderRead(
 }
 
 /**
+ * A task's start answered as unanswered the first time its task's id is
+ * sent, as a dropped connection leaves it, so a flow sees New task's notice
+ * with Try again, and a Try again under the same id goes through; nothing for
+ * any other act, or a start sent again.
+ */
+function startRefusedOnce(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): PortActResult<typeof ACT_KIND.TASKS_START> | undefined {
+  if (kind !== ACT_KIND.TASKS_START) return undefined;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const { id } = payload as PortActPayload<typeof ACT_KIND.TASKS_START>;
+  const refused = STARTS_REFUSED.get(state) ?? new Set<string>();
+
+  if (id === undefined || refused.has(id)) return undefined;
+  STARTS_REFUSED.set(state, new Set(refused).add(id));
+
+  return { failure: TASK_CALL_FAILURE.UNANSWERED };
+}
+
+/**
  * The writes `-refuseWrites true` refuses, each answered as the host
  * answers once the service has refused it: a task's status and its pin
  * not kept, so the screens put the row back and say why, as they would
- * of a live refusal, a task's start unanswered, so a flow sees New task's
- * notice with Try again once its sheet has closed, and a follower added or a
+ * of a live refusal (a task's start is refused on its first send alone,
+ * `startRefusedOnce`), and a follower added or a
  * memory deleted unanswered, so a flow sees the notice over Add a
  * follower's sheet and Settings'.
  */
@@ -317,7 +342,6 @@ const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>>
   [ACT_KIND.TASKS_RESTORE, () => false],
   [ACT_KIND.TASKS_SET_STANDING, () => false],
   [ACT_KIND.TASKS_PIN, () => false],
-  [ACT_KIND.TASKS_START, () => ({ failure: TASK_CALL_FAILURE.UNANSWERED })],
   [ACT_KIND.TASKS_ADD_FOLLOWER, () => ({ failure: FOLLOWER_CALL_FAILURE.UNANSWERED })],
   [ACT_KIND.MEMORIES_FORGET, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
   // Note that a note to the people who make the app is refused too, so its footer's failure tone shows.
@@ -368,6 +392,13 @@ export function fixtureActs(
         const refused = refusesWrites ? REFUSED_WRITES.get(kind as PortActKind) : undefined;
 
         if (refused !== undefined) return Promise.resolve(refused());
+
+        // SAFETY: the port is keyed by act kind.
+        const startRefused = refusesWrites
+          ? startRefusedOnce(state, kind as PortActKind, payload)
+          : undefined;
+
+        if (startRefused !== undefined) return Promise.resolve(startRefused);
         // SAFETY: the port is keyed by act kind.
         const older = olderRead(state, profile, kind as PortActKind, payload);
 
