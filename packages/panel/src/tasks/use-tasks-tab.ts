@@ -6,6 +6,8 @@ import type { InboxItemHome } from "@repo/features/inbox-wire";
 import {
   LINK_DESTINATION,
   type LinkDestination,
+  type NumberedAddress,
+  pullRequestAddressOf,
   type ReadLink,
   taskLinkStep,
   taskNumberOf,
@@ -116,6 +118,7 @@ import {
 } from "../workspace-routes.js";
 import { inboxItemHomeQueryOptions, taskByNumberQueryOptions } from "./agent-reads.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./automations-place.js";
+import { type ByPullRequest, NO_PULL_REQUESTS_KEPT, withPullRequest } from "./by-pull-request.js";
 import {
   CLOSED_TAB_STRIP,
   type ClosedTab,
@@ -152,7 +155,8 @@ import {
 } from "./task-repository-menus.js";
 import { MAIN_TAB, SIDE_PANEL_TAB } from "./task-tab-model.js";
 import { loadedTasksFixture } from "./tasks-fixture-loader.js";
-import type { ThreadReveal } from "./thread-reveal.js";
+import type { ThreadAsked, ThreadReveal } from "./thread-reveal.js";
+import { useAgentPullRequestAddress } from "./use-agent-pull-request.js";
 import { type AgentsControl, holdsNothing, readAgentById, useAgents } from "./use-agents.js";
 import {
   type DescriptionHistoryControl,
@@ -175,6 +179,7 @@ import {
   type TaskHolds,
   useSidePanel,
 } from "./use-side-panel.js";
+import { useTaskPullRequests } from "./use-task-work.js";
 import { useEndTerminalTab, useHeldTerminalTabs } from "./use-terminal-session.js";
 import { useWarmAgent } from "./use-warm-agent.js";
 import {
@@ -433,13 +438,10 @@ export interface TasksControl {
   onRevealMessage: (place: AgentPlaceOf<typeof LINK_DESTINATION.MESSAGE>) => void;
   /** The last ask to bring one review thread of an agent's pull request into view, which a link to it makes; let go once its Pull request tab takes it (`thread-reveal.tsx`). */
   threadReveal: ThreadReveal | undefined;
-  /** The agent's Pull request tab took the ask, so a later visit to the tab does not answer it again. */
+  /** The pull request's tab took the ask, so a later visit to the tab does not answer it again. */
   onThreadRevealed: (ask: number) => void;
-  /** Asks the Pull request tab of `changes`, wherever it is drawn, to bring one review thread into view, going nowhere: what a link to it opened beside an Inbox item asks. */
-  onRevealThread: (
-    changes: string,
-    place: AgentPlaceOf<typeof LINK_DESTINATION.PULL_REQUEST_THREAD>,
-  ) => void;
+  /** Asks the Pull request tab of `pullRequest`, wherever it is drawn, to bring one review thread into view, going nowhere: what a link to it opened beside an Inbox item asks. */
+  onRevealThread: (pullRequest: NumberedAddress, thread: ThreadAsked) => void;
   /** The last ask to show a section, under the task it was asked of, so a section of a task not yet open is shown once it is drawn; let go once shown. */
   sectionReveal: { readonly taskId: string; readonly reveal: SectionReveal } | undefined;
   /** The task's page showed the section an ask named, so a later visit to the task does not show it again. */
@@ -1292,24 +1294,19 @@ export function useTasksTab(input: {
   // An agent, or its Pull request, pinned to the sidebar is named there as
   // its tab is named now, so a pin made before the agent had its title or its
   // pull request was read, or before a rename, catches up while its task is open.
+  const activePullRequests = useTaskPullRequests(viewed.activeTaskId ?? "");
+
   const pinLabels = useMemo(
     () => ({
-      pullRequests: new Map(
-        [...agents.pullRequests].map(([agentId, pullRequest]) => [
-          agentId,
-          pullRequestLabelOf(pullRequest),
-        ]),
-      ),
-      numbered: new Map(
-        [...agents.numberedPullRequests].map(([agentId, numbered]) => [
-          agentId,
-          new Map(
-            [...numbered].map(([number, pullRequest]) => [number, pullRequestLabelOf(pullRequest)]),
-          ),
-        ]),
-      ),
+      pullRequests: activePullRequests.reduce<ByPullRequest<string>>((named, line) => {
+        const address = line.url === undefined ? undefined : pullRequestAddressOf(line.url);
+
+        return address === undefined
+          ? named
+          : withPullRequest(named, address, pullRequestLabelOf(line));
+      }, NO_PULL_REQUESTS_KEPT),
     }),
-    [agents.pullRequests, agents.numberedPullRequests],
+    [activePullRequests],
   );
 
   const { onRenamePins } = sidePanel;
@@ -2388,20 +2385,8 @@ export function useTasksTab(input: {
     } else showPanelTab(place.taskId, tab);
   };
 
-  // Note that a pull request two of the open task's agents share opens in the tab already open on it, whichever agent it stands under, as the panel's own door picks it (`changesTabOf`), so a link never stands a second tab on one pull request.
-  // Only a tab the task draws is taken, its agent one of the task's agents at hand: not an archived agent's, nor one of a page the panel stands beside instead.
-  const sharedChangesAgent = (taskId: string, agentId: string): string => {
-    const url = taskId === viewed.activeTaskId ? agents.pullRequests.get(agentId)?.url : undefined;
-
-    if (url === undefined) return agentId;
-    const drawn = agents.agentIds ?? [];
-
-    const open = sidePanel.changes.find(
-      (tab) => drawn.includes(tab.changes) && agents.pullRequests.get(tab.changes)?.url === url,
-    );
-
-    return open?.changes ?? agentId;
-  };
+  // An earlier link to an agent's Changes or one of its review threads opens the pull request the agent's line names.
+  const agentPullRequestOf = useAgentPullRequestAddress();
 
   // A link's workspace, by its id, its slug, or a slug it stood under before: the workspace listed after the link, and
   // its listing, where the account is in it and another is listed, which the link's door does once its move lands.
@@ -2503,15 +2488,12 @@ export function useTasksTab(input: {
     );
   };
 
-  // A review thread's ask, taken by its agent's Pull request tab once drawn; each ask is its own.
-  const revealThread = (
-    changes: string,
-    place: AgentPlaceOf<typeof LINK_DESTINATION.PULL_REQUEST_THREAD>,
-  ) =>
+  // A review thread's ask, taken by its pull request's tab once drawn; each ask is its own.
+  const revealThread = (pullRequest: NumberedAddress, thread: ThreadAsked) =>
     setThreadReveal((last) => ({
-      agentId: changes,
-      threadId: place.threadId,
-      view: place.view,
+      pullRequest,
+      threadId: thread.threadId,
+      view: thread.view,
       ask: (last?.ask ?? 0) + 1,
     }));
 
@@ -2532,6 +2514,24 @@ export function useTasksTab(input: {
    * the agent's tab opens with it, and that its tab is opened with no task
    * words, since a link carries none; its own rows name its task once they land.
    */
+  // The pull request an agent's line names, at once where the task list stands, else once it first answers, unless the window moved on before then.
+  const onAgentPullRequest = (
+    agentId: string,
+    then: (pullRequest: NumberedAddress | undefined) => void,
+  ) => {
+    if (listCollections.agentPullRequests.isReady()) {
+      then(agentPullRequestOf(agentId));
+
+      return;
+    }
+
+    const current = linkRead();
+    const opening = keepLinkLanded();
+    listCollections.agentPullRequests.onFirstReady(() => {
+      if (current()) opening(() => then(agentPullRequestOf(agentId)));
+    });
+  };
+
   const openOnTask = (taskId: string, place: AgentPlace) => {
     const column = agentTab(place.agentId);
     // A tab of the side panel a link opens, and the link a narrow room's step on it stands at (`places/task-step.ts`).
@@ -2548,27 +2548,41 @@ export function useTasksTab(input: {
         return;
       }
 
-      case LINK_DESTINATION.CHANGES: {
-        const tab = changesTab(sharedChangesAgent(taskId, place.agentId));
-        linkOnTask({ taskId: taskId, side: sideOf(tab) }, () =>
-          linkPanelTab({ ...place, taskId }, tab),
-        );
+      // An agent's Changes opens the pull request its line names, and the agent's own tab where its line names none.
+      case LINK_DESTINATION.CHANGES:
+        onAgentPullRequest(place.agentId, (pullRequest) => {
+          if (pullRequest === undefined) {
+            linkOnTask({ taskId: taskId, column }, () => showColumnTab(taskId, column));
 
-        return;
-      }
+            return;
+          }
 
-      // A review thread opens its agent's Pull request tab on the view the link names.
-      case LINK_DESTINATION.PULL_REQUEST_THREAD: {
-        const changes = sharedChangesAgent(taskId, place.agentId);
-        const tab = changesTab(changes);
-        linkOnTask({ taskId: taskId, side: sideOf(tab) }, () => {
-          sidePanel.onPullRequestView(tab, place.view);
-          linkPanelTab({ ...place, taskId }, tab);
-          revealThread(changes, place);
+          const tab = changesTab(pullRequest);
+          linkOnTask({ taskId: taskId, side: sideOf(tab) }, () =>
+            linkPanelTab({ ...place, taskId }, tab),
+          );
         });
 
         return;
-      }
+
+      // A review thread opens the tab of the pull request its agent's line names on the view the link names, and the agent's own tab where its line names none.
+      case LINK_DESTINATION.PULL_REQUEST_THREAD:
+        onAgentPullRequest(place.agentId, (pullRequest) => {
+          if (pullRequest === undefined) {
+            linkOnTask({ taskId: taskId, column }, () => showColumnTab(taskId, column));
+
+            return;
+          }
+
+          const tab = changesTab(pullRequest);
+          linkOnTask({ taskId: taskId, side: sideOf(tab) }, () => {
+            sidePanel.onPullRequestView(tab, place.view);
+            linkPanelTab({ ...place, taskId }, tab);
+            revealThread(pullRequest, place);
+          });
+        });
+
+        return;
 
       case LINK_DESTINATION.AGENT:
         linkOnTask({ taskId: taskId, column }, () => showColumnTab(taskId, column));

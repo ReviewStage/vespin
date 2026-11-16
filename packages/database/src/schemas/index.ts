@@ -58,6 +58,8 @@ export * from "./github-mention.js";
 
 export * from "./github-personal-token.js";
 
+export * from "./github-pull-request-move.js";
+
 export * from "./github-rate-hold.js";
 
 export * from "./github-repository.js";
