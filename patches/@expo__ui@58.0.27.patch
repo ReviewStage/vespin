@@ -27,7 +27,7 @@ index b542a50431f0a501a81c96d06d8705e745364a81..25de3ea1f08148cf00abb15c275fc229
       * Description of why the content is not available.
       */
 diff --git a/build/swift-ui/Image/index.d.ts b/build/swift-ui/Image/index.d.ts
-index f1aeaae3b55fd5cb2d30b952c096b086391575a6..a4c7845d5604e78a36dfae1a67599654892f837a 100644
+index f1aeaae3b55fd5cb2d30b952c096b086391575a6..2b1ebb457380626cbddb8f0b335e6be90bea1cef 100644
 --- a/build/swift-ui/Image/index.d.ts
 +++ b/build/swift-ui/Image/index.d.ts
 @@ -28,6 +28,17 @@ export interface ImageProps extends CommonViewModifierProps {
@@ -48,6 +48,45 @@ index f1aeaae3b55fd5cb2d30b952c096b086391575a6..a4c7845d5604e78a36dfae1a67599654
      /**
       * The variable value that alters the symbol's appearance.
       * A number between 0.0 and 1.0.
+diff --git a/build/swift-ui/List/index.d.ts b/build/swift-ui/List/index.d.ts
+index 0f3d4634c3fcfb4361000f4266a9ad5be8aa822b..5c014b36ae491a7dc1a5f3aba22a311f02f489c5 100644
+--- a/build/swift-ui/List/index.d.ts
++++ b/build/swift-ui/List/index.d.ts
+@@ -12,9 +12,18 @@ export interface ListProps extends CommonViewModifierProps {
+     selection?: (string | number)[];
+     /**
+      * Callback triggered when the selection changes in a list.
+-     * Returns an array of selected item tags.
++     * Returns an array of selected item tags, and whether the list stands in edit mode as they change.
+      */
+-    onSelectionChange?: (selection: (string | number)[]) => void;
++    onSelectionChange?: (selection: (string | number)[], editing: boolean) => void;
++    /**
++     * Whether the list stands in edit mode, as a binding the system may switch on itself, such as on a two-finger drag down the rows.
++     * Requires `selection`. Left out, edit mode follows the environment.
++     */
++    editing?: boolean;
++    /**
++     * Callback triggered when the system switches edit mode, with the rows selected by then.
++     */
++    onEditingChange?: (editing: boolean, selection: (string | number)[]) => void;
+ }
+ /**
+  * A list component that renders its children using a native SwiftUI `List`.
+diff --git a/build/swift-ui/List/index.js b/build/swift-ui/List/index.js
+index 35e91fc87448e062bc43cec99c3e82a8b2b517b5..9d743fc2bac2e3812a3d59203a38bb5f7072222c 100644
+--- a/build/swift-ui/List/index.js
++++ b/build/swift-ui/List/index.js
+@@ -10,7 +10,8 @@ function transformListProps(props) {
+         modifiers,
+         ...modifiers ? createViewModifierEventListener(modifiers) : undefined,
+         ...restProps,
+-        onSelectionChange: ({ nativeEvent: { selection } })=>props?.onSelectionChange?.(selection)
++        onSelectionChange: ({ nativeEvent: { selection, editing } }) => props?.onSelectionChange?.(selection, editing === true),
++        onEditingChange: ({ nativeEvent: { editing, selection } })=>props?.onEditingChange?.(editing, selection)
+     };
+ }
+ /**
 diff --git a/build/swift-ui/modifiers/index.d.ts b/build/swift-ui/modifiers/index.d.ts
 index 482ba8f30f4f393a2d56708cc25314d25db2b521..ed414d5c1929ff271f350e8a0ed60f5cd6332b72 100644
 --- a/build/swift-ui/modifiers/index.d.ts
@@ -126,7 +165,7 @@ index 56dc559f87456e0b6b86f1b91529d9395d4c6a61..495964269db54444a1344d045cb893a4
    }
  }
 diff --git a/ios/ImageView.swift b/ios/ImageView.swift
-index 170de73445439a3ba4e5495643ee5f7c3eb332ab..c78347146acb72f741d29c8bd4c841fbbd6bfd5e 100644
+index 170de73445439a3ba4e5495643ee5f7c3eb332ab..95c9de4367df2853066c81d9f06320bb7cd4c874 100644
 --- a/ios/ImageView.swift
 +++ b/ios/ImageView.swift
 @@ -8,6 +8,10 @@ public final class ImageViewProps: UIBaseViewProps {
@@ -195,6 +234,89 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..c78347146acb72f741d29c8bd4c841fb
      } else if let url = props.uiImage,
                let url = URL(string: url),
                let data = try? Data(contentsOf: url),
+diff --git a/ios/ListView.swift b/ios/ListView.swift
+index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..6deb490e1bfb0ec626fa760cdffdee49483121bb 100644
+--- a/ios/ListView.swift
++++ b/ios/ListView.swift
+@@ -5,13 +5,17 @@ import SwiftUI
+ 
+ final class ListProps: UIBaseViewProps {
+   @Field var selection: [Either<String, Double>]?
++  // Whether the list stands in edit mode, handed as a binding the system may write, so a two-finger drag down the rows can switch it on as Mail's does; nil leaves edit mode to the environment.
++  @Field var editing: Bool?
+   var onSelectionChange = EventDispatcher()
++  var onEditingChange = EventDispatcher()
+ }
+ 
+ struct ListView: ExpoSwiftUI.View {
+   @ObservedObject var props: ListProps
+   @State private var selection = Set<AnyHashable>()
+   @State private var crossAxisSize: CGFloat = 0
++  @State private var editMode: EditMode = .inactive
+ 
+   var body: some View {
+     list
+@@ -21,7 +25,32 @@ struct ListView: ExpoSwiftUI.View {
+ 
+   @ViewBuilder
+   private var list: some View {
+-    if props.selection != nil {
++    if props.selection != nil, props.editing != nil {
++      List(selection: $selection) {
++        Children()
++      }
++      .environment(\.editMode, $editMode)
++      .onAppear {
++        selection = Self.getHashableSetFromEither(props.selection)
++        editMode = props.editing == true ? .active : .inactive
++      }
++      .onChange(of: props.selection) { newValue in
++        selection = Self.getHashableSetFromEither(newValue)
++      }
++      .onChange(of: props.editing) { newValue in
++        editMode = newValue == true ? .active : .inactive
++      }
++      .onChange(of: selection) { newSelection in
++        handleSelectionChange(selection: newSelection)
++      }
++      .onChange(of: editMode) { newMode in
++        // Note that a drag that switches edit mode on drops the row the list held open, as Mail's does, so the drag ticks only the rows it crosses, even before JavaScript answers with its own selection.
++        if newMode == .active, props.editing != true {
++          selection.subtract(Self.getHashableSetFromEither(props.selection))
++        }
++        handleEditingChange(editing: newMode == .active)
++      }
++    } else if props.selection != nil {
+       List(selection: $selection) {
+         Children()
+       }
+@@ -53,7 +82,25 @@ struct ListView: ExpoSwiftUI.View {
+       }
+       return nil
+     }
+-    props.onSelectionChange(["selection": selectionArray])
++    // Note that the edit mode rides with the selection, since a two-finger drag ticks a row and switches edit mode on in one change, and its two events may reach JavaScript in either order.
++    props.onSelectionChange(["selection": selectionArray, "editing": editMode == .active])
++  }
++
++  // Note that the selection rides with the edit mode, since a drag that switches it on has already ticked the rows it crossed. Only the full edit mode counts, never the transient one SwiftUI may stand a list in while a row's swipe actions show, so a swipe never starts Select mode.
++  func handleEditingChange(editing: Bool) {
++    if (props.editing == true) == editing { return }
++    props.onEditingChange(["editing": editing, "selection": Self.selectionArray(selection)])
++  }
++
++  private static func selectionArray(_ selection: Set<AnyHashable>) -> [Any] {
++    selection.compactMap { value in
++      if let stringValue = value as? String {
++        return stringValue
++      } else if let doubleValue = value as? Double {
++        return doubleValue
++      }
++      return nil
++    }
+   }
+ 
+   private static func getHashableSetFromEither(_ array: [Either<String, Double>]?) -> Set<AnyHashable> {
 diff --git a/ios/Modifiers/ViewModifierRegistry.swift b/ios/Modifiers/ViewModifierRegistry.swift
 index 07a856574df36a69b802bd483caf4e33ae05a976..96144798f4a0de5176074149fd73e37838609651 100644
 --- a/ios/Modifiers/ViewModifierRegistry.swift
@@ -233,3 +355,59 @@ index 07a856574df36a69b802bd483caf4e33ae05a976..96144798f4a0de5176074149fd73e378
      register("listSectionMargins") { params, appContext, _ in
        return try ListSectionMargins(from: params, appContext: appContext)
      }
+diff --git a/src/swift-ui/List/index.tsx b/src/swift-ui/List/index.tsx
+index a4ebca663b0b1cda3ca92420dd956a012c928567..5902bc8f155b81bc4a2efe566d88c48c2fd9ce2a 100644
+--- a/src/swift-ui/List/index.tsx
++++ b/src/swift-ui/List/index.tsx
+@@ -18,7 +18,9 @@ function transformListProps(props: Omit<ListProps, 'children'>): Omit<NativeList
+     modifiers,
+     ...(modifiers ? createViewModifierEventListener(modifiers) : undefined),
+     ...restProps,
+-    onSelectionChange: ({ nativeEvent: { selection } }) => props?.onSelectionChange?.(selection),
++    onSelectionChange: ({ nativeEvent: { selection, editing } }) => props?.onSelectionChange?.(selection, editing === true),
++    onEditingChange: ({ nativeEvent: { editing, selection } }) =>
++      props?.onEditingChange?.(editing, selection),
+   };
+ }
+ 
+@@ -35,18 +37,35 @@ export interface ListProps extends CommonViewModifierProps {
+ 
+   /**
+    * Callback triggered when the selection changes in a list.
+-   * Returns an array of selected item tags.
++   * Returns an array of selected item tags, and whether the list stands in edit mode as they change.
+    */
+-  onSelectionChange?: (selection: (string | number)[]) => void;
++  onSelectionChange?: (selection: (string | number)[], editing: boolean) => void;
++
++  /**
++   * Whether the list stands in edit mode, as a binding the system may switch on itself, such as on a two-finger drag down the rows.
++   * Requires `selection`. Left out, edit mode follows the environment.
++   */
++  editing?: boolean;
++
++  /**
++   * Callback triggered when the system switches edit mode, with the rows selected by then.
++   */
++  onEditingChange?: (editing: boolean, selection: (string | number)[]) => void;
+ }
+ 
+ /**
+  * SelectItemEvent represents an event triggered when the selection changes in a list.
+  */
+-type SelectItemEvent = ViewEvent<'onSelectionChange', { selection: (string | number)[] }>;
++type SelectItemEvent = ViewEvent<'onSelectionChange', { selection: (string | number)[]; editing?: boolean }>;
++
++type EditingChangeEvent = ViewEvent<
++  'onEditingChange',
++  { editing: boolean; selection: (string | number)[] }
++>;
+ 
+-type NativeListProps = Omit<ListProps, 'onSelectionChange'> &
+-  SelectItemEvent & {
++type NativeListProps = Omit<ListProps, 'onSelectionChange' | 'onEditingChange'> &
++  SelectItemEvent &
++  EditingChangeEvent & {
+     children: React.ReactNode;
+   };
+ 

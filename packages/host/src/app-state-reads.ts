@@ -236,9 +236,6 @@ export const selectInboxWaiting = (state: AppStateSnapshot) => state.inbox.waiti
 export const selectInboxTasks = (state: AppStateSnapshot) => state.inbox.tasks;
 export const selectFailedRuns = (state: AppStateSnapshot) => state.inbox.failedRuns;
 
-export const selectPullRequestPublished = (state: AppStateSnapshot) =>
-  state[LIVE_READ.PULL_REQUEST_PUBLISHED];
-
 export const selectMachineCommands = (state: AppStateSnapshot) => state.machineCommands;
 
 /** The device this Mac claims commands as for the account signed in; none before it joined for it, or where the platform runs no commands. */
