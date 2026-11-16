@@ -47,7 +47,7 @@ import {
 } from "@repo/features/agent-wire";
 import { carryOnLineWords } from "@repo/features/carry-on-words";
 import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
-import type { KnownNames } from "@repo/features/entity-kind";
+import { ENTITY_KIND, type KnownNames } from "@repo/features/entity-kind";
 import {
   CONTINUE_IN_CLOUD_LABEL,
   FAILURE_REASON,
@@ -177,7 +177,7 @@ import {
   type WireValue,
 } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
-import { BotIcon, WebhookIcon, ZapIcon } from "lucide-react";
+import { WebhookIcon, ZapIcon } from "lucide-react";
 import {
   createContext,
   memo,
@@ -220,6 +220,7 @@ import { AutomationsWanted, useAutomation } from "../automation-directory.js";
 import { useConnected } from "../connection.js";
 import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
 import { useAgentArchive } from "../desktop/agent-archive.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
@@ -514,7 +515,7 @@ const OLDER_FAILED_LINE = "Earlier messages could not be read.";
 /** A worker's transcript: the subagent task it was handed, and the worker starting. */
 const WORKER_LEAD: TranscriptLead = {
   label: "Subagent task",
-  icon: <BotIcon />,
+  icon: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
   startingLine: "The worker is starting.",
 };
 

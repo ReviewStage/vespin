@@ -763,7 +763,7 @@ export function Section({
   );
 }
 
-/** The App's square at a check's size: its picture once it loads, and its robot on the quiet tile until then and where there is none. */
+/** The App's square at a check's size: its picture once it loads, and its hard hat on the quiet tile until then and where there is none. */
 function CheckSquare({ name, src }: { name: string; src: string | undefined }): React.JSX.Element {
   return (
     <Avatar
@@ -778,7 +778,7 @@ function CheckSquare({ name, src }: { name: string; src: string | undefined }): 
   );
 }
 
-/** A check's avatar read through the service's image proxy, through the scope given, drawn once read and the App's robot until then or where it answered none. */
+/** A check's avatar read through the service's image proxy, through the scope given, drawn once read and the App's hard hat until then or where it answered none. */
 function ProxiedCheckAvatar({
   pictures,
   name,

@@ -1256,16 +1256,6 @@ body,
   }
 }
 
-/* The Automations list's toolbar: where its two acts' words would crowd the
-   title, Create with an agent folds to its glyph and New automation keeps
-   its words (`automation-list-frame.tsx`). */
-/* off-scale: 600px, where the Automations toolbar's acts stop fitting */
-@container automations-toolbar (width < 600px) {
-  .automations-acts {
-    --ui-fold: folded;
-  }
-}
-
 /* The prompt's placeholder, the height of its field at the rows it stands
    (`--automation-prompt-rows`, the editor's `PROMPT_ROWS`), its insets and
    its border (`text-field.css`). */

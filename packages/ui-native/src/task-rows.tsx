@@ -221,7 +221,7 @@ type AgentRowProps = {
   /** The row's id, which its list's `onSelect` is called with. */
   readonly id: string;
   readonly name: string;
-  /** The provider whose harness it runs in, whose mark its tile wears; the sparkles where it is not known. */
+  /** The provider whose harness it runs in, whose mark its tile wears; the hard hat where it is not known. */
   readonly harness?: ModelProvider | undefined;
   readonly state: AgentRowState;
   /** Where it runs: "Cloud", or the device's name. */
