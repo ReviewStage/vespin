@@ -196,6 +196,27 @@ const ADA = { userId: "user-ada", name: "Ada Lovelace" } as const;
 /** A teammate, the workspace's admin, who is assigned a task the account follows. */
 const GRACE = { userId: "user-grace", name: "Grace Hopper" } as const;
 
+/** A thread resolved or reopened as the service answers one: at the status asked for, with the line saying so by Ada at its end. */
+function settledThread(
+  thread: DescriptionCommentThread,
+  action: typeof DESCRIPTION_COMMENT_ACTION.RESOLVE | typeof DESCRIPTION_COMMENT_ACTION.REOPEN,
+): DescriptionCommentThread {
+  const resolving = action === DESCRIPTION_COMMENT_ACTION.RESOLVE;
+
+  const line = {
+    id: fixtureId(resolving ? 307 : 308),
+    kind: resolving ? DESCRIPTION_COMMENT_ENTRY.RESOLVED : DESCRIPTION_COMMENT_ENTRY.REOPENED,
+    writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+    at: Date.now(),
+  };
+
+  return {
+    ...thread,
+    status: resolving ? DESCRIPTION_COMMENT_STATUS.RESOLVED : DESCRIPTION_COMMENT_STATUS.OPEN,
+    entries: [...thread.entries, line],
+  };
+}
+
 /**
  * The sign-in pictures the fixture's people stand in with: organizations'
  * logos on GitHub's avatar host, which the apps may load pictures from,
@@ -2690,12 +2711,19 @@ const ANSWERS: StagedAnswers = {
   // Note that a rename and a delete are taken as the service takes them, though nothing here moves, so the window draws its own write.
   [ACT_KIND.TASKS_RENAME]: () => true,
   [ACT_KIND.TASKS_DELETE]: () => true,
-  // Note that a reply is taken as the service takes one, answered with its thread as it then stands, though nothing here moves.
+  // Note that a reply, a resolve, and a reopen are each taken as the service takes one, answered with the thread as it then stands, though nothing here moves; any other act is answered with the thread unchanged.
   [ACT_KIND.TASKS_COMMENT_ACT]: ({ taskId, threadId, action }) => {
     const thread = INVITES_THREADS.find((each) => each.id === threadId);
 
     if (taskId !== TASK.INVITES || thread === undefined) {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
+    }
+
+    if (
+      action.action === DESCRIPTION_COMMENT_ACTION.RESOLVE ||
+      action.action === DESCRIPTION_COMMENT_ACTION.REOPEN
+    ) {
+      return { thread: settledThread(thread, action.action) };
     }
 
     if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) return { thread };
