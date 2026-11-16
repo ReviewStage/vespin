@@ -5,6 +5,7 @@ import {
   BookBookmark,
   BookOpen,
   BrainCircuit,
+  Broom,
   Building2,
   Calendar,
   CircleArrowOutUpLeft,
@@ -180,6 +181,8 @@ export const GLYPH = {
   SOUND_CLIP: lucideGlyph(AudioWaveform),
   // A video an agent recorded, of its browser or of an app on a Mac.
   RECORDING: lucideGlyph(Video),
+  // Tidying up: work left lying about, such as old threads, gone through and put away.
+  CLEAN_UP: lucideGlyph(Broom),
   SETTINGS: GearIcon,
   TIME: lucideGlyph(Clock),
   // A day, as a date's chip and its picker name it; a time of day is TIME's.

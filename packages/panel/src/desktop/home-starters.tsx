@@ -49,7 +49,7 @@ const STARTERS_TITLE = "Try one of these";
 
 /** Each starter's glyph, as the app draws what it makes. */
 const STARTER_GLYPH = {
-  [STARTER.AGENT_HISTORY]: <GLYPH.HISTORY />,
+  [STARTER.AGENT_HISTORY]: <GLYPH.CLEAN_UP />,
   [STARTER.RACE_FIXES]: <EntityGlyph kind={ENTITY_KIND.PULL_REQUEST} />,
   [STARTER.SMALL_FIX]: <GLYPH.DONE />,
   [STARTER.DAILY_BRIEFING]: <EntityGlyph kind={ENTITY_KIND.AUTOMATION} />,
