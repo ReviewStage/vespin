@@ -85,7 +85,8 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: failure-notice-settings
 # New task closes the moment Start is pressed, as the panel's does; its start
-# refused, the notice says so with Try again, which sends the same start.
+# refused, the notice says so with Try again, which sends the same start, and
+# the start taken on Try again opens its task, which the fixture never reads.
 - launchApp:
     clearState: true
     arguments:
@@ -101,3 +102,9 @@ appId: dev.vespin.ios
 - assertVisible: "Try again"
 - waitForAnimationToEnd
 - takeScreenshot: failure-notice-start-refused
+- tapOn: "Try again"
+- extendedWaitUntil:
+    visible: "Reading the task"
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: failure-notice-start-again
