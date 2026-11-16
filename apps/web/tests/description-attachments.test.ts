@@ -40,7 +40,7 @@ import {
 } from "@repo/service/testing/integration-connect";
 import { unparsedWire } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { paddedTo, webmBytes } from "@repo/wire/testing";
+import { m4aBytes, paddedTo, webmBytes } from "@repo/wire/testing";
 import { Clock, type Context, Effect, Layer, Option, Result } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
@@ -376,6 +376,33 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
         assert.equal(served.contentType, PICTURE_MEDIA_TYPE.WEBM);
         assert.deepEqual([...served.bytes], [...recording]);
         assert.equal(tooLong.status, HOSTED_HTTP_STATUS.BAD_REQUEST);
+      }),
+  );
+
+  it.effect(
+    "an M4A a member keeps is served as the sound clip it is, and one labeled a video is not kept",
+    () =>
+      Effect.gen(function* () {
+        const { owner, teammate, taskId } = yield* openSharedTask;
+        const clip = m4aBytes();
+        const base64 = Buffer.from(clip).toString("base64");
+
+        const kept = uploaded(
+          yield* ask(
+            upload(taskId, owner, pictureBody(`data:${PICTURE_MEDIA_TYPE.M4A};base64,${base64}`)),
+          ),
+        );
+
+        assert.ok("id" in kept);
+        const served = yield* ask(read(taskId, kept.id, teammate));
+
+        const mislabeled = yield* ask(
+          upload(taskId, owner, pictureBody(`data:${PICTURE_MEDIA_TYPE.MP4};base64,${base64}`)),
+        );
+
+        assert.equal(served.contentType, PICTURE_MEDIA_TYPE.M4A);
+        assert.deepEqual([...served.bytes], [...clip]);
+        assert.equal(mislabeled.status, HOSTED_HTTP_STATUS.BAD_REQUEST);
       }),
   );
 });

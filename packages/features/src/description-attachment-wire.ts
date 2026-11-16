@@ -16,8 +16,8 @@ import { MP4_TYPE, WEBM_TYPE } from "./video-signature.js";
  * description-attachment-wire.ts -- a description's files on the wire: how many a description may hold, what an upload carries, and what it answers.
  *
  * A picture is pasted, dropped, or chosen into a description's text on the Mac and
- * sent as one picture (`picture-wire.ts`), as is a video an agent recorded,
- * added from the file viewer. A PDF is laid in the same way and sent as a
+ * sent as one picture (`picture-wire.ts`), as is a video an agent recorded
+ * or a sound clip it made, added from the file viewer. A PDF is laid in the same way and sent as a
  * `data:` URL of its own type, its bytes opening as every PDF's do. The
  * service keeps its bytes beside the description and answers the id the text
  * then names it by (`description-attachment-link.ts`), where a PDF stands
@@ -32,8 +32,7 @@ export const DESCRIPTION_ATTACHMENT_BOUNDS = {
 /**
  * The types a description's attachment is served as: a picture's, a
  * video's, or a sound clip's its text names, or any a comment's file may
- * be. Note that a sound clip is read here before a description keeps one,
- * because a reader released before it could read one would fail to draw it.
+ * be.
  */
 const DESCRIPTION_ATTACHMENT_TYPE = {
   ...AGENT_ATTACHMENT_TYPE,
@@ -47,7 +46,7 @@ export const descriptionAttachmentTypeSchema = EffectSchema.Literals(
   Object.values(DESCRIPTION_ATTACHMENT_TYPE),
 );
 
-/** The types a description's own file may be kept as: a picture's or a video's, or a PDF's. */
+/** The types a description's own file may be kept as: a picture's, a video's, a sound clip's, or a PDF's. */
 export const DESCRIPTION_FILE_TYPE = {
   ...PICTURE_MEDIA_TYPE,
   PDF: AGENT_ATTACHMENT_TYPE.PDF,
@@ -60,7 +59,7 @@ export const descriptionFileTypeSchema = EffectSchema.Literals(
   Object.values(DESCRIPTION_FILE_TYPE),
 );
 
-/** A description's own file, as its bytes under its media type: a picture, a video, or a PDF. */
+/** A description's own file, as its bytes under its media type: a picture, a video, a sound clip, or a PDF. */
 export interface DescriptionFile {
   readonly contentType: DescriptionFileType;
   readonly bytes: Uint8Array;
@@ -99,7 +98,7 @@ export const descriptionFileDataUrlSchema = EffectSchema.String.check(
   }),
 );
 
-/** An upload (POST): the one picture, video, or PDF, as a `data:` URL; the key keeps the name it shipped with. */
+/** An upload (POST): the one picture, video, sound clip, or PDF, as a `data:` URL; the key keeps the name it shipped with. */
 export const descriptionAttachmentRequestSchema = EffectSchema.Struct({
   picture: descriptionFileDataUrlSchema,
 });

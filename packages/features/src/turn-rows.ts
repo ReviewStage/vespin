@@ -112,7 +112,7 @@ export const CALL_KIND = {
   CREATE_TASK: "create-task",
   SHOW_PAGE: "show-page",
   READ_PAGE: "read-page",
-  /** Pictures a coding agent showed from its sandbox (`show_image`), drawn as a row only where the call was refused; a shown set draws as its pictures. */
+  /** Pictures a coding agent showed from its sandbox (`show_media`), drawn as a row only where the call was refused; a shown set draws as its pictures. */
   SHOW_IMAGE: "show-image",
   /** A pull request a coding agent opened (`open_pull_request`), its row naming it by its number and title, which opens its Pull request tab; a refusal folds open its reason instead. */
   OPEN_PULL_REQUEST: "open-pull-request",
