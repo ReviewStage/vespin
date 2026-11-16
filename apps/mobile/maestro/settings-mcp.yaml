@@ -27,4 +27,7 @@ appId: dev.vespin.ios
 - assertVisible: "Disconnect ChatGPT?"
 - waitForAnimationToEnd
 - takeScreenshot: settings-mcp-disconnect
-- tapOn: "Cancel"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Disconnect ChatGPT?"
