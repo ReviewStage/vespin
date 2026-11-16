@@ -26,6 +26,7 @@ import { member, user } from "@repo/database/schemas/auth";
 import { automationRun } from "@repo/database/schemas/automation";
 import { task } from "@repo/database/schemas/task";
 import { taskBlock } from "@repo/database/schemas/task-block";
+import { workspaceSandboxSize } from "@repo/database/schemas/workspace-sandbox-size";
 import { TOPIC } from "@repo/database/sync/notification";
 import {
   agentApprovalSync,
@@ -49,10 +50,12 @@ import {
   taskSync,
   turnsSync,
   userSync,
+  workspaceSandboxSizeSync,
 } from "@repo/database/sync/tables";
 import { BOOT_PHASE, type WireBootPhase } from "@repo/features/agent-boot";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/agent-sandbox-wire";
 import { AGENT_BRIEF, type AgentFailure } from "@repo/features/agent-wire";
+import { SANDBOX_SIZE } from "@repo/features/sandbox-size";
 import {
   NO_TASK_OWNER,
   PERSON_PAGE_AGENTS,
@@ -356,6 +359,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
           AgentRow["brief"]
         >`case when ${agentTable.prompt} is not null then ${AGENT_BRIEF.PROMPT} when ${agentTable.descriptionSnapshot} is not null then ${AGENT_BRIEF.DESCRIPTION} else ${AGENT_BRIEF.BLANK} end`,
         repository: agentTable.repository,
+        sandboxVcpus: SANDBOX_VCPUS_OF_AGENT,
         starterId: agentTable.userId,
         starterName: outerJoined(starter.name),
         startedByAgentId: agentTable.startedByAgentId,
@@ -440,6 +444,14 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
 }
 
 /**
+ * The vCPUs the agent's sandbox opens with: its workspace's size, or the
+ * default where the workspace chose none. Note that a change of the size wakes the list on
+ * the workspace's topic (`movedAgents`), and reaches the agent's sandbox at
+ * its next open after it stops.
+ */
+const SANDBOX_VCPUS_OF_AGENT = sql<number>`coalesce((select ${workspaceSandboxSize.vcpus} from ${workspaceSandboxSize} where ${workspaceSandboxSize.organizationId} = ${agentTable.organizationId}), ${SANDBOX_SIZE.VCPUS})`;
+
+/**
  * Where the agent's current sandbox stands as its row in `agent_sandbox`
  * last recorded it (`@repo/features/agent-sandbox-wire`): none where no
  * row stands, off where it was released or is being, booting while a boot
@@ -517,7 +529,8 @@ function movedPlans(moved: SyncMoved): SQL {
  * The agents what moved could move: their own rows and the reader's pins,
  * those whose turn or conversation moved, those of a moved plan or of one
  * whose pin, or an agent's pin, moved, those naming a moved member or Mac,
- * and those a moved run started.
+ * those a moved run started, and those of a workspace whose sandbox size
+ * moved.
  */
 function movedAgents(moved: SyncMoved): SQL {
   const agents = moved.keys(agentSync, agentTable.id);
@@ -553,6 +566,10 @@ function movedAgents(moved: SyncMoved): SQL {
       liveKeysIn(sql`${agentTable.archivedBy} ->> 'userId'`, members),
       liveKeysIn(agentTable.deviceId, moved.keys(deviceSync, device.id)),
       liveKeysIn(agentTable.automationRunId, moved.keys(automationRunSync, automationRun.id)),
+      liveKeysIn(
+        agentTable.organizationId,
+        moved.keys(workspaceSandboxSizeSync, workspaceSandboxSize.organizationId),
+      ),
     ) ?? sql`false`
   );
 }
@@ -580,6 +597,7 @@ const TASK_LIST_TABLES = [
   memberSync,
   githubPersonalTokenSync,
   githubRepositoryReadSync,
+  workspaceSandboxSizeSync,
 ];
 
 /**
