@@ -1225,3 +1225,9 @@ body {
 .catalog-transcript-fold .ui-disclosure-summary:hover {
   color: var(--ui-color-text);
 }
+
+/* The import-from-a-Mac design mockup: a Settings page tall enough to hold
+   the import's banner and its landed rows. Throwaway. */
+.catalog-import-frame {
+  height: 720px;
+}

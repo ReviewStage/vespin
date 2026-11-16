@@ -72,6 +72,7 @@ import { GLYPH_SLOTS_EXAMPLE } from "./examples/glyph-slots";
 import { GROUP_HEADERS_EXAMPLE } from "./examples/group-headers";
 import { HOVER_CARDS_EXAMPLE } from "./examples/hover-cards";
 import { ICONS_EXAMPLE } from "./examples/icons";
+import { IMPORT_FROM_MAC_EXAMPLE } from "./examples/import-from-mac";
 import { INLINE_EDITS_EXAMPLE } from "./examples/inline-edits";
 import { INLINE_REFS_EXAMPLE } from "./examples/inline-refs";
 import { INTRO_CARDS_EXAMPLE } from "./examples/intro-cards";
@@ -334,6 +335,7 @@ export const EXAMPLES: readonly Example[] = [
   AUTH_PAGE_EXAMPLE,
   GLYPH_SLOTS_EXAMPLE,
   ICONS_EXAMPLE,
+  IMPORT_FROM_MAC_EXAMPLE,
   CORNER_COUNTS_EXAMPLE,
   COUNT_FIGURES_EXAMPLE,
   RESIZE_EDGES_EXAMPLE,
