@@ -6,6 +6,7 @@ import { asPictureList } from "@repo/features/agent-pictures-model";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   CONVERSATION_PICTURE_BOUNDS,
+  isPlayedType,
   type KeptPicture,
 } from "@repo/features/conversation-picture-wire";
 import { INBOX_BOUNDS } from "@repo/features/inbox-wire";
@@ -22,7 +23,8 @@ import { type InboxSandboxDoor, phoneCopyOfSandbox, readSandboxImage } from "./i
  *
  * The agent names each file by its path and says in a line what it shows;
  * the service reads each through the same door the agent's file tools reach
- * the sandbox by (`inbox-image.ts`), held to a picture's bound and the three
+ * the sandbox by (`inbox-image.ts`), each held to its type's bound, a
+ * still to a thread's so that it may be posted as shown, and to the three
  * types, a recording the agent made of what it did, a WebM or an H.264
  * MP4, which the transcript plays in a picture's place, or a sound clip it
  * made, a WAV, an MP3, an M4A, an AAC stream, or an Ogg, which the
@@ -48,7 +50,7 @@ export const SHOW_MEDIA_REFUSAL = {
   NO_FILE: "Not shown: no such file in your sandbox:",
   NOT_IMAGE:
     "Not shown: that file is not a PNG, JPEG, or WebP image whose header states its size, a WebM or H.264 MP4 video whose video track states its size, or a WAV, MP3, M4A, AAC, or Ogg sound clip:",
-  TOO_LARGE: `Not shown: a picture, a video, or a sound clip is kept up to ${CONVERSATION_PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB. Save a picture smaller, as a JPEG or a WebP, or as the part of the page that matters; record a video or a sound clip shorter or smaller, such as a clip as an M4A or an MP3; and show it again:`,
+  TOO_LARGE: `Not shown: a picture is kept up to ${INBOX_BOUNDS.MAX_IMAGE_BYTES / 1_000_000} MB, and a video or a sound clip up to ${CONVERSATION_PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB. Take a picture smaller, such as the viewport only, or as a JPEG; record a video or a sound clip shorter or smaller, such as a clip as an M4A or an MP3; and show it again:`,
   UNREADABLE_FILE: "Not shown: that file could not be read from your sandbox:",
   FULL: `Not shown: this transcript already keeps ${CONVERSATION_PICTURE_BOUNDS.MAX_BYTES_PER_CONVERSATION / 1_000_000} MB of pictures, recordings, and sound clips, as many as it may.`,
   UNAVAILABLE: "Not shown: the files could not be kept just now. The call may be made again.",
@@ -83,7 +85,7 @@ export const SHOW_MEDIA_TOOL = {
     "A flow, such as clicking through a form, is shown as a WebM recording, such as Playwright's `page.screencast.start({ path })` once the page has drawn, which the transcript plays. " +
     "A sound clip you made, such as a voice or a sound effect, is shown the same way, for the developer to hear: " +
     "no model hears sound, so its caption says what it holds. " +
-    `Each is a PNG, JPEG, or WebP, a WebM or MP4 video, or a WAV, MP3, M4A, AAC, or Ogg sound clip, of at most ${CONVERSATION_PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB. ` +
+    `Each is a PNG, JPEG, or WebP of at most ${INBOX_BOUNDS.MAX_IMAGE_BYTES / 1_000_000} MB, or a WebM or MP4 video or a WAV, MP3, M4A, AAC, or Ogg sound clip of at most ${CONVERSATION_PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB. ` +
     "Never show a picture of a secret. A Markdown image in your reply shows nothing; this is the one " +
     "way to show a picture, a recording, or a sound clip in your transcript.",
   inputSchema: SHOW_MEDIA_INPUT,
@@ -125,7 +127,7 @@ function readPicture(
   );
 }
 
-/** The file at the path, read, held to the bound, and measured, its type settled from all of its bytes; or the sentence refusing it. */
+/** The file at the path, read, held to its type's bound, and measured, its type settled from all of its bytes; or the sentence refusing it. */
 function measuredPicture(
   binding: ShowMediaBinding,
   path: string,
@@ -145,6 +147,14 @@ function measuredPicture(
       const measured = measuredMedia(file.bytes, file.contentType);
 
       if (measured === undefined) return Result.fail(`${SHOW_MEDIA_REFUSAL.NOT_IMAGE} ${path}`);
+
+      // Note that a still is held to a thread's bound, because one shown here is posted as it is.
+      if (
+        !isPlayedType(measured.contentType) &&
+        file.bytes.byteLength > INBOX_BOUNDS.MAX_IMAGE_BYTES
+      ) {
+        return Result.fail(`${SHOW_MEDIA_REFUSAL.TOO_LARGE} ${path}`);
+      }
 
       return Result.succeed({ bytes: file.bytes, ...measured });
     }),
