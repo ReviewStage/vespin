@@ -601,7 +601,9 @@ function TitleWords({
  * column, the title, and what ends the line. The line centers its pieces,
  * so the mark stands on the title at any Dynamic Type size, and at an
  * accessibility size stacks its end under the title, the mark's column
- * growing with the words.
+ * growing with the words. What trails the line, such as the arrow of a row
+ * that opens GitHub, keeps the trailing edge at every size, as iOS keeps a
+ * row's chevron there.
  */
 export function RowHead({
   unread,
@@ -612,6 +614,7 @@ export function RowHead({
   title,
   ink,
   end,
+  trail,
 }: {
   readonly unread: boolean;
   readonly faded: boolean;
@@ -623,6 +626,7 @@ export function RowHead({
   readonly title: string;
   readonly ink: string;
   readonly end: ReactNode;
+  readonly trail?: ReactNode;
 }) {
   const lines = useRowLines();
   const stacked = useAccessibilitySize();
@@ -659,6 +663,7 @@ export function RowHead({
         )}
         <Spacer />
         {stacked ? null : end}
+        {trail}
       </HStack>
     </HStack>
   );
