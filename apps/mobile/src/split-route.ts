@@ -107,13 +107,16 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
 export function useHandToSplit(tab: SplitTab, id: string | undefined): boolean {
   const router = useRouter();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
-  const focused = useIsFocused();
   const own = useOwnTab();
-  const handing = regular && focused && (own === undefined || own === iosRouteTab(tab));
+  const handing = regular && (own === undefined || own === iosRouteTab(tab));
 
-  useEffect(() => {
-    if (handing && id !== undefined) router.dismissTo({ pathname: tab, params: { selected: id } });
-  }, [handing, router, tab, id]);
+  // Note that the hand-off runs as a focus effect rather than on a read of focus, as the roots hear theirs (#9516), so a screen behind never redraws on a page pushed over it or popped.
+  useFocusEffect(
+    useCallback(() => {
+      if (handing && id !== undefined)
+        router.dismissTo({ pathname: tab, params: { selected: id } });
+    }, [handing, router, tab, id]),
+  );
 
   return handing;
 }
