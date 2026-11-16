@@ -144,11 +144,16 @@ export function effortOptions(
 /**
  * The platform of one of the account's devices, by its id, as the models'
  * read lists the devices a task may run its agents on; none while that read
- * hasn't landed, or for a device it doesn't name. Note that it reads what
- * the host already holds and follows nothing, so an agent's row that asks
- * draws the Mac's mark until a sheet has read the devices.
+ * hasn't landed, or for a device it doesn't name. Note that the read is
+ * followed only while a device is named, so a row of a cloud agent reads
+ * nothing, and a row of a device's agent draws its platform's mark on a
+ * cold launch without waiting for a sheet to read the devices.
  */
 export function useDevicePlatform(deviceId: string | undefined): DevicePlatform | undefined {
+  const acts = useHostActs();
+  const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
+  const following = deviceId === undefined ? undefined : signedInAccountId(account);
+  useLiveFollow(following, () => acts[ACT_KIND.AGENTS_MODELS_FOLLOW]());
   const { data } = useQuery({ ...appStateQuery, select: selectModels });
 
   if (deviceId === undefined) return undefined;
