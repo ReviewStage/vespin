@@ -1,0 +1,60 @@
+== start 22:58:35 free 24 GB
+-- readings start 22:58:36
+/dev/disk3s1s1       460   12        24    34%  484014 262125000    0%   /
+vm.swapusage: total = 5120.00M  used = 4109.31M  free = 1010.69M  (encrypted)
+Auto-merging packages/ui-native/src/index.ts
+  merged #8948 a49fb348b6
+built 9d6288638f = main 6766317a4f  + #9346 c127282056 + #8954 196ba16455 + #9039 605a053aaf
+built 9d6288638f
+@expo/ui patch: patches/@expo__ui@58.0.27.patch
+  scrollContentMargins: 3 lines
+  photoSize: 4 lines
+  originalColor: 3 lines
+clean install: node_modules removed (the @expo/ui patch and lockfile hash changed, orchestrator 08:09 UTC)
+install 0
+patches: 0 failures; @expo/ui patch 1 patched dirs
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+build settings: 3 of 3 added
+curve 22:59:13 25879 MB
+curve 22:59:43 23613 MB
+curve 23:00:14 23707 MB
+curve 23:00:44 23159 MB
+curve 23:01:15 22977 MB
+curve 23:01:45 22706 MB
+curve 23:02:16 22005 MB
+curve 23:02:47 21442 MB
+curve 23:03:17 21159 MB
+curve 23:03:49 20996 MB
+BUILD EXIT 0 23:04:20 free 20 GB
+actool warnings: 7
+    /Applications/Xcode.app/Contents/Developer/usr/bin/actool /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/ShareExtension/ShareExtension.xcassets --compile /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Products/Release-iphonesimulator/ShareExtension.appex --output-format human-readable-text --notices --warnings --export-dependency-info /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/assetcatalog_dependencies --output-partial-info-plist /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/assetcatalog_generated_info.plist --accent-color AccentColor --compress-pngs --enable-on-demand-resources NO --standalone-icon-behavior all --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 26.0 --platform iphonesimulator --bundle-identifier dev.vespin.ios.ShareExtension --generate-swift-asset-symbol-extensions NO --generate-swift-asset-symbols /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/DerivedSources/GeneratedAssetSymbols.swift --generate-objc-asset-symbols /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/DerivedSources/GeneratedAssetSymbols.h --generate-asset-symbol-index /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/DerivedSources/GeneratedAssetSymbols-Index.plist
+    /Applications/Xcode.app/Contents/Developer/usr/bin/actool /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/ShareExtension/ShareExtension.xcassets --compile /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/assetcatalog_output/thinned --output-format human-readable-text --notices --warnings --export-dependency-info /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/assetcatalog_dependencies_thinned --output-partial-info-plist /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/ShareExtension.build/assetcatalog_generated_info.plist_thinned --accent-color AccentColor --compress-pngs --enable-on-demand-resources NO --standalone-icon-behavior all --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 26.0 --platform iphonesimulator
+    /Applications/Xcode.app/Contents/Developer/usr/bin/actool /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/AgentsLiveActivity/AgentsLiveActivity.xcassets --compile /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Products/Release-iphonesimulator/AgentsLiveActivity.appex --output-format human-readable-text --notices --warnings --export-dependency-info /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/AgentsLiveActivity.build/assetcatalog_dependencies --output-partial-info-plist /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/AgentsLiveActivity.build/assetcatalog_generated_info.plist --accent-color AccentColor --compress-pngs --enable-on-demand-resources NO --standalone-icon-behavior all --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 26.0 --platform iphonesimulator --bundle-identifier dev.vespin.ios.AgentsLiveActivity --generate-swift-asset-symbol-extensions NO --generate-swift-asset-symbols /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/AgentsLiveActivity.build/DerivedSources/GeneratedAssetSymbols.swift --generate-objc-asset-symbols /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/AgentsLiveActivity.build/DerivedSources/GeneratedAssetSymbols.h --generate-asset-symbol-index /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/AgentsLiveActivity.build/DerivedSources/GeneratedAssetSymbols-Index.plist
+    /Applications/Xcode.app/Contents/Developer/usr/bin/actool /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/AgentsLiveActivity/AgentsLiveActivity.xcassets --compile /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/AgentsLiveActivity.build/assetcatalog_output/thinned --output-format human-readable-text --notices --warnings --export-dependency-info /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/AgentsLiveActivity.build/assetcatalog_dependencies_thinned --output-partial-info-plist /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/AgentsLiveActivity.build/assetcatalog_generated_info.plist_thinned --accent-color AccentColor --compress-pngs --enable-on-demand-resources NO --standalone-icon-behavior all --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 26.0 --platform iphonesimulator
+/Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/AgentsLiveActivity/AgentsLiveActivity.xcassets: warning: Accent color ‘AccentColor’ is not present in any asset catalogs.
+    /Applications/Xcode.app/Contents/Developer/usr/bin/actool /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/Vespin/Images.xcassets /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/Vespin/Vespin.icon --compile /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Products/Release-iphonesimulator/Vespin.app --output-format human-readable-text --notices --warnings --export-dependency-info /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/Vespin.build/assetcatalog_dependencies --output-partial-info-plist /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/Vespin.build/assetcatalog_generated_info.plist --app-icon Vespin --accent-color AccentColor --compress-pngs --enable-on-demand-resources YES --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 26.0 --platform iphonesimulator --bundle-identifier dev.vespin.ios --generate-swift-asset-symbol-extensions NO --generate-swift-asset-symbols /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/Vespin.build/DerivedSources/GeneratedAssetSymbols.swift --generate-objc-asset-symbols /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/Vespin.build/DerivedSources/GeneratedAssetSymbols.h --generate-asset-symbol-index /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/Vespin.build/DerivedSources/GeneratedAssetSymbols-Index.plist
+    /Applications/Xcode.app/Contents/Developer/usr/bin/actool /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/Vespin/Images.xcassets /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/Vespin/Vespin.icon --compile /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/Vespin.build/assetcatalog_output/thinned --output-format human-readable-text --notices --warnings --export-dependency-info /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/Vespin.build/assetcatalog_dependencies_thinned --output-partial-info-plist /Users/deanstratakos/vespin-ipad-agent/repo/apps/mobile/ios/build/Build/Intermediates.noindex/Vespin.build/Release-iphonesimulator/Vespin.build/assetcatalog_generated_info.plist_thinned --app-icon Vespin --accent-color AccentColor --compress-pngs --enable-on-demand-resources YES --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 26.0 --platform iphonesimulator
+/Users/deanstratakos/vespin-ipad-agent/Vn6.app: replacing existing signature
+== audit26
+clean binaries: 15
+cold-ipad26 pid 35945 alive yes crashes 0
+cold-ipad27 pid 41940 alive yes crashes 0
+cold-iphone pid 45479 alive yes crashes 0
+9039-native-iphone-light-r9039b: fails 0 shots 4 
+9039-native-iphone-dark-r9039b: fails 0 shots 4 
+9039-native-ipad26-light-r9039b: fails 0 shots 4 
+9039-native-ipad26-dark-r9039b: fails 0 shots 4 
+8948-native-iphone-light-m8948: fails 0 shots 7 
+8948-native-ipad26-light-m8948: fails 1 shots 7 Assert that "1 selected" is visible... FAILED
+9346-native-ipad26-light-r9346: fails 1 shots 5 Tap on "Open"... FAILED
+9346-native-ipad26-dark-r9346: fails 1 shots 5 Tap on "Open"... FAILED
+9346-native-ipad27-light-r9346: fails 1 shots 5 Tap on "Open"... FAILED
+9346-native-iphone-light-r9346c: fails 0 shots 1 
+9346-native-ipad26-light-r9346a: fails 0 shots 1 
+8954-native-ipad26-light-r8954n: fails 1 shots 4 Assert that "Done" is visible... FAILED
+8954-native-ipad26-dark-r8954n: fails 1 shots 4 Assert that "Done" is visible... FAILED
+8954-native-ipad26-light-r8954pt: fails 0 shots 3 
+8954-native-ipad27-light-r8954n: fails 1 shots 4 Assert that "Done" is visible... FAILED
+8954-native-ipad27-dark-r8954n: fails 1 shots 4 Assert that "Done" is visible... FAILED
+8954-native-iphone-light-r8954n: fails 1 shots 4 Assert that "Done" is visible... FAILED
+8954-native-iphone-dark-r8954n: fails 1 shots 4 Assert that "Done" is visible... FAILED
