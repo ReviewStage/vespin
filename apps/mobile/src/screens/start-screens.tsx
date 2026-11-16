@@ -471,23 +471,23 @@ function useSheetStart(
         inPlace: setNote,
         went: BUZZ.SUCCESS,
       },
-    )
-      .then((went) => {
-        const answer = started.answer;
+    ).then((went) => {
+      const answer = started.answer;
 
-        if (!went || answer === undefined || "refused" in answer) return;
-        kept.release();
-        router.dismiss();
-        router.navigate(
-          onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })),
-        );
-
-        if (answer.agentId !== undefined) router.push(onTab(iosAgentRoute(answer.agentId)));
-      })
-      .finally(() => {
+      // Note that only a start that didn't land lowers the guard, because the sheet stays for another press; one that landed keeps it up while the sheet slides away, so a press during the slide starts nothing.
+      if (!went || answer === undefined || "refused" in answer) {
         sending.current = false;
         setStarting(false);
-      });
+
+        return;
+      }
+
+      kept.release();
+      router.dismiss();
+      router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })));
+
+      if (answer.agentId !== undefined) router.push(onTab(iosAgentRoute(answer.agentId)));
+    });
   };
 
   return { starting, go };
