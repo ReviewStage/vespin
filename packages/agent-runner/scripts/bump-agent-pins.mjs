@@ -327,7 +327,8 @@ function requiredOf(manifest) {
  * manifests name, read from the release's own manifest and then each part's
  * in order, so a dependency's own dependency is found. Fails where a
  * manifest names a dependency no part pins, or a range its part no longer
- * meets and names no exact release.
+ * meets and names no exact release, or where any manifest's range is not met
+ * by the release chosen for that part.
  */
 async function partReleases(label, pin, name, to) {
   const manifests = [await registryJson(`${name}/${to}`)];
@@ -335,8 +336,9 @@ async function partReleases(label, pin, name, to) {
   const releases = [];
 
   for (const each of parts) {
+    // Note that the platform package's address names `HOST_CLI_VERSION`, so the version edit moves it, never a write of its file.
     if (each.name === `${name}-darwin-arm64`) {
-      releases.push({ ...each, version: to });
+      releases.push({ ...each, version: to, withRelease: true });
       continue;
     }
 
@@ -351,15 +353,22 @@ async function partReleases(label, pin, name, to) {
       throw new Error(`${label}: ${each.name}@${current} no longer meets ${range}`);
     }
 
-    releases.push({ ...each, version });
+    releases.push({ ...each, version, withRelease: false });
     manifests.push(await registryJson(`${each.name}/${version}`));
   }
 
-  // Note that a dependency no part keeps would be missing on the Mac, so it stops the bump for a person to pin it.
-  const kept = new Set(parts.map((each) => each.name));
-  const missing = manifests.flatMap(requiredOf).find(([dependency]) => !kept.has(dependency));
+  // Note that every range any new manifest names is held to the release chosen for it, so two parts that disagree stop the bump, as does a dependency no part keeps, which would be missing on the Mac.
+  const chosen = new Map(releases.map((each) => [each.name, each.version]));
 
-  if (missing !== undefined) throw new Error(`${label}: nothing pins ${missing[0]}@${missing[1]}`);
+  for (const [dependency, range] of manifests.flatMap(requiredOf)) {
+    const version = chosen.get(dependency);
+
+    if (version === undefined) throw new Error(`${label}: nothing pins ${dependency}@${range}`);
+
+    if (!meets(version, range)) {
+      throw new Error(`${label}: ${dependency}@${version} does not meet ${range}`);
+    }
+  }
 
   return releases;
 }
@@ -387,7 +396,7 @@ async function readParts(label, pin, name, to, root, scratch) {
       part: each.part,
       name: each.name,
       from: each.file,
-      file,
+      file: each.withRelease ? each.file : file,
       sha256: sha256(bytes),
       bytes: bytes.length,
     });
