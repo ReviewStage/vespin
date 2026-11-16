@@ -601,10 +601,10 @@ function everyTaskAgent(
 }
 
 /** A pull request as the panel names its tab: its number, title, and where it stands, and its page. */
-export type NamedPullRequest = PullRequestMarked & Pick<AgentPullRequest, "title" | "url">;
+type NamedPullRequest = PullRequestMarked & Pick<AgentPullRequest, "title" | "url">;
 
 /** How the panel names each pull request by its repository and number, where anything it holds names it. */
-export type PullRequestNames = (pullRequest: NumberedAddress) => NamedPullRequest | undefined;
+type PullRequestNames = (pullRequest: NumberedAddress) => NamedPullRequest | undefined;
 
 /**
  * The agent of the task whose listed pull request is the one given, in the

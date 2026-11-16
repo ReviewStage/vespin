@@ -446,7 +446,7 @@ export function samePin(a: SidebarPin, b: SidebarPin): boolean {
 }
 
 /** What the open task's Pull request pins are named now, by the pull request's number and title, each by its repository and number. */
-export interface PinNames {
+interface PinNames {
   readonly pullRequests: ByPullRequest<string>;
 }
 

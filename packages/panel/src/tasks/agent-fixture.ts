@@ -1520,14 +1520,13 @@ function stagedRunOnMac(held: AppWorkspaceTools): AppWorkspaceTools {
   return laid;
 }
 
-/** The agent's pull request as its Pull request tab names it: the workspace the task reads it through, its repository, and its number. */
-function fixturePullRequestKey(workspaceId: string) {
-  return { workspaceId, repository: REPOSITORY, number: PULL_REQUEST.number } as const;
-}
+/** The Inbox profile's pull request, the reference journey's agent's, which a link beside its items opens: its number and title. */
+const INBOX_PULL_REQUEST = { number: 128, title: "Invite a teammate by email" } as const;
 
 /** Lays `rows` as one read of the agent's pull request, by its repository and number, over main's held read, one object for each of main's and workspace. */
 function stagedPart<Read>(
   rows: Read,
+  number: number = PULL_REQUEST.number,
 ): (
   held: AppRepositoryPullRequestHeld<Read>,
   workspaceId: string,
@@ -1543,7 +1542,7 @@ function stagedPart<Read>(
     let laid = ofHeld.get(workspaceId);
 
     if (laid === undefined) {
-      const { repository, number } = fixturePullRequestKey(workspaceId);
+      const repository = REPOSITORY;
       const ofWorkspace = held[workspaceId];
 
       laid = {
@@ -1582,6 +1581,46 @@ const STAGED_PARTS = {
   [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: stagedPart<PullRequestChaptersAnswer>(CHAPTERS),
 };
 
+/** The overview's parts of the Inbox profile's pull request, as the agent's own read them, under its own number and title. */
+const INBOX_PARTS = {
+  [LIVE_READ.REPOSITORY_PULL_REQUEST]: stagedPart<RepositoryOverviewPullRequestAnswerView>(
+    {
+      pullRequest: {
+        ...OVERVIEW_PULL_REQUEST.pullRequest,
+        ...INBOX_PULL_REQUEST,
+        url: `https://github.com/${REPOSITORY}/pull/${INBOX_PULL_REQUEST.number}`,
+      },
+    },
+    INBOX_PULL_REQUEST.number,
+  ),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: stagedPart<RepositoryOverviewChecksAnswerView>(
+    OVERVIEW_CHECKS,
+    INBOX_PULL_REQUEST.number,
+  ),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]:
+    stagedPart<RepositoryOverviewConversationAnswerView>(
+      OVERVIEW_CONVERSATION,
+      INBOX_PULL_REQUEST.number,
+    ),
+};
+
+/** Main's document as the Inbox profile draws it: the reference journey's pull request held as its Pull request tab beside an item reads it. */
+function inboxAppState(state: AppStateSnapshot, workspaceId: string): AppStateSnapshot {
+  return {
+    ...state,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST]: INBOX_PARTS[LIVE_READ.REPOSITORY_PULL_REQUEST](
+      state[LIVE_READ.REPOSITORY_PULL_REQUEST],
+      workspaceId,
+    ),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: INBOX_PARTS[
+      LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS
+    ](state[LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS], workspaceId),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: INBOX_PARTS[
+      LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION
+    ](state[LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION], workspaceId),
+  };
+}
+
 /** Main's settings with the Voice experiment on, one object for each of main's. */
 const VOICE_SETTINGS = new WeakMap<
   NonNullable<AppStateSnapshot["settings"]>,
@@ -1614,7 +1653,8 @@ function voiceSettings(
  * and the agent's transcript as its tab's read of it holds it
  * (`LIVE_READ.TRANSCRIPT`), the long run's at the step it reached, and
  * where its `run_on_mac` stands as its Runs on card reads it
- * (`LIVE_READ.WORKSPACE_TOOLS`).
+ * (`LIVE_READ.WORKSPACE_TOOLS`); and under the Inbox profile, the
+ * reference journey's pull request as its tab beside an item reads it.
  * The same document, the very object, under any other profile.
  */
 export function agentAppState(
@@ -1623,6 +1663,8 @@ export function agentAppState(
   workspaceId: string,
 ): AppStateSnapshot {
   const stage = AGENT_STAGES.get(state.run.profile);
+
+  if (state.run.profile === RUN_PROFILE.INBOX) return inboxAppState(state, workspaceId);
 
   if (stage === undefined) return state;
   const held = state[LIVE_READ.PAGES];
