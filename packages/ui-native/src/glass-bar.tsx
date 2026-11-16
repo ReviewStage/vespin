@@ -421,17 +421,20 @@ interface DockProps {
  */
 function useDockLift(keyboard: number, shown: boolean) {
   const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
-  const [foot, setFoot] = useState<number | undefined>(undefined);
+  const [placed, setPlaced] = useState<{ readonly foot: number; readonly room: number }>();
   const { height: windowHeight } = useWindowDimensions();
 
   const measure = useCallback(
     (next: number, top: number) => {
       setRoom(next);
 
-      if (keyboard === 0) setFoot(windowHeight - top + SPACE.ROW);
+      if (keyboard === 0) setPlaced({ foot: windowHeight - top + SPACE.ROW, room: next });
     },
     [keyboard, windowHeight],
   );
+
+  // Note that a bar grown or shrunk while the keyboard stood moves its foot by that change alone, since with the keyboard down its bottom stands still, and the keyboard's fall moves the bar without laying it out, so nothing measures it again.
+  const foot = placed === undefined ? undefined : placed.foot + room - placed.room;
 
   useNoticeLift({ room, foot }, shown);
 

@@ -944,6 +944,8 @@ type PictureProps = {
   readonly tileAspect?: number | undefined;
   /** Reads the picture again where it could not be read; none offers nothing. */
   readonly onRetry?: (() => void) | undefined;
+  /** Whether it fills its tile, cropped as a set's tiles stand, rather than standing whole inside it. */
+  readonly fill?: boolean | undefined;
 };
 
 /**
@@ -956,7 +958,7 @@ type PictureProps = {
  * stands one, so the words under it do not jump twice and it never reads as
  * an empty box.
  */
-export function Picture({ source, alt, tileAspect, onRetry }: PictureProps) {
+export function Picture({ source, alt, tileAspect, onRetry, fill = false }: PictureProps) {
   const colors = useColors();
   const [natural, setNatural] = useState<MediaSize | undefined>(undefined);
   const heard = alt === "" ? "Picture" : alt;
@@ -1012,7 +1014,7 @@ export function Picture({ source, alt, tileAspect, onRetry }: PictureProps) {
         >
           <Image
             source={{ uri: source }}
-            resizeMode="contain"
+            resizeMode={fill ? "cover" : "contain"}
             onLoad={(event) => {
               const loaded = event.nativeEvent.source;
 

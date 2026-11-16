@@ -8,26 +8,43 @@ appId: dev.vespin.ios
 # fixture refuses a task's status, its pin, its start, a follower added and a
 # memory deleted as the service would
 # (`src/host/fixture-host.ts`), and no server is reached.
+# Note that the value is quoted, as every launch argument's is, because
+# Maestro hands a YAML boolean to the app without its dash, which iOS then
+# never reads as a setting, and the fixture refuses nothing.
 - launchApp:
     clearState: true
     arguments:
       fixture: inbox
       refuseWrites: "true"
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - assertVisible: "Weekly digest email"
 - waitForAnimationToEnd
 # Unpin from the row's long press menu is refused: the row stays pinned and
 # the notice says why, with Try again. Note that a notice offering Try again
 # says it as its button, not in its words (`failure-notice-model.ts`), so
-# each refusal is matched by its first sentence.
-- longPressOn: "Weekly digest email"
+# each refusal is matched by its first sentence, and that the notice is
+# checked at once, since it stands six seconds.
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Unpin
 - tapOn: "Unpin"
-- assertVisible: "The task could not be unpinned\\..*"
+- extendedWaitUntil:
+    visible: "The task could not be unpinned\\..*"
+    timeout: 5000
 - assertVisible:
     id: "failure-notice-retry"
 - takeScreenshot: failure-notice
 # Try again sends the unpin once more, which is refused again, so the
-# notice comes back in the same words.
+# notice comes back, and a swipe up puts it away before its time is up.
+# Note that the swipe follows the press at once, with nothing checked
+# between, because the notice goes on its own six seconds after it stands
+# (`failure-notice.tsx`), and a press and two checks on a loaded runner took
+# longer; the swipe finding the notice is what shows it came back.
 - tapOn:
     id: "failure-notice-retry"
 - assertVisible: "The task could not be unpinned\\..*"
@@ -59,25 +76,32 @@ appId: dev.vespin.ios
 # task's agent is at work and only the person can decide to stop it; once
 # confirmed, it is refused too: the task stays in the list and the notice
 # says it could not be marked done.
-- longPressOn: "Weekly digest email"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Mark done
 - tapOn: "Mark done"
 - tapOn: "Stop agent"
-- assertVisible: "The task could not be marked done\\..*"
+- extendedWaitUntil:
+    visible: "The task could not be marked done\\..*"
+    timeout: 5000
 - assertVisible: "Weekly digest email"
 - takeScreenshot: failure-notice-mark-done
 # A refusal inside a sheet draws in that sheet, over its backdrop, not
 # behind it: Add a follower stands over Billing export's Followers sheet,
 # and the fixture leaves the add unanswered, so the sheet stays and the
 # notice rises at the sheet's own foot.
-- tapOn: "Tasks"
-- tapOn: "Billing export"
-# Note that a landscape iPad also stands "Following" as a sidebar row and as
-# a section of the Tasks list beside the task, both below its "Created by"
-# line, so the task's own Following chip, above that line, is the one tapped.
-- waitForAnimationToEnd
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: Billing export
 - tapOn:
-    text: "Following"
-    above: "Created by.*"
+    id: "following-chip"
 - tapOn: "Add a follower"
 - tapOn: "Alan Turing.*"
 - assertVisible: "Following could not be changed\\..*"
@@ -90,7 +114,9 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       refuseWrites: "true"
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - tapOn:
     id: "workspace-switcher"
 - tapOn: "Settings, .*"
@@ -114,7 +140,9 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       refuseWrites: "true"
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - tapOn: "New task"
 - assertVisible: "Describe the task"
 - inputText: "Write the invite reminder email."

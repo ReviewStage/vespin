@@ -32,6 +32,7 @@ import { pullRequestLinksLayer } from "./github/pull-request-links.js";
 import { integrationConnectFromEnvironment } from "./integrations/integration-connect.js";
 import { sentryLogger } from "./observability/sentry.js";
 import { pageLinksFromEnvironment } from "./pages/page-links.js";
+import { cursorModelCatalogLayer } from "./providers/cursor-models.js";
 import { modelCatalogLayer } from "./providers/model-catalog.js";
 import { apnsSenderFromEnvironment } from "./push/apns.js";
 import { apnsHttp2Transport } from "./push/apns-http2.js";
@@ -202,6 +203,9 @@ export const webServices = Layer.mergeAll(
   githubDeliveryReadsFromEnvironment,
   voiceCallLeasesFromEnvironment,
   modelCatalogLayer.pipe(Layer.provide(Layer.merge(FetchHttpClient.layer, hostedEnvironment))),
+  cursorModelCatalogLayer.pipe(
+    Layer.provide(Layer.merge(FetchHttpClient.layer, hostedEnvironment)),
+  ),
   pullRequestLinksLayer,
   productAnalyticsFromEnvironment.pipe(
     Layer.provide(Layer.mergeAll(FetchHttpClient.layer, hostedEnvironment, webSqlClient)),

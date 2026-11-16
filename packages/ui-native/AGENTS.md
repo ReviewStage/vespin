@@ -248,6 +248,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   split view's list keeps selected stands on a rounded `SELECTED` fill set in
   from the column's edges (`ROW_INSET.FILL`), its hairlines stepping aside, as
   Mail's selected message does; its words don't move.
+- **A list with nothing to show** still stands, its `EmptyState` its one
+  row (`RowList`'s `empty`), as iOS stands its content-unavailable view in a
+  list's place: a pull anywhere still reads it again, and the state's own
+  press, such as Try again, still takes a tap. A screen never swaps its list
+  for the state.
 - **Select mode** (`RowList`'s `choosing`) is SwiftUI's own edit mode, as
   Mail's Select: a round check leads each row, a tap ticks it, two fingers
   dragged down tick a run, and the swipes step aside. Its screen names the
@@ -255,7 +260,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   foot, a compact window's tab bar stepping aside for it.
 - **Group headers** (`ListSection`) are small and muted with a count, or
   finished of all as `2/5` (`progress`); a `foldable` one folds in place on
-  a press, its chevron on the left, its rows easing away and back; and one given `add` ends in a muted +,
+  a press, its chevron on the left, its rows easing away and back; one given a `glyph` leads its title
+  with what the group is, as the panel's sidebar leads a section with its icon and a repository with its
+  owner's picture (`RepositoryPicture`, its glyph standing in until it draws); and one given `add` ends in a muted +,
   one act or the system's menu of several, as Reminders' groups add, so an
   empty section stands as its header alone rather than a list of add rows.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
