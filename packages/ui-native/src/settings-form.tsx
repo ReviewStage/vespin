@@ -1,6 +1,7 @@
 // settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
 
 import {
+  Circle,
   ContextMenu,
   Form,
   HStack,
@@ -14,6 +15,7 @@ import {
   Text,
   Toggle,
   VStack,
+  ZStack,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
@@ -32,8 +34,10 @@ import {
   foregroundStyle,
   frame,
   listRowBackground,
+  listSectionSpacing,
   menuIndicator,
   menuStyle,
+  multilineTextAlignment,
   resizable,
   scrollContentBackground,
   scrollDismissesKeyboard,
@@ -53,6 +57,16 @@ import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 
+/** How far apart a form's sections stand, and how far its first stands under the bar. */
+export const FORM_SPACING = {
+  /** The system's grouped spacing, as a page of Settings stands. */
+  REGULAR: "regular",
+  /** Close under the bar and between sections, as a short sheet of a few rows stands, Reminders' Details and Mail's options among them. */
+  COMPACT: "compact",
+} as const;
+
+export type FormSpacing = (typeof FORM_SPACING)[keyof typeof FORM_SPACING];
+
 /** An account's face in its row, larger than a list's. */
 const ACCOUNT_FACE_SIZE = 36;
 
@@ -62,7 +76,7 @@ const ROW_FACE_SIZE = ACCOUNT_FACE_SIZE - 8;
 /** An account's face heading its own page, as large as Apple Account's photo stands over its name. */
 const ACCOUNT_HEAD_FACE_SIZE = 72;
 
-/** Where a `PushRow` goes, and the mark at its end that says so, where iOS's own Settings marks them. */
+/** Where a row goes on a press, such as a `PushRow` or a pull request's check, and the mark at its end that says so, where iOS's own Settings marks them. */
 export const PUSH_ROW_GOES = {
   /** A page of Settings, pushed over this one: iOS's own chevron, as every row that goes on draws it. */
   PAGE: GLYPH.DISCLOSURE,
@@ -95,7 +109,7 @@ const GOES_INK = { type: "hierarchical", style: "tertiary" } as const;
  * ink, semibold at the row's small line, as iOS draws its chevron, so it
  * grows with the reader's text size.
  */
-function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
+export function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
   return (
     <Image
       {...glyphImage(goes)}
@@ -189,8 +203,11 @@ function PressedRow({
  */
 export function SettingsForm({
   onContentHeight,
+  spacing = FORM_SPACING.REGULAR,
   children,
 }: {
+  /** How far apart its sections stand; a short sheet's stand close, so its first section doesn't sit under an empty band. */
+  readonly spacing?: FormSpacing;
   /** Told the height its rows stand in, as they lay out, for a popover that fits it; none where the form fills its place. */
   readonly onContentHeight?: ((height: number) => void) | undefined;
   readonly children: ReactNode;
@@ -207,6 +224,7 @@ export function SettingsForm({
     <Form
       modifiers={[
         ...(measured === null ? [] : [measured]),
+        ...(spacing === FORM_SPACING.COMPACT ? [listSectionSpacing("compact")] : []),
         scrollContentBackground("hidden"),
         scrollDismissesKeyboard("immediately"),
         background(colors.GROUPED),
@@ -840,6 +858,8 @@ type MemberRowProps = {
   readonly picture?: string | undefined;
   /** Their role, in the words the panel says it: Owner, Admin, Member; none for an address invited, whose line says it. */
   readonly role?: string | undefined;
+  /** Whether they are an address invited rather than a member, which a person mark leads in place of a face, since an address has no photo and its letters would read as someone's. */
+  readonly invited?: boolean | undefined;
   /** The badge beside the reader's own name, such as "You"; none on anyone else's row. */
   readonly badge?: string | undefined;
   /** What the reader may do to them; a row with none takes no press. */
@@ -852,21 +872,37 @@ type MemberRowProps = {
  * ink. Where the reader may act on them, a press opens the system's menu of
  * those acts, as a contact's row opens one.
  */
-export function MemberRow({ name, email, picture, role, badge, acts }: MemberRowProps) {
+export function MemberRow({ name, email, picture, role, invited, badge, acts }: MemberRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(ROW_FACE_SIZE);
 
   const face = (
     <HStack spacing={SPACE.ROW}>
-      <Avatar name={name} picture={picture} size={faceSize} />
+      {invited === true ? (
+        <ZStack modifiers={[frame({ width: faceSize, height: faceSize }), accessibilityHidden()]}>
+          <Circle modifiers={[foregroundStyle(colors.GROUPED)]} />
+          <Image {...glyphImage(GLYPH.PERSON)} color={colors.TEXT_MUTED} />
+        </ZStack>
+      ) : (
+        <Avatar name={name} picture={picture} size={faceSize} />
+      )}
       <VStack alignment="leading" spacing={1}>
+        {/* Note that a row holding acts is a menu's label, which centers a wrapped line, so its lines keep to their leading edge, as Settings' subtitles do. */}
         <Text
-          modifiers={[foregroundStyle(colors.TEXT), alignmentGuide("listRowSeparatorLeading", 0)]}
+          modifiers={[
+            foregroundStyle(colors.TEXT),
+            alignmentGuide("listRowSeparatorLeading", 0),
+            multilineTextAlignment("leading"),
+          ]}
         >
           {badge === undefined ? name : `${name} · ${badge}`}
         </Text>
         <Text
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            multilineTextAlignment("leading"),
+          ]}
         >
           {email}
         </Text>
