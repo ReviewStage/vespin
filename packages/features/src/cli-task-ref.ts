@@ -3,7 +3,7 @@
  *
  * A window and a link name a task by its key, a script by the id an answer
  * printed, so the command takes all three. A number or a key names a task of
- * the workspace the command acts in (`plans.find`); the key's prefix is read
+ * the workspace the command acts in (`tasks.find`); the key's prefix is read
  * off the workspace's name and follows a rename (`workspace-key.ts`), so only
  * its number is read, and the prefix is never checked against the workspace.
  */

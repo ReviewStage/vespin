@@ -23,7 +23,7 @@ const RUN = {
 
 const LINK = {
   workspace: "workspace-1",
-  place: { kind: LINK_DESTINATION.TASK, planId: "plan-1" },
+  place: { kind: LINK_DESTINATION.TASK, taskId: "plan-1" },
 } as const;
 
 /** A bridge over a fresh store. */
@@ -50,7 +50,11 @@ it.effect(
     Effect.gen(function* () {
       const { bridge, state } = yield* bridgeFixture;
       const read = yield* Effect.promise(() => bridge.requestAppState());
-      assert.deepEqual(read, { ...state.snapshot(), window: { fullScreen: false } });
+      assert.deepEqual(read, {
+        ...state.snapshot(),
+        window: { fullScreen: false },
+        taskList: state.taskList(),
+      });
 
       const heard: AppStateDelivery[] = [];
       bridge.onAppState((delivery) => heard.push(delivery));

@@ -13,14 +13,17 @@ import {
   AGENT_ATTACHMENT_TYPE,
   type AgentAttachment,
   base64Bytes,
+  isInlinedText,
 } from "@repo/features/agent-wire";
-import { MODEL_PROVIDER, type ModelChoice, type ModelProvider } from "@repo/features/models-wire";
+import { MODEL_PROVIDER, type ModelChoice } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import type { ModelApiProvider } from "@repo/features/provider-key-wire";
 import { failureKind } from "@repo/runtime/effect";
 import { generateText, type LanguageModel } from "ai";
 import { Duration, Effect, Option, Redacted } from "effect";
 import { HostedEnvironment } from "../../environment.js";
 import { providerModelOf } from "../../providers/model-catalog.js";
+import { writtenTextBytes } from "../attached-files.js";
 import { ownKeyOf } from "./account-keys.js";
 import { CODER } from "./bounds.js";
 
@@ -117,7 +120,7 @@ export interface SummaryModel {
 const OTHER_PROVIDER_SUMMARY = {
   [MODEL_PROVIDER.ANTHROPIC]: "claude-sonnet-5-5",
   [MODEL_PROVIDER.OPENAI]: "gpt-6.1-sol",
-} as const satisfies Record<ModelProvider, string>;
+} as const satisfies Record<ModelApiProvider, string>;
 
 const OTHER_PROVIDER_SUMMARY_EFFORT = "low";
 
@@ -139,7 +142,7 @@ export type SummaryModelOf = (
 
 /** The provider's own options for the lowest effort, with no thinking asked for. */
 function summaryOptions(
-  provider: ModelProvider,
+  provider: ModelApiProvider,
   effort: string,
 ): Record<string, Record<string, string>> {
   return provider === MODEL_PROVIDER.ANTHROPIC
@@ -203,18 +206,24 @@ export function fileBlocksBytes(count: number): number {
   return count * REPLAY_FIT.FILE_TOKENS * BYTES_PER_TOKEN;
 }
 
+/** The bytes one file of the first message takes beside its words, as the harness is handed it. */
+function fileBytes(file: AgentAttachment): number {
+  if (isInlinedText(file)) return base64Bytes(file.data);
+
+  return file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT
+    ? writtenTextBytes(file)
+    : fileBlocksBytes(1);
+}
+
 /**
- * The bytes the first message's files take beside its words: a text file's
- * own, since the harness is handed it inlined, and an image's or a PDF's counted at
+ * The bytes the first message's files take beside its words: an inlined
+ * text file's own, since the harness is handed it whole; a text file
+ * written into its machine, the line naming it with its first lines
+ * (`writtenTextBytes`); and an image's or a PDF's counted at
  * `REPLAY_FIT.FILE_TOKENS`, since its bytes tell nothing of its tokens.
  */
 export function filesBytes(files: readonly AgentAttachment[]): number {
-  return files.reduce(
-    (sum, file) =>
-      sum +
-      (file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT ? base64Bytes(file.data) : fileBlocksBytes(1)),
-    0,
-  );
+  return files.reduce((sum, file) => sum + fileBytes(file), 0);
 }
 
 /** What a line's sender is called in the words a summary call reads: the app by its product's name, the rest by their kind. */
@@ -481,7 +490,11 @@ export const productionSummaryModel = (
     if (named === undefined) return undefined;
     const environment = yield* HostedEnvironment;
 
-    const own = yield* ownKeyOf(userId, named.provider, environment).pipe(
+    // Note that a Cursor agent's summary is written on another provider's key, since Cursor's key buys no model call outside its agents.
+    const preferred =
+      named.provider === MODEL_PROVIDER.CURSOR ? MODEL_PROVIDER.ANTHROPIC : named.provider;
+
+    const own = yield* ownKeyOf(userId, preferred, environment).pipe(
       Effect.catch((failure) =>
         Effect.as(
           Effect.logWarning(`a replay summary's key could not be read: ${failureKind(failure)}`),

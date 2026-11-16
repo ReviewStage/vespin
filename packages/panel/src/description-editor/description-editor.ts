@@ -21,6 +21,7 @@ import { NodeSelection, Selection, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { Predicate } from "effect";
 import { enterSends, modEnterSends } from "../enter-sends.js";
+import { chipSpacing, typedAtChipSpace } from "./chip-spacing.js";
 import { withCodeHeaders } from "./code-block-view.js";
 import { anchorsLaidIn, anchorsOf, commentAnchorMark, spanIn } from "./comment-anchors.js";
 import {
@@ -803,6 +804,7 @@ export function mountDescriptionEditor(
       ...extensions,
       Placeholder.configure({ placeholder: placeholderOf(placeholder, blocks !== undefined) }),
       commentAnchorMark,
+      chipSpacing,
       ...formatReports(format),
     ],
     content: opened.content,
@@ -823,8 +825,9 @@ export function mountDescriptionEditor(
       handleDrop: (view, event, _slice, moved) =>
         pictures === undefined ? false : droppedPictures(view, event, moved, pictures),
       // Note that words typed over a selected picture start a line below it, where they would replace it.
-      handleTextInput: (view, _from, _to, words) =>
-        pictures !== undefined && pictureTyped(view, words),
+      handleTextInput: (view, from, to, words) =>
+        typedAtChipSpace(view, from, to, words) ||
+        (pictures !== undefined && pictureTyped(view, words)),
       transformPasted: (slice) =>
         pictures === undefined ? slice : copiedPictures(slice, pictures),
       handleKeyDown: (view, event) => {
@@ -954,6 +957,7 @@ export function mountDescriptionEditor(
       return { base: withLineEnding(answer.base, ending), text: written() };
     },
     chooseMention: (mention) => picking?.choose(editor, mention),
+    retypeMention: (words) => picking?.retype(editor, words),
     insertBlock: (block) => slash?.insert(editor, block),
     markdown: written,
     replaceAnchors: (text, next, open) => {

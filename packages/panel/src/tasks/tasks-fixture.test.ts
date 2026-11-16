@@ -98,5 +98,5 @@ test("the open task's version history lists at least four versions by more than 
     "a later version is read beside the one before it",
   );
   assert.equal(oldest.revision.previous, null, "the first has none before it");
-  assert.notEqual(opened.revision.document.body, opened.revision.previous?.body);
+  assert.notEqual(opened.revision.description.body, opened.revision.previous?.body);
 });

@@ -125,8 +125,8 @@ import { useWindowAccount, windowAccountOf } from "./window-account.js";
 const STANDING_CLASS =
   "cloud-browser-standing flex min-w-0 flex-none items-center justify-between gap-control-gap border-b border-border px-column-inset py-tight-gap";
 
-/** The body, the page drawn on a canvas of the page's own shape, centered on the well. */
-const BODY_CLASS = "browser-view-body cloud-browser-body items-center justify-center bg-well";
+/** The body, the page drawn on a canvas of the page's own shape, centered on the window's ground, the panel's own. */
+const BODY_CLASS = "browser-view-body cloud-browser-body items-center justify-center bg-ground";
 
 /** A quiet line over the body while no page stands to drive, or while a draft waits on an address; only its words and presses take the pointer. */
 const NOTICE_CLASS =
@@ -481,8 +481,8 @@ function paint(canvas: HTMLCanvasElement | null, image: HTMLImageElement | undef
 
 /**
  * The relative luminance (WCAG 2, linear light) under which the page beneath
- * the agent's pointer reads as dark, which draws it in `--agent-pointer-on-dark`,
- * the dark mode's brighter amber, rather than `--agent-pointer`; its white edge
+ * the agent's pointer reads as dark, which draws it in `--ui-color-agent-pointer-on-dark`,
+ * the dark mode's brighter amber, rather than `--ui-color-agent-pointer`; its white edge
  * holds it apart from the page on either side of the line.
  */
 const DARK_PAGE_LUMA = 0.32;
@@ -811,7 +811,6 @@ export function CloudBrowserPane({
             <CloudBrowserCursor
               cursor={tab.cursor}
               lastActedAt={tab.lastActedAt}
-              frame={size}
               hidden={driven || notice !== undefined}
               onDarkPage={onDarkPage}
             />

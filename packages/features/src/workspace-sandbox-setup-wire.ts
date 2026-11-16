@@ -16,7 +16,7 @@ import { workspaceIdSchema } from "./task-wire.js";
  * `PUT /api/workspaces/sandbox-setup/repository` save one, each to an owner
  * or admin, an empty script removing it. A repository's run actions are the
  * commands a member runs in one of its agents, each only when pressed, from
- * the Run menu over the agent's tabs, behind the Run actions experiment: in
+ * the Run menu over the agent's tabs: in
  * a cloud agent's sandbox, or on the Mac a local agent runs on, as each
  * action's availability allows; `PUT /api/workspaces/sandbox-setup/run-actions`
  * saves one repository's whole list in its order, to an owner or admin, an
@@ -165,7 +165,7 @@ const runActionCommandSchema = EffectSchema.String.check(
  * where it wears one, a sidebar section's kind of icon, whether it is the
  * repository's default, the Run button's and ⌥⌘R's, and where it may run.
  */
-export const runActionSchema = EffectSchema.Struct({
+const runActionSchema = EffectSchema.Struct({
   id: EffectSchema.String,
   label: EffectSchema.String,
   command: EffectSchema.String,

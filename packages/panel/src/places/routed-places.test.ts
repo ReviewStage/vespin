@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { EXPERIMENT, NO_EXPERIMENTS } from "@repo/settings";
-import { agentTab, changesTab } from "@repo/ui/tab-strip-model";
+import { agentTab } from "@repo/ui/tab-strip-model";
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { test } from "vitest";
@@ -9,6 +9,7 @@ import { createPanelRouter } from "../panel-router.js";
 import type { RouteAccess } from "../route-gates.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
+import { listedRows } from "../testing/history-rows.js";
 import { tasksControl, VIEWS_AWAY } from "../testing/tasks-control.js";
 import type { RoutedViews } from "../workspace-routes.js";
 import {
@@ -123,14 +124,6 @@ test.each<readonly [string, string, Partial<PlaceThere>]>([
     { taskStep: { taskId: TASK_ID }, taskStands: () => false },
   ],
   [
-    "a narrow room's task step at its side panel's Pull request address, on a task since deleted",
-    "/acme/agent/agent-1/changes",
-    {
-      taskStep: { taskId: TASK_ID, panel: { open: true, tab: changesTab("agent-1") } },
-      taskStands: () => false,
-    },
-  ],
-  [
     "a task's step on a column tab since closed",
     "/acme/task/7/agent/agent-1",
     { taskStep: { taskId: TASK_ID, column: agentTab("agent-1") }, columnStands: () => false },
@@ -159,7 +152,13 @@ test("each place over the plan names its step for itself, and Admin's as the pla
     overrides: Parameters<typeof tasksControl>[0],
     place: keyof typeof ROUTED_PLACE,
     views: RoutedViews = VIEWS_AWAY,
-  ) => stepTitle(ROUTED_PLACE[place], tasksControl({ tasks: [task], ...overrides }), views);
+  ) =>
+    stepTitle(
+      ROUTED_PLACE[place],
+      tasksControl({ tasks: [task], ...overrides }),
+      listedRows([task]),
+      views,
+    );
 
   assert.deepEqual(titled({}, "BOARD", { ...VIEWS_AWAY, board: true }), {
     label: "Tasks",

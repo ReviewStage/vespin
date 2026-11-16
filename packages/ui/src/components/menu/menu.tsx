@@ -147,11 +147,12 @@ export const MENU_ITEM_MARK = {
 
 export type MenuItemMark = (typeof MENU_ITEM_MARK)[keyof typeof MENU_ITEM_MARK];
 
-/** Where an item's detail stands: a second line under its label, beside it on the one line, as a picker's row says a person's email, or under it on as many lines as its words take, as a mode's hint says what the mode does. */
+/** Where an item's detail stands: a second line under its label, beside it on the one line, as a picker's row says a person's email, under it on as many lines as its words take, as a mode's hint says what the mode does, or under it on at most two lines, cut short past them, as a list of messages says each one's words. */
 export const MENU_DETAIL = {
   UNDER: "under",
   BESIDE: "beside",
   WRAPPED: "wrapped",
+  CLAMPED: "clamped",
 } as const;
 
 export type MenuDetailPlace = (typeof MENU_DETAIL)[keyof typeof MENU_DETAIL];
@@ -816,9 +817,16 @@ function ItemBody({
 }): React.JSX.Element {
   const beside = action.detailPlace === MENU_DETAIL.BESIDE;
 
+  // Note that a detail on several lines leaves the glyph on the label's line, as a face leads a name.
+  const tall =
+    action.detail !== undefined &&
+    (action.detailPlace === MENU_DETAIL.WRAPPED || action.detailPlace === MENU_DETAIL.CLAMPED);
+
   const glyph =
     column || action.icon !== undefined ? (
-      <MenuGlyph masked={action.replayMasked}>{action.icon}</MenuGlyph>
+      <MenuGlyph masked={action.replayMasked} onFirstLine={tall}>
+        {action.icon}
+      </MenuGlyph>
     ) : null;
 
   if (action.detail === undefined) {
@@ -869,8 +877,14 @@ function ItemBody({
             {action.tag}
           </span>
         )}
-        {action.detailPlace === MENU_DETAIL.WRAPPED ? (
-          <span className="ui-menu-item-detail whitespace-normal">
+        {action.detailPlace === MENU_DETAIL.WRAPPED ||
+        action.detailPlace === MENU_DETAIL.CLAMPED ? (
+          <span
+            className={cn(
+              "ui-menu-item-detail whitespace-normal",
+              action.detailPlace === MENU_DETAIL.CLAMPED && "line-clamp-2",
+            )}
+          >
             <ItemWords masked={detailMasked}>{action.detail}</ItemWords>
           </span>
         ) : (

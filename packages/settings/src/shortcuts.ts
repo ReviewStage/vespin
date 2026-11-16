@@ -351,17 +351,12 @@ const MODIFIER_WORD = {
 
 /** How a chord's modifiers are drawn for each command key: their order, and the name each accelerator's modifier is drawn as. */
 const MODIFIER_SPELLING = {
-  [COMMAND_KEY.META]: { order: MODIFIER_GLYPHS, names: MODIFIER_GLYPH },
-  [COMMAND_KEY.CONTROL]: { order: MODIFIER_WORDS, names: MODIFIER_WORD },
+  [COMMAND_KEY.META]: { order: MODIFIER_GLYPHS, names: new Map(Object.entries(MODIFIER_GLYPH)) },
+  [COMMAND_KEY.CONTROL]: { order: MODIFIER_WORDS, names: new Map(Object.entries(MODIFIER_WORD)) },
 } as const;
 
 function modifierGlyph(name: string): string {
-  const { names } = MODIFIER_SPELLING[commandKey];
-
-  if (!Object.hasOwn(names, name)) return name;
-
-  // SAFETY: Object.hasOwn narrows name to a key the glyph table documents.
-  return names[name as keyof typeof names];
+  return MODIFIER_SPELLING[commandKey].names.get(name) ?? name;
 }
 
 /**
@@ -727,7 +722,6 @@ export const APP_SHORTCUTS = {
   [APP_COMMAND.RUN_ACTION]: {
     label: "Run",
     chord: { key: SHORTCUT_KEY.R, option: true },
-    experiment: EXPERIMENT.RUN_ACTIONS,
     capability: HOST_CAPABILITY.DESKTOP_APP,
   },
   [APP_COMMAND.INSERT_PICTURE]: {

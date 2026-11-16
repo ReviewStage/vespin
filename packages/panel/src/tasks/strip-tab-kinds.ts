@@ -320,22 +320,32 @@ const STRIP_TAB_KINDS = {
   },
   [STRIP_TAB_KIND.CHANGES]: {
     title: (tab, names) => names.pullRequest(tab),
-    untitled: (tab) => (tab.turn === undefined ? TAB_WORDS.PULL_REQUEST : TAB_WORDS.TURN_CHANGES),
-    look: (tab, known) => ({
-      kind: TAB_KIND.CHANGES,
-      pullRequest: tab.turn === undefined ? known.pullRequest : undefined,
-    }),
+    untitled: () => TAB_WORDS.PULL_REQUEST,
+    look: (_tab, known) => ({ kind: TAB_KIND.CHANGES, pullRequest: known.pullRequest }),
     surface: surfaceOf(PRODUCT_SURFACE.PULL_REQUEST),
-    // A Changes tab on another pull request of the agent's repository, by its number, or on one turn, is no place a link names.
-    link: (tab) =>
-      tab.number === undefined && tab.turn === undefined
-        ? { kind: LINK_DESTINATION.CHANGES, agentId: tab.changes }
-        : undefined,
-    drawsAgain: (tab, draws) => drawsChanges(tab, { taskAgents: draws.taskAgents }),
+    // A pull request's tab is named by its page on GitHub, which opens it again; no app link names it on its task.
+    link: NO_LINK,
+    drawsAgain: ALWAYS,
     reopens: true,
     endsSession: false,
     closesIdle: true,
     pin: PINNED_TO_SIDEBAR,
+    kept: { column: false, sidePanel: true },
+    takesFind: true,
+    stays: NEVER,
+  },
+  [STRIP_TAB_KIND.TURN_CHANGES]: {
+    title: () => TAB_WORDS.TURN_CHANGES,
+    untitled: () => TAB_WORDS.TURN_CHANGES,
+    look: () => ({ kind: TAB_KIND.CHANGES, pullRequest: undefined }),
+    surface: surfaceOf(PRODUCT_SURFACE.PULL_REQUEST),
+    // One turn's changes are no place a link names.
+    link: NO_LINK,
+    drawsAgain: (tab, draws) => drawsChanges(tab, { taskAgents: draws.taskAgents }),
+    reopens: true,
+    endsSession: false,
+    closesIdle: true,
+    pin: UNPINNED,
     kept: { column: false, sidePanel: true },
     takesFind: true,
     stays: NEVER,
@@ -379,7 +389,7 @@ const STRIP_TAB_KINDS = {
     surface: surfaceOf(PRODUCT_SURFACE.PAGE),
     link: (tab, holder) => ({
       kind: LINK_DESTINATION.PAGE,
-      planId: holder.taskId,
+      taskId: holder.taskId,
       pageId: tab.page,
     }),
     // A task's pages not read yet pass over no tab, and once read, a page gone since is passed over.
@@ -427,18 +437,14 @@ function asKindTab(tab: StripTab): AnyKindTab {
 /**
  * The names a place that reads nothing of a tab's thing gives it: no agent,
  * worker, or page, a file by its name, a Pull request by its word and its
- * number where it names one, and a Browser tab by its word.
+ * number, and a Browser tab by its word.
  */
 export const UNREAD_TAB_NAMES: TabNames = {
   agent: () => undefined,
   subagent: () => undefined,
   file: fileName,
   pullRequest: (tab) =>
-    tab.turn !== undefined
-      ? TAB_WORDS.TURN_CHANGES
-      : tab.number === undefined
-        ? TAB_WORDS.PULL_REQUEST
-        : pullRequestLabelOf({ number: tab.number, title: TAB_WORDS.PULL_REQUEST }),
+    pullRequestLabelOf({ number: tab.changes.number, title: TAB_WORDS.PULL_REQUEST }),
   page: () => undefined,
   browser: () => TAB_WORDS.BROWSER,
 };

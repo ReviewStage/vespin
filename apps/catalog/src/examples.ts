@@ -8,6 +8,7 @@ import { APPROVAL_ACTIONS_EXAMPLE } from "./examples/approval-actions";
 import { ARRIVALS_EXAMPLE } from "./examples/arrivals";
 import { ARTWORK_EXAMPLE } from "./examples/artwork";
 import { ATTACHMENT_CHIPS_EXAMPLE } from "./examples/attachment-chips";
+import { AUDIO_PLAYER_EXAMPLE } from "./examples/audio-player";
 import { AUTH_PAGE_EXAMPLE } from "./examples/auth-page";
 import { AVATARS_EXAMPLE } from "./examples/avatars";
 import { BACK_BUTTONS_EXAMPLE } from "./examples/back-buttons";
@@ -23,6 +24,7 @@ import { CALL_CONTROLS_EXAMPLE } from "./examples/call-controls";
 import { CAPTION_FIELDS_EXAMPLE } from "./examples/caption-fields";
 import { CARD_PRESSES_EXAMPLE } from "./examples/card-presses";
 import { CARDS_EXAMPLE } from "./examples/cards";
+import { CHECK_GLYPHS_EXAMPLE } from "./examples/check-glyphs";
 import { CHECKBOXES_EXAMPLE } from "./examples/checkboxes";
 import { CHIP_POPOVERS_EXAMPLE } from "./examples/chip-popovers";
 import { CHIPS_EXAMPLE } from "./examples/chips";
@@ -52,6 +54,7 @@ import { DISCLOSURES_EXAMPLE } from "./examples/disclosures";
 import { DRAFT_CARDS_EXAMPLE } from "./examples/draft-cards";
 import { DRAWER_SWIPES_EXAMPLE } from "./examples/drawer-swipes";
 import { DROP_SLOTS_EXAMPLE } from "./examples/drop-slots";
+import { EDGE_CLIPS_EXAMPLE } from "./examples/edge-clips";
 import { EDITABLE_DOCUMENT_EXAMPLE } from "./examples/editable-document";
 import { EMAIL_CHIPS_EXAMPLE } from "./examples/email-chips";
 import { EMPTY_STATES_EXAMPLE } from "./examples/empty-states";
@@ -86,6 +89,7 @@ import { MENU_EXAMPLE } from "./examples/menu";
 import { MENU_SECTIONS_EXAMPLE } from "./examples/menu-sections";
 import { MESSAGES_EXAMPLE } from "./examples/messages";
 import { MORE_BUTTONS_EXAMPLE } from "./examples/more-buttons";
+import { NAME_VALUE_ROWS_EXAMPLE } from "./examples/name-value-rows";
 import { NAV_ITEMS_EXAMPLE } from "./examples/nav-items";
 import { NOTE_LINES_EXAMPLE } from "./examples/note-lines";
 import { ONE_LINE_EXAMPLE } from "./examples/one-line";
@@ -109,7 +113,6 @@ import { PROGRESS_RINGS_EXAMPLE } from "./examples/progress-rings";
 import { PROSE_EXAMPLE } from "./examples/prose";
 import { PROVIDER_BUTTONS_EXAMPLE } from "./examples/provider-buttons";
 import { PUBLIC_PAGE_EXAMPLE } from "./examples/public-page";
-import { QUEUE_LINES_EXAMPLE } from "./examples/queue-lines";
 import { READABLE_CONTROLS_EXAMPLE } from "./examples/readable-controls";
 import { RECT_FLOAT_EXAMPLE } from "./examples/rect-float";
 import { REMOTE_SURFACE_EXAMPLE } from "./examples/remote-surface";
@@ -157,6 +160,7 @@ import { TIMES_EXAMPLE } from "./examples/times";
 import { TOASTS_EXAMPLE } from "./examples/toasts";
 import { TOOLBARS_EXAMPLE } from "./examples/toolbars";
 import { TOOLTIPS_EXAMPLE } from "./examples/tooltips";
+import { TRANSCRIPT_RAILS_EXAMPLE } from "./examples/transcript-rails";
 import { TURN_ENDS_EXAMPLE } from "./examples/turn-ends";
 import { TYPOGRAPHY_EXAMPLE } from "./examples/typography";
 import { UPLOAD_COVERS_EXAMPLE } from "./examples/upload-covers";
@@ -201,6 +205,7 @@ export const EXAMPLES: readonly Example[] = [
   CALL_CONTROLS_EXAMPLE,
   LENGTH_COUNTERS_EXAMPLE,
   CARDS_EXAMPLE,
+  CHECK_GLYPHS_EXAMPLE,
   SOCIAL_SIGN_IN_EXAMPLE,
   CARD_PRESSES_EXAMPLE,
   BLOCK_LISTS_EXAMPLE,
@@ -232,6 +237,7 @@ export const EXAMPLES: readonly Example[] = [
   DRAFT_CARDS_EXAMPLE,
   DRAWER_SWIPES_EXAMPLE,
   DROP_SLOTS_EXAMPLE,
+  EDGE_CLIPS_EXAMPLE,
   EMAIL_CHIPS_EXAMPLE,
   EMPTY_STATES_EXAMPLE,
   ERROR_LINES_EXAMPLE,
@@ -258,6 +264,7 @@ export const EXAMPLES: readonly Example[] = [
   TOASTS_EXAMPLE,
   TOOLBARS_EXAMPLE,
   TOOLTIPS_EXAMPLE,
+  TRANSCRIPT_RAILS_EXAMPLE,
   TIMES_EXAMPLE,
   SHORTCUTS_EXAMPLE,
   CHECKBOXES_EXAMPLE,
@@ -303,13 +310,13 @@ export const EXAMPLES: readonly Example[] = [
   ROLLING_NUMBER_EXAMPLE,
   PUBLIC_PAGE_EXAMPLE,
   LANDING_EXAMPLE,
-  QUEUE_LINES_EXAMPLE,
   SCROLL_AREA_EXAMPLE,
   SAVED_TICKS_EXAMPLE,
   SEARCH_FIELDS_EXAMPLE,
   SEARCH_MATCHES_EXAMPLE,
   SEARCHABLE_MENU_EXAMPLE,
   SECRET_FIELDS_EXAMPLE,
+  NAME_VALUE_ROWS_EXAMPLE,
   SETTINGS_PAGE_EXAMPLE,
   SETTINGS_SECTION_EXAMPLE,
   SPINNERS_EXAMPLE,
@@ -320,6 +327,7 @@ export const EXAMPLES: readonly Example[] = [
   SKELETONS_EXAMPLE,
   SLIDER_EXAMPLE,
   VIDEO_PLAYER_EXAMPLE,
+  AUDIO_PLAYER_EXAMPLE,
   SETTINGS_ORDERED_ROWS_EXAMPLE,
   SETTINGS_ROW_EXAMPLE,
   ACCOUNT_WORDS_EXAMPLE,
