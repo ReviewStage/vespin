@@ -659,6 +659,13 @@
   background-color: var(--ui-color-code-ground);
 }
 
+/* A pane that is all code, a File tab, Files changed, or a page's source,
+   draws its code on the panel's ground rather than the code ground, which
+   stays a code card's inset ground in a conversation. */
+.file-tab {
+  --ui-color-code-ground: var(--ui-color-ground);
+}
+
 /* Pierre's tree draws in a shadow root of its own, which inherits these:
    the panel's words, its fills, and its focus ring, so the tree reads as
    the panel's own list, beside a File tab and under a crumb alike. The ring
@@ -671,7 +678,7 @@
    ListRow `current`): the work sheet's ground here, its hairline and
    shadow in the tree's own sheet (`row-marks.ts`). */
 .file-tree-host {
-  --trees-bg-override: var(--ui-color-well);
+  --trees-bg-override: var(--ui-color-ground);
   --trees-bg-muted-override: var(--ui-color-fill-hover);
   --trees-fg-override: var(--ui-color-text);
   --trees-fg-muted-override: var(--ui-color-text-muted);

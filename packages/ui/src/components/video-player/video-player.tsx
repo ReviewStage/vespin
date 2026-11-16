@@ -24,6 +24,7 @@ import {
 } from "../../icons/lucide-glyphs.js";
 import { motionHeld } from "../../motion-timing.js";
 import { notePictureOrigin } from "../../picture-expand.js";
+import { usePlayingFrames } from "../../playing-frames.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, IconButton } from "../button/button.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, Card } from "../card/card.js";
 import { EDGE_CLIP_ELEMENT, EDGE_CLIP_LAYOUT, EdgeClip } from "../edge-clip/edge-clip.js";
@@ -843,6 +844,11 @@ export function VideoPlayer({
       keepPlace(keeps.current, { at: Math.min(shown.currentTime, duration), by: self });
     }
   };
+
+  // While it plays, its place is read on every frame, so the scrubber and the playhead glide rather than step at each `timeupdate`.
+  usePlayingFrames(playback.playing, () => {
+    if (video.current !== null) read(video.current);
+  });
 
   // Once its length is known, the video goes to where it was left, or its start, which also ends the seek that read the length.
   const resume = (shown: HTMLVideoElement) => {
