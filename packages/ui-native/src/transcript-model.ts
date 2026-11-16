@@ -496,7 +496,7 @@ function saidItem(
   };
 }
 
-/** An automation's prompt as its agent's first line, in place of the line's own words and sender. */
+/** An automation's prompt as its agent's first line, in place of the line's own words and sender, with the pictures the line carried. */
 function originItem(
   line: AgentTranscriptMessage,
   base: ItemBase,
@@ -506,6 +506,7 @@ function originItem(
     ...base,
     kind: TRANSCRIPT_ITEM.SAID,
     words: origin.prompt ?? messageWords(line),
+    pictures: saidPictures(line),
     sender: undefined,
     by: undefined,
     at: line.sentAt,

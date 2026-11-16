@@ -37,6 +37,7 @@ import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
 import { IntegrationMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
+import { PictureSet } from "./picture-set.js";
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
@@ -672,17 +673,17 @@ function TranscriptRow({
               {item.sender}
             </Text>
           )}
-          {/* Note that the pictures a line carried stand over its words at its end, as Messages and the panel stand a message's photos over its bubble, each by the media's one rule. */}
-          {(item.pictures ?? []).map((picture) => (
-            <Picture
-              key={picture.key}
-              source={picture.url ?? saidSource(drawing, picture.pictureId)}
-              alt={picture.name}
-              onRetry={
-                picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId)
-              }
-            />
-          ))}
+          {/* Note that the pictures a line carried stand over its words at its end, as Messages and the panel stand a message's photos over its bubble: one by the media's one rule, several as a set side by side. */}
+          <PictureSet
+            atEnd
+            pictures={(item.pictures ?? []).map((picture) => ({
+              key: picture.key,
+              source: picture.url ?? saidSource(drawing, picture.pictureId),
+              alt: picture.name,
+              onRetry:
+                picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
+            }))}
+          />
           {/* Note that a line of pictures alone draws no empty bubble under them, while a line of other files alone, which the phone leaves to the panel, keeps its bubble so the line still stands. */}
           {item.words.trim() === "" && (item.pictures ?? []).length > 0 ? null : (
             <CopyWordsMenu words={item.words}>
@@ -753,6 +754,25 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.FOLD:
       return <FoldRow item={item} onToggle={drawing.onToggle} />;
     case TRANSCRIPT_ITEM.MEDIA:
+      // Note that several pictures with no captions stand as one set side by side, as Messages groups photos; a recording, a sound clip, or a picture with its own caption, stands alone so its caption stays under it.
+      if (
+        item.media.length > 1 &&
+        item.media.every((shown) => shown.kind === SHOWN_MEDIA.PICTURE && shown.caption === "")
+      ) {
+        return (
+          <View style={[styles.row, inset(item.depth), styles.media]}>
+            <PictureSet
+              pictures={item.media.map((shown) => ({
+                key: shown.id,
+                source: drawing.mediaSource(shown.id),
+                alt: shown.label,
+                onRetry: retryOf(drawing, shown.id),
+              }))}
+            />
+          </View>
+        );
+      }
+
       return (
         <View style={[styles.row, inset(item.depth), styles.media]}>
           {item.media.map((shown) => (
