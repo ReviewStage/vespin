@@ -11,7 +11,7 @@ import {
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import type { FileChip } from "@repo/features/attachment-model";
-import { isVideoType, type KeptPicture } from "@repo/features/conversation-picture-wire";
+import { isPlayedType, type KeptPicture } from "@repo/features/conversation-picture-wire";
 import { formatBytes } from "@repo/features/number-format";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -19,6 +19,7 @@ import {
   AppIcon,
   type AppIconSize,
   type AppIconStandIn,
+  isAudioDataUrl,
   isVideoDataUrl,
   PICTURE_SET_SHOWN,
   PictureSet,
@@ -47,7 +48,7 @@ import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
 import { useWordFiles, WordFilesContext } from "./file-chips.js";
 
 /**
- * agent-pictures.tsx -- the pictures in an agent's transcript: a set it showed with `show_image`, the pictures an integration's call answered, under the call's row, and an image a line handed it, over the line.
+ * agent-pictures.tsx -- the pictures in an agent's transcript: a set it showed with `show_media`, the pictures an integration's call answered, under the call's row, and an image a line handed it, over the line.
  *
  * Each picture is read once through the window's pictures
  * (`../picture-query.ts`), under the agent, or under the worker whose
@@ -67,7 +68,9 @@ import { useWordFiles, WordFilesContext } from "./file-chips.js";
  * `stop_recording`, plays where it stands instead, its own block above the
  * call's pictures, with the player's own controls, Full screen among them
  * (`@repo/ui`'s `VideoPlayer`); its Expand opens the same viewer over the
- * call's videos and pictures, which plays it there. An image a line handed
+ * call's videos and pictures, which plays it there. A sound clip the agent
+ * showed plays where it stands the same way, as its waveform
+ * (`@repo/ui`'s `AudioPlayer`). An image a line handed
  * the agent, which its row names by the picture it was kept as rather than
  * carrying its bytes, is read the same way and drawn among the line's files
  * (`MessageFileChips`).
@@ -269,8 +272,10 @@ function ShownOne({
   onOpen: () => void;
 }): ReactNode {
   const state = usePicture(pictureQuery(door.owner, shown.picture.id, door.read), pictureUnread);
-  // Note that a picture is described by its file's name, since its caption is drawn beside it, but a video's player is named by the caption, because "Video: flow" says nothing of what it shows.
-  const video = state.kind === PICTURE_STATE.READY && isVideoDataUrl(state.url);
+
+  // Note that a picture is described by its file's name, since its caption is drawn beside it, but a video's or a clip's player is named by the caption, because "Video: flow" says nothing of what it shows.
+  const video =
+    state.kind === PICTURE_STATE.READY && (isVideoDataUrl(state.url) || isAudioDataUrl(state.url));
 
   return (
     <PictureBlock
@@ -366,8 +371,9 @@ function UnseenPictures({
 }
 
 /**
- * A `show_image` call drawn as what it showed: one picture or video as its
- * own block, several as one set, each in its place while the call reads it.
+ * A `show_media` or `show_image` call drawn as what it showed: one picture,
+ * video, or sound clip as its own block, several pictures as one set, each
+ * in its place while the call reads it.
  */
 export function ShownPictures({
   input,
@@ -384,15 +390,15 @@ export function ShownPictures({
   return <ShownSet door={door} shown={all} />;
 }
 
-/** Whether a shown file was kept as a video, played where it stands rather than drawn in a set. */
-function isShownVideo(
+/** Whether a shown file was kept as a video or a sound clip, played where it stands rather than drawn in a set. */
+function isShownPlayed(
   shown: ShownPicture,
 ): shown is ShownPicture & { readonly picture: KeptPicture } {
-  return shown.picture !== undefined && isVideoType(shown.picture.mediaType);
+  return shown.picture !== undefined && isPlayedType(shown.picture.mediaType);
 }
 
 /**
- * The pictures and videos of a `show_image` call, or a browser call's
+ * The pictures and videos of a `show_media` call, or a browser call's
  * recordings: each video played as its own block, then one picture as its
  * own block or several as one set, and one viewer over them all, which a
  * picture's press and a video's Expand open alike.
@@ -405,8 +411,8 @@ function ShownSet({
   shown: readonly ShownPicture[];
 }): ReactNode {
   const { open, viewer } = useViewer(door);
-  const videos = shown.filter(isShownVideo);
-  const stills = shown.filter((each) => !isShownVideo(each));
+  const videos = shown.filter(isShownPlayed);
+  const stills = shown.filter((each) => !isShownPlayed(each));
 
   // Note that the viewer walks them in the order they are drawn, videos first, rather than the order the call named them.
   const kept = [...videos, ...stills].flatMap((each) =>
@@ -493,7 +499,7 @@ function notKeptWords(byteCount: number): string {
  * line, open or closed: one kept is its thumbnail, opening the viewer over
  * the call's pictures; one not kept says so, with its size, since the
  * model saw it all the same. The videos a browser call recorded stand
- * under them as a `show_image` call's would.
+ * under them as a `show_media` call's would.
  */
 /** An app's icon a call kept beside the transcript, read through the transcript's door, in a call row's glyph seat; its stand-in (`AppIcon`'s) stands there until it lands, and for good where no icon was kept. */
 export function KeptAppIcon({

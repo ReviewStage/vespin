@@ -22,8 +22,10 @@ import {
   SpeakerIcon,
   SpeakerOffIcon,
 } from "../../icons/lucide-glyphs.js";
+import { useMediaPlace } from "../../media-place.js";
 import { motionHeld } from "../../motion-timing.js";
 import { notePictureOrigin } from "../../picture-expand.js";
+import { usePlayingFrames } from "../../playing-frames.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, IconButton } from "../button/button.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, Card } from "../card/card.js";
 import { EDGE_CLIP_ELEMENT, EDGE_CLIP_LAYOUT, EdgeClip } from "../edge-clip/edge-clip.js";
@@ -84,12 +86,11 @@ import { Tooltip } from "../tooltip/hint.js";
  * its size is read it says it as `--ui-video-natural-width` and
  * `--ui-video-natural-height`, plain numbers the place may fit it by.
  *
- * A recording keeps its place wherever it is drawn: each player notes where
- * it stands as it plays (`places`, by the video's bytes), so the same
- * recording drawn again, in the viewer an Expand opens or in a player drawn
- * anew, starts where it was left, and a player played again after another
- * moved the same recording, as the inline one after the viewer closes, goes
- * on from there.
+ * A recording keeps its place wherever it is drawn (`useMediaPlace`, as a
+ * sound clip's does), so the same recording drawn again, in the viewer an
+ * Expand opens or in a player drawn anew, starts where it was left, and a
+ * player played again after another moved the same recording, as the
+ * inline one after the viewer closes, goes on from there.
  *
  * Until its first frame's size is read, the frame holds the shape it will
  * take, its known size or a screenshot's (`LOADING_SIZE`), on the veil, the
@@ -214,12 +215,6 @@ const FRAME_CHORD = {
   NEXT: IN_CONTEXT_SHORTCUTS[IN_CONTEXT_KEY.VIDEO_FRAME_AHEAD].chord,
 } as const satisfies Record<string, ShortcutChord>;
 
-/**
- * How many recordings' places are kept, the latest played; past it the
- * oldest is let go, since each is keyed by its whole `data:` URL.
- */
-const PLACES_KEPT = 16;
-
 /** Where a video plays: in place of a picture, or in the file viewer. */
 export const VIDEO_PLAYER_PLACE = {
   INLINE: "inline",
@@ -258,24 +253,6 @@ interface Playback {
   readonly speed: number;
 }
 
-/** Where a recording was left: the second it stood at, and the player that stood it there. */
-interface Place {
-  readonly at: number;
-  readonly by: symbol;
-}
-
-/** Where each recording was last left, by its `data:` URL, the latest last. */
-const places = new Map<string, Place>();
-
-/** Notes where `dataUrl` was left, letting the oldest place go past `PLACES_KEPT`. */
-function keepPlace(dataUrl: string, place: Place): void {
-  places.delete(dataUrl);
-  places.set(dataUrl, place);
-  const oldest = places.keys().next().value;
-
-  if (places.size > PLACES_KEPT && oldest !== undefined) places.delete(oldest);
-}
-
 /** Whether the reader took the sound away last, which every player drawn after it starts by. */
 let soundOff = false;
 
@@ -290,21 +267,30 @@ export function isVideoDataUrl(dataUrl: string): boolean {
 }
 
 /**
- * The `blob:` address a video's `data:` URL plays from, made from its bytes
- * here and let go of as what draws it goes, the player or a thumb's still:
- * neither window's policy lets media load from a `data:` address, nor fetch
- * one, where both allow `blob:`. Note that the bytes are copied into an
- * array of their own length one by one, because `Uint8Array.from` over the
- * decoded string first lists every character, tens of megabytes for a
- * recording, which a phone with several on screen runs out of room for.
+ * The bytes a `data:` URL holds. Note that they are copied into an array of
+ * their own length one by one, because `Uint8Array.from` over the decoded
+ * string first lists every character, tens of megabytes for a recording,
+ * which a phone with several on screen runs out of room for.
+ */
+export function dataUrlBytes(dataUrl: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
+  const bytes = new Uint8Array(binary.length);
+
+  for (let at = 0; at < binary.length; at += 1) bytes[at] = binary.charCodeAt(at);
+
+  return bytes;
+}
+
+/**
+ * The `blob:` address a video's or a sound clip's `data:` URL plays from,
+ * made from its bytes here and let go of as what draws it goes, the player
+ * or a thumb's still: neither window's policy lets media load from a
+ * `data:` address, nor fetch one, where both allow `blob:`.
  */
 export function useBlobUrl(dataUrl: string): string | undefined {
   const [url, setUrl] = useState<string>();
   useEffect(() => {
-    const binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
-    const bytes = new Uint8Array(binary.length);
-
-    for (let at = 0; at < binary.length; at += 1) bytes[at] = binary.charCodeAt(at);
+    const bytes = dataUrlBytes(dataUrl);
     const made = URL.createObjectURL(new Blob([bytes], { type: dataUrlMediaType(dataUrl) }));
     setUrl(made);
 
@@ -409,7 +395,7 @@ function useFullScreen(
  * Note that a WebM a recorder wrote as it went states none, which the
  * browser reports as infinite, so it is sought past its end once, which
  * makes the browser read the length, and brought back to where it was left
- * as the length lands (`resume`).
+ * as the length lands (`useMediaPlace`'s `resume`).
  */
 function probeLength(video: HTMLVideoElement): void {
   if (!Number.isFinite(video.duration)) video.currentTime = Number.MAX_SAFE_INTEGER;
@@ -812,10 +798,7 @@ export function VideoPlayer({
           aspectRatio: `${String(LOADING_SIZE.width)} / ${String(LOADING_SIZE.height)}`,
         };
 
-  // This player, named in the places it keeps, so it can tell another's from its own.
-  const [self] = useState(() => Symbol(VIDEO_LABEL.PLAYER));
-  // The recording whose place this player keeps, once it has taken up where that one was left.
-  const keeps = useRef<string>(undefined);
+  const kept = useMediaPlace(dataUrl);
   // Note that whether it starts is read once, as it mounts, because a video hears autoplay only then.
   const [starts] = useState(() => viewer && !motionHeld());
 
@@ -830,18 +813,13 @@ export function VideoPlayer({
       speed: shown.playbackRate,
     });
 
-    if (moved && keeps.current !== undefined) {
-      keepPlace(keeps.current, { at: Math.min(shown.currentTime, duration), by: self });
-    }
+    if (moved) kept.keep(shown);
   };
 
-  // Once its length is known, the video goes to where it was left, or its start, which also ends the seek that read the length.
-  const resume = (shown: HTMLVideoElement) => {
-    if (keeps.current !== undefined || !Number.isFinite(shown.duration)) return;
-    keeps.current = dataUrl;
-    const left = places.get(dataUrl)?.at ?? 0;
-    shown.currentTime = left < shown.duration ? left : 0;
-  };
+  // While it plays, its place is read on every frame, so the scrubber and the playhead glide rather than step at each `timeupdate`.
+  usePlayingFrames(playback.playing, () => {
+    if (video.current !== null) read(video.current);
+  });
 
   const expand =
     onExpand === undefined
@@ -902,34 +880,27 @@ export function VideoPlayer({
           if (viewer) setNatural({ width: shown.videoWidth, height: shown.videoHeight });
           setReadUrl(url);
           // A new address is a new recording, whose place is taken up afresh.
-          keeps.current = undefined;
+          kept.forget();
           probeLength(shown);
-          resume(shown);
+          // Once its length is known, the video goes to where it was left, which also ends the seek that read the length.
+          kept.resume(shown);
           read(shown);
         }}
         onDurationChange={(event) => {
-          resume(event.currentTarget);
+          kept.resume(event.currentTarget);
           read(event.currentTarget);
         }}
         onTimeUpdate={(event) => read(event.currentTarget)}
         onPlay={(event) => {
-          const shown = event.currentTarget;
-          const left = keeps.current === undefined ? undefined : places.get(keeps.current);
-
           // Played again after another player moved the same recording, it goes on from there.
-          if (left !== undefined && left.by !== self) {
-            shown.currentTime = left.at < shown.duration ? left.at : 0;
-          }
-
-          read(shown);
+          kept.rejoin(event.currentTarget);
+          read(event.currentTarget);
         }}
         onPause={(event) => read(event.currentTarget)}
         onEnded={(event) => read(event.currentTarget)}
         onRateChange={(event) => read(event.currentTarget, false)}
         // A new address resets the old one's time before its own loads, which is no place of the old recording's.
-        onEmptied={() => {
-          keeps.current = undefined;
-        }}
+        onEmptied={kept.forget}
       />
       {flash === undefined ? null : <KeyFlash flash={flash} onGone={() => setFlash(undefined)} />}
       {loaded ? (
