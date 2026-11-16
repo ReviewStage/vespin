@@ -1,10 +1,10 @@
 /**
- * workspace-environment.ts -- a workspace's shared environment variables (`workspace-environment-wire.ts`), as procedures: list their names, put one, delete one.
+ * workspace-environment.ts -- a workspace's shared environment variables (`workspace-environment-wire.ts`), as procedures: list them, put one, save several, delete one.
  *
- * Every output is the variables' names as they then stand, its wire schema
- * flipped, and none carries a value: the one body that holds a value is the
- * put's own. A body refuses a key it does not name (`exactInput`); the
- * list's query does not.
+ * Every output is the variables as they then stand, its wire schema
+ * flipped, and none carries a secret's value: the bodies that hold one are
+ * the writes' own. A body refuses a key it does not name (`exactInput`);
+ * the list's query does not.
  *
  * Each declares the refusals its handler answers
  * (`packages/service/src/workspace-environment/`): a workspace the account
@@ -24,11 +24,15 @@ import {
   workspaceEnvironmentAnswerSchema,
   workspaceVariableDeleteRequestSchema,
   workspaceVariablePutRequestSchema,
+  workspaceVariablesSaveRequestSchema,
 } from "../workspace-environment-wire.js";
 import { bodyCap, declaredProcedure, exactInput, refuses } from "./base.js";
 
 /** A put is one value at its bound, at six bytes a character, which is the most JSON spends on one (`\u0000`), and room for the rest. */
 const PUT_BODY_BYTES = WORKSPACE_ENVIRONMENT_BOUNDS.MAX_VALUE_CHARS * 6 + 4_096;
+
+/** A save's values together stay under the body a Vercel function takes, however many it names; a larger one is refused unread. */
+const SAVE_BODY_BYTES = 4 * 1024 * 1024;
 
 /** A delete carries a workspace id and a name. */
 const DELETE_BODY_BYTES = 2_048;
@@ -48,6 +52,14 @@ export const workspaceEnvironmentContract = {
     .meta(bodyCap(PUT_BODY_BYTES))
     .meta(openapi({ method: HTTP_METHOD.PUT, path: HOSTED_SERVICE_PATH.WORKSPACE_ENVIRONMENT }))
     .input(exactInput(workspaceVariablePutRequestSchema))
+    .output(EffectSchema.flip(workspaceEnvironmentAnswerSchema)),
+  save: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
+    .meta(bodyCap(SAVE_BODY_BYTES))
+    .meta(
+      openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.WORKSPACE_ENVIRONMENT_SAVE }),
+    )
+    .input(exactInput(workspaceVariablesSaveRequestSchema))
     .output(EffectSchema.flip(workspaceEnvironmentAnswerSchema)),
   delete: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))

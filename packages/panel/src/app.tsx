@@ -1,7 +1,12 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
 import { FEEDBACK_KIND, type FeedbackKind } from "@repo/features/feedback";
-import { type AccountLink, LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
+import {
+  type AccountLink,
+  LINK_DESTINATION,
+  type NumberedAddress,
+  type ReadLink,
+} from "@repo/features/link-grammar";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
@@ -19,7 +24,8 @@ import { playCompletionSound } from "@repo/ui/completion-sound";
 import { isComposingKey } from "@repo/ui/composing-key";
 import { useLinkOpener } from "@repo/ui/held-link";
 import { LINK_ROUTE, linkRoute } from "@repo/ui/link-route";
-import { useLiveQuery } from "@tanstack/react-db";
+import { changesTab } from "@repo/ui/tab-strip-model";
+import { eq, useLiveQuery } from "@tanstack/react-db";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -578,8 +584,9 @@ function AppWindow(): React.JSX.Element {
   );
 
   // What the window shows is handed off to the member's iPhone, as the phone's own screen for it would be (`handoff.ts`).
+  // Note that the task list is read as it stands at the draw, as the links at hand are.
   useHandoff(() => (accountGated ? [] : copyLink.linksAt(false).map(({ link }) => link)), {
-    tasks: tasks.tasks,
+    tasks: taskListCollections.tasks.toArray,
     workspaces: tasks.workspaces,
   });
 
@@ -600,16 +607,23 @@ function AppWindow(): React.JSX.Element {
   }, [launched, goSettings, adminView, listedForLaunch, openAutomations]);
 
   // An app link, handed by the system or pressed in the window, opens where its place stands (`@repo/ui/link-route`).
-  // A pull request a listed task's agent opened opens in that agent's Pull request tab wherever it is pressed (`use-open-link.ts`).
-  const { data: taskPullRequests } = useLiveQuery((q) =>
-    q.from({ listed: taskListCollections.taskPullRequests }),
+  // A pull request a listed task's lines name opens in its Pull request tab on that task wherever it is pressed (`use-open-link.ts`).
+  // Note that only the pull requests of a task the list holds are, joined on the task's id.
+  const { data: listedTasks } = useLiveQuery((q) =>
+    q
+      .from({ listed: taskListCollections.taskPullRequests })
+      .join(
+        { task: taskListCollections.tasks },
+        ({ listed, task }) => eq(listed.taskId, task.id),
+        "inner",
+      )
+      .select(({ listed }) => ({ taskId: listed.taskId, pullRequests: listed.pullRequests })),
   );
 
-  const listedTasks = useMemo(() => {
-    const ids = new Set(tasks.tasks.map((task) => task.id));
-
-    return taskPullRequests.filter((each) => ids.has(each.taskId));
-  }, [tasks.tasks, taskPullRequests]);
+  // A pull request a listed task's lines name opens in its Pull request tab on that task, on its conversation.
+  const openListedPullRequest = useSteadyDoor((taskId: string, pullRequest: NumberedAddress) =>
+    tasks.onShowPanelTab(taskId, changesTab(pullRequest)),
+  );
 
   // An Admin link opens while the account's access is still being read, the
   // place waiting on it, and never for an account that is no admin
@@ -931,7 +945,7 @@ function AppWindow(): React.JSX.Element {
       {/* The window's one voice call, which outlives switching tabs and tasks. */}
       <VoiceCallProvider>
         <OpenLinkProvider value={openAppLink}>
-          <ListedPullRequests tasks={listedTasks}>
+          <ListedPullRequests tasks={listedTasks} onOpen={openListedPullRequest}>
             <OpenPersonProvider value={openPerson}>
               <PreloadPersonProvider value={preloadPerson}>
                 <OpenFeedbackProvider value={openFeedbackAbout}>

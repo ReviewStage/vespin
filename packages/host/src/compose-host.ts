@@ -9,6 +9,7 @@ import {
   HostedIntegrationsClient,
   HostedMachineCommandClient,
   HostedMcpClientsClient,
+  HostedPullRequestClient,
   HostedTaskClient,
   HostedTerminalClient,
   HostedWorkspaceClient,
@@ -18,6 +19,7 @@ import { type ClientIdentity, clientNamedOnService } from "@repo/features/client
 import { HostedInstalledSkillClient } from "@repo/features/installed-skill-client";
 import { INTEGRATION_LANDING } from "@repo/features/integration-wire";
 import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
+import { agentName } from "@repo/features/model-label";
 import {
   carried,
   GATEWAY_EVENT,
@@ -331,6 +333,11 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       credential: account.credential,
     });
 
+    const pullRequestClient = new HostedPullRequestClient({
+      serviceBaseUrl: kernel.hostedServiceBaseUrl,
+      credential: account.credential,
+    });
+
     /** The account signed in now, by its id, which every live read names. */
     const accountId = () => {
       const signedIn = account.session.snapshot();
@@ -458,7 +465,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
 
     /** An agent as the task list holds it now; none where it lists no such agent. */
     const agentListed = (agentId: string) =>
-      (tasks.snapshot().taskAgents ?? []).find((agent) => agent.id === agentId);
+      tasks.agentsListed()?.find((agent) => agent.id === agentId);
 
     /** Waits until the task list says an agent's sandbox stands open, answering whether it waited: false at once where it already says so, or does not know. */
     const sandboxOpened = (agentId: string) =>
@@ -512,6 +519,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
             : undefined;
         },
         client: agentClient,
+        pullRequests: pullRequestClient,
         ports: agentPortsClient,
         listed: tasks.listed,
         pullRequestListings: tasks.pullRequestListings,
@@ -614,6 +622,11 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
               credential: account.credential,
             }),
             turnEnded,
+            agentName: (agentId) => {
+              const agent = agentListed(agentId);
+
+              return agent === undefined ? undefined : agentName(agent);
+            },
             ...Option.match(computerHelper, {
               onNone: () => ({}),
               onSome: (helper) => ({ computer: macComputerUse(settings, helper) }),
@@ -932,6 +945,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       }),
       drain,
       taskListMoves: tasks.taskListMoves,
+      agentsListed: tasks.agentsListed,
     };
 
     return assembly;

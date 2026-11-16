@@ -1,5 +1,7 @@
+import { eq, useLiveQuery } from "@tanstack/react-db";
 import { type RefObject, useEffect, useRef } from "react";
 import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 
 /**
@@ -28,25 +30,51 @@ export function useHomeNewTask(box: RefObject<HTMLElement | null>, asks: number)
 }
 
 /**
- * Whether the account has ever had a task in the workspace named, or in any
- * while none is: the service's word where it has said
- * (`TasksControl.taskWorkspaces`), since the list may hold none of a
- * workspace's old and finished tasks, else whether the list holds one.
+ * Whether the task list holds a task in the workspace named, or in any while
+ * none is: one live query over the task collection (`findOne`), so a
+ * delivery moving a task draws the reader again only where the answer
+ * moves.
  */
-export function hadTasks(tasks: TasksControl, workspaceId: string | undefined): boolean {
-  const said = tasks.taskWorkspaces;
+export function useListsTask(workspaceId: string | undefined): boolean {
+  const { tasks } = useTaskListCollections();
 
-  const listed =
-    workspaceId === undefined
-      ? tasks.tasks.length > 0
-      : tasks.tasks.some((task) => task.workspaceId === workspaceId);
+  return (
+    useLiveQuery({
+      query: (q) => {
+        const every = q.from({ task: tasks });
+
+        return (
+          workspaceId === undefined
+            ? every
+            : every.where(({ task }) => eq(task.workspaceId, workspaceId))
+        ).findOne();
+      },
+    }).data !== undefined
+  );
+}
+
+/**
+ * Whether the account has ever had a task in the workspace named, or in any
+ * while none is: whether the list holds one (`listed`, `useListsTask`), else
+ * the service's word where it has said (`TasksControl.taskWorkspaces`),
+ * since the list may hold none of a workspace's old and finished tasks.
+ */
+export function hadTasks(
+  tasks: Pick<TasksControl, "taskWorkspaces">,
+  workspaceId: string | undefined,
+  listed: boolean,
+): boolean {
+  const said = tasks.taskWorkspaces;
 
   if (listed || said === undefined) return listed;
 
   return workspaceId === undefined ? said.length > 0 : said.includes(workspaceId);
 }
 
-/** Whether the welcome stands: an account signed in whose task list landed, never having had a task in any workspace. */
-export function welcomed(tasks: TasksControl): boolean {
-  return tasks.signedIn && tasks.listRead && !hadTasks(tasks, undefined);
+/** Whether the welcome stands: an account signed in whose task list landed, never having had a task in any workspace, `listed` saying whether the list holds any (`useListsTask`). */
+export function welcomed(
+  tasks: Pick<TasksControl, "signedIn" | "listRead" | "taskWorkspaces">,
+  listed: boolean,
+): boolean {
+  return tasks.signedIn && tasks.listRead && !hadTasks(tasks, undefined, listed);
 }

@@ -167,6 +167,8 @@ export const SETTINGS_SECTION = {
   CLAUDE: SETTINGS_SEARCH_ROW.API_KEY_ANTHROPIC,
   /** Codex's row on Agents: the account's ChatGPT plan and OpenAI key, which dictation and voice run on too. */
   CODEX: SETTINGS_SEARCH_ROW.API_KEY_OPENAI,
+  /** Cursor's row on Agents: the account's Cursor API key. */
+  CURSOR: SETTINGS_SEARCH_ROW.API_KEY_CURSOR,
   /** The account's GitHub personal access token row, where a member saves the token that adds repositories to a workspace. */
   GITHUB_TOKEN: SETTINGS_SEARCH_ROW.GITHUB_ACCESS,
 } as const;
@@ -194,6 +196,7 @@ export interface SettingsLink {
 const HARNESS_SECTION = {
   [MODEL_PROVIDER.ANTHROPIC]: SETTINGS_SECTION.CLAUDE,
   [MODEL_PROVIDER.OPENAI]: SETTINGS_SECTION.CODEX,
+  [MODEL_PROVIDER.CURSOR]: SETTINGS_SECTION.CURSOR,
 } as const satisfies Record<ModelProvider, SettingsSection>;
 
 /**

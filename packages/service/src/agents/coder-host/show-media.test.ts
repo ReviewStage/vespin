@@ -1,0 +1,493 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { it } from "@effect/vitest";
+import { Database } from "@repo/database/core/query";
+import {
+  readConversationPicture,
+  readServedConversationPicture,
+} from "@repo/database/models/conversation-pictures";
+import type { ConversationTarget } from "@repo/database/models/writer";
+import { attachment } from "@repo/database/schemas/attachment";
+import { user } from "@repo/database/schemas/auth";
+import { conversations } from "@repo/database/schemas/storage";
+import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
+import { getTestDB } from "@repo/database/testing";
+import {
+  CONVERSATION_MEDIA_TYPE,
+  CONVERSATION_PICTURE_BOUNDS,
+} from "@repo/features/conversation-picture-wire";
+import { INBOX_IMAGE_TYPE } from "@repo/features/inbox-wire";
+import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
+import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
+import { m4aBytes, mp4Bytes, pngBytes, webmBytes } from "@repo/wire/testing";
+import { eq } from "drizzle-orm";
+import { Effect, Option, Schema } from "effect";
+import { ACTION_RESULT_STATUS } from "../../core.js";
+import { runShowMedia, SHOW_MEDIA_REFUSAL, type ShowMediaBinding } from "./show-media.js";
+
+/**
+ * show-media.test.ts -- a coding agent's pictures shown from its sandbox
+ * over a real dialect: each file read and kept beside the transcript the
+ * call is written to, in order, and named by id; a call with a file that is
+ * missing, no picture, or too large shows nothing and says why, naming the
+ * path; and a transcript that keeps as many pictures as it may shows no
+ * more.
+ *
+ * Synthetic files throughout: a picture is a PNG's signature and header,
+ * which states its size, and nothing more; a video is a WebM's EBML header
+ * or an MP4's boxes, and a track that states its size; a sound clip is an
+ * M4A's boxes, whose one track's handler is sound, or an Ogg page's opening
+ * bytes.
+ */
+
+const CHECKOUT = "/vercel/sandbox/repository";
+
+/** An Ogg page's opening bytes and a few more, which is all a clip's read sniffs. */
+const OGG_CLIP = Uint8Array.from([0x4f, 0x67, 0x67, 0x53, 0, 2, 7, 7, 7, 7, 7, 7]);
+
+/** A sandbox holding the files given by absolute path, each read as one stream, and making the copy given of an Ogg clip for a phone. */
+function sandboxWith(
+  files: Readonly<Record<string, Uint8Array>>,
+  phoneAudio?: Uint8Array,
+): ShowMediaBinding["sandbox"] {
+  return () =>
+    Promise.resolve({
+      phoneAudio: () => Promise.resolve(phoneAudio ?? null),
+      readFile: ({ path }: { path: string }) => {
+        const bytes = files[path];
+
+        if (bytes === undefined) return Promise.resolve(null);
+
+        return Promise.resolve(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(bytes);
+              controller.close();
+            },
+          }),
+        );
+      },
+    });
+}
+
+const openConversation = Effect.gen(function* () {
+  const db = yield* Database;
+  const userId = `user-${randomUUID()}`;
+  yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
+  const [row] = yield* db
+    .insert(conversations)
+    .values({ userId, kind: CONVERSATION_KIND.AGENT })
+    .returning({ id: conversations.id });
+
+  assert.ok(row);
+  const target: ConversationTarget = { userId, conversationId: row.id };
+
+  return target;
+});
+
+const readShown = Schema.decodeUnknownSync(
+  Schema.Struct({
+    status: Schema.Literal(ACTION_RESULT_STATUS.ACCEPTED),
+    pictures: Schema.Array(
+      Schema.Struct({
+        id: Schema.String,
+        mediaType: Schema.String,
+        width: Schema.Number,
+        height: Schema.Number,
+        byteCount: Schema.Number,
+      }),
+    ),
+  }),
+);
+
+const refused = (reason: string) => ({ status: ACTION_RESULT_STATUS.REJECTED, reason });
+
+const show = (binding: ShowMediaBinding, input: WireBoundaryInput) =>
+  runShowMedia(binding, unparsedWire(input));
+
+it.layer(getTestDB())("show_media", (it) => {
+  it.effect(
+    "each file is kept beside the transcript in order, named by its id, type, and size, and read back as its bytes",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+
+        const sandbox = sandboxWith({
+          [`${CHECKOUT}/shots/members.png`]: pngBytes(1200, 720),
+          "/tmp/accept.png": pngBytes(390, 700),
+        });
+
+        const answer = readShown(
+          yield* show(
+            { target, sandbox, checkout: CHECKOUT },
+            {
+              images: [
+                { path: "shots/members.png", caption: "Members page" },
+                { path: "/tmp/accept.png", caption: "Accept page" },
+              ],
+            },
+          ),
+        );
+
+        assert.deepEqual(
+          answer.pictures.map(({ mediaType, width, height, byteCount }) => [
+            mediaType,
+            width,
+            height,
+            byteCount,
+          ]),
+          [
+            [INBOX_IMAGE_TYPE.PNG, 1200, 720, 33],
+            [INBOX_IMAGE_TYPE.PNG, 390, 700, 33],
+          ],
+        );
+        const [first] = answer.pictures;
+        assert.ok(first);
+        const read = yield* readConversationPicture(target.conversationId, first.id);
+        assert.deepEqual(
+          Option.map(read, (stored) => [...stored.bytes]),
+          Option.some([...pngBytes(1200, 720)]),
+        );
+      }),
+  );
+
+  it.effect(
+    "a set naming the same bytes twice, or bytes an earlier call kept, answers the one row kept for them",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+
+        const sandbox = sandboxWith({
+          "/tmp/a.png": pngBytes(10, 10),
+          "/tmp/b.png": pngBytes(20, 20),
+        });
+
+        const binding = { target, sandbox, checkout: CHECKOUT };
+
+        const [earlier] = readShown(
+          yield* show(binding, { images: [{ path: "/tmp/b.png", caption: "B" }] }),
+        ).pictures;
+
+        assert.ok(earlier);
+
+        const answer = readShown(
+          yield* show(binding, {
+            images: [
+              { path: "/tmp/a.png", caption: "A" },
+              { path: "/tmp/b.png", caption: "B" },
+              { path: "/tmp/a.png", caption: "A" },
+            ],
+          }),
+        );
+
+        const [a, b, aAgain] = answer.pictures.map((picture) => picture.id);
+        assert.deepEqual([b, aAgain], [earlier.id, a]);
+        assert.notEqual(a, earlier.id);
+      }),
+  );
+
+  it.effect(
+    "a call naming a missing file, a file that is no picture, or one too large shows nothing and names the path",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const tooLarge = new Uint8Array(CONVERSATION_PICTURE_BOUNDS.MAX_BYTES + 1);
+        tooLarge.set(pngBytes(10, 10));
+
+        const sandbox = sandboxWith({
+          [`${CHECKOUT}/ok.png`]: pngBytes(10, 10),
+          [`${CHECKOUT}/notes.txt`]: new TextEncoder().encode("not a picture at all"),
+          [`${CHECKOUT}/huge.png`]: tooLarge,
+        });
+
+        const binding = { target, sandbox, checkout: CHECKOUT };
+
+        const withSecond = (path: string) => ({
+          images: [
+            { path: "ok.png", caption: "Kept only if every file is" },
+            { path, caption: "The second" },
+          ],
+        });
+
+        assert.deepEqual(
+          yield* show(binding, withSecond("gone.png")),
+          refused(`${SHOW_MEDIA_REFUSAL.NO_FILE} gone.png`),
+        );
+        assert.deepEqual(
+          yield* show(binding, withSecond("notes.txt")),
+          refused(`${SHOW_MEDIA_REFUSAL.NOT_IMAGE} notes.txt`),
+        );
+        assert.deepEqual(
+          yield* show(binding, withSecond("huge.png")),
+          refused(`${SHOW_MEDIA_REFUSAL.TOO_LARGE} huge.png`),
+        );
+        const db = yield* Database;
+
+        const kept = yield* db
+          .select({ id: attachment.id })
+          .from(attachment)
+          .where(eq(attachment.conversationId, target.conversationId));
+
+        assert.deepEqual(kept, [], "the file read before a refused one is not kept either");
+      }),
+  );
+
+  it.effect(
+    "a WebM the agent recorded is kept beside the pictures it shows with, as a video of the size its track states",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const recording = webmBytes(1280, 800);
+
+        const sandbox = sandboxWith({
+          "/tmp/video/flow.webm": recording,
+          [`${CHECKOUT}/after.png`]: pngBytes(1200, 720),
+        });
+
+        const answer = readShown(
+          yield* show(
+            { target, sandbox, checkout: CHECKOUT },
+            {
+              images: [
+                { path: "/tmp/video/flow.webm", caption: "Inviting a member" },
+                { path: "after.png", caption: "The invite sent" },
+              ],
+            },
+          ),
+        );
+
+        assert.deepEqual(
+          answer.pictures.map(({ mediaType, width, height }) => [mediaType, width, height]),
+          [
+            [CONVERSATION_MEDIA_TYPE.WEBM, 1280, 800],
+            [INBOX_IMAGE_TYPE.PNG, 1200, 720],
+          ],
+        );
+        const [video] = answer.pictures;
+        assert.ok(video);
+        const read = yield* readConversationPicture(target.conversationId, video.id);
+        assert.deepEqual(
+          Option.map(read, (stored) => [stored.contentType, [...stored.bytes]]),
+          Option.some([CONVERSATION_MEDIA_TYPE.WEBM, [...recording]]),
+          "it is served back as the WebM it was",
+        );
+      }),
+  );
+
+  it.effect(
+    "an H.264 MP4 the computer tool recorded is kept as an MP4 of the size its track states",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const recording = mp4Bytes(1280, 800);
+        const sandbox = sandboxWith({ "/tmp/recordings/simulator.mp4": recording });
+
+        const answer = readShown(
+          yield* show(
+            { target, sandbox, checkout: CHECKOUT },
+            { images: [{ path: "/tmp/recordings/simulator.mp4", caption: "Signing in" }] },
+          ),
+        );
+
+        assert.deepEqual(
+          answer.pictures.map(({ mediaType, width, height }) => [mediaType, width, height]),
+          [[CONVERSATION_MEDIA_TYPE.MP4, 1280, 800]],
+        );
+        const [video] = answer.pictures;
+        assert.ok(video);
+        const read = yield* readConversationPicture(target.conversationId, video.id);
+        assert.deepEqual(
+          Option.map(read, (stored) => [stored.contentType, [...stored.bytes]]),
+          Option.some([CONVERSATION_MEDIA_TYPE.MP4, [...recording]]),
+        );
+      }),
+  );
+
+  it.effect("a Matroska file that is no WebM is refused as no picture, naming the path", () =>
+    Effect.gen(function* () {
+      const target = yield* openConversation;
+      const sandbox = sandboxWith({ [`${CHECKOUT}/flow.mkv`]: webmBytes(640, 480, "matroska") });
+
+      assert.deepEqual(
+        yield* show(
+          { target, sandbox, checkout: CHECKOUT },
+          { images: [{ path: "flow.mkv", caption: "Not a WebM" }] },
+        ),
+        refused(`${SHOW_MEDIA_REFUSAL.NOT_IMAGE} flow.mkv`),
+      );
+    }),
+  );
+
+  it.effect("one picture given bare, its path and caption with no list around them, is shown", () =>
+    Effect.gen(function* () {
+      const target = yield* openConversation;
+      const sandbox = sandboxWith({ [`${CHECKOUT}/shots/members.png`]: pngBytes(1200, 720) });
+
+      const answer = readShown(
+        yield* show(
+          { target, sandbox, checkout: CHECKOUT },
+          { path: "shots/members.png", caption: "Members page" },
+        ),
+      );
+
+      assert.deepEqual(
+        answer.pictures.map(({ width, height }) => [width, height]),
+        [[1200, 720]],
+      );
+    }),
+  );
+
+  it.effect(
+    "a call of no images, or of more than a set may hold, is refused in the tool's words",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const binding = { target, sandbox: sandboxWith({}), checkout: CHECKOUT };
+
+        const many = Array.from(
+          { length: CONVERSATION_PICTURE_BOUNDS.MAX_PER_CALL + 1 },
+          (_, at) => ({
+            path: `shot-${String(at)}.png`,
+            caption: "One of too many",
+          }),
+        );
+
+        assert.deepEqual(
+          yield* show(binding, { images: [] }),
+          refused(SHOW_MEDIA_REFUSAL.UNREADABLE),
+        );
+        assert.deepEqual(
+          yield* show(binding, { images: many }),
+          refused(SHOW_MEDIA_REFUSAL.UNREADABLE),
+        );
+      }),
+  );
+
+  it.effect("a transcript that keeps as many pictures as it may shows no more", () =>
+    Effect.gen(function* () {
+      const target = yield* openConversation;
+      const db = yield* Database;
+      // Note that the row stands in for pictures kept up to the budget, because two hundred
+      // megabytes of real bytes would only slow the test.
+      yield* db.insert(attachment).values({
+        userId: target.userId,
+        conversationId: target.conversationId,
+        sha256: "f".repeat(64),
+        contentType: INBOX_IMAGE_TYPE.PNG,
+        width: 1,
+        height: 1,
+        byteCount: CONVERSATION_PICTURE_BOUNDS.MAX_BYTES_PER_CONVERSATION,
+        bytes: new Uint8Array([0]),
+        createdAt: new Date(),
+      });
+
+      const binding = {
+        target,
+        sandbox: sandboxWith({ [`${CHECKOUT}/one.png`]: pngBytes(10, 10) }),
+        checkout: CHECKOUT,
+      };
+
+      assert.deepEqual(
+        yield* show(binding, { images: [{ path: "one.png", caption: "One more" }] }),
+        refused(SHOW_MEDIA_REFUSAL.FULL),
+      );
+    }),
+  );
+
+  it.effect(
+    "a set the transcript has room for only part of keeps none of it, so a refused call costs the budget nothing",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const db = yield* Database;
+        // Note that the row leaves room for the first picture below and not the second, so the
+        // refusal falls between them.
+        yield* db.insert(attachment).values({
+          userId: target.userId,
+          conversationId: target.conversationId,
+          sha256: "e".repeat(64),
+          contentType: INBOX_IMAGE_TYPE.PNG,
+          width: 1,
+          height: 1,
+          byteCount: CONVERSATION_PICTURE_BOUNDS.MAX_BYTES_PER_CONVERSATION - 40,
+          bytes: new Uint8Array([0]),
+          createdAt: new Date(),
+        });
+
+        const binding = {
+          target,
+          sandbox: sandboxWith({
+            [`${CHECKOUT}/first.png`]: pngBytes(10, 10, 1),
+            [`${CHECKOUT}/second.png`]: pngBytes(10, 10, 2),
+          }),
+          checkout: CHECKOUT,
+        };
+
+        const answer = yield* show(binding, {
+          images: [
+            { path: "first.png", caption: "Fits alone" },
+            { path: "second.png", caption: "Does not" },
+          ],
+        });
+
+        assert.deepEqual(answer, refused(SHOW_MEDIA_REFUSAL.FULL));
+
+        const kept = yield* db
+          .select({ sha256: attachment.sha256 })
+          .from(attachment)
+          .where(eq(attachment.conversationId, target.conversationId));
+
+        assert.deepEqual(kept, [{ sha256: "e".repeat(64) }], "the first picture was not kept");
+      }),
+  );
+  it.effect(
+    "an MP4 that holds sound and no video is kept as an M4A clip of no size, and an Ogg clip with the M4A its sandbox made, served to a phone in its place",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const m4a = m4aBytes();
+
+        const sandbox = sandboxWith({ "/tmp/voice.m4a": m4a, "/tmp/voice.ogg": OGG_CLIP }, m4a);
+
+        const answer = readShown(
+          yield* show(
+            { target, sandbox, checkout: CHECKOUT },
+            {
+              images: [
+                { path: "/tmp/voice.m4a", caption: "The greeting, as an M4A" },
+                { path: "/tmp/voice.ogg", caption: "The greeting, as an Ogg" },
+              ],
+            },
+          ),
+        );
+
+        assert.deepEqual(
+          answer.pictures.map(({ mediaType, width, height }) => [mediaType, width, height]),
+          [
+            [CONVERSATION_MEDIA_TYPE.M4A, 0, 0],
+            [CONVERSATION_MEDIA_TYPE.OGG, 0, 0],
+          ],
+        );
+        const [, ogg] = answer.pictures;
+        assert.ok(ogg);
+
+        const served = (playable: (typeof PLAYABLE_VIDEO_TYPE)[keyof typeof PLAYABLE_VIDEO_TYPE]) =>
+          Effect.map(
+            readServedConversationPicture(target.conversationId, ogg.id, playable),
+            Option.map((picture) => [picture.contentType, [...picture.bytes]]),
+          );
+
+        assert.deepEqual(
+          yield* served(PLAYABLE_VIDEO_TYPE.MP4),
+          Option.some([CONVERSATION_MEDIA_TYPE.M4A, [...m4a]]),
+          "a phone is served the M4A copy",
+        );
+        assert.deepEqual(
+          yield* served(PLAYABLE_VIDEO_TYPE.WEBM),
+          Option.some([CONVERSATION_MEDIA_TYPE.OGG, [...OGG_CLIP]]),
+          "every other reader the Ogg it was",
+        );
+      }),
+  );
+});
