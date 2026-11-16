@@ -127,8 +127,8 @@ const MAX_VIDEO_MB = (INBOX_BOUNDS.MAX_VIDEO_BYTES / 1_000_000).toFixed(1);
 const MAX_PDF_MB = (AGENT_BOUNDS.MAX_PDF_BYTES / 1_000_000).toFixed(1);
 
 const POST_THREAD_WORDS =
-  "Post a message on a thread in the inbox, apart from your transcript, which the developer's inbox never shows: " +
-  "post here what needs them and, the moment it is ready, what they should look at, and answer a thread message on its own thread, never in your reply alone. " +
+  "Post a message to the developer's inbox, which is where they look for anything that needs them. " +
+  "Use it whenever you need something from them or have something ready for them to look at, and when someone writes to you on a thread, reply on that same thread. " +
   "key is your own short lowercase slug, such as branch-protection: the first post under a key opens its thread and must name its title, " +
   "and a later one adds a message to that thread, a title it names renaming it. " +
   "to is the member the ask waits on, by their [@Name](link) mention; without it, the task's assignee, or the developer who started you. " +

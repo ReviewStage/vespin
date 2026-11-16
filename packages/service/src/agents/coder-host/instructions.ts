@@ -199,7 +199,7 @@ export function coderInstructions(
     ...(publishes ? publishLines(authorship, startBranch, memberToken) : []),
     `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\` and post it in a thread.`,
     "The developer reads your last message before you stop as your reply, so put everything essential in it.",
-    `Ask the developer what you need, and show them what is ready to look at, in a thread with \`${INBOX_TOOLS.POST.name}\`.`,
+    `When you need something from the developer, or have something ready for them to look at, post it in a thread with \`${INBOX_TOOLS.POST.name}\`. If someone writes to you on a thread, reply on that thread, not just in your final message.`,
     ...(describes
       ? [
           `Record a decision you made, or a question left open with the assumption you go on, in the task's description with \`${EDIT_DESCRIPTION_TOOL.name}\`${read}.`,
