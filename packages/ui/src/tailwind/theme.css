@@ -363,6 +363,14 @@
     var(--ui-list-row-depth, 0) *
     (var(--ui-control-icon) + var(--ui-icon-gap))
   );
+  /* A task's row nested under another (`TaskRow`'s `depth`) stands its status
+     mark and its name in by the status column and the gap after it once for
+     each level, so its mark stands under the name of the row it is nested
+     under, as a sidebar's nested row's glyph does. */
+  --spacing-task-row-nest: calc(
+    var(--ui-list-row-depth, 0) *
+    (var(--spacing-chip-compact) + var(--ui-block-gap))
+  );
   /* A nav item nested under a place (`NavItem`'s `nested`) starts where that
      place's name does: its row's inset, a glyph, and the glyph's gap. */
   --spacing-nav-item-nest: calc(var(--ui-row-inset) + var(--ui-control-icon) + var(--ui-icon-gap));
