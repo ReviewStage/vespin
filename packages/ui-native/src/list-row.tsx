@@ -228,13 +228,14 @@ type TaskRowProps = RowActs & {
   readonly depth?: number | undefined;
 };
 
-/** A row's act as a button of its long press menu or its swipe: red where it takes something away, and otherwise in `ink`, the muted ink a menu's glyph takes unless a swipe asks for its fill. */
+/** A row's act as a button of its long press menu or its swipe: red where it takes something away, through the system's destructive role where `roled`, and otherwise in `ink`, the muted ink a menu's glyph takes unless a swipe asks for its fill. */
 export function actionButton(
   action: RowAction,
   colors: BrandColors,
   ink: string = colors.TEXT_MUTED,
+  roled = true,
 ) {
-  const destructive = action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
+  const destructive = roled && action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
 
   return (
     <Button
@@ -407,10 +408,21 @@ function fullSwipes(swipes: readonly RowSwipe[]): boolean {
  * A swipe's piece: an act's button, or a menu's, in `ink`. Behind the row
  * it fills with the action gray, which holds 4.5:1 under the swipe's white
  * words in both themes where the muted ink, light in dark, did not; in the
- * long press menu it stands in the muted ink a menu's glyph takes.
+ * long press menu it stands in the muted ink a menu's glyph takes. Note that
+ * an act that takes something away fills red without the destructive role,
+ * because SwiftUI takes a row out of its list the moment a destructive swipe
+ * is pressed, before an act that asks first, such as Archive, hears its
+ * answer, so a Cancel left the row gone under its section's count.
  */
 function swipeButton(swipe: RowSwipe, colors: BrandColors, ink: string) {
-  return isSubmenu(swipe) ? rowSubmenu(swipe, colors, ink) : actionButton(swipe, colors, ink);
+  if (isSubmenu(swipe)) return rowSubmenu(swipe, colors, ink);
+
+  return actionButton(
+    swipe,
+    colors,
+    swipe.tone === ROW_ACTION_TONE.DESTRUCTIVE ? colors.DANGER : ink,
+    false,
+  );
 }
 
 /**
