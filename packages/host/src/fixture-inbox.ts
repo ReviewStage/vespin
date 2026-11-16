@@ -154,6 +154,7 @@ import {
   fixtureAgentOlderMessages,
   fixtureAgentPicture,
   fixtureAgentTranscript,
+  fixtureLongTranscript,
 } from "./fixture-agent-transcript.js";
 import {
   FIXTURE_PICTURE_PNG,
@@ -1941,6 +1942,9 @@ const INVITES_TRANSCRIPT = withQueued(
   fixtureAgentTranscript(INVITES_STARTED, ADA, "Build teammate invitations"),
 );
 
+/** The rounding agent's finished run, long enough that its page opens far below its first row, its words wide in places: a link, a code block, and a table. */
+const ROUNDING_TRANSCRIPT = fixtureLongTranscript(LANDED - 5 * DAY, ADA, "Fix ledger rounding");
+
 /** A transcript with one message of the account's queued behind its turn, which the agent's composer lists over its field with Steer and Delete. */
 function withQueued(transcript: AppTranscript): AppTranscript {
   const queued = {
@@ -1956,7 +1960,7 @@ function withQueued(transcript: AppTranscript): AppTranscript {
   return { ...transcript, word: { ...word, queue: { messages: [queued], revision: 1 } } };
 }
 
-/** The transcripts main holds with the invitations agent's laid over them, one object for each of main's. */
+/** The transcripts main holds with the invitations and rounding agents' laid over them, one object for each of main's. */
 const STAGED_TRANSCRIPTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT]
@@ -1972,6 +1976,7 @@ function stagedTranscripts(
   const staged = {
     ...held,
     [AGENT.INVITES]: { ...held[AGENT.INVITES], [OWN_TRANSCRIPT]: { rows: INVITES_TRANSCRIPT } },
+    [AGENT.ROUNDING]: { ...held[AGENT.ROUNDING], [OWN_TRANSCRIPT]: { rows: ROUNDING_TRANSCRIPT } },
   };
 
   STAGED_TRANSCRIPTS.set(held, staged);
