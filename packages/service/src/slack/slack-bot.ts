@@ -1,15 +1,17 @@
 /**
  * slack-bot.ts -- our own Slack bot: the team its token answers for, and a member written to directly.
  *
- * The bot is one Slack app whose token Vercel Connect holds under the
- * connector `SLACK_BOT_CONNECTOR_UID` names, under an app subject, never a
- * member's, so it is apart from the Slack each member connects for their
- * agents (`integrations.ts`). Its token is asked for at the moment a call is
- * made and kept in the SDK's own cache, never stored.
+ * The bot is our own Slack app, installed in each workspace's Slack team,
+ * whose install grants that workspace its own bot token, kept sealed with
+ * the installation (`@repo/database/models/slack-installation-store`). It is
+ * apart from the Slack each member connects for their agents
+ * (`integrations.ts`). Every call is made for one workspace
+ * (`SlackBot.forWorkspace`), on the token opened for it with the
+ * deployment's key ring as that workspace's bot is asked for; a workspace
+ * whose token is not held, or will not open, is written nothing, and the
+ * token is never logged or kept past the handle.
  *
- * A workspace's owner or admin who is someone in the team the token answers
- * for (`auth.test`) connects the bot, which keeps that team
- * (`@repo/database/models/slack-installation-store`). Writing to a member
+ * Writing to a member
  * finds their Slack user id the first time and keeps it: through a Slack
  * account they connected themselves under Settings › Integrations, whose own
  * token `auth.test` answers their user id and team for, the first in the
@@ -35,7 +37,7 @@
  * to the bound its caller names.
  *
  * `dm`, `update`, those reads, replies, joins, and leaves, and the files
- * are best-effort: whatever fails, Slack, Connect, or the store, is logged
+ * are best-effort: whatever fails, Slack, Connect, the token, or the store, is logged
  * by a fixed line and Slack's own error code, never Slack's words or the
  * token, and answers nothing. Note that neither is to be
  * yielded inside a transaction, because each waits on Slack.
@@ -44,6 +46,12 @@
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { INTEGRATION_ROW_STATUS } from "@repo/database/integration-vocabulary";
 import {
+  type KeyRing,
+  PROVIDER_KEY_ENCRYPTION_ENVIRONMENT,
+  parseKeyRing,
+} from "@repo/database/models/provider-key-seal";
+import {
+  openSlackBot,
   recordSlackMemberLookup,
   slackMemberLookup,
   slackMemberOf,
@@ -52,7 +60,6 @@ import {
 } from "@repo/database/models/slack-installation-store";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import type { WireRecord } from "@repo/wire";
-import { getToken } from "@vercel/connect";
 import {
   Config,
   Context,
@@ -64,16 +71,13 @@ import {
   Layer,
   Option,
   Redacted,
+  Result,
   Schema,
 } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import { readAccountPerson } from "../accounts/account-person.js";
-import { text } from "../core.js";
 import { type ConnectorService, IntegrationConnect } from "../integrations/integration-connect.js";
 import { readIntegrationConnections } from "../integrations/integration-store.js";
-
-/** The variable this deployment names the bot's connector by; a blank value is absent. */
-const SLACK_BOT_ENVIRONMENT = { CONNECTOR: "SLACK_BOT_CONNECTOR_UID" } as const;
 
 /** How long a member whose email matched no one in the team is written nothing before Slack is asked again. */
 const SLACK_MEMBER_MISS_LIFETIME = Duration.days(1);
@@ -150,7 +154,7 @@ interface SlackTeam {
   readonly name: string;
 }
 
-/** Why Slack answered nothing usable: the deployment names no connector, or Connect or Slack refused, keeping Slack's code where it is a slug. */
+/** Why Slack answered nothing usable: the workspace holds no token, or Connect or Slack refused, keeping Slack's code where it is a slug. */
 export class SlackBotFailure extends Data.TaggedError("SlackBotFailure")<{
   readonly method: SlackMethod;
   readonly code?: string;
@@ -191,27 +195,20 @@ export type SlackWebApi = (
   memberSubject?: string,
 ) => Effect.Effect<unknown, SlackBotFailure>;
 
-/** our Slack bot as this deployment holds it. */
-export interface SlackBotService {
-  /** Whether the deployment names the bot's connector; one that does not writes nothing. */
-  readonly configured: boolean;
-  /** The team the bot's token answers for, as `auth.test` says. */
+/** Our Slack bot for one workspace, on the token that workspace's install granted; one whose token is not held writes nothing. */
+export interface SlackWorkspaceBot {
+  /** Whether the workspace's bot token is held and opened; a bot without one writes nothing. */
+  readonly connected: boolean;
+  /** The team the workspace's bot token answers for, as `auth.test` says. */
   readonly team: Effect.Effect<SlackTeam, SlackBotFailure>;
   /** Writes to the member directly, in the thread under the DM `thread` names where given, where the workspace's bot is connected and their email matches someone in its team; nothing otherwise, or where anything failed. */
   readonly dm: (
-    organizationId: string,
     userId: string,
     content: SlackMessageContent,
     thread?: SlackMessage,
   ) => Effect.Effect<Option.Option<SlackMessage>, never, DatabaseServices>;
-  /** Whether the account is someone in the bot's team, through a Slack account it connected itself or by its email; nothing is kept. */
-  readonly inTeam: (
-    teamId: string,
-    userId: string,
-  ) => Effect.Effect<boolean, SlackBotFailure | StoreFailure, DatabaseServices>;
   /** The member of the workspace a Slack user of its connected team is, by the id kept for them or through a Slack account a member connected themselves; nothing where neither finds one. */
   readonly memberOf: (
-    organizationId: string,
     teamId: string,
     slackUserId: string,
   ) => Effect.Effect<Option.Option<string>, StoreFailure, DatabaseServices>;
@@ -252,6 +249,16 @@ export interface SlackBotService {
   ) => Effect.Effect<void>;
   /** A file a member shared, read from its private address up to `maxBytes`; nothing where the read failed or ran past them. */
   readonly download: (url: string, maxBytes: number) => Effect.Effect<Option.Option<Uint8Array>>;
+}
+
+/** Our Slack bot as this deployment holds it. */
+export interface SlackBotService {
+  /** Whether the deployment holds a key ring to open a workspace's bot token with; one that does not writes nothing. */
+  readonly configured: boolean;
+  /** The bot for the workspace, its token opened once for the handle; a workspace whose token is not held, or will not open, gets a bot that writes nothing. Note that the handle is for one piece of work, never kept. */
+  readonly forWorkspace: (
+    organizationId: string,
+  ) => Effect.Effect<SlackWorkspaceBot, never, DatabaseServices>;
 }
 
 export class SlackBot extends Context.Service<SlackBot, SlackBotService>()("SlackBot") {}
@@ -545,18 +552,18 @@ function uploadFiles(
   });
 }
 
-/** The bot over one Web API and the file transfer beside it, or over none where the deployment names no connector; a bot handed no transfer moves no file. */
-export function slackBotOver(
+/** The workspace's bot over one Web API on its token and the file transfer beside it, or over none where its token is not held; a bot handed no transfer moves no file. */
+function slackWorkspaceBotOver(
+  organizationId: string,
   api: SlackWebApi | undefined,
   transfer?: SlackFileTransfer,
-): SlackBotService {
+): SlackWorkspaceBot {
   if (api === undefined) {
     return {
-      configured: false,
+      connected: false,
       team: Effect.fail(new SlackBotFailure({ method: SLACK_METHOD.AUTH_TEST })),
       dm: () => Effect.succeedNone,
-      inTeam: () => Effect.succeed(false),
-      memberOf: slackMemberOf,
+      memberOf: (teamId, slackUserId) => slackMemberOf(organizationId, teamId, slackUserId),
       update: () => Effect.void,
       reply: () => Effect.succeedNone,
       threadMessages: () => Effect.succeed([]),
@@ -572,12 +579,12 @@ export function slackBotOver(
   }
 
   return {
-    configured: true,
+    connected: true,
     team: api(SLACK_METHOD.AUTH_TEST, {}).pipe(
       Effect.flatMap((answer) => readAnswer(SLACK_METHOD.AUTH_TEST, AuthTestSchema)(answer)),
       Effect.map((answer) => ({ id: answer.team_id, name: answer.team })),
     ),
-    dm: (organizationId, userId, content, thread) =>
+    dm: (userId, content, thread) =>
       Effect.gen(function* () {
         const installation = yield* workspaceSlackInstallation(organizationId);
 
@@ -604,14 +611,7 @@ export function slackBotOver(
 
         return Option.some<SlackMessage>({ channel: message.channel, ts: message.ts });
       }).pipe(Effect.catch(swallowed<SlackMessage>("write to a member"))),
-    inTeam: (teamId, userId) =>
-      Effect.gen(function* () {
-        if (Option.isSome(yield* ownSlackId(api, teamId, userId))) return true;
-
-        return Option.isSome(yield* emailSlackId(api, userId));
-      }),
-    memberOf: (organizationId, teamId, slackUserId) =>
-      memberOfSlackUser(api, organizationId, teamId, slackUserId),
+    memberOf: (teamId, slackUserId) => memberOfSlackUser(api, organizationId, teamId, slackUserId),
     update: (channel, ts, content) =>
       api(SLACK_METHOD.CHAT_UPDATE, { channel, ts, ...contentArgs(content) }).pipe(
         Effect.asVoid,
@@ -733,29 +733,26 @@ export function slackBotOver(
   };
 }
 
-/**
- * The subject the bot's token is asked under: the app's, as Slack bot tokens
- * are one per install. Note that this is exactly what `@vercel/connect/chat`'s
- * `connectSlackAdapter(connector).botToken()` asks, called here directly,
- * because that helper's type comes from a Chat SDK package we do not install.
- */
-const BOT_SUBJECT = { subject: { type: "app" } } as const;
-
-/** The bot's token from its own connector. */
-function botToken(connector: string): Effect.Effect<string, unknown> {
-  return Effect.tryPromise(() => getToken(connector, BOT_SUBJECT));
+/** The bot over one Web API every workspace's calls are made on, and the file transfer beside it, or over none, where no workspace's token is held. */
+export function slackBotOver(
+  api: SlackWebApi | undefined,
+  transfer?: SlackFileTransfer,
+): SlackBotService {
+  return {
+    configured: api !== undefined,
+    forWorkspace: (organizationId) =>
+      Effect.succeed(slackWorkspaceBotOver(organizationId, api, transfer)),
+  };
 }
 
-/** The token a call is made on: the bot's from its own connector, or a member's own Slack account's from the connector members connect Slack through. */
+/** The token a call is made on: the workspace's bot token, or a member's own Slack account's from the connector members connect Slack through. */
 function tokenFor(
   method: SlackMethod,
-  connector: string,
+  token: Redacted.Redacted<string>,
   members: ConnectorService,
   memberSubject: string | undefined,
 ): Effect.Effect<string, SlackBotFailure> {
-  if (memberSubject === undefined) {
-    return botToken(connector).pipe(Effect.mapError(() => new SlackBotFailure({ method })));
-  }
+  if (memberSubject === undefined) return Effect.succeed(Redacted.value(token));
 
   return members.token(memberSubject, { fresh: false }).pipe(
     Effect.map((issued) => Redacted.value(issued.token)),
@@ -763,18 +760,18 @@ function tokenFor(
   );
 }
 
-/** The Web API under a token from Connect, each call a form post as Slack's docs take every method. */
+/** The Web API on the workspace's bot token, or a member's own from Connect, each call a form post as Slack's docs take every method. */
 function slackWebApi(
-  connector: string,
+  token: Redacted.Redacted<string>,
   members: ConnectorService,
   client: HttpClient.HttpClient,
 ): SlackWebApi {
   return (method, args, memberSubject) =>
     Effect.gen(function* () {
-      const token = yield* tokenFor(method, connector, members, memberSubject);
+      const bearer = yield* tokenFor(method, token, members, memberSubject);
 
       const request = HttpClientRequest.post(`${SLACK_API_ORIGIN}/api/${method}`).pipe(
-        HttpClientRequest.bearerToken(token),
+        HttpClientRequest.bearerToken(bearer),
         HttpClientRequest.acceptJson,
         HttpClientRequest.bodyUrlParams(args),
       );
@@ -819,7 +816,10 @@ function isHttpsOn(url: string, host: string | undefined): boolean {
  * on the bot's token from Slack's file host alone, refused past the bound
  * by the length it states and again by the bytes that came.
  */
-function slackFileTransfer(connector: string, client: HttpClient.HttpClient): SlackFileTransfer {
+function slackFileTransfer(
+  token: Redacted.Redacted<string>,
+  client: HttpClient.HttpClient,
+): SlackFileTransfer {
   const failed = () => new SlackFileFailure();
 
   return {
@@ -842,7 +842,6 @@ function slackFileTransfer(connector: string, client: HttpClient.HttpClient): Sl
     read: (url, maxBytes) =>
       Effect.gen(function* () {
         if (!isHttpsOn(url, SLACK_FILE_HOST)) return yield* Effect.fail(failed());
-        const token = yield* botToken(connector).pipe(Effect.mapError(failed));
         const request = HttpClientRequest.get(url).pipe(HttpClientRequest.bearerToken(token));
 
         const bytes = yield* Effect.gen(function* () {
@@ -862,7 +861,29 @@ function slackFileTransfer(connector: string, client: HttpClient.HttpClient): Sl
   };
 }
 
-/** The bot as this deployment's environment configures it, read as the services are built. */
+/** The deployment's key ring, or none where it holds none it can parse, which is logged by the shape that is wrong and never a value. */
+const deploymentKeyRing = Effect.gen(function* () {
+  const configured = yield* Config.option(
+    Config.Redacted(PROVIDER_KEY_ENCRYPTION_ENVIRONMENT.KEYS),
+  );
+
+  if (Option.isNone(configured)) return Option.none<KeyRing>();
+  const ring = parseKeyRing(configured.value);
+
+  if (Result.isSuccess(ring)) return Option.some(ring.success);
+  yield* Effect.logError(
+    `The Slack bot cannot read the provider key encryption keys: ${ring.failure}`,
+  );
+
+  return Option.none<KeyRing>();
+});
+
+/**
+ * The bot as this deployment's environment configures it, read as the
+ * services are built: each workspace's own token, opened with the
+ * deployment's key ring, or no bot where it holds none. A token that the
+ * store cannot read is logged by its kind alone and writes nothing.
+ */
 export const slackBotFromEnvironment: Layer.Layer<
   SlackBot,
   Config.ConfigError,
@@ -870,17 +891,34 @@ export const slackBotFromEnvironment: Layer.Layer<
 > = Layer.effect(
   SlackBot,
   Effect.gen(function* () {
-    const connector = text(
-      Option.getOrUndefined(yield* Config.option(Config.String(SLACK_BOT_ENVIRONMENT.CONNECTOR))),
-    );
+    const ring = yield* deploymentKeyRing;
 
-    if (connector === undefined) return slackBotOver(undefined);
+    if (Option.isNone(ring)) return slackBotOver(undefined);
     const members = (yield* IntegrationConnect)[INTEGRATION_PROVIDER.SLACK];
     const client = yield* HttpClient.HttpClient;
 
-    return slackBotOver(
-      slackWebApi(connector, members, client),
-      slackFileTransfer(connector, client),
-    );
+    return {
+      configured: true,
+      forWorkspace: (organizationId) =>
+        openSlackBot(ring.value, organizationId).pipe(
+          Effect.catch((failure) =>
+            Effect.as(
+              Effect.logWarning("The Slack bot could not read a workspace's token", failure._tag),
+              Option.none(),
+            ),
+          ),
+          Effect.map((opened) =>
+            Option.match(opened, {
+              onNone: () => slackWorkspaceBotOver(organizationId, undefined),
+              onSome: ({ token }) =>
+                slackWorkspaceBotOver(
+                  organizationId,
+                  slackWebApi(token, members, client),
+                  slackFileTransfer(token, client),
+                ),
+            }),
+          ),
+        ),
+    };
   }),
 );
