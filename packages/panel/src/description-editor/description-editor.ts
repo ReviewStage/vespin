@@ -957,6 +957,7 @@ export function mountDescriptionEditor(
       return { base: withLineEnding(answer.base, ending), text: written() };
     },
     chooseMention: (mention) => picking?.choose(editor, mention),
+    retypeMention: (words) => picking?.retype(editor, words),
     insertBlock: (block) => slash?.insert(editor, block),
     markdown: written,
     replaceAnchors: (text, next, open) => {

@@ -27,7 +27,7 @@
         "maxLength": 36
       },
       "maxItems": 10,
-      "description": "Pictures handed to the agent with its first message: at most 10 attachment ids of pictures in your own conversation, such as one show_image kept, each at most 1.5 MB and all of them 3 MB together; a larger one is refused."
+      "description": "Pictures handed to the agent with its first message: at most 10 attachment ids of pictures in your own conversation, such as one show_media kept, each at most 1.5 MB and all of them 3 MB together; a larger one is refused."
     },
     "title": {
       "type": "string",

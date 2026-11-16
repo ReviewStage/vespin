@@ -72,8 +72,8 @@
  * (`claimSlackThreadTurn`), never in every thread it was ever kept for. A
  * thread's post is its final message in a `markdown` block, which
  * Slack draws as standard Markdown, or that it failed
- * or was stopped, each with the agent's link, and after either the pictures and
- * recordings the agent showed with `show_image` in that turn, shared as
+ * or was stopped, each with the agent's link, and after either the pictures,
+ * recordings, and sound clips the agent showed with `show_media` in that turn, shared as
  * files under the thread (`SlackBot.upload`). A turn of an agent started
  * from Slack that finished well then
  * archives the agent under the rule an automation's "Archive finished runs"
@@ -1136,7 +1136,7 @@ function turnOutcome(turn: SettledAgentTurn, words: string | undefined): SlackMe
   return { text: slackClipped(words, NOTIFICATION_CHARS), blocks: [slackMarkdownBlock(words)] };
 }
 
-/** The pictures and recordings the turn's `show_media` and `show_image` calls kept beside the transcript, in the order shown, each under its caption; one not kept is left out. */
+/** The pictures, recordings, and sound clips the turn's `show_media` and `show_image` calls kept beside the transcript, in the order shown, each under its caption; one not kept is left out. */
 const shownUploads = Effect.fnUntraced(function* (
   conversationId: string,
   journal: StoredUIMessage,

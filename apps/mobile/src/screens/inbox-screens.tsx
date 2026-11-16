@@ -68,6 +68,7 @@ import {
   Screen,
   SplitView,
   scopeMenu,
+  scopeSubtitle,
   THREAD_MEDIA,
   type ThreadMedia,
   type ThreadMessage,
@@ -75,10 +76,11 @@ import {
   ThreadPreview,
   UNDER_SPLIT_SCREEN,
   useColors,
+  useMinute,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
 import {
   PUSHED_PAGE,
@@ -138,6 +140,12 @@ const SCOPE_LABEL = "Filter";
 
 /** The scopes whose pill carries its count, the two that say how much waits. */
 const COUNTED_SCOPES: ReadonlySet<InboxShow> = new Set([INBOX_SHOW.NEEDS_ME, INBOX_SHOW.OPEN]);
+
+/** The scopes that narrow Open, which the filter button stands filled for and the bar names under its title, as Mail's filters do; All widens it instead, so it names no filter. */
+const NARROWING_SCOPES: ReadonlySet<InboxShow> = new Set([
+  INBOX_SHOW.NEEDS_ME,
+  INBOX_SHOW.REMINDERS,
+]);
 
 /** The bar's menu of the Inbox's other acts, a round glass ⋯ as iOS draws a toolbar's menu. */
 const MORE = { label: "More", symbol: GLYPH.MORE } as const;
@@ -274,7 +282,7 @@ export function InboxItemRows({
  * press lifts its preview, the thread's newest messages, over the same acts.
  * On an iPad it drags out as its vespin.dev link.
  */
-function InboxRow({
+function InboxRowView({
   listed,
   readerId,
   pictureOf,
@@ -282,6 +290,8 @@ function InboxRow({
   remindMenu,
   onResolve,
 }: InboxRowActs & { readonly listed: InboxListed }) {
+  // Note that the row reads the minute itself, so a row whose thread did not move still moves its time and Remind me's times as the minute turns.
+  const now = useMinute();
   const { holder, item } = listed;
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
@@ -336,6 +346,7 @@ function InboxRow({
       }
       at={item.updatedAt}
       due={item.remindAt}
+      now={now}
       trailingActions={[...resolve, remindMenu(item)]}
       leadingActions={[
         {
@@ -359,6 +370,16 @@ function InboxRow({
     />
   );
 }
+
+/**
+ * An Inbox item's row, drawn again only where its props moved. Note that
+ * every delivery to the Inbox drew every row again, a list off screen's
+ * among them, which held the JS thread under a working agent's posts; its
+ * props keep their identity while its own thread stands (`inboxListed`, the
+ * acts' and the menus' hooks), so a row is now drawn again only where its
+ * thread moved.
+ */
+const InboxRow = memo(InboxRowView);
 
 /**
  * What the list stands where it lists nothing: that the account's feed is
@@ -660,7 +681,7 @@ function ThreadDetail({
   const inboxActs = useInboxActs();
   const keeping = useKeeping();
   const inStack = place.inStack;
-  const remindMenu = place.inStack ? (on: InboxItem) => remind.menu([on]) : place.remindMenu;
+  const remindMenu = place.inStack ? remind.itemMenu : place.remindMenu;
 
   const doors = {
     onMark: (unread: boolean) => inboxActs.mark(item.id, unread),
@@ -1061,7 +1082,7 @@ function InboxStackList(words: InboxSearch) {
             }
             onRefresh={acts.refresh}
             onMark={acts.mark}
-            remindMenu={(item) => remind.menu([item])}
+            remindMenu={remind.itemMenu}
             onResolve={acts.resolve}
             choosing={choosing?.rows}
             onChooseStart={chooseStart}
@@ -1115,7 +1136,7 @@ function InboxSplitScreen({
         onSelect={select}
         onRefresh={acts.refresh}
         onMark={acts.mark}
-        remindMenu={(item) => remind.menu([item])}
+        remindMenu={remind.itemMenu}
         onResolve={acts.resolve}
         choosing={choosing?.rows}
         onChooseStart={chooseStart}
@@ -1138,8 +1159,10 @@ function InboxSplitScreen({
       choosing === undefined
         ? {
             title: INBOX_TITLE,
+            // Note that beside the app sidebar the scope leaves the list for the filter button, so the bar names a narrowing one under its title, as Mail's "Filtered by: Unread"; elsewhere the scopes stand over the list and say it themselves.
+            titleLine: threeColumns ? scopeSubtitle(scopes, NARROWING_SCOPES.has(show)) : undefined,
             filter: threeColumns
-              ? scopeMenu(SCOPE_LABEL, scopes, show !== INBOX_SHOW.OPEN)
+              ? scopeMenu(SCOPE_LABEL, scopes, NARROWING_SCOPES.has(show))
               : undefined,
             menu,
             search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
@@ -1151,12 +1174,7 @@ function InboxSplitScreen({
     selected === undefined ? (
       <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
     ) : (
-      <ThreadColumn
-        key={selected}
-        id={selected}
-        remindMenu={(item) => remind.menu([item])}
-        onOpen={select}
-      />
+      <ThreadColumn key={selected} id={selected} remindMenu={remind.itemMenu} onOpen={select} />
     );
 
   // Note that with no thread picked the detail's bar keeps the thread's acts, dimmed, as Mail's bar stands over No Message Selected; a picked thread's page stands its own.

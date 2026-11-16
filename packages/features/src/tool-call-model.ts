@@ -1641,7 +1641,6 @@ const AGENT_TOOL_VIEWS = {
     input: input === undefined ? textBlock("") : jsonBlock(input),
     output: output === undefined ? undefined : jsonBlock(output),
   }),
-  [AGENT_TOOL.SHOW_IMAGE]: SHOWN_MEDIA_CALL,
   [AGENT_TOOL.SHOW_MEDIA]: SHOWN_MEDIA_CALL,
   [AGENT_TOOL.SLEEP]: ({ input, output }) => {
     const seconds = isRecord(input) && isWireNumber(input.seconds) ? input.seconds : undefined;
@@ -1717,6 +1716,7 @@ const RETIRED_TOOL_VIEWS = {
   [RETIRED_TOOL.LIST_CODING_AGENTS]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_AGENTS, input, output, undefined),
   [RETIRED_TOOL.EDIT_PLAN]: AGENT_TOOL_VIEWS[AGENT_TOOL.EDIT_DESCRIPTION],
+  [RETIRED_TOOL.SHOW_IMAGE]: SHOWN_MEDIA_CALL,
   [RETIRED_TOOL.READ_CODING_AGENT]: ({ input, output }) =>
     namedCall(CALL_KIND.READ_AGENT, input, output, "agentId"),
   [RETIRED_TOOL.MESSAGE_CODING_AGENT]: ({ input, output }) =>

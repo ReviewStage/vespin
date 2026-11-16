@@ -633,7 +633,7 @@ export function isTodos(
   );
 }
 
-/** How the fold reads a part: its words, its reasoning as a note, a delegation as a subagent, a to-do list and a set of pictures, a page, or a recording shown each on a row of its own, a start that began a coding agent counted apart, and every other call grouped with the calls beside it. */
+/** How the fold reads a part: its words, its reasoning as a note, a delegation as a subagent, a set of pictures, a page, or a recording shown each on a row of its own, a start that began a coding agent counted apart, and every other call grouped with the calls beside it. */
 const AGENT_READING: RowReading<AgentPart> = {
   key: (part, index) => {
     if (part.kind === AGENT_PART.TOOL) return part.callId;
@@ -662,7 +662,7 @@ const AGENT_READING: RowReading<AgentPart> = {
     if (startedAgentOf(part) !== undefined) return ROW_PART.AGENT;
 
     // Note that what the agent showed is never grouped, because a group folds closed once the agent moves on and would fold the pictures with it.
-    return isTodos(part) || isShownSet(part) || isShownPage(part) || keptRecording(part)
+    return isShownSet(part) || isShownPage(part) || keptRecording(part)
       ? ROW_PART.LONE_CALL
       : ROW_PART.CALL;
   },
@@ -911,10 +911,9 @@ export function followUpsWords(chosen: readonly string[]): string | undefined {
  * across them. The turn moves while the agent may still write to it, which
  * is its last message; any other has ended. A worker's session folds as
  * its agent's does, since a run of calls reads the same whoever made it.
- * The agent's words, its to-do lists, and every set of pictures, page, and
- * recording it showed stand on rows of their own, never folded. A line that
- * reached the turn while it ran (`arrived`) stands among its parts where it
- * arrived.
+ * The agent's words and every set of pictures, page, and recording it
+ * showed stand on rows of their own, never folded. A line that reached the
+ * turn while it ran (`arrived`) stands among its parts where it arrived.
  */
 export function agentRows(
   message: AgentTranscriptMessage,

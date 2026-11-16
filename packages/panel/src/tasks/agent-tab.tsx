@@ -56,6 +56,7 @@ import {
 } from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
+import type { NumberedAddress } from "@repo/features/link-grammar";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
 import { cardTitle, plainWords } from "@repo/features/plain-words";
@@ -940,34 +941,31 @@ function TodosRow({
   );
 }
 
-/** Where the transcript draws the agent's to-do lists: the call whose list stays out of a finished turn's fold, the call whose list the agent is at, none once it stops, and the list as it stood after each of Claude Code's task calls (`taskTodos`). */
+/** Where the transcript draws the agent's to-do lists: the call whose list the agent is at, none once it stops, and the list as it stood after each of Claude Code's task calls (`taskTodos`). */
 interface TodosPlace {
-  readonly kept: string | undefined;
   readonly live: string | undefined;
   readonly lists: ReadonlyMap<string, AgentTodos["todos"]>;
 }
 
 /** A transcript that holds no to-do list, as the brain's does not. */
 const NO_TODOS: TodosPlace = {
-  kept: undefined,
   live: undefined,
   lists: new Map(),
 };
 
-/** Whether two places draw the to-do lists alike: the same calls kept and live, and each task call's list the one it was; none alike only with none. */
+/** Whether two places draw the to-do lists alike: the same call live, and each task call's list the one it was; none alike only with none. */
 function sameTodosPlace(a: TodosPlace | undefined, b: TodosPlace | undefined): boolean {
   if (a === undefined || b === undefined) return a === b;
 
-  return a.kept === b.kept && a.live === b.live && sameEntries(a.lists, b.lists);
+  return a.live === b.live && sameEntries(a.lists, b.lists);
 }
 
-/** Where the to-do lists are drawn for the transcript given: the newest kept, and live while the agent works. */
+/** Where the to-do lists are drawn for the transcript given: the newest live while the agent works. */
 function todosPlace(messages: readonly AgentTranscriptMessage[], working: boolean): TodosPlace {
   const lists = taskTodos(messages);
   const standing = newestTodos(messages, lists);
 
   return {
-    kept: standing?.callId,
     live: working ? standing?.callId : undefined,
     lists,
   };
@@ -3969,8 +3967,8 @@ interface AgentTabDoors {
   onOpenTarget?: DelegationDoors["onOpenTarget"];
   /** The cards its rows that open a tab hang, as those tabs hang them. */
   cards?: TranscriptCards | undefined;
-  /** Opens the agent's pull request, its checks, description, and conversation, in a tab of the side panel's own. */
-  onOpenPullRequest?: ((number?: number) => void) | undefined;
+  /** Opens a pull request the agent opened, by its repository and number, its checks, description, and conversation, in a tab of the side panel's own. */
+  onOpenPullRequest?: ((pullRequest: NumberedAddress) => void) | undefined;
   /** Hears the transcript the tab holds each time it moves, which the tab's hover card previews once the tab is not shown. */
   onHeld: (agentId: string, held: HeldTranscript) => void;
 }
@@ -4311,8 +4309,7 @@ function AgentTabBody({
         doors={{
           openGitHub,
           copy: copyWithToast,
-          openPullRequest: onOpenPullRequest === undefined ? undefined : () => onOpenPullRequest(),
-          openPullRequestNumber: onOpenPullRequest,
+          openPullRequest: onOpenPullRequest,
         }}
         startedAt={agent.runStartedAt}
         counts={shown}

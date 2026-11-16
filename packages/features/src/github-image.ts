@@ -12,8 +12,9 @@
  * the window. Every other image GitHub links goes through its own image
  * proxy, `camo.githubusercontent.com`, or stands on its older public upload
  * host, and is read as it is. A file of a repository, an image a
- * description links on its own branch (`raw.githubusercontent.com`, or
- * `github.com/<owner>/<name>/raw/...`), which GitHub's rendering leaves as
+ * description links on its own branch (`raw.githubusercontent.com`,
+ * `github.com/<owner>/<name>/raw/...`, or `.../blob/...` with a `raw` query,
+ * which GitHub redirects to the raw file), which GitHub's rendering leaves as
  * written and which a private repository answers no stranger, is named by
  * its repository, ref, and path, and is read through the repository's
  * contents on the App's token, only where the repository is the agent's
@@ -96,6 +97,12 @@ export function imageTypeOfPath(path: string): GitHubImageType | undefined {
 /** The segment `github.com/<owner>/<name>/raw/<ref>/<path>` names a repository's file under. */
 const RAW_SEGMENT = "raw";
 
+/** The segment `github.com/<owner>/<name>/blob/<ref>/<path>` names a file's page under, its raw bytes with a `raw` query. */
+const BLOB_SEGMENT = "blob";
+
+/** The query that turns a file's page into its raw bytes; GitHub redirects on it whatever its value. */
+const RAW_QUERY = "raw";
+
 const ASSET_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 /** A signed upload's file name: GitHub's number for it, then the asset's id, then its extension. */
@@ -171,8 +178,10 @@ export function githubImageOf(address: string): GitHubImage | undefined {
 
   if (url.hostname === HOST.RAW) return fileOf(segments);
 
-  // Note that `github.com/<owner>/<name>/raw/<ref>/<path>` names the same file the raw host does.
-  if (url.hostname === HOST.GITHUB && segments[2] === RAW_SEGMENT) {
+  // Note that `github.com/<owner>/<name>/raw/<ref>/<path>`, and its `blob` page asked `?raw`, name the same file the raw host does.
+  const rawBlob = segments[2] === BLOB_SEGMENT && url.searchParams.has(RAW_QUERY);
+
+  if (url.hostname === HOST.GITHUB && (segments[2] === RAW_SEGMENT || rawBlob)) {
     return fileOf([...segments.slice(0, 2), ...segments.slice(3)]);
   }
 

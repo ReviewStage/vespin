@@ -134,7 +134,7 @@ import {
   runAgentEditDescription,
   runAgentLookAtPicture,
   runAgentOpenPullRequest,
-  runAgentShowImage,
+  runAgentShowMedia,
   runAgentShowPage,
 } from "../coder-host/agent-doors.js";
 import { MESSAGE_AGENT_TOOL, runMessageAgent } from "../coder-host/agent-message.js";
@@ -151,7 +151,7 @@ import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
 import { OPEN_PULL_REQUEST_TOOL } from "../coder-host/pull-request.js";
 import { sessionsRouter } from "../coder-host/runtime-sessions.js";
-import { SHOW_IMAGE_TOOL } from "../coder-host/show-image.js";
+import { SHOW_MEDIA_TOOL } from "../coder-host/show-media.js";
 import { runScheduleWakeup, SCHEDULE_WAKEUP_TOOL } from "../coder-host/wakeup-tool.js";
 import {
   COMPUTER_TOOL,
@@ -571,8 +571,8 @@ const CATALOG = [
     },
   ),
   served(
-    SHOW_IMAGE_TOOL,
-    (admitted, input, { sandbox }) => runAgentShowImage(admitted, input, sandbox),
+    SHOW_MEDIA_TOOL,
+    (admitted, input, { sandbox }) => runAgentShowMedia(admitted, input, sandbox),
     LOADED,
   ),
   served(
