@@ -1696,7 +1696,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
       }),
   );
   it.effect(
-    "a review, a comment on a pull request, and a status on its head branch each note the pull request moved, and a comment on an issue notes nothing",
+    "a review, a comment on a pull request, a status on its head branch, and a fork's check suite each note the pull request moved, and a comment on an issue notes nothing",
     () =>
       Effect.gen(function* () {
         const sighted = {
@@ -1762,6 +1762,14 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         });
         const checked = yield* moves();
         assert.ok(movedAt(checked) > movedAt(commented));
+
+        // A fork's check suite names no pull request, and is heard by the branch it ran on.
+        yield* deliver("check_suite", {
+          action: "completed",
+          repository: sighted,
+          check_suite: { head_branch: "agent/invite-once", head_sha: "e4f5a6b", pull_requests: [] },
+        });
+        assert.ok(movedAt(yield* moves()) > movedAt(checked));
       }),
   );
 });

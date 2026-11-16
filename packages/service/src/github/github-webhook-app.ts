@@ -114,7 +114,8 @@ import { actOnGitHubMention, githubMentionOf, type MentionServices } from "./git
  * (`@repo/database/models/github-pull-request-moves`), which every open
  * Pull request tab follows live to read it again, whoever opened it. A
  * commit status names no pull request, so it notes those whose head branch
- * an earlier delivery recorded as one of the branches it names. Of these
+ * an earlier delivery recorded as one of the branches it names, and so does
+ * a fork's check suite, which names none either, by the branch it ran on. Of these
  * deliveries only the numbers, the branches, and the commits are read for
  * it, and none of them is logged.
  * A check run's delivery notes nothing, as above: the suite covers it.
@@ -301,9 +302,10 @@ const IssueMovedSchema = Schema.Struct({
   }),
 });
 
-/** A check suite's delivery, as far as its moves are read: the pull requests it ran for and their heads, none for a fork's. */
+/** A check suite's delivery, as far as its moves are read: the branch it ran on, and the pull requests it ran for and their heads, none for a fork's. */
 const CheckSuiteMovedSchema = Schema.Struct({
   check_suite: Schema.Struct({
+    head_branch: Schema.NullOr(Schema.String),
     pull_requests: Schema.Array(Schema.Struct({ number: Schema.Int, head: MovedHeadSchema })),
   }),
 });
@@ -489,10 +491,14 @@ function pullRequestsMoved(
       const read = readDelivery(CheckSuiteMovedSchema, payload);
 
       if (Result.isFailure(read)) return undefined;
+      const suite = read.success.check_suite;
 
-      return {
-        named: read.success.check_suite.pull_requests.map(({ number, head }) => ({ number, head })),
-      };
+      // Note that a fork's suite names no pull request, so it finds them by the branch it ran on, as a status does.
+      if (suite.pull_requests.length === 0) {
+        return suite.head_branch === null ? undefined : { branches: [suite.head_branch] };
+      }
+
+      return { named: suite.pull_requests.map(({ number, head }) => ({ number, head })) };
     }
 
     case WEBHOOK_EVENT.STATUS: {
