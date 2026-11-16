@@ -40,4 +40,11 @@ export const VOICE_CALL_LEASE = {
   CLOSE_WAIT: Duration.seconds(10),
   /** How long a delivery that failed waits before the queue brings it again, as when the sideband dropped: short, since the call is unheld until then. */
   FAILED_AGAIN: Duration.seconds(1),
+  /**
+   * The delivery of one lease from which an attach refused as unavailable
+   * (503) reads as the session gone, since a session that closed while no
+   * lease listened may answer so for good (live test, Nov 16); deliveries
+   * come `FAILED_AGAIN` apart, so a passing outage gets about ten seconds.
+   */
+  UNAVAILABLE_DELIVERIES: 10,
 } as const;

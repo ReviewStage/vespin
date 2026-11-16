@@ -22,7 +22,7 @@ import {
   openVoiceCall,
   VOICE_CALLER_ENVIRONMENT,
 } from "../testing/voice-callers.js";
-import { LIVE_SIDEBAND_EVENT } from "./live-sideband.js";
+import { LIVE_SIDEBAND_EVENT, LiveSidebands, SidebandRefused } from "./live-sideband.js";
 import { VOICE_CALL_LEASE } from "./voice-call-bounds.js";
 import type { VoiceCallObserver } from "./voice-call-holder.js";
 import {
@@ -131,7 +131,7 @@ it.layer(SUITE)("a voice call held lease by lease", (it) => {
 
         yield* Effect.gen(function* () {
           const first = yield* Effect.forkChild(
-            holdVoiceCall({ callId: call.id, callerId, epoch: 1, redelivered: false }, observe),
+            holdVoiceCall({ callId: call.id, callerId, epoch: 1, delivery: 1 }, observe),
           );
 
           const said = [yield* session.say(SPOKEN)];
@@ -145,9 +145,7 @@ it.layer(SUITE)("a voice call held lease by lease", (it) => {
           assert.deepEqual(next, { callId: call.id, callerId, epoch: 2 });
 
           // The next lease attaches while the first still listens, and hears the session's replay.
-          const second = yield* Effect.forkChild(
-            holdVoiceCall({ ...next, redelivered: false }, observe),
-          );
+          const second = yield* Effect.forkChild(holdVoiceCall({ ...next, delivery: 1 }, observe));
 
           const replayed = yield* nextHeard(heard, LIVE_REPLAYED);
           assert.deepEqual(replayed, [
@@ -201,7 +199,7 @@ it.layer(SUITE)("a voice call held lease by lease", (it) => {
 
       const held = yield* Effect.gen(function* () {
         const holder = yield* Effect.forkChild(
-          holdVoiceCall({ callId: call.id, callerId, epoch: 1, redelivered: false }, observe),
+          holdVoiceCall({ callId: call.id, callerId, epoch: 1, delivery: 1 }, observe),
         );
 
         yield* session.say(SPOKEN);
@@ -234,7 +232,7 @@ it.layer(SUITE)("a voice call held lease by lease", (it) => {
 
         const held = yield* Effect.gen(function* () {
           const holder = yield* Effect.forkChild(
-            holdVoiceCall({ callId: call.id, callerId, epoch: 1, redelivered: false }, observe),
+            holdVoiceCall({ callId: call.id, callerId, epoch: 1, delivery: 1 }, observe),
           );
 
           yield* session.say(SPOKEN);
@@ -262,7 +260,7 @@ it.layer(SUITE)("a voice call held lease by lease", (it) => {
 
         const held = yield* Effect.gen(function* () {
           const holder = yield* Effect.forkChild(
-            holdVoiceCall({ callId: call.id, callerId, epoch: 1, redelivered: false }, observe),
+            holdVoiceCall({ callId: call.id, callerId, epoch: 1, delivery: 1 }, observe),
           );
 
           yield* session.say(SPOKEN);
@@ -295,7 +293,7 @@ it.layer(SUITE)("a voice call held lease by lease", (it) => {
 
         yield* Effect.gen(function* () {
           const crashed = yield* Effect.forkChild(
-            holdVoiceCall({ ...lease, redelivered: false }, observe),
+            holdVoiceCall({ ...lease, delivery: 1 }, observe),
           );
 
           yield* session.say(SPOKEN);
@@ -306,9 +304,7 @@ it.layer(SUITE)("a voice call held lease by lease", (it) => {
           yield* Fiber.interrupt(crashed);
 
           // The same message, come again, claims from the epoch its dead delivery took.
-          const again = yield* Effect.forkChild(
-            holdVoiceCall({ ...lease, redelivered: true }, observe),
-          );
+          const again = yield* Effect.forkChild(holdVoiceCall({ ...lease, delivery: 2 }, observe));
 
           assert.deepEqual(
             (yield* nextHeard(heard, 1)).map((one) => one.epoch),
@@ -316,15 +312,13 @@ it.layer(SUITE)("a voice call held lease by lease", (it) => {
           );
 
           // A first delivery of a message whose epoch is long gone holds nothing.
-          const stale = yield* holdVoiceCall({ ...lease, redelivered: false }, observe);
+          const stale = yield* holdVoiceCall({ ...lease, delivery: 1 }, observe);
           assert.equal(stale, VOICE_CALL_HELD.STALE);
 
           // Its holder dies too, and the message comes a third time: the call is still taken back.
           yield* Fiber.interrupt(again);
 
-          const third = yield* Effect.forkChild(
-            holdVoiceCall({ ...lease, redelivered: true }, observe),
-          );
+          const third = yield* Effect.forkChild(holdVoiceCall({ ...lease, delivery: 2 }, observe));
 
           assert.deepEqual(
             (yield* nextHeard(heard, 1)).map((one) => one.epoch),
@@ -335,6 +329,47 @@ it.layer(SUITE)("a voice call held lease by lease", (it) => {
 
         const row = Option.getOrThrow(yield* readVoiceCall(callerId, call.id));
         assert.equal(row.leaseEpoch, 4);
+      }),
+  );
+
+  it.effect(
+    "a lease its session keeps refusing as unavailable ends the call once it has come often enough, with no seconds kept",
+    () =>
+      Effect.gen(function* () {
+        const { call, callerId } = yield* openVoiceCall;
+        const leases = yield* recordingLeases(true);
+        const { observe } = yield* hearing;
+        const lease = { callId: call.id, callerId, epoch: 1 };
+
+        // A session that closed while no lease listened, which answers every attach 503 rather than 404 (live test, Nov 16).
+        const closedUnheard = Layer.mergeAll(
+          Layer.succeed(HostedEnvironment, VOICE_CALLER_ENVIRONMENT),
+          Layer.succeed(LiveSidebands, {
+            attach: () => Effect.fail(new SidebandRefused({ status: 503 })),
+          }),
+          leases.layer,
+          ANALYTICS.layer,
+        );
+
+        const earlier = yield* Effect.flip(
+          holdVoiceCall(
+            { ...lease, delivery: VOICE_CALL_LEASE.UNAVAILABLE_DELIVERIES - 1 },
+            observe,
+          ).pipe(Effect.provide(closedUnheard)),
+        );
+
+        assert.equal(earlier._tag, "SidebandUnattached");
+        assert.equal(Option.isSome(yield* readVoiceCall(callerId, call.id)), true);
+
+        const held = yield* holdVoiceCall(
+          { ...lease, delivery: VOICE_CALL_LEASE.UNAVAILABLE_DELIVERIES },
+          observe,
+        ).pipe(Effect.provide(closedUnheard));
+
+        assert.equal(held, VOICE_CALL_HELD.GONE);
+        assert.equal(Option.isNone(yield* readVoiceCall(callerId, call.id)), true);
+        assert.deepEqual(yield* metered(callerId), []);
+        assert.deepEqual(countedCalls(callerId), []);
       }),
   );
 });
