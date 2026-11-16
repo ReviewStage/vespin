@@ -53,8 +53,8 @@ const STARTER_GLYPH = {
   [STARTER.RACE_FIXES]: <EntityGlyph kind={ENTITY_KIND.PULL_REQUEST} />,
   [STARTER.SMALL_FIX]: <GLYPH.DONE />,
   [STARTER.DAILY_BRIEFING]: <EntityGlyph kind={ENTITY_KIND.AUTOMATION} />,
-  [STARTER.LIVE_APP]: <GLYPH.LINK />,
-  [STARTER.SITE_WALKTHROUGH]: <GLYPH.WEBSITE />,
+  [STARTER.LIVE_APP]: <GLYPH.WEBSITE />,
+  [STARTER.SITE_WALKTHROUGH]: <GLYPH.RECORDING />,
 } as const satisfies Record<Starter, React.JSX.Element>;
 
 /** Home's starters while the member has them on and the listed workspace holds few tasks; nothing otherwise. */
