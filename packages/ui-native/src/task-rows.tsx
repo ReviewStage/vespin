@@ -74,6 +74,7 @@ import {
 } from "./marks.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { ProblemLine } from "./problem-line.js";
+import { useRollingCount } from "./rolling-count.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -708,6 +709,7 @@ export function GroupRow({ id, title, symbol, count: held, testId, onDropLink }:
   const colors = useColors();
   const count = held === 0 ? undefined : held;
   const leadWidth = useScaledSize(MARK_SIZE.SIDEBAR_LEAD);
+  const rolling = useRollingCount(count ?? 0);
 
   // Note that the name keeps one line at every text size and is cut short, and the count holds the line's end at its own width, as Mail's mailboxes stand, so a large size never breaks a name mid-word or drops the count under it.
   const row: ReactElement = (
@@ -733,6 +735,7 @@ export function GroupRow({ id, title, symbol, count: held, testId, onDropLink }:
             foregroundStyle(colors.TEXT_MUTED),
             lineLimit(1),
             fixedSize(),
+            ...rolling,
           ]}
         >
           {String(count)}
@@ -854,6 +857,7 @@ function ChangedWords({
 /** The count of a block's open comment threads at its trailing edge, as a document's margin marks them, opening them on a press. */
 function CommentCount({ comments }: { readonly comments: WordsComments }) {
   const colors = useColors();
+  const rolling = useRollingCount(comments.count);
 
   return (
     <SwiftUIButton
@@ -880,6 +884,7 @@ function CommentCount({ comments }: { readonly comments: WordsComments }) {
             font({ textStyle: TYPE_ROLE.TIME }),
             monospacedDigit(),
             foregroundStyle(colors.TEXT_MUTED),
+            ...rolling,
           ]}
         >
           {String(comments.count)}
