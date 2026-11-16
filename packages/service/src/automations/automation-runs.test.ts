@@ -67,8 +67,7 @@ import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN, TURN_STATUS, type TurnStatus } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { eq } from "drizzle-orm";
-import { Clock, Duration, Effect, Layer, Option, Result } from "effect";
-import { TestClock } from "effect/testing";
+import { Clock, Effect, Layer, Option, Result } from "effect";
 import {
   type AgentSessions,
   SESSION_CANCEL_OUTCOME,
@@ -661,7 +660,7 @@ it.layer(SUITE)("an automation's runs", (it) => {
   );
 
   it.effect(
-    "a same-agent automation's first run waits on the agent's own work, and one that holds no agent, its agent deleted or none chosen yet, starts one that it keeps for every later run",
+    "a same-agent automation's run goes to its agent while the agent works, and one that holds no agent, its agent deleted or none chosen yet, starts one that it keeps for every later run",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
@@ -670,7 +669,7 @@ it.layer(SUITE)("an automation's runs", (it) => {
         const agent = Option.getOrThrow(yield* readAgent(owner, first));
         yield* ranTurn(owner, first, TURN_STATUS.RUNNING);
 
-        // Another automation of the owner's on the busy agent: no run of its own started it, and still its work counts.
+        // Another automation of the owner's on the busy agent: no run of its own started it.
         const fresh = Option.getOrThrow(
           yield* createAutomation(owner, {
             organizationId: automation.organizationId,
@@ -686,15 +685,12 @@ it.layer(SUITE)("an automation's runs", (it) => {
 
         const busy = yield* toSameAgent(fresh, first);
 
-        const waited = yield* executeAutomationRun(
+        const sent = yield* executeAutomationRun(
           agentSessions.sessionsFor,
           yield* runNow(busy),
         ).pipe(Effect.provide(services));
 
-        assert.deepEqual(waited, {
-          status: AUTOMATION_RUN_STATUS.SKIPPED,
-          reason: AUTOMATION_RUN_REASON.CONCURRENCY,
-        });
+        assert.deepEqual(sent, { status: AUTOMATION_RUN_STATUS.STARTED, agentId: first });
 
         // Its agent deleted, the target let go, as one made with none chosen stands: the run starts one, which it keeps.
         yield* Database.use((db) =>
@@ -1004,51 +1000,6 @@ it.layer(SUITE)("an automation's runs", (it) => {
       }),
   );
 
-  it.effect("a run past the concurrency guard or the daily cap is skipped and starts nothing", () =>
-    Effect.gen(function* () {
-      const agentSessions = fakeAgentSessions();
-
-      const execute = (automation: Automation) =>
-        Effect.flatMap(runNow(automation), (run) =>
-          executeAutomationRun(agentSessions.sessionsFor, run).pipe(Effect.provide(services)),
-        );
-
-      const concurrent = yield* openAutomation({
-        guards: { maxConcurrentRuns: 1, dailyRunCap: 10 },
-      });
-
-      const capped = yield* openAutomation({
-        guards: { maxConcurrentRuns: 5, dailyRunCap: 1 },
-      });
-
-      const whileWorking = [
-        yield* execute(concurrent.automation),
-        yield* execute(concurrent.automation),
-      ];
-
-      const pastCap = [yield* execute(capped.automation), yield* execute(capped.automation)];
-
-      assert.deepEqual(
-        whileWorking.map((outcome) => outcome?.status),
-        [AUTOMATION_RUN_STATUS.STARTED, AUTOMATION_RUN_STATUS.SKIPPED],
-      );
-      assert.deepEqual(whileWorking[1], {
-        status: AUTOMATION_RUN_STATUS.SKIPPED,
-        reason: AUTOMATION_RUN_REASON.CONCURRENCY,
-      });
-      assert.deepEqual(pastCap[1], {
-        status: AUTOMATION_RUN_STATUS.SKIPPED,
-        reason: AUTOMATION_RUN_REASON.DAILY_CAP,
-      });
-      assert.equal(agentSessions.opened.length, 2, "only the two started runs opened a session");
-      assert.deepEqual(
-        countedProperties(concurrent.owner, SERVER_EVENT.AUTOMATION_RUN_START),
-        [{ trigger_kind: "manual" }],
-        "the skipped run is not counted as a start",
-      );
-    }),
-  );
-
   it.effect(
     "a run of an automation whose creator left its workspace fails as creator-left and starts nothing, and the automation stays on",
     () =>
@@ -1150,13 +1101,10 @@ it.layer(SUITE)("an automation's runs", (it) => {
   );
 
   it.effect(
-    "one automation's firings delivered together are decided one after another, so the concurrency guard holds across them",
+    "one automation's firings delivered together each start their own run, however many are at work",
     () =>
       Effect.gen(function* () {
-        const { owner, automation, now } = yield* openAutomation({
-          guards: { maxConcurrentRuns: 1, dailyRunCap: 10 },
-        });
-
+        const { owner, automation, now } = yield* openAutomation();
         const agentSessions = fakeAgentSessions();
         yield* updateAutomation(owner, automation.id, { nextRunAt: null });
 
@@ -1174,11 +1122,11 @@ it.layer(SUITE)("an automation's runs", (it) => {
 
         const runs = yield* listAutomationRuns(owner, automation.id);
         assert.deepEqual(runs.map((run) => [run.status, run.reason]).sort(), [
-          [AUTOMATION_RUN_STATUS.SKIPPED, AUTOMATION_RUN_REASON.CONCURRENCY],
-          [AUTOMATION_RUN_STATUS.SKIPPED, AUTOMATION_RUN_REASON.CONCURRENCY],
+          [AUTOMATION_RUN_STATUS.STARTED, null],
+          [AUTOMATION_RUN_STATUS.STARTED, null],
           [AUTOMATION_RUN_STATUS.STARTED, null],
         ]);
-        assert.equal(agentSessions.opened.filter((each) => each.account === owner).length, 1);
+        assert.equal(agentSessions.opened.filter((each) => each.account === owner).length, 3);
       }),
   );
 
@@ -1215,31 +1163,25 @@ it.layer(SUITE)("an automation's runs", (it) => {
       }),
   );
 
-  it.effect(
-    "two acts on one automation's runs at once, a sweep's and a Run now's, start one agent under a concurrency of one",
-    () =>
-      Effect.gen(function* () {
-        const { owner, automation } = yield* openAutomation({
-          guards: { maxConcurrentRuns: 1, dailyRunCap: 10 },
-        });
+  it.effect("two acts on one run at once, two deliveries of its firing, start one agent", () =>
+    Effect.gen(function* () {
+      const { owner, automation } = yield* openAutomation();
+      const agentSessions = fakeAgentSessions();
+      const run = yield* runNow(automation);
 
-        const agentSessions = fakeAgentSessions();
-        const first = yield* runNow(automation);
-        const second = yield* runNow(automation);
+      const outcomes = yield* Effect.all(
+        [run, run].map((each) =>
+          executeAutomationRun(agentSessions.sessionsFor, each).pipe(Effect.provide(services)),
+        ),
+        { concurrency: 2 },
+      );
 
-        const outcomes = yield* Effect.all(
-          [first, second].map((run) =>
-            executeAutomationRun(agentSessions.sessionsFor, run).pipe(Effect.provide(services)),
-          ),
-          { concurrency: 2 },
-        );
-
-        assert.deepEqual(outcomes.map((outcome) => outcome?.status).sort(), [
-          AUTOMATION_RUN_STATUS.SKIPPED,
-          AUTOMATION_RUN_STATUS.STARTED,
-        ]);
-        assert.equal(agentSessions.opened.filter((each) => each.account === owner).length, 1);
-      }),
+      assert.deepEqual(
+        outcomes.filter((outcome) => outcome?.status === AUTOMATION_RUN_STATUS.STARTED).length,
+        1,
+      );
+      assert.equal(agentSessions.opened.filter((each) => each.account === owner).length, 1);
+    }),
   );
 
   it.effect(
@@ -1650,38 +1592,6 @@ it.layer(SUITE)("an automation's runs", (it) => {
         [],
       );
     }),
-  );
-
-  it.effect(
-    "a Sentry run on an issue another run started on within the cooldown is skipped as the same subject, and another issue, or the same one past the cooldown, starts",
-    () =>
-      Effect.gen(function* () {
-        const agentSessions = fakeAgentSessions();
-
-        const { automation } = yield* openAutomation({
-          guards: { ...AUTOMATION_DEFAULT_GUARDS, maxConcurrentRuns: 4, subjectCooldownHours: 2 },
-        });
-
-        const act = (run: AutomationRun) =>
-          executeAutomationRun(agentSessions.sessionsFor, run).pipe(Effect.provide(services));
-
-        // The cooldown is timed from a run's start, so the first run fires and starts three hours before the rest.
-        const long = yield* act(yield* sentryRun(automation, { id: "7" }));
-        yield* TestClock.adjust(Duration.hours(3));
-        const first = yield* act(yield* sentryRun(automation, { id: "7" }));
-        const again = yield* act(yield* sentryRun(automation, { id: "7" }));
-        const other = yield* act(yield* sentryRun(automation, { id: "8" }));
-
-        assert.deepEqual(
-          [long?.status, first?.status, again, other?.status],
-          [
-            AUTOMATION_RUN_STATUS.STARTED,
-            AUTOMATION_RUN_STATUS.STARTED,
-            { status: AUTOMATION_RUN_STATUS.SKIPPED, reason: AUTOMATION_RUN_REASON.SAME_SUBJECT },
-            AUTOMATION_RUN_STATUS.STARTED,
-          ],
-        );
-      }),
   );
 
   it.effect(

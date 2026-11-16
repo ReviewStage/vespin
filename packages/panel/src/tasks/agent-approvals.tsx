@@ -17,17 +17,20 @@ import {
   type ApprovalAnswerRequest,
 } from "@repo/features/agent-approval-wire";
 import { AGENT_PART, type AgentPart } from "@repo/features/agent-parts";
+import { runtimeOfProvider } from "@repo/features/agent-runtime-models";
+import { modesOf, modeTakenOn } from "@repo/features/agent-runtime-modes";
 import type { AgentApprovalAnswerView } from "@repo/features/agent-view";
-import { AGENT_RUNTIME, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
+import { AGENT_STATUS, type AgentRuntime, type AgentSummary } from "@repo/features/agent-wire";
 import { allowedCommandWords } from "@repo/features/allowed-command-model";
 import { providerOf } from "@repo/features/model-label";
+import { drawnCall } from "@repo/features/native-tool-calls";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
+  askMissingWords,
   PERMISSION_MODE_HINT,
   PERMISSION_MODE_LABEL,
-  PERMISSION_MODE_LIST,
   PERMISSION_MODE_WORDS,
 } from "@repo/settings";
 import {
@@ -92,8 +95,12 @@ import type { HeldCall } from "./transcript-blocks.js";
  * on it, and it writes no setting, since it is the new agent's alone; its
  * submenu says nothing of a next turn. Claude Code
  * and Codex agents each ask in their own harness's terms, which these words
- * and hints, Codex's own, fit both; an agent on neither asks nothing, so no
- * other is offered a mode.
+ * and hints, Codex's own, fit both. A Cursor agent takes Approve for me, as
+ * Cursor's own Auto-review, and Full access, but never Ask for approval, so
+ * its menu offers those two and says why the third is missing; a new one
+ * whose member's default is Ask starts on Full access, which its menu says
+ * (`@repo/features`'s `modesOf`). An agent on no harness asks nothing, so it
+ * is offered no mode.
  *
  * A call the agent holds waits on a member's answer (`pendingApprovals`),
  * which the call's own row says, found by the call's id (`toolUseId`): its
@@ -128,7 +135,7 @@ export type PermissionModeWriter = (
 ) => Promise<AgentActAnswer>;
 
 /** An answer to an ask as the view hears it: the host's answer, or one that never arrived. */
-export type ApprovalActAnswer = AgentApprovalAnswerView | Unreached<"unanswered">;
+type ApprovalActAnswer = AgentApprovalAnswerView | Unreached<"unanswered">;
 
 /** How an answer is sent: the agent, the ask, and the answer. */
 export type ApprovalAnswerWriter = (
@@ -144,9 +151,6 @@ export const MODE_GLYPH = {
   [AGENT_PERMISSION_MODE.FULL_ACCESS]: FullAccessIcon,
 } as const satisfies Record<AgentPermissionMode, () => React.JSX.Element>;
 
-/** The modes in the order the menu offers them: the most asking first, Full access last, as Codex orders its own. */
-export const MODES = PERMISSION_MODE_LIST;
-
 /** What the modes are called as a row among the model menu's. */
 export const MODE_GROUP = PERMISSION_MODE_WORDS.GROUP;
 
@@ -154,7 +158,7 @@ export const MODE_GROUP = PERMISSION_MODE_WORDS.GROUP;
 export const MODE_QUESTION = PERMISSION_MODE_WORDS.QUESTION;
 
 /** When a change reaches the agent, said under the menu and on the change's toast. */
-export const MODE_APPLIES = PERMISSION_MODE_WORDS.APPLIES;
+const MODE_APPLIES = PERMISSION_MODE_WORDS.APPLIES;
 
 /** Why a change of mode did not take, said under the composer's bar. */
 const MODE_CHANGE_FAILED = PERMISSION_MODE_WORDS.CHANGE_FAILED;
@@ -171,20 +175,34 @@ function modeOf(agent: Pick<AgentSummary, "permissionMode">): AgentPermissionMod
   return agent.permissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS;
 }
 
-/** The mode chip's control: the mode it shows, a change, when a change reaches the agent, and why the last did not take. */
+/** The mode chip's control: the mode it shows, the modes it offers, a change, when a change reaches the agent, and why the last did not take. */
 export interface AgentModeControl {
   readonly mode: AgentPermissionMode;
+  /** The modes the agent's harness takes, in the order the menu offers them: the most asking first, Full access last, as Codex orders its own. */
+  readonly modes: readonly AgentPermissionMode[];
   /** Changes the agent's mode: from its next turn for a running agent, from its first for a new one. */
   readonly choose: (mode: AgentPermissionMode) => void;
-  /** When a change reaches the agent, said under the Permissions submenu: from its next turn for a running agent; nothing for a new one, whose first launch runs on it. */
+  /** What the Permissions submenu says under its modes: why a mode the harness never takes is missing, and when a change reaches the agent, from its next turn for a running agent; nothing for a new one whose harness takes every mode. */
   readonly applies: string | undefined;
   /** Why the last change did not take, said under the composer's bar; nothing while none failed. */
   readonly note: string | undefined;
 }
 
+/** The words under the Permissions submenu, each that stands, in order. */
+function noteOf(...words: readonly (string | undefined)[]): string | undefined {
+  const said = words.filter((each) => each !== undefined);
+
+  return said.length === 0 ? undefined : said.join(" ");
+}
+
+/** Whether an agent on the runtime has a mode to choose, which its harness takes beside Full access. */
+function choosesMode(runtime: AgentRuntime | undefined): boolean {
+  return modesOf(runtime).length > 1;
+}
+
 /**
  * The mode chip of an agent: none for an agent that never asks, which is
- * every agent on neither Claude Code nor Codex. Note that the mode is read off the
+ * every agent on no harness. Note that the mode is read off the
  * agent's row, which the host draws a change on at once, as the model
  * chip's is.
  */
@@ -198,12 +216,7 @@ export function useAgentPermissionMode(input: {
   latest.current = input;
   const writes = useRef(0);
 
-  if (
-    agent === undefined ||
-    (agent.runtime !== AGENT_RUNTIME.CLAUDE_CODE && agent.runtime !== AGENT_RUNTIME.CODEX)
-  ) {
-    return undefined;
-  }
+  if (agent === undefined || !choosesMode(agent.runtime)) return undefined;
 
   const choose = (mode: AgentPermissionMode) => {
     if (mode === modeOf(agent)) return;
@@ -224,8 +237,9 @@ export function useAgentPermissionMode(input: {
 
   return {
     mode: modeOf(agent),
+    modes: modesOf(agent.runtime),
     choose,
-    applies: MODE_APPLIES,
+    applies: noteOf(askMissingWords(agent.runtime), MODE_APPLIES),
     note: note?.agentId === agent.id ? note.words : undefined,
   };
 }
@@ -236,10 +250,13 @@ const selectDefaultMode = (state: AppStateSnapshot): AgentPermissionMode =>
 
 /**
  * The Permissions row of a new agent's menu: the mode picked on it, else
- * the member's Default permissions, for a model whose harness takes a mode,
- * a Claude model's Claude Code or a GPT model's Codex; none before a model
- * is chosen, or for one on neither. Note that a pick is the new agent's
- * alone, sent with its Start, and writes no setting.
+ * the member's Default permissions where the model's harness takes it, else
+ * Full access, as the service starts it (`startingPermissionMode`), for a
+ * model whose harness takes a mode, a Claude model's Claude Code, a GPT
+ * model's Codex, or a Cursor model's Cursor, which never asks for approval
+ * and says so; none before a model is chosen, or for one on none. Note that
+ * a pick is the new agent's alone, sent with its Start, and writes no
+ * setting.
  */
 export function useNewAgentPermissionMode(input: {
   /** The catalog id of the model the agent would start on; none before one is chosen. */
@@ -252,12 +269,18 @@ export function useNewAgentPermissionMode(input: {
     useQuery({ ...appStateQuery, select: selectDefaultMode }).data ??
     AGENT_PERMISSION_MODE.FULL_ACCESS;
 
-  if (input.model === undefined || providerOf(input.model) === undefined) return undefined;
+  const provider = input.model === undefined ? undefined : providerOf(input.model);
+  const runtime = provider === undefined ? undefined : runtimeOfProvider(provider);
+
+  if (!choosesMode(runtime)) return undefined;
+  const wanted = input.picked ?? fallback;
+  const mode = modeTakenOn(runtime, wanted);
 
   return {
-    mode: input.picked ?? fallback,
+    mode,
+    modes: modesOf(runtime),
     choose: input.choose,
-    applies: undefined,
+    applies: askMissingWords(runtime, mode !== wanted),
     note: undefined,
   };
 }
@@ -269,9 +292,9 @@ export function modeShown(control: AgentModeControl | undefined): AgentPermissio
     : control.mode;
 }
 
-/** The modes as the model menu's Permissions submenu offers them, each with its hint under its name. */
-export function modeMenuRows(): readonly MenuRow[] {
-  return MODES.map((mode) => {
+/** The modes the control offers as the model menu's Permissions submenu draws them, each with its hint under its name. */
+export function modeMenuRows(control: AgentModeControl): readonly MenuRow[] {
+  return control.modes.map((mode) => {
     const Glyph = MODE_GLYPH[mode];
 
     return {
@@ -507,7 +530,7 @@ function DenyNoteBox({ busy, maxLength, onDeny, onCancel }: DenyNoteDoors): Reac
 }
 
 /** A held call as its row draws it: where it stands in words, who asks and why, and the presses while it waits. */
-export function heldCallOf(ask: ApprovalView): HeldCall {
+function heldCallOf(ask: ApprovalView): HeldCall {
   return {
     status: ask.settled ?? HELD_WORDS.WAITING,
     waiting: ask.settled === undefined,
@@ -588,16 +611,22 @@ export function looseApprovals(
   );
 }
 
-/** The call an ask no drawn row holds stands for, as its row is drawn from it: the tool, its input, under way while the ask waits. */
+/** The call an ask no drawn row holds stands for, as its row is drawn from it: the tool, its input, under way while the ask waits. Note that the harness's own tool is read as the call of its kind (`drawnCall`), as a stored part is, so a held `Bash` reads as a command rather than as a tool by that name. */
 export function heldCallPart(
   approval: AgentPendingApproval,
 ): Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }> {
+  const { tool, input } = drawnCall({
+    tool: approval.toolName,
+    input: approval.input,
+    output: undefined,
+  });
+
   return {
     kind: AGENT_PART.TOOL,
-    tool: approval.toolName,
+    tool,
     callId: approval.toolUseId,
     state: TOOL_STATE.INPUT_AVAILABLE,
-    input: approval.input,
+    input,
     output: undefined,
     errorText: undefined,
   };

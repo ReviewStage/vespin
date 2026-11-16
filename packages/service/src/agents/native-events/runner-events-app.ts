@@ -87,6 +87,7 @@ import {
 import { providerModelOf } from "../../providers/model-catalog.js";
 import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { reopenTaskForWork, settleTaskAfterTurn } from "../../tasks/task-finish.js";
+import { turnAccountNames } from "../agent-runtime/servers.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
 import { roomAfterLimit, soonestResetBeside } from "../coder-host/agent-runtime-choice.js";
 import { carriedOn } from "../coder-host/carry-on.js";
@@ -105,6 +106,7 @@ import {
 } from "../workspace-mcp/bearer.js";
 import { claudeCodeMoments } from "./claude-code-moments.js";
 import { codexMoments } from "./codex-moments.js";
+import { cursorMoments } from "./cursor-moments.js";
 import {
   NATIVE_MOMENT,
   type NativeHeld,
@@ -118,6 +120,8 @@ import {
   type NativeWrite,
   projectMoments,
   turnProgressed,
+  withCallAccounts,
+  withTurnAccounts,
   withTurnServers,
 } from "./native-projection.js";
 import { isApprovalEvent, landApprovalEvent } from "./runner-approvals.js";
@@ -226,6 +230,23 @@ function estimatedTokens(json: string): number {
  * as the moments of the run, with what the projection holds as it is read.
  */
 type NativeReader = (message: WireValue, held: NativeHeld) => readonly NativeMoment[];
+
+/** The native harnesses whose runners post here. */
+type PostingHarness = Exclude<ConversationRuntime, typeof CONVERSATION_RUNTIME.RETIRED>;
+
+/** How each native harness's messages are read. */
+const NATIVE_READER = {
+  [CONVERSATION_RUNTIME.CLAUDE_CODE]: claudeCodeMoments,
+  [CONVERSATION_RUNTIME.CODEX]: codexMoments,
+  [CONVERSATION_RUNTIME.CURSOR]: cursorMoments,
+} as const satisfies Record<PostingHarness, NativeReader>;
+
+/** The harness a conversation's events are read as: its own, and Claude Code's for one on none, as a conversation from before runtimes read. */
+function harnessReadAs(runtime: ConversationRuntime | undefined): PostingHarness {
+  return runtime === undefined || runtime === CONVERSATION_RUNTIME.RETIRED
+    ? CONVERSATION_RUNTIME.CLAUDE_CODE
+    : runtime;
+}
 
 /** What the batch is applied for: the conversation, its agent, and what that agent runs on. */
 interface Applying {
@@ -851,6 +872,8 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
     const reports: string[] = [];
     // Whether another payer has room, or when a limit resets, read once and only for a batch that ends a turn on the plan's limit.
     let afterLimit: AfterLimit | undefined;
+    // The owner's account names, read once for a batch that may open a turn, before its calls are written (`withCallAccounts`).
+    let opening: Readonly<Record<string, string>> | undefined;
 
     for (const { sequence, message } of events) {
       const held: NativeHeld = {
@@ -860,7 +883,17 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         planLimited: state.rateLimit !== undefined,
       };
 
-      const moments = applying.read(message, held);
+      // An event read with no turn under way may open one, so its calls are named by the names read for it.
+      // Note that a read of the names that fails stamps none, so the turn's calls keep the names their ids give, and the turn goes on.
+      if (state.turn === undefined && opening === undefined) {
+        opening = yield* turnAccountNames(applying.target.userId).pipe(
+          Effect.orElseSucceed(() => ({})),
+        );
+      }
+
+      const accounts = state.turn === undefined ? (opening ?? {}) : (state.turn.accounts ?? {});
+
+      const moments = withCallAccounts(state, applying.read(message, held), accounts);
 
       if (afterLimit === undefined && endsOnLimit(state, moments)) {
         afterLimit = yield* roomAfterLimitOf(applying);
@@ -905,6 +938,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         );
 
         state = withTurnServers(state, write.turnId, taken);
+        state = withTurnAccounts(state, write.turnId, opening ?? {});
       }
     }
 
@@ -1035,9 +1069,8 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
 
   if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(target.userId, agent.value.id));
-  const runtime = Option.map(routing, (row) => row.runtime);
-  const codex = Option.contains(runtime, CONVERSATION_RUNTIME.CODEX);
-  const reader = read ?? (codex ? codexMoments : claudeCodeMoments);
+  const harness = harnessReadAs(Option.getOrUndefined(Option.map(routing, (row) => row.runtime)));
+  const reader = read ?? NATIVE_READER[harness];
   const refusedFor = { agentId: agent.value.id, conversationId: target.conversationId };
 
   const body = yield* readBodyBytesEffect(MAX_BODY_BYTES).pipe(
@@ -1131,7 +1164,6 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   const { runtimeSessionId } = admitted.value;
 
   for (const failed of applied.value.failed) {
-    const harness = codex ? CONVERSATION_RUNTIME.CODEX : CONVERSATION_RUNTIME.CLAUDE_CODE;
     yield* sayTurnFailed(failed, harness, applying.payer, {
       agentId: agent.value.id,
       conversationId: target.conversationId,

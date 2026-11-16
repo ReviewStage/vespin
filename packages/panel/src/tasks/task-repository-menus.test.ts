@@ -2,13 +2,13 @@
 
 import assert from "node:assert/strict";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, TASKS_READ } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
-import { handState } from "../testing/app-state.js";
-import { withQueryClient, writeHandedAppState } from "../testing/copy-feedback.js";
+import { handState, type WrittenTasksView } from "../testing/app-state.js";
+import { settledWrites, withQueryClient, writeHandedAppState } from "../testing/copy-feedback.js";
 import type { RepositoryChooser } from "./repository-chip.js";
 import { useRepositoriesIn } from "./task-repository-menus.js";
 
@@ -64,12 +64,14 @@ function Probe(): null {
 
 /** Draws the hook over main's document, its task list as given. */
 async function mount(
-  tasks: Pick<TasksView, "workspaces" | "tasks">,
+  tasks: Pick<WrittenTasksView, "workspaces" | "tasks">,
 ): Promise<(workspaceId: string | undefined) => RepositoryChooser> {
   handState({}, { tasks: { ...IDLE_TASKS_VIEW, listStatus: TASKS_READ.READY, ...tasks } });
   await writeHandedAppState();
   root = createRoot(document.body.appendChild(document.createElement("div")));
   act(() => root?.render(withQueryClient(createElement(Probe))));
+  // The window's task-list collections stand on the list once its first read lands.
+  await act(() => settledWrites());
 
   return repositoriesIn ?? assert.fail("the hook stands");
 }

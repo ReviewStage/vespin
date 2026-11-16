@@ -19,6 +19,7 @@ import {
   TRANSCRIPT_KIND,
 } from "@repo/features/agent-view";
 import { AGENT_CURSOR_START, AGENT_STATUS, QUEUE_CHANGE } from "@repo/features/agent-wire";
+import { MACHINE_ASK_DECISION } from "@repo/features/machine-ask-wire";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import type { WireBoundaryInput } from "@repo/wire";
 import { Effect } from "effect";
@@ -44,7 +45,7 @@ const PAIRING_CODE = "BCDF-GHJK";
 const STARTED = {
   agent: {
     id: AGENT_ID,
-    planId: TASK_ID,
+    taskId: TASK_ID,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,
@@ -112,6 +113,7 @@ const REFUSAL = {
     "Could not read your preferences again on this system.",
   [AGENT_ACT_KIND.AGENTS_SET_DEFAULT_MACHINE]:
     "Could not change that agent's default machine on this system.",
+  [AGENT_ACT_KIND.MACHINE_ASK_ANSWER]: "Could not answer the machine's ask on this system.",
 } as const;
 
 /** A payload each declared act's schema takes, so a window refused it was refused for who it is alone. */
@@ -123,6 +125,7 @@ const PAYLOAD: Readonly<Record<keyof typeof AGENT_ACTS, WireBoundaryInput>> = {
   HOSTS_REMOVE: { id: HOST_ID },
   MACHINES_CHANGE: { id: HOST_ID, computerUse: false },
   MACHINES_REMOVE: { id: HOST_ID },
+  MACHINE_ASK_ANSWER: { id: HOST_ID, decision: MACHINE_ASK_DECISION.DENY },
   HOSTS_THIS_MAC_SET: { on: true },
   HOSTS_ALLOWED_APPS: {},
   HOSTS_PAIRING_READ: { code: PAIRING_CODE },

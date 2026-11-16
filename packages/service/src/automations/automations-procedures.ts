@@ -66,7 +66,7 @@ export function automationsProcedures(seams: AutomationsProcedureSeams) {
     /** The account's automations, or one workspace's; none for a task, on which no automation stands. */
     list: automations.list.effect(function* ({ input, context }) {
       const listed =
-        input.planId === undefined
+        input.taskId === undefined
           ? yield* hostedStoreOrUnavailable(
               listAutomations(context.userId, { organizationId: input.workspaceId }),
             )

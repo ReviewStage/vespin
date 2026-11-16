@@ -1,7 +1,6 @@
 // transcript.tsx -- an agent's transcript as the iPhone draws it: the app's one React Native list, lazy, anchored at its newest row, its rows the panel's anatomy in the brand's inks.
 
-import type { AgentStatus } from "@repo/features/agent-wire";
-import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
+import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -9,8 +8,10 @@ import { SymbolView } from "expo-symbols";
 import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   type AccessibilityActionEvent,
+  AccessibilityInfo,
   ActivityIndicator,
   FlatList,
+  type HostInstance,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   ScrollView,
@@ -21,19 +22,22 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   useAccessibilitySize,
-  useAnnounced,
   useReduceMotion,
   useReduceTransparency,
   useScaledSize,
 } from "./accessibility.js";
+import { AudioClip } from "./audio-clip.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
-import { useDockRoom } from "./glass-bar.js";
+import { DOCK_FOLLOWS_KEYBOARD, useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
+import { IntegrationMark } from "./marks.js";
+import { MEDIA_BOUNDS } from "./media-frame.js";
+import { PictureSet } from "./picture-set.js";
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
@@ -45,11 +49,16 @@ import {
   CALL_STANDING,
   type CallStanding,
   type OriginPart,
+  SHOWN_MEDIA,
+  type ShownMedia,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptPlace,
 } from "./transcript-model.js";
 import { Video } from "./video.js";
+
+/** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart. */
+const RUN_GAP = 1;
 
 /** How far a row a fold or a group holds stands in, for each step it is held. */
 const DEPTH_INSET = 18;
@@ -59,14 +68,6 @@ const LATEST_REACH = 240;
 
 /** How near its newest row the list stands to keep it in view as rows land, in points. */
 const ANCHOR_REACH = 48;
-
-/**
- * The room the system's tab bar floats over at the screen's foot, past the
- * safe area, which the newest row and Jump to latest stand clear of. Note
- * that the list keeps it at its own end, because a scroll to the end reaches
- * the end of the rows alone and not the room the system keeps for the bar.
- */
-const TAB_BAR_ROOM = 64;
 
 /** How wide the round control that brings the newest row into view stands, in points: the system's least target. */
 const JUMP_SIZE = 44;
@@ -123,9 +124,10 @@ const styles = StyleSheet.create({
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
   saidHeld: { alignSelf: "stretch", alignItems: "flex-end" },
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
+  stamp: { alignSelf: "center", fontWeight: "500", paddingBottom: SPACE.TIGHT },
   said: {
     maxWidth: "82%",
-    borderRadius: 18,
+    borderRadius: RADIUS.BUBBLE,
     paddingHorizontal: SPACE.ROW + 4,
     paddingVertical: SPACE.ROW,
   },
@@ -135,7 +137,7 @@ const styles = StyleSheet.create({
   chip: {
     flexShrink: 1,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 6,
+    borderRadius: RADIUS.TAG,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
@@ -144,10 +146,12 @@ const styles = StyleSheet.create({
     gap: SPACE.TIGHT + 2,
     paddingTop: SPACE.TIGHT,
   },
-  block: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
+  block: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.BLOCK, overflow: "hidden" },
   blockTitle: { paddingHorizontal: SPACE.ROW, paddingTop: 6 },
   blockText: { padding: SPACE.ROW, paddingTop: SPACE.TIGHT },
   media: { gap: SPACE.ROW },
+  // Note that each picture or recording sizes itself by the media's one rule (`mediaFrame`), and its caption wraps at the widest one stands.
+  shown: { maxWidth: MEDIA_BOUNDS.WIDTH, alignItems: "flex-start", gap: SPACE.TIGHT },
   page: {
     flexDirection: "row",
     alignItems: "center",
@@ -157,16 +161,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.EDGE - 4,
     paddingVertical: SPACE.ROW,
   },
-  head: {
-    paddingHorizontal: SPACE.EDGE,
-    paddingTop: SPACE.TIGHT,
-    paddingBottom: SPACE.EDGE,
-    gap: 6,
-  },
   headLine: { flexDirection: "row", alignItems: "center", gap: 6 },
-  headModel: { flexDirection: "row", alignItems: "center", gap: 3 },
   older: { alignItems: "center", gap: SPACE.TIGHT * 2, paddingVertical: SPACE.ROW },
-  jump: { position: "absolute", alignSelf: "center" },
+  jump: { position: "absolute" },
   jumpFace: {
     width: JUMP_SIZE,
     height: JUMP_SIZE,
@@ -195,7 +192,7 @@ type InsetResult = { readonly paddingLeft: number };
 
 /** The step a row stands in by, for the folds that hold it. */
 function inset(depth: number): InsetResult {
-  return { paddingLeft: SPACE.PAGE + depth * DEPTH_INSET };
+  return { paddingLeft: SPACE.EDGE + depth * DEPTH_INSET };
 }
 
 /** Where a call or a group stands, at its line's end: the working mark while it runs, the failed mark once it failed, and nothing once it ended well; heard in its row's value rather than apart. */
@@ -254,18 +251,35 @@ function BodyBlock({
   );
 }
 
-/** A call's glyph at a row mark's size, the panel's own for its kind, through the system's symbol view (`patches/expo-symbols@58.0.4.patch`), so a call's row costs no SwiftUI host. */
-function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
+/**
+ * A call's glyph at a row mark's size, the panel's own for its kind, through
+ * the system's symbol view (`patches/expo-symbols@58.0.4.patch`), so a call's
+ * row costs no SwiftUI host; or, for a call of an integration's tool, the
+ * integration's mark, as the panel's row leads with it. Note that the mark
+ * alone takes a SwiftUI host, because the symbol view tints whatever it draws
+ * in one ink, which would flatten a mark in its brand's own colors.
+ */
+function CallGlyph({
+  callKind,
+  provider,
+}: {
+  readonly callKind: CallKind;
+  readonly provider: IntegrationProvider | undefined;
+}) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
 
-  return (
+  return provider === undefined ? (
     <SymbolView
       name={glyphSymbol(CALL_SYMBOL[callKind])}
       size={size}
       tintColor={colors.TEXT_MUTED}
       accessibilityElementsHidden
     />
+  ) : (
+    <InlineHost style={{ width: size, height: size }}>
+      <IntegrationMark provider={provider} size={size} ink={colors.TEXT_MUTED} />
+    </InlineHost>
   );
 }
 
@@ -274,27 +288,40 @@ function CallRow({
   item,
   held,
   onToggle,
+  placeCall,
 }: {
   readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.CALL }>;
   /** The answer the agent holds the call for, where it does. */
   readonly held: HeldCall | undefined;
   readonly onToggle: (item: TranscriptItem) => void;
+  readonly placeCall: ((callId: string, row: HostInstance | null) => void) | undefined;
 }) {
+  const { callId } = item;
+
+  // Note that the row hands the transcript its press, so a reader sent to this call lands on it once the list has scrolled it into view.
+  const press = useCallback(
+    (row: HostInstance | null) => placeCall?.(callId, row),
+    [callId, placeCall],
+  );
+
   const colors = useColors();
   const large = useAccessibilitySize();
   // Note that at an accessibility size the line's words wrap rather than cut to a word or two.
   const lines = large ? undefined : 1;
   const { line, chip } = item;
   const subject = line.subject === undefined || line.subject === "" ? undefined : line.subject;
+  // Note that the integration's mark is hidden from VoiceOver, so its name is heard in the mark's place.
+  const mark = item.provider === undefined ? undefined : INTEGRATION_NAME[item.provider];
   const standing = held?.waiting === true ? HELD_HEARD : CALL_STANDING_HEARD[item.standing];
 
   return (
     <View style={[styles.row, inset(item.depth)]}>
       <Press
+        ref={press}
         onPress={() => onToggle(item)}
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
-        accessibilityLabel={[line.verb, chip, subject, item.runOn].filter(Boolean).join(" ")}
+        accessibilityLabel={[line.verb, chip, subject, mark, item.runOn].filter(Boolean).join(" ")}
         accessibilityValue={{
           text: item.open ? standing : `${standing}, ${COLLAPSED_HEARD}`,
         }}
@@ -302,7 +329,7 @@ function CallRow({
         hitSlop={LINE_REACH}
         style={styles.callLine}
       >
-        <CallGlyph callKind={item.callKind} />
+        <CallGlyph callKind={item.callKind} provider={item.provider} />
         <View style={[styles.callWords, large ? styles.wrapped : null]}>
           <Text
             numberOfLines={lines}
@@ -317,7 +344,10 @@ function CallRow({
           </Text>
           {chip === undefined ? null : (
             <View
-              style={[styles.chip, { backgroundColor: colors.WELL, borderColor: colors.CHIP_EDGE }]}
+              style={[
+                styles.chip,
+                { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE },
+              ]}
             >
               <Text
                 numberOfLines={lines}
@@ -447,6 +477,8 @@ function OriginFrom({
 /** A webhook call's body under the prompt it rode in with, folded under its own line, as the caller sent it. */
 function OriginBody({ body }: { readonly body: string }) {
   const colors = useColors();
+  const chevron = useScaledSize(MARK_SIZE.GLYPH - 3);
+  const column = useScaledSize(MARK_SIZE.GLYPH);
   const [open, setOpen] = useState(false);
 
   return (
@@ -460,10 +492,10 @@ function OriginBody({ body }: { readonly body: string }) {
         style={styles.callLine}
       >
         <SymbolView
-          name={open ? "chevron.down" : "chevron.right"}
-          size={MARK_SIZE.GLYPH - 3}
+          name={glyphSymbol(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
+          size={chevron}
           tintColor={colors.TEXT_MUTED}
-          style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
+          style={{ width: column, height: column }}
           accessibilityElementsHidden
         />
         <Text style={{ flex: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
@@ -484,6 +516,8 @@ function FoldRow({
   readonly onToggle: (item: TranscriptItem) => void;
 }) {
   const colors = useColors();
+  const chevron = useScaledSize(MARK_SIZE.GLYPH - 3);
+  const column = useScaledSize(MARK_SIZE.GLYPH);
   const large = useAccessibilitySize();
 
   const heard = [
@@ -505,9 +539,9 @@ function FoldRow({
       >
         <SymbolView
           name={glyphSymbol(item.open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
-          size={MARK_SIZE.GLYPH - 3}
+          size={chevron}
           tintColor={colors.TEXT_MUTED}
-          style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
+          style={{ width: column, height: column }}
           accessibilityElementsHidden
         />
         <Text
@@ -533,8 +567,10 @@ interface RowDrawing {
   readonly onOpenPage: (
     item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>,
   ) => void;
-  /** The address a picture or a recording is drawn from, by its id; none while its bytes are on their way. */
-  readonly mediaSource: (id: string) => string | undefined;
+  /** The address a picture or a recording is drawn from, by its id; none while its bytes are on their way, and `null` where they could not be read. */
+  readonly mediaSource: (id: string) => string | null | undefined;
+  /** Reads a picture or a recording whose bytes could not be read again, by its id. */
+  readonly onRetryMedia?: ((id: string) => void) | undefined;
   /** Opens a recording the system's player cannot play where it plays. */
   readonly onOpenElsewhere?: (() => void) | undefined;
   /** Opens a web address in Safari, such as a pull request's page on GitHub. */
@@ -549,10 +585,53 @@ interface RowDrawing {
   readonly suggestion?:
     | ((link: ReplyButtonLink, words: string) => SuggestionLook | undefined)
     | undefined;
+  /** Hands the transcript a call's row as it stands and as it goes, so a reader sent to the call lands on it. */
+  readonly placeCall?: ((callId: string, row: HostInstance | null) => void) | undefined;
 }
 
 /** A pull request an agent opened, as the transcript lists it. */
 type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
+
+/** What a picture a sent line kept by its id is drawn from, read as the agent's shown ones are; `null` for one the line names no way to, which stands as could not be read. */
+function saidSource(drawing: RowDrawing, pictureId: string | undefined): string | null | undefined {
+  return pictureId === undefined ? null : drawing.mediaSource(pictureId);
+}
+
+/** What reads a picture or a recording again, by its id, where the transcript offers it. */
+function retryOf(drawing: RowDrawing, id: string): (() => void) | undefined {
+  const retry = drawing.onRetryMedia;
+
+  return retry === undefined ? undefined : () => retry(id);
+}
+
+/** One thing a call showed, as its kind draws it: a picture, a recording in the system's player, or a sound clip in its strip; one whose bytes could not be read offers Try again. */
+function ShownMediaView({
+  shown,
+  source,
+  onOpenElsewhere,
+  onRetry,
+}: {
+  readonly shown: ShownMedia;
+  readonly source: string | null | undefined;
+  readonly onOpenElsewhere: (() => void) | undefined;
+  readonly onRetry: (() => void) | undefined;
+}) {
+  switch (shown.kind) {
+    case SHOWN_MEDIA.VIDEO:
+      return (
+        <Video
+          source={source}
+          label={shown.label}
+          onOpenElsewhere={onOpenElsewhere}
+          onRetry={onRetry}
+        />
+      );
+    case SHOWN_MEDIA.AUDIO:
+      return <AudioClip source={source} label={shown.label} onRetry={onRetry} />;
+    case SHOWN_MEDIA.PICTURE:
+      return <Picture source={source} alt={shown.label} onRetry={onRetry} />;
+  }
+}
 
 /** One of the transcript's rows, as its kind draws it. */
 function TranscriptRow({
@@ -564,37 +643,63 @@ function TranscriptRow({
 }) {
   const colors = useColors();
   const large = useAccessibilitySize();
+  const pageMark = useScaledSize(MARK_SIZE.WRITER);
+  const pageChevron = useScaledSize(MARK_SIZE.GLYPH - 3);
 
   switch (item.kind) {
     case TRANSCRIPT_ITEM.SAID:
       return (
-        <View style={[styles.row, styles.saidRow]}>
+        <View
+          style={[
+            styles.row,
+            styles.saidRow,
+            item.joinsAbove ? { paddingTop: RUN_GAP } : null,
+            item.joinsBelow ? { paddingBottom: RUN_GAP } : null,
+          ]}
+        >
+          {item.stamp === undefined ? null : (
+            <Text style={[styles.stamp, { fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }]}>
+              {item.stamp}
+            </Text>
+          )}
           {item.from === undefined ? null : (
             <OriginFrom parts={item.from} onOpenLink={drawing.onOpenLink} />
           )}
-          {item.sender === undefined ? null : (
-            <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT }}>
+          {item.sender === undefined || item.joinsAbove ? null : (
+            <Text
+              accessibilityRole="header"
+              style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT }}
+            >
               {item.sender}
             </Text>
           )}
-          <CopyWordsMenu words={item.words}>
-            <View style={styles.saidHeld}>
-              <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
-                <Markdown
-                  words={item.words}
-                  typed
-                  repository={drawing.repository}
-                  onOpenLink={drawing.onOpenLink}
-                />
+          {/* Note that the pictures a line carried stand over its words at its end, as Messages and the panel stand a message's photos over its bubble: one by the media's one rule, several as a set side by side. */}
+          <PictureSet
+            atEnd
+            pictures={(item.pictures ?? []).map((picture) => ({
+              key: picture.key,
+              source: picture.url ?? saidSource(drawing, picture.pictureId),
+              alt: picture.name,
+              onRetry:
+                picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
+            }))}
+          />
+          {/* Note that a line of pictures alone draws no empty bubble under them, while a line of other files alone, which the phone leaves to the panel, keeps its bubble so the line still stands. */}
+          {item.words.trim() === "" && (item.pictures ?? []).length > 0 ? null : (
+            <CopyWordsMenu words={item.words}>
+              <View style={styles.saidHeld}>
+                <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
+                  <Markdown
+                    words={item.words}
+                    typed
+                    repository={drawing.repository}
+                    onOpenLink={drawing.onOpenLink}
+                  />
+                </View>
               </View>
-            </View>
-          </CopyWordsMenu>
-          {item.body === undefined ? null : <OriginBody body={item.body} />}
-          {item.sent === undefined ? null : (
-            <Text style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}>
-              {item.sent}
-            </Text>
+            </CopyWordsMenu>
           )}
+          {item.body === undefined ? null : <OriginBody body={item.body} />}
         </View>
       );
     case TRANSCRIPT_ITEM.FOOT:
@@ -639,24 +744,45 @@ function TranscriptRow({
       );
     case TRANSCRIPT_ITEM.CALL:
       return (
-        <CallRow item={item} held={drawing.heldCall?.(item.callId)} onToggle={drawing.onToggle} />
+        <CallRow
+          item={item}
+          held={drawing.heldCall?.(item.callId)}
+          onToggle={drawing.onToggle}
+          placeCall={drawing.placeCall}
+        />
       );
     case TRANSCRIPT_ITEM.FOLD:
       return <FoldRow item={item} onToggle={drawing.onToggle} />;
     case TRANSCRIPT_ITEM.MEDIA:
+      // Note that several pictures with no captions stand as one set side by side, as Messages groups photos; a recording, a sound clip, or a picture with its own caption, stands alone so its caption stays under it.
+      if (
+        item.media.length > 1 &&
+        item.media.every((shown) => shown.kind === SHOWN_MEDIA.PICTURE && shown.caption === "")
+      ) {
+        return (
+          <View style={[styles.row, inset(item.depth), styles.media]}>
+            <PictureSet
+              pictures={item.media.map((shown) => ({
+                key: shown.id,
+                source: drawing.mediaSource(shown.id),
+                alt: shown.label,
+                onRetry: retryOf(drawing, shown.id),
+              }))}
+            />
+          </View>
+        );
+      }
+
       return (
         <View style={[styles.row, inset(item.depth), styles.media]}>
           {item.media.map((shown) => (
-            <View key={shown.id} style={{ gap: SPACE.TIGHT }}>
-              {shown.video ? (
-                <Video
-                  source={drawing.mediaSource(shown.id)}
-                  label={shown.label}
-                  onOpenElsewhere={drawing.onOpenElsewhere}
-                />
-              ) : (
-                <Picture source={drawing.mediaSource(shown.id)} alt={shown.label} />
-              )}
+            <View key={shown.id} style={styles.shown}>
+              <ShownMediaView
+                shown={shown}
+                source={drawing.mediaSource(shown.id)}
+                onOpenElsewhere={drawing.onOpenElsewhere}
+                onRetry={retryOf(drawing, shown.id)}
+              />
               {shown.caption === "" ? null : (
                 <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
                   {shown.caption}
@@ -681,7 +807,7 @@ function TranscriptRow({
           >
             <SymbolView
               name={glyphSymbol(GLYPH.PAGE)}
-              size={MARK_SIZE.WRITER}
+              size={pageMark}
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
             />
@@ -698,7 +824,7 @@ function TranscriptRow({
             </View>
             <SymbolView
               name={glyphSymbol(GLYPH.FOLDED)}
-              size={MARK_SIZE.GLYPH - 3}
+              size={pageChevron}
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
             />
@@ -736,91 +862,23 @@ function TranscriptRow({
   }
 }
 
-type AgentHeadProps = {
-  /** The model the agent runs on, as the panel's chip names it. */
-  readonly model: string | undefined;
-  readonly status: AgentStatus | undefined;
-  /** Opens the picker that changes the model, as a press on the panel's chip does; none where the reader may not change it. */
-  readonly onModel?: (() => void) | undefined;
-};
-
-/** What a press on the head's model says it does, to VoiceOver. */
-const CHANGE_MODEL = "Change model";
-
 /**
- * The line over the transcript, the agent's title standing in the system's
- * bar over it: where the agent stands and the model it runs on, as the
- * panel's tab and its model chip say them; nothing before either is known.
- * Where the model may be changed, its name is a press with a chevron after
- * it, as the panel's chip draws one, opening the picker.
- */
-export function AgentHead({ model, status, onModel }: AgentHeadProps) {
-  const colors = useColors();
-  const state = status === undefined ? undefined : agentGlyphState(status);
-  const words = status === undefined ? undefined : agentStateWords(status);
-  const pressed = onModel !== undefined && model !== undefined && model !== "";
-
-  const said = [words, pressed ? undefined : model]
-    .filter((each) => each !== undefined && each !== "")
-    .join(" · ");
-
-  // Note that a change of state is told to VoiceOver as it lands, such as Working turning to Finished or Failed, since the reader may stand anywhere in the transcript.
-  useAnnounced(words);
-
-  if (said === "" && !pressed) return null;
-  const ink = { fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED };
-
-  return (
-    <View style={[styles.head, styles.headLine]}>
-      {state === GLYPH_STATE.WORKING ? (
-        <ActivityIndicator size="small" color={colors.WORKING} accessibilityElementsHidden />
-      ) : state === GLYPH_STATE.FAILED ? (
-        <SymbolView
-          name={glyphSymbol(GLYPH.FAILED)}
-          size={MARK_SIZE.GLYPH}
-          tintColor={colors.DANGER}
-          accessibilityElementsHidden
-        />
-      ) : null}
-      {said === "" ? null : (
-        <Text style={ink}>{pressed && words !== undefined ? `${said} ·` : said}</Text>
-      )}
-      {pressed ? (
-        <Press
-          onPress={onModel}
-          accessibilityRole="button"
-          accessibilityLabel={`${CHANGE_MODEL}, ${model}`}
-          hitSlop={LINE_REACH}
-          testID="agent-model"
-          style={styles.headModel}
-        >
-          <Text style={ink}>{model}</Text>
-          <SymbolView
-            name={glyphSymbol(GLYPH.UNFOLDED)}
-            size={MARK_SIZE.GLYPH - 4}
-            weight="semibold"
-            tintColor={colors.TEXT_MUTED}
-            accessibilityElementsHidden
-          />
-        </Press>
-      ) : null}
-    </View>
-  );
-}
-
-/**
- * The control that brings the newest row into view, as Messages and the
- * chat apps draw it: a round button of Liquid Glass holding a down arrow,
- * centered over the list's foot, standing only once the reader has scrolled
- * back. Note that where Liquid Glass is unavailable, before iOS 26, or the
+ * The control that brings the newest row into view: a round button of
+ * Liquid Glass holding a down arrow, standing only once the reader has
+ * scrolled back, over the list's foot at the end of the rows' words, as the
+ * panel's way back stands in its log's corner, so it covers at most a
+ * line's end rather than the middle of the words. Note that where Liquid Glass is unavailable, before iOS 26, or the
  * reader turned on Reduce Transparency, it is drawn solid on the surface's
  * ground inside the quiet ink rather than a hand-drawn copy of glass.
  */
 function JumpToLatest({
   bottom,
+  end,
   onPress,
 }: {
   readonly bottom: number;
+  /** How far in from the list's trailing edge it stands: where the rows' words end. */
+  readonly end: number;
   readonly onPress: () => void;
 }) {
   const colors = useColors();
@@ -842,7 +900,7 @@ function JumpToLatest({
       accessibilityRole="button"
       accessibilityLabel={JUMP_TO_LATEST}
       hitSlop={SPACE.TIGHT}
-      style={[styles.jump, { bottom }]}
+      style={[styles.jump, { bottom, right: end }]}
     >
       {solid ? (
         <View
@@ -928,6 +986,9 @@ type AgentTranscriptProps = Omit<RowDrawing, "now"> & {
 /** A call's row the transcript is asked to bring into view, the ask told apart by its serial. */
 export type TranscriptReveal = { readonly callId: string; readonly serial: number };
 
+/** How long a revealed row's scroll takes to settle at most, in milliseconds, after which its row takes VoiceOver's focus where the scroll's own end did not send it: the system's scroll animation, with room. */
+const REVEAL_SETTLE_MS = 600;
+
 /** Where a revealed row stands in the screen, from its top: a little above the middle, clear of the composer docked over the foot. */
 const REVEAL_POSITION = 0.35;
 
@@ -958,9 +1019,48 @@ export function AgentTranscript({
   // The list's own width, so a wide window's rows stand centered within the reading width rather than across it.
   const [width, setWidth] = useState(0);
   const sides = Math.max(0, (width - left - right - READING_WIDTH) / 2);
-  const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
-  // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript.
-  const foot = bottom + TAB_BAR_ROOM + useDockRoom();
+  // The calls' rows as they stand, and the call a reader was sent to whose row has not yet taken VoiceOver's focus.
+  const calls = useRef(new Map<string, HostInstance>());
+  const sentTo = useRef<string | undefined>(undefined);
+  // Whether the scroll that brings the call sent to into view has settled, so its row, mounted after, takes the focus as it stands.
+  const settled = useRef(false);
+
+  // Note that the focus waits for the scroll that brings the call into view to settle, since a focus sent as it starts lands on a row still off screen, and a row the list had not yet drawn as it settled takes it once it stands (`placeCall`).
+  const focusSentTo = useCallback(() => {
+    settled.current = true;
+    const callId = sentTo.current;
+    const row = callId === undefined ? undefined : calls.current.get(callId);
+
+    if (row === undefined) return;
+    sentTo.current = undefined;
+    settled.current = false;
+    AccessibilityInfo.sendAccessibilityEvent(row, "focus");
+  }, []);
+
+  const placeCall = useCallback(
+    (callId: string, row: HostInstance | null) => {
+      if (row === null) {
+        calls.current.delete(callId);
+
+        return;
+      }
+
+      calls.current.set(callId, row);
+
+      // Note that the row takes the focus a frame later, once it is laid out, where the scroll settled before it was drawn.
+      if (settled.current && sentTo.current === callId) requestAnimationFrame(focusSentTo);
+    },
+    [focusSentTo],
+  );
+
+  const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now(), placeCall };
+  const keyboard = useDockKeyboard();
+  const dock = useDockRoom();
+  // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript, and no more, since no tab bar stands under a conversation (`(tabs)/_layout.tsx`). While the keyboard stands, the list's own keyboard inset holds the room under the bar, since the keyboard covers the safe area and the bar stands right on it.
+  // Note that a keyboard standing only partway over that room, as one an interactive drag is pulling down, takes only the part it covers, since the bar stands clear of the safe area until the keyboard rises past it.
+  const foot = Math.max(0, bottom - keyboard) + dock;
+  // Note that Jump to latest stands just over the composer, on the keyboard while it stands past the safe area.
+  const jumpFoot = Math.max(bottom, keyboard) + dock + SPACE.ROW;
 
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
@@ -1003,8 +1103,15 @@ export function AgentTranscript({
 
     if (index < 0) return;
     anchored.current = false;
+    sentTo.current = reveal.callId;
+    settled.current = false;
     list.current?.scrollToIndex({ index, viewPosition: REVEAL_POSITION, animated: !reduceMotion });
-  }, [reveal, reduceMotion]);
+
+    // Note that a scroll that moves the list ends in its momentum's end, which sends the focus, while one that has nowhere to go, the row already in view, ends at once, so the focus is also sent once the scroll would have settled.
+    const settling = setTimeout(focusSentTo, reduceMotion ? 0 : REVEAL_SETTLE_MS);
+
+    return () => clearTimeout(settling);
+  }, [reveal, reduceMotion, focusSentTo]);
 
   // Note that a row not yet measured cannot be scrolled to by its index, so the list goes to where the rows' average height puts it, then to the row once it is drawn.
   const onScrollToIndexFailed = useCallback(
@@ -1013,16 +1120,23 @@ export function AgentTranscript({
         offset: info.averageItemLength * info.index,
         animated: false,
       });
-      requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
         list.current?.scrollToIndex({
           index: info.index,
           viewPosition: REVEAL_POSITION,
           animated: false,
-        }),
-      );
+        });
+        requestAnimationFrame(focusSentTo);
+      });
     },
-    [],
+    [focusSentTo],
   );
+
+  // Note that the keyboard rising under a reader at the newest row brings the row up with it, as Messages' does, rather than leaving it behind the keyboard; the list's inset has already grown for it, so its end is the row clear of the bar.
+  useEffect(() => {
+    if (keyboard > 0 && anchored.current)
+      list.current?.getScrollResponder()?.scrollToEnd({ animated: !reduceMotion });
+  }, [keyboard, reduceMotion]);
 
   // Note that a row landing, or a fold opened, at the newest row keeps it in view, while one landing as the reader reads back leaves their place.
   const onContentSizeChange = useCallback(() => {
@@ -1064,14 +1178,19 @@ export function AgentTranscript({
         contentInsetAdjustmentBehavior="automatic"
         // Note that rows laid before the oldest, as an older page lands, leave the row the reader reads where it stood.
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-        // Note that a drag down into the keyboard lowers it, as Messages' transcript does, since the composer docked over the list holds no key that does.
-        keyboardDismissMode="interactive"
+        // Note that the list stands its end clear of the keyboard with the system's own inset, moved on the keyboard's own curve, so the newest rows never sit behind it.
+        automaticallyAdjustKeyboardInsets
+        // Note that a drag lowers the keyboard, since the composer docked over the list holds no key that does: under the finger, as Messages' does, where the dock follows the keyboard frame by frame, and at once where it follows only the keyboard's announced moves, since its composer would stand still through the drag, then jump.
+        keyboardDismissMode={DOCK_FOLLOWS_KEYBOARD ? "interactive" : "on-drag"}
         onContentSizeChange={onContentSizeChange}
         onScrollToIndexFailed={onScrollToIndexFailed}
         onScroll={onScroll}
         onScrollBeginDrag={onScrollBegin}
         onScrollEndDrag={onScrollSettled}
-        onMomentumScrollEnd={onScrollSettled}
+        onMomentumScrollEnd={(event) => {
+          onScrollSettled(event);
+          focusSentTo();
+        }}
         scrollEventThrottle={64}
         initialNumToRender={16}
         windowSize={9}
@@ -1079,7 +1198,8 @@ export function AgentTranscript({
       />
       {away ? (
         <JumpToLatest
-          bottom={foot}
+          bottom={jumpFoot}
+          end={right + sides + SPACE.EDGE}
           onPress={() => {
             anchored.current = true;
             // Note that the jump scrolls at once where the reader asked for less motion.

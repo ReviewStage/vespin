@@ -1,5 +1,5 @@
 /**
- * agent-refusal-words.ts -- what a refused Start, message, Stop, or change of model says, by why the service refused it, worded once for every client that sends one: the panel's agent tabs and New task, and the iOS app's composer, New agent, and New task.
+ * agent-refusal-words.ts -- what a refused Start, message, Stop, or change of model says, by why the service refused it, and what a refused write of the account's default model says, worded once for every client that sends one: the panel's agent tabs, New task, and Agents settings, and the iOS app's composer, New agent, New task, and Agents settings.
  *
  * The words are plain text; what mends a refusal (a press into Settings, a
  * task moved to the workspace whose GitHub reaches it) is each client's own,
@@ -21,6 +21,9 @@ const START_NEEDS_REPOSITORY = "Choose a repository";
 
 /** What a call refused for a repository out of the workspace's reach says, wherever it is refused. */
 export const REPOSITORY_UNREACHED_NOTE = `${PRODUCT_NAME} cannot reach this task's repository on GitHub.`;
+
+/** What a write of the account's default model, effort, or speed the service refused says, on every client's Agents settings. */
+export const DEFAULT_SAVE_FAILED_NOTE = "The default could not be saved. Try again.";
 
 /** What a message no answer came back for says, which may have reached the agent all the same. */
 export const NOT_HEARD_BACK = "No answer came back.";
@@ -119,6 +122,8 @@ export function localAgentRefusalWords(
       return `${name} is offline, so this agent can't start there. ${DEVICE_WAKE[devicePlatformOf(device ?? {})]}, ${RUN_IN_CLOUD}.`;
     case LOCAL_AGENT_REFUSAL.CODEX:
       return `${name} can't run Codex agents yet. Wait for its Codex download to finish, choose a Claude model, ${RUN_IN_CLOUD}.`;
+    case LOCAL_AGENT_REFUSAL.CURSOR:
+      return `${name} can't run Cursor agents. Update its host if it's a Mac, choose a Claude or Codex model, ${RUN_IN_CLOUD}.`;
     case LOCAL_AGENT_REFUSAL.NO_HARNESS:
       return `${name} can't run this model's agents. Choose a Claude or Codex model, ${RUN_IN_CLOUD}.`;
     case LOCAL_AGENT_REFUSAL.PREPARING:

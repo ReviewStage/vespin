@@ -22,19 +22,13 @@ import type {
   ModelChoice,
   ModelProvider,
 } from "@repo/features/models-wire";
-import {
-  PULL_REQUEST_CHAPTERS_CALL_FAILURE,
-  type PullRequestChaptersAnswerView,
-} from "@repo/features/pull-request-chapters-view";
 import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type DraftSuggestion, sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { ListedPullRequest } from "@repo/features/task-wire";
-import type { TasksView } from "@repo/features/tasks-view";
 import type { TranscriptReader } from "@repo/features/transcript-copy";
 import { ACT_KIND } from "@repo/host/acts";
-import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import type { PortActPayload } from "@repo/host/contract";
 import type { TaskListCollections } from "@repo/host/task-list-following";
 import { EXPERIMENT } from "@repo/settings";
@@ -88,12 +82,7 @@ import {
   toastOnlyUndo,
   withdrawUndo,
 } from "../undo-stack.js";
-import {
-  appStateQuery,
-  memoizedSelect,
-  selectExperiment,
-  selectPullRequestPublished,
-} from "../use-app-state.js";
+import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import type { ApprovalAnswerWriter, PermissionModeWriter } from "./agent-approvals.js";
 import {
   archivedManyWords,
@@ -113,7 +102,7 @@ import {
   repositorySkillsQueryOptions,
 } from "./agent-reads.js";
 import { type AgentFork, continueFork, forkStart } from "./fork-model.js";
-import { type ByPullRequestTab, pullRequestAsked } from "./pull-request-number.js";
+import { type HeldUpdate, heldUpdateOver } from "./refused-send.js";
 import { keptSkills } from "./repository-skills.js";
 import type { SkillSource } from "./skill-picker.js";
 import { useSuggestionSender } from "./suggestion-send.js";
@@ -127,11 +116,6 @@ import type {
   InboxMessenger,
   InboxThreadStarter,
 } from "./use-task-inbox.js";
-
-/** A pull request's chapters the port refused to answer, as the tab hears any answer that never came. */
-const CHAPTERS_UNANSWERED: PullRequestChaptersAnswerView = {
-  failure: PULL_REQUEST_CHAPTERS_CALL_FAILURE.UNANSWERED,
-};
 
 /** Why a Start did not start, with the answer that said so, which a shown failure reports. */
 type StartFailure = Failure & { readonly cause?: unknown };
@@ -196,38 +180,6 @@ export const AGENT_RENAME_TERMS = {
 /** No words to listen for, one array so a render that has none hands down the same one. */
 const NO_KEYWORDS: readonly string[] = [];
 
-/** No pull request a tab names by its number, one map so a draw that holds none hands down the same one. */
-const NO_NUMBERED_PULL_REQUESTS: ByPullRequestTab<AgentPullRequest> = new Map();
-
-/**
- * Each pull request a Pull request tab names by its number, by agent and
- * then number, as the host holds what was published of it
- * (`LIVE_READ.PULL_REQUEST_PUBLISHED`) while a surface holds it: the side
- * panel each numbered tab it draws, and the tab shown its own. A read that
- * failed, or named no pull request, holds none, and the agents' own stand
- * apart (`pullRequests`).
- */
-const selectNumberedPullRequests = memoizedSelect(
-  (state) => [selectPullRequestPublished(state)],
-  (held): ByPullRequestTab<AgentPullRequest> => {
-    const numbered = new Map<string, Map<number | undefined, AgentPullRequest>>();
-
-    for (const [agentId, ofAgent] of Object.entries(held ?? {})) {
-      for (const [number, read] of Object.entries(ofAgent)) {
-        const rows = read.rows;
-
-        if (number === OWN_PULL_REQUEST || rows === undefined || "failure" in rows) continue;
-
-        if (rows.pullRequest === null) continue;
-        const kept = numbered.get(agentId) ?? new Map<number | undefined, AgentPullRequest>();
-        numbered.set(agentId, kept.set(Number(number), rows.pullRequest));
-      }
-    }
-
-    return numbered.size === 0 ? NO_NUMBERED_PULL_REQUESTS : numbered;
-  },
-);
-
 /** What the task list's collections carry of one task: its agents in the order started, the archived among them, none where they are not followed, and its agents' pull requests. */
 interface TaskRows {
   readonly listedHere: readonly AgentSummary[] | undefined;
@@ -249,7 +201,7 @@ function useTaskRows(
       ? undefined
       : q
           .from({ agent: collections.agents })
-          .where(({ agent }) => eq(agent.planId, taskId))
+          .where(({ agent }) => eq(agent.taskId, taskId))
           .orderBy(({ agent }) => agent.createdAt)
           .orderBy(({ agent }) => agent.id),
   );
@@ -265,16 +217,6 @@ function useTaskRows(
   return {
     listedHere: followed ? agents : undefined,
     listedPullRequests: pullRequests,
-  };
-}
-
-/** What a fixture run's staged list carries of one task, as the collections carry a followed list's. */
-function stagedRows(staged: TasksView, taskId: string | undefined): TaskRows {
-  const carried = taskId !== undefined && staged.tasks.some((task) => task.id === taskId);
-
-  return {
-    listedHere: carried ? staged.taskAgents?.filter((agent) => agent.planId === taskId) : undefined,
-    listedPullRequests: staged.agentPullRequests,
   };
 }
 
@@ -444,13 +386,10 @@ export interface AgentsControl {
   ) => string;
   /** Lets the open task's draft's fork or suggestion go, leaving an ordinary draft with its words and chips. */
   onDropFork: () => void;
-  /** Writes the open task's draft: the words in its box, the choice on its chip, the MCP servers it switched off, the mode its Permissions row picked, or that the refusal it was handed was let go. */
+  /** Writes the open task's draft: the choice on its chip, the MCP servers it switched off, the mode its Permissions row picked, or that the refusal it was handed was let go. */
   onDraftChange: (
     change: Partial<
-      Pick<
-        AgentDraft,
-        "prompt" | "choice" | "disabledServers" | "runsOn" | "permissionMode" | "refused"
-      >
+      Pick<AgentDraft, "choice" | "disabledServers" | "runsOn" | "permissionMode" | "refused">
     >,
   ) => void;
   /**
@@ -468,10 +407,8 @@ export interface AgentsControl {
    * launch hands them off.
    */
   onTaskStarted: (taskId: string, agent: AgentSummary) => void;
-  /** Changes the open task's draft's files from those it holds as the change lands. */
-  onDraftAttachments: (
-    next: (held: readonly AgentAttachment[]) => readonly AgentAttachment[],
-  ) => void;
+  /** Moves the open task's draft's words and files on together from what it holds as the change lands, as every box's are (`refused-send.ts`). */
+  onDraftHeld: HeldUpdate;
   /**
    * Lets the draft go; nothing was started, so nothing is left behind. One
    * that held words or files raises a toast whose Undo puts it back and
@@ -596,16 +533,6 @@ export interface AgentsControl {
   readTranscript: TranscriptReader;
   /** Each of the task's agents' pull requests, by agent, of those that have one, as the task list carries them (`useListedPullRequests`). */
   pullRequests: ReadonlyMap<string, AgentPullRequest>;
-  /** Each pull request a Pull request tab names by its number, by agent and then by number (`pull-request-number.ts`), as the host holds what was published of it while a surface holds it. */
-  numberedPullRequests: ByPullRequestTab<AgentPullRequest>;
-  /**
-   * One pull request's chapters generated for its head now, or the
-   * generation already under way; answers once the generation lands, which
-   * may take minutes, with whether chapters can be generated and the
-   * workspace's newest chapters, whatever head they were made for; or why
-   * there are none, a port that refused included.
-   */
-  generateChapters: (agentId: string, number?: number) => Promise<PullRequestChaptersAnswerView>;
   /** The words a dictation into an agent's box is likely to say, read off the open task. */
   keywords: readonly string[];
   /** The skills of the open plan's repository a `/` in an agent's box offers, read once for the plan (`repository-skills.ts`), or of the agent's own where no plan is open; nothing while neither names a workspace, or while the Skills experiment is off. */
@@ -927,8 +854,6 @@ export function useAgents(input: {
   repository: string | null;
   /** Whether the task list follows the open task's agents live, so a task with none has none, rather than none read yet. */
   agentsFollowed: boolean;
-  /** A fixture run's staged task list, which stands in for the task list's collections, which never carry it; none outside one. */
-  staged?: TasksView | undefined;
   /** Where the task list's read stands, which an answer on the task's Inbox reads again where it failed: failed, and its Try again; none where nothing reads it again. */
   list?: { readonly failed: boolean; readonly onRetry: () => void } | undefined;
   /** Opens Settings on its Integrations page. */
@@ -976,7 +901,6 @@ export function useAgents(input: {
   );
 
   const { mutateAsync: sendArchive } = useMutation(actMutation(ROW_WRITE.AGENT_ARCHIVE.kind));
-  const { mutateAsync: sendChapters } = useMutation(actMutation(ACT_KIND.CHAPTERS_GENERATE));
   const { mutateAsync: sendInboxAnswer } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_ANSWER));
   const { mutateAsync: sendInboxMessage } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_MESSAGE));
   const { mutateAsync: sendInboxStart } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_START));
@@ -1049,15 +973,7 @@ export function useAgents(input: {
   // The task's agents and their pull requests as the task list's collections carry them, read by the task alone, so a
   // delivery that moves another task's rows draws nothing here; none where the list does not carry the task.
   const collections = useTaskListCollections();
-  const followedRows = useTaskRows(collections, taskId, input.agentsFollowed);
-  const { staged } = input;
-
-  const stagedHere = useMemo(
-    () => (staged === undefined ? undefined : stagedRows(staged, taskId)),
-    [staged, taskId],
-  );
-
-  const { listedHere, listedPullRequests } = stagedHere ?? followedRows;
+  const { listedHere, listedPullRequests } = useTaskRows(collections, taskId, input.agentsFollowed);
 
   // Note that an agent New task holds stands beside the list's until the list first carries it,
   // and leaves with it once it no longer does, so a tab never leaves between the two.
@@ -1337,7 +1253,7 @@ export function useAgents(input: {
   /**
    * Where a draft's words are kept: under its key, beside the fork it is.
    * Note that an agent page's draft is kept with its agent's id as the
-   * `planId`, so the drafted plans list that id too; no task has it, so no
+   * `taskId`, so the drafted plans list that id too; no task has it, so no
    * row reads it as drafted.
    */
   const wordsPlace = (
@@ -1347,7 +1263,7 @@ export function useAgents(input: {
     suggestion?: DraftSuggestion,
   ): NewAgentPlace => ({
     kind: DRAFT_PLACE.NEW_AGENT,
-    planId: on,
+    taskId: on,
     draftId: id,
     ...forkOf(fork),
     ...suggestionOf(suggestion),
@@ -1488,19 +1404,11 @@ export function useAgents(input: {
   };
 
   const onDraftChange = (
-    change: Partial<
-      Pick<
-        AgentDraft,
-        "prompt" | "choice" | "disabledServers" | "runsOn" | "permissionMode" | "refused"
-      >
+    choices: Partial<
+      Pick<AgentDraft, "choice" | "disabledServers" | "runsOn" | "permissionMode" | "refused">
     >,
   ) => {
-    if (taskId === undefined || draft === undefined) return;
-    const { prompt, ...choices } = change;
-
-    if (prompt !== undefined) writeWords((was) => ({ ...was, text: prompt }));
-
-    if (Object.keys(choices).length === 0) return;
+    if (taskId === undefined || draft === undefined || Object.keys(choices).length === 0) return;
     withDraft(taskId, {
       id: draft.id,
       choice: draft.choice,
@@ -1542,11 +1450,9 @@ export function useAgents(input: {
     setStarted({ taskId: on, agent });
   };
 
-  // Note that the files are changed from the draft as it stands when the
+  // Note that the words and files are changed from the draft as it stands when the
   // change lands, because a file's read lands after the render that began it.
-  const onDraftAttachments = (
-    next: (held: readonly AgentAttachment[]) => readonly AgentAttachment[],
-  ) => writeWords((was) => ({ ...was, attachments: next(was.attachments) }));
+  const onDraftHeld = heldUpdateOver(writeWords);
 
   // Note that a draft holding words or files is let go at once, as every
   // act that can be taken back is, and ⌘Z and its toast's Undo put it back.
@@ -2015,20 +1921,6 @@ export function useAgents(input: {
   // choosing a task reads none of them.
   const pullRequests = useListedPullRequests(listedPullRequests, taskId);
 
-  // A pull request a tab names by its number is kept by agent and number,
-  // apart from the agents' own, so it never stands for what an agent published.
-  const numberedPullRequests =
-    useQuery({ ...appStateQuery, select: selectNumberedPullRequests }).data ??
-    NO_NUMBERED_PULL_REQUESTS;
-
-  const generateChapters = useCallback<AgentsControl["generateChapters"]>(
-    (agentId, number) =>
-      sendChapters(pullRequestAsked(agentId, number)).catch(
-        (): PullRequestChaptersAnswerView => CHAPTERS_UNANSWERED,
-      ),
-    [sendChapters],
-  );
-
   const answerInbox = useCallback<InboxAnswerer>(
     (params) => sendInboxAnswer(params),
     [sendInboxAnswer],
@@ -2058,7 +1950,7 @@ export function useAgents(input: {
     if (!skillsOn || taskId === undefined) return undefined;
 
     return keptSkills(() =>
-      queryClient.fetchQuery(repositorySkillsQueryOptions({ planId: taskId })),
+      queryClient.fetchQuery(repositorySkillsQueryOptions({ taskId: taskId })),
     );
   }, [queryClient, skillsOn, taskId, repository]);
 
@@ -2088,7 +1980,7 @@ export function useAgents(input: {
     onDraftChange,
     onHandDraft,
     onTaskStarted,
-    onDraftAttachments,
+    onDraftHeld,
     onDiscardDraft,
     startPrompt: steadyStartPrompt,
     startFork: steadyStartFork,
@@ -2129,8 +2021,6 @@ export function useAgents(input: {
     readAgent,
     readTranscript,
     pullRequests,
-    numberedPullRequests,
-    generateChapters,
     keywords: input.keywords ?? NO_KEYWORDS,
     readSkills,
     answerInbox,

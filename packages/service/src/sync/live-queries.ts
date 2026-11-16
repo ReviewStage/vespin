@@ -20,10 +20,15 @@ import { hostsRead } from "../live/reads/hosts.js";
 import { inboxItemsRead } from "../live/reads/inbox-items.js";
 import { installedSkillsRead } from "../live/reads/installed-skills.js";
 import { integrationStatusesRead } from "../live/reads/integration-statuses.js";
+import { machineAsksRead } from "../live/reads/machine-asks.js";
 import { machineCommandsRead } from "../live/reads/machine-commands.js";
 import { machinesRead } from "../live/reads/machines.js";
 import { agentPagesRead, taskPagesRead } from "../live/reads/pages.js";
-import { pullRequestChaptersRead } from "../live/reads/pull-request-chapters.js";
+import {
+  pullRequestChaptersRead,
+  repositoryPullRequestChaptersRead,
+} from "../live/reads/pull-request-chapters.js";
+import { repositoryPullRequestMovedRead } from "../live/reads/pull-request-moved.js";
 import { agentInboxRead, taskInboxRead } from "../live/reads/scope-inbox.js";
 import { sidebarRead } from "../live/reads/sidebar.js";
 import { taskCommentsRead } from "../live/reads/task-comments.js";
@@ -58,6 +63,7 @@ export const BOUND_READS: readonly AnyBoundRead[] = [
   agentTranscriptRead,
   hostsRead,
   machinesRead,
+  machineAsksRead,
   agentOriginRead,
   taskPagesRead,
   agentPagesRead,
@@ -80,6 +86,8 @@ export const BOUND_READS: readonly AnyBoundRead[] = [
   automationWorkspaceRunsRead,
   automationRunsRead,
   pullRequestChaptersRead,
+  repositoryPullRequestChaptersRead,
+  repositoryPullRequestMovedRead,
 ];
 
 export const LIVE_QUERIES = liveReadRegistry(BOUND_READS);

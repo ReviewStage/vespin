@@ -56,6 +56,7 @@ import {
   installEditorLayout,
   pressInComposer,
   typeInComposer,
+  typeKeysInComposer,
 } from "../testing/composer.js";
 import { withQueryClient, writeHandedAppState } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
@@ -525,6 +526,14 @@ test("Shift+Return is a new line, and the agent is handed both lines", async () 
   assert.equal(card.agents[0]?.prompt, "Fix the refresh\nand add a test");
 });
 
+test("`> ` typed makes a quote the caret stays in, as in an agent's box, and the agent is handed it", async () => {
+  const card = await mount();
+  typeKeysInComposer(document, "> Ship it");
+  await card.key("Enter");
+
+  assert.equal(card.agents[0]?.prompt, "> Ship it");
+});
+
 test("once a repository is chosen, an @ offers its files, read through the workspace, and the row chosen is drawn as its chip and handed to the agent as its link", async () => {
   const told: AnyAct[] = [];
   fakeActs({
@@ -850,6 +859,17 @@ test("a refusal keeps the card and the words, says why under it, and Retry start
   act(() => card.button("Retry").click());
   await settle();
   assert.equal(card.starts.length, 2);
+});
+
+test("a refusal's note goes once the words are edited, and stays while they stand", async () => {
+  const card = await mount("Vespin cannot reach acme/web.");
+  card.type("Dark mode toggle");
+  await card.key("Enter");
+  assert.match(card.note() ?? "", /Vespin cannot reach acme\/web\./u);
+
+  card.type(" for the sidebar");
+  await settle();
+  assert.equal(card.note(), undefined);
 });
 
 test("a start refused for a missing credential says which harness to connect, and the card offers the same press the draft agent tab does, opening Settings at its row", async () => {

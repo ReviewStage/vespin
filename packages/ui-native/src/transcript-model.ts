@@ -40,7 +40,7 @@ import {
   recordedVideosOf,
   shownPicturesOf,
 } from "@repo/features/agent-pictures-model";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import type { SendingMessage } from "@repo/features/agent-view";
 import {
   type AgentOrigin,
@@ -49,8 +49,10 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { fileName } from "@repo/features/code-ref-words";
-import { isVideoType } from "@repo/features/conversation-picture-wire";
-import { INTEGRATION_NAME } from "@repo/features/integration-wire";
+import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
+import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
+import { messageFileChips } from "@repo/features/message-files";
+import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { SUGGESTION_LEAD, suggestionWords } from "@repo/features/reply-button-wire";
 import { callHeading, WORKING_LINE, workedForText } from "@repo/features/time-format";
@@ -69,6 +71,7 @@ import { shownPageVersion, type ToolCallView, toolCallView } from "@repo/feature
 import { suggestedByOf, suggestionStartOf } from "@repo/features/transcript-lines";
 import {
   CALL_KIND,
+  CALL_MARK,
   type CallKind,
   type CallLine,
   calledFile,
@@ -140,14 +143,30 @@ export interface CallBodyBlock {
   readonly text: string;
 }
 
-/** One picture or recording a call showed, by the id the service kept it under. */
+/** How a call's shown media is drawn: a picture, a recording in the system's player, or a sound clip in its strip. */
+export const SHOWN_MEDIA = {
+  PICTURE: "picture",
+  VIDEO: "video",
+  AUDIO: "audio",
+} as const;
+
+type ShownMediaKind = (typeof SHOWN_MEDIA)[keyof typeof SHOWN_MEDIA];
+
+/** How media kept under `mediaType` is drawn. */
+function shownKindOf(mediaType: string): ShownMediaKind {
+  if (isVideoType(mediaType)) return SHOWN_MEDIA.VIDEO;
+
+  return isAudioType(mediaType) ? SHOWN_MEDIA.AUDIO : SHOWN_MEDIA.PICTURE;
+}
+
+/** One picture, recording, or sound clip a call showed, by the id the service kept it under. */
 export interface ShownMedia {
   readonly id: string;
   /** The words drawn under it; empty for none. */
   readonly caption: string;
   /** What it is heard as: its caption, or where it has none its name among the call's (`screenshot-1`), as the panel's viewer names it. */
   readonly label: string;
-  readonly video: boolean;
+  readonly kind: ShownMediaKind;
 }
 
 /** One part of the line naming who sent a line: words before it and after it in the muted ink, such as "Suggested by" and who started an agent, where it has any; its words; and the address a press opens, where it has one. */
@@ -176,14 +195,24 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.SAID;
       readonly words: string;
+      /** The pictures the line carried, drawn over its words as the panel draws them; none where it carried none. */
+      readonly pictures?: readonly SaidPicture[] | undefined;
       /** Who sent it, where the reader did not. */
       readonly sender: string | undefined;
       /** Who sent an automation's prompt, or the agent whose suggestion a line was sent from, part by part; it stands over the sender. */
       readonly from?: readonly OriginPart[] | undefined;
       /** A webhook call's body, which rode in with an automation's prompt. */
       readonly body?: string | undefined;
-      /** When it was sent, as a call's header says the day and the time; none where the row kept no time. */
-      readonly sent: string | undefined;
+      /** The account that sent it, where the reader did not, which a run of lines is told apart by. */
+      readonly by: string | undefined;
+      /** When it was sent; none where the row kept no time. */
+      readonly at: number | undefined;
+      /** The day and time standing centered over it, as Messages heads talk that picks up again: on the first line with a time, and on one sent after a pause; none on the rest. */
+      readonly stamp: string | undefined;
+      /** Whether it follows a line of the same sender's run closely, so it stands tight under it and names no sender. */
+      readonly joinsAbove: boolean;
+      /** Whether a line of its run follows it closely, so it stands tight over it. */
+      readonly joinsBelow: boolean;
     }
   | { readonly kind: typeof TRANSCRIPT_ITEM.WORDS; readonly words: string }
   | {
@@ -191,6 +220,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       /** The call's id, which opens and closes it. */
       readonly callId: string;
       readonly callKind: CallKind;
+      /** For a call of an integration's tool, the integration, whose mark leads its row in its kind's glyph's place. */
+      readonly provider: IntegrationProvider | undefined;
       readonly line: CallLine;
       /** What the call made or is about, named after the line's verb as the panel's chip names it. */
       readonly chip: string | undefined;
@@ -273,6 +304,12 @@ const ORIGIN_WORDS = {
   ISSUE: "issue",
 } as const;
 
+/** How long after one line the same sender's next still joins its run: five minutes, as a thread's runs reach. */
+const RUN_REACH_MS = 5 * 60 * 1000;
+
+/** How long a pause between two sent lines has to be for the later one to stand under the day and time again: a quarter of an hour. */
+const STAMP_PAUSE_MS = 15 * 60 * 1000;
+
 /** How many lines of a call's block its card draws, as the panel's card cuts one. */
 const BLOCK_LINES = 40;
 
@@ -345,9 +382,9 @@ function callBody(
   ];
 }
 
-/** Where a call stands by its state. */
-function standingOf(state: ToolState): CallStanding {
-  if (state === TOOL_STATE.OUTPUT_ERROR) return CALL_STANDING.FAILED;
+/** Where a call stands by its state, a call the service answered without doing it (`refused`) standing as failed. */
+function standingOf(state: ToolState, refused: boolean): CallStanding {
+  if (state === TOOL_STATE.OUTPUT_ERROR || refused) return CALL_STANDING.FAILED;
 
   return state === TOOL_STATE.OUTPUT_AVAILABLE ? CALL_STANDING.DONE : CALL_STANDING.RUNNING;
 }
@@ -355,7 +392,7 @@ function standingOf(state: ToolState): CallStanding {
 /** Whether a call is a set of pictures shown, which draws as its pictures. */
 function showedPictures(part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>): boolean {
   return (
-    part.tool === AGENT_TOOL.SHOW_IMAGE &&
+    isShowMediaTool(part.tool) &&
     part.state === TOOL_STATE.OUTPUT_AVAILABLE &&
     isRecord(part.output) &&
     part.output.status === "accepted"
@@ -398,16 +435,46 @@ function suggestionFrom(
   return [{ ...by, after: sender === undefined ? STARTED_BY.YOU : STARTED_BY.MEMBER(sender) }];
 }
 
+/** The media types a sent line's file is drawn as a picture for. */
+const PICTURE_TYPES: ReadonlySet<string> = new Set(Object.values(PICTURE_TYPE));
+
+/** A picture a sent line carried: its place on the line, its name, and its bytes where the line kept them, or the picture it was kept as, read by its id. */
+export interface SaidPicture {
+  readonly key: string;
+  readonly name: string;
+  readonly url: string | undefined;
+  readonly pictureId: string | undefined;
+}
+
+/** The pictures a sent line carried, in order, as the panel lists a line's files (`messageFileChips`); a file that is no picture, such as a PDF, is left to the panel. */
+function saidPictures(line: AgentTranscriptMessage): readonly SaidPicture[] {
+  return messageFileChips(line).flatMap((file, index): SaidPicture[] =>
+    PICTURE_TYPES.has(file.mediaType)
+      ? [
+          {
+            key: String(index),
+            name: file.name,
+            // Note that a picture kept apart is read by its id, so the empty `data:` address its line keeps in the bytes' place never stands in for it.
+            url: file.pictureId === undefined && file.url !== "" ? file.url : undefined,
+            pictureId: file.pictureId,
+          },
+        ]
+      : [],
+  );
+}
+
 /** A line someone sent, as its item: one sent from a suggestion headed by who suggested it, its words without the lead that names that agent to the agent reading them. */
 function saidItem(
   line: AgentTranscriptMessage,
   base: ItemBase,
   reading: TranscriptReading,
 ): TranscriptItem {
-  const sender =
-    line.sentBy === undefined || line.sentBy.userId === reading.readerId
-      ? undefined
-      : line.sentBy.name;
+  // Note that a line is the reader's own only by a user id that matches theirs, so an app's line, which has none, keeps its name while the reader is unknown.
+  const own =
+    line.sentBy === undefined ||
+    (line.sentBy.userId !== undefined && line.sentBy.userId === reading.readerId);
+
+  const sender = own ? undefined : line.sentBy?.name;
 
   const from = suggestionFrom(line, reading, sender);
   const words = messageWords(line);
@@ -418,25 +485,34 @@ function saidItem(
     ...base,
     kind: TRANSCRIPT_ITEM.SAID,
     words: from === undefined ? words : suggestionWords(words),
+    pictures: saidPictures(line),
     sender: started ? undefined : sender,
     from,
-    sent: line.sentAt === undefined ? undefined : callHeading(line.sentAt, reading.now),
+    by: sender === undefined ? undefined : line.sentBy?.userId,
+    at: line.sentAt,
+    stamp: undefined,
+    joinsAbove: false,
+    joinsBelow: false,
   };
 }
 
-/** An automation's prompt as its agent's first line, in place of the line's own words and sender. */
+/** An automation's prompt as its agent's first line, in place of the line's own words and sender, with the pictures the line carried. */
 function originItem(
   line: AgentTranscriptMessage,
   base: ItemBase,
-  reading: TranscriptReading,
   origin: TranscriptOrigin,
 ): TranscriptItem {
   return {
     ...base,
     kind: TRANSCRIPT_ITEM.SAID,
     words: origin.prompt ?? messageWords(line),
+    pictures: saidPictures(line),
     sender: undefined,
-    sent: line.sentAt === undefined ? undefined : callHeading(line.sentAt, reading.now),
+    by: undefined,
+    at: line.sentAt,
+    stamp: undefined,
+    joinsAbove: false,
+    joinsBelow: false,
     from: origin.from,
     body: origin.body,
   };
@@ -624,7 +700,7 @@ function callItems(
               id: picture.id,
               caption,
               label: caption === "" ? name : caption,
-              video: isVideoType(picture.mediaType),
+              kind: shownKindOf(picture.mediaType),
             },
           ],
     ),
@@ -632,7 +708,7 @@ function callItems(
       id: picture.id,
       caption,
       label: caption === "" ? name : caption,
-      video: true,
+      kind: SHOWN_MEDIA.VIDEO,
     })),
     // Note that a picture a call answered that was not kept has no bytes to draw, so it is left out.
     ...calledPicturesOf(part.tool, part.input, part.output).flatMap((called) =>
@@ -642,7 +718,7 @@ function callItems(
               id: called.picture.id,
               caption: "",
               label: called.name,
-              video: isVideoType(called.picture.mediaType),
+              kind: shownKindOf(called.picture.mediaType),
             },
           ]
         : [],
@@ -680,9 +756,11 @@ function callItems(
     kind: TRANSCRIPT_ITEM.CALL,
     callId: part.callId,
     callKind: view.kind,
+    provider: view.provider,
     ...callNaming(view),
-    runOn: callPlace(view.kind, view.server),
-    standing: standingOf(part.state),
+    // Note that the row leads with the integration's mark, so it names only what the mark does not: the account among several, or a server of no integration's.
+    runOn: callPlace(view, CALL_MARK.LEADS),
+    standing: standingOf(part.state, view.refused === true),
     open,
     body: open
       ? callBody(view.input, read?.output ?? view.output, drawn.errorText, read !== undefined)
@@ -704,7 +782,21 @@ function callItems(
           },
         ];
 
-  return [call, ...page, ...openedPullRequest(part, base, reading.pullRequests), ...mediaItem];
+  const opened = openedPullRequest(part, base, reading.pullRequests);
+
+  // Note that a pull request the call opened stands as its card alone, as a set of pictures shown stands as its pictures, since the call's line named the same pull request over it; a call refused opens none and keeps its line with the reason.
+  if (opened.length > 0) return [...page, ...opened, ...mediaItem];
+
+  // Note that a finished call a page's card stands for is drawn as its card alone, as the card names the page the call's line would say again.
+  if (
+    page.length > 0 &&
+    call.kind === TRANSCRIPT_ITEM.CALL &&
+    call.standing === CALL_STANDING.DONE &&
+    !open
+  )
+    return [...page, ...mediaItem];
+
+  return [call, ...page, ...mediaItem];
 }
 
 /** One part as its items; none for what the agent thought, or a part with nothing to draw. */
@@ -761,6 +853,54 @@ function rowItems(
   });
 }
 
+type SaidItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.SAID }>;
+
+/** Whether `next` joins the run `last` ends, as Messages groups a sender's bubbles: the same sender, sent within `RUN_REACH_MS`, neither headed by where it came from. */
+function joinsRun(last: SaidItem, next: SaidItem): boolean {
+  if (last.from !== undefined || next.from !== undefined || next.body !== undefined) return false;
+
+  if (last.by !== next.by || last.sender !== next.sender) return false;
+
+  if (last.at === undefined || next.at === undefined) return false;
+
+  return next.at >= last.at && next.at - last.at <= RUN_REACH_MS;
+}
+
+/**
+ * The items with the lines sent in runs and their times between them, as
+ * Messages draws a conversation: lines one sender sent back to back stand
+ * tight under one sender's name, and the day and time stand centered over
+ * the first line with a time and over one sent after a pause of
+ * `STAMP_PAUSE_MS` since the line before it, rather than under every line.
+ */
+function inRuns(items: readonly TranscriptItem[], now: number): readonly TranscriptItem[] {
+  let lastSent: number | undefined;
+
+  const timed = items.map((item, index): TranscriptItem => {
+    if (item.kind !== TRANSCRIPT_ITEM.SAID) return item;
+
+    const before = items[index - 1];
+    const joinsAbove = before?.kind === TRANSCRIPT_ITEM.SAID && joinsRun(before, item);
+
+    const paused =
+      item.at !== undefined && (lastSent === undefined || item.at - lastSent >= STAMP_PAUSE_MS);
+
+    const stamp = paused && item.at !== undefined ? callHeading(item.at, now) : undefined;
+
+    if (item.at !== undefined) lastSent = item.at;
+
+    return { ...item, joinsAbove, stamp };
+  });
+
+  return timed.map((item, index): TranscriptItem => {
+    const after = timed[index + 1];
+
+    if (item.kind !== TRANSCRIPT_ITEM.SAID || after?.kind !== TRANSCRIPT_ITEM.SAID) return item;
+
+    return { ...item, joinsBelow: after.joinsAbove };
+  });
+}
+
 /**
  * The transcript with the member's messages on their way at its end, each
  * as their own line under the id its row lands under, so the row takes its
@@ -813,7 +953,7 @@ export function transcriptItems(
 
       return [
         origin !== undefined && message.id === head
-          ? originItem(message, base, reading, origin)
+          ? originItem(message, base, origin)
           : saidItem(message, base, reading),
       ];
     }
@@ -852,11 +992,12 @@ export function transcriptItems(
   });
 
   const last = placed.at(-1)?.message.id;
+  const runs = inRuns(items, reading.now);
 
-  if (!reading.writing || last === undefined) return items;
+  if (!reading.writing || last === undefined) return runs;
 
   return [
-    ...items,
+    ...runs,
     {
       place: { ...linePlace(last, last), piece: TRANSCRIPT_PIECE.WORKING },
       depth: 0,
@@ -868,9 +1009,9 @@ export function transcriptItems(
 
 /**
  * The items with their working line saying that the agent waits on the
- * reader (`waitingOnYouWords`), as the panel's does, so an agent held for
- * an answer never reads as working on; the items as they stand where none
- * waits.
+ * reader (`waitingOnYouWords`), as the panel's does, and its folds not
+ * turning, so an agent held for an answer never reads as working on; the
+ * items as they stand where none waits.
  */
 export function withWaitingLine(
   items: readonly TranscriptItem[],
@@ -879,7 +1020,11 @@ export function withWaitingLine(
   if (waiting === undefined) return items;
 
   return items.map((item) =>
-    item.kind === TRANSCRIPT_ITEM.WORKING ? { ...item, words: waiting, waiting: true } : item,
+    item.kind === TRANSCRIPT_ITEM.WORKING
+      ? { ...item, words: waiting, waiting: true }
+      : item.kind === TRANSCRIPT_ITEM.FOLD
+        ? { ...item, running: false }
+        : item,
   );
 }
 
@@ -917,7 +1062,16 @@ export function openCuts(items: readonly TranscriptItem[]): readonly AgentPartCu
 
 /** The ids of every picture and recording the items show, which the list reads the bytes of. */
 export function shownMediaIds(items: readonly TranscriptItem[]): readonly string[] {
-  return items.flatMap((item) =>
-    item.kind === TRANSCRIPT_ITEM.MEDIA ? item.media.map(({ id }) => id) : [],
-  );
+  return items.flatMap((item) => {
+    if (item.kind === TRANSCRIPT_ITEM.MEDIA) return item.media.map(({ id }) => id);
+
+    // Note that a picture a sent line kept by its id is read as the agent's shown ones are, through the same door.
+    if (item.kind === TRANSCRIPT_ITEM.SAID) {
+      return (item.pictures ?? []).flatMap(({ pictureId }) =>
+        pictureId === undefined ? [] : [pictureId],
+      );
+    }
+
+    return [];
+  });
 }

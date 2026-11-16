@@ -1,0 +1,91 @@
+---
+title: "Pull requests"
+description: "vespin pr"
+---
+
+Read pull requests, their checks, conversation, and chapters, and mark files viewed. Every command also takes the global flags `--json`, `-q`, `-w`, and `--url`, described in [CLI](/cli#scripts-and-coding-agents).
+
+## vespin pr view
+
+Read an agent's pull request, or any of a repository the workspace reaches: its overview, checks, conversation, or diff
+
+```sh
+vespin pr view [flags] <pr|agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `pr|agent string` | The pull request, as owner/name#number, or the pull request's page on GitHub, or an agent's id for its pull request |
+| `--number integer` | With an agent's id, another pull request of its repository |
+| `--checks` | Its head's checks and deployments |
+| `--conversation` | Its comments and reviews, with their review threads |
+| `--diff` | Every changed file's patch |
+| `--stat` | Each changed file as one line, with whether you marked it viewed |
+
+```sh
+# Its overview and description
+vespin pr view acme/relay#42
+
+# Its checks, then its comments and reviews
+vespin pr view https://github.com/acme/relay/pull/42 --checks --conversation
+
+# Its files, and which you viewed
+vespin pr view acme/relay#42 --stat
+
+# Every file's patch
+vespin pr view acme/relay#42 --diff
+
+# The agent's own pull request's comments and reviews
+vespin pr view <agent-id> --conversation
+```
+
+## vespin pr viewed
+
+Mark files of a pull request viewed on GitHub as you, or unmark them
+
+```sh
+vespin pr viewed [flags] <pr|agent> <path...>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `pr|agent string` | The pull request, as owner/name#number, or the pull request's page on GitHub, or an agent's id for its pull request |
+| `path... string` | The files, by their paths from the repository's root |
+| `--number integer` | With an agent's id, another pull request of its repository |
+| `--unmark` | Unmark them instead |
+
+```sh
+# Mark two files viewed
+vespin pr viewed acme/relay#42 src/a.ts src/b.ts
+
+# Unmark one
+vespin pr viewed acme/relay#42 src/a.ts --unmark
+
+# Mark a file of the agent's own pull request viewed
+vespin pr viewed <agent-id> src/a.ts
+```
+
+## vespin pr chapters
+
+Read a pull request's chapters, the story of its diff in reading order; --generate makes them
+
+```sh
+vespin pr chapters [flags] <pr|agent>
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `pr|agent string` | The pull request, by its GitHub link or as owner/name#number, or an agent's id for its pull request |
+| `--number integer` | With an agent's id, another pull request of its repository |
+| `--generate` | Generate the chapters for the head now, on your own API key; slower than reading |
+
+```sh
+# Read the chapters
+vespin pr chapters acme/app#42
+
+# Generate them on your API key
+vespin pr chapters https://github.com/acme/app/pull/42 --generate
+
+# The agent's own pull request
+vespin pr chapters <agent-id>
+```

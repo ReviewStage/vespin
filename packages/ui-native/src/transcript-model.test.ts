@@ -6,15 +6,19 @@ import { describe, expect, it } from "vitest";
 import {
   NO_TOGGLES,
   openCuts,
+  SHOWN_MEDIA,
   TRANSCRIPT_ITEM,
   transcriptItems,
   transcriptOriginOf,
+  withWaitingLine,
 } from "./transcript-model.js";
 
 const PICTURE = { id: "picture-1", mediaType: "image/png", width: 320, height: 180, byteCount: 10 };
+const SHOT = "data:image/png;base64,iVBORw0KGgo=";
+const CLIP = { id: "clip-1", mediaType: "audio/mpeg", width: 0, height: 0, byteCount: 10 };
 
 describe("transcriptItems", () => {
-  it("leaves the agent's thinking out and draws the pictures it showed under the turn", () => {
+  it("leaves the agent's thinking out and draws what it showed under the turn, a sound clip played rather than drawn", () => {
     const items = transcriptItems(
       [
         {
@@ -31,8 +35,13 @@ describe("transcriptItems", () => {
               type: "tool-show_image",
               toolCallId: "shots",
               state: "output-available",
-              input: { images: [{ path: "/shots/dialog.png", caption: "The dialog" }] },
-              output: { status: "accepted", pictures: [PICTURE] },
+              input: {
+                images: [
+                  { path: "/shots/dialog.png", caption: "The dialog" },
+                  { path: "/sounds/chime.mp3", caption: "The chime" },
+                ],
+              },
+              output: { status: "accepted", pictures: [PICTURE, CLIP] },
             },
             { type: "text", text: "Here it is." },
           ],
@@ -48,11 +57,49 @@ describe("transcriptItems", () => {
       TRANSCRIPT_ITEM.WORDS,
     ]);
     expect(items[1]).toMatchObject({
-      media: [{ id: "picture-1", caption: "The dialog", label: "The dialog", video: false }],
+      media: [
+        { id: "picture-1", caption: "The dialog", label: "The dialog", kind: SHOWN_MEDIA.PICTURE },
+        { id: "clip-1", caption: "The chime", label: "The chime", kind: SHOWN_MEDIA.AUDIO },
+      ],
     });
   });
 
-  it("opens an automation's transcript on its run's prompt, from the automation and its pull request, leaving later lines as sent", () => {
+  it("draws the pictures a line carried over its words, one kept apart read by its id, leaving a file that is no picture to the panel", () => {
+    const shot = "data:image/png;base64,iVBORw0KGgo=";
+
+    const items = transcriptItems(
+      [
+        {
+          id: "sent",
+          role: MESSAGE_ROLE.USER,
+          parts: [
+            { type: "text", text: "The button is cut off." },
+            { type: "file", mediaType: "image/png", filename: "bug.png", url: shot },
+            { type: "file", mediaType: "application/pdf", filename: "plan.pdf", url: "" },
+            {
+              type: "file",
+              mediaType: "image/png",
+              filename: "kept.png",
+              url: "data:image/png;base64,",
+              providerMetadata: { app: { attachmentId: "picture-9" } },
+            },
+          ],
+        },
+      ],
+      { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
+    );
+
+    expect(items[0]).toMatchObject({
+      kind: TRANSCRIPT_ITEM.SAID,
+      words: "The button is cut off.",
+      pictures: [
+        { name: "bug.png", url: shot, pictureId: undefined },
+        { name: "kept.png", url: undefined, pictureId: "picture-9" },
+      ],
+    });
+  });
+
+  it("opens an automation's transcript on its run's prompt, from the automation and its pull request, with the pictures it carried, leaving later lines as sent", () => {
     const origin = transcriptOriginOf({
       automationId: undefined,
       automationName: "Morning triage",
@@ -73,7 +120,10 @@ describe("transcriptItems", () => {
         {
           id: "fired",
           role: MESSAGE_ROLE.USER,
-          parts: [{ type: "text", text: "Triage the new issues.\n\nFired by pull request #42." }],
+          parts: [
+            { type: "text", text: "Triage the new issues.\n\nFired by pull request #42." },
+            { type: "file", mediaType: "image/png", filename: "crash.png", url: SHOT },
+          ],
         },
         { id: "later", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Thanks." }] },
       ],
@@ -96,9 +146,72 @@ describe("transcriptItems", () => {
           { words: "#42 Crash on launch", address: "https://github.com/ada/relay/pull/42" },
         ],
         body: '{"event":"opened"}',
+        pictures: [{ name: "crash.png", url: SHOT, pictureId: undefined }],
       },
       { kind: TRANSCRIPT_ITEM.SAID, words: "Thanks.", sender: undefined },
     ]);
+  });
+
+  it("stands one sender's lines sent close together in a run, and the day and time only over talk that picks up again, never joining the reader to an app", () => {
+    const minute = 60 * 1000;
+    const ada = { name: "Ada", userId: "u1" };
+    const grace = { name: "Grace", userId: "u2" };
+
+    const line = (
+      id: string,
+      minutes: number,
+      sentBy: { readonly name: string; readonly userId?: string } = ada,
+    ) => ({
+      id,
+      role: MESSAGE_ROLE.USER,
+      parts: [{ type: "text" as const, text: id }],
+      sentAt: minutes * minute,
+      sentBy,
+    });
+
+    const items = transcriptItems(
+      [
+        line("a", 0),
+        line("b", 1),
+        line("c", 2, grace),
+        line("d", 3, grace),
+        line("e", 40),
+        line("f", 41, { name: "Morning triage" }),
+      ],
+      { writing: false, readerId: "u1", toggles: NO_TOGGLES, now: 41 * minute, pullRequests: [] },
+    );
+
+    expect(
+      items.map((item) =>
+        item.kind === TRANSCRIPT_ITEM.SAID
+          ? [item.words, item.joinsAbove, item.joinsBelow, item.sender, item.stamp !== undefined]
+          : item.kind,
+      ),
+    ).toEqual([
+      ["a", false, true, undefined, true],
+      ["b", true, false, undefined, false],
+      ["c", false, true, "Grace", false],
+      ["d", true, false, "Grace", false],
+      ["e", false, false, undefined, true],
+      ["f", false, false, "Morning triage", false],
+    ]);
+  });
+
+  it("names an app's line while the reader is not yet known", () => {
+    const items = transcriptItems(
+      [
+        {
+          id: "fired",
+          role: MESSAGE_ROLE.USER,
+          parts: [{ type: "text", text: "Triage the new issues." }],
+          sentAt: 0,
+          sentBy: { name: "Morning triage" },
+        },
+      ],
+      { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 1, pullRequests: [] },
+    );
+
+    expect(items).toMatchObject([{ kind: TRANSCRIPT_ITEM.SAID, sender: "Morning triage" }]);
   });
 
   it("heads a line sent from a suggestion by the agent that suggested it", () => {
@@ -217,7 +330,7 @@ describe("transcriptItems", () => {
       },
     },
   ])(
-    "draws a pull request a call opened as the task list holds it, or as it was opened where the list holds none ($card.state)",
+    "draws a pull request a call opened as the task list holds it, or as it was opened where the list holds none, in the call's place ($card.state)",
     ({ held, card }) => {
       const items = transcriptItems([OPENED], {
         writing: false,
@@ -232,8 +345,47 @@ describe("transcriptItems", () => {
         url: "https://github.com/ada/relay/pull/128",
         ...card,
       });
+      expect(items.some((item) => item.kind === TRANSCRIPT_ITEM.CALL)).toBe(false);
     },
   );
+});
+
+describe("withWaitingLine", () => {
+  it("stops a fold's spinner while the agent waits on the reader", () => {
+    const done = (id: string) => ({
+      type: "tool-bash",
+      toolCallId: id,
+      state: "output-available",
+      input: { command: `pnpm test ${id}` },
+      output: { stdout: "ok" },
+    });
+
+    const items = transcriptItems(
+      [
+        {
+          id: "work",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            done("a"),
+            done("b"),
+            {
+              type: "tool-bash",
+              toolCallId: "c",
+              state: "input-available",
+              input: { command: "pnpm test c" },
+            },
+          ],
+        },
+      ],
+      { writing: true, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
+    );
+
+    const folds = (shown: readonly (typeof items)[number][]) =>
+      shown.flatMap((item) => (item.kind === TRANSCRIPT_ITEM.FOLD ? [item.running] : []));
+
+    expect(folds(items)).toEqual([true]);
+    expect(folds(withWaitingLine(items, "Waiting on you · 1 approval"))).toEqual([false]);
+  });
 });
 
 describe("a call whose answer its page carried cut", () => {

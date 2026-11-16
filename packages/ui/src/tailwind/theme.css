@@ -518,6 +518,7 @@
   --color-input: var(--ui-color-input);
   /* A picked day's fill and ink, and the wash of a range between its ends. */
   --color-fill-selected: var(--ui-color-fill-selected);
+  --color-fill-current: var(--ui-color-fill-current);
   /* A toolbar floated on the menu's surface: a row's round, a hair out. */
   --radius-menu-toolbar: calc(var(--ui-menu-row-radius) + var(--ui-space-2));
   /* The base scale, as `p-ui-8` (`tokens/scale.css`), because the window's
@@ -957,6 +958,10 @@
   /* A video played in place (`components/video-player/`): no taller than a
      picture is drawn, and full screen as wide as the stage. */
   --spacing-video-player: 520px; /* off-scale: a picture's drawn height */
+  /* A sound clip played in place (`components/audio-player/`): as wide as a
+     picture stands before its bytes are read, its waveform a control's
+     height, and in the viewer a taller one. */
+  --spacing-audio-player: 480px; /* off-scale: a picture's stand-in width */
   --spacing-stage: var(--ui-stage-width);
   /* A sign-in gate's provider button (`components/provider-button/`): the
      height a devtool's sign-in button stands at, a finger's at least under
@@ -1119,7 +1124,7 @@
   --spacing-conversation-empty-wide: 560px; /* off-scale: a one-line failure's measure, Continue beside it */
   --spacing-conversation-older: calc(100% - var(--ui-space-32));
   /* The way back to the newest line stands this far above the log's foot: its own room, past whatever floats over the log's end (`--conversation-over-end`, the log's own). */
-  --spacing-conversation-scroll: calc(var(--ui-space-16) + var(--conversation-over-end, 0px));
+  --spacing-conversation-scroll: calc(var(--ui-space-6) + var(--conversation-over-end, 0px));
   --shadow-floating-edge: inset 0 0 0 1px var(--ui-color-border), var(--ui-menu-shadow);
   --color-button-ground: var(--ui-button-ground);
   --color-inert-link: color-mix(in srgb, currentColor 40%, transparent);

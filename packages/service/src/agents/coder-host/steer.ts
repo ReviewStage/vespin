@@ -34,9 +34,11 @@ import {
   turnWaitingLines,
 } from "@repo/database/models/writer";
 import { type ConversationRuntime, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
+import { runsGoal } from "@repo/features/agent-goal-model";
 import { AGENT_MACHINE, AGENT_STATUS, type AgentAttachment } from "@repo/features/agent-wire";
 import { MENTION_KIND, withoutMemberLinks } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
+import { leadingCommand, SLASH_COMMAND } from "@repo/features/slash-command";
 import { causeKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -524,6 +526,11 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
 
   const runtime = yield* admittedRuntime(userId, agent, yield* Effect.fromResult(read.routing));
 
+  // Note that a harness that keeps no goal, as Cursor's, is refused a `/goal` line rather than handed it as words, so the member is told no goal runs.
+  if (!runsGoal(runtime) && leadingCommand(line.text)?.name === SLASH_COMMAND.GOAL) {
+    return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+  }
+
   if (yield* Effect.fromResult(read.repeated)) return { outcome: STEER_OUTCOME.REPEATED };
   const held = yield* Effect.fromResult(read.task);
 
@@ -568,7 +575,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
               workspace.value,
               agent.repository,
               agentMember(agent),
-              task?.ownerId === userId ? userId : undefined,
+              task.ownerId === userId ? userId : undefined,
             ),
       ),
       reads: Effect.result(
@@ -663,7 +670,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   const servers =
     line.sender.kind === MESSAGE_SENDER.AGENT || reviewers
       ? []
-      : mentionedServers(line.serverWords ?? line.text, task?.repository ?? null);
+      : mentionedServers(line.serverWords ?? line.text, task.repository ?? null);
 
   // Note that a native agent's are written before its harness hears the words too, so the turn its runner
   // opens on them takes them: the hand-over runs in no transaction, so the agent's row a launch writes

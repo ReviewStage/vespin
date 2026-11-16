@@ -1,11 +1,10 @@
 // split-route.ts -- a tab's selection kept in its root route, so a link, a notification, or a fold lands on the item beside its list or pushed over it, as the window allows.
 
 import { iosRouteOnTab, iosRouteTab } from "@repo/features/ios-app-links";
-import { useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import { useOwnTab } from "./tab-route.js";
-import { useWindowSizeClass } from "./use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "./window-size-class.js";
 
 /** A tab whose root stands a split view in a regular window, by its root route. */
 export const SPLIT_TAB = {
@@ -51,7 +50,6 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
   const router = useRouter();
   const { selected } = useLocalSearchParams<{ selected?: string }>();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
-  const focused = useIsFocused();
   const [held, hold] = useState<HeldPick | undefined>(undefined);
   const routed = selected ?? (regular ? picked.get(tab) : undefined);
 
@@ -59,24 +57,25 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
   useEffect(() => hold(undefined), [routed]);
 
   useEffect(() => {
-    if (regular) {
-      if (selected !== undefined) picked.set(tab, selected);
+    if (regular && selected !== undefined) picked.set(tab, selected);
+  }, [regular, selected, tab]);
 
-      return;
-    }
+  // Note that the root hears its focus through an effect rather than reading it, because a read draws the root and its whole list again on every tab switch and every page pushed over it or popped.
+  useFocusEffect(
+    useCallback(() => {
+      if (regular) return;
 
-    if (!focused) return;
+      // Note that the item shown beside the list may be the tab's last pick rather than the param, so a fold pushes that one.
+      const shown = selected ?? picked.get(tab);
 
-    // Note that the item shown beside the list may be the tab's last pick rather than the param, so a fold pushes that one.
-    const shown = selected ?? picked.get(tab);
+      if (shown === undefined) return;
+      // Note that the item now stands pushed over the list, so the tab no longer holds it beside the list.
+      picked.delete(tab);
 
-    if (shown === undefined) return;
-    // Note that the item now stands pushed over the list, so the tab no longer holds it beside the list.
-    picked.delete(tab);
-
-    if (selected !== undefined) router.setParams({ selected: undefined });
-    router.push(itemRoute(tab, shown));
-  }, [regular, focused, selected, router, tab]);
+      if (selected !== undefined) router.setParams({ selected: undefined });
+      router.push(itemRoute(tab, shown));
+    }, [regular, selected, router, tab]),
+  );
 
   return {
     selected: held !== undefined && held.over === routed ? held.id : routed,
@@ -98,6 +97,11 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
  * pushed onto another tab's stack, as a compact window opens a thread's task
  * on the Inbox's, stays a page there once the window turns regular, as an
  * agent's page does, because that tab's root has no list to select it in.
+ * Note that only the screen in front hands over, as `useSplitSelection`
+ * pushes only from it, because the hand-off pops every page above the root:
+ * an unfold under a page pushed over this one, or under a sheet, would close
+ * them and drop their drafts. A screen behind hands over once it next comes
+ * in front, and keeps drawing until it does.
  */
 export function useHandToSplit(tab: SplitTab, id: string | undefined): boolean {
   const router = useRouter();
@@ -105,9 +109,13 @@ export function useHandToSplit(tab: SplitTab, id: string | undefined): boolean {
   const own = useOwnTab();
   const handing = regular && (own === undefined || own === iosRouteTab(tab));
 
-  useEffect(() => {
-    if (handing && id !== undefined) router.dismissTo({ pathname: tab, params: { selected: id } });
-  }, [handing, router, tab, id]);
+  // Note that the hand-off runs as a focus effect rather than on a read of focus, as the roots hear theirs (#9516), so a screen behind never redraws on a page pushed over it or popped.
+  useFocusEffect(
+    useCallback(() => {
+      if (handing && id !== undefined)
+        router.dismissTo({ pathname: tab, params: { selected: id } });
+    }, [handing, router, tab, id]),
+  );
 
   return handing;
 }

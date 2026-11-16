@@ -9,10 +9,11 @@ import {
   rewindConversation,
 } from "@repo/database/models/conversation-rewind";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
-import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import { listStandingVoiceCalls } from "@repo/database/models/voice-calls";
 import type { ConversationTarget } from "@repo/database/models/writer";
+import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { LOCAL_AGENT_REFUSAL } from "@repo/features/agent-wire";
+import type { CheckoutRestoreSnapshot } from "@repo/features/checkout-restore";
 import type { Sandbox } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
 import { Effect, Option, Result } from "effect";
@@ -86,7 +87,7 @@ const stoppedForRewind = /* @__PURE__ */ Effect.fnUntraced(function* (
 const restorePointOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   target: ConversationTarget,
   messageId: string,
-): Effect.fn.Return<TurnCheckoutSnapshot, HostedRefusal, DatabaseServices> {
+): Effect.fn.Return<CheckoutRestoreSnapshot, HostedRefusal, DatabaseServices> {
   const snapshot = yield* hostedStoreOrUnavailable(readRewindSnapshot(target, messageId));
 
   if (Option.isNone(snapshot)) return yield* Effect.fail(HOSTED_REFUSAL.CHECKOUT_SNAPSHOT_MISSING);
@@ -108,7 +109,7 @@ export function refusedByMachine(cause: unknown): HostedRefusal {
 /** The checkout put back to the snapshot on the agent's machine: refused where the snapshot is no longer there, or the machine restores none, and unavailable where the restore failed. */
 const restoredForRewind = /* @__PURE__ */ Effect.fnUntraced(function* (
   target: ConversationTarget,
-  snapshot: TurnCheckoutSnapshot,
+  snapshot: CheckoutRestoreSnapshot,
 ): Effect.fn.Return<
   void,
   HostedRefusal,
@@ -140,7 +141,8 @@ const restoredForRewind = /* @__PURE__ */ Effect.fnUntraced(function* (
  * above, its files put back too where `restoreFiles` asks. Refused where
  * the caller may not write to the agent, where no such line stands, where
  * the line sits inside a turn's work, where a voice call stands on the
- * agent, or where the files are asked back and no snapshot of them stands.
+ * agent, where it runs on Cursor, whose session no cut resumes yet, or
+ * where the files are asked back and no snapshot of them stands.
  */
 export const rewoundAgent = /* @__PURE__ */ Effect.fn("web/rewoundAgent")(function* (
   account: string,
@@ -162,6 +164,12 @@ export const rewoundAgent = /* @__PURE__ */ Effect.fn("web/rewoundAgent")(functi
   const calls = yield* hostedStoreOrUnavailable(listStandingVoiceCalls(account, agent.id));
 
   if (calls.length > 0) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+  // Cursor's store keeps no checkpoint a cut could resume at yet, so a Cursor agent is never rewound.
+  const routing = yield* hostedStoreOrUnavailable(readAgentRouting(agent.userId, agent.id));
+
+  if (Option.getOrUndefined(routing)?.runtime === CONVERSATION_RUNTIME.CURSOR) {
+    return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+  }
 
   // The files go back only while the account rewinding has the experiment on: off, no window of theirs offers the choice, so a request asking it is malformed.
   if (

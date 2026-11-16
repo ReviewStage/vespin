@@ -174,7 +174,6 @@ export interface Agent {
   readonly id: string;
   /** The account that started the agent, whose conversation it runs in and whose provider key pays for it. */
   readonly userId: string;
-  /** The task the agent works on. */
   readonly taskId: string;
   /** The workspace the agent belongs to. */
   readonly organizationId: string;
@@ -1399,6 +1398,21 @@ const updateAgentRunnerToken = SqlSchema.findAll({
     ),
 });
 
+const updateRunnerTokenRestored = SqlSchema.void({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    runnerTokenHash: Schema.String,
+  }),
+  execute: ({ userId, agentId, runnerTokenHash }) =>
+    Database.use((db) =>
+      db
+        .update(agentTable)
+        .set({ runnerTokenHash })
+        .where(and(reachableAgent(userId, agentId), isNull(agentTable.runnerTokenHash))),
+    ),
+});
+
 const findRunnerLaunch = SqlSchema.findOneOption({
   Request: Schema.Struct({ agentId: Schema.String }),
   Result: Schema.Struct({ launch: Schema.Number }),
@@ -2496,8 +2510,8 @@ export function listWorkspaceAgents(
  * Every agent of the workspace a delete stops, not archived, any member's,
  * whether or not the owner deleting it sees it, oldest started first, the
  * first `offset` passed over, and at most `limit`. Read by the workspace
- * alone, as `workspaceConversationIds` reads it: the caller holds the
- * account to the workspace's owner first, since everything in it goes.
+ * alone: the caller holds the account to the workspace's owner first, since
+ * everything in it goes.
  */
 export function listAgentsOfDeletedWorkspace(
   organizationId: string,
@@ -3516,6 +3530,19 @@ export function recordAgentRunnerToken(
     updateAgentRunnerToken({ userId, agentId, runnerTokenHash }),
     (rows) => rows.length > 0,
   );
+}
+
+/**
+ * A bearer `recordAgentRunnerToken` retired given back to the launch it was
+ * recorded as, its number unmoved, as a stop that failed leaves that launch's
+ * runner running; nothing where a newer bearer stands since.
+ */
+export function restoreAgentRunnerToken(
+  userId: string,
+  agentId: string,
+  runnerTokenHash: string,
+): AgentStoreEffect<void> {
+  return updateRunnerTokenRestored({ userId, agentId, runnerTokenHash });
 }
 
 /**

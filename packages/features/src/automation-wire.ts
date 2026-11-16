@@ -23,10 +23,6 @@ import { SENTRY_LEVEL, SENTRY_TRIGGER_EVENT, TRIGGER_PROVIDER } from "./trigger-
  * automation did or did not act. The shapes here are what the store keeps
  * as JSON (`packages/database/src/schemas/automation.ts`) and what the
  * routes answer, declared once.
- *
- * Note that `planId` and `planName` keep the wire's legacy spelling of a task, because a
- * released desktop sends and reads them; they are renamed with the wire in a
- * follow-up, with no alias.
  */
 
 export const AUTOMATION_BOUNDS = {
@@ -158,9 +154,6 @@ export type ScheduleTrigger = typeof scheduleTriggerSchema.Type;
 
 /** A schedule that runs once, at its date and time. */
 export type OnceScheduleTrigger = typeof onceScheduleTriggerSchema.Type;
-
-/** A schedule that repeats on its cron. */
-export type CronScheduleTrigger = typeof cronScheduleTriggerSchema.Type;
 
 /** Whether a schedule runs once rather than on a cron. */
 export function scheduleRunsOnce(schedule: ScheduleTrigger): schedule is OnceScheduleTrigger {
@@ -320,11 +313,11 @@ export type AutomationAction = typeof automationActionSchema.Type;
 export type AutomationActionJson = typeof automationActionSchema.Encoded;
 
 /**
- * How far one automation may go: how many of its agents may be at work at
- * once, past which a firing is skipped rather than queued, how many
- * runs it may start in a day, counted over the last twenty-four hours, and,
- * for an integration trigger, how many hours pass before the same subject
- * (one Sentry issue) may start another run, a day where absent.
+ * The limits an automation once ran under: agents at work at once, runs a
+ * day, and an integration subject's cooldown. Nothing enforces them since
+ * every firing starts its run; they stay on the wire, stored and sent,
+ * because released clients read and write them, until every client is
+ * released past that (AGENTS.md's "Breaking the hosted wire").
  */
 export const automationGuardsSchema = EffectSchema.Struct({
   maxConcurrentRuns: EffectSchema.Int.check(
@@ -350,9 +343,6 @@ export const AUTOMATION_DEFAULT_GUARDS: AutomationGuards = {
   maxConcurrentRuns: 1,
   dailyRunCap: 10,
 };
-
-/** How long an integration trigger waits before the same subject fires it again, where its guards name no cooldown: a day. */
-export const AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS = 24;
 
 /** Who an automation belongs to: its owner alone, or the workspace it was made in. */
 export const AUTOMATION_SCOPE = {
@@ -533,7 +523,7 @@ export const automationRunReasonSchema = EffectSchema.Literals(
 );
 
 /** The query an automation list may narrow by: one task's automations alone. */
-export const AUTOMATION_LIST_QUERY = { TASK_ID: "planId", WORKSPACE_ID: "workspaceId" } as const;
+export const AUTOMATION_LIST_QUERY = { TASK_ID: "taskId", WORKSPACE_ID: "workspaceId" } as const;
 
 /**
  * One run as the history shows it: what fired it, where it stands, why
@@ -571,8 +561,8 @@ export type AutomationRunSummary = typeof automationRunSummarySchema.Type;
 const automationSummarySchema = EffectSchema.Struct({
   id: wireUuidSchema,
   /** The task it was made on; null for an automation made on its workspace with no task, which its repositories stand in for. */
-  planId: EffectSchema.NullOr(wireUuidSchema),
-  planName: EffectSchema.NullOr(EffectSchema.String),
+  taskId: EffectSchema.NullOr(wireUuidSchema),
+  taskName: EffectSchema.NullOr(EffectSchema.String),
   /** The workspace it belongs to, whose members its scope lets reach it; absent from a service before it. */
   workspaceId: EffectSchema.optionalKey(EffectSchema.String),
   name: EffectSchema.String,
@@ -662,7 +652,7 @@ const automationRepositoriesSchema = EffectSchema.Array(githubRepositoryFullName
  */
 export const automationCreateRequestSchema = EffectSchema.Struct({
   id: EffectSchema.optionalKey(chosenIdSchema),
-  planId: EffectSchema.optionalKey(wireUuidSchema),
+  taskId: EffectSchema.optionalKey(wireUuidSchema),
   workspaceId: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
   repositories: EffectSchema.optionalKey(automationRepositoriesSchema),
   name: nameSchema,

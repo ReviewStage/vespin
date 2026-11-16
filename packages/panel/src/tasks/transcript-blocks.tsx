@@ -7,7 +7,7 @@ import {
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
-import type { IntegrationProvider } from "@repo/features/integration-wire";
+import { type IntegrationProvider, integrationConnectionOf } from "@repo/features/integration-wire";
 import { GITHUB_DEFAULT_BRANCH, GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
 import { machineName } from "@repo/features/machine-name";
 import { encodeMention, MENTION_KIND, mayNameChip } from "@repo/features/mention-link";
@@ -25,12 +25,14 @@ import {
   type CallMachine,
   type MachineNotRun,
   machineNotRunLabel,
+  NOT_RUN_OUTCOME,
   type SentWords,
   todosCount,
 } from "@repo/features/tool-call-model";
 import {
   agentCallLine,
   CALL_KIND,
+  CALL_MARK,
   CALL_WORDS,
   type CallKind,
   type CallLine,
@@ -44,12 +46,14 @@ import {
   moreFiles,
   sameFieldsBy,
   sameTurnRow,
+  searchToolsLine,
   siteName,
   TURN_ROW,
   type TurnRow,
 } from "@repo/features/turn-rows";
 import { keyWordsIn } from "@repo/features/workspace-key";
 import {
+  APP_ICON_STAND_IN,
   DISCLOSURE_BODY,
   DISCLOSURE_LOOK,
   DISCLOSURE_SUMMARY,
@@ -65,6 +69,7 @@ import {
   GlyphSlot,
   INLINE_REF_LOOK,
   InlineRef,
+  type InlineRefLook,
   LAYOUT_ELEMENT,
   LineButton,
   LineRow,
@@ -96,6 +101,7 @@ import {
 import {
   AlarmClockCheckIcon,
   AlarmClockOffIcon,
+  AppWindowMacIcon,
   ArchiveIcon,
   ArchiveRestoreIcon,
   CalendarCheckIcon,
@@ -125,7 +131,6 @@ import {
   LayoutListIcon,
   LinkIcon,
   type LucideIcon,
-  MonitorIcon,
   PencilLineIcon,
   PlayIcon,
   PlugIcon,
@@ -192,6 +197,7 @@ import { useThisMac } from "../machine-name.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
 import { StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
+import type { CallRoute } from "./agent-machines.js";
 import { KeptAppIcon } from "./agent-pictures.js";
 import { useDescriptionPictureDrawer } from "./description-pictures.js";
 import { useInboxPictureDrawer } from "./inbox-pictures.js";
@@ -205,6 +211,7 @@ import { MachineNotRunNote } from "./machine-not-run.js";
 import { fileChip, linkChip, type MentionDoors } from "./mention-chip.js";
 import { ModelLabel } from "./model-label.js";
 import { ReplyButtonLink } from "./reply-button-link.js";
+import { ServerCard } from "./server-card.js";
 import { SubagentMark } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
 import {
@@ -424,7 +431,7 @@ function definitionsIn(
  * names it as a link to where it points and never fetches it, because a
  * picture an agent writes is a request to wherever its address points the
  * moment the tab opens, and a model's words must make none; the pictures an
- * agent shows are its `show_image` calls'. The pictures drawn are a description's
+ * agent shows are its `show_media` calls'. The pictures drawn are a description's
  * own, inside the description's card, and an Inbox item's own, inside its pane,
  * each read through the host (`description-pictures.tsx`, `inbox-pictures.tsx`)
  * rather than from its address. Note that the mark is
@@ -1218,8 +1225,8 @@ function CutWords({
 const CALL_ICON = {
   [CALL_KIND.COMMAND]: TerminalIcon,
   [CALL_KIND.MACHINE_COMMAND]: LaptopIcon,
-  [CALL_KIND.BROWSER]: GlobeIcon,
-  [CALL_KIND.COMPUTER]: MonitorIcon,
+  [CALL_KIND.BROWSER]: AppWindowMacIcon,
+  [CALL_KIND.COMPUTER]: () => <GLYPH.COMPUTER_USE />,
   [CALL_KIND.READ_FILE]: FileTextIcon,
   [CALL_KIND.WRITE_FILE]: FilePenIcon,
   [CALL_KIND.EDIT]: FilePenIcon,
@@ -1417,11 +1424,19 @@ export function useMacOwner(): Actor | undefined {
   return useContext(MacOwnerContext);
 }
 
-/** The machine a terminal command or an action on an app made now would go to, as the agent's standing names it (`workspaceTools.runOnMac.machine`), which a call still unanswered names; none where it names none. */
-const RoutedMachineContext = createContext<Pick<CallMachine, "id" | "name"> | undefined>(undefined);
+/** Where a terminal command or an action on an app made now would go, as the agent's tools name it (`useCallRoute`), which a call still unanswered names; none where the window holds none. */
+const RoutedMachineContext = createContext<CallRoute | undefined>(undefined);
+
+/** Whether a call that ran nothing has a card under its row naming its machine: the refused call's card for one no machine could take, or the note for one that lacked a grant. */
+function notRunNamesMachine(notRun: MachineNotRun | undefined): boolean {
+  return (
+    notRun?.outcome === NOT_RUN_OUTCOME.UNREACHED ||
+    notRun?.outcome === NOT_RUN_OUTCOME.MISSING_PERMISSIONS
+  );
+}
 
 /** Where a call ran, as its row ends: the machine's chip, named as every list of machines names it (This Mac among them), its card and its press the chip's own. */
-function OnMachine({ machine }: { machine: Pick<CallMachine, "id" | "name"> }): ReactNode {
+export function OnMachine({ machine }: { machine: Pick<CallMachine, "id" | "name"> }): ReactNode {
   const thisMac = useThisMac();
   const doors = useMentionDoors();
   const words = machineName({ deviceId: machine.id, name: machine.name }, [], thisMac);
@@ -1431,20 +1446,67 @@ function OnMachine({ machine }: { machine: Pick<CallMachine, "id" | "name"> }): 
   return linkChip(link, words, doors);
 }
 
-/** Names whose Mac the transcript under it ran its Mac commands on (`MacOwnerProvider`), and the machine it would send a call to now, which a call still unanswered names. */
+/** Names whose Mac the transcript under it ran its Mac commands on (`MacOwnerProvider`), and where it would send a call now, which a call still unanswered names. */
 export function CallPlaceProvider({
   owner,
-  machine,
+  route,
   children,
 }: {
   owner: Actor | undefined;
-  machine: Pick<CallMachine, "id" | "name"> | undefined;
+  route: CallRoute | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   return (
     <MacOwnerContext.Provider value={owner}>
-      <RoutedMachineContext.Provider value={machine}>{children}</RoutedMachineContext.Provider>
+      <RoutedMachineContext.Provider value={route}>{children}</RoutedMachineContext.Provider>
     </MacOwnerContext.Provider>
+  );
+}
+
+/**
+ * The server a call ran on or searched, as its chip: an integration's by its
+ * provider's mark and the account's name where the call keeps one, or the
+ * server's name as its card gives it otherwise, hanging the account's card;
+ * a server of no integration's by its name beside the server's glyph, since
+ * no mark of its own says which. An MCP row ends in it only where it says
+ * more than the mark leading the row (`TranscriptTool`), and a search of a
+ * server's tools names the server by it after its verb, as a pill as every
+ * chip after a verb is. The chip takes no press of its own, so a press on it
+ * opens the row as a press anywhere on the line does.
+ */
+function CallServerChip({
+  provider,
+  connection,
+  account,
+  server,
+  look = INLINE_REF_LOOK.WASH,
+}: {
+  provider: IntegrationProvider | undefined;
+  connection: string | undefined;
+  account: string | undefined;
+  server: string | undefined;
+  look?: InlineRefLook;
+}): ReactNode {
+  if (provider === undefined) {
+    return server === undefined ? null : (
+      <InlineRef
+        look={look}
+        glyph={<EntityGlyph kind={ENTITY_KIND.SERVER} />}
+        label={server}
+        hint={false}
+      />
+    );
+  }
+
+  const label = account ?? server;
+
+  return label === undefined ? null : (
+    <InlineRef
+      look={look}
+      glyph={<ProviderMark provider={provider} />}
+      label={label}
+      card={<ServerCard provider={provider} connection={connection} account={account} />}
+    />
   );
 }
 
@@ -1455,10 +1517,16 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     provider?: IntegrationProvider | undefined;
     /** For a call on an app on the developer's Mac, the picture its icon was kept as, which the row wears in its kind's icon's place; a computer call with none wears the app icon's placeholder. */
     appIcon?: string | undefined;
-    /** For a call of an MCP server's tool, the server's name, which the row says it ran on beside its line. */
+    /** For a call of an MCP server's tool, the server's name, which a custom server's row says it ran on by its chip. */
     server?: string | undefined;
+    /** For a call of an integration's tool, the connection it ran on, which its account chip's card reads. */
+    connection?: string | undefined;
+    /** For a call of an integration's tool, the name of the account it ran on, kept where its owner held more than one at the provider, which its row ends in by the account's chip; none for the rest. */
+    account?: string | undefined;
     /** For a terminal command or an action on an app, the machine its answer says it went to, which the row says it ran on; none where its answer names none or it has not answered. */
     machine?: CallMachine | undefined;
+    /** For a terminal command or an action on an app, the id of the machine its input names, which the row names while it has not answered; none where it names none. */
+    namedMachine?: string | undefined;
     /** For a command, the plain words the model said it is for, which the row says in its verb's place; the closed row previews the command's first line after them, and the body holds it whole. */
     description?: string | undefined;
     /** For a call about one coding agent, the agent, whose chip the row names it by in the place of "the coding agent"; none where the agent is not known. */
@@ -1483,11 +1551,14 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     answered?: ReactNode;
     /** For a terminal command or an action on an app that ran nothing on its machine, how, which the row says quietly at its line's end and its body in the answer's place; none for the rest. */
     notRun?: MachineNotRun | undefined;
+    /** Whether the service answered the call without doing it (`ToolCallView`'s `refused`), which its line marks as a failure. */
+    refused?: boolean | undefined;
   };
 
 /** A call held for an answer, as its row draws it (`TranscriptTool`'s `held`). */
 export interface HeldCall {
-  readonly status: string;
+  /** Where the ask stands, in words, or words that move on their own, as a countdown to an ask's close. */
+  readonly status: ReactNode;
   /** Whether it still waits on an answer, which holds the call rather than working it. */
   readonly waiting: boolean;
   readonly about: string | undefined;
@@ -1534,7 +1605,10 @@ export function TranscriptTool({
   provider,
   appIcon,
   server,
+  connection,
+  account,
   machine,
+  namedMachine,
   subject,
   description,
   agent,
@@ -1549,13 +1623,32 @@ export function TranscriptTool({
   held,
   answered,
   notRun,
+  refused,
   ...props
 }: TranscriptToolProps): ReactNode {
   const Icon = CALL_ICON[kind];
   const called = calledChip(kind, files, page, useMentionDoors());
 
-  const { line, chip } =
-    made !== undefined
+  const search = kind === CALL_KIND.SEARCH_TOOLS;
+
+  // Note that a search of a server's tools names the server by its chip after the verb, so its row ends in no tag, and its words stand whole as it opens.
+  const { line, chip } = search
+    ? {
+        line: searchToolsLine(subject),
+        chip:
+          server === undefined ? undefined : (
+            <CallServerChip
+              provider={
+                connection === undefined ? undefined : integrationConnectionOf(connection)?.provider
+              }
+              connection={connection}
+              account={account}
+              server={server}
+              look={INLINE_REF_LOOK.PILL}
+            />
+          ),
+      }
+    : made !== undefined
       ? { line: madeCallLine(made.kind), chip: made.chip }
       : called === undefined
         ? chippedLine(kind, subject, description, agent, undefined, agentCard)
@@ -1563,18 +1656,32 @@ export function TranscriptTool({
 
   const command = isCommandKind(kind);
   const macOwner = useContext(MacOwnerContext);
-  // Note that a call names the machine its answer names, and one still unanswered the machine the agent's calls go to now, so a row never names the starter's Mac for a call routed elsewhere.
-  const routed = useContext(RoutedMachineContext);
+  // Note that a call names the machine its answer names, and one still unanswered the machine it names or else the one the agent's calls go to now, so a row never names the default for a call sent elsewhere.
+  const route = useContext(RoutedMachineContext);
   const unanswered = state === TOOL_STATE.INPUT_STREAMING || state === TOOL_STATE.INPUT_AVAILABLE;
-  const onMachine = machine ?? (unanswered ? routed : undefined);
+  const onMachine = machine ?? (unanswered ? route?.(namedMachine) : undefined);
+  const machineCall = kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER;
+  // Note that a call no machine could take, or that lacked a grant, ends in its status alone, since the card under it names the machine by its chip, so a narrow row keeps its own words.
+  const namedBelow = machineCall && machine !== undefined && notRunNamesMachine(notRun);
 
   const onMachineChip =
-    (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
-    onMachine !== undefined ? (
+    machineCall && onMachine !== undefined && !namedBelow ? (
       <OnMachine machine={onMachine} />
     ) : undefined;
 
   const opened = useHeldOpen(held?.waiting === true);
+  const mcp = kind === CALL_KIND.MCP_TOOL;
+
+  // Note that an MCP row ends in a chip only where it says more than the mark leading it: an account among its owner's several, or a server of no integration's.
+  const serverChip =
+    mcp && (provider === undefined ? server !== undefined : account !== undefined) ? (
+      <CallServerChip
+        provider={provider}
+        connection={connection}
+        account={account}
+        server={server}
+      />
+    ) : undefined;
 
   const row = (
     <Tool {...props} {...(held === undefined ? undefined : opened)}>
@@ -1584,7 +1691,12 @@ export function TranscriptTool({
           provider !== undefined ? (
             <ProviderMark provider={provider} />
           ) : appIcon !== undefined || kind === CALL_KIND.COMPUTER ? (
-            <KeptAppIcon id={appIcon} />
+            <KeptAppIcon
+              id={appIcon}
+              standIn={
+                kind === CALL_KIND.COMPUTER ? APP_ICON_STAND_IN.COMPUTER_USE : APP_ICON_STAND_IN.APP
+              }
+            />
           ) : (
             <Icon aria-hidden="true" />
           )
@@ -1593,22 +1705,24 @@ export function TranscriptTool({
         subject={line.subject}
         chip={chip}
         subjectIsCode={line.code}
-        subjectInBody={(command && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject)}
-        placeChip={onMachineChip}
+        subjectInBody={
+          (command && input.kind === TOOL_BLOCK.COMMAND) || (!search && blockSays(input, subject))
+        }
+        placeChip={onMachineChip ?? serverChip}
         place={
-          (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
-          macOwner !== undefined ? (
+          namedBelow ? undefined : machineCall && macOwner !== undefined ? (
             <ActorLine>
               {"On "}
               <ActorRef actor={macOwner} sentence possessive />
               {" Mac"}
             </ActorLine>
-          ) : (
-            callPlace(kind, server)
+          ) : mcp || search ? undefined : (
+            callPlace({ kind, server }, CALL_MARK.LEADS)
           )
         }
         status={held?.status ?? (notRun === undefined ? undefined : machineNotRunLabel(notRun))}
         paused={held?.waiting}
+        refused={refused}
       />
       <ToolContent bare>
         {held?.about === undefined ? null : (

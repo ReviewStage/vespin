@@ -229,6 +229,7 @@ test("a paste past the box's cap and too large for a file is cut to the room lef
   const note = () => box.container.querySelector(".ui-composer-foot-note")?.textContent;
   assert.equal(note(), undefined);
 
+  // Note that this runs a few seconds, because only words past a text file's 3 MB bound stay words to be cut.
   pasteInComposer(box.container, "x".repeat(AGENT_BOUNDS.MAX_TEXT_BYTES + 1));
   assert.equal(box.shown().length, cap, "the box holds what fits");
   assert.equal(note()?.includes(pasteCutWords(cap)), true, "and says the rest was cut");
@@ -302,7 +303,7 @@ test("words selected raise the format toolbar, its marks alone, and a message bo
 const TAKEN: AgentAgentAnswer = {
   agent: {
     id: "agent-1",
-    planId: "plan-1",
+    taskId: "plan-1",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,
@@ -629,6 +630,26 @@ test("a box starting an agent, with no session yet, lists /goal beside /model bu
   typeInComposer(box.container, "/");
   await settle();
   assert.deepEqual(names(), ["/model", "/goal"]);
+});
+
+test("a box whose model runs on Cursor, which keeps no goal, lists no /goal", async () => {
+  // The Goals experiment offers /goal.
+  writeAppState(stateWith({ [EXPERIMENT.GOALS]: true }, {}));
+
+  const box = await mounted(undefined, {
+    model: { ...MODEL, choice: { model: "cursor/composer-2.5", effort: "default" } },
+    startsGoal: true,
+    skills: () => Promise.resolve({ skills: [] }),
+  });
+
+  const names = () =>
+    [...box.container.querySelectorAll('[role="listbox"] [role="option"]')].map(
+      (row) => row.querySelector(".ui-combobox-option-label")?.textContent,
+    );
+
+  typeInComposer(box.container, "/");
+  await settle();
+  assert.deepEqual(names(), ["/model"]);
 });
 
 test("a row of the skills' list leads with a book, says what it is for and where it comes from, and hangs the skill's card beside it", async () => {

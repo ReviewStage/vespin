@@ -5,15 +5,18 @@ import {
   revisionWriterName,
   VERSION_HISTORY_WORDS,
 } from "@repo/features/description-history-words";
-import type { DescriptionRevisionLine } from "@repo/features/task-wire";
-import { agoText, dayAndTimeText } from "@repo/features/time-format";
-import { readingWords, showMoreWords, VERB } from "@repo/features/words";
+import { type VersionDiff, versionDiff } from "@repo/features/description-version-diff";
+import { providerOf } from "@repo/features/model-label";
+import type { ModelProvider } from "@repo/features/models-wire";
+import { DESCRIPTION_ACTOR, type DescriptionLastEdit } from "@repo/features/task-wire";
+import { dayAndTimeText } from "@repo/features/time-format";
+import { readingWords, showMoreWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   BUZZ,
+  DetailPage,
   EmptyState,
   GLYPH,
-  glyphSymbol,
   LIST_LOOK,
   LinkRow,
   ListSection,
@@ -22,30 +25,36 @@ import {
   Screen,
   useColors,
   useFailureNotices,
+  useMinute,
+  VERSION_WRITER,
+  VersionRow,
+  type VersionWriter,
   WordsRow,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
-import { useHostActs } from "../host/host-provider.js";
+import { useState } from "react";
+import { PUSHED_PAGE, useDetailLeave, useDetailPush, useHandToDetail } from "../detail-stack.js";
+import { useHostActs, useListedAgents } from "../host/host-provider.js";
+import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
-import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
+import {
+  type DescriptionPictures,
+  useDescriptionPictures,
+} from "../tasks/use-description-pictures.js";
 import {
   HISTORY_READ,
   useNewestVersion,
   useTaskHistory,
   useTaskVersion,
 } from "../tasks/use-history.js";
-import { useWrite } from "../use-write.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** The route a version is opened on: the task by its id, and the version by its number in the query. */
 export const VERSION_ROUTE = "/tasks/version/[id]";
 
 /** The route a task's version history is opened on. */
 export const HISTORY_ROUTE = "/tasks/history/[id]";
-
-/** The glyph each version's row leads with, the panel's restore arrow round a clock. */
-const VERSION_SYMBOL = GLYPH.HISTORY;
 
 /** The glyph the history stands under while it says nothing else. */
 const HISTORY_SYMBOL = GLYPH.HISTORY;
@@ -57,26 +66,74 @@ function versionNumber(spelled: string | undefined): number | undefined {
   return Number.isInteger(seq) && seq >= 1 ? seq : undefined;
 }
 
-/** The line under a version's writer: Current first on the newest, so a narrow row cuts off its summary rather than it, then what it did and how long ago. */
-function versionLine(line: DescriptionRevisionLine, newest: boolean, now: number): string {
-  const said = [revisionSummary(line), agoText(line.lastEdit.at, now)];
-
-  return (newest ? [VERSION_HISTORY_WORDS.CURRENT, ...said] : said).join(" · ");
+/** Who wrote a version, by the mark its row leads with, as the panel's version rows lead: a person by their face, its picture looked up only for a person, since a notetaker's version names the person whose call it was written on, whose photo is not its writer's. */
+function versionWriter(
+  lastEdit: DescriptionLastEdit,
+  pictureOf: PictureOf,
+  harness: ModelProvider | undefined,
+): VersionWriter {
+  switch (lastEdit.actor) {
+    case DESCRIPTION_ACTOR.DEVELOPER:
+      return {
+        kind: VERSION_WRITER.PERSON,
+        face: {
+          name: revisionWriterName(lastEdit, undefined),
+          picture: pictureOf(lastEdit.by?.userId),
+        },
+      };
+    case DESCRIPTION_ACTOR.AGENT:
+      return { kind: VERSION_WRITER.AGENT, name: revisionWriterName(lastEdit, undefined), harness };
+    case DESCRIPTION_ACTOR.NOTETAKER:
+      return { kind: VERSION_WRITER.PRODUCT };
+    case DESCRIPTION_ACTOR.EARLIER:
+      return { kind: VERSION_WRITER.EARLIER };
+  }
 }
+
+/** What the bar's Restore says, short for the bar; it is heard as the panel's whole "Restore this version". */
+const RESTORE_BAR = "Restore";
 
 /**
  * A task description's version history, as the panel's lists it: each
  * version under its writer, what it did and when, the newest marked
  * Current, and Show more under them while older versions stand unread. A
  * press opens the version whole. The host follows the history while the
- * screen stands, so a save lands at its head as it lands.
+ * screen stands, so a save lands at its head as it lands. In a window wide
+ * enough for three columns it stands pushed over the split view's detail
+ * instead, and a version opens over it there.
  */
 export function HistoryScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
+  const handed = useHandToDetail({ kind: PUSHED_PAGE.HISTORY, taskId: id });
+
+  if (handed) return null;
+
+  return <History taskId={id} />;
+}
+
+/** A task description's version history, as `HistoryScreen` describes it; `inColumn` pushed over a split view's detail. */
+export function History({
+  taskId: id,
+  inColumn = false,
+}: {
+  readonly taskId: string;
+  readonly inColumn?: boolean | undefined;
+}) {
   const router = useRouter();
+  const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
   const history = useTaskHistory(id);
-  const now = Date.now();
+  const pictureOf = useMemberPictures();
+  const listedAgents = useListedAgents();
+
+  // An agent's version leads with its harness's mark where the task's agents still hold its model, as the panel's version rows do.
+  const harnessOf = (agentId: string | undefined): ModelProvider | undefined => {
+    const model = listedAgents.find((agent) => agent.id === agentId)?.model;
+
+    return model === undefined ? undefined : providerOf(model);
+  };
+
+  const now = useMinute();
   const revisions = history.page?.revisions ?? [];
   const earlier = history.page?.earlier;
   const newest = revisions[0]?.seq;
@@ -86,7 +143,7 @@ export function HistoryScreen() {
       <EmptyState
         title={VERSION_HISTORY_WORDS.UNREAD}
         symbol={GLYPH.FAILED}
-        action={{ label: VERB.RETRY, onPress: history.retry }}
+        retry={history.retry}
       />
     ) : history.read === HISTORY_READ.READING ? (
       <EmptyState title={readingWords("the version history")} symbol={HISTORY_SYMBOL} loading />
@@ -99,13 +156,26 @@ export function HistoryScreen() {
             history.older === HISTORY_READ.FAILED ? VERSION_HISTORY_WORDS.OLDER_UNREAD : undefined
           }
         >
-          {revisions.map((line) => (
-            <LinkRow
+          {revisions.map((line, index) => (
+            <VersionRow
               key={line.seq}
-              symbol={VERSION_SYMBOL}
-              label={revisionWriterName(line.lastEdit, history.readerId)}
-              detail={versionLine(line, line.seq === newest, now)}
-              onPress={() =>
+              writer={versionWriter(line.lastEdit, pictureOf, harnessOf(line.agentId))}
+              name={revisionWriterName(line.lastEdit, history.readerId)}
+              summary={revisionSummary(line)}
+              at={line.lastEdit.at}
+              now={now}
+              current={line.seq === newest}
+              first={index === 0}
+              onPress={() => {
+                const version = {
+                  kind: PUSHED_PAGE.VERSION,
+                  taskId: id,
+                  seq: line.seq,
+                  at: line.lastEdit.at,
+                  newest,
+                } as const;
+
+                if (toDetail(version)) return;
                 router.push({
                   pathname: onOwnTab(VERSION_ROUTE),
                   params: {
@@ -114,8 +184,8 @@ export function HistoryScreen() {
                     at: String(line.lastEdit.at),
                     newest: String(newest),
                   },
-                })
-              }
+                });
+              }}
             />
           ))}
           {earlier === undefined ? null : (
@@ -133,6 +203,8 @@ export function HistoryScreen() {
         </ListSection>
       </RowList>
     );
+
+  if (inColumn) return <DetailPage bar={{ name: VERSION_HISTORY_WORDS.TITLE }}>{body}</DetailPage>;
 
   return (
     <>
@@ -159,6 +231,17 @@ export function VersionScreen() {
   } = useLocalSearchParams<{ id: string; seq?: string; at?: string; newest?: string }>();
 
   const seq = versionNumber(spelled);
+  const savedAt = Number(at);
+  const newest = versionNumber(spelledNewest);
+  const opened = Number.isFinite(savedAt) && at !== undefined ? savedAt : undefined;
+
+  const handed = useHandToDetail(
+    seq === undefined
+      ? undefined
+      : { kind: PUSHED_PAGE.VERSION, taskId: id, seq, at: opened, newest },
+  );
+
+  if (handed && seq !== undefined) return null;
 
   if (seq === undefined) {
     return (
@@ -168,31 +251,67 @@ export function VersionScreen() {
     );
   }
 
-  const savedAt = Number(at);
-  const newest = versionNumber(spelledNewest);
+  return <Version taskId={id} seq={seq} at={opened} newest={newest} />;
+}
+
+/**
+ * A version's words against the version before it, as the panel's version
+ * page draws them: each section a row, one written in or changed edged in
+ * green, one struck edged in red and dimmed. The phone's Markdown draws no
+ * mark inside its words, so a changed section reads as it was written,
+ * its struck words left out (`plain`). A version that changed nothing says so under
+ * its words; the first, with nothing before it, says nothing.
+ */
+function VersionWords({
+  diff,
+  first,
+  onOpenLink,
+  pictureSource,
+  videoAt,
+  fileAt,
+}: DescriptionPictures & {
+  readonly diff: VersionDiff;
+  readonly first: boolean;
+  readonly onOpenLink: (address: string) => void;
+}) {
+  const unchanged = !first && !diff.changed;
 
   return (
-    <Version
-      taskId={id}
-      seq={seq}
-      at={Number.isFinite(savedAt) && at !== undefined ? savedAt : undefined}
-      newest={newest}
-    />
+    <RowList look={LIST_LOOK.PLAIN}>
+      <ListSection footer={unchanged ? VERSION_HISTORY_WORDS.NO_CHANGE : undefined}>
+        {diff.units.map((unit, at) => (
+          <WordsRow
+            // A section's heading may stand twice, struck and written again, so its place keys it.
+            key={at}
+            words={unit.plain}
+            change={unit.change}
+            last={at === diff.units.length - 1}
+            onOpenLink={onOpenLink}
+            pictureSource={pictureSource}
+            videoAt={videoAt}
+            fileAt={fileAt}
+          />
+        ))}
+      </ListSection>
+    </RowList>
   );
 }
 
-/** One version and its restore; `at` its latest save, which titles it, and `newest` the description as it stands, which a restore's Undo puts back, each none where the route did not carry it. */
-function Version({
+/** One version and its restore; `at` its latest save, which titles it, and `newest` the description as it stands, which a restore's Undo puts back, each none where the route did not carry it; `inColumn` pushed over a split view's detail, where a restore that went goes back in its column. */
+export function Version({
   taskId,
   seq,
   at,
   newest,
+  inColumn = false,
 }: {
   readonly taskId: string;
   readonly seq: number;
   readonly at: number | undefined;
   readonly newest: number | undefined;
+  readonly inColumn?: boolean | undefined;
 }) {
+  const detail = useDetailLeave();
   const colors = useColors();
   const router = useRouter();
   const navigation = useNavigation();
@@ -205,24 +324,33 @@ function Version({
   // The version that stands now, as the history beneath this screen follows it, else as the list stood when it was left.
   const standingNow = useNewestVersion(taskId) ?? newest;
   const current = standingNow === seq;
-  // Whether the screen still stands, since a restore that lands after it was left must not go back from the screen in front.
-  const standing = useRef(true);
-  useEffect(() => {
-    standing.current = true;
-
-    return () => {
-      standing.current = false;
-    };
-  }, []);
   const answer = version.data;
   const read = answer === undefined || "failure" in answer ? undefined : answer.revision;
-  const { pictureSource, videoAt } = useDescriptionPictures(read?.description.body);
+
+  // Note that the version and the one before it are each read for their pictures on their own, since a section struck from the one before draws through that version's own reference definitions, which share names with the version's.
+  const shownPictures = useDescriptionPictures(read?.description.body);
+  const struckPictures = useDescriptionPictures(read?.previous?.body);
+
+  // Note that a picture the version itself names keeps what its own read says, `null` where it cannot be drawn among it, and only one it never named is asked of the version before.
+  const pictureSource = (written: string) => {
+    const shown = shownPictures.pictureSource(written);
+
+    return shown === undefined ? struckPictures.pictureSource(written) : shown;
+  };
+
+  const videoAt = (written: string) =>
+    shownPictures.videoAt(written) ?? struckPictures.videoAt(written);
+
+  const fileAt = (written: string) =>
+    shownPictures.fileAt(written) ?? struckPictures.fileAt(written);
 
   const restore = () => {
     if (restoring) return;
     // Note that the Undo puts back the version that stood when the restore was pressed, as the panel's does.
     const undoTo = standingNow;
     setRestoring(true);
+    // Note that every restore of this task's description, an Undo among them, is newer than a refused one, whose Try again then sends nothing.
+    const subject = { kind: WRITE_SUBJECT.TASK_DESCRIPTION, id: taskId };
 
     const undo =
       undoTo === undefined || undoTo === seq
@@ -231,22 +359,26 @@ function Version({
             void write(() => acts[ACT_KIND.TASKS_RESTORE]({ taskId, seq: undoTo }), {
               refused: (restored) => (restored ? undefined : VERSION_HISTORY_WORDS.UNDO_REFUSED),
               unanswered: VERSION_HISTORY_WORDS.UNDO_REFUSED,
+              subject,
               went: BUZZ.SUCCESS,
             });
 
     void write(() => acts[ACT_KIND.TASKS_RESTORE]({ taskId, seq }), {
       refused: (restored) => (restored ? undefined : VERSION_HISTORY_WORDS.RESTORE_REFUSED),
       unanswered: VERSION_HISTORY_WORDS.RESTORE_REFUSED,
+      // Note that a refused restore offers Try again, as its words say, since the screen has gone back and nothing else sends it again.
+      retry: true,
+      subject,
       went: BUZZ.SUCCESS,
-    }).then((went) => {
-      setRestoring(false);
+      // Note that Restored and its Undo are said on the restore that landed, a Try again's included.
+      done: () =>
+        notices.say({ kind: NOTICE_KIND.DONE, words: VERSION_HISTORY_WORDS.RESTORED, undo }),
+    }).then(() => setRestoring(false));
 
-      if (!went) return;
-      notices.say({ kind: NOTICE_KIND.DONE, words: VERSION_HISTORY_WORDS.RESTORED, undo });
-
-      // Note that a link pressed in the version while its restore was out stands in front of it, and is left where it is.
-      if (standing.current && navigation.isFocused()) router.back();
-    });
+    // Note that the screen goes back as the restore is sent rather than once it lands, which waits on the service and then on the change reaching the app: the description takes the version as it arrives, Restored stands with its Undo then, and a refusal says why in the failure notice. In a column it leaves only while it stands on top of its stack.
+    if (detail !== undefined) {
+      if (detail.onTop()) detail.leave();
+    } else if (navigation.isFocused()) router.back();
   };
 
   const body = version.isPending ? (
@@ -255,37 +387,49 @@ function Version({
     <EmptyState
       title={VERSION_HISTORY_WORDS.VERSION_UNREAD}
       symbol={GLYPH.FAILED}
-      action={{ label: VERB.RETRY, onPress: () => void version.refetch() }}
+      retry={() => void version.refetch()}
     />
   ) : (
-    <RowList look={LIST_LOOK.PLAIN}>
-      <ListSection>
-        <WordsRow
-          words={read.description.body}
-          onOpenLink={openLink}
-          pictureSource={pictureSource}
-          videoAt={videoAt}
-        />
-      </ListSection>
-    </RowList>
+    <VersionWords
+      diff={versionDiff(read.previous, read.description)}
+      first={read.previous === null}
+      onOpenLink={openLink}
+      pictureSource={pictureSource}
+      videoAt={videoAt}
+      fileAt={fileAt}
+    />
   );
+
+  const name = at === undefined ? VERSION_HISTORY_WORDS.TITLE : dayAndTimeText(at);
+
+  if (inColumn) {
+    // Note that Restore stands dimmed on the description as it stands, heard as already current, as the compact bar keeps it, rather than leaving the column's bar.
+    const restoreAct = {
+      label: current ? VERSION_HISTORY_WORDS.ALREADY_CURRENT : VERSION_HISTORY_WORDS.RESTORE,
+      symbol: GLYPH.RESTORE,
+      disabled: current || read === undefined || restoring,
+      onPress: restore,
+    };
+
+    return <DetailPage bar={{ name, acts: [restoreAct] }}>{body}</DetailPage>;
+  }
 
   return (
     <>
-      <Stack.Screen
-        options={{ title: at === undefined ? VERSION_HISTORY_WORDS.TITLE : dayAndTimeText(at) }}
-      />
-      {current ? null : (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon={glyphSymbol(GLYPH.RESTORE)}
-            tintColor={colors.TEXT}
-            accessibilityLabel={VERSION_HISTORY_WORDS.RESTORE}
-            disabled={read === undefined || restoring}
-            onPress={restore}
-          />
-        </Stack.Toolbar>
-      )}
+      <Stack.Screen options={{ title: name }} />
+      {/* Note that Restore says what it does in words, as Pages' does, and stands dimmed on the description as it stands, heard as already current, as the panel keeps it, rather than vanishing. */}
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          tintColor={colors.TEXT}
+          accessibilityLabel={
+            current ? VERSION_HISTORY_WORDS.ALREADY_CURRENT : VERSION_HISTORY_WORDS.RESTORE
+          }
+          disabled={current || read === undefined || restoring}
+          onPress={restore}
+        >
+          {RESTORE_BAR}
+        </Stack.Toolbar.Button>
+      </Stack.Toolbar>
       <Screen>{body}</Screen>
     </>
   );

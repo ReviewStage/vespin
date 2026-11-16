@@ -23,11 +23,13 @@ CI runs the portable check on Linux, where `export:ios` bundles the iOS app
 with Metro beside the typecheck. The iOS app's simulators run by hand, never
 on a PR (`ios-simulators.yml`, on GitHub's `xcode-27` image): it builds the
 app for the simulator, runs its Maestro flows on an iPhone, the iPhone Duo,
-and an iPad, and uploads their screenshots as the `mobile-screenshots`
+and an iPad, and uploads each one's screenshots as a `mobile-screenshots-*`
 artifact, which `apps/mobile/AGENTS.md` says how to read. No workflow runs the
 desktop app's tests on a Mac: the release job (`release.yml`'s `macos-15` job,
 run on a `v*` tag push or a manual dispatch) only builds, signs, notarizes,
 and verifies the app. A green PR says nothing about either app on a device.
+
+No push builds a Vercel Preview; run `vercel deploy` if one is needed.
 
 A release is dated in Eastern time (America/New_York), never UTC or the
 author's own zone: its `CHANGELOG.md` heading carries the day its tag is
@@ -147,7 +149,7 @@ component, or add the component or variant there.
   and title. The model is handed a small copy of each screenshot, whose base64
   is left out of the stored conversation, and the service keeps a full-size copy
   beside the transcript the call is written to, the agent's or its worker's, as
-  `show_image`'s pictures are
+  `show_media`'s pictures are
   (`packages/service/src/agents/browser/browser-tool.ts`), which the stored
   conversation names by id, which that transcript shows to the members who can
   open the task, and which is deleted with the conversation, at once on a
@@ -169,15 +171,15 @@ component, or add the component or variant there.
   may read that thread and deleted with it, and none of it goes into a trace,
   a counted event, or a fixture. Such a recording may also be added to its
   task's plan, from the file viewer's Add to plan or an agent's `edit_plan`,
-  at most ten to a plan, kept beside the plan as its pictures are
+  kept beside the plan as its pictures are
   (`packages/database/src/models/plan-attachments.ts`), shown to the members
   who can open the task and deleted with the plan; `look_at_picture` refuses
   it (`packages/service/src/tasks/picture-look.ts`), so no model is handed it,
-  and none of it goes into a trace, a counted event, or a fixture. And a window on a member's own Mac,
+  and none of it goes into a trace, a counted event, or a fixture. An agent may likewise show, or post to a thread, a sound clip it made in its sandbox (a WAV, MP3, M4A, AAC, or Ogg file, up to 4 MB), and a clip may be added to its task's description, from the file viewer's Add to description or an agent's `edit_description`, kept, shown, and deleted on the terms of a recording, with an AAC copy kept beside an Ogg one for a phone that plays no Ogg; `look_at_picture` refuses it, so no model is handed it, and none of it goes into a trace, a counted event, or a fixture. And a window on a member's own Mac,
   which an agent's `computer` tool reads only for an app the member allowed,
   reaches the model as a bounded copy, and its full-size copy and the app's
   icon are kept beside the transcript the call is written to, as
-  `show_image`'s pictures are (`packages/service/src/agents/computer-tool.ts`),
+  `show_media`'s pictures are (`packages/service/src/agents/computer-tool.ts`),
   shown to the members who can open the task and deleted with the
   conversation; session replay masks the transcript's screenshots, and none
   of it ever goes into a trace, a counted event, or a fixture. And an app's
@@ -187,7 +189,7 @@ component, or add the component or variant there.
   to that Mac's disk until the next recording replaces it; the stop posts it
   to the service (`POST /api/mac-commands/recording`), which holds it beside
   its command's row until the call reads it and the row goes, then keeps it
-  beside the transcript the call is written to as `show_image`'s pictures
+  beside the transcript the call is written to as `show_media`'s pictures
   are (`packages/service/src/agents/computer-tool.ts`), shown to the members
   who can open the task and deleted with the conversation, and saves a copy
   on the agent's own machine, its sandbox or its starter's Mac, from which it
@@ -213,8 +215,7 @@ component, or add the component or variant there.
   an unmasked attribute or a new way of drawing words is what would change
   that.
 - Never push PR media to a branch but `pr-assets`, under `pr-<number>/`, if
-  you add any; a fresh `pr-assets-<topic>` branch mails a failed Vercel Preview
-  on every push. PR media is not required.
+  you add any. PR media is not required.
 - Never add to this file (`AGENTS.md`, which `CLAUDE.md` links to) unless the
   user explicitly approved the addition.
 
@@ -226,6 +227,26 @@ Vercel's cron calls `/api/maintenance/sweep` once a minute (the root `vercel.jso
 answers unavailable and sweeps nothing. A turn past the deadline its row holds
 (`packages/database/src/models/turn-state.ts`) is the sweep's: it fails it with
 why (`packages/service/src/agents/coder-host/reconcile.ts`); no read settles one.
+
+## Breaking the hosted wire
+
+The service deploys from `main` on merge, but the desktop, the host daemon,
+the CLI, and the iOS app ship only on their releases, and stay installed for
+weeks. So a change a released client cannot read lands in three steps, never
+one:
+
+1. Clients read the old shape and the new, and send the next
+   `HOSTED_API_VERSION` (`packages/features/src/client-identity.ts`), while
+   the service still serves the old shape; for a rename, it sends both keys.
+2. Every client is released from a commit after that step.
+3. The service drops the old shape and raises `HOSTED_API_FLOOR`
+   (`packages/service/src/orpc/handler.ts`), which refuses older builds as
+   needing an update they can now take.
+
+`[check: scripts/repository-checks.sh]` The floor may not pass the version
+the newest `v*`, `host-v*`, `cli-v*`, or `ios-v*` tag sends. `[review]` Before
+step 3, see each tag's release published and a TestFlight build from after
+step 1 in testers' hands: a dispatched Release iOS run has no tag to check.
 
 ## Testing
 

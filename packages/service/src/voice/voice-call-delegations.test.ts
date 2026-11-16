@@ -27,7 +27,8 @@ import {
   VOICE_CALLER_ENVIRONMENT,
 } from "../testing/voice-callers.js";
 import { voiceCallDelegations } from "./voice-call-delegations.js";
-import { holdVoiceCall, VOICE_CALL_HELD, type VoiceCallObserver } from "./voice-call-lease.js";
+import type { VoiceCallObserver } from "./voice-call-holder.js";
+import { holdVoiceCall, VOICE_CALL_HELD } from "./voice-call-lease.js";
 
 /**
  * A voice call's delegations run by the lease holding it, over a fake
@@ -167,10 +168,7 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
 
         const run = Effect.gen(function* () {
           const holder = yield* Effect.forkChild(
-            holdVoiceCall(
-              { callId: call.id, callerId, epoch: 1, redelivered: false },
-              settingOut(ready),
-            ),
+            holdVoiceCall({ callId: call.id, callerId, epoch: 1, delivery: 1 }, settingOut(ready)),
           );
 
           yield* Deferred.await(ready);
@@ -217,7 +215,7 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
         const run = Effect.gen(function* () {
           const first = yield* Effect.forkChild(
             holdVoiceCall(
-              { callId: call.id, callerId, epoch: 1, redelivered: false },
+              { callId: call.id, callerId, epoch: 1, delivery: 1 },
               settingOut(firstReady),
             ),
           );
@@ -233,7 +231,7 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
           // The next lease attaches, hearing the session's last events again, and claims the call.
           const next = yield* Effect.forkChild(
             holdVoiceCall(
-              { callId: call.id, callerId, epoch: 2, redelivered: false },
+              { callId: call.id, callerId, epoch: 2, delivery: 1 },
               settingOut(nextReady),
             ),
           );

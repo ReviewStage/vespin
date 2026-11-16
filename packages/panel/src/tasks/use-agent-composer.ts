@@ -1,3 +1,4 @@
+import { goalRefusalWords } from "@repo/features/agent-goal-model";
 import { newerTurn } from "@repo/features/agent-status";
 import {
   AGENT_CALL_FAILURE,
@@ -8,12 +9,13 @@ import {
   AGENT_BOUNDS,
   type AgentAttachment,
   type AgentPayer,
+  type AgentRuntime,
   type AgentTranscriptMessage,
   type AgentTurn,
   agentAttachmentsSchema,
   hasWordsOrFiles,
 } from "@repo/features/agent-wire";
-import { type Failure, remedyLabel } from "@repo/features/failure-remedy";
+import { FAILURE_REASON, type Failure, remedyLabel } from "@repo/features/failure-remedy";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DraftSuggestion, SuggestionSendResult } from "@repo/features/suggestion-model";
 import { STATUS_TONE } from "@repo/ui";
@@ -31,7 +33,7 @@ import {
   SENT_LINE_STATE,
   type SentLine,
 } from "./agent-model.js";
-import { type HeldUpdate, putBackRefused } from "./refused-send.js";
+import { type BoxHeld, type HeldUpdate, heldUpdateOver, putBackRefused } from "./refused-send.js";
 
 /**
  * use-agent-composer.ts -- the message box under an agent's transcript as one control: the words being written, and the lines the member sent, drawn from the one record of their messages on their way the host holds.
@@ -84,7 +86,7 @@ import { type HeldUpdate, putBackRefused } from "./refused-send.js";
  */
 
 /** A message as the box sends it: the request the service takes, and what the host draws it by while it goes. */
-export type OutgoingMessage = Omit<AgentMessageParams, "agentId">;
+type OutgoingMessage = Omit<AgentMessageParams, "agentId">;
 
 /** How one message is sent to an agent, answered as the view hears it; it fails where the host never heard it, so it drew nothing. */
 export type MessageSender = (agentId: string, message: OutgoingMessage) => Promise<AgentActAnswer>;
@@ -104,13 +106,15 @@ export type ComposerNote = Failure & { readonly cause?: unknown };
 
 /** Everything the composer draws and presses. */
 export interface AgentComposerControl {
-  /** The words in the box. */
-  draft: string;
-  setDraft: (text: string) => void;
-  /** The files that go with the words, in the order attached. */
-  attachments: readonly AgentAttachment[];
-  /** Changes the files from those the box holds as the change lands, which a read that lands late needs. */
-  setAttachments: (next: (held: readonly AgentAttachment[]) => readonly AgentAttachment[]) => void;
+  /** The words in the box and the files that go with them, in the order attached, as the box's draft keeps them. */
+  held: BoxHeld;
+  /**
+   * Moves the box's words and files on together from what its draft holds as
+   * the change lands (`refused-send.ts`). Every change the box makes goes
+   * through it, typed, attached, queued, or put back, so no box writes its
+   * words its own way.
+   */
+  updateHeld: HeldUpdate;
   /** Whether a send holds the box until it answers, during which the box takes nothing: New task's, whose send opens the task; an agent's box never holds. */
   sending: boolean;
   /** Why the last Revert did not go, or the newest message refused where what mends it is elsewhere, said under the box beside that remedy and Retry; nothing while neither waits. Every message refused says so on its own line too. */
@@ -296,8 +300,6 @@ export interface HeldComposer extends AgentComposerControl {
   readonly cut: ReadonlySet<string> | undefined;
   /** The ids of the lines still on their way, whose rows the service may yet withdraw, so no rewind lands on them. */
   readonly going: ReadonlySet<string>;
-  /** Moves the box's words and files on together from what its draft holds as the change lands, as a refused send put back does (`refused-send.ts`). */
-  readonly updateHeld: HeldUpdate;
   /** The suggestion in another agent's reply the box was filled in from, which its send goes through; none for any other draft. */
   readonly suggestion: DraftSuggestion | undefined;
   /** Lets the box's suggestion go, its words kept, so the box sends them as a line of the developer's own. */
@@ -321,6 +323,8 @@ export function useAgentComposer(input: {
   rewind?: MessageRewinder | undefined;
   /** Who pays for the agent, which a plan's refusal names; none for an agent from before payers. */
   payer?: AgentPayer | undefined;
+  /** The harness the agent runs on, whose refusal of a `/goal` line it keeps no goal for says so; none where not known. */
+  runtime?: AgentRuntime | undefined;
   /** The teammate who started the agent (`teammateStarter`), whose own credentials a refusal names; none for the reader's own. */
   starter?: string | undefined;
   /** Whether the tab is on screen, which a refusal landing while it is not says in a toast; on screen where unsaid. */
@@ -341,7 +345,7 @@ export function useAgentComposer(input: {
     | undefined;
 }): HeldComposer {
   const { agentId, messages, sending } = input;
-  const kept = useDraft({ kind: DRAFT_PLACE.AGENT, planId: input.taskId, agentId });
+  const kept = useDraft({ kind: DRAFT_PLACE.AGENT, taskId: input.taskId, agentId });
   const queryClient = useQueryClient();
   const [held, setHeld] = useState<Held>(() => fresh(agentId));
 
@@ -373,24 +377,25 @@ export function useAgentComposer(input: {
 
   const { update } = kept;
 
-  /** Moves the box's words and files on together from what its draft holds as the change lands. */
-  const updateHeld: HeldUpdate = (next) =>
-    kept.update((was) => {
-      const moved = next(was);
-
-      return moved === undefined ? was : { ...was, ...moved };
-    });
+  const updateHeld = heldUpdateOver(kept.update);
 
   const at = latest.current;
 
-  /** Why a refused message did not go, in the box's words. */
-  const noteOf = (message: SendingMessage): ComposerNote | undefined =>
-    message.refused === undefined
-      ? undefined
-      : {
-          ...messageFailureNote(message.refused, at.taskId, at.payer, at.starter),
-          cause: message.refused,
-        };
+  /** Why a refused message did not go, in the box's words: a `/goal` line to a harness that keeps no goal, refused as asking what it does not offer, says so. */
+  const noteOf = (message: SendingMessage): ComposerNote | undefined => {
+    const { refused } = message;
+
+    if (refused === undefined) return undefined;
+
+    const goalWords =
+      refused.failure === AGENT_CALL_FAILURE.INVALID_CHOICE
+        ? goalRefusalWords(at.runtime, message.text)
+        : undefined;
+
+    return goalWords === undefined
+      ? { ...messageFailureNote(refused, at.taskId, at.payer, at.starter), cause: refused }
+      : { reason: FAILURE_REASON.OTHER, text: goalWords, cause: refused };
+  };
 
   // A refusal for good, the agent's session ended, closes the box, said in the words of the newest one.
   const ending = sending.findLast(
@@ -732,11 +737,7 @@ export function useAgentComposer(input: {
   const remediedNote = remedied === undefined ? undefined : noteOf(remedied);
 
   return {
-    draft: shown.text,
-    setDraft: (text) => kept.update((was) => ({ ...was, text })),
-    attachments: shown.attachments,
-    setAttachments: (next) =>
-      kept.update((was) => ({ ...was, attachments: next(was.attachments) })),
+    held: shown,
     updateHeld,
     sending: suggesting,
     note: closed === undefined ? (held.revertFailed?.note ?? remediedNote) : undefined,

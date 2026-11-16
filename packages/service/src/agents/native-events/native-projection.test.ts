@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { RUN_EVENT, TURN_FAILURE } from "@repo/features/turn-run";
+import { Option } from "effect";
 import { test } from "vitest";
 import { NATIVE_ENDING, NATIVE_MOMENT, PLAN_STATUS } from "./native-moments.js";
 import {
@@ -7,8 +8,9 @@ import {
   NATIVE_WRITE,
   projectMoments,
   turnProgressed,
+  withCallAccounts,
 } from "./native-projection.js";
-import { toolAnswerSettlement } from "./runner-moments.js";
+import { runnerMoments, toolAnswerSettlement } from "./runner-moments.js";
 
 test("an unknown tool's call settled with a new input, as Codex settles one, keeps the input that names the tool it called", () => {
   const result = projectMoments(
@@ -49,6 +51,55 @@ test("an unknown tool's call settled with a new input, as Codex settles one, kee
     [
       [RUN_EVENT.TOOL_CALL_STARTED, "unknown_tool", { name: "edit_plan", input: {} }],
       [RUN_EVENT.TOOL_CALL_SETTLED, "unknown_tool", undefined],
+    ],
+  );
+});
+
+test("a call of an integration's tool names the account it ran on, even in the event that opens its turn or as it starts and settles in one event; a call on an account no name stands for is left as it was", () => {
+  const accounts = { "linear-2": "Acme" };
+
+  const envelope = (callId: string, connection: string | undefined) => ({
+    remoteTool: "save_issue",
+    parentCallId: callId,
+    input: {},
+    ...(connection === undefined ? undefined : { connection }),
+  });
+
+  const stamped = withCallAccounts(
+    heldProjection(null),
+    [
+      {
+        kind: NATIVE_MOMENT.TOOL_STARTED,
+        callId: "call_acme",
+        name: "linear_remote",
+        input: envelope("call_acme", "linear-2"),
+      },
+      {
+        kind: NATIVE_MOMENT.TOOL_SETTLED,
+        callId: "call_acme",
+        settlement: toolAnswerSettlement({ workspaceTool: false, text: "ok", output: "ok" }, false),
+        input: envelope("call_acme", "linear-2"),
+      },
+      {
+        kind: NATIVE_MOMENT.TOOL_STARTED,
+        callId: "call_notion",
+        name: "notion_remote",
+        input: envelope("call_notion", undefined),
+      },
+    ],
+    accounts,
+  );
+
+  assert.deepEqual(
+    stamped.map((moment) =>
+      moment.kind === NATIVE_MOMENT.TOOL_STARTED || moment.kind === NATIVE_MOMENT.TOOL_SETTLED
+        ? moment.input
+        : undefined,
+    ),
+    [
+      { ...envelope("call_acme", "linear-2"), account: "Acme" },
+      { ...envelope("call_acme", "linear-2"), account: "Acme" },
+      envelope("call_notion", undefined),
     ],
   );
 });
@@ -452,5 +503,60 @@ test("a turn whose launch lost its session goes on once in a replayed launch, an
   assert.deepEqual(
     [kinds(first.writes), kinds(second.writes)],
     [[{ kind: NATIVE_WRITE.RETRY, replay: true }], [{ kind: NATIVE_WRITE.FAILED, replay: false }]],
+  );
+});
+
+test("a command the runner marks killed out of memory, in a batch before its answer's, settles its call marked with the sandbox's memory, and the next call unmarked", () => {
+  const context = {
+    conversationId: "c_projection",
+    now: 0,
+    attempt: 1,
+    queuedTurnId: undefined,
+    model: undefined,
+    ownKey: false,
+    registered: () => true,
+    report: () => undefined,
+  };
+
+  const answer = toolAnswerSettlement(
+    { workspaceTool: false, text: "Exit code 137", output: "Exit code 137" },
+    true,
+  );
+
+  const marked = runnerMoments({
+    type: "vespin_runner_out_of_memory",
+    callId: "call_typecheck",
+    memoryGb: 4,
+  }).pipe(Option.getOrElse(() => []));
+
+  const first = projectMoments(
+    heldProjection(null),
+    [
+      { kind: NATIVE_MOMENT.TOOL_STARTED, callId: "call_typecheck", name: "Bash", input: {} },
+      ...marked,
+    ],
+    { ...context, sequence: 0 },
+  );
+
+  const second = projectMoments(
+    first.state,
+    [
+      { kind: NATIVE_MOMENT.TOOL_SETTLED, callId: "call_typecheck", settlement: answer },
+      { kind: NATIVE_MOMENT.TOOL_STARTED, callId: "call_retry", name: "Bash", input: {} },
+      { kind: NATIVE_MOMENT.TOOL_SETTLED, callId: "call_retry", settlement: answer },
+    ],
+    { ...context, sequence: 1 },
+  );
+
+  assert.deepEqual(
+    second.writes.flatMap((write) =>
+      write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.TOOL_CALL_SETTLED
+        ? [[write.event.callId, write.event.settlement.outOfMemory]]
+        : [],
+    ),
+    [
+      ["call_typecheck", { memoryGb: 4 }],
+      ["call_retry", undefined],
+    ],
   );
 });

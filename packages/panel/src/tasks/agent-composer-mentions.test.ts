@@ -31,7 +31,7 @@ import {
 import { pageFrameUrl } from "@repo/features/page-frame";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { TASK_SKILL_SOURCE, TASK_TREE_ENTRY } from "@repo/features/task-wire";
-import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, TASKS_READ } from "@repo/features/tasks-view";
 import {
   WORKSPACE_ROLE,
   type WorkspaceMachine,
@@ -63,6 +63,7 @@ import {
   holdIntegrationTools,
   holdMembers,
   stateWith,
+  type WrittenTasksView,
 } from "../testing/app-state.js";
 import {
   composerEditor,
@@ -164,7 +165,7 @@ function workspaceAgent(
 ): AgentSummary {
   return {
     id,
-    planId: taskId,
+    taskId: taskId,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title,
@@ -210,14 +211,14 @@ let newest: readonly AgentSummary[] = NEWEST_AGENTS;
 let listFailed = false;
 
 /** Lays the task list on the window again, as the host does once it reads it. */
-let deliverTasks: (next: TasksView) => void = () => undefined;
+let deliverTasks: (next: WrittenTasksView) => void = () => undefined;
 
 /**
  * The task list as the host lays it: the newest agents and the archived
  * one, each on its task, in the workspace the plan stands in,
  * or failed before it carried any.
  */
-function tasksView(): TasksView {
+function tasksView(): WrittenTasksView {
   if (listFailed) return { ...IDLE_TASKS_VIEW, listStatus: TASKS_READ.FAILED };
 
   const listed = [...newest, OLD_AGENT].map((agent) => ({
@@ -229,6 +230,7 @@ function tasksView(): TasksView {
   return {
     ...IDLE_TASKS_VIEW,
     listStatus: TASKS_READ.READY,
+    listed: true,
     taskAgents: listed,
   };
 }
@@ -240,7 +242,7 @@ function workspaceAnswer({ words = "" }: AgentWorkspaceListParams): readonly Age
   return WORKSPACE_AGENTS.filter(
     (agent) =>
       (agent.title ?? "").toLowerCase().includes(lower) ||
-      (agent.planId === BILLING.id && BILLING.name.toLowerCase().includes(lower)),
+      (agent.taskId === BILLING.id && BILLING.name.toLowerCase().includes(lower)),
   );
 }
 
@@ -783,7 +785,7 @@ test("off a plan's page a sent message's mention is still its chip, which opens 
   assert.deepEqual(opened, [
     {
       workspace: "",
-      place: { kind: LINK_DESTINATION.SECTION, planId: TASK_ID, anchor: "rollout" },
+      place: { kind: LINK_DESTINATION.SECTION, taskId: TASK_ID, anchor: "rollout" },
     },
   ]);
   assert.equal(carryingTarget(container), undefined);
@@ -849,7 +851,7 @@ test("an @ in the box browses the account's connected MCP servers as one kind, a
   ]);
 });
 
-test("with Computer use on, on the Mac the agent's calls go to, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id", async () => {
+test("with Computer use on, on the Mac the agent's calls go to, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id on this Mac", async () => {
   const sent: string[] = [];
 
   const sender: MessageSender = (_agentId, { text }) => {
@@ -895,7 +897,7 @@ test("with Computer use on, on the Mac the agent's calls go to, an @ in the box 
 
   assert.deepEqual(apps, ["Apps", ["Simulator"]]);
   assert.deepEqual(sent, [
-    `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.apple.iphonesimulator" }, "Simulator", PLACE)}`,
+    `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.apple.iphonesimulator", machine: STUDIO_ID }, "Simulator", PLACE)}`,
   ]);
 });
 
@@ -908,7 +910,7 @@ const OFF_THAT_MAC = {
 } as const;
 
 test.each(Object.values(OFF_THAT_MAC))(
-  "off the Mac the agent's calls go to, in %s, an @ in the box offers the apps the reader's machines always allow, each by the name its machine posted and saying the machines it is allowed on, a pick sent as the app's mention by its bundle id",
+  "off the Mac the agent's calls go to, in %s, an @ in the box offers the apps the reader's machines always allow, one row for each machine that allows an app, grouped by machine with the window's own first, each by the name its machine posted and saying its machine, a pick of an app on two sent as the app's mention by its bundle id on that machine, its chip naming the machine",
   async (window) => {
     const sent: string[] = [];
 
@@ -968,20 +970,32 @@ test.each(Object.values(OFF_THAT_MAC))(
       row.querySelector(".ui-combobox-option-detail")?.textContent ?? "",
     ]);
 
-    typeInComposer(container, "slack");
+    typeInComposer(container, "notes");
     await settle();
     pressInComposer(container, "Enter");
     await settle();
     pressInComposer(container, "Enter");
     await settle();
 
+    // Note that the rows are grouped by machine, the window's own Mac first where it is one of the reader's.
+    const onStudio = [
+      ["Notes", "Studio"],
+      ["Slack", "Studio"],
+    ];
+
+    const onLaptop = [["Notes", "Laptop"]];
+    const studioFirst = window === OFF_THAT_MAC.ANOTHER_MACHINE;
+
+    const first = studioFirst
+      ? { machine: STUDIO_ID, written: "Notes on Studio" }
+      : { machine: LAPTOP_ID, written: "Notes on Laptop" };
+
     assert.deepEqual(rows, [
       ["Computer", ""],
-      ["Notes", "Always allowed on Studio, Laptop"],
-      ["Slack", "Always allowed on Studio"],
+      ...(studioFirst ? [...onStudio, ...onLaptop] : [...onLaptop, ...onStudio]),
     ]);
     assert.deepEqual(sent, [
-      `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.tinyspeck.slackmacgap" }, "Slack", PLACE)}`,
+      `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.apple.Notes", machine: first.machine }, first.written, PLACE)}`,
     ]);
   },
 );
@@ -1257,7 +1271,7 @@ test("a sent message's mention of a page or an agent is drawn as the chip that o
 
   assert.deepEqual(chips.map(chipName), [PAGE.title, STORE_AGENT.name]);
   assert.deepEqual(opened, [
-    { workspace: "acme", place: { kind: LINK_DESTINATION.PAGE, planId: TASK_ID, pageId: PAGE.id } },
+    { workspace: "acme", place: { kind: LINK_DESTINATION.PAGE, taskId: TASK_ID, pageId: PAGE.id } },
     {
       workspace: "acme",
       place: { kind: LINK_DESTINATION.AGENT, agentId: STORE_AGENT.id },
@@ -1859,19 +1873,19 @@ test("a bare End and Home take the highlight to the last row and the first, a mo
 });
 
 test.each([
-  ["⌫", "Backspace"],
-  ["←", "ArrowLeft"],
-  ["Escape", "Escape"],
+  ["Escape", true, "See @"],
+  ["Backspace", false, "See @files"],
 ])(
-  "Enter on a kind's row narrows the list to it, and %s on its empty words widens it again, deleting nothing and closing nothing",
-  async (_, key) => {
+  "Enter on a kind's row found by its word writes the word and a colon, as typing them would, and %s on its empty words widens the list again",
+  async (key, taken, after) => {
     const { container } = await wideBox();
 
-    typeInComposer(container, "See @");
+    typeInComposer(container, "See @file");
     await settle();
     highlightRow(container, "Browse", "Files and folders");
     pressInComposer(container, "Enter");
     await settle();
+    const written = composerEditor(container).textContent;
     const narrowed = groupsListed(container);
     const narrowedCrumb = crumb(container);
     // Note that whether the key bubbled is read off the document, since an event forgets it was stopped once its dispatch ends.
@@ -1880,14 +1894,18 @@ test.each([
     document.addEventListener("keydown", listen);
     const pressed = pressInComposer(container, key);
     document.removeEventListener("keydown", listen);
+
+    // Note that a ⌫ the list leaves to the editor is laid in by hand, since a key pressed here writes nothing.
+    if (!pressed.defaultPrevented) eraseInComposer(container, 1);
     await settle();
 
+    assert.equal(written, "See @files:");
     assert.equal(narrowedCrumb, "Files and folders");
     assert.deepEqual(narrowed, [["Files and folders", ["apps/", "README.md"]]]);
-    assert.equal(pressed.defaultPrevented, true);
+    assert.equal(pressed.defaultPrevented, taken);
     // An Escape the list takes is kept from the surface behind it, as one that closes the list is, so a dialog around the box stays open.
     assert.equal(behind.includes("Escape"), false);
-    assert.equal(composerEditor(container).textContent, "See @");
+    assert.equal(composerEditor(container).textContent, after);
     assert.equal(crumb(container), undefined);
     assert.ok(kindsListed(container).length > 0, "the kinds' rows stand again");
   },
@@ -1964,7 +1982,7 @@ test("files found by a word typed on are those the longer word finds, and the wo
   assert.deepEqual(listed(container), typed);
 });
 
-test("a group holding more than four ends in the row saying how many more, which opens its kind searched by the same words, as typing @files: does", async () => {
+test("a group holding more than four ends in the row saying how many more, which writes its kind's word before the same words, as typing @files: does", async () => {
   const { container } = await wideBox();
 
   typeInComposer(container, "See @invite");
@@ -1980,7 +1998,7 @@ test("a group holding more than four ends in the row saying how many more, which
 
   assert.equal(wide?.[1].length, 5);
   assert.match(more, /^Show \d+ more$/u);
-  assert.deepEqual(opened, ["Files and folders", 50, "See @invite"]);
+  assert.deepEqual(opened, ["Files and folders", 50, "See @files:invite"]);
   assert.equal(crumb(container), "Files and folders");
   assert.equal(listedCount(container), 50);
   assert.ok(listed(container).every((name) => name.startsWith("invite-")));

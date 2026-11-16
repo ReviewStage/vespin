@@ -1,4 +1,6 @@
 import { DENIES_WAITING } from "@repo/features/agent-approval-model";
+import { runsGoal } from "@repo/features/agent-goal-model";
+import { runtimeOfProvider } from "@repo/features/agent-runtime-models";
 import { SERVER_HANDED } from "@repo/features/agent-servers-model";
 import {
   AGENT_BOUNDS,
@@ -441,6 +443,12 @@ export function AgentComposer({
   onContinueInCloud?: ((carry: MoveCarry) => void) | undefined;
 }): React.JSX.Element {
   const connected = useConnected();
+  // Note that a Start's box has no runtime yet, so the harness its chosen model runs on stands for it.
+  const provider = model === undefined ? undefined : providerOf(model.choice.model);
+
+  const runtime =
+    model?.runtime ?? (provider === undefined ? undefined : runtimeOfProvider(provider));
+
   // Who pays, as the chip's menu names it, is the context popover's last line too.
   const paying = model === undefined ? payer : paidByOf(payer, usage, model.runtime);
 
@@ -452,7 +460,7 @@ export function AgentComposer({
     paying === undefined ? undefined : (
       <PayerValue
         payer={paying}
-        provider={model === undefined ? undefined : providerOf(model.choice.model)}
+        provider={provider}
         usage={usage}
         owner={owner}
         planName={planName}
@@ -482,18 +490,19 @@ export function AgentComposer({
   const goalsOn =
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.GOALS) }).data === true;
 
-  // Note that `/model` needs only the model chip, so New task's box and a draft's run it, while `/compact` and `/clear` need a session, and `/goal` a session or a first message, while the Goals experiment is on.
+  // Note that `/model` needs only the model chip, so New task's box and a draft's run it, while `/compact` and `/clear` need a session, and `/goal` a session or a first message, on a harness that runs a goal, while the Goals experiment is on.
   const reach = {
     model: model !== undefined,
     session: onClear !== undefined,
-    goal: goalsOn && (onClear !== undefined || startsGoal),
+    goal: goalsOn && runsGoal(runtime) && (onClear !== undefined || startsGoal),
   };
 
   const statuses = useIntegrationStatuses();
 
   const box = useMessageBox({
-    draft: composer.draft,
-    setDraft: composer.setDraft,
+    draft: composer.held.text,
+    // Note that the box's words are moved on from what its draft holds as the change lands, never from a render's copy, since one keystroke may hand back several words.
+    setDraft: (text) => composer.updateHeld((now) => ({ ...now, text })),
     // Note that a closed box asks for nothing, since it takes nothing.
     placeholder: closed
       ? ""
@@ -501,8 +510,11 @@ export function AgentComposer({
     label: wording?.label ?? "Message to the agent",
     maxLength,
     held,
-    holder: { attachments: composer.attachments, update: composer.setAttachments },
-    pastesTextAsFile: true,
+    holder: {
+      attachments: composer.held.attachments,
+      update: (next) =>
+        composer.updateHeld((now) => ({ ...now, attachments: next(now.attachments) })),
+    },
     self: agentId,
     skills,
     // Note that an edit of a queued message runs no command, chosen as typed, since it saves back into its place.
@@ -546,7 +558,7 @@ export function AgentComposer({
     answer === undefined
       ? !sendsEmpty &&
         !editingQueued &&
-        !hasWordsOrFiles(composer.draft.trim(), composer.attachments)
+        !hasWordsOrFiles(composer.held.text.trim(), composer.held.attachments)
       : !answer.sendable;
 
   const showsStop = empty && stoppable && !composer.sending && !editingQueued;
@@ -697,7 +709,7 @@ export function AgentComposer({
     switch (name) {
       case SLASH_COMMAND.COMPACT:
       case SLASH_COMMAND.GOAL: {
-        const words = leadingCommand(composer.draft)?.words ?? "";
+        const words = leadingCommand(composer.held.text)?.words ?? "";
 
         if (chosen) editor.current?.replace(`/${name} ${words}`);
 
@@ -737,7 +749,7 @@ export function AgentComposer({
    */
   const typedCommand = (): SlashCommand | undefined => {
     if (editingQueued) return undefined;
-    const typed = leadingCommand(composer.draft);
+    const typed = leadingCommand(composer.held.text);
 
     if (typed === undefined || !isSlashCommand(typed.name)) return undefined;
 

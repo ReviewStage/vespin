@@ -88,8 +88,8 @@ export const AGENT_TOOL = {
   REPLY_TO_COMMENT: DESCRIPTION_COMMENT_TOOL.REPLY,
   UPDATE_COMMENT: DESCRIPTION_COMMENT_TOOL.UPDATE,
   READ_PAGE: "read_page",
-  // Pictures from a coding agent's sandbox, shown in its transcript.
-  SHOW_IMAGE: "show_image",
+  // Pictures, recordings, and sound clips from a coding agent's sandbox, shown in its transcript.
+  SHOW_MEDIA: "show_media",
   // A wakeup a coding agent books for later: its turn ends, and the prompt opens its next turn when due.
   SCHEDULE_WAKEUP: "schedule_wakeup",
   // A coding agent's turn ended in a short summary, the reply its developer reads, and the follow-ups it offers them.
@@ -138,8 +138,9 @@ export const CONNECTION_TOOL = {
  * with the Code and Board tabs, a voice call's question queue and
  * hang-up, removed with GPT Live, the memory's two tools, since named for
  * the memory, the plan comments' resolve and reopen, folded into
- * `update_comment`, and the plan's edit, renamed for the description it
- * edits.
+ * `update_comment`, the plan's edit, renamed for the description it
+ * edits, and the show of pictures, renamed for the sound clips it shows
+ * beside them.
  */
 export const RETIRED_TOOL = {
   WEB_FETCH: "web_fetch",
@@ -191,6 +192,8 @@ export const RETIRED_TOOL = {
   REOPEN_THREAD: "reopen_thread",
   // Renamed `edit_description`, as the task's document is its description.
   EDIT_PLAN: "edit_plan",
+  // Renamed `show_media`, as it shows sound clips beside pictures and recordings.
+  SHOW_IMAGE: "show_image",
 } as const;
 
 /**
@@ -201,7 +204,18 @@ export const RETIRED_TOOL = {
  */
 export const RENAMED_TOOL: ReadonlyMap<string, AgentTool> = new Map([
   [RETIRED_TOOL.EDIT_PLAN, AGENT_TOOL.EDIT_DESCRIPTION],
+  [RETIRED_TOOL.SHOW_IMAGE, AGENT_TOOL.SHOW_MEDIA],
 ]);
+
+/**
+ * Whether a call is one that showed the developer media from a coding
+ * agent's sandbox, under either of the names it is stored by: `show_image`,
+ * as a transcript written while it was offered by that name stores it, or
+ * `show_media`.
+ */
+export function isShowMediaTool(tool: string): boolean {
+  return tool === AGENT_TOOL.SHOW_MEDIA || tool === RETIRED_TOOL.SHOW_IMAGE;
+}
 
 /**
  * Claude Code's own tools, by the names its CLI calls them, which a coding
@@ -277,6 +291,17 @@ export const WORKSPACE_MCP_SERVER_NAMES: ReadonlySet<string> = new Set([
   "luke",
 ]);
 
+/**
+ * The key of our MCP server's result `_meta` under which a call's answer
+ * carries fields for the people watching the agent alone, which the
+ * transcript keeps beside the answer it read (`toolAnswerSettlement`). Note
+ * that no harness hands a result's `_meta` to its model: Claude Code passes
+ * it to its SDK's consumer as the message's `tool_use_result`, and Codex
+ * on its app-server's item, so the model reads the answer as it was without
+ * them.
+ */
+export const WORKSPACE_MCP_WATCHED_META = "vespin.dev/watched";
+
 /** Our tool's own name from a Claude Code call's, `mcp__team__read_thread` being our `read_thread`; none for a tool of any other server. */
 export function claudeCodeWorkspaceTool(name: string): string | undefined {
   for (const server of WORKSPACE_MCP_SERVER_NAMES) {
@@ -306,4 +331,35 @@ export const CODEX_TOOL = {
   TODO_LIST: "todoList",
   SUBAGENT: "collabAgentToolCall",
   IMAGE_VIEW: "imageView",
+} as const;
+
+/**
+ * Cursor's own tools, by the names its transcript stores their calls under:
+ * the SDK's own tool name (`read`, `shell`, `task`) behind `cursor` and
+ * capitalized, since its bare names (`grep`, `glob`) are the names of tools
+ * of ours a stored call of another kind already holds. A coding agent
+ * running on Cursor does its shell, file, search, todo, and delegation work
+ * through these. A call to our own MCP server, which Cursor reaches as a
+ * custom tool named as Claude Code names it (`mcp__team__read_inbox`), is
+ * stored under our tool's name, one to an integration's server as that
+ * integration's call, and one to any other MCP server as `cursorMcp`
+ * (`cursor-moments.ts`).
+ */
+export const CURSOR_TOOL = {
+  SHELL: "cursorShell",
+  READ: "cursorRead",
+  WRITE: "cursorWrite",
+  EDIT: "cursorEdit",
+  DELETE: "cursorDelete",
+  LS: "cursorLs",
+  GLOB: "cursorGlob",
+  GREP: "cursorGrep",
+  SEM_SEARCH: "cursorSemSearch",
+  READ_LINTS: "cursorReadLints",
+  WEB_SEARCH: "cursorWebSearch",
+  WEB_FETCH: "cursorWebFetch",
+  UPDATE_TODOS: "cursorUpdateTodos",
+  CREATE_PLAN: "cursorCreatePlan",
+  TASK: "cursorTask",
+  MCP: "cursorMcp",
 } as const;

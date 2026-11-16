@@ -8,8 +8,9 @@
  * change, a retire, a warm, or an approval. A config that names `linesUrl` has the runner read
  * the later lines from the service instead (`RUNNER_LINES`).
  *
- * The config says which harness the launch runs: Claude Code (P05), or Codex
- * through `codex app-server` (P20). Secrets never travel on stdin: the
+ * The config says which harness the launch runs: Claude Code (P05), Codex
+ * through `codex app-server` (P20), or Cursor through its SDK in the
+ * runner's own process (`cursor.ts`). Secrets never travel on stdin: the
  * runner's bearer and, in the cloud, the harness's credential are in its
  * environment; on a host the harnesses run on the machine's own logins. The
  * one value in argv that stands for one is the bearer's placeholder in a
@@ -26,6 +27,7 @@ import type {
   SDKMessage,
   SessionCronSummary,
 } from "@anthropic-ai/claude-agent-sdk";
+import type { SDKMessage as CursorSdkMessage } from "@cursor/sdk";
 import type { WireValue } from "@repo/wire";
 import type { GoalNotice } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
@@ -66,6 +68,15 @@ export const RUNNER_ENV = {
    * Codex runs inherits.
    */
   OPENAI_API_KEY: "OPENAI_API_KEY",
+  /**
+   * The account's Cursor API key, for a Cursor launch its key pays for: in
+   * the cloud's sandbox a placeholder, swapped for the real key at the
+   * firewall on Cursor's API, as OpenAI's is. The runner reads it and hands
+   * it to the SDK as its `apiKey`, and takes it out of its own environment
+   * before the SDK runs, since the agent's shell inherits the runner's
+   * (`cursor.ts`).
+   */
+  CURSOR_API_KEY: "CURSOR_API_KEY",
   /**
    * Where the runner runs, where its starter says (`RUNNER_PLACE`): set by a
    * host's daemon alone, on a Linux box and a Mac alike, This Mac's among
@@ -132,9 +143,6 @@ export const CLAUDE_CODE_TOOLS = {
   ],
 } as const;
 
-/** The read-only subagent a Claude Code launch defines, by the `subagent_type` the Agent tool takes. */
-export const CLAUDE_CODE_WORKER = "worker";
-
 /**
  * How a Claude Code launch answers its agent's tool calls (its config's
  * `permissionMode`): every call run unasked, as every launch ran before
@@ -198,6 +206,7 @@ const AllowedCommandsSchema = Schema.Array(Schema.Array(Schema.String));
 export const RUNNER_HARNESS = {
   CLAUDE_CODE: "claude_code",
   CODEX: "codex",
+  CURSOR: "cursor",
 } as const;
 
 export type RunnerHarness = (typeof RUNNER_HARNESS)[keyof typeof RUNNER_HARNESS];
@@ -370,6 +379,8 @@ export const RUNNER_TRANSCRIPTS = {
   },
   /** The project Codex's threads are kept under (`codex-rollout.ts`), which names no checkout. */
   CODEX_PROJECT: "codex",
+  /** The project a Cursor agent's store is kept under (`cursor-store.ts`), which names no checkout. */
+  CURSOR_PROJECT: "cursor",
 } as const;
 
 /**
@@ -584,23 +595,10 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   linesUrl: Schema.optionalKey(Schema.String),
   /** Our MCP server's streamable-HTTP endpoint. */
   mcpUrl: Schema.String,
-  /**
-   * Our MCP server's tools the worker subagent (`CLAUDE_CODE_WORKER`) may not
-   * call, by name: every one that does more than read. Absent in a config
-   * written before it, where the worker is denied the whole server.
-   */
-  workerDenied: Schema.optionalKey(Schema.Array(Schema.String)),
   /** Where the CLI's transcript is kept at the service (`RUNNER_TRANSCRIPTS`), handed to the SDK as its `sessionStore`; none where the CLI's own files are all it keeps. */
   transcriptsUrl: Schema.optionalKey(Schema.String),
   /** The integrations the agent is handed, one MCP server each; none in a config written before them. */
   integrations: Schema.optionalKey(Schema.Array(IntegrationServerSchema)),
-  /**
-   * Read by no runner since Claude Code's command sandbox went: written empty
-   * for a host whose release bundles a runner from before, which refuses a
-   * config without it, and dropped once the service's host version floor
-   * (`HOST_VERSION.FLOOR`) passes that release.
-   */
-  allowedDomains: Schema.optionalKey(Schema.Array(Schema.String)),
   /** Where the member's installed skills are (`INSTALLED_SKILLS`), loaded as a local plugin where the folder holds one. */
   installedSkills: Schema.optionalKey(Schema.String),
   /** Whether the launch stays warm while no turn of it runs (`RUNNER_WARM`): from its start until a message comes, and once the agent's turn is over, posting IDLE rather than ending; it ends there where absent. */
@@ -685,8 +683,76 @@ export const CodexConfigSchema = Schema.Struct({
 
 export type CodexConfig = typeof CodexConfigSchema.Type;
 
-/** The first stdin line, for either harness. */
-export const RunnerConfigSchema = Schema.Union([CodexConfigSchema, ClaudeCodeConfigSchema]);
+/**
+ * A model as Cursor's SDK takes it (its `ModelSelection`): Cursor's model
+ * id, the parameters the choice sends (its effort, `fast`, a pinned
+ * window), and Max Mode where the variant runs only there. The service
+ * builds it from its own catalog (`cursor-models.ts`), so the runner hands
+ * it on as it stands.
+ */
+export const CursorModelSelectionSchema = Schema.Struct({
+  id: Schema.String,
+  params: Schema.optionalKey(
+    Schema.Array(Schema.Struct({ id: Schema.String, value: Schema.String })),
+  ),
+  maxMode: Schema.optionalKey(Schema.Boolean),
+});
+
+export type CursorModelSelection = typeof CursorModelSelectionSchema.Type;
+
+/**
+ * The modes a Cursor launch runs in: everything unasked (`FULL_ACCESS`), or
+ * Cursor's own Auto-review deciding each call (`AUTO`). Cursor's SDK asks
+ * nobody, so a mode that asks the member is never handed to it.
+ */
+const CursorPermissionModeSchema = Schema.Literals([
+  PERMISSION_MODE.FULL_ACCESS,
+  PERMISSION_MODE.AUTO,
+]);
+
+/**
+ * The first stdin line of a Cursor launch, which runs Cursor's agent in the
+ * runner's own process through `@cursor/sdk` (`cursor.ts`). `sdk` is the
+ * SDK's entry as the image installs it (`CURSOR_SDK_ENTRY`), imported from
+ * there so the SDK finds its own platform package beside it. `session` is
+ * Cursor's id for the agent, which the service mints: the launch resumes it
+ * where the store holds it and makes it under that id otherwise.
+ */
+export const CursorConfigSchema = Schema.Struct({
+  harness: Schema.Literal(RUNNER_HARNESS.CURSOR),
+  cwd: Schema.String,
+  /** The agent the launch runs, whose id names the refs its checkout's snapshots stand under (`checkout-snapshot.ts`). */
+  agentId: Schema.optionalKey(Schema.String),
+  sdk: Schema.String,
+  session: Schema.String,
+  model: CursorModelSelectionSchema,
+  /** Our coder instructions, which lead the first message an agent made anew is sent, and the first after its conversation is summarized (`cursor.ts`). */
+  instructions: Schema.String,
+  firstSequence: SequenceSchema,
+  eventsUrl: Schema.String,
+  /** Where the runner reads the service's lines past its config (`RUNNER_LINES`); none where the service writes them to its stdin. */
+  linesUrl: Schema.optionalKey(Schema.String),
+  mcpUrl: Schema.String,
+  /** Where the agent's Cursor store is kept at the service (`RUNNER_TRANSCRIPTS`, `cursor-store.ts`); none where the runner's memory is all it keeps. */
+  transcriptsUrl: Schema.optionalKey(Schema.String),
+  /** The integrations the agent is handed, one MCP server each. */
+  integrations: Schema.optionalKey(Schema.Array(IntegrationServerSchema)),
+  /** Whether the launch stays warm while no turn of it runs (`RUNNER_WARM`), as a Codex launch does. */
+  warm: Schema.optionalKey(Schema.Boolean),
+  trace: Schema.optionalKey(RunnerTraceSchema),
+  warmForMs: Schema.optionalKey(Schema.Number),
+  /** How the launch answers its agent's tool calls; full access where absent. */
+  permissionMode: Schema.optionalKey(CursorPermissionModeSchema),
+});
+
+export type CursorConfig = typeof CursorConfigSchema.Type;
+
+/** The first stdin line, for any harness. */
+export const RunnerConfigSchema = Schema.Union([
+  CodexConfigSchema,
+  CursorConfigSchema,
+  ClaudeCodeConfigSchema,
+]);
 
 export type RunnerConfig = typeof RunnerConfigSchema.Type;
 
@@ -763,6 +829,8 @@ const ModelLineSchema = Schema.Struct({
   effort: Schema.optionalKey(Schema.Union([EffortSchema, CodexEffortSchema])),
   fast: Schema.optionalKey(Schema.Boolean),
   ultrafast: Schema.optionalKey(Schema.Boolean),
+  /** The model a Cursor launch sends from its next message on, in place of `model`, `effort`, and `fast`, which it skips; the other harnesses skip this. */
+  selection: Schema.optionalKey(CursorModelSelectionSchema),
 });
 
 /**
@@ -850,6 +918,7 @@ export const RUNNER_EVENT = {
   APPROVAL_REQUESTED: "vespin_runner_approval_requested",
   APPROVAL_RESOLVED: "vespin_runner_approval_resolved",
   GOAL: "vespin_runner_goal",
+  OUT_OF_MEMORY: "vespin_runner_out_of_memory",
 } as const;
 
 /** Why a launch ended. */
@@ -969,6 +1038,21 @@ export interface RunnerGoal extends GoalNotice {
   readonly type: typeof RUNNER_EVENT.GOAL;
 }
 
+/**
+ * The OUT_OF_MEMORY event: a command the kernel killed for want of memory
+ * (`out-of-memory.ts`), posted just ahead of the message carrying its
+ * answer, so the service marks the call it settles. `callId` is the call's
+ * `tool_use` block's id, or the id of the Codex item that ran it, and
+ * `memoryGb` the sandbox's memory as it ran, in whole GB. A command killed
+ * where the sandbox's memory could not be read is posted no event, only its
+ * transcript line.
+ */
+export interface RunnerOutOfMemory {
+  readonly type: typeof RUNNER_EVENT.OUT_OF_MEMORY;
+  readonly callId: string;
+  readonly memoryGb: number;
+}
+
 /** The CONNECTION_LOST event: the provider's host the launch could not reach and now probes. */
 export interface RunnerConnectionLost {
   readonly type: typeof RUNNER_EVENT.CONNECTION_LOST;
@@ -1018,6 +1102,17 @@ export const CONNECTION_LOST_DETAIL = {
   GAVE_UP: " could not be reached, and did not answer again within the wait",
   LOST_AGAIN: " could not be reached again before the model answered",
 } as const;
+
+/** The `vespin-host` command that signs a Mac in to Cursor (`@repo/host/daemon`'s `cursorLogin`), the sign-in its local Cursor agents run on. */
+export const CURSOR_LOGIN_COMMAND = "cursor-login";
+
+/**
+ * What a Cursor launch on a host ends `FAILED` with where the machine holds
+ * no Cursor sign-in, or one that expired, which the service reads as the
+ * machine not signed in (`coder-host/status.ts`): words that say how the
+ * member signs in there.
+ */
+export const CURSOR_SIGNED_OUT_DETAIL = `Cursor isn't signed in on this Mac. Run vespin-host ${CURSOR_LOGIN_COMMAND} in Terminal there and approve the sign-in in your browser, then send a message.`;
 
 /** What a launch ends with where its provider's connection failed it, by which way (`CONNECTION_LOST_DETAIL`). */
 export function connectionLostFailure(
@@ -1152,10 +1247,17 @@ export function codexErrorKind(
   return Option.getOrUndefined(decodeCodexErrorKind(named));
 }
 
-/** What the runner posts: the SDK's message or Codex's notification as it was emitted, or one of the runner's own. */
+/** One message Claude Code's Agent SDK put out, as it put it out. */
+export type ClaudeCodeMessage = SDKMessage;
+
+/** One message Cursor's SDK streamed of a run, as it streamed it (`@cursor/sdk`'s `SDKMessage`). */
+export type CursorMessage = CursorSdkMessage;
+
+/** What the runner posts: the SDK's message, Codex's notification, or Cursor's message as it was emitted, or one of the runner's own. */
 export type RunnerMessage =
-  | SDKMessage
+  | ClaudeCodeMessage
   | CodexNotification
+  | CursorMessage
   | RunnerAccepted
   | RunnerWaiting
   | RunnerConnectionLost
@@ -1164,7 +1266,8 @@ export type RunnerMessage =
   | RunnerEndEvent
   | RunnerApprovalRequested
   | RunnerApprovalResolved
-  | RunnerGoal;
+  | RunnerGoal
+  | RunnerOutOfMemory;
 
 /** One event as posted: its number and its message. */
 export interface RunnerEvent {

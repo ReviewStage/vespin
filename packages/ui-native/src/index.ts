@@ -1,6 +1,6 @@
 // index.ts -- @repo/ui-native: the iOS app's components over @expo/ui's SwiftUI, its Markdown in React Native views, and the brand's tokens they draw with.
 
-export { useAnnounced } from "./accessibility.js";
+export { useAnnounced, useReduceTransparency } from "./accessibility.js";
 
 export { AccountBarItem, AccountButton, type BarAccount } from "./account-button.js";
 
@@ -15,7 +15,17 @@ export {
   StepList,
 } from "./ask-card.js";
 
+export {
+  ConfirmAsk,
+  WORDS_ASK_KIND,
+  WordsAsk,
+  type WordsAskAct,
+  type WordsAskKind,
+} from "./asks.js";
+
 export { AuthPage } from "./auth-page.js";
+
+export { type BarSubtitle, StackBarTitle } from "./bar-title.js";
 
 export { BRAND_MARK_ASSET, BrandMark } from "./brand-mark.js";
 
@@ -28,12 +38,34 @@ export {
   Chip,
   FieldChip,
   FollowingChip,
+  LabelChip,
+  type ListScopes,
+  PriorityChip,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
   ScopePicker,
   StatusChip,
 } from "./button.js";
+
+export {
+  CallAccessory,
+  CallCardRow,
+  type CallPresses,
+  COMPOSER_CALL,
+  type ComposerCall,
+  type StandingCallCard,
+} from "./call.js";
+
+export { ChipMarkProvider } from "./chip-mark.js";
+
+export {
+  CHIP_MARK,
+  type ChipMark,
+  type ChipMarkOf,
+  type ChipMarksHeld,
+  chipMarkOf,
+} from "./chip-mark-model.js";
 
 export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
@@ -43,6 +75,7 @@ export {
   type ChipMenu,
   type ChipMenuGroup,
   ComposeSheet,
+  MENU_CHIP_LOOK,
   MenuChip,
 } from "./compose-sheet.js";
 
@@ -57,9 +90,10 @@ export {
   SkillSuggestions,
 } from "./composer-head.js";
 
-export { EmptyState, NoSelection } from "./empty-state.js";
+export { EmptyState, NoSelection, TRY_AGAIN_WORDS } from "./empty-state.js";
 
 export {
+  FailureNoticeLayer,
   FailureNoticeProvider,
   type FailureNotices,
   useFailureNotices,
@@ -67,7 +101,9 @@ export {
 
 export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
 
-export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
+export { releaseFields } from "./field-focus.js";
+
+export { AttachRow, MenuPickRow, WORDS_LOOK, WordsField } from "./form-rows.js";
 
 export { GlassBar, GlassDock } from "./glass-bar.js";
 
@@ -77,6 +113,7 @@ export {
   glyphSymbol,
   type LucideSymbol,
   type MarkLook,
+  runsOnGlyph,
   sectionGlyph,
 } from "./glyph.js";
 
@@ -94,6 +131,8 @@ export { type Keeping, KeepingProvider } from "./held-menu.js";
 
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 
+export { INTEGRATION_MARK_ASSET, type IntegrationMarkAsset } from "./integration-marks.js";
+
 export {
   type HeldPicture,
   heldPicture,
@@ -105,26 +144,41 @@ export {
 } from "./keep-model.js";
 
 export {
+  NO_WRITES,
+  newestValue,
+  takesRowBack,
+  type WriteSent,
+  type WritesBook,
+  writeSent,
+  writeSettled,
+} from "./latest-writes-model.js";
+
+export {
   ListRow,
   ROW_ACTION_TONE,
   type RowAction,
   type RowActionTone,
+  type RowMenuGroup,
   type RowSubmenu,
   type RowSwipe,
   type TaskFold,
   TaskRow,
 } from "./list-row.js";
 
-export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
+export { MachineAskSheet } from "./machine-ask-sheet.js";
 
-export { markdownGithubPages, markdownReplyButtons } from "./markdown-model.js";
+export { Markdown, type MarkdownFile, type MarkdownVideo, Picture } from "./markdown.js";
+
+export { markdownGithubPages, markdownReplyButtons, markdownShows } from "./markdown-model.js";
 
 export { MarkdownPage } from "./markdown-page.js";
 
 export {
   AgentTile,
   Avatar,
+  FACE_KIND,
   type Face,
+  type FaceKind,
   FailedMark,
   NeedsYouDot,
   TaskStatusMark,
@@ -135,11 +189,17 @@ export {
 
 export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
 
-export { monogramOf } from "./monogram.js";
+export { useMinute } from "./minute.js";
 
-export { RenameAsk, SwitchRow } from "./option-rows.js";
+export { useNoticeFootRoom } from "./notice-lift.js";
+
+export { SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
+
+export { PictureSet, type SetPicture } from "./picture-set.js";
+
+export { ProblemLine } from "./problem-line.js";
 
 export {
   PROVIDER_MARK_ASSET,
@@ -156,21 +216,22 @@ export {
 } from "./pull-request-look.js";
 
 export {
-  ConfirmAsk,
+  githubFace,
+  MARK_FACE,
+  type MarkFace,
   MarkRow,
   MergeActRow,
   type MergeMethodChoice,
   PullRequestHead,
-  WORDS_ASK_KIND,
-  WordsAsk,
-  type WordsAskAct,
-  type WordsAskKind,
   WriteNoteRow,
 } from "./pull-request-page.js";
 
-export { RemindSheet } from "./remind-sheet.js";
+export { RemindPickSheet } from "./remind-sheet.js";
 
 export {
+  FOOTER_TONE,
+  type FooterTone,
+  footerToneOf,
   LIST_LOOK,
   type ListLook,
   ListSection,
@@ -183,7 +244,7 @@ export { AgentPreview, type PreviewAgent, TaskPreview, ThreadPreview } from "./r
 
 export { latestStep, type PreviewMessage, previewMessages } from "./row-preview-model.js";
 
-export { Screen, Spacer } from "./screen.js";
+export { NO_GROUND, SCREEN_GROUND, Screen, type ScreenGround, Spacer } from "./screen.js";
 
 export { ScreenFailure } from "./screen-failure.js";
 
@@ -196,7 +257,10 @@ export {
   CodeRow,
   type ConnectionLine,
   ConnectionRow,
+  FORM_SPACING,
   FollowerRow,
+  type FormSpacing,
+  LoadingRow,
   MemberRow,
   type MemberRowAct,
   MenuRow,
@@ -219,35 +283,53 @@ export {
 
 export {
   type BarAction,
+  type BarFootItem,
   type BarMenu,
+  type BarMenuAction,
+  type BarMenuGroup,
   type BarPath,
   type BarSearch,
   type ColumnBar,
+  DetailPage,
+  type DetailStack,
+  type DetailStackPage,
+  groupKey,
+  HostedFill,
+  isBarMenu,
   KeptColumns,
   type KeptView,
   menuWithout,
   SplitOverTabs,
   SplitView,
   scopeMenu,
+  scopeSubtitle,
   UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 
-export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
+export {
+  PRIORITY_MARK_SYMBOL,
+  PRIORITY_MARK_TONE,
+  STATUS_MARK_SYMBOL,
+} from "./status-mark-model.js";
 
 export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
-export { askForName, type NameAsk, shareLink, shareWords } from "./system-asks.js";
+export { askForName, type NameAsk, shareWords } from "./system-asks.js";
 
 export {
   AGENT_ROW_STATE,
   AgentRow,
   type AgentRowState,
+  FailedReadRow,
   GroupRow,
   LINK_ROW_TONE,
   LinkRow,
   type LinkRowTone,
   RelationRow,
   TaskHead,
+  VERSION_WRITER,
+  VersionRow,
+  type VersionWriter,
   WordsRow,
 } from "./task-rows.js";
 
@@ -262,21 +344,23 @@ export {
 export { BRAND_COLOR } from "./tokens/brand-colors.js";
 
 export {
+  type BarScheme,
   type BrandColors,
+  ElevatedGround,
   STATUS_TONE,
   type StatusTone,
   toneColor,
+  useBarScheme,
   useColors,
 } from "./tokens/colors.js";
 
 export { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 
-export { MARK_SIZE, SPACE } from "./tokens/space.js";
+export { MARK_SIZE, SPACE, TAB_BAR_ROOM } from "./tokens/space.js";
 
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
 export {
-  AgentHead,
   AgentTranscript,
   type OlderPages,
   type TranscriptReveal,
@@ -307,7 +391,15 @@ export {
   useAsyncAction,
 } from "./use-async-action.js";
 
+export { useThreeColumns, useWindowSizeClass } from "./use-window-size-class.js";
+
 export { Video } from "./video.js";
+
+export {
+  WINDOW_SIZE_CLASS,
+  type WindowSizeClass,
+  windowSizeClass,
+} from "./window-size-class.js";
 
 export {
   newWorkspaceAction,

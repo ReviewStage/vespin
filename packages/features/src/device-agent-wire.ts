@@ -1,6 +1,7 @@
 import { Schema as EffectSchema } from "effect";
 import { checkoutIdentitySchema } from "./checkout-identity.js";
 import { DEVICE_AGENT_FOLDER } from "./checkout-path.js";
+import { checkoutRestoreSnapshotSchema } from "./checkout-restore.js";
 import { HOST_TARGET } from "./host-release.js";
 import { wireUuidSchema } from "./service-wire.js";
 
@@ -430,12 +431,8 @@ export const deviceAgentFilesPayloadSchema = EffectSchema.Struct({
   files: EffectSchema.Array(deviceAgentFileSchema),
 });
 
-/** A restore line's payload: the snapshot the worktree goes back to, as the turn's row keeps it (`@repo/features/checkout-restore`'s `CheckoutRestoreSnapshot`). */
-export const deviceAgentRestorePayloadSchema = EffectSchema.Struct({
-  commit: EffectSchema.String,
-  head: EffectSchema.NullOr(EffectSchema.String),
-  branch: EffectSchema.NullOr(EffectSchema.String),
-});
+/** A restore line's payload: the snapshot the worktree goes back to, as the turn's row keeps it. */
+export const deviceAgentRestorePayloadSchema = checkoutRestoreSnapshotSchema;
 
 /**
  * A launch's secrets, as the claim of its line hands them over once: the
@@ -502,6 +499,8 @@ const deviceField = { deviceId: wireUuidSchema };
 /**
  * A register: the Mac's id, its name, its home folder, and the CLI it
  * bundles, both absolute, the Codex binary it runs, absent until it has one,
+ * the entry of the Cursor SDK it keeps, absent on a device that keeps none
+ * (a Linux host, and a host from before it), which runs no Cursor agent,
  * its platform and architecture, and the capabilities its follower has
  * (`DEVICE_CAPABILITY`), absent for none. The device sends each key only when it names something
  * beyond the default, so a service from before it, which refuses a key it
@@ -537,6 +536,7 @@ export const deviceAgentRegisterRequestSchema = EffectSchema.Struct({
   attachmentsFolder: macPath,
   claudeExecutable: macPath,
   codexExecutable: EffectSchema.optionalKey(macPath),
+  cursorSdk: EffectSchema.optionalKey(macPath),
   capabilities: EffectSchema.optionalKey(
     EffectSchema.Array(EffectSchema.Literals(Object.values(DEVICE_CAPABILITY))).check(
       EffectSchema.isMaxLength(16),

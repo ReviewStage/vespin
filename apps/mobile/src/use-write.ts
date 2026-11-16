@@ -24,10 +24,22 @@ import {
   selectLiveMark,
 } from "@repo/host/app-state-reads";
 import { actRefusalSentence } from "@repo/host/contract";
-import { BUZZ, type Buzz, buzz, NOTICE_KIND, useFailureNotices } from "@repo/ui-native";
+import {
+  BUZZ,
+  type Buzz,
+  buzz,
+  NO_WRITES,
+  NOTICE_KIND,
+  newestValue,
+  takesRowBack,
+  useFailureNotices,
+  type WritesBook,
+  writeSent,
+  writeSettled,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostActs } from "./host/host-provider.js";
 
@@ -58,10 +70,10 @@ interface WriteSaying<Answer> {
   /**
    * Says the refusal in place, beside what the write came from, rather than
    * in the notice, such as a send whose words go back into its field; it is
-   * told the refusal's words, the offline hint among them, and the error
-   * buzz still plays.
+   * told the refusal's words, the offline hint among them, and whether the
+   * offline notice already said it, and the error buzz still plays.
    */
-  readonly inPlace?: ((words: string) => void) | undefined;
+  readonly inPlace?: ((words: string, noticed: boolean) => void) | undefined;
 }
 
 /** Sends `act`, says what came back, and answers whether it went. Never rejects. */
@@ -75,6 +87,7 @@ export const WRITE_SUBJECT = {
   THREAD_READ: "thread-read",
   THREAD_REMINDER: "thread-reminder",
   TASK_STATUS: "task-status",
+  TASK_DESCRIPTION: "task-description",
   TASK_PRIORITY: "task-priority",
   TASK_ASSIGNEE: "task-assignee",
   TASK_PIN: "task-pin",
@@ -84,6 +97,8 @@ export const WRITE_SUBJECT = {
   TASK_PARENT: "task-parent",
   TASK_SECTION: "task-section",
   TASK_FOLLOWING: "task-following",
+  TASK_COMMENT: "task-comment",
+  TASK_WORKSPACE: "task-workspace",
 } as const;
 
 export type WriteSubjectKind = (typeof WRITE_SUBJECT)[keyof typeof WRITE_SUBJECT];
@@ -198,7 +213,7 @@ export function useWrite(): Write {
 
           if (offline) notices.say({ kind: NOTICE_KIND.OFFLINE, words: said });
 
-          if (saying.inPlace !== undefined) saying.inPlace(said);
+          if (saying.inPlace !== undefined) saying.inPlace(said, offline);
           else if (!offline) {
             notices.say({
               kind: NOTICE_KIND.REFUSED,
@@ -271,4 +286,94 @@ export function refusalOf<Answer>(
       said.words = words;
     },
   }).then(() => said.words);
+}
+
+/** Writes a screen sends one after another, on rows of their own, and the refusals it says for them. */
+export interface LatestWrites<Refusal, Value> {
+  /** Why each row's newest write was refused, by the row it changes, until that row's next write is sent. */
+  readonly refusals: ReadonlyMap<string, Refusal>;
+  /** The refusals said, in the order they were said and each once, for a group's one footer. */
+  readonly said: readonly Refusal[];
+  /**
+   * Sends `act` at once for the row `row` names, such as a member's id or a
+   * setting's field, even while an earlier one is out, and answers false only
+   * where its refusal takes the row back: refused, and still the row's newest
+   * write, so the caller redraws the row from what is stored.
+   */
+  readonly run: (
+    row: string,
+    value: Value,
+    act: () => PromiseLike<Refusal | undefined>,
+  ) => Promise<boolean>;
+  /** What a new pick on `row` is compared with: the value its newest write carries while out, else `drawn` (`newestValue`). */
+  readonly newest: (row: string, drawn: Value) => Value;
+}
+
+/**
+ * Writes that each go out at once, each row's newest refusal kept to say, for
+ * acts the host declares, so their change is drawn as they are sent and a
+ * refusal rolls it back. Note that this is `useAsyncAction` without its lock,
+ * because a second pick or press while the first is out (an effort right after
+ * a model, or one member's role right after another's) is a write of its own,
+ * which the lock dropped unseen. Writes to one row follow each other, so an
+ * earlier one's refusal landing after a later one began is not said, as an
+ * agent's model picks keep only the latest's (`use-agent-model.ts`), and its
+ * caller hears it as nothing to take back, since the later pick stands. Writes to two rows are each their own, so
+ * a refused one is said whatever another row's write did. A row's pick is
+ * compared with `newest`, the value its write still out carries, so a pick
+ * back to the drawn value before that write is drawn still goes.
+ */
+export function useLatestWrites<Refusal, Value = undefined>(
+  unanswered: (cause: unknown) => Refusal,
+): LatestWrites<Refusal, Value> {
+  // Note that the book is held in a ref as well as drawn, because two writes in one frame both read the state the last draw left, and only the ref is written before the second lands.
+  const book = useRef<WritesBook<Refusal, Value>>(NO_WRITES);
+  const [refusals, setRefusals] = useState<ReadonlyMap<string, Refusal>>(NO_WRITES.refusals);
+  const newestUnanswered = useRef(unanswered);
+  useEffect(() => {
+    newestUnanswered.current = unanswered;
+  }, [unanswered]);
+
+  const run = useCallback(
+    (row: string, value: Value, act: () => PromiseLike<Refusal | undefined>): Promise<boolean> => {
+      const sent = writeSent(book.current, row, value);
+      book.current = sent.book;
+      setRefusals(sent.book.refusals);
+
+      // Note that it answers false only for a refusal that takes the row back, so a caller redraws a row from what is stored only then, never over a later pick still out.
+      const settle = (said: Refusal | undefined): boolean => {
+        const back = takesRowBack(book.current, row, sent.write, said);
+        book.current = writeSettled(book.current, row, sent.write, said);
+        setRefusals(book.current.refusals);
+
+        return !back;
+      };
+
+      let started: PromiseLike<Refusal | undefined>;
+
+      try {
+        started = act();
+      } catch (thrown) {
+        // Note that an act that throws before it starts anything is refused as one that rejects is.
+        started = Promise.reject(thrown);
+      }
+
+      return Promise.resolve(started).then(
+        (said) => settle(said ?? undefined),
+        (cause: unknown) => settle(newestUnanswered.current(cause)),
+      );
+    },
+    [],
+  );
+
+  const newest = useCallback(
+    (row: string, drawn: Value): Value => newestValue(book.current, row, drawn),
+    [],
+  );
+
+  return useMemo(
+    // Note that a footer says each refusal once, though two rows' writes were refused in the same words.
+    () => ({ refusals, said: [...new Set(refusals.values())], run, newest }),
+    [refusals, run, newest],
+  );
 }

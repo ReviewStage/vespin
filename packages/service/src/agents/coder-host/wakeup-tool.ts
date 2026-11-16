@@ -95,8 +95,7 @@ export const SCHEDULE_WAKEUP_TOOL = {
     `${WAKEUP_DELAY.MAX_SECONDS} seconds, a minute through 7 days less an hour; wait longer by ` +
     "booking again when it fires. One wakeup stands at a time: booking again replaces it, and " +
     "stop: true cancels it. A message that reaches you first, such as GitHub's that every check " +
-    "finished, starts a turn on its own, so cancel the wakeup then. Answers `accepted` with the instant booked and the delay as held, or with no " +
-    "wakeup once canceled, or `rejected` and why.",
+    "finished, starts a turn on its own, so cancel the wakeup then.",
   inputSchema: SCHEDULE_WAKEUP_INPUT,
 } as const;
 

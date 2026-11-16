@@ -67,7 +67,23 @@ export const TOPIC = {
    * that workspace and never its members' task lists.
    */
   WORKSPACE_SKILLS: "workspace-skills",
+  /**
+   * A GitHub repository, by GitHub's own id for it, which a rename or a
+   * transfer keeps: what GitHub's deliveries say moved of its pull requests,
+   * which no account owns, so a Pull request tab follows them by the
+   * repository and selects its own number.
+   */
+  GITHUB_REPOSITORY: "github-repository",
   TASK: "task",
+  /**
+   * A task's parent, by the parent's id, named by each write to a child of
+   * it, before and after, so a reparented child names the parent it left
+   * too: narrower than the task's own topic, so no read is woken on it and
+   * the parent's open reads never wake for a child's write, and the task
+   * list's delta read finds in the log the parents whose sub-task counts
+   * moved.
+   */
+  TASK_PARENT: "task-parent",
   AGENT: "agent",
   CONVERSATION: "conversation",
 } as const;
