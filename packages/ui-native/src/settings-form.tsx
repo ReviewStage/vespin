@@ -199,13 +199,18 @@ function PressedRow({
  * on the surface, as the panel's settings cards stand on its page, rather
  * than on the system's grouped grays. A drag on it lowers the keyboard at
  * once, as a composing sheet's words otherwise keep it standing over the
- * rows below them, with no key of the keyboard's own that lowers it.
+ * rows below them, with no key of the keyboard's own that lowers it. A
+ * clear form paints no ground between its cards, so they stand on a
+ * half-height sheet's own glass.
  */
 export function SettingsForm({
   onContentHeight,
+  clear = false,
   spacing = FORM_SPACING.REGULAR,
   children,
 }: {
+  /** Whether the form stands on what is under it, such as a half-height sheet's glass, rather than on its own ground. */
+  readonly clear?: boolean | undefined;
   /** How far apart its sections stand; a short sheet's stand close, so its first section doesn't sit under an empty band. */
   readonly spacing?: FormSpacing;
   /** Told the height its rows stand in, as they lay out, for a popover that fits it; none where the form fills its place. */
@@ -227,7 +232,7 @@ export function SettingsForm({
         ...(spacing === FORM_SPACING.COMPACT ? [listSectionSpacing("compact")] : []),
         scrollContentBackground("hidden"),
         scrollDismissesKeyboard("immediately"),
-        background(colors.GROUPED),
+        ...(clear ? [] : [background(colors.GROUPED)]),
         tint(colors.TEXT),
         font({ textStyle: TYPE_ROLE.ROW_TITLE }),
       ]}

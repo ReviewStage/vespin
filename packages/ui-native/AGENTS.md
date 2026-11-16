@@ -123,7 +123,10 @@ builds a control of its own.
   screen and a list stand on the brand's `GROUND` and `SIDEBAR`, never the
   system's grays, and so do a split view's list and detail columns
   themselves (`containerBackground`) and a sheet or popover to its edge
-  (`presentationBackground`); a split view's sidebar paints nothing, so it
+  (`presentationBackground`), but for a short route sheet at half height in
+  a compact window, which iOS floats as Liquid Glass and which stands on
+  that glass alone (see Grouped forms) unless the reader reduces
+  transparency; a split view's sidebar paints nothing, so it
   stands clear on the system's floating glass pane, as Mail's does; lists stand plain, as the panel's do, never as
   inset cards (a page of one thing's sections, such as a task's, stands
   `LIST_LOOK.DETAIL`, the system's grouped list, so its headers scroll away
@@ -268,7 +271,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   or remind) read as iOS Settings' cards: their rows stand in the panel's
   raised fill (`RAISED`, the brand's `OVERLAY`) on the form's own ground
   (`GROUPED`: the chip's hover gray in light, black in dark), and the sheet
-  around them stands on `GROUPED` too. A row a press takes somewhere is the
+  around them stands on `GROUPED` too, but for a short sheet at half height,
+  which iOS floats as Liquid Glass: there the glass is its one ground
+  (`Screen` and `SettingsForm` `clear`), as Apple's half sheets stand. A row a press takes somewhere is the
   system's default button, so it flashes the row's gray while held, as
   Settings' rows do; a choice among a few is `PickRows`, each a row with
   what it does under its name where it says and the picked one checked in
