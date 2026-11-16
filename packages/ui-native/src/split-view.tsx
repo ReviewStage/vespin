@@ -49,12 +49,16 @@ import { type BarSubtitle, ColumnBarTitle } from "./bar-title.js";
 import type { Scope } from "./button.js";
 import { GLYPH, type Glyph } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
-import { choiceColor, type MenuChoice } from "./list-row.js";
+import { BAR_KIND, barSubtitle } from "./interactions.js";
+import { choiceContent, type MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
 import { useColors } from "./tokens/colors.js";
 
 /** What the first column holds, so it is drawn afresh as that changes. */
 const FIRST_COLUMN = { APP_SIDEBAR: "app-sidebar", LIST: "list" } as const;
+
+/** What a bar's subtitle opens with while a filter narrows its list, as Mail's does. */
+const FILTERED_BY = "Filtered by:";
 
 /** Where the split view stands against the tabs' screens: over a tab's root, or behind the page a tab pushed over it. */
 const LAYER = { FRONT: 1, BEHIND: 0 } as const;
@@ -144,6 +148,8 @@ export type BarPath = {
  */
 export type ColumnBar = {
   readonly title?: string | undefined;
+  /** A line under the list's `title`, as Mail names its filter under Inbox, drawn by the system's own bar (`barSubtitle`); never with a `name`, whose line is its `subtitle`. */
+  readonly titleLine?: string | undefined;
   /** A pushed page's name, small and inline in the ink, as a compact window's stack names an agent's page; never with a `title`. */
   readonly name?: string | undefined;
   /** A muted line under the page's `name`, such as an agent's state and model, standing with it in the bar's middle; never without a `name`. */
@@ -239,7 +245,7 @@ export function BarMenuButton({
       {menu.choices.map((choice) => (
         <Toggle
           key={choice.label}
-          {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
+          {...choiceContent(choice, colors)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />
@@ -312,6 +318,13 @@ export function scopeMenu(label: string, scopes: readonly Scope[], narrowed: boo
     })),
     actions: [],
   };
+}
+
+/** What a bar says under its title while its filter narrows the list, as Mail's "Filtered by: Unread"; nothing while it shows the list whole. */
+export function scopeSubtitle(scopes: readonly Scope[], narrowed: boolean): string | undefined {
+  const chosen = scopes.find((scope) => scope.selected);
+
+  return narrowed && chosen !== undefined ? `${FILTERED_BY} ${chosen.label}` : undefined;
 }
 
 /** A menu with the acts and menus a bar already stands as glyphs left out, so ⋯ holds only the rest. */
@@ -416,6 +429,7 @@ function Column({
           : bar.name !== undefined
             ? [navigationTitle(bar.name), toolbarTitleDisplayMode("inline")]
             : [toolbarTitleDisplayMode("inline")]),
+        barSubtitle(BAR_KIND.COLUMN, bar.titleLine),
       ]}
     >
       {ruled ? (

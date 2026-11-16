@@ -21,7 +21,7 @@ import type {
   SDKMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import { Predicate } from "effect";
-import type { CodexNotification } from "./protocol.js";
+import { type CodexNotification, RUNNER_EVENT, type RunnerOutOfMemory } from "./protocol.js";
 
 /** 128 and SIGKILL's 9: how a shell reports a command killed by the signal. */
 const SIGKILL_EXIT = 137;
@@ -104,7 +104,13 @@ export interface ClaudeCodeMemoryWatch {
     readonly PostToolUse: HookCallbackMatcher[];
     readonly PostToolUseFailure: HookCallbackMatcher[];
   };
-  readonly annotate: (message: SDKMessage) => SDKMessage;
+  readonly annotate: (message: SDKMessage) => Annotated<SDKMessage>;
+}
+
+/** A harness's message as posted, with the event marking each call in it killed out of memory, posted ahead of it. */
+export interface Annotated<M> {
+  readonly killed: readonly RunnerOutOfMemory[];
+  readonly message: M;
 }
 
 /** The kernel's count of OOM kills, from the first file that keeps one; none on a machine that keeps none. */
@@ -136,11 +142,17 @@ function claudeCodeExitCode(error: string): number | undefined {
   return match === null ? undefined : Number(match[1]);
 }
 
+/** A command killed out of memory: the transcript's line, and the sandbox's memory in whole GB where it was read. */
+interface OutOfMemoryKill {
+  readonly line: string;
+  readonly memoryGb: number | undefined;
+}
+
 /**
- * The transcript's line for a command killed out of memory, its size in
+ * A command killed out of memory, its line saying the sandbox's size in
  * whole GB; none for any other run.
  */
-function outOfMemoryLine(run: CommandMemoryRun): string | undefined {
+function outOfMemoryKill(run: CommandMemoryRun): OutOfMemoryKill | undefined {
   const { exitCode, killsBefore, killsAfter, memoryBytes } = run;
 
   if (exitCode !== SIGKILL_EXIT || killsBefore === undefined || killsAfter === undefined) {
@@ -149,9 +161,18 @@ function outOfMemoryLine(run: CommandMemoryRun): string | undefined {
 
   if (killsAfter <= killsBefore) return undefined;
 
-  return memoryBytes === undefined
-    ? "Killed: the sandbox ran out of memory"
-    : `Killed: the sandbox ran out of memory (${Math.round(memoryBytes / GIB)} GB)`;
+  const memoryGb = memoryBytes === undefined ? undefined : Math.round(memoryBytes / GIB);
+
+  return memoryGb === undefined
+    ? { line: "Killed: the sandbox ran out of memory", memoryGb }
+    : { line: `Killed: the sandbox ran out of memory (${memoryGb} GB)`, memoryGb };
+}
+
+/** The event the service marks a killed call by, ahead of its answer (`RUNNER_EVENT.OUT_OF_MEMORY`); none where the sandbox's memory was not read. */
+function killedEvent(callId: string, kill: OutOfMemoryKill): readonly RunnerOutOfMemory[] {
+  return kill.memoryGb === undefined
+    ? []
+    : [{ type: RUNNER_EVENT.OUT_OF_MEMORY, callId, memoryGb: kill.memoryGb }];
 }
 
 /** What the model reads beside a command killed out of memory: the line, and what to do next. */
@@ -174,7 +195,7 @@ export function claudeCodeMemoryWatch(
   readings: MemoryReadings = MACHINE_READINGS,
 ): ClaudeCodeMemoryWatch {
   const began = new Map<string, number | undefined>();
-  const lines = new Map<string, string>();
+  const kills = new Map<string, OutOfMemoryKill>();
 
   const onBegin: HookCallback = async (hook) => {
     if (hook.hook_event_name === HOOK_EVENT.PRE_TOOL_USE)
@@ -190,39 +211,40 @@ export function claudeCodeMemoryWatch(
     const killsBefore = began.get(hook.tool_use_id);
     began.delete(hook.tool_use_id);
 
-    const line = outOfMemoryLine({
+    const kill = outOfMemoryKill({
       exitCode: claudeCodeExitCode(hook.error),
       killsBefore,
       killsAfter: killsBefore === undefined ? undefined : await readings.kills(),
       memoryBytes: await readings.memoryBytes(),
     });
 
-    if (line === undefined) return { continue: true };
-    lines.set(hook.tool_use_id, line);
+    if (kill === undefined) return { continue: true };
+    kills.set(hook.tool_use_id, kill);
 
     return {
       continue: true,
       hookSpecificOutput: {
         hookEventName: HOOK_EVENT.POST_TOOL_USE_FAILURE,
-        additionalContext: outOfMemoryContext(line),
+        additionalContext: outOfMemoryContext(kill.line),
       },
     };
   };
 
-  const annotate = (message: SDKMessage): SDKMessage => {
-    if (message.type !== "user" || lines.size === 0) return message;
+  const annotate = (message: SDKMessage): Annotated<SDKMessage> => {
+    if (message.type !== "user" || kills.size === 0) return { killed: [], message };
     const { content } = message.message;
 
-    if (Predicate.isString(content)) return message;
-    let changed = false;
+    if (Predicate.isString(content)) return { killed: [], message };
+    const killed: RunnerOutOfMemory[] = [];
 
     const blocks = content.map((block) => {
       if (block.type !== "tool_result") return block;
-      const line = lines.get(block.tool_use_id);
+      const kill = kills.get(block.tool_use_id);
 
-      if (line === undefined) return block;
-      lines.delete(block.tool_use_id);
-      changed = true;
+      if (kill === undefined) return block;
+      kills.delete(block.tool_use_id);
+      killed.push(...killedEvent(block.tool_use_id, kill));
+      const { line } = kill;
       const said = block.content;
 
       if (said === undefined || Predicate.isString(said)) {
@@ -232,7 +254,7 @@ export function claudeCodeMemoryWatch(
       return { ...block, content: [...said, { type: "text" as const, text: line }] };
     });
 
-    return changed ? { ...message, message: { ...message.message, content: blocks } } : message;
+    return { killed, message: { ...message, message: { ...message.message, content: blocks } } };
   };
 
   const matching = (hook: HookCallback): HookCallbackMatcher[] => [
@@ -258,7 +280,7 @@ export function claudeCodeMemoryWatch(
  */
 export function codexMemoryWatch(
   readings: MemoryReadings = MACHINE_READINGS,
-): (notification: CodexNotification) => Promise<CodexNotification> {
+): (notification: CodexNotification) => Promise<Annotated<CodexNotification>> {
   const began = new Map<string, number | undefined>();
 
   return async (notification) => {
@@ -268,30 +290,37 @@ export function codexMemoryWatch(
     ) {
       began.set(notification.params.item.id, await readings.kills());
 
-      return notification;
+      return { killed: [], message: notification };
     }
 
-    if (notification.method !== CODEX_COMMAND.COMPLETED) return notification;
+    if (notification.method !== CODEX_COMMAND.COMPLETED)
+      return { killed: [], message: notification };
     const { item } = notification.params;
 
-    if (item.type !== CODEX_COMMAND.ITEM || !began.has(item.id)) return notification;
+    if (item.type !== CODEX_COMMAND.ITEM || !began.has(item.id)) {
+      return { killed: [], message: notification };
+    }
+
     const killsBefore = began.get(item.id);
     began.delete(item.id);
 
-    const line = outOfMemoryLine({
+    const kill = outOfMemoryKill({
       exitCode: item.exitCode ?? undefined,
       killsBefore,
       killsAfter: killsBefore === undefined ? undefined : await readings.kills(),
       memoryBytes: await readings.memoryBytes(),
     });
 
-    if (line === undefined) return notification;
+    if (kill === undefined) return { killed: [], message: notification };
     const said = item.aggregatedOutput ?? "";
-    const aggregatedOutput = said === "" ? line : `${said.replace(/\n$/, "")}\n${line}`;
+    const aggregatedOutput = said === "" ? kill.line : `${said.replace(/\n$/, "")}\n${kill.line}`;
 
     return {
-      ...notification,
-      params: { ...notification.params, item: { ...item, aggregatedOutput } },
+      killed: killedEvent(item.id, kill),
+      message: {
+        ...notification,
+        params: { ...notification.params, item: { ...item, aggregatedOutput } },
+      },
     };
   };
 }

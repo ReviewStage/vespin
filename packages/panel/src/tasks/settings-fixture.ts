@@ -71,6 +71,7 @@ import {
   type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
+import type { WorkspaceSandboxSizeAnswer } from "@repo/features/workspace-sandbox-size-wire";
 import {
   WORKSPACE_ROLE,
   type WorkspaceMachine,
@@ -799,11 +800,41 @@ let acmeSlackBot: WorkspaceSlackBot = {
 
 /* ----- Settings › Cloud environment's Variables ----- */
 
-/** Acme's environment variables by name, as an add, a replace, and a delete leave them. */
+/** Acme's environment variables, secrets and configs, as an add, an edit, and a delete leave them. */
 let acmeVariables: readonly WorkspaceVariable[] = [
-  { name: "DATABASE_URL", updatedAt: NOW - 3 * DAY },
-  { name: "OPENAI_API_KEY", updatedAt: NOW - DAY },
-  { name: "SENTRY_AUTH_TOKEN", updatedAt: NOW - 2 * HOUR },
+  {
+    name: "DATABASE_URL",
+    secret: true,
+    createdAt: NOW - 20 * DAY,
+    updatedAt: NOW - 3 * DAY,
+    createdBy: FIXTURE_PERSON.MAYA,
+    updatedBy: FIXTURE_PERSON.ADA,
+  },
+  {
+    name: "LOG_LEVEL",
+    secret: false,
+    value: "debug",
+    createdAt: NOW - 12 * DAY,
+    updatedAt: NOW - 5 * HOUR,
+    createdBy: FIXTURE_PERSON.THEO,
+    updatedBy: FIXTURE_PERSON.THEO,
+  },
+  {
+    name: "NODE_ENV",
+    secret: false,
+    value: "production",
+    createdAt: NOW - 30 * DAY,
+    updatedAt: NOW - 30 * DAY,
+    createdBy: FIXTURE_PERSON.ADA,
+  },
+  {
+    name: "OPENAI_API_KEY",
+    secret: true,
+    createdAt: NOW - DAY,
+    updatedAt: NOW - DAY,
+    createdBy: FIXTURE_PERSON.PRIYA,
+  },
+  { name: "SENTRY_AUTH_TOKEN", secret: true, createdAt: NOW - 9 * DAY, updatedAt: NOW - 2 * HOUR },
 ];
 
 /** The variables a write leaves, in name order as the service answers them. */
@@ -811,6 +842,35 @@ function variablesAnswer(variables: readonly WorkspaceVariable[]) {
   acmeVariables = [...variables].sort((one, other) => one.name.localeCompare(other.name));
 
   return { variables: acmeVariables };
+}
+
+/** A variable as a write by the account leaves it: a new one added now, one that stood changed now; a config's value kept, a secret's never. */
+function writtenVariable(
+  name: string,
+  value: string,
+  secret: boolean | undefined,
+): WorkspaceVariable {
+  const was = acmeVariables.find((variable) => variable.name === name);
+
+  // Note that a new variable is what `secret` says, a secret by default, and one that stood stays a secret once it is one.
+  const isSecret = was === undefined ? (secret ?? true) : was.secret !== false || secret === true;
+
+  const kept = isSecret ? {} : { value };
+
+  if (was === undefined) {
+    return {
+      name,
+      secret: isSecret,
+      createdAt: NOW,
+      updatedAt: NOW,
+      createdBy: FIXTURE_PERSON.ADA,
+      ...kept,
+    };
+  }
+
+  const { value: _value, ...rest } = was;
+
+  return { ...rest, secret: isSecret, updatedAt: NOW, updatedBy: FIXTURE_PERSON.ADA, ...kept };
 }
 
 /* ----- Settings › Cloud environment's scripts ----- */
@@ -828,6 +888,9 @@ const SETUP_RUN_AGENT = {
     name: "Retry the relay's webhooks",
   },
 } as const;
+
+/** Acme's sandbox size, as a choice leaves it: four vCPUs. */
+let acmeSandboxSize: WorkspaceSandboxSizeAnswer = { vcpus: 4 };
 
 /**
  * Acme's sandbox setup, as a save leaves it: an install script, setup
@@ -1011,11 +1074,20 @@ const ANSWERS: StagedAnswers = {
   },
   [ACT_KIND.ALLOWED_COMMANDS_WRITE]: (write) => allowedCommandWritten(write),
   [ACT_KIND.WORKSPACE_ENVIRONMENT_LIST]: () => ({ variables: acmeVariables }),
-  [ACT_KIND.WORKSPACE_ENVIRONMENT_PUT]: ({ name }) =>
+  [ACT_KIND.WORKSPACE_ENVIRONMENT_PUT]: ({ name, value }) =>
     variablesAnswer([
       ...acmeVariables.filter((variable) => variable.name !== name),
-      { name, updatedAt: NOW },
+      writtenVariable(name, value, undefined),
     ]),
+  [ACT_KIND.WORKSPACE_ENVIRONMENT_SAVE]: ({ variables, secret }) => {
+    const written = variables.map(({ name, value }) => writtenVariable(name, value, secret));
+    const names = new Set(variables.map((variable) => variable.name));
+
+    return variablesAnswer([
+      ...acmeVariables.filter((variable) => !names.has(variable.name)),
+      ...written,
+    ]);
+  },
   [ACT_KIND.WORKSPACE_ENVIRONMENT_DELETE]: ({ name }) =>
     variablesAnswer(acmeVariables.filter((variable) => variable.name !== name)),
   // The workspace's members' machines, by name, or one member's: the account's own as Hosts stages them, and a teammate's Mac.
@@ -1025,6 +1097,12 @@ const ANSWERS: StagedAnswers = {
     ),
   }),
   [ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: () => acmeSandboxSetup,
+  [ACT_KIND.WORKSPACE_SANDBOX_SIZE_READ]: () => acmeSandboxSize,
+  [ACT_KIND.WORKSPACE_SANDBOX_SIZE_PUT]: ({ vcpus }) => {
+    acmeSandboxSize = { ...acmeSandboxSize, vcpus };
+
+    return acmeSandboxSize;
+  },
   [ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: ({ script }) => sandboxSetupAnswer(undefined, script),
   [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script }) =>
     sandboxSetupAnswer(repository, script),
