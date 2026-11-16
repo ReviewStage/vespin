@@ -759,8 +759,8 @@ function runsOnOf(
  * v0.7.1 refuses a summary without it. It goes once a release whose decoder
  * treats it as optional has shipped and v0.7.1 is no longer supported. A pin,
  * the reader's own `pinnedAt` and the `pinPosition` they dragged it to, is
- * answered only where it stands, so a plan that is not pinned reads as every
- * plan did before pins; an owner whose account is gone is named by nothing.
+ * answered only where it stands; an owner whose account is gone is named by
+ * nothing.
  */
 function summaryOf(
   row: TaskSummaryRow,
@@ -1045,7 +1045,6 @@ const lockTask = SqlSchema.findOneOption({
     ),
 });
 
-/** Whether any task is a child of this one. */
 const hasChildren = SqlSchema.findOneOption({
   Request: Schema.Struct({ taskId: Schema.String }),
   Result: Schema.Struct({ id: Schema.String }),
@@ -1219,12 +1218,6 @@ const nameUntitled = SqlSchema.findOneOption({
     ),
 });
 
-/**
- * Starts a task under the account, in the workspace it was handed, as one
- * empty document, with the repository it was handed; it stands first in
- * the list. A plan handed no name, or a blank one, starts as
- * `UNTITLED_TASK_NAME`.
- */
 /** A started task's row as it is inserted: its name, or Untitled, its description's text, empty where none is named, and its brief, or none for a blank one. */
 const insertOf = (userId: string, started: NewTask & { readonly id?: string }) =>
   Effect.gen(function* () {
@@ -1520,11 +1513,9 @@ export interface TaskHeader {
   readonly ownerId: string | null;
   readonly name: string;
   readonly repository: string | null;
-  /** Where the task stands. */
   readonly status: TaskStatus;
   /** The task it is a child of; null for a task at the top. */
   readonly parentTaskId: string | null;
-  /** How the task is worked. */
   readonly mode: TaskMode;
   /** The member it is assigned to; null for none. */
   readonly assigneeId: string | null;
@@ -2436,8 +2427,8 @@ export function archiveAgentOfDoneTask<R = never>(
 }
 
 /**
- * Deletes the task and its document, and stamps its coding agents'
- * conversations cleared; false where the account reached no such task. The agents'
+ * Deletes the task, its document, and its coding agents' conversations;
+ * false where the account reached no such task. The agents'
  * conversations are read before the delete, because the delete cascades
  * the agent rows that name them.
  *

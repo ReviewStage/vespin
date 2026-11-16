@@ -5,6 +5,8 @@
  * registered as one node on the host's registry. The runtime itself stands
  * behind the host; nothing here composes a store or a brain.
  */
+
+import { listedApart } from "@repo/features/tasks-view";
 import {
   type GatewayHost,
   NODE_CAPABILITY_STATUS,
@@ -14,7 +16,6 @@ import {
 } from "@repo/gateway";
 import { isWireString } from "@repo/wire";
 import { Data, Effect, type Scope } from "effect";
-import { taskListPartsOf } from "../app-state.js";
 import { createHostOperator, type HostOperator } from "../host-operator.js";
 import {
   HOST_NATIVE_NODE_ID,
@@ -52,10 +53,12 @@ export const wireGateway = /* @__PURE__ */ Effect.fn("client/wireGateway")(funct
   });
 
   // What the host tells its clients of the panel's tasks, written to the
-  // document every window is told from, its lists held beside it. The
-  // subscription is the scope's, so the close that ends the wiring ends it.
-  const stopTasks = host.onTasksChanged((tasks) => {
-    state.update({ tasks: tasks }, taskListPartsOf(tasks));
+  // document every window is told from, its lists held beside it rather
+  // than in it. The subscription is the scope's, so the close that ends
+  // the wiring ends it.
+  const stopTasks = host.onTasksChanged((listed) => {
+    const { tasks, lists } = listedApart(listed);
+    state.update({ tasks }, lists);
   });
 
   yield* Effect.addFinalizer(() => Effect.sync(stopTasks));

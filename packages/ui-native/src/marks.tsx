@@ -23,18 +23,30 @@ import {
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { NEEDS_YOU } from "@repo/features/inbox-list-model";
+import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
-import { TASK_STATUS_TONE, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
-import type { TaskStatus } from "@repo/features/task-wire";
+import {
+  TASK_PRIORITY_WORDS,
+  TASK_STATUS_TONE,
+  TASK_STATUS_WORDS,
+} from "@repo/features/task-standing-words";
+import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { useState } from "react";
 import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
 import { monogramOf } from "./monogram.js";
-import { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
+import {
+  PRIORITY_MARK_BARRED,
+  PRIORITY_MARK_SYMBOL,
+  PRIORITY_MARK_TONE,
+  STATUS_MARK_SYMBOL,
+} from "./status-mark-model.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { MARK_SIZE } from "./tokens/space.js";
+import { TASK_PRIORITY_UNLIT_OPACITY } from "./tokens/task-status-symbols.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { tileHue } from "./workspace-tile-model.js";
 
@@ -116,6 +128,42 @@ export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
       color={toneColor(colors, TASK_STATUS_TONE[status])}
       modifiers={[accessibilityLabel(TASK_STATUS_WORDS[status])]}
     />
+  );
+}
+
+/**
+ * A task's priority as its bars, as the panel marks it: the lit bars in its
+ * ink over every bar it can light, drawn faint, urgent's square in the
+ * attention ink, heard as the priority's name. Note that the faint bars are
+ * a symbol of their own beneath the lit ones, each in one ink, since a
+ * palette of two layers drew the whole mark black on iOS.
+ */
+export function TaskPriorityMark({ priority }: { readonly priority: TaskPriority }) {
+  const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
+  const ink = toneColor(colors, PRIORITY_MARK_TONE[priority]);
+
+  const lit = (
+    <Image
+      {...glyphImage(PRIORITY_MARK_SYMBOL[priority])}
+      size={size}
+      color={ink}
+      modifiers={[accessibilityLabel(TASK_PRIORITY_WORDS[priority])]}
+    />
+  );
+
+  if (!PRIORITY_MARK_BARRED.has(priority)) return lit;
+
+  return (
+    <ZStack>
+      <Image
+        {...glyphImage(GLYPH.PRIORITY_BARS)}
+        size={size}
+        color={ink}
+        modifiers={[opacity(TASK_PRIORITY_UNLIT_OPACITY), accessibilityHidden()]}
+      />
+      {lit}
+    </ZStack>
   );
 }
 
@@ -262,12 +310,14 @@ const TILE_MARK_SCALE = 0.72;
 /**
  * The image sets each harness's mark is drawn from, which the app's config
  * writes into its asset catalog (`apps/mobile/app.config.ts`): Claude Code's
- * Clawd from the brand's path in its own clay, and Codex's picture from the
- * files the panel serves, each as the panel's `HarnessMark` draws it.
+ * Clawd from the brand's path in its own clay, Codex's picture from the
+ * files the panel serves, and Cursor's cube from the brand's path in the
+ * row's ink, each as the panel's `HarnessMark` draws it.
  */
 export const HARNESS_MARK_ASSET = {
   [MODEL_PROVIDER.ANTHROPIC]: "ClawdMark",
   [MODEL_PROVIDER.OPENAI]: "CodexMark",
+  [MODEL_PROVIDER.CURSOR]: "CursorMark",
 } as const satisfies Record<ModelProvider, string>;
 
 /**
@@ -327,6 +377,29 @@ export function HarnessMark({
     <Image
       assetName={HARNESS_MARK_ASSET[provider]}
       modifiers={[resizable(), frame({ width: size, height: size }), accessibilityHidden()]}
+    />
+  );
+}
+
+/** An integration's mark, as the panel leads a call of its tool with it: the provider's own vector at `size`, a template mark in `ink`, unheard beside the words it leads. */
+export function IntegrationMark({
+  provider,
+  size,
+  ink,
+}: {
+  readonly provider: IntegrationProvider;
+  readonly size: number;
+  readonly ink: string;
+}) {
+  return (
+    <Image
+      assetName={INTEGRATION_MARK_ASSET[provider]}
+      modifiers={[
+        resizable(),
+        frame({ width: size, height: size }),
+        foregroundStyle(ink),
+        accessibilityHidden(),
+      ]}
     />
   );
 }

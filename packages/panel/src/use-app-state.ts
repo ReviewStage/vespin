@@ -45,14 +45,12 @@ export {
   selectNetwork,
   selectNotifications,
   selectPortForwarding,
-  selectPullRequestPublished,
   selectRefusedAgents,
   selectRun,
   selectSessionReplay,
   selectSettingsHeld,
   selectSignedIn,
   selectStoredExperimentChoices,
-  selectTaskListStanding,
   selectTaskSendRefused,
   selectTasks,
   selectVoiceCall,
@@ -201,7 +199,9 @@ export function followAppState(client: QueryClient): AppStateFollowing {
   const shown = (state: AppStateSnapshot): void => {
     client.setQueryData(appStateQuery.queryKey, state);
 
-    if (state.run.fixtureMode) taskList.write(state.version, selectListedTasks(state));
+    const staged = loadedTasksFixture()?.fixtureTasksView(state.run);
+
+    if (staged !== undefined) taskList.write(state.version, staged);
   };
 
   // Answers the staging the state waits on in a fixture run, and nothing where it is written at once.
