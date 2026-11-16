@@ -156,6 +156,23 @@ describe("transcriptItems", () => {
     ]);
   });
 
+  it("names an app's line while the reader is not yet known", () => {
+    const items = transcriptItems(
+      [
+        {
+          id: "fired",
+          role: MESSAGE_ROLE.USER,
+          parts: [{ type: "text", text: "Triage the new issues." }],
+          sentAt: 0,
+          sentBy: { name: "Morning triage" },
+        },
+      ],
+      { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 1, pullRequests: [] },
+    );
+
+    expect(items).toMatchObject([{ kind: TRANSCRIPT_ITEM.SAID, sender: "Morning triage" }]);
+  });
+
   it("heads a line sent from a suggestion by the agent that suggested it", () => {
     const suggestedBy = { agent_id: "a1", name: "Triage", button_id: "b1" };
     const lead = "Suggested by [@Triage](https://vespin.dev/acme/agent/a1):\n\n";

@@ -437,10 +437,12 @@ function saidItem(
   base: ItemBase,
   reading: TranscriptReading,
 ): TranscriptItem {
-  const sender =
-    line.sentBy === undefined || line.sentBy.userId === reading.readerId
-      ? undefined
-      : line.sentBy.name;
+  // Note that a line is the reader's own only by a user id that matches theirs, so an app's line, which has none, keeps its name while the reader is unknown.
+  const own =
+    line.sentBy === undefined ||
+    (line.sentBy.userId !== undefined && line.sentBy.userId === reading.readerId);
+
+  const sender = own ? undefined : line.sentBy?.name;
 
   const from = suggestionFrom(line, reading, sender);
   const words = messageWords(line);
