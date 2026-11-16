@@ -38,12 +38,12 @@ import {
   buzz,
   Chip,
   type ChipMenuGroup,
-  ComposeSheet,
   ConfirmAsk,
   FieldChip,
   GLYPH,
   type Glyph,
   glyphSymbol,
+  MENU_CHIP_LOOK,
   MenuChip,
   type PickOption,
   runsOnGlyph,
@@ -57,6 +57,7 @@ import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { useCloseSheet } from "../close-sheet.js";
+import { FocusedComposeSheet } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useListedTasks } from "../host/host-provider.js";
 import { useOnTab } from "../tab-route.js";
@@ -130,7 +131,15 @@ interface FileForLater {
   readonly onFile: () => void;
 }
 
-/** The sheet's bar: its name, Cancel at its leading edge, and Start at its trailing one, lit once there are words or pictures to send and while no start is out, with File for later before it on New task; and the ask a Cancel or a swipe down raises while the sheet holds a draft. */
+/** Where a closing start lands once it went: on its task's page, or on to the agent it started. */
+const LANDING = {
+  TASK: "task",
+  AGENT: "agent",
+} as const;
+
+type Landing = (typeof LANDING)[keyof typeof LANDING];
+
+/** The sheet's bar: its name, the system's ✕ at its leading edge (Cancel to VoiceOver), and Start at its trailing one, lit once there are words or pictures to send and while no start is out, with File for later before it on New task; and the ask the ✕ or a swipe down raises while the sheet holds a draft. */
 function SheetBar({
   title,
   ready,
@@ -161,7 +170,12 @@ function SheetBar({
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={close}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        {/* Note that the sheet closes with the system's ✕, as Mail's compose sheet does, its word kept for VoiceOver. */}
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={WORDS.CANCEL}
+          onPress={close}
+        />
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         {file === undefined ? null : (
@@ -245,10 +259,13 @@ function ModelChip({ pick }: { readonly pick: ModelPick }) {
     });
   }
 
+  const harness = pick.shown === undefined ? undefined : providerOf(pick.shown.model);
+
   return (
     <MenuChip
+      look={MENU_CHIP_LOOK.DOCK}
       label={effort === undefined ? model : `${model}${JOINED}${effort}`}
-      harness={pick.shown === undefined ? undefined : providerOf(pick.shown.model)}
+      {...(harness === undefined ? {} : { harness })}
       menu={{ groups }}
     />
   );
@@ -276,6 +293,7 @@ function RunsOnChip({
 
   return (
     <MenuChip
+      look={MENU_CHIP_LOOK.DOCK}
       label={labelOf(options, runsOn) ?? WORDS.RUNS_ON}
       symbol={glyphOf(runsOn)}
       menu={{
@@ -310,12 +328,19 @@ function RepositoryChip({
   readonly tree: TaskSummary | undefined;
 }) {
   if (tree !== undefined) {
-    return <FieldChip label={tree.repository ?? NO_REPOSITORY} symbol={GLYPH.REPOSITORY} />;
+    return (
+      <MenuChip
+        look={MENU_CHIP_LOOK.DOCK}
+        label={tree.repository ?? NO_REPOSITORY}
+        symbol={GLYPH.REPOSITORY}
+      />
+    );
   }
 
   if (repository.options.length > 0) {
     return (
       <MenuChip
+        look={MENU_CHIP_LOOK.DOCK}
         label={labelOf(repository.options, repository.picked) ?? WORDS.REPOSITORY}
         symbol={GLYPH.REPOSITORY}
         menu={{
@@ -334,7 +359,7 @@ function RepositoryChip({
   return (
     <>
       {repository.picked === undefined ? null : (
-        <FieldChip label={repository.picked} symbol={GLYPH.REPOSITORY} />
+        <MenuChip look={MENU_CHIP_LOOK.DOCK} label={repository.picked} symbol={GLYPH.REPOSITORY} />
       )}
       {repository.failed === undefined ? null : (
         <Chip label={WORDS.TRY_AGAIN} symbol={GLYPH.RETRY} onPress={repository.retry} />
@@ -490,19 +515,21 @@ function useSheetStart(
 }
 
 /**
- * New task's start, as the panel's New task sends it: the sheet closes the
- * moment Start is pressed, and the start goes on as a write, opening the
- * task's page once it lands, where its new agent stands among its agents. A start
- * refused is said in the failure notice, whose Try again sends the same
- * start again. Note that this never makes a second task, because the task's
- * id and its agent's key are minted once per sheet (`useStartTask`,
- * `useFileTask`), and the service answers a start it already made with the
- * same task. Pictures the service would refuse still hold the sheet, saying
- * why under its words.
+ * New task's and New agent's start, as the panel's sends it: the sheet
+ * closes the moment Start is pressed, and the start goes on as a write,
+ * opening the task's page once it lands, where its new agent stands among
+ * its agents; New agent's then opens the new agent's page over it, titled
+ * by its brief, as the panel's New agent lands on the agent it started. A start refused is said in the failure notice, whose Try again
+ * sends the same start again. Note that this never makes a second task or
+ * agent, because the task's id and its agent's key are minted once per sheet
+ * (`useStartTask`, `useFileTask`, `useStartAgent`), and the service answers
+ * a start it already made with the same one. Pictures the service would
+ * refuse still hold the sheet, saying why under its words.
  */
 function useClosingStart(
   kept: KeptWords,
   setNote: (note: string | undefined) => void,
+  landing: Landing,
 ): UseSheetStartResult {
   const router = useRouter();
   const navigation: Navigator = useNavigation();
@@ -511,7 +538,11 @@ function useClosingStart(
   // Note that a start goes once, so a second press while the sheet slides away sends nothing.
   const [sent, setSent] = useState(false);
 
-  const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
+  const go = (
+    start: () => Promise<StartAnswer>,
+    refusal?: string | undefined,
+    brief?: string | undefined,
+  ) => {
     if (sent) return;
 
     if (refusal !== undefined) {
@@ -550,10 +581,17 @@ function useClosingStart(
           const now = standingIn(presenting, 0);
 
           if (!sameStanding(sheet, now) && !sameStanding(uncovered, now)) return;
-          // Note that only the task's page opens, its new agent standing in its Agents section, because a second route pushed over it races the split view's hand-off and leaves the task behind.
           router.navigate(
             onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })),
           );
+
+          // Note that New task lands on the task's page alone, its new agent standing in its Agents section, while New agent goes on to the agent it started, titled by its brief as the sheet's start names it, so Back returns to the task.
+          if (landing !== LANDING.AGENT || answer.agentId === undefined) return;
+          const title = brief === undefined ? "" : cardTitle(brief);
+          router.push({
+            pathname: onTab(iosAgentRoute(answer.agentId)),
+            params: title === "" ? {} : { brief: title },
+          });
         },
       },
     );
@@ -625,7 +663,9 @@ export function NewAgentScreen({
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const kept = useKeptWords(drafted);
-  const { starting, go } = useSheetStart(kept, setNote);
+  const sheet = useSheetStart(kept, setNote);
+  const closing = useClosingStart(kept, setNote, LANDING.AGENT);
+  const starting = sheet.starting || closing.starting;
   const skills = useSkillOffer(prompt, setPrompt, { taskId: taskId });
 
   // Note that a suggestion's start sends its own title and branch beside the words, files, and model the sheet holds.
@@ -644,21 +684,26 @@ export function NewAgentScreen({
       : { refused: result.failure.text };
   };
 
+  // Note that New agent's own start closes the sheet at once, as New task's does, while a suggestion's keeps it up until the service answers, since it goes through the suggestion once, as the panel's draft sends one.
   const start = () =>
-    go(
-      () =>
-        opened === undefined
-          ? startAgent({
+    opened === undefined
+      ? closing.go(
+          () =>
+            startAgent({
               prompt: prompt.trim(),
               attachments: pictures.files,
               picked: pick.picked,
               runsOn,
-            })
-          : startSuggested(opened.suggestion),
-      pictures.refusal,
-      // Note that a suggestion's start is named by its own title where it has one, as the service names the agent.
-      opened?.suggestion.title ?? prompt.trim(),
-    );
+            }),
+          pictures.refusal,
+          prompt.trim(),
+        )
+      : sheet.go(
+          () => startSuggested(opened.suggestion),
+          pictures.refusal,
+          // Note that a suggestion's start is named by its own title where it has one, as the service names the agent.
+          opened.suggestion.title ?? prompt.trim(),
+        );
 
   return (
     <>
@@ -668,7 +713,7 @@ export function NewAgentScreen({
         onStart={start}
         kept={kept}
       />
-      <ComposeSheet
+      <FocusedComposeSheet
         title={
           opened === undefined
             ? undefined
@@ -924,7 +969,7 @@ export function NewTaskScreen({
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
   const filed = pictures.opening ? undefined : filedOf(prompt, pictures.files);
   const kept = useKeptWords(drafted);
-  const { starting, go } = useClosingStart(kept, setNote);
+  const { starting, go } = useClosingStart(kept, setNote, LANDING.TASK);
   const place = { repository: repository.picked, relation: relation.relation };
   const tree = inTree(relation.relation) ? relation.task : undefined;
   // Note that a `/` offers the skills of the repository the task starts in, its tree's where it joins one, as the panel's New task reads them.
@@ -977,7 +1022,7 @@ export function NewTaskScreen({
         file={{ ready: filed !== undefined && placed && !starting, onFile: file }}
         kept={kept}
       />
-      <ComposeSheet
+      <FocusedComposeSheet
         head={<RelationChip pick={relation} />}
         words={{
           placeholder: WORDS.TASK_PLACEHOLDER,

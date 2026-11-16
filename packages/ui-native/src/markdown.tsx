@@ -3,6 +3,7 @@
 import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, type EntityKind, entityWordHeard } from "@repo/features/entity-kind";
 import type { LinkStanding } from "@repo/features/link-standing-model";
+import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import { SymbolView } from "expo-symbols";
@@ -22,6 +23,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AudioClip } from "./audio-clip.js";
+import { ChipMarkView, ChipSymbol, useChipMarkOf } from "./chip-mark.js";
+import type { ChipMarkOf } from "./chip-mark-model.js";
 import { DraftCard } from "./draft-card.js";
 import { FileChip } from "./file-chip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
@@ -42,6 +45,9 @@ import {
   type MarkdownSuggestion,
   markdownBlocks,
 } from "./markdown-model.js";
+import { MediaBox } from "./media-box.js";
+import { MediaFailed } from "./media-failed.js";
+import { type MediaSize, mediaFrame } from "./media-frame.js";
 import { Press } from "./press.js";
 import {
   SUGGESTION_LOOK,
@@ -50,7 +56,7 @@ import {
   suggestionHeard,
 } from "./suggestion-look.js";
 import { type BrandColors, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
-import { SPACE } from "./tokens/space.js";
+import { RADIUS, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
@@ -170,9 +176,9 @@ const QUOTE_INSET = QUOTE_RULE + SPACE.ROW;
 const styles = StyleSheet.create({
   marker: { position: "absolute", left: 0, top: 0 },
   quote: { borderLeftWidth: QUOTE_RULE, paddingLeft: SPACE.ROW },
-  well: { borderRadius: 8, padding: SPACE.ROW },
+  well: { borderRadius: RADIUS.BLOCK, padding: SPACE.ROW },
   tableBox: { alignSelf: "stretch", overflow: "hidden" },
-  table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
+  table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.BLOCK, overflow: "hidden" },
   row: { flexDirection: "row" },
   cell: { paddingHorizontal: SPACE.ROW, paddingVertical: 6 },
   chip: {
@@ -180,11 +186,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 3,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 6,
+    borderRadius: RADIUS.TAG,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
-  picture: { width: "100%", borderRadius: 8 },
+  picture: { width: "100%", borderRadius: RADIUS.BLOCK },
   pending: { alignItems: "center", justifyContent: "center" },
   viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
   viewerClose: { position: "absolute", padding: SPACE.ROW },
@@ -200,6 +206,8 @@ interface Drawing {
   readonly openLink: (address: string) => void;
   /** The address a picture is drawn from, by the address its words name it by; none while it is on its way. */
   readonly pictureSource: (written: string) => string | null | undefined;
+  /** Reads a picture that could not be read again, by the address its words name it by; none offers nothing. */
+  readonly onRetryPicture: ((written: string) => void) | undefined;
   /** The video a picture's address names, played in its place; none where the address names a picture. */
   readonly videoAt: (written: string) => MarkdownVideo | undefined;
   /** The file a picture's address names, such as a PDF a description keeps as it keeps a picture, drawn as its chip in its place; none where the address names a picture. */
@@ -208,6 +216,8 @@ interface Drawing {
   readonly headings: boolean;
   /** What GitHub holds of the pull request or issue a chip's page names, as the host read it; none while unread or unanswered. */
   readonly linkStanding: (page: string) => LinkStanding | undefined;
+  /** The mark the app holds for the entity a chip names (`ChipMarkProvider`); none where it holds nothing. */
+  readonly markOf: ChipMarkOf;
   /** How a suggestion's link stands, by its button and the words it was written with; none where it is drawn as the plain link it is. */
   readonly suggestion: (link: ReplyButtonLink, words: string) => SuggestionLook | undefined;
 }
@@ -278,31 +288,6 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   }
 }
 
-/**
- * A chip's glyph in a `size`-point square in `color`, through the system's
- * symbol view, which the app's patch (`patches/expo-symbols@58.0.4.patch`)
- * lets read Lucide's custom symbols from the asset catalog as well as SF
- * Symbols, so a chip costs no SwiftUI host of its own.
- */
-function ChipGlyph({
-  glyph,
-  size,
-  color,
-}: {
-  readonly glyph: Glyph;
-  readonly size: number;
-  readonly color: string;
-}) {
-  return (
-    <SymbolView
-      name={glyphSymbol(glyph)}
-      size={size}
-      tintColor={color}
-      accessibilityElementsHidden
-    />
-  );
-}
-
 /** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere. */
 function MentionChip({
   chip,
@@ -316,6 +301,12 @@ function MentionChip({
   const size = TEXT_SIZE.FOOTNOTE;
   const standing = standingLook(chip, drawing);
   const heard = standing?.heard ?? chip.heard;
+
+  // Note that a GitHub page's standing wins over the entity's mark, since only the provider's answer says where it stands.
+  const mark =
+    standing === undefined && chip.of !== undefined ? drawing.markOf(chip.of) : undefined;
+
+  const markSize = size * fontScale;
 
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
@@ -333,11 +324,15 @@ function MentionChip({
           },
         ]}
       >
-        <ChipGlyph
-          glyph={standing?.glyph ?? ENTITY_SYMBOL[chip.entity]}
-          size={size * fontScale}
-          color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
-        />
+        {mark === undefined ? (
+          <ChipSymbol
+            glyph={standing?.glyph ?? ENTITY_SYMBOL[chip.entity]}
+            size={markSize}
+            color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
+          />
+        ) : (
+          <ChipMarkView mark={mark} size={markSize} colors={colors} />
+        )}
         <Text
           numberOfLines={1}
           style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
@@ -389,7 +384,7 @@ function SuggestionChip({
           },
         ]}
       >
-        <ChipGlyph
+        <ChipSymbol
           glyph={offered ? SUGGESTION_SYMBOL : ENTITY_SYMBOL[ENTITY_KIND.AGENT]}
           size={size * fontScale}
           color={colors.TEXT_MUTED}
@@ -402,7 +397,7 @@ function SuggestionChip({
         </Text>
         {offered ? null : (
           <>
-            <ChipGlyph
+            <ChipSymbol
               glyph={SUGGESTION_SYMBOL}
               size={size * fontScale}
               color={colors.TEXT_MUTED}
@@ -943,9 +938,9 @@ function CodeView({ text, drawing }: { readonly text: string; readonly drawing: 
 /** The most a full-screen picture zooms in to, as a pinch takes it. */
 const VIEWER_MAX_ZOOM = 4;
 
-/** What a picture that could not be read says in its well, its own words first, as the panel's stand-in says it. */
+/** What a picture that could not be read is heard as, its own words first, as the panel's stand-in says it. */
 function unreadWords(alt: string): string {
-  return alt.trim() === "" ? "This picture could not be read." : `${alt} · could not be read.`;
+  return `${alt.trim() === "" ? "This picture" : alt} ${MEDIA_READ_WORDS.COULD_NOT_READ}`;
 }
 
 type PictureProps = {
@@ -953,8 +948,10 @@ type PictureProps = {
   readonly source: string | null | undefined;
   /** What the picture shows, heard in its place. */
   readonly alt: string;
-  /** A tile's fixed shape, width over height, the picture standing whole inside it; the picture's own shape where none is given. */
+  /** A tile's fixed shape, width over height, the picture standing whole inside it, as wide as its tile; the picture's own shape and size, held to `MEDIA_BOUNDS`, where none is given. */
   readonly tileAspect?: number | undefined;
+  /** Reads the picture again where it could not be read; none offers nothing. */
+  readonly onRetry?: (() => void) | undefined;
 };
 
 /**
@@ -967,11 +964,11 @@ type PictureProps = {
  * is, the system's spinner in it as Photos stands one, so the words under
  * it do not jump twice and it never reads as an empty box.
  */
-export function Picture({ source, alt, tileAspect }: PictureProps) {
+export function Picture({ source, alt, tileAspect, onRetry }: PictureProps) {
   const colors = useColors();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const [aspect, setAspect] = useState<number | undefined>(undefined);
+  const [natural, setNatural] = useState<MediaSize | undefined>(undefined);
   const [full, setFull] = useState(false);
   const heard = alt === "" ? "Picture" : alt;
 
@@ -979,53 +976,63 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
     source == null ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard },
   );
 
+  // Note that a tile fills its tile at the tile's shape, and any other picture stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
+  const frame = tileAspect === undefined ? mediaFrame(natural) : undefined;
+
   const well = [
     styles.picture,
-    { aspectRatio: tileAspect ?? aspect ?? 16 / 9, backgroundColor: colors.WELL },
+    { aspectRatio: tileAspect ?? frame?.aspectRatio, backgroundColor: colors.WELL },
   ];
 
   if (source === undefined) {
     return (
-      <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
-        <ActivityIndicator color={colors.TEXT_MUTED} />
-      </View>
+      <MediaBox frame={frame}>
+        <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
+          <ActivityIndicator color={colors.TEXT_MUTED} />
+        </View>
+      </MediaBox>
     );
   }
 
   // Note that a picture that could not be read says so in its well, as the panel's stand-in does, rather than spin as one still on its way.
   if (source === null) {
-    const words = unreadWords(alt);
-
     return (
-      <View style={[well, styles.pending]} accessible accessibilityLabel={words}>
-        <Text style={{ fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "center" }}>
-          {words}
-        </Text>
-      </View>
+      <MediaBox frame={frame}>
+        <MediaFailed
+          line={MEDIA_READ_WORDS.PICTURE_FAILED}
+          heard={unreadWords(alt)}
+          onRetry={onRetry}
+          style={well}
+        />
+      </MediaBox>
     );
   }
 
   return (
     <>
-      <HeldMenu acts={acts}>
-        <Press
-          onPress={() => setFull(true)}
-          accessibilityRole="imagebutton"
-          accessibilityLabel={heard}
-          accessibilityHint="Opens full screen"
-        >
-          <Image
-            source={{ uri: source }}
-            resizeMode="contain"
-            onLoad={(event) => {
-              const loaded = event.nativeEvent.source;
+      <MediaBox frame={frame}>
+        <HeldMenu acts={acts}>
+          <Press
+            onPress={() => setFull(true)}
+            accessibilityRole="imagebutton"
+            accessibilityLabel={heard}
+            accessibilityHint="Opens full screen"
+          >
+            <Image
+              source={{ uri: source }}
+              resizeMode="contain"
+              onLoad={(event) => {
+                const loaded = event.nativeEvent.source;
 
-              if (loaded.width > 0 && loaded.height > 0) setAspect(loaded.width / loaded.height);
-            }}
-            style={well}
-          />
-        </Press>
-      </HeldMenu>
+                if (loaded.width > 0 && loaded.height > 0) {
+                  setNatural({ width: loaded.width, height: loaded.height });
+                }
+              }}
+              style={well}
+            />
+          </Press>
+        </HeldMenu>
+      </MediaBox>
       <Modal
         visible={full}
         animationType="fade"
@@ -1103,12 +1110,32 @@ function PictureBlock({
 
   const video = drawing.videoAt(source);
 
-  if (video === undefined) return <Picture source={drawing.pictureSource(source)} alt={alt} />;
+  if (video === undefined) {
+    const retry = drawing.onRetryPicture;
+
+    return (
+      <Picture
+        source={drawing.pictureSource(source)}
+        alt={alt}
+        onRetry={retry === undefined ? undefined : () => retry(source)}
+      />
+    );
+  }
+
   const label = alt.trim() === "" ? video.label : alt;
 
-  if (video.audio === true) return <AudioClip source={video.source} label={label} />;
+  if (video.audio === true) {
+    return <AudioClip source={video.source} label={label} onRetry={video.onRetry} />;
+  }
 
-  return <Video source={video.source} label={label} onOpenElsewhere={video.onOpenElsewhere} />;
+  return (
+    <Video
+      source={video.source}
+      label={label}
+      onOpenElsewhere={video.onOpenElsewhere}
+      onRetry={video.onRetry}
+    />
+  );
 }
 
 function BlockView({
@@ -1208,8 +1235,12 @@ type MarkdownProps = {
   readonly onOpenLink: (address: string) => void;
   /** Whether a person typed the words line by line, whose line breaks are kept; an agent's join as Markdown reads them. */
   readonly typed?: boolean | undefined;
+  /** Whether raw HTML in the words stays unseen, as GitHub's page hides a pull request body's comments and tags; it is drawn as written where none is given. */
+  readonly hidesHtml?: boolean | undefined;
   /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way, and `null` where it could not be read. Each is drawn from the address it names where none is given. */
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
+  /** Reads a picture that could not be read again, by the address its words name it by; a picture that could not be read offers nothing where none is given. */
+  readonly onRetryPicture?: ((written: string) => void) | undefined;
   /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
   /** The file a picture's address names, such as a PDF a description keeps, drawn as its chip in its place; every address names a picture where none is given. */
@@ -1224,13 +1255,14 @@ type MarkdownProps = {
     | undefined;
 };
 
-/** A video or a sound clip the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, whether it is a sound clip, and where a video opens where the player cannot read it. */
+/** A video or a sound clip the words name as a picture, played in its place: the file it plays from, none while it is on its way and `null` where it could not be read, its name, whether it is a sound clip, where a video opens where the player cannot read it, and what reads it again. */
 export interface MarkdownVideo {
-  readonly source: string | undefined;
+  readonly source: string | null | undefined;
   readonly label: string;
   /** Whether it is a sound clip, played in its strip (`AudioClip`) rather than a film's player. */
   readonly audio?: boolean | undefined;
   readonly onOpenElsewhere?: (() => void) | undefined;
+  readonly onRetry?: (() => void) | undefined;
 }
 
 /** A file the words name as a picture, drawn as its chip in its place: the file of the app's caches it opens from, its type, and its size in words. One that could not be read stands as a picture that could not be. */
@@ -1280,7 +1312,9 @@ export function Markdown({
   repository = null,
   onOpenLink,
   typed,
+  hidesHtml,
   pictureSource = namedSource,
+  onRetryPicture,
   videoAt = noVideo,
   fileAt = noFile,
   headings = false,
@@ -1289,6 +1323,7 @@ export function Markdown({
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
+  const markOf = useChipMarkOf();
   const [measured, setMeasured] = useState<number | undefined>(undefined);
   const [measuredAt, setMeasuredAt] = useState(width);
 
@@ -1299,8 +1334,9 @@ export function Markdown({
   }
 
   const blocks = useMemo(
-    () => markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed }),
-    [words, repository, typed],
+    () =>
+      markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed, hidesHtml }),
+    [words, repository, typed, hidesHtml],
   );
 
   const drawing: Drawing = {
@@ -1309,10 +1345,12 @@ export function Markdown({
     lineWidth: measured ?? width - SPACE.PAGE * 2,
     openLink: onOpenLink,
     pictureSource,
+    onRetryPicture,
     videoAt,
     fileAt,
     headings,
     linkStanding,
+    markOf,
     suggestion,
   };
 

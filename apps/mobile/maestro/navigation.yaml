@@ -54,13 +54,13 @@ onFlowComplete:
       - takeScreenshot: ipad-sidebar-tasks
       - tapOn:
           id: "search-tab"
-      - assertVisible: "Find a task, an Inbox item, or an agent."
+      - assertVisible: "Search Vespin"
       - waitForAnimationToEnd
       - takeScreenshot: ipad-sidebar-search
       - tapOn: "Inbox"
       - tapOn:
           id: "workspace-switcher"
-      - assertVisible: ".*, Settings"
+      - assertVisible: "Settings, .*"
       - assertVisible: "Workspace settings|Settings…"
       - takeScreenshot: ipad-switcher-settings
       - tapOn:
@@ -78,7 +78,7 @@ onFlowComplete:
     commands:
       - tapOn:
           id: "workspace-switcher"
-      - assertVisible: ".*, Settings"
+      - assertVisible: "Settings, .*"
       - assertVisible: "Workspace settings|Settings…"
       - takeScreenshot: switcher-settings
       - tapOn:

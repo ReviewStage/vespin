@@ -243,6 +243,7 @@ const LISTED = {
   BILLING: "c526e869-a1d2-4efb-96bd-d2e3f405162c",
   EXPORT: "d637f97a-b2e3-4f0c-87ce-e3f405162737",
   DIGEST_V1: "e748a08b-c3f4-4a1d-98df-f405162738f4",
+  LANDING: "f859b19c-d405-4b2e-a9e0-0516273849a5",
 } as const;
 
 /** The agents that posted the items, one at work on each task. */
@@ -981,7 +982,8 @@ function listedTask(
 /**
  * The account's tasks that hold no item, which fill out its Tasks list as
  * the sidebar stands it: a sub-task under the reference journey's, which
- * the launch's checklist waits on, a task
+ * the launch's checklist waits on, and a done one, which the journey waited
+ * on, so its page draws a finished related task beside open ones, a task
  * in a second repository, so the list draws its repositories' headings,
  * one the account keeps in a section of its own, a teammate's it
  * follows, which the list draws under Following, and one filed for later
@@ -1001,6 +1003,15 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     parentTaskId: TASK.INVITES,
     blocks: [LISTED.LAUNCH],
     priority: TASK_PRIORITY.NONE,
+  }),
+  listedTask(LISTED.LANDING, "Invite landing page", {
+    repository: "ada/relay",
+    status: TASK_STATUS.DONE,
+    number: 50,
+    updatedAt: LANDED - 1 * DAY,
+    completedAt: LANDED - 1 * DAY,
+    parentTaskId: TASK.INVITES,
+    blocks: [TASK.INVITES],
   }),
   listedTask(LISTED.ALERTS, "Usage alerts", {
     repository: "ada/ledger",
@@ -1615,7 +1626,7 @@ function invitesDocument(listed: TaskSummary): Task {
   return {
     ...task,
     description: { body: INVITES_DESCRIPTION, assumptions: [] },
-    blockedBy: [LISTED.ALERTS],
+    blockedBy: [LISTED.ALERTS, LISTED.LANDING],
     blocks: [],
   };
 }
@@ -1661,11 +1672,34 @@ const INVITES_HISTORY: DescriptionRevisionsAnswer = {
   ],
 };
 
-/** The reference journey's description as one of its versions left it: whole at the newest, its opening alone before. */
+/**
+ * Ada's draft of the reference journey's description, before its agent took
+ * it on: a goal of one line, and a question the agent's version answered and
+ * struck, so the newest version reads against it as sections written in,
+ * changed and struck.
+ */
+const INVITES_DRAFT = [
+  "## Context",
+  "",
+  "Only an admin can add someone to a workspace.",
+  "",
+  "## Open questions",
+  "",
+  "- Should an invite expire?",
+  "",
+  "## Goal",
+  "",
+  "- A member invites a teammate by email.",
+  "",
+].join("\n");
+
+/** The reference journey's description as one of its versions left it: whole at the newest, Ada's draft before it, and the draft's opening first. */
 function invitesVersionBody(seq: number): string {
   const newest = INVITES_HISTORY.revisions[0]?.seq;
 
-  return seq === newest ? INVITES_DESCRIPTION : (INVITES_DESCRIPTION.split("\n\n")[0] ?? "");
+  if (seq === newest) return INVITES_DESCRIPTION;
+
+  return seq === 1 ? (INVITES_DRAFT.split("\n\n## Open questions")[0] ?? "") : INVITES_DRAFT;
 }
 
 /** The pages the reference journey's agent showed, as its task's page lists them. */
@@ -2550,7 +2584,8 @@ const ANSWERS: StagedAnswers = {
     revision: {
       seq,
       description: { body: invitesVersionBody(seq), assumptions: [] },
-      previous: null,
+      // The version before it, which the version is drawn against; the first has none.
+      previous: seq > 1 ? { body: invitesVersionBody(seq - 1), assumptions: [] } : null,
     },
   }),
   [ACT_KIND.TASKS_RESTORE]: () => true,

@@ -56,6 +56,7 @@ import {
   MARK_FACE,
   MarkRow,
   MergeActRow,
+  markdownShows,
   PATH_PART,
   PullRequestHead,
   REVIEW_LOOK,
@@ -63,6 +64,7 @@ import {
   Screen,
   STATUS_TONE,
   useColors,
+  WordsRow,
   WriteNoteRow,
 } from "@repo/ui-native";
 import { setStringAsync } from "expo-clipboard";
@@ -70,7 +72,7 @@ import { Stack, useLocalSearchParams } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { useAgentPullRequests, useFollowedAgent } from "../agents/use-agent.js";
 import { PUSHED_PAGE, useHandToDetail } from "../detail-stack.js";
-import { openInSafari } from "../open-link.js";
+import { openInSafari, useOpenLink } from "../open-link.js";
 import {
   type PullRequestKey,
   type PullRequestWrites,
@@ -87,7 +89,6 @@ const MENU_WORDS = {
   COPY_GITHUB_LINK: "Copy GitHub link",
   OPEN_ON_GITHUB: "Open on GitHub",
   REFRESH: "Refresh",
-  TRY_AGAIN: "Try again",
 } as const;
 
 /** The id the comments row stands under, beside the checks' and the reviewers'. */
@@ -281,6 +282,9 @@ function methodsOffered(pullRequest: AgentOverviewPullRequest | undefined): read
   return chooses ? (pullRequest?.merging?.methods ?? []) : [];
 }
 
+/** The heading of a pull request's description, as the task page heads its own. */
+const DESCRIPTION_WORDS = "Description";
+
 /**
  * The bar's one act, the ⋯ menu, grouped as the panel's and Mail's are:
  * Copy GitHub link and Open on GitHub, then Refresh. The merge stands in
@@ -324,7 +328,8 @@ function PullRequestToolbar({
  * One agent's pull request, by the agent and its number, on a screen of its
  * own: its path in the bar, the repository and its number, small and muted;
  * its heading, where it stands as the panel's pill says it and its
- * branches, with GitHub's sentence of whether it merges; its checks, how
+ * branches, with GitHub's sentence of whether it merges; its description
+ * as its author wrote it, in Markdown, where it has one; its checks, how
  * they went counted beside their heading, each with how long it ran and
  * opening its run on GitHub; and its reviewers, where each stands, with
  * how many comments its conversation holds, which opens it on GitHub. Its
@@ -375,6 +380,7 @@ export function PullRequestPage({
   const key: PullRequestKey = { agentId: id, number: pulled };
   useSurfaceOpen(PRODUCT_SURFACE.PULL_REQUEST, String(pulled));
   const colors = useColors();
+  const openLink = useOpenLink();
   const agent = useFollowedAgent(id);
   const listed = useAgentPullRequests(id).find((each) => each.number === key.number);
   const parts = usePullRequestParts(key);
@@ -478,17 +484,23 @@ export function PullRequestPage({
     const failed = failedOf(parts.pullRequest);
 
     return page(
-      <EmptyState
-        title={failed ? PULL_REQUEST_READ_WORDS.FAILED : PULL_REQUEST_READ_WORDS.READING}
-        symbol={failed ? GLYPH.FAILED : GLYPH.PULL_REQUEST}
-        loading={!failed}
-        action={failed ? { label: MENU_WORDS.TRY_AGAIN, onPress: () => void retry() } : undefined}
-      />,
+      failed ? (
+        <EmptyState
+          title={PULL_REQUEST_READ_WORDS.FAILED}
+          symbol={GLYPH.FAILED}
+          retry={() => void retry()}
+        />
+      ) : (
+        <EmptyState title={PULL_REQUEST_READ_WORDS.READING} symbol={GLYPH.PULL_REQUEST} loading />
+      ),
     );
   }
 
   const action = pullRequest === undefined ? undefined : mergeActionFor(pullRequest);
   const summary = checks === undefined ? undefined : checksSummaryOf(checks);
+  // Note that a pull request with no description, one read from a service before it, or one that holds only HTML GitHub's page hides (a template's comments, a bot's badges), shows no Description section, rather than the panel's "No description provided.", since the phone draws no empty section.
+  const description = pullRequest?.body ?? "";
+  const described = markdownShows(description, { hidesHtml: true });
 
   const reviewers =
     pullRequest === undefined
@@ -576,6 +588,16 @@ export function PullRequestPage({
           />
         )}
       </ListSection>
+      {described ? (
+        <ListSection title={DESCRIPTION_WORDS}>
+          <WordsRow
+            words={description}
+            repository={agent?.repository}
+            onOpenLink={openLink}
+            hidesHtml
+          />
+        </ListSection>
+      ) : null}
       <ListSection
         title="Checks"
         count={
