@@ -171,8 +171,6 @@ export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-
 
 export { useMinute } from "./minute.js";
 
-export { monogramOf } from "./monogram.js";
-
 export { SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
