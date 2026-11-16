@@ -28,6 +28,7 @@ import {
   pullRequestChaptersRead,
   repositoryPullRequestChaptersRead,
 } from "../live/reads/pull-request-chapters.js";
+import { repositoryPullRequestMovedRead } from "../live/reads/pull-request-moved.js";
 import { agentInboxRead, taskInboxRead } from "../live/reads/scope-inbox.js";
 import { sidebarRead } from "../live/reads/sidebar.js";
 import { taskCommentsRead } from "../live/reads/task-comments.js";
@@ -86,6 +87,7 @@ export const BOUND_READS: readonly AnyBoundRead[] = [
   automationRunsRead,
   pullRequestChaptersRead,
   repositoryPullRequestChaptersRead,
+  repositoryPullRequestMovedRead,
 ];
 
 export const LIVE_QUERIES = liveReadRegistry(BOUND_READS);
