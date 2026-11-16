@@ -460,6 +460,11 @@ export const FOOTER_TONE = {
 
 export type FooterTone = (typeof FOOTER_TONE)[keyof typeof FOOTER_TONE];
 
+/** A footer's tone where it says a refusal while one stands and a note otherwise: a failure while `refusal` holds words. */
+export function footerToneOf(refusal: string | undefined): FooterTone {
+  return refusal === undefined ? FOOTER_TONE.NOTE : FOOTER_TONE.FAILURE;
+}
+
 /** A section's footer: a note in the system's footnote ink, or a failure as every refusal reads, muted words led by the alert glyph in the attention ink rather than red words (`ProblemLine`), told to VoiceOver as it stands since it stands because something did not go. */
 function SectionFooter({ words, tone }: { readonly words: string; readonly tone: FooterTone }) {
   const failure = tone === FOOTER_TONE.FAILURE;
