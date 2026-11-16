@@ -8,7 +8,8 @@
 // share button, whose sheet holds Copy and Save Image. Note that it opens with
 // the system's plain transition rather than growing from the thumbnail
 // pressed, since grown from one Quick Look stood in its immersive mode, its
-// bar and Done hidden until a tap, on the iOS 27.2 iPhone as on the iPad. A
+// bar and Done hidden until a tap, on the iOS 27.2 iPhone as on the iPad, and
+// on the 27.2 runtimes a zoom it began on its own never stood at all. A
 // file Quick Look can't read, or one UIKit would not present it over, answers
 // false, and the app shares it instead.
 
@@ -45,6 +46,11 @@ private final class Preview: NSObject, QLPreviewControllerDataSource, QLPreviewC
 
   func previewControllerDidDismiss(_ controller: QLPreviewController) {
     onDismiss(self)
+  }
+
+  /// No view to grow from, so Quick Look never zooms out of the thumbnail pressed.
+  func previewController(_ controller: QLPreviewController, transitionViewFor item: QLPreviewItem) -> UIView? {
+    nil
   }
 }
 
@@ -93,8 +99,12 @@ public final class QuickLookModule: Module {
       controller.delegate = preview
       // Note that it's presented itself, full screen, rather than inside a navigation controller of the app's, since Quick Look draws its own Done only where it finds itself presented; pushed into another's stack it has none, and a Done added to its bar showed in some runs and not others on the iOS 26.5 iPad.
       controller.modalPresentationStyle = .fullScreen
+      // Note that the plain transition is asked for by name, since on the iOS 27.2 runtimes Quick Look began a zoom out of the thumbnail pressed on its own, tracking the thumbnail's frame, and never stood: built and fed, but never on screen.
+      controller.preferredTransition = .coverVertical
       shown.append(preview)
-      presenter.present(controller, animated: true)
+      presenter.present(controller, animated: true) {
+        NSLog("Quick Look stands over %@.", String(describing: type(of: presenter)))
+      }
 
       // Note that UIKit refuses a presentation only in its log, such as over a controller whose view stands in no window or that already presents another, so a refusal is told here, and the app shares the file rather than nothing opening.
       guard presenter.presentedViewController === controller else {
