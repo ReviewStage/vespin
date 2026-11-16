@@ -28,9 +28,9 @@ import { appStateQuery, selectExperiment } from "../use-app-state.js";
  *
  * The cards are `@repo/ui`'s suggestions (`SuggestionCards`), as the
  * Automations list suggests its presets, one for each starter the
- * workspace is offered (`startersFor`): those it can run first, by the
- * repository it reaches, read as the repository chip reads it, and a Mac of
- * the member's among the devices Runs on offers. A press writes the
+ * workspace is offered (`startersFor`), in their declared order, judged by
+ * the repository it reaches, read as the repository chip reads it, and a
+ * Mac of the member's among the devices Runs on offers. A press writes the
  * starter's words into New task's draft in the workspace, which the
  * composer above draws at once, and hands the words the caret
  * (`onFilled`), so the member reads what the agent will do and starts it

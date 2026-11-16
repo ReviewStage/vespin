@@ -9,12 +9,11 @@
  * request, a morning briefing an automation posts to the Inbox, and the
  * threads left open in Codex and Claude Code on the member's own Mac turned
  * into Inbox items. Each ends in something to open, a link, a video, a pull
- * request, or Inbox items, rather than a chat to read. Those the workspace
- * can run come first, in the order declared here; one needing a repository
- * the workspace has none of is still offered after them, where its card
- * asks for GitHub, since connecting it is the way to run it, while one
- * needing a Mac is offered only to a member who has one, since that is no
- * press away. Its prompt is the words a press writes into the box, which
+ * request, or Inbox items, rather than a chat to read. They stand in the
+ * order declared here; one needing a repository the workspace has none of
+ * keeps its place, its card asking for GitHub, since connecting it is the
+ * way to run it, while one needing a Mac is offered only to a member who
+ * has one, since that is no press away. Its prompt is the words a press writes into the box, which
  * the member reads, edits, and starts; one that needs something typed, such
  * as the site's address, ends where it goes. Home offers them behind
  * `EXPERIMENT.STARTER_TASKS`.
@@ -37,11 +36,11 @@ export type StarterNeed = (typeof STARTER_NEED)[keyof typeof STARTER_NEED];
 /** Each starter, by the name it is known by. */
 export const STARTER = {
   AGENT_HISTORY: "agent-history",
+  SITE_WALKTHROUGH: "site-walkthrough",
+  DAILY_BRIEFING: "daily-briefing",
   RACE_FIXES: "race-fixes",
   SMALL_FIX: "small-fix",
-  DAILY_BRIEFING: "daily-briefing",
   LIVE_APP: "live-app",
-  SITE_WALKTHROUGH: "site-walkthrough",
 } as const;
 
 export type Starter = (typeof STARTER)[keyof typeof STARTER];
@@ -67,6 +66,24 @@ export const STARTER_TASKS: readonly StarterTask[] = [
       "Read my Codex and Claude Code history on this Mac (~/.codex/sessions and ~/.claude/projects). Find the threads that stopped on an open question or unfinished work, and post one Inbox thread for each: where it stood, in a line, and the one decision it needs from me. Then show me a page listing the threads that look finished, so I can archive them. Only read those files; don't change or delete anything.",
   },
   {
+    starter: STARTER.SITE_WALKTHROUGH,
+    name: "Record a walkthrough of my site",
+    detail:
+      "Clicks through your site in its browser, records a video, and shows the 5 issues it hit.",
+    needs: STARTER_NEED.NONE,
+    prompt:
+      "Open my site in your browser and record a video walking through it the way a first-time visitor would. Then show me the 5 issues you hit, worst first, each with a screenshot. My site: ",
+  },
+  {
+    starter: STARTER.DAILY_BRIEFING,
+    name: "Put a daily briefing in my Inbox",
+    detail:
+      "Sets up an automation that posts what needs your call in this repository every weekday morning.",
+    needs: STARTER_NEED.REPOSITORY,
+    prompt:
+      "Set up an automation that runs every weekday at 9 AM: it reads this repository's open pull requests and issues, and posts one Inbox thread listing what needs my call, each with the decision it needs. Run it once now so I can see the first briefing.",
+  },
+  {
     starter: STARTER.RACE_FIXES,
     name: "Try 3 fixes at once",
     detail:
@@ -84,15 +101,6 @@ export const STARTER_TASKS: readonly StarterTask[] = [
       "Look through this repository and pick one small, safe fix worth making: a failing test, a broken link in the docs, a stale TODO, or a lint error. Tell me in a line why you picked it, make the fix, and open a pull request.",
   },
   {
-    starter: STARTER.DAILY_BRIEFING,
-    name: "Put a daily briefing in my Inbox",
-    detail:
-      "Sets up an automation that posts what needs your call in this repository every weekday morning.",
-    needs: STARTER_NEED.REPOSITORY,
-    prompt:
-      "Set up an automation that runs every weekday at 9 AM: it reads this repository's open pull requests and issues, and posts one Inbox thread listing what needs my call, each with the decision it needs. Run it once now so I can see the first briefing.",
-  },
-  {
     starter: STARTER.LIVE_APP,
     name: "Build a tiny app and send me a link",
     detail:
@@ -100,15 +108,6 @@ export const STARTER_TASKS: readonly StarterTask[] = [
     needs: STARTER_NEED.NONE,
     prompt:
       "Build me a small, genuinely useful web app (you pick: a tip splitter, a pomodoro timer, or a unit converter), run it in your sandbox, and send me a live link I can open on my phone. Show me a screenshot of it too.",
-  },
-  {
-    starter: STARTER.SITE_WALKTHROUGH,
-    name: "Record a walkthrough of my site",
-    detail:
-      "Clicks through your site in its browser, records a video, and shows the 5 issues it hit.",
-    needs: STARTER_NEED.NONE,
-    prompt:
-      "Open my site in your browser and record a video walking through it the way a first-time visitor would. Then show me the 5 issues you hit, worst first, each with a screenshot. My site: ",
   },
 ];
 
@@ -119,9 +118,9 @@ export interface OfferedStarter {
 }
 
 /**
- * The starters a workspace is offered: those it can run, in order, then
- * those needing a repository it lacks, where GitHub can be connected
- * (`connectable`); one needing a Mac only where the member has one.
+ * The starters a workspace is offered, in the order declared: each it can
+ * run, each needing a repository it lacks where GitHub can be connected
+ * (`connectable`), and one needing a Mac only where the member has one.
  */
 export function startersFor(has: {
   /** Whether the workspace reaches a repository. */
@@ -137,14 +136,10 @@ export function startersFor(has: {
     [STARTER_NEED.MAC]: has.mac,
   } as const satisfies Record<StarterNeed, boolean>;
 
-  const runnable = STARTER_TASKS.filter((task) => met[task.needs]);
+  // A job needing a repository stays offered where one can be connected, its card asking for GitHub.
+  const offered = STARTER_TASKS.filter(
+    (task) => met[task.needs] || (task.needs === STARTER_NEED.REPOSITORY && has.connectable),
+  );
 
-  const waiting = has.connectable
-    ? STARTER_TASKS.filter((task) => task.needs === STARTER_NEED.REPOSITORY && !has.repository)
-    : [];
-
-  return [
-    ...runnable.map((task) => ({ task, runnable: true })),
-    ...waiting.map((task) => ({ task, runnable: false })),
-  ];
+  return offered.map((task) => ({ task, runnable: met[task.needs] }));
 }

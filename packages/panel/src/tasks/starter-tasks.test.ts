@@ -6,32 +6,32 @@ describe("startersFor", () => {
     {
       has: { repository: false, connectable: false, mac: false },
       offered: [
-        [STARTER.LIVE_APP, true],
         [STARTER.SITE_WALKTHROUGH, true],
+        [STARTER.LIVE_APP, true],
       ],
     },
     {
       has: { repository: false, connectable: true, mac: true },
       offered: [
         [STARTER.AGENT_HISTORY, true],
-        [STARTER.LIVE_APP, true],
         [STARTER.SITE_WALKTHROUGH, true],
+        [STARTER.DAILY_BRIEFING, false],
         [STARTER.RACE_FIXES, false],
         [STARTER.SMALL_FIX, false],
-        [STARTER.DAILY_BRIEFING, false],
+        [STARTER.LIVE_APP, true],
       ],
     },
     {
       has: { repository: true, connectable: false, mac: false },
       offered: [
+        [STARTER.SITE_WALKTHROUGH, true],
+        [STARTER.DAILY_BRIEFING, true],
         [STARTER.RACE_FIXES, true],
         [STARTER.SMALL_FIX, true],
-        [STARTER.DAILY_BRIEFING, true],
         [STARTER.LIVE_APP, true],
-        [STARTER.SITE_WALKTHROUGH, true],
       ],
     },
-  ])("offers what $has can run first, then what needs GitHub connected", ({ has, offered }) => {
+  ])("offers what $has can run or connect for, in order", ({ has, offered }) => {
     expect(startersFor(has).map(({ task, runnable }) => [task.starter, runnable])).toEqual(offered);
   });
 });
