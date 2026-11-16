@@ -14,8 +14,6 @@ import { readSchedule, SCHEDULE_REFUSAL } from "@repo/features/automation-schedu
 import {
   AUTOMATION_ACTION,
   AUTOMATION_BOUNDS,
-  AUTOMATION_DEFAULT_GUARDS,
-  AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS,
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
@@ -25,7 +23,6 @@ import {
   type AutomationTarget,
   automationActionSchema,
   automationCreateRequestSchema,
-  automationGuardsSchema,
   automationScopeSchema,
   githubTriggerSchema,
   scheduleTriggerSchema,
@@ -159,7 +156,7 @@ export const AUTOMATION_TOOL_REFUSAL = {
     "alone; leave scope out or name personal.",
   INVALID:
     `Not run: ${PRODUCT_NAME} does not take the automation as asked. Check the trigger, the repositories, ` +
-    "the scope, and the agentId, and that the guards are whole numbers within their bounds.",
+    "the scope, and the agentId.",
   UNKNOWN_SERVERS:
     "Not run: name each connection in disabledServers as your connections are named in your " +
     "instructions, such as neon, sentry, or notion-2 for a second Notion account; these name none:",
@@ -209,15 +206,6 @@ const SERVERS = describeWire(
   "Connections, as your instructions name them, each run's agent is not handed; the whole list.",
 );
 
-const GUARDS = describeWire(
-  automationGuardsSchema,
-  `maxConcurrentRuns 1 to ${AUTOMATION_BOUNDS.MAX_CONCURRENT_RUNS}, default ` +
-    `${AUTOMATION_DEFAULT_GUARDS.maxConcurrentRuns}; dailyRunCap 1 to ` +
-    `${AUTOMATION_BOUNDS.MAX_DAILY_RUNS}, default ${AUTOMATION_DEFAULT_GUARDS.dailyRunCap}; ` +
-    `subjectCooldownHours, per Sentry issue, 1 to ${AUTOMATION_BOUNDS.MAX_SUBJECT_COOLDOWN_HOURS}, ` +
-    `default ${AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS}.`,
-);
-
 const SCOPE = describeWire(
   automationScopeSchema,
   "personal, the default, is its creator's; workspace is every member's.",
@@ -260,7 +248,6 @@ const AUTOMATION_FIELDS = {
   effort: modelChoiceSchema.fields.effort,
   disabledServers: SERVERS,
   agentId: AGENT_ID,
-  guards: GUARDS,
   scope: SCOPE,
   archiveSuccessful: ARCHIVE_SUCCESSFUL,
   slackDelivery: SLACK_DELIVERY,
@@ -297,7 +284,7 @@ export const LIST_AUTOMATIONS_TOOL = {
   description:
     "List the automations of your workspace that the developer you work for may read, newest " +
     "first: each with its id, name, whether it is on, its trigger, the start of its prompt, the " +
-    "model and effort its runs take, its repositories, where its runs land, its guards, scope, " +
+    "model and effort its runs take, its repositories, where its runs land, its scope, " +
     "when it is next due, its newest run, and whether the developer made it. Name an " +
     "automationId to read that one whole, its prompt in full and its newest runs, each with why " +
     "it was skipped or failed and the agent it started. An automation fires on a schedule, a " +
@@ -345,7 +332,7 @@ export const RUN_AUTOMATION_TOOL = {
   description:
     `Run an automation of your workspace now, by its id as ${AGENT_TOOL.LIST_AUTOMATIONS} ` +
     "answered it, as its Run now on the automations page would: one run, whatever its trigger, " +
-    "through the same guards a firing takes, starting its agent on its prompt as a " +
+    "starting its agent on its prompt as a " +
     "scheduled run would, or handing it to the one agent it names. Run one when the developer " +
     "asks for it, such as to try an automation just made, never otherwise on your own.",
   inputSchema: RUN_AUTOMATION_INPUT,
@@ -460,7 +447,6 @@ function automationReading(summary: AutomationSummary, whole: boolean): WireReco
     disabledServers: [...(summary.action.disabledServers ?? [])],
     repositories: [...(summary.repositories ?? [])],
     runsLandOn: landingOf(summary),
-    guards: { ...summary.guards },
     scope: summary.scope ?? AUTOMATION_SCOPE.PERSONAL,
     archiveSuccessful: summary.archiveSuccessful ?? false,
     slackDelivery: summary.slackDelivery ?? false,
@@ -728,7 +714,6 @@ export function runCreateAutomation(
           name: made.name,
           trigger: made.trigger,
           action,
-          ...(made.guards === undefined ? undefined : { guards: made.guards }),
           ...(made.scope === undefined ? undefined : { scope: made.scope }),
           ...(landing.success === undefined ? undefined : { target: landing.success }),
           ...(made.archiveSuccessful === undefined

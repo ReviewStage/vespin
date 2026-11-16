@@ -37,6 +37,7 @@ import {
 import type { TaskStatus } from "@repo/features/task-wire";
 import {
   Fragment,
+  memo,
   type ReactElement,
   type ReactNode,
   useEffect,
@@ -182,7 +183,7 @@ export type ColumnBar = {
   readonly foot?: readonly BarFootItem[] | undefined;
 };
 
-/** What a bar's foot holds: an act, or a menu that opens from its glyph, such as Remind me's times. */
+/** What a bar's foot holds: an act, or a menu that opens from its glyph (from its words at a list column's foot), such as Remind me's times. */
 export type BarFootItem = BarAction | BarMenu;
 
 /** Whether a foot's item is a menu rather than one act. */
@@ -255,25 +256,34 @@ function MenuActs({ group }: { readonly group: BarMenuGroup }) {
   );
 }
 
-/** A bar's menu as SwiftUI's: each choice a toggle the system checks, then a rule, then each act, then each group behind a rule of its own. */
-export function BarMenuButton({
+/**
+ * A bar's menu as SwiftUI's: each choice a toggle the system checks, then a
+ * rule, then each act, then each group behind a rule of its own. Note that it
+ * is drawn again only for a menu changed, because a menu of many choices,
+ * such as one listing every open task, would otherwise build each of them
+ * anew on every key typed beside it.
+ */
+export const BarMenuButton = memo(function BarMenuButton({
   menu,
   modifiers = [],
+  worded = false,
 }: {
   readonly menu: BarMenu;
   /** How the menu's trigger is drawn where it stands, such as in a bar; a submenu takes none. */
   readonly modifiers?: readonly ModifierConfig[] | undefined;
+  /** Whether its trigger reads as its words alone rather than its glyph, as a list column's foot holds its acts. */
+  readonly worded?: boolean | undefined;
 }) {
   const colors = useColors();
 
   return (
     <Menu
-      label={menuLabel(menu.label, menu.symbol)}
+      label={worded ? menu.label : menuLabel(menu.label, menu.symbol)}
       modifiers={[...modifiers, disabled(menu.disabled === true)]}
     >
       {menu.choices.map((choice) => (
         <Toggle
-          key={choice.label}
+          key={choice.id ?? choice.label}
           {...choiceContent(choice, colors)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
@@ -289,18 +299,24 @@ export function BarMenuButton({
       ))}
     </Menu>
   );
-}
+});
 
 /** A bar's menu standing in its bar, such as a column's ⋯, its glyph alone in the bar's glass. */
 export function BarMenuItem({ menu }: { readonly menu: BarMenu }) {
   return <BarMenuButton menu={menu} modifiers={BAR_ITEM_MENU} />;
 }
 
-/** A bar act as SwiftUI's button, its symbol alone, heard by its words, or its words where it has no symbol, dimmed while it can't act. */
-function BarActionButton({ action }: { readonly action: BarAction }) {
+/** A bar act as SwiftUI's button, its symbol alone, heard by its words, or its words where it has no symbol or stands `worded`, dimmed while it can't act. */
+function BarActionButton({
+  action,
+  worded = false,
+}: {
+  readonly action: BarAction;
+  readonly worded?: boolean | undefined;
+}) {
   return (
     <SwiftUIButton
-      {...actContent(action.label, action.symbol)}
+      {...actContent(action.label, worded ? undefined : action.symbol)}
       onPress={action.onPress}
       modifiers={[disabled(action.disabled === true)]}
     />
@@ -520,9 +536,14 @@ function Column({
             <BarMenuItem menu={bar.menu} />
           </ToolbarItem>
         )}
+        {/* Note that a column's foot holds its acts by their words, as Files' and Mail's edit bars do on an iPad, since a regular window has the room and a bare glyph there left Mark as read, Remind me and Resolve to be guessed. */}
         {(bar.foot ?? []).map((item) => (
           <ToolbarItem key={item.label} placement="bottomBar">
-            {isBarMenu(item) ? <BarMenuItem menu={item} /> : <BarActionButton action={item} />}
+            {isBarMenu(item) ? (
+              <BarMenuButton menu={item} modifiers={BAR_ITEM_MENU} worded />
+            ) : (
+              <BarActionButton action={item} worded />
+            )}
           </ToolbarItem>
         ))}
       </BarContent>

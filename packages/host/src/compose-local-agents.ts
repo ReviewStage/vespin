@@ -1513,6 +1513,7 @@ export function composeLocalAgents(
             ...rootsOf(folder),
             claudeExecutable: tools.claude,
             codexExecutable: tools.codex,
+            ...(tools.cursorSdk === undefined ? undefined : { cursorSdk: tools.cursorSdk }),
             capabilities: platform.deviceCapabilities,
             ...setup,
           });

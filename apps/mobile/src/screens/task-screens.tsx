@@ -45,6 +45,7 @@ import {
 } from "@repo/features/task-standing-words";
 import {
   foldedTaskRows,
+  NO_REPOSITORY_KEY,
   TASK_TREE_GROUP,
   type TaskTree,
   type TaskTreeGroup,
@@ -112,6 +113,7 @@ import {
   type RowAction,
   RowForEach,
   RowList,
+  type RowMenuGroup,
   type RowSubmenu,
   type RowSwipe,
   runsOnGlyph,
@@ -126,6 +128,7 @@ import {
   TaskRow,
   UNDER_SPLIT_SCREEN,
   useColors,
+  useMinute,
   useThreeColumns,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -364,6 +367,7 @@ function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | u
     symbol: GLYPH.MOVE,
     choices: placing.sections.map((section) => ({
       label: section.title,
+      symbol: sectionGlyph(section.icon),
       on: section.id === standing,
       onPress: () => {
         if (section.id !== standing) placing.moveToSection(task.id, section.id);
@@ -431,6 +435,11 @@ function placingSubmenus(task: TaskSummary, placing: TaskPlacing): readonly RowS
   );
 }
 
+/** A submenu as a list of none or one, for a menu only offered where it has something to hold. */
+function present(submenu: RowSubmenu | undefined): readonly RowSubmenu[] {
+  return submenu === undefined ? [] : [submenu];
+}
+
 /** A row's menu as a bar's ⋯ holds it, its acts' tones read as the bar reads them. */
 function barSubmenu(submenu: RowSubmenu): BarMenu {
   return {
@@ -488,20 +497,23 @@ function removeParentActs(task: TaskSummary, relations: TaskRelationWrites): rea
 type RowActsResult = {
   readonly trailingActions: readonly RowSwipe[];
   readonly leadingActions: readonly RowSwipe[];
-  readonly menuSubmenus: readonly RowSubmenu[];
   readonly menuActions: readonly RowAction[];
+  readonly menuGroups: readonly RowMenuGroup[];
 };
 
 /**
  * A row's acts, as the panel's row menu offers them on a phone: behind its
  * trailing swipe Mark done, offered on a task not yet done, which a full
  * swipe runs, and Status; behind its leading swipe Pin or Unpin, whichever
- * the task is not, which a full swipe runs; and in its long press menu,
- * after those, Task relation, which opens the Task relation sheet on a kind,
- * Move to section, and its repository (`placingSubmenus`), then Remove
- * parent, where it has one, and the panel's order: Copy link, which raises the share sheet, Rename, in
- * the system's name alert, Mark as read or unread, whichever the task is
- * not, Open in browser, and Permanently delete last, which asks first.
+ * the task is not, which a full swipe runs. Its long press menu groups them
+ * as the task page's ⋯ does (`taskMenu`), each group set apart by a divider:
+ * the swipes' acts with Mark as read or unread, whichever the task is not;
+ * then Task relation, which opens the Task relation sheet on a kind, and Move
+ * to section, with Remove parent where it has one; then Rename, in the
+ * system's name alert, and Copy link, which raises the share sheet; then
+ * More, holding its repository, its version history and Move to workspace
+ * where offered, and Open in browser; and Permanently delete alone, last,
+ * which asks first.
  * Priority and assignee are set from the chips on the task's page
  * (`standingMenus`).
  */
@@ -523,41 +535,68 @@ function rowActs(
         onPress: () => listing.pin(task.id, !pinned),
       },
     ],
-    menuSubmenus: [relationSubmenu(task, openRelation), ...placingSubmenus(task, listing.placing)],
     menuActions: [
-      ...removeParentActs(task, listing.relations),
-      {
-        label: WORDS.COPY_LINK,
-        symbol: GLYPH.LINK,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => copyTaskLink(task, listing.workspace),
-      },
-      {
-        label: WORDS.RENAME,
-        symbol: GLYPH.RENAME,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => askRename(task, listing.rename),
-      },
-      ...rowActions(historyActions(task, listing.doors.history)),
       {
         label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
         symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => listing.markRead(task.id, !unread),
       },
-      ...rowActions(moveActions(listing.doors.moveDoor(task))),
+    ],
+    menuGroups: [
       {
-        label: VERB.OPEN_IN_BROWSER,
-        symbol: GLYPH.OPEN_EXTERNALLY,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () =>
-          openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
+        submenus: [
+          relationSubmenu(task, openRelation),
+          ...present(sectionSubmenu(task, listing.placing)),
+        ],
+        actions: removeParentActs(task, listing.relations),
       },
       {
-        label: WORDS.DELETE,
-        symbol: GLYPH.DELETE,
-        tone: ROW_ACTION_TONE.DESTRUCTIVE,
-        onPress: () => listing.askDelete(task),
+        actions: [
+          {
+            label: WORDS.RENAME,
+            symbol: GLYPH.RENAME,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => askRename(task, listing.rename),
+          },
+          {
+            label: WORDS.COPY_LINK,
+            symbol: GLYPH.LINK,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => copyTaskLink(task, listing.workspace),
+          },
+        ],
+      },
+      {
+        // Note that the acts a phone reaches for least wait one level down in More, its repository, version history, Move to workspace and Open in browser, so the menu fits an iPhone 18 Pro's window under the lifted preview and Permanently delete stands in it rather than below its fold.
+        submenus: [
+          {
+            ...WORDS.MORE,
+            choices: [],
+            submenus: present(repositorySubmenu(task, listing.placing)),
+            actions: [
+              ...rowActions(historyActions(task, listing.doors.history)),
+              ...rowActions(moveActions(listing.doors.moveDoor(task))),
+              {
+                label: VERB.OPEN_IN_BROWSER,
+                symbol: GLYPH.OPEN_EXTERNALLY,
+                tone: ROW_ACTION_TONE.NEUTRAL,
+                onPress: () =>
+                  openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
+              },
+            ],
+          },
+        ],
+      },
+      {
+        actions: [
+          {
+            label: WORDS.DELETE,
+            symbol: GLYPH.DELETE,
+            tone: ROW_ACTION_TONE.DESTRUCTIVE,
+            onPress: () => listing.askDelete(task),
+          },
+        ],
       },
     ],
   };
@@ -648,6 +687,7 @@ export function TaskListRow({
       finished={taskFinished(task)}
       needsYou={look.needsYou}
       agents={look.agents}
+      blocked={task.blocked === true}
       taskKey={keyed ? keyOf(task, listing.workspace) : undefined}
       depth={depth}
       {...rowActs(task, look.unread, listing, openRelation)}
@@ -904,6 +944,8 @@ function GroupSection({
   return (
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
+      glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
+      repository={headPicture(group)}
       count={group.rows.length}
       foldable
       folded={hold.folded.has(group.key)}
@@ -1066,6 +1108,34 @@ function TasksTree({
       ))}
     </RowList>
   );
+}
+
+/**
+ * What a Tasks list group's header leads with, as the panel's sidebar
+ * heads each: a section with its own icon, a repository with the
+ * repository's mark, which stands in until its owner's picture draws
+ * (`headPicture`), the tasks with none with no-repository's; and nothing
+ * for Pinned and Following, whose words say what they are.
+ */
+function groupHeadGlyph(group: TaskTreeGroup): Glyph | undefined {
+  switch (group.kind) {
+    case TASK_TREE_GROUP.SECTION:
+      return sectionGlyph(group.icon);
+    case TASK_TREE_GROUP.REPOSITORY:
+      return group.key === NO_REPOSITORY_KEY ? GLYPH.NO_REPOSITORY : GLYPH.REPOSITORY;
+    case TASK_TREE_GROUP.PINNED:
+    case TASK_TREE_GROUP.FOLLOWING:
+      return undefined;
+  }
+}
+
+/** The repository whose owner's picture leads a repository group's header, as the panel's sidebar draws it; none for any other group, or the tasks with no repository. */
+function headPicture(group: TaskTreeGroup): string | undefined {
+  return group.kind === TASK_TREE_GROUP.REPOSITORY &&
+    group.title !== undefined &&
+    group.key !== NO_REPOSITORY_KEY
+    ? group.key
+    : undefined;
 }
 
 /** The glyph a collection's sidebar row leads with: Pinned's pin, Following's eye, and a section's own icon, as the panel's sidebar draws it (`sectionGlyph`). */
@@ -1334,6 +1404,7 @@ function standingMenus(
 
 /** The task's head: its name, its chips, each opening its menu, who follows it, and who created it and when. */
 function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
+  const now = useMinute();
   const { task } = overview;
   const pictureOf = useMemberPictures();
   const following = useFollowingChip(task.id);
@@ -1364,7 +1435,7 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
       createdBy={
         task.createdBy === undefined
           ? undefined
-          : `${WORDS.CREATED_BY} ${task.createdBy.name}${LINE_PART}${provenanceText(task.createdAt, Date.now())}`
+          : `${WORDS.CREATED_BY} ${task.createdBy.name}${LINE_PART}${provenanceText(task.createdAt, now)}`
       }
     />
   );
@@ -1513,6 +1584,13 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
                   status={other?.status}
                   faded={other !== undefined && taskFinished(other)}
                   relation={TASK_RELATION_WORDS[kind]}
+                  relationMark={{
+                    glyph: RELATION_KIND_SYMBOL[kind],
+                    // Note that a blocker wants the reader, as the panel's pill draws it, until it's known done or canceled; one the list doesn't hold was never shown done, so it still blocks and stands in the attention ink.
+                    attention:
+                      kind === TASK_RELATION_KIND.BLOCKED_BY &&
+                      (other === undefined || !taskFinished(other)),
+                  }}
                   trailingActions={relationSwipes(task.id, id, kind, relations)}
                 />
               );
@@ -1771,6 +1849,7 @@ function OverviewAgents({
 
 /** The pages the task's agents showed, each opened whole on the app's own page screen, at the version the list holds. */
 function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
+  const now = useMinute();
   const router = useRouter();
   const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
@@ -1785,7 +1864,7 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
           key={page.id}
           symbol={GLYPH.PAGE}
           label={page.title}
-          detail={provenanceText(page.at, Date.now())}
+          detail={provenanceText(page.at, now)}
           onPress={() => {
             const opened = {
               kind: PUSHED_PAGE.TASK_PAGE,
@@ -1951,19 +2030,31 @@ function ReadFailedRow({
   return <FailedReadRow label={words} act={WORDS.TRY_AGAIN} onPress={onRetry} />;
 }
 
+/** What the Comments section's last row says it shows in the threads' place, as the panel's comments pane toggles: the resolved threads, or the open ones again. */
+const COMMENTS_SHOWN = {
+  RESOLVED: "Show resolved comments",
+  OPEN: "Show open comments",
+} as const;
+
 /**
- * The description's comment threads that still stand open, as the panel's
- * comments list holds them, the oldest started first: each its first
- * comment's words and when it last moved, opening the thread with its reply
- * field; none where no thread stands open.
+ * The description's comment threads, as the panel's comments list holds
+ * them, the oldest started first: those that still stand open, each its
+ * first comment's words and when it last moved, opening the thread with its
+ * reply field; and, where any is resolved, a last row that lists the
+ * resolved ones in their place, as the panel's Resolved toggle does, and
+ * back. None where no thread stands, open or resolved.
  */
 function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
+  const now = useMinute();
   const router = useRouter();
   const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
   const { task } = overview;
-  const open = useTaskComments(task.id).filter(threadOpen);
+  const threads = useTaskComments(task.id);
   const retry = useTaskCommentsRetry(task.id);
+  const [resolvedShown, setResolvedShown] = useState(false);
+  const open = threads.filter(threadOpen);
+  const resolved = threads.filter((thread) => !threadOpen(thread));
 
   if (retry !== undefined) {
     return (
@@ -1973,16 +2064,20 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
     );
   }
 
-  if (open.length === 0) return null;
+  // Note that the resolved list falls back to the open one once nothing in it stays resolved, as a reopen from its thread leaves it.
+  const showingResolved = resolvedShown && resolved.length > 0;
+  const listed = showingResolved ? resolved : open;
+
+  if (open.length === 0 && resolved.length === 0) return null;
 
   return (
-    <ListSection title={WORDS.COMMENTS} count={open.length}>
-      {open.map((thread) => (
+    <ListSection title={WORDS.COMMENTS} count={listed.length}>
+      {listed.map((thread) => (
         <LinkRow
           key={thread.id}
-          symbol={GLYPH.COMMENT}
+          symbol={showingResolved ? GLYPH.RESOLVED : GLYPH.COMMENT}
           label={threadComments(thread)[0]?.words ?? thread.quote}
-          detail={provenanceText(thread.updatedAt, Date.now())}
+          detail={provenanceText(thread.updatedAt, now)}
           onPress={() => {
             if (toDetail({ kind: PUSHED_PAGE.COMMENTS, threadId: thread.id, taskId: task.id })) {
               return;
@@ -1995,6 +2090,14 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
           }}
         />
       ))}
+      {resolved.length === 0 ? null : (
+        <LinkRow
+          symbol={showingResolved ? GLYPH.COMMENT : GLYPH.RESOLVED}
+          label={showingResolved ? COMMENTS_SHOWN.OPEN : COMMENTS_SHOWN.RESOLVED}
+          detail={showingResolved ? undefined : `${resolved.length}`}
+          onPress={() => setResolvedShown(!showingResolved)}
+        />
+      )}
     </ListSection>
   );
 }

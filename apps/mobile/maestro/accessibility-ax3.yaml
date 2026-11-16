@@ -37,11 +37,14 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityExtraLarge
-- tapOn: "Tasks"
-- scrollUntilVisible:
-    element: "Teammate invitations"
-    direction: DOWN
-- tapOn: "Teammate invitations"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Teammate invitations"
 - assertVisible: "Created by .*"
 - scrollUntilVisible:
     element: "Agents"

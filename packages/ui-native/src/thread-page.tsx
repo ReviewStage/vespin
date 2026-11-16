@@ -44,6 +44,7 @@ import { actContent } from "./glyph-label.js";
 import { CopyWordsSwiftMenu } from "./held-menu.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
+import { PictureSet, type SetPicture } from "./picture-set.js";
 import {
   BAR_ITEM_MENU,
   type BarFootItem,
@@ -132,8 +133,19 @@ export type ThreadMessage = {
   readonly media: readonly ThreadMedia[];
   /** What the answer it carries says it was, "Chose Both", and whether it went ahead, a check in the done tone, or held back, a turn back in the muted ink. */
   readonly stamp?: { readonly words: string; readonly ahead: boolean } | undefined;
+  /** What happened to the thread after it, such as a member resolving it or the agent withdrawing its ask. */
+  readonly after?: readonly ThreadEvent[] | undefined;
   /** The form's values the answer filled, each field's name and what was put in it, which stand under the stamp, as the panel lists them. */
   readonly values?: readonly { readonly label: string; readonly words: string }[] | undefined;
+};
+
+/** A line of what happened to a thread: who did it, what they did in the panel's words, when, and an agent's why for a withdrawn ask. */
+type ThreadEvent = {
+  readonly key: string;
+  readonly who: { readonly name: string; readonly agent: boolean };
+  readonly did: string;
+  readonly at: number | undefined;
+  readonly reason?: string | undefined;
 };
 
 type ThreadPageProps = {
@@ -150,6 +162,8 @@ type ThreadPageProps = {
   /** Whether the title is the words the thread stands on, such as a description's comment, quoted as the panel's thread quotes them: muted, regular, and cut to two lines, rather than a heading of its own. */
   readonly quoted?: boolean | undefined;
   readonly messages: readonly ThreadMessage[];
+  /** What happened to the thread before every message read, such as a close on a thread nobody wrote on, drawn under its heading. */
+  readonly opening?: readonly ThreadEvent[] | undefined;
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */
   readonly repository?: string | null | undefined;
   /** Opens a link or a chip pressed, by the address it was written as, where the app draws it or in Safari. */
@@ -277,6 +291,28 @@ export function PathTitle({
   );
 }
 
+/** A message's files in runs: each run of pictures side by side as one set, and each other file alone, in the order the message carried them. */
+function mediaRuns(media: readonly ThreadMedia[]): readonly (readonly ThreadMedia[])[] {
+  const runs: ThreadMedia[][] = [];
+
+  for (const each of media) {
+    const last = runs.at(-1);
+    const joins = each.kind === THREAD_MEDIA.PICTURE && last?.[0]?.kind === THREAD_MEDIA.PICTURE;
+
+    if (joins) last.push(each);
+    else runs.push([each]);
+  }
+
+  return runs;
+}
+
+/** A picture of a run as its set draws it; none for a file of another kind, which a run of pictures never holds. */
+function setPicture(media: ThreadMedia): readonly SetPicture[] {
+  return media.kind === THREAD_MEDIA.PICTURE
+    ? [{ key: media.key, source: media.source, alt: media.alt, onRetry: media.onRetry }]
+    : [];
+}
+
 /** A file after a message's words, as its kind draws it. */
 function MediaView({ media }: { readonly media: ThreadMedia }) {
   switch (media.kind) {
@@ -334,6 +370,65 @@ function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["sta
       </Text>
       <Spacer />
     </HStack>
+  );
+}
+
+/**
+ * A line of what happened to the thread among its messages, as the panel's
+ * thread draws one: a glyph in the face's column, whoever did it, what
+ * they did and when, in the muted ink, and an agent's why for a
+ * withdrawn ask under it, where the messages' words start.
+ */
+function EventLine({
+  event,
+  now,
+}: {
+  readonly event: ThreadEvent;
+  readonly now?: number | undefined;
+}) {
+  const colors = useColors();
+  const resolved = !event.who.agent;
+  const moment = now ?? Date.now();
+  const when = event.at === undefined ? undefined : sinceText(event.at, moment);
+  const heard = `${event.who.name} ${event.did}${event.at === undefined ? "" : `, ${sinceHeard(event.at, moment)}`}${event.reason === undefined ? "" : `. ${event.reason}`}`;
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={SPACE.TIGHT}
+      modifiers={[
+        padding({ horizontal: SPACE.EDGE }),
+        accessibilityElement("ignore"),
+        accessibilityLabel(heard),
+      ]}
+    >
+      <HStack spacing={WRITER_GAP} alignment="firstTextBaseline">
+        <Image
+          {...glyphImage(resolved ? GLYPH.RESOLVED : GLYPH.UNDO)}
+          size={MARK_SIZE.GLYPH - 2}
+          color={colors.TEXT_MUTED}
+          modifiers={[frame({ width: MARK_SIZE.WRITER }), accessibilityHidden()]}
+        />
+        {/* Note that the line is one text, never a nested one, since `@expo/ui`'s native text keeps a nested child's first words. */}
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {`${event.who.name} ${event.did}${when === undefined ? "" : ` · ${when}`}`}
+        </Text>
+        <Spacer />
+      </HStack>
+      {event.reason === undefined ? null : (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            padding({ leading: MARK_SIZE.WRITER + WRITER_GAP }),
+          ]}
+        >
+          {event.reason}
+        </Text>
+      )}
+    </VStack>
   );
 }
 
@@ -468,9 +563,13 @@ function MessageView({
                 linkStanding={linkStanding}
               />
             )}
-            {message.media.map((media) => (
-              <MediaView key={media.key} media={media} />
-            ))}
+            {mediaRuns(message.media).map((run) =>
+              run.length === 1 && run[0] !== undefined ? (
+                <MediaView key={run[0].key} media={run[0]} />
+              ) : (
+                <PictureSet key={run[0]?.key} pictures={run.flatMap(setPicture)} />
+              ),
+            )}
           </View>
         </RNHostView>
       </VStack>
@@ -499,6 +598,7 @@ export function ThreadPage(props: ThreadPageProps) {
     title,
     quoted,
     messages,
+    opening,
     ask,
     acts = [],
     menu,
@@ -543,11 +643,23 @@ export function ThreadPage(props: ThreadPageProps) {
               standing={standing}
               path={pathInHead ? pathTitle : undefined}
             />
-            {messages.map((message) => (
-              <MessageView key={message.id} message={message} {...drawing} />
+            {(opening ?? []).map((event) => (
+              <EventLine key={event.key} event={event} now={drawing.now} />
             ))}
+            {messages.map((message) => (
+              <VStack key={message.id} alignment="leading" spacing={SPACE.EDGE}>
+                <MessageView message={message} {...drawing} />
+                {(message.after ?? []).map((event) => (
+                  <EventLine key={event.key} event={event} now={drawing.now} />
+                ))}
+              </VStack>
+            ))}
+            {/* Note that the ask stands where the messages' words do, past the writers' faces, so a notice's Got it and a card line up under what they answer. */}
             {ask === undefined ? null : (
-              <VStack alignment="leading" modifiers={[padding({ horizontal: SPACE.EDGE })]}>
+              <VStack
+                alignment="leading"
+                modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}
+              >
                 {ask}
               </VStack>
             )}

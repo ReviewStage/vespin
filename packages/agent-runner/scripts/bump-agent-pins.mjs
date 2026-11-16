@@ -1,16 +1,17 @@
 /**
- * bump-agent-pins.mjs -- move the pinned Claude Agent SDK or Codex to a newer npm release, every pin of it read off the release itself.
+ * bump-agent-pins.mjs -- move the pinned Claude Agent SDK, Codex, or Cursor's SDK to a newer npm release, every pin of it read off the release itself.
  *
- * `pnpm --filter @repo/agent-runner bump:agent-pins [claude|codex][@<version>]...`,
- * both tools where none is named. For each tool it picks the newest stable
+ * `pnpm --filter @repo/agent-runner bump:agent-pins [claude|codex|cursor][@<version>]...`,
+ * every tool where none is named. For each tool it picks the newest stable
  * release npm has held for at least `MIN_AGE_HOURS` (or the version named),
  * and where that is newer than the pin, it rewrites every place the release
  * lives together, as `tools/oxlint/vespin/guards/agent-pins.ts` holds them:
  * `src/pins.ts`'s sandbox pin and `HOST_CLI_VERSION`, each host pin's
  * address, size, SHA-256, and file digests, the image's `ARG`s
- * (`apps/web/agent-image/Dockerfile`), and, for Claude, this package's SDK
- * dependency and the lockfile, and for Codex, the generated app-server
- * protocol (`generate-codex-protocol.mjs`).
+ * (`apps/web/agent-image/Dockerfile`), and, for Claude and Cursor, this
+ * package's SDK dependency and the lockfile, whose platform packages
+ * (`@cursor/sdk-linux-x64` and its siblings) move with the SDK, and for
+ * Codex, the generated app-server protocol (`generate-codex-protocol.mjs`).
  *
  * Note that nothing here loosens what a host checks: each archive is fetched
  * from the address its pin names, which must be npm's own tarball address,
@@ -37,6 +38,7 @@ const MIN_AGE_HOURS = 24;
 const REGISTRY = "https://registry.npmjs.org";
 const SDK = "@anthropic-ai/claude-agent-sdk";
 const CODEX = "@openai/codex";
+const CURSOR_SDK = "@cursor/sdk";
 
 const packageRoot = path.resolve(import.meta.dirname, "..");
 const repositoryRoot = path.resolve(packageRoot, "..", "..");
@@ -78,7 +80,17 @@ const TOOLS = {
       ["CODEX_LINUX_PINS.arm64", pins.CODEX_LINUX_PINS.arm64, CODEX, "-linux-arm64"],
     ],
   },
+  cursor: {
+    title: "Cursor SDK",
+    package: CURSOR_SDK,
+    current: () => pins.CURSOR_SDK_PIN.VERSION,
+    // Note that the image installs the SDK from npm, its platform package beside it, so no host pin is read off an archive yet.
+    hostPins: [],
+  },
 };
+
+/** The tools whose SDK this package depends on by name, which the lockfile moves with. */
+const SDK_DEPENDENCY = { claude: SDK, cursor: CURSOR_SDK };
 
 /** Write a line of progress to stderr, which stdout's JSON leaves clean. */
 function say(line) {
@@ -348,6 +360,18 @@ function versionEdits(tool, from, to, claude) {
     };
   }
 
+  if (tool === "cursor") {
+    return {
+      pins: [
+        [
+          `export const CURSOR_SDK_PIN = {\n  VERSION: "${from}",`,
+          `export const CURSOR_SDK_PIN = {\n  VERSION: "${to}",`,
+        ],
+      ],
+      image: [[`ARG CURSOR_SDK_VERSION=${from}\n`, `ARG CURSOR_SDK_VERSION=${to}\n`]],
+    };
+  }
+
   return {
     pins: [
       [`  VERSION: "${from}",`, `  VERSION: "${to}",`],
@@ -393,9 +417,11 @@ async function bump(tool, to) {
   );
   run("pnpm", ["exec", "biome", "format", "--write", PINS_FILE]);
 
-  if (tool === "claude") {
+  const dependency = SDK_DEPENDENCY[tool];
+
+  if (dependency !== undefined) {
     rewrite(PACKAGE_FILE, (text) =>
-      replaceOnce(text, `"${SDK}": "${from}"`, `"${SDK}": "${to}"`, "package.json"),
+      replaceOnce(text, `"${dependency}": "${from}"`, `"${dependency}": "${to}"`, "package.json"),
     );
     // Note that the lockfile is moved alone, then installed from as every checkout is, so the guard reads the SDK it names.
     run("pnpm", ["install", "--lockfile-only"]);
@@ -414,8 +440,7 @@ function requested(args) {
   return asked.map((arg) => {
     const [tool, version] = arg.split("@");
 
-    if (!(tool in TOOLS))
-      throw new Error(`no tool ${tool}: name ${Object.keys(TOOLS).join(" or ")}`);
+    if (!(tool in TOOLS)) throw new Error(`no tool ${tool}: name ${Object.keys(TOOLS).join(", ")}`);
 
     if (version !== undefined && !stable(version))
       throw new Error(`${arg} names no stable release`);

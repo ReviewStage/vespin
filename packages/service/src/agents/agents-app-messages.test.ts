@@ -692,6 +692,39 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
+    "a /goal line to an agent on Cursor, which keeps no goal, is refused, and nothing reaches its harness",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+
+        const { owner, agent, ask, target } = yield* messagedAgent(agentSessions, {
+          running: false,
+        });
+
+        yield* Database.use((db) =>
+          db
+            .update(conversations)
+            .set({ runtime: CONVERSATION_RUNTIME.CURSOR })
+            .where(eq(conversations.id, target.conversationId)),
+        );
+        const sends = agentSessions.sent.length;
+
+        const refused = yield* ask(
+          messageAs(owner, agent.id, {
+            text: "/goal every billing test passes",
+            clientKey: randomUUID(),
+          }),
+        );
+
+        assert.deepEqual(
+          refused,
+          refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
+        );
+        assert.equal(agentSessions.sent.length, sends, "the harness is handed nothing");
+      }),
+  );
+
+  it.effect(
     "a task's archive naming an assignee who is no member is refused before any of its agents is stopped",
     () =>
       Effect.gen(function* () {

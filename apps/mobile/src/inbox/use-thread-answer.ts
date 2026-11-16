@@ -8,7 +8,7 @@
  * drawn over the thread the moment it is pressed (`inboxSendingDrawn`), so
  * the list and the thread read it settled at once, and stands until a read
  * carries it; a refused one is let go, its words and picks put back on the
- * box, the refusal said under it, and the phone buzzes as a refusal does.
+ * box, the refusal said in its head, and the phone buzzes as a refusal does.
  * The box's next send may start a new thread with the thread's agent
  * instead (`AGENTS_INBOX_START`), as the panel's "Send as a new thread to"
  * does: its words the thread's first message, the new thread opened once
@@ -88,6 +88,8 @@ interface ThreadHeld {
   readonly asNew?: boolean;
   /** The key the last thread start went under and its words, which a start of the same words goes under again, so a retry starts one thread. */
   readonly started?: { readonly key: string; readonly words: string };
+  /** The key of the Got it out, which takes Got it off the thread while it is out, as the host draws the thread settled once it goes, and sends nothing on a second press. */
+  readonly nodding?: string | undefined;
 }
 
 /** A thread the app holds nothing of. */
@@ -196,7 +198,7 @@ function letGoCarriedCloses(items: readonly InboxItem[]): void {
 
 /** The store with the thread's closes let go, as its Undo asks, so the thread is drawn as the host draws the take-back rather than closed by a send taken back. */
 function letGoCloses(itemId: string): void {
-  if (held.get(itemId)?.sending.size === undefined) return;
+  if (!held.has(itemId)) return;
   hold(itemId, (was) => ({
     ...was,
     sending: new Map(
@@ -346,7 +348,7 @@ export interface ThreadAnswer {
   readonly send: (pressed?: InboxDraft) => void;
   /** Resolves the thread without an answer, with Undo once it went. */
   readonly resolve: () => void;
-  /** Whether the thread is a notice its box offers Got it on: open, asking nothing, and the box empty, the nod drawn by the host at once once pressed. */
+  /** Whether the thread is a notice its box offers Got it on: open, asking nothing, the box empty, and no Got it out, so a press takes it away at once until the host draws the thread settled. */
   readonly nods: boolean;
   /** Settles the notice with Got it, messaging nobody, with Undo once it went. */
   readonly acknowledge: () => void;
@@ -356,9 +358,6 @@ export interface ThreadAnswer {
   /** Starts a new thread with the thread's agent, the box's words its first message, and opens it once the service took it. */
   readonly start: () => void;
 }
-
-/** The nods out, by the item's id, so a second press of Got it before the first lands sends nothing. */
-const nodding = new Set<string>();
 
 /** The new threads out, by the item's id, so a second start waits for the first's answer rather than racing it for the box's words. */
 const starting = new Set<string>();
@@ -378,7 +377,7 @@ export function useThreadAnswer(
   const { item } = listed;
   const itemId = item.id;
   const store = useSyncExternalStore(subscribe, heldNow);
-  const { draft, note, asNew = false } = store.get(itemId) ?? NOTHING_HELD;
+  const { draft, note, asNew = false, nodding } = store.get(itemId) ?? NOTHING_HELD;
   const thread = item.thread ?? [];
 
   const onDraft = useCallback(
@@ -485,11 +484,12 @@ export function useThreadAnswer(
 
   // Got it nods at the revision drawn, so an agent's change since is never settled unseen; one settled first by someone else is passed over quietly, with no Undo, since what was asked already stands.
   const acknowledge = () => {
-    if (nodding.has(itemId)) return;
-    nodding.add(itemId);
+    if (held.get(itemId)?.nodding !== undefined) return;
     const key = randomUUID();
     let taken = false;
-    hold(itemId, (was) => ({ ...was, note: undefined }));
+    // Note that a Got it's refusal and its letting go touch the box only while the Got it out is still this one.
+    const ours = () => held.get(itemId)?.nodding === key;
+    hold(itemId, (was) => ({ ...was, note: undefined, nodding: key }));
     void write(
       () =>
         acts[ACT_KIND.AGENTS_INBOX_ANSWER]({
@@ -510,11 +510,13 @@ export function useThreadAnswer(
               ? undefined
               : NOT_ACKNOWLEDGED,
         unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
-        inPlace: (words) => hold(itemId, (was) => ({ ...was, note: words })),
+        inPlace: (words) => {
+          if (ours()) hold(itemId, (was) => ({ ...was, note: words }));
+        },
         went: BUZZ.SUCCESS,
       },
     ).then((went) => {
-      nodding.delete(itemId);
+      if (ours()) hold(itemId, (was) => ({ ...was, nodding: undefined }));
 
       if (went && taken) settled([{ item, key }], SETTLE.ACKNOWLEDGE);
     });
@@ -589,7 +591,12 @@ export function useThreadAnswer(
       unreadableNumber(thread, draft) !== undefined || inboxThreadSend(thread, draft) !== undefined,
     send,
     resolve,
-    nods: !asNew && awaitsNod(item) && draft.note.trim() === "" && draft.attachments.length === 0,
+    nods:
+      !asNew &&
+      nodding === undefined &&
+      awaitsNod(item) &&
+      draft.note.trim() === "" &&
+      draft.attachments.length === 0,
     acknowledge,
     asNew,
     setAsNew,

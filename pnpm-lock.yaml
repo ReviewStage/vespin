@@ -1128,6 +1128,9 @@ importers:
         specifier: 4.6.0
         version: 4.6.0
     devDependencies:
+      '@cursor/sdk':
+        specifier: 1.4.0
+        version: 1.4.0(zod@4.6.7)
       '@effect/vitest':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)(vitest@5.1.0)
