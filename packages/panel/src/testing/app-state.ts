@@ -28,6 +28,11 @@ import type { IntegrationToolsAnswer } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { ModelsAnswer } from "@repo/features/models-wire";
 import { PAGE_OWNER, type PagePlace } from "@repo/features/page-wire";
+import type { PullRequestChaptersAnswer } from "@repo/features/pull-request-chapters-wire";
+import type {
+  RepositoryPullRequestParams,
+  RepositoryPullRequestPartParams,
+} from "@repo/features/pull-request-view";
 import {
   IDLE_TASKS_VIEW,
   type TASK_CALL_FAILURE,
@@ -39,7 +44,6 @@ import {
   type AppAllowedCommandList,
   type AppAutomationReads,
   type AppBrowserTabs,
-  type AppChapters,
   type AppDescriptionComments,
   type AppGitHubToken,
   type AppHolderInboxes,
@@ -54,6 +58,8 @@ import {
   type AppProviderKeyList,
   type AppPullRequestParts,
   type AppRepositoryLists,
+  type AppRepositoryPullRequestHeld,
+  type AppRepositoryPullRequestParts,
   type AppSlackChannels,
   type AppStateDelivery,
   type AppStateSnapshot,
@@ -77,6 +83,7 @@ import {
   OWN_PULL_REQUEST,
   OWN_TRANSCRIPT,
   PULL_REQUEST_PART_READ,
+  REPOSITORY_PULL_REQUEST_PART_READ,
   UNREAD,
 } from "@repo/host/app-state";
 import {
@@ -84,6 +91,7 @@ import {
   AGENT_ACT_KIND,
   AUTOMATION_ACT_KIND,
   INTEGRATION_ACT_KIND,
+  PULL_REQUEST_ACT_KIND,
   SETTINGS_ACT_KIND,
   TASKS_ACT_KIND,
   WORKSPACE_ACT_KIND,
@@ -239,6 +247,13 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.PULL_REQUEST_PUBLISHED]: NO_KEYS_HELD,
     [LIVE_READ.PULL_REQUEST_VIEWED]: NO_KEYS_HELD,
     [LIVE_READ.REVIEW_OPTIONS]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: NO_KEYS_HELD,
     [LIVE_READ.DEVICE_PRESENCE]: NO_KEYS_HELD,
     [LIVE_READ.HOSTS]: NO_KEYS_HELD,
     [LIVE_READ.MACHINES]: NO_KEYS_HELD,
@@ -493,12 +508,14 @@ export interface HostReadsHanded {
   readonly deliverItems: (next: AppHostRead<AppInboxItems>) => void;
   readonly deliverHolders: (next: AppHolderInboxes) => void;
   readonly deliverPages: (next: AppPages) => void;
-  readonly deliverChapters: (next: AppChapters) => void;
+  readonly deliverChapters: (next: AppRepositoryChapters) => void;
   readonly deliverBrowserTabs: (next: AppBrowserTabs) => void;
   readonly deliverAutomations: (next: Partial<AppAutomationReads>) => void;
   readonly deliverComments: (next: AppDescriptionComments) => void;
   readonly deliverTools: (next: AppIntegrationTools) => void;
-  readonly deliverParts: (next: Partial<AppPullRequestParts>) => void;
+  readonly deliverParts: (
+    next: Partial<AppPullRequestParts> | Partial<AppRepositoryPullRequestParts>,
+  ) => void;
   /** The signed-in account's keys, held under its id. */
   readonly deliverKeys: (next: AppHostRead<AppProviderKeyList>) => void;
   /** The models the signed-in account is offered and its devices, held under its id. */
@@ -543,7 +560,7 @@ function withAccountId(snapshot: AppStateSnapshot): AppStateSnapshot {
 export function handHostReads(first: {
   readonly items?: AppHostRead<AppInboxItems>;
   readonly holders?: AppHolderInboxes;
-  readonly chapters?: AppChapters;
+  readonly chapters?: AppRepositoryChapters;
   readonly tools?: AppIntegrationTools;
   readonly keys?: AppHostRead<AppProviderKeyList>;
   readonly allowedCommands?: AppHostRead<AppAllowedCommandList>;
@@ -580,7 +597,7 @@ export function handHostReads(first: {
         ...(first.holders === undefined ? undefined : { [LIVE_READ.HOLDER_INBOX]: first.holders }),
         ...(first.chapters === undefined
           ? undefined
-          : { [LIVE_READ.PULL_REQUEST_CHAPTERS]: first.chapters }),
+          : { [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: first.chapters }),
         ...(first.tools === undefined ? undefined : { [LIVE_READ.INTEGRATION_TOOLS]: first.tools }),
         ...(first.keys === undefined
           ? undefined
@@ -636,7 +653,7 @@ export function handHostReads(first: {
     deliverItems: (next) => deliver({ [LIVE_READ.INBOX_ITEMS]: next }),
     deliverHolders: (next) => deliver({ [LIVE_READ.HOLDER_INBOX]: next }),
     deliverPages: (next) => deliver({ [LIVE_READ.PAGES]: next }),
-    deliverChapters: (next) => deliver({ [LIVE_READ.PULL_REQUEST_CHAPTERS]: next }),
+    deliverChapters: (next) => deliver({ [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: next }),
     deliverBrowserTabs: (next) => deliver({ [LIVE_READ.BROWSER_TABS]: next }),
     deliverAutomations: (next) => deliver(next),
     deliverComments: (next) => deliver({ [LIVE_READ.DESCRIPTION_COMMENTS]: next }),
@@ -839,6 +856,99 @@ export function holdPullRequestParts(
       return quietHold();
     },
     [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_RETRY]: (params) => ask(params),
+  });
+
+  return asked;
+}
+
+/** The chapters of each pull request held by its repository and number, as the host holds them for the Pull request tabs. */
+export type AppRepositoryChapters = AppRepositoryPullRequestHeld<PullRequestChaptersAnswer>;
+
+/** What a test's service answers one part of a pull request named by its repository and number with, by the part, as the read it replaces did. */
+type RepositoryPartAnswerOf<Part extends PullRequestPart> =
+  AppHostReads[(typeof REPOSITORY_PULL_REQUEST_PART_READ)[Part]];
+
+/** How a test's service answers each part of a pull request named by its repository and number, by the part, for the pull request the tab names; a part it does not answer is held quietly. */
+export type RepositoryPullRequestPartAnswers = {
+  readonly [Part in PullRequestPart]?: (
+    pullRequest: RepositoryPullRequestParams,
+  ) => Promise<RepositoryPartAnswerOf<Part>>;
+};
+
+/**
+ * Answers the window's holds on the parts of a pull request named by its
+ * repository and number, and its Try again on one, as the host does,
+ * beside whatever acts the test answers by now, on the terms
+ * `holdPullRequestParts` answers an agent's: each laid at the workspace,
+ * the repository, and the number. Answers with every ask made, in order.
+ */
+export function holdRepositoryPullRequestParts(
+  deliver: HostReadsHanded["deliverParts"],
+  answers: RepositoryPullRequestPartAnswers,
+): readonly RepositoryPullRequestPartParams[] {
+  const asked: RepositoryPullRequestPartParams[] = [];
+
+  let held: AppRepositoryPullRequestParts = {
+    [LIVE_READ.REPOSITORY_PULL_REQUEST]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: NO_KEYS_HELD,
+    [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: NO_KEYS_HELD,
+  };
+
+  const ask = async (params: RepositoryPullRequestPartParams) => {
+    const answer = answers[params.part];
+
+    if (answer === undefined) return;
+    asked.push(params);
+    const read = REPOSITORY_PULL_REQUEST_PART_READ[params.part];
+    const { part: _part, ...pullRequest } = params;
+    const { workspaceId, repository } = pullRequest;
+    const number = String(pullRequest.number);
+
+    const landed: object = await answer(pullRequest).catch(() => ({
+      failure: AGENT_CALL_FAILURE.UNANSWERED,
+    }));
+
+    const slice: Readonly<
+      Record<string, Readonly<Record<string, Readonly<Record<string, AppHostRead<object>>>>>>
+    > = held[read];
+
+    const ofWorkspace = slice[workspaceId];
+    const ofRepository = ofWorkspace?.[repository];
+    const was = ofRepository?.[number]?.rows;
+
+    const kept =
+      params.part !== PULL_REQUEST_PART.VIEWED &&
+      "failure" in landed &&
+      was !== undefined &&
+      !("failure" in was);
+
+    if (kept) return;
+    // SAFETY: what lands for a part is that part's read (`RepositoryPartAnswerOf`), laid at its key's path.
+    held = {
+      ...held,
+      [read]: {
+        ...slice,
+        [workspaceId]: {
+          ...ofWorkspace,
+          [repository]: { ...ofRepository, [number]: { rows: landed } },
+        },
+      },
+    } as AppRepositoryPullRequestParts;
+    deliver(held);
+  };
+
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [PULL_REQUEST_ACT_KIND.PULL_REQUESTS_PART_FOLLOW]: (params) => {
+      // Note that the host lays what it read once the hold is taken, never inside it.
+      void Promise.resolve().then(() => ask(params));
+
+      return quietHold();
+    },
+    [PULL_REQUEST_ACT_KIND.PULL_REQUESTS_PART_RETRY]: (params) => ask(params),
   });
 
   return asked;

@@ -2,7 +2,15 @@
 
 import { GlassEffectContainer, Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
-import { frame, type ModifierConfig, onGeometryChange, padding } from "@expo/ui/swift-ui/modifiers";
+import {
+  background,
+  frame,
+  glassEffect,
+  type ModifierConfig,
+  onGeometryChange,
+  padding,
+  strokeBorder,
+} from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
@@ -150,6 +158,42 @@ function useFieldGround(radius: number): readonly ModifierConfig[] {
       SwiftModifiers.shapes.roundedRectangle({ cornerRadius: radius }),
     ),
   ];
+}
+
+/**
+ * The glass a SwiftUI piece floating over the screen stands in, rounded as a
+ * bar is, such as the failure notice and a split view's composer: the
+ * system's glass, or, where Liquid Glass is unavailable or the reader turned
+ * on Reduce Transparency, the same solid stand-in a `GlassBar` draws, the
+ * surface's ground inside the quiet ink's hairline, rather than whatever the
+ * system makes of glass the reader asked not to see through.
+ */
+export function useBarGlass(): readonly ModifierConfig[] {
+  const colors = useColors();
+  const solid = useReduceTransparency() || !isLiquidGlassAvailable();
+
+  return solid
+    ? [
+        background(
+          colors.SURFACE,
+          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: BAR_RADIUS }),
+        ),
+        strokeBorder({
+          content: colors.TEXT_MUTED,
+          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+          shape: "roundedRectangle",
+          cornerRadius: BAR_RADIUS,
+          style: { lineWidth: StyleSheet.hairlineWidth },
+        }),
+      ]
+    : [
+        glassEffect({
+          glass: { variant: "regular" },
+          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+          shape: "roundedRectangle",
+          cornerRadius: BAR_RADIUS,
+        }),
+      ];
 }
 
 /**

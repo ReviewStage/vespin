@@ -354,6 +354,18 @@ const moveAgents = SqlSchema.findAll({
     ),
 });
 
+/** Retires the runner bearer of each of the account's agents pinned to its device removed, since a removed host's runners act for no one. */
+const retireRunners = SqlSchema.void({
+  Request: Schema.Struct({ userId: Schema.String, deviceId: Schema.String }),
+  execute: ({ userId, deviceId }) =>
+    Database.use((db) =>
+      db
+        .update(agentTable)
+        .set({ runnerTokenHash: null })
+        .where(and(eq(agentTable.userId, userId), eq(agentTable.deviceId, deviceId))),
+    ),
+});
+
 /** The account's Runs on pick, where it names a device folded, naming the one they fold into. */
 const movePick = SqlSchema.void({
   Request: FoldSchema,
@@ -527,10 +539,20 @@ export function hostsOf(userId: string): HostEffect<readonly HostRow[]> {
   return Effect.flatMap(DateTime.nowAsDate, (now) => findHosts({ userId, now }));
 }
 
-/** Removes the account's enrolled machine, or a host its approve made, and refuses its secret from now on, answering the transaction it was removed in; none where the account lists no such machine. */
+/** Removes the account's enrolled machine, or a host its approve made, and refuses its secret and its agents' runner bearers from now on, answering the transaction it was removed in; none where the account lists no such machine. */
 export function removeHost(userId: string, id: string): HostEffect<string | undefined> {
-  return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    Effect.map(stampRemoved({ userId, id, now }), ([removed]) => removed?.txid),
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        const now = yield* DateTime.nowAsDate;
+        const [removed] = yield* stampRemoved({ userId, id, now });
+
+        if (removed === undefined) return undefined;
+        yield* retireRunners({ userId, deviceId: id });
+
+        return removed.txid;
+      }),
+    ),
   );
 }
 

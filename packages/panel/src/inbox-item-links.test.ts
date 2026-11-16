@@ -30,10 +30,9 @@ const ROUTER = createPanelRouter(
   new QueryClient(),
 );
 
-/** A task's or an agent's: its repository, and one agent, which opened the pull request numbered 42. */
+/** A task's: its repository, and one agent. */
 const HOLDING = {
   repository: "acme/relay",
-  pullRequests: new Map([[AGENT, { url: PR }]]),
   agentIds: [AGENT],
   heldIds: undefined,
 };
@@ -55,40 +54,22 @@ function go(link: ReadLink): Route {
 
 it.each<[string, string, InboxItemHere, Route]>([
   [
-    "an Inbox item: a pull request one of its agents opened, however its page is spelled, in that agent's Pull request tab",
+    "an Inbox item: a pull request, however its page is spelled, in its Pull request tab by its repository and number",
     `${PR}#issuecomment-1`,
     ITEM,
-    beside({ kind: THING.PULL_REQUEST, agentId: AGENT }),
+    beside({ kind: THING.PULL_REQUEST, pullRequest: { repository: "acme/relay", number: 42 } }),
   ],
   [
-    "an Inbox item: another pull request of its repository, in any case, by its number in its first agent's tab",
-    "https://github.com/Acme/Relay/pull/41/files",
+    "an Inbox item: a pull request of another repository, in its Pull request tab too",
+    "https://github.com/Acme/Other/pull/41/files",
     ITEM,
-    beside({ kind: THING.PULL_REQUEST, agentId: AGENT, number: 41 }),
+    beside({ kind: THING.PULL_REQUEST, pullRequest: { repository: "Acme/Other", number: 41 } }),
   ],
   [
-    "an Inbox item: a pull request of another repository, the window's",
-    "https://github.com/acme/other/pull/41",
-    ITEM,
-    NOTHING,
-  ],
-  [
-    "an Inbox item: another pull request of its repository with none of its agents drawn, the window's",
-    "https://github.com/acme/relay/pull/41",
-    { ...ITEM, agentIds: [] },
-    NOTHING,
-  ],
-  [
-    "an Inbox item: a page under its agent's own pull request's, in that agent's own Pull request tab",
-    `${PR}/files`,
-    ITEM,
-    beside({ kind: THING.PULL_REQUEST, agentId: AGENT }),
-  ],
-  [
-    "an Inbox item: a long run of slashes, read at once as any address no pull request matches",
+    "an Inbox item: a long run of slashes, read at once as a page under the pull request it names",
     `https://github.com/acme/relay/pull/43${"/".repeat(50_000)}x`,
     { ...ITEM, agentIds: undefined },
-    NOTHING,
+    beside({ kind: THING.PULL_REQUEST, pullRequest: { repository: "acme/relay", number: 43 } }),
   ],
   [
     "an Inbox item: a file of its repository, beside it",
