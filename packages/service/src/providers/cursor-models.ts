@@ -28,9 +28,10 @@
  * (`CURSOR_CLIENT_API_VERSION`).
  */
 
+import type { CursorModelSelection } from "@repo/agent-runner/protocol";
 import { modelIdAtSpeed } from "@repo/features/model-effort";
 import { MODEL_PROVIDER, MODEL_SPEED, NO_EFFORT } from "@repo/features/models-wire";
-import type { OfferedModel } from "./model-catalog.js";
+import { type OfferedModel, providerModelOf } from "./model-catalog.js";
 
 /** The first hosted API version (`HOSTED_API_VERSION`) whose clients read `cursor` as a provider; a catalog answer to an older one never holds a Cursor entry, which would refuse its whole read. */
 const CURSOR_CLIENT_API_VERSION = 4;
@@ -158,4 +159,41 @@ export function withCursorModels(
   offer: CursorOffer,
 ): readonly OfferedModel[] {
   return offersCursor(offer) ? [...models, ...CURSOR_CATALOG] : models;
+}
+
+/** Whether a catalog id is one of Cursor's models as offered (`CURSOR_MODELS`). */
+function isCursorModel(catalogId: string): catalogId is keyof typeof CURSOR_MODELS {
+  return Object.hasOwn(CURSOR_MODELS, catalogId);
+}
+
+/**
+ * The model a Cursor agent on the catalog id and effort given runs, as
+ * Cursor's SDK takes it (`ModelSelection`): Cursor's id, every parameter
+ * the entry pins, its effort under the parameter it spells it by where it
+ * lists the effort, and `fast` where it takes it, true for the fast
+ * version. No entry needs Max Mode, so none is asked. None for an id that
+ * is not one of Cursor's models.
+ */
+export function cursorModelSelectionOf(
+  catalogId: string,
+  effort: string,
+): CursorModelSelection | undefined {
+  const model = providerModelOf(catalogId);
+  const standardId = model === undefined ? catalogId : `${MODEL_PROVIDER.CURSOR}/${model.modelId}`;
+
+  if (model?.provider !== MODEL_PROVIDER.CURSOR || !isCursorModel(standardId)) return undefined;
+  const entry: CursorModel = CURSOR_MODELS[standardId];
+
+  const effortParam =
+    entry.effort?.values.includes(effort) === true
+      ? [{ id: entry.effort.parameter, value: effort }]
+      : [];
+
+  const fastParam = entry.fast
+    ? [{ id: CURSOR_PARAMETER.FAST, value: String(model.speed === MODEL_SPEED.FAST) }]
+    : [];
+
+  const params = [...entry.pinned, ...effortParam, ...fastParam];
+
+  return params.length === 0 ? { id: entry.cursorId } : { id: entry.cursorId, params };
 }

@@ -95,6 +95,8 @@ const StepSchema = Schema.Struct({
   draft: DraftSchema,
   /** How many reasoning summaries the step told, which numbers the next one's id. */
   reasoning: Schema.Number,
+  /** The step's reasoning still forming, for a harness that streams it in pieces (`NATIVE_MOMENT.REASONING_DELTA`), told whole as the step goes on; absent where none forms. */
+  thinking: Schema.optionalKey(Schema.String),
 });
 
 type Step = typeof StepSchema.Type;
@@ -539,7 +541,8 @@ class Fold {
   }
 
   /** The step's words told whole, and the step closed. */
-  #closed(turn: Turn): Turn {
+  #closed(held: Turn): Turn {
+    const turn = this.#thought(held);
     const step = turn.step;
 
     if (step === undefined) return turn;
@@ -574,7 +577,7 @@ class Fold {
 
   /** The step's words grown, and told where another sentence finished. */
   #words(grow: (draft: Draft) => Draft): void {
-    const turn = this.#step(undefined);
+    const turn = this.#thought(this.#step(undefined));
     const step = turn.step;
 
     if (step === undefined) return;
@@ -583,9 +586,13 @@ class Fold {
 
   #reasoning(text: string): void {
     const turn = this.#step(undefined);
-    const step = turn.step;
 
-    if (step === undefined) return;
+    if (turn.step === undefined) return;
+    this.#setTurn(this.#toldReasoning(turn, turn.step, text));
+  }
+
+  /** One reasoning summary of the step told the writer, under the id its place in the step mints. */
+  #toldReasoning(turn: Turn, step: Step, text: string): Turn {
     const id = reasoningItemId(this.#context.conversationId, turn.id, turn.steps, step.reasoning);
 
     const told = this.#tell(turn, {
@@ -594,7 +601,45 @@ class Fold {
       item: { id, summary: text },
     });
 
-    this.#setTurn({ ...told, step: { ...step, reasoning: step.reasoning + 1 } });
+    return { ...told, step: { ...step, reasoning: step.reasoning + 1 } };
+  }
+
+  /** A piece of the step's reasoning kept with what formed before it, until the step goes on (`#thought`). */
+  #thinking(text: string): void {
+    const turn = this.#step(undefined);
+    const step = turn.step;
+
+    if (step === undefined) return;
+    this.#setTurn({ ...turn, step: { ...step, thinking: (step.thinking ?? "") + text } });
+  }
+
+  /** The turn with the step's reasoning that formed in pieces told whole as one summary; as it is where none formed. */
+  #thought(turn: Turn): Turn {
+    const step = turn.step;
+
+    if (step?.thinking === undefined) return turn;
+    const { thinking, ...rest } = step;
+    const text = thinking.trim();
+
+    const told =
+      text.length === 0 ? { ...turn, step: rest } : this.#toldReasoning(turn, rest, text);
+
+    this.#setTurn(told);
+
+    return told;
+  }
+
+  /** Every call the turn still holds unanswered settled as given. */
+  #openCallsSettled(
+    moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.OPEN_CALLS_SETTLED }>,
+  ): void {
+    for (const callId of Object.keys(this.state.turn?.running ?? {})) {
+      this.#toolSettled({
+        kind: NATIVE_MOMENT.TOOL_SETTLED,
+        callId,
+        settlement: moment.settlement,
+      });
+    }
   }
 
   /**
@@ -611,7 +656,7 @@ class Fold {
     const { name, input }: { readonly name: string; readonly input: UnparsedWireValue } =
       this.#context.registered(moment.name) ? moment : unknownCall(moment.name, moment.input);
 
-    const turn = this.#step(undefined);
+    const turn = this.#thought(this.#step(undefined));
 
     if (turn.calls[moment.callId] !== undefined) return;
 
@@ -1012,6 +1057,14 @@ class Fold {
         return;
       case NATIVE_MOMENT.REASONING:
         this.#reasoning(moment.text);
+
+        return;
+      case NATIVE_MOMENT.REASONING_DELTA:
+        this.#thinking(moment.text);
+
+        return;
+      case NATIVE_MOMENT.OPEN_CALLS_SETTLED:
+        this.#openCallsSettled(moment);
 
         return;
       case NATIVE_MOMENT.TOOL_STARTED:
