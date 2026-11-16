@@ -394,7 +394,7 @@ export {
   useAsyncAction,
 } from "./use-async-action.js";
 
-export { useThreeColumns, useWindowSizeClass } from "./use-window-size-class.js";
+export { useTabRail, useThreeColumns, useWindowSizeClass } from "./use-window-size-class.js";
 
 export { Video } from "./video.js";
 
