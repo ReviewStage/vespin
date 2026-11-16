@@ -135,7 +135,6 @@ import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js"
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
-import { type TreeHold, useTreeHold } from "../tasks/tree-hold.js";
 import {
   threadComments,
   threadOpen,
@@ -711,6 +710,50 @@ type OpenedParents = {
   readonly opened: ReadonlySet<string>;
   readonly toggle: (taskId: string) => void;
 };
+
+/** What the tree holds of its own reading: each group's opened parents, and the groups folded shut, by the group's key. */
+type TreeHold = {
+  readonly opened: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly toggleParent: (group: string, taskId: string) => void;
+  readonly folded: ReadonlySet<string>;
+  readonly setFolded: (group: string, folded: boolean) => void;
+};
+
+/**
+ * The tree's hold: which parents stand open and which groups stand folded.
+ * Note that it is held above the rows, since a recycled row draws another
+ * task once scrolled past and a folded section drops its rows, and above the
+ * Tasks tab's two layouts, since a fold or an unfold of the iPhone Duo, or a
+ * rotation across the split's cutoff, swaps one layout for the other and
+ * would lose what the reader opened. It is handed to the tree as a prop,
+ * never a context, because a three-column window draws the tree in the
+ * tabs' one split view, above this root screen.
+ */
+function useTreeHoldState(): TreeHold {
+  const [opened, setOpened] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
+  const [folded, setFoldedSet] = useState<ReadonlySet<string>>(NONE_OPEN);
+
+  const toggleParent = (group: string, taskId: string) =>
+    setOpened((was) => {
+      const parents = new Set(was.get(group) ?? NONE_OPEN);
+
+      if (!parents.delete(taskId)) parents.add(taskId);
+
+      return new Map(was).set(group, parents);
+    });
+
+  const setFolded = (group: string, shut: boolean) =>
+    setFoldedSet((was) => {
+      const next = new Set(was);
+
+      if (shut) next.add(group);
+      else next.delete(group);
+
+      return next;
+    });
+
+  return { opened, toggleParent, folded, setFolded };
+}
 
 /** One group's opened parents out of the tree's hold. */
 function groupParents(hold: TreeHold, group: string): OpenedParents {
@@ -2081,17 +2124,17 @@ function TasksSplitScreen({
 
 /**
  * The Tasks tab's root screen: its tree, laid out by the window's size
- * class. Note that what the reader set outlives the screen (`useTreeHold`),
+ * class. Note that what the reader set is held here, above the two layouts,
  * so a rotation or a fold of the iPhone Duo, which swaps one layout for the
- * other and can remount the tabs, keeps it: the search, the parents opened
- * and the groups folded; a status or a delete question standing open is held
- * here, above the two layouts.
+ * other, keeps it: the search, the parents opened and the groups folded
+ * (`TreeHold`), and a status or a delete question standing open.
  */
 export function TasksListScreen() {
   const sizeClass = useWindowSizeClass();
   const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
-  const hold = useTreeHold();
-  const screen = useTasksScreen({ search: hold.search, setSearch: hold.setSearch });
+  const [search, setSearch] = useState("");
+  const screen = useTasksScreen({ search, setSearch });
+  const hold = useTreeHoldState();
 
   return (
     <>
