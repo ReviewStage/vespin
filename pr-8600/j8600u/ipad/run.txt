@@ -1,0 +1,50 @@
+==> iPad Pro 11-inch (M5) (BAD5C9D5-2CB3-466D-8272-09ADD64A74E8)
+Monitoring boot status for iPad Pro 11-inch (M5) (BAD5C9D5-2CB3-466D-8272-09ADD64A74E8).
+Booting device...
+[2026-11-16 06:34:59 +0000] Status=0, isTerminal=NO, Elapsed=00:00.
+	Booting
+
+[2026-11-16 06:35:02 +0000] Status=1, isTerminal=NO, Elapsed=00:03.
+	Waiting on BackBoard
+
+[2026-11-16 06:35:03 +0000] Status=2, isTerminal=NO, Elapsed=00:03.
+	Waiting on Data Migration
+		Reason:(null)
+		Migration Elapsed:00:00 seconds
+
+[2026-11-16 06:35:03 +0000] Status=4, isTerminal=NO, Elapsed=00:04.
+	Waiting on System App
+
+[2026-11-16 06:35:04 +0000] Status=4294967295, isTerminal=YES, Elapsed=00:05.
+	Finished
+
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2805c96b (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+
+Waiting for flows to complete...
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[Passed] accessibility (1m 49s)
+[Failed] tasks (15m 13s) (Assertion is false: "Fix ledger rounding" is visible)
+
+1/2 Flow Failed
+
+error: the flows failed on iPad Pro 11-inch (M5) in light; its output is under /Users/deanstratakos/vespin-ipad-agent/out/j8600u/ipad/ipad-pro-11-inch-(m5)/light
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+
+Waiting for flows to complete...
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[Passed] accessibility (1m 50s)
+[Failed] tasks (15m 13s) (Assertion is false: "Fix ledger rounding" is visible)
+
+1/2 Flow Failed
+
+error: the flows failed on iPad Pro 11-inch (M5) in dark; its output is under /Users/deanstratakos/vespin-ipad-agent/out/j8600u/ipad/ipad-pro-11-inch-(m5)/dark
