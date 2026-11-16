@@ -744,10 +744,10 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.FOLD:
       return <FoldRow item={item} onToggle={drawing.onToggle} />;
     case TRANSCRIPT_ITEM.MEDIA:
-      // Note that several pictures with no captions stand as one set side by side, as Messages groups photos; a recording, or a picture with its own caption, stands alone so its caption stays under it.
+      // Note that several pictures with no captions stand as one set side by side, as Messages groups photos; a recording, a sound clip, or a picture with its own caption, stands alone so its caption stays under it.
       if (
         item.media.length > 1 &&
-        item.media.every((shown) => !shown.video && shown.caption === "")
+        item.media.every((shown) => shown.kind === SHOWN_MEDIA.PICTURE && shown.caption === "")
       ) {
         return (
           <View style={[styles.row, inset(item.depth), styles.media]}>
