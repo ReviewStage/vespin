@@ -71,6 +71,7 @@ const KEK = {
 const KEY = {
   ANTHROPIC: "sk-ant-api03-test-key-0000000000000000wxyz",
   OPENAI: "sk-proj-test-key-00000000000000000000abcd",
+  CURSOR: "crsr_test-key-0000000000000000000000000mnop",
 } as const;
 
 const PROVIDER_URL = {
@@ -602,7 +603,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
   );
 
   it.effect(
-    "a key the provider refuses, one it cannot be asked about, and one spelled as the other provider's keep nothing and say why, and none is logged",
+    "a key the provider refuses, one it cannot be asked about, and one spelled as another provider's keep nothing and say why, and none is logged",
     () =>
       Effect.gen(function* () {
         const refused = "sk-ant-api03-refused-000000000000000000rfsd";
@@ -617,6 +618,8 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         const unreachable = yield* ask(save(owner, PROVIDER_KEY_PROVIDER.OPENAI, failing));
         const misplaced = yield* ask(save(owner, PROVIDER_KEY_PROVIDER.OPENAI, KEY.ANTHROPIC));
         const reversed = yield* ask(save(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, KEY.OPENAI));
+        const toCursor = yield* ask(save(owner, PROVIDER_KEY_PROVIDER.CURSOR, KEY.OPENAI));
+        const fromCursor = yield* ask(save(owner, PROVIDER_KEY_PROVIDER.OPENAI, KEY.CURSOR));
 
         assert.deepEqual(keysOf(invalid), { keys: [], rejected: PROVIDER_KEY_REJECTION.INVALID });
         assert.deepEqual(keysOf(unreachable), {
@@ -627,17 +630,25 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           keys: [],
           rejected: PROVIDER_KEY_REJECTION.WRONG_PROVIDER,
         });
-        assert.deepEqual(keysOf(reversed), {
-          keys: [],
-          rejected: PROVIDER_KEY_REJECTION.WRONG_PROVIDER,
-        });
+
+        for (const answered of [reversed, toCursor, fromCursor]) {
+          assert.deepEqual(keysOf(answered), {
+            keys: [],
+            rejected: PROVIDER_KEY_REJECTION.WRONG_PROVIDER,
+          });
+        }
+
+        assert.ok(
+          checks.every((check) => keyOf(check.headers) !== KEY.CURSOR),
+          "a Cursor key is never sent to OpenAI",
+        );
         assert.ok(
           checks.every((check) => keyOf(check.headers) !== KEY.ANTHROPIC),
           "an Anthropic key is never sent to OpenAI",
         );
         assert.ok(
           checks.every((check) => keyOf(check.headers) !== KEY.OPENAI),
-          "an OpenAI key is never sent to Anthropic, not even to ask about fast mode",
+          "an OpenAI key is never sent to Anthropic or Cursor, not even to ask about fast mode",
         );
 
         for (const key of [refused, failing, KEY.ANTHROPIC]) {

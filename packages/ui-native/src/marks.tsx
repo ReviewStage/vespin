@@ -310,12 +310,14 @@ const TILE_MARK_SCALE = 0.72;
 /**
  * The image sets each harness's mark is drawn from, which the app's config
  * writes into its asset catalog (`apps/mobile/app.config.ts`): Claude Code's
- * Clawd from the brand's path in its own clay, and Codex's picture from the
- * files the panel serves, each as the panel's `HarnessMark` draws it.
+ * Clawd from the brand's path in its own clay, Codex's picture from the
+ * files the panel serves, and Cursor's cube from the brand's path in the
+ * row's ink, each as the panel's `HarnessMark` draws it.
  */
 export const HARNESS_MARK_ASSET = {
   [MODEL_PROVIDER.ANTHROPIC]: "ClawdMark",
   [MODEL_PROVIDER.OPENAI]: "CodexMark",
+  [MODEL_PROVIDER.CURSOR]: "CursorMark",
 } as const satisfies Record<ModelProvider, string>;
 
 /**
