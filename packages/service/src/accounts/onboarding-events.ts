@@ -1,13 +1,8 @@
 /**
  * onboarding-events.ts -- an account's sign-up and task activity, told to Resend for its onboarding emails.
  *
- * The nudge a new account is sent is Resend's automation ("No-task nudge"),
- * not the service's: it starts on the event `vespin.signed_up` and sends a
- * note on day 3 and another on day 7, each only to an account that has
- * started no task (`has_task`) and that the founder has not marked as
- * already talking to (`in_conversation`, set by hand in Resend, never here). An account that started a task hears
- * from the founder directly instead, so a note never lands on someone already
- * in a conversation. The service tells Resend these things and nothing else:
+ * Which onboarding emails go out, and when, is set in Resend's automations,
+ * not here. The service tells Resend these things and nothing else:
  *
  * - At sign-up, from the auth route (`auth-app.ts`), the contact is made by
  *   its address alone (https://resend.com/docs/api-reference/contacts/create-contact),
@@ -15,16 +10,14 @@
  *   on, and `vespin.signed_up` is sent with the greeting the automation's
  *   notes open with (`greetingOf`), the welcome email's own
  *   (https://resend.com/docs/api-reference/events/send-event).
- * - An invitation accepted, from the same route, sends `vespin.invite_accepted`,
- *   which no automation reads today.
+ * - An invitation accepted, from the same route, sends `vespin.invite_accepted`.
  * - A task made through the one make every door shares
  *   (`task-create-relation.ts`) sets the contact's properties
  *   (https://resend.com/docs/api-reference/contacts/update-contact):
  *   `has_task`, 1 once the account has started a task; `task_days`, on how
  *   many days it started one; and `last_task_day`, the latest of those days.
- *   A day is counted from the sign-up, the first 24 hours being day 0. The
- *   nudge reads `has_task` alone; the other two describe how active an
- *   account is for whoever reads its contact. They are read from every task the account started each time, not added up
+ *   A day is counted from the sign-up, the first 24 hours being day 0. They
+ *   are read from every task the account started each time, not added up
  *   here, so a report lost to an outage is made whole by the next. An
  *   account with no task keeps Resend's fallbacks, 0, 0, and -1.
  * - An account deleted (`account-deletion.ts`) has its contact deleted
