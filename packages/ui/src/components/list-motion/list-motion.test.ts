@@ -243,7 +243,7 @@ test("nothing plays the first time a list is drawn", () => {
   expect(played).toEqual([]);
 });
 
-test("a row arriving fades in, slides in from the leading edge, and unrolls on the beat the row it pushed down glides from where it stood on, so it never stands over that row", () => {
+test("a row arriving fades in, slides in from the leading edge, and stands clipped at the top of the row it pushed down as that row glides from where it stood", () => {
   const show = draw([["A", "B"]]);
 
   show([["A", "N", "B"]]);
@@ -251,21 +251,42 @@ test("a row arriving fades in, slides in from the leading edge, and unrolls on t
   expect(motionsOf(rowOf("N"))).toEqual([
     [{ opacity: 0 }, { opacity: 1 }],
     [{ transform: "translateX(-16px)" }, { transform: "none" }],
-    [{ clipPath: "inset(0 0 100% 0)" }, { clipPath: "inset(0)" }],
+    [{ clipPath: `inset(0 0 ${ROW}px 0)` }, { clipPath: "inset(0 0 0px 0)" }],
   ]);
   expect(motionsOf(rowOf("B"))).toEqual([
     [{ transform: `translate(0px, ${-ROW}px)` }, { transform: "none" }],
   ]);
   expect(motionsOf(rowOf("A"))).toEqual([]);
-  const unroll = played.find(
-    (each) => each.element === rowOf("N") && "clipPath" in (each.keyframes[0] ?? {}),
-  );
+});
+
+test("rows arriving together each stand clipped at the top of the row they pushed down, on the beat it glides on, so none stands over it", () => {
+  const show = draw([["A", "B"]]);
+
+  show([["A", "M", "N", "B"]]);
+
+  const clipOf = (key: string) =>
+    played.find((each) => each.element === rowOf(key) && "clipPath" in (each.keyframes[0] ?? {}));
+
   const glide = played.find((each) => each.element === rowOf("B"));
-  expect([unroll?.timing.duration, unroll?.timing.easing, unroll?.timing.delay]).toEqual([
-    glide?.timing.duration,
-    glide?.timing.easing,
-    glide?.timing.delay,
+
+  expect(clipOf("M")?.keyframes).toEqual([
+    { clipPath: `inset(0 0 ${ROW}px 0)` },
+    { clipPath: "inset(0 0 0px 0)" },
   ]);
+  expect(clipOf("N")?.keyframes).toEqual([
+    { clipPath: `inset(0 0 ${2 * ROW}px 0)` },
+    { clipPath: "inset(0 0 0px 0)" },
+  ]);
+
+  for (const key of ["M", "N"]) {
+    const clip = clipOf(key)?.timing;
+
+    expect([clip?.duration, clip?.easing, clip?.delay]).toEqual([
+      glide?.timing.duration,
+      glide?.timing.easing,
+      glide?.timing.delay,
+    ]);
+  }
 });
 
 test("a row pushed down in a list a transform around it draws at half its size glides as far as its layout moved it, not as far as it is drawn", () => {
@@ -383,7 +404,7 @@ test("a row listed again before its exit has played stands again, and comes back
   expect(motionsOf(back)).toEqual([
     [{ opacity: 0 }, { opacity: 1 }],
     [{ transform: "translateX(-16px)" }, { transform: "none" }],
-    [{ clipPath: "inset(0 0 100% 0)" }, { clipPath: "inset(0)" }],
+    [{ clipPath: `inset(0 0 ${ROW}px 0)` }, { clipPath: "inset(0 0 0px 0)" }],
   ]);
 });
 

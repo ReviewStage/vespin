@@ -31,8 +31,9 @@
  * comes back the way it went. A row arriving rides the pair every arriving
  * element rides, opacity over `--ui-duration-quick` and its travel on
  * `--ui-spring`, rows that arrive together a `--ui-row-stagger` apart, and is
- * unrolled from its top edge on that spring as it slides in, so it never
- * stands over the row it pushes down while that row glides out of its way. A
+ * clipped at the top of the row it pushes down as that row glides out of
+ * its way, so it never stands over that row's words, however many rows
+ * arrive above it together. A
  * list that was not drawn before the change, a fold opened, draws its rows
  * at once, and nothing plays the first time a list is drawn. While what the
  * lists draw is still being read (`reading`), as an Inbox's reads land one
@@ -683,15 +684,7 @@ interface MoveTiming {
   readonly close: KeyframeAnimationOptions | undefined;
 }
 
-/**
- * Plays a row's arrival, the way it would leave played back on the spring,
- * added onto any motion of its own, as it fades in, `step` staggers after
- * the first; only the fade where it does not travel. A row sliding in is
- * unrolled from its top edge on that same spring too, which the rows it
- * pushed down glide on, so its foot and the top of the row under it travel
- * as one edge and its words never stand over a row still on its way out of
- * its place.
- */
+/** Plays a row's arrival, the way it would leave played back on the spring, added onto any motion of its own, as it fades in, `step` staggers after the first; only the fade where it does not travel. */
 function arrive(mover: Element, step: number, away: Keyframe, timing: MoveTiming): void {
   if (timing.arrive === undefined) return;
   const delay = timing.wait + Math.min(step, STAGGER_STEPS) * timing.stagger;
@@ -706,11 +699,67 @@ function arrive(mover: Element, step: number, away: Keyframe, timing: MoveTiming
     fill: "backwards",
     composite: unrolls ? "replace" : "add",
   });
+}
 
-  if (timing.way !== LIST_MOTION_WAY.SLIDE) return;
-  mover.animate([{ clipPath: ROLLED_UP }, { clipPath: UNROLLED }], {
-    ...timing.travel,
-    delay,
+/**
+ * Where the top of the row under an arriving row stands from the arriving
+ * row's own top, as the glide that commit plays starts and as it ends: the
+ * first row of its list under it that stood before the change; none where
+ * nothing that stood is under it. Note that both are read as drawn, the
+ * group carrying them included, so the gap between them is what the
+ * reader sees.
+ */
+function edgeUnder(
+  root: HTMLElement,
+  mover: Element,
+  movers: readonly Element[],
+  now: Map<Element, Place>,
+  wasOf: (mover: Element) => Place | undefined,
+  carriedOf: (mover: Element) => Point,
+): { readonly from: number; readonly to: number; readonly height: number } | undefined {
+  const at = now.get(mover);
+
+  if (at === undefined) return undefined;
+  let under: { readonly was: Place; readonly is: Place } | undefined;
+
+  for (const other of movers) {
+    const was = other.parentElement === mover.parentElement ? wasOf(other) : undefined;
+    const is = now.get(other);
+
+    if (was === undefined || is === undefined || is.y <= at.y + STILL) continue;
+
+    if (under === undefined || is.y < under.is.y) under = { was, is };
+  }
+
+  if (under === undefined) return undefined;
+
+  return {
+    from: under.was.y - at.y - carriedOf(mover).y,
+    to: under.is.y - at.y,
+    height: mover.getBoundingClientRect().height / drawnScale(root).y,
+  };
+}
+
+/**
+ * Keeps a row sliding in behind the row it pushed down: its foot is clipped
+ * to the top of that row as it glides out of the way, on the timing it
+ * glides on, so the arriving row's words never stand over a row still on
+ * its way out of its place, however many rows arrive above it together.
+ * Note that an inset past the row's own height hides it whole, and that its
+ * last inset never reaches past its foot, which would show what is drawn
+ * outside it.
+ */
+function unrollUnder(
+  mover: Element,
+  edge: { readonly from: number; readonly to: number; readonly height: number },
+  glide: KeyframeAnimationOptions,
+  wait: number,
+): void {
+  if (edge.from >= edge.height) return;
+  const hidden = (shown: number) => `inset(0 0 ${Math.max(0, edge.height - shown)}px 0)`;
+  mover.animate([{ clipPath: hidden(edge.from) }, { clipPath: hidden(edge.to) }], {
+    ...glide,
+    delay: wait,
     fill: "backwards",
   });
 }
@@ -761,17 +810,33 @@ function playMoves(root: HTMLElement, before: Snapshot, timing: MoveTiming): voi
   const away = awayOf(root, timing.way);
   const seenArriving = arriving.filter((mover) => now.get(mover)?.seen === true);
 
-  for (const [step, mover] of seenArriving.entries()) arrive(mover, step, away, timing);
   // Note that rows arriving in a leaving row's place, a choice's next rows, set the beat what they move glides on.
   const glide = arriving.length === 0 ? (timing.close ?? timing.travel) : timing.travel;
+
+  const carriedOf = (mover: Element): Point => {
+    const carrier = carrierOf(root, mover);
+
+    return carrier === root ? { x: 0, y: 0 } : movedBy(carrier);
+  };
+
+  for (const [step, mover] of seenArriving.entries()) {
+    // Note that a row sliding in is read before it plays, as its own motions would move it.
+    const edge =
+      timing.way === LIST_MOTION_WAY.SLIDE && timing.travels
+        ? edgeUnder(root, mover, movers, now, wasOf, carriedOf)
+        : undefined;
+
+    arrive(mover, step, away, timing);
+
+    if (edge !== undefined) unrollUnder(mover, edge, glide, timing.wait);
+  }
 
   for (const mover of movers) {
     const was = wasOf(mover);
 
     if (was === undefined || !(was.seen || now.get(mover)?.seen === true)) continue;
-    const carrier = carrierOf(root, mover);
     const own = movedBy(mover);
-    const carried = carrier === root ? { x: 0, y: 0 } : movedBy(carrier);
+    const carried = carriedOf(mover);
     const x = own.x - carried.x;
     const y = own.y - carried.y;
 
