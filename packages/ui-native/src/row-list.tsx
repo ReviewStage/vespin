@@ -15,22 +15,28 @@ import {
   font,
   foregroundStyle,
   frame,
-  listSectionMargins,
+  listRowBackground,
+  listRowInsets,
+  listRowSeparator,
   listStyle,
   monospacedDigit,
   onGeometryChange,
   refreshable,
   scrollContentBackground,
+  scrollContentMargins,
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { searchTokens } from "@repo/features/search-tokens";
 import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useMemo, useState } from "react";
+import { useAnnounced } from "./accessibility.js";
+import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
+import { ProblemLine } from "./problem-line.js";
 import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
@@ -81,6 +87,8 @@ type RowListProps = {
   readonly choosing?: RowChoosing | undefined;
   /** What a search typed, whose words each row's title sets in bold; none for a list no search found. */
   readonly searched?: string | undefined;
+  /** The scopes it lists under, standing as its first row so they scroll away with the rows; none where it has none. */
+  readonly scopes?: ListScopes | undefined;
   /**
    * Starts its Select mode with the rows the system ticked, where it has one:
    * iPadOS lets a list whose selection is a set tick several rows with no
@@ -108,15 +116,42 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
 }
 
 /**
+ * A list's scopes as its first row: the system's control on the list's own
+ * ground, edge to edge with no hairline, so the rows scroll up under the bar
+ * with it, as Mail's categories do, and a pull reads again from above it.
+ */
+function ScopeRow({ scopes }: { readonly scopes: ListScopes }) {
+  const colors = useColors();
+
+  return (
+    <HStack
+      modifiers={[
+        listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
+        listRowBackground(colors.GROUND),
+        listRowSeparator("hidden"),
+      ]}
+    >
+      <ScopeControl {...scopes} />
+    </HStack>
+  );
+}
+
+/**
  * A list of `ListRow`s, each picked by its id. Note that a list on a screen
  * of its own keeps no selection, since a pick pushes the row's own screen and
  * the row should not stand selected on the way back. A plain list wider than
- * the reading width, such as a pull request's page across an iPad, centers
- * its sections in it, as iOS's readable content guide does, while the list
- * still scrolls from either edge. In Select mode the list stands in
- * SwiftUI's own edit mode, as Mail's Select does: a round check leads each
- * row, a tap ticks it rather than opening it, two fingers dragged down tick
- * a run, and the rows' swipes step aside, as the system's do.
+ * the reading width stands its rows in a centered column of that width, as
+ * iOS's readable content guide stands a page, so a pull request's page across
+ * a landscape iPad reads as a column rather than rows 1,400 pt long. Note
+ * that the column is the list's content margins (`scrollContentMargins`,
+ * SwiftUI's `contentMargins` through the app's `@expo/ui` patch), never a
+ * frame, so the list keeps the whole width and a drag, a trackpad or a pull
+ * to refresh in the ground beside the column scrolls it, as Mail's and
+ * Settings' do; `listSectionMargins` moved no plain list's rows. In
+ * Select mode the list stands in SwiftUI's own edit mode, as Mail's Select
+ * does: a round check leads each row, a tap ticks it rather than opening it,
+ * two fingers dragged down tick a run, and the rows' swipes step aside, as
+ * the system's do.
  */
 export function RowList({
   look,
@@ -125,6 +160,7 @@ export function RowList({
   onRefresh,
   choosing,
   searched,
+  scopes,
   onChooseStart,
   children,
 }: RowListProps) {
@@ -164,7 +200,7 @@ export function RowList({
         scrollContentBackground("hidden"),
         ...listGround(colors, look),
         onGeometryChange(({ width: next }) => setWidth(next)),
-        ...(sides > 0 ? [listSectionMargins({ edges: "horizontal", length: sides })] : []),
+        ...(sides > 0 ? [scrollContentMargins({ edges: "horizontal", length: sides })] : []),
         // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
         scrollDismissesKeyboard("immediately"),
         ...(onRefresh === undefined || choosing !== undefined ? [] : [refreshable(onRefresh)]),
@@ -174,6 +210,8 @@ export function RowList({
     >
       <RowOpenContext value={onSelect}>
         <RowSelectedContext value={choosing === undefined ? selected : undefined}>
+          {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
+          {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
           <RowSearchedContext value={searchedWords}>{children}</RowSearchedContext>
         </RowSelectedContext>
       </RowOpenContext>
@@ -219,6 +257,8 @@ type ListSectionProps = {
   readonly foldable?: boolean | undefined;
   /** A line under the section, in the system's footnote. */
   readonly footer?: string | undefined;
+  /** What the footer says: a note on the section, in the footnote's own ink, or why a send did not go, as every refusal reads (`ProblemLine`) and told to VoiceOver at once. */
+  readonly footerTone?: FooterTone | undefined;
   /** Called with the link a row dragged onto the header carries (`RowFrame`'s `link`), such as a task's to move it into the section; the header takes no drop where none is given. */
   readonly onDropLink?: ((url: string) => void) | undefined;
   /** How many of what it holds are finished of all of them, drawn as `2/5` in the count's place, such as a task's sub-tasks. */
@@ -368,6 +408,22 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
   );
 }
 
+/** What a section's footer says: a note on it, or a failure, as a form says a send that did not go under its field. */
+export const FOOTER_TONE = {
+  NOTE: "note",
+  FAILURE: "failure",
+} as const;
+
+export type FooterTone = (typeof FOOTER_TONE)[keyof typeof FOOTER_TONE];
+
+/** A section's footer: a note in the system's footnote ink, or a failure as every refusal reads, muted words led by the alert glyph in the attention ink rather than red words (`ProblemLine`), told to VoiceOver as it stands since it stands because something did not go. */
+function SectionFooter({ words, tone }: { readonly words: string; readonly tone: FooterTone }) {
+  const failure = tone === FOOTER_TONE.FAILURE;
+  useAnnounced(failure ? words : undefined, true);
+
+  return failure ? <ProblemLine text={words} /> : <Text>{words}</Text>;
+}
+
 /**
  * A section of a list or a form under a small muted header with its count,
  * as Linear's and Cursor's groups stand rather than the system's uppercase
@@ -384,6 +440,7 @@ export function ListSection({
   mark,
   foldable = false,
   footer,
+  footerTone = FOOTER_TONE.NOTE,
   onDropLink,
   add,
   children,
@@ -441,7 +498,9 @@ export function ListSection({
   return (
     <Section
       {...(header === undefined ? {} : { header })}
-      {...(footer === undefined ? {} : { footer: <Text>{footer}</Text> })}
+      {...(footer === undefined
+        ? {}
+        : { footer: <SectionFooter words={footer} tone={footerTone} /> })}
     >
       {foldable && folded ? [] : children}
     </Section>
