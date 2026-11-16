@@ -27,7 +27,7 @@ index b542a50431f0a501a81c96d06d8705e745364a81..25de3ea1f08148cf00abb15c275fc229
       * Description of why the content is not available.
       */
 diff --git a/build/swift-ui/Image/index.d.ts b/build/swift-ui/Image/index.d.ts
-index f1aeaae3b55fd5cb2d30b952c096b086391575a6..a4c7845d5604e78a36dfae1a67599654892f837a 100644
+index f1aeaae3b55fd5cb2d30b952c096b086391575a6..2b1ebb457380626cbddb8f0b335e6be90bea1cef 100644
 --- a/build/swift-ui/Image/index.d.ts
 +++ b/build/swift-ui/Image/index.d.ts
 @@ -28,6 +28,17 @@ export interface ImageProps extends CommonViewModifierProps {
@@ -165,7 +165,7 @@ index 56dc559f87456e0b6b86f1b91529d9395d4c6a61..495964269db54444a1344d045cb893a4
    }
  }
 diff --git a/ios/ImageView.swift b/ios/ImageView.swift
-index 170de73445439a3ba4e5495643ee5f7c3eb332ab..c78347146acb72f741d29c8bd4c841fbbd6bfd5e 100644
+index 170de73445439a3ba4e5495643ee5f7c3eb332ab..95c9de4367df2853066c81d9f06320bb7cd4c874 100644
 --- a/ios/ImageView.swift
 +++ b/ios/ImageView.swift
 @@ -8,6 +8,10 @@ public final class ImageViewProps: UIBaseViewProps {
@@ -235,7 +235,7 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..c78347146acb72f741d29c8bd4c841fb
                let url = URL(string: url),
                let data = try? Data(contentsOf: url),
 diff --git a/ios/ListView.swift b/ios/ListView.swift
-index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..aa316510eeeab2c31aac68c388153fa1760679dd 100644
+index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..ea261e4bd4e838b367dc6b2b8a1aaa83d15380aa 100644
 --- a/ios/ListView.swift
 +++ b/ios/ListView.swift
 @@ -5,13 +5,17 @@ import SwiftUI
@@ -256,7 +256,7 @@ index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..aa316510eeeab2c31aac68c388153fa1
  
    var body: some View {
      list
-@@ -21,7 +25,28 @@ struct ListView: ExpoSwiftUI.View {
+@@ -21,7 +25,32 @@ struct ListView: ExpoSwiftUI.View {
  
    @ViewBuilder
    private var list: some View {
@@ -280,13 +280,17 @@ index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..aa316510eeeab2c31aac68c388153fa1
 +        handleSelectionChange(selection: newSelection)
 +      }
 +      .onChange(of: editMode) { newMode in
++        // Note that a drag that switches edit mode on drops the row the list held open, as Mail's does, so the drag ticks only the rows it crosses, even before JavaScript answers with its own selection.
++        if newMode.isEditing, props.editing != true {
++          selection.subtract(Self.getHashableSetFromEither(props.selection))
++        }
 +        handleEditingChange(editing: newMode.isEditing)
 +      }
 +    } else if props.selection != nil {
        List(selection: $selection) {
          Children()
        }
-@@ -53,7 +78,25 @@ struct ListView: ExpoSwiftUI.View {
+@@ -53,7 +82,25 @@ struct ListView: ExpoSwiftUI.View {
        }
        return nil
      }
@@ -313,6 +317,44 @@ index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..aa316510eeeab2c31aac68c388153fa1
    }
  
    private static func getHashableSetFromEither(_ array: [Either<String, Double>]?) -> Set<AnyHashable> {
+diff --git a/ios/Modifiers/ViewModifierRegistry.swift b/ios/Modifiers/ViewModifierRegistry.swift
+index 07a856574df36a69b802bd483caf4e33ae05a976..96144798f4a0de5176074149fd73e37838609651 100644
+--- a/ios/Modifiers/ViewModifierRegistry.swift
++++ b/ios/Modifiers/ViewModifierRegistry.swift
+@@ -1402,6 +1402,22 @@ internal struct Badge: ViewModifier, Record {
+   }
+ }
+ 
++// Vespin's patch: the margins a scroll view stands its content in, while the
++// scroll view itself keeps its whole width, so a plain list framed at a
++// reading width still scrolls from the ground beside it.
++internal struct ScrollContentMargins: ViewModifier, Record {
++  @Field var length: CGFloat?
++  @Field var edges: EdgeOptions?
++
++  func body(content: Content) -> some View {
++    if #available(iOS 17.0, tvOS 17.0, macOS 14.0, *), let edges {
++      content.contentMargins(edges.toEdge(), length ?? 0, for: .scrollContent)
++    } else {
++      content
++    }
++  }
++}
++
+ internal struct ListSectionMargins: ViewModifier, Record {
+   @Field var length: CGFloat?
+   @Field var edges: EdgeOptions?
+@@ -2342,6 +2358,10 @@ extension ViewModifierRegistry {
+       return try Badge(from: params, appContext: appContext)
+     }
+ 
++    register("scrollContentMargins") { params, appContext, _ in
++      return try ScrollContentMargins(from: params, appContext: appContext)
++    }
++
+     register("listSectionMargins") { params, appContext, _ in
+       return try ListSectionMargins(from: params, appContext: appContext)
+     }
 diff --git a/src/swift-ui/List/index.tsx b/src/swift-ui/List/index.tsx
 index a4ebca663b0b1cda3ca92420dd956a012c928567..5902bc8f155b81bc4a2efe566d88c48c2fd9ce2a 100644
 --- a/src/swift-ui/List/index.tsx
@@ -369,41 +411,3 @@ index a4ebca663b0b1cda3ca92420dd956a012c928567..5902bc8f155b81bc4a2efe566d88c48c
      children: React.ReactNode;
    };
  
-diff --git a/ios/Modifiers/ViewModifierRegistry.swift b/ios/Modifiers/ViewModifierRegistry.swift
-index 07a856574df36a69b802bd483caf4e33ae05a976..96144798f4a0de5176074149fd73e37838609651 100644
---- a/ios/Modifiers/ViewModifierRegistry.swift
-+++ b/ios/Modifiers/ViewModifierRegistry.swift
-@@ -1402,6 +1402,22 @@ internal struct Badge: ViewModifier, Record {
-   }
- }
- 
-+// Vespin's patch: the margins a scroll view stands its content in, while the
-+// scroll view itself keeps its whole width, so a plain list framed at a
-+// reading width still scrolls from the ground beside it.
-+internal struct ScrollContentMargins: ViewModifier, Record {
-+  @Field var length: CGFloat?
-+  @Field var edges: EdgeOptions?
-+
-+  func body(content: Content) -> some View {
-+    if #available(iOS 17.0, tvOS 17.0, macOS 14.0, *), let edges {
-+      content.contentMargins(edges.toEdge(), length ?? 0, for: .scrollContent)
-+    } else {
-+      content
-+    }
-+  }
-+}
-+
- internal struct ListSectionMargins: ViewModifier, Record {
-   @Field var length: CGFloat?
-   @Field var edges: EdgeOptions?
-@@ -2342,6 +2358,10 @@ extension ViewModifierRegistry {
-       return try Badge(from: params, appContext: appContext)
-     }
- 
-+    register("scrollContentMargins") { params, appContext, _ in
-+      return try ScrollContentMargins(from: params, appContext: appContext)
-+    }
-+
-     register("listSectionMargins") { params, appContext, _ in
-       return try ListSectionMargins(from: params, appContext: appContext)
-     }
