@@ -1,7 +1,7 @@
 /**
  * slack-agent-starts.ts -- a member's @mention of our Slack bot, or a direct message to it, starts a coding agent as them or reaches the agent its thread speaks for, and every settled turn bound for Slack is posted there.
  *
- * Our Slack route hands each event Connect forwarded here
+ * Our Slack route hands each event Slack sent here
  * (`slack-events-app.ts`): an `app_mention` in a channel, or a `message.im`
  * a member wrote to the bot directly. A bot's message, a message's edit or
  * any subtype but a file share, and Slack's own retry of an event

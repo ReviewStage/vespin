@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { archiveAgent, createAgent, readAgent } from "@repo/database/models/agent-store";
@@ -7,6 +7,9 @@ import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import {
   linkSlackInstallation,
   recordSlackAgentThread,
+  recordSlackMemberLookup,
+  slackMemberLookup,
+  workspaceSlackInstallation,
   writeSlackChannelRepository,
 } from "@repo/database/models/slack-installation-store";
 import { readTask } from "@repo/database/models/task-store";
@@ -27,9 +30,10 @@ import { TASK_STATUS, UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import type { WireRecord } from "@repo/wire";
 import { eq } from "drizzle-orm";
-import { Clock, DateTime, Effect, Layer, Option, Result } from "effect";
+import { Clock, ConfigProvider, DateTime, Effect, Layer, Option, Result } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
+import { TestClock } from "effect/testing";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import { type AfterResponse, keptAfterResponse } from "../http/after-response.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
@@ -52,12 +56,13 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 /**
  * Our Slack route, answered by its group the way a function answers it,
- * over a real store, a fake Slack, and a verifier standing in for Vercel's
- * keys: a press of a decide ask's option in the DM the bot wrote is
+ * over a real store, a fake Slack, and a fixture signing secret: a press of a decide ask's option in the DM the bot wrote is
  * acknowledged before anything is done, then answers
  * the ask as the member it was written to, hands the agent its answer, and
- * rewrites the DM to say the option chosen, and a request Connect did not
- * sign is refused before anything of it is read; and a mention of the bot
+ * rewrites the DM to say the option chosen, and a request whose signature
+ * is forged, or whose timestamp is stale, is refused before anything of it
+ * is read; an uninstall of the app deletes the team's installation and its
+ * members' ids; and a mention of the bot
  * starts an agent as the member Slack's email names on a task made for it,
  * replying with its link, and starts nothing for a Slack user who is no member; a message in
  * the thread of an archived agent brings it back and hands it the message,
@@ -74,7 +79,13 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 const ORIGIN = "https://app.test";
 const EVENTS = "/api/slack/events";
-const CONNECT_TOKEN = "connect-oidc-fixture";
+const SIGNING_SECRET = "slack-signing-secret-fixture";
+
+/** Slack's own request timestamp header and signature header. */
+const SLACK_HEADER = {
+  TIMESTAMP: "x-slack-request-timestamp",
+  SIGNATURE: "x-slack-signature",
+} as const;
 
 /** One Web API call the fake Slack was handed. */
 interface SlackCall {
@@ -131,9 +142,30 @@ function fakeFiles(read: string[]): SlackFileTransfer {
   };
 }
 
-/** Connect's bearer as the deployment's verifier holds it: the fixture token alone. */
-const verify = (request: Request) =>
-  request.headers.get("authorization") === `Bearer ${CONNECT_TOKEN}`;
+/**
+ * A request to our Slack route as Slack sends it, signed with the secret
+ * given at the epoch the test clock starts at, worked by hand from Slack's
+ * "Verifying requests from Slack" rather than through the route's own code.
+ */
+function slackRequest(contentType: string, body: string, secret = SIGNING_SECRET): Request {
+  const timestamp = "0";
+  const digest = createHmac("sha256", secret).update(`v0:${timestamp}:${body}`).digest("hex");
+
+  return new Request(new URL(EVENTS, ORIGIN), {
+    method: "POST",
+    headers: {
+      "content-type": contentType,
+      [SLACK_HEADER.TIMESTAMP]: timestamp,
+      [SLACK_HEADER.SIGNATURE]: `v0=${digest}`,
+    },
+    body,
+  });
+}
+
+/** An event Slack sends as JSON, signed with our secret. */
+function slackEvent(payload: WireRecord): Request {
+  return slackRequest("application/json", JSON.stringify(payload));
+}
 
 const ENVIRONMENT: HostedEnvironmentValues = {
   posthogPersonalApiKey: undefined,
@@ -253,10 +285,13 @@ const answer = (
       HARNESS.layer,
       bot,
       after,
+      ConfigProvider.layer(
+        ConfigProvider.fromUnknown({ SLACK_APP_SIGNING_SECRET: SIGNING_SECRET }),
+      ),
     );
 
     const { handler, dispose } = HttpRouter.toWebHandler(
-      slackEventsApp(verify).pipe(HttpRouter.provideRequest(services)),
+      slackEventsApp.pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
 
@@ -267,11 +302,11 @@ const answer = (
     return { status: response.status, body };
   });
 
-/** Slack's press of the button, form-encoded as interactivity arrives, with Connect's bearer or none, and the message's checkboxes as they stand. */
+/** Slack's press of the button, form-encoded as interactivity arrives, signed with the secret given, and the message's checkboxes as they stand. */
 function press(
   button: { readonly action_id: string; readonly value: string },
   slackUserId: string,
-  bearer: string | undefined,
+  secret: string = SIGNING_SECRET,
   state: WireRecord = {},
 ): Request {
   const payload = {
@@ -283,17 +318,14 @@ function press(
     state: { values: state },
   };
 
-  return new Request(new URL(EVENTS, ORIGIN), {
-    method: "POST",
-    headers: {
-      "content-type": "application/x-www-form-urlencoded",
-      ...(bearer === undefined ? undefined : { authorization: `Bearer ${bearer}` }),
-    },
-    body: new URLSearchParams({ payload: JSON.stringify(payload) }).toString(),
-  });
+  return slackRequest(
+    "application/x-www-form-urlencoded",
+    new URLSearchParams({ payload: JSON.stringify(payload) }).toString(),
+    secret,
+  );
 }
 
-/** Slack's mention of the bot in a channel by the Slack user given, as Connect forwards it with its bearer. */
+/** Slack's mention of the bot in a channel by the Slack user given, as Slack sends it. */
 function mention(slackUserId: string, eventId: string): Request {
   const payload = {
     type: "event_callback",
@@ -309,14 +341,10 @@ function mention(slackUserId: string, eventId: string): Request {
     },
   };
 
-  return new Request(new URL(EVENTS, ORIGIN), {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${CONNECT_TOKEN}` },
-    body: JSON.stringify(payload),
-  });
+  return slackEvent(payload);
 }
 
-/** Slack's mention of the bot in the thread given by the Slack user given, as Connect forwards it with its bearer. */
+/** Slack's mention of the bot in the thread given by the Slack user given, as Slack sends it. */
 function threadMention(slackUserId: string, eventId: string, threadTs: string): Request {
   const payload = {
     type: "event_callback",
@@ -333,14 +361,10 @@ function threadMention(slackUserId: string, eventId: string, threadTs: string): 
     },
   };
 
-  return new Request(new URL(EVENTS, ORIGIN), {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${CONNECT_TOKEN}` },
-    body: JSON.stringify(payload),
-  });
+  return slackEvent(payload);
 }
 
-/** Slack's direct message to the bot by the Slack user given, sharing a PNG screenshot, a Mac's HEIC one, and a PDF with no words, as Connect forwards it. */
+/** Slack's direct message to the bot by the Slack user given, sharing a PNG screenshot, a Mac's HEIC one, and a PDF with no words, as Slack sends it. */
 function directShare(slackUserId: string, eventId: string): Request {
   const shared = (name: string, mimetype: string) => ({
     name,
@@ -373,14 +397,10 @@ function directShare(slackUserId: string, eventId: string): Request {
     },
   };
 
-  return new Request(new URL(EVENTS, ORIGIN), {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${CONNECT_TOKEN}` },
-    body: JSON.stringify(payload),
-  });
+  return slackEvent(payload);
 }
 
-/** Slack's direct message to the bot by the Slack user given, in the thread of the DM given, as Connect forwards it. */
+/** Slack's direct message to the bot by the Slack user given, in the thread of the DM given, as Slack sends it. */
 function dmReply(
   slackUserId: string,
   eventId: string,
@@ -402,11 +422,7 @@ function dmReply(
     },
   };
 
-  return new Request(new URL(EVENTS, ORIGIN), {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${CONNECT_TOKEN}` },
-    body: JSON.stringify(payload),
-  });
+  return slackEvent(payload);
 }
 
 /** A member's agent on the task a Slack message made, on the runtime given, in the Beacon repository where asked and none otherwise, started from a Slack thread of its own; with that thread and the Slack user their email names. */
@@ -470,7 +486,7 @@ const openThreadAgent = (runtime: ConversationRuntime, inBeacon: boolean) =>
 
 it.layer(SUITE)("our Slack route", (it) => {
   it.effect(
-    "a press Connect signed is acknowledged first, then answers the ask as the member it was written to, tells the agent, and says the choice in the DM; one unsigned is refused",
+    "a press Slack signed is acknowledged first, then answers the ask as the member it was written to, tells the agent, and says the choice in the DM; one forged or stale is refused",
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
@@ -495,19 +511,25 @@ it.layer(SUITE)("our Slack route", (it) => {
           (stored) => Option.getOrThrow(stored).item.thread?.find((m) => m.ask)?.ask?.status,
         );
 
-        const unsigned = yield* answer(bot, press(month, slackUserId, undefined));
+        const forged = yield* answer(bot, press(month, slackUserId, "another-secret"));
+        // Slack's press signed at the epoch, heard six minutes on.
+        yield* TestClock.adjust("6 minutes");
+        const stale = yield* answer(bot, press(month, slackUserId));
+        yield* TestClock.setTime(0);
         const stillOpen = yield* askStatus;
         const kept = keptAfterResponse();
-        const signed = yield* answer(bot, press(month, slackUserId, CONNECT_TOKEN), kept.layer);
+        const signed = yield* answer(bot, press(month, slackUserId), kept.layer);
         const atAnswer = yield* askStatus;
         // The press's work, then the settle of the DM it hands on once the answer is taken.
         yield* kept.run;
         yield* kept.run;
 
-        assert.deepEqual(unsigned, {
+        const refused = {
           status: HOSTED_HTTP_STATUS.UNAUTHORIZED,
           body: { error: HOSTED_API_ERROR.INVALID_TOKEN },
-        });
+        };
+
+        assert.deepEqual([forged, stale], [refused, refused]);
         assert.equal(stillOpen, INBOX_ASK_STATUS.OPEN);
         assert.deepEqual(signed, { status: HOSTED_HTTP_STATUS.OK, body: {} });
         assert.equal(atAnswer, INBOX_ASK_STATUS.OPEN);
@@ -565,7 +587,7 @@ it.layer(SUITE)("our Slack route", (it) => {
         const kept = keptAfterResponse();
         yield* answer(
           bot,
-          press(submit, title?.args.channel ?? "", CONNECT_TOKEN, {
+          press(submit, title?.args.channel ?? "", SIGNING_SECRET, {
             picks: {
               [checkboxes.action_id]: { type: "checkboxes", selected_options: ticked },
             },
@@ -613,7 +635,7 @@ it.layer(SUITE)("our Slack route", (it) => {
         const heard = HARNESS.heard.length;
 
         const kept = keptAfterResponse();
-        yield* answer(bot, press(month, title?.args.channel ?? "", CONNECT_TOKEN), kept.layer);
+        yield* answer(bot, press(month, title?.args.channel ?? ""), kept.layer);
         yield* kept.run;
 
         const stored = Option.getOrThrow(yield* readInboxItem(owner, item.id));
@@ -649,7 +671,7 @@ it.layer(SUITE)("our Slack route", (it) => {
           .find((element: { text?: { text: string } }) => element.text?.text === "Mark done");
 
         const kept = keptAfterResponse();
-        yield* answer(bot, press(done, title?.args.channel ?? "", CONNECT_TOKEN), kept.layer);
+        yield* answer(bot, press(done, title?.args.channel ?? ""), kept.layer);
         yield* kept.run;
         yield* kept.run;
 
@@ -958,6 +980,39 @@ it.layer(SUITE)("our Slack route", (it) => {
           { filename: "mac.heic", mediaType: "image/png" },
           { filename: "notes.pdf", mediaType: "application/pdf" },
         ]);
+      });
+    },
+  );
+  it.effect(
+    "an uninstall of the app from a team deletes its workspace's installation and its members' Slack ids",
+    () => {
+      const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack([])));
+
+      return Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        const task = yield* startTask(owner, { name: "Slack uninstall" });
+        const organizationId = task.workspaceId;
+        yield* linkSlackInstallation({
+          organizationId,
+          teamId: "T0001",
+          teamName: "Team",
+          userId: owner,
+        });
+        yield* recordSlackMemberLookup(organizationId, owner, "U0001");
+
+        const uninstalled = yield* answer(
+          bot,
+          slackEvent({
+            type: "event_callback",
+            team_id: "T0001",
+            event_id: `Ev${randomUUID()}`,
+            event: { type: "app_uninstalled" },
+          }),
+        );
+
+        assert.deepEqual(uninstalled, { status: HOSTED_HTTP_STATUS.OK, body: {} });
+        assert.ok(Option.isNone(yield* workspaceSlackInstallation(organizationId)));
+        assert.ok(Option.isNone(yield* slackMemberLookup(organizationId, owner)));
       });
     },
   );
