@@ -22,6 +22,7 @@ import {
   inboxPreview,
   inboxScopeInstead,
   inboxSettledStanding,
+  inboxThreadEventsShown,
   inboxThreadMessages,
   isDone,
   isUnread,
@@ -43,6 +44,7 @@ import {
   SELECTION_WORDS,
   selectedWords,
 } from "@repo/features/words";
+import { ACT_KIND } from "@repo/host/acts";
 import { INBOX_FEED, type InboxFeed, selectWorkspaces } from "@repo/host/app-state-reads";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -100,7 +102,8 @@ import {
 } from "../detail-stack.js";
 import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
+import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
+import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import {
   useInboxActs,
@@ -112,7 +115,7 @@ import {
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
 import { useKeeping } from "../keeping.js";
-import { type PictureOf, useMemberPictures } from "../member-pictures.js";
+import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns, useInFront } from "../place-columns.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
@@ -663,6 +666,26 @@ function ThreadDetail({
     [item, agentName, readerId],
   );
 
+  const hostActs = useHostActs();
+
+  // Note that the closers are named from the thread's own workspace's members, followed here, since a link may open a thread outside the workspace the phone works in.
+  useLiveFollow(holder.task.workspaceId, (id) =>
+    hostActs[ACT_KIND.WORKSPACE_MEMBERS_FOLLOW]({ workspaceId: id }),
+  );
+
+  const memberFace = useMemberFaces(holder.task.workspaceId);
+
+  // What happened to the thread, by the message each line follows, -1 before every message read, as the panel's thread draws it, a member named as the thread's own workspace names them, since a link may open a thread of another workspace than the one chosen.
+  const events = useMemo(
+    () =>
+      inboxThreadEventsShown(item, {
+        agentName,
+        readerId,
+        memberName: (userId) => memberFace(userId)?.name,
+      }),
+    [item, agentName, readerId, memberFace],
+  );
+
   // Note that a file its words draw, or its open ask's options carry, is read beside the files drawn after them, since its bytes come the same way.
   const media = useMemo(
     () => [
@@ -800,8 +823,9 @@ function ThreadDetail({
 
   const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
 
-  const drawn: readonly ThreadMessage[] = messages.map((message) => ({
+  const drawn: readonly ThreadMessage[] = messages.map((message, index) => ({
     ...message,
+    after: events.get(index),
     writer: {
       ...message.writer,
       id: message.writer.agent ? undefined : message.writer.userId,
@@ -898,6 +922,7 @@ function ThreadDetail({
       pathActions={pathActions}
       title={cardTitle(item.title)}
       messages={drawn}
+      opening={events.get(-1)}
       repository={holder.task.repository}
       onOpenLink={openLink}
       pictureSource={pictureSource}
