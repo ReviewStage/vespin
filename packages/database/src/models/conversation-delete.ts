@@ -12,8 +12,9 @@ import { conversations } from "../schemas/storage.js";
  * the schema's own cascade takes each conversation's messages, turns, and
  * events, and every conversation delegated from it, a worker's under its
  * agent's, with it. Deleting the account cascades everything at once. The
- * sandbox a deleted conversation's session ran in is not deleted here: its
- * snapshots expire on their own lapse (`@repo/sandbox`'s retention).
+ * sandbox a deleted conversation's session ran in is not deleted here: the
+ * caller retires the session first, which deletes its sandbox
+ * (`retire-sessions.ts`).
  *
  * Note that the cascade's cost is the conversation's own size: each child
  * table finds the rows it deletes through its conversation's or its turn's
