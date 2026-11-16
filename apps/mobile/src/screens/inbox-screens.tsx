@@ -186,14 +186,16 @@ const STEP_WORDS = {
 } as const;
 
 /**
- * The Inbox's rows, by id, in the order the compact list drew them as one
- * was opened: its scope and its search as they stood, so an open thread's
- * arrows step through what the reader was looking at, as the panel's K and
- * J step through the list held on screen. Note that it lives as long as the
- * app does, and a thread it doesn't hold, such as one a notification opened,
- * steps through the kept scope's live rows instead.
+ * The order of rows handed to a thread about to open, by its id: the compact
+ * list's rows as they stood when one was opened, its scope and its search
+ * among them, or the order an arrow stepped from, so an open thread's arrows
+ * step through what the reader was looking at, as the panel's K and J step
+ * through the list held on screen. Note that each thread takes its own order
+ * as it opens and keeps it, so a thread opened over another, such as from a
+ * link in it, never moves the one under it; a thread handed none, such as one
+ * a notification opened, steps through the kept scope's live rows instead.
  */
-let heldOrder: readonly string[] = [];
+const handedOrders = new Map<string, readonly string[]>();
 
 /** What an agent is called where the task list does not hold it, as the panel's tab names one it cannot find. */
 const UNLISTED_AGENT = "Agent";
@@ -623,8 +625,12 @@ function useAgentLabel(agentId: string): {
  * names the path and which draws its own Remind me sheet, or a split view's
  * detail, which opens the sheet its screen draws outside the split view.
  */
-/** The threads either side of an open one, in the list's order; none at an end. */
-type ThreadSteps = { readonly previous?: string | undefined; readonly next?: string | undefined };
+/** The threads either side of an open one, in the order it steps through, which it hands on with each step; none at an end. */
+type ThreadSteps = {
+  readonly order: readonly string[];
+  readonly previous?: string | undefined;
+  readonly next?: string | undefined;
+};
 
 type ThreadPlace =
   | { readonly inStack: true; readonly steps: ThreadSteps }
@@ -778,7 +784,9 @@ function ThreadDetail({
 
   // An arrow opens the thread above or below in this one's place, as Mail's message arrows do, so Back still lands on the list.
   const stepTo = (id: string | undefined) => {
-    if (id !== undefined) router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
+    if (id === undefined || !place.inStack) return;
+    handedOrders.set(id, place.steps.order);
+    router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
   };
 
   const answer = useThreadAnswer(listed, openStarted);
@@ -1263,7 +1271,10 @@ function InboxStackList(held: InboxHeld) {
           listed={listing.listed}
           readerId={listing.readerId}
           onSelect={(id) => {
-            heldOrder = listing.listed.map(({ item }) => item.id);
+            handedOrders.set(
+              id,
+              listing.listed.map(({ item }) => item.id),
+            );
             router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })));
           }}
           onRefresh={acts.refresh}
@@ -1421,24 +1432,26 @@ function InboxSplitScreen({
 }
 
 /**
- * The threads either side of an open one: in the order the list held as it
- * was opened, or, for a thread that order doesn't hold, in the kept scope's
- * live rows, the open thread kept among them, as the panel's list keeps the
- * item its pane shows, which are then held for the arrows' next steps.
+ * The threads either side of an open one: in the order handed to it as it
+ * opened, which it keeps while it stands, or, for one handed none or one that
+ * order doesn't hold, in the kept scope's live rows, the open thread kept
+ * among them, as the panel's list keeps the item its pane shows.
  */
 function useThreadSteps(id: string): ThreadSteps {
   const { show } = useInboxScope();
   const listing = useInboxListing({ show, search: "", chosen: id });
-  const held = heldOrder.includes(id);
-  const order = held ? heldOrder : listing.listed.map(({ item }) => item.id);
+  const [handed] = useState(() => handedOrders.get(id));
+
+  // Note that the hand-off is taken once, so a later open of this thread with none handed, such as from a notification, never finds a stale one.
+  useEffect(() => {
+    handedOrders.delete(id);
+  }, [id]);
+
+  const order = handed?.includes(id) ? handed : listing.listed.map(({ item }) => item.id);
+
   const at = order.indexOf(id);
 
-  // Note that a thread the held order doesn't hold starts a run of its own on the live rows, held from then on, so a step to a thread an older order also holds keeps to this run's order rather than jumping to that one's.
-  useEffect(() => {
-    if (!held) heldOrder = order;
-  }, [held, order]);
-
-  return at < 0 ? {} : { previous: order[at - 1], next: order[at + 1] };
+  return at < 0 ? { order } : { order, previous: order[at - 1], next: order[at + 1] };
 }
 
 /**
