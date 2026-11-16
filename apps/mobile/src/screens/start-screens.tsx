@@ -45,7 +45,7 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useNavigationContainerRef, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
@@ -322,6 +322,32 @@ type UseSheetStartResult = {
 
 type Started = { answer?: StartAnswer };
 
+/** A route in a navigator's state, as React Navigation hands it, read only for which route is focused under it. */
+type RouteNode = { readonly key?: string | undefined; readonly state?: NavigatorState | undefined };
+
+/** A navigator's state, as React Navigation hands it. */
+type NavigatorState = {
+  readonly index?: number | undefined;
+  readonly routes: readonly RouteNode[];
+};
+
+/** The route focused inside `route`, as `getCurrentRoute` descends to it. */
+function focusedIn(route: RouteNode | undefined): RouteNode | undefined {
+  const state = route?.state;
+
+  if (state === undefined) return route;
+
+  return focusedIn(state.routes[state.index ?? state.routes.length - 1]);
+}
+
+/** The route focused under the sheet on top of the root stack: what the sheet uncovers as it goes. */
+function focusedUnderSheet(root: NavigatorState | undefined): RouteNode | undefined {
+  if (root === undefined) return undefined;
+  const under = (root.index ?? root.routes.length - 1) - 1;
+
+  return under < 0 ? undefined : focusedIn(root.routes[under]);
+}
+
 /**
  * Sends a start once, while none is out: on an agent started, the sheet
  * gives way to its page; on a task made with no agent, filed for later or
@@ -400,6 +426,7 @@ function useClosingStart(
   setNote: (note: string | undefined) => void,
 ): UseSheetStartResult {
   const router = useRouter();
+  const navigation = useNavigationContainerRef();
   const onTab = useOnTab();
   const write = useWrite();
   // Note that a start goes once, so a second press while the sheet slides away sends nothing.
@@ -416,6 +443,9 @@ function useClosingStart(
     }
 
     setSent(true);
+    // Note that where the reader stands is kept as Start is pressed: the sheet, and the route it uncovers.
+    const sheet = navigation.getCurrentRoute();
+    const uncovered = focusedUnderSheet(navigation.getRootState());
     kept.release();
     router.dismiss();
     const started: Started = {};
@@ -436,6 +466,10 @@ function useClosingStart(
       const answer = started.answer;
 
       if (!went || answer === undefined || "refused" in answer) return;
+      // Note that the task opens only while the reader stands where Start left them, because a route moves to a new object as a page opens or a row is picked, and what they opened meanwhile must stand.
+      const now = navigation.getCurrentRoute();
+
+      if (now !== sheet && now !== uncovered) return;
       // Note that only the task's page opens, its new agent standing in its Agents section, because a second route pushed over it races the split view's hand-off and leaves the task behind.
       router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })));
     });
