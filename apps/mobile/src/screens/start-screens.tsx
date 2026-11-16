@@ -46,7 +46,7 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useNavigation, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
@@ -343,6 +343,67 @@ type UseSheetStartResult = {
 
 type Started = { answer?: StartAnswer };
 
+/** A route in a navigator's state, as React Navigation hands it: its key, its params, and the navigator under it. */
+type RouteNode = {
+  readonly key?: string | undefined;
+  readonly params?: object | undefined;
+  readonly state?: NavigatorState | undefined;
+};
+
+/** A navigator's state, as React Navigation hands it. */
+type NavigatorState = {
+  readonly index?: number | undefined;
+  readonly routes: readonly RouteNode[];
+};
+
+/** Where the reader stands: the focused route by its key, and its params as written, which a split view's pick moves. */
+type Standing = { readonly key: string | undefined; readonly params: string | undefined };
+
+/** The route focused inside `route`, as `getCurrentRoute` descends to it. */
+function focusedIn(route: RouteNode | undefined): RouteNode | undefined {
+  const state = route?.state;
+
+  if (state === undefined) return route;
+
+  return focusedIn(state.routes[state.index ?? state.routes.length - 1]);
+}
+
+/** A navigator, as React Navigation hands it, read only for its state and the navigator over it. */
+type Navigator = {
+  readonly getState: () => NavigatorState;
+  readonly getParent: () => Navigator | undefined;
+};
+
+/**
+ * The navigator a sheet was presented on: the first, from the sheet's own up,
+ * with a route beneath its top. Note that it is found by walking up, because
+ * a sheet may stand in a stack of its own, as New task's layout does.
+ */
+function presentingNavigator(own: Navigator): Navigator {
+  const state = own.getState();
+  const parent = own.getParent();
+
+  return (state.index ?? 0) > 0 || parent === undefined ? own : presentingNavigator(parent);
+}
+
+/** Where the reader stands in a navigator, `back` routes below its top: the focused route there, by key and params. */
+function standingIn(navigator: Navigator, back: number): Standing {
+  const state = navigator.getState();
+  const at = (state.index ?? state.routes.length - 1) - back;
+
+  return standingOf(at < 0 ? undefined : focusedIn(state.routes[at]));
+}
+
+/** Where a route stands, by its key and its params, which React Navigation keeps serializable. */
+function standingOf(route: RouteNode | undefined): Standing {
+  return { key: route?.key, params: JSON.stringify(route?.params) };
+}
+
+/** Whether the reader stands where they stood: the same route, with the same row selected. */
+function sameStanding(was: Standing, now: Standing): boolean {
+  return was.key === now.key && was.params === now.params;
+}
+
 /**
  * Sends a start once, while none is out: on an agent started, the sheet
  * gives way to its page; on a task made with no agent, filed for later or
@@ -403,6 +464,75 @@ function useSheetStart(
   };
 
   return { starting, go };
+}
+
+/**
+ * New task's start, as the panel's New task sends it: the sheet closes the
+ * moment Start is pressed, and the start goes on as a write, opening the
+ * task's page once it lands, where its new agent stands among its agents. A start
+ * refused is said in the failure notice, whose Try again sends the same
+ * start again. Note that this never makes a second task, because the task's
+ * id and its agent's key are minted once per sheet (`useStartTask`,
+ * `useFileTask`), and the service answers a start it already made with the
+ * same task. Pictures the service would refuse still hold the sheet, saying
+ * why under its words.
+ */
+function useClosingStart(
+  kept: KeptWords,
+  setNote: (note: string | undefined) => void,
+): UseSheetStartResult {
+  const router = useRouter();
+  const navigation: Navigator = useNavigation();
+  const onTab = useOnTab();
+  const write = useWrite();
+  // Note that a start goes once, so a second press while the sheet slides away sends nothing.
+  const [sent, setSent] = useState(false);
+
+  const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
+    if (sent) return;
+
+    if (refusal !== undefined) {
+      setNote(refusal);
+      buzz(BUZZ.WARNING);
+
+      return;
+    }
+
+    setSent(true);
+    // Note that where the reader stands is kept as Start is pressed, in the navigator the sheet was presented on: the sheet, and the route it uncovers.
+    const presenting = presentingNavigator(navigation);
+    const sheet = standingIn(presenting, 0);
+    const uncovered = standingIn(presenting, 1);
+    kept.release();
+    router.dismiss();
+    const started: Started = {};
+
+    void write(
+      () =>
+        start().then((answer) => {
+          started.answer = answer;
+
+          return answer;
+        }),
+      {
+        refused: (answer) => ("refused" in answer ? answer.refused : undefined),
+        retry: true,
+        went: BUZZ.SUCCESS,
+      },
+    ).then((went) => {
+      const answer = started.answer;
+
+      if (!went || answer === undefined || "refused" in answer) return;
+      // Note that the task opens only while the reader stands where Start left them, on the same route with the same row selected, so a page they opened or a row they picked meanwhile stands.
+      const now = standingIn(presenting, 0);
+
+      if (!sameStanding(sheet, now) && !sameStanding(uncovered, now)) return;
+      // Note that only the task's page opens, its new agent standing in its Agents section, because a second route pushed over it races the split view's hand-off and leaves the task behind.
+      router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })));
+    });
+  };
+
+  return { starting: sent, go };
 }
 
 /**
@@ -742,7 +872,7 @@ export function NewTaskScreen({
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
   const filed = pictures.opening ? undefined : filedOf(prompt, pictures.files);
   const kept = useKeptWords(drafted);
-  const { starting, go } = useSheetStart(kept, setNote);
+  const { starting, go } = useClosingStart(kept, setNote);
   const place = { repository: repository.picked, relation: relation.relation };
   const tree = inTree(relation.relation) ? relation.task : undefined;
   // Note that a `/` offers the skills of the repository the task starts in, its tree's where it joins one, as the panel's New task reads them.
