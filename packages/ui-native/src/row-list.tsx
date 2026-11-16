@@ -29,7 +29,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { searchTokens } from "@repo/features/search-tokens";
 import { Predicate } from "effect";
-import { type ReactElement, type ReactNode, useMemo, useState } from "react";
+import { type ReactElement, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useAnnounced } from "./accessibility.js";
 import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
@@ -93,11 +93,25 @@ type RowListProps = {
    * Starts its Select mode with the rows the system ticked, where it has one:
    * iPadOS lets a list whose selection is a set tick several rows with no
    * edit mode of ours, by a two-finger drag, a pointer's ⌘ or Shift click,
-   * or the keyboard. None for a list with no Select mode.
+   * or the keyboard, and the iPhone by a two-finger drag down the list, as
+   * Mail's starts Select. None for a list with no Select mode.
    */
   readonly onChooseStart?: ((ids: readonly string[]) => void) | undefined;
   readonly children: ReactNode;
 };
+
+/**
+ * The rows a two-finger drag chose: the selection the system reports, but
+ * for the row that stood open before the drag, which a list keeping a
+ * selection, such as an iPad's list column, still holds as it enters edit
+ * mode, so Select mode starts with only the rows the drag passed over.
+ */
+function dragChosen(
+  selection: readonly (string | number)[],
+  open: string | undefined,
+): readonly string[] {
+  return selection.filter(Predicate.isString).filter((id) => id !== open);
+}
 
 /** The one row a SwiftUI `List` selection names, where it names one. */
 function selectedId(selection: readonly (string | number)[]): string | undefined {
@@ -151,7 +165,9 @@ function ScopeRow({ scopes }: { readonly scopes: ListScopes }) {
  * Select mode the list stands in SwiftUI's own edit mode, as Mail's Select
  * does: a round check leads each row, a tap ticks it rather than opening it,
  * two fingers dragged down tick a run, and the rows' swipes step aside, as
- * the system's do.
+ * the system's do. A list that can start Select mode hands SwiftUI its edit
+ * mode as a binding, so two fingers dragged down it start Select mode as
+ * they do in Mail.
  */
 export function RowList({
   look,
@@ -168,6 +184,13 @@ export function RowList({
   const searchedWords = useMemo(() => searchTokens(searched ?? ""), [searched]);
   const [width, setWidth] = useState(0);
   const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
+  // Whether a two-finger drag started Select mode before the list was drawn in it.
+  const dragged = useRef(false);
+  const chooses = choosing !== undefined;
+
+  useEffect(() => {
+    if (!chooses) dragged.current = false;
+  }, [chooses]);
 
   // Note that a list in Select mode draws no row as the open one and reads nothing on a pull, since its checks say what is chosen and a pull there would read the rows from under them.
   return (
@@ -175,7 +198,19 @@ export function RowList({
       selection={
         choosing !== undefined ? [...choosing.chosen] : selected === undefined ? [] : [selected]
       }
-      onSelectionChange={(selection) => {
+      // Note that the edit mode stands as a binding only where a drag may start Select mode, so a list without one keeps the plain environment value below.
+      {...(onChooseStart === undefined
+        ? {}
+        : {
+            editing: chooses,
+            onEditingChange: (editing: boolean, selection: readonly (string | number)[]) => {
+              if (!editing || chooses) return;
+
+              dragged.current = true;
+              onChooseStart(dragChosen(selection, selected));
+            },
+          })}
+      onSelectionChange={(selection, editing) => {
         if (choosing !== undefined) {
           choosing.onChoose(selection.filter(Predicate.isString));
 
@@ -184,8 +219,14 @@ export function RowList({
 
         const ids = selection.filter(Predicate.isString);
 
-        // Note that several rows ticked at once by the system start Select mode with them, as Mail's do, rather than read as a tap on the first, which drew them in the system's own ink and fill and then cleared them as the single selection was laid back.
-        if (ids.length > 1 && onChooseStart !== undefined) {
+        // Note that a row ticked while the system holds the list in edit mode (a two-finger drag, which may tick its first row before the edit mode's own event lands), the rows ticked after it, and several rows the system ticks at once choose rather than open, as Mail's do, rather than read as a tap on the first.
+        if (onChooseStart !== undefined && (editing || dragged.current)) {
+          onChooseStart(dragChosen(selection, selected));
+
+          return;
+        }
+
+        if (onChooseStart !== undefined && ids.length > 1) {
           onChooseStart(ids);
 
           return;
@@ -205,7 +246,10 @@ export function RowList({
         scrollDismissesKeyboard("immediately"),
         ...(onRefresh === undefined || choosing !== undefined ? [] : [refreshable(onRefresh)]),
         // Note that a ticked check is what the reader chose, so Select mode tints it copper, as Mail's checks take its accent, where the screen's ink drew a pale disc in dark.
-        ...(choosing === undefined ? [] : [environment("editMode", "active"), tint(colors.ACCENT)]),
+        ...(choosing === undefined ? [] : [tint(colors.ACCENT)]),
+        ...(choosing === undefined || onChooseStart !== undefined
+          ? []
+          : [environment("editMode", "active")]),
       ]}
     >
       <RowOpenContext value={onSelect}>
@@ -415,6 +459,11 @@ export const FOOTER_TONE = {
 } as const;
 
 export type FooterTone = (typeof FOOTER_TONE)[keyof typeof FOOTER_TONE];
+
+/** A footer's tone where it says a refusal while one stands and a note otherwise: a failure while `refusal` holds words. */
+export function footerToneOf(refusal: string | undefined): FooterTone {
+  return refusal === undefined ? FOOTER_TONE.NOTE : FOOTER_TONE.FAILURE;
+}
 
 /** A section's footer: a note in the system's footnote ink, or a failure as every refusal reads, muted words led by the alert glyph in the attention ink rather than red words (`ProblemLine`), told to VoiceOver as it stands since it stands because something did not go. */
 function SectionFooter({ words, tone }: { readonly words: string; readonly tone: FooterTone }) {

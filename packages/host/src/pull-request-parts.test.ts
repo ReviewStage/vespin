@@ -19,7 +19,8 @@ import {
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { listedAgentOf } from "@repo/features/task-list-live";
-import { Effect, PubSub, Stream } from "effect";
+import { Duration, Effect, PubSub, Stream } from "effect";
+import { TestClock } from "effect/testing";
 import { type AppPullRequestParts, OWN_PULL_REQUEST } from "./app-state.js";
 import type { ListMove } from "./list-moves.js";
 import {
@@ -30,11 +31,12 @@ import {
   type RepositoryPullRequestKey,
   repositoryPullRequestParts,
 } from "./pull-request-parts.js";
+import { polledLive } from "./testing/polled-live.js";
 import { agentListRow } from "./testing/task-list-rows.js";
 import { windowFocus } from "./window-focus.js";
 
 /**
- * pull-request-parts.test.ts -- the parts of a pull request a Pull request tab holds, through an agent or by its repository and number, are asked again together as the task list says it moved, or first names the agent's own, and keep an answer over a later failure.
+ * pull-request-parts.test.ts -- the parts of a pull request a Pull request tab holds through an agent are asked again together as the task list says it moved, or first names the agent's own, and keep an answer over a later failure; those it holds by its repository and number, as GitHub says the pull request moved.
  */
 
 const AGENT = "3c2e1d0f-9a8b-4c7d-8e6f-5a4b3c2d1e0f";
@@ -347,130 +349,88 @@ it.effect(
     }),
 );
 
-/** The parts of pull requests named by their repository and number over a fake service, each ask written down as `part repository#number`, with the list's drawings handed through `draw`. */
-function repositorySubject() {
-  return Effect.gen(function* () {
-    const asked: string[] = [];
-    const drawings = yield* PubSub.unbounded<PullRequestListing>();
-
-    const answering =
-      <Answer>(part: PullRequestPart, answer: Answer) =>
-      (key: RepositoryPullRequestKey) =>
-        Effect.sync(() => {
-          asked.push(`${part} ${key.repository}#${key.number}`);
-
-          return answer;
-        });
-
-    const parts = yield* repositoryPullRequestParts({
-      gate: () => true,
-      focus: yield* windowFocus,
-      ask: {
-        pullRequest: answering(PULL_REQUEST_PART.PULL_REQUEST, overview(OWN, 42)),
-        checks: answering(PULL_REQUEST_PART.CHECKS, { pullRequest: { checks: [] } }),
-        conversation: answering(PULL_REQUEST_PART.CONVERSATION, {
-          pullRequest: { reviewers: [], conversation: [], earlier: 0 },
-        }),
-        published: answering(PULL_REQUEST_PART.PUBLISHED, {
-          repository: "acme/relay",
-          branch: "agent/invite-once",
-          pullRequest: line(OWN, 42),
-        }),
-        reviewOptions: answering(PULL_REQUEST_PART.REVIEW_OPTIONS, {
-          labels: [],
-          users: [],
-          teams: [],
-        }),
-        viewed: answering(PULL_REQUEST_PART.VIEWED, {
-          outcome: PULL_REQUEST_WRITE_OUTCOME.DONE,
-          files: [],
-        }),
-      },
-      listings: Effect.map(PubSub.subscribe(drawings), Stream.fromSubscription),
-      tell: {
-        [LIVE_READ.REPOSITORY_PULL_REQUEST]: () => undefined,
-        [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: () => undefined,
-        [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: () => undefined,
-        [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: () => undefined,
-        [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: () => undefined,
-        [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: () => undefined,
-      },
-    });
-
-    let drawnBefore: ListDrawing | undefined;
-
-    return {
-      asked,
-      draw: (drawn: ListDrawing) =>
-        Effect.suspend(() => {
-          const told = listingOf(drawnBefore, drawn);
-          drawnBefore = drawn;
-
-          return Effect.andThen(PubSub.publish(drawings, told), settled);
-        }),
-      /** Holds every part of the agent's pull request, its repository spelled in another case than its address, for the caller's scope. */
-      holdOwn: Effect.andThen(
-        Effect.forEach(PARTS, (part) =>
-          parts.hold({ part, workspaceId: WORKSPACE, repository: "Acme/Relay", number: 42 }),
-        ),
-        settled,
-      ),
-    };
-  });
-}
-
-it.effect(
-  "a pull request held by its repository is asked again as the list's line for it moves, whatever the case its repository is spelled in, and not as another's moves",
-  () =>
-    Effect.gen(function* () {
-      const { asked, draw, holdOwn } = yield* repositorySubject();
-      yield* holdOwn;
-      yield* draw(listing());
-      asked.length = 0;
-
-      yield* draw(listing({ other: { checks: CHECK_SUMMARY.PASSING } }));
-      assert.deepEqual(asked, []);
-
-      yield* draw(
-        listing({ own: { headSha: "e4f5a6b" }, other: { checks: CHECK_SUMMARY.PASSING } }),
-      );
-      assert.deepEqual(
-        asked.toSorted(),
-        [...MOVING, PULL_REQUEST_PART.VIEWED].map((part) => `${part} Acme/Relay#42`).toSorted(),
-      );
-    }),
+/** Every step a follow has to take, taken, then its next poll asked, which waits half a second after the last answered (`live-follow.ts`). */
+const nextPoll = Effect.andThen(
+  settled,
+  Effect.andThen(TestClock.adjust(Duration.millis(500)), settled),
 );
 
-it.effect(
-  "a pull request held by its repository is asked again as the status of the agent the list says published it moves",
-  () =>
-    Effect.gen(function* () {
-      const { asked, draw, holdOwn } = yield* repositorySubject();
-      yield* holdOwn;
-      yield* draw(listing());
-      asked.length = 0;
-
-      yield* draw(listing({}, AGENT_STATUS.COMPLETED));
-
-      assert.deepEqual(asked.toSorted(), MOVING.map((part) => `${part} Acme/Relay#42`).toSorted());
-    }),
-);
+/** The pull request's row as GitHub's deliveries left it: the minute it last moved, and its head. */
+const movedRow = (minute: number, headSha: string) => ({
+  number: 42,
+  headSha,
+  movedAt: Date.UTC(2026, 10, 16, 12, minute),
+});
 
 it.effect(
-  "a pull request held by its repository is asked again as the list first names it, as an agent's own is when it publishes",
+  "a pull request held by its repository is asked again as GitHub says it moved, its viewed marks only as its head moved with it, and nothing at the first answer",
   () =>
     Effect.gen(function* () {
-      const { asked, draw, holdOwn } = yield* repositorySubject();
-      yield* holdOwn;
-      const listed = listing();
-      yield* draw({
-        ...listed,
-        agentPullRequests: listed.agentPullRequests.filter((each) => each.agentId !== AGENT),
+      const asked: string[] = [];
+      const live = polledLive(["moved"] as const);
+      live.set({ moved: [movedRow(0, "a1b2c3d")] });
+
+      const answering =
+        <Answer>(part: PullRequestPart, answer: Answer) =>
+        (_key: RepositoryPullRequestKey) =>
+          Effect.sync(() => {
+            asked.push(part);
+
+            return answer;
+          });
+
+      const parts = yield* repositoryPullRequestParts({
+        gate: () => true,
+        focus: yield* windowFocus,
+        ask: {
+          pullRequest: answering(PULL_REQUEST_PART.PULL_REQUEST, overview(OWN, 42)),
+          checks: answering(PULL_REQUEST_PART.CHECKS, { pullRequest: { checks: [] } }),
+          conversation: answering(PULL_REQUEST_PART.CONVERSATION, {
+            pullRequest: { reviewers: [], conversation: [], earlier: 0 },
+          }),
+          published: answering(PULL_REQUEST_PART.PUBLISHED, {
+            repository: "acme/relay",
+            branch: "agent/invite-once",
+            pullRequest: line(OWN, 42),
+          }),
+          reviewOptions: answering(PULL_REQUEST_PART.REVIEW_OPTIONS, {
+            labels: [],
+            users: [],
+            teams: [],
+          }),
+          viewed: answering(PULL_REQUEST_PART.VIEWED, {
+            outcome: PULL_REQUEST_WRITE_OUTCOME.DONE,
+            files: [],
+          }),
+        },
+        moved: {
+          seal: (_key, poll, _userId, after) =>
+            poll ? live.poll(after) : Effect.succeed(live.first()),
+          accountId: () => "user-reader",
+        },
+        tell: {
+          [LIVE_READ.REPOSITORY_PULL_REQUEST]: () => undefined,
+          [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: () => undefined,
+          [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: () => undefined,
+          [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: () => undefined,
+          [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: () => undefined,
+          [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: () => undefined,
+        },
       });
+
+      yield* Effect.forEach(PARTS, (part) =>
+        parts.hold({ part, workspaceId: WORKSPACE, repository: "acme/relay", number: 42 }),
+      );
+      yield* nextPoll;
       asked.length = 0;
 
-      yield* draw(listed);
+      live.set({ moved: [movedRow(5, "a1b2c3d")] });
+      yield* nextPoll;
+      assert.deepEqual(asked.toSorted(), MOVING.toSorted());
 
-      assert.deepEqual(asked.toSorted(), MOVING.map((part) => `${part} Acme/Relay#42`).toSorted());
+      asked.length = 0;
+      live.set({ moved: [movedRow(9, "e4f5a6b")] });
+      yield* nextPoll;
+      assert.deepEqual(asked.toSorted(), [...MOVING, PULL_REQUEST_PART.VIEWED].toSorted());
     }),
 );

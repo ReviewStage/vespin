@@ -49,12 +49,16 @@ import { type BarSubtitle, ColumnBarTitle } from "./bar-title.js";
 import type { Scope } from "./button.js";
 import { GLYPH, type Glyph } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
+import { BAR_KIND, barSubtitle } from "./interactions.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
 import { useColors } from "./tokens/colors.js";
 
 /** What the first column holds, so it is drawn afresh as that changes. */
 const FIRST_COLUMN = { APP_SIDEBAR: "app-sidebar", LIST: "list" } as const;
+
+/** What a bar's subtitle opens with while a filter narrows its list, as Mail's does. */
+const FILTERED_BY = "Filtered by:";
 
 /** Where the split view stands against the tabs' screens: over a tab's root, or behind the page a tab pushed over it. */
 const LAYER = { FRONT: 1, BEHIND: 0 } as const;
@@ -144,6 +148,8 @@ export type BarPath = {
  */
 export type ColumnBar = {
   readonly title?: string | undefined;
+  /** A line under the list's `title`, as Mail names its filter under Inbox, drawn by the system's own bar (`barSubtitle`); never with a `name`, whose line is its `subtitle`. */
+  readonly titleLine?: string | undefined;
   /** A pushed page's name, small and inline in the ink, as a compact window's stack names an agent's page; never with a `title`. */
   readonly name?: string | undefined;
   /** A muted line under the page's `name`, such as an agent's state and model, standing with it in the bar's middle; never without a `name`. */
@@ -314,6 +320,13 @@ export function scopeMenu(label: string, scopes: readonly Scope[], narrowed: boo
   };
 }
 
+/** What a bar says under its title while its filter narrows the list, as Mail's "Filtered by: Unread"; nothing while it shows the list whole. */
+export function scopeSubtitle(scopes: readonly Scope[], narrowed: boolean): string | undefined {
+  const chosen = scopes.find((scope) => scope.selected);
+
+  return narrowed && chosen !== undefined ? `${FILTERED_BY} ${chosen.label}` : undefined;
+}
+
 /** A menu with the acts and menus a bar already stands as glyphs left out, so ⋯ holds only the rest. */
 export function menuWithout(menu: BarMenu, acts: readonly BarFootItem[]): BarMenu {
   const barred = new Set(acts.map((act) => act.label));
@@ -416,6 +429,7 @@ function Column({
           : bar.name !== undefined
             ? [navigationTitle(bar.name), toolbarTitleDisplayMode("inline")]
             : [toolbarTitleDisplayMode("inline")]),
+        barSubtitle(BAR_KIND.COLUMN, bar.titleLine),
       ]}
     >
       {ruled ? (
@@ -817,7 +831,9 @@ export function KeptColumns({
  * is. The split view stands in front while a tab's root stands, and behind
  * the tabs while a tab has pushed a page over its root, which slides in over
  * the split view, since the root under it draws nothing of its own; behind,
- * it takes no touch and VoiceOver passes over it. With no
+ * it takes no touch and VoiceOver passes over it. In front, the tabs under it
+ * are passed over in turn, so a page a tab pushed before, or a tab's root,
+ * is never read or matched from behind the split view. With no
  * split view, the tabs stand alone in the same place, so a rotation across
  * the line keeps every tab's stack.
  */
@@ -834,7 +850,12 @@ export function SplitOverTabs({
 
   return (
     <View style={layers.stand}>
-      <View style={[layers.tabs, { zIndex: LAYER.FRONT - layer }]}>{tabs}</View>
+      <View
+        style={[layers.tabs, { zIndex: LAYER.FRONT - layer }]}
+        accessibilityElementsHidden={split !== undefined && front}
+      >
+        {tabs}
+      </View>
       {split === undefined ? null : (
         <View
           style={[layers.split, { zIndex: layer }]}

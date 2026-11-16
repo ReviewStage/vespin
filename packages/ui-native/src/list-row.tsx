@@ -86,6 +86,12 @@ function useRowLines(): (typeof ROW_LINES)[keyof typeof ROW_LINES] {
   return useAccessibilitySize() ? ROW_LINES.ACCESSIBILITY : ROW_LINES.STANDARD;
 }
 
+/** How a row's title is drawn: plain, or as Markdown with a search's words in bold, each by a native text of its own. */
+const TITLE_LOOK = {
+  PLAIN: "plain",
+  MARKED: "marked",
+} as const;
+
 /** What parts the pieces of what a row is heard as, as VoiceOver pauses between a label's phrases. */
 const HEARD_PART = ", ";
 
@@ -228,13 +234,14 @@ type TaskRowProps = RowActs & {
   readonly depth?: number | undefined;
 };
 
-/** A row's act as a button of its long press menu or its swipe: red where it takes something away, and otherwise in `ink`, the muted ink a menu's glyph takes unless a swipe asks for its fill. */
+/** A row's act as a button of its long press menu or its swipe: red where it takes something away, through the system's destructive role where `roled`, and otherwise in `ink`, the muted ink a menu's glyph takes unless a swipe asks for its fill. */
 export function actionButton(
   action: RowAction,
   colors: BrandColors,
   ink: string = colors.TEXT_MUTED,
+  roled = true,
 ) {
-  const destructive = action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
+  const destructive = roled && action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
 
   return (
     <Button
@@ -404,13 +411,31 @@ function fullSwipes(swipes: readonly RowSwipe[]): boolean {
 }
 
 /**
- * A swipe's piece: an act's button, or a menu's, in `ink`. Behind the row
- * it fills with the action gray, which holds 4.5:1 under the swipe's white
- * words in both themes where the muted ink, light in dark, did not; in the
- * long press menu it stands in the muted ink a menu's glyph takes.
+ * A swipe's piece behind the row: an act's button, or a menu's, filled with
+ * the action gray, which holds 4.5:1 under the swipe's white words in both
+ * themes where the muted ink, light in dark, did not. Note that an act that
+ * takes something away fills with the danger fill, which holds the same
+ * under white, without the destructive role, because SwiftUI takes a row
+ * out of its list the moment a destructive swipe is pressed, before an act
+ * that asks first, such as Archive, hears its answer, so a Cancel left the
+ * row gone under its section's count.
  */
-function swipeButton(swipe: RowSwipe, colors: BrandColors, ink: string) {
-  return isSubmenu(swipe) ? rowSubmenu(swipe, colors, ink) : actionButton(swipe, colors, ink);
+function swipeButton(swipe: RowSwipe, colors: BrandColors) {
+  if (isSubmenu(swipe)) return rowSubmenu(swipe, colors, colors.ACTION_FILL);
+
+  return actionButton(
+    swipe,
+    colors,
+    swipe.tone === ROW_ACTION_TONE.DESTRUCTIVE ? colors.DANGER_FILL : colors.ACTION_FILL,
+    false,
+  );
+}
+
+/** A swiped act as it stands again in the long press menu: in the muted ink a menu's glyph takes, and red through the system's destructive role, since a menu takes no row away. */
+function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
+  return isSubmenu(swipe)
+    ? rowSubmenu(swipe, colors, colors.TEXT_MUTED)
+    : actionButton(swipe, colors);
 }
 
 /**
@@ -495,7 +520,7 @@ export function RowFrame({
     <ContextMenu>
       <ContextMenu.Items>
         {opening.map((action) => actionButton(action, colors))}
-        {swiped.map((swipe) => swipeButton(swipe, colors, colors.TEXT_MUTED))}
+        {swiped.map((swipe) => swipeMenuButton(swipe, colors))}
         {menuSubmenus.map((submenu) => rowSubmenu(submenu, colors))}
         {menuActions.map((action) => actionButton(action, colors))}
       </ContextMenu.Items>
@@ -512,12 +537,12 @@ export function RowFrame({
       {menu}
       {trailingActions.length === 0 ? null : (
         <SwipeActions.Actions edge="trailing" allowsFullSwipe={fullSwipes(trailingActions)}>
-          {trailingActions.map((swipe) => swipeButton(swipe, colors, colors.ACTION_FILL))}
+          {trailingActions.map((swipe) => swipeButton(swipe, colors))}
         </SwipeActions.Actions>
       )}
       {leadingActions.length === 0 ? null : (
         <SwipeActions.Actions edge="leading" allowsFullSwipe={fullSwipes(leadingActions)}>
-          {leadingActions.map((swipe) => swipeButton(swipe, colors, colors.ACTION_FILL))}
+          {leadingActions.map((swipe) => swipeButton(swipe, colors))}
         </SwipeActions.Actions>
       )}
     </SwipeActions>
@@ -529,7 +554,10 @@ export function RowFrame({
  * it, as Mail's search results set them, and plain outside a search. Note
  * that a marked title is one Markdown string in one native text, never texts
  * nested in it, so a key typed redraws the words in place rather than
- * building the row's text anew.
+ * building the row's text anew. A title turning from marked to plain, or
+ * back, is drawn by a native text of its own (`TITLE_LOOK`), because the one
+ * native text, handed its plain words with no Markdown, kept drawing the bold
+ * of the last search it marked.
  */
 function TitleWords({
   title,
@@ -541,9 +569,11 @@ function TitleWords({
   const marked = searchedTitleMarkdown(title, useContext(RowSearchedContext));
 
   return marked === undefined ? (
-    <Text modifiers={[...modifiers]}>{title}</Text>
+    <Text key={TITLE_LOOK.PLAIN} modifiers={[...modifiers]}>
+      {title}
+    </Text>
   ) : (
-    <Text markdownEnabled modifiers={[...modifiers]}>
+    <Text key={TITLE_LOOK.MARKED} markdownEnabled modifiers={[...modifiers]}>
       {marked}
     </Text>
   );

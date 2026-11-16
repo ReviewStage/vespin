@@ -94,6 +94,7 @@ export {
   glyphSymbol,
   type LucideSymbol,
   type MarkLook,
+  runsOnGlyph,
   sectionGlyph,
 } from "./glyph.js";
 
@@ -170,8 +171,6 @@ export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-
 
 export { useMinute } from "./minute.js";
 
-export { monogramOf } from "./monogram.js";
-
 export { SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
@@ -213,6 +212,7 @@ export { RemindPickSheet } from "./remind-sheet.js";
 export {
   FOOTER_TONE,
   type FooterTone,
+  footerToneOf,
   LIST_LOOK,
   type ListLook,
   ListSection,
@@ -278,6 +278,7 @@ export {
   SplitOverTabs,
   SplitView,
   scopeMenu,
+  scopeSubtitle,
   UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 

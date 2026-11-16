@@ -228,7 +228,7 @@ describe("transcriptItems", () => {
       },
     },
   ])(
-    "draws a pull request a call opened as its card alone, as the task list holds it, or as it was opened where the list holds none ($card.state)",
+    "draws a pull request a call opened as the task list holds it, or as it was opened where the list holds none, in the call's place ($card.state)",
     ({ held, card }) => {
       const items = transcriptItems([OPENED], {
         writing: false,

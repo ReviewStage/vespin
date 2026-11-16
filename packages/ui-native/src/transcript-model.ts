@@ -725,18 +725,21 @@ function callItems(
           },
         ];
 
-  const cards = [...page, ...openedPullRequest(part, base, reading.pullRequests)];
+  const opened = openedPullRequest(part, base, reading.pullRequests);
 
-  // Note that a finished call a card stands for is drawn as its card alone, as the card names the page or the pull request the call's line would say again.
+  // Note that a pull request the call opened stands as its card alone, as a set of pictures shown stands as its pictures, since the call's line named the same pull request over it; a call refused opens none and keeps its line with the reason.
+  if (opened.length > 0) return [...page, ...opened, ...mediaItem];
+
+  // Note that a finished call a page's card stands for is drawn as its card alone, as the card names the page the call's line would say again.
   if (
-    cards.length > 0 &&
+    page.length > 0 &&
     call.kind === TRANSCRIPT_ITEM.CALL &&
     call.standing === CALL_STANDING.DONE &&
     !open
   )
-    return [...cards, ...mediaItem];
+    return [...page, ...mediaItem];
 
-  return [call, ...cards, ...mediaItem];
+  return [call, ...page, ...mediaItem];
 }
 
 /** One part as its items; none for what the agent thought, or a part with nothing to draw. */
