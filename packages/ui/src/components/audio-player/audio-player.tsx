@@ -342,7 +342,8 @@ export function AudioPlayer({
     // biome-ignore lint/a11y/useSemanticElements: a player holds a clip and its controls, not a form's controls, so it is no `<fieldset>`.
     <span
       ref={frame}
-      className="ui-audio-player-frame flex w-full items-center gap-ui-8 focus:outline-none"
+      // Note that the card's inset is the video bar's, so Play and Expand stand as far from its edge as a video's do.
+      className={`ui-audio-player-frame flex w-full items-center gap-ui-8 focus:outline-none ${viewer ? "" : "p-ui-6"}`}
       data-playing={playback.playing}
       tabIndex={-1}
       role="group"
@@ -408,7 +409,7 @@ export function AudioPlayer({
     <Card
       as={CARD_ELEMENT.SPAN}
       corner={CARD_CORNER.CONTROL}
-      padding={CARD_PADDING.SNUG}
+      padding={CARD_PADDING.NONE}
       className="ui-audio-player block w-audio-player max-w-full"
       data-place={place}
     >
