@@ -22,7 +22,7 @@ struct InboxWidget: Widget {
       InboxWidgetView(snapshot: entry.snapshot)
     }
     .configurationDisplayName("Inbox")
-    .description("What's waiting on you in Vespin.")
+    .description("What needs you in Vespin.")
     .supportedFamilies([
       .systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular, .accessoryInline,
     ])
@@ -35,6 +35,12 @@ struct InboxEntry: TimelineEntry {
   let date: Date
   /// The snapshot kept, or none while no account is signed in.
   let snapshot: InboxWidgetSnapshot?
+
+  /// How strongly a Smart Stack should turn to the widget: by how many threads need the member, and not at all while none does.
+  var relevance: TimelineEntryRelevance? {
+    guard let waiting = snapshot?.waiting, waiting > 0 else { return nil }
+    return TimelineEntryRelevance(score: Float(waiting))
+  }
 }
 
 /// One entry, the snapshot as it stands; the app and the push reload the widget whenever it moves.
@@ -97,19 +103,35 @@ struct SmallInbox: View {
       InboxHeading(snapshot: snapshot, inline: false)
       Spacer(minLength: 4)
       if let snapshot {
-        CountFigure(waiting: snapshot.waiting)
-        Text("waiting on you")
-          .font(.caption)
-          .foregroundStyle(Color("TextMuted"))
-          .lineLimit(1)
-        if let row = snapshot.rows.first {
-          InboxRowLine(row: row, compact: true).padding(.top, 4)
+        // Note that the newest thread's title is the first to go where the count and its words leave it no room, as at the larger text sizes.
+        ViewThatFits(in: .vertical) {
+          SmallCount(snapshot: snapshot, newest: snapshot.rows.first)
+          SmallCount(snapshot: snapshot, newest: nil)
         }
       } else {
         SignedOutLine()
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+  }
+}
+
+/// The small size's count, its words, and the newest thread's title under them, where one is given.
+struct SmallCount: View {
+  let snapshot: InboxWidgetSnapshot
+  let newest: InboxWidgetSnapshot.Row?
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 2) {
+      CountFigure(waiting: snapshot.waiting)
+      Text(snapshot.waiting == 1 ? "needs you" : "need you")
+        .font(.caption)
+        .ink(muted: true)
+        .lineLimit(1)
+      if let newest {
+        InboxRowLine(row: newest, compact: true).padding(.top, 4)
+      }
+    }
   }
 }
 
@@ -134,9 +156,9 @@ struct MediumInbox: View {
       if let snapshot {
         if snapshot.waiting == 0 {
           Spacer(minLength: 0)
-          Text("Nothing waiting on you")
+          Text(InboxWidgetSnapshot.nothingWaiting)
             .font(.subheadline)
-            .foregroundStyle(Color("TextMuted"))
+            .ink(muted: true)
             .frame(maxWidth: .infinity)
         }
         ForEach(snapshot.rows) { row in
@@ -206,12 +228,12 @@ struct InboxHeading: View {
     layout {
       Label { Text("Inbox") } icon: { Image("Inbox") }
         .font(.subheadline.weight(.semibold))
-        .foregroundStyle(Color("Text"))
+        .ink()
         .lineLimit(1)
       if let workspace = snapshot?.workspace, !workspace.isEmpty {
         Text(workspace)
           .font(.caption2)
-          .foregroundStyle(Color("TextMuted"))
+          .ink(muted: true)
           .lineLimit(1)
       }
     }
@@ -226,13 +248,15 @@ struct CountFigure: View {
     Text("\(waiting)")
       .font(.largeTitle.weight(.semibold))
       .monospacedDigit()
+      .minimumScaleFactor(0.6)
+      .lineLimit(1)
       .foregroundStyle(Color(waiting > 0 ? "Attention" : "TextMuted"))
       .widgetAccentable()
       .contentTransition(.numericText())
   }
 }
 
-/// One thread: the ask's glyph and its title, and, on a medium row, its task's name trailing on the same line.
+/// One thread: the ask's glyph and its title, which takes the row's width, its task left to the thread's page.
 struct InboxRowLine: View {
   let row: InboxWidgetSnapshot.Row
   let compact: Bool
@@ -242,13 +266,9 @@ struct InboxRowLine: View {
       AskGlyph(ask: row.ask).frame(width: 14)
       Text(row.title)
         .font(compact ? .caption.weight(.medium) : .subheadline.weight(.medium))
-        .foregroundStyle(Color("Text"))
+        .ink()
         .lineLimit(compact ? 2 : 1)
-        .layoutPriority(1)
-      Spacer(minLength: 4)
-      if !compact, !row.task.isEmpty {
-        Text(row.task).font(.caption).foregroundStyle(Color("TextMuted")).lineLimit(1)
-      }
+      Spacer(minLength: 0)
     }
     .privacySensitive()
   }
@@ -261,9 +281,9 @@ struct AskGlyph: View {
   var body: some View {
     Group {
       switch ask {
-      case "decide": Image("Split")
-      case "do": Image("SquareCheck")
-      case "answer": Image("PenLine")
+      case "decide": Image("Split").widgetAccentedRenderingMode(.accented)
+      case "do": Image("SquareCheck").widgetAccentedRenderingMode(.accented)
+      case "answer": Image("PenLine").widgetAccentedRenderingMode(.accented)
       default: Color.clear.frame(width: 1, height: 1)
       }
     }
@@ -278,7 +298,7 @@ struct SignedOutLine: View {
   var body: some View {
     Text("Open Vespin to sign in")
       .font(.caption)
-      .foregroundStyle(Color("TextMuted"))
+      .ink(muted: true)
       .lineLimit(2)
   }
 }
@@ -286,8 +306,33 @@ struct SignedOutLine: View {
 // MARK: - Words and routes
 
 extension InboxWidgetSnapshot {
-  /// The count in words, as the Lock Screen says it.
-  var countText: String { waiting > 0 ? "\(waiting) waiting on you" : "Nothing waiting on you" }
+  /// The count in the panel's words (`NEEDS_YOU` in `@repo/features/inbox-list-model`), as the Lock Screen says it: "1 needs you", "3 need you".
+  var countText: String {
+    guard waiting > 0 else { return Self.nothingWaiting }
+    return "\(waiting) \(waiting == 1 ? "needs" : "need") you"
+  }
+
+  /// What the widget says while nothing needs the member.
+  static let nothingWaiting = "Nothing needs you"
+}
+
+/// The brand's ink in full color, else the system's primary or secondary, so a tinted or clear Home Screen and the Lock Screen tint the words as they tint the system's own.
+struct Ink: ViewModifier {
+  @Environment(\.widgetRenderingMode) private var mode
+  let muted: Bool
+
+  func body(content: Content) -> some View {
+    if mode == .fullColor {
+      content.foregroundStyle(Color(muted ? "TextMuted" : "Text"))
+    } else {
+      content.foregroundStyle(muted ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+    }
+  }
+}
+
+extension View {
+  /// The words' ink, by the rendering mode (`Ink`).
+  func ink(muted: Bool = false) -> some View { modifier(Ink(muted: muted)) }
 }
 
 /// The app's routes the widget opens: the Inbox, and a thread on it.
