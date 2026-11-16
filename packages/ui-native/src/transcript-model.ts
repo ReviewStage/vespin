@@ -809,7 +809,9 @@ type SaidItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.SAID }>;
 function joinsRun(last: SaidItem, next: SaidItem): boolean {
   if (last.from !== undefined || next.from !== undefined || next.body !== undefined) return false;
 
-  if (last.by !== next.by || last.at === undefined || next.at === undefined) return false;
+  if (last.by !== next.by || last.sender !== next.sender) return false;
+
+  if (last.at === undefined || next.at === undefined) return false;
 
   return next.at >= last.at && next.at - last.at <= RUN_REACH_MS;
 }
