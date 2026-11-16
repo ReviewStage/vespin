@@ -1,0 +1,76 @@
+== bundle Zd2 base 085f5a1c75
+  built 085f5a1c75 base app Vn6.app (main 6766317a4f + #9346 #8948 #8954 #9039)
+duo-folded-portrait-1: maestro 0 failed 
+duo-folded-portrait-2: maestro 0 failed 
+duo-folded-portrait-3: maestro 0 failed 
+iphone-portrait-1: maestro 0 failed 
+iphone-portrait-2: maestro 0 failed 
+iphone-portrait-3: maestro 0 failed 
+iphone-landscape-1: maestro 0 failed 
+iphone-landscape-2: maestro 0 failed 
+iphone-landscape-3: maestro 1 failed Assert that "Add a way to resend an invite that expired." is visible... FAILED
+== duo-folded-portrait-1
+   probe: NOT FOUND
+   (0, '', '[0,0][0,0]')
+   (1, 'Vespin', '[0,0][466,678]')
+   (27, 'Inbox', '[80,37][123,58]')
+   (27, 'Search', '[338,28][378,68]')
+   (32, 'Inbox', '[396,434][440,492]')
+   (32, 'Tasks', '[396,484][440,542]')
+   (32, 'Search', '[396,534][440,592]')
+   (33, 'Search', '[404,549][432,576]')
+   (31, 'New task', '[394,606][442,654]')
+   (1, '', '[0,0][0,0]')
+== duo-folded-portrait-2
+   probe: NOT FOUND
+   (0, '', '[0,0][0,0]')
+   (1, 'Vespin', '[0,0][466,678]')
+   (1, '', '[0,0][0,0]')
+== duo-folded-portrait-3
+   probe: NOT FOUND
+   (0, '', '[0,0][0,0]')
+   (1, 'Vespin', '[0,0][466,678]')
+   (1, '', '[0,0][0,0]')
+== iphone-portrait-1
+   probe: NOT FOUND
+   (0, '', '[0,0][0,0]')
+   (1, 'Vespin', '[0,0][402,874]')
+   (27, 'Inbox', '[179,73][222,94]')
+   (27, 'Search', '[342,66][382,102]')
+   (22, 'Tab Bar', '[0,791][402,874]')
+   (25, 'Inbox', '[25,795][125,849]')
+   (25, 'Tasks', '[115,795][216,849]')
+   (25, 'Search', '[206,795][307,849]')
+   (26, 'Search', '[243,808][270,835]')
+   (26, 'New task', '[319,791][381,853]')
+   (1, '', '[0,0][0,0]')
+== iphone-portrait-2
+   probe: NOT FOUND
+   (0, '', '[0,0][0,0]')
+   (1, 'Vespin', '[0,0][402,874]')
+   (1, '', '[0,0][0,0]')
+== iphone-portrait-3
+   probe: NOT FOUND
+   (0, '', '[0,0][0,0]')
+   (1, 'Vespin', '[0,0][402,874]')
+   (1, '', '[0,0][0,0]')
+== iphone-landscape-1
+   probe: NOT FOUND
+   (0, '', '[0,0][0,0]')
+   (1, 'Vespin', '[0,0][874,402]')
+   (27, 'Inbox', '[415,35][458,56]')
+   (27, 'Search', '[792,28][832,64]')
+   (22, 'Tab Bar', '[0,338][874,402]')
+   (25, 'Inbox', '[42,342][108,378]')
+   (25, 'Tasks', '[112,342][178,378]')
+   (25, 'Search', '[182,342][248,378]')
+   (26, 'Search', '[207,350][228,369]')
+   (26, 'New task', '[792,338][836,382]')
+== iphone-landscape-2
+   probe: NOT FOUND
+   (0, '', '[0,0][0,0]')
+   (1, 'Vespin', '[0,0][874,402]')
+== iphone-landscape-3
+   probe: NOT FOUND
+   (0, '', '[0,0][0,0]')
+   (1, 'Vespin', '[0,0][874,402]')
