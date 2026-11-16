@@ -124,6 +124,7 @@
     "./github/github-delivery-read-bounds": "./src/github/github-delivery-read-bounds.js",
     "./github/github-webhook-app": "./src/github/github-webhook-app.js",
     "./github/pull-requests": "./src/github/pull-requests.js",
+    "./github/pull-requests-app": "./src/github/pull-requests-app.js",
     "./github/repository-file": "./src/github/repository-file.js",
     "./github/repository-folder": "./src/github/repository-folder.js",
     "./github/workspace-repository": "./src/github/workspace-repository.js",

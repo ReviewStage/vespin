@@ -178,7 +178,9 @@ function useOwnedPullRequest(url: string): OwnedPullRequest | undefined {
   const number = pullRequestAddressOf(url)?.number;
   const listed = listedPullRequestOf(url, carried);
 
-  return listed === undefined ? undefined : { ...listed, number };
+  return listed?.agentId === undefined
+    ? undefined
+    : { agentId: listed.agentId, taskId: listed.taskId, number };
 }
 
 /**

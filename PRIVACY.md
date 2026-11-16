@@ -117,7 +117,12 @@ A workspace's owners and admins can save environment variables for the
 workspace, which we store sealed the same way. Each of the workspace's cloud
 agents is handed them as environment variables in its sandbox as it starts a
 turn, so the agent can read them, and a value it reads or prints may reach its
-model and its transcript. Agents on your Mac are never handed them.
+model and its transcript. Agents on your Mac are never handed them. A variable
+is a secret unless the one who saves it marks it otherwise: a secret's value is
+never shown to anyone once saved, while one saved as a config, such as
+`NODE_ENV`, is shown to every member of the workspace in Settings. We keep who
+added each variable and who last changed it, and show both to the workspace's
+members.
 
 ### Integrations and connected apps
 
@@ -442,6 +447,15 @@ While you look at a thread, task, agent, or pull request, the app tells iOS
 its title and its vespin.dev link, so Handoff can offer it on your other
 devices signed in to the same Apple Account. iOS hands them to those devices
 directly, and the app does not offer them to Siri suggestions or to search.
+
+### Members' pictures on your iPhone
+
+So a menu can lead each member of a workspace with their face, such as a
+task's Assignee menu, the Vespin iOS app keeps a small copy of each member's
+sign-in picture as a file in its caches on your iPhone or iPad. It downloads
+each one from the Google or GitHub address the app already draws it from,
+sends it nowhere else, and keeps it only in the caches iOS may clear when the
+device needs room; deleting the app deletes them.
 
 ## 3\. Legal basis for processing
 

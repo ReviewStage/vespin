@@ -41,7 +41,6 @@ import {
 } from "@repo/features/pull-request-write-wire";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppChapters } from "@repo/host/app-state";
 import { Effect } from "effect";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -53,7 +52,12 @@ import { GitHubConnectProvider } from "../github-connect.js";
 import { MemberDirectory } from "../member-directory.js";
 import { answeringChanges, fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
 import { DESKTOP_LINKS, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { handHostReads, holdMembers, holdPullRequestParts } from "../testing/app-state.js";
+import {
+  type AppRepositoryChapters,
+  handHostReads,
+  holdMembers,
+  holdRepositoryPullRequestParts,
+} from "../testing/app-state.js";
 import { layContainersAt } from "../testing/container-width.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
@@ -62,7 +66,7 @@ import { landedBundles, onSideBundles } from "../testing/side-bundles.js";
 import { agentsControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
-import { AgentPullRequestTab } from "./agent-pull-request-tab.js";
+import { PullRequestTab } from "./agent-pull-request-tab.js";
 import { PULL_REQUEST_VIEW, type PullRequestView } from "./task-tab-model.js";
 import type { AgentsControl } from "./use-agents.js";
 
@@ -91,6 +95,9 @@ const AGENT: AgentSummary = {
 };
 
 const PAGE = "https://github.com/acme/relay/pull/42";
+
+/** The pull request as its tab names it: the workspace it reads it through, its repository, and its number. */
+const PULL_REQUEST_KEY = { workspaceId: "workspace-acme", repository: "acme/relay", number: 42 };
 const HEAD = "b".repeat(40);
 const OLDER = "a".repeat(40);
 const BASE = "c".repeat(40);
@@ -325,7 +332,7 @@ beforeEach(() => {
   marked = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...DESKTOP_LINKS });
   fakeActPort({
-    [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: ({ request }) => {
+    [ACT_KIND.PULL_REQUESTS_ACTION]: ({ request }) => {
       marked.push(request);
 
       return Promise.resolve({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE });
@@ -348,7 +355,7 @@ afterEach(() => {
 interface Answers {
   /** The chapters as the host holds them, a failure as a read that never answered; none yet, with Generate offered, where none are named. */
   readonly chapters?: PullRequestChaptersAnswerView;
-  readonly generateChapters?: AgentsControl["generateChapters"];
+  readonly generateChapters?: () => Promise<PullRequestChaptersAnswerView>;
   /** The files marked viewed on GitHub; the marks are unread where none are named. */
   readonly viewed?: readonly string[];
   /** The head GitHub holds as each read of the overview and the files asks; theirs where none is named, the overview's merge box saying none. */
@@ -379,11 +386,15 @@ const DANA: WorkspaceMember = {
 /** How the chapters the host holds move, as its live read of them answers; nothing before a test's control lays them. */
 let moveChapters: (next: PullRequestChaptersAnswerView) => void = () => undefined;
 
-/** The agent's pull request's chapters as the host holds them, a failure as a read that never answered. */
-function chaptersHeld(answer: PullRequestChaptersAnswerView): AppChapters {
+/** The pull request's chapters as the host holds them, by its repository and number, a failure as a read that never answered. */
+function chaptersHeld(answer: PullRequestChaptersAnswerView): AppRepositoryChapters {
+  const { workspaceId, repository, number } = PULL_REQUEST_KEY;
+
   return {
-    [AGENT.id]: {
-      [String(PULL_REQUEST.number)]: "failure" in answer ? { failed: true } : { rows: answer },
+    [workspaceId]: {
+      [repository]: {
+        [String(number)]: "failure" in answer ? { failed: true } : { rows: answer },
+      },
     },
   };
 }
@@ -411,7 +422,7 @@ function controlAnswering(answers: Answers): AgentsControl {
   // Note that the workspace's people are laid on the document as the tab holds them, as the host lays them.
   holdMembers(deliverMembers, () => ({ rows: { members: [DANA] } }));
   // The host holds the tab's parts, its pull request read anew for its head on each ask.
-  holdPullRequestParts(deliverParts, {
+  holdRepositoryPullRequestParts(deliverParts, {
     [PULL_REQUEST_PART.PULL_REQUEST]: () =>
       Promise.resolve({
         pullRequest:
@@ -445,6 +456,8 @@ function controlAnswering(answers: Answers): AgentsControl {
   });
   fakeActPort({
     ...fakeActPortCalls(),
+    [ACT_KIND.CHAPTERS_REPOSITORY_GENERATE]: () =>
+      (answers.generateChapters ?? (() => Promise.resolve(answering(ready()))))(),
     // The host draws a pick over the member's preferences row the moment it is asked, as it draws the default's.
     [ACT_KIND.AGENTS_CHAPTERS_PROVIDER_WRITE]: ({ provider }) => {
       picks.push(provider);
@@ -491,7 +504,6 @@ function controlAnswering(answers: Answers): AgentsControl {
         },
       ],
     ]),
-    generateChapters: answers.generateChapters ?? (() => Promise.resolve(answering(ready()))),
   });
 }
 
@@ -499,8 +511,9 @@ function controlAnswering(answers: Answers): AgentsControl {
 function Switching({ control, first }: { control: AgentsControl; first: PullRequestView }) {
   const [view, setView] = useState<PullRequestView>(first);
 
-  return createElement(AgentPullRequestTab, {
-    agentId: AGENT.id,
+  return createElement(PullRequestTab, {
+    pullRequest: PULL_REQUEST_KEY,
+    taskId: AGENT.taskId,
     control,
     shown: true,
     repository: "acme/relay",
