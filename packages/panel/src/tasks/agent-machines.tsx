@@ -61,18 +61,38 @@ function useAgentTools(agentId: string | undefined): WorkspaceToolsAnswer | unde
   return useQuery(workspaceToolsQuery(agentId)).data;
 }
 
-/** The machine a call the agent makes now would go to, by its id and name, the same object while neither moved; none where the service names none. */
-export function useRoutedMachine(
-  agentId: string | undefined,
-): { readonly id: string; readonly name: string } | undefined {
-  const machine = useAgentTools(agentId)?.runOnMac?.machine;
-  const id = machine?.id;
-  const name = machine?.name;
+/** A machine a call still unanswered names, by its id and name. */
+export interface CallRouteMachine {
+  readonly id: string;
+  readonly name: string;
+}
 
-  return useMemo(
-    () => (id === undefined || name === undefined ? undefined : { id, name }),
-    [id, name],
-  );
+/** The machine a call still unanswered goes to, given the id of the machine it names, none where it names none; none where the window cannot tell. */
+export type CallRoute = (named: string | undefined) => CallRouteMachine | undefined;
+
+/**
+ * Where a call the agent makes now goes, as the service routes it
+ * (`machine-routing.ts`): the machine it names, found among those the agent
+ * may use, or else the one a call naming none goes to now. A call naming a
+ * machine the agent's tools do not list goes unnamed until it answers,
+ * rather than naming the default it does not go to.
+ */
+function callRouteOf(tools: WorkspaceToolsAnswer | undefined): CallRoute {
+  const routed = tools?.runOnMac?.machine;
+  const machines = tools?.machines ?? [];
+
+  return (named) => {
+    const machine = named === undefined ? routed : machines.find((listed) => listed.id === named);
+
+    return machine === undefined ? undefined : { id: machine.id, name: machine.name };
+  };
+}
+
+/** Where a call the agent makes now goes (`callRouteOf`), the same door while the agent's tools stand as they were. */
+export function useCallRoute(agentId: string | undefined): CallRoute {
+  const tools = useAgentTools(agentId);
+
+  return useMemo(() => callRouteOf(tools), [tools]);
 }
 
 /** The agent's default machine set on the service, a refusal said in a toast. */

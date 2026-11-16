@@ -43,8 +43,8 @@ export interface PullRequestComment {
 }
 
 /** The comment box's words and change, for the tab to hold across the box coming and going. */
-export function usePullRequestComment(agentId: string, onWritten: ReadAgain): PullRequestComment {
-  const writes = usePullRequestWrites(agentId, onWritten);
+export function usePullRequestComment(onWritten: ReadAgain): PullRequestComment {
+  const writes = usePullRequestWrites(onWritten);
   const [body, setBody] = useState("");
 
   return { writes, body, setBody };

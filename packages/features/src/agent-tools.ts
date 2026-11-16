@@ -88,8 +88,8 @@ export const AGENT_TOOL = {
   REPLY_TO_COMMENT: DESCRIPTION_COMMENT_TOOL.REPLY,
   UPDATE_COMMENT: DESCRIPTION_COMMENT_TOOL.UPDATE,
   READ_PAGE: "read_page",
-  // Pictures from a coding agent's sandbox, shown in its transcript.
-  SHOW_IMAGE: "show_image",
+  // Pictures, recordings, and sound clips from a coding agent's sandbox, shown in its transcript.
+  SHOW_MEDIA: "show_media",
   // A wakeup a coding agent books for later: its turn ends, and the prompt opens its next turn when due.
   SCHEDULE_WAKEUP: "schedule_wakeup",
   // A coding agent's turn ended in a short summary, the reply its developer reads, and the follow-ups it offers them.
@@ -138,8 +138,9 @@ export const CONNECTION_TOOL = {
  * with the Code and Board tabs, a voice call's question queue and
  * hang-up, removed with GPT Live, the memory's two tools, since named for
  * the memory, the plan comments' resolve and reopen, folded into
- * `update_comment`, and the plan's edit, renamed for the description it
- * edits.
+ * `update_comment`, the plan's edit, renamed for the description it
+ * edits, and the show of pictures, renamed for the sound clips it shows
+ * beside them.
  */
 export const RETIRED_TOOL = {
   WEB_FETCH: "web_fetch",
@@ -191,6 +192,8 @@ export const RETIRED_TOOL = {
   REOPEN_THREAD: "reopen_thread",
   // Renamed `edit_description`, as the task's document is its description.
   EDIT_PLAN: "edit_plan",
+  // Renamed `show_media`, as it shows sound clips beside pictures and recordings.
+  SHOW_IMAGE: "show_image",
 } as const;
 
 /**
@@ -201,7 +204,18 @@ export const RETIRED_TOOL = {
  */
 export const RENAMED_TOOL: ReadonlyMap<string, AgentTool> = new Map([
   [RETIRED_TOOL.EDIT_PLAN, AGENT_TOOL.EDIT_DESCRIPTION],
+  [RETIRED_TOOL.SHOW_IMAGE, AGENT_TOOL.SHOW_MEDIA],
 ]);
+
+/**
+ * Whether a call is one that showed the developer media from a coding
+ * agent's sandbox, under either of the names it is stored by: `show_image`,
+ * as a transcript written while it was offered by that name stores it, or
+ * `show_media`.
+ */
+export function isShowMediaTool(tool: string): boolean {
+  return tool === AGENT_TOOL.SHOW_MEDIA || tool === RETIRED_TOOL.SHOW_IMAGE;
+}
 
 /**
  * Claude Code's own tools, by the names its CLI calls them, which a coding

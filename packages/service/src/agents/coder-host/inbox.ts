@@ -136,7 +136,7 @@ const POST_THREAD_WORDS =
   "A card shows code from a blob link at the full 40-character commit you read it at, one already on GitHub, " +
   `ending #L<start>-L<end>, at most ${INBOX_BOUNDS.MAX_CODE_LINES} lines. ` +
   `Draw a picture as ![alt](<path> "caption"), its path in your sandbox, relative to the checkout or absolute: ` +
-  `a PNG, JPEG, or WebP of at most ${MAX_PICTURE_MB} MB, a WebM or MP4 video of at most ${MAX_VIDEO_MB} MB, which plays there, ` +
+  `a PNG, JPEG, or WebP of at most ${MAX_PICTURE_MB} MB, a WebM or MP4 video or a WAV, MP3, M4A, AAC, or Ogg sound clip of at most ${MAX_VIDEO_MB} MB, which plays there, ` +
   `or a PDF of at most ${MAX_PDF_MB} MB, kept as a file of the message; at most ${INBOX_BOUNDS.MAX_MESSAGE_PICTURES} a message, ` +
   "and pictures written next to each other stand side by side. " +
   "Draw the picture a message is about in it, since the thread's reader never sees a transcript. " +
@@ -380,8 +380,8 @@ const readThreadAsked = readEither(inboxReadThreadInputSchema);
 const PICTURE_REFUSALS: SandboxImageRefusals = {
   NO_FILE: "Not posted: a picture names no file in your sandbox:",
   NOT_IMAGE:
-    "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM or H.264 MP4 video that states its size, or a PDF:",
-  TOO_LARGE: `Not posted: a picture names a file larger than ${MAX_PICTURE_MB} MB, a video larger than ${MAX_VIDEO_MB} MB, or a PDF larger than ${MAX_PDF_MB} MB; render it smaller, or record a shorter flow:`,
+    "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM or H.264 MP4 video that states its size, a WAV, MP3, M4A, AAC, or Ogg sound clip, or a PDF:",
+  TOO_LARGE: `Not posted: a picture names a file larger than ${MAX_PICTURE_MB} MB, a video or a sound clip larger than ${MAX_VIDEO_MB} MB, or a PDF larger than ${MAX_PDF_MB} MB; render it smaller, or record a shorter flow or clip:`,
   UNREADABLE: "Not posted: a picture's file could not be read from your sandbox:",
 };
 
@@ -389,8 +389,8 @@ const PICTURE_REFUSALS: SandboxImageRefusals = {
 const OPTION_FILE_REFUSALS: SandboxImageRefusals = {
   NO_FILE: "Not posted: an option's media names no file in your sandbox:",
   NOT_IMAGE:
-    "Not posted: an option's media names a file that is not a PNG, JPEG, or WebP image, or a WebM or H.264 MP4 video that states its size:",
-  TOO_LARGE: `Not posted: an option's media names a file larger than ${MAX_PICTURE_MB} MB, or a video larger than ${MAX_VIDEO_MB} MB; render it smaller, or record a shorter flow:`,
+    "Not posted: an option's media names a file that is not a PNG, JPEG, or WebP image, a WebM or H.264 MP4 video that states its size, or a WAV, MP3, M4A, AAC, or Ogg sound clip:",
+  TOO_LARGE: `Not posted: an option's media names a file larger than ${MAX_PICTURE_MB} MB, or a video or a sound clip larger than ${MAX_VIDEO_MB} MB; render it smaller, or record a shorter flow or clip:`,
   UNREADABLE: "Not posted: an option's media file could not be read from your sandbox:",
 };
 

@@ -26,6 +26,7 @@ import {
   useReduceTransparency,
   useScaledSize,
 } from "./accessibility.js";
+import { AudioClip } from "./audio-clip.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { DOCK_FOLLOWS_KEYBOARD, useDockKeyboard, useDockRoom } from "./glass-bar.js";
@@ -46,6 +47,8 @@ import {
   CALL_STANDING,
   type CallStanding,
   type OriginPart,
+  SHOWN_MEDIA,
+  type ShownMedia,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptPlace,
@@ -584,6 +587,26 @@ interface RowDrawing {
 /** A pull request an agent opened, as the transcript lists it. */
 type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
 
+/** One thing a call showed, as its kind draws it: a picture, a recording in the system's player, or a sound clip in its strip. */
+function ShownMediaView({
+  shown,
+  source,
+  onOpenElsewhere,
+}: {
+  readonly shown: ShownMedia;
+  readonly source: string | undefined;
+  readonly onOpenElsewhere: (() => void) | undefined;
+}) {
+  switch (shown.kind) {
+    case SHOWN_MEDIA.VIDEO:
+      return <Video source={source} label={shown.label} onOpenElsewhere={onOpenElsewhere} />;
+    case SHOWN_MEDIA.AUDIO:
+      return <AudioClip source={source} label={shown.label} />;
+    case SHOWN_MEDIA.PICTURE:
+      return <Picture source={source} alt={shown.label} />;
+  }
+}
+
 /** One of the transcript's rows, as its kind draws it. */
 function TranscriptRow({
   item,
@@ -688,15 +711,11 @@ function TranscriptRow({
         <View style={[styles.row, inset(item.depth), styles.media]}>
           {item.media.map((shown) => (
             <View key={shown.id} style={{ gap: SPACE.TIGHT }}>
-              {shown.video ? (
-                <Video
-                  source={drawing.mediaSource(shown.id)}
-                  label={shown.label}
-                  onOpenElsewhere={drawing.onOpenElsewhere}
-                />
-              ) : (
-                <Picture source={drawing.mediaSource(shown.id)} alt={shown.label} />
-              )}
+              <ShownMediaView
+                shown={shown}
+                source={drawing.mediaSource(shown.id)}
+                onOpenElsewhere={drawing.onOpenElsewhere}
+              />
               {shown.caption === "" ? null : (
                 <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
                   {shown.caption}

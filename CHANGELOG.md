@@ -72,6 +72,67 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.37.0 — 2026-11-15
+
+### A cursor for each agent
+
+Each agent using an app on your Mac now moves a cursor of its own, gliding from
+one action to the next. While more than one agent's cursor is on screen, each
+wears a tag with its agent's name, so you can tell them apart; a lone cursor
+stays a bare arrow. Before, agents shared one cursor, and the latest to act took
+it over. A recording shows only its own agent's cursor.
+
+[#9530](https://github.com/ReviewStage/vespin/pull/9530),
+[#9533](https://github.com/ReviewStage/vespin/pull/9533)
+
+### Improvements
+
+- Settings › Cloud environment › Variables shows who added or last changed
+  each variable and when, copies a name with a click, and hides a config's
+  value until you reveal it
+  ([#9212](https://github.com/ReviewStage/vespin/pull/9212))
+- Opening an Inbox thread starts its agent, as opening its transcript does, so
+  your reply reaches a session that is already running
+  ([#9520](https://github.com/ReviewStage/vespin/pull/9520),
+  [#9526](https://github.com/ReviewStage/vespin/pull/9526))
+- A Claude Code agent's subagents work as Claude Code ships them: they can edit
+  and write files, start subagents of their own, and use Vespin's tools
+  ([#9512](https://github.com/ReviewStage/vespin/pull/9512))
+- A tool search's row reads Searched Slack tools for "send message", with the
+  server's chip, and ⌘F finds it by those words
+  ([#9514](https://github.com/ReviewStage/vespin/pull/9514),
+  [#9524](https://github.com/ReviewStage/vespin/pull/9524))
+- The side panel, its Pull request tab, and its code panes stand on the
+  window's own background, so they no longer read as a second, darker window
+  ([#9527](https://github.com/ReviewStage/vespin/pull/9527))
+- An agent's to-do updates fold in with the calls around them rather than
+  breaking a turn into separate rows
+  ([#9523](https://github.com/ReviewStage/vespin/pull/9523))
+- Opening a kind's row in the @ list writes its word, such as `@apps:`, so
+  what you type next searches inside it
+  ([#9536](https://github.com/ReviewStage/vespin/pull/9536))
+- A playing video's scrubber and time glide rather than jumping a quarter
+  second at a time
+  ([#9537](https://github.com/ReviewStage/vespin/pull/9537))
+- A task's description holds as many videos as it does pictures, up to 100
+  files in all ([#9521](https://github.com/ReviewStage/vespin/pull/9521))
+- An Inbox row whose thread waits on its agent after your reply says so,
+  rather than looking like it still waits on you
+  ([#9513](https://github.com/ReviewStage/vespin/pull/9513))
+
+### Fixes
+
+- Fixed a running call on a Mac naming the agent's default machine rather than
+  the one it ran on ([#9529](https://github.com/ReviewStage/vespin/pull/9529))
+- Fixed images a pull request's description links as `blob/…?raw=true` showing
+  as broken links ([#9534](https://github.com/ReviewStage/vespin/pull/9534))
+- Fixed the Inbox list drawing empty space where its rows should be
+  ([#9515](https://github.com/ReviewStage/vespin/pull/9515))
+- Fixed the sidebar showing a Done sub-task in a section while its parent was
+  hidden, hiding an open sub-task whose parent was hidden, and hiding a
+  Backlog or teammate's task you had put in a section
+  ([#9538](https://github.com/ReviewStage/vespin/pull/9538))
+
 ## 0.36.0 — 2026-11-15
 
 ### Cloud sandbox size
@@ -86,6 +147,8 @@ its next turn the agent is told that its sandbox grew.
 [#9481](https://github.com/ReviewStage/vespin/pull/9481),
 [#9488](https://github.com/ReviewStage/vespin/pull/9488),
 [#9489](https://github.com/ReviewStage/vespin/pull/9489)
+
+![Settings › Cloud environment in acme, its Sandbox section's Size menu open on 2 vCPUs · 4 GB marked Default, 4 vCPUs · 8 GB checked, and 8 vCPUs · 16 GB, over the Size row and the section's caption](apps/web/public/changelog/0.36.0/cloud-sandbox-size.png)
 
 ### Improvements
 

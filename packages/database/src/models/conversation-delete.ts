@@ -12,15 +12,15 @@ import { conversations } from "../schemas/storage.js";
  * the schema's own cascade takes each conversation's messages, turns, and
  * events, and every conversation delegated from it, a worker's under its
  * agent's, with it. Deleting the account cascades everything at once. The
- * sandbox a deleted conversation's session ran in is not deleted here: its
- * snapshots expire on Vercel's own schedule (`CODER.SANDBOX_SNAPSHOTS`),
- * seven days after it was last used.
+ * sandbox a deleted conversation's session ran in is not deleted here: the
+ * caller retires the session first, which deletes its sandbox
+ * (`retire-sessions.ts`). Note that a retire is best effort, so one that
+ * fails or times out leaves the sandbox and the delete goes on.
  *
  * Note that the cascade's cost is the conversation's own size: each child
  * table finds the rows it deletes through its conversation's or its turn's
  * index (`__tests__/conversation-delete.test.ts`), so even a long agent's
- * transcript is a few indexed deletes, which is what the cron's purge ran for
- * each conversation before.
+ * transcript is a few indexed deletes.
  */
 
 const deleteRows = SqlSchema.void({
