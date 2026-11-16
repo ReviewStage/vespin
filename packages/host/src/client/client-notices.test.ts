@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
+import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { AGENT_STATUS, type AgentStatus, type ListedAgent } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { Deferred, Effect, Exit, Layer, Scope } from "effect";
+import { APP_SETTING_DEFAULTS } from "@repo/settings";
+import { Deferred, Effect, Exit, Layer, Queue, Scope, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { type AgentNotice, AgentNoticeDoors, NOTICE_KIND } from "../agent-notices.js";
 import { type AppHostRead, type AppTranscript, OWN_TRANSCRIPT } from "../app-state.js";
 import { runModeFor } from "../run-mode.js";
+import type { TaskListMoved } from "../task-list-moved.js";
 import { recordingReporter } from "../testing/recording-reporter.js";
 import { AppStateStore, initialAppState } from "./app-state-store.js";
 import { linkClientNotices } from "./client-notices.js";
@@ -21,6 +24,8 @@ import { linkClientNotices } from "./client-notices.js";
  * window forward, and never while the panel is in front, where the prompt
  * itself stands; and an agent's own transcript, as a window holds it, notes
  * the agent's end, where no worker's transcript says anything of the agent.
+ * The tasks and agents come from the host's task list as each drawing moves
+ * them, never from the document.
  */
 
 const RUN = {
@@ -45,7 +50,8 @@ const SILENT_DOORS = Layer.succeed(AgentNoticeDoors, {
 /**
  * The notices linked into `scope` over a host whose workspaces read is
  * `workspacesRefresh`, with every report written to `reported`; the focus
- * listener the panel would call is answered by `focus()`.
+ * listener the panel would call is answered by `focus()`, and each drawing
+ * of the host's task list is handed in by `list()`.
  */
 function linked(
   scope: Scope.Closeable,
@@ -57,8 +63,10 @@ function linked(
 
   return Effect.gen(function* () {
     const state = new AppStateStore(initialAppState(RUN, false, []), yield* Effect.context());
+    const drawings = yield* Queue.unbounded<TaskListMoved>();
     yield* linkClientNotices({
       state,
+      taskList: Effect.succeed(Stream.fromQueue(drawings)),
       host: {
         agentAccountInboxFollow: () => Effect.void,
         agentAccountInboxUnfollow: () => Effect.void,
@@ -82,7 +90,12 @@ function linked(
       report: (message) => reported.push(message),
     }).pipe(Effect.provide(SILENT_DOORS), Scope.provide(scope));
 
-    return { focus: () => focus, state, forwarded: () => forward };
+    return {
+      focus: () => focus,
+      state,
+      forwarded: () => forward,
+      list: (moved: TaskListMoved) => Queue.offerUnsafe(drawings, moved),
+    };
   });
 }
 
@@ -210,8 +223,11 @@ const AGENT: ListedAgent = {
   repository: null,
 };
 
-/** The task list holding the task and its agent as `agent`. */
-const listing = (agent: ListedAgent) => ({ tasks: [TASK], taskAgents: [agent] });
+/** The task list drawn whole, holding the task and its agent as `agent`. */
+const listing = (agent: ListedAgent): TaskListMoved => ({
+  whole: true,
+  drawn: { tasks: [TASK], taskAgents: [agent] },
+});
 
 /** A transcript as the host holds it once `pages` pages were read, the last saying the agent, or the worker, stands at `status`. */
 function transcriptAt(status: AgentStatus, pages = 1): AppHostRead<AppTranscript> {
@@ -225,9 +241,9 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const scope = yield* Scope.make();
-      const { state } = yield* linked(scope, () => Effect.void, []);
+      const { state, list } = yield* linked(scope, () => Effect.void, []);
       const settled = Effect.repeat(Effect.yieldNow, { times: 20 });
-      state.update({ tasks: { ...state.snapshot().tasks, ...listing(AGENT) } });
+      list(listing(AGENT));
       yield* settled;
 
       const held = (...[worker, own]: readonly AgentStatus[]) => ({
@@ -264,7 +280,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const scope = yield* Scope.make();
-      const { state } = yield* linked(scope, () => Effect.void, []);
+      const { state, list } = yield* linked(scope, () => Effect.void, []);
       const settled = Effect.repeat(Effect.yieldNow, { times: 20 });
 
       const own = (read: AppHostRead<AppTranscript>) => ({
@@ -275,9 +291,7 @@ it.effect(
       const ended = transcriptAt(AGENT_STATUS.COMPLETED, 2);
       state.update(own(ended));
       yield* settled;
-      state.update({
-        tasks: { ...state.snapshot().tasks, ...listing({ ...AGENT, turnId: "turn-2" }) },
-      });
+      list(listing({ ...AGENT, turnId: "turn-2" }));
       yield* settled;
       // Held again, the host lays what it held anew, not yet caught up, as many pages read as before.
       const word = { status: AGENT_STATUS.COMPLETED, title: null, caughtUp: false };
@@ -302,7 +316,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const scope = yield* Scope.make();
-      const { state } = yield* linked(scope, () => Effect.void, []);
+      const { state, list } = yield* linked(scope, () => Effect.void, []);
       const settled = Effect.repeat(Effect.yieldNow, { times: 20 });
       const worker = { "call-7": transcriptAt(AGENT_STATUS.RUNNING) };
 
@@ -312,7 +326,7 @@ it.effect(
         },
       });
 
-      state.update({ tasks: { ...state.snapshot().tasks, ...listing(AGENT) } });
+      list(listing(AGENT));
       yield* settled;
 
       state.update(held(transcriptAt(AGENT_STATUS.RUNNING, 1)));
@@ -324,6 +338,55 @@ it.effect(
       state.update(held(transcriptAt(AGENT_STATUS.COMPLETED, 1)));
       yield* settled;
       assert.deepEqual(state.snapshot().agents.unseen, [AGENT.id]);
+
+      yield* Scope.close(scope, Exit.void);
+    }),
+);
+
+it.effect(
+  "a finish is titled by the name a drawing of the task list moved its task to, and an agent a drawing archived takes its dot with it",
+  () =>
+    Effect.gen(function* () {
+      posted.length = 0;
+      const scope = yield* Scope.make();
+      const { state, list } = yield* linked(scope, () => Effect.void, []);
+      const settled = Effect.repeat(Effect.yieldNow, { times: 20 });
+      const mine = { ...AGENT, startedBy: { userId: "user-dana", name: "Dana" } };
+      const ended = { ...mine, status: AGENT_STATUS.COMPLETED };
+      const settings = state.snapshot().settings;
+      state.update({
+        account: {
+          status: ACCOUNT_STATUS.SIGNED_IN,
+          id: "user-dana",
+          email: "dana@example.com",
+          provider: "github",
+        },
+        settings: {
+          experiments: {},
+          accountRead: true,
+          ...settings,
+          stored: { ...APP_SETTING_DEFAULTS, ...settings?.stored, turnNotifications: true },
+        },
+      });
+      list(listing(mine));
+      yield* settled;
+
+      list({
+        whole: false,
+        tasks: [{ was: TASK, now: { ...TASK, name: "Ship the louder chime" } }],
+        agents: [{ was: mine, now: ended }],
+      });
+      yield* settled;
+      yield* TestClock.adjust("2 seconds");
+      assert.deepEqual(
+        posted.map((notice) => notice.title),
+        ["Ship the louder chime"],
+      );
+      assert.deepEqual(state.snapshot().agents.unseen, [AGENT.id]);
+
+      list({ whole: false, tasks: [], agents: [{ was: ended, now: { ...ended, archivedAt: 2 } }] });
+      yield* settled;
+      assert.deepEqual(state.snapshot().agents.unseen, []);
 
       yield* Scope.close(scope, Exit.void);
     }),

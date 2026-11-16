@@ -1,4 +1,4 @@
-// thread-page.tsx -- an Inbox thread: its path small in the bar, a menu of what it opens, its title as the page's heading, then each message flat, its writer's face or tile, name and time in SwiftUI and its words, pictures, videos, and files in React Native views.
+// thread-page.tsx -- an Inbox thread: its path small in the bar, a menu of what it opens, its title as the page's heading, then each message flat, its writer's face or tile, name and time in SwiftUI and its words, pictures, videos, sound clips, and files in React Native views.
 
 import {
   HStack,
@@ -35,6 +35,7 @@ import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
+import { AudioClip } from "./audio-clip.js";
 import { BarContent } from "./bar-content.js";
 import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
@@ -68,10 +69,11 @@ const styles = StyleSheet.create({
   words: { paddingLeft: WORDS_INSET, paddingRight: SPACE.EDGE, gap: SPACE.ROW },
 });
 
-/** What a message's file is drawn as after its words: a picture, a video in the system's player, or any other file, such as a PDF, as its chip. */
+/** What a message's file is drawn as after its words: a picture, a video in the system's player, a sound clip in its strip, or any other file, such as a PDF, as its chip. */
 export const THREAD_MEDIA = {
   PICTURE: "picture",
   VIDEO: "video",
+  AUDIO: "audio",
   FILE: "file",
 } as const;
 
@@ -90,6 +92,13 @@ export type ThreadMedia =
       readonly label: string;
       /** Opens the video where it plays, such as its thread in Safari, for one the system's player cannot read. */
       readonly onOpenElsewhere?: (() => void) | undefined;
+    }
+  | {
+      readonly kind: typeof THREAD_MEDIA.AUDIO;
+      readonly key: string;
+      /** The clip's file under the app's caches, named by its type's extension; none while its bytes are on their way. */
+      readonly source: string | undefined;
+      readonly label: string;
     }
   | {
       readonly kind: typeof THREAD_MEDIA.FILE;
@@ -256,6 +265,8 @@ function MediaView({ media }: { readonly media: ThreadMedia }) {
       return (
         <Video source={media.source} label={media.label} onOpenElsewhere={media.onOpenElsewhere} />
       );
+    case THREAD_MEDIA.AUDIO:
+      return <AudioClip source={media.source} label={media.label} />;
     case THREAD_MEDIA.FILE:
       return (
         <FileChip
@@ -386,7 +397,12 @@ function MessageView({
           {writer.agent ? (
             <AgentTile name={writer.name} harness={writer.harness} size={MARK_SIZE.WRITER} />
           ) : (
-            <Avatar name={writer.name} picture={writer.picture} size={MARK_SIZE.WRITER} />
+            <Avatar
+              name={writer.name}
+              id={writer.id}
+              picture={writer.picture}
+              size={MARK_SIZE.WRITER}
+            />
           )}
           <Text
             modifiers={[

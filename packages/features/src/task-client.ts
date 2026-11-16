@@ -169,7 +169,6 @@ const UNANSWERED = { ok: false, failure: TASK_CALL_FAILURE.UNANSWERED } as const
 /** Why a keep the service refused in band was not kept, as the editor hears it. */
 const KEEP_REFUSED = {
   [DESCRIPTION_ATTACHMENT_REFUSAL.TOO_MANY]: PICTURE_KEEP_FAILURE.TOO_MANY,
-  [DESCRIPTION_ATTACHMENT_REFUSAL.TOO_MANY_VIDEOS]: PICTURE_KEEP_FAILURE.TOO_MANY_VIDEOS,
 } as const satisfies Record<
   (typeof DESCRIPTION_ATTACHMENT_REFUSAL)[keyof typeof DESCRIPTION_ATTACHMENT_REFUSAL],
   (typeof PICTURE_KEEP_FAILURE)[keyof typeof PICTURE_KEEP_FAILURE]

@@ -37,7 +37,6 @@ import {
   SettingsBlock,
   SettingsLine,
   SettingsRow,
-  SettingsRowActSlot,
   type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
   SettingsRowsFold,
@@ -238,6 +237,8 @@ const THIS_MAC_WORDS = {
   TURN_ON_FAILED: "Could not turn on this Mac. Try again.",
   NEEDS_APPROVAL: `macOS won't run agents on this Mac until you allow ${PRODUCT_NAME} in System Settings › General › Login Items.`,
   OPEN_LOGIN_ITEMS: "Open Login Items",
+  WONT_START: "Won't start",
+  WONT_START_DETAIL: `Agents can't run here, because the host quits as soon as it starts. Updating ${PRODUCT_NAME} may fix it.`,
   STILL_LISTED: `This Mac is off, but ${PRODUCT_NAME} couldn't remove it from your machines. Remove it from the list below.`,
   FOLDER_LEFT: "This Mac is off, but an agent's folder couldn't be deleted.",
 } as const;
@@ -311,8 +312,8 @@ function HostRow({
 /**
  * This Mac's row in the desktop app: Run agents on this Mac, on while its
  * host stands, what its host says while on, setting up until the service
- * lists it, failed while the app cannot start its host, and what it does
- * while off. Note that the row's words are This Mac,
+ * lists it, failed while the app cannot start its host, won't start while
+ * its host dies each time launchd starts it, and what it does while off. Note that the row's words are This Mac,
  * as every list of machines calls it, and the switch's own name says what
  * it sets.
  */
@@ -322,13 +323,14 @@ function ThisMacRow({
   on,
   needsApproval,
   setupFailed,
+  wontStart,
   facts,
   chevron,
   onChange,
 }: {
   /** What it lets agents do (`machineAgentFacts`). */
   facts: MachineAgentFacts | undefined;
-  /** The chevron of its settings' fold, after its switch. */
+  /** The chevron of its settings' fold, before its switch, as Computer use's stands before its own. */
   chevron: React.ReactNode;
   /** This Mac as the service lists it; none before it does. */
   host: HostLine | undefined;
@@ -338,13 +340,21 @@ function ThisMacRow({
   needsApproval: boolean;
   /** Whether the app could not start its host, and is trying again. */
   setupFailed: boolean;
+  /** Whether its host dies each time launchd starts it. */
+  wontStart: boolean;
   onChange: (next: boolean) => void;
 }): React.JSX.Element {
   const { mutate: openLoginItems } = useMutation(pressMutation(ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS));
-  // Note that a reader is told at once where this Mac's host could not be started, as the row turns to Failed.
+  // Note that a reader is told at once where this Mac's host could not be started, as the row turns to Failed or Won't start.
   useAnnounce(
     ANNOUNCE.ALERT,
-    on && setupFailed ? `${THIS_MAC} ${MACHINE_STANDING_WORDS[DEVICE_STANDING.FAILED]}` : "",
+    !on
+      ? ""
+      : setupFailed
+        ? `${THIS_MAC} ${MACHINE_STANDING_WORDS[DEVICE_STANDING.FAILED]}`
+        : wontStart
+          ? `${THIS_MAC} ${THIS_MAC_WORDS.WONT_START}`
+          : "",
   );
 
   const description = !on ? (
@@ -352,6 +362,10 @@ function ThisMacRow({
   ) : setupFailed ? (
     <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
       {MACHINE_STANDING_WORDS[DEVICE_STANDING.FAILED]}
+    </SettingsRowStateLine>
+  ) : wontStart ? (
+    <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
+      {THIS_MAC_WORDS.WONT_START}
     </SettingsRowStateLine>
   ) : host === undefined ? (
     <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN}>
@@ -372,10 +386,10 @@ function ThisMacRow({
         label={THIS_MAC}
         description={description}
         labelsControl
-        end={() => <SettingsRowActSlot />}
       >
         {(control) => (
           <>
+            {chevron}
             <Switch
               id={control.controlId}
               checked={on}
@@ -383,10 +397,20 @@ function ThisMacRow({
               describedBy={control["aria-describedby"]}
               onChange={(next) => onChange(next)}
             />
-            {chevron}
           </>
         )}
       </SettingsRow>
+      {/* Note that a host that dies as it starts says nothing itself, so the row says why agents can't run here. */}
+      {on && wontStart && !setupFailed ? (
+        <SettingsRow
+          label={null}
+          description={
+            <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
+              {THIS_MAC_WORDS.WONT_START_DETAIL}
+            </SettingsRowStateLine>
+          }
+        />
+      ) : null}
       {/* Note that macOS holds a registered agent until the member allows it, and only System Settings can, so the line opens it there. */}
       {on && needsApproval ? (
         <SettingsRow
@@ -777,6 +801,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
                     on={thisMacOn}
                     needsApproval={thisMac.needsApproval === true}
                     setupFailed={thisMac.setupFailed === true}
+                    wontStart={thisMac.wontStart === true}
                     facts={agentFacts(thisMacMachine?.id)}
                     chevron={chevron}
                     onChange={switchThisMac}

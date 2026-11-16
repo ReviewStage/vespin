@@ -1,5 +1,5 @@
 import { RUNNER_END, RUNNER_EVENT, type RunnerEnd } from "@repo/agent-runner/protocol";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_TOOL, WORKSPACE_MCP_WATCHED_META } from "@repo/features/agent-tools";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { TurnFilesSummarySchema, type TurnFilesSummaryView } from "@repo/features/turn-files-wire";
 import {
@@ -13,6 +13,7 @@ import {
   isWireString,
   type UnparsedWireValue,
   valueFromJsonText,
+  type WireRecord,
   type WireValue,
 } from "@repo/wire";
 import {
@@ -30,7 +31,8 @@ import { NATIVE_ENDING, NATIVE_MOMENT, type NativeMoment } from "./native-moment
  * harness's messages, the same for Claude Code and Codex: a line we handed
  * the harness, the launch waiting on work in flight, the connection to the
  * model's provider lost and answering again, the agent's turn over
- * with the launch kept warm, and the launch's end. A
+ * with the launch kept warm, a command killed out of memory, and the
+ * launch's end. A
  * tool's answer is settled the same way whichever harness ran it: our own
  * tool's as the JSON it answered, any other's as the text the model read.
  */
@@ -75,6 +77,16 @@ export function withoutNul(value: WireValue): WireValue {
       withoutNul(each),
     ]),
   );
+}
+
+/** What our tool's result carried for the people watching alone, out of its `_meta` (`WORKSPACE_MCP_WATCHED_META`); none where it carried none. */
+export function watchedOfMeta(meta: WireValue | null | undefined): WireRecord | undefined {
+  const value =
+    meta === undefined || meta === null || !isRecord(meta)
+      ? undefined
+      : meta[WORKSPACE_MCP_WATCHED_META];
+
+  return value !== undefined && isRecord(value) ? value : undefined;
 }
 
 /** What a picture in a tool's answer is kept as: the bytes went to the model once, and a transcript carries every byte it holds into each read. */
@@ -149,6 +161,10 @@ const readConnectionRestored = Schema.decodeUnknownOption(
 
 /** A move of the agent's goal the runner read where the harness's own stream says none (`claude-goals.ts`), its fields the goal notice's own. */
 const readGoal = Schema.decodeUnknownOption(GoalNoticeSchema);
+
+const readOutOfMemory = Schema.decodeUnknownOption(
+  Schema.Struct({ callId: Schema.String, memoryGb: Schema.Int.check(Schema.isGreaterThan(0)) }),
+);
 
 const readEnd = Schema.decodeUnknownOption(
   Schema.Struct({
@@ -270,6 +286,15 @@ export function runnerMoments(message: WireValue): Option.Option<readonly Native
           onNone: () => [],
         }),
       );
+    case RUNNER_EVENT.OUT_OF_MEMORY:
+      return Option.some(
+        Option.match(readOutOfMemory(message), {
+          onSome: ({ callId, memoryGb }): readonly NativeMoment[] => [
+            { kind: NATIVE_MOMENT.OUT_OF_MEMORY, callId, memoryGb },
+          ],
+          onNone: () => [],
+        }),
+      );
     // An ask and its settle are no moment of the run: the events route lands them apart (`runner-approvals.ts`).
     case RUNNER_EVENT.APPROVAL_REQUESTED:
     case RUNNER_EVENT.APPROVAL_RESOLVED:
@@ -293,17 +318,29 @@ const MACHINE_NOT_RUN = "not-run";
  * the text the model read or what the harness reported of the call. Note
  * that a machine tool's `not-run` is kept as its answer though the harness
  * flags it an error, because its row reads the machine, why, and the
- * missing grants from it, and nothing ran to fail.
+ * missing grants from it, and nothing ran to fail. What our tool's result
+ * carried for the people watching alone (`WORKSPACE_MCP_WATCHED_META`) is
+ * kept beside the answer the model read, under keys the answer leaves free.
  */
 export function toolAnswerSettlement(
   answer:
-    | { readonly workspaceTool: true; readonly name: string; readonly text: string }
+    | {
+        readonly workspaceTool: true;
+        readonly name: string;
+        readonly text: string;
+        readonly watched?: WireRecord | undefined;
+      }
     | { readonly workspaceTool: false; readonly text: string; readonly output: UnparsedWireValue },
   isError: boolean,
 ): ToolCallSettlement {
-  const output: UnparsedWireValue = answer.workspaceTool
+  const read: UnparsedWireValue = answer.workspaceTool
     ? withoutNul(valueFromJsonText(answer.text))
     : answer.output;
+
+  const watched = answer.workspaceTool ? answer.watched : undefined;
+
+  const output: UnparsedWireValue =
+    isRecord(read) && watched !== undefined ? withoutNul({ ...watched, ...read }) : read;
 
   const status = isRecord(output) && isWireString(output.status) ? output.status : undefined;
 

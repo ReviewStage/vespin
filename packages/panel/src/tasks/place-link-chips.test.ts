@@ -13,7 +13,6 @@ import {
   type Workspace,
   type WorkspaceMember,
 } from "@repo/features/workspace-wire";
-import type { AppStateSnapshot } from "@repo/host/app-state";
 import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -21,7 +20,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { MemberDirectory } from "../member-directory.js";
 import { FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { handMembers, signedInAs } from "../testing/app-state.js";
+import { handMembers, type ListedAppState, signedInAs } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { listedAgent } from "../testing/tasks-control.js";
@@ -80,7 +79,7 @@ const TASK: TaskSummary = {
 };
 
 /** Main's document holding the task, its agent, its page, and an Inbox item waiting on it. */
-const STATE: AppStateSnapshot = (() => {
+const STATE: ListedAppState = (() => {
   const snapshot = signedInAs({ id: SAM, email: "sam@example.com", name: "Sam Okafor" });
 
   return {
@@ -151,7 +150,7 @@ afterEach(() => {
 async function drawn(
   text: string,
   opened: LinkDestination[],
-  state: AppStateSnapshot = STATE,
+  state: ListedAppState = STATE,
 ): Promise<HTMLElement> {
   fakeActs({
     onAppState: () => () => undefined,
