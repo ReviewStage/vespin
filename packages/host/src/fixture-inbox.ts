@@ -690,7 +690,7 @@ const DIGEST_ITEMS: readonly InboxItem[] = [
   ),
 ];
 
-/** The rounding task's one item, closed by its agent once the question no longer stood. */
+/** The rounding task's items: one closed by its agent once the question no longer stood, and one whose ask the agent withdrew before posting on, so the line saying so stands between its messages. */
 const ROUNDING_ITEMS: readonly InboxItem[] = [
   item(
     21,
@@ -716,6 +716,27 @@ const ROUNDING_ITEMS: readonly InboxItem[] = [
       settledAt: LANDED - 4 * DAY + HOUR,
     },
   ),
+  // Note that the agent's three messages stand within a few minutes, so only the withdrawn ask's line between them splits them into two runs.
+  item(22, AGENT.ROUNDING, "tax-rounding", "Where the invoice's tax rounds", [
+    agentSaid(
+      320,
+      3 * DAY,
+      "Tax rounds per line today, so a three-line invoice can come out a cent off the tax on its total. Should it round once, on the total?",
+      {
+        type: INBOX_ASK.DECIDE,
+        options: [{ label: "Per line" }, { label: "On the total" }],
+        status: INBOX_ASK_STATUS.WITHDRAWN,
+        withdrawnReason: "The tax spec says to round once, on the total.",
+        withdrawnAt: LANDED - 3 * DAY + MINUTE,
+      },
+    ),
+    agentSaid(321, 3 * DAY - 2 * MINUTE, "Tax now rounds once, on the invoice's total."),
+    agentSaid(
+      322,
+      3 * DAY - 3 * MINUTE,
+      "Added a test with three lines whose per-line tax comes to a cent more than the total's.",
+    ),
+  ]),
 ];
 
 /** Each task's inbox, by the task's id. */
