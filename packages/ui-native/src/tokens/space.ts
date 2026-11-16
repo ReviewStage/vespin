@@ -60,6 +60,12 @@ export const RADIUS = {
   TAG: 6,
   /** A selected row's fill, set in from its column's edges, as Mail's selected mailbox and message stand. */
   SIDEBAR_ROW: 10,
+  /** A block set into words: a code block, a table, a picture, a video, a draft. */
+  BLOCK: 8,
+  /** A tile a press stands on: a file's chip, a choice's media, an attached picture. */
+  TILE: 12,
+  /** A message's bubble, as Messages rounds one. */
+  BUBBLE: 18,
 } as const;
 
 /**
