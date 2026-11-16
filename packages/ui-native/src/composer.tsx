@@ -8,6 +8,7 @@ import {
   Menu,
   ProgressView,
   TextField,
+  type TextFieldSelection,
   Toggle,
   useNativeState,
   VStack,
@@ -30,7 +31,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { longPasteIn } from "@repo/features/long-paste";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import { BAR_EDGE, BAR_ROW_SPACING, BarHead, GlassBar, useBarGlass } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
@@ -50,9 +51,12 @@ const COMPOSER_FOOT_UNMEASURED = SEND_SIZE + 2 * (SPACE.ROW + 2) + SPACE.ROW;
 
 /**
  * A press's frame in the composer's row: Apple's least target, its mark
- * centered in it, the whole frame taking the press. The bar's edge is thin
- * (`BAR_EDGE`) by as much as the frame stands past its mark, so the bar
- * draws as it did with its marks alone.
+ * centered in it. The bar's edge is thin (`BAR_EDGE`) by as much as the frame
+ * stands past its mark, so the bar draws as it did with its marks alone.
+ * Note that a plain mark's button wears it on its label, never on the button,
+ * so the whole frame takes the press: a borderless button or a menu answers
+ * only where its label is hit. The round button wears it on itself, for its
+ * place in the row alone, since its press is its circle's, as the system's is.
  */
 const PRESS_FRAME = [
   frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
@@ -108,8 +112,8 @@ const FIELD_LEADING = SPACE.ROW + 4 - BAR_EDGE;
 /** How far the field's words stand from Send's frame, which stands its round in by less than the row's spacing did. */
 const FIELD_TRAILING = SPACE.TIGHT;
 
-/** The most lines the field grows to before it scrolls its words. */
-const FIELD_LINES = 6;
+/** The most lines the field grows to before it scrolls its words; fewer at an accessibility size, where six of its lines with the keyboard up left the transcript over it no room. */
+const FIELD_LINES = { REGULAR: 6, LARGE: 3 } as const;
 
 /** What the + is named by, whether it opens one act or a menu. */
 const ADD_LABEL = "Add";
@@ -214,9 +218,14 @@ function SendButton({
     return (
       <Button
         onPress={onDictate}
-        modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel("Dictate")]}
+        modifiers={[buttonStyle("borderless"), accessibilityLabel("Dictate")]}
       >
-        <Image {...glyphImage(GLYPH.DICTATE)} size={dictateSize} color={colors.TEXT_MUTED} />
+        <Image
+          {...glyphImage(GLYPH.DICTATE)}
+          size={dictateSize}
+          color={colors.TEXT_MUTED}
+          modifiers={PRESS_FRAME}
+        />
       </Button>
     );
   }
@@ -246,8 +255,15 @@ function AddMenu({ menu, testId }: { readonly menu: ComposerMenu; readonly testI
 
   return (
     <Menu
-      label={<Image {...glyphImage(GLYPH.ADD)} size={addSize} color={colors.TEXT_MUTED} />}
-      modifiers={[...PRESS_FRAME, accessibilityLabel(ADD_LABEL), accessibilityIdentifier(testId)]}
+      label={
+        <Image
+          {...glyphImage(GLYPH.ADD)}
+          size={addSize}
+          color={colors.TEXT_MUTED}
+          modifiers={PRESS_FRAME}
+        />
+      }
+      modifiers={[accessibilityLabel(ADD_LABEL), accessibilityIdentifier(testId)]}
     >
       {menu.actions.map((action) => (
         <Button
@@ -304,12 +320,16 @@ export function AddPress({
       onPress={onAdd}
       modifiers={[
         buttonStyle("borderless"),
-        ...PRESS_FRAME,
         accessibilityLabel(ADD_LABEL),
         accessibilityIdentifier(testId),
       ]}
     >
-      <Image {...glyphImage(GLYPH.ADD)} size={addSize} color={colors.TEXT_MUTED} />
+      <Image
+        {...glyphImage(GLYPH.ADD)}
+        size={addSize}
+        color={colors.TEXT_MUTED}
+        modifiers={PRESS_FRAME}
+      />
     </Button>
   );
 }
@@ -332,6 +352,9 @@ function ComposerPieces(props: ComposerProps) {
   } = props;
 
   const text = useNativeState(held ?? "");
+  // Note that a field opening on words handed back, as a refused send's, stands its caret after them, as Messages keeps a draft's, rather than at their start.
+  const [opened] = useState(() => (held ?? "").length);
+  const caret = useNativeState<TextFieldSelection>({ start: opened, end: opened });
   const [typed, setTyped] = useState(held ?? "");
   const words = held ?? typed;
   // Note that the field is handed the holder's words only where they moved apart from what was typed, as a send empties them or a refusal hands them back.
@@ -355,6 +378,7 @@ function ComposerPieces(props: ComposerProps) {
   };
 
   const empty = words.trim() === "" && !sendable;
+  const lines = useAccessibilitySize() ? FIELD_LINES.LARGE : FIELD_LINES.REGULAR;
 
   const send =
     onSend === undefined
@@ -376,10 +400,11 @@ function ComposerPieces(props: ComposerProps) {
         placeholder={placeholder}
         axis="vertical"
         autoFocus={props.autoFocus === true}
+        {...(opened > 0 && { selection: caret })}
         onTextChange={type}
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-          lineLimit(FIELD_LINES),
+          lineLimit(lines),
           padding({
             vertical: FIELD_INSET,
             trailing: FIELD_TRAILING,

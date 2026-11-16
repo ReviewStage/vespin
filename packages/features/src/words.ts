@@ -66,6 +66,7 @@ export const MCP_SERVER_LABEL = {
  */
 export const FIELD_WORDS = {
   OPTIONAL: "Optional",
+  REQUIRED: "Required",
   SAVED: "Saved",
   SHOW: "Show",
   HIDE: "Hide",

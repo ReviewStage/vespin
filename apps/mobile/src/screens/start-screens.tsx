@@ -10,11 +10,16 @@ import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { agentName, providerOf } from "@repo/features/model-label";
+import { cardTitle } from "@repo/features/plain-words";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { type SuggestionRefusal, sentOf, suggestedChoice } from "@repo/features/suggestion-model";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
 import { REMOVE_RELATION, TASK_RELATION_MENU } from "@repo/features/task-relation-model";
-import { TASK_CREATE_RELATION_WORDS, TASK_STATUS_TONE } from "@repo/features/task-standing-words";
+import {
+  TASK_CREATE_RELATION_WORDS,
+  TASK_STATUS_TONE,
+  TASK_STATUS_WORDS,
+} from "@repo/features/task-standing-words";
 import {
   isTaskSettled,
   TASK_BOUNDS,
@@ -77,6 +82,8 @@ import { useWrite } from "../use-write.js";
 /** The panel's words for the sheets, their capsules, their menus, and their acts. */
 const WORDS = {
   NEW_AGENT: "New agent",
+  /** What VoiceOver hears for the task New agent starts on, which the capsule says with its ring and name alone. */
+  STARTS_ON: (task: string, status: string) => `Starts on ${task}, ${status}`,
   NEW_TASK: "New task",
   AGENT_PLACEHOLDER: "Ask to make changes",
   TASK_PLACEHOLDER: "Describe the task",
@@ -338,7 +345,11 @@ function RepositoryChip({
 
 type UseSheetStartResult = {
   readonly starting: boolean;
-  readonly go: (start: () => Promise<StartAnswer>, refusal?: string | undefined) => void;
+  readonly go: (
+    start: () => Promise<StartAnswer>,
+    refusal?: string | undefined,
+    brief?: string | undefined,
+  ) => void;
 };
 
 type Started = { answer?: StartAnswer };
@@ -421,7 +432,11 @@ function useSheetStart(
   const write = useWrite();
   const [starting, setStarting] = useState(false);
 
-  const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
+  const go = (
+    start: () => Promise<StartAnswer>,
+    refusal?: string | undefined,
+    brief?: string | undefined,
+  ) => {
     if (starting) return;
 
     if (refusal !== undefined) {
@@ -458,7 +473,15 @@ function useSheetStart(
           onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })),
         );
 
-        if (answer.agentId !== undefined) router.push(onTab(iosAgentRoute(answer.agentId)));
+        // Note that the agent's page is handed the title its brief reads as, which names it in the bar until the task list does, rather than a bare "Agent"; the title alone travels in the route, never the brief's whole words.
+        const title = brief === undefined ? "" : cardTitle(brief);
+
+        if (answer.agentId !== undefined) {
+          router.push({
+            pathname: onTab(iosAgentRoute(answer.agentId)),
+            params: title === "" ? {} : { brief: title },
+          });
+        }
       })
       .finally(() => setStarting(false));
   };
@@ -570,8 +593,9 @@ function offered(skills: SkillsOffered | undefined) {
 }
 
 /**
- * New agent on a task, as the panel's draft tab starts one: what to ask of
- * it and the pictures that go with it, the model and effort it runs on, the
+ * New agent on a task, as the panel's draft tab starts one: the task it
+ * starts on, named over the words, what to ask of it and the pictures that
+ * go with it, the model and effort it runs on, the
  * account's default until another is picked, and where it runs. Opened on a
  * suggestion (`opened`), it starts filled in with the suggestion's brief and
  * model under a line naming who suggested it, offers no Runs on, and its
@@ -595,6 +619,8 @@ export function NewAgentScreen({
   // Note that a suggestion's agent starts on its suggester's task, as the service starts it, so Start waits until that task is read.
   const suggestedTask = suggester?.taskId;
   const placed = opened === undefined || suggestedTask !== undefined;
+  const listed = useListedTasks();
+  const startsOn = listed.find((task) => task.id === (suggestedTask ?? taskId));
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
@@ -630,6 +656,8 @@ export function NewAgentScreen({
             })
           : startSuggested(opened.suggestion),
       pictures.refusal,
+      // Note that a suggestion's start is named by its own title where it has one, as the service names the agent.
+      opened?.suggestion.title ?? prompt.trim(),
     );
 
   return (
@@ -649,6 +677,7 @@ export function NewAgentScreen({
                 opened.suggestion.label,
               )
         }
+        head={startsOn === undefined ? undefined : <StartsOnChip task={startsOn} />}
         words={{
           placeholder: WORDS.AGENT_PLACEHOLDER,
           words: prompt,
@@ -673,6 +702,25 @@ export function NewAgentScreen({
         }
       />
     </>
+  );
+}
+
+/**
+ * The task New agent starts on, over its words as a capsule with the task's
+ * ring and name. Note that the panel starts an agent from a draft tab on the
+ * task's own page, which names the task, while this sheet covers that page,
+ * so it says which task the agent works on; it takes no press, since an agent
+ * starts only on the task it was opened from.
+ */
+function StartsOnChip({ task }: { readonly task: TaskSummary }) {
+  const status = task.status ?? TASK_STATUS.TODO;
+
+  return (
+    <FieldChip
+      label={task.name}
+      status={status}
+      heard={WORDS.STARTS_ON(task.name, TASK_STATUS_WORDS[status])}
+    />
   );
 }
 
@@ -912,6 +960,7 @@ export function NewTaskScreen({
           ...place,
         }),
       pictures.refusal,
+      prompt.trim(),
     );
   };
 

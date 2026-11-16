@@ -52,6 +52,9 @@ import {
   DeniesWaiting,
   DetailPage,
   drawnCallIds,
+  FOOTER_TONE,
+  FORM_SPACING,
+  footerToneOf,
   GLYPH,
   type Glyph,
   glyphSymbol,
@@ -588,13 +591,17 @@ function columnBarOf(doors: AgentBarDoors): ColumnBar {
         ...optionActs,
       ],
       submenus: [copy, ...run],
-      last: listed
+      groups: listed
         ? [
             {
-              label: MENU_WORDS.DELETE,
-              symbol: GLYPH.DELETE,
-              destructive: true,
-              onPress: doors.onDelete,
+              actions: [
+                {
+                  label: MENU_WORDS.DELETE,
+                  symbol: GLYPH.DELETE,
+                  destructive: true,
+                  onPress: doors.onDelete,
+                },
+              ],
             },
           ]
         : [],
@@ -644,13 +651,26 @@ export function AgentScreen() {
     id = "",
     suggestedBy,
     button,
-  } = useLocalSearchParams<{ id: string; suggestedBy?: string; button?: string }>();
+    brief,
+  } = useLocalSearchParams<{
+    id: string;
+    suggestedBy?: string;
+    button?: string;
+    /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
+    brief?: string;
+  }>();
 
-  const handed = useHandToDetail({ kind: PUSHED_PAGE.AGENT, agentId: id, suggestedBy, button });
+  const handed = useHandToDetail({
+    kind: PUSHED_PAGE.AGENT,
+    agentId: id,
+    suggestedBy,
+    button,
+    brief,
+  });
 
   if (handed) return null;
 
-  return <AgentConversation id={id} suggestedBy={suggestedBy} button={button} />;
+  return <AgentConversation id={id} suggestedBy={suggestedBy} button={button} brief={brief} />;
 }
 
 /**
@@ -666,12 +686,15 @@ export function AgentConversation({
   id,
   suggestedBy,
   button,
+  brief,
   inColumn = false,
   onLeave,
 }: {
   readonly id: string;
   readonly suggestedBy?: string | undefined;
   readonly button?: string | undefined;
+  /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
+  readonly brief?: string | undefined;
   /** Where the page goes once its agent is archived or deleted, where it stands as a detail's root, such as Search's pick; a pushed page leaves its stack, and a stack's screen goes back. */
   readonly onLeave?: (() => void) | undefined;
   /** Whether it stands pushed over a split view's detail rather than on a stack over the window. */
@@ -803,9 +826,10 @@ export function AgentConversation({
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
 
-  const title = cardTitle(
-    shown === undefined ? (transcript?.word?.title ?? UNLISTED_AGENT) : agentName(shown),
-  );
+  // Note that a title with no words left once read, such as a brief of code alone, falls back to "Agent" rather than a blank bar.
+  const title =
+    cardTitle(shown === undefined ? (transcript?.word?.title ?? brief ?? "") : agentName(shown)) ||
+    UNLISTED_AGENT;
 
   useScreenActivity((workspaces) =>
     shown === undefined
@@ -895,6 +919,11 @@ export function AgentConversation({
   };
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
+  // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
+  // Note that Copy transcript waits only for the transcript's first answer, failed or not, since the copy reads the whole transcript itself.
+  const copiable = held !== undefined;
+  const copyable = address !== undefined || copiable;
+  const openable = address !== undefined || openOptions !== undefined;
   const talk = useAgentTalk(id, shown?.taskId);
   const otherCall = useStandingCallCard(id);
 
@@ -1050,96 +1079,116 @@ export function AgentConversation({
     <>
       <Stack.Screen options={screenOptions} />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
-          {address === undefined ? null : (
-            <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.LINK)} onPress={actions.copyLink}>
-                {MENU_WORDS.COPY_LINK}
-              </Stack.Toolbar.MenuAction>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
-                onPress={() => openInSafari(address)}
-              >
-                {VERB.OPEN_IN_BROWSER}
-              </Stack.Toolbar.MenuAction>
-            </Stack.Toolbar.Menu>
-          )}
-          <Stack.Toolbar.Menu inline>
-            <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.COPY)} title={COPY_TRANSCRIPT_WORDS.COPY}>
-              <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.CONCISE)}>
-                {COPY_TRANSCRIPT_WORDS.CONCISE}
-              </Stack.Toolbar.MenuAction>
-              <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.FULL)}>
-                {COPY_TRANSCRIPT_WORDS.FULL}
-              </Stack.Toolbar.MenuAction>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(GLYPH.SHARE)}
-                onPress={() => shareTranscript(TRANSCRIPT_COPY.FULL)}
-              >
-                {COPY_TRANSCRIPT_WORDS.SHARE}
-              </Stack.Toolbar.MenuAction>
-            </Stack.Toolbar.Menu>
-          </Stack.Toolbar.Menu>
-          {agent === undefined ? null : (
-            <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RENAME)} onPress={askRename}>
-                {MENU_WORDS.RENAME}
-              </Stack.Toolbar.MenuAction>
-              {barActs ? null : (
-                <Stack.Toolbar.MenuAction
-                  icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
-                  onPress={actions.pin}
-                >
-                  {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
-                </Stack.Toolbar.MenuAction>
-              )}
-            </Stack.Toolbar.Menu>
-          )}
-          {openOptions === undefined ? null : (
-            <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.OPTIONS)} onPress={openOptions}>
-                {ADD_WORDS.OPTIONS}
-              </Stack.Toolbar.MenuAction>
-              {hasPorts ? (
-                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.PLUG)} onPress={openPorts}>
-                  {AGENT_PORTS_WORDS.PORTS}
-                </Stack.Toolbar.MenuAction>
-              ) : null}
-              {runActions.length === 0 ? null : (
-                <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.RUN)} title={RUN_ACTION_WORDS.SUBMENU}>
-                  {runActions.map((offered) => (
+        {copyable || openable ? (
+          <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
+            {/* Note that the groups keep the panel's order (`agentMenuGroups`): the copies, then the name, then where it opens, then archiving, and Permanently delete last and alone. */}
+            {copyable ? (
+              <Stack.Toolbar.Menu inline>
+                {address === undefined ? null : (
+                  <Stack.Toolbar.MenuAction
+                    icon={glyphSymbol(GLYPH.LINK)}
+                    onPress={actions.copyLink}
+                  >
+                    {MENU_WORDS.COPY_LINK}
+                  </Stack.Toolbar.MenuAction>
+                )}
+                {copiable ? (
+                  <Stack.Toolbar.Menu
+                    icon={glyphSymbol(GLYPH.COPY)}
+                    title={COPY_TRANSCRIPT_WORDS.COPY}
+                  >
                     <Stack.Toolbar.MenuAction
-                      key={offered.action.id}
-                      icon={glyphSymbol(offered.runs ? GLYPH.STOP : GLYPH.RUN)}
-                      subtitle={offered.runs ? RUN_ACTION_WORDS.RUNNING : offered.action.command}
-                      onPress={offered.onPress}
+                      onPress={() => copyTranscript(TRANSCRIPT_COPY.CONCISE)}
                     >
-                      {runActionMenuLabel(offered.action, offered.runs)}
+                      {COPY_TRANSCRIPT_WORDS.CONCISE}
                     </Stack.Toolbar.MenuAction>
-                  ))}
-                </Stack.Toolbar.Menu>
-              )}
-            </Stack.Toolbar.Menu>
-          )}
-          {agent === undefined || barActs ? null : (
-            <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.ARCHIVE)} onPress={askArchive}>
-                {MENU_WORDS.ARCHIVE}
-              </Stack.Toolbar.MenuAction>
-            </Stack.Toolbar.Menu>
-          )}
-          {agent === undefined ? null : (
-            <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(GLYPH.DELETE)}
-                destructive
-                onPress={() => setDeleting(true)}
-              >
-                {MENU_WORDS.DELETE}
-              </Stack.Toolbar.MenuAction>
-            </Stack.Toolbar.Menu>
-          )}
-        </Stack.Toolbar.Menu>
+                    <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.FULL)}>
+                      {COPY_TRANSCRIPT_WORDS.FULL}
+                    </Stack.Toolbar.MenuAction>
+                    <Stack.Toolbar.MenuAction
+                      icon={glyphSymbol(GLYPH.SHARE)}
+                      onPress={() => shareTranscript(TRANSCRIPT_COPY.FULL)}
+                    >
+                      {COPY_TRANSCRIPT_WORDS.SHARE}
+                    </Stack.Toolbar.MenuAction>
+                  </Stack.Toolbar.Menu>
+                ) : null}
+              </Stack.Toolbar.Menu>
+            ) : null}
+            {agent === undefined ? null : (
+              <Stack.Toolbar.Menu inline>
+                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RENAME)} onPress={askRename}>
+                  {MENU_WORDS.RENAME}
+                </Stack.Toolbar.MenuAction>
+                {barActs ? null : (
+                  <Stack.Toolbar.MenuAction
+                    icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
+                    onPress={actions.pin}
+                  >
+                    {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
+                  </Stack.Toolbar.MenuAction>
+                )}
+              </Stack.Toolbar.Menu>
+            )}
+            {openable ? (
+              <Stack.Toolbar.Menu inline>
+                {address === undefined ? null : (
+                  <Stack.Toolbar.MenuAction
+                    icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
+                    onPress={() => openInSafari(address)}
+                  >
+                    {VERB.OPEN_IN_BROWSER}
+                  </Stack.Toolbar.MenuAction>
+                )}
+                {openOptions === undefined ? null : (
+                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.OPTIONS)} onPress={openOptions}>
+                    {ADD_WORDS.OPTIONS}
+                  </Stack.Toolbar.MenuAction>
+                )}
+                {openOptions !== undefined && hasPorts ? (
+                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.PLUG)} onPress={openPorts}>
+                    {AGENT_PORTS_WORDS.PORTS}
+                  </Stack.Toolbar.MenuAction>
+                ) : null}
+                {openOptions === undefined || runActions.length === 0 ? null : (
+                  <Stack.Toolbar.Menu
+                    icon={glyphSymbol(GLYPH.RUN)}
+                    title={RUN_ACTION_WORDS.SUBMENU}
+                  >
+                    {runActions.map((offered) => (
+                      <Stack.Toolbar.MenuAction
+                        key={offered.action.id}
+                        icon={glyphSymbol(offered.runs ? GLYPH.STOP : GLYPH.RUN)}
+                        subtitle={offered.runs ? RUN_ACTION_WORDS.RUNNING : offered.action.command}
+                        onPress={offered.onPress}
+                      >
+                        {runActionMenuLabel(offered.action, offered.runs)}
+                      </Stack.Toolbar.MenuAction>
+                    ))}
+                  </Stack.Toolbar.Menu>
+                )}
+              </Stack.Toolbar.Menu>
+            ) : null}
+            {agent === undefined || barActs ? null : (
+              <Stack.Toolbar.Menu inline>
+                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.ARCHIVE)} onPress={askArchive}>
+                  {MENU_WORDS.ARCHIVE}
+                </Stack.Toolbar.MenuAction>
+              </Stack.Toolbar.Menu>
+            )}
+            {agent === undefined ? null : (
+              <Stack.Toolbar.Menu inline>
+                <Stack.Toolbar.MenuAction
+                  icon={glyphSymbol(GLYPH.DELETE)}
+                  destructive
+                  onPress={() => setDeleting(true)}
+                >
+                  {MENU_WORDS.DELETE}
+                </Stack.Toolbar.MenuAction>
+              </Stack.Toolbar.Menu>
+            )}
+          </Stack.Toolbar.Menu>
+        ) : null}
         {/* Note that a right bar's first item stands at its edge, so the ⋯ leads the list and Archive then Pin stand before it, as Mail stands its acts before More. Each glyph is named as the ⋯'s is, since a top bar loads an `xcasset` icon through React Native's image loader, which reads no symbol set, and drew an empty capsule. */}
         {barActs ? (
           <Stack.Toolbar.Button
@@ -1227,7 +1276,7 @@ export function AgentPage({
  * the model lists, Fast only where the model has a fast version; its
  * permission mode, each with what it does, where its harness takes one,
  * which takes effect from its next turn; and the connected MCP servers it is
- * handed, each with its switch, a server connected in Settings. Done closes
+ * handed, each with its switch, a server connected in Settings. Its checkmark closes
  * it.
  */
 export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
@@ -1258,13 +1307,17 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button onPress={() => router.back()}>
-          {OPTIONS_WORDS.DONE}
-        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CONFIRM)}
+          variant="done"
+          tintColor={colors.ACCENT}
+          accessibilityLabel={OPTIONS_WORDS.DONE}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
       <Screen>
-        <SettingsForm>
-          <ListSection footer={pick.note}>
+        <SettingsForm spacing={FORM_SPACING.COMPACT}>
+          <ListSection footer={pick.note} footerTone={FOOTER_TONE.FAILURE}>
             <MenuPickRow
               label={OPTIONS_WORDS.MODEL}
               options={pick.models}
@@ -1292,6 +1345,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
             <ListSection
               title={PERMISSION_MODE_WORDS.GROUP}
               footer={mode.note ?? PERMISSION_MODE_WORDS.APPLIES}
+              footerTone={footerToneOf(mode.note)}
             >
               <PickRows
                 options={mode.modes}
@@ -1304,7 +1358,11 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
               />
             </ListSection>
           )}
-          <ListSection title={MCP_SERVER_LABEL.many} footer={serversFooter}>
+          <ListSection
+            title={MCP_SERVER_LABEL.many}
+            footer={serversFooter}
+            footerTone={footerToneOf(servers.note)}
+          >
             {servers.servers.map((server) => (
               <SwitchRow
                 key={server.connection}
@@ -1336,7 +1394,7 @@ const PORT_ACT_WORDS = {
   [PORT_ACT.STOP_SHARING]: AGENT_PORTS_WORDS.STOP_SHARING,
 } as const satisfies Record<PortAct, string>;
 
-/** The Ports sheet's own words: its close. */
+/** The Ports sheet's own words: what VoiceOver hears its checkmark as. */
 const PORTS_WORDS = { DONE: "Done" } as const;
 
 /**
@@ -1347,7 +1405,7 @@ const PORTS_WORDS = { DONE: "Done" } as const;
  * and Sharing, and offers Open link, which opens it in Safari, Copy link,
  * and Stop sharing; while one is shared, another offers nothing, and where
  * none is listed, the panel's line says why. A share that did not go says
- * why under the list. Done closes it.
+ * why under the list. Its checkmark closes it.
  */
 export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
   const colors = useColors();
@@ -1384,14 +1442,19 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button onPress={() => router.back()}>
-          {PORTS_WORDS.DONE}
-        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CONFIRM)}
+          variant="done"
+          tintColor={colors.ACCENT}
+          accessibilityLabel={PORTS_WORDS.DONE}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
       <Screen>
-        <SettingsForm>
+        <SettingsForm spacing={FORM_SPACING.COMPACT}>
           <ListSection
             footer={ports.note ?? (ports.rows.length === 0 ? ports.none : ports.linkNote)}
+            footerTone={footerToneOf(ports.note)}
           >
             {ports.rows.map((row) => (
               <MenuRow
