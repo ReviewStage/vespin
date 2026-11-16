@@ -3,37 +3,24 @@
 import { useColorScheme } from "react-native";
 import { useIncreaseContrast } from "../accessibility.js";
 import { BRAND_COLOR } from "./brand-colors.js";
+import { STATUS_TONE, type StatusTone } from "./status-tone.js";
+
+export { STATUS_TONE, type StatusTone };
 
 /**
  * One theme's colors, by the role each names, and the roles derived from
- * them: the selected row's fill (`SELECTED`), and a grouped form's ground
- * (`GROUPED`) and the raised fill its rows stand in (`RAISED`).
+ * them: the selected row's fill (`SELECTED`), a grouped form's ground
+ * (`GROUPED`) and the raised fill its rows stand in (`RAISED`), and the fill
+ * of a card standing on the page's own ground (`CARD`).
  */
 export type BrandColors = {
-  readonly [Role in keyof typeof BRAND_COLOR.LIGHT | "SELECTED" | "GROUPED" | "RAISED"]: string;
+  readonly [Role in
+    | keyof typeof BRAND_COLOR.LIGHT
+    | "SELECTED"
+    | "GROUPED"
+    | "RAISED"
+    | "CARD"]: string;
 };
-
-/**
- * Where something stands, as its color says it: the same six tones
- * `@repo/ui`'s `status-tone.ts` names, so a task done reads in one green on
- * the Mac and the iPhone alike.
- */
-export const STATUS_TONE = {
-  /** At rest, or ended with nothing to say: backlog, todo, canceled. */
-  NEUTRAL: "neutral",
-  /** Still going, with nothing to do yet: a task in progress. */
-  WORKING: "working",
-  /** Needs a person: an ask waiting on you. */
-  ATTENTION: "attention",
-  /** Finished well: a task done, an agent finished. */
-  COMPLETE: "complete",
-  /** GitHub's shipped: a merged pull request. */
-  MERGED: "merged",
-  /** Failed, or can't go on. */
-  DANGER: "danger",
-} as const;
-
-export type StatusTone = (typeof STATUS_TONE)[keyof typeof STATUS_TONE];
 
 /** The role each tone inks with. */
 const TONE_ROLE = {
@@ -69,19 +56,30 @@ function strongerContrast(colors: BrandColors): BrandColors {
  * A grouped form's rows stand in the panel's raised fill (`OVERLAY`, its
  * menus' and popovers') on `grouped`, so they read as cards, as iOS
  * Settings' do: white on the light theme's soft gray, and a lifted gray on
- * the dark theme's black.
+ * the dark theme's black. A card on the page's ground, such as an ask's,
+ * takes the fill iOS sets a card in on a plain page (its secondary
+ * background): the soft gray on the light theme's white, where the brand's
+ * surface is the ground's own white and the card would read only by its
+ * hairline, and the lifted surface on the dark theme's black.
  */
 function theme(
   colors: (typeof BRAND_COLOR)[keyof typeof BRAND_COLOR],
   grouped: string,
+  card: string,
 ): BrandColors {
-  return { ...colors, SELECTED: colors.CHIP_EDGE, GROUPED: grouped, RAISED: colors.OVERLAY };
+  return {
+    ...colors,
+    SELECTED: colors.CHIP_EDGE,
+    GROUPED: grouped,
+    RAISED: colors.OVERLAY,
+    CARD: card,
+  };
 }
 
 // Note that the light theme's form ground is the chip's hover gray rather than the sidebar's, because the sidebar's #fafafa sits too near the cards' white to tell them apart.
 const THEME = {
-  LIGHT: theme(BRAND_COLOR.LIGHT, BRAND_COLOR.LIGHT.CHIP_HOVER),
-  DARK: theme(BRAND_COLOR.DARK, BRAND_COLOR.DARK.SIDEBAR),
+  LIGHT: theme(BRAND_COLOR.LIGHT, BRAND_COLOR.LIGHT.CHIP_HOVER, BRAND_COLOR.LIGHT.CHIP_HOVER),
+  DARK: theme(BRAND_COLOR.DARK, BRAND_COLOR.DARK.SIDEBAR, BRAND_COLOR.DARK.SURFACE),
 } as const;
 
 const STRONGER = {

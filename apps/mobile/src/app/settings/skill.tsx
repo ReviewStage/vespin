@@ -85,7 +85,7 @@ export default function SkillScreen() {
   const [read, setRead] = useState<SkillRead>({ kind: SKILL_READ.READING });
   const [round, setRound] = useState(0);
 
-  // Note that a skill's files change only by a new install, so the page reads them once as it opens, and again only on Retry.
+  // Note that a skill's files change only by a new install, so the page reads them once as it opens, and again only on Try again.
   useEffect(() => {
     let held = true;
     acts[ACT_KIND.INSTALLED_SKILLS_READ]({ skillId: skill })

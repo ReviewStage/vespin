@@ -113,12 +113,12 @@ export function rowLines(row: ServerRow, refusal: string | undefined): readonly 
 /**
  * What each row offers, and why its last act did not go: a grant (Connect,
  * Reconnect, or Try again) at its end, which opens the sign-in and waits on
- * it; Retry at the end of a connected one whose tools couldn't be read;
+ * it; Try again at the end of a connected one whose tools couldn't be read;
  * Cancel at the end of one waited on, Reopen in its menu; and, on one
  * connected, Rename where the provider holds several accounts, Add another
  * account where the provider offers it, and Disconnect, which asks first
  * (`onAsk`). A server that rides the account's GitHub sign-in offers only its
- * Retry here, as the desktop and the web connect it.
+ * Try again here, as the desktop and the web connect it.
  */
 function useIntegrationActs(
   statuses: IntegrationStatuses,

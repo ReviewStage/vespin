@@ -24,7 +24,9 @@ import {
   BUZZ,
   EmptyState,
   GLYPH,
+  glyphSymbol,
   ListSection,
+  NO_GROUND,
   Screen,
   SettingsForm,
   useColors,
@@ -36,6 +38,7 @@ import { useCallback, useRef, useState } from "react";
 import { chooseOver, useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { useSheetAtHalf } from "../sheet-stack.js";
 import { useTaskOverview } from "../tasks/use-tasks.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { selectPhotos, switcherWorkspace } from "../workspace-switcher.js";
@@ -87,6 +90,7 @@ export function useMoveTaskDoor(): (task: TaskSummary) => (() => void) | undefin
 export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
   const router = useRouter();
   const colors = useColors();
+  const half = useSheetAtHalf();
   const acts = useHostActs();
   const write = useWrite();
   const overview = useTaskOverview(taskId);
@@ -136,11 +140,15 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.GROUPED },
+          contentStyle: { backgroundColor: half ? NO_GROUND : colors.GROUPED },
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={WORDS.CANCEL}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button disabled={chosen === undefined} onPress={move}>
@@ -154,7 +162,7 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
     return (
       <>
         {bar}
-        <Screen>
+        <Screen clear={half}>
           <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         </Screen>
       </>
@@ -174,8 +182,8 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
   return (
     <>
       {bar}
-      <Screen>
-        <SettingsForm>
+      <Screen clear={half}>
+        <SettingsForm clear={half}>
           <ListSection title={moveTitle(task.name)} footer={effects}>
             <WorkspacePickRows
               options={targets.map((workspace) => ({
