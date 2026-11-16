@@ -35,6 +35,7 @@ import {
 } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { Effect, Layer, Match, Option } from "effect";
+import { TestClock } from "effect/testing";
 import { test } from "vitest";
 import {
   type AgentSessions,
@@ -69,12 +70,13 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  * What happens on a coding agent's pull request after its turn ends, told
  * to the agent as a message from GitHub: a review, a comment on the pull
  * request, and a failed check on its branch are read off their deliveries
- * and nothing else is; a person's review reaches the agent whether or not it
+ * and nothing else is; only the newest unarchived agent on the branch is
+ * told; a person's review reaches the agent whether or not it
  * is at work, a comment our own App made reaches only an agent idle since
  * before it was made, so an agent's own reply never wakes it, and a failed
- * check only an agent not at work; and every check on an agent's head
- * finished only the agent at work on that head, once GitHub says none is
- * left to finish; a check line names the checks that failed, and carries
+ * check only an agent not at work whose pull request stands on that head;
+ * and every check on an agent's head finished the agent on that head, at
+ * work or idle, once GitHub says none is left to finish; a check line names the checks that failed, and carries
  * each by its name, how it ended, and its page, where the head's checks
  * were read. Over a real dialect, the harness a fake at the client's boundary
  * and GitHub a script. Synthetic throughout.
@@ -86,7 +88,7 @@ const APP_BOT = "luke-agents[bot]";
 const MADE_AT = Date.parse("2026-10-16T12:00:00Z");
 
 /** One installation per test's workspace, since one installation connects to one workspace and the tests share a database. */
-const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 14 }, (_, index) => ({
+const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 16 }, (_, index) => ({
   id: 8_100 + index,
   login: RELAY.owner,
   accountId: 81_000 + index,
@@ -332,8 +334,9 @@ const endedTurn = (owner: string, conversationId: string, settledAt: number) =>
     }),
   );
 
-test("a review submitted, a comment on a pull request, a failed check suite or commit status on an agent's branch, and the merge queue taking an agent's open pull request out are read, each by who caused it and when, and nothing else is", () => {
-  const ref = "agent/invites";
+test("a review submitted, a comment on a pull request, a failed check suite or commit status on any branch, and the merge queue taking an open pull request out are read, each by who caused it and when, and nothing else is", () => {
+  // A branch of any name, since the agents on it are found in our own rows.
+  const ref = "fix/invites";
   assert.deepEqual(
     agentWakeOf("pull_request_review", unparsedWire(reviewDelivery(ref, "octocat")), 0),
     {
@@ -411,15 +414,14 @@ test("a review submitted, a comment on a pull request, a failed check suite or c
     updated_at: new Date(MADE_AT).toISOString(),
     repository,
     sender: { login: "buildkite[bot]", type: "Bot" },
-    // An agent's branch under the prefix agents worked on before, whose pull requests still stand open.
-    branches: [{ name: "main" }, { name: branch }, { name: "luke/another-agent" }],
+    branches: [{ name: "main" }, { name: branch }],
     description: "Never read.",
   });
 
   assert.deepEqual(agentWakeOf("status", unparsedWire(status(ref, "failure")), 0), {
     kind: AGENT_WAKE.CHECK_FAILED,
     repository: RELAY_FULL_NAME,
-    branches: [ref, "luke/another-agent"],
+    branches: ["main", ref],
     pullRequest: undefined,
     url: `https://github.com/${RELAY_FULL_NAME}/commit/4567cdef/checks`,
     by: "buildkite[bot]",
@@ -464,21 +466,20 @@ test("a review submitted, a comment on a pull request, a failed check suite or c
     // Taken out by hand, as the agent's own `gh pr merge --disable-auto` takes it out.
     ["pull_request", dequeued(ref, "MANUAL")],
     ["pull_request", dequeued(ref, "MERGE", { state: "closed", merged: true })],
-    ["pull_request", dequeued("main", "CI_FAILURE")],
     ["pull_request", dequeued(ref, "CI_FAILURE", { state: "open", merged: false }, "enqueued")],
     ["pull_request_review_comment", reviewDelivery(ref, "octocat", "created")],
     ["issue_comment", comment(false)],
     ["issue_comment", comment(true, "edited")],
     ["check_suite", suite(ref, "success")],
-    ["check_suite", suite("main", "failure")],
     ["status", status(ref, "pending")],
-    ["status", { ...status("release", "error"), branches: [{ name: "release" }] }],
+    // A commit no branch stands at.
+    ["status", { ...status(ref, "error"), branches: [] }],
   ] as const) {
     assert.equal(agentWakeOf(event, unparsedWire(payload), 0), undefined, event);
   }
 });
 
-test("a check suite or check run completed, whatever its conclusion, or a commit status set to its outcome, on an agent's branch says its head's checks may all have finished, and nothing else does", () => {
+test("a check suite or check run completed, whatever its conclusion, or a commit status set to its outcome, on a branch says its head's checks may all have finished, and nothing else does", () => {
   const ref = "luke/invites";
 
   const suite = (action: string, branch: string | null, conclusion: string | null) => ({
@@ -555,25 +556,23 @@ test("a check suite or check run completed, whatever its conclusion, or a commit
   });
   assert.deepEqual(
     checksCompletedWakeOf("status", unparsedWire(status("success", ["main", ref])), 0),
-    { ...finished, pullRequest: undefined, by: "buildkite[bot]" },
+    { ...finished, branches: ["main", ref], pullRequest: undefined, by: "buildkite[bot]" },
   );
 
   for (const [event, payload] of [
     ["check_suite", suite("requested", ref, null)],
-    ["check_suite", suite("completed", "main", "success")],
     // A fork's branch, which GitHub names as none.
     ["check_suite", suite("completed", null, "success")],
     ["check_run", run("created", ref)],
-    ["check_run", run("completed", "release")],
     ["status", status("pending", [ref])],
-    ["status", status("success", ["main"])],
+    ["status", status("success", [])],
     ["pull_request_review", reviewDelivery(ref, "octocat")],
   ] as const) {
     assert.equal(checksCompletedWakeOf(event, unparsedWire(payload), 0), undefined, event);
   }
 });
 
-test("a person's review reaches an agent at work or not, Vespin's App's only an agent idle since before it was made, a failed check only an agent idle since before it failed, and an archived agent nothing", () => {
+test("a person's review and every check finished reach an agent at work or not, Vespin's App's review only an agent idle since before it was made, a failed check only an agent idle since before it failed, and an archived agent nothing", () => {
   const review = (by: string): AgentWake => ({
     kind: AGENT_WAKE.REVIEW,
     repository: RELAY_FULL_NAME,
@@ -611,8 +610,8 @@ test("a person's review reaches an agent at work or not, Vespin's App's only an 
   const finished: AgentWake = { ...failed, kind: AGENT_WAKE.CHECKS_COMPLETED, sha: HEAD };
   assert.deepEqual(
     [idleBefore, endedSince, atWork].map((at) => woken(finished, at)),
-    [false, false, true],
-    "every check finished reaches only an agent at work, which waits on them",
+    [true, true, true],
+    "every check finished reaches an agent at work or idle, which waits on them either way",
   );
   assert.equal(
     agentIsWoken(
@@ -721,7 +720,7 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
   );
 
   it.effect(
-    "a person's review is told to the agent on the branch once under the delivery's id, drawn as theirs, and Vespin's App's reply made while the agent was at work is told to nobody",
+    "a person's review is told to the newest unarchived agent on the branch once under the delivery's id, drawn as theirs, and Vespin's App's reply made while the agent was at work is told to nobody",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
@@ -775,6 +774,34 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
           Effect.provide(github),
         );
 
+        // A newer agent on the branch, as one continued or forked from it stands: only it is told.
+        yield* TestClock.adjust("1 second");
+        const newer = yield* openAgent;
+        yield* updateAgentBranch(newer.owner, newer.agent.id, ref);
+        const toNewer = randomUUID();
+
+        const newest = yield* wakeAgents(agentSessions.sessionsFor, wake, toNewer, APP_BOT).pipe(
+          Effect.provide(github),
+        );
+
+        const linesOf = (who: { owner: string; agent: { conversationId: string } }) =>
+          Effect.map(
+            readMessageByClientId(who.owner, who.agent.conversationId, {}, sentLineId(toNewer)),
+            (lines) => (lines.ok ? lines.value.length : 0),
+          );
+
+        assert.deepEqual([yield* linesOf(newer), yield* linesOf({ owner, agent })], [1, 0]);
+
+        // The newer one archived, the agent beneath it is the newest again.
+        yield* archiveAgent(newer.owner, newer.agent.id, true);
+
+        const beneath = yield* wakeAgents(
+          agentSessions.sessionsFor,
+          wake,
+          randomUUID(),
+          APP_BOT,
+        ).pipe(Effect.provide(github));
+
         yield* archiveAgent(owner, agent.id, true);
 
         const archived = yield* wakeAgents(
@@ -784,7 +811,10 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
           APP_BOT,
         ).pipe(Effect.provide(github));
 
-        assert.deepEqual([own, archived, agentSessions.sent.length], [0, 0, 1]);
+        assert.deepEqual(
+          [own, newest, beneath, archived, agentSessions.sent.length],
+          [0, 1, 1, 0, 3],
+        );
       }),
   );
 
@@ -795,6 +825,7 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
         const agentSessions = fakeAgentSessions();
         const { owner, agent, ref, target } = yield* openAgent;
         yield* endedTurn(owner, agent.conversationId, MADE_AT - 60_000);
+        yield* publishedAt(owner, agent.id, HEAD);
         const github = githubReaching(INSTALLATIONS).layer;
 
         const heardAfter = (wake: AgentWake | undefined) =>
@@ -1002,6 +1033,7 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
         const agentSessions = fakeAgentSessions();
         const { owner, agent, ref } = yield* openAgentOn(GITHUB_ACCESS.TOKEN);
         yield* endedTurn(owner, agent.conversationId, MADE_AT - 60_000);
+        yield* publishedAt(owner, agent.id, HEAD);
 
         const failed: AgentWake = {
           kind: AGENT_WAKE.CHECK_FAILED,
@@ -1011,6 +1043,7 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
           url: `https://github.com/${RELAY_FULL_NAME}/commit/${HEAD}/checks`,
           by: "github-actions[bot]",
           at: MADE_AT,
+          sha: HEAD,
         };
 
         yield* wakeAgents(agentSessions.sessionsFor, failed, randomUUID(), APP_BOT).pipe(
@@ -1253,8 +1286,13 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
 
         const read = yield* openAgent;
         yield* endedTurn(read.owner, read.agent.conversationId, MADE_AT - 60_000);
+        yield* publishedAt(read.owner, read.agent.id, HEAD);
         const unread = yield* openAgent;
         yield* endedTurn(unread.owner, unread.agent.conversationId, MADE_AT - 60_000);
+        yield* publishedAt(unread.owner, unread.agent.id, HEAD);
+        // An agent that ended its turn on the branch with no pull request at the failed commit is not told.
+        const branchOnly = yield* openAgent;
+        yield* endedTurn(branchOnly.owner, branchOnly.agent.conversationId, MADE_AT - 60_000);
 
         const holding = githubHoldingChecks({
           checkRuns: [
@@ -1283,6 +1321,14 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
           APP_BOT,
         ).pipe(Effect.provide(failing));
 
+        const untold = yield* wakeAgents(
+          agentSessions.sessionsFor,
+          failedOn(branchOnly.ref),
+          randomUUID(),
+          APP_BOT,
+        ).pipe(Effect.provide(holding));
+
+        assert.equal(untold, 0);
         const [named, told] = agentSessions.sent;
 
         const close =
@@ -1327,7 +1373,7 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
   );
 
   it.effect(
-    "every check finished tells no agent idle since, none whose pull request has moved past that commit, and none where there are no checks at all",
+    "every check finished tells an agent idle since, none whose pull request has moved past that commit, and none where there are no checks at all",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
@@ -1375,8 +1421,8 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
         held.checkRuns = [];
         told.push(yield* deliver(unchecked.ref));
 
-        assert.deepEqual(told, [0, 0, 0]);
-        assert.deepEqual(agentSessions.sent, []);
+        assert.deepEqual(told, [1, 0, 0]);
+        assert.equal(agentSessions.sent.length, 1);
       }),
   );
 });
