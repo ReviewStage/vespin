@@ -1,0 +1,140 @@
+2026-11-16 10:06:31.408 Db Vespin[64157:a3a45bf] [com.apple.FrontBoard:SceneExtension] registering method "wantsDismissInteraction" from extension <_UISceneZoomTransitionSettings> on class "FBSSceneSettings"
+2026-11-16 10:06:31.408 Db Vespin[64157:a3a45bf] [com.apple.FrontBoard:SceneExtension] registering method "setWantsDismissInteraction:" from extension <_UISceneZoomTransitionSettings> on class "FBSSceneSettings"
+2026-11-16 10:06:31.424 Db Vespin[64157:a3a45c3] [com.apple.BaseBoard:Common] [rdar://100354962] Fixing incorrect property returned by protocol_copyPropertyList2() for "error": required --> optional
+2026-11-16 10:06:31.424 Db Vespin[64157:a3a45c3] [com.apple.FrontBoard:SceneExtension] registering method "error" from extension FBSSceneTransitionContextCore on class "FBSSceneTransitionContext"
+2026-11-16 10:06:31.424 Db Vespin[64157:a3a45c3] [com.apple.FrontBoard:SceneExtension] registering method "setError:" from extension FBSSceneTransitionContextCore on class "FBSSceneTransitionContext"
+    NSExceptionDomains =     {
+            NSExceptionAllowsInsecureHTTPLoads = 1;
+            NSExceptionMinimumTLSVersion = "TLSv1.0";
+            NSExceptionRequiresForwardSecrecy = 0;
+            NSExceptionAllowsInsecureHTTPLoads = 1;
+            NSExceptionMinimumTLSVersion = "TLSv1.2";
+            NSExceptionRequiresForwardSecrecy = 0;
+            NSExceptionAllowsInsecureHTTPLoads = 1;
+            NSExceptionMinimumTLSVersion = "TLSv1.0";
+            NSExceptionRequiresForwardSecrecy = 0;
+            NSExceptionAllowsInsecureHTTPLoads = 1;
+)} (error: (null))
+2026-11-16 10:06:31.857 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:31.878 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:31.889 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:31.892 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:31.892 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:31.895 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:31.895 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:31.896 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:31.896 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:31.896 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:31.896 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:31.896 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:32.014 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:32.026 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:32.027 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:32.034 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:32.114 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:32.123 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:32.126 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:32.128 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x10da68a00> (F83C1F9B-C6A4-4E1F-AC56-E3FDE7CA5C05)
+2026-11-16 10:06:32.162 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.163 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.186 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.189 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.197 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.197 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.197 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.197 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.200 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.200 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.208 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.208 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.208 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.213 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.215 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.
+2026-11-16 10:06:32.215 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.222 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.223 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.ves
+2026-11-16 10:06:32.281 Df Vespin[64157:a3a44f8] [com.apple.UIKit:InterfaceStyle] Push traits update to screen for new style 1, <_UIKeyboardInputScene: 0x10e91c280> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.
+2026-11-16 10:06:32.332 I  Vespin[64157:a3a45e1] [dev.expo.modules:expo] 🟢 Registering module 'ExpoPushTokenManager'
+2026-11-16 10:06:32.341 I  Vespin[64157:a3a45e1] [dev.expo.modules:expo] 🟢 Registering module 'ExpoRouterNativeLinkPreview'
+2026-11-16 10:06:32.341 I  Vespin[64157:a3a45e1] [dev.expo.modules:expo] 🟢 Registering module 'ExpoRouterToolbarModule'
+)} (error: (null))
+2026-11-16 10:06:32.417 Df Vespin[64157:a3a44f8] [com.apple.activitykit:pushToken] Activated ActivityPushTokenClient connection
+2026-11-16 10:06:32.421 I  Vespin[64157:a3a45bf] [com.apple.activitykit:pushToken] Push Service: Activated
+2026-11-16 10:06:32.426 Df Vespin[64157:a3a45bf] [com.apple.activitykit:pushToken] Push tokens changed: [:]
+2026-11-16 10:06:32.477 Df Vespin[64157:a3a45c0] [com.apple.activitykit:api] Push token is not available; waiting for next update
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
+2026-11-16 10:06:33.008 I  Vespin[64157:a3a45e1] [dev.expo.modules:expo] 🟢 Creating JS object for module 'ExpoPushTokenManager'
+2026-11-16 10:06:33.027 I  Vespin[64157:a3a45e1] [dev.expo.modules:expo] 🟢 Creating JS object for module 'ExpoRouterNativeLinkPreview'
+)} (error: (null))
+2026-11-16 10:06:33.098 I  Vespin[64157:a3a45e1] [dev.expo.modules:expo] 🟢 Creating JS object for module 'ExpoRouterToolbarModule'
+                "inbox-settled-push" =                 {
+                    name = "inbox-settled-push";
+)} (error: (null))
+2026-11-16 10:06:33.603 Df Vespin[64157:a3a45c1] [com.apple.activitykit:pushToken] Push tokens changed: ["dev.vespin.ios::pushToStart": 128 bytes]
+2026-11-16 10:06:33.603 Df Vespin[64157:a3a45eb] [com.apple.activitykit:api] Emitting push token 128 bytes
+)} (error: (null))
+2026-11-16 10:06:33.904 I  Vespin[64157:a3a45c1] [com.apple.CFNetwork:Default] TLD info from asset location is unavailable or too old. Falling back to builtin
+2026-11-16 10:06:34.045 I  Vespin[64157:a3a45c1] [com.apple.network:connection] nw_resolver_host_resolve_callback [C1.1.1] flags=0x40000003 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv6#644852b8 ttl=3785
+2026-11-16 10:06:34.048 I  Vespin[64157:a3a45c1] [com.apple.network:connection] nw_resolver_host_resolve_callback [C1.1.1] flags=0x40000003 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv6#8e3898d7 ttl=3785
+2026-11-16 10:06:34.049 I  Vespin[64157:a3a45c1] [com.apple.network:connection] nw_resolver_host_resolve_callback [C1.1.1] flags=0x40000003 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv6#584471cf ttl=3785
+2026-11-16 10:06:34.049 I  Vespin[64157:a3a45c1] [com.apple.network:connection] nw_resolver_host_resolve_callback [C1.1.1] flags=0x40000003 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv6#d5eac6ec ttl=3785
+2026-11-16 10:06:34.050 I  Vespin[64157:a3a45c1] [com.apple.network:connection] nw_resolver_host_resolve_callback [C1.1.1] flags=0x40000003 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv4#eafe98ec ttl=2877
+2026-11-16 10:06:34.050 I  Vespin[64157:a3a45c1] [com.apple.network:connection] nw_resolver_host_resolve_callback [C1.1.1] flags=0x40000003 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv4#e18c57d9 ttl=2877
+2026-11-16 10:06:34.050 I  Vespin[64157:a3a45c1] [com.apple.network:connection] nw_resolver_host_resolve_callback [C1.1.1] flags=0x40000003 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv4#9f5df5a2 ttl=2877
+2026-11-16 10:06:34.051 I  Vespin[64157:a3a45c1] [com.apple.network:connection] nw_resolver_host_resolve_callback [C1.1.1] flags=0x40000002 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv4#b07923d6 ttl=2877
+2026-11-16 10:06:34.118 Db Vespin[64157:a3a44f8] [com.apple.defaults:User Defaults] found no value for key LogUINavigationController in CFPrefsSearchListSource<0x10ad64820> (Domain: com.apple.UIKit, Container: (null) Non-launch persona: 0)
+2026-11-16 10:06:34.154 I  Vespin[64157:a3a45c3] [com.apple.network:connection] nw_endpoint_resolver_receive_report [C1.1.1 Hostname#2a2d1a9d:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], expensive, constrained, uses wifi, LQ
+2026-11-16 10:06:34.169 I  Vespin[64157:a3a45eb] [com.apple.network:connection] nw_resolver_host_resolve_callback [C2.1.1] flags=0x40000003 ifindex=0 error=NoSuchRecord(-65554) hostname=github.com. addr=IN6ADDR_ANY ttl=1439
+2026-11-16 10:06:34.169 I  Vespin[64157:a3a45eb] [com.apple.network:connection] nw_resolver_host_resolve_callback [C2.1.1] flags=0xc0000002 ifindex=0 error=NoError(0) hostname=github.com. addr=IPv4#8cea572e ttl=73
+2026-11-16 10:06:34.203 I  Vespin[64157:a3a45c0] [com.apple.network:connection] nw_resolver_host_resolve_callback [C2.1.1] flags=0x2 ifindex=0 error=NoError(0) hostname=github.com. addr=IPv4#08e7495f ttl=80
+2026-11-16 10:06:34.224 I  Vespin[64157:a3a45eb] [com.apple.network:connection] nw_endpoint_resolver_receive_report [C2.1.1 Hostname#e4bd930b:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], expensive, constrained, uses wifi, LQ
+2026-11-16 10:06:35.156 Db Vespin[64157:a3a44f8] [com.apple.defaults:User Defaults] found no value for key UseDesktopNavigationBar in CFPrefsSearchListSource<0x107d9c5f0> (Domain: dev.vespin.ios, Container: (null) Non-launch persona: 0)
+2026-11-16 10:06:35.485 Db Vespin[64157:a3a45c3] [com.apple.corespotlight:default] ~~~ retryIfNecessaryWithError: (null)
+2026-11-16 10:06:35.718 Db Vespin[64157:a3a44f8] [com.apple.UIKit:_UIScrollPocketBarInteraction] <_UIScrollPocketBarInteraction: 0x1205ab100; owner: <RNSNavigationBar: 0x120641200>> updated receivers to <_UIScrollEdgeEffectViewInteraction: 0x1233c7700>
+2026-11-16 10:06:35.718 Db Vespin[64157:a3a44f8] [com.apple.UIKit:_UIScrollPocketBarInteraction] Add/invalidate bar interaction <_UIScrollPocketBarInteraction: 0x1205ab100; owner: <RNSNavigationBar: 0x120641200>> on receiver <_UIScrollEdgeEffectViewInteraction
+2026-11-16 10:06:36.063 Db Vespin[64157:a3a44f8] [com.apple.UIKit:_UIScrollPocketBarInteraction] Add/invalidate bar interaction <_UIScrollPocketBarInteraction: 0x1205ab100; owner: <RNSNavigationBar: 0x120641200>> on receiver <_UIScrollEdgeEffectViewInteraction
+)} (error: (null))
+)} (error: (null))
+2026-11-16 10:06:38.307 Db Vespin[64157:a3a44f8] [com.apple.UIKit:_UIScrollPocketBarInteraction] Removing bar interaction <_UIScrollPocketBarInteraction: 0x1205ab100; owner: <RNSNavigationBar: 0x120641200>> from <_UIScrollEdgeEffectViewInteraction: 0x1233c7700
+2026-11-16 10:06:38.307 Db Vespin[64157:a3a44f8] [com.apple.UIKit:_UIScrollPocketBarInteraction] <_UIScrollPocketBarInteraction: 0x1205ab100; owner: <RNSNavigationBar: 0x120641200>> updated receivers to
+2026-11-16 10:06:38.378 Db Vespin[64157:a3a44f8] [com.apple.UIKit:_UIScrollPocketBarInteraction] <_UIScrollPocketBarInteraction: 0x122d94a80; owner: <RNSNavigationBar: 0x120642100>> updated receivers to <_UIScrollEdgeEffectViewInteraction: 0x1253be580>
+2026-11-16 10:06:38.378 Db Vespin[64157:a3a44f8] [com.apple.UIKit:_UIScrollPocketBarInteraction] Add/invalidate bar interaction <_UIScrollPocketBarInteraction: 0x122d94a80; owner: <RNSNavigationBar: 0x120642100>> on receiver <_UIScrollEdgeEffectViewInteraction
+)} (error: (null))
+)} (error: (null))
+2026-11-16 10:06:42.054 I  Vespin[64157:a3a4b10] [com.apple.network:connection] nw_resolver_host_resolve_callback [C3.1.1] flags=0x40000003 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv6#644852b8 ttl=3785
+2026-11-16 10:06:42.054 I  Vespin[64157:a3a4b10] [com.apple.network:connection] nw_resolver_host_resolve_callback [C3.1.1] flags=0x40000003 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv6#8e3898d7 ttl=3785
+2026-11-16 10:06:42.054 I  Vespin[64157:a3a4b10] [com.apple.network:connection] nw_resolver_host_resolve_callback [C3.1.1] flags=0x40000003 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv6#584471cf ttl=3785
+2026-11-16 10:06:42.054 I  Vespin[64157:a3a4b10] [com.apple.network:connection] nw_resolver_host_resolve_callback [C3.1.1] flags=0x40000003 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv6#d5eac6ec ttl=3785
+2026-11-16 10:06:42.054 I  Vespin[64157:a3a4b10] [com.apple.network:connection] nw_resolver_host_resolve_callback [C3.1.1] flags=0x40000003 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv4#eafe98ec ttl=2877
+2026-11-16 10:06:42.054 I  Vespin[64157:a3a4b10] [com.apple.network:connection] nw_resolver_host_resolve_callback [C3.1.1] flags=0x40000003 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv4#e18c57d9 ttl=2877
+2026-11-16 10:06:42.054 I  Vespin[64157:a3a4b10] [com.apple.network:connection] nw_resolver_host_resolve_callback [C3.1.1] flags=0x40000003 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv4#9f5df5a2 ttl=2877
+2026-11-16 10:06:42.055 I  Vespin[64157:a3a4b10] [com.apple.network:connection] nw_resolver_host_resolve_callback [C3.1.1] flags=0x40000002 ifindex=0 error=NoError(0) hostname=avatars.githubusercontent.com. addr=IPv4#b07923d6 ttl=2877
+2026-11-16 10:06:42.082 Df Vespin[64157:a3a45bf] [com.apple.xpc:connection] [0x126ebb980] failed to do a bootstrap look-up: xpc_error=[3: No such process]
+2026-11-16 10:06:42.099 I  Vespin[64157:a3a45c1] [com.apple.network:connection] nw_endpoint_resolver_receive_report [C3.1.1 Hostname#2a2d1a9d:443 in_progress resolver (satisfied (Path is satisfied), interface: en0[802.11], expensive, constrained, uses wifi, LQ
+2026-11-16 10:06:42.106 Db Vespin[64157:a3a45c3] [com.apple.useractivity:main] --- in async block, back from willSynchronizeActivity. self=7B68CCF3-EDE4-4351-AE95-C6917160A5E3/<UAUserActivity: 0x123c34d80> { type = dev.vespin.viewing, UUID = 7B68CCF3-EDE4-4351
+2026-11-16 10:06:42.106 Db Vespin[64157:a3a44f8] [com.apple.defaults:User Defaults] found no value for key UINavigationControllerEnableVerboseLoggingForStrictRepeatedPushAssertion in CFPrefsSearchListSource<0x107d9c5f0> (Domain: dev.vespin.ios, Container: (nul
+2026-11-16 10:06:42.106 Db Vespin[64157:a3a45c3] [com.apple.useractivity:main] --- clearing _sendToServerPending for 7B68CCF3-EDE4-4351-AE95-C6917160A5E3 because we're about to push this to the server.
+2026-11-16 10:06:42.394 Db Vespin[64157:a3a44f8] [com.apple.defaults:User Defaults] found no value for key NavigationBarBackButtonShowsContextMenu in CFPrefsSearchListSource<0x10ad64820> (Domain: com.apple.UIKit, Container: (null) Non-launch persona: 0)
+2026-11-16 10:06:42.428 Db Vespin[64157:a3a44f8] [com.apple.UIKit:_UIScrollPocketBarInteraction] <_UIScrollPocketBarInteraction: 0x122d94a80; owner: <RNSNavigationBar: 0x120642100>> updated receivers to <_UIScrollEdgeEffectViewInteraction: 0x1253be580>, <_UISc
+2026-11-16 10:06:42.428 Db Vespin[64157:a3a44f8] [com.apple.UIKit:_UIScrollPocketBarInteraction] Add/invalidate bar interaction <_UIScrollPocketBarInteraction: 0x122d94a80; owner: <RNSNavigationBar: 0x120642100>> on receiver <_UIScrollEdgeEffectViewInteraction
+2026-11-16 10:06:42.428 Db Vespin[64157:a3a44f8] [com.apple.UIKit:_UIScrollPocketBarInteraction] Add/invalidate bar interaction <_UIScrollPocketBarInteraction: 0x122d94a80; owner: <RNSNavigationBar: 0x120642100>> on receiver <_UIScrollEdgeEffectViewInteraction
+2026-11-16 10:06:42.468 Db Vespin[64157:a3a44f8] [com.apple.UIKit:_UIScrollPocketBarInteraction] Add/invalidate bar interaction <_UIScrollPocketBarInteraction: 0x122d94a80; owner: <RNSNavigationBar: 0x120642100>> on receiver <_UIScrollEdgeEffectViewInteraction
+2026-11-16 10:06:42.468 Db Vespin[64157:a3a44f8] [com.apple.UIKit:_UIScrollPocketBarInteraction] Add/invalidate bar interaction <_UIScrollPocketBarInteraction: 0x122d94a80; owner: <RNSNavigationBar: 0x120642100>> on receiver <_UIScrollEdgeEffectViewInteraction
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
+)} (error: (null))
