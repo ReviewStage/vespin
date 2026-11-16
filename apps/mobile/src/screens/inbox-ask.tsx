@@ -50,6 +50,7 @@ import {
 } from "@repo/ui-native";
 import { Predicate } from "effect";
 import type { ReactNode } from "react";
+import { useFocusShown } from "../focus-shown.js";
 import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
 import { REMIND_ME } from "./inbox-remind.js";
 
@@ -312,15 +313,17 @@ export function ThreadComposer({
   item,
   answer,
   agentName,
-  inColumn = false,
+  inColumn,
 }: {
   readonly item: InboxItem;
   readonly answer: ThreadAnswer;
   /** The thread's agent's name, which the new thread's switch names. */
   readonly agentName: string;
-  /** Whether it stands at a SwiftUI column's foot, a split view's detail, rather than docked over the screen. */
-  readonly inColumn?: boolean;
+  /** Whether it stands at a SwiftUI column's foot, a split view's detail, rather than docked over the screen, and whether that column stands in front: the app's notice stands over its composer only while the column does and the thread's screen is the one in front of its stack. */
+  readonly inColumn?: { readonly inFront: boolean } | undefined;
 }) {
+  // Note that the thread's screen hears its focus here rather than reading it whole, so a change of focus draws only the composer again (`useFocusShown`).
+  const focused = useFocusShown();
   const { draft, onDraft, answerReady, send, asNew, setAsNew, start } = answer;
 
   const placeholder = asNew
@@ -348,7 +351,11 @@ export function ThreadComposer({
     },
   };
 
-  return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
+  return inColumn === undefined ? (
+    <Composer {...props} />
+  ) : (
+    <ComposerFoot {...props} shown={inColumn.inFront && focused} />
+  );
 }
 
 /** What the thread's ⋯ menu acts through: its read mark, Remind me's times, and its link copied. */

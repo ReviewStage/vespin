@@ -44,6 +44,7 @@ import {
   selectedWords,
 } from "@repo/features/words";
 import { INBOX_FEED, type InboxFeed, selectWorkspaces } from "@repo/host/app-state-reads";
+import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   BAR_TITLE,
   type BarAction,
@@ -52,7 +53,6 @@ import {
   BUTTON_LOOK,
   EmptyState,
   GLYPH,
-  GlassDock,
   glyphSymbol,
   isBarMenu,
   LIST_LOOK,
@@ -84,6 +84,9 @@ import {
   UNDER_SPLIT_SCREEN,
   useColors,
   useMinute,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
@@ -95,6 +98,7 @@ import {
   useStackRoot,
   useStandFocusedDetailFront,
 } from "../detail-stack.js";
+import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
@@ -118,8 +122,6 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
-import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
   PLUS_TAB,
@@ -307,6 +309,12 @@ function InboxRowView({
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspaceStep = linkWorkspaceStep(holder.task.workspaceId, workspaces);
+  const keeping = useKeeping();
+
+  const link = linkOf(
+    { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
+    workspaceStep,
+  );
 
   // Note that only the thread's tail is read for its preview, since the preview draws its newest few messages alone.
   const messages = useMemo(
@@ -364,10 +372,16 @@ function InboxRowView({
           onPress: () => onMark(item.id, !unread),
         },
       ]}
-      link={linkOf(
-        { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
-        workspaceStep,
-      )}
+      link={link}
+      // Note that the long press offers Copy link after the swipes' acts, as the panel's row menu and the thread's ⋯ offer it.
+      menuActions={[
+        {
+          label: APP_SHORTCUTS[APP_COMMAND.COPY_LINK].label,
+          symbol: GLYPH.LINK,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => keeping.copyWords(link),
+        },
+      ]}
       preview={
         <ThreadPreview
           title={title}
@@ -494,12 +508,20 @@ function moreMenu(
   };
 }
 
+/** A menu standing dimmed while `dim` holds, so a bar keeps its place for it and VoiceOver hears it as dimmed, as Mail's edit bar stands Remind me until a message is chosen. */
+function dimmedWhile(dim: boolean, menu: BarMenu): BarMenu {
+  return dim ? { ...menu, disabled: true } : menu;
+}
+
 /**
  * What the Inbox offers for the threads chosen in Select mode, as the panel's
  * selection does (`inbox-selection.tsx`): Mark as read while one is unread,
  * else Mark as unread; Remind me, its time set on every one; and Resolve
  * while one is open, each taking only the threads it would change. Each act
- * lets Select mode go, as Mail's do. None while nothing is chosen.
+ * lets Select mode go, as Mail's do. Note that every act keeps its place,
+ * dimmed while it would change nothing, as Mail's edit bar stands its acts
+ * dimmed until a message is chosen, so the bar never pops in on the first
+ * tick nor shifts as Resolve comes and goes.
  */
 function chosenActs(
   chosen: readonly InboxItem[],
@@ -507,30 +529,18 @@ function chosenActs(
   remind: ReturnType<typeof useRemind>,
   stop: () => void,
 ): readonly BarFootItem[] {
-  if (chosen.length === 0) return [];
+  const none = chosen.length === 0;
   const unread = chosen.filter(isUnread);
   const open = chosen.filter((item) => item.status === INBOX_STATUS.OPEN);
   const marking = unread.length > 0 ? unread : chosen;
 
-  const resolve =
-    open.length === 0
-      ? []
-      : [
-          {
-            label: RESOLVE,
-            symbol: GLYPH.RESOLVED,
-            onPress: () => {
-              acts.resolveMany(open);
-              stop();
-            },
-          },
-        ];
-
   return [
     {
-      label: unread.length > 0 ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
-      symbol: unread.length > 0 ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
+      label: unread.length > 0 || none ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
+      symbol: unread.length > 0 || none ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
+      disabled: none,
       onPress: () => {
+        if (none) return;
         acts.markMany(
           marking.map((item) => item.id),
           unread.length === 0,
@@ -538,8 +548,17 @@ function chosenActs(
         stop();
       },
     },
-    remind.menu(chosen, stop),
-    ...resolve,
+    dimmedWhile(none, remind.menu(chosen, stop)),
+    {
+      label: RESOLVE,
+      symbol: GLYPH.RESOLVED,
+      disabled: open.length === 0,
+      onPress: () => {
+        if (open.length === 0) return;
+        acts.resolveMany(open);
+        stop();
+      },
+    },
   ];
 }
 
@@ -888,9 +907,17 @@ function ThreadDetail({
       {...(inStack
         ? {}
         : {
+            pathInHead: true,
             acts,
             menu: menuWithout(menu, acts),
-            foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
+            foot: (
+              <ThreadComposer
+                item={item}
+                answer={answer}
+                agentName={agentName}
+                inColumn={{ inFront }}
+              />
+            ),
           })}
     />
   );
@@ -930,9 +957,9 @@ function ThreadDetail({
           ))}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
-      <GlassDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
+      <FocusedDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
         <Screen>{page}</Screen>
-      </GlassDock>
+      </FocusedDock>
       {remind.sheet}
     </>
   );
@@ -1027,6 +1054,15 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
         title:
           pickedItems.length === 0 ? SELECTION_WORDS.SELECT : selectedWords(pickedItems.length),
         acts: chosenActs(pickedItems, acts, remind, selecting.stop),
+        // Note that Select all takes every thread listed, and Select none lets them go once all are chosen, as Mail's edit bar leads with them.
+        all: (pickedItems.length === listing.listed.length && pickedItems.length > 0
+          ? { label: SELECTION_WORDS.SELECT_NONE, onPress: () => selecting.choose([]) }
+          : {
+              label: SELECTION_WORDS.SELECT_ALL,
+              // Note that with nothing listed, such as under a search that finds nothing, Select all stands dimmed, so its press never lets go of the threads chosen before.
+              disabled: listing.listed.length === 0,
+              onPress: () => selecting.choose(listing.listed.map(({ item }) => item.id)),
+            }) satisfies BarAction,
         done: { label: SELECT_DONE, onPress: selecting.stop } satisfies BarAction,
       }
     : undefined;
@@ -1074,7 +1110,7 @@ function InboxStackList(held: InboxHeld) {
   const field = useRefilledSearchField(search);
   const placement = useHeldSearchPlacement(search);
 
-  // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
+  // Note that Select mode names how many are chosen in the title's place, stands Select all where the switcher stood and Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
   return (
     <>
       <Stack.Screen options={{ title: choosing?.title ?? INBOX_TITLE }}>
@@ -1089,7 +1125,19 @@ function InboxStackList(held: InboxHeld) {
           />
         )}
       </Stack.Screen>
-      {choosing !== undefined ? null : <SettingsBarButton switcher={switcher} />}
+      {choosing !== undefined ? (
+        <Stack.Toolbar placement="left">
+          <Stack.Toolbar.Button
+            variant="plain"
+            disabled={choosing.all.disabled === true}
+            onPress={choosing.all.onPress}
+          >
+            {choosing.all.label}
+          </Stack.Toolbar.Button>
+        </Stack.Toolbar>
+      ) : (
+        <SettingsBarButton switcher={switcher} />
+      )}
       <Stack.Toolbar placement="right">
         {choosing !== undefined ? (
           <Stack.Toolbar.Button variant="plain" onPress={choosing.done.onPress}>
@@ -1115,7 +1163,11 @@ function InboxStackList(held: InboxHeld) {
             ...(at === 0 ? [] : [<Stack.Toolbar.Spacer key={at} />]),
             // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass.
             isBarMenu(act) ? (
-              <Stack.Toolbar.Menu key={act.label} accessibilityLabel={act.label}>
+              <Stack.Toolbar.Menu
+                key={act.label}
+                accessibilityLabel={act.label}
+                disabled={act.disabled === true}
+              >
                 <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
                 {toolbarMenuActions(act)}
               </Stack.Toolbar.Menu>
@@ -1123,6 +1175,7 @@ function InboxStackList(held: InboxHeld) {
               <Stack.Toolbar.Button
                 key={act.label}
                 accessibilityLabel={act.label}
+                disabled={act.disabled === true}
                 onPress={act.onPress}
               >
                 {act.symbol === undefined ? null : (
@@ -1242,7 +1295,7 @@ function InboxSplitScreen({
           {rows}
         </ScopePicker>
       ),
-    // Note that Select mode names how many are chosen in the column's title, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
+    // Note that Select mode names how many are chosen in the column's title, leads its bar with Select all, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
     bar:
       choosing === undefined
         ? {
@@ -1255,7 +1308,12 @@ function InboxSplitScreen({
             menu,
             search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
           }
-        : { title: choosing.title, action: choosing.done, foot: choosing.acts },
+        : {
+            title: choosing.title,
+            lead: [choosing.all],
+            action: choosing.done,
+            foot: choosing.acts,
+          },
   };
 
   const detail =
