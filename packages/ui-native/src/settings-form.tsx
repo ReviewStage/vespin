@@ -34,6 +34,7 @@ import {
   foregroundStyle,
   frame,
   listRowBackground,
+  listSectionSpacing,
   menuIndicator,
   menuStyle,
   multilineTextAlignment,
@@ -51,10 +52,20 @@ import { actContent, GlyphImage } from "./glyph-label.js";
 import type { IntegrationMarkAsset } from "./integration-marks.js";
 import { Avatar } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
-import { useColors } from "./tokens/colors.js";
+import { type BrandColors, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
+
+/** How far apart a form's sections stand, and how far its first stands under the bar. */
+export const FORM_SPACING = {
+  /** The system's grouped spacing, as a page of Settings stands. */
+  REGULAR: "regular",
+  /** Close under the bar and between sections, as a short sheet of a few rows stands, Reminders' Details and Mail's options among them. */
+  COMPACT: "compact",
+} as const;
+
+export type FormSpacing = (typeof FORM_SPACING)[keyof typeof FORM_SPACING];
 
 /** An account's face in its row, larger than a list's. */
 const ACCOUNT_FACE_SIZE = 36;
@@ -65,7 +76,7 @@ const ROW_FACE_SIZE = ACCOUNT_FACE_SIZE - 8;
 /** An account's face heading its own page, as large as Apple Account's photo stands over its name. */
 const ACCOUNT_HEAD_FACE_SIZE = 72;
 
-/** Where a `PushRow` goes, and the mark at its end that says so, where iOS's own Settings marks them. */
+/** Where a row goes on a press, such as a `PushRow` or a pull request's check, and the mark at its end that says so, where iOS's own Settings marks them. */
 export const PUSH_ROW_GOES = {
   /** A page of Settings, pushed over this one: iOS's own chevron, as every row that goes on draws it. */
   PAGE: GLYPH.DISCLOSURE,
@@ -98,7 +109,7 @@ const GOES_INK = { type: "hierarchical", style: "tertiary" } as const;
  * ink, semibold at the row's small line, as iOS draws its chevron, so it
  * grows with the reader's text size.
  */
-function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
+export function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
   return (
     <Image
       {...glyphImage(goes)}
@@ -192,8 +203,11 @@ function PressedRow({
  */
 export function SettingsForm({
   onContentHeight,
+  spacing = FORM_SPACING.REGULAR,
   children,
 }: {
+  /** How far apart its sections stand; a short sheet's stand close, so its first section doesn't sit under an empty band. */
+  readonly spacing?: FormSpacing;
   /** Told the height its rows stand in, as they lay out, for a popover that fits it; none where the form fills its place. */
   readonly onContentHeight?: ((height: number) => void) | undefined;
   readonly children: ReactNode;
@@ -210,6 +224,7 @@ export function SettingsForm({
     <Form
       modifiers={[
         ...(measured === null ? [] : [measured]),
+        ...(spacing === FORM_SPACING.COMPACT ? [listSectionSpacing("compact")] : []),
         scrollContentBackground("hidden"),
         scrollDismissesKeyboard("immediately"),
         background(colors.GROUPED),
@@ -801,7 +816,7 @@ export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
             spacing={SPACE.ROW}
             modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
           >
-            <Avatar name={name} picture={picture} size={faceSize} />
+            <Avatar name={name} id={id} picture={picture} size={faceSize} />
             <VStack alignment="leading" spacing={1}>
               <Text modifiers={[foregroundStyle(off ? colors.TEXT_MUTED : colors.TEXT)]}>
                 {name}
@@ -925,6 +940,8 @@ export function MemberRow({ name, email, picture, role, invited, badge, acts }: 
 type FollowerRowProps = {
   /** Their name, or You for the reader. */
   readonly name: string;
+  /** Their member id, which their letters' hue is read off. */
+  readonly id: string;
   readonly picture?: string | undefined;
   /** The muted word after their name, such as Assignee; none for none. */
   readonly role?: string | undefined;
@@ -941,7 +958,7 @@ type FollowerRowProps = {
  * press. VoiceOver hears it as one element, its name then its role and what
  * agents may do there, since the laptop alone says that on screen.
  */
-export function FollowerRow({ name, picture, role, machines, heard }: FollowerRowProps) {
+export function FollowerRow({ name, id, picture, role, machines, heard }: FollowerRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(ROW_FACE_SIZE);
 
@@ -955,7 +972,7 @@ export function FollowerRow({ name, picture, role, machines, heard }: FollowerRo
         ...spokenValue(role, heard),
       ]}
     >
-      <Avatar name={name} picture={picture} size={faceSize} />
+      <Avatar name={name} id={id} picture={picture} size={faceSize} />
       <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
       {role === undefined ? null : (
         <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>
@@ -1152,15 +1169,47 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
     </ContextMenu>
   );
 
-  if (removeAct === undefined) return <HStack modifiers={placed}>{menu}</HStack>;
+  if (remove === undefined) return <HStack modifiers={placed}>{menu}</HStack>;
 
   return (
     <SwipeActions modifiers={placed}>
       {menu}
       <SwipeActions.Actions edge="trailing" allowsFullSwipe={false}>
-        {removeAct}
+        <SwipeRemove
+          label={remove.label}
+          symbol={NOTE_REMOVE.SYMBOL}
+          onPress={remove.onPress}
+          colors={colors}
+        />
       </SwipeActions.Actions>
     </SwipeActions>
+  );
+}
+
+/**
+ * A row's swiped act that takes something away, filled with the danger fill
+ * that holds 4.5:1 under white. Note that it takes no destructive role,
+ * because SwiftUI takes a row out of its list the moment a destructive swipe
+ * is pressed, before an act that asks first, such as Disconnect, hears its
+ * answer, so a Cancel left the row gone; the long press menu keeps the role.
+ */
+function SwipeRemove({
+  label,
+  symbol,
+  onPress,
+  colors,
+}: {
+  readonly label: string;
+  readonly symbol?: Glyph | undefined;
+  readonly onPress: () => void;
+  readonly colors: BrandColors;
+}) {
+  return (
+    <SwiftUIButton
+      {...(symbol === undefined ? { label } : actContent(label, symbol))}
+      onPress={onPress}
+      modifiers={[tint(colors.DANGER_FILL)]}
+    />
   );
 }
 
@@ -1302,12 +1351,7 @@ export function ConnectionRow({ name, mark, lines, act, menu = [], onOpen }: Con
       {held}
       <SwipeActions.Actions edge="trailing" allowsFullSwipe={false}>
         {swiped.map((each) => (
-          <SwiftUIButton
-            key={each.label}
-            label={each.label}
-            role={NOTE_REMOVE.ROLE}
-            onPress={each.onPress}
-          />
+          <SwipeRemove key={each.label} label={each.label} onPress={each.onPress} colors={colors} />
         ))}
       </SwipeActions.Actions>
     </SwipeActions>

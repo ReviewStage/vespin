@@ -73,6 +73,8 @@ import {
   BROWSER_TAB_OPEN_FAILURE,
   type FollowerCallFailure,
   type HeldTask,
+  type ListedTasksView,
+  listedTasksViewSchema,
   type ParentCallFailure,
   PICTURE_KEEP_FAILURE,
   type RelationCallFailure,
@@ -80,8 +82,6 @@ import {
   TASK_CALL_FAILURE,
   type TaskCallFailure,
   type TasksCommentAnswer,
-  type TasksView,
-  tasksViewSchema,
 } from "@repo/features/tasks-view";
 import { WORKSPACE_INTEGRATIONS_READ } from "@repo/features/workspace-integrations-live";
 import type { WorkspaceInvitation } from "@repo/features/workspace-invitation-wire";
@@ -858,6 +858,7 @@ export function fakeService(tasks: Task[]): FakeService {
       setTokenRepository: () => Effect.succeed(service.tokenRepositorySet ?? UNANSWERED_WORKSPACE),
       environment: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putVariable: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      saveVariables: () => Effect.succeed(UNANSWERED_WORKSPACE),
       deleteVariable: () => Effect.succeed(UNANSWERED_WORKSPACE),
       sandboxSetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       mergeQueue: () => Effect.succeed(UNANSWERED_WORKSPACE),
@@ -865,6 +866,8 @@ export function fakeService(tasks: Task[]): FakeService {
       putInstallScript: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRepositorySetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRunActions: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      sandboxSize: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      putSandboxSize: () => Effect.succeed(UNANSWERED_WORKSPACE),
       // Each workspace read as the service answers it; a poll is not counted among the reads.
       // SAFETY: each declared read answers its own script's rows, as its declaration's answer.
       liveRead: ((
@@ -1663,13 +1666,13 @@ export function subject(
   return Effect.gen(function* () {
     /** Every event the composer emitted besides the view, by its kind, a live follow's slice by the slice it is told on. */
     const pushed: [GatewayEventKind | LiveRead, WireValue][] = [];
-    const told: TasksView[] = [];
+    const told: ListedTasksView[] = [];
     /** Every other event the host emitted, in order, a live follow's slice by the slice it is told on. */
     const events: { readonly kind: string; readonly payload: WireValue }[] = [];
 
     const waiters: {
-      wanted: (view: TasksView) => boolean;
-      seen: Deferred.Deferred<TasksView>;
+      wanted: (view: ListedTasksView) => boolean;
+      seen: Deferred.Deferred<ListedTasksView>;
     }[] = [];
 
     const focus = yield* windowFocus;
@@ -1700,7 +1703,7 @@ export function subject(
           return;
         }
 
-        const read = readEither(tasksViewSchema)(payload);
+        const read = readEither(listedTasksViewSchema)(payload);
         assert.ok(Result.isSuccess(read), "the planning event carries a view");
         told.push(read.success);
 
@@ -1839,17 +1842,17 @@ export function subject(
     const last = () => told.at(-1);
 
     /** The first view told, from now on, that `wanted` holds of. */
-    const viewWhere = (wanted: (view: TasksView) => boolean) =>
+    const viewWhere = (wanted: (view: ListedTasksView) => boolean) =>
       Effect.gen(function* () {
-        const seen = yield* Deferred.make<TasksView>();
+        const seen = yield* Deferred.make<ListedTasksView>();
         waiters.push({ wanted, seen });
 
         return yield* Deferred.await(seen);
       });
 
     /** Waits from now on for the first view `wanted` holds of, and answers the wait. */
-    const viewLands = (wanted: (view: TasksView) => boolean) =>
-      Effect.map(Deferred.make<TasksView>(), (seen) => {
+    const viewLands = (wanted: (view: ListedTasksView) => boolean) =>
+      Effect.map(Deferred.make<ListedTasksView>(), (seen) => {
         waiters.push({ wanted, seen });
 
         return Deferred.await(seen);

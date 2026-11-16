@@ -4,10 +4,12 @@ import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { cssCustomProperties } from "@repo/ui";
+import { eq, useLiveQuery } from "@tanstack/react-db";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { appPlatform } from "../app-platform.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import { repositorySkillsQueryOptions } from "../tasks/agent-reads.js";
 import { MENTION_MENU_SIDE } from "../tasks/mention-picker.js";
 import { useMentionedPlace } from "../tasks/mentioned-place.js";
@@ -18,7 +20,7 @@ import type { SkillSource } from "../tasks/skill-picker.js";
 import type { SkillWithFile } from "../tasks/skill-ref.js";
 import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "../tasks/task-mentions.js";
 import { useOpenTask } from "../tasks/use-open-link.js";
-import { appStateQuery, selectExperiment, selectListedTasks } from "../use-app-state.js";
+import { appStateQuery, selectExperiment } from "../use-app-state.js";
 
 /**
  * automation-prompt.tsx -- an automation's prompt, written in the composer's own field, as New task's words are.
@@ -132,8 +134,18 @@ export function AutomationPrompt({
   const workspaceId = workspace?.id;
   const slug = workspace?.slug;
   const onOpenTask = useOpenTask() ?? OPEN_NOTHING;
-  // An `@` offers the workspace's coding agents, each named by its task.
-  const tasks = useQuery({ ...appStateQuery, select: selectListedTasks }).data?.tasks ?? NO_TASKS;
+  // An `@` offers the workspace's coding agents, each named by its task, which is the workspace's too.
+  const collections = useTaskListCollections();
+
+  const tasks =
+    useLiveQuery((q) =>
+      workspaceId === undefined
+        ? undefined
+        : q
+            .from({ task: collections.tasks })
+            .where(({ task }) => eq(task.workspaceId, workspaceId)),
+    ).data ?? NO_TASKS;
+
   const readAgents = useMentionAgentsReader(workspaceId, tasks, useMentionedPlace().models);
 
   const mentions = useMemo(

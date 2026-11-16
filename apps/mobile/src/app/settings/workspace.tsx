@@ -33,6 +33,8 @@ import {
   BUZZ,
   buzz,
   ConfirmAsk,
+  FOOTER_TONE,
+  footerToneOf,
   GLYPH,
   ListSection,
   LoadingRow,
@@ -245,6 +247,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                 .filter((refusal) => refusal !== undefined)
                 .join(" ") || undefined
             }
+            footerTone={FOOTER_TONE.FAILURE}
           >
             <WorkspaceRow
               workspace={switcherWorkspace(workspace, false, photos)}
@@ -293,6 +296,11 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                 ? WORKSPACE_READ_FAILED.MEMBERS
                 : people.said.join(" ") || (ownerAlone ? LEAVE_WORDS.OWNER_NO_ADMIN : undefined)
             }
+            footerTone={
+              held?.members?.failed === true || people.said.length > 0
+                ? FOOTER_TONE.FAILURE
+                : FOOTER_TONE.NOTE
+            }
           >
             {members === undefined && held?.members?.failed !== true ? (
               <LoadingRow words={readingWords("the members")} />
@@ -318,6 +326,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                   ? WORKSPACE_READ_FAILED.INVITATIONS
                   : invite.said.join(" ") || undefined
               }
+              footerTone={FOOTER_TONE.FAILURE}
             >
               <ActionRow
                 label={INVITATION_WORDS.INVITE}
@@ -356,7 +365,10 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             </ListSection>
           ) : null}
           {owner && !personal && heir !== undefined ? (
-            <ListSection footer={transfer.refusal ?? LEAVE_WORDS.OWNER}>
+            <ListSection
+              footer={transfer.refusal ?? LEAVE_WORDS.OWNER}
+              footerTone={footerToneOf(transfer.refusal)}
+            >
               <ActionRow
                 label={TRANSFER_WORDS.VERB}
                 onPress={() => setAsking({ kind: ASKING.TRANSFER, member: heir })}
@@ -364,7 +376,10 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             </ListSection>
           ) : null}
           {personal || owner ? null : (
-            <ListSection footer={leave.refusal ?? LEAVE_WORDS.LINE}>
+            <ListSection
+              footer={leave.refusal ?? LEAVE_WORDS.LINE}
+              footerTone={footerToneOf(leave.refusal)}
+            >
               <ActionRow
                 label={LEAVE_WORDS.VERB(workspace.name)}
                 destructive

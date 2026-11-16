@@ -4,6 +4,7 @@ import {
   iosAppRouteOf,
   iosAppRouteOfAddress,
   iosHostConnectCode,
+  iosRouteAgent,
   iosRouteHidesTabs,
   iosRouteOnTab,
 } from "./ios-app-links.js";
@@ -94,9 +95,23 @@ describe("the tab bar on a route", () => {
     ["/tasks/agent/agent-1/pull/42", true],
     ["/tasks/agent/agent-1/page", false],
     ["/tasks/page/page-1", false],
+    ["/tasks/comments/thread-1", true],
     ["/search", false],
   ])("on %s hidden is %s", (pathname, hidden) => {
     expect(iosRouteHidesTabs(pathname)).toBe(hidden);
+  });
+});
+
+// Note that the regression this catches is the call bar standing over its own agent's page, whose composer already holds the call's presses, or missing from a page under it, which has no composer.
+describe("the agent whose page a route is", () => {
+  it.each([
+    ["/tasks/agent/agent-1", "agent-1"],
+    ["/tasks/agent/agent-1/pull/42", undefined],
+    ["/tasks/agent", undefined],
+    ["/tasks/task-1", undefined],
+    ["/inbox/thread-1", undefined],
+  ])("on %s is %s", (pathname, agent) => {
+    expect(iosRouteAgent(pathname)).toBe(agent);
   });
 });
 

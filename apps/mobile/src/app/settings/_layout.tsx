@@ -5,7 +5,7 @@ import { HOST_CONNECT_WORDS } from "@repo/features/host-connect-words";
 import { MCP_CLIENTS_WORDS } from "@repo/features/mcp-clients-words";
 import { PUSH_NOTIFICATIONS_TITLE } from "@repo/features/push-device-model";
 import { SETTINGS_PAGE_TITLE, SETTINGS_VIEW } from "@repo/settings/settings-views";
-import { BAR_TITLE, useColors } from "@repo/ui-native";
+import { BAR_TITLE, useBarScheme, useColors } from "@repo/ui-native";
 import { Stack } from "expo-router";
 import { IntegrationsProvider } from "../../integrations/use-integrations-page.js";
 
@@ -22,12 +22,14 @@ export const unstable_settings = { anchor: "index" };
  */
 export default function SettingsLayout() {
   const colors = useColors();
+  const scheme = useBarScheme();
 
   // Note that Integrations and a connection's page read one instance of the integrations, held here, so a sign-in begun on the page stands on the list beneath it.
   return (
     <IntegrationsProvider>
       <Stack
         screenOptions={{
+          headerUserInterfaceStyle: scheme,
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerBackButtonDisplayMode: "minimal",
