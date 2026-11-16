@@ -1,5 +1,6 @@
 // search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, scoped as ⌘K's filters scope them, each row drawn by its own list's row, its results beside the app sidebar in a window wide enough for three columns.
 
+import { READING_INBOX } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
@@ -14,7 +15,7 @@ import {
   scopedFound,
   searchPlaceholder,
 } from "@repo/features/search-found-model";
-import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
+import { CHOOSE_AN_ITEM_WORDS, readingWords } from "@repo/features/words";
 import {
   type BarMenu,
   type ColumnBar,
@@ -69,6 +70,9 @@ import {
 /** The Search tab's name, at its head. */
 const SEARCH_TITLE = "Search";
 
+/** What a search under Tasks or Agents says while the task list is still being read. */
+const READING_TASKS = `${readingWords("your tasks")}…`;
+
 /** What the scopes choose, heard by VoiceOver before the scope chosen. */
 const SCOPE_LABEL = "Show";
 
@@ -94,6 +98,21 @@ function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined
     ),
     ...found.agents.map(({ agent }) => [agent.id, iosAgentRoute(agent.id)] as const),
   ]);
+}
+
+/**
+ * What a scope's rows are still being read from, as the words its wait
+ * says, so it never says it found nothing before the lists it searches have
+ * answered: Inbox waits on the Inbox's first read, Tasks and Agents on the
+ * task list, which holds both, and All on either; none once they answered.
+ */
+function scopeReading(found: SearchFound, scope: SearchScope): string | undefined {
+  const inbox = scope !== SEARCH_SCOPE.TASKS && scope !== SEARCH_SCOPE.AGENTS;
+  const tasks = scope !== SEARCH_SCOPE.INBOX;
+
+  if (inbox && found.inboxReading) return READING_INBOX;
+
+  return tasks && found.tasksReading ? READING_TASKS : undefined;
 }
 
 /** What kind of row a wide window's Search picked, whose page stands beside the results. */
@@ -283,6 +302,7 @@ function useSearchScreen(
 
   const shown = scopedFound(found, scope);
   const none = shown.tasks.length + shown.inbox.length + shown.agents.length === 0;
+  const reading = scopeReading(found, scope);
 
   const scopes = SCOPES.map((each) => ({
     label: SEARCH_SCOPE_TITLE[each],
@@ -290,10 +310,17 @@ function useSearchScreen(
     onPress: () => setScope(each),
   }));
 
+  // Note that a scope that found nothing says so only once the lists it searches have answered and the finding has caught up with what is typed; until then it says what it reads, or keeps the last query's rows, as the panel's ⌘K does.
+  const empty = none && (reading !== undefined || found.current);
+
   // Note that the scopes stand as the results' first row, so they scroll away with them, and over a scope that found nothing, so another is one tap away.
-  const results = none ? (
+  const results = empty ? (
     <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-      <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
+      {reading !== undefined ? (
+        <EmptyState title={reading} symbol={GLYPH.SEARCH} loading />
+      ) : (
+        <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
+      )}
     </ScopePicker>
   ) : (
     <FoundList
