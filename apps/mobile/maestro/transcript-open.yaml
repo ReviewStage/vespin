@@ -1,0 +1,75 @@
+# transcript-open.yaml -- a long finished transcript opens straight at its newest row, its bubbles, link, code block and table inside the screen, both when the app launches on it and when its row on the task's page is tapped.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose rounding agent holds ten
+# finished turns (`@repo/host/fixture-agent-transcript`'s
+# `fixtureLongTranscript`), and opened on its page by `-agent <id>`; nothing
+# reaches a server. Note that the first frame the page shows must already
+# stand at the agent's last words, with the first ask far above it, since the
+# list stands hidden until it has settled at its end.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 70d19314-5c8e-4fa6-81ce-8d9eafb0c1d7
+- extendedWaitUntil:
+    visible: "Rounding is settled: every total now rounds half-cents to even.*"
+    timeout: 30000
+- assertNotVisible: "Where do totals round today\\?"
+- takeScreenshot: transcript-open-latest
+# Read back up: the table wider than a phone scrolls inside its own frame,
+# and the code block's long line inside its own, each within the screen.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Show me the cases the tests cover, side by side."
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- takeScreenshot: transcript-open-table
+# The bubble holding a link no line holds wraps it inside the bubble, and the
+# bubble inside the screen; the code block under it scrolls in its own frame.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Compare with https://ledger.*"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- takeScreenshot: transcript-open-link
+
+# Opened as a reader opens it, from the agent's row on its task's page, so
+# the time from the tap to the page's first frame can be read from the run's
+# recording: the first frame drawn must be the newest row, as above.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Ledger rounding"
+- extendedWaitUntil:
+    visible: "Created by .*"
+    timeout: 20000
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Fix ledger rounding"
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- tapOn: "Fix ledger rounding"
+- extendedWaitUntil:
+    visible: "Rounding is settled: every total now rounds half-cents to even.*"
+    timeout: 10000
+- assertNotVisible: "Where do totals round today\\?"
+- takeScreenshot: transcript-open-tapped
