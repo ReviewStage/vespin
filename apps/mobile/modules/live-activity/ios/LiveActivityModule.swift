@@ -45,6 +45,11 @@ private struct KeptPhone: Codable {
   let headers: [String: String]
 }
 
+/// How highly iOS ranks a voice call's activity among the app's, which decides the one the Dynamic Island shows: above the agents' activity, whose pushes carry no score and so rank at none, since a call standing is what the member is doing now.
+enum CallRelevance {
+  static let score: Double = 100
+}
+
 public final class LiveActivityModule: Module {
   /// The defaults key and the ping `StopAgentIntent` names.
   private static let stopsKey = "dev.vespin.live-activity.stops"
@@ -191,7 +196,9 @@ public final class LiveActivityModule: Module {
       for activity in Activity<CallActivityAttributes>.activities {
         await activity.end(nil, dismissalPolicy: .immediate)
       }
-      _ = try Activity.request(attributes: called, content: .init(state: state, staleDate: nil))
+      _ = try Activity.request(
+        attributes: called,
+        content: .init(state: state, staleDate: nil, relevanceScore: CallRelevance.score))
     }
 
     // The call's activity set to a new state, from its JSON.
@@ -199,7 +206,8 @@ public final class LiveActivityModule: Module {
       let state = try JSONDecoder().decode(
         CallActivityAttributes.ContentState.self, from: Data(contentState.utf8))
       for activity in Activity<CallActivityAttributes>.activities {
-        await activity.update(.init(state: state, staleDate: nil))
+        await activity.update(
+          .init(state: state, staleDate: nil, relevanceScore: CallRelevance.score))
       }
     }
 
