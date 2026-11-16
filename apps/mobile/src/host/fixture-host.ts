@@ -413,7 +413,7 @@ const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>>
   [ACT_KIND.FEEDBACK_SEND, () => ({ delivered: false })],
   // Note that a change to a pull request is refused as GitHub refuses one, its words beside, so the pull request page shows its write note.
   [
-    ACT_KIND.AGENTS_PULL_REQUEST_ACTION,
+    ACT_KIND.PULL_REQUESTS_ACTION,
     () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.REFUSED, words: PULL_REQUEST_REFUSED_WORDS }),
   ],
 ]);
