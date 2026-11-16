@@ -2,6 +2,7 @@ import { NodeFileSystem } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { AUTH_SESSION_END } from "@repo/credentials";
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { READ_MARK } from "@repo/features/read-mark";
 import { ACT_KIND } from "@repo/host/acts";
 import { RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
 import { inboxGroupsIn, selectExperiment, selectInboxHoldings } from "@repo/host/app-state-reads";
@@ -129,6 +130,48 @@ it.effect(
         const threads = (yield* inboxGroupsOver(bridge)).flatMap(({ items }) => items);
 
         expect(threads.length).toBeGreaterThan(600);
+      }),
+    ),
+);
+
+it.effect(
+  "a fixture run settles once a task is marked read, rather than staging its list again forever",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const root = yield* ownFolder;
+        const { acts, bridge } = yield* standingHost(root, RUN_PROFILE.INBOX);
+
+        const following = yield* Effect.acquireRelease(
+          Effect.sync(() => followAppStateInto(bridge, new QueryClient())),
+          (followed) => Effect.sync(() => followed.stop()),
+        );
+
+        yield* Effect.promise(() => following.written);
+
+        const task = following.taskList.tasks.toArray.find(
+          ({ name }) => name === "Weekly digest email",
+        );
+
+        expect(task).toBeDefined();
+
+        yield* Effect.promise(() =>
+          acts[ACT_KIND.TASKS_MARK_READ]({ taskId: task?.id ?? "", readMark: READ_MARK.READ }),
+        );
+
+        // Note that each change the store announces stages the fixture again, so a stage that always hands the store something new never lets the version stand.
+        const settledVersion = Effect.gen(function* () {
+          yield* Effect.forEach(Array.from({ length: 50 }), () => Effect.yieldNow, {
+            discard: true,
+          });
+
+          return (yield* Effect.promise(() => bridge.requestAppState())).version;
+        });
+
+        const first = yield* settledVersion;
+        const second = yield* settledVersion;
+
+        expect(second).toBe(first);
       }),
     ),
 );
