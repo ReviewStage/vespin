@@ -1,16 +1,16 @@
 /**
- * starter-report.ts -- a started agent's final message handed to the agent that started it, as its turn settles.
+ * starter-report.ts -- a started agent's failed turn told to the agent that started it, as its turn settles.
  *
  * An agent another coding agent started (`agent.started_by_agent_id`)
- * reports to its starter by message; one whose turn ends before it does,
- * or whose report `message_agent` refused, would leave its starter waiting
- * on a message that never comes. So the store writer's settle of a coding
- * agent's turn (`@repo/database/models/writer`'s `SettledTurnListener`) hands
- * the turn's final words to the starter here, as the message the agent would
- * have sent (`agent-message.ts`): under the agent's own name, opening on
- * who sent it and how its turn ended, completed, failed with why, or
- * stopped, and closing on how to answer it. A failed turn that said nothing
- * hands its failure alone. The words are cut to fit one message.
+ * messages its starter itself when it finishes or needs it; one whose turn
+ * fails cannot, and would leave its starter waiting on a message that never
+ * comes. So the store writer's settle of a coding agent's failed turn
+ * (`@repo/database/models/writer`'s `SettledTurnListener`) hands the turn's
+ * final words to the starter here, as a message from the agent
+ * (`agent-message.ts`): under the agent's own name, opening on who sent it
+ * and why its turn failed. A turn completed or stopped sends nothing, and
+ * one that said nothing hands its failure alone. The words are cut to fit
+ * one message.
  *
  * The line goes under the turn's own id as its key, so a settle heard again
  * sends nothing twice (`steerAgent`'s repeat); one the service could not
@@ -24,11 +24,7 @@ import { readMessageByClientId } from "@repo/database/models/message-reads";
 import { type SettledAgentTurn, storeWriter } from "@repo/database/models/writer";
 import { agentFailureWords } from "@repo/features/agent-failure-words";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
-import {
-  AGENT_FAILURE,
-  AGENT_MESSAGE_LEAD,
-  agentMessageReplyLine,
-} from "@repo/features/agent-wire";
+import { AGENT_FAILURE, AGENT_MESSAGE_LEAD } from "@repo/features/agent-wire";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
 import { causeKind } from "@repo/runtime/effect";
@@ -108,32 +104,21 @@ function finalWords(journal: StoredUIMessage): string | undefined {
     : last;
 }
 
-/** How the turn ended, in the head's words. */
+/** How the failed turn ended, in the head's words. */
 function ended(turn: SettledAgentTurn): string {
-  if (turn.status === TURN_STATUS.CANCELED) return "was stopped before it finished";
-
   // A turn its plan's usage limit stopped is said so, not as a failure word.
   if (turn.failure === TURN_FAILURE.PLAN_LIMIT) {
     return `was stopped: ${agentFailureWords(AGENT_FAILURE.PLAN_LIMIT, undefined)}`;
   }
 
-  if (turn.status === TURN_STATUS.FAILED) {
-    return `failed its turn${turn.failure === null ? "" : ` (${turn.failure})`}`;
-  }
-
-  return "finished its turn";
+  return `failed its turn${turn.failure === null ? "" : ` (${turn.failure})`}`;
 }
 
-/** The line the starter receives: who it is from and how its turn ended, its final words, and how to answer. */
-function reportLine(
-  agent: Agent,
-  mention: string,
-  turn: SettledAgentTurn,
-  words: string | undefined,
-): string {
+/** The line the starter receives: who it is from and how its turn failed, and its final words. */
+function reportLine(mention: string, turn: SettledAgentTurn, words: string | undefined): string {
   const head = `${AGENT_MESSAGE_LEAD} · ${mention}, an agent you started, ${ended(turn)}. Its final message:`;
 
-  return [head, words ?? NO_WORDS, agentMessageReplyLine(agent.id)].join("\n\n");
+  return [head, words ?? NO_WORDS].join("\n\n");
 }
 
 /**
@@ -149,8 +134,9 @@ const starterOf = (agent: Agent) =>
   });
 
 /**
- * Hands the settled turn's final message to the agent's starter, as the
- * header says, or nothing where the agent has none to tell; a failure to
+ * Hands a failed turn's final message to the agent's starter, as the
+ * header says, or nothing where the turn did not fail or the agent has
+ * none to tell; a failure to
  * send is logged by its kind alone, never answered, so nothing of the agent
  * or its member rides the log line.
  */
@@ -159,6 +145,7 @@ export function reportToStarter(
   turn: SettledAgentTurn,
 ): Effect.Effect<void, never, DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox> {
   return Effect.gen(function* () {
+    if (turn.status !== TURN_STATUS.FAILED) return;
     const agent = yield* readAgentOfConversation(turn.userId, turn.conversationId);
 
     if (Option.isNone(agent)) return;
@@ -190,7 +177,7 @@ export function reportToStarter(
       turn.userId,
       starter.value,
       {
-        text: reportLine(agent.value, mention, turn, words),
+        text: reportLine(mention, turn, words),
         clientKey: turn.turnId,
         sender: agentLineSender(agent.value),
         metadata: { channel: MESSAGE_CHANNEL.AGENT_MESSAGE },
