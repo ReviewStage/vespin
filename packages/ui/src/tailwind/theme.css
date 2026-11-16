@@ -58,6 +58,9 @@
   ); /* off-scale: the panel's least width */
   --spacing-half-container: 50cqi;
   --spacing-control-icon: var(--ui-control-icon);
+  /* A large glyph-alone button (`components/button/`), a player's Play: a
+     control's height and a step more, so it stands apart from the row. */
+  --spacing-control-large: calc(var(--ui-control-height) + var(--ui-space-8));
   --spacing-icon-gap: var(--ui-icon-gap);
   --spacing-menu-row: var(--ui-menu-row-height);
   --spacing-menu-glyph: var(--ui-menu-glyph);
@@ -962,6 +965,7 @@
      picture stands before its bytes are read, its waveform a control's
      height, and in the viewer a taller one. */
   --spacing-audio-player: 480px; /* off-scale: a picture's stand-in width */
+  --spacing-audio-player-viewer: 160px; /* off-scale: a tall waveform across the viewer */
   --spacing-stage: var(--ui-stage-width);
   /* A sign-in gate's provider button (`components/provider-button/`): the
      height a devtool's sign-in button stands at, a finger's at least under
