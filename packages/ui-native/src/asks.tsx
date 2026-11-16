@@ -32,6 +32,9 @@ const NO_SIZE = { position: "absolute" } as const;
 /** Where an action sheet's host stands: along the screen's foot, so the sheet rises from there. */
 const FOOT = { position: "absolute", left: 0, right: 0, bottom: 0, height: 1 } as const;
 
+/** How long an action sheet waits after it is asked for, about as long as a bar's or a row's menu takes to close. */
+const MENU_CLOSE_MS = 350;
+
 type ConfirmAskProps = {
   /** The question, as the panel's confirm asks it: "Remove from the merge queue?" */
   readonly title: string;
@@ -133,6 +136,31 @@ function AlertConfirm({
   );
 }
 
+/**
+ * Whether an action sheet asked for stands yet: only once a menu that asked
+ * for it has had time to close. Note that the sheet waits, because an act in
+ * a bar's ⋯ or a row's long-press menu runs while UIKit is still closing
+ * that menu, and SwiftUI drops a sheet asked for then: it reports the sheet
+ * gone at once, so the question is let go and nothing shows.
+ */
+function useShownAfterMenus(presented: boolean): boolean {
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    if (!presented) {
+      setShown(false);
+
+      return;
+    }
+
+    const timer = setTimeout(() => setShown(true), MENU_CLOSE_MS);
+
+    return () => clearTimeout(timer);
+  }, [presented]);
+
+  return presented && shown;
+}
+
 /** The ask as the system's action sheet, rising from the screen's foot: its question and what it costs, its act first, and the system's own Cancel. */
 function SheetConfirm({
   title,
@@ -143,12 +171,14 @@ function SheetConfirm({
   onAct,
   onDismiss,
 }: ConfirmAskProps) {
+  const shown = useShownAfterMenus(presented);
+
   return (
     <Host style={FOOT}>
       <ConfirmationDialog
         title={title}
         titleVisibility="visible"
-        isPresented={presented}
+        isPresented={shown}
         onIsPresentedChange={(shown) => {
           if (!shown) onDismiss();
         }}
