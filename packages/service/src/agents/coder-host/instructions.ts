@@ -162,9 +162,9 @@ function namingLines(repository: string | null, ownTask: OwnTask, workspace: str
  * What the agent is told of its task's status, which nothing but an agent
  * or the developer moves, so a task left In progress stands in the
  * developer's sidebar until they move it by hand. The agent keeps it
- * current, as the developer's own task menu would: In progress while open
- * or waiting, To do or Backlog when it waits on another task or is set
- * aside, Canceled when dropped, and Done once its work is finished. Done
+ * current in the order the task menu lists them: Backlog when set aside,
+ * To do when it waits on another task, In progress while open or waiting,
+ * Done once its work is finished, and Canceled when dropped. Done
  * withdraws the task's open asks and archives its agents, the one that
  * moved it once its turn ends (`../../tasks/task-finish.ts`), so it waits
  * on both; a turn starting on the task moves it back into progress from
@@ -173,18 +173,13 @@ function namingLines(repository: string | null, ownTask: OwnTask, workspace: str
  * books a wakeup to see it land.
  */
 function statusLines(publishes: boolean): string[] {
-  const merged = publishes ? "every pull request of yours merged or closed, " : "";
-
-  const unmerged = publishes ? ", or its pull request closed unmerged with nothing left to do" : "";
+  const done = publishes
+    ? `Mark it Done before your last message, once your pull requests merged or closed, no ask is open on the task, and no other agent on it is at work; work with no pull request is finished once its result is ready. Nothing tells you a pull request merged, so after you queue one, book a wakeup with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` to check.`
+    : "Mark it Done before your last message, once its result is ready, no ask is open on the task, and no other agent on it is at work.";
 
   return [
-    `Keep your task's status current with \`${AGENT_TOOL.UPDATE_TASK}\`: In progress while you work on it or it waits on a review, a merge, or the developer; To do when it is ready but waits on another task; Backlog when the developer sets it aside; Canceled when they drop it${unmerged}.`,
-    `Mark it Done before your last message once its work is finished: ${merged}no ask still open on the task, and no other agent on the task still at work. Work that needed no pull request, such as an answer, a report, or a run that found nothing to do, is finished once its result is ready.`,
-    ...(publishes
-      ? [
-          `Where you queued your pull request to merge, book a wakeup with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` to see it land, since no message tells you it merged, then mark the task Done.`,
-        ]
-      : []),
+    `Keep your task's status current with \`${AGENT_TOOL.UPDATE_TASK}\`: Backlog when the developer sets it aside, To do when it waits on another task, In progress while you work or wait on a review, a merge, or the developer, Done once the work is finished, and Canceled when the developer drops it.`,
+    done,
   ];
 }
 
