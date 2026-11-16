@@ -93,15 +93,29 @@ export interface ComputerAppPin {
   readonly pin_pid?: number;
 }
 
+/**
+ * The agent whose cursor an action moves, which the helper draws one of for
+ * each agent: by its id, and by the name its cursor's tag shows while
+ * another agent's cursor shows too. A conversation that is no agent's names
+ * none, and moves the one cursor kept for those.
+ */
+export interface ComputerCursorOwner {
+  readonly cursor_agent?: string;
+  readonly cursor_name?: string;
+}
+
 export type ComputerHelperRequest =
-  | (MacComputerAction & ComputerAppPin)
+  | (MacComputerAction & ComputerAppPin & ComputerCursorOwner)
   | { readonly op: typeof COMPUTER_HELPER_OP.DESCRIBE_APP; readonly app: string }
+  | {
+      readonly op: typeof COMPUTER_HELPER_OP.RELEASE_CURSOR;
+      readonly cursor_agent?: string;
+    }
   | {
       readonly op:
         | typeof COMPUTER_HELPER_OP.LIST_INSTALLED_APPS
         | typeof COMPUTER_HELPER_OP.PERMISSIONS
-        | typeof COMPUTER_HELPER_OP.REQUEST_PERMISSIONS
-        | typeof COMPUTER_HELPER_OP.RELEASE_CURSOR;
+        | typeof COMPUTER_HELPER_OP.REQUEST_PERMISSIONS;
     };
 
 /** Whether macOS lets the helper capture other apps' windows and post input to them. */
@@ -151,6 +165,13 @@ const helperAppSchema = Schema.Struct({
 /** Where the agent's cursor stands, as a share of the window the app's last read captured, in the helper's spelling. */
 const helperCursorSchema = Schema.Struct({ x_fraction: Schema.Number, y_fraction: Schema.Number });
 
+/** One screenshot of a window, as base64 JPEG. */
+const helperShotSchema = Schema.Struct({
+  width: Schema.Number,
+  height: Schema.Number,
+  jpeg: Schema.String,
+});
+
 /**
  * One line of the helper's, by its request's id. Note that a read's answer
  * comes before a description's, since a read names its app too, and the
@@ -181,9 +202,7 @@ const helperLineSchema = Schema.fromJsonString(
       }),
       elements: Schema.String,
       truncated: Schema.Boolean,
-      shots: Schema.Array(
-        Schema.Struct({ width: Schema.Number, height: Schema.Number, jpeg: Schema.String }),
-      ),
+      shots: Schema.Array(helperShotSchema),
       cursor: Schema.optionalKey(helperCursorSchema),
     }),
     Schema.Struct({ id: Schema.Number, ok: Schema.Literal(true), app: helperAppSchema }),
@@ -198,6 +217,7 @@ const helperLineSchema = Schema.fromJsonString(
       ok: Schema.Literal(true),
       done: Schema.String,
       cursor: Schema.optionalKey(helperCursorSchema),
+      shot: Schema.optionalKey(helperShotSchema),
     }),
     Schema.Struct({
       id: Schema.Number,
@@ -274,7 +294,11 @@ function answerOf(line: HelperLine): ComputerHelperAnswer {
     };
   }
 
-  return { outcome: { done: line.done, ...wireCursor(line.cursor) } };
+  const { done, cursor, shot } = line;
+
+  return {
+    outcome: { done, ...wireCursor(cursor), ...(shot === undefined ? undefined : { shot }) },
+  };
 }
 
 /** What a request answers where the helper was still on an earlier one when its own time ran out. */

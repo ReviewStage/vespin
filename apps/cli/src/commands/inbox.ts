@@ -21,7 +21,7 @@ import type { AccountInboxAnswer } from "@repo/features/account-inbox-wire";
 import { CLI_EXIT } from "@repo/features/cli-exit";
 import { CLI_DO_ANSWER, cliInboxAnswer } from "@repo/features/cli-inbox-answer";
 import { cliRemindAt } from "@repo/features/cli-remind";
-import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { readerZone } from "@repo/features/date-mention";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import {
@@ -117,6 +117,7 @@ function authorOf(message: InboxMessage): string {
 const MEDIA_WORD = {
   PICTURE: "Picture",
   RECORDING: "Recording",
+  SOUND_CLIP: "Sound clip",
   PAGE: "Page",
   LINK: "Link",
 } as const;
@@ -125,7 +126,11 @@ const MEDIA_WORD = {
 function mediaLine(piece: InboxOptionMedia, at: number): string {
   switch (piece.type) {
     case INBOX_OPTION_MEDIA.FILE: {
-      const word = isVideoType(piece.mediaType) ? MEDIA_WORD.RECORDING : MEDIA_WORD.PICTURE;
+      const word = isVideoType(piece.mediaType)
+        ? MEDIA_WORD.RECORDING
+        : isAudioType(piece.mediaType)
+          ? MEDIA_WORD.SOUND_CLIP
+          : MEDIA_WORD.PICTURE;
 
       return `      ${word}: ${piece.caption ?? `${at + 1}`}`;
     }

@@ -5,5 +5,7 @@ import "./src/host/polyfills.js";
 import "./src/crash-reports.js";
 // Whether the launch began in the background is read before the screens load, since their modules run only once a route first draws.
 import "./src/launch-state.js";
+// The seal check runs here, before the host opens anything, where the launch asks for it (`-sealCheck true`).
+import "./src/host/seal-check.js";
 import "./src/notification-task.js";
 import "expo-router/entry";

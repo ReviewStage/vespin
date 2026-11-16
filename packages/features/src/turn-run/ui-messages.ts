@@ -17,6 +17,7 @@ import type {
   UIMessage,
   UITools,
 } from "ai";
+import { outOfMemoryMetadata } from "../out-of-memory-wire.js";
 import { TOOL_CALL_SETTLEMENT, type ToolCallSettlement } from "./run-events.js";
 import { TURN_TRIGGER, type TurnTrigger } from "./turn.js";
 
@@ -111,9 +112,15 @@ function reasoningPart(reasoning: ReasoningSummary): ReasoningUIPart {
   };
 }
 
-/** A tool part in the state its call settled in: the answer's output, or the error's own text. */
+/** A tool part in the state its call settled in: the answer's output, or the error's own text, and for a command killed out of memory its mark (`out-of-memory-wire.ts`). */
 export function settledToolPart(part: ToolPart, settlement: ToolCallSettlement): ToolPart {
-  const call = { type: part.type, toolCallId: part.toolCallId };
+  const call = {
+    type: part.type,
+    toolCallId: part.toolCallId,
+    ...(settlement.outOfMemory === undefined
+      ? undefined
+      : { resultProviderMetadata: outOfMemoryMetadata(settlement.outOfMemory) }),
+  };
 
   return settlement.state === TOOL_CALL_SETTLEMENT.OUTPUT_ERROR
     ? {

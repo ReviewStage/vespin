@@ -5,7 +5,12 @@ import {
   type AgentStatus,
   type AgentSummary,
 } from "@repo/features/agent-wire";
-import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
+import {
+  LINK_DESTINATION,
+  type LinkDestination,
+  type NumberedAddress,
+} from "@repo/features/link-grammar";
+import { machineAsksByAgent } from "@repo/features/machine-ask-live";
 import { TASK_BOUNDS, type TaskSummary } from "@repo/features/task-wire";
 import type { ToolTarget } from "@repo/features/tool-call-model";
 import { TRANSCRIPT_COPY } from "@repo/features/transcript-copy";
@@ -42,7 +47,7 @@ import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { useDraftedAgents } from "../composer-drafts.js";
 import { useLinkItems } from "../copy-link-item.js";
 import { leftMark } from "../draft-mark.js";
-import { machineAsksByAgent, useMachineAsks } from "../machine-asks.js";
+import { useMachineAsks } from "../machine-asks.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentCardReading } from "../tasks/agent-ref.js";
@@ -832,8 +837,8 @@ export function MainTabContent({
   shown: boolean;
   views: TabViews;
   onOpenDelegation: (agentId: string, callId: string, task: string, status: AgentStatus) => void;
-  /** Opens the agent's pull request in the side panel, by the agent, or another it opened by its number; none where no side panel stands to show it. */
-  onOpenPullRequest?: ((agentId: string, number?: number) => void) | undefined;
+  /** Opens a pull request an agent opened in the side panel, by its repository and number; none where no side panel stands to show it. */
+  onOpenPullRequest?: ((pullRequest: NumberedAddress) => void) | undefined;
   /** Opens what a call in the agent's transcript is about in the tab that draws it. */
   onOpenTarget: (target: ToolTarget) => void;
   /** The cards the transcript's rows that open a tab hang, as those tabs hang them. */
@@ -901,11 +906,7 @@ export function MainTabContent({
             onOpenSubagent={(callId, task, status) =>
               onOpenDelegation(agentId, callId, task, status)
             }
-            onOpenPullRequest={
-              onOpenPullRequest === undefined
-                ? undefined
-                : (number?: number) => onOpenPullRequest(agentId, number)
-            }
+            onOpenPullRequest={onOpenPullRequest}
             onOpenTarget={onOpenTarget}
             cards={cards.agent(agentId)}
             onHeld={views.onAgentHeld}

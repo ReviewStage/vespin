@@ -139,6 +139,8 @@ const TurnSchema = Schema.Struct({
   reconnecting: Schema.optionalKey(Schema.Number),
   /** The calls whose subagents run on in the background, by the key their end is named by (`NATIVE_MOMENT.SUBAGENT_RUNNING`). */
   subagents: Schema.optionalKey(Schema.Record(Schema.String, SubagentSchema)),
+  /** The calls it holds whose command the kernel killed for want of memory, by id, each with the sandbox's memory in GB, until it settles marked (`NATIVE_MOMENT.OUT_OF_MEMORY`). */
+  outOfMemory: Schema.optionalKey(Schema.Record(Schema.String, Schema.Number)),
   usage: Schema.optionalKey(UsageSchema),
   /** Why the newest model turn failed, where it did. */
   failure: Schema.optionalKey(Schema.String),
@@ -237,18 +239,27 @@ function stampedInput(
 
 /**
  * The moments with each call of an integration's tool naming the account it
- * ran on, as the turn under way recorded the agent's owner calling it
- * (`withTurnAccounts`), so every reader of the call names the account it ran
- * on, never one of their own. A call the turn names no account for, or one
- * read before the turn recorded them, is left as it was.
+ * ran on, by `accounts`: the names the turn under way recorded the agent's
+ * owner calling each account (`withTurnAccounts`), or, for an event that
+ * opens a turn, the names read for it (`turnAccountNames`), so every reader
+ * of the call names the account it ran on, never one of their own. A call
+ * settled with a new input is named by the call it settles, started in the
+ * same event or held by the turn. A call on an account no name stands for is
+ * left as it was.
  */
 export function withCallAccounts(
   state: NativeProjection,
   moments: readonly NativeMoment[],
+  accounts: Readonly<Record<string, string>>,
 ): readonly NativeMoment[] {
-  const accounts = state.turn?.accounts;
+  if (Object.keys(accounts).length === 0) return moments;
 
-  if (accounts === undefined) return moments;
+  // Note that a call may start and settle in one event, as Codex tells a call it answered at once, before the turn holds its name.
+  const started = new Map(
+    moments.flatMap((moment) =>
+      moment.kind === NATIVE_MOMENT.TOOL_STARTED ? [[moment.callId, moment.name] as const] : [],
+    ),
+  );
 
   return moments.map((moment) => {
     if (moment.kind === NATIVE_MOMENT.TOOL_STARTED) {
@@ -256,7 +267,7 @@ export function withCallAccounts(
     }
 
     if (moment.kind === NATIVE_MOMENT.TOOL_SETTLED && moment.input !== undefined) {
-      const name = state.turn?.calls[moment.callId];
+      const name = started.get(moment.callId) ?? state.turn?.calls[moment.callId];
 
       return { ...moment, input: stampedInput(name, moment.input, accounts) };
     }
@@ -418,14 +429,17 @@ function withSettledSubagents(turn: Turn, callId: string): Turn {
   return { ...turn, subagents };
 }
 
-/** The turn with the call answered: no longer running, and any background subagent under it settled. */
+/** The turn with the call answered: no longer running, any background subagent under it settled, and its out-of-memory mark let go. */
 function withSettledCall(turn: Turn, callId: string): Turn {
-  const settled = withSettledSubagents(turn, callId);
+  const subagentsSettled = withSettledSubagents(turn, callId);
+  const { outOfMemory, ...settled } = subagentsSettled;
+  const { [callId]: _marked, ...stillKilled } = outOfMemory ?? {};
+  const kept = outOfMemory === undefined ? settled : { ...settled, outOfMemory: stillKilled };
 
-  if (settled.running === undefined) return settled;
-  const { [callId]: _answered, ...running } = settled.running;
+  if (kept.running === undefined) return kept;
+  const { [callId]: _answered, ...running } = kept.running;
 
-  return { ...settled, running };
+  return { ...kept, running };
 }
 
 type UnknownCallResult = { readonly name: string; readonly input: WireValue };
@@ -617,17 +631,33 @@ class Fold {
     );
   }
 
+  /** A held call's command killed out of memory, kept until its answer settles it marked; nothing for a call the turn does not hold. */
+  #outOfMemory(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.OUT_OF_MEMORY }>): void {
+    const turn = this.state.turn;
+
+    if (turn?.calls[moment.callId] === undefined) return;
+    this.#setTurn({
+      ...turn,
+      outOfMemory: { ...turn.outOfMemory, [moment.callId]: moment.memoryGb },
+    });
+  }
+
   #toolSettled(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.TOOL_SETTLED }>): void {
     const turn = this.state.turn;
     const name = turn?.calls[moment.callId];
 
     if (turn === undefined || name === undefined) return;
+    const memoryGb = turn.outOfMemory?.[moment.callId];
+
     this.#setTurn(
       this.#tell(withSettledCall(turn, moment.callId), {
         kind: RUN_EVENT.TOOL_CALL_SETTLED,
         callId: moment.callId,
         name,
-        settlement: moment.settlement,
+        settlement:
+          memoryGb === undefined
+            ? moment.settlement
+            : { ...moment.settlement, outOfMemory: { memoryGb } },
         // Note that an unknown tool's call keeps the input it started with, which names the tool it called.
         ...(moment.input !== undefined && name !== UNKNOWN_TOOL
           ? { input: moment.input }
@@ -990,6 +1020,10 @@ class Fold {
         return;
       case NATIVE_MOMENT.TOOL_SETTLED:
         this.#toolSettled(moment);
+
+        return;
+      case NATIVE_MOMENT.OUT_OF_MEMORY:
+        this.#outOfMemory(moment);
 
         return;
       case NATIVE_MOMENT.SUBAGENT_RUNNING:
