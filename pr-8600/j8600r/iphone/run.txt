@@ -1,0 +1,187 @@
+==> iPhone 18 Pro (CE9E34B9-693F-475C-8AC7-308952029222)
+Monitoring boot status for iPhone 18 Pro (CE9E34B9-693F-475C-8AC7-308952029222).
+Booting device...
+[2026-11-16 02:13:10 +0000] Status=0, isTerminal=NO, Elapsed=00:00.
+	Booting
+
+[2026-11-16 02:13:12 +0000] Status=1, isTerminal=NO, Elapsed=00:01.
+	Waiting on BackBoard
+
+[2026-11-16 02:13:13 +0000] Status=4294967295, isTerminal=YES, Elapsed=00:02.
+	Finished
+
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+
+Waiting for flows to complete...
+[Failed] settings (39s) (Assertion is false: "Status, Working" is visible)
+[Passed] settings-integrations-tools (36s)
+[Passed] settings-mcp (28s)
+[Passed] machine-ask (18s)
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[Passed] pull-request (2m 26s)
+[Passed] settings-integrations (41s)
+[Passed] search (43s)
+[Passed] live-activity (51s)
+[Passed] settings-skill-add (46s)
+[Passed] settings-memory (49s)
+[Passed] navigation (38s)
+[Passed] keep (52s)
+[Passed] workspace (1m 2s)
+[Passed] settings-memory-edit (47s)
+[Passed] draft-rotate (17s)
+[Passed] agent (5m 25s)
+[Passed] settings-machine-connect (15s)
+[Passed] new-thread (41s)
+[Passed] agent-ports (36s)
+[Passed] sign-in (41s)
+[Passed] new-task (2m 4s)
+[Passed] related (46s)
+[Passed] task-relations (1m 19s)
+[Failed] inbox (51s) (Element not found: Text matching regex: Open.*)
+[Passed] failure-notice (2m 6s)
+[Passed] markdown (39s)
+[Passed] portrait-detail (19s)
+[Passed] task-history (45s)
+[Passed] undo (57s)
+[Passed] skeleton (1m 34s)
+[Passed] settings-skills (29s)
+[Passed] new-agent (48s)
+[Passed] compose (1m 35s)
+[Passed] answer (3m 37s)
+[Passed] settings-machines (28s)
+[Passed] accessibility (1m 43s)
+[Passed] select (26s)
+[Passed] following (1m 4s)
+[Passed] feedback (51s)
+[Passed] description-comment (59s)
+[Failed] tasks (8m 58s)
+[Failed] update-needed (6s)
+
+4/42 Flows Failed
+
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow background
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Press Home key... COMPLETED
+Notification sent to 'dev.vespin.ios'
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow open
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Swipe from (30%, 0%) to (30%, 70%) in 400 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that ".*Who can withdraw an invite.*" is visible... COMPLETED
+Take screenshot notification-center... COMPLETED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+Run flow when false is true... SKIPPED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+  Swiping in RIGHT direction on ".*Who can withdraw an invite.*"... COMPLETED
+Run flow when true is true... COMPLETED
+Tap on (Optional) id: swipe-action-button-identifier... COMPLETED
+Assert that "The member who sent it" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot notification-thread... COMPLETED
+error: the flows failed on iPhone 18 Pro in light; its output is under /Users/deanstratakos/vespin-ipad-agent/out/j8600/iphone/iphone-18-pro/light
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+
+Waiting for flows to complete...
+[Failed] settings (44s) (Assertion is false: "Status, Working" is visible)
+[Passed] settings-integrations-tools (31s)
+[Passed] settings-mcp (29s)
+[Passed] machine-ask (16s)
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[Passed] pull-request (2m 14s)
+[Passed] settings-integrations (32s)
+[Passed] search (40s)
+[Passed] live-activity (49s)
+[Passed] settings-skill-add (39s)
+[Passed] settings-memory (43s)
+[Passed] navigation (42s)
+[Passed] keep (54s)
+[Passed] workspace (1m 4s)
+[Passed] settings-memory-edit (45s)
+[Passed] draft-rotate (15s)
+[Passed] agent (5m 27s)
+[Passed] settings-machine-connect (16s)
+[Passed] new-thread (41s)
+[Passed] agent-ports (34s)
+[Passed] sign-in (40s)
+[Passed] new-task (1m 54s)
+[Passed] related (43s)
+[Passed] task-relations (1m 15s)
+[Failed] inbox (46s) (Element not found: Text matching regex: Open.*)
+[Passed] failure-notice (2m 6s)
+[Passed] markdown (37s)
+[Passed] portrait-detail (20s)
+[Passed] task-history (43s)
+[Passed] undo (52s)
+[Passed] skeleton (1m 33s)
+[Passed] settings-skills (33s)
+[Passed] new-agent (49s)
+[Passed] compose (1m 29s)
+[Passed] answer (3m 23s)
+[Passed] settings-machines (25s)
+[Passed] accessibility (1m 43s)
+[Passed] select (25s)
+[Passed] following (1m 5s)
+[Passed] feedback (46s)
+[Passed] description-comment (1m 2s)
+[Failed] tasks (7m 1s) (Element not found: Text matching regex: Should an owner be able to resend.*)
+[Passed] update-needed (11s)
+
+3/42 Flows Failed
+
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow background
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Press Home key... COMPLETED
+Notification sent to 'dev.vespin.ios'
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow open
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Swipe from (30%, 0%) to (30%, 70%) in 400 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that ".*Who can withdraw an invite.*" is visible... FAILED
+
+Assertion is false: ".*Who can withdraw an invite.*" is visible
+
+Assertion '".*Who can withdraw an invite.*" is visible' failed. Check the UI hierarchy in debug artifacts to verify the element state and properties.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state
+- This could be a real regression that needs to be addressed
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/j8600/iphone/iphone-18-pro/dark/notification/debug
+error: the flows failed on iPhone 18 Pro in dark; its output is under /Users/deanstratakos/vespin-ipad-agent/out/j8600/iphone/iphone-18-pro/dark

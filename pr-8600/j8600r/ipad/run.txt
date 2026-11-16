@@ -1,0 +1,95 @@
+==> iPad Pro 11-inch (M5) (BAD5C9D5-2CB3-466D-8272-09ADD64A74E8)
+Monitoring boot status for iPad Pro 11-inch (M5) (BAD5C9D5-2CB3-466D-8272-09ADD64A74E8).
+Booting device...
+[2026-11-16 00:32:43 +0000] Status=0, isTerminal=NO, Elapsed=00:00.
+	Booting
+
+[2026-11-16 00:32:47 +0000] Status=1, isTerminal=NO, Elapsed=00:03.
+	Waiting on BackBoard
+
+[2026-11-16 00:32:48 +0000] Status=2, isTerminal=NO, Elapsed=00:04.
+	Waiting on Data Migration
+		Reason:(null)
+		Migration Elapsed:00:00 seconds
+
+[2026-11-16 00:32:49 +0000] Status=4, isTerminal=NO, Elapsed=00:05.
+	Waiting on System App
+
+[2026-11-16 00:32:50 +0000] Status=4294967295, isTerminal=YES, Elapsed=00:06.
+	Finished
+
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+╭───────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                               │
+│   Get results faster by executing flows in parallel on Maestro Cloud virtual devices. Run:    │
+│   maestro cloud app_file flows_folder/                                                        │
+│                                                                                               │
+╰───────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
+Waiting for flows to complete...
+[Failed] settings (49s) (Assertion is false: "Status, Working" is visible)
+[Passed] settings-integrations-tools (32s)
+[Passed] machine-ask (19s)
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[Passed] pull-request (2m 19s)
+[Passed] settings-skill-add (1m 2s)
+[Passed] settings-memory (58s)
+[Passed] workspace (1m 24s)
+[Passed] draft-rotate (46s)
+[Passed] agent (6m 24s)
+[Passed] new-thread (44s)
+[Passed] sign-in (47s)
+[Failed] inbox (2m 18s) (Element not found: Text matching regex: Reminders)
+[Passed] failure-notice (2m 22s)
+[Passed] portrait-detail (1m 23s)
+[Passed] undo (1m 11s)
+[Passed] skeleton (1m 13s)
+[Passed] answer (4m 8s)
+[Failed] accessibility (2m 7s) (No visible element found: ".*, Settings")
+[Passed] feedback (55s)
+[Failed] tasks (12m 8s) (Element not found: Text matching regex: More)
+[Passed] update-needed (28s)
+
+4/21 Flows Failed
+
+error: the flows failed on iPad Pro 11-inch (M5) in light; its output is under /Users/deanstratakos/vespin-ipad-agent/out/j8600/ipad/ipad-pro-11-inch-(m5)/light
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+
+Waiting for flows to complete...
+[Failed] settings (45s) (Assertion is false: "Status, Working" is visible)
+[Passed] settings-integrations-tools (51s)
+[Passed] machine-ask (30s)
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[Passed] pull-request (2m 31s)
+[Passed] settings-skill-add (53s)
+[Passed] settings-memory (56s)
+[Passed] workspace (1m)
+[Passed] draft-rotate (37s)
+[Passed] agent (6m 3s)
+[Passed] new-thread (50s)
+[Passed] sign-in (59s)
+[Failed] inbox (2m 17s) (Element not found: Text matching regex: Reminders)
+[Passed] failure-notice (2m 15s)
+[Passed] portrait-detail (1m 16s)
+[Passed] undo (1m 2s)
+[Passed] skeleton (1m 11s)
+[Passed] answer (3m 30s)
+[Failed] accessibility (2m 14s) (No visible element found: ".*, Settings")
+[Passed] feedback (57s)
+[Failed] tasks (12m 25s) (Element not found: Text matching regex: More)
+[Passed] update-needed (25s)
+
+4/21 Flows Failed
+
+error: the flows failed on iPad Pro 11-inch (M5) in dark; its output is under /Users/deanstratakos/vespin-ipad-agent/out/j8600/ipad/ipad-pro-11-inch-(m5)/dark
