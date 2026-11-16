@@ -1,8 +1,9 @@
 import type { CheckoutSnapshot } from "@repo/agent-runner/protocol";
 import { nativeTurnId, reasoningItemId } from "@repo/database/models/ids";
+import { connectionLostProviderOf, usageLimitAgentOf } from "@repo/features/agent-runtime-models";
 import { CLAUDE_CODE_UNRECORDED_TOOL, UNKNOWN_TOOL } from "@repo/features/agent-tools";
 import { integrationOfRemoteTool } from "@repo/features/integration-wire";
-import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import type { ModelProvider } from "@repo/features/models-wire";
 import {
   isRecord,
   isWireString,
@@ -10,12 +11,7 @@ import {
   type WireValue,
   WireValueSchema,
 } from "@repo/wire";
-import {
-  CONNECTION_LOST_PROVIDER,
-  type ConnectionLostNotice,
-  USAGE_LIMIT_AGENT,
-  type UsageLimitMove,
-} from "@repo/wire/ui-messages";
+import type { ConnectionLostNotice, UsageLimitMove } from "@repo/wire/ui-messages";
 import { Option, Schema } from "effect";
 import {
   addModelUsage,
@@ -865,26 +861,23 @@ class Fold {
     this.#setTurn(undefined);
   }
 
-  /** The provider the turn's model is of, as a notice names it: OpenAI's, or Anthropic's for every other. */
-  #provider(): ConnectionLostNotice["provider"] {
-    const provider =
-      this.#context.model === undefined
-        ? undefined
-        : providerModelOf(this.#context.model)?.provider;
+  /** The provider the turn's model is of; none where the model is not known. */
+  #modelProvider(): ModelProvider | undefined {
+    return this.#context.model === undefined
+      ? undefined
+      : providerModelOf(this.#context.model)?.provider;
+  }
 
-    return provider === MODEL_PROVIDER.OPENAI
-      ? CONNECTION_LOST_PROVIDER.OPENAI
-      : CONNECTION_LOST_PROVIDER.ANTHROPIC;
+  /** The provider the turn's model is of, as a notice names it: Anthropic's where the model is not known. */
+  #provider(): ConnectionLostNotice["provider"] {
+    return connectionLostProviderOf(this.#modelProvider());
   }
 
   #limitNotice(turn: Turn, resetsAt: number | null, moved?: UsageLimitMove): Turn {
     return this.#tell(turn, {
       kind: RUN_EVENT.USAGE_LIMIT_REACHED,
       notice: {
-        agent:
-          this.#provider() === CONNECTION_LOST_PROVIDER.OPENAI
-            ? USAGE_LIMIT_AGENT.CODEX
-            : USAGE_LIMIT_AGENT.CLAUDE,
+        agent: usageLimitAgentOf(this.#modelProvider()),
         resetsAt,
         ...(moved === undefined ? undefined : { moved }),
       },
