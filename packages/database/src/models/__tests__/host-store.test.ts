@@ -36,7 +36,7 @@ import { keepRunsOnPick, readRunsOnPick } from "../runs-on-pick.js";
  * An account's hosts, over a real dialect: a member's session creates a
  * machine its account never registered, and enrolls its own registered
  * desktop in place, which is then read, listed, and removed as a host is;
- * a removed host's secret resolves nothing, and no account enrolls, lists,
+ * a removed host's secret and its runners' bearers resolve nothing, and no account enrolls, lists,
  * or removes another's. A Mac that joins again folds the account's other
  * Macs on its machine into it, never another account's, a Linux box's, or
  * itself, and a host's later register never folds.
@@ -251,6 +251,35 @@ it.layer(getTestDB())("the host store", (it) => {
         assert.ok(Option.isNone(yield* hostBySecret(old.secretHash)), "the folded Mac is refused");
         assert.equal(yield* hostRemoved(owner, old.id), true);
       }),
+  );
+
+  it.effect("a removed host's agents' runner bearers reach none of their tools", () =>
+    Effect.gen(function* () {
+      const { owner } = yield* openAccounts;
+      const host = yield* enrolledHost(owner, { name: "Box", platform: DEVICE_PLATFORM.LINUX });
+      const started = yield* startTask(owner, { name: "Invitations" });
+
+      const { agent } = Option.getOrThrow(
+        yield* createAgent(owner, {
+          taskId: started.id,
+          idempotencyKey: randomUUID(),
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          descriptionSnapshot: "# Invitations\n",
+          prompt: null,
+          repository: null,
+          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+          machine: AGENT_MACHINE.DEVICE,
+          deviceId: host.id,
+        }),
+      );
+
+      const bearerDigest = "e".repeat(64);
+      yield* recordAgentRunnerToken(owner, agent.id, bearerDigest);
+      yield* removeHost(owner, host.id);
+
+      assert.ok(Option.isNone(yield* readRunnerTokenConversation(bearerDigest)));
+    }),
   );
 
   it.effect("a fold never reaches another account's Mac on the same machine", () =>
