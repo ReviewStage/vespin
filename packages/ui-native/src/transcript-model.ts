@@ -199,8 +199,16 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly from?: readonly OriginPart[] | undefined;
       /** A webhook call's body, which rode in with an automation's prompt. */
       readonly body?: string | undefined;
-      /** When it was sent, as a call's header says the day and the time; none where the row kept no time. */
-      readonly sent: string | undefined;
+      /** The account that sent it, where the reader did not, which a run of lines is told apart by. */
+      readonly by: string | undefined;
+      /** When it was sent; none where the row kept no time. */
+      readonly at: number | undefined;
+      /** The day and time standing centered over it, as Messages heads talk that picks up again: on the first line with a time, and on one sent after a pause; none on the rest. */
+      readonly stamp: string | undefined;
+      /** Whether it follows a line of the same sender's run closely, so it stands tight under it and names no sender. */
+      readonly joinsAbove: boolean;
+      /** Whether a line of its run follows it closely, so it stands tight over it. */
+      readonly joinsBelow: boolean;
     }
   | { readonly kind: typeof TRANSCRIPT_ITEM.WORDS; readonly words: string }
   | {
@@ -291,6 +299,12 @@ const ORIGIN_WORDS = {
   RUN_BY: "Run by",
   ISSUE: "issue",
 } as const;
+
+/** How long after one line the same sender's next still joins its run: five minutes, as a thread's runs reach. */
+const RUN_REACH_MS = 5 * 60 * 1000;
+
+/** How long a pause between two sent lines has to be for the later one to stand under the day and time again: a quarter of an hour. */
+const STAMP_PAUSE_MS = 15 * 60 * 1000;
 
 /** How many lines of a call's block its card draws, as the panel's card cuts one. */
 const BLOCK_LINES = 40;
@@ -423,10 +437,12 @@ function saidItem(
   base: ItemBase,
   reading: TranscriptReading,
 ): TranscriptItem {
-  const sender =
-    line.sentBy === undefined || line.sentBy.userId === reading.readerId
-      ? undefined
-      : line.sentBy.name;
+  // Note that a line is the reader's own only by a user id that matches theirs, so an app's line, which has none, keeps its name while the reader is unknown.
+  const own =
+    line.sentBy === undefined ||
+    (line.sentBy.userId !== undefined && line.sentBy.userId === reading.readerId);
+
+  const sender = own ? undefined : line.sentBy?.name;
 
   const from = suggestionFrom(line, reading, sender);
   const words = messageWords(line);
@@ -439,7 +455,11 @@ function saidItem(
     words: from === undefined ? words : suggestionWords(words),
     sender: started ? undefined : sender,
     from,
-    sent: line.sentAt === undefined ? undefined : callHeading(line.sentAt, reading.now),
+    by: sender === undefined ? undefined : line.sentBy?.userId,
+    at: line.sentAt,
+    stamp: undefined,
+    joinsAbove: false,
+    joinsBelow: false,
   };
 }
 
@@ -447,7 +467,6 @@ function saidItem(
 function originItem(
   line: AgentTranscriptMessage,
   base: ItemBase,
-  reading: TranscriptReading,
   origin: TranscriptOrigin,
 ): TranscriptItem {
   return {
@@ -455,7 +474,11 @@ function originItem(
     kind: TRANSCRIPT_ITEM.SAID,
     words: origin.prompt ?? messageWords(line),
     sender: undefined,
-    sent: line.sentAt === undefined ? undefined : callHeading(line.sentAt, reading.now),
+    by: undefined,
+    at: line.sentAt,
+    stamp: undefined,
+    joinsAbove: false,
+    joinsBelow: false,
     from: origin.from,
     body: origin.body,
   };
@@ -725,7 +748,21 @@ function callItems(
           },
         ];
 
-  return [call, ...page, ...openedPullRequest(part, base, reading.pullRequests), ...mediaItem];
+  const opened = openedPullRequest(part, base, reading.pullRequests);
+
+  // Note that a pull request the call opened stands as its card alone, as a set of pictures shown stands as its pictures, since the call's line named the same pull request over it; a call refused opens none and keeps its line with the reason.
+  if (opened.length > 0) return [...page, ...opened, ...mediaItem];
+
+  // Note that a finished call a page's card stands for is drawn as its card alone, as the card names the page the call's line would say again.
+  if (
+    page.length > 0 &&
+    call.kind === TRANSCRIPT_ITEM.CALL &&
+    call.standing === CALL_STANDING.DONE &&
+    !open
+  )
+    return [...page, ...mediaItem];
+
+  return [call, ...page, ...mediaItem];
 }
 
 /** One part as its items; none for what the agent thought, or a part with nothing to draw. */
@@ -782,6 +819,54 @@ function rowItems(
   });
 }
 
+type SaidItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.SAID }>;
+
+/** Whether `next` joins the run `last` ends, as Messages groups a sender's bubbles: the same sender, sent within `RUN_REACH_MS`, neither headed by where it came from. */
+function joinsRun(last: SaidItem, next: SaidItem): boolean {
+  if (last.from !== undefined || next.from !== undefined || next.body !== undefined) return false;
+
+  if (last.by !== next.by || last.sender !== next.sender) return false;
+
+  if (last.at === undefined || next.at === undefined) return false;
+
+  return next.at >= last.at && next.at - last.at <= RUN_REACH_MS;
+}
+
+/**
+ * The items with the lines sent in runs and their times between them, as
+ * Messages draws a conversation: lines one sender sent back to back stand
+ * tight under one sender's name, and the day and time stand centered over
+ * the first line with a time and over one sent after a pause of
+ * `STAMP_PAUSE_MS` since the line before it, rather than under every line.
+ */
+function inRuns(items: readonly TranscriptItem[], now: number): readonly TranscriptItem[] {
+  let lastSent: number | undefined;
+
+  const timed = items.map((item, index): TranscriptItem => {
+    if (item.kind !== TRANSCRIPT_ITEM.SAID) return item;
+
+    const before = items[index - 1];
+    const joinsAbove = before?.kind === TRANSCRIPT_ITEM.SAID && joinsRun(before, item);
+
+    const paused =
+      item.at !== undefined && (lastSent === undefined || item.at - lastSent >= STAMP_PAUSE_MS);
+
+    const stamp = paused && item.at !== undefined ? callHeading(item.at, now) : undefined;
+
+    if (item.at !== undefined) lastSent = item.at;
+
+    return { ...item, joinsAbove, stamp };
+  });
+
+  return timed.map((item, index): TranscriptItem => {
+    const after = timed[index + 1];
+
+    if (item.kind !== TRANSCRIPT_ITEM.SAID || after?.kind !== TRANSCRIPT_ITEM.SAID) return item;
+
+    return { ...item, joinsBelow: after.joinsAbove };
+  });
+}
+
 /**
  * The transcript with the member's messages on their way at its end, each
  * as their own line under the id its row lands under, so the row takes its
@@ -834,7 +919,7 @@ export function transcriptItems(
 
       return [
         origin !== undefined && message.id === head
-          ? originItem(message, base, reading, origin)
+          ? originItem(message, base, origin)
           : saidItem(message, base, reading),
       ];
     }
@@ -873,11 +958,12 @@ export function transcriptItems(
   });
 
   const last = placed.at(-1)?.message.id;
+  const runs = inRuns(items, reading.now);
 
-  if (!reading.writing || last === undefined) return items;
+  if (!reading.writing || last === undefined) return runs;
 
   return [
-    ...items,
+    ...runs,
     {
       place: { ...linePlace(last, last), piece: TRANSCRIPT_PIECE.WORKING },
       depth: 0,
@@ -889,9 +975,9 @@ export function transcriptItems(
 
 /**
  * The items with their working line saying that the agent waits on the
- * reader (`waitingOnYouWords`), as the panel's does, so an agent held for
- * an answer never reads as working on; the items as they stand where none
- * waits.
+ * reader (`waitingOnYouWords`), as the panel's does, and its folds not
+ * turning, so an agent held for an answer never reads as working on; the
+ * items as they stand where none waits.
  */
 export function withWaitingLine(
   items: readonly TranscriptItem[],
@@ -900,7 +986,11 @@ export function withWaitingLine(
   if (waiting === undefined) return items;
 
   return items.map((item) =>
-    item.kind === TRANSCRIPT_ITEM.WORKING ? { ...item, words: waiting, waiting: true } : item,
+    item.kind === TRANSCRIPT_ITEM.WORKING
+      ? { ...item, words: waiting, waiting: true }
+      : item.kind === TRANSCRIPT_ITEM.FOLD
+        ? { ...item, running: false }
+        : item,
   );
 }
 

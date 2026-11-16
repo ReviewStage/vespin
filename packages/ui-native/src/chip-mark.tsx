@@ -7,8 +7,7 @@ import { createContext, type ReactNode, useContext, useState } from "react";
 import { Image as Photo, PixelRatio, Text, useColorScheme, View } from "react-native";
 import { CHIP_MARK, type ChipMark, type ChipMarkOf } from "./chip-mark-model.js";
 import { type Glyph, glyphSymbol } from "./glyph.js";
-import { HARNESS_MARK_ASSET, MONOGRAM_SCALE, TILE_ROUNDING } from "./marks.js";
-import { monogramOf } from "./monogram.js";
+import { HARNESS_MARK_ASSET, TILE_ROUNDING } from "./marks.js";
 import { type BrandColors, toneColor } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { tileHue } from "./workspace-tile-model.js";
@@ -111,8 +110,8 @@ function PictureOverLetters({
   );
 }
 
-/** The share of a tile its letter stands at, as `WorkspaceTile`'s. */
-const TILE_LETTER_SCALE = 0.5;
+/** The share of a face or tile its one letter stands at, as `Avatar`'s and `WorkspaceTile`'s. */
+const LETTER_SCALE = 0.5;
 
 /** A chip's mark at `size` points, as the panel's chip draws its entity's. */
 export function ChipMarkView({
@@ -140,8 +139,8 @@ export function ChipMarkView({
           corner={size / 2}
           ground={colors.AVATAR_TILE}
           ink={colors.AVATAR_INK}
-          letters={monogramOf(mark.name)}
-          letterScale={MONOGRAM_SCALE}
+          letters={identityLetter(mark.name)}
+          letterScale={LETTER_SCALE}
         />
       );
     case CHIP_MARK.HARNESS:
@@ -162,7 +161,7 @@ export function ChipMarkView({
           ground={tileHue(mark.workspace.id, dark)}
           ink={ON_IDENTITY}
           letters={identityLetter(mark.workspace.name)}
-          letterScale={TILE_LETTER_SCALE}
+          letterScale={LETTER_SCALE}
         />
       );
   }
