@@ -51,6 +51,12 @@ enum CallRelevance {
   static let score: Double = 100
 }
 
+/// A press on the call's activity, as `CallPressIntent` pings it: what it sets, and the agent its activity shows.
+private struct CallPress {
+  let press: String
+  let agentId: String
+}
+
 public final class LiveActivityModule: Module {
   /// The defaults key and the ping `StopAgentIntent` names.
   private static let stopsKey = "dev.vespin.live-activity.stops"
@@ -79,6 +85,10 @@ public final class LiveActivityModule: Module {
   private var watchers: [Task<Void, Never>] = []
   private var stopObserver: NSObjectProtocol?
   private var callPressObserver: NSObjectProtocol?
+  /// Where the call's presses wait their turn, taken one at a time in the order they came.
+  private var callPressQueue: AsyncStream<CallPress>.Continuation?
+  /// The one task that takes the call's presses from their queue.
+  private var callPressTaker: Task<Void, Never>?
 
   public func definition() -> ModuleDefinition {
     Name("LiveActivity")
@@ -93,22 +103,31 @@ public final class LiveActivityModule: Module {
       self.stopObserver = NotificationCenter.default.addObserver(
         forName: Self.stopAsked, object: nil, queue: .main
       ) { [weak self] _ in Task { @MainActor in self?.handOnStops() } }
+      // Note that presses are taken one at a time, in the order they came, since each waits on the activity's update before it goes on, and two such waits may end in either order: a mute then an unmute must reach the call in that order, or the call ends muted.
+      let (callPresses, nextCallPress) = AsyncStream.makeStream(of: CallPress.self)
+      self.callPressQueue = nextCallPress
+      self.callPressTaker = Task { @MainActor [weak self] in
+        for await taken in callPresses {
+          guard let self else { return }
+          guard self.listening.contains("onCallPress") else { continue }
+          // Note that the activity shows a mute at once, rather than after JavaScript's round trip mirrors the call back, which felt delayed on a call; the mirror then confirms it, or sets it back where the call refused.
+          await Self.showCallPress(taken.press, agentId: taken.agentId)
+          self.sendEvent("onCallPress", ["press": taken.press, "agentId": taken.agentId])
+        }
+      }
       self.callPressObserver = NotificationCenter.default.addObserver(
         forName: Self.callPressed, object: nil, queue: .main
-      ) { [weak self] note in
+      ) { note in
         guard let press = note.userInfo?["press"] as? String,
           let agentId = note.userInfo?["agentId"] as? String
         else { return }
-        Task { @MainActor in
-          guard let self, self.listening.contains("onCallPress") else { return }
-          // Note that the activity shows a mute at once, rather than after JavaScript's round trip mirrors the call back, which felt delayed on a call; the mirror then confirms it, or sets it back where the call refused.
-          await Self.showCallPress(press, agentId: agentId)
-          self.sendEvent("onCallPress", ["press": press, "agentId": agentId])
-        }
+        nextCallPress.yield(CallPress(press: press, agentId: agentId))
       }
     }
 
     OnDestroy {
+      self.callPressQueue?.finish()
+      self.callPressTaker?.cancel()
       self.watchers.forEach { $0.cancel() }
       if let stopObserver = self.stopObserver { NotificationCenter.default.removeObserver(stopObserver) }
       if let callPressObserver = self.callPressObserver {
