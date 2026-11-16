@@ -1,7 +1,6 @@
 import { QUEUE_PAUSE, type QueuedMessage, type QueuePaused } from "@repo/features/agent-queue-wire";
-import { pausedWords, QUEUE_WORDS } from "@repo/features/agent-queue-words";
+import { pausedWords, QUEUE_DELETE_QUESTION, QUEUE_WORDS } from "@repo/features/agent-queue-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { IRREVERSIBLE_WORDS } from "@repo/features/words";
 import {
   BANNER_LOOK,
   Banner,
@@ -101,9 +100,9 @@ function queuerOf(message: QueuedMessage, directory: Directory): Actor | undefin
 
 /** What asking to delete a queued message says. */
 const DELETE_QUESTION: DialogQuestion = {
-  title: "Delete queued message?",
-  body: `It will not be sent, and any files it carries go with it. ${IRREVERSIBLE_WORDS}`,
-  verb: "Delete message",
+  title: QUEUE_DELETE_QUESTION.TITLE,
+  body: QUEUE_DELETE_QUESTION.BODY,
+  verb: QUEUE_DELETE_QUESTION.VERB,
   running: "Deleting",
   loss: CONFIRM_LOSS.IRREVERSIBLE,
   replayUnmasked: true,

@@ -20,8 +20,10 @@
  * offers the skills of the agent's task's repository (`use-skill-offer.ts`).
  */
 
+import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
 import {
   pausedWords,
+  QUEUE_DELETE_QUESTION,
   QUEUE_LEFT_WORDS,
   QUEUE_REFUSED_WORDS,
 } from "@repo/features/agent-queue-words";
@@ -113,11 +115,28 @@ export interface AgentComposer {
   readonly paused: string | undefined;
   /** Sends a queued message now; none for a reader who did not start the agent, whose queue they read only. */
   readonly steer: ((id: string) => void) | undefined;
+  /** Asks whether to delete a queued message, which `removing` then asks; none for a reader who did not start the agent. */
   readonly remove: ((id: string) => void) | undefined;
+  /** The question a queued message's Delete asks first, as the panel's queue asks it, since its words and files go for good. */
+  readonly removing: QueuedDeleteAsk;
+  /** Puts the queued message at `from` at `to`, as the panel's drag drops it; none for a reader who did not start the agent. */
+  readonly move: ((from: number, to: number) => void) | undefined;
+  /** Lets a paused queue hand its messages on again; none for a reader who did not start the agent. */
+  readonly resume: (() => void) | undefined;
   /** What the last send, pick, Stop, or queue change that did not go said. */
   readonly note: string | undefined;
   /** The skills a `/` being typed offers; none while no `/` word ends the words. */
   readonly skills: SkillsOffered | undefined;
+}
+
+/** A queued message's Delete as `ConfirmAsk` asks it: the panel's words, whether it stands, and its answers. */
+export interface QueuedDeleteAsk {
+  readonly title: string;
+  readonly message: string;
+  readonly act: string;
+  readonly presented: boolean;
+  readonly onAct: () => void;
+  readonly onDismiss: () => void;
 }
 
 /** A message suggestion a box was opened on: its button, by which its words are laid in once, the words, and the send that goes through it in place of a message. */
@@ -177,6 +196,8 @@ export function useAgentComposer(
   // Whether a send through the suggestion is out, so a second never goes through its one press.
   const [suggestionOut, setSuggestionOut] = useState(false);
   const [note, setNote] = useState<string | undefined>(undefined);
+  // The queued message whose Delete asks, by its id; none while none asks.
+  const [deleting, setDeleting] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const [stopping, setStopping] = useState(false);
   const writing = status !== undefined && agentStillWriting(status);
@@ -358,6 +379,21 @@ export function useAgentComposer(
   const queue = transcript?.word?.queue;
   const held = queue?.messages ?? [];
 
+  // Note that a pause until the machine starts is said by the empty transcript, whose Retry lifts it, as the panel's dock leaves it out.
+  const paused =
+    queue?.paused === undefined || queue.paused.because === QUEUE_PAUSE.BOOT_FAILED
+      ? undefined
+      : queue.paused;
+
+  const move = (from: number, to: number) => {
+    const order = held.map((message) => message.id);
+    const [taken] = order.splice(from, 1);
+
+    if (taken === undefined) return;
+    order.splice(to, 0, taken);
+    change({ change: QUEUE_CHANGE.REORDER, order });
+  };
+
   const queued: readonly QueuedLine[] = held.map((message) => ({
     id: message.id,
     words:
@@ -384,13 +420,28 @@ export function useAgentComposer(
     stop: writing ? stop : undefined,
     stopping,
     queued,
-    paused: queue?.paused === undefined ? undefined : pausedWords(queue.paused),
+    paused: paused === undefined ? undefined : pausedWords(paused),
     steer: controlsQueue
       ? (messageId) => change({ change: QUEUE_CHANGE.STEER, messageId })
       : undefined,
-    remove: controlsQueue
-      ? (messageId) => change({ change: QUEUE_CHANGE.DELETE, messageId })
-      : undefined,
+    remove: controlsQueue ? setDeleting : undefined,
+    removing: {
+      title: QUEUE_DELETE_QUESTION.TITLE,
+      message: QUEUE_DELETE_QUESTION.BODY,
+      act: QUEUE_DELETE_QUESTION.VERB,
+      presented: deleting !== undefined,
+      onAct: () => {
+        setDeleting(undefined);
+
+        if (deleting !== undefined) change({ change: QUEUE_CHANGE.DELETE, messageId: deleting });
+      },
+      onDismiss: () => setDeleting(undefined),
+    },
+    move: controlsQueue && held.length > 1 ? move : undefined,
+    resume:
+      controlsQueue && paused !== undefined
+        ? () => change({ change: QUEUE_CHANGE.RESUME })
+        : undefined,
     note,
     skills,
   };
