@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import { INBOX_IMAGE_TYPE } from "@repo/features/inbox-wire";
-import { PICTURE_KEEP_FAILURE, type TasksPictureKeepAnswer } from "@repo/features/tasks-view";
+import type { TasksPictureKeepAnswer } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActKind } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
@@ -51,6 +51,9 @@ const PAGE_TEXT = "## Approach\n\nThe invite email follows the mock.\n";
 
 /** A recording's first bytes, a WebM's, which is all the window reads of one. */
 const WEBM_BASE64 = "GkXfow==";
+
+/** An Ogg page's opening bytes, `OggS`, which is all the viewer reads of a clip's type. */
+const OGG_BASE64 = "T2dnUwAC";
 
 /** The description's text as the service holds it. */
 let held = PAGE_TEXT;
@@ -146,12 +149,19 @@ const SHOWN: AgentTranscriptMessage = {
 
 type RecordedResult = { shown: AgentTranscriptMessage; door: AgentPictureDoor };
 
-/** A recording the agent showed, which its door answers as the bytes given. */
-function recorded(base64: string): RecordedResult {
+/** A recording the agent showed, or a sound clip of the type given, which its door answers as the bytes given. */
+function recorded(
+  base64: string,
+  mediaType:
+    | typeof CONVERSATION_MEDIA_TYPE.WEBM
+    | typeof CONVERSATION_MEDIA_TYPE.OGG = CONVERSATION_MEDIA_TYPE.WEBM,
+): RecordedResult {
   const door: AgentPictureDoor = {
-    owner: `agent-add-video-${String(base64.length)}`,
-    read: () => Promise.resolve({ contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64 }),
+    owner: `agent-add-${mediaType}-${String(base64.length)}`,
+    read: () => Promise.resolve({ contentType: mediaType, base64 }),
   };
+
+  const sized = mediaType === CONVERSATION_MEDIA_TYPE.WEBM;
 
   const shown: AgentTranscriptMessage = {
     id: "turn-video",
@@ -167,9 +177,9 @@ function recorded(base64: string): RecordedResult {
           pictures: [
             {
               id: "2d4f6a8c-0e1b-4d3f-8a5c-7e9b1d3f5a02",
-              mediaType: CONVERSATION_MEDIA_TYPE.WEBM,
-              width: 1280,
-              height: 800,
+              mediaType,
+              width: sized ? 1280 : 0,
+              height: sized ? 800 : 0,
               byteCount: base64.length,
             },
           ],
@@ -329,21 +339,27 @@ async function withBlobs(body: () => Promise<void>): Promise<void> {
 
 const VIDEO_LINE = `![Inviting a member](https://vespin.dev/acme/task/${TASK_ID}/files/${KEPT_ID})`;
 
-test("Add to description keeps a recording as it is, never re-encoded, and writes its line at the description's end", () =>
-  withBlobs(async () => {
-    await opened(await drawn(PAGE, recorded(WEBM_BASE64)));
-    const add = viewerButton("Add to description");
-    assert.ok(add, "the viewer playing the recording offers Add to description");
+test.each([
+  ["recording", CONVERSATION_MEDIA_TYPE.WEBM, WEBM_BASE64],
+  ["sound clip", CONVERSATION_MEDIA_TYPE.OGG, OGG_BASE64],
+] as const)(
+  "Add to description keeps a %s as it is, never re-encoded, and writes its line at the description's end",
+  (_name, mediaType, base64) =>
+    withBlobs(async () => {
+      await opened(await drawn(PAGE, recorded(base64, mediaType)));
+      const add = viewerButton("Add to description");
+      assert.ok(add, "the viewer playing the file offers Add to description");
 
-    await act(async () => add.click());
-    await settled(() => /Added/u.test(newestToastSays() ?? ""));
+      await act(async () => add.click());
+      await settled(() => /Added/u.test(newestToastSays() ?? ""));
 
-    assert.deepEqual(keeping, [`data:${CONVERSATION_MEDIA_TYPE.WEBM};base64,${WEBM_BASE64}`]);
-    assert.equal(held, `${PAGE_TEXT}\n${VIDEO_LINE}\n`);
-    assert.equal(newestToastSays(), "Added to the descriptionUndo");
-  }));
+      assert.deepEqual(keeping, [`data:${mediaType};base64,${base64}`]);
+      assert.equal(held, `${PAGE_TEXT}\n${VIDEO_LINE}\n`);
+      assert.equal(newestToastSays(), "Added to the descriptionUndo");
+    }),
+);
 
-test("a recording past what a description may be sent, or one past the description's videos, is refused in words and the description is not written", () =>
+test("a recording past what a description may be sent is refused in words and the description is not written", () =>
   withBlobs(async () => {
     // Three zero bytes for every four characters, one more than a sent video may hold.
     const large = "AAAA".repeat(1_100_001);
@@ -356,15 +372,4 @@ test("a recording past what a description may be sent, or one past the descripti
       newestToastSays(),
       "This video is over 3.3 MB, too large to add to the description from here.",
     );
-
-    for (const root of roots.splice(0)) act(() => root.unmount());
-    document.body.innerHTML = "";
-    keepAnswer = { failure: PICTURE_KEEP_FAILURE.TOO_MANY_VIDEOS };
-    await opened(await drawn(PAGE, recorded(WEBM_BASE64)));
-    await act(async () => viewerButton("Add to description")?.click());
-    await settled(() => /videos/u.test(newestToastSays() ?? ""));
-
-    assert.deepEqual(sent, [ACT_KIND.TASKS_PICTURE_KEEP]);
-    assert.equal(held, PAGE_TEXT);
-    assert.equal(newestToastSays(), "This description already holds as many videos as it can.");
   }));

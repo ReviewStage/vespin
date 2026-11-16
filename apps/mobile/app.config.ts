@@ -11,8 +11,16 @@ import {
 import { basename, join } from "node:path";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
-import { CLAWD_PATH, GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
-import { TASK_STATUS_SYMBOL_TEMPLATES } from "@repo/brand/task-status-symbols";
+import {
+  CLAWD_PATH,
+  CURSOR_PATH,
+  GITHUB_PATH,
+  GOOGLE_MARK_LAYERS,
+} from "@repo/brand/provider-marks";
+import {
+  TASK_PRIORITY_SYMBOL_TEMPLATES,
+  TASK_STATUS_SYMBOL_TEMPLATES,
+} from "@repo/brand/task-status-symbols";
 import type { SentryEnvironment } from "@repo/host/sentry-environment";
 import { Predicate } from "effect";
 import type { ConfigContext, ExpoConfig } from "expo/config";
@@ -76,7 +84,8 @@ const PNG_COLOR_TYPE_RGB = 2;
 // marks from the brand's paths: GitHub's a template SwiftUI draws in the ink
 // of the words beside it, Google's in its own four colors; and the harness
 // marks `AgentTile` draws (`HARNESS_MARK_ASSET`), Claude Code's Clawd in its
-// own clay, centered on a square canvas so it never stretches.
+// own clay, centered on a square canvas so it never stretches, and Cursor's
+// cube a template in the ink of the row it leads.
 const IMAGE_SETS = [
   {
     NAME: "BrandMark",
@@ -106,6 +115,13 @@ const IMAGE_SETS = [
       SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -4.5 47 47"><path fill="#D97757" d="${CLAWD_PATH}"/></svg>`,
     },
     TEMPLATE: false,
+  },
+  {
+    NAME: "CursorMark",
+    LIGHT: {
+      SVG: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="#000" d="${CURSOR_PATH}"/></svg>`,
+    },
+    TEMPLATE: true,
   },
 ] as const;
 
@@ -865,7 +881,11 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }
 
-      for (const { name, svg } of [...LUCIDE_SYMBOL_TEMPLATES, ...TASK_STATUS_SYMBOL_TEMPLATES])
+      for (const { name, svg } of [
+        ...LUCIDE_SYMBOL_TEMPLATES,
+        ...TASK_STATUS_SYMBOL_TEMPLATES,
+        ...TASK_PRIORITY_SYMBOL_TEMPLATES,
+      ])
         writeSymbolSet(catalog, name, svg);
 
       return modConfig;

@@ -231,6 +231,7 @@ function VersionWords({
   onOpenLink,
   pictureSource,
   videoAt,
+  fileAt,
 }: DescriptionPictures & {
   readonly diff: VersionDiff;
   readonly first: boolean;
@@ -251,6 +252,7 @@ function VersionWords({
             onOpenLink={onOpenLink}
             pictureSource={pictureSource}
             videoAt={videoAt}
+            fileAt={fileAt}
           />
         ))}
       </ListSection>
@@ -301,6 +303,9 @@ export function Version({
 
   const videoAt = (written: string) =>
     shownPictures.videoAt(written) ?? struckPictures.videoAt(written);
+
+  const fileAt = (written: string) =>
+    shownPictures.fileAt(written) ?? struckPictures.fileAt(written);
 
   const restore = () => {
     if (restoring) return;
@@ -354,6 +359,7 @@ export function Version({
       onOpenLink={openLink}
       pictureSource={pictureSource}
       videoAt={videoAt}
+      fileAt={fileAt}
     />
   );
 

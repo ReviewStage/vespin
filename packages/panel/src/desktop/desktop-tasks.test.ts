@@ -950,7 +950,7 @@ test("opening another task draws only its own title and sub-tasks, none of the t
   container.remove();
 });
 
-test("a chip in the plan naming a pull request one of the task's agents opened opens that agent's Pull request tab on its conversation, another of the task's repository, an archived agent's among them, opens by its number, and another repository's opens on GitHub", async () => {
+test("a chip in the plan naming a pull request opens a Pull request tab of exactly that pull request on its conversation, by its repository and number: the agent's own, another the agent opened, an archived agent's, and another repository's alike", async () => {
   const agent: AgentSummary = {
     id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
     taskId: TASK.id,
@@ -1011,7 +1011,7 @@ test("a chip in the plan naming a pull request one of the task's agents opened o
               region: { kind: TASK_REGION.READY, task },
               sidePanel: {
                 ...DOCUMENT_PANEL,
-                onPullRequestView: (tab, view) => opened.push({ agentId: tab.changes, view }),
+                onPullRequestView: (tab, view) => opened.push({ pullRequest: tab.changes, view }),
                 onOpen: (tab) => opened.push(tab),
               },
               agents: agentsControl({
@@ -1068,27 +1068,23 @@ test("a chip in the plan naming a pull request one of the task's agents opened o
   });
 
   act(() => own.click());
-  assert.deepEqual(opened, [
-    { agentId: agent.id, view: PULL_REQUEST_VIEW.CONVERSATION },
-    changesTab(agent.id),
-  ]);
-  assert.deepEqual(onGitHub, [], "nothing opened on GitHub");
-
-  // Another pull request of the task's repository opens in a Pull request tab of its own, by its number.
+  // Note that the agent's row names #42, so #7 is the agent's other pull request, which once opened the tab of its own.
   act(() => chip("relay#7")?.click());
-  // An archived agent's Pull request tab is not drawn on the task, so its pull request opens by its number too.
   act(() => chip("relay#9")?.click());
-  assert.deepEqual(opened.slice(2), [
-    { agentId: agent.id, view: PULL_REQUEST_VIEW.CONVERSATION },
-    changesTab(agent.id, 7),
-    { agentId: agent.id, view: PULL_REQUEST_VIEW.CONVERSATION },
-    changesTab(agent.id, 9),
+  act(() => chip("billing#3")?.click());
+
+  const tabOf = (repository: string, number: number) => [
+    { pullRequest: { repository, number }, view: PULL_REQUEST_VIEW.CONVERSATION },
+    changesTab({ repository, number }),
+  ];
+
+  assert.deepEqual(opened, [
+    ...tabOf("acme/relay", 42),
+    ...tabOf("acme/relay", 7),
+    ...tabOf("acme/relay", 9),
+    ...tabOf("acme/billing", 3),
   ]);
   assert.deepEqual(onGitHub, [], "nothing opened on GitHub");
-
-  act(() => chip("billing#3")?.click());
-  assert.deepEqual(onGitHub, [elsewhere]);
-  assert.equal(opened.length, 6, "no tab was asked for");
   act(() => root.unmount());
   container.remove();
 });

@@ -5,8 +5,8 @@
 appId: dev.vespin.ios
 ---
 # Launched on the host's Inbox fixture with `-refuseWrites true`, so the
-# fixture refuses a task's status, its pin, a follower added and a memory
-# deleted as the service would
+# fixture refuses a task's status, its pin, its start, a follower added and a
+# memory deleted as the service would
 # (`src/host/fixture-host.ts`), and no server is reached.
 - launchApp:
     clearState: true
@@ -55,7 +55,13 @@ appId: dev.vespin.ios
 # notice stands at its top edge.
 - tapOn: "Tasks"
 - tapOn: "Billing export"
-- tapOn: "Following"
+# Note that a landscape iPad also stands "Following" as a sidebar row and as
+# a section of the Tasks list beside the task, both below its "Created by"
+# line, so the task's own Following chip, above that line, is the one tapped.
+- waitForAnimationToEnd
+- tapOn:
+    text: "Following"
+    above: "Created by.*"
 - tapOn: "Add a follower"
 - tapOn: "Alan Turing.*"
 - assertVisible: "Following could not be changed\\..*"
@@ -84,3 +90,27 @@ appId: dev.vespin.ios
 - assertVisible: "The memory could not be deleted\\..*"
 - waitForAnimationToEnd
 - takeScreenshot: failure-notice-settings
+# New task closes the moment Start is pressed, as the panel's does; its start
+# refused, the notice says so with Try again, which sends the same start, and
+# the start taken on Try again opens its task, which the fixture never reads.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      refuseWrites: "true"
+- assertVisible: "Recorded the invite flow"
+- tapOn: "New task"
+- assertVisible: "Describe the task"
+- inputText: "Write the invite reminder email."
+- hideKeyboard
+- tapOn: "Start"
+- assertNotVisible: "Describe the task"
+- assertVisible: "Try again"
+- waitForAnimationToEnd
+- takeScreenshot: failure-notice-start-refused
+- tapOn: "Try again"
+- extendedWaitUntil:
+    visible: "Reading the task"
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: failure-notice-start-again
