@@ -17,7 +17,6 @@ import {
   moveDisabled,
   padding,
   scrollContentBackground,
-  scrollDisabled,
 } from "@expo/ui/swift-ui/modifiers";
 import { useWindowDimensions } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
@@ -45,7 +44,7 @@ const QUEUED_LINES_LARGE = 3;
 /** How many queued messages stand in sight before the rest scroll, as the panel's dock stands about three. */
 const LINES_IN_SIGHT = 3;
 
-/** How tall a queued message stands at an accessibility size, its few lines over its acts, in rows of a press's height. */
+/** How tall a queued message, or why the queue stands paused, stands at an accessibility size, its few lines beside or over its acts, in rows of a press's height. */
 const LARGE_ROW_PRESSES = 2.5;
 
 /** The most of the window's height the queue takes, so the composer and the keyboard always keep the rest. */
@@ -310,8 +309,7 @@ export function QueuedLines({
   if (lines.length === 0 && paused === undefined) return null;
 
   const row = large ? press * LARGE_ROW_PRESSES : press;
-  const header = paused === undefined ? 0 : press;
-  const whole = lines.length * row + header;
+  const header = paused === undefined ? 0 : row;
 
   const height = Math.min(
     Math.min(lines.length, LINES_IN_SIGHT) * row + header,
@@ -329,7 +327,7 @@ export function QueuedLines({
       modifiers={[
         listStyle("plain"),
         scrollContentBackground("hidden"),
-        scrollDisabled(whole <= height),
+        // Note that the list always scrolls, since a row's words or why the queue paused may wrap past the height laid for them, and Resume stands at that line's end.
         frame({ height }),
         padding({ vertical: SPACE.TIGHT }),
         ...glass,

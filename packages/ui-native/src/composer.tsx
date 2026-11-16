@@ -509,7 +509,6 @@ export function ComposerFoot(props: ComposerProps & { readonly shown: boolean })
     padding({ all: BAR_EDGE }),
     ...useBarGlass(),
     padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
-    ...(props.above === undefined ? [measured] : []),
     ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
   ];
 
@@ -527,12 +526,12 @@ export function ComposerFoot(props: ComposerProps & { readonly shown: boolean })
       </VStack>
     );
 
-  // Note that what stands over the composer is measured with it, so the notice stands over both.
-  return props.above === undefined ? (
-    foot
-  ) : (
+  // Note that what stands over the composer is measured with it, so the notice stands over both, and the composer keeps its place under it whether or not anything stands there, so its field is never drawn anew as the queue comes and goes.
+  return (
     <VStack spacing={SPACE.TIGHT * 2} modifiers={[measured]}>
-      <VStack modifiers={[padding({ horizontal: SPACE.ROW + 2 })]}>{props.above}</VStack>
+      {props.above === undefined ? null : (
+        <VStack modifiers={[padding({ horizontal: SPACE.ROW + 2 })]}>{props.above}</VStack>
+      )}
       {foot}
     </VStack>
   );
