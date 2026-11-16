@@ -11,8 +11,9 @@
  * Cursor's own words for it: its model id, the parameter its effort is
  * spelled by (`effort`, `reasoning_effort`, or `reasoning`, as each model
  * names its own), whether it takes `fast`, the parameters every choice of
- * it sends as they are, and whether it runs in Max Mode, so the runner is
- * handed Cursor's `ModelSelection` (`{ id, params, maxMode }`) whole.
+ * it sends as they are, its two context windows where it lists two, and
+ * which of its variants run in Max Mode alone, so the runner is handed
+ * Cursor's `ModelSelection` (`{ id, params, maxMode }`) whole.
  *
  * Each of Cursor's models is read by one rule (`cursorModelsOf`). Its
  * effort is the first of the three effort parameters it lists, and a model
@@ -21,12 +22,14 @@
  * window, thinking) are pinned as its default variant sets them. It is
  * offered at fast speed beside its own, as AI Gateway's fast slugs are,
  * where a variant of it runs `fast`: its own id sends `fast: false`, and
- * the id with `-fast` (`MODEL_SPEED_SUFFIX`) sends `fast: true`. Where it
- * lists variants that run only in Max Mode, Cursor's larger window at a
- * price of its own, it is also offered as a model of its own named so
- * (`… (Max Mode)`, `cursor/<id>-max`), pinned as its Max Mode variant sets
- * its parameters and sent with `maxMode`, so a Max Mode run is always one
- * its starter chose by name. Cursor's `default` is offered as `cursor/auto`,
+ * the id with `-fast` (`MODEL_SPEED_SUFFIX`) sends `fast: true`. Where a
+ * variant of it runs on a larger `context` than its default one, as
+ * Grok 4.7's 500K does beside its 256K, it offers the two as its context
+ * windows, chosen on the Context row as every model's are, the larger the
+ * default; Cursor runs some of those only in Max Mode, which a choice is
+ * sent with wherever every variant it matches runs in Max Mode alone, as
+ * Cursor's own picker now does, so no Max Mode entry is offered of its own.
+ * Cursor's `default` is offered as `cursor/auto`,
  * since Cursor answers to `auto` too and a tab reads the label off the id.
  *
  * Where Cursor's list cannot be read (no key yet, Cursor down, an answer
@@ -42,6 +45,7 @@
 import type { CursorModelSelection } from "@repo/agent-runner/protocol";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { PROVIDER_KEY_UNREADABLE } from "@repo/database/models/provider-key-seal";
+import { CONTEXT_WINDOW, type ContextWindow } from "@repo/features/agent-wire";
 import { modelIdAtSpeed } from "@repo/features/model-effort";
 import { type MacOffer, MODEL_PROVIDER, MODEL_SPEED, NO_EFFORT } from "@repo/features/models-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
@@ -97,8 +101,11 @@ const FAST_ON = "true";
 /** Cursor's own id for its choice of model per request, and the name we offer it under. */
 const CURSOR_AUTO = { CURSOR_ID: "default", SLUG: "auto" } as const;
 
-/** What ends a Max Mode model's catalog id, and its name. */
-const MAX_MODE = { ID_SUFFIX: "-max", NAME_SUFFIX: " (Max Mode)" } as const;
+/** How many tokens each suffix of a `context` value stands for: `256k`, `1m`. */
+const TOKEN_SUFFIX = { k: 1_000, m: 1_000_000 } as const;
+
+/** A `context` value as Cursor spells it: a count and its suffix. */
+const CONTEXT_VALUE = /^(\d+(?:\.\d+)?)([km])$/u;
 
 /** One parameter of Cursor's `ModelSelection`, as its model list spells it. */
 interface CursorParameterValue {
@@ -108,7 +115,7 @@ interface CursorParameterValue {
 
 /** One Cursor model as we offer it, and Cursor's own words for it. */
 export interface CursorModel {
-  /** Its catalog id at standard speed (`cursor/grok-4.7`, `cursor/grok-4.7-max`). */
+  /** Its catalog id at standard speed (`cursor/grok-4.7`). */
   readonly catalogId: string;
   /** Cursor's model id, which `ModelSelection.id` takes. */
   readonly cursorId: string;
@@ -118,17 +125,30 @@ export interface CursorModel {
   readonly effort: { readonly parameter: string; readonly values: readonly string[] } | undefined;
   /** Whether it takes `fast`, and so is offered at fast speed beside its own. */
   readonly fast: boolean;
-  /** What every choice of it sends as it is: its window, and any other parameter its variant sets. */
+  /** What every choice of it sends as it is: its standard window, and any other parameter its variant sets. */
   readonly pinned: readonly CursorParameterValue[];
-  /** Whether it runs only in Max Mode, which every choice of it asks for. */
-  readonly maxMode: boolean;
+  /** Its two context windows, in tokens, and the `context` value its larger one is sent as, at its own speed and at fast speed; none at a speed it runs on one window alone. */
+  readonly windows: { readonly standard?: CursorWindows; readonly fast?: CursorWindows };
+  /** The parameters of each variant that runs in Max Mode alone, but its effort, by which a choice matching only those is sent in Max Mode. */
+  readonly maxModeOnly: readonly (readonly CursorParameterValue[])[];
+  /** The parameters of each variant that runs outside Max Mode, but its effort. */
+  readonly outsideMaxMode: readonly (readonly CursorParameterValue[])[];
+}
+
+/** A model's two context windows as Cursor lists them. */
+interface CursorWindows {
+  readonly standardTokens: number;
+  readonly longTokens: number;
+  /** The `context` value the larger window is sent as. */
+  readonly longContext: string;
 }
 
 /**
  * The models offered where Cursor's own list cannot be read, read from it
  * on Nov 16, 2026: Composer 2.5, Cursor's own, whose default variant is its
  * fast one; Auto, Cursor's choice of model per request; and Grok 4.7,
- * pinned to its 256K window, its 500K one being Max Mode's.
+ * pinned to its 256K window, its 500K one running in Max Mode alone, which
+ * a model offered with no variants read cannot tell.
  */
 const PINNED_CURSOR_MODELS: readonly CursorModel[] = [
   {
@@ -138,7 +158,9 @@ const PINNED_CURSOR_MODELS: readonly CursorModel[] = [
     effort: undefined,
     fast: true,
     pinned: [],
-    maxMode: false,
+    windows: {},
+    maxModeOnly: [],
+    outsideMaxMode: [],
   },
   {
     catalogId: "cursor/auto",
@@ -147,7 +169,9 @@ const PINNED_CURSOR_MODELS: readonly CursorModel[] = [
     effort: undefined,
     fast: false,
     pinned: [],
-    maxMode: false,
+    windows: {},
+    maxModeOnly: [],
+    outsideMaxMode: [],
   },
   {
     catalogId: "cursor/grok-4.7",
@@ -159,7 +183,9 @@ const PINNED_CURSOR_MODELS: readonly CursorModel[] = [
     },
     fast: true,
     pinned: [{ id: CURSOR_PARAMETER.CONTEXT, value: "256k" }],
-    maxMode: false,
+    windows: {},
+    maxModeOnly: [],
+    outsideMaxMode: [],
   },
 ];
 
@@ -229,24 +255,85 @@ function runsFast(variants: readonly CursorVariant[]): boolean {
   );
 }
 
-/** Whether two sets of parameters say the same, whatever their order. */
-function sameParams(
-  left: readonly CursorParameterValue[],
-  right: readonly CursorParameterValue[],
-): boolean {
-  return (
-    left.length === right.length &&
-    left.every((param) =>
-      right.some((other) => other.id === param.id && other.value === param.value),
-    )
-  );
+/** A variant's `context` value; none where it sets none. */
+function contextOf(variant: CursorVariant | undefined): string | undefined {
+  return variant?.params.find((param) => param.id === CURSOR_PARAMETER.CONTEXT)?.value;
+}
+
+/** A `context` value as a count of tokens; none for one spelled otherwise. */
+function tokensOf(value: string | undefined): number | undefined {
+  const match = value === undefined ? null : CONTEXT_VALUE.exec(value.toLowerCase());
+
+  if (match?.[1] === undefined) return undefined;
+  // Note that the pattern takes `k` or `m` alone, so any suffix but `m` is `k`.
+  const scale = match[2] === "m" ? TOKEN_SUFFIX.m : TOKEN_SUFFIX.k;
+
+  return Math.round(Number(match[1]) * scale);
 }
 
 /**
- * One of Cursor's models as we offer it: at most two models, its own,
- * pinned as its default variant runs outside Max Mode, and, where it lists
- * variants that run only in Max Mode, its Max Mode one, pinned as the
- * first of those that sets its parameters otherwise.
+ * The model's two windows: the default variant's `context` and the largest
+ * any other variant runs on, where both read as tokens and the second is
+ * the larger; none otherwise, as for a model that lists one window.
+ */
+function windowsOf(
+  base: CursorVariant | undefined,
+  variants: readonly CursorVariant[],
+): CursorWindows | undefined {
+  const standardTokens = tokensOf(contextOf(base));
+
+  if (standardTokens === undefined) return undefined;
+  let windows: CursorWindows | undefined;
+
+  for (const variant of variants) {
+    const longContext = contextOf(variant);
+    const longTokens = tokensOf(longContext);
+
+    if (longContext === undefined || longTokens === undefined || longTokens <= standardTokens) {
+      continue;
+    }
+
+    if (windows === undefined || longTokens > windows.longTokens) {
+      windows = { standardTokens, longTokens, longContext };
+    }
+  }
+
+  return windows;
+}
+
+/** The variants that run at the speed given: those setting `fast` so, and those setting no `fast`. */
+function variantsAt(variants: readonly CursorVariant[], fast: boolean): readonly CursorVariant[] {
+  return variants.filter((variant) => {
+    const speed = variant.params.find((param) => param.id === CURSOR_PARAMETER.FAST)?.value;
+
+    return speed === undefined || (speed === FAST_ON) === fast;
+  });
+}
+
+/** A model's windows at each speed it runs, each read as `windowsOf` reads them, none at a speed with one window alone. */
+function windowsAtSpeeds(
+  base: CursorVariant | undefined,
+  variants: readonly CursorVariant[],
+): CursorModel["windows"] {
+  const standard = windowsOf(base, variantsAt(variants, false));
+  const fast = windowsOf(base, variantsAt(variants, true));
+
+  return {
+    ...(standard === undefined ? undefined : { standard }),
+    ...(fast === undefined ? undefined : { fast }),
+  };
+}
+
+/** A variant's parameters but its effort, by which a choice is matched to it. */
+function matchedParams(variant: CursorVariant): readonly CursorParameterValue[] {
+  return variant.params.filter((param) => !EFFORT_PARAMETERS.includes(param.id));
+}
+
+/**
+ * One of Cursor's models as we offer it: pinned as its default variant runs
+ * outside Max Mode, at fast speed too where any variant runs fast, and on
+ * two context windows where a variant runs on a larger one, each choice
+ * sent in Max Mode where it matches only variants that run in it alone.
  */
 function offeredOf(item: CursorListItem): readonly CursorModel[] {
   const slug = item.id === CURSOR_AUTO.CURSOR_ID ? CURSOR_AUTO.SLUG : item.id;
@@ -265,50 +352,32 @@ function offeredOf(item: CursorListItem): readonly CursorModel[] {
   const maxOnly = variants.filter((variant) => variant.isMaxMode === true);
   const base = standard.find((variant) => variant.isDefault === true) ?? standard[0];
 
+  // A model all of whose variants run in Max Mode alone has no window to stand on outside it.
+  if (base === undefined && variants.length > 0) return [];
+
   // Note that a model listing no variants runs as its parameters say, `fast` among them.
-  const listsFast =
-    item.parameters?.some(
-      (param) =>
-        param.id === CURSOR_PARAMETER.FAST && param.values.some((each) => each.value === FAST_ON),
-    ) ?? false;
+  const fast =
+    variants.length === 0
+      ? (item.parameters?.some(
+          (param) =>
+            param.id === CURSOR_PARAMETER.FAST &&
+            param.values.some((each) => each.value === FAST_ON),
+        ) ?? false)
+      : runsFast(variants);
 
-  const own: readonly CursorModel[] =
-    base === undefined && variants.length > 0
-      ? []
-      : [
-          {
-            catalogId: `${MODEL_PROVIDER.CURSOR}/${slug}`,
-            cursorId: item.id,
-            name: item.displayName ?? item.id,
-            effort,
-            fast: variants.length === 0 ? listsFast : runsFast(standard),
-            pinned: [
-              ...otherParams(base),
-              ...pinnedSpeed(base, variants.length === 0 ? listsFast : runsFast(standard)),
-            ],
-            maxMode: false,
-          },
-        ];
-
-  const maxBase =
-    maxOnly.find((variant) => !sameParams(otherParams(variant), otherParams(base))) ?? maxOnly[0];
-
-  const max: readonly CursorModel[] =
-    maxBase === undefined
-      ? []
-      : [
-          {
-            catalogId: `${MODEL_PROVIDER.CURSOR}/${slug}${MAX_MODE.ID_SUFFIX}`,
-            cursorId: item.id,
-            name: `${item.displayName ?? item.id}${MAX_MODE.NAME_SUFFIX}`,
-            effort,
-            fast: runsFast(maxOnly),
-            pinned: [...otherParams(maxBase), ...pinnedSpeed(maxBase, runsFast(maxOnly))],
-            maxMode: true,
-          },
-        ];
-
-  return [...own, ...max];
+  return [
+    {
+      catalogId: `${MODEL_PROVIDER.CURSOR}/${slug}`,
+      cursorId: item.id,
+      name: item.displayName ?? item.id,
+      effort,
+      fast,
+      pinned: [...otherParams(base), ...pinnedSpeed(base, fast)],
+      windows: windowsAtSpeeds(base, variants),
+      maxModeOnly: maxOnly.map(matchedParams),
+      outsideMaxMode: standard.map(matchedParams),
+    },
+  ];
 }
 
 /** Cursor's list as the models we offer, in Cursor's order, each model read on its own and one it cannot read left out, the first of any two that would take one id kept. */
@@ -423,7 +492,17 @@ export const cursorModelCatalogLayer = Layer.effect(
 
 // ------------------------------------------------------------- the offer
 
-/** The catalog entries one Cursor model is offered as: its own, and its fast version right after it where it takes `fast`. */
+/** A model's windows as a catalog entry offers them; nothing for a speed with one window. */
+function offeredWindows(windows: CursorWindows | undefined) {
+  return windows === undefined
+    ? undefined
+    : {
+        contextWindows: { standardTokens: windows.standardTokens, longTokens: windows.longTokens },
+        contextWindow: windows.longTokens,
+      };
+}
+
+/** The catalog entries one Cursor model is offered as: its own, and its fast version right after it where it takes `fast`, each with the windows it runs on at its speed. */
 function catalogEntriesOf(model: CursorModel): readonly OfferedModel[] {
   const own: OfferedModel = {
     id: model.catalogId,
@@ -432,14 +511,15 @@ function catalogEntriesOf(model: CursorModel): readonly OfferedModel[] {
     efforts: model.effort?.values ?? [NO_EFFORT],
   };
 
-  if (!model.fast) return [own];
+  if (!model.fast) return [{ ...own, ...offeredWindows(model.windows.standard) }];
 
   return [
-    own,
+    { ...own, ...offeredWindows(model.windows.standard) },
     {
       ...own,
       id: modelIdAtSpeed(model.catalogId, MODEL_SPEED.FAST),
       name: `${model.name} (Fast)`,
+      ...offeredWindows(model.windows.fast),
     },
   ];
 }
@@ -504,23 +584,43 @@ function cursorModelAt(
   return undefined;
 }
 
+/** Whether a choice's parameters say what a variant's do, each the variant sets. */
+function matches(
+  variant: readonly CursorParameterValue[],
+  chosen: readonly CursorParameterValue[],
+): boolean {
+  return variant.every((param) =>
+    chosen.some((each) => each.id === param.id && each.value === param.value),
+  );
+}
+
 /**
- * The model a Cursor agent on the catalog id and effort given runs, as
- * Cursor's SDK takes it (`ModelSelection`): Cursor's id, every parameter
- * the model pins, its effort under the parameter it spells it by where it
- * lists the effort, `fast` where it takes it, true for the fast version,
- * and Max Mode for a Max Mode model. None for an id that is not one of the
- * Cursor models given.
+ * The model a Cursor agent on the catalog id, effort, and window given
+ * runs, as Cursor's SDK takes it (`ModelSelection`): Cursor's id, every
+ * parameter the model pins, its larger `context` on the long window of a
+ * model with two, the default, its effort under the parameter it spells it
+ * by where it lists the effort, `fast` where it takes it, true for the fast
+ * version, and Max Mode where the choice matches only variants that run in
+ * it alone. None for an id that is not one of the Cursor models given.
  */
 export function cursorModelSelectionOf(
   cursorModels: readonly CursorModel[],
   catalogId: string,
   effort: string,
+  contextWindow?: ContextWindow,
 ): CursorModelSelection | undefined {
   const found = cursorModelAt(cursorModels, catalogId);
 
   if (found === undefined) return undefined;
   const { model } = found;
+  const windows = found.fast ? model.windows.fast : model.windows.standard;
+  const longContext = contextWindow === CONTEXT_WINDOW.STANDARD ? undefined : windows?.longContext;
+
+  const pinned = model.pinned.map((param) =>
+    longContext !== undefined && param.id === CURSOR_PARAMETER.CONTEXT
+      ? { ...param, value: longContext }
+      : param,
+  );
 
   const effortParam =
     model.effort?.values.includes(effort) === true
@@ -528,11 +628,15 @@ export function cursorModelSelectionOf(
       : [];
 
   const fastParam = model.fast ? [{ id: CURSOR_PARAMETER.FAST, value: String(found.fast) }] : [];
-  const params = [...model.pinned, ...effortParam, ...fastParam];
+  const params = [...pinned, ...effortParam, ...fastParam];
+
+  const maxMode =
+    model.maxModeOnly.some((variant) => matches(variant, params)) &&
+    !model.outsideMaxMode.some((variant) => matches(variant, params));
 
   return {
     id: model.cursorId,
     ...(params.length === 0 ? undefined : { params }),
-    ...(model.maxMode ? { maxMode: true } : undefined),
+    ...(maxMode ? { maxMode: true } : undefined),
   };
 }
