@@ -47,7 +47,6 @@ export const GATEWAY_METHOD = {
   TERMINALS_INPUT: "terminals.input",
   TERMINALS_RESIZE: "terminals.resize",
   TERMINALS_ACK: "terminals.ack",
-  TERMINALS_SHOWN: "terminals.shown",
   TERMINALS_DISCONNECT: "terminals.disconnect",
   TERMINALS_WAKE: "terminals.wake",
   /**

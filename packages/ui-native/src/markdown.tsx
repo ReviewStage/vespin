@@ -3,6 +3,7 @@
 import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, type EntityKind, entityWordHeard } from "@repo/features/entity-kind";
 import type { LinkStanding } from "@repo/features/link-standing-model";
+import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import { SymbolView } from "expo-symbols";
@@ -15,12 +16,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  type TextLayoutEvent,
   type TextStyle,
   useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AudioClip } from "./audio-clip.js";
+import { ChipMarkView, ChipSymbol, useChipMarkOf } from "./chip-mark.js";
+import type { ChipMarkOf } from "./chip-mark-model.js";
 import { DraftCard } from "./draft-card.js";
+import { FileChip } from "./file-chip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
 import { ISSUE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -39,6 +45,9 @@ import {
   type MarkdownSuggestion,
   markdownBlocks,
 } from "./markdown-model.js";
+import { MediaBox } from "./media-box.js";
+import { MediaFailed } from "./media-failed.js";
+import { type MediaSize, mediaFrame } from "./media-frame.js";
 import { Press } from "./press.js";
 import {
   SUGGESTION_LOOK,
@@ -47,7 +56,7 @@ import {
   suggestionHeard,
 } from "./suggestion-look.js";
 import { type BrandColors, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
-import { SPACE } from "./tokens/space.js";
+import { RADIUS, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
@@ -92,7 +101,9 @@ const ENTITY_SYMBOL: Readonly<Record<EntityKind, Glyph>> = {
   [ENTITY_KIND.DATE]: GLYPH.DATE,
   // Note that an app on a Mac is never read from the phone, so it wears an app's shape rather than its icon.
   [ENTITY_KIND.MAC_APP]: GLYPH.APP,
-  [ENTITY_KIND.COMPUTER]: GLYPH.COMPUTER,
+  [ENTITY_KIND.COMPUTER]: GLYPH.COMPUTER_USE,
+  // Note that a machine's link names its id alone, and the phone reads no machine for its platform, so it wears a Mac's shape.
+  [ENTITY_KIND.MACHINE]: GLYPH.MAC,
 };
 
 /** Each heading level's size and weight, a step above the 15 pt words as the denser scale reads, never past a page's own heading. */
@@ -128,14 +139,46 @@ const MARKER_WIDTH = 1.4;
  */
 const BULLET = { SIZE: 0.34, MIDDLE: 0.69, INSET: 0.2 } as const;
 
+/**
+ * How far apart a flow's blocks stand, in body sizes, as the panel's
+ * Markdown flow sets them (`prose.css`'s `.ui-markdown-flow`): a paragraph's
+ * gap between blocks, a heading close over what it names, a rule a gap and a
+ * half from what it divides, and a list's items close together. Note that
+ * these scale with the reader's text size, as the words do.
+ */
+const BLOCK_GAP = { BLOCK: 1, UNDER_HEADING: 0.25, RULE: 1.5, ITEM: 0.25 } as const;
+
+/** How far apart the blocks inside one list item or one quote stand, in body sizes, as the panel's `li > * + *` and quote's own set them. */
+const NESTED_GAP = 0.5;
+
+/**
+ * Where a list item's first line of words stands, in points from the item's
+ * top, as the line was laid out: its baseline and its face's lowercase and
+ * capital heights. Note that an inline chip makes its line taller and sets
+ * the words lower in it, so a marker placed by the body size alone stood
+ * high beside such a line; one placed on the measured baseline does not.
+ */
+type FirstLine = {
+  readonly baseline: number;
+  readonly xHeight: number;
+  readonly capHeight: number;
+};
+
+/** Reports a list item's first line once it is laid out; none where nothing asks. */
+type OnFirstLine = ((line: FirstLine) => void) | undefined;
+
+/** A quote's rule, the line down its left. */
+const QUOTE_RULE = 3;
+
+/** How far a quote's words stand in from the column: its rule and its padding. */
+const QUOTE_INSET = QUOTE_RULE + SPACE.ROW;
+
 const styles = StyleSheet.create({
-  flow: { gap: SPACE.ROW },
-  itemBody: { gap: SPACE.TIGHT },
   marker: { position: "absolute", left: 0, top: 0 },
-  quote: { borderLeftWidth: 3, paddingLeft: SPACE.ROW, gap: SPACE.ROW },
-  well: { borderRadius: 8, padding: SPACE.ROW },
+  quote: { borderLeftWidth: QUOTE_RULE, paddingLeft: SPACE.ROW },
+  well: { borderRadius: RADIUS.BLOCK, padding: SPACE.ROW },
   tableBox: { alignSelf: "stretch", overflow: "hidden" },
-  table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
+  table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.BLOCK, overflow: "hidden" },
   row: { flexDirection: "row" },
   cell: { paddingHorizontal: SPACE.ROW, paddingVertical: 6 },
   chip: {
@@ -143,11 +186,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 3,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 6,
+    borderRadius: RADIUS.TAG,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
-  picture: { width: "100%", borderRadius: 8 },
+  picture: { width: "100%", borderRadius: RADIUS.BLOCK },
   pending: { alignItems: "center", justifyContent: "center" },
   viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
   viewerClose: { position: "absolute", padding: SPACE.ROW },
@@ -163,12 +206,18 @@ interface Drawing {
   readonly openLink: (address: string) => void;
   /** The address a picture is drawn from, by the address its words name it by; none while it is on its way. */
   readonly pictureSource: (written: string) => string | null | undefined;
+  /** Reads a picture that could not be read again, by the address its words name it by; none offers nothing. */
+  readonly onRetryPicture: ((written: string) => void) | undefined;
   /** The video a picture's address names, played in its place; none where the address names a picture. */
   readonly videoAt: (written: string) => MarkdownVideo | undefined;
+  /** The file a picture's address names, such as a PDF a description keeps as it keeps a picture, drawn as its chip in its place; none where the address names a picture. */
+  readonly fileAt: (written: string) => MarkdownFile | undefined;
   /** Whether a heading is heard as one, on a page of words alone, where VoiceOver's Headings rotor walks its sections. */
   readonly headings: boolean;
   /** What GitHub holds of the pull request or issue a chip's page names, as the host read it; none while unread or unanswered. */
   readonly linkStanding: (page: string) => LinkStanding | undefined;
+  /** The mark the app holds for the entity a chip names (`ChipMarkProvider`); none where it holds nothing. */
+  readonly markOf: ChipMarkOf;
   /** How a suggestion's link stands, by its button and the words it was written with; none where it is drawn as the plain link it is. */
   readonly suggestion: (link: ReplyButtonLink, words: string) => SuggestionLook | undefined;
 }
@@ -239,31 +288,6 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   }
 }
 
-/**
- * A chip's glyph in a `size`-point square in `color`, through the system's
- * symbol view, which the app's patch (`patches/expo-symbols@58.0.4.patch`)
- * lets read Lucide's custom symbols from the asset catalog as well as SF
- * Symbols, so a chip costs no SwiftUI host of its own.
- */
-function ChipGlyph({
-  glyph,
-  size,
-  color,
-}: {
-  readonly glyph: Glyph;
-  readonly size: number;
-  readonly color: string;
-}) {
-  return (
-    <SymbolView
-      name={glyphSymbol(glyph)}
-      size={size}
-      tintColor={color}
-      accessibilityElementsHidden
-    />
-  );
-}
-
 /** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere. */
 function MentionChip({
   chip,
@@ -277,6 +301,12 @@ function MentionChip({
   const size = TEXT_SIZE.FOOTNOTE;
   const standing = standingLook(chip, drawing);
   const heard = standing?.heard ?? chip.heard;
+
+  // Note that a GitHub page's standing wins over the entity's mark, since only the provider's answer says where it stands.
+  const mark =
+    standing === undefined && chip.of !== undefined ? drawing.markOf(chip.of) : undefined;
+
+  const markSize = size * fontScale;
 
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
@@ -294,11 +324,15 @@ function MentionChip({
           },
         ]}
       >
-        <ChipGlyph
-          glyph={standing?.glyph ?? ENTITY_SYMBOL[chip.entity]}
-          size={size * fontScale}
-          color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
-        />
+        {mark === undefined ? (
+          <ChipSymbol
+            glyph={standing?.glyph ?? ENTITY_SYMBOL[chip.entity]}
+            size={markSize}
+            color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
+          />
+        ) : (
+          <ChipMarkView mark={mark} size={markSize} colors={colors} />
+        )}
         <Text
           numberOfLines={1}
           style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
@@ -350,7 +384,7 @@ function SuggestionChip({
           },
         ]}
       >
-        <ChipGlyph
+        <ChipSymbol
           glyph={offered ? SUGGESTION_SYMBOL : ENTITY_SYMBOL[ENTITY_KIND.AGENT]}
           size={size * fontScale}
           color={colors.TEXT_MUTED}
@@ -363,7 +397,7 @@ function SuggestionChip({
         </Text>
         {offered ? null : (
           <>
-            <ChipGlyph
+            <ChipSymbol
               glyph={SUGGESTION_SYMBOL}
               size={size * fontScale}
               color={colors.TEXT_MUTED}
@@ -566,18 +600,35 @@ function runsText(runs: readonly MarkdownRun[], drawing: Drawing): string {
   return runs.map((run) => runText(run, drawing)).join("");
 }
 
+/** Reads a laid-out line's first line for `onFirstLine`. Note that iOS reports each line's `ascender` as its baseline's offset from the line's top, measured, so a chip's height is in it. */
+function firstLineOf(onFirstLine: (line: FirstLine) => void) {
+  return (event: TextLayoutEvent) => {
+    const first = event.nativeEvent.lines[0];
+
+    if (first === undefined) return;
+
+    onFirstLine({
+      baseline: first.y + first.ascender,
+      xHeight: first.xHeight,
+      capHeight: first.capHeight,
+    });
+  };
+}
+
 /** A line of words: a paragraph's, a heading's, or a table cell's. */
 function Line({
   runs,
   drawing,
   style,
   heading,
+  onFirstLine,
 }: {
   readonly runs: readonly MarkdownRun[];
   readonly drawing: Drawing;
   readonly style?: TextStyle | undefined;
   /** Whether the line is heard as a heading. */
   readonly heading?: boolean | undefined;
+  readonly onFirstLine?: OnFirstLine;
 }) {
   const openings = lineOpenings(runs, drawing);
 
@@ -595,6 +646,7 @@ function Line({
       accessibilityLabel={lineHeard(runs, drawing)}
       {...(heading === true ? { accessibilityRole: "header" as const } : {})}
       {...actions}
+      {...(onFirstLine === undefined ? {} : { onTextLayout: firstLineOf(onFirstLine) })}
       style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}
     >
       <Runs runs={runs} drawing={drawing} />
@@ -609,19 +661,30 @@ const TASK_BOX_HEARD = { DONE: "Done", OPEN: "Not done" } as const;
 function Marker({
   checked,
   number,
+  firstLine,
   drawing,
 }: {
   readonly checked: boolean | undefined;
   readonly number: number | undefined;
+  /** The item's first line as laid out; none until it is, or where the item opens with no line of words. */
+  readonly firstLine: FirstLine | undefined;
   readonly drawing: Drawing;
 }) {
   const { colors, fontScale } = drawing;
   const width = PROSE_SIZE * MARKER_WIDTH * fontScale;
+  const size = PROSE_SIZE * fontScale;
+
+  // Note that each marker centers on the first line as measured, a box on its capitals and a bullet on its lowercase letters, and falls back to the body size's own place until the line is laid out.
+  const centerOn = (height: number, middle: (line: FirstLine) => number, fallback: number) =>
+    firstLine === undefined ? fallback : Math.max(0, middle(firstLine) - height / 2);
 
   if (checked !== undefined) {
     return (
       <View
-        style={{ width, paddingTop: 2 * fontScale }}
+        style={{
+          width,
+          paddingTop: centerOn(size, (line) => line.baseline - line.capHeight / 2, 2 * fontScale),
+        }}
         accessible
         accessibilityRole="checkbox"
         accessibilityLabel={checked ? TASK_BOX_HEARD.DONE : TASK_BOX_HEARD.OPEN}
@@ -629,7 +692,7 @@ function Marker({
       >
         <SymbolView
           name={glyphSymbol(checked ? GLYPH.BOX_TICKED : GLYPH.BOX)}
-          size={PROSE_SIZE * fontScale}
+          size={size}
           tintColor={checked ? colors.ACCENT : colors.TEXT_MUTED}
         />
       </View>
@@ -638,7 +701,6 @@ function Marker({
 
   // Note that a bullet is a dot drawn at the panel's disc's size on the first line's lowercase letters, since the bullet character stands small and high in the system face; it is never heard, while an ordered list's number is, since its order is part of what it says.
   if (number === undefined) {
-    const size = PROSE_SIZE * fontScale;
     const dot = size * BULLET.SIZE;
 
     return (
@@ -646,7 +708,11 @@ function Marker({
         style={{
           width,
           alignItems: "flex-end",
-          paddingTop: size * BULLET.MIDDLE - dot / 2,
+          paddingTop: centerOn(
+            dot,
+            (line) => line.baseline - line.xHeight / 2,
+            size * BULLET.MIDDLE - dot / 2,
+          ),
           paddingRight: size * BULLET.INSET,
         }}
         accessibilityElementsHidden
@@ -664,10 +730,41 @@ function Marker({
     );
   }
 
+  return <ItemNumber number={number} width={width} firstLine={firstLine} drawing={drawing} />;
+}
+
+/** An ordered item's number, set on the item's first line's baseline: it measures its own and stands lower by however far the item's line sets its words lower. */
+function ItemNumber({
+  number,
+  width,
+  firstLine,
+  drawing,
+}: {
+  readonly number: number;
+  readonly width: number;
+  readonly firstLine: FirstLine | undefined;
+  readonly drawing: Drawing;
+}) {
+  const [own, setOwn] = useState<number | undefined>(undefined);
+
+  const drop =
+    firstLine === undefined || own === undefined ? 0 : Math.max(0, firstLine.baseline - own);
+
+  // Note that the drop stands on a box around the number rather than on its words, so the number's own measured baseline never moves with it.
   return (
-    <Text style={{ width, fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "right" }}>
-      {`${number}.`}
-    </Text>
+    <View style={{ paddingTop: drop }}>
+      <Text
+        onTextLayout={firstLineOf((line) => setOwn(line.baseline))}
+        style={{
+          width,
+          fontSize: PROSE_SIZE,
+          color: drawing.colors.TEXT_MUTED,
+          textAlign: "right",
+        }}
+      >
+        {`${number}.`}
+      </Text>
+    </View>
   );
 }
 
@@ -688,21 +785,61 @@ function ListView({
 }) {
   const indent = PROSE_SIZE * MARKER_WIDTH * drawing.fontScale + SPACE.TIGHT;
 
+  const itemGap = PROSE_SIZE * BLOCK_GAP.ITEM * drawing.fontScale;
+
   return (
-    <View style={styles.flow}>
+    <View style={{ gap: itemGap }}>
       {block.items.map((item, at) => (
-        <View key={at} style={[styles.itemBody, { paddingLeft: indent }]}>
-          {/* Note that an empty item's marker stands in the flow, pulled back into the margin, since an item with no words would otherwise take no height and the next item would draw over its marker. */}
-          <View style={item.blocks.length === 0 ? { marginLeft: -indent } : styles.marker}>
-            <Marker
-              checked={item.checked}
-              number={block.start === undefined ? undefined : block.start + at}
-              drawing={drawing}
-            />
-          </View>
-          <Blocks blocks={item.blocks} drawing={drawing} />
-        </View>
+        <ListItem
+          key={at}
+          item={item}
+          number={block.start === undefined ? undefined : block.start + at}
+          indent={indent}
+          drawing={drawing}
+        />
       ))}
+    </View>
+  );
+}
+
+/** One list item: its marker in the margin, placed on the item's first line as laid out, beside its blocks. */
+function ListItem({
+  item,
+  number,
+  indent,
+  drawing,
+}: {
+  readonly item: Extract<MarkdownBlock, { kind: typeof MARKDOWN_BLOCK.LIST }>["items"][number];
+  readonly number: number | undefined;
+  readonly indent: number;
+  readonly drawing: Drawing;
+}) {
+  const [firstLine, setFirstLine] = useState<FirstLine | undefined>(undefined);
+
+  // Note that a layout reporting the same line keeps the state as it stands, so a redraw of the words never draws the item again.
+  const onFirstLine = (line: FirstLine) =>
+    setFirstLine((held) =>
+      held !== undefined &&
+      held.baseline === line.baseline &&
+      held.xHeight === line.xHeight &&
+      held.capHeight === line.capHeight
+        ? held
+        : line,
+    );
+
+  return (
+    <View style={{ paddingLeft: indent }}>
+      {/* Note that an empty item's marker stands in the flow, pulled back into the margin, since an item with no words would otherwise take no height and the next item would draw over its marker. */}
+      <View style={item.blocks.length === 0 ? { marginLeft: -indent } : styles.marker}>
+        <Marker checked={item.checked} number={number} firstLine={firstLine} drawing={drawing} />
+      </View>
+      {/* Note that the item's chips are held to the width left beside its marker, so one in a list never runs past the column. */}
+      <Blocks
+        blocks={item.blocks}
+        drawing={{ ...drawing, lineWidth: drawing.lineWidth - indent }}
+        gap={NESTED_GAP}
+        onFirstLine={onFirstLine}
+      />
     </View>
   );
 }
@@ -801,9 +938,9 @@ function CodeView({ text, drawing }: { readonly text: string; readonly drawing: 
 /** The most a full-screen picture zooms in to, as a pinch takes it. */
 const VIEWER_MAX_ZOOM = 4;
 
-/** What a picture that could not be read says in its well, its own words first, as the panel's stand-in says it. */
+/** What a picture that could not be read is heard as, its own words first, as the panel's stand-in says it. */
 function unreadWords(alt: string): string {
-  return alt.trim() === "" ? "This picture could not be read." : `${alt} · could not be read.`;
+  return `${alt.trim() === "" ? "This picture" : alt} ${MEDIA_READ_WORDS.COULD_NOT_READ}`;
 }
 
 type PictureProps = {
@@ -811,8 +948,10 @@ type PictureProps = {
   readonly source: string | null | undefined;
   /** What the picture shows, heard in its place. */
   readonly alt: string;
-  /** A tile's fixed shape, width over height, the picture standing whole inside it; the picture's own shape where none is given. */
+  /** A tile's fixed shape, width over height, the picture standing whole inside it, as wide as its tile; the picture's own shape and size, held to `MEDIA_BOUNDS`, where none is given. */
   readonly tileAspect?: number | undefined;
+  /** Reads the picture again where it could not be read; none offers nothing. */
+  readonly onRetry?: (() => void) | undefined;
 };
 
 /**
@@ -825,11 +964,11 @@ type PictureProps = {
  * is, the system's spinner in it as Photos stands one, so the words under
  * it do not jump twice and it never reads as an empty box.
  */
-export function Picture({ source, alt, tileAspect }: PictureProps) {
+export function Picture({ source, alt, tileAspect, onRetry }: PictureProps) {
   const colors = useColors();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const [aspect, setAspect] = useState<number | undefined>(undefined);
+  const [natural, setNatural] = useState<MediaSize | undefined>(undefined);
   const [full, setFull] = useState(false);
   const heard = alt === "" ? "Picture" : alt;
 
@@ -837,53 +976,63 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
     source == null ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard },
   );
 
+  // Note that a tile fills its tile at the tile's shape, and any other picture stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
+  const frame = tileAspect === undefined ? mediaFrame(natural) : undefined;
+
   const well = [
     styles.picture,
-    { aspectRatio: tileAspect ?? aspect ?? 16 / 9, backgroundColor: colors.WELL },
+    { aspectRatio: tileAspect ?? frame?.aspectRatio, backgroundColor: colors.WELL },
   ];
 
   if (source === undefined) {
     return (
-      <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
-        <ActivityIndicator color={colors.TEXT_MUTED} />
-      </View>
+      <MediaBox frame={frame}>
+        <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
+          <ActivityIndicator color={colors.TEXT_MUTED} />
+        </View>
+      </MediaBox>
     );
   }
 
   // Note that a picture that could not be read says so in its well, as the panel's stand-in does, rather than spin as one still on its way.
   if (source === null) {
-    const words = unreadWords(alt);
-
     return (
-      <View style={[well, styles.pending]} accessible accessibilityLabel={words}>
-        <Text style={{ fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "center" }}>
-          {words}
-        </Text>
-      </View>
+      <MediaBox frame={frame}>
+        <MediaFailed
+          line={MEDIA_READ_WORDS.PICTURE_FAILED}
+          heard={unreadWords(alt)}
+          onRetry={onRetry}
+          style={well}
+        />
+      </MediaBox>
     );
   }
 
   return (
     <>
-      <HeldMenu acts={acts}>
-        <Press
-          onPress={() => setFull(true)}
-          accessibilityRole="imagebutton"
-          accessibilityLabel={heard}
-          accessibilityHint="Opens full screen"
-        >
-          <Image
-            source={{ uri: source }}
-            resizeMode="contain"
-            onLoad={(event) => {
-              const loaded = event.nativeEvent.source;
+      <MediaBox frame={frame}>
+        <HeldMenu acts={acts}>
+          <Press
+            onPress={() => setFull(true)}
+            accessibilityRole="imagebutton"
+            accessibilityLabel={heard}
+            accessibilityHint="Opens full screen"
+          >
+            <Image
+              source={{ uri: source }}
+              resizeMode="contain"
+              onLoad={(event) => {
+                const loaded = event.nativeEvent.source;
 
-              if (loaded.width > 0 && loaded.height > 0) setAspect(loaded.width / loaded.height);
-            }}
-            style={well}
-          />
-        </Press>
-      </HeldMenu>
+                if (loaded.width > 0 && loaded.height > 0) {
+                  setNatural({ width: loaded.width, height: loaded.height });
+                }
+              }}
+              style={well}
+            />
+          </Press>
+        </HeldMenu>
+      </MediaBox>
       <Modal
         visible={full}
         animationType="fade"
@@ -932,7 +1081,10 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
   );
 }
 
-/** A picture's block: the video its address names, played in its place, or the picture. */
+/** What a file's chip is named where its words gave it no name. */
+const UNNAMED_FILE = "Attachment";
+
+/** A picture's block: the file its address names, as its chip, the video or sound clip, played in its place, or the picture. */
 function PictureBlock({
   source,
   alt,
@@ -942,15 +1094,46 @@ function PictureBlock({
   readonly alt: string;
   readonly drawing: Drawing;
 }) {
+  const file = drawing.fileAt(source);
+
+  // Note that a file is named by the words naming it, as the panel's chip is, since its address names no file.
+  if (file !== undefined) {
+    return (
+      <FileChip
+        name={alt.trim() === "" ? UNNAMED_FILE : alt.trim()}
+        mediaType={file.mediaType}
+        source={file.source}
+        size={file.size}
+      />
+    );
+  }
+
   const video = drawing.videoAt(source);
 
-  if (video === undefined) return <Picture source={drawing.pictureSource(source)} alt={alt} />;
+  if (video === undefined) {
+    const retry = drawing.onRetryPicture;
+
+    return (
+      <Picture
+        source={drawing.pictureSource(source)}
+        alt={alt}
+        onRetry={retry === undefined ? undefined : () => retry(source)}
+      />
+    );
+  }
+
+  const label = alt.trim() === "" ? video.label : alt;
+
+  if (video.audio === true) {
+    return <AudioClip source={video.source} label={label} onRetry={video.onRetry} />;
+  }
 
   return (
     <Video
       source={video.source}
-      label={alt.trim() === "" ? video.label : alt}
+      label={label}
       onOpenElsewhere={video.onOpenElsewhere}
+      onRetry={video.onRetry}
     />
   );
 }
@@ -958,9 +1141,12 @@ function PictureBlock({
 function BlockView({
   block,
   drawing,
+  onFirstLine,
 }: {
   readonly block: MarkdownBlock;
   readonly drawing: Drawing;
+  /** Reports a heading's or a paragraph's first line, where a list item opens with it. */
+  readonly onFirstLine?: OnFirstLine;
 }) {
   const { colors } = drawing;
 
@@ -973,16 +1159,22 @@ function BlockView({
           drawing={drawing}
           style={{ ...HEADING_LOOK[block.level], color: colors.TEXT }}
           heading={drawing.headings}
+          onFirstLine={onFirstLine}
         />
       );
     case MARKDOWN_BLOCK.PARAGRAPH:
-      return <Line runs={block.runs} drawing={drawing} />;
+      return <Line runs={block.runs} drawing={drawing} onFirstLine={onFirstLine} />;
     case MARKDOWN_BLOCK.LIST:
       return <ListView block={block} drawing={drawing} />;
     case MARKDOWN_BLOCK.QUOTE:
       return (
         <View style={[styles.quote, { borderColor: colors.CHIP_EDGE }]}>
-          <Blocks blocks={block.blocks} drawing={drawing} />
+          {/* Note that a quote's chips are held to the width inside its rule and padding. */}
+          <Blocks
+            blocks={block.blocks}
+            drawing={{ ...drawing, lineWidth: drawing.lineWidth - QUOTE_INSET }}
+            gap={NESTED_GAP}
+          />
         </View>
       );
     case MARKDOWN_BLOCK.TABLE:
@@ -1000,14 +1192,38 @@ function BlockView({
   }
 }
 
+/** The space over a block, in body sizes, by what stands before it: none over the first, a heading's close gap under a heading, a rule's wider gap around a rule, and `gap` otherwise. */
+function gapOver(block: MarkdownBlock, before: MarkdownBlock | undefined, gap: number): number {
+  if (before === undefined) return 0;
+
+  if (block.kind === MARKDOWN_BLOCK.RULE || before.kind === MARKDOWN_BLOCK.RULE) {
+    return BLOCK_GAP.RULE;
+  }
+
+  return before.kind === MARKDOWN_BLOCK.HEADING ? BLOCK_GAP.UNDER_HEADING : gap;
+}
+
+/** A run of blocks, each set its gap below the one before it, as the panel's flow spaces them; `gap` is the plain gap, a page's or a list item's. */
 function Blocks({
   blocks,
   drawing,
+  gap = BLOCK_GAP.BLOCK,
+  onFirstLine,
 }: {
   readonly blocks: readonly MarkdownBlock[];
   readonly drawing: Drawing;
+  readonly gap?: number;
+  /** Reports the first block's first line, a list item's, which its marker stands on. */
+  readonly onFirstLine?: OnFirstLine;
 }): ReactNode {
-  return blocks.map((block, at) => <BlockView key={at} block={block} drawing={drawing} />);
+  return blocks.map((block, at) => (
+    <View
+      key={at}
+      style={{ marginTop: PROSE_SIZE * gapOver(block, blocks[at - 1], gap) * drawing.fontScale }}
+    >
+      <BlockView block={block} drawing={drawing} onFirstLine={at === 0 ? onFirstLine : undefined} />
+    </View>
+  ));
 }
 
 type MarkdownProps = {
@@ -1019,10 +1235,16 @@ type MarkdownProps = {
   readonly onOpenLink: (address: string) => void;
   /** Whether a person typed the words line by line, whose line breaks are kept; an agent's join as Markdown reads them. */
   readonly typed?: boolean | undefined;
+  /** Whether raw HTML in the words stays unseen, as GitHub's page hides a pull request body's comments and tags; it is drawn as written where none is given. */
+  readonly hidesHtml?: boolean | undefined;
   /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way, and `null` where it could not be read. Each is drawn from the address it names where none is given. */
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
+  /** Reads a picture that could not be read again, by the address its words name it by; a picture that could not be read offers nothing where none is given. */
+  readonly onRetryPicture?: ((written: string) => void) | undefined;
   /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
+  /** The file a picture's address names, such as a PDF a description keeps, drawn as its chip in its place; every address names a picture where none is given. */
+  readonly fileAt?: ((written: string) => MarkdownFile | undefined) | undefined;
   /** Whether its headings are heard as headings, on a page of words alone; a message's are styled alone. */
   readonly headings?: boolean | undefined;
   /** What GitHub holds of a pull request or issue a chip names, by its page (`markdownGithubPages`), which the chip says where it stands; every chip says what its link says where none is given. */
@@ -1033,11 +1255,21 @@ type MarkdownProps = {
     | undefined;
 };
 
-/** A video the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, and where it opens where the player cannot read it. */
+/** A video or a sound clip the words name as a picture, played in its place: the file it plays from, none while it is on its way and `null` where it could not be read, its name, whether it is a sound clip, where a video opens where the player cannot read it, and what reads it again. */
 export interface MarkdownVideo {
-  readonly source: string | undefined;
+  readonly source: string | null | undefined;
   readonly label: string;
+  /** Whether it is a sound clip, played in its strip (`AudioClip`) rather than a film's player. */
+  readonly audio?: boolean | undefined;
   readonly onOpenElsewhere?: (() => void) | undefined;
+  readonly onRetry?: (() => void) | undefined;
+}
+
+/** A file the words name as a picture, drawn as its chip in its place: the file of the app's caches it opens from, its type, and its size in words. One that could not be read stands as a picture that could not be. */
+export interface MarkdownFile {
+  readonly source: string;
+  readonly mediaType: string;
+  readonly size: string | undefined;
 }
 
 /** Each picture drawn from the address its words name it by. */
@@ -1060,46 +1292,77 @@ function noVideo(): undefined {
   return undefined;
 }
 
+/** No address naming a file. */
+function noFile(): undefined {
+  return undefined;
+}
+
 /**
  * Words drawn as the Markdown they were written in, as the panel draws a
  * message: the panel's parse (`@repo/features/markdown-tree`), read into
  * blocks by `markdown-model.ts`, in the brand's colors for the window's
  * scheme and at the reader's Dynamic Type size. It draws no scroller of its
- * own, so a screen stands it in its own.
+ * own, so a screen stands it in its own. Note that a chip is held to the
+ * width the words stand in, measured once they are laid out, since an open
+ * iPhone Duo's or an iPad's detail column is far narrower than the window;
+ * until then, to the window's width less a page's margins.
  */
 export function Markdown({
   words,
   repository = null,
   onOpenLink,
   typed,
+  hidesHtml,
   pictureSource = namedSource,
+  onRetryPicture,
   videoAt = noVideo,
+  fileAt = noFile,
   headings = false,
   linkStanding = noStanding,
   suggestion = noSuggestion,
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
+  const markOf = useChipMarkOf();
+  const [measured, setMeasured] = useState<number | undefined>(undefined);
+  const [measuredAt, setMeasuredAt] = useState(width);
+
+  // Note that a change of the window's width, a fold, an unfold, or a turn, forgets the width measured, since words in a bubble that wraps its words are measured no wider than they stood and would hold their chips there for good.
+  if (measuredAt !== width) {
+    setMeasuredAt(width);
+    setMeasured(undefined);
+  }
 
   const blocks = useMemo(
-    () => markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed }),
-    [words, repository, typed],
+    () =>
+      markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed, hidesHtml }),
+    [words, repository, typed, hidesHtml],
   );
 
   const drawing: Drawing = {
     colors,
     fontScale,
-    lineWidth: width - SPACE.PAGE * 2,
+    lineWidth: measured ?? width - SPACE.PAGE * 2,
     openLink: onOpenLink,
     pictureSource,
+    onRetryPicture,
     videoAt,
+    fileAt,
     headings,
     linkStanding,
+    markOf,
     suggestion,
   };
 
   return (
-    <View style={styles.flow}>
+    <View
+      onLayout={(event) => {
+        // Note that a width of none, as a view hidden behind another lays out, keeps the last, so no chip is held to nothing.
+        const laid = event.nativeEvent.layout.width;
+
+        if (laid > 0) setMeasured(laid);
+      }}
+    >
       <Blocks blocks={blocks} drawing={drawing} />
     </View>
   );

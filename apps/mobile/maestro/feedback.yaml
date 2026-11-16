@@ -1,4 +1,4 @@
-# feedback.yaml -- Settings' Send feedback on the Inbox fixture: the form under its Feedback and Prompt control, a note typed, signed by the fixture's account, and sent, landing back on Settings.
+# feedback.yaml -- Settings' Send feedback on the Inbox fixture: the form under its Feedback and Prompt control, a note typed, signed by the fixture's account, and sent, thanked on the page, then Back to Settings.
 #
 # Launched on the host's Inbox fixture, signed in as Ada Lovelace, whose
 # act door answers a send as delivered (`@repo/host/fixture-inbox`), so no
@@ -9,10 +9,14 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+# Note that the Inbox is waited for, since a loaded runner's cold launch has
+# drawn it after Maestro's own few seconds.
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: ".*, Settings"
+- tapOn: "Settings, .*"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Send feedback"
@@ -34,6 +38,16 @@ appId: dev.vespin.ios
 - tapOn: "Feedback"
 - tapOn: "Send"
 - waitForAnimationToEnd
-# Settings' list stands again, Email beside Send feedback under About.
-- assertVisible: "Email"
+# The page stays and thanks the reader under the cleared field, since the
+# app's notice stands under the Settings sheet; Back then leaves without asking.
+- assertVisible: "Feedback sent. Thank you."
 - takeScreenshot: feedback-sent
+- tapOn:
+    id: "BackButton"
+- waitForAnimationToEnd
+# Settings' list stands again, Email us beside Send feedback in its last group.
+# Note that the list is scrolled to it, because a short window, the iPhone
+# Duo's, stands that group below its fold.
+- scrollUntilVisible:
+    element: "Email us"
+    direction: DOWN

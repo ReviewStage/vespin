@@ -27,26 +27,26 @@
  *   standing for what holds it draws: a file of any repository, read through
  *   the item's workspace where it is not the item's own, a page of any task,
  *   read on its own place where it is not the item's,
- *   an archived agent's Changes, one of its task's agents' transcripts, at a
+ *   an agent's Changes, as an earlier link names it, opening the pull
+ *   request the agent's line names, one of its task's agents' transcripts, at a
  *   message of it where the link names one, a review thread of one of its
  *   agents' pull requests, and a pull request as `pullRequestBeside` opens
  *   it. An agent of its task the panel does not draw, an archived one, is
  *   the window's, which opens its tab on the task; any other agent is the
  *   window's too, which opens it in the middle. Another Inbox item is chosen
  *   in the Inbox the item stands in, rather than in its task's Inbox tab.
- * - A task's page and an agent's page (`use-open-link.ts`'s
- *   `openPullRequestsHere`) open beside them a pull request one of their
- *   agents opened, an archived one's among them, in its Pull request tab,
- *   and any other of their repository no listed agent opened by its number
- *   in their first agent's;
+ * - A task's page (`use-open-link.ts`'s `openPullRequestsHere`) opens
+ *   beside it, by its repository and number, a pull request its own lines
+ *   name and any other no listed task's lines name (`pullRequestBeside`);
  *   and a page of any other task or agent on no task, read on its own place,
- *   their own pages being the window's to open as the panel's.
+ *   its own pages being the window's to open as the panel's.
  * - The window (`use-open-link.ts`'s `throughWindow`) goes to every place in
- *   the app, and to the Pull request tab of a pull request a listed task's
- *   or a listed agent on no task's agent opened; anything else leaves for
- *   the browser, as everything does outside the window.
+ *   the app, and opens a pull request a listed task's lines name in its
+ *   Pull request tab on that task; anything else leaves for the browser, as
+ *   everything does outside the window.
  * - The Tasks tab (`link-places.ts`'s `onTasksTab`) opens beside it a
- *   page, an agent's Changes, a worker, or a review thread of the task it
+ *   page, an agent's Changes, which opens the pull request the agent's line
+ *   names, a worker, or a review thread of the task it
  *   shows with nothing standing over its plan, chooses that task's Overview
  *   for the task itself, one of its description's sections, or one of its
  *   comments, at the section or the comment, and goes to any other.
@@ -54,6 +54,7 @@
 
 import {
   LINK_DESTINATION,
+  type NumberedAddress,
   type PullRequestThreadView,
   pullRequestAddressOf,
   type ReadLink,
@@ -66,7 +67,7 @@ import {
   pageRepositoryOf,
 } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
-import type { listedPullRequestOf } from "@repo/ui/pull-request-link";
+import type { ListedPullRequestOwner } from "@repo/ui/pull-request-link";
 import { type LinkRouter, type RoutedLink, routedPressOf } from "./link-places.js";
 
 /** The kinds of address a press names. */
@@ -96,8 +97,8 @@ export type Address =
       readonly href: string;
       readonly repository: string;
       readonly number: number;
-      /** The agent of a task or the agent on no task the window lists that opened it, and its task; none where the window lists none, or is not asked. */
-      readonly listed: ReturnType<typeof listedPullRequestOf>;
+      /** The listed task whose lines name it, and the agent of it that opened it; none where the window lists none, or is not asked. */
+      readonly listed: ListedPullRequestOwner | undefined;
       /** Whether the account opens pull requests on GitHub (`pull-request-opens.ts`), so no surface opens it in a tab and the window leaves it for the browser; none where it is not asked. */
       readonly onGitHub?: boolean;
     }
@@ -126,11 +127,11 @@ export const HERE = {
 export const THING = {
   FILE: "file",
   PAGE: "page",
-  /** An agent's Changes, its Pull request tab, as an app link names it. */
+  /** An agent's Changes, as an earlier app link names it, which opens the Pull request tab of the pull request the agent's line names. */
   CHANGES: "changes",
-  /** An agent's Pull request tab on its Conversation, as the pull request's page on GitHub names it. */
+  /** A pull request's tab on its Conversation, by its repository and number, as its page on GitHub names it. */
   PULL_REQUEST: "pull-request",
-  /** One review thread of an agent's pull request, in its Pull request tab, on the view the link names. */
+  /** One review thread of an agent's pull request, as an earlier app link names it, in the tab of the pull request the agent's line names, on the view the link names. */
   THREAD: "thread",
   /** One of an agent's workers. */
   WORKER: "worker",
@@ -154,12 +155,7 @@ export type Thing =
       readonly place?: PagePlace;
     }
   | { readonly kind: typeof THING.CHANGES; readonly agentId: string }
-  | {
-      readonly kind: typeof THING.PULL_REQUEST;
-      readonly agentId: string;
-      /** The pull request's number, where it is another of the repository's than the one the agent opened. */
-      readonly number?: number;
-    }
+  | { readonly kind: typeof THING.PULL_REQUEST; readonly pullRequest: NumberedAddress }
   | {
       readonly kind: typeof THING.THREAD;
       readonly agentId: string;
@@ -186,6 +182,8 @@ export const ROUTE = {
   EXTERNAL: "external",
   /** The surface opens nothing of it, and whatever stands around it is asked. */
   NOTHING: "nothing",
+  /** Opens a pull request's tab on the listed task whose lines name it. */
+  ON_TASK: "on-task",
 } as const;
 
 /** What a press does, and with what. */
@@ -193,7 +191,12 @@ export type Route =
   | { readonly kind: typeof ROUTE.BESIDE; readonly thing: Thing }
   | { readonly kind: typeof ROUTE.GO; readonly link: ReadLink }
   | { readonly kind: typeof ROUTE.EXTERNAL; readonly href: string }
-  | { readonly kind: typeof ROUTE.NOTHING };
+  | { readonly kind: typeof ROUTE.NOTHING }
+  | {
+      readonly kind: typeof ROUTE.ON_TASK;
+      readonly taskId: string;
+      readonly pullRequest: NumberedAddress;
+    };
 
 export const NOTHING: Route = { kind: ROUTE.NOTHING };
 
@@ -201,11 +204,11 @@ export const NOTHING: Route = { kind: ROUTE.NOTHING };
 function mentionedLinkOf(mention: ReturnType<typeof decodeMention>): ReadLink | undefined {
   switch (mention?.kind) {
     case MENTION_KIND.TASK:
-      return { workspace: "", place: { kind: LINK_DESTINATION.TASK, planId: mention.taskId } };
+      return { workspace: "", place: { kind: LINK_DESTINATION.TASK, taskId: mention.taskId } };
     case MENTION_KIND.SECTION:
       return {
         workspace: "",
-        place: { kind: LINK_DESTINATION.SECTION, planId: mention.taskId, anchor: mention.anchor },
+        place: { kind: LINK_DESTINATION.SECTION, taskId: mention.taskId, anchor: mention.anchor },
       };
     default:
       return undefined;

@@ -9,14 +9,17 @@ import {
   HostedIntegrationsClient,
   HostedMachineCommandClient,
   HostedMcpClientsClient,
+  HostedPullRequestClient,
   HostedTaskClient,
   HostedTerminalClient,
   HostedWorkspaceClient,
 } from "@repo/features";
+import { AGENT_STATUS } from "@repo/features/agent-wire";
 import { type ClientIdentity, clientNamedOnService } from "@repo/features/client-identity";
 import { HostedInstalledSkillClient } from "@repo/features/installed-skill-client";
 import { INTEGRATION_LANDING } from "@repo/features/integration-wire";
 import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
+import { agentName } from "@repo/features/model-label";
 import {
   carried,
   GATEWAY_EVENT,
@@ -69,6 +72,7 @@ import {
   AppIdentity,
   ComputerUseHelper,
   type Environment,
+  KeptListsDue,
   LoopbackListener,
   MirrorPlatform,
   Reporter,
@@ -174,8 +178,9 @@ function macComputerUse(settings: SettingsComposer, helper: ComputerUseHelperSea
 /**
  * This Mac as a device of the accounts signed in on it, as the Mac's
  * commands join it: the ids this install keeps, the machine as its host
- * names it, and Settings' say over commands and apps, its command mode and
- * the apps allowed without asking, which the service's is written over.
+ * names it, and Settings' say over commands and apps, its command mode,
+ * its switch for apps, and the apps allowed without asking, which the
+ * service's is written over.
  */
 function machineCommandsDevice(
   settings: SettingsComposer,
@@ -202,6 +207,7 @@ function machineCommandsDevice(
     settings: Effect.map(stored, (values) => ({
       commandMode: values.macCommands ?? APP_SETTING_SCHEMA.macCommands.default,
       alwaysAllowedApps: computerUseAppsOf(values.computerUseApps),
+      computerUse: values.computerUse ?? APP_SETTING_SCHEMA.computerUse.default,
     })),
     applySettings: (kept) =>
       Effect.gen(function* () {
@@ -212,6 +218,17 @@ function machineCommandsDevice(
           landed = yield* written(
             settings.store.set(APP_SETTING_SCHEMA.macCommands.field, kept.commandMode),
           );
+        }
+
+        // Note that a service that holds no switch for apps yet names none, which leaves this Mac's for it to carry up.
+        if (
+          kept.computerUse !== undefined &&
+          (values.computerUse ?? APP_SETTING_SCHEMA.computerUse.default) !== kept.computerUse
+        ) {
+          landed =
+            (yield* written(
+              settings.store.set(APP_SETTING_SCHEMA.computerUse.field, kept.computerUse),
+            )) && landed;
         }
 
         const apps = computerUseAppsStored(kept.alwaysAllowedApps);
@@ -265,6 +282,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const shutdownSignal = yield* ShutdownSignal;
     const { report } = yield* Reporter;
     const { tokenCipher } = yield* AccountSource;
+    const listsDue = yield* Effect.serviceOption(KeptListsDue);
     const fileSystemContext = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
 
     const settings = yield* composeSettings();
@@ -311,6 +329,11 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     });
 
     const agentPortsClient = new HostedAgentPortsClient({
+      serviceBaseUrl: kernel.hostedServiceBaseUrl,
+      credential: account.credential,
+    });
+
+    const pullRequestClient = new HostedPullRequestClient({
       serviceBaseUrl: kernel.hostedServiceBaseUrl,
       credential: account.credential,
     });
@@ -442,7 +465,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
 
     /** An agent as the task list holds it now; none where it lists no such agent. */
     const agentListed = (agentId: string) =>
-      (tasks.snapshot().taskAgents ?? []).find((agent) => agent.id === agentId);
+      tasks.agentsListed()?.find((agent) => agent.id === agentId);
 
     /** Waits until the task list says an agent's sandbox stands open, answering whether it waited: false at once where it already says so, or does not know. */
     const sandboxOpened = (agentId: string) =>
@@ -456,6 +479,28 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           yield* Stream.runHead(Stream.filter(drawings, () => !closed()));
 
           return true;
+        }),
+      );
+
+    /** Waits until the task list says an agent's turn is over: ended, failed, or stopped. An agent it does not list is waited on, since a cursor put away early is worse than one the helper's own clock puts away. */
+    const turnEnded = (agentId: string) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          // Note that each drawing of the list is listened to before the list is read, so one drawn between the two is not missed.
+          const drawings = yield* tasks.pullRequestListings;
+
+          const over = () => {
+            const status = agentListed(agentId)?.status;
+
+            return (
+              status !== undefined &&
+              status !== AGENT_STATUS.RUNNING &&
+              status !== AGENT_STATUS.STARTING
+            );
+          };
+
+          if (over()) return;
+          yield* Stream.runHead(Stream.filter(drawings, over));
         }),
       );
 
@@ -474,11 +519,15 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
             : undefined;
         },
         client: agentClient,
+        pullRequests: pullRequestClient,
         ports: agentPortsClient,
         listed: tasks.listed,
         pullRequestListings: tasks.pullRequestListings,
+        openedOutside: tasks.openedOutside,
+        inboxNamed: tasks.inboxNamed,
         pool,
         agentListed,
+        entities: () => entities?.store,
       }),
     );
 
@@ -572,6 +621,12 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
               serviceBaseUrl: kernel.hostedServiceBaseUrl,
               credential: account.credential,
             }),
+            turnEnded,
+            agentName: (agentId) => {
+              const agent = agentListed(agentId);
+
+              return agent === undefined ? undefined : agentName(agent);
+            },
             ...Option.match(computerHelper, {
               onNone: () => ({}),
               onSome: (helper) => ({ computer: macComputerUse(settings, helper) }),
@@ -704,6 +759,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         queueMoves: pool.queueMoves,
         refused: agents.refused.kept,
         refusedMoves: agents.refused.moves,
+        ...(Option.isSome(listsDue) ? { listsDue: listsDue.value } : undefined),
       }).pipe(Scope.provide(scope), Effect.provideContext(fileSystemContext));
 
       entities = { store, scope };
@@ -888,6 +944,8 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         yield* Effect.forkScoped(account.session.refreshOnce());
       }),
       drain,
+      taskListMoves: tasks.taskListMoves,
+      agentsListed: tasks.agentsListed,
     };
 
     return assembly;

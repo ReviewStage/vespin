@@ -2,7 +2,6 @@ import { githubAvatarAt, githubAvatarUrl } from "@repo/features/account-picture"
 import {
   AGENT_CALL_FAILURE,
   type AgentCallFailure,
-  type AgentPullRequestReadParams,
   PULL_REQUEST_PART,
   type PullRequestPart,
 } from "@repo/features/agent-view";
@@ -14,7 +13,6 @@ import {
   CHECK_STATE,
   CHECK_SUMMARY,
   type CheckState,
-  type CheckSummary,
   CONVERSATION_ENTRY,
   type ConversationEntry,
   DEPLOYMENT_STATE,
@@ -30,15 +28,13 @@ import {
   type ReviewThread,
 } from "@repo/features/agent-wire";
 import {
-  LINK_DESTINATION,
-  type LinkDestination,
   PULL_REQUEST_THREAD_VIEW,
   type PullRequestThreadView,
+  pullRequestAddressOf,
 } from "@repo/features/link-grammar";
 import { type LinkStanding, PULL_REQUEST_MOMENT } from "@repo/features/link-standing-model";
 import { formatCount } from "@repo/features/number-format";
 import {
-  CHECK_SUMMARY_WORDS,
   CHECK_WORDS,
   checksCountOf,
   checksSummaryOf,
@@ -46,6 +42,7 @@ import {
   PULL_REQUEST_READ_WORDS,
   reviewersOf,
 } from "@repo/features/pull-request-model";
+import type { RepositoryPullRequestParams } from "@repo/features/pull-request-view";
 import type { FailureSurface } from "@repo/features/shown-failure";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { workingTime } from "@repo/features/time-format";
@@ -57,9 +54,15 @@ import {
   Avatar,
   BUTTON_VARIANT,
   ButtonLink,
+  CARD_CORNER,
+  CARD_ELEMENT,
+  CARD_LOOK,
+  CARD_PADDING,
+  Card,
   CHIP_LOOK,
   CHOICE_BAR_FOLD,
   CHOICE_BAR_LOOK,
+  CheckGlyph,
   Chip,
   ChipCount,
   ChipName,
@@ -69,6 +72,7 @@ import {
   CornerDot,
   type CountPart,
   CountParts,
+  checksCount,
   DETAIL_PAGE_INSET,
   DetailPage,
   DISCLOSURE_SUMMARY,
@@ -109,7 +113,6 @@ import {
   SpinnerRing,
   STATUS_TONE,
   Stack,
-  type StatusTone,
   TEXT_ELEMENT,
   TEXT_FONT,
   TEXT_VARIANT,
@@ -124,8 +127,6 @@ import {
 import { actorName } from "@repo/ui/actor-model";
 import { renderingText } from "@repo/ui/github-html";
 import {
-  CheckIcon,
-  CircleSlashIcon,
   ExternalLinkIcon,
   GLYPH,
   MessagesSquareIcon,
@@ -138,6 +139,7 @@ import {
 import { landedMark } from "@repo/ui/landed";
 import { LazyBoundary } from "@repo/ui/lazy-boundary";
 import { PICTURE_STATE, usePicture } from "@repo/ui/picture-read";
+import { samePullRequestAddress } from "@repo/ui/tab-strip-model";
 import {
   VIRTUAL_ROWS_ANCHOR,
   type VirtualRowPlace,
@@ -165,7 +167,6 @@ import { Fold, FoldBody } from "../ai-elements/fold.js";
 import { appPlatform } from "../app-platform.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { LINK_COPY, useCopyToast } from "../copy-feedback.js";
-import { useLinkItems } from "../copy-link-item.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import {
   type HandTabActions,
@@ -176,14 +177,14 @@ import {
 import { failureShown, pictureUnread } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import {
-  pullRequestChecksQuery,
-  pullRequestConversationQuery,
-  pullRequestPartRetryMutation,
-  pullRequestPublishedQuery,
-  pullRequestQuery,
+  repositoryPullRequestChecksQuery,
+  repositoryPullRequestConversationQuery,
+  repositoryPullRequestPartRetryMutation,
+  repositoryPullRequestPublishedQuery,
+  repositoryPullRequestQuery,
 } from "../live-reads.js";
 import { useMergeQueueOpener } from "../merge-queue-route.js";
-import { pictureQuery } from "../picture-query.js";
+import { ofRepository } from "../places/pull-request-beside.js";
 import { scrollerOf } from "../scroll-within.js";
 import { SHELL_ROOM } from "../shell-room.js";
 import {
@@ -251,7 +252,6 @@ import {
 } from "./pull-request-comment-box.js";
 import { PullRequestDescription } from "./pull-request-description.js";
 import { PullRequestLabels } from "./pull-request-labels.js";
-import { PullRequestNumberProvider, pullRequestAsked } from "./pull-request-number.js";
 import { HeaderReviewers, OpenedLine, ReviewStanding, useNamer } from "./pull-request-people.js";
 import {
   LabelPicker,
@@ -261,13 +261,18 @@ import {
   usePullRequestPicks,
   useReviewOptions,
 } from "./pull-request-pickers.js";
-import { EntryPictures, useGitHubImageRead, usePictureDrawer } from "./pull-request-pictures.js";
+import {
+  EntryPictures,
+  type GitHubPictureScope,
+  githubPictureQuery,
+  usePictureDrawer,
+} from "./pull-request-pictures.js";
 import { Reactions } from "./pull-request-reactions.js";
 import { PullRequestReview } from "./pull-request-review.js";
 import {
   type PullRequestSource,
   PullRequestSourceProvider,
-  useAgentPullRequestSource,
+  usePullRequestSourceOf,
 } from "./pull-request-source.js";
 import { PullRequestStack } from "./pull-request-stack.js";
 import { useTaskTicks } from "./pull-request-task-ticks.js";
@@ -281,6 +286,7 @@ import {
   PullRequestStateMenu,
   PullRequestTitle,
   PullRequestTitleLine,
+  PullRequestUnreachable,
   PullRequestWriteNote,
   type PullRequestWrites,
   type ReadAgain,
@@ -299,31 +305,25 @@ import {
 import { type GitHubPictureDrawer, GitHubWords, TranscriptWords } from "./transcript-blocks.js";
 import type { AgentsControl } from "./use-agents.js";
 import { usePlaceStanding } from "./use-link-standing.js";
-import {
-  linkPressOf,
-  type OpenHere,
-  OpenHereFirst,
-  useOpenLink,
-  useOpenPlace,
-} from "./use-open-link.js";
+import { linkPressOf, type OpenHere, OpenHereFirst, useOpenLink } from "./use-open-link.js";
 
 /**
- * agent-pull-request-tab.tsx -- one agent's Pull request tab in the side panel: its pull request as GitHub holds it, laid out as stage-cli's pull request page: a fixed header, then tabs for its conversation, its checks, its chapters, and its files.
+ * agent-pull-request-tab.tsx -- one pull request's tab in the side panel, by its repository and number: the pull request as GitHub holds it, laid out as stage-cli's pull request page: a fixed header, then tabs for its conversation, its checks, its chapters, and its files.
  *
  * The overview is three parts the host holds while the tab shows
- * (`pullRequestQuery` and its siblings in `live-reads.ts`), each read from GitHub by the
- * service on the App's token for the agent's repository rather than anyone's
- * own, so nothing here reads on a clock: the host asks each as the tab is
- * shown, as a window comes forward, and on Retry or Refresh, and all of them
- * again together as the agent's status moves, its end among it, and as the
- * task list's line for the pull request moves: its state, its checks, its
- * place in the queue, or its head, which a push moves. Each lands on its
+ * (`repositoryPullRequestQuery` and its siblings in `live-reads.ts`), each
+ * read from GitHub by the service on the App's token through the workspace
+ * of the task holding the strip rather than anyone's own, so nothing here
+ * reads on a clock: the host asks each as the tab is shown, as a window
+ * comes forward, and on Retry or Refresh, and all of them again together as
+ * the task list's line for the pull request moves: its state, its checks,
+ * its place in the queue, or its head, which a push moves. Each lands on its
  * own, and a tab drawn again draws the last answers at once: the pull request
  * itself (its description, branches, mergeability, and people); its
  * conversation, whose reviews say where each reviewer the header draws
  * stands; and its checks, whose deployments the header's Preview opens, as
  * stage-cli's header reads them. What the app already holds of
- * the pull request, what the agent published, draws the pill, the title,
+ * the pull request, as GitHub has it now or as the task's agents listed it, draws the pill, the title,
  * and the Files changed tab's count at once; each part stands as a skeleton
  * until its read lands, and says so with its own Retry where its read
  * failed, the other parts and the tabs standing. Refresh reads again all
@@ -511,25 +511,23 @@ interface PartRead<A> {
 function usePartRead<Answer>(
   held: UseQueryResult<Answer>,
   part: PullRequestPart,
-  asked: AgentPullRequestReadParams | undefined,
+  asked: RepositoryPullRequestParams | undefined,
 ) {
   const [asking, setAsking] = useState(0);
-  const { mutateAsync: retry } = useMutation(pullRequestPartRetryMutation());
-  const agentId = asked?.agentId;
-  const number = asked?.number;
+  const { mutateAsync: retry } = useMutation(repositoryPullRequestPartRetryMutation());
 
   const ask = useCallback(() => {
-    if (agentId === undefined) return Promise.resolve();
+    if (asked === undefined) return Promise.resolve();
     setAsking((count) => count + 1);
 
     // Note that a Try again the port refuses settles as one that landed, since the read's own failure is what the tab draws.
-    return retry(number === undefined ? { part, agentId } : { part, agentId, number })
+    return retry({ part, ...asked })
       .then(
         () => undefined,
         () => undefined,
       )
       .finally(() => setAsking((count) => count - 1));
-  }, [retry, part, agentId, number]);
+  }, [retry, part, asked]);
 
   const answer = held.data ?? (held.isError ? UNANSWERED : undefined);
 
@@ -558,22 +556,6 @@ function unread(part: Part<unknown>): boolean {
 function landed<A>(part: Part<A>): A | undefined {
   return part.kind === PART.LANDED ? part.value : undefined;
 }
-
-/** The glyph a check wears for where it stands. */
-const CHECK_GLYPHS = {
-  [CHECK_STATE.FAILED]: <XIcon />,
-  [CHECK_STATE.PENDING]: <SpinnerRing />,
-  [CHECK_STATE.PASSED]: <CheckIcon />,
-  [CHECK_STATE.SKIPPED]: <CircleSlashIcon />,
-} as const satisfies Record<CheckState, ReactNode>;
-
-/** The ink a check's glyph wears for where it stands: passed green, failed red, and one still running or skipped quiet, a running one turning the ring every wait turns, since it is work under way rather than something that needs you. */
-const CHECK_INK = {
-  [CHECK_STATE.FAILED]: "text-destructive",
-  [CHECK_STATE.PENDING]: "text-muted-foreground",
-  [CHECK_STATE.PASSED]: "text-complete",
-  [CHECK_STATE.SKIPPED]: "text-muted-foreground",
-} as const satisfies Record<CheckState, string>;
 
 /** The tone and glyph a deployment wears, as a check's: ready as passed, deploying as running, failed as failed, and no longer serving as skipped. */
 const DEPLOYMENT_TONE = {
@@ -796,17 +778,17 @@ function CheckSquare({ name, src }: { name: string; src: string | undefined }): 
   );
 }
 
-/** A check's avatar read through the service's image proxy as the agent's, drawn once read and the App's robot until then or where it answered none. */
+/** A check's avatar read through the service's image proxy, through the scope given, drawn once read and the App's robot until then or where it answered none. */
 function ProxiedCheckAvatar({
-  agentId,
+  pictures,
   name,
   src,
 }: {
-  agentId: string;
+  pictures: GitHubPictureScope;
   name: string;
   src: string;
 }): React.JSX.Element {
-  const state = usePicture(pictureQuery(agentId, src, useGitHubImageRead()), pictureUnread);
+  const state = usePicture(githubPictureQuery(pictures, src), pictureUnread);
 
   return (
     <CheckSquare name={name} src={state.kind === PICTURE_STATE.READY ? state.url : undefined} />
@@ -815,17 +797,17 @@ function ProxiedCheckAvatar({
 
 /** The picture of the App that runs a check, or of whoever posted it: one GitHub's avatar host serves drawn as it is, at its size, and any other through the service's image proxy. */
 function CheckAvatar({
-  agentId,
+  pictures,
   name,
   src,
 }: {
-  agentId: string;
+  pictures: GitHubPictureScope;
   name: string;
   src: string;
 }): React.JSX.Element {
   const hosted = githubAvatarUrl(src);
 
-  if (hosted === undefined) return <ProxiedCheckAvatar agentId={agentId} name={name} src={src} />;
+  if (hosted === undefined) return <ProxiedCheckAvatar pictures={pictures} name={name} src={src} />;
 
   return (
     <CheckSquare
@@ -838,26 +820,22 @@ function CheckAvatar({
 /** A check's or a deployment's lead: its glyph for where it stands, in that standing's tone, in a box of a glyph's size which a running one's ring fills, then its App's avatar where it has one. */
 function CheckLead({
   tone,
-  agentId,
+  pictures,
   name,
   avatarUrl,
 }: {
   tone: CheckState;
-  agentId: string;
+  /** Whose reach the avatar is read through where GitHub's avatar host does not serve it. */
+  pictures: GitHubPictureScope;
   /** Who the avatar is of, the App or what it deploys, which its picture is named by. */
   name: string;
   avatarUrl: string | undefined;
 }): React.JSX.Element {
   return (
     <span className="inline-flex items-center gap-control-gap">
-      <span
-        className={`inline-grid size-check-glyph flex-none place-items-center [&>svg]:size-check-glyph ${CHECK_INK[tone]}`}
-        data-check-state={tone}
-      >
-        {CHECK_GLYPHS[tone]}
-      </span>
+      <CheckGlyph state={tone} />
       {avatarUrl === undefined ? null : (
-        <CheckAvatar agentId={agentId} name={name} src={avatarUrl} />
+        <CheckAvatar pictures={pictures} name={name} src={avatarUrl} />
       )}
     </span>
   );
@@ -873,12 +851,12 @@ function CheckLead({
  * it too (`line-cards.tsx`), each saying how it ended where its App would be.
  */
 export function CheckRow({
-  agentId,
+  pictures,
   check,
   live,
   says,
 }: {
-  agentId: string;
+  pictures: GitHubPictureScope;
   check: PullRequestCheck;
   live: boolean;
   /** What the row says under its name in place of its App: how a check a GitHub line names ended, since the line names no App. */
@@ -894,7 +872,7 @@ export function CheckRow({
       leading={
         <CheckLead
           tone={check.state}
-          agentId={agentId}
+          pictures={pictures}
           name={check.app ?? check.name}
           avatarUrl={avatarUrl}
         />
@@ -916,11 +894,11 @@ export function CheckRow({
 
 /** Every check, in the order the service ranks them, failures first, then those still running, then the rest, under a count of each standing. */
 function Checks({
-  agentId,
+  pictures,
   checks,
   live,
 }: {
-  agentId: string;
+  pictures: GitHubPictureScope;
   checks: readonly PullRequestCheck[];
   live: boolean;
 }): React.JSX.Element {
@@ -940,7 +918,7 @@ function Checks({
         <CheckList>
           {checks.map((check, at) => (
             // Note that two checks may share a name across Apps, so a row is keyed by its place too.
-            <CheckRow key={`${at}`} agentId={agentId} check={check} live={live} />
+            <CheckRow key={`${at}`} pictures={pictures} check={check} live={live} />
           ))}
         </CheckList>
       )}
@@ -1130,10 +1108,6 @@ function EntryWords({
 /** How a thread drawn in the tab is taken to its other view, and the place a link to it names there; none for a thread GitHub named no id for. */
 interface ThreadJumps {
   readonly jump: (thread: ReviewThread, view: PullRequestThreadView) => void;
-  readonly place: (
-    thread: ReviewThread,
-    view: PullRequestThreadView,
-  ) => LinkDestination | undefined;
 }
 
 const ThreadJumpContext = createContext<ThreadJumps | undefined>(undefined);
@@ -1151,28 +1125,35 @@ function useThreadJump(
 }
 
 /**
- * A thread's ⋯ at the end of its head: Copy link, the thread's app link in
- * the view it is drawn in (`LINK_DESTINATION.PULL_REQUEST_THREAD`), then, in Files
- * changed, View in Conversation, where the thread is found by its id;
- * nothing where the thread offers neither.
+ * A thread's ⋯ at the end of its head: Copy GitHub link, its first
+ * comment's page on GitHub, as a comment's ⋯ offers its own
+ * (`GitHubEntryMenu`), since no app link names a thread of a pull request
+ * by its repository; then, in Files changed, View in Conversation, where the
+ * thread is found by its id; nothing where the thread offers neither.
  */
 function ThreadMenu({
   thread,
-  here,
   there,
 }: {
   thread: ReviewThread;
-  /** The view the thread is drawn in, which its link names. */
-  here: PullRequestThreadView;
   /** The view its View in takes it to. */
   there: PullRequestThreadView;
 }): React.JSX.Element | null {
   const menu = useMenu(true);
-  const jumps = useContext(ThreadJumpContext);
-  const linkItemsOf = useLinkItems();
+  const copy = useCopyToast();
   const jump = useThreadJump(thread, there);
-  const place = jumps?.place(thread, here);
-  const links = place === undefined ? [] : linkItemsOf(place);
+  const url = thread.comments[0]?.url;
+
+  const links =
+    url === undefined
+      ? []
+      : [
+          commandAction(
+            PANEL_COMMAND.COPY_GITHUB_LINK,
+            () => copy(url, LINK_COPY.COPIED),
+            undefined,
+          ),
+        ];
 
   // Note that a Conversation thread's own path and lines already open it in Files changed, so only Files changed offers a View in.
   const views: MenuAction[] =
@@ -1418,11 +1399,7 @@ function ThreadCard({
             {pending ? (
               start.menu
             ) : (
-              <ThreadMenu
-                thread={thread}
-                here={PULL_REQUEST_THREAD_VIEW.CONVERSATION}
-                there={PULL_REQUEST_THREAD_VIEW.FILES}
-              />
+              <ThreadMenu thread={thread} there={PULL_REQUEST_THREAD_VIEW.FILES} />
             )}
           </CommentTools>
         }
@@ -1643,11 +1620,7 @@ function InlineThread({
           {pending ? (
             start.menu
           ) : (
-            <ThreadMenu
-              thread={thread}
-              here={PULL_REQUEST_THREAD_VIEW.FILES}
-              there={PULL_REQUEST_THREAD_VIEW.CONVERSATION}
-            />
+            <ThreadMenu thread={thread} there={PULL_REQUEST_THREAD_VIEW.CONVERSATION} />
           )}
         </CommentTools>
       }
@@ -1776,12 +1749,16 @@ function EntryFrame({
   ...props
 }: Omit<ComponentProps<"li">, "className">): React.JSX.Element {
   return (
-    <li
-      className="pull-request-entry flex min-w-0 flex-col gap-item-gap rounded-control border border-border px-boxed-inset py-row-inset text-caption-inline"
+    <Card
       {...props}
+      as={CARD_ELEMENT.LI}
+      look={CARD_LOOK.OUTLINE}
+      corner={CARD_CORNER.CONTROL}
+      padding={CARD_PADDING.NONE}
+      className="pull-request-entry flex min-w-0 flex-col gap-item-gap px-boxed-inset py-row-inset text-caption-inline"
     >
       {children}
-    </li>
+    </Card>
   );
 }
 
@@ -2060,10 +2037,10 @@ function HeadPeople({
 
 /** One deployment: its glyph for where it stands, its App's avatar, its environment and where it stands in words; a press opens the address it serves, where it names one. */
 function DeploymentRow({
-  agentId,
+  pictures,
   deployment,
 }: {
-  agentId: string;
+  pictures: GitHubPictureScope;
   deployment: PullRequestDeployment;
 }): React.JSX.Element {
   const openLink = useOpenLink();
@@ -2074,7 +2051,7 @@ function DeploymentRow({
       leading={
         <CheckLead
           tone={DEPLOYMENT_TONE[state]}
-          agentId={agentId}
+          pictures={pictures}
           name={deployment.environment}
           avatarUrl={avatarUrl}
         />
@@ -2096,10 +2073,10 @@ function DeploymentRow({
 
 /** The head's deployments, such as its Vercel Previews, the newest of each environment first, each opening the address it serves; nothing where it has none. */
 function Deployments({
-  agentId,
+  pictures,
   deployments,
 }: {
-  agentId: string;
+  pictures: GitHubPictureScope;
   deployments: readonly PullRequestDeployment[];
 }): React.JSX.Element | null {
   if (deployments.length === 0) return null;
@@ -2108,7 +2085,7 @@ function Deployments({
     <Section title="Deployments" count={formatCount(deployments.length)}>
       <List label="Deployment list" variant={LIST_VARIANT.CARD} density={LIST_DENSITY.DENSE}>
         {deployments.map((deployment) => (
-          <DeploymentRow key={deployment.environment} agentId={agentId} deployment={deployment} />
+          <DeploymentRow key={deployment.environment} pictures={pictures} deployment={deployment} />
         ))}
       </List>
     </Section>
@@ -2243,11 +2220,11 @@ function PreviewControl({
 
 /** The checks section as its read stands: every check once landed, its running counts moving while the tab is shown (`live`), a skeleton of rows while out, its failure with Retry, and nothing where the pull request's own read failed too, whose failure under the title speaks for it. */
 function ChecksPart({
-  agentId,
+  pictures,
   parts,
   live,
 }: {
-  agentId: string;
+  pictures: GitHubPictureScope;
   parts: OverviewParts;
   live: boolean;
 }): React.JSX.Element | null {
@@ -2258,8 +2235,8 @@ function ChecksPart({
   if (part.kind === PART.LANDED) {
     return (
       <>
-        <Deployments agentId={agentId} deployments={part.value.deployments ?? []} />
-        <Checks agentId={agentId} checks={part.value.checks} live={live} />
+        <Deployments pictures={pictures} deployments={part.value.deployments ?? []} />
+        <Checks pictures={pictures} checks={part.value.checks} live={live} />
       </>
     );
   }
@@ -2309,7 +2286,6 @@ function DescriptionWords({
 
 /** The description, as the pull request's read carries it, edited in place where the member may edit it (`./pull-request-description.tsx`), with the reactions it wears once the conversation's read, which carries them, lands; a skeleton while its read is out, and nothing where it failed, whose failure stands under the title. */
 function DescriptionPart({
-  agentId,
   part,
   onRead,
   reactions,
@@ -2317,7 +2293,6 @@ function DescriptionPart({
   picture,
   fold,
 }: {
-  agentId: string;
   part: Part<AgentOverviewPullRequest>;
   /** Asks the pull request's read again, as an edit of the description does once GitHub answered it. */
   onRead: ReadAgain;
@@ -2350,7 +2325,6 @@ function DescriptionPart({
         // Note that it is keyed by its pull request, so words left in one pull request's editor are never another's.
         <PullRequestDescription
           key={part.value.number}
-          agentId={agentId}
           pullRequest={part.value}
           body={part.value.body}
           drawn={words}
@@ -2476,40 +2450,6 @@ function HeaderTitle({
   return (
     <PullRequestTitle title={title.title} number={pullRequestNumberLabel(title)} writes={writes} />
   );
-}
-
-/** The glyph the Checks tab wears for how its checks went, as the pull request's mark tells it; none where there are none. */
-const SUMMARY_GLYPHS = {
-  [CHECK_SUMMARY.FAILING]: <XIcon />,
-  [CHECK_SUMMARY.PENDING]: <SpinnerRing size={SPINNER_SIZE.SMALL} />,
-  [CHECK_SUMMARY.PASSING]: <CheckIcon />,
-  [CHECK_SUMMARY.NONE]: null,
-} as const satisfies Record<CheckSummary, ReactNode>;
-
-/** The tone the Checks tab's count takes for how its checks went, as its glyph does: a wait quiet, under the ring every wait turns. */
-const SUMMARY_TONES = {
-  [CHECK_SUMMARY.FAILING]: STATUS_TONE.DANGER,
-  [CHECK_SUMMARY.PENDING]: STATUS_TONE.NEUTRAL,
-  [CHECK_SUMMARY.PASSING]: STATUS_TONE.COMPLETE,
-  [CHECK_SUMMARY.NONE]: STATUS_TONE.NEUTRAL,
-} as const satisfies Record<CheckSummary, StatusTone>;
-
-/** What the Checks tab counts: how they went in its color from the first frame, and how many once read; nothing where neither stands. */
-function checksCount(
-  summary: CheckSummary,
-  count: number | undefined,
-): readonly CountPart[] | undefined {
-  const glyph = SUMMARY_GLYPHS[summary];
-
-  if (glyph === null && count === undefined) return undefined;
-  const text = count === undefined ? "" : formatCount(count);
-  const tone = SUMMARY_TONES[summary];
-
-  return [
-    glyph === null
-      ? { text, tone }
-      : { text, tone, glyph, glyphLabel: CHECK_SUMMARY_WORDS[summary] },
-  ];
 }
 
 /** What the Chapters tab says of where they stand, beside its glyph, to a reader who cannot see it. */
@@ -2843,7 +2783,7 @@ function ConversationViewOptions({
  * to land on.
  */
 function ConversationView({
-  agentId,
+  pictures,
   parts,
   url,
   comment,
@@ -2851,7 +2791,7 @@ function ConversationView({
   landing,
   shown: viewShown,
 }: {
-  agentId: string;
+  pictures: GitHubPictureScope;
   parts: OverviewParts;
   url: string | undefined;
   /** The comment box's words and its own change, held by the tab so the box may come and go. */
@@ -2864,7 +2804,7 @@ function ConversationView({
   shown: boolean;
 }): React.JSX.Element {
   const now = useMinute();
-  const picture = usePictureDrawer(agentId);
+  const picture = usePictureDrawer(pictures);
   const choices = useConversationFilters();
   const { filters, change } = choices;
   const conversation = landed(parts.conversation)?.conversation;
@@ -2913,7 +2853,6 @@ function ConversationView({
       stands them, so the Conversation and the Checks read alike. */}
       <div className="pull-request-page px-pull-request-page pt-section-gap text-body text-foreground wrap-anywhere [--pull-request-page-measure:var(--ui-page-measure)]">
         <DescriptionPart
-          agentId={agentId}
           part={parts.pullRequest}
           onRead={parts.ask.pullRequest}
           reactions={landed(parts.conversation)?.descriptionReactions}
@@ -2994,24 +2933,23 @@ function centerCard(card: HTMLElement): void {
 
 /**
  * The tab's door to its review threads by id, and the thread it is bringing
- * into view. A thread is taken to its other view through the window's own
- * route for its link (`LINK_DESTINATION.PULL_REQUEST_THREAD`), as any link to it
- * would take it, which opens this tab on that view and leaves the ask for
- * it to take; a tab the route cannot reach, one showing another pull
- * request by its number, or one outside the window, takes the jump itself.
- * Once the conversation is read, the thread is found by its id, or said
- * gone, and the ask let go.
+ * into view. A thread is taken to its other view by the tab itself, and a
+ * link to it that an earlier version wrote under its agent, pressed
+ * elsewhere, opens this tab on its view and leaves the ask here for it to
+ * take (`useWindowThreadReveal`). Once the conversation is read, the
+ * thread is found by its id, or said gone, and the ask let go. No link
+ * names a thread of a pull request by its repository, so a thread's menu
+ * offers no Copy link.
  */
 function useThreadJumps(input: {
-  agentId: string;
-  number: number | undefined;
+  pullRequest: RepositoryPullRequestParams;
   shown: boolean;
   threads: readonly ReviewThread[];
   conversation: Part<AgentOverviewConversation>;
   onView: (view: PullRequestView) => void;
 }) {
-  const { agentId, number, shown, threads, conversation } = input;
-  const openPlace = useOpenPlace();
+  const { pullRequest, shown, threads, conversation } = input;
+  const { workspaceId, number } = pullRequest;
   const toast = useToast();
   const [jump, setJump] = useState<ThreadJump | undefined>(undefined);
   // The thread last brought into the Conversation, which stands through its filters while it is read.
@@ -3025,9 +2963,8 @@ function useThreadJumps(input: {
     setJump({ threadId, view, ask: asks.current });
   }, []);
 
-  // A link names the agent's own pull request, never one a tab shows by its number.
-  const windowAsk = useWindowThreadReveal(agentId);
-  const taken = number === undefined && shown ? windowAsk : undefined;
+  const windowAsk = useWindowThreadReveal(pullRequest);
+  const taken = shown ? windowAsk : undefined;
   const latestAsk = useRef(taken);
   latestAsk.current = taken;
   useEffect(() => {
@@ -3038,23 +2975,10 @@ function useThreadJumps(input: {
     standing.onRevealed(standing.reveal.ask);
   }, [taken?.reveal.ask, start]);
 
-  const place = (thread: ReviewThread, view: PullRequestThreadView): LinkDestination | undefined =>
-    thread.id === undefined || number !== undefined
-      ? undefined
-      : { kind: LINK_DESTINATION.PULL_REQUEST_THREAD, agentId, threadId: thread.id, view };
-
   const latestView = useRef(input.onView);
   latestView.current = input.onView;
 
   const jumpTo = (thread: ReviewThread, view: PullRequestThreadView) => {
-    const routed = place(thread, view);
-
-    if (routed !== undefined && openPlace !== undefined) {
-      openPlace(routed);
-
-      return;
-    }
-
     if (thread.id === undefined) return;
     latestView.current(view);
     start(thread.id, view);
@@ -3072,12 +2996,12 @@ function useThreadJumps(input: {
       failure: {
         surface: FAILURE_SURFACE.PULL_REQUEST_THREAD,
         cause: FAILURE_CONDITION.GONE,
-        about: { agentId, pullRequest: number },
+        about: { workspaceId, pullRequest: number },
         refused: true,
       },
     });
     setJump(undefined);
-  }, [gone, toast, agentId, number]);
+  }, [gone, toast, workspaceId, number]);
 
   const letGo = useCallback((ask: number) => {
     setJump((was) => (was?.ask === ask ? undefined : was));
@@ -3110,7 +3034,7 @@ function useThreadJumps(input: {
               failure: {
                 surface: FAILURE_SURFACE.PULL_REQUEST_THREAD,
                 cause: FAILURE_CONDITION.GONE,
-                about: { agentId, pullRequest: number },
+                about: { workspaceId, pullRequest: number },
                 refused: true,
               },
             });
@@ -3121,7 +3045,7 @@ function useThreadJumps(input: {
       : undefined;
 
   return {
-    jumps: { jump: jumpTo, place } satisfies ThreadJumps,
+    jumps: { jump: jumpTo } satisfies ThreadJumps,
     kept,
     conversationLanding,
     filesReveal,
@@ -3197,7 +3121,7 @@ function useConversationAnchors(input: {
 }
 
 /**
- * One agent's Pull request tab, laid out as stage-cli's pull request page:
+ * One pull request's tab, laid out as stage-cli's pull request page:
  * a fixed header that stays put while what is under it scrolls (the pill
  * saying where it stands, its title and number, and, while it is open, the
  * merge control, in one row; then its branches, who opened it and
@@ -3210,36 +3134,53 @@ function useConversationAnchors(input: {
  * wears, are asked as the tab is shown; the checks and the files as their
  * tab is first shown, the files also as
  * Chapters is, whose diff draws them. Only a read saying there is no
- * pull request yet takes the header and the tabs away; a read that failed
- * says so in its own part, with its own Retry, the others standing. Files
- * changed draws the conversation's review threads on their lines.
+ * pull request takes the header and the tabs away, and one saying the
+ * workspace no longer reaches its repository stands in their place with
+ * the press that mends it; a read that failed otherwise says so in its own
+ * part, with its own Retry, the others standing. Files changed draws the
+ * conversation's review threads on their lines. The tab names its pull
+ * request by its repository and number alone and reads it through the
+ * workspace of the task holding the strip (`pull-request-source.ts`), so
+ * nothing it shows is any agent's.
  */
-export function AgentPullRequestTab({
+export function PullRequestTab({
   control,
+  pullRequest,
+  taskId,
   ...props
-}: AgentPullRequestTabProps): React.JSX.Element {
-  const source = useAgentPullRequestSource(control, props.agentId, props.number);
+}: PullRequestTabProps): React.JSX.Element {
+  // Note that the task's own line names the tab before its pull request is read, where one of its agents opened it; it is drawn, never read by.
+  const published = useMemo(
+    () =>
+      [...control.pullRequests.values()].find((each) => {
+        const address = pullRequestAddressOf(each.url);
 
-  // Note that the number and the source are handed down before any of the tab's own hooks run, its writes among them.
+        return address !== undefined && samePullRequestAddress(address, pullRequest);
+      }),
+    [control.pullRequests, pullRequest],
+  );
+
+  const source = usePullRequestSourceOf(pullRequest, { taskId }, published);
+
   return (
-    <PullRequestNumberProvider value={props.number}>
-      <PullRequestSourceProvider value={source}>
-        <WritePlaceProvider value={source.place}>
-          <PullRequestTabBody {...props} source={source} />
-        </WritePlaceProvider>
-      </PullRequestSourceProvider>
-    </PullRequestNumberProvider>
+    <PullRequestSourceProvider value={source}>
+      <WritePlaceProvider value={source.place}>
+        <PullRequestTabBody {...props} source={source} />
+      </WritePlaceProvider>
+    </PullRequestSourceProvider>
   );
 }
 
-interface AgentPullRequestTabProps {
-  agentId: string;
-  /** The pull request of the agent's repository the tab shows by its number, where it is not the one from the agent's branch (`pull-request-number.ts`); none shows the agent's own. */
-  number?: number | undefined;
+interface PullRequestTabProps {
+  /** The pull request the tab shows, by its repository and number, read through the workspace of the task holding the strip. */
+  pullRequest: RepositoryPullRequestParams;
+  /** The task holding the strip, whose workspace is given the repository where it no longer reaches it; none where no task holds it. */
+  taskId: string | null;
+  /** The task's agents, whose listed pull request names the tab before its own read lands where one of them opened it. */
   control: AgentsControl;
   /** Whether the panel is on screen, which is when the tab reads. */
   shown: boolean;
-  /** The plan's repository, whose files a gap between a diff's hunks is read from; none opens no gap. */
+  /** The plan's repository, whose files a gap between a diff's hunks is read from where the pull request is of it; none opens no gap. */
   repository: string | null;
   /** Whether the tree beside File tabs and the files is open, and its toggle. */
   tree: TreeShown;
@@ -3452,18 +3393,18 @@ function CompactTitle({
   );
 }
 
-/** The Pull request tab under the number it names, reading through its source (`AgentPullRequestTab`). */
+/** The Pull request tab, reading through its source (`PullRequestTab`). */
 function PullRequestTabBody({
-  agentId,
-  number,
   source,
   shown,
-  repository,
+  repository: taskRepository,
   tree,
   view,
   onView,
   onActions,
-}: Omit<AgentPullRequestTabProps, "control"> & { source: PullRequestSource }): React.JSX.Element {
+}: Omit<PullRequestTabProps, "control" | "pullRequest" | "taskId"> & {
+  source: PullRequestSource;
+}): React.JSX.Element {
   const id = useId();
 
   // A phone names the chosen tab and draws the others by their glyphs and counts, so the four fit its row without scrolling; a tab pressed is named.
@@ -3478,29 +3419,42 @@ function PullRequestTabBody({
     panel: `${id}-${each}-panel`,
   });
 
-  // The header's parts are held while the tab is shown, the conversation among them for where its reviewers stand, the checks for the deployments its Preview opens, and what the agent published, which names a tab and its pin by the pull request's title.
-  const asked = shown ? pullRequestAsked(agentId, number) : undefined;
+  const { pullRequest } = source;
+
+  // Note that a gap between hunks is read from the plan's repository, so one is opened only where the pull request is of it.
+  const repository =
+    taskRepository !== null && ofRepository(pullRequest.repository, taskRepository)
+      ? taskRepository
+      : null;
+
+  const pictures = useMemo(
+    () => ({ workspaceId: pullRequest.workspaceId, repository: pullRequest.repository }),
+    [pullRequest.workspaceId, pullRequest.repository],
+  );
+
+  // The header's parts are held while the tab is shown, the conversation among them for where its reviewers stand, the checks for the deployments its Preview opens, and the pull request as GitHub holds it now, which names a tab and its pin by its title.
+  const asked = shown ? pullRequest : undefined;
 
   const pullRequestRead = usePartRead(
-    useQuery(pullRequestQuery(asked)),
+    useQuery(repositoryPullRequestQuery(asked)),
     PULL_REQUEST_PART.PULL_REQUEST,
     asked,
   );
 
   const conversationRead = usePartRead(
-    useQuery(pullRequestConversationQuery(asked)),
+    useQuery(repositoryPullRequestConversationQuery(asked)),
     PULL_REQUEST_PART.CONVERSATION,
     asked,
   );
 
   const checksRead = usePartRead(
-    useQuery(pullRequestChecksQuery(asked)),
+    useQuery(repositoryPullRequestChecksQuery(asked)),
     PULL_REQUEST_PART.CHECKS,
     asked,
   );
 
   const publishedRead = usePartRead(
-    useQuery(pullRequestPublishedQuery(asked)),
+    useQuery(repositoryPullRequestPublishedQuery(asked)),
     PULL_REQUEST_PART.PUBLISHED,
     asked,
   );
@@ -3528,11 +3482,11 @@ function PullRequestTabBody({
   };
 
   const reading = pullRequestRead.out || checksRead.out || conversationRead.out;
-  // Note that a tab naming its pull request by number draws what the host last read of it, as the task list draws the agent's own.
+  // The pull request as the host last read it from GitHub, else as the task's agents listed it, which names the tab at once.
   const publishedPart = publishedRead.answer;
 
   const published =
-    number !== undefined && publishedPart !== undefined && "pullRequest" in publishedPart
+    publishedPart !== undefined && "pullRequest" in publishedPart
       ? (publishedPart.pullRequest ?? source.published)
       : source.published;
 
@@ -3540,9 +3494,16 @@ function PullRequestTabBody({
   // The pill offers the Merge queue page while the account has it on.
   const openMergeQueue = useMergeQueueOpener();
 
-  const none = [parts.pullRequest, parts.checks, parts.conversation].some(
-    (part) => part.kind === PART.NONE,
-  );
+  // A workspace that no longer reaches the pull request's repository reads none of its parts, so it says so once, in their place, with the press that mends it.
+  const unreachable =
+    parts.pullRequest.kind === PART.FAILED &&
+    parts.pullRequest.failed.failure === AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE
+      ? parts.pullRequest
+      : undefined;
+
+  const none =
+    unreachable !== undefined ||
+    [parts.pullRequest, parts.checks, parts.conversation].some((part) => part.kind === PART.NONE);
 
   // The toolbar's ⋯ copies and opens the pull request on GitHub and reads it again while the header draws it,
   // Refresh dimmed while a read is out; a read saying there is none takes them away with the header.
@@ -3602,7 +3563,6 @@ function PullRequestTabBody({
   // Files changed's reads, held here so its tab's count reads the same marks it draws, and the
   // Chapters view draws the same files and marks; asked as either is first shown.
   const changes = useChangesReads(
-    agentId,
     source,
     shown && !none && (view === PULL_REQUEST_VIEW.FILES || view === PULL_REQUEST_VIEW.CHAPTERS),
   );
@@ -3634,7 +3594,6 @@ function PullRequestTabBody({
 
   // The chapters, held while the tab is shown once the pull request's own read has answered, naming the number it found, so their tab says where they stand before their view is opened.
   const chapters = useChaptersRead(
-    agentId,
     source,
     shown && overview !== undefined,
     overview === undefined
@@ -3649,13 +3608,13 @@ function PullRequestTabBody({
   const now = useMinute();
   // A change is read back as Refresh reads: the tab, and what the agent published, which the plan's own marks draw.
   const written = refresh;
-  const writes = usePullRequestWrites(agentId, written);
-  const review = usePullRequestWrites(agentId, written);
+  const writes = usePullRequestWrites(written);
+  const review = usePullRequestWrites(written);
   // The member's own pending review, read beside the conversation, which names what Review and a comment on lines offer.
   const pendingReview = landed(parts.conversation)?.pendingReview;
-  const picture = usePictureDrawer(agentId);
-  const comment = usePullRequestComment(agentId, written);
-  const options = useReviewOptions(agentId);
+  const picture = usePictureDrawer(pictures);
+  const comment = usePullRequestComment(written);
+  const options = useReviewOptions(pullRequest);
   const picks = usePullRequestPicks(overview, writes);
   // Note that Files changed is handed the same threads while the conversation
   // and the minute stand, because a file a thread is on draws its notes anew
@@ -3686,8 +3645,7 @@ function PullRequestTabBody({
   );
 
   const threadJumps = useThreadJumps({
-    agentId,
-    number,
+    pullRequest,
     shown,
     threads: threadList,
     conversation: parts.conversation,
@@ -3708,9 +3666,9 @@ function PullRequestTabBody({
   const fold = useHeaderFold(phone);
   const listRoom = phone && fold.extent.lead ? fold.extent.room : 0;
 
-  // Every review thread the tab draws, in the Conversation or on its line, replies and resolves on this agent's pull request.
+  // Every review thread the tab draws, in the Conversation or on its line, replies and resolves on this pull request.
   const page = (
-    <ThreadWritesProvider value={{ agentId, onWritten: written }}>
+    <ThreadWritesProvider value={{ onWritten: written }}>
       <ThreadJumpContext.Provider value={threadJumps.jumps}>
         <AnchorsContext.Provider value={anchors.open}>
           <Fill
@@ -3722,7 +3680,15 @@ function PullRequestTabBody({
             onScrollEndCapture={fold.onScrollEndCapture}
           >
             <PullRequestWriteNote writes={writes} />
-            {none ? (
+            {unreachable !== undefined ? (
+              <PullRequestUnreachable
+                failure={failureShown({
+                  surface: FAILURE_SURFACE.PULL_REQUEST_READ,
+                  cause: unreachable.failed,
+                })}
+                onRetry={() => void refresh()}
+              />
+            ) : none ? (
               <EmptyState icon={<GLYPH.PULL_REQUEST />}>
                 {PULL_REQUEST_WORDS.NO_PULL_REQUEST}
               </EmptyState>
@@ -3820,7 +3786,7 @@ function PullRequestTabBody({
                   hidden={view !== PULL_REQUEST_VIEW.CONVERSATION}
                 >
                   <ConversationView
-                    agentId={agentId}
+                    pictures={pictures}
                     parts={parts}
                     url={title?.url}
                     comment={comment}
@@ -3842,7 +3808,7 @@ function PullRequestTabBody({
                     inset={DETAIL_PAGE_INSET.READING}
                   >
                     <ChecksPart
-                      agentId={agentId}
+                      pictures={pictures}
                       parts={parts}
                       live={shown && view === PULL_REQUEST_VIEW.CHECKS}
                     />
@@ -3866,7 +3832,6 @@ function PullRequestTabBody({
                         loaded={chaptersTabLoaded}
                       >
                         <CHAPTERS_TAB
-                          agentId={agentId}
                           source={source}
                           shown={shown && view === PULL_REQUEST_VIEW.CHAPTERS}
                           repository={repository}
@@ -3895,7 +3860,6 @@ function PullRequestTabBody({
                     value={viewActions.handFor(PULL_REQUEST_VIEW.FILES)}
                   >
                     <AgentChangesTab
-                      agentId={agentId}
                       source={source}
                       shown={shown && !none && view === PULL_REQUEST_VIEW.FILES}
                       repository={repository}

@@ -10,6 +10,7 @@ import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { appCommandOffered, runAppCommand } from "../app-commands.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handHostReads, handMembers } from "../testing/app-state.js";
@@ -127,8 +128,12 @@ function keepAnyone(workspace: Workspace = ACME): void {
   );
 }
 
-/** The sidebar listing `plans` in `workspace`, read by Dean. */
-function mountSidebar(workspace: Workspace, tasks: readonly TaskSummary[] = TASKS): HTMLElement {
+/** The sidebar listing `plans` in `workspace`, each task standing in it, read by Dean. */
+function mountSidebar(
+  workspace: Workspace,
+  tasks: readonly TaskSummary[] = TASKS,
+  said?: Pick<TasksControl, "taskWorkspaces">,
+): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -136,10 +141,11 @@ function mountSidebar(workspace: Workspace, tasks: readonly TaskSummary[] = TASK
   sidebarRouter = windowRouter();
 
   const control = tasksControl({
-    tasks: [...tasks],
+    tasks: tasks.map((each) => ({ ...each, workspaceId: workspace.id })),
     workspace,
     workspaces: [workspace],
     me: DEAN,
+    ...said,
   });
 
   act(() =>
@@ -273,8 +279,9 @@ function lastMenuItems(): string[] {
 async function mountRead(
   workspace: Workspace,
   tasks?: readonly TaskSummary[],
+  said?: Pick<TasksControl, "taskWorkspaces">,
 ): Promise<HTMLElement> {
-  const sidebar = mountSidebar(workspace, tasks);
+  const sidebar = mountSidebar(workspace, tasks, said);
   await act(async () => undefined);
 
   return sidebar;
@@ -308,7 +315,7 @@ test("a shared workspace opens on your own tasks, those you are on and those no 
   assert.equal(options?.getAttribute("aria-description"), null);
 });
 
-test("View options offers Group by, Show completed sub-tasks, and Assigned to, Assigned to holding Me, Anyone, then each teammate by name with their email beside it, hanging their card", async () => {
+test("View options offers Group by, Show completed sub-tasks, and Assigned to, Assigned to holding Me, Following, Anyone, then each teammate by name with their email beside it, hanging their card", async () => {
   const sidebar = await mountRead(ACME, ASSIGNED);
   const button = viewOptions(sidebar);
   act(() => button.click());
@@ -324,6 +331,7 @@ test("View options offers Group by, Show completed sub-tasks, and Assigned to, A
       ]),
       [
         ["Me", null, true],
+        ["Following", null, false],
         ["Anyone", null, false],
         ["Charles Pan", "charles@acme.dev", false],
         ["Maya Okafor", "maya@acme.dev", false],
@@ -332,32 +340,6 @@ test("View options offers Group by, Show completed sub-tasks, and Assigned to, A
   );
   restOn(menuItem("Charles Pan"));
   assert.equal(cardName(), "Charles Pan");
-});
-
-test("a list kept on Following while the workspace has Following off reads as My tasks, Me checked and no Following offered", async () => {
-  window.localStorage.setItem(
-    "app.sidebarTaskViews",
-    JSON.stringify({ [ACME.id]: { grouping: "repository", assignee: { kind: "following" } } }),
-  );
-
-  const sidebar = await mountRead(ACME, ASSIGNED);
-  assert.equal(headWords(sidebar), "My tasks");
-  act(() => viewOptions(sidebar).click());
-  act(() => menuItem("Assigned to").click());
-  await vi.waitFor(() =>
-    assert.deepEqual(
-      [...document.querySelectorAll<HTMLElement>('[role="option"]')].map((row) => [
-        itemLabel(row),
-        row.getAttribute("aria-current") === "true",
-      ]),
-      [
-        ["Me", true],
-        ["Anyone", false],
-        ["Charles Pan", false],
-        ["Maya Okafor", false],
-      ],
-    ),
-  );
 });
 
 test("the Tasks head says My tasks, then Everyone's tasks once Assigned to › Anyone lists everyone's, kept across launches, with a dot and no chip", async () => {
@@ -508,15 +490,23 @@ test("in one run, a task with no repository says so on its row", async () => {
   });
 });
 
-test("an empty workspace says only that it holds no tasks", async () => {
-  const sidebar = await mountRead(ACME, []);
-
-  // Note that the pinned section's own "Drag tasks here to pin them" is a line of the sidebar too.
-  const notes = [...sidebar.querySelectorAll(".ui-note-line")].flatMap(({ textContent: note }) =>
+/** The lines the sidebar says, the pinned section's own "Drag tasks here to pin them" left out. */
+function noteLines(sidebar: HTMLElement): readonly (string | null)[] {
+  return [...sidebar.querySelectorAll(".ui-note-line")].flatMap(({ textContent: note }) =>
     note?.startsWith("Drag tasks here") === true ? [] : [note],
   );
+}
 
-  assert.deepEqual(notes, ["No tasks yet."]);
+test("an empty workspace says only that it holds no tasks", async () => {
+  const sidebar = await mountRead(ACME, [], { taskWorkspaces: [] });
+
+  assert.deepEqual(noteLines(sidebar), ["No tasks yet."]);
+});
+
+test("a workspace whose tasks the list does not hold, old and finished ones, says none match its view rather than none yet", async () => {
+  const sidebar = await mountRead(ACME, [], { taskWorkspaces: [ACME.id] });
+
+  assert.deepEqual(noteLines(sidebar), ["No tasks match this view. Show all"]);
 });
 
 test("⌘K offers each view choice only while it would change the list, and running one changes it as the menu would", async () => {
@@ -684,7 +674,7 @@ test("Assigned to a teammate, with nothing of theirs, says so, and Show all list
   assert.equal(headWords(sidebar), "Everyone's tasks");
 });
 
-test("Assigned to says the members could not be read, with Retry, under Me and Anyone, and Retry reads them again and leaves the menu standing", async () => {
+test("Assigned to says the members could not be read, with Retry, under Me, Following, and Anyone, and Retry reads them again and leaves the menu standing", async () => {
   const reads = handHostReads({ members: { [ACME.id]: { failed: true } } });
   fakeActPort({
     [ACT_KIND.WORKSPACE_MEMBERS_RETRY]: ({ workspaceId }) => {
@@ -712,7 +702,7 @@ test("Assigned to says the members could not be read, with Retry, under Me and A
   const said = document.body.textContent ?? "";
   await act(async () => offeredRetry.click());
 
-  assert.deepEqual(failed, ["Me", "Anyone"]);
+  assert.deepEqual(failed, ["Me", "Following", "Anyone"]);
   assert.match(said, /Members could not be read\./u);
   await vi.waitFor(() => assert.equal(offered().includes("Charles Pan"), true));
   assert.equal(retry(), undefined);

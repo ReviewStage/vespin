@@ -123,14 +123,10 @@ export function readTaskToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
     name: AGENT_TOOL.READ_TASK,
     description:
       "Read one task of your workspace by its id, a teammate's included: its " +
-      "key (such as ACME-42), name, where it stands (its status) and how much it matters (its " +
-      "priority), repository, who started it (startedBy, and startedByUserId to link them by), whether it is the task you " +
-      "work on, the brief the developer started it with (null for none), the tasks " +
-      "it is blocked by and the tasks it blocks (each with its id, name, and status), its followers " +
-      "(each with their name and id, whether they are its assignee, and whether its " +
-      "agents may use their machines; absent where your workspace keeps none)" +
-      `${READ_TASK_DESCRIPTION_WORDS[on.descriptionsOn ? "on" : "off"]} Read one before you start an agent on it, or to learn what another task is about; ` +
-      `${AGENT_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
+      "key, name, status, priority, repository, who started it (startedBy, and startedByUserId to " +
+      "link them by), whether it is the task you work on, the brief the developer started it with, " +
+      "the tasks it is blocked by and the tasks it blocks, its followers" +
+      `${READ_TASK_DESCRIPTION_WORDS[on.descriptionsOn ? "on" : "off"]} Read one before you start an agent on it, or to learn what another task is about.`,
     inputSchema: READ_TASK_INPUT,
   } as const;
 }
@@ -179,7 +175,7 @@ export function runReadTask(
       const descriptionsOn = yield* callerDescriptionsOn(call.caller);
       const blocks = yield* taskBlockReadings(userId, task);
 
-      const followers = yield* followerReadingsOf(userId, workspace.value, [task.id]);
+      const followers = yield* followerReadingsOf(userId, [task.id]);
 
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
@@ -193,9 +189,7 @@ export function runReadTask(
           isYourTask: task.id === callerTask(call.caller),
           brief: brief ?? null,
           ...blocks,
-          ...(followers === undefined
-            ? undefined
-            : { followers: (followers.get(task.id) ?? []).map((follower) => ({ ...follower })) }),
+          followers: (followers.get(task.id) ?? []).map((follower) => ({ ...follower })),
         },
         ...(descriptionsOn
           ? {
@@ -374,18 +368,12 @@ function createTaskWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
   return (
     "Make a task in your workspace for the developer you work for, as the sidebar's New task " +
     "would: owned by them, on the repository named or the one you work in, " +
-    `${CREATE_TASK_STARTS_WITH[on.descriptionsOn ? "on" : "off"]}, and no agent on it. ` +
-    "Make one for a separate piece of work that should stand as a task of its own, " +
-    "where the developer asked for it; " +
-    `then start an agent on it with ${AGENT_TOOL.START_AGENT}'s taskId. ` +
-    "Give it a status, a priority, and an assignee where the developer said them. Give it a " +
-    "parentTaskId to make it a child task of another, to any depth: a child always works in " +
-    "its parent's repository, so leave repository out for one. Give it subTaskIds to make it " +
-    "the parent of tasks that have none, and blockedBy and blocks for the tasks it waits on and " +
-    `the tasks that wait on it, as ${AGENT_TOOL.UPDATE_TASK} names them, all written in the same ` +
-    "call: a child that waits on a sibling takes a parentTaskId and a blockedBy. Answers " +
-    "`accepted` with the task's id, key, name, status, priority, assignee, and repository, or " +
-    "`rejected` and why."
+    `${CREATE_TASK_STARTS_WITH[on.descriptionsOn ? "on" : "off"]}, and no agent on it, for work that ` +
+    "should stand as a task of its own where the developer asked for one; " +
+    `start an agent on it with ${AGENT_TOOL.START_AGENT}'s taskId. ` +
+    "Give it a status, a priority, and an assignee where the developer said them. Its parent, " +
+    "sub-tasks, and blocks are all written in the same call: a child always works in its parent's " +
+    "repository, and a child that waits on a sibling takes a parentTaskId and a blockedBy."
   );
 }
 

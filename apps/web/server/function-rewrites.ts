@@ -65,8 +65,8 @@ const AUTH_ROUTE = "auth/[...all]";
 const SEGMENT_REWRITES: readonly SegmentRewrite[] = [
   { src: "/api/auth/(.*)", route: AUTH_ROUTE, query: `${DISPATCH_QUERY.PATH}=auth/$1` },
   {
-    src: "/api/plans/([^/]+)/attachments/([^/]+)",
-    route: "plans/attachment",
+    src: "/api/tasks/([^/]+)/attachments/([^/]+)",
+    route: "tasks/attachment",
     query: "id=$1&attachment=$2",
   },
   {
@@ -377,13 +377,12 @@ export function apiRewritesSource(rewrites: readonly Rewrite[]): string {
  * because Vercel evaluates a service's routes only once a request has
  * entered it and ignores a `routes` key left at the top level; and the
  * top-level `rewrites` are the public routing that sends every path to the
- * web service. The `git` key turns off deployment of GitHub's merge-queue
- * branches (`gh-readonly-queue/<base>/pr-<n>-<sha>`): CI gates the queue, and
- * the squash it lands on `main` deploys on its own. It turns off, too, the
- * branches that hold pictures alone and share no history with `main`: PR
- * media (`pr-assets`, and the `pr-assets-<topic>` AGENTS.md warns against)
- * and screenshot evidence (`evidence/<topic>`). A glob is `**` where a `*`
- * would not cross the branch name's `/`.
+ * web service. The `git` key deploys a push to `main` alone, its production,
+ * and no other branch's: a Preview is built only when someone asks for one,
+ * through Vercel's Create Deployment or `vercel deploy`, because Previews
+ * built on every push were most of the project's build minutes and few were
+ * ever opened. Note that Vercel deploys a branch where any glob that matches
+ * it is `true`, so `main` deploys though `**` matches it too.
  */
 const WebService = Schema.Struct({
   root: Schema.String,

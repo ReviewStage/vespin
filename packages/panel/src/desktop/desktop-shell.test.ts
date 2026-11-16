@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { DESCRIPTION_ACTOR, type Task } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import {
   ACCOUNT_ACT_KIND,
@@ -48,11 +48,17 @@ import {
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { DESKTOP_CAPABILITIES, handCapabilities, handState } from "../testing/app-state.js";
 import { withQueryClient, writeHandedAppState } from "../testing/copy-feedback.js";
+import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { DOCUMENT_NAME, DOCUMENT_TASK } from "../testing/document-task.js";
 import { restOn } from "../testing/hint-rest.js";
 import { pressInPhoneHead, readPhoneHead } from "../testing/phone-head.js";
 import { agentAt, personAt, SHELL_AT, shellRouterEachTest } from "../testing/shell-router.js";
-import { handInbox, newTaskControl, tasksControl } from "../testing/tasks-control.js";
+import {
+  handInbox,
+  newTaskControl,
+  type TasksControlOverrides,
+  tasksControl,
+} from "../testing/tasks-control.js";
 import { holdingInboxChoice, leavingBy } from "../testing/window-router.js";
 import { DesktopShell } from "./desktop-shell.js";
 import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
@@ -172,7 +178,7 @@ function shellProps(
 }
 
 /** The tasks' state a shell under test is handed, and the routed place it stands at where that is the router's alone, the Board or a person's page. */
-interface ShellOverrides extends Partial<TasksControl> {
+interface ShellOverrides extends TasksControlOverrides {
   readonly at?: string;
   /** Where the Inbox item its address names stands, as the door that chose it held it. */
   readonly held?: InboxChoice;
@@ -213,7 +219,10 @@ function mount(
       ...overrides,
     });
 
-    return createElement(DesktopShell, shellProps(tasks, tab, onTabChange, sidebarPatch));
+    return overListedTasks(
+      tasks,
+      createElement(DesktopShell, shellProps(tasks, tab, onTabChange, sidebarPatch)),
+    );
   }
 
   const home =
@@ -297,7 +306,7 @@ async function mountSwitching(): Promise<(tab: PanelTab) => Promise<void>> {
           underRouter(
             createElement(
               DesktopShell,
-              shellProps(tasksControl({ page: TASKS_PAGE.DOCUMENT }), tab, ignore, {}),
+              shellProps(tasksControl({ page: TASKS_PAGE.TASK }), tab, ignore, {}),
             ),
           ),
         ),
@@ -649,7 +658,7 @@ test("the window is called by what stands in it: the plan on screen in its own w
         signedIn,
         workspaces,
         workspace: ACME,
-        region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+        region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
       },
       tab,
     );
@@ -674,7 +683,7 @@ test("the window is called by what stands in it: the plan on screen in its own w
     workspaces: [ACME],
     workspace: ACME,
     at: SHELL_AT.AUTOMATIONS,
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
   });
   assert.equal(document.title, "Automations — Acme");
 });
@@ -684,10 +693,10 @@ test("a plan opened with its Inbox tab shown rather than its plan is read at onc
     const page = mount(
       inboxOpen,
       {
-        page: TASKS_PAGE.DOCUMENT,
+        page: TASKS_PAGE.TASK,
         tasks: [{ ...DOCUMENT_TASK, readThrough: DOCUMENT_TASK.updatedAt - 1 }],
         activeTaskId: DOCUMENT_TASK.id,
-        region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+        region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
         sidePanel: {
           ...tasksControl().sidePanel,
           open: true,
@@ -734,17 +743,19 @@ function mountListing(listed: readonly Task[]): (open: Task | undefined) => void
 
   return (open) => {
     const tasks = tasksControl({
-      page: open === undefined ? TASKS_PAGE.HOME : TASKS_PAGE.DOCUMENT,
+      page: open === undefined ? TASKS_PAGE.HOME : TASKS_PAGE.TASK,
       tasks: listed.map((task) => (task.id === open?.id ? open : task)),
       activeTaskId: open?.id,
       region:
-        open === undefined
-          ? { kind: DOCUMENT_REGION.NONE }
-          : { kind: DOCUMENT_REGION.READY, task: open },
+        open === undefined ? { kind: TASK_REGION.NONE } : { kind: TASK_REGION.READY, task: open },
     });
 
     const props = shellProps(tasks, PANEL_TAB.TASKS, ignore, { collapsed: false });
-    act(() => root?.render(withQueryClient(underRouter(createElement(DesktopShell, props)))));
+    act(() =>
+      root?.render(
+        withQueryClient(underRouter(overListedTasks(tasks, createElement(DesktopShell, props)))),
+      ),
+    );
   };
 }
 
@@ -923,10 +934,13 @@ async function mountNarrow(
             Fragment,
             null,
             held === undefined ? null : holdingInboxChoice(held),
-            createElement(DesktopShell, {
-              ...shellProps(tasks, PANEL_TAB.TASKS, ignore, sidebarPatch),
-              room,
-            }),
+            overListedTasks(
+              tasks,
+              createElement(DesktopShell, {
+                ...shellProps(tasks, PANEL_TAB.TASKS, ignore, sidebarPatch),
+                room,
+              }),
+            ),
           ),
           at,
         ),
@@ -1022,7 +1036,7 @@ test("on a phone the bar's Inbox wears the count of what needs the reader, named
   });
 
   const page = await mountNarrow(
-    { at: SHELL_AT.BOARD, listed: { tasks: [DOCUMENT_TASK] } },
+    { at: SHELL_AT.BOARD, tasks: [DOCUMENT_TASK] },
     { overlay: SIDEBAR_OVERLAY.OPEN },
   );
 
@@ -1066,7 +1080,7 @@ test("on a phone the Inbox's head leads with the reader's face, whose menu holds
 });
 
 test("the places bar stands only on a phone's lists: an open task, an Inbox item, an automation's editor, and a wide window keep the whole screen", async () => {
-  const onTask = await mountNarrow({ page: TASKS_PAGE.DOCUMENT });
+  const onTask = await mountNarrow({ page: TASKS_PAGE.TASK });
   assert.deepEqual(barItems(onTask), [], "an open task keeps the screen");
   act(() => root?.unmount());
   document.body.innerHTML = "";
@@ -1214,7 +1228,7 @@ test("the Automations page stands in the plan's place, titled for the listed wor
     workspace: ACME,
     at: SHELL_AT.AUTOMATIONS,
     leave: () => closed.push("closed"),
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
   };
 
   handState({});
@@ -1249,8 +1263,8 @@ function placed(place: Place) {
   const control = tasksControl();
 
   const onTask = {
-    page: TASKS_PAGE.DOCUMENT,
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    page: TASKS_PAGE.TASK,
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
   } as const;
 
   const tasks = {
@@ -1517,8 +1531,8 @@ test("a plan's chip in a description's version history hangs the plan's card, as
   const control = tasksControl();
 
   const page = mount(false, {
-    page: TASKS_PAGE.DOCUMENT,
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    page: TASKS_PAGE.TASK,
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     tasks: [DOCUMENT_TASK],
     history: {
       ...control.history,
@@ -1531,7 +1545,7 @@ test("a plan's chip in a description's version history hangs the plan's card, as
           changes: 1,
         },
         current: true,
-        read: { kind: HISTORY_READ.READY, document: { body, assumptions: [] }, previous: null },
+        read: { kind: HISTORY_READ.READY, description: { body, assumptions: [] }, previous: null },
       },
     },
   });
@@ -1676,8 +1690,8 @@ test("on a phone an open task leads its own row with the way back the window's h
     root = createRoot(container);
 
     const tasks = tasksControl({
-      page: TASKS_PAGE.DOCUMENT,
-      region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+      page: TASKS_PAGE.TASK,
+      region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     });
 
     const props = shellProps(tasks, PANEL_TAB.TASKS, ignore, {});
@@ -1730,8 +1744,8 @@ test("on a phone an open task, which draws no sidebar toggle, still answers the 
   let toggled = 0;
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
-    region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+    page: TASKS_PAGE.TASK,
+    region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
   });
 
   const container = document.body.appendChild(document.createElement("div"));
@@ -1788,8 +1802,8 @@ test("on a phone's task, which stands over no places bar, a finger swiped in fro
 
   const page = await mountNarrow(
     {
-      page: TASKS_PAGE.DOCUMENT,
-      region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
+      page: TASKS_PAGE.TASK,
+      region: { kind: TASK_REGION.READY, task: DOCUMENT_TASK },
     },
     { onOverlay },
   );

@@ -41,7 +41,7 @@ import {
   type SuggestedBy,
   type ThreadLineMetadata,
 } from "@repo/wire";
-import { createContext, type ReactNode, useContext } from "react";
+import { createContext, type ReactNode, useContext, useMemo } from "react";
 import { PLAN_BODY_LAYOUT, Plan, PlanContent, PlanHeader, PlanIcon } from "../ai-elements/plan.js";
 import { CheckList, CheckRow } from "./agent-pull-request-tab.js";
 import { FileTypeIcon } from "./file-type-icon.js";
@@ -170,9 +170,9 @@ function commentLink(line: CommentLineMetadata, doors: MentionDoors): string | u
   if (line.task_id === undefined || doors.place.workspace === "") return undefined;
 
   return line.page_id === undefined
-    ? linkOf({ kind: LINK_DESTINATION.TASK, planId: line.task_id }, doors.place.workspace)
+    ? linkOf({ kind: LINK_DESTINATION.TASK, taskId: line.task_id }, doors.place.workspace)
     : linkOf(
-        { kind: LINK_DESTINATION.PAGE, planId: line.task_id, pageId: line.page_id },
+        { kind: LINK_DESTINATION.PAGE, taskId: line.task_id, pageId: line.page_id },
         doors.place.workspace,
       );
 }
@@ -359,7 +359,8 @@ function GitHubLineWords({
   html: string | undefined;
 }): React.JSX.Element {
   const agentId = useContext(TranscriptAgent);
-  const drawn = usePictureDrawer(agentId ?? "");
+  const scope = useMemo(() => ({ agentId: agentId ?? "" }), [agentId]);
+  const drawn = usePictureDrawer(scope);
 
   if (html === undefined) return <TranscriptWords text={words} />;
 
@@ -398,6 +399,7 @@ function commentNote(
 /** The checks a check event names, failures first, as the Pull request tab's own rows, each saying how it ended. */
 function GitHubCheckRows({ line }: { line: GitHubLineMetadata }): React.JSX.Element {
   const agentId = useContext(TranscriptAgent) ?? "";
+  const scope = useMemo(() => ({ agentId }), [agentId]);
 
   return (
     <CheckList>
@@ -405,7 +407,7 @@ function GitHubCheckRows({ line }: { line: GitHubLineMetadata }): React.JSX.Elem
         // Note that two checks may share a name across Apps, so a row is keyed by its place too.
         <CheckRow
           key={`${at}`}
-          agentId={agentId}
+          pictures={scope}
           live={false}
           says={CONCLUSION_WORDS[check.conclusion]}
           check={{

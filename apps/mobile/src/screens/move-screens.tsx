@@ -7,6 +7,7 @@ import {
   moveChosen,
   moveGainParts,
   moveLossParts,
+  moveNoneTakesWords,
   movePartsText,
   moveTargetLine,
   moveTargets,
@@ -23,7 +24,9 @@ import {
   BUZZ,
   EmptyState,
   GLYPH,
+  glyphSymbol,
   ListSection,
+  NO_GROUND,
   Screen,
   SettingsForm,
   useColors,
@@ -31,12 +34,13 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useChosenWorkspace } from "../chosen-workspace.js";
+import { useCallback, useRef, useState } from "react";
+import { chooseOver, useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { useSheetAtHalf } from "../sheet-stack.js";
 import { useTaskOverview } from "../tasks/use-tasks.js";
-import { useWrite } from "../use-write.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { selectPhotos, switcherWorkspace } from "../workspace-switcher.js";
 
 /** The sheet's own words. */
@@ -77,21 +81,22 @@ export function useMoveTaskDoor(): (task: TaskSummary) => (() => void) | undefin
  * other workspaces, each with its tile and who shares it, or why its GitHub
  * cannot take the task, the first that can chosen; under them what the move
  * does for the one chosen, as the panel's dialog says it; and Move in the
- * bar, which moves the task and closes the sheet, or keeps it up where the
- * service refused, the app's failure notice saying so. The sheet is the
+ * bar, which moves the task and closes the sheet at once, the phone following
+ * it into its new workspace, and where the service refuses, the app's
+ * failure notice says so and the phone goes back to where the task stands. The sheet is the
  * move's confirmation, as the panel's dialog is, since a task moved
  * elsewhere leaves its workspace's members.
  */
 export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
   const router = useRouter();
   const colors = useColors();
+  const half = useSheetAtHalf();
   const acts = useHostActs();
   const write = useWrite();
   const overview = useTaskOverview(taskId);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const [picked, setPicked] = useState<string | undefined>(undefined);
-  const [moving, setMoving] = useState(false);
 
   const task = overview?.task;
   const repository = task?.repository ?? null;
@@ -101,35 +106,28 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
   const personalId = workspaces[0]?.id;
 
   const { choose } = useChosenWorkspace(workspaces);
-  // Note that a press is read off a ref, since a second tap can land before the render that disables Move, and the sheet's standing too, since an answer may land once it is gone.
-  const sending = useRef(false);
-  const standing = useRef(true);
-  useEffect(() => {
-    standing.current = true;
+  // Note that a second tap can land before the sheet has gone, so a press is read off a ref.
+  const sent = useRef(false);
 
-    return () => {
-      standing.current = false;
-    };
-  }, []);
-
+  // Note that the move is a declared write, drawn in the workspace it goes to at once, so the phone follows the task there and the sheet closes as it goes, as the panel's list follows it. A refusal is said by the app's failure notice with Try again, and the phone goes back to the workspace the task stands in.
   const move = () => {
-    if (task === undefined || chosen === undefined || sending.current) return;
-    sending.current = true;
-    setMoving(true);
+    if (task === undefined || chosen === undefined || sent.current) return;
+    sent.current = true;
+    choose(chosen.id);
+    router.back();
 
+    // Note that the phone is put back, and forward again on a Try again that goes, only while it still works where the move left it.
     void write(() => acts[ACT_KIND.TASKS_MOVE]({ taskId: task.id, workspaceId: chosen.id }), {
       refused: (answer) => ("failure" in answer ? TASK_MOVE_WORDS.REFUSED : undefined),
+      retry: true,
+      // Note that a newer move of the task makes this one's Try again do nothing, so it never sends the task back where it was moved from since.
+      subject: { kind: WRITE_SUBJECT.TASK_WORKSPACE, id: task.id },
       went: BUZZ.SUCCESS,
+      done: () => {
+        if (from !== undefined) chooseOver(from.id, chosen.id);
+      },
     }).then((moved) => {
-      sending.current = false;
-
-      if (!standing.current) return;
-      setMoving(false);
-
-      if (!moved) return;
-      // The phone follows the task into the workspace it moved to, as the panel's list follows it, so its page names it there.
-      choose(chosen.id);
-      router.back();
+      if (!moved && from !== undefined) chooseOver(chosen.id, from.id);
     });
   };
 
@@ -142,19 +140,19 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.GROUPED },
-          // Note that the sheet stays while the move is out, as the panel's dialog refuses to close, so its answer lands where it was asked.
-          gestureEnabled: !moving,
+          contentStyle: { backgroundColor: half ? NO_GROUND : colors.GROUPED },
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button disabled={moving} onPress={() => router.back()}>
-          {WORDS.CANCEL}
-        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={WORDS.CANCEL}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button disabled={chosen === undefined || moving} onPress={move}>
-          {moving ? TASK_MOVE_WORDS.RUNNING : moveVerb(chosen)}
+        <Stack.Toolbar.Button disabled={chosen === undefined} onPress={move}>
+          {moveVerb(chosen)}
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
     </>
@@ -164,16 +162,19 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
     return (
       <>
         {bar}
-        <Screen>
+        <Screen clear={half}>
           <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         </Screen>
       </>
     );
   }
 
+  // Note that where no workspace can take the task the footer says why, rather than leave a dimmed list and a dimmed Move to explain themselves.
   const effects =
     chosen === undefined
-      ? undefined
+      ? repository === null
+        ? undefined
+        : moveNoneTakesWords(repository)
       : [moveLossParts(from, chosen), moveGainParts(chosen), moveAgentsParts(chosen)]
           .map(movePartsText)
           .join("\n");
@@ -181,14 +182,14 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
   return (
     <>
       {bar}
-      <Screen>
-        <SettingsForm>
+      <Screen clear={half}>
+        <SettingsForm clear={half}>
           <ListSection title={moveTitle(task.name)} footer={effects}>
             <WorkspacePickRows
               options={targets.map((workspace) => ({
                 workspace: switcherWorkspace(workspace, workspace.id === personalId, photos),
                 line: moveTargetLine(workspace, repository, personalId),
-                disabled: moving || !workspaceTakesTask(workspace, repository),
+                disabled: !workspaceTakesTask(workspace, repository),
               }))}
               picked={chosen?.id}
               onPick={setPicked}

@@ -174,7 +174,6 @@ export interface Agent {
   readonly id: string;
   /** The account that started the agent, whose conversation it runs in and whose provider key pays for it. */
   readonly userId: string;
-  /** The task the agent works on. */
   readonly taskId: string;
   /** The workspace the agent belongs to. */
   readonly organizationId: string;
@@ -905,6 +904,18 @@ const updateAgentBranchRow = SqlSchema.void({
     ),
 });
 
+const updateAgentTargetDeviceRow = SqlSchema.void({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    targetDeviceId: Schema.String,
+  }),
+  execute: ({ userId, agentId, targetDeviceId }) =>
+    Database.use((db) =>
+      db.update(agentTable).set({ targetDeviceId }).where(reachableAgent(userId, agentId)),
+    ),
+});
+
 const markTurnFastRefused = SqlSchema.void({
   Request: Schema.Struct({ userId: Schema.String, turnId: Schema.String }),
   execute: ({ userId, turnId }) =>
@@ -1384,6 +1395,21 @@ const updateAgentRunnerToken = SqlSchema.findAll({
         )
         .where(reachableAgent(userId, agentId))
         .returning({ id: agentTable.id, launch: agentTable.runnerLaunch }),
+    ),
+});
+
+const updateRunnerTokenRestored = SqlSchema.void({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    runnerTokenHash: Schema.String,
+  }),
+  execute: ({ userId, agentId, runnerTokenHash }) =>
+    Database.use((db) =>
+      db
+        .update(agentTable)
+        .set({ runnerTokenHash })
+        .where(and(reachableAgent(userId, agentId), isNull(agentTable.runnerTokenHash))),
     ),
 });
 
@@ -2484,8 +2510,8 @@ export function listWorkspaceAgents(
  * Every agent of the workspace a delete stops, not archived, any member's,
  * whether or not the owner deleting it sees it, oldest started first, the
  * first `offset` passed over, and at most `limit`. Read by the workspace
- * alone, as `workspaceConversationIds` reads it: the caller holds the
- * account to the workspace's owner first, since everything in it goes.
+ * alone: the caller holds the account to the workspace's owner first, since
+ * everything in it goes.
  */
 export function listAgentsOfDeletedWorkspace(
   organizationId: string,
@@ -2978,6 +3004,15 @@ export function updateAgentBranch(
   branch: string | null,
 ): AgentStoreEffect<void> {
   return updateAgentBranchRow({ userId, agentId, branch });
+}
+
+/** The agent's default machine set, where its terminal commands and actions on apps go when a call names none (`agent.target_device_id`); nothing written for an agent the account does not reach. Note that the caller decides the machine may be one; this writes it. */
+export function updateAgentTargetDevice(
+  userId: string,
+  agentId: string,
+  targetDeviceId: string,
+): AgentStoreEffect<void> {
+  return updateAgentTargetDeviceRow({ userId, agentId, targetDeviceId });
 }
 
 /** The account's turn marked as one a step of ran at standard speed because Anthropic refused it Fast; nothing written for a turn the account does not own. */
@@ -3495,6 +3530,19 @@ export function recordAgentRunnerToken(
     updateAgentRunnerToken({ userId, agentId, runnerTokenHash }),
     (rows) => rows.length > 0,
   );
+}
+
+/**
+ * A bearer `recordAgentRunnerToken` retired given back to the launch it was
+ * recorded as, its number unmoved, as a stop that failed leaves that launch's
+ * runner running; nothing where a newer bearer stands since.
+ */
+export function restoreAgentRunnerToken(
+  userId: string,
+  agentId: string,
+  runnerTokenHash: string,
+): AgentStoreEffect<void> {
+  return updateRunnerTokenRestored({ userId, agentId, runnerTokenHash });
 }
 
 /**

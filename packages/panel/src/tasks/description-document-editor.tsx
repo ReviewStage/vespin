@@ -1238,7 +1238,7 @@ function useTakenText(
       if (task.lastEdit?.actor !== DESCRIPTION_ACTOR.DEVELOPER) return;
       landed.current = undefined;
       seen.current.updatedAt = task.updatedAt;
-      const taken = mounted?.take(sent, task.document.body);
+      const taken = mounted?.take(sent, task.description.body);
 
       if (taken === undefined) return;
       seen.current.base = taken.base;
@@ -1250,7 +1250,7 @@ function useTakenText(
 
     if (!settled || editor.closing || draft !== base) return;
     seen.current.updatedAt = task.updatedAt;
-    const theirs = task.document.body;
+    const theirs = task.description.body;
 
     if (theirs === base) return;
 
@@ -1408,12 +1408,12 @@ export function DescriptionDocumentEditor({
   );
 
   const commentAnchors =
-    openAnchors.length === 0 || editor.draft !== task.document.body ? undefined : openAnchors;
+    openAnchors.length === 0 || editor.draft !== task.description.body ? undefined : openAnchors;
 
   useTakenText(editor, editing, task, handle, handed);
   useAnchorsFollowed(
     handle,
-    task.document.body,
+    task.description.body,
     openAnchors,
     openThreads.map((thread) => thread.id),
   );

@@ -409,7 +409,7 @@ export function FileTreePane({
   return (
     <PanePin
       ref={pane}
-      className="file-tree-pane relative flex w-file-tree min-w-0 flex-none flex-col border-l border-border data-leaving:absolute data-leaving:inset-y-0 data-leaving:right-0 data-leaving:bg-well"
+      className="file-tree-pane relative flex w-file-tree min-w-0 flex-none flex-col border-l border-border data-leaving:absolute data-leaving:inset-y-0 data-leaving:right-0 data-leaving:bg-ground"
       aria-label={label}
       data-leaving={leaving ? "" : undefined}
       inert={leaving}

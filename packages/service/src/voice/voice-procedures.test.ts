@@ -2,12 +2,10 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { parseKeyRing, sealProviderKey } from "@repo/database/models/provider-key-seal";
-import { saveProviderKey } from "@repo/database/models/provider-key-store";
+import { readVoiceCall } from "@repo/database/models/voice-calls";
 import { agentTable } from "@repo/database/schemas/agent";
-import { user } from "@repo/database/schemas/auth";
 import { conversations, messages } from "@repo/database/schemas/storage";
-import { hostedUsage } from "@repo/database/schemas/usage";
+import { voiceCallTable } from "@repo/database/schemas/voice-call";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   getTestDB,
@@ -16,44 +14,44 @@ import {
   openWorkspace,
 } from "@repo/database/testing";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
-import { PROVIDER_KEY_KIND, PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { LIVE_VOICE } from "@repo/features/voices";
 import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE, type WireBoundaryInput } from "@repo/wire";
 import { HTTP_STATUS, jsonResponse, recordingHttpClient } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
-import { Cause, type Context, Effect, Layer, Logger, Option, Redacted, Result } from "effect";
-import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
-import {
-  recordingProductAnalytics,
-  SERVER_AGENT_HARNESS,
-  SERVER_EVENT,
-  SERVER_VOICE_CALL_DURATION,
-} from "../events/server-events.js";
+import { Cause, type Context, Effect, Layer, Logger, Option } from "effect";
+import { HostedEnvironment } from "../environment.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
 import { hostedFetch } from "../orpc/handler.js";
 import type { WebServices } from "../runtime.js";
+import {
+  openVoiceCaller,
+  VOICE_CALLER_ENVIRONMENT,
+  VOICE_CALLER_KEY,
+} from "../testing/voice-callers.js";
+import {
+  type VoiceCallLeaseMessage,
+  VoiceCallLeaseNotPublished,
+  VoiceCallLeases,
+} from "./voice-call-lease.js";
 import { voiceProcedures } from "./voice-procedures.js";
 
 /**
  * A voice call opened by the hosted oRPC router the way the web route
  * answers it, over a real dialect and OpenAI faked at its HTTP door: the
  * panel's offer goes to GPT-Live on the caller's own OpenAI key, never ours,
- * and only the SDP answer comes back. A caller with no key of their own, one
- * outside the agent's workspace, and a teammate on an agent only its starter
- * drives are each refused before OpenAI is called. A finished call's seconds
- * land on the caller's day and are counted by length and harness alone.
+ * with the panel's data channel cut down to audio's own events, and only the
+ * call's id and the SDP answer come back, the call's row standing and its
+ * first lease published. A caller with no key of their own, one outside the
+ * agent's workspace, and a teammate on an agent only its starter drives are
+ * each refused before OpenAI is called; a call whose lease the queue did not
+ * take is refused and leaves no row.
  *
  * Synthetic accounts, bearers, offers, and keys throughout.
  */
 
-const ANALYTICS = recordingProductAnalytics();
-
 const ORIGIN = "https://app.test";
 const SESSIONS_URL = "https://api.openai.com/v1/live/sessions";
-const OPENAI_KEY = "sk-proj-account-test-key-00000000000voice";
-
-/** The deployment's ring the account's key is sealed under: fixed bytes written for this file. */
-const RING = `1:${Buffer.alloc(32, 5).toString("base64")}`;
+const LIVE_SESSION_ID = "live_test";
 
 const OFFER = "v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\ns=offer\r\n";
 const ANSWER = "v=0\r\no=- 3 4 IN IP4 127.0.0.1\r\ns=answer\r\n";
@@ -61,60 +59,19 @@ const ANSWER = "v=0\r\no=- 3 4 IN IP4 127.0.0.1\r\ns=answer\r\n";
 /** GPT-Live answers a created session with 201. */
 const CREATED = 201;
 
-const NO_ENVIRONMENT: HostedEnvironmentValues = {
-  posthogPersonalApiKey: undefined,
-  posthogProjectId: undefined,
-  posthogApiHost: undefined,
-  posthogProjectApiKey: undefined,
-  posthogIngestHost: undefined,
-  cronSecret: undefined,
-  githubWebhookSecret: undefined,
-  providerKeyEncryptionKeys: Redacted.make(RING),
-  titleAnthropicApiKey: undefined,
-  previewApiKeys: {},
-};
-
 /** How the fake GPT-Live answers: a created session with its SDP answer, or a status of its own. */
 type LiveAnswer = { readonly created: true } | { readonly status: number };
 
 function liveResponse(answer: LiveAnswer): Response {
-  if ("status" in answer) return jsonResponse({ error: { message: OPENAI_KEY } }, answer.status);
+  if ("status" in answer) {
+    return jsonResponse({ error: { message: VOICE_CALLER_KEY } }, answer.status);
+  }
 
   return jsonResponse(
-    { session: { id: "live_test" }, transport: { type: "webrtc", sdp: ANSWER } },
+    { session: { id: LIVE_SESSION_ID }, transport: { type: "webrtc", sdp: ANSWER } },
     CREATED,
   );
 }
-
-/** A signed-in account, with its own OpenAI key saved unless told otherwise. */
-const openAccount = (options: { readonly key?: boolean } = {}) =>
-  Effect.gen(function* () {
-    const db = yield* Database;
-    const userId = `user-${randomUUID()}`;
-    yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
-
-    if (options.key === false) return userId;
-    const ring = parseKeyRing(Redacted.make(RING));
-    assert.ok(Result.isSuccess(ring));
-
-    const owner = {
-      userId,
-      provider: PROVIDER_KEY_PROVIDER.OPENAI,
-      kind: PROVIDER_KEY_KIND.API_KEY,
-    } as const;
-
-    yield* saveProviderKey(
-      userId,
-      owner.provider,
-      owner.kind,
-      sealProviderKey(ring.success, owner, Redacted.make(OPENAI_KEY)),
-      "sk-…oice",
-      null,
-      new Date(0),
-    );
-
-    return userId;
-  });
 
 /** An agent of the owner's on a task named "Flaky tests", running on Claude Code, in our sandbox or on the owner's own Mac; its id. */
 const openAgent = (ownerId: string, workspaceId: string, onMac = false) =>
@@ -173,10 +130,11 @@ const openAgent = (ownerId: string, workspaceId: string, onMac = false) =>
     return agentId;
   });
 
-/** The router with GPT-Live answering as given, and every request it sent and line it logged kept for the test to read. */
-const openRouter = (live: LiveAnswer = { created: true }) => {
+/** The router with GPT-Live answering as given and the queue taking leases unless told otherwise, and every request it sent, lease it published, and line it logged kept for the test to read. */
+const openRouter = (live: LiveAnswer = { created: true }, queue = { takes: true }) => {
   const model = recordingHttpClient(() => liveResponse(live));
   const logged: string[] = [];
+  const published: VoiceCallLeaseMessage[] = [];
 
   const procedures = voiceProcedures({
     resolveUserId: (incoming) =>
@@ -194,14 +152,21 @@ const openRouter = (live: LiveAnswer = { created: true }) => {
       const services = yield* Effect.context<never>().pipe(
         Effect.provide(
           Layer.mergeAll(
-            Layer.succeed(HostedEnvironment, NO_ENVIRONMENT),
+            Layer.succeed(HostedEnvironment, VOICE_CALLER_ENVIRONMENT),
+            Layer.succeed(VoiceCallLeases, {
+              publish: (lease) =>
+                queue.takes
+                  ? Effect.sync(() => {
+                      published.push(lease);
+                    })
+                  : Effect.fail(new VoiceCallLeaseNotPublished({ reason: "refused" })),
+            }),
             model.layer,
-            ANALYTICS.layer,
             Logger.layer([recorder]),
           ),
         ),
       );
-      // SAFETY: the voice procedures yield the database, the clock, the environment, the analytics, and OpenAI's HTTP client alone, which the context above holds.
+      // SAFETY: the voice procedures yield the database, the clock, the environment, the queue, and OpenAI's HTTP client alone, which the context above holds.
 
       const webServices = services as Context.Context<WebServices>;
 
@@ -225,33 +190,41 @@ const openRouter = (live: LiveAnswer = { created: true }) => {
   const open = (userId: string, agentId: string) =>
     ask(userId, "/api/voice/session", { agentId, voice: LIVE_VOICE.CEDAR, sdp: OFFER });
 
-  const ended = (userId: string, agentId: string, seconds: number) =>
-    ask(userId, "/api/voice/calls", { agentId, seconds });
-
-  return { open, ended, calls: model.requests, logged };
+  return { open, calls: model.requests, published, logged };
 };
 
 const refusal = (status: number, error: string) => ({ status, body: { error } });
 
 it.layer(getTestDB())("the voice routes", (it) => {
   it.effect(
-    "a call is created on GPT-Live with the panel's offer, the voice, and the agent's task on the caller's own key, and answered with the SDP answer alone",
+    "a call is created on GPT-Live with the panel's offer, the voice, the agent's task, and the panel's channel cut down, on the caller's own key, and answered with its id and the SDP answer alone, its row standing and its first lease published",
     () =>
       Effect.gen(function* () {
-        const ownerId = yield* openAccount();
+        const ownerId = yield* openVoiceCaller();
         const workspaceId = yield* openWorkspace(ownerId);
         const agentId = yield* openAgent(ownerId, workspaceId);
         const router = openRouter();
 
         const answered = yield* router.open(ownerId, agentId);
 
-        assert.deepEqual(answered, { status: HOSTED_HTTP_STATUS.OK, body: { sdp: ANSWER } });
+        assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
+        // SAFETY: an answered open is the call's id and its SDP answer, which the next line compares whole.
+        const { callId, sdp } = answered.body as { callId: string; sdp: string };
+        assert.deepEqual(answered.body, { callId, sdp: ANSWER });
+        assert.equal(sdp, ANSWER);
+
+        // The session's id stays with the service, on the call's row, and the call's first lease names the epoch the row opened at.
+        const call = Option.getOrThrow(yield* readVoiceCall(ownerId, callId));
+        assert.equal(call.liveSessionId, LIVE_SESSION_ID);
+        assert.equal(call.agentId, agentId);
+        assert.equal(call.voice, LIVE_VOICE.CEDAR);
+        assert.deepEqual(router.published, [{ callId, callerId: ownerId, epoch: 1 }]);
         assert.equal(router.calls.length, 1);
-        const [call] = router.calls;
-        assert.ok(call);
-        assert.equal(call.url, SESSIONS_URL);
-        assert.equal(call.authorization, `Bearer ${OPENAI_KEY}`);
-        const raw = call.init.body;
+        const [request] = router.calls;
+        assert.ok(request);
+        assert.equal(request.url, SESSIONS_URL);
+        assert.equal(request.authorization, `Bearer ${VOICE_CALLER_KEY}`);
+        const raw = request.init.body;
         assert.ok(raw instanceof Uint8Array, "the session goes as a JSON body");
         const sent = JSON.parse(new TextDecoder().decode(raw));
         assert.deepEqual(sent.transport, { type: "webrtc", sdp: OFFER });
@@ -259,6 +232,22 @@ it.layer(getTestDB())("the voice routes", (it) => {
         assert.deepEqual(sent.session.delegation, { type: "client" });
         assert.equal(sent.session.store, false);
         assert.deepEqual(sent.session.audio, { output: { voice: LIVE_VOICE.CEDAR } });
+        // The panel may only mute, unmute, and end the call, and hears only its start, its close, and the mute acknowledgments.
+        assert.deepEqual(sent.session.client, {
+          data_channel: {
+            allowed_client_events: [
+              "session.input_audio.mute",
+              "session.input_audio.unmute",
+              "session.close",
+            ],
+            allowed_server_events: [
+              { type: "session.started" },
+              { type: "session.closed" },
+              { type: "session.input_audio.muted" },
+              { type: "session.input_audio.unmuted" },
+            ],
+          },
+        });
         assert.ok(sent.session.instructions.includes("Task: Flaky tests"));
         // The developer's spoken line and the agent's reply are context; the voice's own retelling is not.
         assert.ok(sent.session.instructions.includes("Developer: Use the staging database."));
@@ -271,13 +260,13 @@ it.layer(getTestDB())("the voice routes", (it) => {
     "a caller with no OpenAI key of their own is refused as missing one, one outside the agent's workspace as not found, and a teammate on an agent that runs on its starter's Mac as not permitted, and OpenAI is never called",
     () =>
       Effect.gen(function* () {
-        const ownerId = yield* openAccount();
+        const ownerId = yield* openVoiceCaller();
         const workspaceId = yield* openWorkspace(ownerId);
         const agentId = yield* openAgent(ownerId, workspaceId);
-        const keyless = yield* openAccount({ key: false });
+        const keyless = yield* openVoiceCaller({ key: false });
         yield* joinWorkspace(workspaceId, keyless);
-        const stranger = yield* openAccount();
-        const teammate = yield* openAccount();
+        const stranger = yield* openVoiceCaller();
+        const teammate = yield* openVoiceCaller();
         yield* joinWorkspace(workspaceId, teammate);
         const onMac = yield* openAgent(ownerId, workspaceId, true);
         const router = openRouter();
@@ -302,7 +291,7 @@ it.layer(getTestDB())("the voice routes", (it) => {
     "a session OpenAI refused is answered unavailable, and neither the key nor the offer is logged",
     () =>
       Effect.gen(function* () {
-        const ownerId = yield* openAccount();
+        const ownerId = yield* openVoiceCaller();
         const workspaceId = yield* openWorkspace(ownerId);
         const agentId = yield* openAgent(ownerId, workspaceId);
         const router = openRouter({ status: HTTP_STATUS.UNAUTHORIZED });
@@ -315,45 +304,35 @@ it.layer(getTestDB())("the voice routes", (it) => {
         );
         assert.ok(router.logged.length > 0, "the failure is logged");
 
-        for (const secret of [OPENAI_KEY, OFFER]) {
+        for (const secret of [VOICE_CALLER_KEY, OFFER]) {
           assert.ok(router.logged.every((line) => !line.includes(secret)));
         }
       }),
   );
 
   it.effect(
-    "a finished call's seconds land on the caller's day, and it is counted under the agent's workspace by its length and harness alone",
+    "a call whose first lease the queue did not take is refused as unavailable, and its row is gone",
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
-        const ownerId = yield* openAccount();
+        const ownerId = yield* openVoiceCaller();
         const workspaceId = yield* openWorkspace(ownerId);
         const agentId = yield* openAgent(ownerId, workspaceId);
-        const router = openRouter();
+        const router = openRouter({ created: true }, { takes: false });
 
-        const answered = yield* router.ended(ownerId, agentId, 330);
+        const answered = yield* router.open(ownerId, agentId);
 
-        assert.deepEqual(answered, { status: HOSTED_HTTP_STATUS.OK, body: { done: true } });
-
-        const days = yield* db
-          .select({ voiceSeconds: hostedUsage.voiceSeconds })
-          .from(hostedUsage)
-          .where(eq(hostedUsage.userId, ownerId));
-
-        assert.deepEqual(days, [{ voiceSeconds: 330 }]);
         assert.deepEqual(
-          ANALYTICS.recorded
-            .filter((event) => event.userId === ownerId && event.name === SERVER_EVENT.VOICE_CALL)
-            .map((event) => ({ workspaceId: event.workspaceId, ...event.properties })),
-          [
-            {
-              workspaceId,
-              duration: SERVER_VOICE_CALL_DURATION.UNDER_15M,
-              harness: SERVER_AGENT_HARNESS.CLAUDE_CODE,
-            },
-          ],
+          answered,
+          refusal(HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE, HOSTED_API_ERROR.UNAVAILABLE),
         );
-        assert.equal(router.calls.length, 0);
+
+        const standing = yield* db
+          .select({ id: voiceCallTable.id })
+          .from(voiceCallTable)
+          .where(eq(voiceCallTable.callerId, ownerId));
+
+        assert.deepEqual(standing, []);
       }),
   );
 });

@@ -2,6 +2,7 @@ import {
   AGENT_TOOL,
   CLAUDE_CODE_TOOL,
   CODEX_TOOL,
+  CURSOR_TOOL,
   EVE_TOOL,
   RETIRED_TOOL,
   UNKNOWN_TOOL,
@@ -88,7 +89,8 @@ const TOOL_INPUT = verbatimJsonSchema(WireValueSchema, {
  * names, the two task controls (`EVE_TOOL`) a turn of the retired
  * runtime named where it waited on its worker or stopped one, Claude Code's own tools, which an agent running on Claude Code
  * calls under their CLI names, Codex's own work, which an agent running on
- * Codex does under its items' names (`../native-events/`), the call a native
+ * Codex does under its items' names, and Cursor's own tools, which an agent
+ * running on Cursor calls under `CURSOR_TOOL`'s names (`../native-events/`), the call a native
  * harness made to a tool none of these name (`UNKNOWN_TOOL`), and each
  * connection's calls beside them (`../../integrations/connection-tools.ts`),
  * which the agent and its workers alike make.
@@ -102,6 +104,7 @@ export const CODER_TOOL_SET: ToolSet = Object.fromEntries([
       ...Object.values(RETIRED_CODER_TOOL),
       ...Object.values(CLAUDE_CODE_TOOL),
       ...Object.values(CODEX_TOOL),
+      ...Object.values(CURSOR_TOOL),
       UNKNOWN_TOOL,
     ]),
   ].map((name) => [name, wireValidatedTool(`the stored ${name} tool`, TOOL_INPUT)]),

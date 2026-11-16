@@ -57,6 +57,7 @@ export {
   Environment,
   type HostReporter,
   IdSource,
+  KeptListsDue,
   type LocalAgentCommand,
   LocalAgentPlatform,
   type LocalAgentPlatformSeam,

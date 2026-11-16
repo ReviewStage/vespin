@@ -1,4 +1,4 @@
-import type { CallCredential } from "./account-call.js";
+import type { HostedServiceOptions } from "./account-call.js";
 import { hostedCall } from "./hosted-call.js";
 import { type HostedClient, hostedClient } from "./hosted-link.js";
 import { MCP_CLIENT_QUERY } from "./mcp-client-wire.js";
@@ -14,18 +14,10 @@ import { MCP_CLIENT_QUERY } from "./mcp-client-wire.js";
  * it again.
  */
 
-export interface HostedMcpClientsClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-  requestTimeoutMs?: number;
-}
-
 export class HostedMcpClientsClient {
   readonly #hosted: HostedClient;
 
-  constructor(options: HostedMcpClientsClientOptions) {
+  constructor(options: HostedServiceOptions) {
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,
       credential: options.credential,

@@ -6,6 +6,7 @@ import {
   GITHUB_ACCOUNT_TYPE,
   GITHUB_INSTALLATION_STATUS,
 } from "@repo/database/github-installation-vocabulary";
+import { recordAgentPullRequests } from "@repo/database/models/agent-pull-requests";
 import {
   type Agent,
   createAgent,
@@ -19,10 +20,16 @@ import { listWorkspaces } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { account, user } from "@repo/database/schemas/auth";
 import { githubInstallation } from "@repo/database/schemas/github-installation";
+import { githubPullRequestMove } from "@repo/database/schemas/github-pull-request-move";
 import { turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { fakeWorkspaceSeams, getTestDB, leaveWorkspace, startTask } from "@repo/database/testing";
-import { AGENT_PAYER, type AgentPullRequest } from "@repo/features/agent-wire";
+import {
+  AGENT_PAYER,
+  type AgentPullRequest,
+  CHECK_SUMMARY,
+  PULL_REQUEST_STATE,
+} from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
   AUTOMATION_DEFAULT_GUARDS,
@@ -40,9 +47,10 @@ import { TASK_STATUS } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN, TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
 import { and, eq } from "drizzle-orm";
-import { Clock, DateTime, Effect, Layer, Option, Redacted } from "effect";
+import { Clock, DateTime, Duration, Effect, Layer, Option, Redacted } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
+import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { WorkspaceDriveFills, workspaceDriveName } from "../agents/workspace-drive.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
@@ -53,6 +61,7 @@ import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
   connectWorkspaceGitHub,
   type FakeGitHub,
+  fixtureGitHubApp,
   GITHUB_APP_SETTINGS,
   GITHUB_FIXTURE,
   GITHUB_FIXTURE_MEMBER,
@@ -455,6 +464,50 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         assert.equal(inQueue?.state, "open");
         assert.equal(inQueue?.queued, true);
         assert.equal(left?.queued, undefined);
+      }),
+  );
+
+  it.effect(
+    "a delivery reads again only the linked pull requests from the branch it names, leaving the agent's other open ones to their own deliveries",
+    () =>
+      Effect.gen(function* () {
+        const pull: PullRequestFixture = { state: "open", merged: false, conclusion: "success" };
+        const { github, ref, owner, agent } = yield* openAgent(pull);
+        const earlier = `${ref}-earlier`;
+
+        yield* recordAgentPullRequests(owner, agent.id, [
+          {
+            repository: RELAY_FULL_NAME,
+            headBranch: earlier,
+            pullRequest: {
+              number: 57,
+              title: "Invitation emails",
+              url: `https://github.com/${RELAY_FULL_NAME}/pull/57`,
+              state: PULL_REQUEST_STATE.OPEN,
+              checks: CHECK_SUMMARY.PASSING,
+              additions: 30,
+              deletions: 2,
+              changedFiles: 3,
+            },
+          },
+        ]);
+
+        const readsOf57 = () =>
+          github.sent.filter((sent) => new URL(sent.url).pathname.endsWith("/pulls/57")).length;
+
+        yield* answer(
+          github,
+          SECRET,
+          delivery("pull_request", pullRequestDelivery("synchronize", ref)),
+        );
+        const onOwnBranch = readsOf57();
+        yield* answer(
+          github,
+          SECRET,
+          delivery("pull_request", pullRequestDelivery("synchronize", earlier)),
+        );
+
+        assert.deepEqual([onOwnBranch, readsOf57()], [0, 1]);
       }),
   );
 
@@ -1523,7 +1576,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         yield* connectWorkspaceGitHub(workspaceId, installation);
         // A slug spelled with a hyphen, as the deployed App's is.
         const slug = "luke-agent";
-        const app = GitHubApp.layer({ ...GITHUB_APP_SETTINGS, slug });
+        const app = fixtureGitHubApp({ ...GITHUB_APP_SETTINGS, slug });
         const github = githubReaching([installation], app);
         const commentId = 31_337;
 
@@ -1640,6 +1693,83 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         );
 
         assert.deepEqual(started, []);
+      }),
+  );
+  it.effect(
+    "a review, a comment on a pull request, a status on its head branch, and a fork's check suite each note the pull request moved, and a comment on an issue notes nothing",
+    () =>
+      Effect.gen(function* () {
+        const sighted = {
+          id: 900_000_000 + Math.floor(Math.random() * 90_000_000),
+          full_name: RELAY_FULL_NAME,
+          updated_at: "2026-11-16T00:00:00Z",
+        };
+
+        /** When the row last moved, in epoch milliseconds; none before a delivery noted it. */
+        const movedAt = (rows: readonly { readonly at: Date }[]) => rows[0]?.at.getTime() ?? 0;
+
+        const moves = () =>
+          Database.use((db) =>
+            db
+              .select({ number: githubPullRequestMove.number, at: githubPullRequestMove.movedAt })
+              .from(githubPullRequestMove)
+              .where(eq(githubPullRequestMove.repositoryId, sighted.id)),
+          );
+
+        /** The instant each delivery below is read at, a minute after the one before. */
+        const deliver = (event: string, payload: WireBoundaryInput) =>
+          Effect.andThen(
+            TestClock.adjust(Duration.minutes(1)),
+            answer(githubReaching([]), SECRET, delivery(event, payload)),
+          );
+
+        const pullRequest = { number: 41, head: { ref: "agent/invite-once", sha: "c0ffee1" } };
+        yield* deliver("pull_request_review", {
+          action: "submitted",
+          repository: sighted,
+          pull_request: pullRequest,
+        });
+        const reviewed = yield* moves();
+        assert.deepEqual(
+          reviewed.map((row) => row.number),
+          [41],
+        );
+
+        yield* deliver("issue_comment", {
+          action: "created",
+          repository: sighted,
+          issue: { number: 9 },
+          comment: { id: 1, body: "Ignored" },
+        });
+        yield* deliver("issue_comment", {
+          action: "created",
+          repository: sighted,
+          issue: { number: 41, pull_request: { url: "ignored" } },
+          comment: { id: 2, body: "Ignored" },
+        });
+        const commented = yield* moves();
+        assert.deepEqual(
+          commented.map((row) => row.number),
+          [41],
+        );
+        assert.ok(movedAt(commented) > movedAt(reviewed));
+
+        yield* deliver("status", {
+          repository: sighted,
+          sha: "e4f5a6b",
+          state: "success",
+          branches: [{ name: "agent/invite-once", commit: { sha: "e4f5a6b" } }],
+        });
+        const checked = yield* moves();
+        assert.ok(movedAt(checked) > movedAt(commented));
+
+        // A fork's check suite names no pull request, and is heard by the branch it ran on.
+        yield* deliver("check_suite", {
+          action: "completed",
+          repository: sighted,
+          check_suite: { head_branch: "agent/invite-once", head_sha: "e4f5a6b", pull_requests: [] },
+        });
+        assert.ok(movedAt(yield* moves()) > movedAt(checked));
       }),
   );
 });

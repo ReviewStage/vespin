@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { inboxAttachmentAddress } from "./inbox-attachment-link.js";
-import { INBOX_MEDIA, inboxThreadMessages } from "./inbox-list-model.js";
+import { INBOX_MEDIA, inboxThreadEventsShown, inboxThreadMessages } from "./inbox-list-model.js";
 import {
   INBOX_MESSAGE_AUTHOR,
+  INBOX_REPLY,
   INBOX_STATUS,
   INBOX_WIRE_VERSION,
   type InboxItem,
@@ -10,9 +11,10 @@ import {
 import { LINK_DESTINATION } from "./link-grammar.js";
 
 /**
- * inbox-list-model.test.ts -- a thread's message as a client draws it: what
- * its words name in place is drawn there as what it is, a recording as a
- * video, and only what they do not name stands after them, a PDF among it.
+ * inbox-list-model.test.ts -- a thread as a client draws it: what a
+ * message's words name in place is drawn there as what it is, a recording as
+ * a video, and only what they do not name stands after them, a PDF among it;
+ * and the lines of what happened to it, who closed it and where.
  */
 
 const ITEM = "0b6e2f1a-3c4d-4e5f-8a9b-1c2d3e4f5a60";
@@ -22,18 +24,20 @@ const CLIP = "3e915c4d-6f70-4182-9d2e-4f5a6b7c8d93";
 const SHOT = "4fa26d5e-7081-4293-8e3f-5a6b7c8d9ea4";
 const MOVIE = "50b37e6f-8192-43a4-9f40-6b7c8d9eafb5";
 const PLAN_PDF = "61c48f70-92a3-44b5-8a51-7c8d9eafb0c6";
+const CHIME = "72d590a1-a3b4-45c6-9b62-8d9eafb0c1d7";
+const ALARM = "83e6a1b2-b4c5-46d7-8c73-9eafb0c1d2e8";
 
 /** One of the item's files' addresses, as an agent's post names it in its words. */
 function address(attachmentId: string): string {
   return inboxAttachmentAddress(
-    { kind: LINK_DESTINATION.INBOX_ITEM, planId: PLAN, itemId: ITEM },
+    { kind: LINK_DESTINATION.INBOX_ITEM, taskId: PLAN, itemId: ITEM },
     attachmentId,
     "acme",
   );
 }
 
 describe("inboxThreadMessages", () => {
-  it("plays a recording its words name where they name it, a WebM or an MP4, and draws after them only what they leave unnamed, a PDF as a file", () => {
+  it("plays a recording or a sound clip its words name where they name it, and draws after them only what they leave unnamed, a clip as a clip and a PDF as a file", () => {
     const item: InboxItem = {
       id: ITEM,
       agentId: "agent-1",
@@ -47,13 +51,15 @@ describe("inboxThreadMessages", () => {
         {
           id: "message-1",
           author: INBOX_MESSAGE_AUTHOR.AGENT,
-          text: `The page:\n\n![The page](${address(STILL)})\n\nThe flow:\n\n![The flow](${address(CLIP)})\n\n![The export](${address(MOVIE)})`,
+          text: `The page:\n\n![The page](${address(STILL)})\n\nThe flow:\n\n![The flow](${address(CLIP)})\n\n![The export](${address(MOVIE)})\n\n![The chime](${address(CHIME)})`,
           files: [
             { attachmentId: STILL, name: "page.png", mediaType: "image/png" },
             { attachmentId: CLIP, name: "flow.webm", mediaType: "video/webm" },
             { attachmentId: SHOT, name: "after.png", mediaType: "image/png" },
             { attachmentId: MOVIE, name: "export.mp4", mediaType: "video/mp4" },
             { attachmentId: PLAN_PDF, name: "plan.pdf", mediaType: "application/pdf" },
+            { attachmentId: CHIME, name: "chime.mp3", mediaType: "audio/mpeg" },
+            { attachmentId: ALARM, name: "alarm.ogg", mediaType: "audio/ogg" },
           ],
           createdAt: 1_000,
         },
@@ -68,10 +74,130 @@ describe("inboxThreadMessages", () => {
       { kind: INBOX_MEDIA.PICTURE, attachmentId: STILL },
       { kind: INBOX_MEDIA.VIDEO, attachmentId: CLIP },
       { kind: INBOX_MEDIA.VIDEO, attachmentId: MOVIE },
+      { kind: INBOX_MEDIA.AUDIO, attachmentId: CHIME },
     ]);
     expect(message?.media.map(({ kind, attachmentId }) => ({ kind, attachmentId }))).toEqual([
       { kind: INBOX_MEDIA.PICTURE, attachmentId: SHOT },
+      { kind: INBOX_MEDIA.AUDIO, attachmentId: ALARM },
       { kind: INBOX_MEDIA.FILE, attachmentId: PLAN_PDF },
+    ]);
+  });
+
+  it("says a marker naming one of a message's files as the file's name, which stands after the words as its chip", () => {
+    const item: InboxItem = {
+      id: ITEM,
+      agentId: "agent-1",
+      key: "plan",
+      revision: 1,
+      version: INBOX_WIRE_VERSION,
+      title: "The plan",
+      needsReply: false,
+      status: INBOX_STATUS.OPEN,
+      thread: [
+        {
+          id: "message-1",
+          author: INBOX_MESSAGE_AUTHOR.AGENT,
+          text: "The plan is in [File: plan.pdf].",
+          files: [{ attachmentId: PLAN_PDF, name: "plan.pdf", mediaType: "application/pdf" }],
+          createdAt: 1_000,
+        },
+      ],
+      postedAt: 1_000,
+      updatedAt: 1_000,
+    };
+
+    const [message] = inboxThreadMessages(item, "Agent", undefined);
+
+    expect(message?.words).toBe("The plan is in plan.pdf.");
+  });
+
+  it("keeps the values an answer filled, in the order it sent them, a yes or no as its word, so a settled thread still says what was answered", () => {
+    const item: InboxItem = {
+      id: ITEM,
+      agentId: "agent-1",
+      key: "limits",
+      revision: 2,
+      version: INBOX_WIRE_VERSION,
+      title: "Invite limits",
+      needsReply: false,
+      status: INBOX_STATUS.ANSWERED,
+      thread: [
+        {
+          id: "0c1d2e3f-4a5b-4c6d-8e7f-90a1b2c3d4e5",
+          author: INBOX_MESSAGE_AUTHOR.AGENT,
+          text: "Fill in the limits.",
+          createdAt: 1_000,
+        },
+        {
+          id: "message-2",
+          author: INBOX_MESSAGE_AUTHOR.MEMBER,
+          text: "",
+          answers: {
+            ask: "0c1d2e3f-4a5b-4c6d-8e7f-90a1b2c3d4e5",
+            reply: INBOX_REPLY.ANSWERED,
+            values: [
+              { label: "Invites a day", value: 20 },
+              { label: "Admins only", value: false },
+            ],
+          },
+          createdAt: 2_000,
+        },
+      ],
+      postedAt: 1_000,
+      updatedAt: 2_000,
+    };
+
+    const [asking, answering] = inboxThreadMessages(item, "Agent", undefined);
+
+    expect(asking?.values).toBeUndefined();
+    expect(answering?.values).toEqual([
+      { label: "Invites a day", words: "20" },
+      { label: "Admins only", words: "no" },
+    ]);
+  });
+});
+
+describe("inboxThreadEventsShown", () => {
+  it("says who resolved a notice without an answer, the reader as You, after the last message written by then", () => {
+    const item: InboxItem = {
+      id: ITEM,
+      agentId: "agent-1",
+      key: "notice",
+      revision: 3,
+      version: INBOX_WIRE_VERSION,
+      title: "Recorded the flow",
+      needsReply: false,
+      status: INBOX_STATUS.CLOSED,
+      closedBy: { userId: "reader-1", name: "Ada Lovelace" },
+      settledAt: 2_500,
+      thread: [
+        { id: "message-1", author: INBOX_MESSAGE_AUTHOR.AGENT, text: "Done.", createdAt: 1_000 },
+        {
+          id: "message-2",
+          author: INBOX_MESSAGE_AUTHOR.AGENT,
+          text: "Also this.",
+          createdAt: 2_000,
+        },
+        { id: "message-3", author: INBOX_MESSAGE_AUTHOR.AGENT, text: "Later.", createdAt: 3_000 },
+      ],
+      postedAt: 1_000,
+      updatedAt: 3_000,
+    };
+
+    const names = { agentName: "Agent", readerId: "reader-1", memberName: () => undefined };
+
+    expect([...inboxThreadEventsShown(item, names)]).toEqual([
+      [
+        1,
+        [
+          {
+            key: ITEM,
+            who: { name: "You", agent: false },
+            did: "resolved this without an answer",
+            at: 2_500,
+          },
+        ],
+      ],
     ]);
   });
 });

@@ -312,7 +312,7 @@ export function ForkChip({
   const openPlace = useOpenPlace();
   const { agentId, messageId } = fork;
   // A source the list does not hold is opened on its own page.
-  const task = source === undefined ? undefined : { planId: source.planId };
+  const task = source === undefined ? undefined : { taskId: source.taskId };
 
   const open =
     openPlace === undefined
@@ -389,7 +389,7 @@ export function SuggestionChip({
   const openPlace = useOpenPlace();
   const { agentId } = suggestion;
   // A source the list does not hold is opened on its own page.
-  const task = source === undefined ? undefined : { planId: source.planId };
+  const task = source === undefined ? undefined : { taskId: source.taskId };
 
   const open =
     openPlace === undefined

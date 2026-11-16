@@ -22,6 +22,8 @@ import {
   ClaudeCodeConfigSchema,
   type CodexConfig,
   CodexConfigSchema,
+  type CursorConfig,
+  CursorConfigSchema,
   type InputLine,
   InputLineSchema,
   RUNNER_ENV,
@@ -220,6 +222,8 @@ function asUserCommand(command: string, args: readonly string[]) {
 
 type Hooks = {
   onStart?: ((command: FakeCommand) => Promise<void>) | undefined;
+  /** Run as a stop reaches the session, before its sandbox stops and its commands end, as Vercel's stop takes a moment in which the runner still runs. */
+  onStop?: ((sessionId: string) => Promise<void>) | undefined;
   runExit?: ((args: readonly string[]) => number) | undefined;
   runStdout?: ((args: readonly string[]) => string | undefined) | undefined;
   onRun?:
@@ -265,6 +269,8 @@ export function runnerSandboxApi() {
    */
   const failCommandReads = { remaining: 0 };
   const failPolicy = { remaining: 0 };
+  /** How many stops the API refuses next, leaving the sandbox and its commands running. */
+  const failStop = { remaining: 0 };
   /** How many network policy updates the API holds next, answering none until the caller gives up. */
   const holdPolicy = { remaining: 0 };
   /** Whether a read that waits for a running command's exit is held until the reader gives up or the command exits. */
@@ -469,6 +475,17 @@ export function runnerSandboxApi() {
       const refused = sandboxStopRefusal(init);
 
       if (refused !== undefined) return refused;
+
+      if (failStop.remaining > 0) {
+        failStop.remaining -= 1;
+
+        return Response.json(
+          { error: { code: "bad_request", message: "The stop was refused." } },
+          { status: 400 },
+        );
+      }
+
+      await hooks.onStop?.(sessionId);
 
       for (const sandbox of sandboxes.filter((each) => each.currentSessionId === sessionId)) {
         sandbox.status = "stopped";
@@ -707,6 +724,7 @@ export function runnerSandboxApi() {
     failStdin,
     failCommandReads,
     failPolicy,
+    failStop,
     holdPolicy,
     waits,
     exit,
@@ -721,6 +739,7 @@ const WHOLE = { onExcessProperty: EXCESS_KEYS.REFUSE } as const;
 const decodeRunnerConfig = Schema.decodeUnknownSync(RunnerConfigSchema);
 const decodeClaudeCodeConfig = Schema.decodeUnknownSync(ClaudeCodeConfigSchema);
 const decodeCodexConfig = Schema.decodeUnknownSync(CodexConfigSchema);
+const decodeCursorConfig = Schema.decodeUnknownSync(CursorConfigSchema);
 const decodeInputLine = Schema.decodeUnknownSync(InputLineSchema);
 
 /** A launch's config, of either harness, read whole: a key its schema does not name fails the read. */
@@ -735,11 +754,15 @@ export const readClaudeCodeConfig = (input: UnparsedWireValue): ClaudeCodeConfig
 export const readCodexConfig = (input: UnparsedWireValue): CodexConfig =>
   decodeCodexConfig(input, WHOLE);
 
+/** A Cursor launch's config, read whole: a key its schema does not name fails the read. */
+export const readCursorConfig = (input: UnparsedWireValue): CursorConfig =>
+  decodeCursorConfig(input, WHOLE);
+
 /** A line a runner is handed, read whole: a key its schema does not name fails the read. */
 export const readInputLine = (input: UnparsedWireValue): InputLine => decodeInputLine(input, WHOLE);
 
 /** The lines a command's stdin holds, each read back. */
-export function linesOf(command: FakeCommand | undefined): WireValue[] {
+function linesOf(command: FakeCommand | undefined): WireValue[] {
   assert.ok(command !== undefined);
 
   return command.stdin

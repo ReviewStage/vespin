@@ -91,7 +91,11 @@ export function startingPermissionMode(
     : AGENT_PERMISSION_MODE.FULL_ACCESS;
 }
 
-/** Whether the agent's harness takes the mode: full access on any, and a mode that asks on Claude Code and Codex. */
+/**
+ * Whether the agent's harness takes the mode: full access on any; Ask and
+ * Auto on Claude Code and Codex; and Auto on Cursor, as its own Auto-review,
+ * whose SDK asks nobody, so Ask has no one to ask there.
+ */
 export function harnessTakesMode(
   runtime: ConversationRuntime | undefined,
   mode: AgentPermissionMode,
@@ -99,6 +103,7 @@ export function harnessTakesMode(
   return (
     mode === AGENT_PERMISSION_MODE.FULL_ACCESS ||
     runtime === CONVERSATION_RUNTIME.CLAUDE_CODE ||
-    runtime === CONVERSATION_RUNTIME.CODEX
+    runtime === CONVERSATION_RUNTIME.CODEX ||
+    (runtime === CONVERSATION_RUNTIME.CURSOR && mode === AGENT_PERMISSION_MODE.AUTO)
   );
 }

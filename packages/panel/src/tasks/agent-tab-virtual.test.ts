@@ -79,7 +79,7 @@ const AGENT_ID = "4b0f6d3e-2c1a-4f5e-9d8c-7a6b5c4d3e2f";
 
 const AGENT: AgentSummary = {
   id: AGENT_ID,
-  planId: "plan-1",
+  taskId: "plan-1",
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Long run",
@@ -529,6 +529,18 @@ test("⌘F finds a phrase across a far call's verb and subject, as its line read
   };
 
   assert.equal(await farTally(farReply([shown]), "page: Pricing"), "1 of 1");
+});
+
+test("⌘F finds a far tool search's words as its row reads them, the server's name before them", async () => {
+  const searched = {
+    type: "tool-connection_search",
+    toolCallId: "m-7-search",
+    state: "output-available",
+    input: { connection: "slack", query: "send message" },
+    output: { tools: [] },
+  };
+
+  assert.equal(await farTally(farReply([searched]), "Searched Slack tools for"), "1 of 1");
 });
 
 test("⌘F counts nothing in a far integration call's connection_execute, which its row never draws", async () => {

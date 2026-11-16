@@ -12,6 +12,7 @@ import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { handHostReads, holdRepositoryLists, type RepositoriesRead } from "../testing/app-state.js";
 import { editorBundleLanded, installEditorLayout, pressInComposer } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { NO_REPOSITORIES, tasksControl } from "../testing/tasks-control.js";
 import { MENTION_MENU_SIDE } from "./mention-picker.js";
@@ -104,29 +105,31 @@ async function mount() {
   act(() =>
     root.render(
       withQueryClient(
-        createElement(NewTaskComposer, {
-          newTask: {
-            ...control.newTask,
-            workspaces: [ACME],
-            workspaceId: ACME.id,
-            preset: { repository: "acme/web" },
-            tasks: [LOGIN, LIMIT, SIGNUP],
-            repositoriesIn: () => ({ ...NO_REPOSITORIES, scope: ACME.id }),
-            start: (
-              _name: string,
-              repository: string | null,
-              _workspaceId: string | undefined,
-              from?: NewTaskStart,
-            ) => {
-              starts.push({ repository, relations: from?.relations });
+        overEveryTask(
+          tasksControl({ tasks: [LOGIN, LIMIT, SIGNUP] }),
+          createElement(NewTaskComposer, {
+            newTask: {
+              ...control.newTask,
+              workspaces: [ACME],
+              workspaceId: ACME.id,
+              preset: { repository: "acme/web" },
+              repositoriesIn: () => ({ ...NO_REPOSITORIES, scope: ACME.id }),
+              start: (
+                _name: string,
+                repository: string | null,
+                _workspaceId: string | undefined,
+                from?: NewTaskStart,
+              ) => {
+                starts.push({ repository, relations: from?.relations });
 
-              return Promise.resolve(undefined);
+                return Promise.resolve(undefined);
+              },
             },
-          },
-          workspaceId: ACME.id,
-          onLeave: () => undefined,
-          listSide: MENTION_MENU_SIDE.ABOVE,
-        }),
+            workspaceId: ACME.id,
+            onLeave: () => undefined,
+            listSide: MENTION_MENU_SIDE.ABOVE,
+          }),
+        ),
       ),
     ),
   );

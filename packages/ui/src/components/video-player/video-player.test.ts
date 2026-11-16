@@ -21,6 +21,8 @@ import { VIDEO_PLAYER_PLACE, VideoPlayer, type VideoPlayerPlace } from "../../in
  * player as one does, telling its events, and the player is read by what its
  * bar shows. Full screen, where the browser fills the screen with no element,
  * as Safari on an iPhone and jsdom alike, opens the video in that player.
+ * A recording plays muted with no Mute, unless its header names a sound
+ * track, where it plays with its sound and Mute takes it away.
  */
 
 const roots: Root[] = [];
@@ -42,6 +44,7 @@ const WEBM_URL = "data:video/webm;base64,GkXfow==";
 const SEEK_URL = "data:video/webm;base64,GkXfo0FA";
 const HELD_URL = "data:video/webm;base64,GkXfo0FB";
 const KEPT_URL = "data:video/webm;base64,GkXfo0KG";
+const PLAYING_URL = "data:video/webm;base64,GkXfo0KH";
 
 /**
  * A WebM header stating its frames a tenth of a second long: the EBML magic,
@@ -49,6 +52,12 @@ const KEPT_URL = "data:video/webm;base64,GkXfo0KG";
  * (`23 E3 83 84 05 F5 E1 00`), and a Cluster's id, where the header ends.
  */
 const TENTH_FRAME_URL = "data:video/webm;base64,GkXfoyPjg4QF9eEAH0O2dQ==";
+
+/**
+ * A WebM header naming a sound track: the EBML header of doctype `webm`, a
+ * segment of unknown size, and a track entry of type 2, audio (`83 81 02`).
+ */
+const SOUND_URL = "data:video/webm;base64,GkXfo4dCgoR3ZWJtGFOAZwH/////////FlSua4Wug4OBAg==";
 
 /** How long the stand-in runs, in seconds. */
 const LENGTH_S = 20;
@@ -67,7 +76,9 @@ function standInMedia(video: HTMLVideoElement): () => number {
     },
     paused: { get: () => paused },
     duration: { get: () => LENGTH_S },
+    // Note that its time may be redefined, as a test moves a playing video on without telling it.
     currentTime: {
+      configurable: true,
       get: () => at,
       set: (next: number) => {
         at = next;
@@ -204,6 +215,22 @@ test("the arrows seek five seconds within the video's length, flashing how far, 
   expect(reached).toEqual([]);
 });
 
+test("while the video plays its scrubber follows it on every frame the window draws, not only at each timeupdate", () => {
+  vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] });
+
+  try {
+    const { video, pressButton, seekAt } = mountPlayer(undefined, PLAYING_URL);
+    pressButton("Play");
+    // The video runs on to 3.5 seconds, as a playing one does between its timeupdates.
+    Object.defineProperty(video, "currentTime", { configurable: true, get: () => 3.5 });
+    expect(seekAt()).toBe("0");
+    act(() => vi.advanceTimersToNextFrame());
+    expect(seekAt()).toBe("3.5");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test("Space on one of the bar's buttons is the button's, and other keys pass on to the place around the player", () => {
   const { container, press, toggleLabel, reached } = mountPlayer(() => undefined);
   const expand = container.querySelector<HTMLButtonElement>('button[aria-label="Expand"]');
@@ -308,4 +335,17 @@ test("in the viewer the video waits for Play where motion is held still", () => 
   // Note that reduced motion holds motion at the tokens, which the setting's stylesheet would zero.
   document.documentElement.style.setProperty(DURATION_FAST, "1ms");
   expect(mountInViewer().autoplay).toBe(false);
+});
+
+test("a recording plays muted with no Mute, unless its header names a sound track, where Mute takes its sound away and gives it back", () => {
+  const silent = mountPlayer();
+  expect(silent.video.muted).toBe(true);
+  expect(silent.container.querySelector('button[aria-label="Mute"]')).toBeNull();
+
+  const heard = mountPlayer(undefined, SOUND_URL);
+  expect(heard.video.muted).toBe(false);
+  heard.pressButton("Mute");
+  expect(heard.video.muted).toBe(true);
+  heard.pressButton("Unmute");
+  expect(heard.video.muted).toBe(false);
 });

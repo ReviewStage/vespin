@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import type { AgentChangesAnswerView } from "@repo/features/agent-view";
 import {
   AGENT_AUTHOR,
   AGENT_STATUS,
@@ -12,6 +11,7 @@ import {
   PULL_REQUEST_STATE,
   REVIEW_STATE,
 } from "@repo/features/agent-wire";
+import type { RepositoryChangesAnswerView } from "@repo/features/pull-request-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { Tooltip } from "@repo/ui";
 import { act, createElement, Fragment, type ReactElement } from "react";
@@ -53,7 +53,7 @@ const WORKSPACE = { id: "workspace-acme", memberCount: 2 };
 
 const AGENT: AgentSummary = {
   id: "1e3c5a7b-9d2f-4b6e-8a1c-3e5f7a9b1d2c",
-  planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
+  taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Expiry job",
@@ -124,7 +124,7 @@ async function draw(element: ReactElement): Promise<HTMLElement> {
 }
 
 /** The agent's changes as the service answers them, naming the people given. */
-function changesNaming(people: AgentChangesPeople): () => Promise<AgentChangesAnswerView> {
+function changesNaming(people: AgentChangesPeople): () => Promise<RepositoryChangesAnswerView> {
   return () =>
     Promise.resolve({
       pullRequest: {
@@ -264,14 +264,13 @@ test("a pull request's tab card says who opened it and its reviewers once its ta
 });
 
 test("Files changed names nobody, with files or without, since the Pull request tab's header does", async () => {
-  const names = async (readChanges: () => Promise<AgentChangesAnswerView>) => {
+  const names = async (readChanges: () => Promise<RepositoryChangesAnswerView>) => {
     fakeActPort(answeringChanges(readChanges));
     handMembers(() => ({ rows: { members: [CHARLES] } }));
 
     const tab = await draw(
       createElement(ChangesTabReading, {
-        agentId: AGENT.id,
-        control,
+        pullRequest: { workspaceId: "workspace-acme", repository: "acme/relay", number: 42 },
         shown: true,
         repository: "acme/relay",
         tree: { open: false, onToggle: () => undefined },
@@ -296,10 +295,10 @@ test("Files changed names nobody, with files or without, since the Pull request 
   assert.deepEqual([await names(changesNaming(PEOPLE)), await names(noFiles)], [false, false]);
 });
 
-test("the people an agent's Changes tab read are named on its pull request's card wherever it hangs", async () => {
-  /** The agent's pull request's card, hung apart from its tab, naming whom the tab read. */
+test("the people a pull request's tab read are named on its card wherever it hangs", async () => {
+  /** The pull request's card, hung apart from its tab, naming whom the tab read. */
   function HungCard(): ReactElement {
-    return card(peopleOf(useChangesPeople(AGENT.id), PULL_REQUEST));
+    return card(peopleOf(useChangesPeople({ repository: "Acme/Relay", number: 42 }), PULL_REQUEST));
   }
 
   const strip = await draw(
@@ -307,8 +306,7 @@ test("the people an agent's Changes tab read are named on its pull request's car
       Fragment,
       null,
       createElement(ChangesTabReading, {
-        agentId: AGENT.id,
-        control,
+        pullRequest: { workspaceId: "workspace-acme", repository: "acme/relay", number: 42 },
         shown: true,
         repository: "acme/relay",
         tree: { open: false, onToggle: () => undefined },

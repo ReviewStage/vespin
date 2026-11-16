@@ -19,6 +19,7 @@ import {
   credentialRenewedAt,
   releaseCredentialRenewal,
 } from "@repo/database/models/sandbox-terminal-lease";
+import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { Sandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
@@ -26,16 +27,19 @@ import type { HttpClient } from "effect/http";
 import { controlsAgent } from "../agents/agent-reach.js";
 import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import type { AgentImage } from "../agents/coder-host/agent-image.js";
-import { agentRepositoryToken } from "../agents/coder-host/checkout.js";
+import { agentRepositoryToken, repositoryCredentialOf } from "../agents/coder-host/checkout.js";
+import { workspaceEnvironmentOf } from "../agents/coder-host/runner-sessions.js";
 import { connectPty } from "../agents/sandbox-pty.js";
 import { touchedAgentSandbox } from "../agents/sandbox-use.js";
 import { AgentSandbox, agentSandboxLayer } from "../agents/terminal/agent-sandbox.js";
+import type { HostedEnvironment } from "../environment.js";
 import type { GitHubApp } from "../github/github-app.js";
 import type { RelayDependencies } from "./relay.js";
 
 /** What the relay's dependencies answer over: the agents' image among it, which a sandbox is made again from. */
 export type RelayServices =
   | DatabaseServices
+  | HostedEnvironment
   | HttpClient.HttpClient
   | GitHubApp
   | AgentImage
@@ -78,8 +82,11 @@ export const relayDependencies: Effect.Effect<RelayDependencies, never, RelaySer
               userId: agent.userId,
               conversationId: agent.conversationId,
               sessionId: session?.sessionId,
-              repositoryCredential: run(agentRepositoryToken(target, agent)),
+              repositoryCredential: run(
+                Effect.map(agentRepositoryToken(target, agent), repositoryCredentialOf),
+              ),
               memberToken: agent.githubAccess === GITHUB_ACCESS.TOKEN,
+              environment: run(workspaceEnvironmentOf(agent, AGENT_MACHINE.VERCEL)),
             });
           }),
         ),

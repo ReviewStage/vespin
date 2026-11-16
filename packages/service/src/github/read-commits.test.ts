@@ -6,7 +6,7 @@ import {
   PATCH_OMITTED,
 } from "@repo/features/agent-wire";
 import { Effect, Option, Redacted } from "effect";
-import { githubReaching, type SentToGitHub } from "../testing/github-app-fake.js";
+import { fixtureBearer, githubReaching, type SentToGitHub } from "../testing/github-app-fake.js";
 import { readCommits } from "./pull-requests.js";
 
 /**
@@ -53,11 +53,8 @@ const commitsOf = (files: readonly AgentChangedFile[], compare: () => Response) 
       return new URL(request.url).pathname === COMPARE ? compare() : undefined;
     });
 
-    const commits = yield* readCommits(
-      TOKEN,
-      REPOSITORY,
-      Option.some({ headSha: HEAD, baseSha: BASE }),
-      files,
+    const commits = yield* Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+      readCommits(bearer, REPOSITORY, Option.some({ headSha: HEAD, baseSha: BASE }), files),
     ).pipe(Effect.provide(github.layer));
 
     return { commits, sent };
