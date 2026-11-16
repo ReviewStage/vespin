@@ -58,7 +58,7 @@ export const PRESS_SIZE = 44;
 export const RADIUS = {
   CARD: 14,
   TAG: 6,
-  /** A sidebar row's selection, a rounded fill set in from the sidebar's edges, as Mail's selected mailbox stands. */
+  /** A selected row's fill, set in from its column's edges, as Mail's selected mailbox and message stand. */
   SIDEBAR_ROW: 10,
 } as const;
 
@@ -92,4 +92,12 @@ export const ROW_INSET = {
   THREAD_VERTICAL: 11,
   /** Between an Inbox thread's title and the line under it, as Mail's subject sits under its sender. */
   THREAD_LINE_GAP: 3,
+  /**
+   * Between the column's edge and a selected row's rounded fill, so the fill
+   * stands set in, as Mail's selected message does. Note that it stays under
+   * `LEADING`, the dot's margin, which the row pads by `LEADING - FILL` inside
+   * the fill, so the unread dot always stands inside it, whatever size the
+   * dot is drawn at.
+   */
+  FILL: SPACE.TIGHT / 2,
 } as const;

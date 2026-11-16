@@ -23,6 +23,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AudioClip } from "./audio-clip.js";
 import { DraftCard } from "./draft-card.js";
+import { FileChip } from "./file-chip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
 import { ISSUE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -160,9 +161,15 @@ type FirstLine = {
 /** Reports a list item's first line once it is laid out; none where nothing asks. */
 type OnFirstLine = ((line: FirstLine) => void) | undefined;
 
+/** A quote's rule, the line down its left. */
+const QUOTE_RULE = 3;
+
+/** How far a quote's words stand in from the column: its rule and its padding. */
+const QUOTE_INSET = QUOTE_RULE + SPACE.ROW;
+
 const styles = StyleSheet.create({
   marker: { position: "absolute", left: 0, top: 0 },
-  quote: { borderLeftWidth: 3, paddingLeft: SPACE.ROW },
+  quote: { borderLeftWidth: QUOTE_RULE, paddingLeft: SPACE.ROW },
   well: { borderRadius: 8, padding: SPACE.ROW },
   tableBox: { alignSelf: "stretch", overflow: "hidden" },
   table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
@@ -195,6 +202,8 @@ interface Drawing {
   readonly pictureSource: (written: string) => string | null | undefined;
   /** The video a picture's address names, played in its place; none where the address names a picture. */
   readonly videoAt: (written: string) => MarkdownVideo | undefined;
+  /** The file a picture's address names, such as a PDF a description keeps as it keeps a picture, drawn as its chip in its place; none where the address names a picture. */
+  readonly fileAt: (written: string) => MarkdownFile | undefined;
   /** Whether a heading is heard as one, on a page of words alone, where VoiceOver's Headings rotor walks its sections. */
   readonly headings: boolean;
   /** What GitHub holds of the pull request or issue a chip's page names, as the host read it; none while unread or unanswered. */
@@ -829,7 +838,13 @@ function ListItem({
       <View style={item.blocks.length === 0 ? { marginLeft: -indent } : styles.marker}>
         <Marker checked={item.checked} number={number} firstLine={firstLine} drawing={drawing} />
       </View>
-      <Blocks blocks={item.blocks} drawing={drawing} gap={NESTED_GAP} onFirstLine={onFirstLine} />
+      {/* Note that the item's chips are held to the width left beside its marker, so one in a list never runs past the column. */}
+      <Blocks
+        blocks={item.blocks}
+        drawing={{ ...drawing, lineWidth: drawing.lineWidth - indent }}
+        gap={NESTED_GAP}
+        onFirstLine={onFirstLine}
+      />
     </View>
   );
 }
@@ -1059,7 +1074,10 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
   );
 }
 
-/** A picture's block: the video or sound clip its address names, played in its place, or the picture. */
+/** What a file's chip is named where its words gave it no name. */
+const UNNAMED_FILE = "Attachment";
+
+/** A picture's block: the file its address names, as its chip, the video or sound clip, played in its place, or the picture. */
 function PictureBlock({
   source,
   alt,
@@ -1069,6 +1087,20 @@ function PictureBlock({
   readonly alt: string;
   readonly drawing: Drawing;
 }) {
+  const file = drawing.fileAt(source);
+
+  // Note that a file is named by the words naming it, as the panel's chip is, since its address names no file.
+  if (file !== undefined) {
+    return (
+      <FileChip
+        name={alt.trim() === "" ? UNNAMED_FILE : alt.trim()}
+        mediaType={file.mediaType}
+        source={file.source}
+        size={file.size}
+      />
+    );
+  }
+
   const video = drawing.videoAt(source);
 
   if (video === undefined) return <Picture source={drawing.pictureSource(source)} alt={alt} />;
@@ -1110,7 +1142,12 @@ function BlockView({
     case MARKDOWN_BLOCK.QUOTE:
       return (
         <View style={[styles.quote, { borderColor: colors.CHIP_EDGE }]}>
-          <Blocks blocks={block.blocks} drawing={drawing} gap={NESTED_GAP} />
+          {/* Note that a quote's chips are held to the width inside its rule and padding. */}
+          <Blocks
+            blocks={block.blocks}
+            drawing={{ ...drawing, lineWidth: drawing.lineWidth - QUOTE_INSET }}
+            gap={NESTED_GAP}
+          />
         </View>
       );
     case MARKDOWN_BLOCK.TABLE:
@@ -1175,6 +1212,8 @@ type MarkdownProps = {
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
   /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
+  /** The file a picture's address names, such as a PDF a description keeps, drawn as its chip in its place; every address names a picture where none is given. */
+  readonly fileAt?: ((written: string) => MarkdownFile | undefined) | undefined;
   /** Whether its headings are heard as headings, on a page of words alone; a message's are styled alone. */
   readonly headings?: boolean | undefined;
   /** What GitHub holds of a pull request or issue a chip names, by its page (`markdownGithubPages`), which the chip says where it stands; every chip says what its link says where none is given. */
@@ -1192,6 +1231,13 @@ export interface MarkdownVideo {
   /** Whether it is a sound clip, played in its strip (`AudioClip`) rather than a film's player. */
   readonly audio?: boolean | undefined;
   readonly onOpenElsewhere?: (() => void) | undefined;
+}
+
+/** A file the words name as a picture, drawn as its chip in its place: the file of the app's caches it opens from, its type, and its size in words. One that could not be read stands as a picture that could not be. */
+export interface MarkdownFile {
+  readonly source: string;
+  readonly mediaType: string;
+  readonly size: string | undefined;
 }
 
 /** Each picture drawn from the address its words name it by. */
@@ -1214,12 +1260,20 @@ function noVideo(): undefined {
   return undefined;
 }
 
+/** No address naming a file. */
+function noFile(): undefined {
+  return undefined;
+}
+
 /**
  * Words drawn as the Markdown they were written in, as the panel draws a
  * message: the panel's parse (`@repo/features/markdown-tree`), read into
  * blocks by `markdown-model.ts`, in the brand's colors for the window's
  * scheme and at the reader's Dynamic Type size. It draws no scroller of its
- * own, so a screen stands it in its own.
+ * own, so a screen stands it in its own. Note that a chip is held to the
+ * width the words stand in, measured once they are laid out, since an open
+ * iPhone Duo's or an iPad's detail column is far narrower than the window;
+ * until then, to the window's width less a page's margins.
  */
 export function Markdown({
   words,
@@ -1228,12 +1282,21 @@ export function Markdown({
   typed,
   pictureSource = namedSource,
   videoAt = noVideo,
+  fileAt = noFile,
   headings = false,
   linkStanding = noStanding,
   suggestion = noSuggestion,
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
+  const [measured, setMeasured] = useState<number | undefined>(undefined);
+  const [measuredAt, setMeasuredAt] = useState(width);
+
+  // Note that a change of the window's width, a fold, an unfold, or a turn, forgets the width measured, since words in a bubble that wraps its words are measured no wider than they stood and would hold their chips there for good.
+  if (measuredAt !== width) {
+    setMeasuredAt(width);
+    setMeasured(undefined);
+  }
 
   const blocks = useMemo(
     () => markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed }),
@@ -1243,17 +1306,25 @@ export function Markdown({
   const drawing: Drawing = {
     colors,
     fontScale,
-    lineWidth: width - SPACE.PAGE * 2,
+    lineWidth: measured ?? width - SPACE.PAGE * 2,
     openLink: onOpenLink,
     pictureSource,
     videoAt,
+    fileAt,
     headings,
     linkStanding,
     suggestion,
   };
 
   return (
-    <View>
+    <View
+      onLayout={(event) => {
+        // Note that a width of none, as a view hidden behind another lays out, keeps the last, so no chip is held to nothing.
+        const laid = event.nativeEvent.layout.width;
+
+        if (laid > 0) setMeasured(laid);
+      }}
+    >
       <Blocks blocks={blocks} drawing={drawing} />
     </View>
   );

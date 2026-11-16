@@ -20,6 +20,7 @@ export type NativeRuntime = Exclude<ConversationRuntime, typeof CONVERSATION_RUN
 export const NATIVE_SESSION_PREFIX = {
   [CONVERSATION_RUNTIME.CLAUDE_CODE]: "claude-code-",
   [CONVERSATION_RUNTIME.CODEX]: "codex-",
+  [CONVERSATION_RUNTIME.CURSOR]: "cursor-",
 } as const satisfies Record<NativeRuntime, string>;
 
 /**
@@ -31,7 +32,7 @@ export const NATIVE_SESSION_PREFIX = {
 const NATIVE_SESSION_PREFIX_BEFORE_RENAME = {
   [CONVERSATION_RUNTIME.CLAUDE_CODE]: "luke-claude-code-",
   [CONVERSATION_RUNTIME.CODEX]: "luke-codex-",
-} as const satisfies Record<NativeRuntime, string>;
+} as const satisfies Partial<Record<NativeRuntime, string>>;
 
 /** The native harness that minted the session, by its id; none for a session the retired runtime minted. */
 export function nativeRuntimeOfSession(sessionId: string): NativeRuntime | undefined {

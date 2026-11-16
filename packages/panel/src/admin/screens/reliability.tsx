@@ -137,6 +137,7 @@ const AUTOMATION_REASONS_SERIES: readonly BreakdownSeries[] = [
 const KEY_PROVIDER_LABEL = {
   [MODEL_PROVIDER.ANTHROPIC]: "Anthropic",
   [MODEL_PROVIDER.OPENAI]: "OpenAI",
+  [MODEL_PROVIDER.CURSOR]: "Cursor",
 } as const;
 
 const KEY_STATUS_LABEL = {

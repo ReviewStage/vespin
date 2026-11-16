@@ -44,9 +44,11 @@ import { useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskRelationWrites } from "../tasks/use-relations.js";
 import { useTaskOverview } from "../tasks/use-tasks.js";
+import { TaskMissing } from "./task-missing.js";
 
 /** The sheet's own words. */
 const WORDS = {
+  BACK: "Back",
   CANCEL: "Cancel",
   TASK_NOT_FOUND: "Task not found",
 } as const;
@@ -97,7 +99,7 @@ interface Candidate {
 /**
  * The tasks the sheet offers for `kind`: the workspace's others, or those
  * a search finds by name, repository, or key, each one that cannot take the
- * kind kept with why, as the panel's menu dims it.
+ * kind kept with why, as the panel's menu dims it, after those that can.
  */
 function candidatesFor(
   subject: TaskRelationSubject,
@@ -114,7 +116,7 @@ function candidatesFor(
       ? tasks.filter((each) => each.workspaceId === subject.workspaceId)
       : searchedTasks({ tasks, workspaceId: subject.workspaceId, workspaceName, tokens });
 
-  return offered
+  const candidates = offered
     .filter((each) => each.id !== subject.id)
     .map((each) => ({
       task: each,
@@ -124,6 +126,12 @@ function candidatesFor(
           : taskKey(workspaceName, each.number),
       why: relationWhyNot(subject, each, kind, byId),
     }));
+
+  // Note that the tasks it can take stand first, each group in the list's order, so a phone's short sheet opens on what a press can pick rather than on rows dimmed with why.
+  return [
+    ...candidates.filter((each) => each.why === undefined),
+    ...candidates.filter((each) => each.why !== undefined),
+  ];
 }
 
 /** The kinds the sheet opens on where none is named, each by its glyph and what choosing it does, as one grouped card of the form's own rows, each going on to its tasks, as a sheet that picks stands (the Move sheet's form). */
@@ -170,6 +178,8 @@ export function TaskRelationScreen({
   const [chosen, setChosen] = useState<TaskRelationKind | undefined>(opened);
   const [search, setSearch] = useState("");
   const kind = chosen;
+  // Whether the kind was picked in this sheet rather than handed to it, so a step back to the kinds stands.
+  const stepped = opened === undefined && kind !== undefined;
 
   const bar = (
     <>
@@ -195,22 +205,40 @@ export function TaskRelationScreen({
           />
         )}
       </Stack.Screen>
-      <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button
-          icon={glyphSymbol(GLYPH.CLOSE)}
-          accessibilityLabel={WORDS.CANCEL}
-          onPress={() => router.back()}
-        />
-      </Stack.Toolbar>
+      {stepped ? (
+        <>
+          {/* Note that a kind picked inside the sheet steps back to the kinds, as a pushed page's back chevron does, with Cancel moving to the other end. */}
+          <Stack.Toolbar placement="left">
+            <Stack.Toolbar.Button
+              icon={glyphSymbol(GLYPH.BACK)}
+              accessibilityLabel={WORDS.BACK}
+              onPress={() => {
+                setChosen(undefined);
+                setSearch("");
+              }}
+            />
+          </Stack.Toolbar>
+          <Stack.Toolbar placement="right">
+            <Stack.Toolbar.Button onPress={() => router.back()}>
+              {WORDS.CANCEL}
+            </Stack.Toolbar.Button>
+          </Stack.Toolbar>
+        </>
+      ) : (
+        <Stack.Toolbar placement="left">
+          <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        </Stack.Toolbar>
+      )}
     </>
   );
 
+  // Note that a task not yet read is on its way, so the sheet reads rather than say it is gone (`TaskMissing`).
   if (overview === undefined) {
     return (
       <>
         {bar}
         <Screen>
-          <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
+          <TaskMissing taskId={taskId} notFound={WORDS.TASK_NOT_FOUND} />
         </Screen>
       </>
     );
