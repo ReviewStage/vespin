@@ -81,14 +81,18 @@ appId: dev.vespin.ios
 - assertVisible: "Resolve"
 - waitForAnimationToEnd
 - takeScreenshot: comment-open-thread
-# A comment's row resolves from a swipe from its trailing edge, as an Inbox
-# thread's does.
+# A comment's row resolves from its own acts, the trailing swipe's Resolve
+# standing again in its long press menu, as an Inbox thread's does. Note that
+# the flow presses it from that menu rather than swiping, because a swipe
+# from a row the task's page stands at no fixed height either reveals Resolve
+# or, run full, presses it, so neither leaves a state the flow can assert;
+# the swipe's own reveal is held by `inbox.yaml`, whose rows `RowFrame`
+# draws as it draws this one.
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
-- swipe:
-    from: "Should an owner be able to resend an expired invite from this page?"
-    direction: LEFT
-- assertVisible: "Resolve"
+- longPressOn: "Should an owner be able to resend an expired invite from this page?"
+- tapOn: "Resolve"
 - waitForAnimationToEnd
-- takeScreenshot: comment-row-swipe
+- assertNotVisible: "Should an owner be able to resend an expired invite from this page?"
+- takeScreenshot: comment-row-resolved
