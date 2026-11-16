@@ -1508,7 +1508,7 @@ function pngOf(size: number, mark: number): Uint8Array {
   return bytes;
 }
 
-/** A picture kept beside the agent's conversation, as `show_image` keeps one, a PNG unless another type is given; answers its attachment id. */
+/** A picture kept beside the agent's conversation, as `show_media` keeps one, a PNG unless another type is given; answers its attachment id. */
 async function keptPicture(
   agent: ConversationTarget,
   bytes: Uint8Array,
@@ -1697,7 +1697,7 @@ test("start_agent refuses, in words that say why and starting nothing, a picture
 
   const unreached = (id: string) =>
     `Not started: attachment ${id} is no picture you can hand on. Name a picture of your own ` +
-    "conversation, such as one show_image kept.";
+    "conversation, such as one show_media kept.";
 
   for (const [images, reason] of [
     [[theirs], unreached(theirs)],

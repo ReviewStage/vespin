@@ -741,7 +741,7 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
         Schema.Array(wireUuidSchema).check(Schema.isMaxLength(AGENT_BOUNDS.MAX_ATTACHMENTS)),
         "Pictures handed to the agent with its first message: at most " +
           `${AGENT_BOUNDS.MAX_ATTACHMENTS} attachment ids of pictures in your own ` +
-          `conversation, such as one ${AGENT_TOOL.SHOW_IMAGE} kept, each at most ${megabytesOf(AGENT_BOUNDS.MAX_IMAGE_BYTES)} and all of them ` +
+          `conversation, such as one ${AGENT_TOOL.SHOW_MEDIA} kept, each at most ${megabytesOf(AGENT_BOUNDS.MAX_IMAGE_BYTES)} and all of them ` +
           `${megabytesOf(AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES)} together; a larger one is refused.`,
       ),
     ),

@@ -1,5 +1,6 @@
 // file-chip.tsx -- a file a message carried that is neither a picture nor a video, such as a PDF: its chip after the message's words, naming it and its size, which opens the file full screen in the system's Quick Look, and whose long press offers Share and, for a text file, Copy.
 
+import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { SymbolView } from "expo-symbols";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
@@ -41,7 +42,7 @@ const styles = StyleSheet.create({
     gap: SPACE.ROW,
     paddingHorizontal: SPACE.ROW + 2,
     paddingVertical: SPACE.TIGHT * 2,
-    borderRadius: RADIUS.TAG * 2,
+    borderRadius: RADIUS.TILE,
     borderWidth: StyleSheet.hairlineWidth,
   },
   words: { flexShrink: 1, gap: 1 },
@@ -69,11 +70,16 @@ type FileChipProps = {
   readonly name: string;
   /** The file's type, which names its kind and its glyph. */
   readonly mediaType: string;
-  /** The file's address on the device, under the app's caches; none while its bytes are on their way. */
-  readonly source: string | undefined;
+  /** The file's address on the device, under the app's caches; none while its bytes are on their way, and `null` where they could not be read. */
+  readonly source: string | null | undefined;
   /** The file's size in words, such as "48 KB"; none until its bytes are read. */
   readonly size: string | undefined;
+  /** Reads the file again where its bytes could not be read, which a press on its chip then does; none offers nothing. */
+  readonly onRetry?: (() => void) | undefined;
 };
+
+/** What a press on a chip whose file could not be read is heard to do. */
+const READS_AGAIN = "Reads the file again";
 
 /**
  * A file's chip after a message's words, as the panel stands a file's chip:
@@ -84,38 +90,54 @@ type FileChipProps = {
  * a spreadsheet or any other kind the system reads, and whose share button
  * opens it in another app; a file Quick Look can't read opens the share
  * sheet instead. While its bytes are on their way the system's spinner
- * stands in its glyph's place and a press does nothing. At an accessibility
- * size its name wraps rather than cuts.
+ * stands in its glyph's place and a press does nothing; one that could not
+ * be read reads them again. At an accessibility size its name wraps rather
+ * than cuts.
  */
-export function FileChip({ name, mediaType, source, size }: FileChipProps) {
+export function FileChip({ name, mediaType, source, size, onRetry }: FileChipProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
   const kind = kindOf(name, mediaType);
-  const heard = [name, kind, size].filter((part) => part !== undefined).join(", ");
+
+  // Note that a file whose bytes could not be read says so under its name in place of its kind, as the panel's chip does, and a press on it reads it again.
+  const unread = source === null;
+  const said = unread ? MEDIA_READ_WORDS.FILE_FAILED : kind;
+
+  const heard = unread
+    ? `${name} ${MEDIA_READ_WORDS.COULD_NOT_READ}`
+    : [name, kind, size].filter((part) => part !== undefined).join(", ");
+
   const fact = { fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED };
 
   const kept: Kept | undefined =
-    source === undefined ? undefined : { kind: KEPT_KIND.FILE, source, name, mediaType };
+    source == null ? undefined : { kind: KEPT_KIND.FILE, source, name, mediaType };
 
   const acts = useKeptActs(kept);
   const open = useQuickLook(kept);
+  const press = unread ? onRetry : open;
 
   return (
     <HeldMenu acts={acts}>
       <Press
-        onPress={open}
-        disabled={open === undefined}
+        onPress={press}
+        disabled={press === undefined}
         accessibilityRole="button"
         accessibilityLabel={heard}
-        accessibilityHint={FILE_WORDS.OPENS}
+        accessibilityHint={unread ? READS_AGAIN : FILE_WORDS.OPENS}
         accessibilityState={{ busy: source === undefined }}
-        style={[styles.chip, { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE }]}
+        style={[styles.chip, { backgroundColor: colors.CARD, borderColor: colors.CHIP_EDGE }]}
       >
         {source === undefined ? (
           <ActivityIndicator color={colors.TEXT_MUTED} style={{ width: MARK_SIZE.LEAD }} />
         ) : (
           <SymbolView
-            name={glyphSymbol(isDocument(mediaType) ? FILE_SYMBOL.DOCUMENT : FILE_SYMBOL.OTHER)}
+            name={glyphSymbol(
+              unread
+                ? GLYPH.FAILED
+                : isDocument(mediaType)
+                  ? FILE_SYMBOL.DOCUMENT
+                  : FILE_SYMBOL.OTHER,
+            )}
             size={MARK_SIZE.LEAD}
             tintColor={colors.TEXT_MUTED}
           />
@@ -130,8 +152,8 @@ export function FileChip({ name, mediaType, source, size }: FileChipProps) {
           </Text>
           {/* Note that its kind and its size stand as two muted words apart, never joined by a separator. */}
           <View style={styles.facts}>
-            <Text style={fact}>{kind}</Text>
-            {size === undefined ? null : <Text style={fact}>{size}</Text>}
+            <Text style={fact}>{said}</Text>
+            {size === undefined || unread ? null : <Text style={fact}>{size}</Text>}
           </View>
         </View>
       </Press>

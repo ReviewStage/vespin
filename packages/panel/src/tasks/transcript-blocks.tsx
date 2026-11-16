@@ -431,7 +431,7 @@ function definitionsIn(
  * names it as a link to where it points and never fetches it, because a
  * picture an agent writes is a request to wherever its address points the
  * moment the tab opens, and a model's words must make none; the pictures an
- * agent shows are its `show_image` calls'. The pictures drawn are a description's
+ * agent shows are its `show_media` calls'. The pictures drawn are a description's
  * own, inside the description's card, and an Inbox item's own, inside its pane,
  * each read through the host (`description-pictures.tsx`, `inbox-pictures.tsx`)
  * rather than from its address. Note that the mark is

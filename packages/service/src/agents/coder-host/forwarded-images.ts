@@ -15,14 +15,14 @@ import { Effect, Option, Result } from "effect";
  *
  * An id names a row of the one `attachment` table, and a forwarder may hand
  * on one kind of row: a picture kept beside its own conversation
- * (`conversation-pictures.ts`), such as one `show_image` kept. Any other id,
+ * (`conversation-pictures.ts`), such as one `show_media` kept. Any other id,
  * another conversation's picture among them, is refused alike, so a refusal
  * never says that a picture stands where the forwarder cannot read it. A video kept beside the conversation, as
- * `show_image` keeps a recording, is refused by name, since a message
+ * `show_media` keeps a recording, is refused by name, since a message
  * carries pictures alone. Each picture is held to the bound one image of
  * a message is held to, and all of them to a message's bytes together
  * (`AGENT_BOUNDS`); one past them is refused rather than shrunk,
- * since a `show_image` picture may be larger than a message takes. A
+ * since a `show_media` picture may be larger than a message takes. A
  * forwarded file is named by its id and its type's extension, never by a
  * path, so nothing of where it came from travels with it. The call refused
  * hands on nothing: the first id refused refuses them all.
@@ -138,7 +138,7 @@ export function forwardedImageRefusalWords(refusal: ForwardedImageRefusal): stri
     case FORWARDED_IMAGE_REFUSAL.UNREACHED:
       return (
         `attachment ${refusal.id} is no picture you can hand on. Name a picture of your own ` +
-        `conversation, such as one ${AGENT_TOOL.SHOW_IMAGE} kept.`
+        `conversation, such as one ${AGENT_TOOL.SHOW_MEDIA} kept.`
       );
     case FORWARDED_IMAGE_REFUSAL.PLAYED:
       return (

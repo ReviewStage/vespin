@@ -48,7 +48,7 @@ import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
 import { useWordFiles, WordFilesContext } from "./file-chips.js";
 
 /**
- * agent-pictures.tsx -- the pictures in an agent's transcript: a set it showed with `show_image`, the pictures an integration's call answered, under the call's row, and an image a line handed it, over the line.
+ * agent-pictures.tsx -- the pictures in an agent's transcript: a set it showed with `show_media`, the pictures an integration's call answered, under the call's row, and an image a line handed it, over the line.
  *
  * Each picture is read once through the window's pictures
  * (`../picture-query.ts`), under the agent, or under the worker whose
@@ -398,7 +398,7 @@ function isShownPlayed(
 }
 
 /**
- * The pictures and videos of a `show_image` call, or a browser call's
+ * The pictures and videos of a `show_media` call, or a browser call's
  * recordings: each video played as its own block, then one picture as its
  * own block or several as one set, and one viewer over them all, which a
  * picture's press and a video's Expand open alike.
@@ -499,7 +499,7 @@ function notKeptWords(byteCount: number): string {
  * line, open or closed: one kept is its thumbnail, opening the viewer over
  * the call's pictures; one not kept says so, with its size, since the
  * model saw it all the same. The videos a browser call recorded stand
- * under them as a `show_image` call's would.
+ * under them as a `show_media` call's would.
  */
 /** An app's icon a call kept beside the transcript, read through the transcript's door, in a call row's glyph seat; its stand-in (`AppIcon`'s) stands there until it lands, and for good where no icon was kept. */
 export function KeptAppIcon({

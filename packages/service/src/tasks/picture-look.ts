@@ -2,6 +2,7 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { readDescriptionAttachment } from "@repo/database/models/description-attachments";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { isAudioType } from "@repo/features/conversation-picture-wire";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
 import { type DescriptionFile, isPdfFile } from "@repo/features/description-attachment-wire";
 import { type InboxAttachmentRef, inboxAttachmentOf } from "@repo/features/inbox-attachment-link";
@@ -66,6 +67,7 @@ export const PICTURE_LOOK_REFUSAL = {
   NO_THREAD_PICTURE: "Not looked: that thread holds no such picture.",
   VIDEO:
     "Not looked: that address is a video, which is never shown to a model. Its alt text and caption in the description's text say what it shows.",
+  CLIP: "Not looked: that address is a sound clip, which is never handed to a model. Its alt text and caption in the description's text say what it holds.",
   PDF_ELSEWHERE:
     "Not written: that address is a PDF kept in another task's description, and you may read only the PDFs of your own task's description. Its name is the alt text of its ![name](address) line; ask the member for what you need of it rather than guess at what it holds.",
   PDF_TOO_LARGE: `Not written: that PDF is larger than ${(AGENT_BOUNDS.MAX_PDF_BYTES / 1_000_000).toFixed(1)} MB, the most written into your machine; ask the member for what you need of it rather than guess at what it holds.`,
@@ -187,14 +189,16 @@ export function pictureNotLooked(reason: string): PictureLookResult {
 
 const isImageType = Schema.is(pictureTypeSchema);
 
-/** Whether a kept file is a picture, an image or a video, rather than any other file a message carried. */
+/** Whether a kept file is a picture, an image, a video, or a sound clip, rather than any other file a message carried. */
 const isPictureMediaType = Schema.is(pictureMediaTypeSchema);
 
-/** A picture as a look answers it: an image's type and its bytes in base64, or the refusal of a video, whose bytes go nowhere. */
+/** A picture as a look answers it: an image's type and its bytes in base64, or the refusal of a sound clip or a video, whose bytes go nowhere. */
 function looked(picture: {
   readonly contentType: string;
   readonly bytes: Uint8Array;
 }): PictureLookResult {
+  if (isAudioType(picture.contentType)) return pictureNotLooked(PICTURE_LOOK_REFUSAL.CLIP);
+
   if (!isImageType(picture.contentType)) {
     return pictureNotLooked(PICTURE_LOOK_REFUSAL.VIDEO);
   }
@@ -269,11 +273,9 @@ export function runLookAtThreadPicture(
       if (Option.isNone(file)) return pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_THREAD_PICTURE);
       const { contentType, bytes } = file.value;
 
-      if (isImageType(contentType)) return looked({ contentType, bytes });
+      if (isPictureMediaType(contentType)) return looked({ contentType, bytes });
 
-      return isPictureMediaType(contentType)
-        ? pictureNotLooked(PICTURE_LOOK_REFUSAL.VIDEO)
-        : pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_THREAD_PICTURE);
+      return pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_THREAD_PICTURE);
     }),
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.UNAVAILABLE))),

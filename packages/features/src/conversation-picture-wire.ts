@@ -36,7 +36,7 @@ export const CONVERSATION_PICTURE_BOUNDS = {
   MAX_BYTES: 4_000_000,
   /** The most bytes of pictures one conversation keeps; a picture past them is named, not kept. */
   MAX_BYTES_PER_CONVERSATION: 200_000_000,
-  /** The most pictures one `show_image` call shows, as one set. */
+  /** The most pictures one `show_media` call shows, as one set. */
   MAX_PER_CALL: 20,
 } as const;
 

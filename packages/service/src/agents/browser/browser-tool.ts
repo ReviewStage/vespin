@@ -35,7 +35,7 @@
  * (`browserModelOutput`) and its base64 is left out of the stored
  * conversation (`storedBrowserOutput`); the transcript's copy, the page at
  * its own size and good quality (`BROWSER_KEPT_SCREENSHOT`), is kept beside
- * the transcript the call is written to as `show_image`'s pictures are
+ * the transcript the call is written to as `show_media`'s pictures are
  * (`@repo/database/models/conversation-pictures`), deleted with that
  * conversation, and the step names it by id (`picture`), or says why it was
  * not kept (`omitted`). Nothing a page holds is logged or traced here: a
