@@ -21,16 +21,20 @@
 # twenty seconds after two swipes. Note too that the bar is found by its
 # identifier, which iOS sets to its title, because a regular window, the
 # iPad's, draws its floating tab bar in the title's place, so no words of
-# the title stand there to be found.
+# the title stand there to be found. With `BESIDE` true, for a page beside a
+# list (`scroll-in.yaml`), every swipe is made at 85% across the window
+# rather than its middle, and a centered scroll is its slow steps until the
+# element shows, then one more.
 appId: dev.vespin.ios
 env:
   DIRECTION: ${DIRECTION || 'DOWN'}
   ABOVE: ${ABOVE || ''}
   BELOW: ${BELOW || ''}
+  BESIDE: ${BESIDE || 'false'}
 ---
 - runFlow:
     when:
-      true: ${BELOW != ''}
+      true: ${BELOW != '' && BESIDE != 'true'}
     commands:
       - repeat:
           times: 40
@@ -50,6 +54,26 @@ env:
           duration: 1500
 - runFlow:
     when:
+      true: ${BELOW != '' && BESIDE == 'true'}
+    commands:
+      - repeat:
+          times: 40
+          while:
+            notVisible:
+              text: "${ELEMENT}"
+              below:
+                id: "${BELOW}"
+          commands:
+            - swipe:
+                start: "85%, 40%"
+                end: "85%, 54%"
+                duration: 1500
+      - swipe:
+          start: "85%, 40%"
+          end: "85%, 54%"
+          duration: 1500
+- runFlow:
+    when:
       true: ${ABOVE != ''}
     commands:
       - scrollUntilVisible:
@@ -61,7 +85,7 @@ env:
           timeout: 60000
 - runFlow:
     when:
-      true: ${ABOVE == '' && BELOW == '' && DIRECTION == 'UP'}
+      true: ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'}
     commands:
       - scrollUntilVisible:
           element: "${ELEMENT}"
@@ -70,12 +94,38 @@ env:
           timeout: 60000
 - runFlow:
     when:
-      true: ${ABOVE == '' && BELOW == '' && DIRECTION != 'UP'}
+      true: ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'}
     commands:
       - scrollUntilVisible:
           element: "${ELEMENT}"
           direction: DOWN
           centerElement: true
           timeout: 60000
+- runFlow:
+    when:
+      true: ${ABOVE == '' && BELOW == '' && BESIDE == 'true'}
+    commands:
+      - runFlow:
+          file: scroll-in.yaml
+          env:
+            ELEMENT: "${ELEMENT}"
+            DIRECTION: "${DIRECTION}"
+            BESIDE: "true"
+- runFlow:
+    when:
+      true: ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'}
+    commands:
+      - swipe:
+          start: "85%, 40%"
+          end: "85%, 60%"
+          duration: 1200
+- runFlow:
+    when:
+      true: ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'}
+    commands:
+      - swipe:
+          start: "85%, 60%"
+          end: "85%, 40%"
+          duration: 1200
 - waitForAnimationToEnd:
     timeout: 5000

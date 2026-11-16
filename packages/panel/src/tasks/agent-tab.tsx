@@ -1,6 +1,12 @@
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import { bootHolds } from "@repo/features/agent-boot";
-import { goalConditions, goalControlLine, goalControlWords } from "@repo/features/agent-goal-model";
+import {
+  GOAL_REACH,
+  goalConditions,
+  goalControlLine,
+  goalControlWords,
+  goalReachOf,
+} from "@repo/features/agent-goal-model";
 import {
   AGENT_PART,
   type AgentPart,
@@ -21,6 +27,7 @@ import {
   turnStretches,
   wholeCallOf,
 } from "@repo/features/agent-parts";
+import { usageLimitAgentOf } from "@repo/features/agent-runtime-models";
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "@repo/features/agent-todos";
 import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
@@ -28,7 +35,6 @@ import {
   AGENT_BRIEF,
   AGENT_FAILURE,
   AGENT_MACHINE,
-  AGENT_RUNTIME,
   AGENT_SENDER,
   AGENT_STATUS,
   type AgentBrief,
@@ -279,7 +285,6 @@ import {
   tabTurnOf,
   teammateStarter,
   transcriptRowKey,
-  usageLimitAgentOf,
   WORKING_PHASE,
   type WorkingPhase,
   workerStatusOf,
@@ -3485,8 +3490,9 @@ function AgentTabView({
   // Note that nothing is rewound under a call into the agent, which the service refuses too (`rewind.ts`).
   const rewinds = boxOpen && transcript.calls.length === 0;
 
-  // Only Codex pauses a goal, and only the agent's starter may change it, while the box can send.
-  const pausesGoal = controlsQueue && boxOpen && agent.runtime === AGENT_RUNTIME.CODEX;
+  // Only Codex pauses a goal, Cursor keeps none, and only the agent's starter may change it, while the box can send.
+  const goalReach = goalReachOf(agent.runtime);
+  const pausesGoal = controlsQueue && boxOpen && goalReach === GOAL_REACH.PAUSES;
   const onEdit = useSteady(rewinds ? composer.edit : undefined);
   const onCancelEdit = useSteady(composer.dropEdit);
   const onSendEdit = useSteady(rewinds ? composer.sendEdit : undefined);
@@ -3846,16 +3852,21 @@ function AgentTabView({
           pending={pendingWords}
           readerId={readerId}
         />
-        <GoalDock
-          messages={kept}
-          going={pendingWords}
-          older={transcript.hasOlder}
-          working={standing.working}
-          onClear={controlsQueue && boxOpen ? () => composer.sendWords(GOAL_LINE.CLEAR) : undefined}
-          // Note that only Codex's goal pauses; Claude Code's stops only as it is cleared.
-          onPause={pausesGoal ? () => composer.sendWords(GOAL_LINE.PAUSE) : undefined}
-          onResume={pausesGoal ? () => composer.sendWords(GOAL_LINE.RESUME) : undefined}
-        />
+        {/* Note that a harness that keeps no goal draws no goal row, whatever its words say. */}
+        {goalReach === GOAL_REACH.NONE ? null : (
+          <GoalDock
+            messages={kept}
+            going={pendingWords}
+            older={transcript.hasOlder}
+            working={standing.working}
+            onClear={
+              controlsQueue && boxOpen ? () => composer.sendWords(GOAL_LINE.CLEAR) : undefined
+            }
+            // Note that only Codex's goal pauses; Claude Code's stops only as it is cleared.
+            onPause={pausesGoal ? () => composer.sendWords(GOAL_LINE.PAUSE) : undefined}
+            onResume={pausesGoal ? () => composer.sendWords(GOAL_LINE.RESUME) : undefined}
+          />
+        )}
         <AgentPicturesProvider value={pictures}>
           {/* Note that the dock reads whose Mac the agent uses, as the transcript above it does, to offer Show only on that Mac. */}
           <CallPlaceProvider owner={macOwner} route={callRoute}>
@@ -4128,6 +4139,7 @@ function AgentTabBody({
     unsend: control.onUnsend,
     rewind: control.onRewind,
     payer: planPayerOf(agent.runtime),
+    runtime: agent.runtime,
     starter,
     shown,
     onOpen:

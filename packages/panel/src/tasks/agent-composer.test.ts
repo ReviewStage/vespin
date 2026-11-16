@@ -632,6 +632,26 @@ test("a box starting an agent, with no session yet, lists /goal beside /model bu
   assert.deepEqual(names(), ["/model", "/goal"]);
 });
 
+test("a box whose model runs on Cursor, which keeps no goal, lists no /goal", async () => {
+  // The Goals experiment offers /goal.
+  writeAppState(stateWith({ [EXPERIMENT.GOALS]: true }, {}));
+
+  const box = await mounted(undefined, {
+    model: { ...MODEL, choice: { model: "cursor/composer-2.5", effort: "default" } },
+    startsGoal: true,
+    skills: () => Promise.resolve({ skills: [] }),
+  });
+
+  const names = () =>
+    [...box.container.querySelectorAll('[role="listbox"] [role="option"]')].map(
+      (row) => row.querySelector(".ui-combobox-option-label")?.textContent,
+    );
+
+  typeInComposer(box.container, "/");
+  await settle();
+  assert.deepEqual(names(), ["/model"]);
+});
+
 test("a row of the skills' list leads with a book, says what it is for and where it comes from, and hangs the skill's card beside it", async () => {
   const box = await mounted();
   typeInComposer(box.container, "Ship it with /");
