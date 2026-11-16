@@ -127,7 +127,7 @@ import {
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import { accountExperimentOn } from "@repo/database/models/account-store";
-import { agentSandboxHeld } from "@repo/database/models/agent-sandbox-holds";
+import { agentSandboxHeld, WORK_BEATS } from "@repo/database/models/agent-sandbox-holds";
 import { agentSandboxRelease } from "@repo/database/models/agent-sandboxes";
 import {
   type Agent,
@@ -177,6 +177,7 @@ import {
   readRepositorySetup,
 } from "@repo/database/models/workspace-sandbox-script-store";
 import { type ConversationTarget, storeWriter } from "@repo/database/models/writer";
+import type { AgentSandboxBeatKind } from "@repo/database/schemas/agent-sandbox";
 import type { RunnerLineFile } from "@repo/database/schemas/runner-line";
 import {
   AGENT_PERMISSION_MODE,
@@ -194,7 +195,8 @@ import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-w
 import { causeKind, failureKind } from "@repo/runtime/effect";
 import {
   isSandboxError,
-  type Sandbox,
+  SANDBOX_STATUS,
+  Sandbox,
   type SandboxError,
   type SandboxFile,
   SandboxUnavailable,
@@ -229,7 +231,7 @@ import {
 import { AfterResponse, afterResponse } from "../../http/after-response.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { agentSpanAttributes, sentryRunnerTrace } from "../../observability/sentry.js";
-import { agentSandboxName } from "../agent-sandbox-open.js";
+import { agentSandboxName, agentSandboxOf } from "../agent-sandbox-open.js";
 import { writtenTextLine } from "../attached-files.js";
 import {
   AgentMachine,
@@ -294,7 +296,7 @@ import {
 } from "./runtime-sessions.js";
 import { nativeSkills } from "./skills.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
-import type { TurnHanded } from "./turn-context.js";
+import { handedToFreshSession, type SandboxResized, type TurnHanded } from "./turn-context.js";
 import { TURN_DELIVERY } from "./turn-delivery-bounds.js";
 import {
   coderTurnMessage,
@@ -1565,7 +1567,7 @@ export const runnerSessions = <
         const handed = Option.isSome(pending)
           ? pending.value
           : fresh
-            ? {}
+            ? handedToFreshSession(yield* readNativeTurnHanded(target))
             : yield* readNativeTurnHanded(target);
 
         const admitted: AdmittedConversation = {
@@ -3324,7 +3326,11 @@ const runnerRetiredIfIdle = (userId: string, agentId: string) =>
  * message sent while the sandbox stops is never taken by the runner the stop
  * ends, whose sandbox may run on a moment past the stop's answer.
  */
-const stoppedHolding = (machine: MachineLifecycle, unheld: UnheldSandbox) =>
+const stoppedHolding = (
+  machine: MachineLifecycle,
+  unheld: UnheldSandbox,
+  beats?: readonly AgentSandboxBeatKind[],
+) =>
   Effect.gen(function* () {
     const { userId, agentId, sessionId } = unheld;
     const found = yield* machine.findPlace(userId, sessionId);
@@ -3335,7 +3341,7 @@ const stoppedHolding = (machine: MachineLifecycle, unheld: UnheldSandbox) =>
     if (running === undefined) return false;
     const sandboxName = agentSandboxName(sessionId);
 
-    if (yield* agentSandboxHeld(sandboxName, new Date(yield* Clock.currentTimeMillis))) {
+    if (yield* agentSandboxHeld(sandboxName, new Date(yield* Clock.currentTimeMillis), beats)) {
       return false;
     }
 
@@ -3409,6 +3415,74 @@ export const sandboxStoppedIfUnheld = Effect.fn("web/sandboxStoppedIfUnheld")(fu
   const machine = yield* deploymentLifecycle;
 
   return yield* holdingRunner(unheld.agentId, stoppedHolding(machine, unheld));
+});
+
+/**
+ * Whether the session's sandbox reads stopped, asked again while it still
+ * stops (`CODER.RESUME_WHILE_ENDING`): Vercel answers a stop before its
+ * snapshot is taken, and a sandbox resumed while it stops comes back at the
+ * size it stood at, never resized (`@repo/sandbox`'s `getOrCreate`). False
+ * where it never read stopped in that wait, or could not be read.
+ */
+const settledStopped = (sessionId: string) =>
+  Effect.gen(function* () {
+    const standing = yield* agentSandboxOf(yield* Sandbox, sessionId);
+
+    return standing?.status === SANDBOX_STATUS.STOPPED;
+  }).pipe(
+    Effect.repeat({
+      schedule: Schedule.spaced(CODER.RESUME_WHILE_ENDING.SPACING),
+      times: CODER.RESUME_WHILE_ENDING.TRIES,
+      until: (stopped) => stopped,
+    }),
+    Effect.orElseSucceed(() => false),
+  );
+
+/** An agent's sandbox a change of its workspace's size names: the sandbox, and the conversation its next turn's message is composed for. */
+export interface ResizedSandbox extends UnheldSandbox {
+  readonly conversationId: string;
+}
+
+/**
+ * An agent's sandbox stopped for a change of its workspace's size, so its
+ * next message resumes it at the new size (`sandbox-machine.ts` resizes a
+ * stopped sandbox before it resumes): only where no turn of the agent's may
+ * be at work, no message waits for a launch, and nothing a member does in it
+ * holds it (a Terminal tab, port forwarding, or the Browser view), as
+ * `sandboxStoppedIfUnheld` decides, but that its chat shown, which keeps it
+ * warm for the next message alone, holds nothing here. Where it stopped,
+ * the lease is held until the sandbox reads stopped (`settledStopped`), so
+ * the next open, which waits on the lease, finds it stopped and resizes it,
+ * and only then is the agent's next turn told the size it resumes at
+ * (`turn-message.ts`), written under the same lease, so no message composed
+ * between misses it.
+ * Answers whether the sandbox was stopped.
+ */
+export const sandboxStoppedForSize = Effect.fn("web/sandboxStoppedForSize")(function* (
+  resized: ResizedSandbox,
+  size: SandboxResized,
+) {
+  const machine = yield* deploymentLifecycle;
+
+  const target: ConversationTarget = {
+    userId: resized.userId,
+    conversationId: resized.conversationId,
+  };
+
+  return yield* holdingRunner(
+    resized.agentId,
+    Effect.gen(function* () {
+      if (!(yield* stoppedHolding(machine, resized, WORK_BEATS))) return false;
+
+      // Note that the agent is told its new size only once the sandbox reads stopped, since one still stopping resumes at its old size.
+      if (yield* settledStopped(resized.sessionId)) {
+        const handed = yield* readNativeTurnHanded(target);
+        yield* recordNativeTurnHanded(target, { ...handed, resized: size });
+      }
+
+      return true;
+    }),
+  );
 });
 
 /**

@@ -41,6 +41,7 @@ import {
   EDITABLE_HEADING_LEAVE,
   EditableBlock,
   EditableHeading,
+  ERROR_STATE_PLACEMENT,
   ErrorState,
   FailureNote,
   headingCaretAtEnd,
@@ -60,6 +61,7 @@ import {
   GitPullRequestIcon,
   GLYPH,
 } from "@repo/ui/icons";
+import type { ReportedFailure } from "@repo/ui/reported-failure";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -80,14 +82,13 @@ import { useGitHubConnection } from "../github-connect.js";
 import { OPEN_SETTINGS_LABEL, useOpenSettings } from "../open-settings.js";
 import { useToast, useWithdrawToast } from "../toast.js";
 import { PULL_REQUEST_TONE, PullRequestMark } from "./pull-request-mark.js";
-import { usePullRequestNumber } from "./pull-request-number.js";
-import { agentPullRequestWrite, usePullRequestSource } from "./pull-request-source.js";
+import { usePullRequestSource, writeScopeOf } from "./pull-request-source.js";
 import { useOpenWorkspaceGitHub } from "./repository-remedy.js";
 
 /**
- * pull-request-writes.tsx -- the changes a member makes to an agent's pull request from its Pull request tab, and what the tab says of each: the pill's menu of where the pull request stands, and the line over the header where GitHub would not take one.
+ * pull-request-writes.tsx -- the changes a member makes to a pull request from its Pull request tab, and what the tab says of each: the pill's menu of where the pull request stands, and the line over the header where GitHub would not take one.
  *
- * Every change is one act (`AGENTS_PULL_REQUEST_ACTION`), which the
+ * Every change is one act (`PULL_REQUESTS_ACTION`), which the
  * service makes on GitHub as the member pressing it, on their own GitHub
  * sign-in and never as our GitHub App (`pull-request-write-wire.ts`).
  * One is out at a time; while it is, the controls that would send another
@@ -299,29 +300,34 @@ export function noteOf(
   }
 }
 
+/** What a change made outside a Pull request tab answers: it never left, since nothing names the pull request it would go to. */
+const NO_SOURCE_WRITE = (): Promise<AgentPullRequestWriteAnswerView> =>
+  Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+
 /**
- * The agent's pull request's changes, one at a time, a press while one is
- * out doing nothing; once GitHub
- * answers, whether it took the change or refused it, `onWritten` asks the
- * tab's reads again, and the change stays out until they land. A change goes through the source of the tab around it
- * (`pull-request-source.ts`), or, drawn outside one, to the agent named.
+ * The changes to the pull request of the tab around, one at a time, a
+ * press while one is out doing nothing; once GitHub answers, whether it
+ * took the change or refused it, `onWritten` asks the tab's reads again,
+ * and the change stays out until they land. A change goes through the
+ * source of the tab around it (`pull-request-source.ts`); drawn outside
+ * one, it goes nowhere and says it was not answered.
  */
-export function usePullRequestWrites(agentId: string, onWritten: ReadAgain): PullRequestWrites {
-  const number = usePullRequestNumber();
+export function usePullRequestWrites(onWritten: ReadAgain): PullRequestWrites {
   const source = usePullRequestSource();
-  const send = source?.write ?? agentPullRequestWrite(agentId, number);
+
+  const send: (request: PullRequestActionRequest) => Promise<AgentPullRequestWriteAnswerView> =
+    source?.write ?? NO_SOURCE_WRITE;
+
   const queryClient = useQueryClient();
+  const scope = source === undefined ? undefined : writeScopeOf(source.pullRequest);
 
   // Note that every change to one pull request is keyed alike, so each control refuses to send while any is out (`isMutating`), and runs in order under one scope where two land in one tick.
-  const mutationKey = useMemo(
-    () => [ACT_KIND.AGENTS_PULL_REQUEST_ACTION, agentId, number] as const,
-    [agentId, number],
-  );
+  const mutationKey = useMemo(() => [ACT_KIND.PULL_REQUESTS_ACTION, scope] as const, [scope]);
 
   // Note that the change is one mutation through GitHub's answer and the reads it asks again, so it stays pending until they land.
   const change = useMutation({
     mutationKey,
-    scope: { id: agentId },
+    ...(scope === undefined ? undefined : { scope: { id: scope } }),
     mutationFn: async (request: PullRequestActionRequest) => {
       const answer = await send(request).catch(
         (): AgentPullRequestWriteAnswerView => ({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
@@ -613,6 +619,51 @@ export function PullRequestStateMenu({
   );
 }
 
+/** Opens where the workspace of the task around is given the repository again: its GitHub in Settings, or the listed workspace's where the place names no task. */
+function useOpenRepositoryAccess(): () => void {
+  const openSettings = useOpenSettings();
+  const openWorkspaceGitHub = useOpenWorkspaceGitHub();
+  const place = useContext(WritePlaceContext);
+
+  // Note that a task's workspace is the task's to name, and a place on none is the listed workspace's.
+  return () =>
+    place?.taskId === null || place?.taskId === undefined
+      ? openSettings({
+          page: SETTINGS_VIEW.WORKSPACE,
+          section: SETTINGS_SECTION.GITHUB_REPOSITORIES,
+        })
+      : openWorkspaceGitHub(place.taskId);
+}
+
+/** What a Pull request tab whose workspace cannot reach the pull request's repository says in the place of the pull request. */
+const UNREACHABLE_WORDS = `${PRODUCT_NAME} cannot reach this pull request's repository on GitHub.`;
+
+/**
+ * A pull request whose repository the workspace holding its tab does not
+ * reach, in the tab's place: why, and the press that gives the workspace
+ * the repository (its GitHub in Settings), beside Try again.
+ */
+export function PullRequestUnreachable({
+  failure,
+  onRetry,
+}: {
+  failure: ReportedFailure;
+  onRetry: () => void;
+}): React.JSX.Element {
+  const openAccess = useOpenRepositoryAccess();
+
+  return (
+    <ErrorState
+      exit={{ label: OPEN_SETTINGS_LABEL, onClick: openAccess }}
+      onRetry={onRetry}
+      failure={failure}
+      placement={ERROR_STATE_PLACEMENT.CENTERED}
+    >
+      {UNREACHABLE_WORDS}
+    </ErrorState>
+  );
+}
+
 /**
  * The line where GitHub did not take the last change: why, the sign-in
  * that mends it where that is why, and its dismissal. It stands over the
@@ -632,19 +683,7 @@ export function PullRequestWriteNote({
   className?: string;
 }): React.JSX.Element | null {
   const { connect } = useGitHubConnection();
-  const openSettings = useOpenSettings();
-  const openWorkspaceGitHub = useOpenWorkspaceGitHub();
-  const place = useContext(WritePlaceContext);
-
-  // Note that a task's workspace is the task's to name, and a place on none is the listed workspace's.
-  const openAccess = () =>
-    place?.taskId === null || place?.taskId === undefined
-      ? openSettings({
-          page: SETTINGS_VIEW.WORKSPACE,
-          section: SETTINGS_SECTION.GITHUB_REPOSITORIES,
-        })
-      : openWorkspaceGitHub(place.taskId);
-
+  const openAccess = useOpenRepositoryAccess();
   const { note, dismiss } = writes;
 
   if (note === undefined) return null;

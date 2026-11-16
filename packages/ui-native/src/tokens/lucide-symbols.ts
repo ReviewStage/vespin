@@ -101,6 +101,7 @@ export const LUCIDE_SYMBOL = {
   NETWORK: "Network",
   OCTAGON_MINUS: "OctagonMinus",
   PANEL_LEFT: "PanelLeft",
+  PAUSE: "Pause",
   PAPERCLIP: "Paperclip",
   PENCIL: "Pencil",
   PENCIL_LINE: "PencilLine",

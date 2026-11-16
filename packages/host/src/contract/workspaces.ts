@@ -29,6 +29,7 @@ import {
   workspaceEnvironmentAnswerSchema,
   workspaceVariableDeleteRequestSchema,
   workspaceVariablePutRequestSchema,
+  workspaceVariablesSaveRequestSchema,
 } from "@repo/features/workspace-environment-wire";
 import { workspaceInvitationSchema } from "@repo/features/workspace-invitation-wire";
 import {
@@ -244,6 +245,13 @@ export const WORKSPACE_ACTS = declaredActs({
     input: workspaceVariablePutRequestSchema,
     output: workspaceEnvironmentAnswerSchema,
     refusal: "Could not save that variable on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+  }),
+  WORKSPACE_ENVIRONMENT_SAVE: hostAct({
+    input: workspaceVariablesSaveRequestSchema,
+    output: workspaceEnvironmentAnswerSchema,
+    refusal: "Could not save those variables on this system.",
     panelOnly: true,
     door: ACT.REMOTE_WORK,
   }),
