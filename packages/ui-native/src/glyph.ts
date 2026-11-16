@@ -1,5 +1,6 @@
 // glyph.ts -- every glyph the app draws, by what it marks: the panel's own Lucide glyph for each place and its own task status marks from the app's asset catalog, and the few iOS draws its own way as SF Symbols.
 
+import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
 import {
   TASK_SECTION_GLYPH,
   TASK_SECTION_ICON_KIND,
@@ -56,7 +57,7 @@ const system = (name: SfSymbol): Glyph => name as Glyph;
  * icons are the desktop's), written into the asset catalog as a custom
  * symbol by `@repo/brand`, so it sizes with Dynamic Type and weighs with its
  * words as an SF Symbol does. An SF Symbol stays only where iOS draws the
- * thing its own way (Share) or where the panel draws a mark of its own rather
+ * thing its own way (Share, and a sheet's close) or where the panel draws a mark of its own rather
  * than a Lucide glyph (a check box, a face, an MCP server, and the panel's
  * product mark), whose drawings are SF Symbols' nearest. A task's status
  * ring is the panel's own mark, written into the asset catalog from the
@@ -94,6 +95,7 @@ export const GLYPH = {
   NO_REPOSITORY: lucide(LUCIDE_SYMBOL.FOLDER_X),
   SKILL: lucide(LUCIDE_SYMBOL.BOOK_OPEN),
   MEMORY: lucide(LUCIDE_SYMBOL.LIGHTBULB),
+  CLOUD: lucide(LUCIDE_SYMBOL.CLOUD),
   HOST: lucide(LUCIDE_SYMBOL.SERVER),
   MAC: lucide(LUCIDE_SYMBOL.LAPTOP),
   ISSUE_OPEN: lucide(LUCIDE_SYMBOL.CIRCLE_DOT),
@@ -166,6 +168,11 @@ export const GLYPH = {
   UNPIN: lucide(LUCIDE_SYMBOL.PIN_OFF),
   MARK_READ: lucide(LUCIDE_SYMBOL.MAIL_OPEN),
   MARK_UNREAD: lucide(LUCIDE_SYMBOL.MAIL),
+  /** A draft's header, by where it goes: an email, and one with no place named. */
+  DRAFT_EMAIL: lucide(LUCIDE_SYMBOL.MAIL),
+  DRAFT_WRITTEN: lucide(LUCIDE_SYMBOL.PEN_LINE),
+  /** A Slack draft's header, where the panel draws Slack's own mark, which no glyph set holds: a message's bubble, the nearest. */
+  DRAFT_SLACK: system("bubble.left"),
   MARK_ALL_READ: lucide(LUCIDE_SYMBOL.CHECK_CHECK),
   SELECT: lucide(LUCIDE_SYMBOL.LIST_CHECKS),
   ARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE),
@@ -209,8 +216,9 @@ export const GLYPH = {
   JUMP_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
   FOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_RIGHT),
   UNFOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
-  // iOS's own: Share is the system's act, a Settings row's chevron is the one iOS draws at a row that goes on, and the composer's Stop is the panel's filled square.
+  // iOS's own: Share is the system's act, a sheet closes with the system's round ✕ (its close role, as Calendar and Reminders close one), a Settings row's chevron is the one iOS draws at a row that goes on, and the composer's Stop is the panel's filled square.
   SHARE: system("square.and.arrow.up"),
+  CLOSE: system("xmark"),
   // A split view's expand, which stands the page alone across the window and back, is the system's own, as Mail draws it.
   EXPAND: system("arrow.up.left.and.arrow.down.right"),
   COLLAPSE: system("arrow.down.right.and.arrow.up.left"),
@@ -218,10 +226,14 @@ export const GLYPH = {
   FILTER: system("line.3.horizontal.decrease.circle"),
   FILTERED: system("line.3.horizontal.decrease.circle.fill"),
   DISCLOSURE: system("chevron.forward"),
+  // A sheet's step back to the step before it, the back chevron iOS draws in a navigation bar.
+  BACK: system("chevron.backward"),
   // A Settings row that leaves the app ends in iOS's own small arrow out, and a row that opens a menu in its up-and-down chevron, as a menu picker's value does.
   GOES_OUT: system("arrow.up.forward"),
   MENU_OPENS: system("chevron.up.chevron.down"),
   STOP_TURN: system("stop.fill"),
+  // A sheet's confirm, the system's checkmark in its prominent bar button, as iOS 26's own sheets close on it.
+  CONFIRM: system("checkmark"),
   // A task's status ring, the panel's own mark.
   STATUS_BACKLOG: statusMark(TASK_STATUS_SYMBOL.BACKLOG),
   STATUS_TODO: statusMark(TASK_STATUS_SYMBOL.TODO),
@@ -269,6 +281,20 @@ const SECTION_GLYPH: Readonly<Record<TaskSectionGlyph, Glyph>> = {
 /** Whether a glyph's name is one the section icon picker suggests. */
 function isSectionGlyph(name: string): name is TaskSectionGlyph {
   return Object.hasOwn(SECTION_GLYPH, name);
+}
+
+/**
+ * Where an agent runs, as the panel's runs-on mark draws it (`runs-on.tsx`):
+ * the cloud's glyph, a Linux server's, or the laptop for a Mac and for a
+ * device whose platform isn't known, as the panel draws a teammate's.
+ */
+export function runsOnGlyph(place: {
+  readonly cloud: boolean;
+  readonly platform?: DevicePlatform | undefined;
+}): Glyph {
+  if (place.cloud) return GLYPH.CLOUD;
+
+  return place.platform === DEVICE_PLATFORM.LINUX ? GLYPH.HOST : GLYPH.MAC;
 }
 
 /**
