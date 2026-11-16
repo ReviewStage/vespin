@@ -367,6 +367,7 @@ it.effect(
 it.effect("cancels the run going on a Stop, and ends the launch stopped", () =>
   Effect.gen(function* () {
     const service = fakeService("I");
+
     const { cursor, write, run } = yield* launch(
       [{ messages: RECORDED_TURN, held: true }],
       service,
