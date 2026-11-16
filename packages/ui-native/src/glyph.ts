@@ -216,6 +216,9 @@ export const GLYPH = {
   JUMP_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
   FOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_RIGHT),
   UNFOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
+  // The Inbox's pager in an open thread's bar, as the panel's K and J and Mail's message arrows.
+  PREVIOUS_ITEM: lucide(LUCIDE_SYMBOL.CHEVRON_UP),
+  NEXT_ITEM: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
   // iOS's own: Share is the system's act, a sheet closes with the system's round ✕ (its close role, as Calendar and Reminders close one), a Settings row's chevron is the one iOS draws at a row that goes on, and the composer's Stop is the panel's filled square.
   SHARE: system("square.and.arrow.up"),
   CLOSE: system("xmark"),
