@@ -85,6 +85,8 @@ import {
   transcriptOriginOf,
   useAnnounced,
   useColors,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
   withSending,
   withWaitingLine,
 } from "@repo/ui-native";
@@ -139,9 +141,7 @@ import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { PageScreen } from "./page-screens.js";
 
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
@@ -998,7 +998,8 @@ export function AgentConversation({
       onOpenLink={openLink}
       onToggle={(item) => setToggles((held) => toggledAt(held, item))}
       onOpenPage={openPage}
-      mediaSource={(pictureId) => media.get(pictureId)}
+      mediaSource={(pictureId) => media.sources.get(pictureId)}
+      onRetryMedia={media.retry}
       onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
       onOpenAddress={openInSafari}
       onOpenPullRequest={(item) => openPullRequest(item.number)}

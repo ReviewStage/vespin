@@ -1,6 +1,7 @@
 // detail-stack.ts -- the pages each place pushes over its detail inside the detail's own column, in a window wide enough for three columns, as Mail opens a message's related pages beside its list with a Back there.
 
 import { IOS_TAB, type IosTab, iosRouteOnTab } from "@repo/features/ios-app-links";
+import { useThreeColumns } from "@repo/ui-native";
 import { type Href, useFocusEffect, useIsFocused, useRouter } from "expo-router";
 import {
   createContext,
@@ -18,7 +19,6 @@ import {
   type SidebarPlace,
 } from "./screens/app-sidebar.js";
 import { useOwnTab } from "./tab-route.js";
-import { useThreeColumns } from "./use-window-size-class.js";
 
 /** What a page pushed over the detail is, as the route a compact window pushes for it names it. */
 export const PUSHED_PAGE = {

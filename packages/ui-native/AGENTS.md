@@ -45,8 +45,11 @@ builds a control of its own.
   answer's fields, and `AskNote` for what a send that did not go said),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
   for its checks and reviewers, `WriteNoteRow`, `MergeActRow` for its
-  merge under its heading), `ConfirmAsk` (the system's
-  alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
+  merge under its heading), `ConfirmAsk` (the question
+  an act asks first: the system's action sheet from the screen's foot in a
+  compact window, its act first, and its alert in a regular one or where
+  words must be typed), `WordsAsk` (the system's alert words are typed in,
+  such as an invitation's address), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a form's words,
   pictures and choices, `ComposeSheet` for a sheet that starts work (its
   words filling the page, and the + and `MenuChip` capsule menus over the
@@ -190,9 +193,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   small and inline, since its bar also holds the switcher, ⋯ and the
   sidebar button. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading
-  under it; a split view's detail column draws the same path in its bar. A
-  thread's path opens its task and its agent, as the panel's crumbs do: in a
-  split view's bar the path is a menu of them under a small chevron, as iOS's
+  under it; a split view's detail column draws the same path in its bar, but
+  for a thread's, which heads the page over its title (`pathInHead`), so the
+  column's narrow bar holds the thread's acts and the path's words stand uncut.
+  A thread's path opens its task and its agent, as the panel's crumbs do: in a
+  split view the path is a menu of them under a small chevron, as iOS's
   title menus stand (`PathTitle`'s `actions`), and in a compact window, whose
   stack's title holds no menu, they lead its ⋯ menu. An
   agent's page names the agent in the bar in the ink instead, as Messages
@@ -298,7 +303,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, a
   row per option checked at its end in copper once picked, as `PickRows`
   checks one, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
-  with Mark done and Couldn't do it under it; `AnswerFields`, a row per
+  with Mark done and Couldn't do it under it, at the system's regular size,
+  Mark done filled as the card's one act and Couldn't do it its words
+  alone, the two stacked past the accessibility sizes; `AnswerFields`, a row per
   field: a text or number field under its label, the field plain inside the
   card and prompting "Required" or "Optional" while empty, a number field's
   pad standing one Done over it for the card, a select's menu picker
@@ -307,8 +314,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   a `Form` scrolls on its own inside the thread's scroll; a card's hairlines
   start where its rows' words do, as iOS insets a list's separator) and the pull request
   (`PullRequestCard`: its state's glyph, its title, its lines in green and
-  red, and its acts as pills; a press on it opens its own page), each on
-  `SURFACE` inside a hairline.
+  red, and its acts as pills; a press on it opens its own page). An ask's
+  card and a file's chip stand on `CARD`, the soft gray in light, so they
+  read off the page's white as iOS's own cards do rather than by a faint
+  hairline alone; the pull request card stands on `SURFACE`; each inside a
+  hairline.
 - **A pull request's page** reads as the panel's Pull request tab, from the
   same model (`@repo/features/pull-request-model`): its state as a chip in
   GitHub's color, the merge queue's in the attention ink with its place
