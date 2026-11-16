@@ -2103,6 +2103,9 @@ export function AgentMessage({
     />
   );
 
+  // Note that a running turn with nothing to draw yet, as one the runner has just opened with only its step boundary, draws no message at all, because an empty one still stands a block's gap over the working line and moves it down as it lands.
+  if (moving && stretches.every((stretch) => stretch.rows?.length === 0)) return null;
+
   return stretches.map((stretch, index) => {
     if (stretch.line !== undefined) {
       const line = stretch.line;
