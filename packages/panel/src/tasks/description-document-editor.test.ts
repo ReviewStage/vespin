@@ -104,6 +104,7 @@ const STAND_IN: DescriptionEditorModule = {
         return { base: merged, text: merged };
       },
       chooseMention: () => undefined,
+      retypeMention: () => undefined,
       insertBlock: () => undefined,
       markdown: () => props.markdown,
       replaceAnchors: () => undefined,
@@ -229,7 +230,7 @@ function threadOn(
 
 function commentsOver(threads: readonly DescriptionCommentThread[]): DescriptionCommentsControl {
   return {
-    planId: "plan-1",
+    taskId: "plan-1",
     threads,
     read: true,
     failed: false,

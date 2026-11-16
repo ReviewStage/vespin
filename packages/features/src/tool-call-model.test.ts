@@ -10,7 +10,7 @@ import {
   toolCallView,
   toolTarget,
 } from "./tool-call-model.js";
-import { CALL_KIND, callLine, callPlace } from "./turn-rows.js";
+import { CALL_KIND, CALL_MARK, callLine, callPlace } from "./turn-rows.js";
 
 const ESCAPE = String.fromCharCode(27);
 
@@ -54,7 +54,7 @@ test("a command the model described carries its description on one line for the 
   }
 });
 
-test("a browser call says what it did and in which tab, by the title its answer gives, with where it ran beside it; while it runs it names the page it went to, and a call that ran nothing says why", () => {
+test("a browser call says what it did and in which tab, by the title its answer gives, or in the browser where it names no tab; while it runs it names the page it went to, and a call that ran nothing says why", () => {
   const input = {
     actions: [
       { action: "click", tab: "tab-1", ref: "e12" },
@@ -76,7 +76,6 @@ test("a browser call says what it did and in which tab, by the title its answer 
 
   const line = callLine(done.kind, done.subject, done.description);
   assert.deepEqual(line, { verb: "Clicked, typed in", subject: "Sign in · Acme", code: false });
-  assert.equal(callPlace(done.kind), "Browser");
 
   const running = toolCallView({
     tool: "browser",
@@ -99,7 +98,7 @@ test("a browser call says what it did and in which tab, by the title its answer 
   });
 
   assert.deepEqual(callLine(refused.kind, refused.subject, refused.description), {
-    verb: "Listed the tabs",
+    verb: "Listed the tabs in the browser",
     subject: "",
     code: false,
   });
@@ -126,7 +125,7 @@ test("a computer call says what it did to which app, by the name the Mac gave it
     code: false,
   });
   assert.equal(done.appIcon, "icon-1");
-  assert.equal(callPlace(done.kind), "On your Mac");
+  assert.equal(callPlace(done, CALL_MARK.LEADS), "On your Mac");
 
   const running = toolCallView({
     tool: "computer",
@@ -140,6 +139,31 @@ test("a computer call says what it did to which app, by the name the Mac gave it
     code: false,
   });
   assert.equal(running.appIcon, undefined);
+});
+
+test("an MCP call names where it ran only where its row's mark does not say it: the account among several, or a server of no integration's; a copy, with no mark, names the server", () => {
+  const remote = (account?: string) =>
+    toolCallView({
+      tool: "linear_remote",
+      input: {
+        remoteTool: "list_issues",
+        parentCallId: "wrapper",
+        input: {},
+        ...(account === undefined ? undefined : { account }),
+      },
+      output: undefined,
+    });
+
+  const several = remote("Acme");
+  const lone = remote();
+  const unknown = toolCallView({ tool: "mcp__docs__search", input: {}, output: undefined });
+
+  assert.equal(callPlace(several, CALL_MARK.LEADS), "Acme");
+  assert.equal(callPlace(several, CALL_MARK.NONE), "Linear · Acme");
+  assert.equal(callPlace(lone, CALL_MARK.LEADS), undefined);
+  assert.equal(callPlace(lone, CALL_MARK.NONE), "Linear");
+  assert.equal(callPlace(unknown, CALL_MARK.LEADS), "docs");
+  assert.equal(callPlace(unknown, CALL_MARK.NONE), "docs");
 });
 
 test("a command run on the Mac is the command it ran, described as a command is, and its answer says how it ended: its exit, its timeout, or why it was not run", () => {
@@ -1273,14 +1297,32 @@ test("a post to the inbox opens the Inbox on the item it posted, by the thread i
   assert.deepEqual(target("read_inbox", {}), { kind: TOOL_TARGET.INBOX });
   assert.deepEqual(target("list_threads", {}), { kind: TOOL_TARGET.INBOX });
 
-  const read = toolCallView({
+  const readCall = {
     tool: "read_thread",
+    callId: "call-read",
     input: { threadId: "item-1" },
-    output: { status: "accepted", thread: { id: "item-1", title: "Invite expiry" } },
-  });
+    output: {
+      status: "accepted",
+      thread: { id: "item-1", key: "invite-ttl", title: "Invite expiry" },
+    },
+  };
+
+  const read = toolCallView(readCall);
 
   assert.equal(read.kind, CALL_KIND.INBOX_THREAD_READ);
   assert.equal(read.subject, "Invite expiry");
+  assert.deepEqual(toolTarget(readCall), {
+    kind: TOOL_TARGET.INBOX,
+    key: "invite-ttl",
+    item: "item-1",
+  });
+  assert.deepEqual(
+    toolTarget({
+      ...readCall,
+      output: { thread: { id: "item-2", key: "theirs", agentId: "agent-2" } },
+    }),
+    { kind: TOOL_TARGET.INBOX },
+  );
 });
 
 test("withdraw_ask is a row naming the thread's key and saying why, opening the Inbox on its item, and the retired reply_inbox and close_inbox_item still draw as they did", () => {

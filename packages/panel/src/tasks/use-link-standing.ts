@@ -11,13 +11,15 @@ import {
   linkStandingOf,
 } from "@repo/features/link-standing-model";
 import { MENTION_KIND, type Mention, type NumberedTaskIdOf } from "@repo/features/mention-link";
-import type { TasksView } from "@repo/features/tasks-view";
+import type { TaskSummary } from "@repo/features/task-wire";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
-import type { AppStateSnapshot } from "@repo/host/app-state";
+import type { TaskListCollections } from "@repo/host/task-list-following";
+import { and, eq, useLiveQuery } from "@tanstack/react-db";
 import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useMemo } from "react";
 import { linkStandingQuery } from "../live-reads.js";
-import { appStateIn, appStateQuery } from "../use-app-state.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import { appStateIn, appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { useTaskFound } from "./use-task-outside.js";
 
 /**
@@ -74,53 +76,42 @@ function connectedFor(workspace: Workspace | undefined): workspace is Workspace 
   return workspace?.github?.active === true;
 }
 
-/** What of the tasks a chip's workspace is found by: the workspaces, and the tasks that name theirs. */
-type WorkspacePlaces = Pick<TasksView, "workspaces" | "tasks">;
-
-/**
- * The workspaces and tasks of the document, which tells the chips only as
- * either moves, so a transcript of chips is not drawn again for each word an
- * agent streams into the slice beside them.
- */
-const selectWorkspacePlaces = (state: AppStateSnapshot): WorkspacePlaces => ({
-  workspaces: state.tasks.workspaces,
-  tasks: state.tasks.tasks,
-});
-
-/** The workspaces and tasks of the document (`selectWorkspacePlaces`); none before the first read. */
-function useWorkspacePlaces(): WorkspacePlaces | undefined {
-  return useQuery({ ...appStateQuery, select: selectWorkspacePlaces }).data;
+/** The workspaces of the document; none before the first read. */
+function useWorkspaces(): readonly Workspace[] | undefined {
+  return useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
 }
 
 /** The workspace of the task given, else the one named by its id; none where neither is listed. */
 function workspaceOf(
-  planning: WorkspacePlaces | undefined,
-  taskId: string | undefined,
+  workspaces: readonly Workspace[] | undefined,
+  task: TaskSummary | undefined,
   namedId: string | undefined,
 ): Workspace | undefined {
-  const workspaces = planning?.workspaces ?? [];
-
-  const taskWorkspaceId =
-    taskId === undefined
-      ? undefined
-      : planning?.tasks.find((task) => task.id === taskId)?.workspaceId;
+  const listed = workspaces ?? [];
 
   return (
-    workspaces.find((each) => each.id === taskWorkspaceId) ??
-    workspaces.find((each) => each.id === namedId)
+    listed.find((each) => each.id === task?.workspaceId) ??
+    listed.find((each) => each.id === namedId)
   );
 }
 
 /** The workspace the words a chip stands in are of: the plan's, else the one the place drawing them names, else the one their mentions are written under; none where they name none. */
 function wordsWorkspace(
-  planning: WorkspacePlaces | undefined,
+  workspaces: readonly Workspace[] | undefined,
+  task: TaskSummary | undefined,
   where: ChipWhere,
   namedId: string | undefined,
 ): Workspace | undefined {
   return (
-    workspaceOf(planning, where.taskId, namedId) ??
-    workspaceOfSlug(planning?.workspaces ?? [], where.workspace)
+    workspaceOf(workspaces, task, namedId) ?? workspaceOfSlug(workspaces ?? [], where.workspace)
   );
+}
+
+/** The workspace the words a chip stands in are of (`wordsWorkspace`), its plan read by id from the task list's collections. */
+export function useWordsWorkspace(where: ChipWhere): Workspace | undefined {
+  const task = useTaskListRow(useTaskListCollections().tasks, where.taskId);
+
+  return wordsWorkspace(useWorkspaces(), task, where, useContext(WordsWorkspaceContext));
 }
 
 /**
@@ -135,41 +126,65 @@ export function useNumberedTaskId(
   workspace: string,
   number: number | undefined,
 ): string | undefined {
-  const planning = useWorkspacePlaces();
+  const workspaces = useWorkspaces();
+  const { tasks } = useTaskListCollections();
+  const named = workspaces === undefined ? undefined : workspaceOfSlug(workspaces, workspace);
+  const namedId = named?.id;
 
-  const listed =
-    number === undefined ? undefined : numberedTaskIdIn(planning, { workspace, number });
+  const { data: numbered, isReady } = useLiveQuery((q) =>
+    namedId === undefined || number === undefined
+      ? undefined
+      : q
+          .from({ task: tasks })
+          .where(({ task }) => and(eq(task.workspaceId, namedId), eq(task.number, number)))
+          .findOne(),
+  );
+
+  const listed = numbered?.id;
 
   // Note that the service is asked only once the window's list stands and lists no such task, so nothing is asked while every task is live.
-  const asked = planning !== undefined && listed === undefined && number !== undefined;
+  const asked =
+    workspaces !== undefined &&
+    number !== undefined &&
+    (namedId === undefined || (isReady && listed === undefined));
+
   const found = useTaskFound(asked ? { workspace, number } : undefined);
 
   return listed ?? found;
 }
 
-/** The id of the task a link names by its number among the tasks `planning` lists (`useNumberedTaskId`); none where it lists none. */
+/** The id of the task a link names by its number among the tasks `tasks` lists in the workspaces given (`useNumberedTaskId`); none where it lists none. */
 function numberedTaskIdIn(
-  planning: WorkspacePlaces | undefined,
+  workspaces: readonly Workspace[] | undefined,
+  tasks: TaskListCollections["tasks"],
   { workspace, number }: { readonly workspace: string; readonly number: number },
 ): string | undefined {
-  if (planning === undefined) return undefined;
-  const named = workspaceOfSlug(planning.workspaces, workspace);
+  if (workspaces === undefined) return undefined;
+  const named = workspaceOfSlug(workspaces, workspace);
 
   if (named === undefined) return undefined;
 
-  return planning.tasks.find((task) => task.workspaceId === named.id && task.number === number)?.id;
+  for (const task of tasks.values()) {
+    if (task.workspaceId === named.id && task.number === number) return task.id;
+  }
+
+  return undefined;
 }
 
-/** The id of the task a link names by its number among the tasks the document `client` holds lists now (`useNumberedTaskId`), for a press that cannot wait a render; nothing redraws for it. */
-export function numberedTaskIdNow(client: QueryClient): NumberedTaskIdOf {
-  return (task) => numberedTaskIdIn(appStateIn(client)?.tasks, task);
+/** The id of the task a link names by its number among the tasks the window lists now (`useNumberedTaskId`), the workspaces read off the document `client` holds, for a press that cannot wait a render; nothing redraws for it. */
+export function numberedTaskIdNow(
+  client: QueryClient,
+  collections: TaskListCollections,
+): NumberedTaskIdOf {
+  return (task) => numberedTaskIdIn(appStateIn(client)?.tasks.workspaces, collections.tasks, task);
 }
 
-/** How the id of the task a link names by its number is found among the tasks the window lists (`useNumberedTaskId`), for words pasted. */
+/** How the id of the task a link names by its number is found among the tasks the window lists (`useNumberedTaskId`), for words pasted, read as they are pasted. */
 export function useNumberedTaskIdOf(): NumberedTaskIdOf {
-  const planning = useWorkspacePlaces();
+  const workspaces = useWorkspaces();
+  const { tasks } = useTaskListCollections();
 
-  return (task) => numberedTaskIdIn(planning, task);
+  return (task) => numberedTaskIdIn(workspaces, tasks, task);
 }
 
 /** The places a task's links name it in, which a link written by the task's number names it in too. */
@@ -188,29 +203,31 @@ const NUMBERED_PLACES: ReadonlySet<LinkDestination["kind"]> = new Set([
  * task only in its own workspace; any other place as it is.
  */
 function numberedPlaceIn(
-  planning: WorkspacePlaces | undefined,
+  workspaces: readonly Workspace[] | undefined,
+  tasks: TaskListCollections["tasks"],
   place: LinkDestination,
   workspace: string,
 ): LinkDestination {
-  if (!NUMBERED_PLACES.has(place.kind) || !("planId" in place)) return place;
-  const task = planning?.tasks.find((each) => each.id === place.planId);
+  if (!NUMBERED_PLACES.has(place.kind) || !("taskId" in place)) return place;
+  const task = tasks.get(place.taskId);
 
-  if (planning === undefined || task?.number === undefined) return place;
-  const home = workspaceOfSlug(planning.workspaces, workspace);
+  if (workspaces === undefined || task?.number === undefined) return place;
+  const home = workspaceOfSlug(workspaces, workspace);
 
   return home?.id === task.workspaceId ? withTaskId(place, taskLinkStep(task)) : place;
 }
 
-/** How a place's link is written by its task's number where the window lists one (`numberedPlaceIn`), as Copy link writes it. */
+/** How a place's link is written by its task's number where the window lists one (`numberedPlaceIn`), as Copy link writes it, read as it is written. */
 export function useNumberedPlace(): (place: LinkDestination, workspace: string) => LinkDestination {
-  const planning = useWorkspacePlaces();
+  const workspaces = useWorkspaces();
+  const { tasks } = useTaskListCollections();
 
-  return (place, workspace) => numberedPlaceIn(planning, place, workspace);
+  return (place, workspace) => numberedPlaceIn(workspaces, tasks, place, workspace);
 }
 
 /** The id of the workspace the words a chip stands in are of (`wordsWorkspace`); none where they name none. */
 export function useWordsWorkspaceId(where: ChipWhere): string | undefined {
-  return wordsWorkspace(useWorkspacePlaces(), where, useContext(WordsWorkspaceContext))?.id;
+  return useWordsWorkspace(where)?.id;
 }
 
 /**
@@ -248,7 +265,7 @@ function useStandingAt(
 
 /** What GitHub holds of the page a link mention names, through the workspace `where` stands in (`useStandingAt`). */
 export function useLinkStanding(mention: Mention, where: ChipWhere): LinkStanding | undefined {
-  const workspace = wordsWorkspace(useWorkspacePlaces(), where, useContext(WordsWorkspaceContext));
+  const workspace = useWordsWorkspace(where);
 
   return useStandingAt(workspace, githubAddressOf(mention));
 }
@@ -258,7 +275,8 @@ export function usePlaceStanding(
   place: { readonly taskId: string | null; readonly workspaceId?: string | undefined },
   address: string | undefined,
 ): LinkStanding | undefined {
-  const workspace = workspaceOf(useWorkspacePlaces(), place.taskId ?? undefined, place.workspaceId);
+  const task = useTaskListRow(useTaskListCollections().tasks, place.taskId ?? undefined);
+  const workspace = workspaceOf(useWorkspaces(), task, place.workspaceId);
 
   return useStandingAt(workspace, address);
 }

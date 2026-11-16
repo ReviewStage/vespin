@@ -239,6 +239,15 @@ export const AGENT_ACT_KIND = {
   MACHINES_RETRY: "machines.retry",
   MACHINES_CHANGE: "machines.change",
   MACHINES_REMOVE: "machines.remove",
+  /**
+   * The asks the account's machines hold for its answer: held for the
+   * window while it holds the stream open and a while after, read again at
+   * once as Try again asks, and one answered from this device. What it
+   * holds reaches the panel on app state (`LIVE_READ.MACHINE_ASKS`).
+   */
+  MACHINE_ASKS_FOLLOW: "machineAsks.follow",
+  MACHINE_ASKS_RETRY: "machineAsks.retry",
+  MACHINE_ASK_ANSWER: "machineAsks.answer",
   /** Run agents on this Mac turned on or off, from This Mac's row in Settings › Hosts; only the desktop answers it. */
   HOSTS_THIS_MAC_SET: "hosts.thisMacSet",
   HOSTS_PAIRING_READ: "hosts.pairingRead",
@@ -404,6 +413,10 @@ export const CHAPTERS_ACT_KIND = {
   CHAPTERS_FOLLOW: "chapters.follow",
   CHAPTERS_RETRY: "chapters.retry",
   CHAPTERS_GENERATE: "chapters.generate",
+  /** A pull request's chapters named by its repository and number rather than an agent, held followed as the agent's are (`LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS`), read again, and generated. */
+  CHAPTERS_REPOSITORY_FOLLOW: "chapters.repositoryFollow",
+  CHAPTERS_REPOSITORY_RETRY: "chapters.repositoryRetry",
+  CHAPTERS_REPOSITORY_GENERATE: "chapters.repositoryGenerate",
 } as const;
 
 /**
@@ -629,11 +642,11 @@ export const TASKS_ACT_KIND = {
    * One task's description held followed while the window holds the stream open
    * for the task it has open, and a while after among those let go lately:
    * what it holds reaches the panel on app state
-   * (`LIVE_READ.DESCRIPTION_DOCUMENT`), so the stream carries nothing.
+   * (`LIVE_READ.HELD_TASK`), so the stream carries nothing.
    */
-  TASKS_DOCUMENT_FOLLOW: "tasks.documentFollow",
+  TASKS_HELD_FOLLOW: "tasks.heldFollow",
   /** A held task's description, which the panel reads on app state, read again at once, as Try again asks. */
-  TASKS_DOCUMENT_RETRY: "tasks.documentRetry",
+  TASKS_HELD_RETRY: "tasks.heldRetry",
   /**
    * One task's description history held followed while the window holds the stream
    * open for its version history, and a while after among those let go
@@ -756,6 +769,23 @@ const MACHINE_COMMAND_ACT_KIND = {
 const PORT_FORWARD_ACT_KIND = {
   PORT_FORWARD_SET: "portForward.set",
   PORT_SHARE_SET: "portForward.share",
+} as const;
+
+/**
+ * A Pull request tab's pull request named by its repository and number
+ * rather than an agent: its parts held while the tab shows them, which
+ * reach the panel on app state (`LIVE_READ.REPOSITORY_PULL_REQUEST` and its
+ * siblings), and read again as Try again asks; its changed files and an
+ * image its overview names, fetched by the host under the account, so the
+ * window holds no bearer and no address; and one change made on GitHub as
+ * the member.
+ */
+export const PULL_REQUEST_ACT_KIND = {
+  PULL_REQUESTS_PART_FOLLOW: "pullRequests.partFollow",
+  PULL_REQUESTS_PART_RETRY: "pullRequests.partRetry",
+  PULL_REQUESTS_CHANGES: "pullRequests.changes",
+  PULL_REQUESTS_GITHUB_IMAGE: "pullRequests.githubImage",
+  PULL_REQUESTS_ACTION: "pullRequests.action",
 } as const;
 
 /**
@@ -882,11 +912,15 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_ENVIRONMENT_LIST: "workspace.environmentList",
   WORKSPACE_ENVIRONMENT_PUT: "workspace.environmentPut",
   WORKSPACE_ENVIRONMENT_DELETE: "workspace.environmentDelete",
+  WORKSPACE_ENVIRONMENT_SAVE: "workspace.environmentSave",
   /** A workspace's cloud sandbox setup, its install script and each repository's setup script, read once as Settings › Cloud environment opens; a save answers the setup as it then stands. */
   WORKSPACE_SANDBOX_SETUP_READ: "workspace.sandboxSetupRead",
   WORKSPACE_INSTALL_SCRIPT_PUT: "workspace.installScriptPut",
   WORKSPACE_REPOSITORY_SETUP_PUT: "workspace.repositorySetupPut",
   WORKSPACE_RUN_ACTIONS_PUT: "workspace.runActionsPut",
+  /** A workspace's cloud sandbox size, read once as Settings › Cloud environment opens; a choice by an owner or admin answers the size as it then stands. */
+  WORKSPACE_SANDBOX_SIZE_READ: "workspace.sandboxSizeRead",
+  WORKSPACE_SANDBOX_SIZE_PUT: "workspace.sandboxSizePut",
   /** Every pull request GitHub's merge queues hold across a workspace's repositories, read as the Merge queue page opens and again while it stands; refused while the account's Merge queue experiment is off. */
   WORKSPACE_MERGE_QUEUE_READ: "workspace.mergeQueueRead",
   /** The machines of a workspace's members, as the @ list offers them and a machine's chip names its owner, read as a place drawing them opens. */
@@ -974,6 +1008,7 @@ export const PORT_ACT_KIND = {
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
   ...PORT_FORWARD_ACT_KIND,
+  ...PULL_REQUEST_ACT_KIND,
   ...SETTINGS_ACT_KIND,
   ...TASKS_ACT_KIND,
   ...TERMINAL_ACT_KIND,
@@ -1009,8 +1044,9 @@ export type ActUse = (typeof ACT_USE)[keyof typeof ACT_USE];
  * a Terminal tab's or a live view's stream, whose bytes never reach app
  * state; `TASKS_REFRESH` is a WRITE, the task list's Try again, because the
  * host follows the list from the account gate opening and only a press asks
- * it again; `AGENTS_CHANGES`, `TASKS_TREE`, `TERMINAL_LIST`, and
- * `MAC_SHELL_ACTIONS` are FETCHes, though each answers what stands now, because each is asked again
+ * it again; `AGENTS_CHANGES`, `PULL_REQUESTS_CHANGES`, `TASKS_TREE`,
+ * `TERMINAL_LIST`, and `MAC_SHELL_ACTIONS` are FETCHes, though each answers
+ * what stands now, because each is asked again
  * whenever it is shown and nothing keeps it, as is `AGENTS_MESSAGES`, Copy
  * transcript's read on its press; `AGENTS_TRANSCRIPT_OLDER` is a WRITE,
  * because it lays an older page on the held transcript and answers only
@@ -1078,6 +1114,9 @@ export const PORT_ACT_USE = {
   MACHINES_RETRY: ACT_USE.READ,
   MACHINES_CHANGE: ACT_USE.WRITE,
   MACHINES_REMOVE: ACT_USE.WRITE,
+  MACHINE_ASKS_FOLLOW: ACT_USE.READ,
+  MACHINE_ASKS_RETRY: ACT_USE.READ,
+  MACHINE_ASK_ANSWER: ACT_USE.WRITE,
   HOSTS_THIS_MAC_SET: ACT_USE.WRITE,
   HOSTS_PAIRING_READ: ACT_USE.FETCH,
   HOSTS_ALLOWED_APPS: ACT_USE.FETCH,
@@ -1158,6 +1197,9 @@ export const PORT_ACT_USE = {
   CHAPTERS_FOLLOW: ACT_USE.READ,
   CHAPTERS_RETRY: ACT_USE.READ,
   CHAPTERS_GENERATE: ACT_USE.WRITE,
+  CHAPTERS_REPOSITORY_FOLLOW: ACT_USE.READ,
+  CHAPTERS_REPOSITORY_RETRY: ACT_USE.READ,
+  CHAPTERS_REPOSITORY_GENERATE: ACT_USE.WRITE,
 
   CLI_INSTALL: ACT_USE.WRITE,
 
@@ -1204,6 +1246,12 @@ export const PORT_ACT_USE = {
 
   PORT_FORWARD_SET: ACT_USE.WRITE,
   PORT_SHARE_SET: ACT_USE.WRITE,
+
+  PULL_REQUESTS_PART_FOLLOW: ACT_USE.READ,
+  PULL_REQUESTS_PART_RETRY: ACT_USE.READ,
+  PULL_REQUESTS_CHANGES: ACT_USE.FETCH,
+  PULL_REQUESTS_GITHUB_IMAGE: ACT_USE.FETCH,
+  PULL_REQUESTS_ACTION: ACT_USE.WRITE,
 
   SETTING_UPDATE: ACT_USE.WRITE,
   SETTINGS_RESET: ACT_USE.WRITE,
@@ -1262,8 +1310,8 @@ export const PORT_ACT_USE = {
   TASKS_PAGE_SOURCE: ACT_USE.FETCH,
   TASKS_PAGE_HTML: ACT_USE.FETCH,
   TASKS_PAGES_FOLLOW: ACT_USE.READ,
-  TASKS_DOCUMENT_FOLLOW: ACT_USE.READ,
-  TASKS_DOCUMENT_RETRY: ACT_USE.READ,
+  TASKS_HELD_FOLLOW: ACT_USE.READ,
+  TASKS_HELD_RETRY: ACT_USE.READ,
   TASKS_HISTORY_FOLLOW: ACT_USE.READ,
   TASKS_HISTORY_RETRY: ACT_USE.READ,
   TASKS_PICTURE_READ: ACT_USE.FETCH,
@@ -1340,10 +1388,13 @@ export const PORT_ACT_USE = {
   WORKSPACE_ENVIRONMENT_LIST: ACT_USE.FETCH,
   WORKSPACE_ENVIRONMENT_PUT: ACT_USE.WRITE,
   WORKSPACE_ENVIRONMENT_DELETE: ACT_USE.WRITE,
+  WORKSPACE_ENVIRONMENT_SAVE: ACT_USE.WRITE,
   WORKSPACE_SANDBOX_SETUP_READ: ACT_USE.FETCH,
   WORKSPACE_INSTALL_SCRIPT_PUT: ACT_USE.WRITE,
   WORKSPACE_REPOSITORY_SETUP_PUT: ACT_USE.WRITE,
   WORKSPACE_RUN_ACTIONS_PUT: ACT_USE.WRITE,
+  WORKSPACE_SANDBOX_SIZE_READ: ACT_USE.FETCH,
+  WORKSPACE_SANDBOX_SIZE_PUT: ACT_USE.WRITE,
   WORKSPACE_MERGE_QUEUE_READ: ACT_USE.FETCH,
   WORKSPACE_MACHINES_READ: ACT_USE.FETCH,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;

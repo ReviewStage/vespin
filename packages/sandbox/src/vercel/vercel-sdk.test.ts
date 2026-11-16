@@ -1,5 +1,5 @@
 /**
- * vercel-sdk.test.ts -- `Sandbox` as Vercel answers it, against a scripted fake of Vercel behind the SDK's `fetch`: what a failure says (the call, Vercel's status and error or the cause's, every token-shaped run redacted) and which of the package's failures Vercel's answer is; and what the adapter decides beside the SDK: a get-or-create hands a sandbox it created to its setup, and meets its name taken with the sandbox holding it, a create refuses it as taken, a sandbox or a snapshot already gone reads as gone, a delete wakes nothing, and a touch lengthens a running session alone, by the rule `TOUCH` sets.
+ * vercel-sdk.test.ts -- `Sandbox` as Vercel answers it, against a scripted fake of Vercel behind the SDK's `fetch`: what a failure says (the call, Vercel's status and error or the cause's, every token-shaped run redacted) and which of the package's failures Vercel's answer is; and what the adapter decides beside the SDK: a get-or-create hands a sandbox it created to its setup, resizes a stopped one alone, and meets its name taken with the sandbox holding it, a create refuses it as taken, a sandbox or a snapshot already gone reads as gone, a delete wakes nothing, and a touch lengthens a running session alone, by the rule `TOUCH` sets.
  */
 
 import assert from "node:assert/strict";
@@ -216,7 +216,8 @@ it.effect(
       );
       assert.equal(setUpOnFound, 0);
       assert.deepEqual(setUp, [SESSION, SESSION]);
-      assert.deepEqual(gets, ["true", "true", "true", "true"]);
+      // Each open first looks for a stopped sandbox to resize, which resumes nothing.
+      assert.deepEqual(gets, ["false", "true", "false", "true", "false", "true", "true"]);
       assert.equal(refused._tag, "SandboxNameTaken");
       assert.equal(refused.call, SANDBOX_CALL.CREATE);
 
@@ -249,6 +250,31 @@ it.effect("a get-or-create that resumes a sandbox closes the ports its last run 
 
     assert.deepEqual(patched, [{ ports: [] }]);
   }),
+);
+
+it.effect(
+  "a get-or-create resizes a stopped sandbox to the size asked before it resumes it, and leaves one up at its own",
+  () =>
+    Effect.gen(function* () {
+      let status = "stopped";
+      const resized: unknown[] = [];
+
+      const api = yield* apiOver((_url, init) => {
+        if (init.method === "PATCH") {
+          resized.push(JSON.parse(String(init.body)).resources);
+
+          return Response.json(sandboxDeleted({ ...RUNNING_SANDBOX, status, vcpus: 2 }));
+        }
+
+        return Response.json(sandboxFound({ ...RUNNING_SANDBOX, status, vcpus: 2 }));
+      });
+
+      yield* api.getOrCreate({ ...CREATE_ASK, vcpus: 4 });
+      status = "running";
+      yield* api.getOrCreate({ ...CREATE_ASK, vcpus: 8 });
+
+      assert.deepEqual(resized, [{ vcpus: 4, memory: 8192 }]);
+    }),
 );
 
 it.effect("a sandbox Vercel no longer holds is none", () =>

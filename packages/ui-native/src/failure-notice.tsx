@@ -2,15 +2,17 @@
 
 import { Host, HStack, Image, Spacer, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
 import {
+  Animation,
   accessibilityElement,
   accessibilityIdentifier,
+  animation,
   buttonStyle,
   fixedSize,
   font,
   foregroundStyle,
-  glassEffect,
   layoutPriority,
   lineLimit,
+  offset,
   padding,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -20,10 +22,11 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useState,
 } from "react";
-import { AccessibilityInfo, Animated, PanResponder, StyleSheet } from "react-native";
+import { AccessibilityInfo, Animated, PanResponder, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useReduceMotion } from "./accessibility.js";
 import {
@@ -36,7 +39,7 @@ import {
   noticeOnline,
   type ShownNotice,
 } from "./failure-notice-model.js";
-import { BAR_RADIUS } from "./glass-bar.js";
+import { useBarGlass } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { BUZZ, buzz } from "./haptics.js";
 import { useColors } from "./tokens/colors.js";
@@ -75,6 +78,8 @@ const styles = StyleSheet.create({
   edge: { position: "absolute", top: 0, left: 0, right: 0 },
   lane: { paddingHorizontal: SPACE.ROW + 2, paddingTop: SPACE.TIGHT, alignItems: "center" },
   banner: { width: "100%", maxWidth: 560 },
+  // A sheet's own frame, which its banner stands over.
+  layer: { flex: 1 },
 });
 
 /** What a screen asks of the notice. */
@@ -88,6 +93,16 @@ export interface FailureNotices {
 }
 
 const Notices = createContext<FailureNotices | undefined>(undefined);
+
+/** Where the one notice stands: the notice itself, the layer drawn last (the sheet on top), and how a layer comes and goes. */
+interface NoticeStage {
+  readonly shown: ShownNotice | undefined;
+  readonly top: string | undefined;
+  readonly gone: (serial: number) => void;
+  readonly enter: (layer: string) => () => void;
+}
+
+const Stage = createContext<NoticeStage | undefined>(undefined);
 
 /** The notice of the app drawn under `FailureNoticeProvider`. */
 export function useFailureNotices(): FailureNotices {
@@ -111,17 +126,28 @@ function noticePress(
     : { label: UNDO, identifier: "failure-notice-undo", act: notice.undo };
 }
 
-/** The banner's words, its glyph, and Try again or Undo, in the system's glass. */
+/**
+ * The banner's words, its glyph, and Try again or Undo, in the system's
+ * glass, standing `ARRIVAL` above its place until it has `arrived`, and
+ * sliding between the two. Note that SwiftUI slides it, not React Native,
+ * because its accessibility frames stay where its host was laid out: a
+ * React Native transform moved what was drawn but left Undo's frame above
+ * the screen's top, so a tap aimed by it, as Maestro aims one, landed on the
+ * status bar.
+ */
 function NoticeBody({
   notice,
+  arrived,
   onPress,
 }: {
   readonly notice: ShownNotice;
+  readonly arrived: boolean;
   readonly onPress: () => void;
 }) {
   const colors = useColors();
   const ink = notice.kind === NOTICE_KIND.REFUSED ? colors.DANGER : colors.TEXT_MUTED;
   const press = noticePress(notice);
+  const glass = useBarGlass();
 
   return (
     <Host matchContents={{ vertical: true }} style={styles.banner}>
@@ -129,15 +155,12 @@ function NoticeBody({
         spacing={SPACE.ROW}
         modifiers={[
           padding({ leading: SPACE.EDGE, trailing: SPACE.ROW, vertical: SPACE.ROW + 2 }),
-          glassEffect({
-            glass: { variant: "regular" },
-            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-            shape: "roundedRectangle",
-            cornerRadius: BAR_RADIUS,
-          }),
+          ...glass,
           // Note that the banner contains its pieces as elements of their own, because an identifier on a plain stack passes down to them and stood over Try again's own.
           accessibilityElement("contain"),
           accessibilityIdentifier("failure-notice"),
+          offset({ y: arrived ? 0 : -ARRIVAL }),
+          animation(Animation.easeInOut({ duration: SLIDE_MS / 1000 }), arrived),
         ]}
       >
         <Image {...glyphImage(NOTICE_SYMBOL[notice.kind])} size={MARK_SIZE.LEAD} color={ink} />
@@ -171,13 +194,15 @@ function NoticeBody({
 }
 
 /**
- * The banner: slides down under the status bar as a notice arrives, or
- * fades in where the reader reduces motion, stands until its time is up,
+ * The banner: fades in and slides down under the status bar as a notice
+ * arrives, or only fades in where the reader reduces motion, stands until its time is up,
  * a swipe up, or its Try again or Undo, and slides away. Note that it stands over the
  * app's root view, above the tabs, and passes every touch outside it
  * through to the screen under it; it does not stand in a window of its own
  * (`FullWindowOverlay`), because on iOS 27.2 that window never drew, so no
- * notice showed at all. A sheet open over the root covers it.
+ * notice showed at all. A sheet open over the root would cover it, so a
+ * sheet draws its own (`FailureNoticeLayer`), and the notice stands in the
+ * one on top.
  */
 function NoticeBanner({
   notice,
@@ -189,10 +214,13 @@ function NoticeBanner({
   const reduceMotion = useReduceMotion();
   const [place] = useState(() => new Animated.Value(0));
   const [drawn, setDrawn] = useState<ShownNotice | undefined>(notice);
+  // Whether the banner stands in its place, or above it as it arrives and leaves.
+  const [lowered, setLowered] = useState(false);
 
   const leave = useCallback(
     (serial: number) => {
       place.stopAnimation();
+      setLowered(false);
       Animated.timing(place, {
         toValue: 0,
         duration: SLIDE_MS,
@@ -207,6 +235,7 @@ function NoticeBanner({
   // A new notice arrives over whatever stood, said aloud once, and goes on its own once its time is up; one let go while it stands slides away.
   useEffect(() => {
     if (notice === undefined) {
+      setLowered(false);
       Animated.timing(place, { toValue: 0, duration: SLIDE_MS, useNativeDriver: true }).start(
         ({ finished }) => finished && setDrawn(undefined),
       );
@@ -215,9 +244,11 @@ function NoticeBanner({
     }
 
     setDrawn(notice);
+    setLowered(false);
     place.setValue(0);
     AccessibilityInfo.announceForAccessibility(notice.words);
     let live = true;
+    let stay: Animated.CompositeAnimation | undefined;
 
     const arrive = (reading: boolean) => {
       if (!live) return;
@@ -228,23 +259,26 @@ function NoticeBanner({
           ? STANDS_FOR.WORDS
           : STANDS_FOR.WITH_PRESS;
 
-      // Note that the notice's stay is a pause between its slide in and its slide out, so a swipe or a newer notice stops all three as one.
-      Animated.sequence([
+      // Note that the notice's stay is a pause after its fade in, so a swipe, a newer notice, or a sheet taking it stops both as one, and it leaves as a swipe has it leave.
+      setLowered(true);
+      stay = Animated.sequence([
         Animated.timing(place, { toValue: 1, duration: SLIDE_MS, useNativeDriver: true }),
         Animated.delay(stands),
-        Animated.timing(place, { toValue: 0, duration: SLIDE_MS, useNativeDriver: true }),
-      ]).start(({ finished }) => {
-        if (finished) onGone(notice.serial);
+      ]);
+      stay.start(({ finished }) => {
+        if (finished && live) leave(notice.serial);
       });
     };
 
     AccessibilityInfo.isScreenReaderEnabled().then(arrive, () => arrive(false));
 
+    // Note that the whole sequence stops, its delay included, which runs on a value of its own; else a banner that handed its notice to a sheet would still let it go when its own stay ran out.
     return () => {
       live = false;
+      stay?.stop();
       place.stopAnimation();
     };
-  }, [notice, place, onGone]);
+  }, [notice, place, leave]);
 
   const swipe = useMemo(
     () =>
@@ -265,24 +299,15 @@ function NoticeBanner({
     noticePress(drawn)?.act();
   };
 
-  const arriving = reduceMotion
-    ? { opacity: place }
-    : {
-        opacity: place,
-        transform: [
-          { translateY: place.interpolate({ inputRange: [0, 1], outputRange: [-ARRIVAL, 0] }) },
-        ],
-      };
-
   return (
     <SafeAreaView edges={["top"]} pointerEvents="box-none" style={styles.edge}>
       <Animated.View
-        style={[styles.lane, arriving]}
+        style={[styles.lane, { opacity: place }]}
         pointerEvents="box-none"
         accessibilityLiveRegion="polite"
         {...swipe.panHandlers}
       >
-        <NoticeBody notice={drawn} onPress={press} />
+        <NoticeBody notice={drawn} arrived={lowered || reduceMotion} onPress={press} />
       </Animated.View>
     </SafeAreaView>
   );
@@ -293,10 +318,13 @@ function NoticeBanner({
  * `useFailureNotices` to the screens: a refusal, or a write that went with
  * its Undo, stands in place of any notice standing, and the offline notice
  * once a stretch offline
- * (`failure-notice-model.ts`).
+ * (`failure-notice-model.ts`). It draws over the root while no sheet stands,
+ * and in the sheet on top while one does (`FailureNoticeLayer`), since a
+ * sheet is a view of its own over the root, which would hide it.
  */
 export function FailureNoticeProvider({ children }: { readonly children: ReactNode }) {
   const [state, setState] = useState(NO_NOTICE);
+  const [layers, setLayers] = useState<readonly string[]>([]);
 
   const notices = useMemo<FailureNotices>(
     () => ({
@@ -309,10 +337,56 @@ export function FailureNoticeProvider({ children }: { readonly children: ReactNo
 
   const gone = useCallback((serial: number) => setState((was) => noticeGone(was, serial)), []);
 
+  // Note that a sheet opens over the ones before it, so the layer that entered last is the one on top.
+  const enter = useCallback((layer: string) => {
+    setLayers((were) => [...were, layer]);
+
+    return () => setLayers((were) => were.filter((was) => was !== layer));
+  }, []);
+
+  const top = layers.at(-1);
+
+  const stage = useMemo<NoticeStage>(
+    () => ({ shown: state.shown, top, gone, enter }),
+    [state.shown, top, gone, enter],
+  );
+
   return (
     <Notices.Provider value={notices}>
-      {children}
-      <NoticeBanner notice={state.shown} onGone={gone} />
+      <Stage.Provider value={stage}>
+        {children}
+        <NoticeBanner notice={top === undefined ? state.shown : undefined} onGone={gone} />
+      </Stage.Provider>
     </Notices.Provider>
+  );
+}
+
+/**
+ * A sheet's own place for the notice: wraps the sheet's screens, and draws
+ * the notice over them while this sheet is the one on top, so a write
+ * refused inside a sheet, or under it, is seen rather than hidden behind it.
+ */
+export function FailureNoticeLayer({
+  children,
+  inFront,
+}: {
+  readonly children: ReactNode;
+  /** Whether the sheet is the screen in front: false once a page opens over it, such as one a notification opened, so its notice stands where it is seen rather than in the sheet under that page. */
+  readonly inFront: boolean;
+}) {
+  const stage = useContext(Stage);
+  const layer = useId();
+
+  if (stage === undefined) throw new Error("A sheet drew a notice layer outside its provider.");
+
+  const { enter, top, shown, gone } = stage;
+
+  useEffect(() => (inFront ? enter(layer) : undefined), [enter, layer, inFront]);
+
+  return (
+    <View style={styles.layer}>
+      {children}
+      <NoticeBanner notice={top === layer ? shown : undefined} onGone={gone} />
+    </View>
   );
 }

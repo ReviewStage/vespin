@@ -75,10 +75,6 @@ import { TurnFilesSummarySchema } from "./turn-files-wire.js";
  * Every request refuses a key it does not name; an answer ignores one a
  * newer service added. Declared directly with Effect's `Schema.Struct` and
  * exported under its own name.
- *
- * Note that `planId` keep the wire's legacy spelling of a task, because a
- * released desktop sends and reads them; they are renamed with the wire in a
- * follow-up, with no alias.
  */
 
 export const AGENT_BOUNDS = {
@@ -133,8 +129,10 @@ export const AGENT_BOUNDS = {
   MAX_IMAGE_BYTES: 1_500_000,
   /** The most bytes one PDF may hold: as many as the message's files together, since one PDF may be all it carries. */
   MAX_PDF_BYTES: MAX_REQUEST_FILES_BYTES,
-  /** The most bytes one text file may hold: about 25,000 tokens of code, inlined whole for the model. */
-  MAX_TEXT_BYTES: 100_000,
+  /** The most bytes one text file may hold: as many as the message's files together, as a PDF's, since one log or dump may be all it carries. */
+  MAX_TEXT_BYTES: MAX_REQUEST_FILES_BYTES,
+  /** The most bytes a text file is inlined whole for the model at: about 25,000 tokens of code. A larger one is written into the agent's machine, its first lines inlined (`isInlinedText`). */
+  MAX_INLINED_TEXT_BYTES: 100_000,
   /** The most bytes every file of one message holds together, which base64 grows by a third and which stays under a function's request body limit (`request-body-limit.ts`). */
   MAX_ATTACHMENTS_BYTES: MAX_REQUEST_FILES_BYTES,
 } as const;
@@ -529,7 +527,8 @@ export type AgentTurn = typeof agentTurnSchema.Type;
  * The files a message may carry, by the media type each travels as: an
  * image or a PDF, which the model reads as a file, or a text file of any
  * extension, which travels as its UTF-8 bytes and is inlined for the model
- * as fenced text under its name.
+ * as fenced text under its name, or written into its machine where it is
+ * too large to inline (`isInlinedText`).
  */
 export const AGENT_ATTACHMENT_TYPE = {
   PNG: "image/png",
@@ -577,6 +576,21 @@ export function base64Bytes(base64: string): number {
   const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
 
   return Math.floor(base64.length / 4) * 3 - padding;
+}
+
+/**
+ * Whether a file is a text file the model is handed inlined whole, within
+ * `AGENT_BOUNDS.MAX_INLINED_TEXT_BYTES`; a larger text file is written into
+ * the agent's machine like a PDF, and the model reads it there.
+ */
+export function isInlinedText(file: {
+  readonly mediaType: string;
+  readonly data: string;
+}): boolean {
+  return (
+    file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT &&
+    base64Bytes(file.data) <= AGENT_BOUNDS.MAX_INLINED_TEXT_BYTES
+  );
 }
 
 /** A file's name on one line, which is how the model reads it, under its heading. */
@@ -1202,7 +1216,7 @@ export function agentOwnerOf(read: AgentOwnerRead): AgentOwner | undefined {
  */
 export const agentSummarySchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  planId: wireUuidSchema,
+  taskId: wireUuidSchema,
   /** AI Gateway's catalog id, such as `anthropic/claude-opus-5.5`. */
   model: EffectSchema.String,
   effort: EffectSchema.String,

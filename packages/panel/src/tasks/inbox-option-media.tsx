@@ -1,4 +1,4 @@
-import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import {
   INBOX_OPTION_MEDIA,
@@ -89,13 +89,17 @@ function FileThumb({
   const gone =
     thumb?.state.kind === PICTURE_STATE.FAILED || thumb?.state.kind === PICTURE_STATE.MISSING;
 
+  // A sound clip has no frame to show, so its thumb is a waveform's glyph, and the viewer plays it.
+  const heard = isAudioType(file.mediaType);
+  const glyph = gone ? <ImageOffIcon /> : heard ? <GLYPH.SOUND_CLIP /> : undefined;
+
   return (
     <span ref={thumb?.anchor} className="block">
       <PageThumb
         fit={PAGE_THUMB_FIT.CONTAIN}
-        image={isRecording(file) ? undefined : url}
+        image={isRecording(file) || heard ? undefined : url}
         video={isRecording(file) ? url : undefined}
-        glyph={gone ? <ImageOffIcon /> : undefined}
+        glyph={glyph}
       />
     </span>
   );
@@ -179,7 +183,7 @@ export function OptionCardMedia({ option }: { option: InboxOption }): React.JSX.
     openPage: (page) =>
       openPlace?.({
         kind: LINK_DESTINATION.PAGE,
-        planId: page.place.taskId,
+        taskId: page.place.taskId,
         pageId: page.pageId,
       }),
   };

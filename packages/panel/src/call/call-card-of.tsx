@@ -9,8 +9,9 @@
  * as they stand, each press asking for the mute's other side.
  */
 
+import { CALL_LIVE_WORD } from "@repo/features/voice-call-words";
 import { type StandingCall, VOICE_CALL_STAGE } from "@repo/features/voice-wire";
-import { CALL_LIVE_WORD, type CallAgent, type CallCard, type CallStatus } from "@repo/ui";
+import type { CallAgent, CallCard, CallStatus } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE } from "@repo/ui/actor-model";
 import type { ComponentProps } from "react";
 import { ActorMark } from "../actor-ref.js";

@@ -1,5 +1,11 @@
 import { type HostedMachineCommandClient, MACHINE_COMMAND_CALL_FAILURE } from "@repo/features";
 import type { DeviceArch, DeviceMachine, DevicePlatform } from "@repo/features/device-agent-wire";
+import { MACHINE_ASKS_READ, machineAsksOfLiveRows } from "@repo/features/machine-ask-live";
+import {
+  MACHINE_ASK_BOUNDS,
+  type MachineAskStandingAnswer,
+  type MachineAskSubject,
+} from "@repo/features/machine-ask-wire";
 import {
   MACHINE_COMMANDS_READ,
   type MachineCommandsLiveAnswer,
@@ -33,6 +39,7 @@ import {
   machineCommandResultSchema,
 } from "@repo/features/machine-command-wire";
 import { MACHINES_READ, machinesOfLiveRows } from "@repo/features/machine-live";
+import { MACHINE_REFUSAL_NEXT } from "@repo/features/machine-refusal-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
@@ -42,7 +49,7 @@ import {
   Deferred,
   Duration,
   Effect,
-  FiberHandle,
+  FiberMap,
   FiberSet,
   Option,
   Queue,
@@ -60,6 +67,7 @@ import {
   COMPUTER_HELPER_FAILURE,
   COMPUTER_HELPER_OP,
   type ComputerAppPin,
+  type ComputerCursorOwner,
   type ComputerHelperAnswer,
   type ComputerHelperRecording,
   type ComputerHelperRequest,
@@ -73,6 +81,7 @@ import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-conce
 import type { HostKernel } from "./host-kernel.js";
 import { decodedLiveRows, LIVE_RESTART, waitOrRegained } from "./live-follow.js";
 import {
+  isMachineShellAsk,
   MACHINE_COMMAND_DECISION,
   type MachineCommandAnswer,
   type MachineCommandAsk,
@@ -214,8 +223,8 @@ const DESCRIBE_WITHIN = Duration.seconds(10);
 /** How long the helper has to put the agent's cursor away, behind any action it is still on. */
 const RELEASE_WITHIN = Duration.seconds(10);
 
-/** Why a release is let go as its turn comes: another agent's action took the cursor meanwhile. */
-const CURSOR_TAKEN_WORDS = "another agent took the cursor.";
+/** Why a release is let go as its turn comes: the agent's next action took its cursor up again meanwhile. */
+const CURSOR_TAKEN_WORDS = "the agent took its cursor up again.";
 
 /** The actions that never move the agent's cursor, so never hand it to the agent asking. Note that an app's read is not among them, because it brings the cursor in where it shows nowhere yet. */
 const STILL_CURSOR: ReadonlySet<string> = new Set([
@@ -235,6 +244,10 @@ export type MachineCommandClient = Pick<
   | "join"
   | "saveDeviceSettings"
   | "saveDeviceAppLooks"
+  | "postAsk"
+  | "lapseAsk"
+  | "closeAsk"
+  | "answerAsk"
 >;
 
 /** This Mac as a device of the accounts signed in on it: the ids it joins as, the machine it names itself as, and its own say over commands and apps. */
@@ -278,6 +291,8 @@ export interface MachineCommandsDependencies {
    * agent's cursor away; none leaves the cursor to the helper's own clock.
    */
   turnEnded?: (agentId: string) => Effect.Effect<void>;
+  /** An agent's name as the task list holds it now, which its cursor's tag shows; none where the list names no such agent. */
+  agentName?: (agentId: string) => string | undefined;
   /** This Mac as a device of the account, where this process can say which machine it runs on; none claims as the account alone. */
   device?: MachineCommandsDevice;
 }
@@ -387,21 +402,22 @@ function kindsOf(standing: GateStanding): readonly MachineCommandKind[] {
 /** What a shell command answers where Settings lets agents run no commands on this Mac, while it stands open for their actions on apps. */
 const COMMANDS_NEVER: MachineCommandRefusal = {
   refused:
-    "Not run: the developer doesn't let agents run commands on their Mac (Settings › This Mac is set to Never).",
+    "Not run: the developer doesn't let agents run commands on their Mac (Settings › This Mac is set to Never). " +
+    MACHINE_REFUSAL_NEXT.SETTING,
 };
 
 /** What a command taken as the setting was switched off, or the account signed out, answers. */
 const SWITCHED_OFF: MacShellResult = {
   exitCode: null,
   stdout: "",
-  stderr: "Not run: commands on this Mac were switched off as it arrived.",
+  stderr: `Not run: commands on this Mac were switched off as it arrived. ${MACHINE_REFUSAL_NEXT.LATER}`,
   truncated: false,
   timedOut: false,
 };
 
 /** What a command the developer declined answers. */
 const DECLINED: MachineCommandRefusal = {
-  refused: "Not run: the developer declined this command.",
+  refused: `Not run: the developer declined this command. ${MACHINE_REFUSAL_NEXT.DECLINED}`,
   outcome: MACHINE_REFUSAL.DECLINED,
 };
 
@@ -418,19 +434,55 @@ function declinedWith(
 /** What the developer answered an ask: Allow or Deny, and with a Deny, the words they gave the agent. */
 type Answered = Pick<MachineCommandAnswer, "decision" | "note">;
 
+/** One ask waiting on the developer, as the Mac holds it: the ask, the account it was claimed for, its answer to come, and whether its post landed with the service, which an answer given here then goes through; none where it was never posted. */
+interface HeldAsk {
+  readonly ask: MachineCommandAsk;
+  readonly userId: string;
+  readonly decided: Deferred.Deferred<Answered>;
+  posted?: Deferred.Deferred<boolean>;
+}
+
+/** What an ask asks about, as the service keeps it. */
+function subjectOf(ask: MachineCommandAsk): MachineAskSubject {
+  return isMachineShellAsk(ask) ? { command: ask.command } : { app: ask.app };
+}
+
+/** An answer the service holds, as the ask's wait takes it. */
+function answeredOf(standing: MachineAskStandingAnswer): Answered {
+  return standing.note === undefined
+    ? { decision: standing.decision }
+    : { decision: standing.decision, note: standing.note };
+}
+
+/** Whether the service answered a call with a failure rather than its answer. */
+function isFailed<A extends object>(
+  answer: A,
+): answer is Extract<A, { readonly failure: unknown }> {
+  return "failure" in answer;
+}
+
+/** How a call to the service about an ask is asked again where it went unanswered: a second apart, a few times. */
+const ASK_CALL_RETRY = { schedule: Schedule.spaced(Duration.seconds(1)), times: 3 } as const;
+
+/** How long a window's close waits for its ask's post to land, so a slow post neither strands it nor holds up the call. */
+const POST_WITHIN = Duration.seconds(5);
+
 /** How long a withdrawn ask's refusal may take to post, so a gate shut on it is not held up. */
 const WITHDRAWN_SETTLE = Duration.seconds(5);
 
 /** What a command the developer did not answer for answers: not run, since its ask closed, or was withdrawn, before anyone answered. */
 const UNANSWERED: MachineCommandRefusal = {
   refused:
-    "Not run: the developer did not answer in time whether to allow this command on their Mac.",
+    "Not run: the developer did not answer in time whether to allow this command on their Mac. " +
+    MACHINE_REFUSAL_NEXT.UNANSWERED,
   outcome: MACHINE_REFUSAL.UNANSWERED,
 };
 
 /** What a command asked under an account that signed out before it was answered answers. */
 const ACCOUNT_CHANGED: MachineCommandRefusal = {
-  refused: "Not run: the account signed in on the developer's Mac changed before it was allowed.",
+  refused:
+    "Not run: the account signed in on the developer's Mac changed before it was allowed. " +
+    MACHINE_REFUSAL_NEXT.LATER,
 };
 
 /** The grants as Settings shows them where there is no helper to read them. */
@@ -438,27 +490,32 @@ const NO_PERMISSIONS: ComputerPermissions = { screenRecording: false, accessibil
 
 /** Why an action does not run where Settings has agents use no apps on this Mac. */
 const APPS_OFF_WORDS =
-  "the developer switched off Settings › Let agents use apps on this Mac, so no app can be used.";
+  "the developer switched off Settings › Let agents use apps on this Mac, so no app can be used. " +
+  MACHINE_REFUSAL_NEXT.SETTING;
 
 /** What an action answers where Settings has agents use no apps on this Mac. */
 const APPS_SWITCHED_OFF: MachineCommandRefusal = { refused: `Not run: ${APPS_OFF_WORDS}` };
 
 /** What an action on an app the developer declined answers. */
 const APP_DECLINED: MachineCommandRefusal = {
-  refused: "Not run: the developer declined to let agents use this app.",
+  refused: `Not run: the developer declined to let agents use this app. ${MACHINE_REFUSAL_NEXT.DECLINED}`,
   outcome: MACHINE_REFUSAL.DECLINED,
 };
 
 /** What an action on an app the developer did not answer for in time answers. */
 const APP_UNANSWERED: MachineCommandRefusal = {
-  refused: "Not run: the developer did not answer in time whether agents may use this app.",
+  refused:
+    "Not run: the developer did not answer in time whether agents may use this app. " +
+    MACHINE_REFUSAL_NEXT.UNANSWERED,
   outcome: MACHINE_REFUSAL.UNANSWERED,
 };
 
 /** What an action on an app agents are never offered answers, by the app's name. */
 function neverOffered(app: string): MachineCommandRefusal {
   return {
-    refused: `Not run: agents are never offered ${app}, as with terminals, password managers, System Settings, and ${PRODUCT_NAME}.`,
+    refused:
+      `Not run: agents are never offered ${app}, as with terminals, password managers, System Settings, and ${PRODUCT_NAME}. ` +
+      MACHINE_REFUSAL_NEXT.WITHOUT,
   };
 }
 
@@ -496,19 +553,19 @@ function granted(permissions: ComputerPermissions, permission: ComputerPermissio
 /**
  * What an action answers where the Mac lacks a grant it needs: each grant
  * missing by name and where it is turned on, short enough to read on the
- * call's row, and asking the agent to pass it on, since nothing it does can
- * grant them.
+ * call's row, and asking the agent to pass it on when it next writes to
+ * them and carry on meanwhile, since nothing it does can grant them.
  */
 function permissionsMissing(
   missing: readonly [ComputerPermission, ...ComputerPermission[]],
 ): MachineCommandRefusal {
   const names = computerPermissionsNamed(missing);
-  const them = missing.length === 1 ? "it" : "them";
 
   return {
     refused:
-      `Not run: ${PRODUCT_NAME} on the developer's Mac needs ${names}. ` +
-      `Ask them to turn ${them} on in ${PRODUCT_NAME}'s Settings › This Mac.`,
+      `Not run: ${PRODUCT_NAME} on the developer's Mac needs ${names}, which they turn on in ` +
+      `${PRODUCT_NAME}'s Settings › This Mac. Mention this when you next write to them. ` +
+      MACHINE_REFUSAL_NEXT.LATER,
     missingPermissions: missing,
   };
 }
@@ -593,7 +650,7 @@ interface RecordingOwner {
   readonly conversationId: string;
 }
 
-/** Whom the agent's cursor stands for: the account and the agent whose action moved it last, none for a conversation that is no agent's. */
+/** Whom a cursor stands for: the account and the agent whose actions move it, none for a conversation that is no agent's. */
 interface CursorHolder {
   readonly userId: string;
   readonly agentId: string | undefined;
@@ -659,18 +716,54 @@ export function composeMachineCommands(
      */
     let recordingOwner: RecordingOwner | undefined;
     /**
-     * Whom the agent's cursor stands for, which the helper keeps one of for
-     * the whole Mac, and the watch on that agent's turn, which puts the
-     * cursor away as the turn ends; another agent's action takes both over.
+     * The cursors the helper draws, one for each agent whose actions move
+     * one, by the agent's id (none for the one cursor of conversations that
+     * are no agent's), and the watch on each agent's turn, by its id, which
+     * puts that agent's cursor alone away as the turn ends.
      */
-    let cursorHolder: CursorHolder | undefined;
-    let cursorWatch: FiberHandle.FiberHandle<void> | undefined;
+    const cursorHolders = new Map<string | undefined, CursorHolder>();
+    let cursorWatches: FiberMap.FiberMap<string> | undefined;
     /** The asks waiting on the developer, by the command's id, the earliest asked first, each with the account it was claimed for. */
 
-    const asks = new Map<
-      string,
-      { ask: MachineCommandAsk; userId: string; decided: Deferred.Deferred<Answered> }
-    >();
+    const asks = new Map<string, HeldAsk>();
+
+    /** The asks this Mac holds whose post landed, by the command's id: the follow of the account's asks stands while there are any. */
+    const landedAsks = yield* SubscriptionRef.make<ReadonlySet<string>>(new Set());
+
+    /** The device the Mac joined as, and the settings the service keeps for it; none before it has joined for the account signed in. */
+    const joined = yield* SubscriptionRef.make<Joined | undefined>(undefined);
+
+    /** Where an ask's calls to the service run beside its command, so none holds it up; made as the concern starts. */
+    let errands: FiberSet.FiberSet | undefined;
+
+    const errand = (effect: Effect.Effect<unknown>) =>
+      errands === undefined ? Effect.void : Effect.asVoid(FiberSet.run(errands, effect));
+
+    /** One call to the service about an ask, asked again where it went unanswered; its answer, or none where it never took it. */
+    const askedOfService = <A extends object>(
+      call: Effect.Effect<A, never, HttpClient.HttpClient>,
+    ): Effect.Effect<Exclude<A, { readonly failure: unknown }> | undefined> =>
+      asked(call).pipe(
+        Effect.flatMap((answer) =>
+          isFailed(answer)
+            ? Effect.fail(answer)
+            : // SAFETY: an answer that is no failure is one of the call's own answers, which a generic narrowing does not carry.
+              Effect.succeed(answer as Exclude<A, { readonly failure: unknown }>),
+        ),
+        Effect.retry(ASK_CALL_RETRY),
+        Effect.option,
+        Effect.map(Option.getOrUndefined),
+      );
+
+    const setPosted = (id: string, landed: boolean) =>
+      SubscriptionRef.update(landedAsks, (ids) => {
+        const next = new Set(ids);
+
+        if (landed) next.add(id);
+        else next.delete(id);
+
+        return next;
+      });
 
     const tellAsks = () =>
       kernel.emit(
@@ -684,6 +777,15 @@ export function composeMachineCommands(
      * which the ask carries so the prompt and the agent's row count down to
      * it; no answer by then is none. The ask is withdrawn however the wait
      * ends, an interruption included, so a prompt never outlives its command.
+     *
+     * Where the Mac joined as a device of the account, the ask also goes up
+     * to the service, so any device of the account may answer it, and the
+     * answer the service took first, here or elsewhere, is the answer
+     * (`asksHeard`). An ask answered comes down everywhere; one whose wait
+     * ended with no answer is said closed, so an answer given after it is
+     * the service's to keep for the agent's next try, and one that beat the
+     * close is taken as given in time. Each of its calls waits on its post,
+     * so none lands before it.
      */
     const consent = (
       shown: (times: { readonly askedAt: number; readonly expiresAt: number }) => MachineCommandAsk,
@@ -693,20 +795,124 @@ export function composeMachineCommands(
       Effect.gen(function* () {
         const ask = shown({ askedAt: kernel.now(), expiresAt: closesAt });
         const decided = yield* Deferred.make<Answered>();
-        asks.set(ask.id, { ask, userId, decided });
-        tellAsks();
         const now = yield* Clock.currentTimeMillis;
+        const deviceId = joinedAs(yield* SubscriptionRef.get(joined), userId);
+        const landed = deviceId === undefined ? undefined : yield* Deferred.make<boolean>();
+        const held: HeldAsk = { ask, userId, decided };
 
-        return yield* Deferred.await(decided).pipe(
+        if (landed !== undefined) held.posted = landed;
+        asks.set(ask.id, held);
+        tellAsks();
+
+        if (deviceId !== undefined && landed !== undefined) {
+          const windowSeconds = Math.min(
+            MACHINE_ASK_BOUNDS.MAX_WINDOW_SECONDS,
+            Math.max(1, Math.ceil((closesAt - now) / 1000)),
+          );
+
+          yield* errand(
+            Effect.gen(function* () {
+              const stands = yield* askedOfService(
+                client.postAsk({ id: ask.id, deviceId, subject: subjectOf(ask), windowSeconds }),
+              );
+
+              if (stands !== undefined) yield* setPosted(ask.id, true);
+              yield* Deferred.succeed(landed, stands !== undefined);
+
+              // Note that a post the service answered at once, as a grant for this agent's retry, decides the ask.
+              if (stands?.answer !== undefined) {
+                yield* Deferred.succeed(decided, answeredOf(stands.answer));
+              }
+            }),
+          );
+        }
+
+        const lettingGo = Effect.sync(() => {
+          asks.delete(ask.id);
+          tellAsks();
+        });
+
+        // Note that a withdrawn ask is let go and said closed beside the command, since its call is answered at once (`withdrawnAs`).
+        const answer = yield* Deferred.await(decided).pipe(
           Effect.timeoutOption(Duration.millis(Math.max(0, closesAt - now))),
           Effect.map(Option.getOrUndefined),
-          Effect.ensuring(
-            Effect.sync(() => {
-              asks.delete(ask.id);
-              tellAsks();
-            }),
+          Effect.onInterrupt(() =>
+            Effect.andThen(
+              lettingGo,
+              landed === undefined ? Effect.void : errand(ended(ask.id, landed, false)),
+            ),
           ),
         );
+
+        yield* lettingGo;
+
+        if (landed === undefined) return answer;
+        const beat = yield* ended(ask.id, landed, answer !== undefined);
+
+        return answer ?? beat;
+      });
+
+    /**
+     * An ask's wait ended, told to the service once its post has landed:
+     * taken down where an answer was taken, or else said closed, answering
+     * the answer that beat the close, where one did. A post still out after
+     * a few seconds is followed to its end beside the command, and an ask it
+     * lands then is taken down or said closed all the same, its answer no
+     * longer waited on, so no ask outlives its command on the service. Note
+     * that a take-down runs beside the command, since nothing waits on it.
+     */
+    const ended = (id: string, landed: Deferred.Deferred<boolean>, answered: boolean) =>
+      Effect.gen(function* () {
+        const later = Effect.andThen(Deferred.await(landed), (late) =>
+          Effect.andThen(
+            setPosted(id, false),
+            !late
+              ? Effect.void
+              : answered
+                ? askedOfService(client.closeAsk(id))
+                : askedOfService(client.lapseAsk(id)),
+          ),
+        );
+
+        // Note that a wait cut short, as a command interrupted is, leaves the post to the same follow-up a slow one gets.
+        const up = yield* Effect.timeoutOption(Deferred.await(landed), POST_WITHIN).pipe(
+          Effect.onInterrupt(() => errand(later)),
+        );
+
+        if (Option.isNone(up)) {
+          yield* errand(later);
+
+          return undefined;
+        }
+
+        yield* setPosted(id, false);
+
+        if (!up.value) return undefined;
+
+        if (answered) {
+          yield* errand(askedOfService(client.closeAsk(id)));
+
+          return undefined;
+        }
+
+        const lapsed = yield* askedOfService(client.lapseAsk(id));
+
+        if (lapsed?.answer === undefined) return undefined;
+
+        // Note that an answer that beat the close is taken as an answer here is, so its ask comes down everywhere.
+        yield* errand(askedOfService(client.closeAsk(id)));
+
+        return answeredOf(lapsed.answer);
+      });
+
+    /** The answers the service took for the asks this Mac waits on, heard as the account's asks move: each decides its ask, whichever device gave it. */
+    const asksHeard = (rows: typeof MACHINE_ASKS_READ.rows.Type) =>
+      Effect.forEach(machineAsksOfLiveRows(rows.asks), (line) => {
+        const held = asks.get(line.id);
+
+        return held === undefined || line.answer === undefined
+          ? Effect.void
+          : Effect.asVoid(Deferred.succeed(held.decided, answeredOf(line.answer)));
       });
 
     /**
@@ -720,7 +926,7 @@ export function composeMachineCommands(
       <A>(wait: Effect.Effect<A>): Effect.Effect<A> =>
         wait.pipe(
           Effect.onInterrupt(() =>
-            settled(id, refusal).pipe(Effect.timeoutOption(WITHDRAWN_SETTLE), Effect.ignore),
+            settled(id, refusal).pipe(Effect.timeoutOption(WITHDRAWN_SETTLE), Effect.asVoid),
           ),
         );
 
@@ -962,7 +1168,9 @@ export function composeMachineCommands(
 
         if (missing !== undefined) return yield* settled(command.id, missing);
         let app: ComputerApp | undefined;
-        let request: ComputerHelperRequest = action;
+        // Note that every action names its agent's cursor, a recording's start among them, which draws that cursor alone into its frames.
+        const cursor = cursorOwnerOf(command.agentId);
+        let request: ComputerHelperRequest = { ...action, ...cursor };
 
         // Note that only an action that names an app asks about it, since listing the apps and stopping a recording act on none.
         if ("app" in action) {
@@ -976,7 +1184,7 @@ export function composeMachineCommands(
           if ("refused" in allowed) return yield* settled(command.id, allowed);
           app = allowed.app;
           // Note that the action names the app as it was allowed, never the agent's words for it, since those may find another app by the time it runs.
-          request = { ...action, ...allowed.pin };
+          request = { ...action, ...allowed.pin, ...cursor };
         }
 
         const left = deadline - (yield* Clock.currentTimeMillis);
@@ -1018,45 +1226,60 @@ export function composeMachineCommands(
       });
 
     /**
-     * The agent's cursor held for the agent whose action just ran: its turn
-     * watched, and the cursor put away as the turn ends, unless another
-     * agent's action took the cursor over first. An agent that already holds
-     * it keeps its watch.
+     * Whose cursor an action moves, as the helper is told it: the agent's id,
+     * and the name its tag shows where the task list names the agent; nothing
+     * for a conversation that is no agent's.
+     */
+    const cursorOwnerOf = (agentId: string | undefined): ComputerCursorOwner => {
+      if (agentId === undefined) return {};
+      const name = dependencies.agentName?.(agentId);
+
+      return name === undefined
+        ? { cursor_agent: agentId }
+        : { cursor_agent: agentId, cursor_name: name };
+    };
+
+    /**
+     * The agent's own cursor held for it as its action runs: its turn
+     * watched, and that cursor alone put away as the turn ends. An agent
+     * that already holds its cursor keeps its watch, and no other agent's
+     * action touches either.
      */
     const heldBy = (holder: CursorHolder) =>
       Effect.gen(function* () {
-        // Note that an agent already holding the cursor keeps its holder, whose watch puts the cursor away by that very holder.
-        if (cursorHolder?.userId === holder.userId && cursorHolder.agentId === holder.agentId)
-          return;
-        cursorHolder = holder;
+        const held = cursorHolders.get(holder.agentId);
 
-        if (cursorWatch === undefined) return;
+        // Note that an agent already holding its cursor keeps its holder, whose watch puts the cursor away by that very holder.
+        if (held?.userId === holder.userId) return;
+        cursorHolders.set(holder.agentId, holder);
         const { turnEnded } = dependencies;
 
         // Note that a conversation that is no agent's, or a Mac that cannot watch turns, leaves the cursor to the helper's own clock.
-        if (holder.agentId === undefined || turnEnded === undefined) {
-          return yield* FiberHandle.clear(cursorWatch);
-        }
+        if (cursorWatches === undefined || holder.agentId === undefined || turnEnded === undefined)
+          return;
 
-        yield* FiberHandle.run(
-          cursorWatch,
+        yield* FiberMap.run(
+          cursorWatches,
+          holder.agentId,
           Effect.andThen(turnEnded(holder.agentId), released(holder)),
         );
       });
 
-    /** The agent's cursor put away, where the holder given still holds it. */
+    /** The holder's cursor put away, where it still holds it. */
     const released = (holder: CursorHolder) =>
       Effect.gen(function* () {
-        if (cursorHolder !== holder || computer === undefined) return;
-        cursorHolder = undefined;
+        if (cursorHolders.get(holder.agentId) !== holder || computer === undefined) return;
+        cursorHolders.delete(holder.agentId);
 
-        // Note that another agent's action may take the cursor while the release waits its turn at the helper, so it is refused then rather than hiding that agent's cursor.
+        // Note that the agent's next action may take its cursor up again while the release waits its turn at the helper, so it is refused then rather than hiding the cursor that action moved.
         const free = Effect.sync(() =>
-          cursorHolder === undefined ? undefined : CURSOR_TAKEN_WORDS,
+          cursorHolders.has(holder.agentId) ? CURSOR_TAKEN_WORDS : undefined,
         );
 
-        yield* Effect.ignore(
-          computer.helper.ask({ op: COMPUTER_HELPER_OP.RELEASE_CURSOR }, RELEASE_WITHIN, free),
+        yield* computer.helper.ask(
+          { op: COMPUTER_HELPER_OP.RELEASE_CURSOR, ...cursorOwnerOf(holder.agentId) },
+          RELEASE_WITHIN,
+          free,
         );
       });
 
@@ -1201,9 +1424,6 @@ export function composeMachineCommands(
           yield* Effect.sleep(LISTENING_EVERY);
         }
       });
-
-    /** The device the Mac joined as, and the settings the service keeps for it; none before it has joined for the account signed in. */
-    const joined = yield* SubscriptionRef.make<Joined | undefined>(undefined);
 
     /**
      * The device the Mac claims as for the account signed in, told to the
@@ -1433,6 +1653,62 @@ export function composeMachineCommands(
       );
 
     /**
+     * The account's asks followed (`MACHINE_ASKS_READ`, which polls the
+     * service, held) while the Mac stands joined and an ask whose post landed
+     * still waits here, each change heard (`asksHeard`); the read asked again
+     * after a pause where the service did not answer it or broke it off.
+     * Note that it reads nothing while no such ask waits, since only those
+     * can bring an answer here.
+     */
+    const asksFollowed = Effect.forever(
+      Effect.gen(function* () {
+        const from = yield* SubscriptionRef.get(joined);
+
+        if (from === undefined || (yield* SubscriptionRef.get(landedAsks)).size === 0) {
+          return yield* Effect.asVoid(
+            Stream.runHead(
+              Stream.filter(
+                Stream.zipLatest(
+                  SubscriptionRef.changes(joined),
+                  SubscriptionRef.changes(landedAsks),
+                ),
+                ([now, ids]) => now !== undefined && ids.size > 0,
+              ),
+            ),
+          );
+        }
+
+        const read = (after?: string) =>
+          asked(
+            client.liveRead(
+              MACHINE_ASKS_READ,
+              { userId: from.userId },
+              after === undefined ? undefined : { after },
+            ),
+          );
+
+        const sealed = yield* read();
+
+        const done = Effect.raceFirst(
+          Effect.asVoid(unjoined(from)),
+          Effect.asVoid(
+            Stream.runHead(
+              Stream.filter(SubscriptionRef.changes(landedAsks), (ids) => ids.size === 0),
+            ),
+          ),
+        );
+
+        if ("failure" in sealed) return yield* Effect.raceFirst(waitOrRegained(LIVE_RESTART), done);
+        const rows = decodedLiveRows({ poll: read }, sealed, MACHINE_ASKS_READ.rows);
+
+        yield* Effect.raceFirst(
+          Stream.runForEach(rows, asksHeard).pipe(Effect.catch(() => waitOrRegained(LIVE_RESTART))),
+          done,
+        );
+      }),
+    );
+
+    /**
      * How this Mac names and draws the apps it always allows, posted for the
      * device it joined as where they moved since it last posted them, so the
      * account's `@` lists off this Mac show each by its name and icon
@@ -1543,11 +1819,9 @@ export function composeMachineCommands(
           allowedOnce.clear();
           recordingOwner = undefined;
 
-          // Note that the cursor of an account the gate left is put away at once, rather than by its turn's watch.
-          if (cursorHolder !== undefined) {
-            if (cursorWatch !== undefined) yield* FiberHandle.clear(cursorWatch);
-            yield* released(cursorHolder);
-          }
+          // Note that the cursors of an account the gate left are put away at once, rather than by their turns' watches.
+          if (cursorWatches !== undefined) yield* FiberMap.clear(cursorWatches);
+          yield* Effect.forEach([...cursorHolders.values()], released, { discard: true });
 
           yield* FiberSet.clear(running);
 
@@ -1575,7 +1849,8 @@ export function composeMachineCommands(
     const lifetime = Effect.gen(function* () {
       const running = yield* FiberSet.make();
       const claims = yield* FiberSet.make();
-      cursorWatch = yield* FiberHandle.make<void>();
+      errands = yield* FiberSet.make();
+      cursorWatches = yield* FiberMap.make<string>();
       // Note that the changes are subscribed to before the gate is first worked out, so one that lands meanwhile is heard rather than lost.
       const changes = yield* dependencies.changed;
       yield* gateMoved;
@@ -1610,6 +1885,12 @@ export function composeMachineCommands(
             Effect.catchDefect(look(event), () =>
               Effect.sync(() => report("this Mac could not join as a device")),
             ),
+          ),
+        );
+
+        yield* Effect.forkScoped(
+          Effect.catchDefect(asksFollowed, () =>
+            Effect.sync(() => report("this Mac could not follow its asks")),
           ),
         );
 
@@ -1768,7 +2049,16 @@ export function composeMachineCommands(
           if (held === undefined) return;
           // Note that words are kept only with a denial, since an Allow hands the agent nothing to read.
           const denied = decision === MACHINE_COMMAND_DECISION.DENY && note !== undefined;
-          yield* Deferred.succeed(held.decided, denied ? { decision, note } : { decision });
+          const given: Answered = denied ? { decision, note } : { decision };
+          const landed = held.posted === undefined ? false : yield* Deferred.await(held.posted);
+
+          // Note that an ask the service never held is this Mac's alone to answer.
+          if (!landed) return yield* Deferred.succeed(held.decided, given);
+
+          // Note that an ask the service holds is decided by the answer it took first, never by this one alone, so an answer another device gave first stands; one it never took leaves the ask waiting.
+          const standing = yield* askedOfService(client.answerAsk({ id, ...given }));
+
+          if (standing !== undefined) yield* Deferred.succeed(held.decided, answeredOf(standing));
         }),
       /** Computer use as Settings shows it: the Mac's grants, and the apps agents use without asking. */
       COMPUTER_USE_STATUS: () =>

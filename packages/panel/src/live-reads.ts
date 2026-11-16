@@ -73,6 +73,7 @@ import { integrationConnectionOf } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, type PagePlace } from "@repo/features/page-wire";
 import type { PullRequestChaptersReadParams } from "@repo/features/pull-request-chapters-view";
+import type { RepositoryPullRequestParams } from "@repo/features/pull-request-view";
 import {
   COMMENT_SUBJECT,
   type TasksCommentsFollow,
@@ -89,7 +90,7 @@ import {
   KEYS_ON,
   OWN_PULL_REQUEST,
   OWN_TRANSCRIPT,
-  READ_KEYS,
+  READ_KEY_DEPTH,
 } from "@repo/host/app-state";
 import {
   type Query,
@@ -158,6 +159,25 @@ function pullRequestPartFollow(part: PullRequestPart): LiveFollow {
     askAct(ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW, { part, ...pullRequestAskedOf(ids) });
 }
 
+/** The pull request a key of a read by its repository names: the workspace, the repository, and the number. */
+function repositoryPullRequestOf([
+  workspaceId = "",
+  repository = "",
+  number,
+]: readonly LiveReadId[]): RepositoryPullRequestParams {
+  return {
+    workspaceId: String(workspaceId),
+    repository: String(repository),
+    number: Number(number),
+  };
+}
+
+/** The follow of one part of a pull request named by its repository and number, by the part. */
+function repositoryPullRequestPartFollow(part: PullRequestPart): LiveFollow {
+  return (ids) =>
+    askAct(ACT_KIND.PULL_REQUESTS_PART_FOLLOW, { part, ...repositoryPullRequestOf(ids) });
+}
+
 /** The integration server whose tools a surface reads: its provider, and its account where the server is not the provider's own. */
 export type IntegrationServer = Pick<IntegrationProviderParams, "provider" | "connection">;
 
@@ -205,6 +225,7 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
   [LIVE_READ.DEVICE_PRESENCE]: () => askAct(ACT_KIND.HOSTS_PRESENCE_FOLLOW),
   [LIVE_READ.HOSTS]: () => askAct(ACT_KIND.HOSTS_FOLLOW),
   [LIVE_READ.MACHINES]: () => askAct(ACT_KIND.MACHINES_FOLLOW),
+  [LIVE_READ.MACHINE_ASKS]: () => askAct(ACT_KIND.MACHINE_ASKS_FOLLOW),
   [LIVE_READ.AGENT_ORIGINS]: ([agentId = ""]) =>
     askAct(ACT_KIND.AGENTS_ORIGIN_FOLLOW, { agentId: String(agentId) }),
   [LIVE_READ.HOLDER_INBOX]: ([kind, id]) =>
@@ -221,8 +242,8 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
       ACT_KIND.TASKS_BROWSER_TABS_FOLLOW,
       kind === BROWSER_TABS_PLACE.TASK ? { taskId: String(id) } : { agentId: String(id) },
     ),
-  [LIVE_READ.DESCRIPTION_DOCUMENT]: ([taskId = ""]) =>
-    askAct(ACT_KIND.TASKS_DOCUMENT_FOLLOW, { taskId: String(taskId) }),
+  [LIVE_READ.HELD_TASK]: ([taskId = ""]) =>
+    askAct(ACT_KIND.TASKS_HELD_FOLLOW, { taskId: String(taskId) }),
   [LIVE_READ.DESCRIPTION_COMMENTS]: (_ids, meta) =>
     askAct(ACT_KIND.TASKS_COMMENTS_FOLLOW, readCommentSubject(meta?.follow)),
   [LIVE_READ.PULL_REQUEST]: pullRequestPartFollow(PULL_REQUEST_PART.PULL_REQUEST),
@@ -233,6 +254,26 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
   [LIVE_READ.REVIEW_OPTIONS]: pullRequestPartFollow(PULL_REQUEST_PART.REVIEW_OPTIONS),
   [LIVE_READ.PULL_REQUEST_CHAPTERS]: ([agentId, number]) =>
     askAct(ACT_KIND.CHAPTERS_FOLLOW, { agentId: String(agentId), number: Number(number) }),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST]: repositoryPullRequestPartFollow(
+    PULL_REQUEST_PART.PULL_REQUEST,
+  ),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: repositoryPullRequestPartFollow(
+    PULL_REQUEST_PART.CHECKS,
+  ),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: repositoryPullRequestPartFollow(
+    PULL_REQUEST_PART.CONVERSATION,
+  ),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: repositoryPullRequestPartFollow(
+    PULL_REQUEST_PART.PUBLISHED,
+  ),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: repositoryPullRequestPartFollow(
+    PULL_REQUEST_PART.VIEWED,
+  ),
+  [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: repositoryPullRequestPartFollow(
+    PULL_REQUEST_PART.REVIEW_OPTIONS,
+  ),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: (ids) =>
+    askAct(ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW, repositoryPullRequestOf(ids)),
   [LIVE_READ.TRANSCRIPT]: ([agentId = "", callId]) =>
     askAct(
       ACT_KIND.AGENTS_TRANSCRIPT,
@@ -271,6 +312,15 @@ function pullRequestPartIds([agentId = "", number = ""]: readonly string[]): rea
   return [agentId, number === OWN_PULL_REQUEST ? OWN_PULL_REQUEST : Number(number)];
 }
 
+/** A pull request's ids by its repository from its path: the workspace, the repository, then the number. */
+function repositoryPullRequestIds([
+  workspaceId = "",
+  repository = "",
+  number = "",
+]: readonly string[]): readonly LiveReadId[] {
+  return [workspaceId, repository, Number(number)];
+}
+
 /**
  * The ids each live read keyed by a number stands for, from its path in its
  * slice, whose every segment is a string; a read keyed by strings alone
@@ -286,6 +336,13 @@ const LIVE_KEY_IDS: Readonly<
   [LIVE_READ.PULL_REQUEST_VIEWED]: pullRequestPartIds,
   [LIVE_READ.REVIEW_OPTIONS]: pullRequestPartIds,
   [LIVE_READ.PULL_REQUEST_CHAPTERS]: ([agentId = "", number = ""]) => [agentId, Number(number)],
+  [LIVE_READ.REPOSITORY_PULL_REQUEST]: repositoryPullRequestIds,
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: repositoryPullRequestIds,
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: repositoryPullRequestIds,
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: repositoryPullRequestIds,
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: repositoryPullRequestIds,
+  [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: repositoryPullRequestIds,
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: repositoryPullRequestIds,
 };
 
 /** The transcript a transcript's ids name: the agent's own, or its worker's by the call that started it. */
@@ -307,6 +364,7 @@ const LIVE_QUERY_READS = [
   LIVE_READ.DEVICE_PRESENCE,
   LIVE_READ.HOSTS,
   LIVE_READ.MACHINES,
+  LIVE_READ.MACHINE_ASKS,
   LIVE_READ.THIS_MAC_HOST,
   LIVE_READ.AGENT_ORIGINS,
   LIVE_READ.INBOX_ITEMS,
@@ -314,7 +372,7 @@ const LIVE_QUERY_READS = [
   LIVE_READ.LINK_STANDINGS,
   LIVE_READ.PAGES,
   LIVE_READ.BROWSER_TABS,
-  LIVE_READ.DESCRIPTION_DOCUMENT,
+  LIVE_READ.HELD_TASK,
   LIVE_READ.DESCRIPTION_COMMENTS,
   LIVE_READ.PULL_REQUEST,
   LIVE_READ.PULL_REQUEST_CHECKS,
@@ -323,6 +381,13 @@ const LIVE_QUERY_READS = [
   LIVE_READ.PULL_REQUEST_VIEWED,
   LIVE_READ.REVIEW_OPTIONS,
   LIVE_READ.PULL_REQUEST_CHAPTERS,
+  LIVE_READ.REPOSITORY_PULL_REQUEST,
+  LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS,
+  LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION,
+  LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED,
+  LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED,
+  LIVE_READ.REPOSITORY_REVIEW_OPTIONS,
+  LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS,
   LIVE_READ.TRANSCRIPT,
   LIVE_READ.HISTORY,
   LIVE_READ.INSTALLED_SKILLS,
@@ -346,13 +411,13 @@ const LIVE_QUERY_READS = [
 /** What tells a live read's query from any other: its key's first element is one of these. */
 const MOVED: ReadonlySet<string> = new Set<LiveReadName>(LIVE_QUERY_READS);
 
-/** How many ids a key of `read` names: none for a read whose slice is one read, as the feed's is, else one per id its slice is keyed by (`HOST_READ_SLICE`). */
+/** How many ids a key of `read` names: none for a read whose slice is one read, as the feed's is, else one per level of ids its slice is keyed by (`HOST_READ_SLICE`). */
 function depthOf(read: LiveReadName): number {
   const slice = HOST_READ_SLICE[read];
 
   if (slice.on === KEYS_ON.ROWS) return 0;
 
-  return slice.keys === READ_KEYS.TWO ? 2 : 1;
+  return READ_KEY_DEPTH[slice.keys];
 }
 
 /** The key ids a read's path in its slice stands for (`LIVE_KEY_IDS`). */
@@ -527,6 +592,10 @@ export const hostsQuery = (accountId: string | undefined) =>
 export const machinesQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.MACHINES, accountIds(accountId));
 
+/** The asks the account's machines hold for its answer, by the account. */
+export const machineAsksQuery = (accountId: string | undefined) =>
+  liveReadQuery(LIVE_READ.MACHINE_ASKS, accountIds(accountId));
+
 /** This Mac's host, by the account, which the host reads on its own every few seconds and holds for the session. */
 export const thisMacHostQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.THIS_MAC_HOST, accountIds(accountId));
@@ -577,8 +646,8 @@ export const browserTabsQuery = (place: BrowserTabsPlace | undefined) =>
   );
 
 /** One task's plan, by the task, which the window's open task holds. */
-export const descriptionDocumentQuery = (taskId: string | undefined) =>
-  liveReadQuery(LIVE_READ.DESCRIPTION_DOCUMENT, taskId === undefined ? undefined : [taskId]);
+export const heldTaskQuery = (taskId: string | undefined) =>
+  liveReadQuery(LIVE_READ.HELD_TASK, taskId === undefined ? undefined : [taskId]);
 
 /** The comments a surface holds, as the acts name them, with no page key where it reads the plan's. */
 function commentsFollowOf({ taskId, pageId }: CommentSubject): CommentSubject {
@@ -634,6 +703,43 @@ export const pullRequestChaptersQuery = (key: PullRequestChaptersReadParams | un
     LIVE_READ.PULL_REQUEST_CHAPTERS,
     key === undefined ? undefined : [key.agentId, key.number],
   );
+
+/** The ids of a pull request named by its repository: the workspace, the repository, then the number; none while a surface names none. */
+function repositoryPullRequestKeyIds(
+  key: RepositoryPullRequestParams | undefined,
+): readonly LiveReadId[] | undefined {
+  return key === undefined ? undefined : [key.workspaceId, key.repository, key.number];
+}
+
+/** A Pull request tab's pull request named by its repository and number. */
+export const repositoryPullRequestQuery = (key: RepositoryPullRequestParams | undefined) =>
+  liveReadQuery(LIVE_READ.REPOSITORY_PULL_REQUEST, repositoryPullRequestKeyIds(key));
+
+/** The checks on a pull request named by its repository and number. */
+export const repositoryPullRequestChecksQuery = (key: RepositoryPullRequestParams | undefined) =>
+  liveReadQuery(LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS, repositoryPullRequestKeyIds(key));
+
+/** The conversation of a pull request named by its repository and number. */
+export const repositoryPullRequestConversationQuery = (
+  key: RepositoryPullRequestParams | undefined,
+) =>
+  liveReadQuery(LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION, repositoryPullRequestKeyIds(key));
+
+/** A pull request named by its repository and number as GitHub holds it now, its branch and its head's checks among it. */
+export const repositoryPullRequestPublishedQuery = (key: RepositoryPullRequestParams | undefined) =>
+  liveReadQuery(LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED, repositoryPullRequestKeyIds(key));
+
+/** Which of a pull request's files the member marked viewed, by its repository and number. */
+export const repositoryPullRequestViewedQuery = (key: RepositoryPullRequestParams | undefined) =>
+  liveReadQuery(LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED, repositoryPullRequestKeyIds(key));
+
+/** What the reviewer and label pickers offer of a pull request named by its repository and number. */
+export const repositoryReviewOptionsQuery = (key: RepositoryPullRequestParams | undefined) =>
+  liveReadQuery(LIVE_READ.REPOSITORY_REVIEW_OPTIONS, repositoryPullRequestKeyIds(key));
+
+/** A pull request's chapters, by its repository and number. */
+export const repositoryPullRequestChaptersQuery = (key: RepositoryPullRequestParams | undefined) =>
+  liveReadQuery(LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS, repositoryPullRequestKeyIds(key));
 
 /** The ids of a read keyed by one id: that id, or none while a surface names none. */
 function oneId(id: string | undefined): readonly string[] | undefined {
@@ -735,7 +841,7 @@ export const holderInboxRetryMutation = () => actMutation(ACT_KIND.AGENTS_INBOX_
 export const descriptionCommentsRetryMutation = () => actMutation(ACT_KIND.TASKS_COMMENTS_RETRY);
 
 /** Try again on a task's plan. */
-export const descriptionDocumentRetryMutation = () => actMutation(ACT_KIND.TASKS_DOCUMENT_RETRY);
+export const heldTaskRetryMutation = () => actMutation(ACT_KIND.TASKS_HELD_RETRY);
 
 /** Try again on one part of a pull request, named by its part, its agent, and its number, which answers once its ask has landed, so a write's read-back can wait on it. */
 export const pullRequestPartRetryMutation = () =>
@@ -743,6 +849,14 @@ export const pullRequestPartRetryMutation = () =>
 
 /** Try again on a pull request's chapters. */
 export const pullRequestChaptersRetryMutation = () => actMutation(ACT_KIND.CHAPTERS_RETRY);
+
+/** Try again on one part of a pull request named by its part, its repository, and its number, which answers once its ask has landed. */
+export const repositoryPullRequestPartRetryMutation = () =>
+  actMutation(ACT_KIND.PULL_REQUESTS_PART_RETRY);
+
+/** Try again on a pull request's chapters named by its repository and number. */
+export const repositoryPullRequestChaptersRetryMutation = () =>
+  actMutation(ACT_KIND.CHAPTERS_REPOSITORY_RETRY);
 
 /** Try again on a transcript. */
 export const transcriptRetryMutation = () => actMutation(ACT_KIND.AGENTS_TRANSCRIPT_RETRY);

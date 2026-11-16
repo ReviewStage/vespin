@@ -17,6 +17,7 @@ import {
   COMPUTER_RECORDING_BOUNDS,
   COMPUTER_SCROLL_DIRECTION,
   type ComputerApp,
+  type ComputerCursor,
   type ComputerOutcome,
   type ComputerShot,
   MACHINE_COMMAND_KIND,
@@ -67,6 +68,14 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  * transcript, since pictures are kept by their bytes. Neither picture's
  * base64 is spelled out in the result the conversation stores.
  *
+ * An action that can change the window asks the Mac for one picture of it
+ * once it has settled, at the kept copy's size, so the people watching see
+ * it catch up with the agent's cursor; it is kept beside the transcript as
+ * a read's is, and answered under `watched`, which the model is never
+ * handed: the agent's text leaves it out (`storedComputerOutput`), and the
+ * call carries it apart, in its result's `_meta` (`computerWatched`), to
+ * the transcript alone. A Mac from before it answers no picture.
+ *
  * An app's window is recorded as the browser is, with `record` and
  * `stop_recording`, under the same limits and words where they mean the
  * same (`recording-keep.ts`): the Mac records the window, the agent's
@@ -78,13 +87,24 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  */
 
 /** How long one action may run once its app is allowed; the ask before it stands apart (`machineAskSeconds`). */
-export const COMPUTER_TOOL_TIMEOUT_SECONDS = 120;
+const COMPUTER_TOOL_TIMEOUT_SECONDS = 120;
 
 /** The two screenshots a read asks for: the model's copy, and the one kept beside the transcript. */
 const COMPUTER_SHOTS = {
   MODEL: { edge: 1280, quality: 0.7 },
   KEPT: { edge: 2560, quality: 0.8 },
 } as const;
+
+/** The actions that can change their app's window, after which the Mac is asked for one picture of it as it settled. */
+const SETTLING_ACTIONS: ReadonlySet<string> = new Set([
+  COMPUTER_ACTION.CLICK,
+  COMPUTER_ACTION.TYPE_TEXT,
+  COMPUTER_ACTION.PRESS_KEY,
+  COMPUTER_ACTION.SCROLL,
+  COMPUTER_ACTION.DRAG,
+  COMPUTER_ACTION.SET_VALUE,
+  COMPUTER_ACTION.PERFORM_SECONDARY_ACTION,
+]);
 
 const elementIndex = Schema.optionalKey(
   describeWire(
@@ -251,6 +271,7 @@ function actionOf(input: ComputerInput): MacComputerAction | undefined {
     ...(action === COMPUTER_ACTION.GET_APP_STATE
       ? { shots: [COMPUTER_SHOTS.MODEL, COMPUTER_SHOTS.KEPT] }
       : undefined),
+    ...(SETTLING_ACTIONS.has(action) ? { shot: COMPUTER_SHOTS.KEPT } : undefined),
     ...(action === COMPUTER_ACTION.RECORD
       ? {
           max_seconds: COMPUTER_RECORDING_BOUNDS.MAX_SECONDS,
@@ -322,6 +343,23 @@ type ActedOutcome = Exclude<
   { readonly recorded: unknown } | { readonly unrecorded: unknown }
 >;
 
+/** Where the agent's cursor stands once the action landed, as a share of the app's last read window, which the panel draws its pointer at; none where the Mac answered none. */
+function cursorOf(outcome: { readonly cursor?: ComputerCursor }): object | undefined {
+  return outcome.cursor === undefined ? undefined : { cursor: outcome.cursor };
+}
+
+/** What the people watching are shown of an action and the model never is: the window as it settled, where the Mac answered it and it was kept. */
+function watchedOf(
+  transcript: ConversationTarget,
+  shot: ComputerShot | undefined,
+): Effect.Effect<object | undefined, never, DatabaseServices> {
+  if (shot === undefined || shot.jpeg === "") return Effect.succeed(undefined);
+
+  return Effect.map(kept(transcript, shot.jpeg), (note) =>
+    "picture" in note ? { watched: { kept: note } } : undefined,
+  );
+}
+
 /** What a call answers for what the action came to, its pictures kept or handed on; a recording started, how long it runs at most, as the browser's answers. */
 function answeredOutcome(
   transcript: ConversationTarget,
@@ -335,11 +373,14 @@ function answeredOutcome(
     const done =
       outcome.done === COMPUTER_ACTION.RECORD
         ? { done: outcome.done, maxSeconds: COMPUTER_RECORDING_BOUNDS.MAX_SECONDS }
-        : { done: outcome.done };
+        : { done: outcome.done, ...cursorOf(outcome) };
 
-    if (acted === undefined) return Effect.succeed({ ...ran, ...done });
+    return Effect.gen(function* () {
+      const app = acted === undefined ? undefined : { app: yield* namedApp(transcript, acted) };
+      const watched = yield* watchedOf(transcript, outcome.shot);
 
-    return Effect.map(namedApp(transcript, acted), (app) => ({ ...ran, ...done, app }));
+      return { ...ran, ...done, ...app, ...watched };
+    });
   }
 
   if ("apps" in outcome) {
@@ -364,6 +405,7 @@ function answeredOutcome(
       window: outcome.window,
       elements: outcome.elements,
       truncated: outcome.truncated,
+      ...cursorOf(outcome),
       ...(shown === undefined
         ? undefined
         : {
@@ -573,10 +615,23 @@ export function computerScreenshot(
     : undefined;
 }
 
-/** A call's result as the conversation keeps it: the model's copy of the window without its base64, the kept copy named by id. */
+/**
+ * A call's result as the agent reads it in words, which the transcript keeps
+ * too: the model's copy of the window without its base64, a read's kept
+ * copy named by id, and what only the people watching are shown
+ * (`computerWatched`) left out.
+ */
 export function storedComputerOutput(output: UnparsedWireValue): UnparsedWireValue {
-  if (!isRecord(output) || !isRecord(output.screenshot)) return output;
-  const { data: _data, ...screenshot } = output.screenshot;
+  if (!isRecord(output)) return output;
+  const { watched, ...answered } = output;
 
-  return unparsedWire({ ...output, screenshot });
+  if (!isRecord(answered.screenshot)) return watched === undefined ? output : answered;
+  const { data: _data, ...screenshot } = answered.screenshot;
+
+  return unparsedWire({ ...answered, screenshot });
+}
+
+/** What a call's result holds for the people watching alone, which its result's `_meta` carries to the transcript and no model reads; none where it holds none. */
+export function computerWatched(output: UnparsedWireValue): UnparsedWireValue | undefined {
+  return isRecord(output) && isRecord(output.watched) ? output.watched : undefined;
 }

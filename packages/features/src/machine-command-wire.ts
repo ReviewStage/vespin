@@ -241,6 +241,15 @@ const computerShotRequestSchema = EffectSchema.Struct({
 });
 
 /**
+ * The one screenshot an action that can change its app's window asks to be
+ * taken of it once the action has settled, for the people watching the
+ * agent; none where the service asks for none. Note that a desktop from
+ * before it drops the key on read, as an answer ignores one a newer service
+ * added, and answers no picture.
+ */
+const settledShot = EffectSchema.optionalKey(computerShotRequestSchema);
+
+/**
  * One action on one app, as the helper reads it. Note that its fields are
  * spelled as the helper's own (`element_index`, not `elementIndex`), so the
  * Mac hands an action to the helper as it came, and the model's tool, which
@@ -259,6 +268,7 @@ export const macComputerActionSchema = EffectSchema.Union([
   EffectSchema.Struct({
     op: EffectSchema.Literal(COMPUTER_ACTION.CLICK),
     app: appName,
+    shot: settledShot,
     element_index: EffectSchema.optionalKey(elementIndex),
     x: EffectSchema.optionalKey(coordinate),
     y: EffectSchema.optionalKey(coordinate),
@@ -274,16 +284,19 @@ export const macComputerActionSchema = EffectSchema.Union([
   EffectSchema.Struct({
     op: EffectSchema.Literal(COMPUTER_ACTION.TYPE_TEXT),
     app: appName,
+    shot: settledShot,
     text: typed.check(EffectSchema.isMinLength(1)),
   }),
   EffectSchema.Struct({
     op: EffectSchema.Literal(COMPUTER_ACTION.PRESS_KEY),
     app: appName,
+    shot: settledShot,
     key: keyName,
   }),
   EffectSchema.Struct({
     op: EffectSchema.Literal(COMPUTER_ACTION.SCROLL),
     app: appName,
+    shot: settledShot,
     element_index: EffectSchema.optionalKey(elementIndex),
     direction: EffectSchema.optionalKey(
       EffectSchema.Literals(Object.values(COMPUTER_SCROLL_DIRECTION)),
@@ -297,6 +310,7 @@ export const macComputerActionSchema = EffectSchema.Union([
   EffectSchema.Struct({
     op: EffectSchema.Literal(COMPUTER_ACTION.DRAG),
     app: appName,
+    shot: settledShot,
     from_x: coordinate,
     from_y: coordinate,
     to_x: coordinate,
@@ -305,12 +319,14 @@ export const macComputerActionSchema = EffectSchema.Union([
   EffectSchema.Struct({
     op: EffectSchema.Literal(COMPUTER_ACTION.SET_VALUE),
     app: appName,
+    shot: settledShot,
     element_index: elementIndex,
     value: typed,
   }),
   EffectSchema.Struct({
     op: EffectSchema.Literal(COMPUTER_ACTION.PERFORM_SECONDARY_ACTION),
     app: appName,
+    shot: settledShot,
     element_index: elementIndex,
     action: keyName,
   }),
@@ -577,6 +593,21 @@ const computerRecordedSchema = EffectSchema.Struct({
   ),
 });
 
+/** A share of a window's width or height from its top left: 0 at its left or top edge, 1 at its right or bottom. */
+const windowShare = EffectSchema.Finite.check(EffectSchema.isBetween({ minimum: 0, maximum: 1 }));
+
+/**
+ * Where the agent's cursor stands on the Mac once an action lands, or as a
+ * read leaves it, as a share of the window the app's last read captured, so
+ * it lands on the same spot of that read's picture at any size it is drawn.
+ */
+const computerCursorSchema = EffectSchema.Struct({
+  xFraction: windowShare,
+  yFraction: windowShare,
+});
+
+export type ComputerCursor = typeof computerCursorSchema.Type;
+
 /** What an action came to: the apps listed, an app's window read, the action done on its app, or a recording stopped, or why it came to no video. */
 const computerOutcomeSchema = EffectSchema.Union([
   EffectSchema.Struct({
@@ -600,9 +631,15 @@ const computerOutcomeSchema = EffectSchema.Union([
     shots: EffectSchema.Array(computerShotSchema).check(
       EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_SHOTS),
     ),
+    cursor: EffectSchema.optionalKey(computerCursorSchema),
   }),
-  // Note that an action names the app it acted on, as the Mac described it before asking, so its row wears the app's icon.
-  EffectSchema.Struct({ done: keyName, app: EffectSchema.optionalKey(computerAppSchema) }),
+  // Note that an action names the app it acted on, as the Mac described it before asking, so its row wears the app's icon, and carries the window as it settled where the action asked for it and the helper could take it.
+  EffectSchema.Struct({
+    done: keyName,
+    app: EffectSchema.optionalKey(computerAppSchema),
+    cursor: EffectSchema.optionalKey(computerCursorSchema),
+    shot: EffectSchema.optionalKey(computerShotSchema),
+  }),
   EffectSchema.Struct({ recorded: computerRecordedSchema }),
   EffectSchema.Struct({ unrecorded: EffectSchema.Literals(Object.values(RECORDING_FAILURE)) }),
 ]);
@@ -693,8 +730,10 @@ export const MACHINE_UNREACHED = {
   DEFAULT_GONE: "default-gone",
   /** The call named a machine this task's agents may not use. */
   UNKNOWN_MACHINE: "unknown-machine",
-  /** No default was set and none of the owner's machines could take it. */
+  /** The call named no machine, its agent picked none, and its owner has no default machine. */
   NO_MACHINE: "no-machine",
+  /** A terminal command for the machine a local agent runs on itself, whose own shell runs there already. */
+  OWN_SHELL: "own-shell",
 } as const;
 
 export type MachineUnreached = (typeof MACHINE_UNREACHED)[keyof typeof MACHINE_UNREACHED];

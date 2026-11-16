@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { isDeepStrictEqual } from "node:util";
 import { it } from "@effect/vitest";
 import {
   AGENT_CALL_FAILURE,
@@ -9,23 +10,31 @@ import {
 import {
   AGENT_STATUS,
   type AgentPullRequest,
+  type AgentStatus,
   CHECK_SUMMARY,
+  type ListedAgent,
   MERGE_STATE,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
+import { listedAgentOf } from "@repo/features/task-list-live";
 import { Effect, PubSub, Stream } from "effect";
 import { type AppPullRequestParts, OWN_PULL_REQUEST } from "./app-state.js";
+import type { ListMove } from "./list-moves.js";
 import {
+  type ListDrawing,
   type PullRequestKey,
   type PullRequestListing,
   pullRequestParts,
+  type RepositoryPullRequestKey,
+  repositoryPullRequestParts,
 } from "./pull-request-parts.js";
+import { agentListRow } from "./testing/task-list-rows.js";
 import { windowFocus } from "./window-focus.js";
 
 /**
- * pull-request-parts.test.ts -- the parts of a pull request a Pull request tab holds are asked again together as the task list says it moved, or first names the agent's own, and keep an answer over a later failure.
+ * pull-request-parts.test.ts -- the parts of a pull request a Pull request tab holds, through an agent or by its repository and number, are asked again together as the task list says it moved, or first names the agent's own, and keep an answer over a later failure.
  */
 
 const AGENT = "3c2e1d0f-9a8b-4c7d-8e6f-5a4b3c2d1e0f";
@@ -33,6 +42,7 @@ const REVIEWER = "7d6c5b4a-3e2f-4a1b-9c8d-7e6f5a4b3c2d";
 const TASK = "5e4d3c2b-1a0f-4e9d-8c7b-6a5f4e3d2c1b";
 const OWN = "https://github.com/acme/relay/pull/42";
 const OTHER = "https://github.com/acme/relay/pull/7";
+const WORKSPACE = "9b8a7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d";
 
 /** A pull request as the task list's line for it stands. */
 function line(
@@ -73,20 +83,55 @@ function overview(url: string, number: number): AgentOverviewPullRequestAnswerVi
   };
 }
 
+/** An agent of the list as it lists it, in `status`. */
+function agent(id: string, status: AgentStatus): ListedAgent {
+  return { ...listedAgentOf(agentListRow(TASK, 1_000), true, undefined), id, status };
+}
+
 /** The list with the agent working on its own pull request, and the reviewer's pull request beside it. */
 function listing(
   moved: { own?: Partial<AgentPullRequest>; other?: Partial<AgentPullRequest> } = {},
-  status: (typeof AGENT_STATUS)[keyof typeof AGENT_STATUS] = AGENT_STATUS.RUNNING,
-): PullRequestListing {
+  status: AgentStatus = AGENT_STATUS.RUNNING,
+): ListDrawing {
   return {
-    statuses: new Map([
-      [AGENT, status],
-      [REVIEWER, AGENT_STATUS.COMPLETED],
-    ]),
-    pullRequests: [
+    taskAgents: [agent(AGENT, status), agent(REVIEWER, AGENT_STATUS.COMPLETED)],
+    agentPullRequests: [
       { agentId: AGENT, taskId: TASK, pullRequest: line(OWN, 42, moved.own) },
       { agentId: REVIEWER, taskId: TASK, pullRequest: line(OTHER, 7, moved.other) },
     ],
+  };
+}
+
+/** Each row of `after` that is not equal to the one of `before` keyed alike, and each of `before` that `after` lets go, as the list's live queries tell them. */
+function movesOf<Row>(
+  before: readonly Row[],
+  after: readonly Row[],
+  keyOf: (row: Row) => string,
+): ListMove<Row>[] {
+  const was = new Map(before.map((row) => [keyOf(row), row]));
+  const now = new Map(after.map((row) => [keyOf(row), row]));
+
+  return [...new Set([...was.keys(), ...now.keys()])].flatMap((key) => {
+    const move = { was: was.get(key), now: now.get(key) };
+
+    return isDeepStrictEqual(move.was, move.now) ? [] : [move];
+  });
+}
+
+/** The listing of the drawing `after`, told what moved since `before`, or whole where it is the first. */
+function listingOf(before: ListDrawing | undefined, after: ListDrawing): PullRequestListing {
+  if (before === undefined) {
+    return {
+      whole: true,
+      agents: [],
+      pullRequests: after.agentPullRequests.map((now) => ({ was: undefined, now })),
+    };
+  }
+
+  return {
+    whole: false,
+    agents: movesOf(before.taskAgents, after.taskAgents, (row) => row.id),
+    pullRequests: movesOf(before.agentPullRequests, after.agentPullRequests, (row) => row.agentId),
   };
 }
 
@@ -160,11 +205,19 @@ function subject(failing: Set<PullRequestPart> = new Set()) {
       },
     });
 
+    let drawnBefore: ListDrawing | undefined;
+
     return {
       parts,
       asked,
       told,
-      draw: (drawn: PullRequestListing) => Effect.andThen(PubSub.publish(drawings, drawn), settled),
+      draw: (drawn: ListDrawing) =>
+        Effect.suspend(() => {
+          const told = listingOf(drawnBefore, drawn);
+          drawnBefore = drawn;
+
+          return Effect.andThen(PubSub.publish(drawings, told), settled);
+        }),
       /** Holds every part of the agent's own pull request, and of the reviewer's that its tab names by number, for the caller's scope. */
       holdBoth: Effect.andThen(
         Effect.forEach(PARTS, (part) =>
@@ -232,7 +285,7 @@ it.effect(
       const listed = listing();
       yield* draw({
         ...listed,
-        pullRequests: listed.pullRequests.filter((each) => each.agentId !== AGENT),
+        agentPullRequests: listed.agentPullRequests.filter((each) => each.agentId !== AGENT),
       });
       asked.length = 0;
 
@@ -291,5 +344,133 @@ it.effect(
           [AGENT]: { [OWN_PULL_REQUEST]: { rows: { pullRequest: { checks: [] } } } },
         },
       });
+    }),
+);
+
+/** The parts of pull requests named by their repository and number over a fake service, each ask written down as `part repository#number`, with the list's drawings handed through `draw`. */
+function repositorySubject() {
+  return Effect.gen(function* () {
+    const asked: string[] = [];
+    const drawings = yield* PubSub.unbounded<PullRequestListing>();
+
+    const answering =
+      <Answer>(part: PullRequestPart, answer: Answer) =>
+      (key: RepositoryPullRequestKey) =>
+        Effect.sync(() => {
+          asked.push(`${part} ${key.repository}#${key.number}`);
+
+          return answer;
+        });
+
+    const parts = yield* repositoryPullRequestParts({
+      gate: () => true,
+      focus: yield* windowFocus,
+      ask: {
+        pullRequest: answering(PULL_REQUEST_PART.PULL_REQUEST, overview(OWN, 42)),
+        checks: answering(PULL_REQUEST_PART.CHECKS, { pullRequest: { checks: [] } }),
+        conversation: answering(PULL_REQUEST_PART.CONVERSATION, {
+          pullRequest: { reviewers: [], conversation: [], earlier: 0 },
+        }),
+        published: answering(PULL_REQUEST_PART.PUBLISHED, {
+          repository: "acme/relay",
+          branch: "agent/invite-once",
+          pullRequest: line(OWN, 42),
+        }),
+        reviewOptions: answering(PULL_REQUEST_PART.REVIEW_OPTIONS, {
+          labels: [],
+          users: [],
+          teams: [],
+        }),
+        viewed: answering(PULL_REQUEST_PART.VIEWED, {
+          outcome: PULL_REQUEST_WRITE_OUTCOME.DONE,
+          files: [],
+        }),
+      },
+      listings: Effect.map(PubSub.subscribe(drawings), Stream.fromSubscription),
+      tell: {
+        [LIVE_READ.REPOSITORY_PULL_REQUEST]: () => undefined,
+        [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: () => undefined,
+        [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: () => undefined,
+        [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: () => undefined,
+        [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: () => undefined,
+        [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: () => undefined,
+      },
+    });
+
+    let drawnBefore: ListDrawing | undefined;
+
+    return {
+      asked,
+      draw: (drawn: ListDrawing) =>
+        Effect.suspend(() => {
+          const told = listingOf(drawnBefore, drawn);
+          drawnBefore = drawn;
+
+          return Effect.andThen(PubSub.publish(drawings, told), settled);
+        }),
+      /** Holds every part of the agent's pull request, its repository spelled in another case than its address, for the caller's scope. */
+      holdOwn: Effect.andThen(
+        Effect.forEach(PARTS, (part) =>
+          parts.hold({ part, workspaceId: WORKSPACE, repository: "Acme/Relay", number: 42 }),
+        ),
+        settled,
+      ),
+    };
+  });
+}
+
+it.effect(
+  "a pull request held by its repository is asked again as the list's line for it moves, whatever the case its repository is spelled in, and not as another's moves",
+  () =>
+    Effect.gen(function* () {
+      const { asked, draw, holdOwn } = yield* repositorySubject();
+      yield* holdOwn;
+      yield* draw(listing());
+      asked.length = 0;
+
+      yield* draw(listing({ other: { checks: CHECK_SUMMARY.PASSING } }));
+      assert.deepEqual(asked, []);
+
+      yield* draw(
+        listing({ own: { headSha: "e4f5a6b" }, other: { checks: CHECK_SUMMARY.PASSING } }),
+      );
+      assert.deepEqual(
+        asked.toSorted(),
+        [...MOVING, PULL_REQUEST_PART.VIEWED].map((part) => `${part} Acme/Relay#42`).toSorted(),
+      );
+    }),
+);
+
+it.effect(
+  "a pull request held by its repository is asked again as the status of the agent the list says published it moves",
+  () =>
+    Effect.gen(function* () {
+      const { asked, draw, holdOwn } = yield* repositorySubject();
+      yield* holdOwn;
+      yield* draw(listing());
+      asked.length = 0;
+
+      yield* draw(listing({}, AGENT_STATUS.COMPLETED));
+
+      assert.deepEqual(asked.toSorted(), MOVING.map((part) => `${part} Acme/Relay#42`).toSorted());
+    }),
+);
+
+it.effect(
+  "a pull request held by its repository is asked again as the list first names it, as an agent's own is when it publishes",
+  () =>
+    Effect.gen(function* () {
+      const { asked, draw, holdOwn } = yield* repositorySubject();
+      yield* holdOwn;
+      const listed = listing();
+      yield* draw({
+        ...listed,
+        agentPullRequests: listed.agentPullRequests.filter((each) => each.agentId !== AGENT),
+      });
+      asked.length = 0;
+
+      yield* draw(listed);
+
+      assert.deepEqual(asked.toSorted(), MOVING.map((part) => `${part} Acme/Relay#42`).toSorted());
     }),
 );

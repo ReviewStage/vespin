@@ -1,5 +1,5 @@
 /**
- * pull-request-chapters.ts -- one coding agent's pull request's chapters bound: their one statement, the tables it reads, the topics that wake it, the workspace it serves, and what the reader's Generate stands on beside it.
+ * pull-request-chapters.ts -- a pull request's chapters bound, through a coding agent and by its repository and number: each read's one statement, the tables it reads, the topics that wake it, what it serves, and what the reader's Generate stands on beside it.
  *
  * The statement reads the newest claim of the pull request numbered under
  * the agent's repository in the agent's workspace, in
@@ -21,11 +21,19 @@
  * is not found. Whether the reader can generate them, and on what, comes
  * from their own keys, which no statement reads, so it is answered beside
  * the rows on every poll.
+ *
+ * The read by the repository and number reads the same newest claim under
+ * the workspace and the repository's name as GitHub spells it, which it
+ * serves once a token minted for the repository confirms the workspace
+ * reaches it, as the read of them by the repository admits a reader
+ * (`reachedRepository`), for a member of that workspace alone: a workspace
+ * the reader is no member of is not found. It is woken by a claim, finish,
+ * or failure in that workspace, and by what admits the reader to it.
  */
 
 import { queryBuilder } from "@repo/database/core/query";
 import { NEWEST_CLAIM } from "@repo/database/models/pull-request-chapters-store";
-import { agentVisibleTo } from "@repo/database/models/workspace-store";
+import { agentVisibleTo, workspaceReachableBy } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { pullRequestChapters } from "@repo/database/schemas/pull-request-chapters";
 import { TOPIC } from "@repo/database/sync/notification";
@@ -38,12 +46,16 @@ import {
   taskSync,
 } from "@repo/database/sync/tables";
 import type { chapterSchema } from "@repo/features/pull-request-chapters";
-import { PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
+import {
+  PULL_REQUEST_CHAPTERS_READ,
+  REPOSITORY_PULL_REQUEST_CHAPTERS_READ,
+} from "@repo/features/pull-request-chapters-live";
 import { and, eq, sql } from "drizzle-orm";
 import { Effect } from "effect";
 import { reachedAgentById } from "../../agents/agent-reach.js";
 import { pullRequestNumberOf } from "../../agents/asked-pull-request.js";
 import { generatorFor, keptUnder } from "../../chapters/pull-request-chapters-procedures.js";
+import { reachedRepository } from "../../github/repository-pull-request.js";
 import { HOSTED_REFUSAL } from "../../http/http-effect.js";
 import { bindLiveRead, liveRowsStatement, ownOrder } from "../live-read-binding.js";
 
@@ -53,6 +65,23 @@ function pullRequestNumberParam(param: string): number {
 
   return Number.isSafeInteger(number) && number > 0 ? number : 0;
 }
+
+/** The newest claim's columns, as both reads select them. */
+const CHAPTERS_COLUMNS = {
+  ordered: false,
+  columns: {
+    status: pullRequestChapters.status,
+    headSha: pullRequestChapters.headSha,
+    baseSha: pullRequestChapters.baseSha,
+    failureKind: pullRequestChapters.failureKind,
+    model: pullRequestChapters.model,
+    // Note that the chapters pass through as the JSON they were stored as, which the reader decodes.
+    chapters: sql<
+      readonly (typeof chapterSchema.Encoded)[] | null
+    >`${pullRequestChapters.chapters}`,
+  },
+  instants: { startedAt: pullRequestChapters.startedAt },
+} as const;
 
 export const pullRequestChaptersRead = bindLiveRead(PULL_REQUEST_CHAPTERS_READ, {
   reads: [
@@ -71,21 +100,7 @@ export const pullRequestChaptersRead = bindLiveRead(PULL_REQUEST_CHAPTERS_READ, 
   statements: ({ userId, id, number }) => ({
     chapters: liveRowsStatement(
       PULL_REQUEST_CHAPTERS_READ.parts.chapters,
-      {
-        ordered: false,
-        columns: {
-          status: pullRequestChapters.status,
-          headSha: pullRequestChapters.headSha,
-          baseSha: pullRequestChapters.baseSha,
-          failureKind: pullRequestChapters.failureKind,
-          model: pullRequestChapters.model,
-          // Note that the chapters pass through as the JSON they were stored as, which the reader decodes.
-          chapters: sql<
-            readonly (typeof chapterSchema.Encoded)[] | null
-          >`${pullRequestChapters.chapters}`,
-        },
-        instants: { startedAt: pullRequestChapters.startedAt },
-      },
+      CHAPTERS_COLUMNS,
       (selection) =>
         ownOrder(
           queryBuilder
@@ -124,3 +139,46 @@ export const pullRequestChaptersRead = bindLiveRead(PULL_REQUEST_CHAPTERS_READ, 
   }),
   beside: ({ params }) => generatorFor(params.userId),
 });
+
+export const repositoryPullRequestChaptersRead = bindLiveRead(
+  REPOSITORY_PULL_REQUEST_CHAPTERS_READ,
+  {
+    reads: [pullRequestChaptersSync, memberSync, githubPersonalTokenSync, githubRepositoryReadSync],
+    topics: ({ userId, workspaceId }) => [
+      [TOPIC.WORKSPACE_CHAPTERS, workspaceId],
+      [TOPIC.ACCOUNT, userId],
+    ],
+    statements: ({ userId, workspaceId, fullName, number }) => ({
+      chapters: liveRowsStatement(
+        REPOSITORY_PULL_REQUEST_CHAPTERS_READ.parts.chapters,
+        CHAPTERS_COLUMNS,
+        (selection) =>
+          ownOrder(
+            queryBuilder
+              .select(selection)
+              .from(pullRequestChapters)
+              .where(
+                and(
+                  eq(pullRequestChapters.organizationId, workspaceId),
+                  eq(pullRequestChapters.repository, fullName),
+                  eq(pullRequestChapters.pullRequestNumber, pullRequestNumberParam(number)),
+                  workspaceReachableBy(userId, workspaceId),
+                ),
+              )
+              .orderBy(...NEWEST_CLAIM)
+              .limit(1),
+          ),
+      ),
+    }),
+    // Note that the number is read first, so one of no shape is refused before the workspace is asked about.
+    serve: Effect.fnUntraced(function* ({ userId, workspaceId, repository, number }) {
+      const read = yield* pullRequestNumberOf([number]);
+
+      if (read === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+      const { subject } = yield* reachedRepository(userId, { workspaceId, repository });
+
+      return { fullName: subject.repository };
+    }),
+    beside: ({ params }) => generatorFor(params.userId),
+  },
+);

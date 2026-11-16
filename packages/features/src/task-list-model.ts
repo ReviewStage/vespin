@@ -16,10 +16,21 @@ import { isTaskSettled, TASK_STATUS, type TaskStatus, type TaskSummary } from ".
  * that they created, so a task of theirs nobody picked up never leaves it.
  * It holds the tasks to do and in progress alone (`SHOWN_STATUSES`), so a
  * filed backlog and the settled tasks stay out of the way of the work under
- * way, unless the reader asks for the finished sub-tasks back, which stand
- * under their parents (`taskInView`); a task from a service before
- * statuses has no status to leave it out by and always stands. The Tasks page lays the same tasks out its own way
- * (`tasks-page-model.ts`).
+ * way (`taskListed`); a task from a service before statuses has no status
+ * to leave it out by and always stands. The Tasks page lays the same tasks
+ * out its own way (`tasks-page-model.ts`).
+ *
+ * Where a task stands is decided by three rules, every list alike. A pin
+ * always stands, whatever its status or whoever is on it. A settled task
+ * never stands on its own: while the view shows finished sub-tasks, one
+ * stands under its parent wherever the parent stands, and nowhere else
+ * (`withSubTasks`). An open task stands once: in the section the member
+ * put it in, whatever its status or whoever is on it; else under its
+ * parent, where the parent stands; else under Following or Tasks, where it
+ * passes their filters, at the top where no ancestor of it stands
+ * (`homedTaskRows`), so open work never leaves the sidebar. A place the
+ * member chose decides where a task stands, and the filters thin only the
+ * lists the sidebar builds itself.
  *
  * The reader may narrow the list to
  * the tasks they follow (`ASSIGNED_TO.FOLLOWING`), and the tasks they follow
@@ -63,7 +74,7 @@ export type AssignedTo =
 export interface TaskListView {
   readonly grouping: TaskGrouping;
   readonly assignedTo: AssignedTo;
-  /** Whether a parent's finished sub-tasks stand under it (`taskInView`). */
+  /** Whether a parent's finished sub-tasks stand under it (`withSubTasks`). */
   readonly finishedSubTasks: boolean;
 }
 
@@ -235,7 +246,7 @@ export function createdByOnly(
 }
 
 /** Whether the reader follows a task: one of its followers. */
-export function followedBy(task: TaskSummary, readerId: string | undefined): boolean {
+function followedBy(task: TaskSummary, readerId: string | undefined): boolean {
   return (
     readerId !== undefined &&
     task.followers?.some((follower) => follower.userId === readerId) === true
@@ -277,7 +288,8 @@ export function tasksAssignedTo(
 /**
  * The tasks the Following group holds, newest active first: of `free`, the
  * tasks neither pinned nor put in a section, those the reader follows that
- * the view draws (`taskInView`) and the Tasks list, `listed`, does not hold.
+ * the lists draw on their own (`taskListed`) and the Tasks list, `listed`,
+ * does not hold.
  * Note that the sidebar draws a task in one place, as a pinned task leaves
  * its section, so a task pinned or put in a section by hand stands there
  * and not here, and the reader's own tasks, which they follow too, stand
@@ -286,15 +298,12 @@ export function tasksAssignedTo(
 export function followingTasks(
   free: readonly TaskSummary[],
   listed: readonly TaskSummary[],
-  view: Pick<TaskListView, "finishedSubTasks">,
   readerId: string | undefined,
 ): readonly TaskSummary[] {
   const held = new Set(listed.map((task) => task.id));
 
   return orderTasks(
-    free.filter(
-      (task) => !held.has(task.id) && followedBy(task, readerId) && taskInView(task, view),
-    ),
+    free.filter((task) => !held.has(task.id) && followedBy(task, readerId) && taskListed(task)),
   );
 }
 
@@ -313,20 +322,9 @@ export function tasksInStatuses(
   return tasks.filter((task) => taskInStatuses(task, statuses));
 }
 
-/**
- * Whether the view draws a task: one of a status the list shows
- * (`SHOWN_STATUSES`), or, while it shows finished sub-tasks, a sub-task
- * done or canceled, which stands under its parent wherever that is drawn
- * and nowhere where it is not (`homedTaskRows`), so a finished task at the
- * top stays out of the list.
- */
-export function taskInView(
-  task: TaskSummary,
-  view: Pick<TaskListView, "finishedSubTasks">,
-): boolean {
-  if (taskInStatuses(task, SHOWN_STATUSES)) return true;
-
-  return view.finishedSubTasks && task.parentTaskId !== undefined && taskFinished(task);
+/** Whether Following and Tasks draw a task on their own: one of a status they show (`SHOWN_STATUSES`), or one with no status to leave it out by. */
+export function taskListed(task: TaskSummary): boolean {
+  return taskInStatuses(task, SHOWN_STATUSES);
 }
 
 /** One task as a list nesting child tasks draws its row: how deep it stands, and whether the child tasks under it stand open. */
@@ -376,13 +374,6 @@ function heldAncestor(
   }
 
   return undefined;
-}
-
-/** Whether a task stands under a parent, which the sidebar draws it under or nowhere: one not pinned, naming a parent other than itself. */
-function underParent(task: TaskSummary): boolean {
-  return (
-    task.pinnedAt === undefined && task.parentTaskId !== undefined && task.parentTaskId !== task.id
-  );
 }
 
 /** The task a task stands under where `tasks` holds it: its nearest ancestor `tasks` holds (`heldAncestor`). */
@@ -479,16 +470,15 @@ export function drawnTaskRows(
  * list holds that parent, so each is moved out of the list it would sort
  * into and into the list holding its top task, or its nearest pinned one,
  * after that list's own rows, where `drawnTaskRows` nests it. A parent no
- * list holds, finished and hidden by the view, filtered out, or out of the
- * reader's sight, is passed by, walked through `every`, so its child task
- * stands under the nearest ancestor a list does hold, and its open work
- * never leaves the sidebar; one none of whose ancestors any list holds is
- * drawn nowhere, never at the top, and so is every task under it, however
- * deep. A task the member put in a list by hand, a pinned one in Pinned
- * or a sectioned one in its section, the first `placed` lists, stays there
- * with every task under it, and nests under its parent only where that
- * list holds the parent too, so a child task dragged into a section stands
- * in it rather than going back under its parent.
+ * list holds, settled or filtered out, is passed by, walked through
+ * `every`, so its child task stands under the nearest ancestor a list does
+ * hold; one none of whose ancestors any list holds stands at the top of the
+ * list it sorts into, with every task under it, so open work never leaves
+ * the sidebar. A task the member put in a list by hand, a pinned one in
+ * Pinned or a sectioned one in its section, the first `placed` lists, stays
+ * there with every task under it, and nests under its parent only where
+ * that list holds the parent too, so a child task dragged into a section
+ * stands in it rather than going back under its parent.
  */
 export function homedTaskRows(
   lists: readonly (readonly TaskSummary[])[],
@@ -519,11 +509,8 @@ export function homedTaskRows(
       above = heldAncestor(at, held, every);
     }
 
-    // The walk ends at a task put in its list by hand, which every task under it follows.
-    if (putByHand(at.id)) return listOf.get(at.id);
-
-    // The top of the walk is drawn nowhere where it stands under a parent no list holds, so neither is anything under it.
-    return above === undefined && underParent(at) ? undefined : listOf.get(at.id);
+    // The walk ends at the top task a list holds, or at one put in its list by hand, and every task under it follows that task's list.
+    return listOf.get(at.id);
   };
 
   const homed = lists.map((tasks) => tasks.map((task) => ({ task, home: homeOf(task) })));
@@ -534,6 +521,63 @@ export function homedTaskRows(
       from === list ? [] : tasks.flatMap(({ task, home }) => (home === list ? [task] : [])),
     ),
   ]);
+}
+
+/** Whether a task names a parent the sidebar may stand it under: one other than itself, and it not pinned, since a pin stands on its own. */
+function standsUnderParent(task: TaskSummary): task is TaskSummary & { parentTaskId: string } {
+  return (
+    task.pinnedAt === undefined && task.parentTaskId !== undefined && task.parentTaskId !== task.id
+  );
+}
+
+/**
+ * The lists `homedTaskRows` homed, each with the child tasks of `pool`
+ * that stand under a parent it holds after its own rows: an open one
+ * whatever its status or whoever is on it, and a settled one only while
+ * `finishedShown`, the view showing finished sub-tasks. A task the lists
+ * hold already, or one whose parent none holds, is left where it is, so a
+ * settled task never stands on its own, a section it was put in among the
+ * places it does not, and a child task stands under the parent it belongs
+ * to wherever that parent stands. Each pass stands the children of the
+ * last, to any depth, each in the order `pool` hands it.
+ */
+export function withSubTasks(
+  lists: readonly (readonly TaskSummary[])[],
+  pool: readonly TaskSummary[],
+  finishedShown: boolean,
+): TaskSummary[][] {
+  const listOf = new Map<string, number>();
+  lists.forEach((tasks, list) => {
+    for (const task of tasks) listOf.set(task.id, list);
+  });
+  const added = lists.map((): TaskSummary[] => []);
+
+  let waiting = pool.filter(
+    (task) =>
+      !listOf.has(task.id) && standsUnderParent(task) && (finishedShown || !taskFinished(task)),
+  );
+
+  for (let stood = true; stood; ) {
+    const next: TaskSummary[] = [];
+    stood = false;
+
+    for (const task of waiting) {
+      const list = task.parentTaskId === undefined ? undefined : listOf.get(task.parentTaskId);
+
+      if (list === undefined) {
+        next.push(task);
+        continue;
+      }
+
+      listOf.set(task.id, list);
+      added[list]?.push(task);
+      stood = true;
+    }
+
+    waiting = next;
+  }
+
+  return lists.map((tasks, list) => [...tasks, ...(added[list] ?? [])]);
 }
 
 /** How many of a task's child tasks are finished, of all of them. */

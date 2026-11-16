@@ -20,7 +20,7 @@ import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
-import { machineName, type ThisMac } from "@repo/features/machine-name";
+import { machineName, THIS_MAC, type ThisMac } from "@repo/features/machine-name";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import {
   encodeMention,
@@ -57,7 +57,7 @@ import {
   workspaceOfSlug,
 } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppInboxItems, AppStateSnapshot } from "@repo/host/app-state";
+import type { AppInboxItems } from "@repo/host/app-state";
 import type { MacApp } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
 import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
@@ -90,6 +90,7 @@ import {
 } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
+import { eq, useLiveQuery } from "@tanstack/react-db";
 import {
   queryOptions,
   skipToken,
@@ -121,7 +122,8 @@ import { useWorkspaceDirectory } from "../member-directory.js";
 import { memberRows, YOU_WORD } from "../member-rows.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { Highlighted } from "../search-field.js";
-import { appStateQuery } from "../use-app-state.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import { appStateQuery, selectMachineCommandDevice, selectWorkspaces } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { type AgentRowPlace, agentMenuRow, useAgentRowPlace } from "./agent-menu-row.js";
 import { useComputerApps } from "./agent-pictures.js";
@@ -254,18 +256,23 @@ import { MachineGlyph, MachineOwnerFace, useWorkspaceMachines } from "./workspac
  * Nothing typed after the `@`, the list browses a row for each kind the
  * place offers, its glyph and name and chevron and nothing else, the
  * connected servers folded into one row: → or Enter on one narrows the list to that
- * kind, as typing its word and a colon does (`@files:`, `@agents:`,
- * `@servers:`, a server's provider such as `@linear:`), which no row
- * spells. Typed, a kind the words name leads the list with its row, so
+ * kind by writing the word as typing its word and a colon would (`@files:`,
+ * `@agents:`, `@servers:`, a server's provider such as `@linear:`), so the
+ * letters that found the row never run on into the words searched; a
+ * provider's second server, which has no word, narrows the list alone, the
+ * word left bare. Typed, a kind the words name leads the list with its row, so
  * `@agent` still offers the way into the agents, and a group holding more
  * than its few ends in the row a capped list ends in ("Show 3 more"), which
- * narrows the list to its kind searched by the same words. A narrowed list
+ * writes its kind's word before the same words (`@files:invite`). A narrowed list
  * stands under a crumb naming the kind, lists up to fifty rows, opens at
- * its top, and searches that kind alone; as a submenu does, ← or ⌫ on its
- * empty words, or Escape, widens it again, and only then does Escape close
- * the list. Narrowed to files and folders, → on a folder walks into it: its
+ * its top, and searches that kind alone; as a submenu does, Escape or the
+ * crumb's arrow widens it again, deleting the `kind:` and keeping the words,
+ * and only then does Escape close the list; ⌫ on its empty words deletes the
+ * colon, which widens it too, and on a list narrowed alone ← or ⌫ on its
+ * empty words steps back. Narrowed to files and folders, → on a folder walks
+ * into it, the word written as `@files:`: its
  * first row mentions the folder, the rest are what it holds, from the tree
- * already read, and the same keys climb back out. Narrowing changes only what the list offers; a
+ * already read, and ← or ⌫ on its empty words climbs back out. Narrowing changes only what the list offers; a
  * pick writes the same mention it would have written from the wide list.
  *
  * A pick hands the editor the mention's name and its target
@@ -426,19 +433,8 @@ const PER_KIND = 50;
 /** How long the typing rests before the service is searched for the agents the words name. */
 const SEARCH_PAUSE = Duration.millis(250);
 
-/** The window's tasks and workspaces, which tell their readers only when one is a new list, so a patch to the open plan draws no list again. */
-interface ListedTasks {
-  readonly tasks: readonly TaskSummary[];
-  readonly workspaces: readonly Workspace[];
-}
-
-/** The lists before the first document arrives. */
-const NO_LISTED_TASKS: ListedTasks = { tasks: [], workspaces: [] };
-
-const selectListedTasks = (state: AppStateSnapshot): ListedTasks => ({
-  tasks: state.tasks.tasks,
-  workspaces: state.tasks.workspaces,
-});
+/** No workspaces, before the first document arrives. */
+const NO_WORKSPACES: readonly Workspace[] = [];
 
 /** The list's own name, which its listbox is read by. */
 const MENU_LABEL = "Mention";
@@ -532,7 +528,7 @@ interface Scope {
   readonly kind: MentionKind | undefined;
   /** The words as they stood when the kind was narrowed to, or the `kind:` typed. */
   readonly entry: string;
-  /** Whether the kind was typed (`@files:`), which ⌫ widens by deleting the colon rather than by a key the list takes. */
+  /** Whether the word spells the kind (`@files:`), typed or written as its row opened, which ⌫ widens by deleting the colon rather than by a key the list takes. */
   readonly typed: boolean;
   readonly walked: readonly Walked[];
   readonly term: string;
@@ -595,23 +591,28 @@ function scopeOf(
   return { kind, entry: typed[0], typed: true, walked: [], term: query.slice(typed[0].length) };
 }
 
+/** A step back out of a narrowed list: the narrowing held after it, and what the `@` word is written as where the step deletes the `kind:` it spells; none where the word stands. */
+interface Back {
+  readonly to: Held | undefined;
+  readonly words: string | undefined;
+}
+
 /**
  * Where back takes a narrowed list: out of the folder walked into, else to
- * every kind where a key narrowed it; nowhere for a wide list, or one whose
- * kind was typed, whose colon ⌫ deletes in the editor instead.
+ * every kind, the word spelling the kind written as the words it searches
+ * by; nowhere for a wide list.
  */
-function backFrom(
-  scope: Scope | undefined,
-  start: number,
-): { readonly to: Held | undefined } | undefined {
+function backFrom(scope: Scope | undefined, start: number): Back | undefined {
   if (scope?.kind === undefined) return undefined;
-  const { kind, entry, typed, walked } = scope;
+  const { kind, entry, typed, walked, term } = scope;
 
   if (walked.length > 0) {
-    return { to: { start, narrow: kind.narrow, entry, typed, walked: walked.slice(0, -1) } };
+    const to = { start, narrow: kind.narrow, entry, typed, walked: walked.slice(0, -1) };
+
+    return { to, words: undefined };
   }
 
-  return typed ? undefined : { to: undefined };
+  return { to: undefined, words: typed ? term : undefined };
 }
 
 /** Whether → opens the row: a kind's, which narrows the list, or a folder's, which walks into it. */
@@ -799,12 +800,11 @@ function threadRow(place: InboxItemPlace, item: InboxItem, holder: string): Ment
 /** The ids of the tasks the feed holds threads of that the window lists not. */
 function unlistedThreadTasks(
   feed: AppInboxItems | undefined,
-  tasks: readonly TaskSummary[],
+  listed: (taskId: string) => boolean,
 ): readonly string[] {
   if (feed === undefined) return [];
-  const listed = new Set(tasks.map((task) => task.id));
 
-  return Object.keys(feed[INBOX_SCOPE_KIND.PLAN]).filter((planId) => !listed.has(planId));
+  return Object.keys(feed[INBOX_SCOPE_KIND.TASK]).filter((taskId) => !listed(taskId));
 }
 
 /**
@@ -822,16 +822,21 @@ function threadRows(
   if (feed === undefined || workspace === undefined) return [];
   const held: { readonly row: MentionRow; readonly own: boolean; readonly at: number }[] = [];
 
-  for (const [planId, items] of Object.entries(feed[INBOX_SCOPE_KIND.PLAN])) {
-    const task = tasks.find((each) => each.id === planId && each.workspaceId === workspace.id);
+  for (const [itemTaskId, items] of Object.entries(feed[INBOX_SCOPE_KIND.TASK])) {
+    const task = tasks.find((each) => each.id === itemTaskId && each.workspaceId === workspace.id);
 
     if (task === undefined) continue;
 
     for (const item of items) {
-      const place: InboxItemPlace = { kind: LINK_DESTINATION.INBOX_ITEM, planId, itemId: item.id };
+      const place: InboxItemPlace = {
+        kind: LINK_DESTINATION.INBOX_ITEM,
+        taskId: itemTaskId,
+        itemId: item.id,
+      };
+
       held.push({
         row: threadRow(place, item, task.name),
-        own: planId === taskId,
+        own: itemTaskId === taskId,
         at: item.updatedAt,
       });
     }
@@ -885,8 +890,13 @@ function pullRequestRows(pullRequests: readonly MentionablePullRequest[]): Menti
   });
 }
 
-/** What an app's row says after its name: that the developer always allows it, or that it runs now. */
-const APP_DETAIL = { ALLOWED: "Always allowed", RUNNING: "Running" } as const;
+/** What an app's row says after its name: the machine it is on, where the list offers more than one machine's apps; else that the developer always allows it, or that it runs now. */
+const APP_DETAIL = {
+  ALLOWED: "Always allowed",
+  RUNNING: "Running",
+  /** The name a pick writes for an app the list offers on more than one machine. */
+  WRITTEN: (name: string, machine: string) => `${name} on ${machine}`,
+} as const;
 
 /** The row that names the Mac itself, any app on it, found by the words a person says it with. */
 const COMPUTER_ROW: MentionRow = {
@@ -895,31 +905,6 @@ const COMPUTER_ROW: MentionRow = {
   detail: undefined,
   terms: "Computer Mac screen",
 };
-
-/**
- * The Mac's own row, then each app on this Mac's row, as the host lists
- * them, those running first; none where it lists none, as while agents use
- * no apps here. A pick names an app by its bundle id, or by its name where
- * it has none, and it is found by either. Note that routing's R3 adds the
- * Mac each row stands on once a command can name one; until then a row
- * names the app alone.
- */
-function appRows(apps: readonly MacApp[]): MentionRow[] {
-  if (apps.length === 0) return [];
-
-  const rows = apps.map(({ name, bundleId, running, allowed }): MentionRow => {
-    const detail = allowed ? APP_DETAIL.ALLOWED : running ? APP_DETAIL.RUNNING : undefined;
-
-    return {
-      mention: { kind: MENTION_KIND.MAC_APP, app: bundleId ?? name },
-      name,
-      detail,
-      terms: bundleId === undefined ? name : `${name} ${bundleId}`,
-    };
-  });
-
-  return [COMPUTER_ROW, ...rows];
-}
 
 /**
  * The name an app is called by where no call named it: a bundle id's last
@@ -933,43 +918,155 @@ function allowedAppName(app: string): string {
   return last === "" ? app : `${last.charAt(0).toUpperCase()}${last.slice(1)}`;
 }
 
+/** One app on one machine as the `@` list offers it. */
+interface MachineApp {
+  /** The app by its bundle id, or by its name where it has none. */
+  readonly app: string;
+  readonly name: string;
+  /** The machine it is on, by its device id; none for this Mac's apps where the window knows no device. */
+  readonly machine: string | undefined;
+  /** What the list calls the machine: This Mac, or its name. */
+  readonly machineName: string;
+  /** The machine's own name, which a pick writes, since This Mac means another Mac to every other reader; none where no read names it. */
+  readonly ownName: string | undefined;
+  readonly allowed: boolean;
+  readonly running: boolean;
+}
+
+/** Where the `@` list reads apps from: this Mac's own, where the window is the Mac the agent uses, and those the reader's machines always allow. */
+interface AppSources {
+  readonly onMac: readonly MacApp[];
+  readonly allowed: readonly MachineAllowedApps[];
+  readonly kept: ComputerApps;
+  /** This Mac's device, which this Mac's apps are on. */
+  readonly thisDevice: string | undefined;
+  readonly thisMac: ThisMac;
+  /** A machine's own name by its device id, as the workspace's machines read it; none where it names none. */
+  readonly ownNameOf: (deviceId: string | undefined) => string | undefined;
+}
+
 /**
- * The Mac's own row, then a row for each app the reader's own machines
- * always allow, by name, as the list offers them where it stands off the
- * Mac the agent uses; none where no machine allows one. An app is named as
- * a machine that allows it posted it, else as a `computer` call in the
- * conversation named it, else by its bundle id, and is found by either. Where the reader has more than one
- * machine that allows an app, each row names the machines it is allowed on.
+ * Every app the list offers, one per app on each machine, grouped by
+ * machine: this Mac's own as its host lists them, those running first and
+ * then by name, then each other machine of the reader's by its name, its
+ * always-allowed apps by name. An app a machine allows is named as that
+ * machine posted it, else as a `computer` call in the conversation named it,
+ * else by its bundle id. This Mac's allowed apps are its host's rows, which
+ * already say so.
  */
-function allowedAppRows(machines: readonly MachineAllowedApps[], kept: ComputerApps): MentionRow[] {
-  const allowedOn = new Map<string, string[]>();
-  const posted = new Map<string, string>();
+function machineAppsOf({
+  onMac,
+  allowed,
+  kept,
+  thisDevice,
+  thisMac,
+  ownNameOf,
+}: AppSources): MachineApp[] {
+  const ownRows = onMac.map(
+    ({ name, bundleId, running, allowed: always }): MachineApp => ({
+      app: bundleId ?? name,
+      name,
+      machine: thisDevice,
+      machineName: THIS_MAC,
+      ownName: ownNameOf(thisDevice),
+      allowed: always,
+      running,
+    }),
+  );
 
-  for (const machine of machines) {
-    for (const app of machine.apps) {
-      allowedOn.set(app, [...(allowedOn.get(app) ?? []), machine.name]);
-    }
+  const listedHere = onMac.length > 0;
 
-    for (const look of machine.looks ?? []) {
-      if (!posted.has(look.app)) posted.set(look.app, look.name);
-    }
-  }
+  const others = allowed.flatMap((machine) => {
+    if (listedHere && machine.deviceId === thisDevice) return [];
+    const posted = new Map((machine.looks ?? []).map((look) => [look.app, look.name]));
+    const machineName = nameOfMachine(machine, thisMac);
 
-  if (allowedOn.size === 0) return [];
-  const named = machines.length > 1;
+    return machine.apps.map(
+      (app): MachineApp => ({
+        app,
+        name:
+          posted.get(app) ??
+          computerAppNamed(kept, app, machine.deviceId)?.name ??
+          allowedAppName(app),
+        machine: machine.deviceId,
+        machineName,
+        ownName: ownNameOf(machine.deviceId) ?? machine.name,
+        allowed: true,
+        running: false,
+      }),
+    );
+  });
 
-  const rows = [...allowedOn].map(([app, on]): MentionRow => {
-    const name = posted.get(app) ?? computerAppNamed(kept, app)?.name ?? allowedAppName(app);
+  // Note that rows are grouped by machine: This Mac's first, its running apps leading, then each other machine by name, its apps by name.
+  const here = (each: MachineApp) => (each.machine === thisDevice ? 0 : 1);
+
+  return [
+    ...ownRows.toSorted(
+      (one, other) => Number(other.running) - Number(one.running) || byName(one, other),
+    ),
+    ...others.toSorted(
+      (one, other) =>
+        here(one) - here(other) ||
+        one.machineName.localeCompare(other.machineName) ||
+        (one.machine ?? "").localeCompare(other.machine ?? "") ||
+        byName(one, other),
+    ),
+  ];
+}
+
+/** Two apps in name order. */
+function byName(one: MachineApp, other: MachineApp): number {
+  return one.name.localeCompare(other.name);
+}
+
+/** What the list calls one of the reader's machines that allows apps: This Mac, or its name. */
+function nameOfMachine(machine: MachineAllowedApps, thisMac: ThisMac): string {
+  return machineName({ deviceId: machine.deviceId, name: machine.name }, [], thisMac);
+}
+
+/**
+ * The Mac's own row, then a row for each app on each machine the list
+ * offers (`machineAppsOf`); none where it offers none, as while agents use no
+ * apps anywhere. A pick names the app by its bundle id, or by its name where
+ * it has none, and the machine it is on, so a call on it goes there. Where
+ * the list offers more than one machine's apps, each row says the machine
+ * it is on in place of whether it runs or is always allowed, and a pick of an app the list offers on more than one machine
+ * writes that machine's own name beside the app's ("Simulator on Mac
+ * mini"), so two chips of it never read alike, and never This Mac, which
+ * names another Mac to every other reader.
+ */
+function appRows(sources: AppSources): MentionRow[] {
+  const offered = machineAppsOf(sources);
+
+  if (offered.length === 0) return [];
+  // Note that machines are counted by their ids, so two of the same name still count as two.
+  const machines = new Set(offered.map((each) => each.machine ?? each.machineName));
+  const named = machines.size > 1;
+  const onHowMany = new Map<string, number>();
+
+  for (const each of offered) onHowMany.set(each.app, (onHowMany.get(each.app) ?? 0) + 1);
+
+  const rows = offered.map((each): MentionRow => {
+    const state = each.allowed ? APP_DETAIL.ALLOWED : each.running ? APP_DETAIL.RUNNING : undefined;
+    const twinned = (onHowMany.get(each.app) ?? 0) > 1;
 
     return {
-      mention: { kind: MENTION_KIND.MAC_APP, app },
-      name,
-      detail: named ? `${APP_DETAIL.ALLOWED} on ${on.join(", ")}` : APP_DETAIL.ALLOWED,
-      terms: `${name} ${app}`,
+      mention: {
+        kind: MENTION_KIND.MAC_APP,
+        app: each.app,
+        ...(each.machine === undefined ? undefined : { machine: each.machine }),
+      },
+      name: each.name,
+      detail: named ? each.machineName : state,
+      written:
+        twinned && each.ownName !== undefined
+          ? APP_DETAIL.WRITTEN(each.name, each.ownName)
+          : undefined,
+      terms: `${each.name} ${each.app} ${each.machineName}`,
     };
   });
 
-  return [COMPUTER_ROW, ...rows.toSorted((one, other) => one.name.localeCompare(other.name))];
+  return [COMPUTER_ROW, ...rows];
 }
 
 /**
@@ -1847,8 +1944,8 @@ function treeKey(
   taskId: string | undefined,
   workspaceId: string | undefined,
   repository: string | null,
-): { planId: string } | { workspaceId: string; repository: string } | undefined {
-  if (taskId !== undefined) return { planId: taskId };
+): { taskId: string } | { workspaceId: string; repository: string } | undefined {
+  if (taskId !== undefined) return { taskId: taskId };
 
   if (workspaceId === undefined || repository === null) return undefined;
 
@@ -2022,6 +2119,7 @@ export function useMentionPicker({
   room,
   side,
   onChoose,
+  onRetype,
 }: {
   source: MentionSource | undefined;
   /** The agent whose box the list stands in, which it does not offer; none for the description's own words. */
@@ -2036,6 +2134,8 @@ export function useMentionPicker({
   room: RefObject<HTMLElement | null>;
   side: MentionMenuSide;
   onChoose: (mention: MentionNode) => void;
+  /** The `@` word written as `@` and the words given, as a kind's row opening writes its `kind:`. */
+  onRetype: (words: string) => void;
 }): MentionPicker {
   const now = useMinute();
   const listId = useId();
@@ -2089,14 +2189,28 @@ export function useMentionPicker({
   }, [askedAt, askSkills]);
 
   // The tasks offered are the workspace's the words stand in: the one that names it, else the plan's, else the one its slug names.
-  const listed = useQuery({ ...appStateQuery, select: selectListedTasks }).data ?? NO_LISTED_TASKS;
+  const collections = useTaskListCollections();
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
+  const ownTask = useTaskListRow(collections.tasks, taskId ?? undefined);
 
   const tasksWorkspaceId =
     workspaceId ??
-    listed.tasks.find((task) => task.id === taskId)?.workspaceId ??
-    (source === undefined ? undefined : workspaceOfSlug(listed.workspaces, source.workspace))?.id;
+    ownTask?.workspaceId ??
+    (source === undefined ? undefined : workspaceOfSlug(workspaces, source.workspace))?.id;
 
-  const tasksWorkspace = listed.workspaces.find((each) => each.id === tasksWorkspaceId);
+  const tasksWorkspace = workspaces.find((each) => each.id === tasksWorkspaceId);
+
+  // The workspace's tasks, newest started first as the list holds them, read only while the list stands open.
+  const { data: workspaceTasks } = useLiveQuery((q) =>
+    !open || tasksWorkspaceId === undefined
+      ? undefined
+      : q
+          .from({ task: collections.tasks })
+          .where(({ task }) => eq(task.workspaceId, tasksWorkspaceId))
+          .orderBy(({ task }) => task.createdAt, "desc")
+          .orderBy(({ task }) => task.id, "desc"),
+  );
+
   // The people offered are the members of that workspace, read while the list stands open wherever the words stand, so every box offers the same people.
   const directory = useWorkspaceDirectory(open ? tasksWorkspace : undefined);
   const { readerId } = directory;
@@ -2108,7 +2222,7 @@ export function useMentionPicker({
   const descriptionsOn = useWorkspaceExperiment(tasksWorkspaceId, EXPERIMENT.DESCRIPTIONS);
 
   const taskRowsOffered = open
-    ? workspaceTaskRows(descriptionsOn ? taskId : undefined, tasksWorkspace, listed.tasks)
+    ? workspaceTaskRows(descriptionsOn ? taskId : undefined, tasksWorkspace, workspaceTasks ?? [])
     : [];
 
   // The threads offered are the workspace's as the account's feed holds them, which the host holds for the session.
@@ -2117,11 +2231,14 @@ export function useMentionPicker({
   const threadsAsked = open && tasksWorkspace !== undefined;
 
   const threadRowsOffered = threadsAsked
-    ? threadRows(feed.data, taskId, tasksWorkspace, listed.tasks)
+    ? threadRows(feed.data, taskId, tasksWorkspace, workspaceTasks ?? [])
     : [];
 
   // Note that a thread of a task the window lists not is offered once the task is read into its list, each asked once while the list stands open and again once it opens anew.
-  const threadTasksOutside = threadsAsked ? unlistedThreadTasks(feed.data, listed.tasks) : [];
+  const threadTasksOutside = threadsAsked
+    ? unlistedThreadTasks(feed.data, (each) => collections.tasks.has(each))
+    : [];
+
   const threadTasksAsked = useRef(new Set<string>());
   useEffect(() => {
     if (!threadsAsked) threadTasksAsked.current.clear();
@@ -2144,34 +2261,42 @@ export function useMentionPicker({
       : [];
 
   // The plan's own key, which finds the description's row as another task's finds its.
-  const planNumber = listed.tasks.find((task) => task.id === taskId)?.number;
+  const planNumber = ownTask?.number;
 
   const planKey =
     tasksWorkspace === undefined || planNumber === undefined
       ? undefined
       : taskKey(tasksWorkspace.name, planNumber);
 
-  // The apps offered are this Mac's where the window is the Mac the agent uses, else those the reader's own machines always allow, each read while the list stands open (`mac-apps.ts`), and none until it is known which.
+  // The apps offered are this Mac's where the window is the Mac the agent uses, and those the reader's own machines always allow, each read while the list stands open (`mac-apps.ts`), and none until it is known which.
   // Note that the agent's machine is read only where this Mac's apps could be offered, so a list with Computer use off waits on nothing.
   const appsReadable = useMacAppsReadable();
   const appsAsked = open && macApps && appsReadable;
   const onThatMac = useOnThatMac(appsAsked ? self : undefined);
   const apps = useMacApps(open && macApps && onThatMac === true);
-  const allowedApps = useAllowedApps(open && macApps && onThatMac === false);
+  // Note that the apps the reader's other machines allow are offered beside this Mac's own, each row naming its machine.
+  const allowedApps = useAllowedApps(open && macApps && onThatMac !== undefined);
   const keptApps = useComputerApps();
-
-  const appRowsOffered =
-    !open || onThatMac === undefined
-      ? []
-      : onThatMac
-        ? appRows(apps.apps)
-        : allowedAppRows(allowedApps.machines, keptApps);
+  const thisDevice = useQuery({ ...appStateQuery, select: selectMachineCommandDevice }).data;
+  const thisMac = useThisMac();
 
   // The machines offered are the workspace's members', read while the list stands open, the task's followers' after the reader's own.
   const machinesAsked = open && tasksWorkspace !== undefined;
   const machines = useWorkspaceMachines(tasksWorkspace?.id, machinesAsked);
-  const thisMac = useThisMac();
-  const followers = listed.tasks.find((task) => task.id === taskId)?.followers;
+
+  const appRowsOffered =
+    !open || onThatMac === undefined
+      ? []
+      : appRows({
+          onMac: onThatMac ? apps.apps : [],
+          allowed: allowedApps.machines,
+          kept: keptApps,
+          thisDevice,
+          thisMac,
+          ownNameOf: (deviceId) => machines.machines.find((each) => each.id === deviceId)?.name,
+        });
+
+  const followers = ownTask?.followers;
   const followerIds = new Set((followers ?? []).map((follower) => follower.userId));
 
   const machineRowsOffered = machinesAsked
@@ -2271,7 +2396,7 @@ export function useMentionPicker({
                 ? []
                 : agentRows(taskId, source.agents ?? NO_AGENTS, NO_AGENTS, self, "", agentPlace)),
               ...threadRowsOffered.filter(
-                (row) => "thread" in row && "planId" in row.thread && row.thread.planId === taskId,
+                (row) => "thread" in row && "taskId" in row.thread && row.thread.taskId === taskId,
               ),
               ...pullRequestRows(source.pullRequests ?? NO_PULL_REQUESTS),
               ...pageRows(holder, source.pages ?? NO_PAGES, now),
@@ -2401,33 +2526,52 @@ export function useMentionPicker({
     setHighlight(undefined);
   };
 
-  // A kind's row narrows the list to it; a folder's walks into it, narrowing a wide list to files and folders.
+  // A kind's row narrows the list to it, the word written as typing its `kind:` would write it, so
+  // the words never run on from the letters that found the row; a folder's walks into it, the word
+  // written as `files:`.
   const openRow = (row: MentionRow) => {
     if (trigger === undefined || scope === undefined) return;
-    const { start, query } = trigger;
+    const { start } = trigger;
 
     if ("from" in row) {
       // A group's foot opens its kind searched by the words already typed; a kind's own row opens it afresh.
-      const entry = row.keeps === true ? scope.entry : query;
-      narrowTo({ start, narrow: row.from.narrow, entry, typed: false, walked: [] });
+      const words = row.keeps === true ? scope.term : "";
+      const { keyword, narrow } = row.from;
+
+      // Note that a kind with no word of its own (a provider's second server) is held by the list alone.
+      narrowTo(
+        keyword === undefined ? { start, narrow, entry: "", typed: false, walked: [] } : undefined,
+      );
+      onRetype(keyword === undefined ? words : `${keyword}:${words}`);
 
       return;
     }
 
     if (!("mention" in row) || row.mention.kind !== MENTION_KIND.FOLDER) return;
+    const entry = `${MENTION_FROM.FILES}:`;
     const within = scope.kind?.narrow.from === MENTION_FROM.FILES;
-    const walked = { path: row.mention.path, entry: query };
+    const walked = { path: row.mention.path, entry };
     narrowTo({
       start,
       narrow: { from: MENTION_FROM.FILES },
-      entry: within ? scope.entry : query,
-      typed: within && scope.typed,
+      entry,
+      typed: true,
       walked: within ? [...scope.walked, walked] : [walked],
     });
+    onRetype(entry);
   };
 
   const backTo = trigger === undefined ? undefined : backFrom(scope, trigger.start);
-  const back = backTo === undefined ? undefined : () => narrowTo(backTo.to);
+
+  const back =
+    backTo === undefined
+      ? undefined
+      : () => {
+          narrowTo(backTo.to);
+
+          if (backTo.words !== undefined) onRetype(backTo.words);
+        };
+
   // The date picker opened from the list hangs from the word and writes the date picked in its place.
   const datePicker = useDatePicker(room);
 
@@ -2508,9 +2652,12 @@ export function useMentionPicker({
     if (!shown) return false;
     const bare = !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
 
-    // A list a key narrowed steps back as a submenu does: ← or ⌫ on its empty words, or Escape, before Escape closes it.
+    // A narrowed list steps back as a submenu does: ← or ⌫ on its empty words, or Escape, before Escape closes it; ← and ⌫ at a word's `kind:` are the editor's, which move past or delete its colon.
     const stepsBack =
-      (event.key === "Backspace" || event.key === "ArrowLeft") && bare && term === "";
+      (event.key === "Backspace" || event.key === "ArrowLeft") &&
+      bare &&
+      term === "" &&
+      backTo?.words === undefined;
 
     if (back !== undefined && (stepsBack || (event.key === "Escape" && bare))) {
       // Note that an Escape taken here is kept from the surface behind, as the field keeps one that closes the list, so a dialog around the box stays open.

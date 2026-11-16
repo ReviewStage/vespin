@@ -75,7 +75,7 @@ import { Duration, Effect, Exit, Predicate, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { type AppTranscript, type AppTranscripts, OWN_TRANSCRIPT } from "../app-state.js";
 import { type AccountAsksClient, composeAccountAsks } from "../compose-account-asks.js";
-import { type AgentClient, composeAgents } from "../compose-agents.js";
+import { type AgentClient, composeAgents, type PullRequestClient } from "../compose-agents.js";
 import type { EntityStore } from "../entity-store.js";
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "../kept-content.js";
 import { windowFocus } from "../window-focus.js";
@@ -88,7 +88,7 @@ export const WORKSPACE_ID = "2a9c4e6f-1b3d-4f5a-8c7e-9d0b1a2c3e4f";
 
 export const AGENT: AgentSummary = {
   id: AGENT_ID,
-  planId: TASK_ID,
+  taskId: TASK_ID,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: null,
@@ -251,7 +251,7 @@ export const ITEM: InboxItem = {
 /** That item as what waits across the account carries it. */
 export const WAITING: AccountInboxEntry = {
   id: ITEM.id,
-  planId: TASK_ID,
+  taskId: TASK_ID,
   agentId: AGENT_ID,
   agentTitle: null,
   agentModel: AGENT.model,
@@ -529,6 +529,7 @@ function fakeService() {
       ),
     changeMachine: () => Effect.succeed({ failure: "unanswered" }),
     removeMachine: () => Effect.succeed({ failure: "unanswered" }),
+    answerMachineAsk: () => Effect.succeed({ failure: "unanswered" }),
     machineAllowedApps: () => Effect.succeed({ machines: [] }),
     readHostPairing: () => Effect.succeed({ failure: "unanswered" }),
     approveHostPairing: () => Effect.succeed({ failure: "unanswered" }),
@@ -928,7 +929,7 @@ function fakeService() {
       Effect.sync(() => {
         asked.push(`inbox-home:${itemId}`);
 
-        return { agentId: ITEM.agentId, planId: TASK_ID, workspaceId: "workspace-1" };
+        return { agentId: ITEM.agentId, taskId: TASK_ID, workspaceId: "workspace-1" };
       }),
     markInboxItemUnread: (itemId) =>
       Effect.sync(() => {
@@ -1185,7 +1186,7 @@ const TRANSCRIPT_PARTS = [
 ] as const;
 
 const SCOPE_PARTS = ["items", "messages", "files"] as const;
-export const ACCOUNT_PARTS = ["items", "planless", "plans", "automations", "failedRuns"] as const;
+export const ACCOUNT_PARTS = ["items", "taskless", "tasks", "automations", "failedRuns"] as const;
 export const ITEMS_PARTS = ["stamps", "items", "messages", "files"] as const;
 const MEMORIES_PARTS = ["memories"] as const;
 
@@ -1298,6 +1299,22 @@ function bySyncId(
   };
 }
 
+const UNANSWERED_CALL = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
+
+/** The service's side of a pull request named by its repository, which no test here asks, so it answers none. */
+const NO_PULL_REQUESTS: PullRequestClient = {
+  pullRequest: () => Effect.succeed(UNANSWERED_CALL),
+  changes: () => Effect.succeed(UNANSWERED_CALL),
+  overviewPullRequest: () => Effect.succeed(UNANSWERED_CALL),
+  overviewChecks: () => Effect.succeed(UNANSWERED_CALL),
+  overviewConversation: () => Effect.succeed(UNANSWERED_CALL),
+  reviewOptions: () => Effect.succeed(UNANSWERED_CALL),
+  viewed: () => Effect.succeed(UNANSWERED_CALL),
+  action: () => Effect.succeed(UNANSWERED_CALL),
+  generateChapters: () => Effect.succeed(UNANSWERED_CALL),
+  githubImage: () => Effect.succeed(UNANSWERED_CALL),
+};
+
 /** Every step a follow has to take, taken: it runs on a fiber of its own. */
 export const settled = Effect.repeat(Effect.yieldNow, { times: 100 });
 
@@ -1364,6 +1381,7 @@ export function subject(
       kept: yield* keptContent(KEPT_CONTENT_CHARACTERS),
       focus,
       client: service.client,
+      pullRequests: NO_PULL_REQUESTS,
       // Note that no test here asks an agent's ports, so their service is a sandbox that is not running.
       ports: {
         list: () => Effect.succeed({ running: false, ports: [] }),

@@ -15,6 +15,7 @@
  */
 
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { CALL_AGENT_WORD, CALL_CONTROL_LABEL, TALK_LABEL } from "@repo/features/voice-call-words";
 import { useEffect, useRef } from "react";
 import { GLYPH } from "../../icons/glyph-registry.js";
 import {
@@ -40,33 +41,6 @@ const AGENT_WORKING_LABEL = `${PRODUCT_NAME} is working on it`;
 
 /** What the group of a call's controls in a message box is named for a reader, since no line there names the call. */
 const CALL_CONTROLS_LABEL = `Call with ${PRODUCT_NAME}`;
-
-/** The agent's line's words, subject-free like the voice's: what it says with no command pending, and what leads the command it runs. */
-const AGENT_THINKING = "Thinking";
-const AGENT_WORKING = "Working";
-
-/** Talk's name for a reader and its hover: what it does, or, with no OpenAI API key saved, what a call needs first. */
-export const TALK_LABEL = {
-  TALK: "Talk",
-  KEY_MISSING: "Add an OpenAI API key",
-} as const;
-
-/** Each call control's name for a reader and its hover, by whether it is on. */
-export const CALL_CONTROL_LABEL = {
-  MUTE_MICROPHONE: "Mute microphone",
-  UNMUTE_MICROPHONE: "Unmute microphone",
-  MUTE_SPEAKER: "Mute speaker",
-  UNMUTE_SPEAKER: "Unmute speaker",
-  END_CALL: "End call",
-} as const;
-
-/** What a call's status says, as the call card's voice line draws it: coming up, live, muted, or on its way down. */
-export const CALL_LIVE_WORD = {
-  CONNECTING: "Connecting…",
-  LIVE: "On call",
-  MUTED: "Muted",
-  ENDING: "Ending…",
-} as const;
 
 /** What a mute silences: the caller's microphone, or the voice on this device alone. */
 export const CALL_DEVICE = {
@@ -360,10 +334,10 @@ function CallStatusLine({
         title={titled ? agent.action : undefined}
       >
         {agent.action === undefined ? (
-          AGENT_THINKING
+          CALL_AGENT_WORD.THINKING
         ) : (
           <>
-            {AGENT_WORKING} · <span className={AGENT_ACTION}>{agent.action}</span>
+            {CALL_AGENT_WORD.WORKING} · <span className={AGENT_ACTION}>{agent.action}</span>
           </>
         )}
       </Text>

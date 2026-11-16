@@ -22,6 +22,9 @@ export function createKeychainService(): KeychainService {
       isAvailable: () => safeStorage.isEncryptionAvailable(),
       encrypt: (plainText) => safeStorage.encryptString(plainText),
       decrypt: (cipherText) => safeStorage.decryptString(Buffer.from(cipherText)),
+      // Note that the base64 is Node's own, because the entity store seals its whole file every 30 seconds and a JavaScript base64 of 20 MB allocates about 400 MB each time.
+      sealText: (plainText) => safeStorage.encryptString(plainText).toString("base64"),
+      openText: (sealedText) => safeStorage.decryptString(Buffer.from(sealedText, "base64")),
     },
     start: () => Effect.void,
     stop: () => Effect.void,

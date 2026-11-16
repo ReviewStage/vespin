@@ -404,7 +404,7 @@ export function SendingAgent({
       : () =>
           openPlace({
             kind: LINK_DESTINATION.AGENT,
-            ...(taskId === undefined ? undefined : { planId: taskId }),
+            ...(taskId === undefined ? undefined : { taskId: taskId }),
             agentId,
           });
 

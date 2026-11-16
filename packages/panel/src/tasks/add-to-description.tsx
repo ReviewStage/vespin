@@ -70,7 +70,6 @@ const ADD_WORDS = {
   PDF_TOO_LARGE: `This PDF is over ${formatBytes(AGENT_BOUNDS.MAX_PDF_BYTES)}, too large to add to the description.`,
   VIDEO_TOO_LARGE: `This video is over ${String(PICTURE_BOUNDS.MAX_SENT_VIDEO_BYTES / 1_000_000)} MB, too large to add to the description from here.`,
   TOO_MANY: "This description already holds as many pictures as it can.",
-  TOO_MANY_VIDEOS: "This description already holds as many videos as it can.",
   NOT_SAVED: "The description could not be saved.",
   NOT_UNDONE: "The description changed since, so the picture stays in it.",
 } as const;
@@ -89,7 +88,6 @@ function fileOf(chip: FileChip): File {
 /** Why a keep failed, in the toast's words. */
 const KEEP_FAILED_WORDS = {
   [PICTURE_KEEP_FAILURE.TOO_MANY]: ADD_WORDS.TOO_MANY,
-  [PICTURE_KEEP_FAILURE.TOO_MANY_VIDEOS]: ADD_WORDS.TOO_MANY_VIDEOS,
   [PICTURE_KEEP_FAILURE.NOT_FOUND]: ADD_WORDS.NOT_SAVED,
   [PICTURE_KEEP_FAILURE.UNANSWERED]: ADD_WORDS.NOT_SAVED,
 } as const;
@@ -308,7 +306,7 @@ export function useAddToDescription(): ViewerAction | undefined {
       if ("refused" in keeping) return failed(keeping.refused, keeping.refused, true);
       const { url } = keeping;
 
-      const kept = await sendKeep({ planId: taskId, picture: url }).catch(
+      const kept = await sendKeep({ taskId: taskId, picture: url }).catch(
         unreachedAs(PICTURE_KEEP_FAILURE.UNANSWERED),
       );
 

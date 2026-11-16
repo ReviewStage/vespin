@@ -84,6 +84,8 @@ export * from "./live-activity.js";
 
 export * from "./machine-command.js";
 
+export * from "./machine-command-ask.js";
+
 export * from "./memory.js";
 
 export * from "./native-call-key.js";
@@ -143,6 +145,8 @@ export * from "./workspace-former-slug.js";
 export * from "./workspace-sandbox-script.js";
 
 export * from "./workspace-sandbox-script-run.js";
+
+export * from "./workspace-sandbox-size.js";
 
 export * from "./workspace-token-repository.js";
 
