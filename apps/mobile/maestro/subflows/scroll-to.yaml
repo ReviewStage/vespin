@@ -21,12 +21,16 @@
 # twenty seconds after two swipes. Note too that the bar is found by its
 # identifier, which iOS sets to its title, because a regular window, the
 # iPad's, draws its floating tab bar in the title's place, so no words of
-# the title stand there to be found.
+# the title stand there to be found. With `X`, every swipe is made at that
+# point across the window rather than its middle, for a page beside a list
+# (`scroll-in.yaml`), and a centered scroll is its slow steps until the
+# element shows, then one more.
 appId: dev.vespin.ios
 env:
   DIRECTION: ${DIRECTION || 'DOWN'}
   ABOVE: ${ABOVE || ''}
   BELOW: ${BELOW || ''}
+  X: ${X || ''}
 ---
 - runFlow:
     when:
@@ -41,12 +45,12 @@ env:
                 id: "${BELOW}"
           commands:
             - swipe:
-                start: "50%, 40%"
-                end: "50%, 54%"
+                start: "${X || '50%'}, 40%"
+                end: "${X || '50%'}, 54%"
                 duration: 1500
       - swipe:
-          start: "50%, 40%"
-          end: "50%, 54%"
+          start: "${X || '50%'}, 40%"
+          end: "${X || '50%'}, 54%"
           duration: 1500
 - runFlow:
     when:
@@ -61,7 +65,7 @@ env:
           timeout: 60000
 - runFlow:
     when:
-      true: ${ABOVE == '' && BELOW == '' && DIRECTION == 'UP'}
+      true: ${ABOVE == '' && BELOW == '' && X == '' && DIRECTION == 'UP'}
     commands:
       - scrollUntilVisible:
           element: "${ELEMENT}"
@@ -70,12 +74,26 @@ env:
           timeout: 60000
 - runFlow:
     when:
-      true: ${ABOVE == '' && BELOW == '' && DIRECTION != 'UP'}
+      true: ${ABOVE == '' && BELOW == '' && X == '' && DIRECTION != 'UP'}
     commands:
       - scrollUntilVisible:
           element: "${ELEMENT}"
           direction: DOWN
           centerElement: true
           timeout: 60000
+- runFlow:
+    when:
+      true: ${ABOVE == '' && BELOW == '' && X != ''}
+    commands:
+      - runFlow:
+          file: scroll-in.yaml
+          env:
+            ELEMENT: "${ELEMENT}"
+            DIRECTION: "${DIRECTION}"
+            X: "${X}"
+      - swipe:
+          start: "${X}, ${DIRECTION == 'UP' ? '40%' : '60%'}"
+          end: "${X}, ${DIRECTION == 'UP' ? '60%' : '40%'}"
+          duration: 1200
 - waitForAnimationToEnd:
     timeout: 5000

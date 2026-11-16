@@ -1,0 +1,41 @@
+# scroll-in.yaml -- scrolls the page until `ELEMENT` shows, down unless `DIRECTION` is UP, as `scrollUntilVisible` does; with `X`, by swipes at that point across the window.
+#
+# Note that `scrollUntilVisible` swipes at the window's middle, which on a
+# landscape iPad is the list column beside the page, so a page in the
+# detail column never moved and the scroll ran out its time. A flow scrolling
+# such a page names a point inside it (`X`, such as `agent.yaml`'s
+# `TRANSCRIPT_X`), and the page is drawn along in slow steps there until the
+# element shows. Without `X` it scrolls as before.
+appId: dev.vespin.ios
+env:
+  DIRECTION: ${DIRECTION || 'DOWN'}
+  X: ${X || ''}
+---
+- runFlow:
+    when:
+      true: ${X == '' && DIRECTION == 'UP'}
+    commands:
+      - scrollUntilVisible:
+          element: "${ELEMENT}"
+          direction: UP
+- runFlow:
+    when:
+      true: ${X == '' && DIRECTION != 'UP'}
+    commands:
+      - scrollUntilVisible:
+          element: "${ELEMENT}"
+          direction: DOWN
+- runFlow:
+    when:
+      true: ${X != ''}
+    commands:
+      - repeat:
+          times: 40
+          while:
+            notVisible: "${ELEMENT}"
+          commands:
+            - swipe:
+                start: "${X}, ${DIRECTION == 'UP' ? '40%' : '65%'}"
+                end: "${X}, ${DIRECTION == 'UP' ? '65%' : '40%'}"
+                duration: 1200
+      - assertVisible: "${ELEMENT}"
