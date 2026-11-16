@@ -160,19 +160,14 @@ function namingLines(repository: string | null, ownTask: OwnTask, workspace: str
 
 /**
  * What the agent is told of its task's status, which nothing but an agent
- * or the developer moves: the agent that keeps it marks it Done once its
+ * or the developer moves: its agent marks it Done once its
  * work is finished, since a task left In progress stands in the developer's
  * sidebar until they close it by hand. Done withdraws the task's open asks
  * and archives its other agents (`update_task`), so it waits on both. A
  * merge tells the agent nothing (`../../github/agent-wakes.ts`), so one
- * that queued its pull request books a wakeup to see it land. A helper
- * another agent started leaves the status to that agent, whose task it
- * may be, and whose turn a Done would end.
+ * that queued its pull request books a wakeup to see it land.
  */
-function statusLines(ownTask: OwnTask, publishes: boolean): string[] {
-  if (!ownTask.keepsStatus)
-    return ["Another agent started you, so leave your task's status to it."];
-
+function statusLines(publishes: boolean): string[] {
   const merged = publishes ? "every pull request of yours merged or closed, " : "";
 
   return [
@@ -233,7 +228,7 @@ export function coderInstructions(
         ]
       : []),
     `Save screenshots under \`${machine.sharedFiles}/\` and show them with \`${AGENT_TOOL.SHOW_MEDIA}\`.`,
-    ...statusLines(ownTask, publishes),
+    ...statusLines(publishes),
     ...namingLines(repository, ownTask, workspace),
   ];
 
@@ -243,8 +238,6 @@ export function coderInstructions(
 export interface OwnTask {
   readonly link: string;
   readonly id: string;
-  /** Whether the agent keeps its task's status: false for a helper another agent started. */
-  readonly keepsStatus: boolean;
 }
 
 /** What an agent's instructions are composed on beyond its row. */
@@ -283,7 +276,6 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
       },
       context.workspace,
     ),
-    keepsStatus: agent.startedByAgentId === null,
   };
 
   return coderInstructions(
