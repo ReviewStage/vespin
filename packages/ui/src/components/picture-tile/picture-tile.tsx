@@ -38,10 +38,11 @@ import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
  * face being the picture its place frames.
  */
 
-/** How the face rounds: as a framed picture's corner, or whole, as a person's disc does. */
+/** How the face rounds: as a framed picture's corner, whole, as a person's disc does, or not at all, where the card it fills rounds it. */
 export const PICTURE_TILE_FACE = {
   FRAMED: "framed",
   ROUND: "round",
+  FLUSH: "flush",
 } as const;
 
 export type PictureTileFace = (typeof PICTURE_TILE_FACE)[keyof typeof PICTURE_TILE_FACE];
@@ -60,7 +61,7 @@ const TILE =
  * button's share reads as a jump.
  */
 const FACE =
-  "ui-picture-tile-face relative block min-w-0 max-w-full rounded-control data-[face=round]:rounded-full transition-transform duration-(--ui-duration-fast) ease-spring-fast group-active/picture-tile:[transform:scale(0.98)] group-data-[pointer-opens=false]/picture-tile:group-active/picture-tile:[transform:none]";
+  "ui-picture-tile-face relative block min-w-0 max-w-full rounded-control data-[face=round]:rounded-full data-[face=flush]:rounded-none transition-transform duration-(--ui-duration-fast) ease-spring-fast group-active/picture-tile:[transform:scale(0.98)] group-data-[pointer-opens=false]/picture-tile:group-active/picture-tile:[transform:none]";
 
 /** What an app's hint hands the tile it wraps: when to show and go, and the chord it names. */
 type HintProps = Pick<

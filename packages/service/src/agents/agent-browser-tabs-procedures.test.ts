@@ -243,7 +243,7 @@ function request(userId: string | undefined, path: string, method = "GET") {
   });
 }
 
-const tabsPath = (taskId: string) => `/api/plans/${taskId}/browser-tabs`;
+const tabsPath = (taskId: string) => `/api/tasks/${taskId}/browser-tabs`;
 
 const agentTabsPath = (agentId: string) => `/api/agents/${agentId}/browser-tabs`;
 
@@ -483,7 +483,7 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
         assert.deepEqual(tabOf(yield* ask(request(teammate, path, "DELETE"))).driver, taken.driver);
 
         yield* TestClock.adjust(BROWSER_TAKEOVER_HOLD_MS + 1_000);
-        const [lapsed] = tabsOf(yield* ask(request(teammate, `/api/plans/${taskId}/browser-tabs`)));
+        const [lapsed] = tabsOf(yield* ask(request(teammate, `/api/tasks/${taskId}/browser-tabs`)));
         assert.equal(lapsed?.driver, null);
         assert.equal(tabOf(yield* ask(request(teammate, path, "POST"))).driver?.userId, teammate);
         assert.equal(tabOf(yield* ask(request(teammate, path, "DELETE"))).driver, null);

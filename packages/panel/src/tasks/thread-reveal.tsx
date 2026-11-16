@@ -1,6 +1,7 @@
 import type { ReviewThread } from "@repo/features/agent-wire";
-import type { PullRequestThreadView } from "@repo/features/link-grammar";
+import type { NumberedAddress, PullRequestThreadView } from "@repo/features/link-grammar";
 import { LANDED_ANIMATION } from "@repo/ui/landed";
+import { samePullRequestAddress } from "@repo/ui/tab-strip-model";
 import {
   type AnimationEvent,
   createContext,
@@ -15,7 +16,7 @@ import { focusSeek } from "../focus-seek.js";
 /**
  * thread-reveal.tsx -- one review thread of a pull request brought into view in its Pull request tab, by a link to it (`LINK_DESTINATION.PULL_REQUEST_THREAD`) or a press of View in Files changed or View in Conversation.
  *
- * A link opens the agent's Pull request tab on the view it names and leaves
+ * A link opens the pull request's tab on the view it names and leaves
  * the ask here (`ThreadRevealProvider`), counted so the same thread asked
  * twice is shown twice, as a message's link leaves its own
  * (`message-links.tsx`). The tab takes the ask as it draws and lets it go,
@@ -38,13 +39,16 @@ export const THREAD_REVEAL_WORDS = {
   THING: "Review thread",
 } as const;
 
-/** An ask to bring one review thread of an agent's pull request into view, on one of its tab's views; counted, so each ask is its own. */
+/** An ask to bring one review thread of a pull request into view, on one of its tab's views; counted, so each ask is its own. */
 export interface ThreadReveal {
-  readonly agentId: string;
+  readonly pullRequest: NumberedAddress;
   readonly threadId: string;
   readonly view: PullRequestThreadView;
   readonly ask: number;
 }
+
+/** What an ask names of the thread it brings into view: the thread, and the view it is shown in. */
+export type ThreadAsked = Pick<ThreadReveal, "threadId" | "view">;
 
 const ThreadRevealContext = createContext<
   | { readonly reveal: ThreadReveal | undefined; readonly onRevealed: (ask: number) => void }
@@ -54,14 +58,14 @@ const ThreadRevealContext = createContext<
 /** Hands down the window's standing ask to bring a review thread into view, and its letting go. */
 export const ThreadRevealProvider = ThreadRevealContext.Provider;
 
-/** The window's standing ask for one of `agentId`'s threads, and the door that lets it go; none where none stands for this agent. */
+/** The window's standing ask for one of the pull request's threads, and the door that lets it go; none where none stands for it. */
 export function useWindowThreadReveal(
-  agentId: string,
+  pullRequest: NumberedAddress,
 ): { readonly reveal: ThreadReveal; readonly onRevealed: (ask: number) => void } | undefined {
   const standing = useContext(ThreadRevealContext);
   const reveal = standing?.reveal;
 
-  return reveal === undefined || reveal.agentId !== agentId
+  return reveal === undefined || !samePullRequestAddress(reveal.pullRequest, pullRequest)
     ? undefined
     : { reveal, onRevealed: standing?.onRevealed ?? (() => undefined) };
 }

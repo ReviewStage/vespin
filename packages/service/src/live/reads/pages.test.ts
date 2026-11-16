@@ -15,8 +15,8 @@ import { SqlClient } from "effect/sql";
 import { taskPagesRead } from "./pages.js";
 
 /**
- * A task's pages as Realtime would deliver them, over the real migrations on
- * PGlite: the statement run as Realtime runs it, its rows decoded and ordered
+ * A task's pages as a live read answers them, over the real migrations on
+ * PGlite: the statement run as raw SQL, its rows decoded and ordered
  * as the desktop does, beside `listPages`, the held read the Inbox read them
  * with. The two agree as pages are shown, as a page's next version lands,
  * and for an account that does not reach the task.
@@ -33,7 +33,7 @@ const openUser = Effect.gen(function* () {
   return userId;
 });
 
-/** The statement run as Realtime runs it. */
+/** The statement run as raw SQL. */
 const runLive = (statement: LiveStatement) =>
   Effect.flatMap(SqlClient.SqlClient, (sql) => sql.unsafe(statement.sql, [...statement.params]));
 
@@ -53,7 +53,7 @@ const openAgent = (userId: string, place: { taskId: string }) =>
     (started) => Option.getOrThrow(started).agent.id,
   );
 
-/** The pages as Realtime would deliver them to `reader`, as the desktop orders them. */
+/** The pages as a live read answers them to `reader`, as the desktop orders them. */
 const liveRowsOf = (statement: LiveStatement) =>
   Effect.gen(function* () {
     const rows = yield* Schema.decodeUnknownEffect(TASK_PAGES_READ.rows)({
@@ -63,7 +63,7 @@ const liveRowsOf = (statement: LiveStatement) =>
     return pagesOfLiveRows(rows);
   });
 
-/** The task's pages as Realtime would deliver them to `reader`, as the desktop orders them. */
+/** The task's pages as a live read answers them to `reader`, as the desktop orders them. */
 const livePagesOf = (reader: string, taskId: string) =>
   liveRowsOf(Option.getOrThrow(taskPagesRead.statements({ userId: reader, id: taskId })).pages);
 

@@ -15,7 +15,7 @@
 import { type PageStripTab, sameTab } from "@repo/ui/tab-strip-model";
 
 /** How many page tabs a panel keeps drawn, the one shown among them: a page kept runs on while hidden, so a few. */
-export const KEPT_PAGES = 3;
+const KEPT_PAGES = 3;
 
 /** A page tab kept drawn, and when it was last shown, by the panel's count of shows. */
 export interface KeptPage {

@@ -19,12 +19,15 @@
  */
 
 import type { InboxItemHome } from "@repo/features/inbox-wire";
+import type { TaskSummary } from "@repo/features/task-wire";
+import type { Workspace } from "@repo/features/workspace-wire";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type NavigateOptions, useNavigate, useRouter } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
 import { useMemo } from "react";
 import { useRoutedExits, useRoutedMemory } from "./places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "./places/routed-places.js";
+import { useTaskListCollections, useTaskListRow } from "./task-list-collections.js";
 import { inboxItemHomeQueryOptions } from "./tasks/agent-reads.js";
 import type { InboxChoice, TasksControl } from "./tasks/use-tasks-tab.js";
 
@@ -111,7 +114,7 @@ function beingFound(choice: InboxChoice): boolean {
 
 /** The item `itemId` under the task the service says it stands on. */
 function choiceAt(itemId: string, home: InboxItemHome): InboxChoice {
-  return { taskId: home.planId, itemAgentId: home.agentId, itemId, opened: true };
+  return { taskId: home.taskId, itemAgentId: home.agentId, itemId, opened: true };
 }
 
 /**
@@ -235,26 +238,35 @@ export function useInboxRoute(): InboxRoute {
 /**
  * The item `chosen` as the listed workspace's Inbox holds it: the Inbox lists
  * the listed workspace's items alone, so a choice another workspace's list
- * made gives way with it. Note that one named by its id alone is held to the
- * listed workspace by the list itself.
+ * made gives way with it, the task it names read by its id (`listed.task`).
+ * Note that one named by its id alone is held to the listed workspace by the
+ * list itself.
  */
 export function listedInboxChoice(
   chosen: InboxChoice | undefined,
-  tasks: Pick<TasksControl, "tasks" | "workspace">,
+  listed: {
+    readonly workspace: Pick<Workspace, "id"> | undefined;
+    readonly task: (taskId: string) => Pick<TaskSummary, "workspaceId"> | undefined;
+  },
 ): InboxChoice | undefined {
-  if (chosen === undefined || !("taskId" in chosen) || tasks.workspace === undefined) return chosen;
-  const listedId = tasks.workspace.id;
+  if (chosen === undefined || !("taskId" in chosen) || listed.workspace === undefined) {
+    return chosen;
+  }
 
-  const listed = tasks.tasks.some(
-    (task) => task.id === chosen.taskId && task.workspaceId === listedId,
-  );
-
-  return listed ? chosen : undefined;
+  return listed.task(chosen.taskId)?.workspaceId === listed.workspace.id ? chosen : undefined;
 }
 
 /** The window's Inbox as the router stands it, its choice as the listed workspace's list holds it. */
-export function useInboxView(tasks: Pick<TasksControl, "tasks" | "workspace">): InboxView {
+export function useInboxView(tasks: Pick<TasksControl, "workspace">): InboxView {
   const { open, chosen, narrowed } = useInboxRoute();
+  // The chosen item's task, read by its id, so only a move of that task draws the choice again.
+  const chosenTaskId = chosen !== undefined && "taskId" in chosen ? chosen.taskId : undefined;
+  const chosenTask = useTaskListRow(useTaskListCollections().tasks, chosenTaskId);
 
-  return { open, chosen: listedInboxChoice(chosen, tasks), narrowed };
+  const listed = {
+    workspace: tasks.workspace,
+    task: (taskId: string) => (taskId === chosenTaskId ? chosenTask : undefined),
+  };
+
+  return { open, chosen: listedInboxChoice(chosen, listed), narrowed };
 }

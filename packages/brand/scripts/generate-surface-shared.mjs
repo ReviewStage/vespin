@@ -13,7 +13,7 @@
 //   src/provider-mark-paths.ts  SVG path data for the sign-in provider marks
 //   src/brand-palette.ts        the brand's colors as plain values
 //   src/lucide-symbols.ts       Lucide's glyphs as SF Symbols templates, outlined
-//   src/task-status-marks.ts    a task's status marks, as @repo/ui draws them
+//   src/task-status-marks.ts    a task's status and priority marks, as @repo/ui draws them
 //   src/task-status-symbols.ts  the same marks as SF Symbols templates
 //   ui/src/tokens/motion-tokens.css  the --ui-* motion tokens the shared
 //                               components read, imported by @repo/ui/tokens.css
@@ -26,7 +26,7 @@
 //   ui-native/src/tokens/lucide-symbols.ts  the names the iOS app's asset
 //                               catalog holds those templates under
 //   ui-native/src/tokens/task-status-symbols.ts  the names it holds the
-//                               status marks' templates under
+//                               status and priority marks' templates under
 //
 // The React that traces the marks, and the rules that consume the tokens, stay
 // in each app: a shared component would pull desktop-only code into the web
@@ -43,8 +43,11 @@ import { markTemplate, symbolTemplate } from "./lucide-symbols.mjs";
 import {
   TASK_MARK_BOX,
   TASK_MARK_ELEMENT,
+  TASK_MARK_LAYER,
   TASK_MARK_LINE_WIDTH,
   TASK_MARK_ROLE,
+  TASK_PRIORITY_MARK,
+  TASK_PRIORITY_UNLIT_OPACITY,
   TASK_STATUS_MARK,
 } from "./task-status-marks.mjs";
 
@@ -118,7 +121,9 @@ const MOTION_PANE = "cubic-bezier(0.2, 0, 0, 1)";
 // The roles the iOS app draws with: the accent, the grounds a screen, a list,
 // and a sidebar stand on, the raised fill a grouped form's rows stand in
 // (OVERLAY) and the light ground under them (CHIP_HOVER), the strong fill the
-// member's own message sits on (FILL_STRONG), the inks, and the status inks.
+// member's own message sits on (FILL_STRONG), the gray a neutral swipe
+// action fills with under white words (ACTION_FILL), the inks, and the status
+// inks.
 // The rest (a focus ring, a chip's selection) are the desktop's and the
 // site's, which SwiftUI's own control states stand in for on iOS.
 const NATIVE_ROLES = [
@@ -134,6 +139,7 @@ const NATIVE_ROLES = [
   "WELL",
   "CHIP_EDGE",
   "FILL_STRONG",
+  "ACTION_FILL",
   "TEXT",
   "TEXT_BODY",
   "TEXT_MUTED",
@@ -165,6 +171,14 @@ const MARK_PATHS = {
    */
   CLAWD:
     "M5.08191 10.0769V0.938461H9.37422V10.0769H5.08191ZM9.23305 10.0769V0.938461H13.5254V10.0769H9.23305ZM13.3842 10.0769V0.938461H17.6765V10.0769H13.3842ZM17.5353 10.0769V0.938461H21.8276V10.0769H17.5353ZM21.6865 10.0769V0.938461H25.9788V10.0769H21.6865ZM25.8376 10.0769V0.938461H30.1299V10.0769H25.8376ZM29.9888 10.0769V0.938461H34.2811V10.0769H29.9888ZM34.1399 10.0769V0.938461H38.4322V10.0769H34.1399ZM38.291 10.0769V0.938461H42.5834V10.0769H38.291ZM0.930769 19.0769V9.93846H5.22308V19.0769H0.930769ZM5.08191 19.0769V9.93846H9.37422V19.0769H5.08191ZM9.23305 19.0769V14.5077H13.5254V19.0769H9.23305ZM13.3842 19.0769V9.93846H17.6765V19.0769H13.3842ZM17.5353 19.0769V9.93846H21.8276V19.0769H17.5353ZM21.6865 19.0769V9.93846H25.9788V19.0769H21.6865ZM25.8376 19.0769V9.93846H30.1299V19.0769H25.8376ZM29.9888 19.0769V9.93846H34.2811V19.0769H29.9888ZM34.1399 19.0769V14.5077H38.4322V19.0769H34.1399ZM38.291 19.0769V9.93846H42.5834V19.0769H38.291ZM42.4422 19.0769V9.93846H46.7345V19.0769H42.4422ZM5.08191 28.0769V18.9385H9.37422V28.0769H5.08191ZM9.23305 28.0769V18.9385H13.5254V28.0769H9.23305ZM13.3842 28.0769V18.9385H17.6765V28.0769H13.3842ZM17.5353 28.0769V18.9385H21.8276V28.0769H17.5353ZM21.6865 28.0769V18.9385H25.9788V28.0769H21.6865ZM25.8376 28.0769V18.9385H30.1299V28.0769H25.8376ZM29.9888 28.0769V18.9385H34.2811V28.0769H29.9888ZM34.1399 28.0769V18.9385H38.4322V28.0769H34.1399ZM38.291 28.0769V18.9385H42.5834V28.0769H38.291ZM5.08191 37.0769V27.9385H9.37422V37.0769H5.08191ZM13.3842 37.0769V27.9385H17.6765V37.0769H13.3842ZM29.9888 37.0769V27.9385H34.2811V37.0769H29.9888ZM38.291 37.0769V27.9385H42.5834V37.0769H38.291Z",
+  /*
+   * Cursor's cube, from Simple Icons' `cursor.svg` (CC0), on its 24-unit
+   * canvas, one ink. Drawn wherever an agent on Cursor names itself: the
+   * panel's harness mark and the iOS app's agent tile, in the ink of the
+   * row it leads.
+   */
+  CURSOR:
+    "M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23",
   GITHUB:
     "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z",
 };
@@ -200,10 +214,13 @@ const LUCIDE_SYMBOLS = {
   ALARM_CLOCK_CHECK: "alarm-clock-check",
   ALARM_CLOCK_OFF: "alarm-clock-off",
   APP_WINDOW: "app-window",
+  APP_WINDOW_MAC: "app-window-mac",
   ARCHIVE: "archive",
   ARCHIVE_RESTORE: "archive-restore",
   ARROW_DOWN: "arrow-down",
   ARROW_UP: "arrow-up",
+  AUDIO_LINES: "audio-lines",
+  BELL: "bell",
   BOOKMARK: "bookmark",
   BOOK_OPEN: "book-open",
   BOT: "bot",
@@ -228,9 +245,12 @@ const LUCIDE_SYMBOLS = {
   CIRCLE_DASHED: "circle-dashed",
   CIRCLE_DOT: "circle-dot",
   CIRCLE_PLUS: "circle-plus",
+  CIRCLE_QUESTION_MARK: "circle-question-mark",
   CIRCLE_SLASH: "circle-slash",
   CIRCLE_STOP: "circle-stop",
   CLOCK: "clock",
+  CLOUD: "cloud",
+  CLOUD_COG: "cloud-cog",
   COPY: "copy",
   CORNER_DOWN_RIGHT: "corner-down-right",
   CORNER_LEFT_UP: "corner-left-up",
@@ -283,14 +303,17 @@ const LUCIDE_SYMBOLS = {
   MESSAGE_SQUARE: "message-square",
   MESSAGE_SQUARE_PLUS: "message-square-plus",
   MIC: "mic",
-  MONITOR: "monitor",
+  MIC_OFF: "mic-off",
+  MOUSE_POINTER_CLICK: "mouse-pointer-click",
   NETWORK: "network",
   OCTAGON_MINUS: "octagon-minus",
   PANEL_LEFT: "panel-left",
+  PAUSE: "pause",
   PAPERCLIP: "paperclip",
   PENCIL: "pencil",
   PENCIL_LINE: "pencil-line",
   PEN_LINE: "pen-line",
+  PHONE_OFF: "phone-off",
   PIN: "pin",
   PIN_OFF: "pin-off",
   PLAY: "play",
@@ -322,6 +345,8 @@ const LUCIDE_SYMBOLS = {
   USER: "user",
   USERS: "users",
   USER_PLUS: "user-plus",
+  VOLUME_2: "volume-2",
+  VOLUME_OFF: "volume-off",
   WIFI_OFF: "wifi-off",
   WRENCH: "wrench",
   X: "x",
@@ -362,6 +387,28 @@ const taskStatusSymbols = Object.entries(TASK_STATUS_MARK).map(([key, parts]) =>
     elements: TASK_MARK_ELEMENT,
   }),
 }));
+
+// A priority mark's parts as one symbol, each in one ink.
+const priorityTemplate = (parts) =>
+  markTemplate(parts, {
+    box: TASK_MARK_BOX,
+    lineWidth: TASK_MARK_LINE_WIDTH,
+    roles: TASK_MARK_ROLE,
+    elements: TASK_MARK_ELEMENT,
+  });
+
+// The priority marks' symbols, named for the priority: "URGENT" as "TaskPriorityUrgent", each its lit parts alone. Note that a priority's unlit bars stand in a symbol of their own, which the app draws faint beneath it, rather than as a second layer, since a palette of the two drew the whole symbol black on iOS.
+const taskPrioritySymbols = Object.entries(TASK_PRIORITY_MARK).map(([key, parts]) => ({
+  key,
+  name: `TaskPriority${assetName(key.toLowerCase())}`,
+  svg: priorityTemplate(parts.filter(({ layer }) => layer !== TASK_MARK_LAYER.UNLIT)),
+}));
+
+// Every bar a priority can light, the faint ground a priority's lit bars stand on.
+const taskPriorityBars = {
+  name: "TaskPriorityBars",
+  svg: priorityTemplate(TASK_PRIORITY_MARK.HIGH),
+};
 
 // ---------- Emission ----------
 const CHECK_ONLY = process.argv.includes("--check");
@@ -518,9 +565,9 @@ function tsMarkPart(part, indent) {
   return `{\n${properties.join("\n")}\n${indent}}`;
 }
 
-// Each status's mark as TypeScript, its parts in drawing order.
-function tsStatusMarks() {
-  const marks = Object.entries(TASK_STATUS_MARK).map(
+// Each mark of a table as TypeScript, its parts in drawing order.
+function tsMarks(table) {
+  const marks = Object.entries(table).map(
     ([key, parts]) =>
       `  ${key}: [\n${parts.map((part) => `    ${tsMarkPart(part, "    ")},`).join("\n")}\n  ],`,
   );
@@ -536,34 +583,45 @@ function taskStatusMarksTs() {
   return `// Generated by packages/brand/scripts/generate-surface-shared.mjs. Do not edit by hand: change
 // the tables in task-status-marks.mjs and re-run it.
 //
-// A task's status as its mark draws it: each part an SVG element on a
-// ${TASK_MARK_BOX}-unit square, a line stroked ${TASK_MARK_LINE_WIDTH} wide, a fill, or a cut, the stroke
-// drawn in the ground's ink over a fill. @repo/ui draws them as SVG, and the
-// iOS app as the custom symbols task-status-symbols.ts holds.
+// A task's status and priority as their marks draw them: each part an SVG
+// element on a ${TASK_MARK_BOX}-unit square, a line stroked ${TASK_MARK_LINE_WIDTH} wide, a fill, or a
+// cut, the stroke drawn in the ground's ink over a fill; a priority's bar is
+// lit or unlit, the unlit drawn at ${TASK_PRIORITY_UNLIT_OPACITY} of the lit. @repo/ui draws
+// them as SVG, and the iOS app as the custom symbols task-status-symbols.ts holds.
 
 export const TASK_MARK_ROLE = ${tsNames(TASK_MARK_ROLE)} as const;
 
 export const TASK_MARK_ELEMENT = ${tsNames(TASK_MARK_ELEMENT)} as const;
 
-export const TASK_STATUS_MARK = ${tsStatusMarks()} as const;
+export const TASK_MARK_LAYER = ${tsNames(TASK_MARK_LAYER)} as const;
+
+export const TASK_PRIORITY_UNLIT_OPACITY = ${TASK_PRIORITY_UNLIT_OPACITY};
+
+export const TASK_STATUS_MARK = ${tsMarks(TASK_STATUS_MARK)} as const;
+
+export const TASK_PRIORITY_MARK = ${tsMarks(TASK_PRIORITY_MARK)} as const;
 `;
 }
 
-function taskStatusSymbolsTs() {
-  const templates = taskStatusSymbols
-    .map(({ name, svg }) => `  {\n    name: "${name}",\n    svg: '${svg}',\n  },`)
-    .join("\n");
+// A list of symbol templates as TypeScript, one object to a template.
+const tsTemplates = (symbols) =>
+  symbols.map(({ name, svg }) => `  {\n    name: "${name}",\n    svg: '${svg}',\n  },`).join("\n");
 
+function taskStatusSymbolsTs() {
   return `// Generated by packages/brand/scripts/generate-surface-shared.mjs. Do not edit by hand: change
 // the tables in task-status-marks.mjs and re-run it.
 //
-// A task's status marks as SF Symbols custom symbol templates, each one
-// outline whose cuts are holes, in three weights iOS interpolates
-// (scripts/lucide-symbols.mjs), which the iOS app's config writes into its
-// asset catalog as symbol sets.
+// A task's status and priority marks as SF Symbols custom symbol templates,
+// each one outline whose cuts are holes, a priority's lit bars apart from
+// every bar it can light, in three weights iOS interpolates (scripts/lucide-symbols.mjs),
+// which the iOS app's config writes into its asset catalog as symbol sets.
 
 export const TASK_STATUS_SYMBOL_TEMPLATES: readonly { name: string; svg: string }[] = [
-${templates}
+${tsTemplates(taskStatusSymbols)}
+];
+
+export const TASK_PRIORITY_SYMBOL_TEMPLATES: readonly { name: string; svg: string }[] = [
+${tsTemplates([...taskPrioritySymbols, taskPriorityBars])}
 ];
 `;
 }
@@ -572,12 +630,22 @@ function nativeTaskStatusSymbolsTs() {
   return `// Generated by packages/brand/scripts/generate-surface-shared.mjs. Do not edit by hand: change
 // the tables in task-status-marks.mjs and re-run it.
 //
-// The names the iOS app's asset catalog holds a task's status marks under,
-// as symbol sets the app's config writes from @repo/brand's templates.
+// The names the iOS app's asset catalog holds a task's status and priority
+// marks under, as symbol sets the app's config writes from @repo/brand's
+// templates, the bars a priority's lit ones stand on, and how strongly those
+// unlit bars are drawn.
 
 export const TASK_STATUS_SYMBOL = {
 ${tsRecord(taskStatusSymbols.map(({ key, name }) => [key, `"${name}"`]))}
 } as const;
+
+export const TASK_PRIORITY_SYMBOL = {
+${tsRecord(taskPrioritySymbols.map(({ key, name }) => [key, `"${name}"`]))}
+} as const;
+
+export const TASK_PRIORITY_BARS_SYMBOL = "${taskPriorityBars.name}";
+
+export const TASK_PRIORITY_UNLIT_OPACITY = ${TASK_PRIORITY_UNLIT_OPACITY};
 `;
 }
 

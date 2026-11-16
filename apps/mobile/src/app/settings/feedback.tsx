@@ -21,9 +21,11 @@ import {
   BUZZ,
   buzz,
   ConfirmAsk,
+  FOOTER_TONE,
   GLYPH,
   glyphSymbol,
   ListSection,
+  SCREEN_GROUND,
   ScopePicker,
   Screen,
   SettingsForm,
@@ -32,8 +34,9 @@ import {
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { Fragment, useEffect, useRef, useState } from "react";
+import { useCloseSheet } from "../../close-sheet.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import {
@@ -92,7 +95,7 @@ function screenshotsOf(pictures: AttachedPictures): readonly FeedbackImage[] {
  */
 export default function FeedbackScreen() {
   const colors = useColors();
-  const router = useRouter();
+  const close = useCloseSheet();
   const acts = useHostActs();
   const write = useWrite();
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
@@ -195,17 +198,21 @@ export default function FeedbackScreen() {
       const added = now[kind].some((picture) => !sent.has(picture.id));
       const otherHeld = now.words[other].trim() !== "" || now[other].length > 0;
 
+      // Note that a picture dropped while the send was out and still being read keeps the page too, so it lands where it can be seen.
+      const leaves = standing.current && !edited && !added && !otherHeld && !now.reading;
+
       for (const id of sent) detach(id);
 
       if (!edited) {
         setWords((current) => ({ ...current, [kind]: "" }));
-        setSends((count) => count + 1);
+
+        // Note that the field is drawn afresh only on a page that stays, because a new field takes the keyboard as it appears, and a List torn down around a field taking focus aborts the app.
+        if (standing.current && !leaves) setSends((count) => count + 1);
       }
 
-      // Note that a picture dropped while the send was out and still being read keeps the page too, so it lands where it can be seen.
-      if (!standing.current || edited || added || otherHeld || now.reading) return;
+      if (!leaves) return;
       kept.release();
-      router.back();
+      close();
     });
   };
 
@@ -220,7 +227,6 @@ export default function FeedbackScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: FEEDBACK_WORDS.TITLE }} />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.SEND)}
@@ -243,10 +249,10 @@ export default function FeedbackScreen() {
         }}
         onDismiss={kept.stay}
       />
-      <Screen>
+      <Screen ground={SCREEN_GROUND.GROUPED}>
         <ScopePicker label={FEEDBACK_WORDS.KIND} scopes={scopes}>
           <SettingsForm>
-            <ListSection footer={note}>
+            <ListSection footer={note} footerTone={FOOTER_TONE.FAILURE}>
               {/* Note that each kind's field stands apart, so a change of kind shows that kind's own words, and is drawn afresh once its words were sent. */}
               <Fragment key={sends}>
                 <WordsField
@@ -268,13 +274,8 @@ export default function FeedbackScreen() {
               />
             </ListSection>
             {signature === undefined ? null : (
-              <ListSection>
-                <ToggleRow
-                  label={FEEDBACK_WORDS.SIGN}
-                  detail={signatureLine(signature, signed)}
-                  on={signed}
-                  onChange={setSigned}
-                />
+              <ListSection footer={signatureLine(signature, signed)}>
+                <ToggleRow label={FEEDBACK_WORDS.SIGN} on={signed} onChange={setSigned} />
               </ListSection>
             )}
           </SettingsForm>

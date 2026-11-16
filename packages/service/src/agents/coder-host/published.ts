@@ -27,23 +27,13 @@ import {
   pullRequestAuthorOf,
 } from "@repo/features/agent-wire";
 import { failureKind } from "@repo/runtime/effect";
-import {
-  Cache,
-  Clock,
-  Data,
-  Duration,
-  Effect,
-  Exit,
-  Option,
-  Predicate,
-  type Redacted,
-} from "effect";
+import { Cache, Clock, Data, Duration, Effect, Exit, Option, Predicate } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { reconsiderRunArchive } from "../../automations/run-archive.js";
 import { recordServerEvent, SERVER_EVENT } from "../../events/server-events.js";
 import {
-  GITHUB_HTTP_STATUS,
   GitHubApp,
+  type GitHubBearer,
   type GitHubRepositoryToken,
   type GitHubWorkspaceReadFailure,
 } from "../../github/github-app.js";
@@ -171,7 +161,7 @@ function wirePullRequestOf(
  * with nor drops a queued mark the last read saw.
  */
 function queuedOf(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   repository: string,
   found: GitHubPullRequest,
   kept: StoredPullRequest | null,
@@ -179,21 +169,21 @@ function queuedOf(
   if (found.state !== PULL_REQUEST_STATE.OPEN) return Effect.succeed(false);
   const keptQueued = kept !== null && kept.number === found.number && kept.queued === true;
 
-  return pullRequestQueued(token, repository, found.number).pipe(
+  return pullRequestQueued(bearer, repository, found.number).pipe(
     Effect.catch(() => Effect.succeed(keptQueued)),
   );
 }
 
 /** The wire's pull request from GitHub's, with its head's checks read beside it, and the row's with its head and when it merged beside that. */
 function withChecks(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   repository: string,
   found: GitHubPullRequest,
   kept: StoredPullRequest | null,
 ): Effect.Effect<Published, PullRequestReadFailure, HttpClient.HttpClient> {
   const read = Effect.all([
-    checkSummaryOf(token, repository, found.headSha),
-    queuedOf(token, repository, found, kept),
+    checkSummaryOf(bearer, repository, found.headSha),
+    queuedOf(bearer, repository, found, kept),
   ]);
 
   return Effect.map(read, ([checks, queued]) => {
@@ -278,16 +268,16 @@ const publishedOnGitHub = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   // The default branch is the checkout's own, not a branch the agent cut: nothing published from it.
   if (agent.branch === reached.repository.defaultBranch) return nothing(agent);
-  const { token } = reached;
-  const ofBranch = yield* pullRequestOfBranch(token, agent.repository, agent.branch);
+  const { bearer } = reached;
+  const ofBranch = yield* pullRequestOfBranch(bearer, agent.repository, agent.branch);
 
   if (Option.isSome(ofBranch)) {
     const kept = yield* readAgentPublished(userId, agent.id);
 
-    return yield* withChecks(token, agent.repository, ofBranch.value, kept);
+    return yield* withChecks(bearer, agent.repository, ofBranch.value, kept);
   }
 
-  const pushed = yield* branchStands(token, agent.repository, agent.branch);
+  const pushed = yield* branchStands(bearer, agent.repository, agent.branch);
 
   return pushed
     ? {
@@ -305,17 +295,21 @@ interface LinkedRead {
 }
 
 /**
- * Whether a linked pull request is read again: one open or a draft, which
- * may yet merge or close, and a closed one from a branch a delivery from
- * GitHub names (`delivered`), since it may have reopened. Note that a merged
- * one never moves again.
+ * Whether a linked pull request is read again. On a delivery from GitHub
+ * (`delivered`), only one from a branch it names, open or closed, since a
+ * closed one may have reopened; with none, as the tab's reads have it, every
+ * one open or a draft, which may yet merge or close. Note that a merged one
+ * never moves again, and that we leave the rest of a delivery's linked pull
+ * requests alone, because a change to one sends a delivery of its own.
  */
 function readAgain(row: AgentPullRequestRow, delivered: readonly string[]): boolean {
   const { state } = row.pullRequest;
 
   if (state === PULL_REQUEST_STATE.MERGED) return false;
 
-  return state !== PULL_REQUEST_STATE.CLOSED || delivered.includes(row.headBranch);
+  if (delivered.length > 0) return delivered.includes(row.headBranch);
+
+  return state !== PULL_REQUEST_STATE.CLOSED;
 }
 
 /**
@@ -336,18 +330,18 @@ const linkedOnGitHub = (
     const asked = rows.filter((row) => readAgain(row, delivered));
 
     if (asked.length === 0) return [];
-    const { token } = yield* agentPullRequestReach(userId, agent, repository);
+    const { bearer } = yield* agentPullRequestReach(userId, agent, repository);
 
     const read = yield* Effect.forEach(
       asked,
       (row) =>
         Effect.gen(function* () {
-          const found = yield* pullRequestByNumber(token, repository, row.pullRequest.number);
+          const found = yield* pullRequestByNumber(bearer, repository, row.pullRequest.number);
 
           if (Option.isNone(found)) return [];
 
           const { stored, ended } = yield* withChecks(
-            token,
+            bearer,
             repository,
             found.value,
             row.pullRequest,
@@ -482,11 +476,11 @@ const extraPublishedOnGitHub = /* @__PURE__ */ Effect.fnUntraced(function* (
   const reached = yield* agentPullRequestReach(userId, agent, extra.repository);
 
   if (extra.headBranch === reached.repository.defaultBranch) return none;
-  const ofBranch = yield* pullRequestOfBranch(reached.token, extra.repository, extra.headBranch);
+  const ofBranch = yield* pullRequestOfBranch(reached.bearer, extra.repository, extra.headBranch);
 
   if (Option.isNone(ofBranch)) return none;
 
-  return yield* withChecks(reached.token, extra.repository, ofBranch.value, extra.pullRequest);
+  return yield* withChecks(reached.bearer, extra.repository, ofBranch.value, extra.pullRequest);
 });
 
 /**
@@ -533,7 +527,7 @@ function extraUnread(cause: unknown): Effect.Effect<void> {
  * such one. Note that it is read afresh on each ask and written nowhere.
  */
 export const pullRequestOfNumber = /* @__PURE__ */ Effect.fnUntraced(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   repository: string,
   number: number,
 ): Effect.fn.Return<
@@ -541,11 +535,11 @@ export const pullRequestOfNumber = /* @__PURE__ */ Effect.fnUntraced(function* (
   PullRequestReadFailure,
   HttpClient.HttpClient
 > {
-  const found = yield* pullRequestByNumber(token, repository, number);
+  const found = yield* pullRequestByNumber(bearer, repository, number);
 
   if (Option.isNone(found)) return Option.none();
-  const checks = yield* checkSummaryOf(token, repository, found.value.headSha);
-  const queued = yield* queuedOf(token, repository, found.value, null);
+  const checks = yield* checkSummaryOf(bearer, repository, found.value.headSha);
+  const queued = yield* queuedOf(bearer, repository, found.value, null);
 
   return Option.some({
     branch: found.value.headRef,
@@ -568,8 +562,8 @@ export const agentPullRequestOfNumber = /* @__PURE__ */ Effect.fn("web/agentPull
     number: number,
   ): Effect.fn.Return<AgentPullRequestAnswer, PublishedReadFailure, PublishedServices> {
     if (!hasRepository(agent)) return nothing(agent).answer;
-    const { token } = yield* agentPullRequestReach(userId, agent);
-    const found = yield* pullRequestOfNumber(token, agent.repository, number);
+    const { bearer } = yield* agentPullRequestReach(userId, agent);
+    const found = yield* pullRequestOfNumber(bearer, agent.repository, number);
 
     if (Option.isNone(found)) return nothing(agent).answer;
 
@@ -626,13 +620,11 @@ function keptStands(agent: Agent, ended: boolean, kept: KeptPublished, now: numb
   return age < Duration.toMillis(CODER.PUBLISHED_ROW_FRESH);
 }
 
-/** Whether GitHub refused the read for its rate limit: a 429, the instance's own held answer among them, or a 403 it may answer one with. */
+/** Whether GitHub refused the read for its rate limit, `@repo/github`'s own hold among it, or as forbidden. */
 function rateLimited(failure: PublishedReadFailure): boolean {
-  if (!Predicate.isTagged(failure, "GitHubUnavailable")) return false;
-
   return (
-    failure.status === GITHUB_HTTP_STATUS.TOO_MANY_REQUESTS ||
-    failure.status === GITHUB_HTTP_STATUS.FORBIDDEN
+    Predicate.isTagged(failure, "GitHubRateLimited") ||
+    Predicate.isTagged(failure, "GitHubForbidden")
   );
 }
 

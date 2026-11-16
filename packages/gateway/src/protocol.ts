@@ -47,7 +47,6 @@ export const GATEWAY_METHOD = {
   TERMINALS_INPUT: "terminals.input",
   TERMINALS_RESIZE: "terminals.resize",
   TERMINALS_ACK: "terminals.ack",
-  TERMINALS_SHOWN: "terminals.shown",
   TERMINALS_DISCONNECT: "terminals.disconnect",
   TERMINALS_WAKE: "terminals.wake",
   /**
@@ -191,6 +190,8 @@ export const GATEWAY_EVENT = {
   OFFLINE_REFUSED_CHANGED: "offlineRefused.changed",
   /** The commands agents asked to run on this Mac that wait on the developer's answer, whole, each time one is asked or answered. */
   MACHINE_COMMAND_ASKS_CHANGED: "macCommandAsks.changed",
+  /** The device this Mac claims commands as for the account signed in, or none before it joined for it, at every look the Mac takes at its device, moved or not. */
+  MACHINE_COMMAND_DEVICE_CHANGED: "macCommandDevice.changed",
 } as const;
 
 export type GatewayEventKind = (typeof GATEWAY_EVENT)[keyof typeof GATEWAY_EVENT];

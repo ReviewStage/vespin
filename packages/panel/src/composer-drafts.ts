@@ -25,7 +25,7 @@ import { readKept, writeKept } from "./kept-storage.js";
  * the task starts in, a description's comment its words per
  * thread being started, per thread answered, and per comment edited
  * (`description-comments.tsx`), a line comment in Files changed its words per
- * agent, pull request, file, side, and last line (`comment-drafts.ts`), an agent's line
+ * pull request, file, side, and last line (`comment-drafts.ts`), an agent's line
  * written again its words and files per agent and line
  * (`edit-composer.tsx`), and an inbox card its answer
  * per item, the options picked, the fields filled, and, on a thread, the
@@ -70,7 +70,7 @@ const MAX_KEPT = 200;
 /** How long the typing rests before what the window changed is written to storage. */
 const STORE_PAUSE = Duration.millis(300);
 
-/** What a draft is written to: a started agent, a plan's agent not yet started, an inbox item, a task not yet started, an automation's helper not yet started, a description's comment, a line comment on an agent's changed file, or an agent's line written again. */
+/** What a draft is written to: a started agent, a plan's agent not yet started, an inbox item, a task not yet started, an automation's helper not yet started, a description's comment, a line comment on a pull request's changed file, a reply on its review thread, or an agent's line written again. */
 export const DRAFT_PLACE = {
   AGENT: "agent",
   NEW_AGENT: "newAgent",
@@ -104,12 +104,12 @@ const draftPlaceSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.AGENT),
     /** The agent's plan, which the sidebar marks; null for an agent with none. */
-    planId: Schema.NullOr(Schema.String),
+    taskId: Schema.NullOr(Schema.String),
     agentId: Schema.String,
   }),
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.NEW_AGENT),
-    planId: Schema.String,
+    taskId: Schema.String,
     /** The key the draft agent starts under, which a relaunch keeps, so a Start asked again is the same one. */
     draftId: Schema.String,
     /** The agent and message the draft forks, with the message's opening words, which a relaunch keeps beside its words; no message for a continue of the agent's whole transcript. */
@@ -126,7 +126,7 @@ const draftPlaceSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.INBOX),
     /** The item's plan, which the sidebar marks; null for an inbox of an agent with no plan. */
-    planId: Schema.NullOr(Schema.String),
+    taskId: Schema.NullOr(Schema.String),
     /** The agent that posted the item, whose own inbox, where it has no plan, is all that reads it. */
     agentId: Schema.String,
     itemId: Schema.String,
@@ -144,7 +144,7 @@ const draftPlaceSchema = Schema.Union([
   Schema.Struct({
     kind: descriptionCommentKind,
     /** The plan the comment is on, which the sidebar marks. */
-    planId: Schema.String,
+    taskId: Schema.String,
     /**
      * What the words go to: the comment of a thread they edit, the thread
      * they answer, or, for a thread not yet started, the words it is started
@@ -162,10 +162,10 @@ const draftPlaceSchema = Schema.Union([
   }),
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.LINE_COMMENT),
-    /** The agent whose pull request's Files changed the comment is written in. */
-    agentId: Schema.String,
-    /** The number of the pull request a tab names other than its agent's own, so two pull requests changing one file keep their words apart; none for the agent's own. */
-    number: Schema.optionalKey(Schema.Number),
+    /** The repository, `owner/name`, of the pull request whose Files changed the comment is written in. */
+    repository: Schema.String,
+    /** The pull request's number, so two pull requests changing one file keep their words apart. */
+    number: Schema.Number,
     /** The changed file the comment is on. */
     path: Schema.String,
     /** The side of the diff the comment's last line counts on, as GitHub anchors a thread. */
@@ -175,9 +175,7 @@ const draftPlaceSchema = Schema.Union([
   }),
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.REVIEW_REPLY),
-    /** The agent whose pull request the review thread is on. */
-    agentId: Schema.String,
-    /** GitHub's own id for the thread, which names it across every pull request. */
+    /** GitHub's own id for the thread, which names it across every pull request; a build from before also kept the agent whose pull request it is on, read past. */
     threadId: Schema.String,
   }),
   Schema.Struct({
@@ -213,11 +211,23 @@ const issueDraftPlaceSchema = Schema.Struct({
  */
 const revisedPlaceSchema = Schema.Struct({
   kind: Schema.Literal(DRAFT_PLACE.INBOX),
-  planId: Schema.NullOr(Schema.String),
+  taskId: Schema.NullOr(Schema.String),
   agentId: Schema.String,
   itemId: Schema.String,
   revision: Schema.Number,
   thread: Schema.optionalKey(Schema.Literal(true)),
+});
+
+/**
+ * A line comment's place as a build from before Pull request tabs named
+ * their pull request by its repository stored it: by the agent whose tab it
+ * was written in. Its pull request cannot be told from the agent, so such an
+ * entry is read past rather than refusing every draft beside it, and goes
+ * once its account writes again.
+ */
+const agentLineCommentPlaceSchema = Schema.Struct({
+  kind: Schema.Literal(DRAFT_PLACE.LINE_COMMENT),
+  agentId: Schema.String,
 });
 
 /** The places of boxes since removed, as a build from before stored them: Chat's and its ask's answer, and the Inbox's New thread's. */
@@ -236,11 +246,12 @@ const retiredPlaceSchema = Schema.Struct({
   kind: Schema.Literals(Object.values(RETIRED_DRAFT_PLACE)),
 });
 
-/** A place as storage may hold it: one of today's, New task's on an issue (`issueDraftPlaceSchema`), one with its revision (`revisedPlaceSchema`), or a removed box's (`retiredPlaceSchema`). */
+/** A place as storage may hold it: one of today's, New task's on an issue (`issueDraftPlaceSchema`), one with its revision (`revisedPlaceSchema`), a line comment's by its agent (`agentLineCommentPlaceSchema`), or a removed box's (`retiredPlaceSchema`). */
 const storedPlaceSchema = Schema.Union([
   issueDraftPlaceSchema,
   revisedPlaceSchema,
   draftPlaceSchema,
+  agentLineCommentPlaceSchema,
   retiredPlaceSchema,
 ]);
 
@@ -257,10 +268,13 @@ function placeOf(
 ): { readonly place: DraftPlace; readonly revision?: number } | undefined {
   if (retired(stored) || "issueId" in stored) return undefined;
 
-  if (!("revision" in stored)) return { place: stored };
-  const { kind, planId, agentId, itemId, revision } = stored;
+  // A line comment kept by its agent, whose pull request cannot be told now, opens no box.
+  if (stored.kind === DRAFT_PLACE.LINE_COMMENT && !("repository" in stored)) return undefined;
 
-  return { place: { kind, planId, agentId, itemId }, revision };
+  if (!("revision" in stored)) return { place: stored };
+  const { kind, taskId, agentId, itemId, revision } = stored;
+
+  return { place: { kind, taskId, agentId, itemId }, revision };
 }
 
 /** The element of a page a thread being started there is on, as its draft keeps it. */
@@ -333,11 +347,8 @@ export type DescriptionCommentPlace = Extract<
   { kind: typeof DRAFT_PLACE.DESCRIPTION_COMMENT }
 >;
 
-/** A line comment in Files changed: the agent, the file, and the side and last line it stands under. */
+/** A line comment in Files changed: the pull request, the file, and the side and last line it stands under. */
 export type LineCommentPlace = Extract<DraftPlace, { kind: typeof DRAFT_PLACE.LINE_COMMENT }>;
-
-/** A reply to a review thread on an agent's pull request: the agent and GitHub's id for the thread. */
-export type ReviewReplyPlace = Extract<DraftPlace, { kind: typeof DRAFT_PLACE.REVIEW_REPLY }>;
 
 /** An agent's line written again: the agent and the line. */
 export type EditPlace = Extract<DraftPlace, { kind: typeof DRAFT_PLACE.EDIT }>;
@@ -1085,7 +1096,7 @@ export function useDraftsOwner(
  * word typed.
  */
 function draftedPlans(drafts: readonly KeptDraft[]): readonly (string | null)[] {
-  return drafts.flatMap(({ place }) => ("planId" in place ? [place.planId] : []));
+  return drafts.flatMap(({ place }) => ("taskId" in place ? [place.taskId] : []));
 }
 
 /**
@@ -1150,7 +1161,7 @@ export function useNewAgentDraft(
   draftId: string | undefined,
 ): KeptDraft<NewAgentPlace> | undefined {
   return useSelector(draftsStore, (drafts) => {
-    const onTask = drafts.filter(isNewAgent).filter((kept) => kept.place.planId === taskId);
+    const onTask = drafts.filter(isNewAgent).filter((kept) => kept.place.taskId === taskId);
 
     return draftId === undefined
       ? onTask.at(-1)
@@ -1349,7 +1360,7 @@ export function useInboxDrafts(taskId: string | null): readonly KeptDraft<InboxP
   const last = useRef<readonly KeptDraft<InboxPlace>[]>([]);
 
   return useSelector(draftsStore, (drafts) => {
-    const found = drafts.filter(isInbox).filter((kept) => kept.place.planId === taskId);
+    const found = drafts.filter(isInbox).filter((kept) => kept.place.taskId === taskId);
 
     const same =
       found.length === last.current.length && found.every((kept, at) => kept === last.current[at]);

@@ -15,7 +15,7 @@ catalog:
   react: 19.2.8
   react-dom: 19.2.8
   ws: 8.21.3
-  ai: 7.0.172
+  ai: 7.0.173
   drizzle-orm: 1.0.0-rc.4
   drizzle-kit: 1.0.0-rc.4
   vitest: 5.1.0
@@ -182,8 +182,17 @@ patchedDependencies:
 # in the menu's ink; so the Status menu's marks lost the status tones the
 # panel's menu draws them in. The patch adds `originalColor`, which tints the
 # symbol's own image (`withTintColor`, rendering kept original), as Mail's Flag
-# menu hands its colored flags to the menu. Delete it when an `@expo/ui`
-# release offers a tinted image a menu keeps.
+# menu hands its colored flags to the menu; and `photoSize`, which draws a `file://`
+# `uiImage` round at a menu glyph's size with its rendering kept original, so
+# the Assignee menu leads each member with their face. It also adds
+# `scrollContentMargins`, SwiftUI's `contentMargins(_:_:for: .scrollContent)`,
+# which stands a plain list's rows in the reading column across a wide window
+# while the list keeps the whole width, so a drag beside the column scrolls it
+# as Mail's does; `listSectionMargins` moved no plain list's rows. And it hands
+# a `List` its edit mode as a binding (`editing`, `onEditingChange`), so a
+# two-finger drag down a list can switch Select mode on. Delete it
+# when an `@expo/ui` release offers a tinted image and a photo a menu keeps,
+# and scroll content margins.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
 #
 # `@sentry/react-native` 8.28.0's native start (`RNSentrySDK.start`, which the
@@ -220,6 +229,17 @@ patchedDependencies:
 # ueberdosis/tiptap#8317, each manager lexing with a `marked` of its own.
 # Delete each half when a TipTap release carries its PR.
   "@tiptap/markdown@3.33.1": patches/@tiptap__markdown@3.33.1.patch
+#
+# `@xterm/addon-webgl` 0.19.0 builds each glyph's canvas font as
+# `${style} ${weight} …`, which starts with a space for upright text. Chromium's
+# font parser briefly refused a font with leading whitespace (crrev.com/c/8525429,
+# fixed by crrev.com/c/8573817), and Electron 43.8.8 shipped the first change
+# without the second, so the canvas kept its `10px sans-serif` default and the
+# desktop's terminal drew tiny letters spread across full-size cells. The patch
+# makes upstream's change in xtermjs/xterm.js#6312 (#6297): the space goes with
+# the optional style. Only `lib/addon-webgl.mjs` is patched, the build the
+# browser bundles resolve. Delete it when an addon release carries #6312.
+  "@xterm/addon-webgl@0.19.0": patches/@xterm__addon-webgl@0.19.0.patch
 
 # Transitive versions raised past a published advisory, each within the major
 # its dependents already take. Delete a line once nothing resolves below it.

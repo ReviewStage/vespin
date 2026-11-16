@@ -53,7 +53,7 @@ export const PAGE_THEME_SCHEME = {
   LIGHT: "light",
 } as const;
 
-export type PageThemeScheme = (typeof PAGE_THEME_SCHEME)[keyof typeof PAGE_THEME_SCHEME];
+type PageThemeScheme = (typeof PAGE_THEME_SCHEME)[keyof typeof PAGE_THEME_SCHEME];
 
 /**
  * The variables a page may draw with, by the names it reads them by, and

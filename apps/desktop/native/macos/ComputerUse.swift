@@ -28,7 +28,10 @@ import UniformTypeIdentifiers
 ///   quality. Its numbers stand until the next `get_app_state` of that app.
 /// - `click`, `type_text`, `press_key`, `scroll`, `drag`, `set_value`,
 ///   `perform_secondary_action`: act on the app by an element's number or by
-///   a point in the first screenshot's pixels.
+///   a point in the first screenshot's pixels. Where the request asks for a
+///   `shot {edge, quality}`, the answer carries the read's window as the
+///   action left it, once it settled, for the people watching the agent; an
+///   action whose window can't be captured so answers without it.
 /// - `record {app, max_seconds, max_bytes}`: starts recording the app's
 ///   window as an H.264 MP4, the agent's cursor drawn over it, until
 ///   `stop_recording` or `max_seconds`, whichever comes first.
@@ -40,11 +43,23 @@ import UniformTypeIdentifiers
 /// by `pin_bundle_id`, or by `pin_pid` for an app with no bundle id, and is
 /// refused where the app it finds no longer matches.
 ///
-/// The agent's own cursor, the browser's pointer drawn over the app in a
-/// window that takes no clicks, glides to each point an action
-/// lands on just before it lands, and fades once the agent rests, so the
-/// developer sees where it works without losing their own cursor. It stands
-/// in no screenshot, since a read captures the app's window alone.
+/// Each agent has its own cursor, the browser's pointer drawn over the app in
+/// a window that takes no clicks, named by the request's `cursor_agent` (none
+/// for the one cursor of conversations that are no agent's). It comes in
+/// over the window's middle as the agent first reads an app, glides to each
+/// point an action lands on just before it lands, and stands there, swaying
+/// about its tip while the agent thinks, until `release_cursor` says the
+/// agent's turn ended, so the developer sees where it works without losing
+/// their own cursor. While more than one agent's cursor stands on the
+/// screen, each wears a tag beside it showing its agent's `cursor_name`. It
+/// stands in no screenshot, since a read captures the app's
+/// window alone, so an action that moves it answers where it landed, and a
+/// read where it stands over the window it read, as `cursor`: its
+/// `x_fraction` and `y_fraction` of the last read window from its top left,
+/// which the app's preview draws its own pointer at over that read's picture.
+/// A recording draws its own agent's cursor alone into its frames, bare.
+/// - `release_cursor {cursor_agent}`: puts that agent's cursor away, as its
+///   turn ends.
 ///
 /// Note that input is never posted to the system's event stream: an element
 /// is pressed through Accessibility, and a point is clicked by an event posted
@@ -62,6 +77,10 @@ private let LINES_PER_PAGE = 12
 private let MAX_CLICKS = 3
 /// How many ancestors up the agent's cursor looks for a place to stand where an element has none.
 private let MAX_CURSOR_ANCESTORS = 4
+/// The attribute Chromium and Electron read as a request to build their pages' Accessibility tree in full, as they do for a screen reader. An app that does not know it refuses it, and nothing else changes.
+private let MANUAL_ACCESSIBILITY = "AXManualAccessibility"
+/// How long an app is given to build its pages' tree the first time it is asked to.
+private let WEB_TREE_WAIT_SECONDS = 0.5
 private let MAX_PAGES = 20.0
 /// The most base64 characters of one screenshot, as the wire bounds it (`COMPUTER_BOUNDS.MAX_SHOT_CHARS`).
 private let MAX_SHOT_CHARS = 1_600_000
@@ -392,6 +411,13 @@ private func children(_ element: AXUIElement) -> [AXUIElement] {
     (attribute(element, kAXChildrenAttribute) as? [AXUIElement]) ?? []
 }
 
+/// An element by an attribute that names one, such as its parent or its window, where it does.
+private func elementAttribute(_ element: AXUIElement, _ name: String) -> AXUIElement? {
+    guard let found = attribute(element, name), CFGetTypeID(found) == AXUIElementGetTypeID() else { return nil }
+    // SAFETY: the type id was checked just above.
+    return (found as! AXUIElement)
+}
+
 private func actions(_ element: AXUIElement) -> [String] {
     var names: CFArray?
     guard AXUIElementCopyActionNames(element, &names) == .success else { return [] }
@@ -455,12 +481,6 @@ private struct TreeWalk {
     }
 }
 
-/// One of an app's windows by an attribute that names one, where it does.
-private func windowAttribute(_ app: AXUIElement, _ name: String) -> AXUIElement? {
-    guard let window = attribute(app, name), CFGetTypeID(window) == AXUIElementGetTypeID() else { return nil }
-    return (window as! AXUIElement)
-}
-
 /// Whether a window is in the Dock, which no capture reads without bringing it back, and bringing it back takes the developer's screen.
 private func minimized(_ window: AXUIElement) -> Bool {
     (attribute(window, kAXMinimizedAttribute) as? Bool) == true
@@ -475,7 +495,7 @@ private func minimized(_ window: AXUIElement) -> Bool {
  */
 private func focusedWindow(_ app: NSRunningApplication) throws -> AXUIElement? {
     let element = AXUIElementCreateApplication(app.processIdentifier)
-    let named = [kAXFocusedWindowAttribute, kAXMainWindowAttribute].compactMap { windowAttribute(element, $0) }
+    let named = [kAXFocusedWindowAttribute, kAXMainWindowAttribute].compactMap { elementAttribute(element, $0) }
     let candidates = named + ((attribute(element, kAXWindowsAttribute) as? [AXUIElement]) ?? [])
     if let shown = candidates.first(where: { !minimized($0) }) { return shown }
     guard candidates.isEmpty else {
@@ -628,22 +648,46 @@ private struct AppSession {
         return CGPoint(x: bounds.midX, y: bounds.midY)
     }
 
+    /// Where a point on the screen stands as a share of the window this read captured, from its top left, which its
+    /// screenshots draw at any size, as an answer carries the agent's cursor; nothing where it stands outside the window.
+    func cursorShare(_ point: CGPoint) -> [String: Any]? {
+        cursorShareOf(point, in: windowFrame)
+    }
+
     /// Where the agent's cursor glides for an element: its center, or where it has no place of its own, the nearest
     /// ancestor's that has one. Note that this places the cursor alone, never a click, which lands only on the element's own center.
     func cursorPoint(_ index: Int) -> CGPoint? {
         guard var element = try? element(index) else { return nil }
         for _ in 0...MAX_CURSOR_ANCESTORS {
             if let bounds = frame(element) { return CGPoint(x: bounds.midX, y: bounds.midY) }
-            guard let parent = attribute(element, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID()
-            else { return nil }
-            // SAFETY: the type id was checked just above.
-            element = parent as! AXUIElement
+            guard let parent = elementAttribute(element, kAXParentAttribute) else { return nil }
+            element = parent
         }
         return nil
     }
 }
 
 private var sessions: [pid_t: AppSession] = [:]
+
+/// The processes already asked to build their pages' tree, which are given no time to build it again.
+private var webTreesAsked: Set<pid_t> = []
+
+/**
+ Asks an app to build its pages' Accessibility tree in full, and gives it a
+ moment to the first time. Note that Chromium and Electron build that tree
+ in full only for a screen reader, or once this attribute asks them to, and
+ until then may list a page's buttons yet answer a press on one without
+ acting on it. It is asked of every app on every read, since an app that
+ does not know the attribute refuses it and nothing else changes, and so no
+ browser is named.
+ */
+private func askForWebTree(_ app: NSRunningApplication) async {
+    let pid = app.processIdentifier
+    let element = AXUIElementCreateApplication(pid)
+    let asked = AXUIElementSetAttributeValue(element, MANUAL_ACCESSIBILITY as CFString, kCFBooleanTrue)
+    guard asked == .success, webTreesAsked.insert(pid).inserted else { return }
+    try? await Task.sleep(nanoseconds: UInt64(WEB_TREE_WAIT_SECONDS * 1_000_000_000))
+}
 
 private func session(_ app: NSRunningApplication) throws -> AppSession {
     guard let found = sessions[app.processIdentifier] else {
@@ -658,6 +702,7 @@ private func getAppState(_ request: [String: Any]) async throws -> [String: Any]
     let app = try await resolveApp(try string(request, "app"))
     try requirePinned(request, app)
     let pid = app.processIdentifier
+    await askForWebTree(app)
     let axWindow = try focusedWindow(app)
     let title = axWindow.flatMap { text($0, kAXTitleAttribute) }
     // Note that a window whose elements are numbered and that has no frame is refused too, since no capture could be paired with it.
@@ -682,7 +727,18 @@ private func getAppState(_ request: [String: Any]) async throws -> [String: Any]
     sessions[pid] = AppSession(
         pid: pid, windowID: window.windowID, windowFrame: window.frame,
         shotSize: CGSize(width: width, height: height), elements: walk.elements)
-    return [
+    // Note that the agent's cursor comes in on its first look at an app, resting over the window's middle, so the developer sees the agent at work before its first press, which glides from there.
+    let owner = cursorOwner(request)
+    let track = await MainActor.run {
+        let cursor = agentCursors.cursor(owner)
+        cursor.appear(at: CGPoint(x: window.frame.midX, y: window.frame.midY), over: window.windowID)
+        return cursor.track
+    }
+    // Note that the read says where the cursor stands only where that is over this window, as it is once its look brought it here, so the preview draws it over this window's picture at that spot.
+    let standing = track.standing(at: ProcessInfo.processInfo.systemUptime).flatMap {
+        cursorShareOf($0, in: window.frame)
+    }
+    var state: [String: Any] = [
         "app": describe(app),
         "window": [
             "title": window.title ?? title ?? "",
@@ -693,34 +749,126 @@ private func getAppState(_ request: [String: Any]) async throws -> [String: Any]
         "truncated": walk.elements.count >= MAX_ELEMENTS,
         "shots": shots,
     ]
+    if let standing { state["cursor"] = standing }
+    return state
 }
 
 // MARK: - The agent's cursor
 
+/// How far past a window's edge, as a share of its size, a point may stand and still count as over it, so a point on its very edge is kept.
+private let CURSOR_SHARE_SLACK = 0.01
+
+/// A point on the screen as a share of a window's frame from its top left, as an answer carries the agent's cursor, held to the window; nothing where it stands outside it, or the window has no size.
+private func cursorShareOf(_ point: CGPoint, in frame: CGRect) -> [String: Any]? {
+    guard frame.width > 0, frame.height > 0 else { return nil }
+    let x = Double((point.x - frame.minX) / frame.width)
+    let y = Double((point.y - frame.minY) / frame.height)
+    let range = -CURSOR_SHARE_SLACK...(1 + CURSOR_SHARE_SLACK)
+    guard range.contains(x), range.contains(y) else { return nil }
+    return ["x_fraction": min(max(x, 0), 1), "y_fraction": min(max(y, 0), 1)]
+}
+
+/// An action's answer, with where the agent's cursor landed for it where it moved, so the app's preview can draw it there.
+private func actedAnswer(_ done: String, cursorAt point: CGPoint?, on session: AppSession) -> [String: Any] {
+    guard let point, let share = session.cursorShare(point) else { return ["done": done] }
+    return ["done": done, "cursor": share]
+}
+
 /// How long the cursor takes to glide to a point, and how long it rests there before the action lands.
 private let CURSOR_GLIDE_SECONDS = 0.25
-/// How long the cursor stands after the agent's last action before it fades.
-private let CURSOR_REST_SECONDS = 2.5
-/// The cursor's box, and where in it the arrow's tip stands.
-private let CURSOR_BOX = CGSize(width: 36, height: 36)
-private let CURSOR_TIP = CGPoint(x: 8, y: 6)
+/// How long the cursor stands after the agent's last action where nothing says the agent's turn ended, as where the app quit mid-turn; the turn's end puts it away first (`release_cursor`).
+private let CURSOR_HOLD_SECONDS = 120.0
+/// How far the cursor turns about its tip either way while it rests, and how long one sway there and back takes, as the panel's pointer sways while the agent works (`@repo/ui`'s `AgentPointer`).
+private let CURSOR_SWAY_DEGREES = 4.5
+private let CURSOR_SWAY_SECONDS = 2.0
+/// How often the cursor's window redraws while it sways: 30 a second, which a sway of a few degrees over seconds needs no more than, so a cursor held a while costs little.
+private let CURSOR_FRAME_NANOSECONDS: UInt64 = 33_333_333
+/// How many frames pass between restacks of the cursor over its app's window: about two a second.
+private let CURSOR_RESTACK_FRAMES = 15
+/// A press's ring about the arrow's tip: its radius as it starts, the scale it grows from and to, and its line.
+private let RIPPLE_RADIUS: CGFloat = 12
+private let RIPPLE_FROM: CGFloat = 0.4
+private let RIPPLE_TO: CGFloat = 1.4
+private let RIPPLE_LINE: CGFloat = 1.5
+/// The room the ring takes about the tip at its widest, which the cursor's window leaves it on every side, so the window never cuts it.
+private let RIPPLE_ROOM = ceil(RIPPLE_RADIUS * RIPPLE_TO + RIPPLE_LINE)
+/// The cursor's box, and where in it the arrow's tip stands: in the middle of the ring's room, which also holds the arrow, its edge and its shadow down and right of the tip.
+private let CURSOR_BOX = CGSize(width: RIPPLE_ROOM * 2, height: RIPPLE_ROOM * 2)
+private let CURSOR_TIP = CGPoint(x: RIPPLE_ROOM, y: RIPPLE_ROOM)
 
 /// The pointer's copper over a light window and the brighter amber over a dark one: the brand's accent in either theme (`@repo/brand`'s `BRAND_PALETTE`), as the browser's pointer is drawn (`recording-cursor.ts`).
 private let POINTER_LIGHT = NSColor(srgbRed: 0xa7 / 255, green: 0x61 / 255, blue: 0x1b / 255, alpha: 1)
 private let POINTER_DARK = NSColor(srgbRed: 0xcf / 255, green: 0x7b / 255, blue: 0x26 / 255, alpha: 1)
+
+/// The cursor's turn about its tip, in radians, a while after it came to rest: one smooth sway one way and back the other each `CURSOR_SWAY_SECONDS`, from upright.
+private func swayAngle(sinceRest: TimeInterval) -> CGFloat {
+    guard sinceRest > 0 else { return 0 }
+    // Note that the sway turns counterclockwise first on the window server's points, whose y runs down, as the browser's does on the page.
+    return -CGFloat(CURSOR_SWAY_DEGREES * .pi / 180 * sin(2 * .pi * sinceRest / CURSOR_SWAY_SECONDS))
+}
 
 /// The pointer's color for the Mac's appearance, which the windows under it follow.
 private func pointerColor() -> NSColor {
     NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? POINTER_DARK : POINTER_LIGHT
 }
 
+/// The tag that names an agent's cursor while another agent's cursor shows too: where it stands from the arrow's tip, its height, its font, the room either side of its words, and the most its words may take before they are cut short.
+private let TAG_OFFSET = CGPoint(x: 12, y: 15)
+private let TAG_HEIGHT: CGFloat = 18
+private let TAG_FONT = NSFont.systemFont(ofSize: 11, weight: .semibold)
+private let TAG_PADDING: CGFloat = 7
+private let TAG_MAX_WORDS_WIDTH: CGFloat = 180
+/// The room the tag's shadow takes past its edge, so the cursor's window never clips it.
+private let TAG_SHADOW_ROOM: CGFloat = 4
+
+/// Whose cursor a request moves: the agent by its id, empty for the one cursor of conversations that are no agent's, and the name its tag shows, where the request gives one.
+private struct CursorOwner: Sendable {
+    let agent: String
+    let name: String?
+}
+
+private func cursorOwner(_ request: [String: Any]) -> CursorOwner {
+    let name = (request["cursor_name"] as? String).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+    return CursorOwner(agent: (request["cursor_agent"] as? String) ?? "", name: name?.isEmpty == false ? name : nil)
+}
+
+/// The tag's words as drawn, cut short with an ellipsis past the most they may take, and the tag's box from the arrow's tip.
+private func tagLayout(_ name: String) -> (words: NSAttributedString, box: CGRect) {
+    let style = NSMutableParagraphStyle()
+    style.lineBreakMode = .byTruncatingTail
+    let words = NSAttributedString(
+        string: name, attributes: [.font: TAG_FONT, .foregroundColor: NSColor.white, .paragraphStyle: style])
+    let width = min(ceil(words.size().width), TAG_MAX_WORDS_WIDTH)
+    return (words, CGRect(x: TAG_OFFSET.x, y: TAG_OFFSET.y, width: width + TAG_PADDING * 2, height: TAG_HEIGHT))
+}
+
+/// The cursor's window's size: the arrow's box, and room for its tag beside it where it is named.
+private func cursorBox(named name: String?) -> CGSize {
+    guard let name else { return CURSOR_BOX }
+    let tag = tagLayout(name).box.offsetBy(dx: CURSOR_TIP.x, dy: CURSOR_TIP.y)
+    return CGSize(
+        width: max(CURSOR_BOX.width, tag.maxX + TAG_SHADOW_ROOM), height: max(CURSOR_BOX.height, tag.maxY + TAG_SHADOW_ROOM))
+}
+
 /**
- The agent's pointer as the browser's is drawn: the same rounded arrow in a
- 16-point box, its tip at the box's top left, in the accent with a white
+ An agent's pointer as the browser's is drawn: the same rounded arrow in a
+ 16-point box, its tip near the box's top left, in the accent with a white
  edge and a soft shadow, and a ring that ripples out from its tip as a press
- lands.
+ lands. While another agent's cursor shows too, a tag in the same accent
+ names the agent beside the arrow, standing still while the arrow sways.
  */
 private final class AgentCursorView: NSView {
+    private let track: CursorTrack
+    /// The agent's name, which its tag shows; none draws no tag.
+    var name: String?
+
+    init(frame: NSRect, track: CursorTrack) {
+        self.track = track
+        super.init(frame: frame)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
     override var isFlipped: Bool { true }
 
     /// The browser pointer's path (`recording-cursor.ts`), its tip at the origin.
@@ -737,7 +885,11 @@ private final class AgentCursorView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        // Note that a lone cursor stays a bare arrow: the tag only tells cursors apart, so it shows while another agent's shows too.
+        if let name, agentCursors.showing > 1 { drawTag(name) }
         let arrow = Self.arrow()
+        let angle = track.at(ProcessInfo.processInfo.systemUptime)?.angle ?? 0
+        arrow.transform(using: AffineTransform(rotationByRadians: angle))
         arrow.transform(using: AffineTransform(translationByX: CURSOR_TIP.x, byY: CURSOR_TIP.y))
         arrow.lineJoinStyle = .round
         arrow.lineWidth = 2.4
@@ -754,22 +906,45 @@ private final class AgentCursorView: NSView {
         arrow.fill()
     }
 
+    /// The tag naming the agent: a pill in the pointer's accent, its words in white, under and right of the arrow's tail.
+    private func drawTag(_ name: String) {
+        let layout = tagLayout(name)
+        let box = layout.box.offsetBy(dx: CURSOR_TIP.x, dy: CURSOR_TIP.y)
+        let pill = NSBezierPath(roundedRect: box, xRadius: TAG_HEIGHT / 2, yRadius: TAG_HEIGHT / 2)
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowOffset = NSSize(width: 0, height: -1)
+        shadow.shadowBlurRadius = 3
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.25)
+        shadow.set()
+        pointerColor().setFill()
+        pill.fill()
+        NSGraphicsContext.restoreGraphicsState()
+        let lineHeight = ceil(TAG_FONT.ascender - TAG_FONT.descender + TAG_FONT.leading)
+        let words = CGRect(
+            x: box.minX + TAG_PADDING, y: box.minY + (box.height - lineHeight) / 2,
+            width: box.width - TAG_PADDING * 2, height: lineHeight)
+        layout.words.draw(with: words, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+    }
+
     /// A ring rippling out from the tip, as the browser's pointer ripples as a press lands.
     func ripple() {
         wantsLayer = true
         guard let layer else { return }
         let ring = CAShapeLayer()
-        ring.path = CGPath(ellipseIn: CGRect(x: -12, y: -12, width: 24, height: 24), transform: nil)
+        ring.path = CGPath(
+            ellipseIn: CGRect(x: -RIPPLE_RADIUS, y: -RIPPLE_RADIUS, width: RIPPLE_RADIUS * 2, height: RIPPLE_RADIUS * 2),
+            transform: nil)
         ring.position = CURSOR_TIP
         ring.fillColor = nil
         ring.strokeColor = pointerColor().cgColor
-        ring.lineWidth = 1.5
+        ring.lineWidth = RIPPLE_LINE
         layer.addSublayer(ring)
         CATransaction.begin()
         CATransaction.setCompletionBlock { ring.removeFromSuperlayer() }
         let grow = CABasicAnimation(keyPath: "transform.scale")
-        grow.fromValue = 0.4
-        grow.toValue = 1.4
+        grow.fromValue = RIPPLE_FROM
+        grow.toValue = RIPPLE_TO
         let fade = CABasicAnimation(keyPath: "opacity")
         fade.fromValue = 1
         fade.toValue = 0
@@ -784,7 +959,7 @@ private final class AgentCursorView: NSView {
 }
 
 /**
- Where the agent's cursor stands, as a recording draws it into its frames:
+ Where one agent's cursor stands, as a recording draws it into its frames:
  the glide it is on, the last press, and whether it shows. The cursor's
  window is no part of a recording of one window, so a recording draws the
  pointer itself, as the browser's draws it into the page
@@ -798,26 +973,53 @@ private final class CursorTrack: @unchecked Sendable {
     private var glidedAt: TimeInterval = 0
     private var pressedAt: TimeInterval?
     private var shownUntil: TimeInterval = 0
+    /// Whether the Mac asks for reduced motion, as last read on the main actor, which holds the cursor upright.
+    private var still = false
 
-    /// Where the cursor stands at the instant given, on the window server's points, its top left the main display's, with how long since its last press; nothing where it shows nowhere.
-    func at(_ now: TimeInterval) -> (point: CGPoint, sincePress: TimeInterval?)? {
+    /// Where the cursor stands at the instant given, on the window server's points, its top left the main display's, with how long since its last press and its turn about its tip; nothing where it shows nowhere.
+    func at(_ now: TimeInterval) -> (point: CGPoint, sincePress: TimeInterval?, angle: CGFloat)? {
         lock.lock()
         defer { lock.unlock() }
         guard let to, now < shownUntil else { return nil }
         let start = from ?? to
         let share = min(max((now - glidedAt) / CURSOR_GLIDE_SECONDS, 0), 1)
         let point = CGPoint(x: start.x + (to.x - start.x) * share, y: start.y + (to.y - start.y) * share)
-        return (point, pressedAt.map { now - $0 })
+        let angle = still ? 0 : swayAngle(sinceRest: now - glidedAt - CURSOR_GLIDE_SECONDS)
+        return (point, pressedAt.map { now - $0 }, angle)
     }
 
-    func glide(to point: CGPoint, at now: TimeInterval) {
+    func glide(to point: CGPoint, at now: TimeInterval, still reduced: Bool) {
         lock.lock()
         defer { lock.unlock() }
+        still = reduced
         let showing = to != nil && now < shownUntil
         from = showing ? at(unlocked: now) : point
         to = point
         glidedAt = now
-        shownUntil = now + CURSOR_GLIDE_SECONDS + CURSOR_REST_SECONDS + CURSOR_GLIDE_SECONDS
+        shownUntil = now + CURSOR_GLIDE_SECONDS + CURSOR_HOLD_SECONDS + CURSOR_GLIDE_SECONDS
+    }
+
+    /// Where the cursor comes to rest at the instant given, the end of the glide it is on, on the window server's points; nothing where it shows nowhere.
+    func standing(at now: TimeInterval) -> CGPoint? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let to, now < shownUntil else { return nil }
+        return to
+    }
+
+    /// The cursor kept where it stands for a hold more from the instant given, as a read while it shows keeps it; nothing where it shows nowhere.
+    func hold(at now: TimeInterval) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard to != nil, now < shownUntil else { return }
+        shownUntil = max(shownUntil, now + CURSOR_HOLD_SECONDS + CURSOR_GLIDE_SECONDS)
+    }
+
+    /// The cursor shown nowhere from the instant given, as the agent's turn ends.
+    func release(at now: TimeInterval) {
+        lock.lock()
+        defer { lock.unlock() }
+        shownUntil = min(shownUntil, now)
     }
 
     func press(at now: TimeInterval) {
@@ -835,72 +1037,265 @@ private final class CursorTrack: @unchecked Sendable {
     }
 }
 
-private let cursorTrack = CursorTrack()
+/**
+ Each agent's cursor's track, by the agent's id, empty for the one cursor of
+ conversations that are no agent's. Note that a track is kept once made,
+ a handful of numbers, so a recording keeps drawing its agent's cursor
+ though the cursor's window is put away and made again; and that a
+ recording's frame queue reads it, so every touch holds the lock.
+ */
+private final class CursorTracks: @unchecked Sendable {
+    private let lock = NSLock()
+    private var tracks: [String: CursorTrack] = [:]
 
-/// The window the agent's cursor stands in: borderless, clear, over every app, taking no clicks, on every space.
+    func track(_ agent: String) -> CursorTrack {
+        lock.lock()
+        defer { lock.unlock() }
+        if let track = tracks[agent] { return track }
+        let made = CursorTrack()
+        tracks[agent] = made
+        return made
+    }
+}
+
+private let cursorTracks = CursorTracks()
+
+/// One agent's cursor's window: borderless, clear, taking no clicks, on every space, and stacked just above
+/// the window of the app the agent is in, so a window that covers that app's covers the cursor too.
 @MainActor
 private final class AgentCursor {
+    let track: CursorTrack
+    /// The agent's name, which the cursor's tag shows while another agent's cursor shows too.
+    private var name: String?
     private var panel: NSPanel?
+    /// The window of the app the agent is in, which the cursor stands just above.
+    private var over: CGWindowID?
+    /// What tells the cursor an app came forward, went back, hid or came back, so it is stacked again above its window.
+    private var watching: [NSObjectProtocol] = []
     private var fade: Task<Void, Never>?
+    /// The redraws that sway the cursor while it stands, for as long as it shows.
+    private var swaying: Task<Void, Never>?
+    /// How many times the cursor was brought in, so a fade that ends after the cursor was brought back leaves its window be.
+    private var shownTimes = 0
+    /// What a fade that ends with the cursor put away does: forgets the cursor, so its window and watchers go.
+    var onGone: (() -> Void)?
+
+    init(track: CursorTrack) {
+        self.track = track
+    }
+
+    /// Whether the cursor stands on the screen now: shown, and not taken off behind its app's hidden window.
+    var onScreen: Bool {
+        guard let panel else { return false }
+        return panel.isVisible && panel.alphaValue > 0
+    }
 
     private func made() -> NSPanel {
         if let panel { return panel }
+        let box = cursorBox(named: name)
         let made = NSPanel(
-            contentRect: NSRect(origin: .zero, size: CURSOR_BOX), styleMask: [.borderless, .nonactivatingPanel],
+            contentRect: NSRect(origin: .zero, size: box), styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered, defer: false)
         made.isOpaque = false
         made.backgroundColor = .clear
         made.hasShadow = false
         made.ignoresMouseEvents = true
-        made.level = .statusBar
+        // Note that the cursor stands among apps' windows rather than over them all, so it goes behind whatever covers the app it is in.
+        made.level = .normal
+        made.hidesOnDeactivate = false
         made.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-        made.contentView = AgentCursorView(frame: NSRect(origin: .zero, size: CURSOR_BOX))
+        let view = AgentCursorView(frame: NSRect(origin: .zero, size: box), track: track)
+        view.name = name
+        made.contentView = view
         panel = made
+        watchApps()
         return made
     }
 
-    /// The cursor glided to a point on the screen, in the window server's coordinates, its top left the main display's.
+    /// The agent named as its tag shows it, the cursor's window resized about the arrow's tip to hold the tag; a request that names none keeps the name it had.
+    func named(_ given: String?) {
+        guard let given, given != name else { return }
+        name = given
+        guard let panel, let view = panel.contentView as? AgentCursorView else { return }
+        view.name = given
+        let box = cursorBox(named: given)
+        // Note that the window grows from its top left, where the arrow's tip stands, which the window server's bottom-left origin moves by the change in height.
+        let frame = panel.frame
+        panel.setFrame(
+            NSRect(x: frame.minX, y: frame.maxY - box.height, width: box.width, height: box.height), display: false)
+        view.setFrameSize(box)
+        view.needsDisplay = true
+    }
+
+    /// Stacks the cursor again whenever an app comes forward, hides or comes back, or the space shown changes, since each reorders the windows around the app the agent is in.
+    private func watchApps() {
+        let center = NSWorkspace.shared.notificationCenter
+        let moves = [
+            NSWorkspace.didActivateApplicationNotification, NSWorkspace.didHideApplicationNotification,
+            NSWorkspace.didUnhideApplicationNotification, NSWorkspace.activeSpaceDidChangeNotification,
+        ]
+        watching = moves.map { name in
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.stack() }
+            }
+        }
+    }
+
+    /// The cursor stood just above the window of the app the agent is in, or taken off the screen while that window is
+    /// not on it, as a hidden or minimized app's is; it keeps its place and fade, so it comes back as the window does.
+    private func stack() {
+        guard let panel, panel.alphaValue > 0, let over else { return }
+        guard windowOnScreen(over) else { return panel.orderOut(nil) }
+        panel.order(.above, relativeTo: Int(over))
+    }
+
     /// The press landing where the cursor stands, its ring rippling out.
     func press() {
         (panel?.contentView as? AgentCursorView)?.ripple()
-        cursorTrack.press(at: ProcessInfo.processInfo.systemUptime)
+        track.press(at: ProcessInfo.processInfo.systemUptime)
     }
 
-    func glide(to point: CGPoint) {
+    /// The cursor glided to a point on the screen, in the window server's coordinates, its top left the main display's.
+    func glide(to point: CGPoint, over window: CGWindowID) {
         let panel = made()
-        cursorTrack.glide(to: point, at: ProcessInfo.processInfo.systemUptime)
+        over = window
+        shownTimes += 1
+        track.glide(
+            to: point, at: ProcessInfo.processInfo.systemUptime,
+            still: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         let height = NSScreen.screens.first?.frame.height ?? 0
-        let origin = CGPoint(x: point.x - CURSOR_TIP.x, y: height - point.y - CURSOR_BOX.height + CURSOR_TIP.y)
-        fade?.cancel()
+        let box = panel.frame.size
+        let origin = CGPoint(x: point.x - CURSOR_TIP.x, y: height - point.y - box.height + CURSOR_TIP.y)
         if !panel.isVisible || panel.alphaValue < 1 {
             panel.setFrameOrigin(origin)
             panel.alphaValue = 1
-            panel.orderFrontRegardless()
+            stack()
         } else {
+            stack()
+            // Note that the window glides by its whole frame, because a window's animator moves it by its frame alone and drops a bare origin.
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = CURSOR_GLIDE_SECONDS
-                panel.animator().setFrameOrigin(origin)
+                panel.animator().setFrame(NSRect(origin: origin, size: box), display: false)
             }
         }
-        fade = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(CURSOR_REST_SECONDS * 1_000_000_000))
-            guard !Task.isCancelled else { return }
-            // Note that the completion is named, because inside a task the bare form is the one that awaits.
-            NSAnimationContext.runAnimationGroup({ context in
-                context.duration = CURSOR_GLIDE_SECONDS
-                panel.animator().alphaValue = 0
-            }, completionHandler: nil)
+        if swaying == nil {
+            swaying = Task { @MainActor [weak self] in
+                var frame = 0
+                while !Task.isCancelled {
+                    // Note that a cursor faded out, or not yet shown, is never redrawn; one shown is redrawn each frame, which also shows or hides its tag as other agents' cursors come and go.
+                    if let panel = self?.panel, panel.isVisible, panel.alphaValue > 0 {
+                        panel.contentView?.needsDisplay = true
+                    }
+                    // Note that it is stacked again a few times a second too, because a window minimized or restored while its app stays active tells no notification.
+                    frame += 1
+                    if frame % CURSOR_RESTACK_FRAMES == 0 { self?.stack() }
+                    try? await Task.sleep(nanoseconds: CURSOR_FRAME_NANOSECONDS)
+                }
+            }
         }
+        fadeAfter(CURSOR_GLIDE_SECONDS + CURSOR_HOLD_SECONDS)
+    }
+
+    /// The cursor brought in resting at a point, with no press, where it shows nowhere yet, as an app's first read brings it; where it already stands, it stays there for a hold more, so an agent that only reads keeps it.
+    func appear(at point: CGPoint, over window: CGWindowID) {
+        guard let panel, panel.isVisible, panel.alphaValue > 0, over == window else {
+            return glide(to: point, over: window)
+        }
+        track.hold(at: ProcessInfo.processInfo.systemUptime)
+        fadeAfter(CURSOR_HOLD_SECONDS)
+    }
+
+    /// The cursor put away once it has stood the seconds given with nothing keeping it, the hold before it called off.
+    private func fadeAfter(_ seconds: TimeInterval) {
+        fade?.cancel()
+        fade = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            self?.hide()
+        }
+    }
+
+    /// The cursor put away at once, as the agent's turn ends: it fades where it stands, and a recording stops drawing it.
+    func release() {
+        fade?.cancel()
+        fade = nil
+        track.release(at: ProcessInfo.processInfo.systemUptime)
+        hide()
+    }
+
+    /// The cursor faded where it stands, its sway stopped, and once faded, its window closed and the cursor forgotten.
+    private func hide() {
+        swaying?.cancel()
+        swaying = nil
+        guard let panel, panel.alphaValue > 0 else { return }
+        // Note that a cursor taken off the screen behind a hidden app is faded too, so the app coming back never brings back a cursor put away.
+        guard panel.isVisible else {
+            panel.alphaValue = 0
+            return gone()
+        }
+        let shown = shownTimes
+        // Note that the completion is named, because inside a task the bare form is the one that awaits.
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = CURSOR_GLIDE_SECONDS
+            panel.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
+            // Note that a cursor brought back while it faded keeps its window.
+            Task { @MainActor in
+                guard let self, self.shownTimes == shown else { return }
+                self.gone()
+            }
+        })
+    }
+
+    /// The cursor's window closed and its watchers ended, since an agent done with the Mac may never act on it again; its next action makes the cursor afresh.
+    private func gone() {
+        let center = NSWorkspace.shared.notificationCenter
+        watching.forEach { center.removeObserver($0) }
+        watching = []
+        panel?.orderOut(nil)
+        panel = nil
+        onGone?()
     }
 }
 
-@MainActor private let agentCursor = AgentCursor()
+/// Every agent's cursor on the Mac, by the agent's id, each made as the agent first moves it and forgotten once put away.
+@MainActor
+private final class AgentCursors {
+    private var cursors: [String: AgentCursor] = [:]
 
-/// The agent's cursor glided to `point`, and a moment let pass so it has arrived as the action lands, which its ring ripples for.
-private func cursorTo(_ point: CGPoint) async {
-    await MainActor.run { agentCursor.glide(to: point) }
+    /// How many agents' cursors stand on the screen now, which a cursor's tag shows only beside another.
+    var showing: Int { cursors.values.filter(\.onScreen).count }
+
+    /// The owner's cursor, made where it has none, named as the request names the agent.
+    func cursor(_ owner: CursorOwner) -> AgentCursor {
+        let cursor = cursors[owner.agent] ?? made(owner.agent)
+        cursor.named(owner.name)
+        return cursor
+    }
+
+    /// The agent's cursor put away, where it has one.
+    func release(_ agent: String) {
+        cursors[agent]?.release()
+    }
+
+    private func made(_ agent: String) -> AgentCursor {
+        let cursor = AgentCursor(track: cursorTracks.track(agent))
+        cursor.onGone = { [weak self, weak cursor] in
+            guard let self, let cursor, self.cursors[agent] === cursor else { return }
+            self.cursors[agent] = nil
+        }
+        cursors[agent] = cursor
+        return cursor
+    }
+}
+
+@MainActor private let agentCursors = AgentCursors()
+
+/// The agent's cursor glided to `point` over the app's window, and a moment let pass so it has arrived as the action lands, which its ring ripples for.
+private func cursorTo(_ point: CGPoint, over window: CGWindowID, for owner: CursorOwner) async {
+    await MainActor.run { agentCursors.cursor(owner).glide(to: point, over: window) }
     try? await Task.sleep(nanoseconds: UInt64(CURSOR_GLIDE_SECONDS * 1_000_000_000))
-    await MainActor.run { agentCursor.press() }
+    await MainActor.run { agentCursors.cursor(owner).press() }
 }
 
 // MARK: - Input
@@ -982,11 +1377,12 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
     let count = min(max(integer(request, "click_count") ?? 1, 1), MAX_CLICKS)
     if let index = integer(request, "element_index") {
         let element = try current.element(index)
-        if let point = current.cursorPoint(index) { await cursorTo(point) }
+        let cursorAt = current.cursorPoint(index)
+        if let point = cursorAt { await cursorTo(point, over: current.windowID, for: cursorOwner(request)) }
         // Note that a plain press goes through Accessibility, which needs no point and no focus, before an event is aimed at the element's center.
         if button == BUTTON.left, count == 1 {
             let pressed = AXUIElementPerformAction(element, kAXPressAction as CFString)
-            if pressed == .success { return ["done": "pressed"] }
+            if pressed == .success { return actedAnswer("pressed", cursorAt: cursorAt, on: current) }
             // Note that only an element that offers no press is clicked at its center instead; any other failure may have pressed it already, so it is answered rather than pressed twice.
             guard pressed == .actionUnsupported else {
                 throw HelperError(
@@ -995,15 +1391,15 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
             }
         }
         clickPoint(try current.center(index), session: current, button: button, count: count)
-        return ["done": "clicked"]
+        return actedAnswer("clicked", cursorAt: cursorAt, on: current)
     }
     guard let x = number(request, "x"), let y = number(request, "y") else {
         throw HelperError(kind: ERROR_KIND.badRequest, message: "Give an element_index, or x and y.")
     }
     let point = current.point(x: x, y: y)
-    await cursorTo(point)
+    await cursorTo(point, over: current.windowID, for: cursorOwner(request))
     clickPoint(point, session: current, button: button, count: count)
-    return ["done": "clicked"]
+    return actedAnswer("clicked", cursorAt: point, on: current)
 }
 
 private func typeText(_ request: [String: Any]) async throws -> [String: Any] {
@@ -1089,13 +1485,13 @@ private func scroll(_ request: [String: Any]) async throws -> [String: Any] {
     let lines = Int32(max(1, (pages.isFinite ? pages : 1) * Double(LINES_PER_PAGE)))
     let vertical: Int32 = direction == DIRECTION.up ? lines : direction == DIRECTION.down ? -lines : 0
     let horizontal: Int32 = direction == DIRECTION.left ? lines : direction == DIRECTION.right ? -lines : 0
-    await cursorTo(point)
+    await cursorTo(point, over: current.windowID, for: cursorOwner(request))
     let event = CGEvent(
         scrollWheelEvent2Source: source, units: .line, wheelCount: 2, wheel1: vertical, wheel2: horizontal,
         wheel3: 0)
     event?.location = point
     post(event, to: current)
-    return ["done": "scrolled"]
+    return actedAnswer("scrolled", cursorAt: point, on: current)
 }
 
 private func drag(_ request: [String: Any]) async throws -> [String: Any] {
@@ -1109,18 +1505,19 @@ private func drag(_ request: [String: Any]) async throws -> [String: Any] {
     let from = current.point(x: fromX, y: fromY)
     let to = current.point(x: toX, y: toY)
     let types = mouseTypes(BUTTON.left)
-    await cursorTo(from)
+    let owner = cursorOwner(request)
+    await cursorTo(from, over: current.windowID, for: owner)
     post(mouseEvent(types.down, at: from, session: current, clicks: 1), to: current)
     let steps = 12
     for step in 1...steps {
         let along = Double(step) / Double(steps)
         let point = CGPoint(x: from.x + (to.x - from.x) * along, y: from.y + (to.y - from.y) * along)
-        await MainActor.run { agentCursor.glide(to: point) }
+        await MainActor.run { agentCursors.cursor(owner).glide(to: point, over: current.windowID) }
         post(mouseEvent(types.drag, at: point, session: current, clicks: 1), to: current)
         try await Task.sleep(nanoseconds: 10_000_000)
     }
     post(mouseEvent(types.up, at: to, session: current, clicks: 1), to: current)
-    return ["done": "dragged"]
+    return actedAnswer("dragged", cursorAt: to, on: current)
 }
 
 private func setValue(_ request: [String: Any]) async throws -> [String: Any] {
@@ -1130,12 +1527,13 @@ private func setValue(_ request: [String: Any]) async throws -> [String: Any] {
     let index = integer(request, "element_index") ?? -1
     let element = try current.element(index)
     let value = (request["value"] as? String) ?? ""
-    if let point = current.cursorPoint(index) { await cursorTo(point) }
+    let cursorAt = current.cursorPoint(index)
+    if let point = cursorAt { await cursorTo(point, over: current.windowID, for: cursorOwner(request)) }
     let result = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, value as CFString)
     guard result == .success else {
         throw HelperError(kind: ERROR_KIND.failed, message: "The element did not take the value (\(result.rawValue)).")
     }
-    return ["done": "set"]
+    return actedAnswer("set", cursorAt: cursorAt, on: current)
 }
 
 private func performSecondaryAction(_ request: [String: Any]) async throws -> [String: Any] {
@@ -1148,12 +1546,60 @@ private func performSecondaryAction(_ request: [String: Any]) async throws -> [S
     guard actions(element).contains(action) else {
         throw HelperError(kind: ERROR_KIND.badRequest, message: "The element offers no \(action) action.")
     }
-    if let point = current.cursorPoint(index) { await cursorTo(point) }
+    let cursorAt = current.cursorPoint(index)
+    if let point = cursorAt { await cursorTo(point, over: current.windowID, for: cursorOwner(request)) }
     let result = AXUIElementPerformAction(element, action as CFString)
     guard result == .success else {
         throw HelperError(kind: ERROR_KIND.failed, message: "The element refused \(action) (\(result.rawValue)).")
     }
-    return ["done": "performed"]
+    return actedAnswer("performed", cursorAt: cursorAt, on: current)
+}
+
+// MARK: - The window after an action
+
+/// How long an action is given to settle before its window is captured: a quarter second is macOS's standard
+/// animation (`NSAnimationContext`'s default duration), so a pressed button's highlight, a menu opening, or a sheet
+/// sliding in has drawn by then, with a few frames to spare, while the agent waits no longer than a glance.
+private let SETTLE_SECONDS = 0.3
+
+/**
+ The window an action acted on as it settled, at the edge and quality the
+ request's `shot` asks for; nothing where it asks for none, or where the
+ window the read captured can't be captured again as it stood, as when the
+ action closed it, moved it, or sent it to another Space. Note that a moved
+ window is passed over, because the agent's cursor is answered as a share of
+ the read's window, and over a picture of another frame it would land on the
+ wrong spot; the next read catches the preview up.
+ */
+private func settledShot(_ request: [String: Any], on current: AppSession) async -> [String: Any]? {
+    guard let asked = request["shot"] as? [String: Any] else { return nil }
+    try? await Task.sleep(nanoseconds: UInt64(SETTLE_SECONDS * 1_000_000_000))
+    guard
+        CGPreflightScreenCaptureAccess(),
+        let content = try? await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true),
+        let window = content.windows.first(where: { $0.windowID == current.windowID }),
+        sameFrame(window.frame, current.windowFrame),
+        let image = try? await capture(window)
+    else { return nil }
+    return jpegBase64(
+        image, edge: min(max(integer(asked, "edge") ?? 2560, MIN_SHOT_EDGE), 4096),
+        quality: min(max(number(asked, "quality") ?? 0.8, 0.1), 1))
+}
+
+/// An action that can change its app's window, its answer carrying the window as it settled where the request asks
+/// for it. Note that the picture never fails the action, which has already landed: one that can't be taken is left out.
+private func settling(
+    _ action: @escaping ([String: Any]) async throws -> [String: Any]
+) -> ([String: Any]) async throws -> [String: Any] {
+    { request in
+        var answer = try await action(request)
+        guard
+            let app = try? actedApp(request), let current = sessions[app.processIdentifier],
+            let shot = await settledShot(request, on: current)
+        else { return answer }
+        answer["shot"] = shot
+        return answer
+    }
 }
 
 // MARK: - Recording
@@ -1222,19 +1668,31 @@ private func windowBounds(_ windowID: CGWindowID) -> CGRect? {
     return rect
 }
 
+/// Whether the window is on the screen now: not minimized, not of a hidden app, and on the space shown.
+private func windowOnScreen(_ windowID: CGWindowID) -> Bool {
+    guard let listed = CGWindowListCopyWindowInfo([.optionIncludingWindow], windowID) as? [[String: Any]] else {
+        return false
+    }
+    return (listed.first?[kCGWindowIsOnscreen as String] as? Bool) == true
+}
+
 /// How long a press's ring takes to ripple out, as the cursor's window draws it.
 private let RIPPLE_SECONDS = CURSOR_GLIDE_SECONDS * 1.6
 
 /**
- The agent's cursor drawn into a frame of the window, where it stands over
- the window: the browser pointer's arrow and, just after a press, its ring.
+ The recording agent's cursor drawn into a frame of the window, where it
+ stands over the window: the browser pointer's arrow, swaying while it
+ rests, and, just after a press, its ring; never its tag, nor another
+ agent's cursor.
  The window fills the frame at its own shape, scaled to fit and centered,
  so a point on the window is placed by the window's bounds now, which follow
  it as it moves or resizes. Nothing is drawn where the cursor shows nowhere,
  or off the window.
  */
-private func drawCursor(into pixels: CVPixelBuffer, window: CGRect, color: CGColor, at now: TimeInterval) {
-    guard let cursor = cursorTrack.at(now), window.width > 0, window.height > 0 else { return }
+private func drawCursor(
+    into pixels: CVPixelBuffer, window: CGRect, track: CursorTrack, color: CGColor, at now: TimeInterval
+) {
+    guard let cursor = track.at(now), window.width > 0, window.height > 0 else { return }
     let width = CGFloat(CVPixelBufferGetWidth(pixels))
     let height = CGFloat(CVPixelBufferGetHeight(pixels))
     let scale = min(width / window.width, height / window.height)
@@ -1257,11 +1715,13 @@ private func drawCursor(into pixels: CVPixelBuffer, window: CGRect, color: CGCol
     context.scaleBy(x: scale, y: scale)
     if let since = cursor.sincePress, since < RIPPLE_SECONDS {
         let share = since / RIPPLE_SECONDS
-        let radius = 12 * (0.4 + share)
+        let radius = RIPPLE_RADIUS * (RIPPLE_FROM + (RIPPLE_TO - RIPPLE_FROM) * share)
         context.setStrokeColor(color.copy(alpha: 1 - share) ?? color)
-        context.setLineWidth(1.5)
+        context.setLineWidth(RIPPLE_LINE)
         context.strokeEllipse(in: CGRect(x: -radius, y: -radius, width: radius * 2, height: radius * 2))
     }
+    // Note that the arrow sways about its tip as the cursor's window draws it, while its ring stays centered there.
+    context.rotate(by: cursor.angle)
     let arrow = CGMutablePath()
     arrow.move(to: CGPoint(x: 0, y: 0))
     arrow.addLine(to: CGPoint(x: 12.07, y: 4.16))
@@ -1303,6 +1763,8 @@ private final class WindowRecorder: NSObject, SCStreamOutput {
     let height: Int
     private let windowID: CGWindowID
     private let pointer: CGColor
+    /// The recording agent's cursor, the one cursor drawn into its frames.
+    private let track: CursorTrack
     private let stream: SCStream
     private let writer: AVAssetWriter
     private let input: AVAssetWriterInput
@@ -1313,11 +1775,12 @@ private final class WindowRecorder: NSObject, SCStreamOutput {
     private var firstUptime: TimeInterval?
     private var ended = false
 
-    init(window: SCWindow, configuration: SCStreamConfiguration, pointer: CGColor) throws {
+    init(window: SCWindow, configuration: SCStreamConfiguration, pointer: CGColor, track: CursorTrack) throws {
         width = configuration.width
         height = configuration.height
         windowID = window.windowID
         self.pointer = pointer
+        self.track = track
         writer = try AVAssetWriter(outputURL: CAPTURED_URL, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
         input = AVAssetWriterInput(
@@ -1343,7 +1806,8 @@ private final class WindowRecorder: NSObject, SCStreamOutput {
     func stream(_ stream: SCStream, didOutputSampleBuffer buffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .screen, !ended, buffer.isValid, isDrawnFrame(buffer) else { return }
         if let pixels = buffer.imageBuffer, let bounds = windowBounds(windowID) {
-            drawCursor(into: pixels, window: bounds, color: pointer, at: ProcessInfo.processInfo.systemUptime)
+            drawCursor(
+                into: pixels, window: bounds, track: track, color: pointer, at: ProcessInfo.processInfo.systemUptime)
         }
         let at = buffer.presentationTimeStamp
         if first == nil {
@@ -1603,7 +2067,9 @@ private func record(_ request: [String: Any]) async throws -> [String: Any] {
     try? FileManager.default.removeItem(at: RECORDING_FOLDER)
     try FileManager.default.createDirectory(
         at: RECORDING_FOLDER, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-    let recorder = try WindowRecorder(window: window, configuration: configuration, pointer: pointer)
+    // Note that a recording draws its own agent's cursor alone, bare, never another agent's or a tag.
+    let track = cursorTracks.track(cursorOwner(request).agent)
+    let recorder = try WindowRecorder(window: window, configuration: configuration, pointer: pointer, track: track)
     try await recorder.start()
     await recordings.begin(recorder, maxSeconds: maxSeconds, maxBytes: maxBytes)
     return ["done": "record"]
@@ -1638,15 +2104,20 @@ private let OPERATIONS: [String: ([String: Any]) async throws -> [String: Any]] 
     "list_installed_apps": { _ in listInstalledApps() },
     "describe_app": describeApp,
     "get_app_state": getAppState,
-    "click": click,
-    "type_text": typeText,
-    "press_key": pressKey,
-    "scroll": scroll,
-    "drag": drag,
-    "set_value": setValue,
-    "perform_secondary_action": performSecondaryAction,
+    "click": settling(click),
+    "type_text": settling(typeText),
+    "press_key": settling(pressKey),
+    "scroll": settling(scroll),
+    "drag": settling(drag),
+    "set_value": settling(setValue),
+    "perform_secondary_action": settling(performSecondaryAction),
     "record": record,
     "stop_recording": stopRecording,
+    "release_cursor": { request in
+        let agent = cursorOwner(request).agent
+        await MainActor.run { agentCursors.release(agent) }
+        return ["done": "released the cursor"]
+    },
 ]
 
 private func handle(_ line: String) async -> [String: Any] {

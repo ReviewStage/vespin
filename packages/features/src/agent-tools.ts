@@ -88,8 +88,8 @@ export const AGENT_TOOL = {
   REPLY_TO_COMMENT: DESCRIPTION_COMMENT_TOOL.REPLY,
   UPDATE_COMMENT: DESCRIPTION_COMMENT_TOOL.UPDATE,
   READ_PAGE: "read_page",
-  // Pictures from a coding agent's sandbox, shown in its transcript.
-  SHOW_IMAGE: "show_image",
+  // Pictures, recordings, and sound clips from a coding agent's sandbox, shown in its transcript.
+  SHOW_MEDIA: "show_media",
   // A wakeup a coding agent books for later: its turn ends, and the prompt opens its next turn when due.
   SCHEDULE_WAKEUP: "schedule_wakeup",
   // A coding agent's turn ended in a short summary, the reply its developer reads, and the follow-ups it offers them.
@@ -138,8 +138,9 @@ export const CONNECTION_TOOL = {
  * with the Code and Board tabs, a voice call's question queue and
  * hang-up, removed with GPT Live, the memory's two tools, since named for
  * the memory, the plan comments' resolve and reopen, folded into
- * `update_comment`, and the plan's edit, renamed for the description it
- * edits.
+ * `update_comment`, the plan's edit, renamed for the description it
+ * edits, and the show of pictures, renamed for the sound clips it shows
+ * beside them.
  */
 export const RETIRED_TOOL = {
   WEB_FETCH: "web_fetch",
@@ -191,6 +192,8 @@ export const RETIRED_TOOL = {
   REOPEN_THREAD: "reopen_thread",
   // Renamed `edit_description`, as the task's document is its description.
   EDIT_PLAN: "edit_plan",
+  // Renamed `show_media`, as it shows sound clips beside pictures and recordings.
+  SHOW_IMAGE: "show_image",
 } as const;
 
 /**
@@ -201,7 +204,18 @@ export const RETIRED_TOOL = {
  */
 export const RENAMED_TOOL: ReadonlyMap<string, AgentTool> = new Map([
   [RETIRED_TOOL.EDIT_PLAN, AGENT_TOOL.EDIT_DESCRIPTION],
+  [RETIRED_TOOL.SHOW_IMAGE, AGENT_TOOL.SHOW_MEDIA],
 ]);
+
+/**
+ * Whether a call is one that showed the developer media from a coding
+ * agent's sandbox, under either of the names it is stored by: `show_image`,
+ * as a transcript written while it was offered by that name stores it, or
+ * `show_media`.
+ */
+export function isShowMediaTool(tool: string): boolean {
+  return tool === AGENT_TOOL.SHOW_MEDIA || tool === RETIRED_TOOL.SHOW_IMAGE;
+}
 
 /**
  * Claude Code's own tools, by the names its CLI calls them, which a coding
@@ -258,20 +272,37 @@ export const CLAUDE_CODE_UNRECORDED_TOOL = {
  */
 export const UNKNOWN_TOOL = "unknown_tool";
 
-/** The name our MCP server is registered under, in Claude Code (`mcpServers.workspace`) and Codex (`mcp_servers.workspace`) alike. */
-export const WORKSPACE_MCP_SERVER = "workspace";
+/**
+ * The name our MCP server is registered under, in Claude Code
+ * (`mcpServers.team`) and Codex (`mcp_servers.team`) alike. Note that it is
+ * not `workspace`, because Claude Code 2.1.322 reserves that name for a
+ * server of its own and drops an HTTP server registered under it.
+ */
+export const WORKSPACE_MCP_SERVER = "team";
 
 /**
- * Every name a stored call may give our MCP server: today's, then `luke`,
- * which it was registered under before, so a transcript stored then still
- * draws its calls as our tools.
+ * Every name a stored call may give our MCP server: today's, then
+ * `workspace` and `luke`, which it was registered under before, so a
+ * transcript stored then still draws its calls as our tools.
  */
 export const WORKSPACE_MCP_SERVER_NAMES: ReadonlySet<string> = new Set([
   WORKSPACE_MCP_SERVER,
+  "workspace",
   "luke",
 ]);
 
-/** Our tool's own name from a Claude Code call's, `mcp__workspace__read_thread` being our `read_thread`; none for a tool of any other server. */
+/**
+ * The key of our MCP server's result `_meta` under which a call's answer
+ * carries fields for the people watching the agent alone, which the
+ * transcript keeps beside the answer it read (`toolAnswerSettlement`). Note
+ * that no harness hands a result's `_meta` to its model: Claude Code passes
+ * it to its SDK's consumer as the message's `tool_use_result`, and Codex
+ * on its app-server's item, so the model reads the answer as it was without
+ * them.
+ */
+export const WORKSPACE_MCP_WATCHED_META = "vespin.dev/watched";
+
+/** Our tool's own name from a Claude Code call's, `mcp__team__read_thread` being our `read_thread`; none for a tool of any other server. */
 export function claudeCodeWorkspaceTool(name: string): string | undefined {
   for (const server of WORKSPACE_MCP_SERVER_NAMES) {
     const prefix = `mcp__${server}__`;

@@ -50,6 +50,15 @@ function choose(id: string): void {
   for (const reader of readers) reader();
 }
 
+/**
+ * Chooses `next` only where the phone still works in `over`, so a write
+ * that moved the phone for itself, such as a task's move, puts it back or
+ * forward again without overriding a newer choice made since.
+ */
+export function chooseOver(over: string, next: string): void {
+  if (keptChoice() === over) choose(next);
+}
+
 type UseChosenWorkspaceResult = {
   readonly chosen: Workspace | undefined;
   readonly choose: (id: string) => void;

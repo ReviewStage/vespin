@@ -6,7 +6,9 @@
  * (`useTasksListing`, every task of the workspace whatever its status), the
  * Inbox's under All (`useInboxListing`), and the agents the task list holds.
  * Each is then ranked by what its row says (`@repo/features/search-found-model`),
- * as ⌘K ranks its rows; no act and no read of the service is added.
+ * as ⌘K ranks its rows. The Tasks listing also asks the service for the
+ * tasks the query finds past the list the host holds, which the host draws
+ * into that list, so a finished or older task is found here too.
  */
 
 import { INBOX_SHOW, type InboxListed } from "@repo/features/inbox-list-model";
@@ -17,10 +19,13 @@ import {
   taskSearchSubject,
 } from "@repo/features/search-found-model";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { selectTasks } from "@repo/host/app-state-reads";
-import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { appStateQuery } from "../host/app-state-query.js";
+import {
+  useListedAgents,
+  useListedTasks,
+  useTaskListCollections,
+  useTaskListRows,
+} from "../host/host-provider.js";
 import { useInboxListing } from "../inbox/use-inbox.js";
 import {
   agentLine,
@@ -43,15 +48,18 @@ export interface SearchFound {
 export function useSearchFound(query: string): SearchFound {
   const listing = useTasksListing(query);
   const inbox = useInboxListing({ show: INBOX_SHOW.ALL, search: query });
-  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
+  const collections = useTaskListCollections();
+  const listedTasks = useListedTasks();
+  const listedAgents = useListedAgents();
+  const pullRequests = useTaskListRows(collections.agentPullRequests);
   const workspace = listing.workspace;
   const waiting = useWaiting(workspace?.id);
 
   return useMemo(() => {
-    const names = new Map((view?.tasks ?? []).map((task) => [task.id, task.name]));
+    const names = new Map(listedTasks.map((task) => [task.id, task.name]));
 
     // Note that an archived agent is left out, as a task's page leaves it out of its Agents.
-    const agents = (view?.taskAgents ?? []).filter(
+    const agents = listedAgents.filter(
       (agent) =>
         agent.archivedAt === undefined &&
         (workspace === undefined || agent.workspaceId === workspace.id),
@@ -64,10 +72,10 @@ export function useSearchFound(query: string): SearchFound {
       // Note that a blank query ranks nothing, so the Inbox's every item, which it lists with nothing typed, stays out.
       inbox: rankedBySearch(inbox.listed, query, inboxSearchSubject),
       agents: rankedBySearch(agents, query, (agent) =>
-        agentSearchSubject(agent, names.get(agent.planId)),
-      ).map((agent) => agentLine(agent, waiting.byAgent, view)),
+        agentSearchSubject(agent, names.get(agent.taskId)),
+      ).map((agent) => agentLine(agent, waiting.byAgent, pullRequests)),
       listing,
       readerId: inbox.readerId,
     };
-  }, [listing, inbox, view, workspace, waiting, query]);
+  }, [listing, inbox, listedTasks, listedAgents, pullRequests, workspace, waiting, query]);
 }

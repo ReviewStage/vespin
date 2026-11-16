@@ -9,7 +9,7 @@ import {
   type DescriptionCommentStart,
   type DescriptionCommentWriter,
 } from "@repo/features/description-comment-wire";
-import { sectionAt } from "@repo/features/description-document";
+import { sectionAt } from "@repo/features/description-sections";
 import type {
   TasksCommentActParams,
   TasksCommentAnswer,
@@ -49,12 +49,12 @@ type CommentMember = NonNullable<DescriptionCommentWriter["by"]>;
 export interface DescriptionCommentWritesDependencies {
   /** Carries a thread's start to the service, or answers that it went unanswered. */
   readonly start: (
-    planId: string,
+    taskId: string,
     start: DescriptionCommentStart,
   ) => Effect.Effect<TasksCommentAnswer>;
   /** Carries one thing done to one thread to the service, or answers that it went unanswered. */
   readonly act: (
-    planId: string,
+    taskId: string,
     threadId: string,
     action: DescriptionCommentActionRequest,
   ) => Effect.Effect<TasksCommentAnswer>;
@@ -112,13 +112,13 @@ function placed(start: DescriptionCommentStart) {
 
 /** A thread as its start draws it before the service answers: open, its one comment the member's. */
 function drawnThread(
-  { planId, start }: TasksCommentStartParams,
+  { taskId, start }: TasksCommentStartParams,
   member: CommentMember | undefined,
   at: number,
 ): CommentThreadRow {
   return {
     id: start.id ?? "",
-    taskId: planId,
+    taskId: taskId,
     ...placed(start),
     status: DESCRIPTION_COMMENT_STATUS.OPEN,
     entries: [drawnComment(member, start.clientKey, start.words, at)],
@@ -213,7 +213,7 @@ function actChange(
  * read holds none yet, and any other thread as its answered fields.
  */
 function writtenOf(
-  planId: string,
+  taskId: string,
   answer: TasksCommentAnswer,
   made: boolean,
 ): Written<FieldChange<CommentThreadRow>, TasksCommentAnswer> | Refused<TasksCommentAnswer> {
@@ -227,7 +227,7 @@ function writtenOf(
   return {
     answer,
     txid: answer.txid,
-    taken: made ? { made: { ...thread, taskId: planId } } : () => thread,
+    taken: made ? { made: { ...thread, taskId: taskId } } : () => thread,
   };
 }
 
@@ -245,8 +245,8 @@ export function descriptionCommentWrites(dependencies: DescriptionCommentWritesD
     // Note that a start naming no id draws nothing, so it answers as the service does.
     keys: ({ start }) => (start.id === undefined ? [] : [start.id]),
     change: (params) => ({ made: drawnThread(params, member(), now()) }),
-    send: ({ planId, start }) =>
-      Effect.map(dependencies.start(planId, start), (answer) => writtenOf(planId, answer, true)),
+    send: ({ taskId, start }) =>
+      Effect.map(dependencies.start(taskId, start), (answer) => writtenOf(taskId, answer, true)),
   };
 
   const acted: WriteDeclaration<
@@ -258,9 +258,9 @@ export function descriptionCommentWrites(dependencies: DescriptionCommentWritesD
     kind: COMMENT_THREAD,
     keys: ({ threadId }) => [threadId],
     change: ({ action }) => actChange(action, member(), now()),
-    send: ({ planId, threadId, action }) =>
-      Effect.map(dependencies.act(planId, threadId, action), (answer) =>
-        writtenOf(planId, answer, false),
+    send: ({ taskId, threadId, action }) =>
+      Effect.map(dependencies.act(taskId, threadId, action), (answer) =>
+        writtenOf(taskId, answer, false),
       ),
   };
 

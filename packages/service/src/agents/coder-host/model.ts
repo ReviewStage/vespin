@@ -1,5 +1,5 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
-import type { ModelProvider } from "@repo/features/models-wire";
+import type { ModelApiProvider } from "@repo/features/provider-key-wire";
 import type { LanguageModel } from "ai";
 import { Effect, Redacted } from "effect";
 import { HostedEnvironment } from "../../environment.js";
@@ -23,7 +23,7 @@ const TITLE_MODEL_ID = "claude-haiku-5-5";
 
 /** One provider's API key the account saved, opened, for a call beside its agents (`account-keys.ts`'s `ownKeyOf`). */
 export interface OwnKey {
-  readonly provider: ModelProvider;
+  readonly provider: ModelApiProvider;
   readonly key: Redacted.Redacted;
 }
 

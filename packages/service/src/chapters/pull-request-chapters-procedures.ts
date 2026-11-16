@@ -84,7 +84,7 @@ import {
   type PullRequestChaptersAnswer,
   type PullRequestChaptersState,
 } from "@repo/features/pull-request-chapters-wire";
-import { Cause, Clock, Effect, Option, type Redacted, Schema } from "effect";
+import { Cause, Clock, Effect, Option, Schema } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { reachedAgentById } from "../agents/agent-reach.js";
 import {
@@ -107,7 +107,7 @@ import {
   SERVER_EVENT,
   type ServerEventActor,
 } from "../events/server-events.js";
-import type { GitHubApp } from "../github/github-app.js";
+import type { GitHubApp, GitHubBearer } from "../github/github-app.js";
 import {
   type GitHubPullRequest,
   pullRequestByNumber,
@@ -169,7 +169,7 @@ interface ChaptersOf {
 
 /** What a Generate stands on: where the chapters are kept, the pull request as GitHub holds it now, and the token it was read on. */
 interface ChaptersSubject extends ChaptersOf {
-  readonly token: Redacted.Redacted;
+  readonly bearer: GitHubBearer;
   readonly pullRequest: GitHubPullRequest;
 }
 
@@ -186,13 +186,13 @@ const subjectOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   if (asked === null || !hasRepository(agent)) return Option.none();
 
-  const { token, workspace, found } = yield* githubReadRefusal(
+  const { bearer, workspace, found } = yield* githubReadRefusal(
     Effect.gen(function* () {
-      const { token } = yield* agentPullRequestReach(userId, agent);
+      const { bearer } = yield* agentPullRequestReach(userId, agent);
       const workspace = yield* agentWorkspace(userId, agent);
-      const found = yield* pullRequestByNumber(token, agent.repository, asked.number);
+      const found = yield* pullRequestByNumber(bearer, agent.repository, asked.number);
 
-      return { token, workspace, found };
+      return { bearer, workspace, found };
     }),
   );
 
@@ -202,7 +202,7 @@ const subjectOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   return Option.map(found, (pullRequest) => ({
     repository: agent.repository,
     organizationId: workspace.value,
-    token,
+    bearer,
     pullRequest,
   }));
 });
@@ -471,15 +471,15 @@ const generated = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /** The pull request's files, words, and commit messages, as a generation reads them. */
 const generationInput = (subject: ChaptersSubject) => {
-  const { token, repository, pullRequest } = subject;
+  const { bearer, repository, pullRequest } = subject;
 
   return githubReadRefusal(
     Effect.all(
       [
-        pullRequestFiles(token, repository, pullRequest),
+        pullRequestFiles(bearer, repository, pullRequest),
         // Note that the messages only help the story along, so a read of them that fails tells it without them.
         Effect.orElseSucceed(
-          pullRequestCommitMessages(token, repository, pullRequest.number),
+          pullRequestCommitMessages(bearer, repository, pullRequest.number),
           (): readonly string[] => [],
         ),
       ],
@@ -507,7 +507,7 @@ const generatedFor = /* @__PURE__ */ Effect.fnUntraced(function* (
   on: GenerateOn,
   subject: ChaptersSubject,
 ) {
-  const { organizationId, repository, token, pullRequest } = subject;
+  const { organizationId, repository, bearer, pullRequest } = subject;
   const { model, generator } = on;
 
   // Note that GitHub names the base on every read of one pull request; one that does not is a GitHub off its shape.
@@ -524,7 +524,7 @@ const generatedFor = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   // The files are read by the pull request's number, so a push between the two reads would tell another head's diff under this one: the head is read again, and a moved one is answered as it now stands, to be generated on its own.
   const after = yield* githubReadRefusal(
-    pullRequestByNumber(token, repository, pullRequest.number),
+    pullRequestByNumber(bearer, repository, pullRequest.number),
   );
 
   if (Option.isNone(after)) return { pullRequest: null };
@@ -621,7 +621,7 @@ export const repositoryChaptersGenerate = /* @__PURE__ */ Effect.fnUntraced(func
   query: RepositoryPullRequest,
 ) {
   // The pull request is reached before the presser's key is asked about, so a non-member is refused alike whatever key they saved.
-  const { token, subject, found } = yield* reachedByNumber(userId, query, pullRequestByNumber);
+  const { bearer, subject, found } = yield* reachedByNumber(userId, query, pullRequestByNumber);
   const on = yield* modelOf(seams, userId);
 
   if (on === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
@@ -629,7 +629,7 @@ export const repositoryChaptersGenerate = /* @__PURE__ */ Effect.fnUntraced(func
   return yield* generatedFor(userId, on, {
     repository: subject.repository,
     organizationId: subject.organizationId,
-    token,
+    bearer,
     pullRequest: found,
   });
 });
