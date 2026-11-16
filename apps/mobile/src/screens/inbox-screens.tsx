@@ -84,6 +84,9 @@ import {
   UNDER_SPLIT_SCREEN,
   useColors,
   useMinute,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
@@ -119,8 +122,6 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
-import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
   PLUS_TAB,

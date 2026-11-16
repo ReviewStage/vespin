@@ -45,8 +45,11 @@ builds a control of its own.
   answer's fields, and `AskNote` for what a send that did not go said),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
   for its checks and reviewers, `WriteNoteRow`, `MergeActRow` for its
-  merge under its heading), `ConfirmAsk` (the system's
-  alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
+  merge under its heading), `ConfirmAsk` (the question
+  an act asks first: the system's action sheet from the screen's foot in a
+  compact window, its act first, and its alert in a regular one or where
+  words must be typed), `WordsAsk` (the system's alert words are typed in,
+  such as an invitation's address), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a form's words,
   pictures and choices, `ComposeSheet` for a sheet that starts work (its
   words filling the page, and the + and `MenuChip` capsule menus over the

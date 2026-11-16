@@ -126,6 +126,9 @@ import {
   TaskRow,
   UNDER_SPLIT_SCREEN,
   useColors,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
   WordsRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -186,8 +189,6 @@ import {
   useTasksReadStatus,
   useTaskWrites,
 } from "../tasks/use-tasks.js";
-import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
   PLUS_TAB,
