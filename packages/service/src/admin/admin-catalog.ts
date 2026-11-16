@@ -49,6 +49,7 @@ const PLACEHOLDER_REPOSITORY = "acme/app";
 const PLACEHOLDER_TASK = {
   link: "https://vespin.dev/acme/task/1",
   id: "00000000-0000-4000-8000-000000000000",
+  keepsStatus: true,
 } as const;
 
 /**

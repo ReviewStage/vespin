@@ -159,6 +159,33 @@ function namingLines(repository: string | null, ownTask: OwnTask, workspace: str
 }
 
 /**
+ * What the agent is told of its task's status, which nothing but an agent
+ * or the developer moves: the agent that keeps it marks it Done once its
+ * work is finished, since a task left In progress stands in the developer's
+ * sidebar until they close it by hand. Done withdraws the task's open asks
+ * and archives its other agents (`update_task`), so it waits on both. A
+ * merge tells the agent nothing (`../../github/agent-wakes.ts`), so one
+ * that queued its pull request books a wakeup to see it land. A helper
+ * another agent started leaves the status to that agent, whose task it
+ * may be, and whose turn a Done would end.
+ */
+function statusLines(ownTask: OwnTask, publishes: boolean): string[] {
+  if (!ownTask.keepsStatus)
+    return ["Another agent started you, so leave your task's status to it."];
+
+  const merged = publishes ? "every pull request of yours merged or closed, " : "";
+
+  return [
+    `Once your task's work is finished, mark it Done with \`${AGENT_TOOL.UPDATE_TASK}\` before your last message: ${merged}no ask of yours still open, and no other agent on the task still at work. Work that needed no pull request, such as an answer, a report, or a run that found nothing to do, is finished once you reply; while it waits on the developer, leave it In progress.`,
+    ...(publishes
+      ? [
+          `Where you queued your pull request to merge, book a wakeup with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` to see it land, since no message tells you it merged, then mark the task Done.`,
+        ]
+      : []),
+  ];
+}
+
+/**
  * The instructions for one agent: on the repository its row names, or none,
  * where it works in a folder with no checkout; worded for what it was
  * handed, its harness's shell, its machine, whose its commits are, the
@@ -206,6 +233,7 @@ export function coderInstructions(
         ]
       : []),
     `Save screenshots under \`${machine.sharedFiles}/\` and show them with \`${AGENT_TOOL.SHOW_MEDIA}\`.`,
+    ...statusLines(ownTask, publishes),
     ...namingLines(repository, ownTask, workspace),
   ];
 
@@ -215,6 +243,8 @@ export function coderInstructions(
 export interface OwnTask {
   readonly link: string;
   readonly id: string;
+  /** Whether the agent keeps its task's status: false for a helper another agent started. */
+  readonly keepsStatus: boolean;
 }
 
 /** What an agent's instructions are composed on beyond its row. */
@@ -253,6 +283,7 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
       },
       context.workspace,
     ),
+    keepsStatus: agent.startedByAgentId === null,
   };
 
   return coderInstructions(
