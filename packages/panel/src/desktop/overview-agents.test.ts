@@ -211,6 +211,36 @@ test("the agents at work come first, then the newest, each saying where it runs,
   assert.deepEqual(opened.agents, [OLDEST.id]);
 });
 
+test("an agent another agent started stands folded under it, the row it stands under counting how many it started finished, and that row's chevron opens them", () => {
+  const lead = agent(
+    "2a4c6e8a-0b1d-4f3a-8c5e-7a9b1c3d5e70",
+    "Roll out invites",
+    1,
+    AGENT_STATUS.RUNNING,
+  );
+
+  const worker = { ...NEWEST, startedByAgentId: lead.id } satisfies AgentSummary;
+  const { host } = mount([worker, lead]);
+  const list = host.querySelector('[aria-label="Agents"]');
+  assert.ok(list !== null);
+
+  const names = () =>
+    [...list.querySelectorAll("li")].map(
+      (row) => row.querySelector("[data-card-press]")?.textContent,
+    );
+
+  assert.deepEqual(names(), ["Roll out invites"], "the worker stands folded under its lead");
+  assert.ok(list.querySelector("li")?.textContent?.includes("1/1"), "its lead counts it finished");
+
+  const chevron = host.querySelector<HTMLButtonElement>(
+    "button[aria-label='Agents started by Roll out invites']",
+  );
+
+  assert.ok(chevron !== null);
+  act(() => chevron.click());
+  assert.deepEqual(names(), ["Roll out invites", "Invite email"]);
+});
+
 test("an agent's row offers the agent's menu from its ⋯, as its row on a person's page does", () => {
   const { host } = mount([NEWEST]);
   const more = host.querySelector<HTMLButtonElement>('button[aria-label="Agent actions"]');
