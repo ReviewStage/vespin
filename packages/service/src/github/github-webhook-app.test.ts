@@ -1696,7 +1696,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
       }),
   );
   it.effect(
-    "a review, a comment on a pull request, and a status on its head each note the pull request moved, and a comment on an issue notes nothing",
+    "a review, a comment on a pull request, and a status on its head branch each note the pull request moved, and a comment on an issue notes nothing",
     () =>
       Effect.gen(function* () {
         const sighted = {
@@ -1723,7 +1723,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
             answer(githubReaching([]), SECRET, delivery(event, payload)),
           );
 
-        const pullRequest = { number: 41, head: { sha: "c0ffee1" } };
+        const pullRequest = { number: 41, head: { ref: "agent/invite-once", sha: "c0ffee1" } };
         yield* deliver("pull_request_review", {
           action: "submitted",
           repository: sighted,
@@ -1756,9 +1756,9 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
 
         yield* deliver("status", {
           repository: sighted,
-          sha: "c0ffee1",
+          sha: "e4f5a6b",
           state: "success",
-          branches: [],
+          branches: [{ name: "agent/invite-once", commit: { sha: "e4f5a6b" } }],
         });
         const checked = yield* moves();
         assert.ok(movedAt(checked) > movedAt(commented));

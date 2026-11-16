@@ -5,12 +5,13 @@ DROP TRIGGER IF EXISTS "app_sync_write" ON "github_pull_request_move";
 CREATE TABLE "github_pull_request_move" (
 	"repository_id" bigint,
 	"number" integer,
+	"head_ref" text,
 	"head_sha" text,
 	"moved_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "github_pull_request_move_pkey" PRIMARY KEY("repository_id","number")
 );
 --> statement-breakpoint
-CREATE INDEX "github_pull_request_move_head" ON "github_pull_request_move" ("repository_id","head_sha");
+CREATE INDEX "github_pull_request_move_head" ON "github_pull_request_move" ("repository_id","head_ref");
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION "app_sync_github_pull_request_move"() RETURNS trigger LANGUAGE plpgsql AS $app_sync$
 DECLARE
@@ -43,4 +44,4 @@ $app_sync$;
 --> statement-breakpoint
 CREATE TRIGGER "app_sync_write" AFTER INSERT OR DELETE ON "github_pull_request_move" FOR EACH ROW EXECUTE FUNCTION "app_sync_github_pull_request_move"();
 --> statement-breakpoint
-CREATE TRIGGER "app_sync_update" AFTER UPDATE ON "github_pull_request_move" FOR EACH ROW WHEN (OLD."repository_id" IS DISTINCT FROM NEW."repository_id" OR OLD."number" IS DISTINCT FROM NEW."number" OR OLD."head_sha" IS DISTINCT FROM NEW."head_sha" OR OLD."moved_at" IS DISTINCT FROM NEW."moved_at") EXECUTE FUNCTION "app_sync_github_pull_request_move"();
+CREATE TRIGGER "app_sync_update" AFTER UPDATE ON "github_pull_request_move" FOR EACH ROW WHEN (OLD."repository_id" IS DISTINCT FROM NEW."repository_id" OR OLD."number" IS DISTINCT FROM NEW."number" OR OLD."head_ref" IS DISTINCT FROM NEW."head_ref" OR OLD."head_sha" IS DISTINCT FROM NEW."head_sha" OR OLD."moved_at" IS DISTINCT FROM NEW."moved_at") EXECUTE FUNCTION "app_sync_github_pull_request_move"();

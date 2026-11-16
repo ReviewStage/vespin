@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "29af5c70-c120-44cc-b540-21936f6c960c",
+  "id": "18217156-b2d7-4de6-b158-7d72cb188238",
   "prevIds": ["57663338-a710-46bf-8580-5cabcd7ca7ff"],
   "ddl": [
     {
@@ -8058,6 +8058,19 @@
       "generated": null,
       "identity": null,
       "name": "number",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "github_pull_request_move"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "head_ref",
       "entityType": "columns",
       "schema": "public",
       "table": "github_pull_request_move"
@@ -16680,7 +16693,7 @@
           "opclass": null
         },
         {
-          "value": "head_sha",
+          "value": "head_ref",
           "isExpression": false,
           "asc": true,
           "nullsFirst": false,

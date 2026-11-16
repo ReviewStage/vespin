@@ -7,7 +7,7 @@ import {
 import { listAgentsOnBranches } from "@repo/database/models/agent-store";
 import {
   type MovedPullRequest,
-  noteHeadMoved,
+  noteHeadsMoved,
   notePullRequestsMoved,
 } from "@repo/database/models/github-pull-request-moves";
 import {
@@ -109,13 +109,14 @@ import { actOnGitHubMention, githubMentionOf, type MentionServices } from "./git
  *
  * Every delivery about a pull request, its reviews, its comments, its
  * review threads, or its checks also notes that pull request as moved now
- * by the repository's GitHub id and its number, with the head commit the
- * delivery gives where it gives one
+ * by the repository's GitHub id and its number, with the head branch and
+ * commit the delivery gives where it gives them
  * (`@repo/database/models/github-pull-request-moves`), which every open
  * Pull request tab follows live to read it again, whoever opened it. A
- * commit status names only a commit, so it notes the pull requests whose
- * head an earlier delivery recorded as that commit. Of these deliveries
- * only the numbers and the commits are read for it, and neither is logged.
+ * commit status names no pull request, so it notes those whose head branch
+ * an earlier delivery recorded as one of the branches it names. Of these
+ * deliveries only the numbers, the branches, and the commits are read for
+ * it, and none of them is logged.
  * A check run's delivery notes nothing, as above: the suite covers it.
  *
  * An installation's own deliveries, which GitHub sends every App without
@@ -284,12 +285,12 @@ const StatusDeliverySchema = Schema.Struct({
   branches: Schema.Array(Schema.Struct({ name: Schema.String })),
 });
 
-/** A delivery about one pull request, as far as its move is read: its number and its head commit. */
+/** A pull request's head as a delivery names it: its branch and its commit. */
+const MovedHeadSchema = Schema.Struct({ ref: Schema.String, sha: Schema.String });
+
+/** A delivery about one pull request, as far as its move is read: its number and its head. */
 const PullRequestMovedSchema = Schema.Struct({
-  pull_request: Schema.Struct({
-    number: Schema.Int,
-    head: Schema.Struct({ sha: Schema.String }),
-  }),
+  pull_request: Schema.Struct({ number: Schema.Int, head: MovedHeadSchema }),
 });
 
 /** A comment's delivery, as far as its move is read: the issue's number, and whether that issue is a pull request, which only a pull request's carries. */
@@ -303,14 +304,14 @@ const IssueMovedSchema = Schema.Struct({
 /** A check suite's delivery, as far as its moves are read: the pull requests it ran for and their heads, none for a fork's. */
 const CheckSuiteMovedSchema = Schema.Struct({
   check_suite: Schema.Struct({
-    pull_requests: Schema.Array(
-      Schema.Struct({ number: Schema.Int, head: Schema.Struct({ sha: Schema.String }) }),
-    ),
+    pull_requests: Schema.Array(Schema.Struct({ number: Schema.Int, head: MovedHeadSchema })),
   }),
 });
 
-/** A commit status's delivery, as far as its move is read: the commit it is on. */
-const StatusMovedSchema = Schema.Struct({ sha: Schema.String });
+/** A commit status's delivery, as far as its move is read: the branches whose head its commit is. */
+const StatusMovedSchema = Schema.Struct({
+  branches: Schema.Array(Schema.Struct({ name: Schema.String })),
+});
 
 const InstallationDeliverySchema = Schema.Struct({
   action: Schema.String,
@@ -454,10 +455,10 @@ function deliveryTarget(event: string, payload: UnparsedWireValue): DeliveryTarg
   }
 }
 
-/** What a delivery says moved of its repository's pull requests: those it names, each with its head where it gives one, or the head commit a status is on. */
+/** What a delivery says moved of its repository's pull requests: those it names, each with its head where it gives one, or those whose head branches a status names. */
 type PullRequestsMoved =
   | { readonly named: readonly MovedPullRequest[] }
-  | { readonly head: string };
+  | { readonly branches: readonly string[] };
 
 /** The pull requests a delivery says moved, where its event names any; nothing for any other delivery, or one off its shape. */
 function pullRequestsMoved(
@@ -470,7 +471,7 @@ function pullRequestsMoved(
     if (Result.isFailure(read)) return undefined;
     const { number, head } = read.success.pull_request;
 
-    return { named: [{ number, headSha: head.sha }] };
+    return { named: [{ number, head }] };
   }
 
   switch (event) {
@@ -490,17 +491,16 @@ function pullRequestsMoved(
       if (Result.isFailure(read)) return undefined;
 
       return {
-        named: read.success.check_suite.pull_requests.map(({ number, head }) => ({
-          number,
-          headSha: head.sha,
-        })),
+        named: read.success.check_suite.pull_requests.map(({ number, head }) => ({ number, head })),
       };
     }
 
     case WEBHOOK_EVENT.STATUS: {
       const read = readDelivery(StatusMovedSchema, payload);
 
-      return Result.isFailure(read) ? undefined : { head: read.success.sha };
+      return Result.isFailure(read)
+        ? undefined
+        : { branches: read.success.branches.map((branch) => branch.name) };
     }
 
     default:
@@ -510,8 +510,8 @@ function pullRequestsMoved(
 
 /** Notes what a delivery says moved of the repository's pull requests as moved at `at`. */
 function noteMoved(repositoryId: number, moved: PullRequestsMoved, at: Date) {
-  return "head" in moved
-    ? noteHeadMoved(repositoryId, moved.head, at)
+  return "branches" in moved
+    ? noteHeadsMoved(repositoryId, moved.branches, at)
     : notePullRequestsMoved(repositoryId, moved.named, at);
 }
 
