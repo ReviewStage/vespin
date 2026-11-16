@@ -52,6 +52,8 @@ import {
   DeniesWaiting,
   DetailPage,
   drawnCallIds,
+  FOOTER_TONE,
+  footerToneOf,
   GLYPH,
   GlassDock,
   type Glyph,
@@ -1257,7 +1259,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
-          <ListSection footer={pick.note}>
+          <ListSection footer={pick.note} footerTone={FOOTER_TONE.FAILURE}>
             <MenuPickRow
               label={OPTIONS_WORDS.MODEL}
               options={pick.models}
@@ -1285,6 +1287,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
             <ListSection
               title={PERMISSION_MODE_WORDS.GROUP}
               footer={mode.note ?? PERMISSION_MODE_WORDS.APPLIES}
+              footerTone={footerToneOf(mode.note)}
             >
               <PickRows
                 options={mode.modes}
@@ -1297,7 +1300,11 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
               />
             </ListSection>
           )}
-          <ListSection title={MCP_SERVER_LABEL.many} footer={serversFooter}>
+          <ListSection
+            title={MCP_SERVER_LABEL.many}
+            footer={serversFooter}
+            footerTone={footerToneOf(servers.note)}
+          >
             {servers.servers.map((server) => (
               <SwitchRow
                 key={server.connection}
@@ -1385,6 +1392,7 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
         <SettingsForm>
           <ListSection
             footer={ports.note ?? (ports.rows.length === 0 ? ports.none : ports.linkNote)}
+            footerTone={footerToneOf(ports.note)}
           >
             {ports.rows.map((row) => (
               <MenuRow

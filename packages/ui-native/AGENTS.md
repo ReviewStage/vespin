@@ -94,7 +94,7 @@ builds a control of its own.
   call lines (`@repo/features/agent-parts`, `turn-rows`, `tool-call-model`),
   the agent's thinking left out, and each call leads with the glyph for its
   kind, as the rows' glyphs are chosen (`transcript-look.ts`). A pull
-  request an agent opened stands under its call as `PullRequestCard`, as the
+  request an agent opened stands in its call's place as `PullRequestCard`, as the
   task list holds it now. A page an agent showed is `SealedPage`, the app's
   one web view, handed the page's HTML sealed by `@repo/features/sealed-page`. `Pressable`,
   `TextInput`, and the rest of React Native's controls appear only here. SwiftUI standing inside those views, such as a message's long press
