@@ -2,6 +2,7 @@ import { isAudioType } from "@repo/features/conversation-picture-wire";
 import { playheadText } from "@repo/features/time-format";
 import { useEffect, useId, useRef, useState } from "react";
 import { ExpandIcon, PauseIcon, PlayIcon } from "../../icons/lucide-glyphs.js";
+import { useMediaPlace } from "../../media-place.js";
 import { motionHeld } from "../../motion-timing.js";
 import { notePictureOrigin } from "../../picture-expand.js";
 import { usePlayingFrames } from "../../playing-frames.js";
@@ -42,6 +43,10 @@ import { dataUrlBytes, dataUrlMediaType, useBlobUrl } from "../video-player/vide
  * the viewer (`VIEWER`) it stands as wide as the place makes it, its
  * waveform taller, and plays at once, unless motion is held still
  * (`motionHeld`: reduced motion or a capture run), where it waits for Play.
+ * A clip keeps its place wherever it is drawn, as a recording does
+ * (`useMediaPlace`): the viewer an Expand opens goes on from where the card
+ * left it, and the card, played again once the viewer closes, from where
+ * the viewer did.
  *
  * The bytes arrive as a picture's do, as a `data:` URL, and play from a
  * `blob:` address made of them (`useBlobUrl`), since neither window's
@@ -314,10 +319,18 @@ export function AudioPlayer({
   const viewer = place === AUDIO_PLAYER_PLACE.VIEWER;
   // Note that whether it starts is read once, as it mounts, because a clip hears autoplay only then.
   const [starts] = useState(() => viewer && !motionHeld());
+  const kept = useMediaPlace(dataUrl);
 
   const read = (shown: HTMLAudioElement) => {
     const duration = Number.isFinite(shown.duration) ? shown.duration : 0;
     setPlayback({ playing: !shown.paused, at: Math.min(shown.currentTime, duration), duration });
+    kept.keep(shown);
+  };
+
+  // Once its length is known, the clip goes to where it was left, or its start.
+  const resume = (shown: HTMLAudioElement) => {
+    kept.resume(shown);
+    read(shown);
   };
 
   // While it plays, its place is read on every frame, so the scrubber and the waveform's played bars glide rather than step at each `timeupdate`.
@@ -357,12 +370,22 @@ export function AudioPlayer({
         src={url}
         autoPlay={starts}
         preload={viewer ? "auto" : "metadata"}
-        onLoadedMetadata={(event) => read(event.currentTarget)}
-        onDurationChange={(event) => read(event.currentTarget)}
+        onLoadedMetadata={(event) => {
+          // A new address is a new clip, whose place is taken up afresh.
+          kept.forget();
+          resume(event.currentTarget);
+        }}
+        onDurationChange={(event) => resume(event.currentTarget)}
         onTimeUpdate={(event) => read(event.currentTarget)}
-        onPlay={(event) => read(event.currentTarget)}
+        onPlay={(event) => {
+          // Played again after another player moved the same clip, it goes on from there.
+          kept.rejoin(event.currentTarget);
+          read(event.currentTarget);
+        }}
         onPause={(event) => read(event.currentTarget)}
         onEnded={(event) => read(event.currentTarget)}
+        // A new address resets the old one's time before its own loads, which is no place of the old clip's.
+        onEmptied={kept.forget}
       />
       <PlayerButton
         label={playback.playing ? AUDIO_LABEL.PAUSE : AUDIO_LABEL.PLAY}
