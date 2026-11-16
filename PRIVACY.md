@@ -603,7 +603,8 @@ made before default-branch drives expires thirty days after its last use. When y
   cannot be reached, your account is deleted anyway and PostHog keeps them.
 - **Onboarding and product-update emails:** we ask Resend to delete the
   contact it keeps under your email address, which stops both; if it cannot be
-  reached, your account is deleted anyway and Resend keeps it.
+  reached or refuses the request, your account is deleted anyway and Resend
+  keeps it.
 - **Error reports** already sent to Sentry are kept until Sentry's retention
   ends, since Sentry offers no way to erase one account's reports.
 - **Integrations:** we ask Vercel Connect to revoke your grants; anything your
