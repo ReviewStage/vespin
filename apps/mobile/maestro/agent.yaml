@@ -6,13 +6,12 @@ appId: dev.vespin.ios
 # Note that each wait for the screen to settle is capped at five seconds,
 # because the page draws its turn still running, whose mark never stops
 # moving, so an uncapped wait always ran to Maestro's fifteen.
-# Note too that on an iPad the transcript is scrolled at `TRANSCRIPT_X`, well
-# inside the detail column, because a scroll at the window's middle lands on
-# the list column of a landscape window, and the page never moved
+# Note too that on an iPad the transcript is scrolled well inside the detail
+# column (`BESIDE`), because a scroll at the window's middle lands on the
+# list column of a landscape window, and the page never moved
 # (`scroll-in.yaml`).
 env:
   FLOATING_TABS: ${FLOATING_TABS || 'false'}
-  TRANSCRIPT_X: "${FLOATING_TABS == 'true' ? '85%' : ''}"
 ---
 # Launched on the host's Inbox fixture, whose invitations agent holds a
 # transcript three turns long (`@repo/host/fixture-inbox`), and opened on its
@@ -57,7 +56,7 @@ env:
     env:
       ELEMENT: "Invite funnel, Page"
       BELOW: "Build teammate invitations"
-      X: ${TRANSCRIPT_X}
+      BESIDE: ${FLOATING_TABS}
 - takeScreenshot: agent-page-card
 - tapOn: "Invite funnel, Page"
 # Note that the wait is long, because the first web view a freshly booted
@@ -80,7 +79,7 @@ env:
     file: subflows/scroll-in.yaml
     env:
       ELEMENT: "Accepting an invite.*"
-      X: ${TRANSCRIPT_X}
+      BESIDE: ${FLOATING_TABS}
 - extendedWaitUntil:
     visible:
       id: "video-player"
@@ -96,14 +95,14 @@ env:
     env:
       ELEMENT: "The invite dialog"
       DIRECTION: UP
-      X: ${TRANSCRIPT_X}
+      BESIDE: ${FLOATING_TABS}
 - takeScreenshot: agent-pictures
 # The pull request it opened after them, as its card with Review.
 - runFlow:
     file: subflows/scroll-in.yaml
     env:
       ELEMENT: ".*#128 Invite a teammate by email.*"
-      X: ${TRANSCRIPT_X}
+      BESIDE: ${FLOATING_TABS}
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-pull-request
@@ -112,7 +111,7 @@ env:
     env:
       ELEMENT: ".*tool calls.*"
       DIRECTION: UP
-      X: ${TRANSCRIPT_X}
+      BESIDE: ${FLOATING_TABS}
 - waitForAnimationToEnd:
     timeout: 5000
 - tapOn: ".*tool calls.*"
@@ -131,10 +130,21 @@ env:
     env:
       ELEMENT: "Earlier messages could not be read."
       DIRECTION: UP
-      X: ${TRANSCRIPT_X}
-- swipe:
-    start: "${TRANSCRIPT_X || '50%'}, 30%"
-    end: "${TRANSCRIPT_X || '50%'}, 80%"
+      BESIDE: ${FLOATING_TABS}
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - swipe:
+          start: "50%, 30%"
+          end: "50%, 80%"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - swipe:
+          start: "85%, 30%"
+          end: "85%, 80%"
 - waitForAnimationToEnd:
     timeout: 5000
 - assertVisible: "Try again"
