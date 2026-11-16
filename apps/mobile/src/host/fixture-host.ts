@@ -260,9 +260,31 @@ function keepReadMark(
   const { taskId, readMark } = payload as PortActPayload<typeof ACT_KIND.TASKS_MARK_READ>;
   const kept: KeptReadMark = { mark: readMark, at: Date.now() };
   READ_MARKS.set(state, new Map(READ_MARKS.get(state) ?? NO_READ_MARKS).set(taskId, kept));
-  stageFixture(state);
+  stageReadMarks(state);
 
   return true;
+}
+
+/**
+ * Lays the read marks a run set over the task list alone, as the host draws
+ * a mark on the one row it moves. Note that it re-stages no other slice,
+ * because a task's page sends its read as it stands, and laying the whole
+ * document again there handed every slice the page reads a new value under
+ * it, after which its bar's Permanently delete asked nothing.
+ */
+function stageReadMarks(state: Pick<AppStateStore, "snapshot" | "taskList" | "update">): void {
+  const snapshot = state.snapshot();
+
+  if (!snapshot.run.fixtureMode || snapshot.run.profile === RUN_PROFILE.IDLE) return;
+
+  const listed = stagedTasks(
+    { ...snapshot, window: { fullScreen: false } },
+    state.taskList(),
+    CHOICES.get(state) ?? NO_CHOICES,
+    READ_MARKS.get(state) ?? NO_READ_MARKS,
+  );
+
+  state.update({ tasks: listed.tasks }, listed.lists);
 }
 
 /** Keeps an Inbox read mark the fixture took and lays it over the document at once, as the host draws one; nothing for any other act. */
