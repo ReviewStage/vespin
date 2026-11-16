@@ -130,6 +130,14 @@ interface FileForLater {
   readonly onFile: () => void;
 }
 
+/** Where a closing start lands once it went: on its task's page, or on to the agent it started. */
+const LANDING = {
+  TASK: "task",
+  AGENT: "agent",
+} as const;
+
+type Landing = (typeof LANDING)[keyof typeof LANDING];
+
 /** The sheet's bar: its name, Cancel at its leading edge, and Start at its trailing one, lit once there are words or pictures to send and while no start is out, with File for later before it on New task; and the ask a Cancel or a swipe down raises while the sheet holds a draft. */
 function SheetBar({
   title,
@@ -493,7 +501,8 @@ function useSheetStart(
  * New task's and New agent's start, as the panel's sends it: the sheet
  * closes the moment Start is pressed, and the start goes on as a write,
  * opening the task's page once it lands, where its new agent stands among
- * its agents. A start refused is said in the failure notice, whose Try again
+ * its agents; New agent's then opens the new agent's page over it, titled
+ * by its brief, as the panel's New agent lands on the agent it started. A start refused is said in the failure notice, whose Try again
  * sends the same start again. Note that this never makes a second task or
  * agent, because the task's id and its agent's key are minted once per sheet
  * (`useStartTask`, `useFileTask`, `useStartAgent`), and the service answers
@@ -503,6 +512,7 @@ function useSheetStart(
 function useClosingStart(
   kept: KeptWords,
   setNote: (note: string | undefined) => void,
+  landing: Landing,
 ): UseSheetStartResult {
   const router = useRouter();
   const navigation: Navigator = useNavigation();
@@ -511,7 +521,11 @@ function useClosingStart(
   // Note that a start goes once, so a second press while the sheet slides away sends nothing.
   const [sent, setSent] = useState(false);
 
-  const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
+  const go = (
+    start: () => Promise<StartAnswer>,
+    refusal?: string | undefined,
+    brief?: string | undefined,
+  ) => {
     if (sent) return;
 
     if (refusal !== undefined) {
@@ -550,10 +564,17 @@ function useClosingStart(
           const now = standingIn(presenting, 0);
 
           if (!sameStanding(sheet, now) && !sameStanding(uncovered, now)) return;
-          // Note that only the task's page opens, its new agent standing in its Agents section, because a second route pushed over it races the split view's hand-off and leaves the task behind.
           router.navigate(
             onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })),
           );
+
+          // Note that New task lands on the task's page alone, its new agent standing in its Agents section, while New agent goes on to the agent it started, titled by its brief as the sheet's start names it, so Back returns to the task.
+          if (landing !== LANDING.AGENT || answer.agentId === undefined) return;
+          const title = brief === undefined ? "" : cardTitle(brief);
+          router.push({
+            pathname: onTab(iosAgentRoute(answer.agentId)),
+            params: title === "" ? {} : { brief: title },
+          });
         },
       },
     );
@@ -626,7 +647,7 @@ export function NewAgentScreen({
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const kept = useKeptWords(drafted);
   const sheet = useSheetStart(kept, setNote);
-  const closing = useClosingStart(kept, setNote);
+  const closing = useClosingStart(kept, setNote, LANDING.AGENT);
   const starting = sheet.starting || closing.starting;
   const skills = useSkillOffer(prompt, setPrompt, { taskId: taskId });
 
@@ -658,6 +679,7 @@ export function NewAgentScreen({
               runsOn,
             }),
           pictures.refusal,
+          prompt.trim(),
         )
       : sheet.go(
           () => startSuggested(opened.suggestion),
@@ -930,7 +952,7 @@ export function NewTaskScreen({
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
   const filed = pictures.opening ? undefined : filedOf(prompt, pictures.files);
   const kept = useKeptWords(drafted);
-  const { starting, go } = useClosingStart(kept, setNote);
+  const { starting, go } = useClosingStart(kept, setNote, LANDING.TASK);
   const place = { repository: repository.picked, relation: relation.relation };
   const tree = inTree(relation.relation) ? relation.task : undefined;
   // Note that a `/` offers the skills of the repository the task starts in, its tree's where it joins one, as the panel's New task reads them.
