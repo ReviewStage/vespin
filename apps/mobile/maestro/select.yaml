@@ -3,6 +3,8 @@
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # Launched on the host's Inbox fixture, as `inbox.yaml` is, so no server is
 # reached. Nothing is sent: the flow shows the mode and leaves it.
@@ -10,20 +12,33 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
 - waitForAnimationToEnd
 # Select stands first in the Inbox's ⋯ menu; a regular window's list column
-# holds its own ⋯, the last "More" on screen.
-- tapOn:
-    text: "More"
-    index: -1
+# holds its own ⋯, the last "More" on screen. Note that a compact window's
+# one "More" is tapped by name alone, since a negative index found none on
+# the Mac's iOS 26.5 simulator.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn: "More"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn:
+          text: "More"
+          index: -1
 - tapOn: "Select"
 - waitForAnimationToEnd
 - assertVisible: "Done"
 - takeScreenshot: select-none
 # A tap on a row ticks it rather than opening it. Note that the two rows are
-# the list's first, since the bar the first tick raises at the foot covers a
-# row low on a phone's screen.
+# the list's first, since the bar of acts at the foot, dimmed until a row is
+# ticked, covers a row low on a phone's screen.
 - tapOn: "Who can withdraw an invite\\?"
 - tapOn: "Recorded the invite flow"
 - assertVisible: "2 selected"

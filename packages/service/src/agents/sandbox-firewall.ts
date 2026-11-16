@@ -85,6 +85,8 @@ export const LAUNCH_SWAP = {
   RUNNER: "runner",
   /** A Codex launch's OpenAI API key, swapped in for its placeholder on OpenAI's API. */
   OPENAI_KEY: "openai-key",
+  /** A Cursor launch's Cursor API key, swapped in for its placeholder on Cursor's two API hosts. */
+  CURSOR_KEY: "cursor-key",
 } as const;
 
 export type LaunchSwapKind = (typeof LAUNCH_SWAP)[keyof typeof LAUNCH_SWAP];
@@ -155,6 +157,8 @@ interface KeptLaunch {
 export interface PlaceholderSwap {
   readonly domain: string;
   readonly path?: { readonly startsWith: string };
+  /** Other hosts the same value is set on for the same placeholder, as Cursor's key is on both its API hosts. */
+  readonly alsoOn?: readonly Pick<PlaceholderSwap, "domain" | "path">[];
   readonly header: string;
   readonly placeholder: Redacted.Redacted;
   readonly value: Redacted.Redacted;
@@ -342,18 +346,22 @@ function cloneEntry({ fullName, token, access }: RepositoryCredential): Firewall
 
 /** The swap at the firewall: a rule on its domain matching its header at the placeholder, setting the real value. */
 export function placeholderSwap(swap: PlaceholderSwap): FirewallEntry {
-  return entryOf([
-    [
-      swap.domain,
-      [
-        {
-          ...(swap.path === undefined ? undefined : { path: swap.path }),
-          headers: { [swap.header]: Redacted.value(swap.placeholder) },
-          set: { [swap.header]: Redacted.value(swap.value) },
-        },
+  const targets = [{ domain: swap.domain, path: swap.path }, ...(swap.alsoOn ?? [])];
+
+  return entryOf(
+    targets.map(
+      ({ domain, path }): HostRules => [
+        domain,
+        [
+          {
+            ...(path === undefined ? undefined : { path }),
+            headers: { [swap.header]: Redacted.value(swap.placeholder) },
+            set: { [swap.header]: Redacted.value(swap.value) },
+          },
+        ],
       ],
-    ],
-  ]);
+    ),
+  );
 }
 
 /** A placeholder minted for one launch: random, and named nowhere but where its process reads it. */

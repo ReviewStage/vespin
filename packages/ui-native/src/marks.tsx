@@ -31,12 +31,13 @@ import {
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
+import { repositoryOwnerPictureUrl } from "@repo/features/tasks-model";
+import { identityLetter } from "@repo/features/workspace-tile";
 import { useState } from "react";
 import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
-import { monogramOf } from "./monogram.js";
 import {
   PRIORITY_MARK_BARRED,
   PRIORITY_MARK_SYMBOL,
@@ -50,8 +51,8 @@ import { TASK_PRIORITY_UNLIT_OPACITY } from "./tokens/task-status-symbols.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { tileHue } from "./workspace-tile-model.js";
 
-/** The share of an avatar's width its letters stand at. */
-const MONOGRAM_SCALE = 0.42;
+/** The share of an avatar's width its letter stands at, half of it, as the panel's avatar sets its letter. */
+const LETTER_SCALE = 0.5;
 
 /** How faint a done row's dot stands, as the panel fades a done row's unread column. */
 const FADED_OPACITY = 0.45;
@@ -131,6 +132,49 @@ export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
   );
 }
 
+/** How round a repository's picture stands, of its size: a tile's, as the panel draws a repository's owner, not a person's circle. */
+const REPOSITORY_CORNER = 0.25;
+
+/**
+ * A repository as the panel's sidebar marks it (`@repo/ui`'s
+ * `RepositoryPicture`): its owner's GitHub picture on a tile's rounded
+ * corners, with the repository's glyph standing in, in the muted ink, until
+ * the picture draws and once it fails. It is never heard, since the words
+ * beside it name the repository.
+ */
+export function RepositoryPicture({
+  repository,
+  size,
+}: {
+  /** The repository, `owner/name`. */
+  readonly repository: string;
+  /** Its width, in points, which its caller scales with Dynamic Type. */
+  readonly size: number;
+}) {
+  const colors = useColors();
+  const address = repositoryOwnerPictureUrl(repository);
+  const [drawn, setDrawn] = useState<string | undefined>(undefined);
+  const [failed, setFailed] = useState<string | undefined>(undefined);
+  const shown = address === drawn && address !== failed;
+
+  return (
+    <ZStack modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}>
+      {shown ? null : (
+        <Image {...glyphImage(GLYPH.REPOSITORY)} size={size} color={colors.TEXT_MUTED} />
+      )}
+      {address === failed ? null : (
+        <AvatarPhoto
+          address={address}
+          size={size}
+          corner={size * REPOSITORY_CORNER}
+          onLoad={() => setDrawn(address)}
+          onFail={() => setFailed(address)}
+        />
+      )}
+    </ZStack>
+  );
+}
+
 /**
  * A task's priority as its bars, as the panel marks it: the lit bars in its
  * ink over every bar it can light, drawn faint, urgent's square in the
@@ -175,10 +219,10 @@ export const FACE_KIND = {
 
 export type FaceKind = (typeof FACE_KIND)[keyof typeof FACE_KIND];
 
-/** A person as a mark draws them: their name, whose letters stand in for a picture, and their sign-in picture where one is known. */
+/** A person as a mark draws them: their name, whose first letter stands in for a picture, and their sign-in picture where one is known. */
 export type Face = {
   readonly name: string;
-  /** What its letters' hue is read off, such as a member's id, as the panel keys a person's disc, so they wear one color on every client; their name where none is given. */
+  /** What its letter's hue is read off, such as a member's id, as the panel keys a person's disc, so they wear one color on every client; their name where none is given. */
   readonly id?: string | undefined;
   readonly picture?: string | undefined;
   /** What it is of, a person where none is given. */
@@ -186,7 +230,7 @@ export type Face = {
 };
 
 type AvatarProps = {
-  /** The person's or agent's name, which the avatar draws the letters of and is heard as. */
+  /** The person's or agent's name, which the avatar draws the first letter of and is heard as. */
   readonly name: string;
   /** Its width, in points; a row's where none is given. */
   readonly size?: number | undefined;
@@ -230,14 +274,15 @@ export function AvatarPhoto({
 }
 
 /**
- * A person's face on the brand's avatar tile: their photo where a picture is
+ * A person's face: their photo where a picture is
  * given, from a host `@repo/features/account-picture` lets a picture load
- * from and asked for at the size it is drawn, and their letters otherwise.
+ * from and asked for at the size it is drawn, and their name's first letter
+ * otherwise, as the panel's avatar draws one (`identityLetter`).
  * An App, or its bot, stands in a rounded square rather than a circle, as
- * the panel and GitHub tell one from a person. The letters stand on the
+ * the panel and GitHub tell one from a person. The letter stands on the
  * identity hue read off its id, or its name where none is given, as the panel's `Avatar` draws a person's letter, so
- * a face holds its edge on the dark ground too. Note that the letters stand
- * only until the photo has drawn, so they show while it loads and once it
+ * a face holds its edge on the dark ground too. Note that the letter stands
+ * only until the photo has drawn, so it shows while the photo loads and once it
  * fails, which takes the photo away, but never through a photo's
  * transparent pixels.
  */
@@ -248,10 +293,10 @@ export function Avatar({
   kind = FACE_KIND.PERSON,
   id = name,
 }: AvatarProps & {
-  /** The address of the person's photo, such as their sign-in picture; their letters alone where none is given. */
+  /** The address of the person's photo, such as their sign-in picture; their letter alone where none is given. */
   readonly picture?: string | undefined;
   readonly kind?: FaceKind | undefined;
-  /** What its letters' hue is read off, such as a member's id; its name where none is given. */
+  /** What its letter's hue is read off, such as a member's id; its name where none is given. */
   readonly id?: string | undefined;
 }) {
   const dark = useColorScheme() === "dark";
@@ -271,12 +316,12 @@ export function Avatar({
           />
           <Text
             modifiers={[
-              font({ size: size * MONOGRAM_SCALE, weight: "semibold", design: "rounded" }),
+              font({ size: size * LETTER_SCALE, weight: "semibold", design: "rounded" }),
               foregroundStyle(ON_IDENTITY),
               accessibilityHidden(),
             ]}
           >
-            {monogramOf(name)}
+            {identityLetter(name)}
           </Text>
         </>
       )}
