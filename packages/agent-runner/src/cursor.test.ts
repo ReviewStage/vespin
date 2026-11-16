@@ -9,6 +9,7 @@ import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { type Cause, Effect, Fiber, Layer, Match, Queue, Stream } from "effect";
 import { vi } from "vitest";
 import {
+  CURSOR_SIGNED_OUT_DETAIL,
   type CursorConfig,
   INPUT_LINE,
   type InputLine,
@@ -17,6 +18,7 @@ import {
   RUNNER_ENV,
   RUNNER_EVENT,
   RUNNER_HARNESS,
+  RUNNER_PLACE,
   RUNNER_TRANSCRIPTS,
   type RunnerEvent,
 } from "./protocol.js";
@@ -157,9 +159,10 @@ function launch(
   runs: readonly FakeRun[],
   service: ReturnType<typeof fakeService>,
   env: Record<string, string> = ENV,
+  machine: { readonly signedIn?: boolean } = {},
 ) {
   return Effect.gen(function* () {
-    const cursor = fakeCursor(runs);
+    const cursor = fakeCursor(runs, machine);
     const mcp = fakeMcpRoute();
     const cli = yield* fakeClaudeCode([]);
     const stdin = yield* Queue.unbounded<string, Cause.Done>();
@@ -388,6 +391,53 @@ it.effect(
         ),
         [LINE.FIRST, LINE.SECOND],
       );
+    }),
+);
+
+/** A launch on a host its member added, whose runner was somehow started holding a key, which a host's launch never reads. */
+const ON_HOST = { ...ENV, [RUNNER_ENV.PLACE]: RUNNER_PLACE.HOST };
+
+it.effect(
+  "on a host, makes the agent on the machine's own Cursor sign-in, handing the SDK no key even where the runner holds one",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const { cursor, write, run } = yield* launch([{ messages: RECORDED_TURN }], service, ON_HOST);
+      yield* write(CONFIG);
+      yield* write(message("Read the README.", LINE.FIRST));
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      const [made] = cursor.created;
+      assert.ok(made !== undefined);
+      assert.equal("apiKey" in made, false);
+    }),
+);
+
+it.effect(
+  "on a host with no Cursor sign-in, makes no agent and ends the launch failed with words that say how to sign in",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+
+      const { cursor, write, run } = yield* launch(
+        [{ messages: RECORDED_TURN }],
+        service,
+        ON_HOST,
+        {
+          signedIn: false,
+        },
+      );
+
+      yield* write(CONFIG);
+      yield* write(message("Read the README.", LINE.FIRST));
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      assert.deepEqual(cursor.created, []);
+      assert.deepEqual(messagesOf(service.applied).at(-1), {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.FAILED,
+        detail: CURSOR_SIGNED_OUT_DETAIL,
+      });
     }),
 );
 

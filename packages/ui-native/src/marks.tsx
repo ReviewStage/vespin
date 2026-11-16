@@ -31,6 +31,7 @@ import {
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
+import { repositoryOwnerPictureUrl } from "@repo/features/tasks-model";
 import { identityLetter } from "@repo/features/workspace-tile";
 import { useState } from "react";
 import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
@@ -128,6 +129,49 @@ export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
       color={toneColor(colors, TASK_STATUS_TONE[status])}
       modifiers={[accessibilityLabel(TASK_STATUS_WORDS[status])]}
     />
+  );
+}
+
+/** How round a repository's picture stands, of its size: a tile's, as the panel draws a repository's owner, not a person's circle. */
+const REPOSITORY_CORNER = 0.25;
+
+/**
+ * A repository as the panel's sidebar marks it (`@repo/ui`'s
+ * `RepositoryPicture`): its owner's GitHub picture on a tile's rounded
+ * corners, with the repository's glyph standing in, in the muted ink, until
+ * the picture draws and once it fails. It is never heard, since the words
+ * beside it name the repository.
+ */
+export function RepositoryPicture({
+  repository,
+  size,
+}: {
+  /** The repository, `owner/name`. */
+  readonly repository: string;
+  /** Its width, in points, which its caller scales with Dynamic Type. */
+  readonly size: number;
+}) {
+  const colors = useColors();
+  const address = repositoryOwnerPictureUrl(repository);
+  const [drawn, setDrawn] = useState<string | undefined>(undefined);
+  const [failed, setFailed] = useState<string | undefined>(undefined);
+  const shown = address === drawn && address !== failed;
+
+  return (
+    <ZStack modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}>
+      {shown ? null : (
+        <Image {...glyphImage(GLYPH.REPOSITORY)} size={size} color={colors.TEXT_MUTED} />
+      )}
+      {address === failed ? null : (
+        <AvatarPhoto
+          address={address}
+          size={size}
+          corner={size * REPOSITORY_CORNER}
+          onLoad={() => setDrawn(address)}
+          onFail={() => setFailed(address)}
+        />
+      )}
+    </ZStack>
   );
 }
 
@@ -358,6 +402,7 @@ export function AgentTile({
           modifiers={[
             resizable(),
             frame({ width: size * TILE_MARK_SCALE, height: size * TILE_MARK_SCALE }),
+            foregroundStyle(colors.TEXT),
             accessibilityHidden(),
           ]}
         />
@@ -374,10 +419,18 @@ export function HarnessMark({
   readonly provider: ModelProvider;
   readonly size?: number | undefined;
 }) {
+  const colors = useColors();
+
+  // Note that the text's ink reaches Cursor's cube alone, a template; Clawd and Codex's picture keep their own colors.
   return (
     <Image
       assetName={HARNESS_MARK_ASSET[provider]}
-      modifiers={[resizable(), frame({ width: size, height: size }), accessibilityHidden()]}
+      modifiers={[
+        resizable(),
+        frame({ width: size, height: size }),
+        foregroundStyle(colors.TEXT),
+        accessibilityHidden(),
+      ]}
     />
   );
 }

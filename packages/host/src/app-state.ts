@@ -7,12 +7,7 @@ import {
   type BrowserTabsPlaceKind,
 } from "@repo/features/agent-browser-tab-wire";
 import {
-  type AgentOverviewChecksAnswerView,
-  type AgentOverviewConversationAnswerView,
-  type AgentOverviewPullRequestAnswerView,
   type AgentPullRequestAnswerView,
-  type AgentPullRequestViewedAnswerView,
-  type AgentReviewOptionsAnswerView,
   type AgentTranscriptPage,
   INBOX_SCOPE_KIND,
   type InboxScopeKind,
@@ -126,9 +121,9 @@ export const RUN_PROFILE = {
   AGENT_TRANSCRIPT: "agent-transcript",
   /** The same agent as an orchestrator days into its run, its transcript thousands of entries long and written to while it is open. */
   AGENT_LONG_RUN: "agent-long-run",
-  /** The same agent after two calls into it, the Voice experiment on: the member's, which handed it work, and a teammate's. */
+  /** The same agent after two calls into it: the member's, which handed it work, and a teammate's. */
   AGENT_VOICE: "agent-voice",
-  /** The same agent mid-turn on a call, the Voice experiment on: a spoken ask awaiting the turn, and the caller's line growing as they speak. */
+  /** The same agent mid-turn on a call: a spoken ask awaiting the turn, and the caller's line growing as they speak. */
   AGENT_VOICE_LIVE: "agent-voice-live",
   /** The same agent, its Pull request tab on the checks. */
   AGENT_CHECKS: "agent-checks",
@@ -440,36 +435,6 @@ export const NO_BROWSER_TABS: AppBrowserTabs = {
   [BROWSER_TABS_PLACE.AGENT]: {},
 };
 
-/** One agent's pull request's newest chapters, as the host's read of them stands: with whether the reader can generate them, once it answered. */
-type AppPullRequestChapters = AppHostRead<PullRequestChaptersAnswer>;
-
-/**
- * Each agent's pull request's chapters the host holds for the windows
- * (`compose-agents.ts`): those a window's Pull request tab chose, and the
- * few let go lately, by the agent's id and then the pull request's number,
- * each as its own read stands. One absent is held by nobody.
- */
-export type AppChapters = Readonly<
-  Record<string, Readonly<Record<string, AppPullRequestChapters>>>
->;
-
-/** No chapters held, as the host stands before any window shows a pull request's and after the session ends. */
-export const NO_CHAPTERS: AppChapters = {};
-
-/**
- * One part of each agent's pull request the windows hold for their Pull
- * request tabs (`pull-request-parts.ts`), by the agent's id and then the
- * pull request's number, or `OWN_PULL_REQUEST` for the agent's own, each as
- * the host's read of it stands: the part, or why there is none. One absent
- * is held by nobody.
- */
-export type AppPullRequestPart<Part> = Readonly<
-  Record<string, Readonly<Record<string, AppHostRead<Part>>>>
->;
-
-/** The key the agent's own pull request's parts stand under, beside those of the pull requests its tabs name by number; no number's. */
-export const OWN_PULL_REQUEST = "own";
-
 /**
  * One read the host holds for the windows of each pull request named by its
  * repository rather than an agent: by the workspace whose installation
@@ -481,16 +446,6 @@ export const OWN_PULL_REQUEST = "own";
 export type AppRepositoryPullRequestHeld<Read> = Readonly<
   Record<string, Readonly<Record<string, Readonly<Record<string, AppHostRead<Read>>>>>>
 >;
-
-/** The read each part of a Pull request tab's pull request is held as, by the part. */
-export const PULL_REQUEST_PART_READ = {
-  [PULL_REQUEST_PART.PULL_REQUEST]: LIVE_READ.PULL_REQUEST,
-  [PULL_REQUEST_PART.CHECKS]: LIVE_READ.PULL_REQUEST_CHECKS,
-  [PULL_REQUEST_PART.CONVERSATION]: LIVE_READ.PULL_REQUEST_CONVERSATION,
-  [PULL_REQUEST_PART.PUBLISHED]: LIVE_READ.PULL_REQUEST_PUBLISHED,
-  [PULL_REQUEST_PART.REVIEW_OPTIONS]: LIVE_READ.REVIEW_OPTIONS,
-  [PULL_REQUEST_PART.VIEWED]: LIVE_READ.PULL_REQUEST_VIEWED,
-} as const satisfies Record<PullRequestPart, LiveRead>;
 
 /** The read each part of a pull request named by its repository and number is held as, by the part. */
 export const REPOSITORY_PULL_REQUEST_PART_READ = {
@@ -722,12 +677,6 @@ export type AppAutomationReads = Pick<
   | typeof LIVE_READ.AUTOMATION_RUNS
 >;
 
-/** Every part of the Pull request tabs' pull requests the windows hold, by the part's read. */
-export type AppPullRequestParts = Pick<
-  AppState,
-  (typeof PULL_REQUEST_PART_READ)[keyof typeof PULL_REQUEST_PART_READ]
->;
-
 /** Every part of the pull requests the windows hold by their repository and number, by the part's read. */
 export type AppRepositoryPullRequestParts = Pick<
   AppState,
@@ -771,17 +720,11 @@ export interface AppHostReads {
   [LIVE_READ.MODELS]: ModelsAnswer;
   [LIVE_READ.PAGES]: readonly PageLine[];
   [LIVE_READ.PROVIDER_KEYS]: AppProviderKeyList;
-  [LIVE_READ.PULL_REQUEST]: AgentOverviewPullRequestAnswerView;
   [LIVE_READ.REPOSITORY_LISTS]: GitHubRepositoriesAnswer;
   [LIVE_READ.GITHUB_TOKEN]: AppGitHubToken;
   [LIVE_READ.ALLOWED_COMMANDS]: AppAllowedCommandList;
-  [LIVE_READ.PULL_REQUEST_CHAPTERS]: PullRequestChaptersAnswer;
   [LIVE_READ.BROWSER_TABS]: readonly AgentBrowserTab[];
-  [LIVE_READ.PULL_REQUEST_CHECKS]: AgentOverviewChecksAnswerView;
-  [LIVE_READ.PULL_REQUEST_CONVERSATION]: AgentOverviewConversationAnswerView;
   [LIVE_READ.PULL_REQUEST_PUBLISHED]: AgentPullRequestAnswerView;
-  [LIVE_READ.PULL_REQUEST_VIEWED]: AgentPullRequestViewedAnswerView;
-  [LIVE_READ.REVIEW_OPTIONS]: AgentReviewOptionsAnswerView;
   [LIVE_READ.REPOSITORY_PULL_REQUEST]: RepositoryOverviewPullRequestAnswerView;
   [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: RepositoryOverviewChecksAnswerView;
   [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: RepositoryOverviewConversationAnswerView;
@@ -946,22 +889,10 @@ export interface AppState {
   [LIVE_READ.GITHUB_TOKEN]: AppGitHubTokens;
   /** The account's always-allowed commands, held while a window draws them and a while after: what Settings › Agents' Always allowed reads. */
   [LIVE_READ.ALLOWED_COMMANDS]: AppAllowedCommands;
-  /** Each agent's pull request's chapters the windows chose, held while a Pull request tab holds them and a while after: what its Chapters tab draws. */
-  [LIVE_READ.PULL_REQUEST_CHAPTERS]: AppChapters;
   /** Each task's or agent's cloud Browser tabs the windows' side panels list, held while one lists them and a while after: what the side panel's Browser tabs draw. Never written to disk. */
   [LIVE_READ.BROWSER_TABS]: AppBrowserTabs;
-  /** Each agent's pull request the windows' Pull request tabs chose, held while a tab shows it and a while after: its description, branches, mergeability, and people. */
-  [LIVE_READ.PULL_REQUEST]: AppPullRequestPart<AgentOverviewPullRequestAnswerView>;
-  /** The checks on each of those pull requests' heads, held as they are. */
-  [LIVE_READ.PULL_REQUEST_CHECKS]: AppPullRequestPart<AgentOverviewChecksAnswerView>;
-  /** Each of those pull requests' conversation and where its reviewers stand, held as they are. */
-  [LIVE_READ.PULL_REQUEST_CONVERSATION]: AppPullRequestPart<AgentOverviewConversationAnswerView>;
-  /** What each of those agents published, its pull request as the service last read it from GitHub, held as they are. */
-  [LIVE_READ.PULL_REQUEST_PUBLISHED]: AppPullRequestPart<AgentPullRequestAnswerView>;
-  /** Which of each of those pull requests' files the member marked viewed, held as they are, read on the member's own GitHub sign-in. */
-  [LIVE_READ.PULL_REQUEST_VIEWED]: AppPullRequestPart<AgentPullRequestViewedAnswerView>;
-  /** What each of those tabs' reviewer and label pickers offer, held as they are once a picker asks. */
-  [LIVE_READ.REVIEW_OPTIONS]: AppPullRequestPart<AgentReviewOptionsAnswerView>;
+  /** What each agent the windows' cards chose published, its pull request as the service last read it from GitHub, by the agent, held while a card shows it and a while after: what the agent's pull request card and a replay's foot draw (`pull-request-parts.ts`). */
+  [LIVE_READ.PULL_REQUEST_PUBLISHED]: AppHeldById<AgentPullRequestAnswerView>;
   /** Each pull request the windows' Pull request tabs chose by its repository and number, held while a tab shows it and a while after: its description, branches, mergeability, and people. */
   [LIVE_READ.REPOSITORY_PULL_REQUEST]: AppRepositoryPullRequestHeld<RepositoryOverviewPullRequestAnswerView>;
   /** The checks on each of those pull requests' heads, held as they are. */
@@ -1172,13 +1103,7 @@ export const HOST_READ_SLICE = {
   [LIVE_READ.REPOSITORY_LISTS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.GITHUB_TOKEN]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.ALLOWED_COMMANDS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
-  [LIVE_READ.PULL_REQUEST_CHAPTERS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
-  [LIVE_READ.PULL_REQUEST]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
-  [LIVE_READ.PULL_REQUEST_CHECKS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
-  [LIVE_READ.PULL_REQUEST_CONVERSATION]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
-  [LIVE_READ.PULL_REQUEST_PUBLISHED]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
-  [LIVE_READ.PULL_REQUEST_VIEWED]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
-  [LIVE_READ.REVIEW_OPTIONS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
+  [LIVE_READ.PULL_REQUEST_PUBLISHED]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.REPOSITORY_PULL_REQUEST]: { keys: READ_KEYS.THREE, on: KEYS_ON.SLICE },
   [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: { keys: READ_KEYS.THREE, on: KEYS_ON.SLICE },
   [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: { keys: READ_KEYS.THREE, on: KEYS_ON.SLICE },

@@ -98,20 +98,18 @@ import {
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/terminal-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
+  type AppHeldById,
   type AppPages,
-  type AppPullRequestPart,
   type AppRepositoryPullRequestHeld,
   type AppStateSnapshot,
   type AppTranscript,
   type AppTranscripts,
   type AppWorkspaceTools,
-  OWN_PULL_REQUEST,
   OWN_TRANSCRIPT,
   RUN_PROFILE,
 } from "@repo/host/app-state";
 import type { PortActKind, PortActPayload, PortActResult } from "@repo/host/contract";
 import { FIXTURE_IDS, FIXTURE_PAGE } from "@repo/host/fixture-stage";
-import { EXPERIMENT } from "@repo/settings";
 import { agentTab, changesTab, fileTab, pageTab, terminalTab } from "@repo/ui/tab-strip-model";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { longRunHold, longRunPicture, longRunTranscript } from "./agent-long-run-fixture.js";
@@ -1051,7 +1049,7 @@ type AgentStage =
       readonly transcript?: TranscriptLength;
       /** Whether the agent holds a call on the member's answer (`HELD_CALL`). */
       readonly held?: true;
-      /** The calls into the agent after its turn, the Voice experiment on; none where it was never called. */
+      /** The calls into the agent after its turn; none where it was never called. */
       readonly voice?: VoiceStage;
     }
   | { readonly file: string }
@@ -1563,21 +1561,18 @@ function stagedPart<Read>(
 
 /** Main's held branch reads with the agent's own laid over them, which its tab's pull request card reads (`use-agent-pull-request.ts`), one object for each of main's. */
 const STAGED_PUBLISHED = new WeakMap<
-  AppPullRequestPart<AgentPullRequestAnswerView>,
-  AppPullRequestPart<AgentPullRequestAnswerView>
+  AppHeldById<AgentPullRequestAnswerView>,
+  AppHeldById<AgentPullRequestAnswerView>
 >();
 
 /** What the agent published, its branch and pull request, as its tab's read of it holds it. */
 function stagedPublished(
-  held: AppPullRequestPart<AgentPullRequestAnswerView>,
-): AppPullRequestPart<AgentPullRequestAnswerView> {
+  held: AppHeldById<AgentPullRequestAnswerView>,
+): AppHeldById<AgentPullRequestAnswerView> {
   let laid = STAGED_PUBLISHED.get(held);
 
   if (laid === undefined) {
-    laid = {
-      ...held,
-      [FIXTURE_AGENT_ID]: { ...held[FIXTURE_AGENT_ID], [OWN_PULL_REQUEST]: { rows: PUBLISHED } },
-    };
+    laid = { ...held, [FIXTURE_AGENT_ID]: { rows: PUBLISHED } };
     STAGED_PUBLISHED.set(held, laid);
   }
 
@@ -1646,35 +1641,14 @@ function inboxAppState(state: AppStateSnapshot, workspaceId: string): AppStateSn
   };
 }
 
-/** Main's settings with the Voice experiment on, one object for each of main's. */
-const VOICE_SETTINGS = new WeakMap<
-  NonNullable<AppStateSnapshot["settings"]>,
-  NonNullable<AppStateSnapshot["settings"]>
->();
-
-/** Lays the Voice experiment on over main's settings, which a voice profile draws a call's lines behind. */
-function voiceSettings(
-  settings: NonNullable<AppStateSnapshot["settings"]>,
-): NonNullable<AppStateSnapshot["settings"]> {
-  let laid = VOICE_SETTINGS.get(settings);
-
-  if (laid === undefined) {
-    laid = {
-      ...settings,
-      experiments: { ...settings.experiments, [EXPERIMENT.VOICE]: true },
-    };
-    VOICE_SETTINGS.set(settings, laid);
-  }
-
-  return laid;
-}
-
 /**
  * Main's document as an agent profile draws it: the open task's pages held
  * with the page its agent showed, as the window's read of them holds them
  * (`LIVE_READ.PAGES`), and the agent's pull request's chapters and parts
  * held as its Pull request tab's reads of them hold them
- * (`LIVE_READ.PULL_REQUEST_CHAPTERS`, `LIVE_READ.PULL_REQUEST` and its siblings),
+ * (`LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS`, `LIVE_READ.REPOSITORY_PULL_REQUEST`
+ * and its siblings), what the agent published as its card reads it
+ * (`LIVE_READ.PULL_REQUEST_PUBLISHED`),
  * and the agent's transcript as its tab's read of it holds it
  * (`LIVE_READ.TRANSCRIPT`), the long run's at the step it reached, and
  * where its `run_on_mac` stands as its Runs on card reads it
@@ -1706,9 +1680,6 @@ export function agentAppState(
 
   return {
     ...state,
-    ...(voiceStage(stage) === undefined || state.settings === undefined
-      ? undefined
-      : { settings: voiceSettings(state.settings) }),
     [LIVE_READ.PAGES]: staged,
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT], stagedTranscript(stage)),
     [LIVE_READ.WORKSPACE_TOOLS]: stagedRunOnMac(state[LIVE_READ.WORKSPACE_TOOLS]),

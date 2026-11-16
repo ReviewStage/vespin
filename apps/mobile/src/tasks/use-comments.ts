@@ -4,7 +4,7 @@
  * The threads are the panel's own read (`TASKS_COMMENTS_FOLLOW`), which the
  * host holds on the document while a screen holds it
  * (`LIVE_READ.DESCRIPTION_COMMENTS`), so a teammate's comment or an agent's
- * reply lands while the page is open. A reply is the panel's act
+ * reply lands while the page is open. A reply, a resolve and a reopen are the panel's act
  * (`TASKS_COMMENT_ACT` with `reply`), under a key minted for its words, so
  * one sent again after a lost answer is taken once; the host draws it over
  * the thread at once and takes it back where the service refused it.
@@ -12,8 +12,14 @@
  * (`DESCRIPTION_COMMENT_SCOPE.BLOCK`), as a long press on it offers, since
  * the app's read-only description has no selection of words; its span is
  * read from the shared parse (`@repo/features/description-blocks`).
+ * A comment's files are read through the host as the panel reads them
+ * (`TASKS_PICTURE_READ`), so no credential leaves it: a picture drawn from
+ * its bytes, and any other file, such as a PDF, written under the app's
+ * caches for its chip to open.
  */
 
+import type { AgentAttachment } from "@repo/features/agent-wire";
+import { ATTACHMENT_VIEW, attachmentView, chipSize } from "@repo/features/attachment-model";
 import type { DescriptionBlock } from "@repo/features/description-blocks";
 import { COMMENT_NOTE, commentRefusalNote } from "@repo/features/description-comment-notes";
 import {
@@ -23,28 +29,82 @@ import {
   DESCRIPTION_COMMENT_SCOPE,
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentEntry,
+  type DescriptionCommentFile,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
+import { markersAsNames } from "@repo/features/file-marker";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { COMMENT_SUBJECT } from "@repo/features/tasks-view";
+import { COMMENT_SUBJECT, TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { BUZZ, type ThreadMessage } from "@repo/ui-native";
+import { BUZZ, buzz, THREAD_MEDIA, type ThreadMedia, type ThreadMessage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { cachedFile } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import type { PictureOf } from "../member-pictures.js";
-import { useWrite } from "../use-write.js";
+import {
+  type AttachedPictures,
+  type HeldPicture,
+  useAttachedPictures,
+} from "../use-attached-pictures.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** No threads read yet. */
 const NO_THREADS: readonly DescriptionCommentThread[] = [];
 
 /** What an entry says of who wrote it where its writer's account is gone. */
 const SOMEONE = "Someone";
+
+/** The prefix a comment's file is written under in the app's caches. */
+const COMMENT_MEDIA_PREFIX = "comment";
+
+/** One file of a comment as read: what it is drawn from, or `null` where it could not be read, its size in words once read, and whether it is gone for good, which no Try again brings back. */
+interface CommentFileRead {
+  readonly source: string | null;
+  readonly size: string | undefined;
+  readonly gone?: boolean | undefined;
+}
+
+/** A thread's files as read, by the attachment each is kept under. */
+type CommentFilesRead = ReadonlyMap<string, CommentFileRead>;
+
+/** Nothing read yet. */
+const NOTHING_READ: CommentFilesRead = new Map();
+
+/** What draws a thread's files: each one's read, by its attachment, none while on its way, and what reads one again that could not be. */
+export interface CommentMedia {
+  readonly readOf: (attachmentId: string) => CommentFileRead | undefined;
+  readonly retry: (attachmentId: string) => void;
+}
+
+/** Whether a comment's file stands as a picture beside its words, rather than as its chip. */
+function pictured(file: DescriptionCommentFile): boolean {
+  return (
+    attachmentView({ name: file.name, mediaType: file.mediaType, url: "" }) ===
+    ATTACHMENT_VIEW.IMAGE
+  );
+}
+
+/** What a comment's file is drawn from once its bytes land: a picture's `data:` address, or any other file's address under the app's caches. */
+async function sourceOf(
+  file: DescriptionCommentFile,
+  read: { readonly contentType: string; readonly base64: string },
+): Promise<string> {
+  if (pictured(file)) return `data:${read.contentType};base64,${read.base64}`;
+
+  return cachedFile(
+    COMMENT_MEDIA_PREFIX,
+    file.attachmentId,
+    file.name,
+    file.mediaType,
+    read.base64,
+  );
+}
 
 /**
  * A new thread's draft kept beside its block: the words typed, the start
@@ -55,6 +115,8 @@ type StartDraft = {
   /** The block's words as the draft was typed on it, since an edited description can stand another block at the same offsets. */
   readonly quote: string | undefined;
   readonly words: string;
+  /** The pictures picked for it and not yet sent. */
+  readonly pictures: readonly HeldPicture[];
   readonly sent: SentStart | undefined;
   readonly note?: string | undefined;
 };
@@ -200,41 +262,177 @@ function writerOf(
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT) {
     const known = writer.agentId === undefined ? undefined : agents.get(writer.agentId);
 
-    return { name: known?.name ?? PRODUCT_NAME, agent: true, harness: known?.harness };
+    return {
+      name: known?.name ?? PRODUCT_NAME,
+      agent: true,
+      id: writer.agentId,
+      harness: known?.harness,
+    };
   }
 
-  return { name: writer.by?.name ?? SOMEONE, agent: false, picture: pictureOf(writer.by?.userId) };
+  return {
+    name: writer.by?.name ?? SOMEONE,
+    agent: false,
+    id: writer.by?.userId,
+    picture: pictureOf(writer.by?.userId),
+  };
 }
 
-/** A thread's comments as its page draws them, each by its writer, its words typed line by line; the files a comment carries are left to the desktop and the web. */
+/** A comment's files as its message draws them after its words, in the order attached: a picture as a picture, any other file as its chip, one that could not be read offering Try again. */
+function commentMedia(entry: DescriptionCommentEntry, media: CommentMedia): readonly ThreadMedia[] {
+  return (entry.files ?? []).map((file): ThreadMedia => {
+    const key = file.attachmentId;
+    const read = media.readOf(key);
+
+    const onRetry =
+      read?.source === null && read.gone !== true ? () => media.retry(key) : undefined;
+
+    return pictured(file)
+      ? { kind: THREAD_MEDIA.PICTURE, key, source: read?.source, alt: file.name, onRetry }
+      : {
+          kind: THREAD_MEDIA.FILE,
+          key,
+          source: read?.source,
+          name: file.name,
+          mediaType: file.mediaType,
+          size: read?.size,
+          onRetry,
+        };
+  });
+}
+
+/** A thread's comments as its page draws them, each by its writer, its words typed line by line, and the files it carries after them. */
 export function threadMessages(
   thread: DescriptionCommentThread,
   agents: ReadonlyMap<string, CommentAgent>,
   pictureOf: PictureOf,
+  media: CommentMedia,
 ): readonly ThreadMessage[] {
   return threadComments(thread).map((entry) => ({
     id: entry.id,
     writer: writerOf(entry, agents, pictureOf),
     at: entry.at,
-    words: entry.words ?? "",
+    // Note that a marker naming one of its files is said as the file's name, since the file stands as its own picture or chip after the words.
+    words: markersAsNames(entry.words ?? ""),
     typed: entry.writer.actor === DESCRIPTION_COMMENT_ACTOR.MEMBER,
-    media: [],
+    media: commentMedia(entry, media),
   }));
+}
+
+/**
+ * Each file a thread's comments carry, read once through the host while
+ * the page stands, as the panel reads a comment's (`TASKS_PICTURE_READ`):
+ * a picture drawn from its bytes, any other file written under the app's
+ * caches, which its chip opens and shares. One the service answers is not
+ * there stands unread for good, as a description's picture does
+ * (`useDescriptionPictures`), and one that got no answer stands unread with
+ * Try again, which asks for it anew. Note that a read that lands once the
+ * page left is dropped.
+ */
+export function useCommentMedia(
+  taskId: string | undefined,
+  thread: DescriptionCommentThread | undefined,
+): CommentMedia {
+  const acts = useHostActs();
+  const [read, setRead] = useState<CommentFilesRead>(NOTHING_READ);
+  const [round, setRound] = useState(0);
+  // The files asked for, by attachment, so each is asked for once while the page stands.
+  const asked = useRef(new Set<string>());
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (taskId === undefined || thread === undefined) return;
+
+    const landed = (id: string, file: CommentFileRead) => {
+      if (mounted.current) setRead((held) => new Map(held).set(id, file));
+    };
+
+    for (const file of threadComments(thread).flatMap((entry) => entry.files ?? [])) {
+      const id = file.attachmentId;
+
+      if (asked.current.has(id)) continue;
+      asked.current.add(id);
+
+      acts[ACT_KIND.TASKS_PICTURE_READ]({ taskId, attachmentId: id })
+        .then(async (answer) => {
+          // Note that a file the service says is not there stays so, while one that got no answer offers Try again.
+          if (!("base64" in answer) && answer.failure === TASK_CALL_FAILURE.NOT_FOUND) {
+            landed(id, { source: null, size: undefined, gone: true });
+
+            return;
+          }
+
+          if (!("base64" in answer)) throw new Error(`The file was not read: ${answer.failure}.`);
+          const chip = { name: file.name, mediaType: file.mediaType, url: "" };
+          landed(id, { source: await sourceOf(file, answer), size: chipSize(chip, answer.base64) });
+        })
+        .catch((cause: unknown) => {
+          console.error("A comment's file was not read.", cause);
+          landed(id, { source: null, size: undefined });
+        });
+    }
+    // Note that `round` is read so a Try again, which forgets the file's ask, reads it anew.
+  }, [acts, taskId, thread, round]);
+
+  return useMemo(
+    () => ({
+      readOf: (attachmentId) => read.get(attachmentId),
+      retry: (attachmentId) => {
+        asked.current.delete(attachmentId);
+        setRead((held) => {
+          const next = new Map(held);
+          next.delete(attachmentId);
+
+          return next;
+        });
+        setRound((at) => at + 1);
+      },
+    }),
+    [read],
+  );
 }
 
 /** A reply's field on a thread: its words, whether they may go, and what a send that did not land said. */
 export interface CommentReply {
   readonly words: string;
   readonly onWords: (words: string) => void;
+  /** The pictures the reply carries, attached from Photos, as the panel's comment field attaches files. */
+  readonly pictures: AttachedPictures;
   readonly sendable: boolean;
   readonly send: () => void;
   readonly note: string | undefined;
 }
 
-/** A reply sent and not yet answered as posted: its words, and the key it went under. */
+/** A reply sent and not yet answered as posted: its words, the pictures it carried, and the key it went under. */
 interface SentReply {
   readonly words: string;
+  readonly files: readonly AgentAttachment[];
   readonly key: string;
+}
+
+/**
+ * Whether a send goes again as the one `sent` names, under its key: the same
+ * words and the same pictures, by their bytes, as the panel's field asks
+ * (`sameFiles`), since the service answers a key it took as posted whatever
+ * the send carries, so a picture changed since would be dropped unseen.
+ */
+function sameSend(sent: SentReply | undefined, words: string, files: readonly AgentAttachment[]) {
+  return (
+    sent !== undefined &&
+    sent.words === words &&
+    sent.files.length === files.length &&
+    sent.files.every(
+      (file, at) => file.mediaType === files[at]?.mediaType && file.data === files[at]?.data,
+    )
+  );
 }
 
 /**
@@ -253,24 +451,52 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
   const [words, setWords] = useState("");
   // Note that the last reply sent is held outside render, so a second tap before the next render reuses its key and the service takes the reply once.
   const sent = useRef<SentReply | undefined>(undefined);
+  // The keys of the replies still out, so a second tap on the same reply before the next render sends nothing, while another reply still goes.
+  const out = useRef(new Set<string>());
   const [note, setNote] = useState<string | undefined>(undefined);
+  const pictures = useAttachedPictures(setNote);
 
   return useMemo(() => {
     const send = () => {
       const kept = words.trim();
 
-      if (kept === "") return;
-      const key = sent.current?.words === kept ? sent.current.key : randomUUID();
-      sent.current = { words: kept, key };
+      // Note that a picture still being read holds the send back, since it would land in the field after the reply had gone without it.
+      if (kept === "" || pictures.reading) return;
+
+      // A picture past a bound holds the send back, saying why, as an agent's composer does.
+      if (pictures.refusal !== undefined) {
+        setNote(pictures.refusal);
+        buzz(BUZZ.WARNING);
+
+        return;
+      }
+
+      const files = pictures.files ?? [];
+      const again = sameSend(sent.current, kept, files) ? sent.current : undefined;
+      const key = again?.key ?? randomUUID();
+
+      if (out.current.has(key)) return;
+      out.current.add(key);
+      sent.current = { words: kept, files, key };
       setNote(undefined);
       setWords("");
+      // The pictures go with the words, and come back with them where the reply is refused.
+      const carried = pictures.take();
+
       // Note that a reply refused says why under the box, where its words go back, rather than in the notice.
       write(
         () =>
           acts[ACT_KIND.TASKS_COMMENT_ACT]({
             taskId: taskId,
             threadId,
-            action: { action: DESCRIPTION_COMMENT_ACTION.REPLY, clientKey: key, words: kept },
+            action: {
+              action: DESCRIPTION_COMMENT_ACTION.REPLY,
+              clientKey: key,
+              words: kept,
+              ...(carried.length === 0
+                ? undefined
+                : { attachments: carried.map(({ file }) => file) }),
+            },
           }),
         {
           refused: (answer) => ("thread" in answer ? undefined : COMMENT_NOTE.NOT_POSTED),
@@ -278,24 +504,68 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
           inPlace: (said) => {
             // Note that words typed while it was out stay, after the reply given back, so neither is lost.
             setWords((now) => (now.trim() === "" ? kept : `${kept}\n\n${now}`));
+            pictures.putBack(carried);
             setNote(said);
           },
           went: BUZZ.SUCCESS,
         },
-      ).then((went) => {
-        // Note that a reply answered after a later one went lets go of its key only while it is still the one held.
-        if (went && sent.current?.key === key) sent.current = undefined;
-      });
+      )
+        .then((went) => {
+          // Note that a reply answered after a later one went lets go of its key only while it is still the one held.
+          if (went && sent.current?.key === key) sent.current = undefined;
+        })
+        .finally(() => out.current.delete(key));
     };
 
     return {
       words,
       onWords: setWords,
-      sendable: words.trim() !== "",
+      pictures,
+      sendable: words.trim() !== "" && !pictures.reading,
       send,
       note,
     };
-  }, [acts, write, taskId, threadId, words, note]);
+  }, [acts, write, taskId, threadId, words, note, pictures]);
+}
+
+/**
+ * Resolves a thread that stands open, or reopens one resolved, as the
+ * panel's check on a thread's first comment does (`TASKS_COMMENT_ACT` with
+ * `resolve` or `reopen`): the host draws it on the press, and one refused is
+ * taken back and said in the notice, in the panel's words for it.
+ */
+export function useCommentSettle(taskId: string): (thread: DescriptionCommentThread) => void {
+  const acts = useHostActs();
+  const write = useWrite();
+
+  return (thread) => {
+    const action = threadOpen(thread)
+      ? DESCRIPTION_COMMENT_ACTION.RESOLVE
+      : DESCRIPTION_COMMENT_ACTION.REOPEN;
+
+    void write(
+      () =>
+        acts[ACT_KIND.TASKS_COMMENT_ACT]({
+          taskId,
+          threadId: thread.id,
+          action: { action },
+        }),
+      {
+        refused: (answer) =>
+          "thread" in answer || "deleted" in answer
+            ? undefined
+            : "refused" in answer
+              ? commentRefusalNote(answer.refused)
+              : COMMENT_NOTE.NOT_CHANGED,
+        unanswered: COMMENT_NOTE.NOT_CHANGED,
+        // Note that a resolve or reopen sent again lands the thread where it was asked to stand, so the notice offers Try again.
+        retry: true,
+        // Note that the thread is the write's subject, so a newer resolve or reopen voids an older one's Try again.
+        subject: { kind: WRITE_SUBJECT.TASK_COMMENT, id: thread.id },
+        went: BUZZ.SUCCESS,
+      },
+    );
+  };
 }
 
 /** The open threads standing on each block of a description, by the block's start, the oldest started first. */
@@ -322,6 +592,8 @@ export function threadsOnBlocks(
 export interface CommentStart {
   readonly words: string;
   readonly onWords: (words: string) => void;
+  /** The pictures the thread's first comment carries, attached from Photos. */
+  readonly pictures: AttachedPictures;
   readonly sendable: boolean;
   readonly send: (refused: (start: RefusedStart, noticed: boolean) => void) => string | undefined;
   readonly note: string | undefined;
@@ -363,15 +635,47 @@ export function useCommentStart(
   // Note that a second tap before the screen has gone would start the thread twice, so the send in flight is held here.
   const inFlight = useRef(false);
   const quote = block?.quote;
+  // The pictures held now, as the keeper last heard them, which a send carries and a refusal keeps again.
+  const heldPictures = useRef<readonly HeldPicture[]>(startDraftOf(taskId, block)?.pictures ?? []);
 
-  // Note that a block read after the first draw takes up the draft kept for it, where nothing was typed meanwhile.
-  useEffect(() => {
-    const kept = startDraftOf(taskId, block);
+  // Note that the pictures picked are kept with the draft's words, so a rotation or a fold never drops one.
+  const pictures = useAttachedPictures(setNote, undefined, undefined, {
+    held: startDraftOf(taskId, block)?.pictures ?? [],
+    keep: (held) => {
+      heldPictures.current = held;
 
-    if (kept === undefined) return;
+      if (block === undefined) return;
+      const was = startDraftOf(taskId, block);
+
+      keepStartDraft(
+        taskId,
+        block,
+        held.length === 0 && (was?.words ?? "") === "" && was?.sent === undefined
+          ? undefined
+          : {
+              quote: block.quote,
+              words: was?.words ?? "",
+              pictures: held,
+              sent: was?.sent,
+              note: was?.note,
+            },
+      );
+    },
+  });
+
+  // Note that a block read after the first draw takes up the draft kept for it, where nothing was typed or picked meanwhile.
+  const takeUp = useEffectEvent((kept: StartDraft) => {
     setLocal((was) => (was === "" ? kept.words : was));
     setSentLocal((was) => was ?? kept.sent);
     setNote((was) => was ?? kept.note);
+
+    if (pictures.attached.length === 0 && kept.pictures.length > 0) pictures.putBack(kept.pictures);
+  });
+
+  useEffect(() => {
+    const kept = startDraftOf(taskId, block);
+
+    if (kept !== undefined) takeUp(kept);
   }, [taskId, block]);
 
   const setWords = useCallback(
@@ -384,9 +688,15 @@ export function useCommentStart(
       keepStartDraft(
         taskId,
         block,
-        next === "" && was?.sent === undefined
+        next === "" && was?.sent === undefined && (was?.pictures.length ?? 0) === 0
           ? undefined
-          : { quote: block.quote, words: next, sent: was?.sent, note: was?.note },
+          : {
+              quote: block.quote,
+              words: next,
+              pictures: was?.pictures ?? [],
+              sent: was?.sent,
+              note: was?.note,
+            },
       );
     },
     [taskId, block],
@@ -396,15 +706,33 @@ export function useCommentStart(
     const send = (refused: (start: RefusedStart, noticed: boolean) => void): string | undefined => {
       const kept = words.trim();
 
-      if (kept === "" || inFlight.current || block === undefined || quote === undefined) {
+      // Note that a picture still being read holds the start back, since it would land after the thread had gone without it.
+      if (
+        kept === "" ||
+        inFlight.current ||
+        pictures.reading ||
+        block === undefined ||
+        quote === undefined
+      ) {
+        return undefined;
+      }
+
+      // A picture past a bound holds the start back, saying why, as an agent's composer does.
+      if (pictures.refusal !== undefined) {
+        setNote(pictures.refusal);
+        buzz(BUZZ.WARNING);
+
         return undefined;
       }
 
       inFlight.current = true;
-      const repeated = sent?.words === kept ? sent : undefined;
+      const files = pictures.files ?? [];
+      const carried = heldPictures.current;
+      const repeated = sameSend(sent, kept, files) ? sent : undefined;
 
       const start: SentStart = {
         words: kept,
+        files,
         key: repeated?.key ?? randomUUID(),
         threadId: repeated?.threadId ?? randomUUID(),
       };
@@ -427,7 +755,7 @@ export function useCommentStart(
               anchor: { from: block.from, to: block.to },
               text,
               words: kept,
-              attachments: [],
+              attachments: [...files],
             },
           }),
         {
@@ -447,7 +775,13 @@ export function useCommentStart(
               (now.quote === quote && (now.sent !== undefined || now.words.trim() === ""));
 
             if (ours) {
-              keepStartDraft(taskId, block, { quote, words: kept, sent: start, note: why });
+              keepStartDraft(taskId, block, {
+                quote,
+                words: kept,
+                pictures: carried,
+                sent: start,
+                note: why,
+              });
             }
 
             refused({ ...start, note: why }, noticed);
@@ -464,9 +798,10 @@ export function useCommentStart(
     return {
       words,
       onWords: setWords,
-      sendable: words.trim() !== "" && quote !== undefined,
+      pictures,
+      sendable: words.trim() !== "" && quote !== undefined && !pictures.reading,
       send,
       note,
     };
-  }, [acts, write, taskId, text, block, quote, words, setWords, sent, note]);
+  }, [acts, write, taskId, text, block, quote, words, setWords, sent, note, pictures]);
 }

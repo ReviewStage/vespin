@@ -51,7 +51,6 @@
         "packages/ui/src/marks/"
       ],
       "baseline": {
-        "packages/panel/src/tasks/inbox-item-chip.tsx": 1,
         "packages/panel/src/tasks/inbox-item-parts.tsx": 1
       }
     },

@@ -12,6 +12,7 @@ export function fakeClis(ready: LocalAgentClis["ready"] = () => Effect.void): Lo
       claude: "/opt/agent/agent-tools/claude",
       codex: "/opt/agent/agent-tools/codex",
       gh: "/opt/agent/agent-tools/gh",
+      cursor: "/opt/agent/agent-tools/cursor-sdk/dist/esm/index.js",
     },
     ready,
   };

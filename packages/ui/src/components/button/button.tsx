@@ -30,7 +30,8 @@ import { SpinnerRing } from "../spinner/spinner.js";
  * for one that destroys, `danger-outline` for a destructive act that is
  * not the place's own, and `ink` for one that ends what the place holds, a
  * solid fill in the text's own color apart from the quiet ones beside it,
- * as a call's End call is. `subtle` is a quiet one in the muted ink, for a
+ * as a call's End call is, or for a player's Play, the one press it
+ * exists for, standing apart from the quiet ones beside it. `subtle` is a quiet one in the muted ink, for a
  * press that stands among quiet words rather than controls, and must not
  * outweigh them (a pull request header's “+ Label”), lighting as a
  * quiet one does. Two tinted looks carry news on a wash of their
@@ -117,7 +118,9 @@ import { SpinnerRing } from "../spinner/spinner.js";
  * agent" over "Start"). The label holds the words it is drawn with, so a
  * reader who says what they see still reaches it (WCAG's label in name).
  *
- * An IconButton comes in two sizes: the control's own, and `compact`, the
+ * An IconButton comes in three sizes: the control's own; `large`, a disc
+ * a few points wider with a larger glyph, for the one press a player exists
+ * for, its Play, which stands apart from all else it draws; and `compact`, the
  * smaller square a row's marks stand in at its end (a sidebar row's Pin,
  * Archive, or ⋯, a message's Copy), which its row reveals under the
  * pointer. A compact quiet one draws no ground under the pointer, because
@@ -182,6 +185,14 @@ export const BUTTON_SIZE = {
 } as const;
 
 export type ButtonSize = (typeof BUTTON_SIZE)[keyof typeof BUTTON_SIZE];
+
+/** How big a glyph-alone button is: a button's own sizes, or `large`, the one press a player exists for (a sound clip's Play), its glyph larger with it. */
+export const ICON_BUTTON_SIZE = {
+  ...BUTTON_SIZE,
+  LARGE: "large",
+} as const;
+
+export type IconButtonSize = (typeof ICON_BUTTON_SIZE)[keyof typeof ICON_BUTTON_SIZE];
 
 /** What a quiet glyph-alone button lights under the pointer, while its menu is open, and while a toggle is on: a fill under it, or its glyph alone. */
 export const BUTTON_LIGHT = {
@@ -289,10 +300,12 @@ type BoxSize = NonNullable<VariantProps<typeof buttonVariants>["size"]>;
 /** The box a button of `variant` is drawn in, at `size`, with words or a glyph alone. */
 function boxSize(
   variant: ButtonVariant | undefined,
-  size: ButtonSize | undefined,
+  size: IconButtonSize | undefined,
   iconOnly: boolean,
 ): BoxSize {
   const compact = size === BUTTON_SIZE.COMPACT;
+
+  if (iconOnly && size === ICON_BUTTON_SIZE.LARGE) return "icon-large";
 
   if (iconOnly) return compact ? "icon-compact" : "icon";
 
@@ -327,7 +340,7 @@ function buttonLook({
   fades = true,
 }: {
   variant: ButtonVariant | undefined;
-  size: ButtonSize | undefined;
+  size: IconButtonSize | undefined;
   corners: ButtonCorners | undefined;
   iconOnly: boolean;
   /** Whether its press is out, which it says with a turning cursor. */
@@ -790,7 +803,7 @@ function submitGlyph(state: SubmitState): React.JSX.Element {
 /** Whether a glyph-alone button of `variant` lights its glyph alone: a quiet one asked to, or a compact quiet one unasked, since the row it stands in is already lit. */
 function lightsGlyph(
   variant: ButtonVariant | undefined,
-  size: ButtonSize | undefined,
+  size: IconButtonSize | undefined,
   lights: ButtonLight | undefined,
 ): boolean {
   if ((variant ?? BUTTON_VARIANT.QUIET) !== BUTTON_VARIANT.QUIET) return false;
@@ -805,7 +818,7 @@ function lightsGlyph(
  * size, or a submit's, which its state decides, always at the control's.
  */
 type IconProps =
-  | { icon: ReactNode; submit?: undefined; size?: ButtonSize }
+  | { icon: ReactNode; submit?: undefined; size?: IconButtonSize }
   | {
       icon?: undefined;
       /** Where the send it makes stands; it is round and wears its state's glyph. */
@@ -859,7 +872,7 @@ export function IconButton({
         fades: submit === undefined,
       })}
       data-icon-only="true"
-      data-size={size === BUTTON_SIZE.COMPACT ? BUTTON_SIZE.COMPACT : undefined}
+      data-size={size === undefined || size === BUTTON_SIZE.CONTROL ? undefined : size}
       data-lights={lightsGlyph(props.variant, size, lights) ? BUTTON_LIGHT.GLYPH : undefined}
       data-submit={submit}
       data-done={landed || undefined}

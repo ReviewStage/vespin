@@ -12,15 +12,13 @@
  * stands in, or after every row while it stands with no line yet; and
  * "Call ended", or the teammate's chip and "ended a call", and how long it
  * ran, to the end of its last line on the call's clock, after the row its
- * last line stands in, once it no longer stands (`callItemsOf`). All of it
- * is drawn only while the Voice experiment is on (`useVoiceShown`).
+ * last line stands in, once it no longer stands (`callItemsOf`).
  */
 
 import { messageWords } from "@repo/features/agent-parts";
 import type { AgentSender, AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { workingTime } from "@repo/features/time-format";
-import type { CallMarks, CallSpan } from "@repo/features/voice-call-lines";
-import { EXPERIMENT } from "@repo/settings";
+import type { CallSpan } from "@repo/features/voice-call-lines";
 import {
   CALL_MARK_END,
   CallMark,
@@ -32,11 +30,9 @@ import {
 } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
 import { MESSAGE_ROLE } from "@repo/wire";
-import { useQuery } from "@tanstack/react-query";
 import { Fragment } from "react";
 import { ActorRef } from "../actor-ref.js";
 import { Message, MessageContent } from "../ai-elements/message.js";
-import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { CopyMessageAction } from "./copy-message.js";
 import { TranscriptWords } from "./transcript-blocks.js";
 
@@ -47,14 +43,6 @@ const CALL_MARK_WORDS = {
   ENDED: "Call ended",
   TEAMMATE_ENDED: "ended a call",
 } as const;
-
-/** No call begins or ends among the rows. */
-export const NO_CALL_MARKS: CallMarks = { opens: new Map(), closes: new Map(), opening: [] };
-
-/** Whether a call's lines are drawn as a call's: while the account has the Voice experiment on. */
-export function useVoiceShown(): boolean {
-  return useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.VOICE) }).data === true;
-}
 
 /** A line the voice said on a call, drawn as the agent's own reply is: its words, then when it was said and its Copy. */
 export function VoiceLineRow({ message }: { message: AgentTranscriptMessage }): React.JSX.Element {

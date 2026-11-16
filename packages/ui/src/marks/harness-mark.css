@@ -7,4 +7,11 @@
   .ui-harness-mark {
     flex: none;
   }
+
+  /* Cursor's cube is one ink, as Cursor's own brand files draw it: the text's
+     own, near-white on dark and near-black on light, never the muted ink of
+     the row it leads. */
+  .ui-harness-mark[data-provider="cursor"] {
+    color: var(--ui-color-text);
+  }
 }

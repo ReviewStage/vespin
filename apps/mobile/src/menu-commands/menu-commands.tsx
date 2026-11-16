@@ -10,6 +10,8 @@ import {
   menuFocusOf,
 } from "@repo/features/ios-menu-commands";
 import {
+  GITHUB_PAGE,
+  gitHubPageLink,
   LINK_DESTINATION,
   type LinkDestination,
   linkOf,
@@ -49,7 +51,6 @@ import {
   useRouter,
 } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { useAgentPullRequests } from "../agents/use-agent.js";
 import { useDetailOnly } from "../detail-only.js";
 import {
   DETAIL_FRONT,
@@ -146,15 +147,18 @@ function rootPlaceOf(pathname: string): SidebarPlace | undefined {
 
 /**
  * What a page pushed over a split view's detail puts in front of the menu:
- * an agent for its own page, its pull request, or a page it showed, so Stop
+ * an agent for its own page, a pull request opened from it, or a page it showed, so Stop
  * and Pin follow it; a task for its page, comments, history, or versions.
  */
 function pushedFocus(page: PushedPage): MenuFocus {
   switch (page.kind) {
     case PUSHED_PAGE.AGENT:
-    case PUSHED_PAGE.PULL_REQUEST:
     case PUSHED_PAGE.AGENT_PAGE:
       return { kind: MENU_SUBJECT.AGENT, id: page.agentId };
+    case PUSHED_PAGE.PULL_REQUEST:
+      return page.agentId === undefined
+        ? { kind: MENU_SUBJECT.NONE }
+        : { kind: MENU_SUBJECT.AGENT, id: page.agentId };
     case PUSHED_PAGE.TASK:
     case PUSHED_PAGE.TASK_PAGE:
     case PUSHED_PAGE.COMMENTS:
@@ -177,10 +181,6 @@ function useSubject(signedIn: boolean): Subject {
     : pushed === undefined
       ? menuFocusOf(pathname, selected)
       : pushedFocus(pushed);
-
-  const pulled = useAgentPullRequests(
-    pushed?.kind === PUSHED_PAGE.PULL_REQUEST ? pushed.agentId : "",
-  );
 
   const thread = useInboxThread(focus.kind === MENU_SUBJECT.THREAD ? focus.id : undefined).listed;
   const collections = useTaskListCollections();
@@ -240,7 +240,11 @@ function useSubject(signedIn: boolean): Subject {
 
   // Note that a pushed pull request or page opens itself in the browser, not the agent or task it stands over.
   if (pushed?.kind === PUSHED_PAGE.PULL_REQUEST) {
-    address = pulled.find(({ number }) => number === pushed.number)?.url;
+    address = gitHubPageLink({
+      kind: GITHUB_PAGE.PULL_REQUEST,
+      repository: pushed.repository,
+      number: pushed.number,
+    });
   } else if (pushed?.kind === PUSHED_PAGE.AGENT_PAGE && agent !== undefined) {
     address = linked({ kind: LINK_DESTINATION.PAGE, taskId: agent.taskId, pageId: pushed.pageId });
   } else if (pushed?.kind === PUSHED_PAGE.TASK_PAGE) {

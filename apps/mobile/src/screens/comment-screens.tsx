@@ -1,12 +1,14 @@
-// comment-screens.tsx -- one thread of a task's description comments, pushed from the task's Overview: its comments as a thread's messages, the words it stands on as its heading, and the reply field docked at its foot; and a new thread on one block of the description, its words as the heading and the comment field docked under them.
+// comment-screens.tsx -- one thread of a task's description comments, pushed from the task's Overview: its comments as a thread's messages, the words it stands on as its heading, Resolve or Reopen in its bar, and the reply field docked at its foot; and a new thread on one block of the description, its words as the heading and the comment field docked under them.
 
 import { type DescriptionBlock, descriptionBlocks } from "@repo/features/description-blocks";
 import { COMMENT_NOTE } from "@repo/features/description-comment-notes";
+import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { agentName, providerOf } from "@repo/features/model-label";
 import { readFailedWords, readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import {
   AskNote,
+  AttachedPictures,
   BAR_TITLE,
   BUTTON_LOOK,
   Composer,
@@ -14,6 +16,7 @@ import {
   DetailPage,
   EmptyState,
   GLYPH,
+  glyphSymbol,
   NOTICE_KIND,
   PATH_PART,
   Screen,
@@ -30,9 +33,12 @@ import { useOpenLink } from "../open-link.js";
 import { useInFront } from "../place-columns.js";
 import { useOnOwnTab } from "../tab-route.js";
 import {
+  type CommentReply,
   threadMessages,
   threadOpen,
+  useCommentMedia,
   useCommentReply,
+  useCommentSettle,
   useCommentStart,
   useTaskComments,
   useTaskCommentsHeld,
@@ -48,7 +54,21 @@ const WORDS = {
   RESOLVED: "Resolved",
   GONE: "Original content deleted",
   NOT_FOUND: "Comment not found",
+  RESOLVE: "Resolve",
+  REOPEN: "Reopen",
 } as const;
+
+/** A comment field's head: the pictures it carries, each taken off on a press, and what its last send or a picture's bound said; none while it holds neither. */
+function fieldHead(pictures: CommentReply["pictures"], note: string | undefined) {
+  if (pictures.attached.length === 0 && note === undefined) return undefined;
+
+  return (
+    <>
+      <AttachedPictures pictures={pictures.attached} onDetach={pictures.detach} />
+      {note === undefined ? null : <AskNote words={note} />}
+    </>
+  );
+}
 
 /** What a thread's page says while the task's comments are first read. */
 const READING_COMMENTS = readingWords("the comments");
@@ -190,8 +210,10 @@ function quoteOf(quote: string, anchored: boolean): string {
  * field docked over its foot, which answers it whether it stands open or
  * resolved, as the panel's thread does, what a reply that did not land
  * said standing in the field's head. The task's path stands small in
- * the bar, as a page of the task's does. In a window wide enough for three
- * columns it stands pushed over the split view's detail instead.
+ * the bar, as a page of the task's does, and the bar's trailing button
+ * resolves the thread, or reopens it once resolved, as the panel's check
+ * on its first comment does. In a window wide enough for three columns it
+ * stands pushed over the split view's detail instead.
  */
 export function CommentThreadScreen() {
   const { id = "", task: taskId = "" } = useLocalSearchParams<{ id: string; task: string }>();
@@ -216,11 +238,13 @@ export function CommentThread({
   const covered = useDetailCovered();
   const inFront = columnShown && !covered;
   const colors = useColors();
-  const openLink = useOpenLink();
   const overview = useTaskOverview(taskId);
+  const openLink = useOpenLink(overview?.task.workspaceId);
   const threads = useTaskComments(overview?.task.id);
   const thread = threads.find((each) => each.id === id);
   const reply = useCommentReply(taskId, id);
+  const media = useCommentMedia(overview?.task.id, thread);
+  const settle = useCommentSettle(taskId);
   const pictureOf = useMemberPictures();
 
   const router = useRouter();
@@ -273,8 +297,17 @@ export function CommentThread({
     onWords: reply.onWords,
     sendable: reply.sendable,
     onSend: reply.send,
-    head: reply.note === undefined ? undefined : <AskNote words={reply.note} />,
+    head: fieldHead(reply.pictures, reply.note),
+    onAdd: reply.pictures.attach,
+    onDropPictures: reply.pictures.drop,
   };
+
+  // Note that a split view's detail bar stands Resolve or Reopen among the page's acts, as a compact window's toolbar stands it, since a column draws no stack toolbar.
+  const settleAct = (shown: DescriptionCommentThread) => ({
+    label: threadOpen(shown) ? WORDS.RESOLVE : WORDS.REOPEN,
+    symbol: threadOpen(shown) ? GLYPH.CHECK : GLYPH.RESTORE,
+    onPress: () => settle(shown),
+  });
 
   const page = (foot?: ReactNode) =>
     thread === undefined ? undefined : (
@@ -283,10 +316,11 @@ export function CommentThread({
         path={path}
         status={task?.status}
         title={quoteOf(thread.quote, thread.anchor !== undefined)}
-        messages={threadMessages(thread, agents, pictureOf)}
+        messages={threadMessages(thread, agents, pictureOf, media)}
         repository={task?.repository}
         onOpenLink={openLink}
         standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}
+        acts={inColumn ? [settleAct(thread)] : undefined}
         foot={foot}
       />
     );
@@ -310,6 +344,15 @@ export function CommentThread({
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
+      {thread === undefined ? null : (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(threadOpen(thread) ? GLYPH.CHECK : GLYPH.RESTORE)}
+            accessibilityLabel={threadOpen(thread) ? WORDS.RESOLVE : WORDS.REOPEN}
+            onPress={() => settle(thread)}
+          />
+        </Stack.Toolbar>
+      )}
       {thread === undefined ? (
         <Screen>
           <ThreadMissing taskId={taskId} overview={overview} />
@@ -392,8 +435,8 @@ export function NewComment({
   const detail = useDetailLeave();
   const onOwnTab = useOnOwnTab();
   const colors = useColors();
-  const openLink = useOpenLink();
   const overview = useTaskOverview(taskId);
+  const openLink = useOpenLink(overview?.task.workspaceId);
   const body = overview?.document?.description.body ?? "";
 
   // Note that the block must still quote the words it was opened on, so an edit that put other words at the same offsets before this read finds nothing rather than the wrong block.
@@ -467,7 +510,9 @@ export function NewComment({
     onWords: start.onWords,
     sendable: start.sendable,
     onSend: send,
-    head: start.note === undefined ? undefined : <AskNote words={start.note} />,
+    head: fieldHead(start.pictures, start.note),
+    onAdd: start.pictures.attach,
+    onDropPictures: start.pictures.drop,
   };
 
   const empty = <BlockState overview={overview} />;

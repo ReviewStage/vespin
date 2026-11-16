@@ -22,11 +22,14 @@ onFlowComplete:
 - extendedWaitUntil:
     visible: "Inbox"
     timeout: 30000
-- tapOn: "Tasks"
-- scrollUntilVisible:
-    element: "Teammate invitations"
-    direction: DOWN
-- tapOn: "Teammate invitations"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Teammate invitations"
 - scrollUntilVisible:
     element: "Build teammate invitations"
     direction: DOWN

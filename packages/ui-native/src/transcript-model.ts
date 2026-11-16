@@ -48,9 +48,20 @@ import {
   type AgentTranscriptMessage,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
+import {
+  ATTACHMENT_VIEW,
+  attachmentText,
+  attachmentView,
+  chipBase64,
+  type FileChip,
+  linesLabel,
+  sizeLabel,
+} from "@repo/features/attachment-model";
 import { fileName } from "@repo/features/code-ref-words";
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
+import { messageFileChips } from "@repo/features/message-files";
+import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { SUGGESTION_LEAD, suggestionWords } from "@repo/features/reply-button-wire";
 import { callHeading, WORKING_LINE, workedForText } from "@repo/features/time-format";
@@ -193,6 +204,10 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.SAID;
       readonly words: string;
+      /** The pictures the line carried, drawn over its words as the panel draws them; none where it carried none. */
+      readonly pictures?: readonly SaidPicture[] | undefined;
+      /** The files the line carried that are no picture, such as a PDF, drawn under its words as their chips; none where it carried none. */
+      readonly files?: readonly SaidFile[] | undefined;
       /** Who sent it, where the reader did not. */
       readonly sender: string | undefined;
       /** Who sent an automation's prompt, or the agent whose suggestion a line was sent from, part by part; it stands over the sender. */
@@ -431,6 +446,79 @@ function suggestionFrom(
   return [{ ...by, after: sender === undefined ? STARTED_BY.YOU : STARTED_BY.MEMBER(sender) }];
 }
 
+/** The media types a sent line's file is drawn as a picture for. */
+const PICTURE_TYPES: ReadonlySet<string> = new Set(Object.values(PICTURE_TYPE));
+
+/** A picture a sent line carried: its place on the line, its name, and its bytes where the line kept them, or the picture it was kept as, read by its id. */
+export interface SaidPicture {
+  readonly key: string;
+  readonly name: string;
+  readonly url: string | undefined;
+  readonly pictureId: string | undefined;
+}
+
+/** The pictures a sent line carried, in order, as the panel lists a line's files (`messageFileChips`); a file that is no picture, such as a PDF, stands as its chip (`saidFiles`). */
+function saidPictures(line: AgentTranscriptMessage): readonly SaidPicture[] {
+  return messageFileChips(line).flatMap((file, index): SaidPicture[] =>
+    PICTURE_TYPES.has(file.mediaType)
+      ? [
+          {
+            key: String(index),
+            name: file.name,
+            // Note that a picture kept apart is read by its id, so the empty `data:` address its line keeps in the bytes' place never stands in for it.
+            url: file.pictureId === undefined && file.url !== "" ? file.url : undefined,
+            pictureId: file.pictureId,
+          },
+        ]
+      : [],
+  );
+}
+
+/** A file a sent line carried that is no picture, such as a PDF or a text file: its place on the line, its name and type, its bytes where the line kept them, and its size in words. */
+export interface SaidFile {
+  readonly key: string;
+  readonly name: string;
+  readonly mediaType: string;
+  /** The file's bytes in base64; none where the line kept none, which leaves the chip its name alone. */
+  readonly base64: string | undefined;
+  readonly size: string | undefined;
+}
+
+/** A text file's words, or none where its bytes are no base64 the system reads. */
+function saidWords(base64: string): string | undefined {
+  try {
+    return attachmentText(base64);
+  } catch {
+    return undefined;
+  }
+}
+
+/** What a sent file's chip says of its size, as the panel's: a text file's count of lines, any other file's bytes. Note that a damaged text file says its bytes, as the panel's chip does, so the row still draws. */
+function saidSize(file: FileChip, base64: string): string {
+  const words = attachmentView(file) === ATTACHMENT_VIEW.TEXT ? saidWords(base64) : undefined;
+
+  return words === undefined ? sizeLabel(base64) : linesLabel(words);
+}
+
+/** The files a sent line carried that are no picture, in order, as the panel lists a line's files (`messageFileChips`). */
+function saidFiles(line: AgentTranscriptMessage): readonly SaidFile[] {
+  return messageFileChips(line).flatMap((file, index): SaidFile[] => {
+    if (PICTURE_TYPES.has(file.mediaType)) return [];
+    const base64 = chipBase64(file);
+    const kept = base64 === "" ? undefined : base64;
+
+    return [
+      {
+        key: String(index),
+        name: file.name,
+        mediaType: file.mediaType,
+        base64: kept,
+        size: kept === undefined ? undefined : saidSize(file, kept),
+      },
+    ];
+  });
+}
+
 /** A line someone sent, as its item: one sent from a suggestion headed by who suggested it, its words without the lead that names that agent to the agent reading them. */
 function saidItem(
   line: AgentTranscriptMessage,
@@ -453,6 +541,8 @@ function saidItem(
     ...base,
     kind: TRANSCRIPT_ITEM.SAID,
     words: from === undefined ? words : suggestionWords(words),
+    pictures: saidPictures(line),
+    files: saidFiles(line),
     sender: started ? undefined : sender,
     from,
     by: sender === undefined ? undefined : line.sentBy?.userId,
@@ -463,7 +553,7 @@ function saidItem(
   };
 }
 
-/** An automation's prompt as its agent's first line, in place of the line's own words and sender. */
+/** An automation's prompt as its agent's first line, in place of the line's own words and sender, with the pictures and files the line carried. */
 function originItem(
   line: AgentTranscriptMessage,
   base: ItemBase,
@@ -473,6 +563,8 @@ function originItem(
     ...base,
     kind: TRANSCRIPT_ITEM.SAID,
     words: origin.prompt ?? messageWords(line),
+    pictures: saidPictures(line),
+    files: saidFiles(line),
     sender: undefined,
     by: undefined,
     at: line.sentAt,
@@ -1026,9 +1118,36 @@ export function openCuts(items: readonly TranscriptItem[]): readonly AgentPartCu
   );
 }
 
+/** A file a sent line carried, as the app writes its bytes for the chip that opens it: the line it rode in on, by the line's own id, and the file, which holds its place on that line. */
+export interface ShownFile {
+  readonly message: string;
+  readonly file: SaidFile;
+}
+
+/** Every file the items' sent lines carried bytes of, which the app writes where the chip opens it from. */
+export function shownFiles(items: readonly TranscriptItem[]): readonly ShownFile[] {
+  return items.flatMap((item) =>
+    item.kind === TRANSCRIPT_ITEM.SAID
+      ? (item.files ?? []).flatMap((file) =>
+          // Note that a line keeps its own id as its row, while a line that reached a turn under way shares the turn's message with every other such line, so the row keys its files apart.
+          file.base64 === undefined ? [] : [{ message: item.place.row, file }],
+        )
+      : [],
+  );
+}
+
 /** The ids of every picture and recording the items show, which the list reads the bytes of. */
 export function shownMediaIds(items: readonly TranscriptItem[]): readonly string[] {
-  return items.flatMap((item) =>
-    item.kind === TRANSCRIPT_ITEM.MEDIA ? item.media.map(({ id }) => id) : [],
-  );
+  return items.flatMap((item) => {
+    if (item.kind === TRANSCRIPT_ITEM.MEDIA) return item.media.map(({ id }) => id);
+
+    // Note that a picture a sent line kept by its id is read as the agent's shown ones are, through the same door.
+    if (item.kind === TRANSCRIPT_ITEM.SAID) {
+      return (item.pictures ?? []).flatMap(({ pictureId }) =>
+        pictureId === undefined ? [] : [pictureId],
+      );
+    }
+
+    return [];
+  });
 }

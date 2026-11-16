@@ -22,7 +22,6 @@ import { providerOf } from "../tasks/agent-model.js";
 import { useComputerApps } from "../tasks/agent-pictures.js";
 import { WorkspaceDirectory } from "../tasks/chip-cards.js";
 import { FileTypeIcon } from "../tasks/file-type-icon.js";
-import { InboxItemChipGlyph } from "../tasks/inbox-item-chip.js";
 import { IssueMark } from "../tasks/issue-mark.js";
 import { useMacAppIconAddress } from "../tasks/mac-app-card.js";
 import { ReadAgentModel } from "../tasks/mentioned-agent-card.js";
@@ -258,7 +257,8 @@ const ENTITY_MARK: EntityMarks = {
   [ENTITY_KIND.HOME]: () => <EntityGlyph kind={ENTITY_KIND.HOME} />,
   [ENTITY_KIND.BOARD]: () => <EntityGlyph kind={ENTITY_KIND.BOARD} />,
   [ENTITY_KIND.INBOX]: () => <EntityGlyph kind={ENTITY_KIND.INBOX} />,
-  [ENTITY_KIND.INBOX_ITEM]: (item) => <InboxItemChipGlyph place={item} />,
+  // A thread's chip wears the Inbox's own glyph, whatever it asks, so it reads as a place in the Inbox.
+  [ENTITY_KIND.INBOX_ITEM]: () => <EntityGlyph kind={ENTITY_KIND.INBOX} />,
   [ENTITY_KIND.AUTOMATIONS]: () => <EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />,
   [ENTITY_KIND.AUTOMATION]: AUTOMATION_MARK,
   [ENTITY_KIND.AUTOMATION_RUN]: AUTOMATION_MARK,

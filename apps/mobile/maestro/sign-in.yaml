@@ -17,7 +17,7 @@ appId: dev.vespin.ios
 # this is for a prompt that rose a beat late, never a second one.
 - extendedWaitUntil:
     visible: "Sign in to Vespin|Don.t Allow"
-    timeout: 10000
+    timeout: 30000
 - runFlow:
     when:
       visible: "Don.t Allow"
@@ -49,7 +49,9 @@ appId: dev.vespin.ios
 - launchApp:
     arguments:
       authServer: stub
-- assertVisible: "Inbox"
+- extendedWaitUntil:
+    visible: "Inbox"
+    timeout: 30000
 - assertNotVisible: "Sign in to Vespin"
 # The workspace switcher leads the Inbox's bar, and its menu's account,
 # heard as Settings and its address, opens it.

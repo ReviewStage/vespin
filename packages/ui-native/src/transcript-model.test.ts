@@ -7,6 +7,7 @@ import {
   NO_TOGGLES,
   openCuts,
   SHOWN_MEDIA,
+  shownFiles,
   TRANSCRIPT_ITEM,
   transcriptItems,
   transcriptOriginOf,
@@ -14,6 +15,7 @@ import {
 } from "./transcript-model.js";
 
 const PICTURE = { id: "picture-1", mediaType: "image/png", width: 320, height: 180, byteCount: 10 };
+const SHOT = "data:image/png;base64,iVBORw0KGgo=";
 const CLIP = { id: "clip-1", mediaType: "audio/mpeg", width: 0, height: 0, byteCount: 10 };
 
 describe("transcriptItems", () => {
@@ -63,7 +65,95 @@ describe("transcriptItems", () => {
     });
   });
 
-  it("opens an automation's transcript on its run's prompt, from the automation and its pull request, leaving later lines as sent", () => {
+  it("draws the pictures a line carried over its words, one kept apart read by its id, and its other files as chips under them", () => {
+    const shot = "data:image/png;base64,iVBORw0KGgo=";
+
+    const items = transcriptItems(
+      [
+        {
+          id: "sent",
+          role: MESSAGE_ROLE.USER,
+          parts: [
+            { type: "text", text: "The button is cut off." },
+            { type: "file", mediaType: "image/png", filename: "bug.png", url: shot },
+            {
+              type: "file",
+              mediaType: "text/markdown",
+              filename: "notes.md",
+              url: "data:text/markdown;base64,YQpiCg==",
+            },
+            { type: "file", mediaType: "application/pdf", filename: "plan.pdf", url: "" },
+            {
+              type: "file",
+              mediaType: "text/plain",
+              filename: "broken.txt",
+              url: "data:text/plain;base64,%%%",
+            },
+            {
+              type: "file",
+              mediaType: "image/png",
+              filename: "kept.png",
+              url: "data:image/png;base64,",
+              providerMetadata: { app: { attachmentId: "picture-9" } },
+            },
+          ],
+        },
+      ],
+      { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
+    );
+
+    expect(items[0]).toMatchObject({
+      kind: TRANSCRIPT_ITEM.SAID,
+      words: "The button is cut off.",
+      pictures: [
+        { name: "bug.png", url: shot, pictureId: undefined },
+        { name: "kept.png", url: undefined, pictureId: "picture-9" },
+      ],
+      files: [
+        { name: "notes.md", base64: "YQpiCg==", size: "2 lines" },
+        { name: "plan.pdf", base64: undefined, size: undefined },
+        { name: "broken.txt", base64: "%%%" },
+      ],
+    });
+  });
+
+  it("keeps each line's files apart where two lines reach one turn while it runs", () => {
+    const note = (id: string, name: string) => ({
+      id,
+      role: MESSAGE_ROLE.USER,
+      parts: [
+        { type: "text" as const, text: id },
+        {
+          type: "file" as const,
+          mediaType: "text/plain",
+          filename: name,
+          url: "data:text/plain;base64,YQ==",
+        },
+      ],
+      arrivedIn: { journalId: "turn", afterStep: 1 },
+    });
+
+    const items = transcriptItems(
+      [
+        { id: "ask", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Go." }] },
+        note("first", "a.txt"),
+        note("second", "b.txt"),
+        {
+          id: "turn",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [{ type: "step-start" }, { type: "text", text: "Working." }],
+        },
+      ],
+      { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
+    );
+
+    expect(shownFiles(items).map(({ message, file }) => [message, file.name])).toEqual([
+      ["first", "a.txt"],
+      ["second", "b.txt"],
+    ]);
+  });
+
+  it("opens an automation's transcript on its run's prompt, from the automation and its pull request, with the pictures and files it carried, leaving later lines as sent", () => {
     const origin = transcriptOriginOf({
       automationId: undefined,
       automationName: "Morning triage",
@@ -84,7 +174,16 @@ describe("transcriptItems", () => {
         {
           id: "fired",
           role: MESSAGE_ROLE.USER,
-          parts: [{ type: "text", text: "Triage the new issues.\n\nFired by pull request #42." }],
+          parts: [
+            { type: "text", text: "Triage the new issues.\n\nFired by pull request #42." },
+            { type: "file", mediaType: "image/png", filename: "crash.png", url: SHOT },
+            {
+              type: "file",
+              mediaType: "text/plain",
+              filename: "crash.log",
+              url: "data:text/plain;base64,YQ==",
+            },
+          ],
         },
         { id: "later", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Thanks." }] },
       ],
@@ -107,6 +206,8 @@ describe("transcriptItems", () => {
           { words: "#42 Crash on launch", address: "https://github.com/ada/relay/pull/42" },
         ],
         body: '{"event":"opened"}',
+        pictures: [{ name: "crash.png", url: SHOT, pictureId: undefined }],
+        files: [{ name: "crash.log", base64: "YQ==" }],
       },
       { kind: TRANSCRIPT_ITEM.SAID, words: "Thanks.", sender: undefined },
     ]);

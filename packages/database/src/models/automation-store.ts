@@ -1,6 +1,5 @@
 import type { AutomationPresetName } from "@repo/features/automation-presets";
 import {
-  AUTOMATION_FIRING,
   AUTOMATION_RUN_STATUS,
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
@@ -617,38 +616,6 @@ const ScheduledRowSchema = Schema.Struct({
 /** One scheduled automation as its schedule is kept for it: its id, its workspace, whether it runs, and what fires it. */
 export type ScheduledAutomation = typeof ScheduledRowSchema.Type;
 
-const StartedAgentSchema = Schema.Struct({
-  agentId: Schema.String,
-  conversationId: Schema.String,
-  createdAt: InstantColumnSchema,
-});
-
-/** An agent one of an automation's runs started: its id, its conversation, and when it was made. */
-export type StartedRunAgent = typeof StartedAgentSchema.Type;
-
-const findStartedAgents = SqlSchema.findAll({
-  Request: Schema.Struct({ automationId: Schema.String, since: Schema.Date }),
-  Result: StartedAgentSchema,
-  execute: ({ automationId, since }) =>
-    Database.use((db) =>
-      db
-        .select({
-          agentId: agentTable.id,
-          conversationId: agentTable.conversationId,
-          createdAt: agentTable.createdAt,
-        })
-        .from(automationRun)
-        .innerJoin(agentTable, eq(agentTable.id, automationRun.agentId))
-        .where(
-          and(
-            eq(automationRun.automationId, automationId),
-            eq(automationRun.status, AUTOMATION_RUN_STATUS.STARTED),
-            gte(automationRun.firedAt, since),
-          ),
-        ),
-    ),
-});
-
 const ArchivableAgentSchema = Schema.Struct({
   runId: Schema.String,
   userId: Schema.String,
@@ -860,24 +827,6 @@ const writeClaimFailed = SqlSchema.findAll({
     ),
 });
 
-const findClaimed = SqlSchema.findAll({
-  Request: Schema.Struct({ automationId: Schema.String, since: Schema.Date }),
-  Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ automationId, since }) =>
-    Database.use((db) =>
-      db
-        .select({ id: automationRun.id })
-        .from(automationRun)
-        .where(
-          and(
-            eq(automationRun.automationId, automationId),
-            CLAIMED,
-            gte(automationRun.settledAt, since),
-          ),
-        ),
-    ),
-});
-
 const ListeningRowSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
@@ -976,45 +925,6 @@ const findIntegrationAutomations = SqlSchema.findAll({
         )
         .orderBy(asc(automation.createdAt), asc(automation.id))
         .limit(limit),
-    ),
-});
-
-const findSubjectRun = SqlSchema.findAll({
-  Request: Schema.Struct({
-    automationId: Schema.String,
-    subjectId: Schema.String,
-    since: Schema.Date,
-  }),
-  Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ automationId, subjectId, since }) =>
-    Database.use((db) =>
-      db
-        .select({ id: automationRun.id })
-        .from(automationRun)
-        .where(
-          and(
-            eq(automationRun.automationId, automationId),
-            // Note that a run is dated by when it started, because one queued may start up to an hour after it fired.
-            gte(automationRun.settledAt, since),
-            eq(automationRun.status, AUTOMATION_RUN_STATUS.STARTED),
-            sql`${automationRun.firing}->>'kind' = ${AUTOMATION_FIRING.INTEGRATION}`,
-            sql`${automationRun.firing}->'subject'->>'id' = ${subjectId}`,
-          ),
-        )
-        .limit(1),
-    ),
-});
-
-const findRunsSince = SqlSchema.findAll({
-  Request: Schema.Struct({ automationId: Schema.String, since: Schema.Date }),
-  Result: RunRowSchema,
-  execute: ({ automationId, since }) =>
-    Database.use((db) =>
-      db
-        .select(RUN_COLUMNS)
-        .from(automationRun)
-        .where(and(eq(automationRun.automationId, automationId), gte(automationRun.firedAt, since)))
-        .orderBy(desc(automationRun.firedAt), desc(automationRun.id)),
     ),
 });
 
@@ -1257,14 +1167,6 @@ export function automationRunByKey(
   return findRunByKey({ userId, automationId, dedupeKey });
 }
 
-/** The automation's runs fired at or after the instant, newest first, which its guards count. */
-export function automationRunsSince(
-  automationId: string,
-  since: Date,
-): TaskStoreEffect<readonly AutomationRun[]> {
-  return findRunsSince({ automationId, since });
-}
-
 /** One run that failed to start, as its automation's owner is told of it: the automation, why, and when. */
 export type OwnFailedRun = typeof FailedRunRowSchema.Type;
 
@@ -1310,14 +1212,6 @@ export function advanceAutomationSchedule(
  */
 export function pauseSpentAutomation(id: string, at: string): TaskStoreEffect<void> {
   return writeSpent({ id, at });
-}
-
-/** The agents the automation's runs fired at or after `since` started, and that stand still. */
-export function startedRunAgents(
-  automationId: string,
-  since: Date,
-): TaskStoreEffect<readonly StartedRunAgent[]> {
-  return findStartedAgents({ automationId, since });
 }
 
 /** The archivable agents of the run the agent belongs to, each read with how many agents the run has, so its reader can tell the run read whole. */
@@ -1554,11 +1448,6 @@ export function failClaimedRun(
   );
 }
 
-/** How many of the automation's runs claimed at or after `since` are still starting, which count against its concurrency; a claim is dated by when it was made, whenever its run fired. */
-export function claimedRunsStarting(automationId: string, since: Date): TaskStoreEffect<number> {
-  return Effect.map(findClaimed({ automationId, since }), (rows) => rows.length);
-}
-
 const WebhookRowSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
@@ -1651,18 +1540,4 @@ export function accountScheduledAutomations(
   userId: string,
 ): TaskStoreEffect<readonly (typeof ScheduledAutomationNameSchema.Type)[]> {
   return findAccountScheduledAutomations(userId);
-}
-
-/**
- * Whether the automation started a run on the integration subject named
- * (one Sentry issue, by the provider's id) at or after `since`:
- * what its per-subject cooldown holds a new delivery back by. A run that was
- * skipped or failed started nothing, so it holds nothing back.
- */
-export function subjectRunStartedSince(
-  automationId: string,
-  subjectId: string,
-  since: Date,
-): TaskStoreEffect<boolean> {
-  return Effect.map(findSubjectRun({ automationId, subjectId, since }), (rows) => rows.length > 0);
 }

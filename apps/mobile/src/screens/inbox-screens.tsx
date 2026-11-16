@@ -22,6 +22,7 @@ import {
   inboxPreview,
   inboxScopeInstead,
   inboxSettledStanding,
+  inboxThreadEventsShown,
   inboxThreadMessages,
   isDone,
   isUnread,
@@ -40,9 +41,11 @@ import {
   CHOOSE_AN_ITEM_WORDS,
   NO_RESULTS_HINT,
   noResultsForWords,
+  PATH_OPENS,
   SELECTION_WORDS,
   selectedWords,
 } from "@repo/features/words";
+import { ACT_KIND } from "@repo/host/acts";
 import { INBOX_FEED, type InboxFeed, selectWorkspaces } from "@repo/host/app-state-reads";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -71,7 +74,6 @@ import {
   type RowSubmenu,
   SCOPE_LOOK,
   type Scope,
-  ScopePicker,
   Screen,
   SplitView,
   scopeMenu,
@@ -90,7 +92,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
 import {
   PUSHED_PAGE,
@@ -100,7 +102,8 @@ import {
 } from "../detail-stack.js";
 import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
+import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
+import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import {
   useInboxActs,
@@ -112,7 +115,7 @@ import {
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
 import { useKeeping } from "../keeping.js";
-import { type PictureOf, useMemberPictures } from "../member-pictures.js";
+import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns, useInFront } from "../place-columns.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
@@ -165,9 +168,6 @@ const NARROWING_SCOPES: ReadonlySet<InboxShow> = new Set([
 /** The bar's menu of the Inbox's other acts, a round glass ⋯ as iOS draws a toolbar's menu. */
 const MORE = { label: "More", symbol: GLYPH.MORE } as const;
 
-/** What a thread's path opens, as the panel's crumbs open its task and its agent. */
-const PATH_OPENS = { TASK: "Open task", AGENT: "Open agent" } as const;
-
 /** What ends Select mode, as the system's own Done does. */
 const SELECT_DONE = "Done";
 
@@ -184,14 +184,16 @@ const STEP_WORDS = {
 } as const;
 
 /**
- * The Inbox's rows, by id, in the order the compact list drew them as one
- * was opened: its scope and its search as they stood, so an open thread's
- * arrows step through what the reader was looking at, as the panel's K and
- * J step through the list held on screen. Note that it lives as long as the
- * app does, and a thread it doesn't hold, such as one a notification opened,
- * steps through the kept scope's live rows instead.
+ * The order of rows handed to a thread about to open, by its id: the compact
+ * list's rows as they stood when one was opened, its scope and its search
+ * among them, or the order an arrow stepped from, so an open thread's arrows
+ * step through what the reader was looking at, as the panel's K and J step
+ * through the list held on screen. Note that each thread takes its own order
+ * as it opens and keeps it, so a thread opened over another, such as from a
+ * link in it, never moves the one under it; a thread handed none, such as one
+ * a notification opened, steps through the kept scope's live rows instead.
  */
-let heldOrder: readonly string[] = [];
+const handedOrders = new Map<string, readonly string[]>();
 
 /** What an agent is called where the task list does not hold it, as the panel's tab names one it cannot find. */
 const UNLISTED_AGENT = "Agent";
@@ -220,6 +222,8 @@ type InboxRowsProps = {
   readonly choosing?: RowChoosing | undefined;
   /** The Inbox's scopes, standing as the list's first row; none beside the app sidebar, where they stand as the bar's filter. */
   readonly scopes?: ListScopes | undefined;
+  /** What stands over the list while it lists no thread: why, and the way on. */
+  readonly empty?: ReactNode | undefined;
   /** Starts Select mode with the threads the system ticked at once, such as by a two-finger drag. */
   readonly onChooseStart: (ids: readonly string[]) => void;
 };
@@ -244,6 +248,7 @@ function InboxRows({
   onResolve,
   choosing,
   scopes,
+  empty,
   onChooseStart,
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
@@ -257,6 +262,7 @@ function InboxRows({
       onRefresh={onRefresh}
       choosing={choosing}
       scopes={scopes}
+      empty={empty}
       onChooseStart={onChooseStart}
     >
       <InboxItemRows
@@ -617,8 +623,12 @@ function useAgentLabel(agentId: string): {
  * names the path and which draws its own Remind me sheet, or a split view's
  * detail, which opens the sheet its screen draws outside the split view.
  */
-/** The threads either side of an open one, in the list's order; none at an end. */
-type ThreadSteps = { readonly previous?: string | undefined; readonly next?: string | undefined };
+/** The threads either side of an open one, in the order it steps through, which it hands on with each step; none at an end. */
+type ThreadSteps = {
+  readonly order: readonly string[];
+  readonly previous?: string | undefined;
+  readonly next?: string | undefined;
+};
 
 type ThreadPlace =
   | { readonly inStack: true; readonly steps: ThreadSteps }
@@ -654,13 +664,34 @@ function ThreadDetail({
 }) {
   const colors = useColors();
   const { holder, item } = listed;
-  const openLink = useOpenLink();
+  // Note that a pull request a thread names opens in the app by its task's workspace.
+  const openLink = useOpenLink(holder.task.workspaceId);
   const { name: agentName, harness } = useAgentLabel(item.agentId);
   const pictureOf = useMemberPictures();
 
   const messages = useMemo(
     () => inboxThreadMessages(item, agentName, readerId),
     [item, agentName, readerId],
+  );
+
+  const hostActs = useHostActs();
+
+  // Note that the closers are named from the thread's own workspace's members, followed here, since a link may open a thread outside the workspace the phone works in.
+  useLiveFollow(holder.task.workspaceId, (id) =>
+    hostActs[ACT_KIND.WORKSPACE_MEMBERS_FOLLOW]({ workspaceId: id }),
+  );
+
+  const memberFace = useMemberFaces(holder.task.workspaceId);
+
+  // What happened to the thread, by the message each line follows, -1 before every message read, as the panel's thread draws it, a member named as the thread's own workspace names them, since a link may open a thread of another workspace than the one chosen.
+  const events = useMemo(
+    () =>
+      inboxThreadEventsShown(item, {
+        agentName,
+        readerId,
+        memberName: (userId) => memberFace(userId)?.name,
+      }),
+    [item, agentName, readerId, memberFace],
   );
 
   // Note that a file its words draw, or its open ask's options carry, is read beside the files drawn after them, since its bytes come the same way.
@@ -752,7 +783,9 @@ function ThreadDetail({
 
   // An arrow opens the thread above or below in this one's place, as Mail's message arrows do, so Back still lands on the list.
   const stepTo = (id: string | undefined) => {
-    if (id !== undefined) router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
+    if (id === undefined || !place.inStack) return;
+    handedOrders.set(id, place.steps.order);
+    router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
   };
 
   const answer = useThreadAnswer(listed, openStarted);
@@ -778,7 +811,7 @@ function ThreadDetail({
   // Note that a split view's detail bar stands the thread's main acts as glyphs, as Mail's stands Reply and Trash, and ⋯ keeps the rest; a compact window's stack keeps them all in ⋯.
   const acts = threadActs(item, answer, doors);
 
-  // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them, inside the detail's own column beside the list where the window stands three; a compact window's stack names the path as its plain title, which can hold no menu, so there they lead the ⋯ menu instead.
+  // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them, inside the detail's own column beside the list where the window stands three, where the path heads the page over its title; a compact window's stack names the thread as its title, which can hold no menu, so there they lead the ⋯ menu instead, headed by the path.
   const pathActions = [
     {
       label: PATH_OPENS.TASK,
@@ -800,8 +833,9 @@ function ThreadDetail({
 
   const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
 
-  const drawn: readonly ThreadMessage[] = messages.map((message) => ({
+  const drawn: readonly ThreadMessage[] = messages.map((message, index) => ({
     ...message,
+    after: events.get(index),
     writer: {
       ...message.writer,
       id: message.writer.agent ? undefined : message.writer.userId,
@@ -898,6 +932,7 @@ function ThreadDetail({
       pathActions={pathActions}
       title={cardTitle(item.title)}
       messages={drawn}
+      opening={events.get(-1)}
       repository={holder.task.repository}
       onOpenLink={openLink}
       pictureSource={pictureSource}
@@ -950,10 +985,11 @@ function ThreadDetail({
 
   return (
     <>
+      {/* Note that the stack's bar names the thread in the ink, as Messages names a conversation and the agent page names its agent, since the thread opens at its newest message with its heading out of sight; its path leads the ⋯ menu. */}
       <Stack.Screen
         options={{
-          title: path.join(PATH_PART),
-          headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
+          title: cardTitle(item.title),
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         }}
       />
       <Stack.Toolbar placement="right">
@@ -973,7 +1009,7 @@ function ThreadDetail({
           <Stack.Toolbar.Icon xcasset={GLYPH.NEXT_ITEM} renderingMode="template" />
         </Stack.Toolbar.Button>
         <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-          <Stack.Toolbar.Menu inline>
+          <Stack.Toolbar.Menu inline title={path.join(PATH_PART)}>
             {pathActions.map((action) => (
               <Stack.Toolbar.MenuAction
                 key={action.label}
@@ -1198,8 +1234,9 @@ function InboxStackList(held: InboxHeld) {
       </Stack.Toolbar>
       {choosing === undefined ? null : (
         <Stack.Toolbar placement="bottom">
-          {choosing.acts.flatMap((act, at) => [
-            ...(at === 0 ? [] : [<Stack.Toolbar.Spacer key={at} />]),
+          {/* Note that the acts stand side by side between two flexible spaces, so iOS 26 draws them in one glass capsule centered over the foot, as Files and Mail group their edit bar's acts, never a glass circle each spread across it. */}
+          <Stack.Toolbar.Spacer />
+          {choosing.acts.map((act) =>
             // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass.
             isBarMenu(act) ? (
               <Stack.Toolbar.Menu
@@ -1222,41 +1259,43 @@ function InboxStackList(held: InboxHeld) {
                 )}
               </Stack.Toolbar.Button>
             ),
-          ])}
+          )}
+          <Stack.Toolbar.Spacer />
         </Stack.Toolbar>
       )}
       <Screen>
-        {listing.listed.length === 0 ? (
-          <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-            <InboxEmpty
-              show={show}
-              search={search}
-              feed={listing.feed}
-              counts={listing.counts}
-              onRetry={() => void acts.refresh()}
-              onShow={choose}
-            />
-          </ScopePicker>
-        ) : (
-          <InboxRows
-            scopes={{ label: SCOPE_LABEL, scopes }}
-            look={LIST_LOOK.PLAIN}
-            listed={listing.listed}
-            readerId={listing.readerId}
-            onSelect={(id) => {
-              heldOrder = listing.listed.map(({ item }) => item.id);
-              router.push(
-                onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })),
-              );
-            }}
-            onRefresh={acts.refresh}
-            onMark={acts.mark}
-            remindMenu={remind.itemMenu}
-            onResolve={acts.resolve}
-            choosing={choosing?.rows}
-            onChooseStart={chooseStart}
-          />
-        )}
+        {/* Note that the list stands even with no thread, its empty state its one row, so a pull still reads the Inbox again. */}
+        <InboxRows
+          scopes={{ label: SCOPE_LABEL, scopes }}
+          look={LIST_LOOK.PLAIN}
+          listed={listing.listed}
+          readerId={listing.readerId}
+          onSelect={(id) => {
+            handedOrders.set(
+              id,
+              listing.listed.map(({ item }) => item.id),
+            );
+            router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })));
+          }}
+          onRefresh={acts.refresh}
+          onMark={acts.mark}
+          remindMenu={remind.itemMenu}
+          onResolve={acts.resolve}
+          choosing={choosing?.rows}
+          onChooseStart={chooseStart}
+          empty={
+            listing.listed.length === 0 ? (
+              <InboxEmpty
+                show={show}
+                search={search}
+                feed={listing.feed}
+                counts={listing.counts}
+                onRetry={() => void acts.refresh()}
+                onShow={choose}
+              />
+            ) : undefined
+          }
+        />
       </Screen>
     </>
   );
@@ -1297,44 +1336,39 @@ function InboxSplitScreen({
   const threeColumns = useThreeColumns();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
 
-  const rows =
-    listing.listed.length === 0 ? (
-      <InboxEmpty
-        show={show}
-        search={search}
-        feed={listing.feed}
-        counts={listing.counts}
-        onRetry={() => void acts.refresh()}
-        onShow={choose}
-      />
-    ) : (
-      <InboxRows
-        scopes={threeColumns ? undefined : { label: SCOPE_LABEL, scopes, look: SCOPE_LOOK.MENU }}
-        look={LIST_LOOK.PLAIN}
-        listed={listing.listed}
-        readerId={listing.readerId}
-        selected={selected}
-        onSelect={select}
-        onRefresh={acts.refresh}
-        onMark={acts.mark}
-        remindMenu={remind.itemMenu}
-        onResolve={acts.resolve}
-        choosing={choosing?.rows}
-        onChooseStart={chooseStart}
-      />
-    );
+  const rows = (
+    <InboxRows
+      scopes={threeColumns ? undefined : { label: SCOPE_LABEL, scopes, look: SCOPE_LOOK.MENU }}
+      look={LIST_LOOK.PLAIN}
+      listed={listing.listed}
+      readerId={listing.readerId}
+      selected={selected}
+      onSelect={select}
+      onRefresh={acts.refresh}
+      onMark={acts.mark}
+      remindMenu={remind.itemMenu}
+      onResolve={acts.resolve}
+      choosing={choosing?.rows}
+      onChooseStart={chooseStart}
+      empty={
+        listing.listed.length === 0 ? (
+          <InboxEmpty
+            show={show}
+            search={search}
+            feed={listing.feed}
+            counts={listing.counts}
+            onRetry={() => void acts.refresh()}
+            onShow={choose}
+          />
+        ) : undefined
+      }
+    />
+  );
 
   // Note that beside the app sidebar the scopes leave the list for Mail's filter button in its bar, so the list starts at its first thread; a two-column window keeps the menu picker over the list.
   const list = {
-    // Note that a list with rows stands its scopes as its first row, so they scroll away with the rows, and one listing nothing keeps them over its empty state.
-    view:
-      threeColumns || listing.listed.length > 0 ? (
-        rows
-      ) : (
-        <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
-          {rows}
-        </ScopePicker>
-      ),
+    // Note that the list stands its scopes as its first row, so they scroll away with the rows, over its empty state too, which stands as its one row.
+    view: rows,
     // Note that Select mode names how many are chosen in the column's title, leads its bar with Select all, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
     bar:
       choosing === undefined
@@ -1398,24 +1432,26 @@ function InboxSplitScreen({
 }
 
 /**
- * The threads either side of an open one: in the order the list held as it
- * was opened, or, for a thread that order doesn't hold, in the kept scope's
- * live rows, the open thread kept among them, as the panel's list keeps the
- * item its pane shows, which are then held for the arrows' next steps.
+ * The threads either side of an open one: in the order handed to it as it
+ * opened, which it keeps while it stands, or, for one handed none or one that
+ * order doesn't hold, in the kept scope's live rows, the open thread kept
+ * among them, as the panel's list keeps the item its pane shows.
  */
 function useThreadSteps(id: string): ThreadSteps {
   const { show } = useInboxScope();
   const listing = useInboxListing({ show, search: "", chosen: id });
-  const held = heldOrder.includes(id);
-  const order = held ? heldOrder : listing.listed.map(({ item }) => item.id);
+  const [handed] = useState(() => handedOrders.get(id));
+
+  // Note that the hand-off is taken once, so a later open of this thread with none handed, such as from a notification, never finds a stale one.
+  useEffect(() => {
+    handedOrders.delete(id);
+  }, [id]);
+
+  const order = handed?.includes(id) ? handed : listing.listed.map(({ item }) => item.id);
+
   const at = order.indexOf(id);
 
-  // Note that a thread the held order doesn't hold starts a run of its own on the live rows, held from then on, so a step to a thread an older order also holds keeps to this run's order rather than jumping to that one's.
-  useEffect(() => {
-    if (!held) heldOrder = order;
-  }, [held, order]);
-
-  return at < 0 ? {} : { previous: order[at - 1], next: order[at + 1] };
+  return at < 0 ? { order } : { order, previous: order[at - 1], next: order[at + 1] };
 }
 
 /**

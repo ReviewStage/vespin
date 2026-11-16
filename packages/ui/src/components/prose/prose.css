@@ -407,7 +407,11 @@
    margins on a transcript's paragraphs, which no reset reaches there. And
    they stand outside the components layer, because a transcript's quote is
    a child of Streamdown's root, whose spacing utility (`space-y-4`) sits in
-   the utilities layer above it and would set the quote's margins. */
+   the utilities layer above it and would set the quote's margins. A quote
+   breaks a long path or identifier at its column's edge, as a paragraph
+   does, since a comment's quote line and a message box's quote hold their
+   words with no paragraph's own rule around them; a table's cells keep
+   theirs whole by their own rule above. */
 .markdown-quote {
   margin: 0;
   padding-left: 0.8em;
@@ -415,6 +419,7 @@
   color: var(--ui-color-text-muted);
   font-style: normal;
   text-align: left;
+  overflow-wrap: anywhere;
 }
 
 blockquote.markdown-quote > * {

@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { Dimensions, type ScaledSize, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   standsThreeColumns,
   WINDOW_SIZE_CLASS,
@@ -81,4 +82,20 @@ export function useThreeColumns(): boolean {
   const { width } = useWindowDimensions();
 
   return regular && standsThreeColumns(width);
+}
+
+/**
+ * Whether the system stands a compact window's tabs as a rail at its side
+ * rather than a bar at its foot, as iOS 27 does on the folded iPhone Duo's
+ * outer display, where the clock and the rail share a column at the right
+ * edge. Note that it is read from the window's shape and its side safe area,
+ * since no API says where the tab bar stands: a portrait window holding
+ * chrome at its side, which a portrait iPhone never does, while a landscape
+ * iPhone's side insets are the sensor's and its tabs still stand at the foot.
+ */
+export function useTabRail(): boolean {
+  const { width, height } = useWindowDimensions();
+  const { left, right } = useSafeAreaInsets();
+
+  return height > width && (left > 0 || right > 0);
 }
