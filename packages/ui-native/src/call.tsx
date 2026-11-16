@@ -262,8 +262,9 @@ export function CallAccessory({
   readonly inline: boolean;
   readonly onOpen: () => void;
 }) {
+  // Note that the host centers the row in the accessory's height, because a host places its SwiftUI at its top leading corner by default, so a row shorter than the accessory stood high, its tile and words above the glass's middle.
   return (
-    <Host style={styles.accessory}>
+    <Host style={styles.accessory} alignment="leading">
       <VStack modifiers={[padding({ leading: SPACE.ROW })]}>
         <CallCardRow call={call} inline={inline} onOpen={onOpen} />
       </VStack>
