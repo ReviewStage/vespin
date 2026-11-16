@@ -401,6 +401,13 @@ export function OverviewAgents({
       }),
   });
 
+  // Note that a row standing folded counts what waits on the developer under it too, so no thread waits unsaid.
+  const waitsUnder = (entry: AddEntry, folded: readonly AddEntry[] | undefined) =>
+    [entry, ...(folded ?? [])].reduce(
+      (count, each) => count + (waiting.get(each.row.id)?.length ?? 0),
+      0,
+    );
+
   const selection = useAgentsSelection(
     agents,
     ordered.flatMap(({ agent }) => (agent === undefined ? [] : [agent])),
@@ -442,7 +449,7 @@ export function OverviewAgents({
                 selection={{ selected: selection.selected, onChange: selection.onChange }}
                 moves
               >
-                {tree.map(({ entry, depth, started }, at) => (
+                {tree.map(({ entry, depth, started, folded }, at) => (
                   <PlanAgentRow
                     key={entry.row.id}
                     entry={entry}
@@ -452,7 +459,7 @@ export function OverviewAgents({
                       started === undefined ? undefined : foldOf(entry, opened.has(entry.row.id))
                     }
                     started={started}
-                    waits={waiting.get(entry.row.id)?.length ?? 0}
+                    waits={waitsUnder(entry, folded)}
                     pullRequest={agents.pullRequests.get(entry.row.id)}
                     agents={agents}
                     held={held}

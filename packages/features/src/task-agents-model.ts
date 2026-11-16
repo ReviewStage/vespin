@@ -248,6 +248,8 @@ export interface AgentTreeRow<Entry> {
   readonly depth: number;
   /** The agents nested under it, every one whether or not they stand open; none where it started none. */
   readonly started?: StartedAgentsCount | undefined;
+  /** The agents its fold passes by, at every depth under it, while it stands folded; none while it stands open or started none. */
+  readonly folded?: readonly Entry[] | undefined;
 }
 
 /**
@@ -288,7 +290,9 @@ function closesLoop(id: string, starters: ReadonlyMap<string, string>): boolean 
  * (`inAgentListOrder`), and each row at the top stands where the first of
  * the agents under it, itself among them, stands, so a lead whose worker
  * waits on the developer stands with it. A row counts the agents nested
- * directly under it, and how many of them no longer work. A loop of
+ * directly under it, and how many of them no longer work, and a row
+ * standing folded names every agent its fold passes by, so what waits on
+ * the developer there can still be said on it. A loop of
  * starters, which nothing writes, is cut where it closes, its agents
  * standing at the top.
  */
@@ -338,6 +342,7 @@ export function agentTree<Entry>(
     return (id === undefined ? undefined : under.get(id)) ?? [];
   };
 
+  const everyUnder = (entry: Entry): Entry[] => [entry, ...kidsOf(entry).flatMap(everyUnder)];
   const rank = new Map(ordered.map((entry, at) => [entry, at]));
 
   const first = (entry: Entry): number =>
@@ -362,9 +367,17 @@ export function agentTree<Entry>(
       return agent !== undefined && !agentStillWriting(agent.status);
     }).length;
 
-    rows.push({ entry, depth, started: { finished, total: kids.length } });
+    const started = { finished, total: kids.length };
 
-    if (id !== undefined && open(id)) for (const kid of kids) draw(kid, depth + 1);
+    if (id !== undefined && open(id)) {
+      rows.push({ entry, depth, started });
+
+      for (const kid of kids) draw(kid, depth + 1);
+
+      return;
+    }
+
+    rows.push({ entry, depth, started, folded: kids.flatMap(everyUnder) });
   };
 
   for (const top of tops.toSorted((a, b) => (firsts.get(a) ?? 0) - (firsts.get(b) ?? 0))) {
