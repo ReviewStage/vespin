@@ -76,10 +76,11 @@ import {
   ThreadPreview,
   UNDER_SPLIT_SCREEN,
   useColors,
+  useMinute,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
 import {
   PUSHED_PAGE,
@@ -281,7 +282,7 @@ export function InboxItemRows({
  * press lifts its preview, the thread's newest messages, over the same acts.
  * On an iPad it drags out as its vespin.dev link.
  */
-function InboxRow({
+function InboxRowView({
   listed,
   readerId,
   pictureOf,
@@ -289,6 +290,8 @@ function InboxRow({
   remindMenu,
   onResolve,
 }: InboxRowActs & { readonly listed: InboxListed }) {
+  // Note that the row reads the minute itself, so a row whose thread did not move still moves its time and Remind me's times as the minute turns.
+  const now = useMinute();
   const { holder, item } = listed;
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
@@ -343,6 +346,7 @@ function InboxRow({
       }
       at={item.updatedAt}
       due={item.remindAt}
+      now={now}
       trailingActions={[...resolve, remindMenu(item)]}
       leadingActions={[
         {
@@ -366,6 +370,16 @@ function InboxRow({
     />
   );
 }
+
+/**
+ * An Inbox item's row, drawn again only where its props moved. Note that
+ * every delivery to the Inbox drew every row again, a list off screen's
+ * among them, which held the JS thread under a working agent's posts; its
+ * props keep their identity while its own thread stands (`inboxListed`, the
+ * acts' and the menus' hooks), so a row is now drawn again only where its
+ * thread moved.
+ */
+const InboxRow = memo(InboxRowView);
 
 /**
  * What the list stands where it lists nothing: that the account's feed is
@@ -667,7 +681,7 @@ function ThreadDetail({
   const inboxActs = useInboxActs();
   const keeping = useKeeping();
   const inStack = place.inStack;
-  const remindMenu = place.inStack ? (on: InboxItem) => remind.menu([on]) : place.remindMenu;
+  const remindMenu = place.inStack ? remind.itemMenu : place.remindMenu;
 
   const doors = {
     onMark: (unread: boolean) => inboxActs.mark(item.id, unread),
@@ -1068,7 +1082,7 @@ function InboxStackList(words: InboxSearch) {
             }
             onRefresh={acts.refresh}
             onMark={acts.mark}
-            remindMenu={(item) => remind.menu([item])}
+            remindMenu={remind.itemMenu}
             onResolve={acts.resolve}
             choosing={choosing?.rows}
             onChooseStart={chooseStart}
@@ -1122,7 +1136,7 @@ function InboxSplitScreen({
         onSelect={select}
         onRefresh={acts.refresh}
         onMark={acts.mark}
-        remindMenu={(item) => remind.menu([item])}
+        remindMenu={remind.itemMenu}
         onResolve={acts.resolve}
         choosing={choosing?.rows}
         onChooseStart={chooseStart}
@@ -1160,12 +1174,7 @@ function InboxSplitScreen({
     selected === undefined ? (
       <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
     ) : (
-      <ThreadColumn
-        key={selected}
-        id={selected}
-        remindMenu={(item) => remind.menu([item])}
-        onOpen={select}
-      />
+      <ThreadColumn key={selected} id={selected} remindMenu={remind.itemMenu} onOpen={select} />
     );
 
   // Note that with no thread picked the detail's bar keeps the thread's acts, dimmed, as Mail's bar stands over No Message Selected; a picked thread's page stands its own.
