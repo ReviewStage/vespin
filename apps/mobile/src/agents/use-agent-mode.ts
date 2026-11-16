@@ -4,10 +4,9 @@
  * The panel's mode control (`@repo/panel`'s `agent-approvals.tsx`) on the
  * phone: offered only for an agent whose harness takes a mode beside Full
  * access, Claude Code, Codex, or Cursor, with the modes its harness takes
- * (`@repo/features`'s `modesOf`), Cursor's never asking for approval, which
- * the control says (`askMissingWords`); a pick is sent as the panel sends
- * it (`AGENTS_PERMISSION_MODE`), and the host draws the mode on the agent's
- * row the moment it is asked, so the
+ * (`@repo/features`'s `modesOf`), Cursor's never asking for approval; a
+ * pick is sent as the panel sends it (`AGENTS_PERMISSION_MODE`), and the
+ * host draws the mode on the agent's row the moment it is asked, so the
  * control reads it off the agent and a refusal the host takes back reads
  * back too, its words said until the next change. A change reaches the
  * agent from its next turn.
@@ -19,12 +18,7 @@ import {
 } from "@repo/features/agent-approval-wire";
 import { modesOf } from "@repo/features/agent-runtime-modes";
 import { ACT_KIND } from "@repo/host/acts";
-import {
-  askMissingWords,
-  PERMISSION_MODE_HINT,
-  PERMISSION_MODE_LABEL,
-  PERMISSION_MODE_WORDS,
-} from "@repo/settings";
+import { PERMISSION_MODE_HINT, PERMISSION_MODE_LABEL, PERMISSION_MODE_WORDS } from "@repo/settings";
 import { BUZZ, buzz } from "@repo/ui-native";
 import { useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
@@ -51,8 +45,6 @@ function modeOptions(modes: readonly AgentPermissionMode[]): readonly ModeOption
 export interface AgentMode {
   readonly mode: AgentPermissionMode;
   readonly modes: readonly ModeOption[];
-  /** Why Ask for approval is not among them, where the harness never asks; none where it does. */
-  readonly missing: string | undefined;
   /** Why the last change did not take; none while none failed. */
   readonly note: string | undefined;
   readonly choose: (mode: AgentPermissionMode) => void;
@@ -76,7 +68,6 @@ export function useAgentMode(agentId: string): AgentMode | undefined {
   return {
     mode,
     modes: modeOptions(modes),
-    missing: askMissingWords(agent.runtime),
     note,
     choose: (picked) => {
       if (picked === mode) return;
