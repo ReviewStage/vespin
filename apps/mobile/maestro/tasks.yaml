@@ -84,7 +84,7 @@ env:
 # status, key and repository, its name, and its agents, the pinned Weekly
 # digest email's at work. Under it stands the panel's row menu: Open, Mark
 # done, Status, Unpin on a pinned task, Copy link, Rename, Mark as unread,
-# Open in browser, and Permanently delete.
+# More, which holds Open in browser, and Permanently delete.
 - scrollUntilVisible:
     element: "Weekly digest email"
     direction: UP
@@ -118,7 +118,7 @@ env:
 - assertVisible: "Rename"
 - assertVisible: "Mark as unread"
 - assertVisible: "Unpin"
-- assertVisible: "Open in browser"
+- assertVisible: "More"
 # Note that the menu is scrolled to its last act, which a short window, the
 # iPhone Duo's, stands below its foot.
 - scrollUntilVisible:

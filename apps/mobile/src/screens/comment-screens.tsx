@@ -1,7 +1,8 @@
-// comment-screens.tsx -- one thread of a task's description comments, pushed from the task's Overview: its comments as a thread's messages, the words it stands on as its heading, and the reply field docked at its foot; and a new thread on one block of the description, its words as the heading and the comment field docked under them.
+// comment-screens.tsx -- one thread of a task's description comments, pushed from the task's Overview: its comments as a thread's messages, the words it stands on as its heading, Resolve or Reopen in its bar, and the reply field docked at its foot; and a new thread on one block of the description, its words as the heading and the comment field docked under them.
 
 import { type DescriptionBlock, descriptionBlocks } from "@repo/features/description-blocks";
 import { COMMENT_NOTE } from "@repo/features/description-comment-notes";
+import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { agentName, providerOf } from "@repo/features/model-label";
 import { readFailedWords, readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
@@ -14,6 +15,7 @@ import {
   DetailPage,
   EmptyState,
   GLYPH,
+  glyphSymbol,
   NOTICE_KIND,
   PATH_PART,
   Screen,
@@ -34,6 +36,7 @@ import {
   threadOpen,
   useCommentMedia,
   useCommentReply,
+  useCommentSettle,
   useCommentStart,
   useTaskComments,
   useTaskCommentsHeld,
@@ -49,6 +52,8 @@ const WORDS = {
   RESOLVED: "Resolved",
   GONE: "Original content deleted",
   NOT_FOUND: "Comment not found",
+  RESOLVE: "Resolve",
+  REOPEN: "Reopen",
 } as const;
 
 /** What a thread's page says while the task's comments are first read. */
@@ -191,8 +196,10 @@ function quoteOf(quote: string, anchored: boolean): string {
  * field docked over its foot, which answers it whether it stands open or
  * resolved, as the panel's thread does, what a reply that did not land
  * said standing in the field's head. The task's path stands small in
- * the bar, as a page of the task's does. In a window wide enough for three
- * columns it stands pushed over the split view's detail instead.
+ * the bar, as a page of the task's does, and the bar's trailing button
+ * resolves the thread, or reopens it once resolved, as the panel's check
+ * on its first comment does. In a window wide enough for three columns it
+ * stands pushed over the split view's detail instead.
  */
 export function CommentThreadScreen() {
   const { id = "", task: taskId = "" } = useLocalSearchParams<{ id: string; task: string }>();
@@ -223,6 +230,7 @@ export function CommentThread({
   const thread = threads.find((each) => each.id === id);
   const reply = useCommentReply(taskId, id);
   const media = useCommentMedia(overview?.task.id, thread);
+  const settle = useCommentSettle(taskId);
   const pictureOf = useMemberPictures();
 
   const router = useRouter();
@@ -278,6 +286,13 @@ export function CommentThread({
     head: reply.note === undefined ? undefined : <AskNote words={reply.note} />,
   };
 
+  // Note that a split view's detail bar stands Resolve or Reopen among the page's acts, as a compact window's toolbar stands it, since a column draws no stack toolbar.
+  const settleAct = (shown: DescriptionCommentThread) => ({
+    label: threadOpen(shown) ? WORDS.RESOLVE : WORDS.REOPEN,
+    symbol: threadOpen(shown) ? GLYPH.CHECK : GLYPH.RESTORE,
+    onPress: () => settle(shown),
+  });
+
   const page = (foot?: ReactNode) =>
     thread === undefined ? undefined : (
       <ThreadPage
@@ -289,6 +304,7 @@ export function CommentThread({
         repository={task?.repository}
         onOpenLink={openLink}
         standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}
+        acts={inColumn ? [settleAct(thread)] : undefined}
         foot={foot}
       />
     );
@@ -312,6 +328,15 @@ export function CommentThread({
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
+      {thread === undefined ? null : (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(threadOpen(thread) ? GLYPH.CHECK : GLYPH.RESTORE)}
+            accessibilityLabel={threadOpen(thread) ? WORDS.RESOLVE : WORDS.REOPEN}
+            onPress={() => settle(thread)}
+          />
+        </Stack.Toolbar>
+      )}
       {thread === undefined ? (
         <Screen>
           <ThreadMissing taskId={taskId} overview={overview} />

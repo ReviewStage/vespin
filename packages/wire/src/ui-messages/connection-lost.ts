@@ -3,8 +3,15 @@ import { Schema } from "effect";
 
 export const CONNECTION_LOST_PART = "data-connection-lost";
 
-/** The provider the connection was lost to, by the name the notice says. */
-export const CONNECTION_LOST_PROVIDER = { ANTHROPIC: "Anthropic", OPENAI: "OpenAI" } as const;
+/** The provider the connection was lost to, by the name the notice says. A client from before a name reads the notice as a part it does not know, and draws nothing. */
+export const CONNECTION_LOST_PROVIDER = {
+  ANTHROPIC: "Anthropic",
+  OPENAI: "OpenAI",
+  CURSOR: "Cursor",
+} as const;
+
+export type ConnectionLostProvider =
+  (typeof CONNECTION_LOST_PROVIDER)[keyof typeof CONNECTION_LOST_PROVIDER];
 
 export const ConnectionLostNoticeSchema = Schema.Struct({
   provider: Schema.Literals(Object.values(CONNECTION_LOST_PROVIDER)),
