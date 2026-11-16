@@ -1,4 +1,4 @@
-# task-history.yaml -- a task description's version history on the Inbox fixture: Version history from the task's ⋯, its versions under their writers, the newest marked Current, an older one opened whole, and Restore this version taken at once with its Undo offered.
+# task-history.yaml -- a task description's version history on the Inbox fixture: Version history from the task's ⋯, its versions under their writers, the newest marked Current, an older one opened whole, Restore this version taken at once with its Undo offered, and the newest version's sections marked against the one before it.
 #
 # Launched on the host's Inbox fixture, whose reference journey holds three
 # versions of its description and whose act door reads a version and takes
@@ -36,3 +36,11 @@ appId: dev.vespin.ios
     id: "failure-notice-undo"
 - assertVisible: "Version history"
 - takeScreenshot: task-version-restored
+# The newest version stands against Ada's draft: its sections written in or changed edged in green, and the draft's question struck in red.
+- tapOn: "Build the invite flow"
+- waitForAnimationToEnd
+- assertVisible: "Removed section"
+- takeScreenshot: task-version-changes
+- scrollUntilVisible:
+    element: "Added section"
+    direction: DOWN
