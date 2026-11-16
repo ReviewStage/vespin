@@ -7,6 +7,8 @@ import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
   FOOTER_TONE,
+  GLYPH,
+  glyphSymbol,
   ListSection,
   Screen,
   SettingsForm,
@@ -117,7 +119,11 @@ export function NewWorkspaceScreen() {
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={close}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={WORDS.CANCEL}
+          onPress={close}
+        />
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button

@@ -6,11 +6,16 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import {
   BAR_TITLE,
   type BrandColors,
+  ChipMarkProvider,
   ElevatedGround,
   FailureNoticeLayer,
   FailureNoticeProvider,
   KeepingProvider,
+  NO_GROUND,
+  TAB_BAR_ROOM,
   useColors,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
@@ -28,12 +33,12 @@ import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 import { useShareSheet } from "../share-sheet.js";
+import { SHORT_SHEET_DETENTS } from "../sheet-stack.js";
 import { holdSplash } from "../splash.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useChipMarks } from "../tasks/chip-marks.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
 import { VoiceCallProvider } from "../voice-call.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
@@ -62,9 +67,6 @@ function navigationTheme(colors: BrandColors, dark: boolean) {
     },
   };
 }
-
-/** A short sheet's heights in a compact window, as fractions of the screen: UIKit's medium, then its large. */
-const SHORT_SHEET_DETENTS = [0.5, 1];
 
 /** The routes the root stack presents as sheets over the app. */
 const SHEET_ROUTE = {
@@ -126,7 +128,9 @@ function SheetNoticeLayer({
  * and drawn on the lifted ground where it is one of the app's sheets, since
  * every sheet stands over the window it was opened from, as a card on an
  * iPhone and a form sheet on an iPad, and iOS lifts what it presents in dark;
- * the app's own pages keep the plain ground.
+ * the app's own pages keep the plain ground. A short sheet at half height in a
+ * compact window (`sheetAllowedDetents`) stands on iOS's own Liquid Glass
+ * alone, so it isn't lifted.
  */
 function screenLayout({
   route,
@@ -135,7 +139,10 @@ function screenLayout({
   children,
 }: {
   readonly route: { readonly name: string };
-  readonly options: { readonly presentation?: string | undefined };
+  readonly options: {
+    readonly presentation?: string | undefined;
+    readonly sheetAllowedDetents?: unknown;
+  };
   readonly navigation: ScreenFocus;
   readonly children: ReactElement;
 }): ReactElement {
@@ -145,7 +152,9 @@ function screenLayout({
     children
   );
 
-  return LIFTED_SHEETS.has(route.name) ? <ElevatedGround>{placed}</ElevatedGround> : placed;
+  const lifted = LIFTED_SHEETS.has(route.name) && options.sheetAllowedDetents === undefined;
+
+  return lifted ? <ElevatedGround>{placed}</ElevatedGround> : placed;
 }
 
 /**
@@ -209,6 +218,8 @@ function GuardedScreens() {
         presentation: "formSheet" as const,
         sheetAllowedDetents: SHORT_SHEET_DETENTS,
         sheetGrabberVisible: true,
+        // Note that the route under the sheet's own stack paints no ground, so at half height the sheet's glass shows through to its screen, which paints none there either (`useSheetAtHalf`).
+        contentStyle: { backgroundColor: NO_GROUND },
       };
 
   return (
@@ -287,7 +298,9 @@ function GuardedScreens() {
 function KeptScreens() {
   return (
     <KeepingProvider keeping={useKeeping()}>
-      <GuardedScreens />
+      <ChipMarkProvider markOf={useChipMarks()}>
+        <GuardedScreens />
+      </ChipMarkProvider>
     </KeepingProvider>
   );
 }
@@ -302,6 +315,8 @@ function KeptScreens() {
  * drew light beside the dark tab bar.
  */
 export default function RootLayout() {
+  // Note that a compact window's tab bar floats at its foot, which the notice stands over; a regular window's tabs stand at its top or its side.
+  const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const dark = useColorScheme() === "dark";
   const colors = useColors();
   const theme = useMemo(() => navigationTheme(colors, dark), [colors, dark]);
@@ -309,7 +324,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={theme}>
       <HostProvider>
-        <FailureNoticeProvider>
+        <FailureNoticeProvider footRoom={compact ? TAB_BAR_ROOM : 0}>
           <VoiceCallProvider>
             <KeptScreens />
           </VoiceCallProvider>
