@@ -1242,7 +1242,7 @@
 }
 
 .review-summary .agent-composer-input {
-  min-height: calc(3 * var(--ui-type-body-leading) + var(--agent-composer-field-block));
+  min-height: calc(3 * var(--agent-composer-line) + var(--agent-composer-field-block));
   padding: var(--ui-space-6) var(--ui-control-inset);
 }
 
@@ -1937,11 +1937,17 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
    takes a smaller share (desktop.css). */
 .agent-composer-field {
   position: relative;
+  /* A line of the box stands as a line of the message it sends: the body
+     type at the transcript's reading leading (`@repo/ui`'s prose.css), so
+     what is typed reads as it will once sent, a code span's pill clear of
+     the lines around it. The box and its placeholder set the leading itself,
+     as the transcript does; this is its length, for the box's heights. */
+  --agent-composer-line: calc(var(--ui-type-body-size) * var(--ui-type-reading-leading));
   --agent-composer-field-cap: calc(var(--ui-stage-height) * 0.4);
   --agent-composer-field-block: calc(var(--ui-space-16) + var(--ui-space-8));
   --agent-composer-field-lines: calc(
     8 *
-    var(--ui-type-body-leading) +
+    var(--agent-composer-line) +
     var(--agent-composer-field-block)
   );
 }
@@ -1949,7 +1955,7 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
 .agent-composer-input {
   box-sizing: border-box;
   width: 100%;
-  min-height: calc(var(--ui-type-body-leading) + var(--agent-composer-field-block));
+  min-height: calc(var(--agent-composer-line) + var(--agent-composer-field-block));
   max-height: min(var(--agent-composer-field-lines), var(--agent-composer-field-cap));
   overflow-x: hidden;
   overflow-y: auto;
@@ -1958,7 +1964,7 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   background: transparent;
   color: var(--ui-color-text);
   font-size: var(--ui-type-body-size);
-  line-height: var(--ui-type-body-leading);
+  line-height: var(--ui-type-reading-leading);
   outline: none; /* no ring: the caret marks the field */
   user-select: text;
 }
@@ -2010,7 +2016,7 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   padding: var(--ui-space-16) var(--ui-space-16) 0;
   color: var(--ui-color-text-muted);
   font-size: var(--ui-type-body-size);
-  line-height: var(--ui-type-body-leading);
+  line-height: var(--ui-type-reading-leading);
   pointer-events: none;
 }
 
@@ -2687,7 +2693,7 @@ svg.lucide {
 .comment-field .agent-composer-field {
   --agent-composer-field-lines: calc(
     8 *
-    1.45em +
+    var(--agent-composer-line) +
     10px
   ); /* off-scale: eight lines and the padding */
 }
@@ -2695,7 +2701,6 @@ svg.lucide {
 .comment-field .agent-composer-input {
   min-height: 36px; /* off-scale: one line and its padding */
   padding: var(--ui-row-inset) var(--comment-field-inline) var(--ui-space-2);
-  line-height: 1.45;
 }
 
 /* A field's foot, its `ComposerFoot`, holds its tools a size under a

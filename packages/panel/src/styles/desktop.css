@@ -1272,7 +1272,7 @@ body,
 .automation-prompt-skeleton {
   height: calc(
     var(--automation-prompt-rows) *
-    var(--ui-type-body-leading) +
+    var(--agent-composer-line) +
     2 *
     var(--ui-space-6) +
     2px
@@ -1287,7 +1287,7 @@ body,
   --agent-composer-field-block: calc(2 * var(--ui-space-6));
   --agent-composer-field-lines: calc(
     24 *
-    var(--ui-type-body-leading) +
+    var(--agent-composer-line) +
     var(--agent-composer-field-block)
   );
 }
@@ -1295,7 +1295,7 @@ body,
 .automation-prompt .agent-composer-input {
   min-height: calc(
     var(--automation-prompt-rows) *
-    var(--ui-type-body-leading) +
+    var(--agent-composer-line) +
     var(--agent-composer-field-block)
   );
   padding: var(--ui-space-6) var(--ui-control-inset);
@@ -1723,7 +1723,7 @@ body,
 /* The words field stands at least five lines tall, so a task's prompt has
    room before it is written; it still grows to the agent box's eight. */
 .new-task-composer .agent-composer-input {
-  min-height: calc(5 * var(--ui-type-body-leading) + var(--agent-composer-field-block));
+  min-height: calc(5 * var(--agent-composer-line) + var(--agent-composer-field-block));
 }
 
 /* In the dialog, which does not scroll, a window too short for five lines,
@@ -1732,7 +1732,7 @@ body,
    its composer keeps the five lines but in a narrow room (below). */
 .new-task .new-task-composer .agent-composer-input {
   min-height: min(
-    calc(5 * var(--ui-type-body-leading) + var(--agent-composer-field-block)),
+    calc(5 * var(--agent-composer-line) + var(--agent-composer-field-block)),
     calc(var(--ui-stage-height) * 0.25)
   );
 }
@@ -1741,7 +1741,7 @@ body,
    rather than five, so Home's Inbox stays in view under it; it still grows
    to the cap as the words are written. */
 :where(:root)[data-ui-room="narrow"] .new-task-composer .agent-composer-input {
-  min-height: calc(2 * var(--ui-type-body-leading) + var(--agent-composer-field-block));
+  min-height: calc(2 * var(--agent-composer-line) + var(--agent-composer-field-block));
 }
 
 /* The foot stands on one row however narrow the card: the Runs on chip and
