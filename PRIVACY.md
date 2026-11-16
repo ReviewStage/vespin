@@ -466,8 +466,8 @@ laws:
 - **Contractual necessity:** processing required to provide the Service,
   manage your account, and run your agents.
 - **Legitimate interest:** processing for security, error monitoring, abuse
-  prevention, improving the Service, and telling you what is new in it, where
-  these interests are not overridden by your rights.
+  prevention, and improving the Service, where these interests are not
+  overridden by your rights.
 - **Consent:** processing based on your consent, such as connecting an
   integration, letting agents run commands on your Mac, or sharing usage data.
   You may withdraw consent at any time.
@@ -480,8 +480,8 @@ laws:
 - Run your agents and the models they use, on your own keys
 - Authenticate your identity and manage your account and workspaces
 - Send workspace invitations and the Slack messages your workspace asked for
-- Send onboarding emails to new accounts, and occasional product-update emails
-  about what is new in Vespin, each with a link to unsubscribe
+- Send you onboarding emails and product updates, which you can unsubscribe
+  from at any time
 - Monitor and analyze usage to improve the Service
 - Detect, prevent, and address technical issues and security threats
 - Comply with legal obligations
@@ -522,11 +522,9 @@ data with:
 - **Infrastructure providers:** Vercel (hosting, agent sandboxes, and Vercel
   Connect, which holds integration tokens), Neon (database), PostHog (usage
   data, screen recordings, feedback, and setup answers), Sentry (error and
-  performance monitoring), Resend (email: for the onboarding emails a new account is sent,
+  performance monitoring), Resend (email: for onboarding emails and product updates,
   Resend is told your email address, your first name, when you signed up, whether
-  you accepted a workspace invitation, and on which days you started a task; for
-  product-update emails, Resend keeps your email address and first name on the
-  list of Vespin accounts, and whether you unsubscribed from them),
+  you accepted a workspace invitation, and on which days you started a task),
   and Slack (feedback, setup answers, and Vespin's Slack bot).
 - **Integrations and connected apps:** the services and MCP clients you connect
   receive what your agents send them, or what our tools answer, and keep it
@@ -601,10 +599,9 @@ made before default-branch drives expires thirty days after its last use. When y
   description text you left in them, stay with the workspace without your name.
 - **Usage data and screen recordings:** we ask PostHog to erase them; if it
   cannot be reached, your account is deleted anyway and PostHog keeps them.
-- **Onboarding and product-update emails:** we ask Resend to delete the
-  contact it keeps under your email address, which stops both; if it cannot be
-  reached or refuses the request, your account is deleted anyway and Resend
-  keeps it.
+- **Onboarding emails:** we ask Resend to delete the contact it keeps under
+  your email address, which stops them; if it cannot be reached, your account
+  is deleted anyway and Resend keeps it.
 - **Error reports** already sent to Sentry are kept until Sentry's retention
   ends, since Sentry offers no way to erase one account's reports.
 - **Integrations:** we ask Vercel Connect to revoke your grants; anything your
@@ -643,8 +640,6 @@ can also act directly in the app:
   Settings › MCP › Agents with access.
 - **GitHub:** revoke the Vespin GitHub App in GitHub's settings under
   Applications.
-- **Product-update emails:** unsubscribe with the link at the foot of any of
-  them. Onboarding emails and the emails your account needs are not affected.
 - **Delete your account** in Settings › Account.
 
 ## 9\. Cookies and tracking
