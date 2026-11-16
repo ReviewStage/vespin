@@ -25,7 +25,8 @@
 // (`updateCall`), and ends it with the call (`endCall`), and a press on it
 // (`CallPressIntent`, in the app's target) pings this module, which hands it
 // on as an event while JavaScript listens, since the call keeps the app
-// running. The Inbox widget, which the same
+// running, and draws a mute's new state on the activity at once, which
+// JavaScript's next state confirms. The Inbox widget, which the same
 // extension draws, is asked to draw again (`reloadInboxWidget`) once the
 // app's JavaScript has written its snapshot into the App Group
 // (`src/inbox-widget/`), since only WidgetKit's Swift can ask.
@@ -100,6 +101,8 @@ public final class LiveActivityModule: Module {
         else { return }
         Task { @MainActor in
           guard let self, self.listening.contains("onCallPress") else { return }
+          // Note that the activity shows a mute at once, rather than after JavaScript's round trip mirrors the call back, which felt delayed on a call; the mirror then confirms it, or sets it back where the call refused.
+          await Self.showCallPress(press, agentId: agentId)
           self.sendEvent("onCallPress", ["press": press, "agentId": agentId])
         }
       }
@@ -283,6 +286,25 @@ public final class LiveActivityModule: Module {
     if superseded.remove(id) != nil { return }
     // The ended activity's own token, so the service clears it only while it still holds that one.
     if listening.contains("onActivityEnded") { sendEvent("onActivityEnded", ["token": token]) }
+  }
+
+  /// The call's activity drawn with a mute press already set, for the agent the press names: the microphone's or the speaker's muted flag as the press sets it. End call and a press it doesn't know leave the activity to JavaScript.
+  @MainActor
+  private static func showCallPress(_ press: String, agentId: String) async {
+    for activity in Activity<CallActivityAttributes>.activities
+    where activity.attributes.agentId == agentId {
+      var state = activity.content.state
+      switch press {
+      case "mute-microphone": state.microphoneMuted = true
+      case "unmute-microphone": state.microphoneMuted = false
+      case "mute-speaker": state.speakerMuted = true
+      case "unmute-speaker": state.speakerMuted = false
+      default: return
+      }
+      guard state != activity.content.state else { continue }
+      await activity.update(
+        .init(state: state, staleDate: nil, relevanceScore: CallRelevance.score))
+    }
   }
 
   /// Hands each fresh Stop request on while JavaScript listens, dropping any too old to act on.
