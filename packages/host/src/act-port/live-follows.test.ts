@@ -3,19 +3,14 @@ import { setImmediate as nextTurn } from "node:timers/promises";
 import { afterEach, it } from "@effect/vitest";
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { HOSTED_SERVICE_PATH } from "@repo/features";
-import {
-  AGENT_CALL_FAILURE,
-  INBOX_SCOPE_KIND,
-  PULL_REQUEST_PART,
-  TRANSCRIPT_KIND,
-} from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND, TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import { AUTOMATION_FOLLOW } from "@repo/features/automation-view";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { WireBoundaryInput } from "@repo/wire";
 import { Effect, Predicate } from "effect";
-import { OWN_PULL_REQUEST, OWN_TRANSCRIPT } from "../app-state.js";
+import { OWN_TRANSCRIPT } from "../app-state.js";
 import {
   ACCOUNT_ASK_ACT_KIND,
   AGENT_ACT_KIND,
@@ -93,14 +88,14 @@ const FOLLOWS = [
     at: [AGENT_ID],
   },
   {
-    follow: CHAPTERS_ACT_KIND.CHAPTERS_FOLLOW,
+    follow: CHAPTERS_ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW,
     followRefusal: "Could not follow the pull request's chapters on this system.",
-    retry: CHAPTERS_ACT_KIND.CHAPTERS_RETRY,
+    retry: CHAPTERS_ACT_KIND.CHAPTERS_REPOSITORY_RETRY,
     retryRefusal: "Could not read the pull request's chapters again on this system.",
-    key: { agentId: AGENT_ID, number: 7 },
-    path: HOSTED_SERVICE_PATH.LIVE_PULL_REQUEST_CHAPTERS,
-    slice: LIVE_READ.PULL_REQUEST_CHAPTERS,
-    at: [AGENT_ID, "7"],
+    key: { workspaceId: "workspace-personal", repository: "acme/relay", number: 7 },
+    path: HOSTED_SERVICE_PATH.LIVE_REPOSITORY_PULL_REQUEST_CHAPTERS,
+    slice: LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS,
+    at: ["workspace-personal", "acme/relay", "7"],
   },
   {
     follow: ACCOUNT_ASK_ACT_KIND.PROVIDER_KEYS_FOLLOW,
@@ -319,14 +314,14 @@ const FOLLOWS = [
     failed: AGENT_CALL_FAILURE.UNANSWERED,
   },
   {
-    follow: AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW,
+    follow: AGENT_ACT_KIND.AGENTS_PULL_REQUEST_FOLLOW,
     followRefusal: "Could not follow the agent's pull request on this system.",
-    retry: AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_RETRY,
+    retry: AGENT_ACT_KIND.AGENTS_PULL_REQUEST_RETRY,
     retryRefusal: "Could not read the agent's pull request again on this system.",
-    key: { part: PULL_REQUEST_PART.PULL_REQUEST, agentId: AGENT_ID },
-    path: `/api/agents/${AGENT_ID}/overview/pull-request`,
-    slice: LIVE_READ.PULL_REQUEST,
-    at: [AGENT_ID, OWN_PULL_REQUEST],
+    key: { agentId: AGENT_ID },
+    path: `/api/agents/${AGENT_ID}/pull-request`,
+    slice: LIVE_READ.PULL_REQUEST_PUBLISHED,
+    at: [AGENT_ID],
     failedAt: ["rows", "failure"],
     failed: AGENT_CALL_FAILURE.UNANSWERED,
   },

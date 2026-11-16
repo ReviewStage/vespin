@@ -330,12 +330,12 @@ function keepMove(
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
-  if (kind !== ACT_KIND.AGENTS_PULL_REQUEST_ACTION) return;
+  if (kind !== ACT_KIND.PULL_REQUESTS_ACTION) return;
   // SAFETY: the payload is the kind's, which the guard above names.
-  const { number, request } = payload as PortActPayload<typeof ACT_KIND.AGENTS_PULL_REQUEST_ACTION>;
+  const { number, request } = payload as PortActPayload<typeof ACT_KIND.PULL_REQUESTS_ACTION>;
   const move = pullRequestMoveOf(request);
 
-  if (number === undefined || move === undefined) return;
+  if (move === undefined) return;
   MOVES.set(state, new Map(MOVES.get(state) ?? NO_MOVES).set(number, move));
   stageFixture(state);
 }
@@ -413,7 +413,7 @@ const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>>
   [ACT_KIND.FEEDBACK_SEND, () => ({ delivered: false })],
   // Note that a change to a pull request is refused as GitHub refuses one, its words beside, so the pull request page shows its write note.
   [
-    ACT_KIND.AGENTS_PULL_REQUEST_ACTION,
+    ACT_KIND.PULL_REQUESTS_ACTION,
     () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.REFUSED, words: PULL_REQUEST_REFUSED_WORDS }),
   ],
 ]);

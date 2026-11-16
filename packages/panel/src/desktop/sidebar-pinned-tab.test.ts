@@ -80,7 +80,7 @@ beforeEach(() => {
   });
   fakeActPort({
     ...fakeActPortCalls(),
-    [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW]: ({ agentId }) => {
+    [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_FOLLOW]: ({ agentId }) => {
       reads.push(agentId);
 
       return quietHold();

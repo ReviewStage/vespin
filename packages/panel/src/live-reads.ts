@@ -10,8 +10,8 @@
  *   keyed by, each an element of its own and in the slice's order
  *   (`[LIVE_READ.MODELS, accountId]`), as `query-keys.ts` asks; the ids are
  *   the read's path in its slice. An id is a string, or a number where the
- *   read names one by number, as a pull request's (`[LIVE_READ.PULL_REQUEST,
- *   agentId, 42]`); its slice holds it at the id's string, so a read keyed
+ *   read names one by number, as a pull request's
+ *   (`[LIVE_READ.REPOSITORY_PULL_REQUEST, workspaceId, repository, 42]`); its slice holds it at the id's string, so a read keyed
  *   by a number declares the ids its path stands for (`LIVE_KEY_IDS`), and
  *   a read keyed by strings alone declares nothing. A factory handed no ids, as a surface
  *   that draws nothing names none, answers the read's name alone, disabled
@@ -60,7 +60,6 @@ import {
 } from "@repo/features/agent-browser-tab-wire";
 import {
   type AgentInboxScope,
-  type AgentPullRequestReadParams,
   type AgentTranscriptKey,
   agentInboxScopeSchema,
   PULL_REQUEST_PART,
@@ -87,7 +86,6 @@ import {
   EVERY_WORKSPACE,
   HOST_READ_SLICE,
   KEYS_ON,
-  OWN_PULL_REQUEST,
   OWN_TRANSCRIPT,
   READ_KEY_DEPTH,
 } from "@repo/host/app-state";
@@ -144,19 +142,6 @@ export type CommentSubject = TasksCommentsFollow;
 
 /** The comments a follow holds, as its query carries them on `meta`; its factory puts one there (`descriptionCommentsQuery`), so it always reads. */
 const readCommentSubject = Schema.decodeUnknownSync(tasksCommentsFollowSchema);
-
-/** The pull request a key of one of its parts names: the agent, and its number where the key names one rather than the agent's own. */
-function pullRequestAskedOf([agentId, number]: readonly LiveReadId[]): AgentPullRequestReadParams {
-  return Predicate.isNumber(number)
-    ? { agentId: String(agentId), number }
-    : { agentId: String(agentId) };
-}
-
-/** The follow of one part of a pull request, by the part. */
-function pullRequestPartFollow(part: PullRequestPart): LiveFollow {
-  return (ids) =>
-    askAct(ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW, { part, ...pullRequestAskedOf(ids) });
-}
 
 /** The pull request a key of a read by its repository names: the workspace, the repository, and the number. */
 function repositoryPullRequestOf([
@@ -245,14 +230,8 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
     askAct(ACT_KIND.TASKS_HELD_FOLLOW, { taskId: String(taskId) }),
   [LIVE_READ.DESCRIPTION_COMMENTS]: (_ids, meta) =>
     askAct(ACT_KIND.TASKS_COMMENTS_FOLLOW, readCommentSubject(meta?.follow)),
-  [LIVE_READ.PULL_REQUEST]: pullRequestPartFollow(PULL_REQUEST_PART.PULL_REQUEST),
-  [LIVE_READ.PULL_REQUEST_CHECKS]: pullRequestPartFollow(PULL_REQUEST_PART.CHECKS),
-  [LIVE_READ.PULL_REQUEST_CONVERSATION]: pullRequestPartFollow(PULL_REQUEST_PART.CONVERSATION),
-  [LIVE_READ.PULL_REQUEST_PUBLISHED]: pullRequestPartFollow(PULL_REQUEST_PART.PUBLISHED),
-  [LIVE_READ.PULL_REQUEST_VIEWED]: pullRequestPartFollow(PULL_REQUEST_PART.VIEWED),
-  [LIVE_READ.REVIEW_OPTIONS]: pullRequestPartFollow(PULL_REQUEST_PART.REVIEW_OPTIONS),
-  [LIVE_READ.PULL_REQUEST_CHAPTERS]: ([agentId, number]) =>
-    askAct(ACT_KIND.CHAPTERS_FOLLOW, { agentId: String(agentId), number: Number(number) }),
+  [LIVE_READ.PULL_REQUEST_PUBLISHED]: ([agentId = ""]) =>
+    askAct(ACT_KIND.AGENTS_PULL_REQUEST_FOLLOW, { agentId: String(agentId) }),
   [LIVE_READ.REPOSITORY_PULL_REQUEST]: repositoryPullRequestPartFollow(
     PULL_REQUEST_PART.PULL_REQUEST,
   ),
@@ -306,11 +285,6 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
   [LIVE_READ.AUTOMATION_RUNS]: automationsFollow(AUTOMATION_FOLLOW.RUNS),
 };
 
-/** A pull request part's ids from its path: the agent, then the number, or `OWN_PULL_REQUEST` for the agent's own. */
-function pullRequestPartIds([agentId = "", number = ""]: readonly string[]): readonly LiveReadId[] {
-  return [agentId, number === OWN_PULL_REQUEST ? OWN_PULL_REQUEST : Number(number)];
-}
-
 /** A pull request's ids by its repository from its path: the workspace, the repository, then the number. */
 function repositoryPullRequestIds([
   workspaceId = "",
@@ -328,13 +302,6 @@ function repositoryPullRequestIds([
 const LIVE_KEY_IDS: Readonly<
   Partial<Record<LiveReadName, (path: readonly string[]) => readonly LiveReadId[]>>
 > = {
-  [LIVE_READ.PULL_REQUEST]: pullRequestPartIds,
-  [LIVE_READ.PULL_REQUEST_CHECKS]: pullRequestPartIds,
-  [LIVE_READ.PULL_REQUEST_CONVERSATION]: pullRequestPartIds,
-  [LIVE_READ.PULL_REQUEST_PUBLISHED]: pullRequestPartIds,
-  [LIVE_READ.PULL_REQUEST_VIEWED]: pullRequestPartIds,
-  [LIVE_READ.REVIEW_OPTIONS]: pullRequestPartIds,
-  [LIVE_READ.PULL_REQUEST_CHAPTERS]: ([agentId = "", number = ""]) => [agentId, Number(number)],
   [LIVE_READ.REPOSITORY_PULL_REQUEST]: repositoryPullRequestIds,
   [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: repositoryPullRequestIds,
   [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: repositoryPullRequestIds,
@@ -373,13 +340,7 @@ const LIVE_QUERY_READS = [
   LIVE_READ.BROWSER_TABS,
   LIVE_READ.HELD_TASK,
   LIVE_READ.DESCRIPTION_COMMENTS,
-  LIVE_READ.PULL_REQUEST,
-  LIVE_READ.PULL_REQUEST_CHECKS,
-  LIVE_READ.PULL_REQUEST_CONVERSATION,
   LIVE_READ.PULL_REQUEST_PUBLISHED,
-  LIVE_READ.PULL_REQUEST_VIEWED,
-  LIVE_READ.REVIEW_OPTIONS,
-  LIVE_READ.PULL_REQUEST_CHAPTERS,
   LIVE_READ.REPOSITORY_PULL_REQUEST,
   LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS,
   LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION,
@@ -665,16 +626,9 @@ export const descriptionCommentsQuery = (subject: CommentSubject | undefined) =>
     subject === undefined ? undefined : { follow: commentsFollowOf(subject) },
   );
 
-/** The ids of one part of a pull request: the agent, then the number the key names or `OWN_PULL_REQUEST` for the agent's own; none while a surface names none. */
-function pullRequestIds(
-  key: AgentPullRequestReadParams | undefined,
-): readonly LiveReadId[] | undefined {
-  return key === undefined ? undefined : [key.agentId, key.number ?? OWN_PULL_REQUEST];
-}
-
-/** What the agent published, its branch and repository among it, by the agent and the number a tab names, or the agent's own. */
-export const pullRequestPublishedQuery = (key: AgentPullRequestReadParams | undefined) =>
-  liveReadQuery(LIVE_READ.PULL_REQUEST_PUBLISHED, pullRequestIds(key));
+/** What the agent published, its branch and the pull request from it, by the agent; none while a surface names none. */
+export const pullRequestPublishedQuery = (agentId: string | undefined) =>
+  liveReadQuery(LIVE_READ.PULL_REQUEST_PUBLISHED, agentId === undefined ? undefined : [agentId]);
 
 /** The ids of a pull request named by its repository: the workspace, the repository, then the number; none while a surface names none. */
 function repositoryPullRequestKeyIds(

@@ -48,6 +48,7 @@ import {
   useTaskHistory,
   useTaskVersion,
 } from "../tasks/use-history.js";
+import { useTaskOverview } from "../tasks/use-tasks.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** The route a version is opened on: the task by its id, and the version by its number in the query. */
@@ -317,7 +318,7 @@ export function Version({
   const navigation = useNavigation();
   const acts = useHostActs();
   const write = useWrite();
-  const openLink = useOpenLink();
+  const openLink = useOpenLink(useTaskOverview(taskId)?.task.workspaceId);
   const notices = useFailureNotices();
   const version = useTaskVersion(taskId, seq);
   const [restoring, setRestoring] = useState(false);

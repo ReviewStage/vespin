@@ -664,7 +664,8 @@ function ThreadDetail({
 }) {
   const colors = useColors();
   const { holder, item } = listed;
-  const openLink = useOpenLink();
+  // Note that a pull request a thread names opens in the app by its task's workspace.
+  const openLink = useOpenLink(holder.task.workspaceId);
   const { name: agentName, harness } = useAgentLabel(item.agentId);
   const pictureOf = useMemberPictures();
 

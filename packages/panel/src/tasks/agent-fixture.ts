@@ -98,14 +98,13 @@ import {
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/terminal-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
+  type AppHeldById,
   type AppPages,
-  type AppPullRequestPart,
   type AppRepositoryPullRequestHeld,
   type AppStateSnapshot,
   type AppTranscript,
   type AppTranscripts,
   type AppWorkspaceTools,
-  OWN_PULL_REQUEST,
   OWN_TRANSCRIPT,
   RUN_PROFILE,
 } from "@repo/host/app-state";
@@ -1562,21 +1561,18 @@ function stagedPart<Read>(
 
 /** Main's held branch reads with the agent's own laid over them, which its tab's pull request card reads (`use-agent-pull-request.ts`), one object for each of main's. */
 const STAGED_PUBLISHED = new WeakMap<
-  AppPullRequestPart<AgentPullRequestAnswerView>,
-  AppPullRequestPart<AgentPullRequestAnswerView>
+  AppHeldById<AgentPullRequestAnswerView>,
+  AppHeldById<AgentPullRequestAnswerView>
 >();
 
 /** What the agent published, its branch and pull request, as its tab's read of it holds it. */
 function stagedPublished(
-  held: AppPullRequestPart<AgentPullRequestAnswerView>,
-): AppPullRequestPart<AgentPullRequestAnswerView> {
+  held: AppHeldById<AgentPullRequestAnswerView>,
+): AppHeldById<AgentPullRequestAnswerView> {
   let laid = STAGED_PUBLISHED.get(held);
 
   if (laid === undefined) {
-    laid = {
-      ...held,
-      [FIXTURE_AGENT_ID]: { ...held[FIXTURE_AGENT_ID], [OWN_PULL_REQUEST]: { rows: PUBLISHED } },
-    };
+    laid = { ...held, [FIXTURE_AGENT_ID]: { rows: PUBLISHED } };
     STAGED_PUBLISHED.set(held, laid);
   }
 
@@ -1650,7 +1646,9 @@ function inboxAppState(state: AppStateSnapshot, workspaceId: string): AppStateSn
  * with the page its agent showed, as the window's read of them holds them
  * (`LIVE_READ.PAGES`), and the agent's pull request's chapters and parts
  * held as its Pull request tab's reads of them hold them
- * (`LIVE_READ.PULL_REQUEST_CHAPTERS`, `LIVE_READ.PULL_REQUEST` and its siblings),
+ * (`LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS`, `LIVE_READ.REPOSITORY_PULL_REQUEST`
+ * and its siblings), what the agent published as its card reads it
+ * (`LIVE_READ.PULL_REQUEST_PUBLISHED`),
  * and the agent's transcript as its tab's read of it holds it
  * (`LIVE_READ.TRANSCRIPT`), the long run's at the step it reached, and
  * where its `run_on_mac` stands as its Runs on card reads it
