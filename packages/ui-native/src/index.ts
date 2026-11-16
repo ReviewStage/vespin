@@ -341,6 +341,7 @@ export { BRAND_COLOR } from "./tokens/brand-colors.js";
 export {
   type BarScheme,
   type BrandColors,
+  ElevatedGround,
   STATUS_TONE,
   type StatusTone,
   toneColor,
