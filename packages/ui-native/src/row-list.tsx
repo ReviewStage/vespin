@@ -100,6 +100,19 @@ type RowListProps = {
   readonly children: ReactNode;
 };
 
+/**
+ * The rows a two-finger drag chose: the selection the system reports, but
+ * for the row that stood open before the drag, which a list keeping a
+ * selection, such as an iPad's list column, still holds as it enters edit
+ * mode, so Select mode starts with only the rows the drag passed over.
+ */
+function dragChosen(
+  selection: readonly (string | number)[],
+  open: string | undefined,
+): readonly string[] {
+  return selection.filter(Predicate.isString).filter((id) => id !== open);
+}
+
 /** The one row a SwiftUI `List` selection names, where it names one. */
 function selectedId(selection: readonly (string | number)[]): string | undefined {
   const first = selection[0];
@@ -188,7 +201,7 @@ export function RowList({
               if (!editing || chooses) return;
 
               dragged.current = true;
-              onChooseStart(selection.filter(Predicate.isString));
+              onChooseStart(dragChosen(selection, selected));
             },
           })}
       onSelectionChange={(selection, editing) => {
@@ -201,7 +214,13 @@ export function RowList({
         const ids = selection.filter(Predicate.isString);
 
         // Note that a row ticked while the system holds the list in edit mode (a two-finger drag, which may tick its first row before the edit mode's own event lands), the rows ticked after it, and several rows the system ticks at once choose rather than open, as Mail's do, rather than read as a tap on the first.
-        if (onChooseStart !== undefined && (editing || dragged.current || ids.length > 1)) {
+        if (onChooseStart !== undefined && (editing || dragged.current)) {
+          onChooseStart(dragChosen(selection, selected));
+
+          return;
+        }
+
+        if (onChooseStart !== undefined && ids.length > 1) {
           onChooseStart(ids);
 
           return;
