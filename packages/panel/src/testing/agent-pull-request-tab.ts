@@ -10,8 +10,6 @@
 
 import {
   AGENT_CALL_FAILURE,
-  type AgentChangesAnswerView,
-  type AgentPullRequestWriteAnswerView,
   PULL_REQUEST_PART,
   type PullRequestPart,
 } from "@repo/features/agent-view";
@@ -33,7 +31,12 @@ import {
   REVIEW_STATE,
   type ReviewThread,
 } from "@repo/features/agent-wire";
-import type { ReadLink } from "@repo/features/link-grammar";
+import type { NumberedAddress } from "@repo/features/link-grammar";
+import type {
+  RepositoryChangesAnswerView,
+  RepositoryPullRequestParams,
+  RepositoryPullRequestWriteAnswerView,
+} from "@repo/features/pull-request-view";
 import {
   MERGE_METHOD,
   PULL_REQUEST_WRITE_OUTCOME,
@@ -54,14 +57,18 @@ import { handedCommand, type TabActionGroups } from "../desktop/strip-tabs.js";
 import type { DiffListProps, DiffViewModule, DiffViewProps } from "../diff-view/contract.js";
 import type { FileTreeModule } from "../file-tree/contract.js";
 import { type GitHubConnectControl, GitHubConnectProvider } from "../github-connect.js";
-import { AgentPullRequestTab } from "../tasks/agent-pull-request-tab.js";
+import { PullRequestTab } from "../tasks/agent-pull-request-tab.js";
+import { OpenPullRequestProvider } from "../tasks/open-pull-request.js";
 import { PULL_REQUEST_VIEW, type PullRequestView } from "../tasks/task-tab-model.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import { OpenLinkProvider } from "../tasks/use-open-link.js";
 import { ToastHost } from "../toast.js";
 import { answeringChanges, fakeActPort, fakeActPortCalls, fakeAppBridge } from "./app-bridge.js";
 import { DESKTOP_LINKS, fakeAppPlatform } from "./app-platform.js";
-import { handHostReads, holdPullRequestParts, type PullRequestPartAnswers } from "./app-state.js";
+import {
+  handHostReads,
+  holdRepositoryPullRequestParts,
+  type RepositoryPullRequestPartAnswers,
+} from "./app-state.js";
 import { installEditorLayout } from "./composer.js";
 import { withQueryClient } from "./copy-feedback.js";
 import { markdownHtmlParserLanded } from "./markdown.js";
@@ -93,6 +100,13 @@ export const AGENT: AgentSummary = {
 };
 
 export const PAGE = "https://github.com/acme/relay/pull/42";
+
+/** The pull request the tab shows, as its tab names it: the workspace it reads it through, its repository, and its number. */
+export const PULL_REQUEST_KEY: RepositoryPullRequestParams = {
+  workspaceId: "workspace-acme",
+  repository: "acme/relay",
+  number: 42,
+};
 
 export const CHARLES_ON_GITHUB = { login: "charlespan", bot: false, userId: CHARLES.userId };
 
@@ -202,16 +216,14 @@ class PullRequestTabWorld {
   images: string[] = [];
   /** What each review thread's preview handed the diff bundle, in the order drawn. */
   previews: DiffViewProps[] = [];
-  /** Every change to the pull request the tab asked for, by agent, in order. */
-  changes: (readonly [string, PullRequestActionRequest])[] = [];
+  /** Every change the tab asked for, by the pull request it named, in order. */
+  changes: (readonly [RepositoryPullRequestParams, PullRequestActionRequest])[] = [];
   /** How the service answers the next change asked for. */
-  changeAnswer: AgentPullRequestWriteAnswerView = {
+  changeAnswer: RepositoryPullRequestWriteAnswerView = {
     outcome: PULL_REQUEST_WRITE_OUTCOME.DONE,
   };
   /** What the service waits on before it answers a change, where a test holds it; none answers at once. */
   changeHeld: Promise<void> | undefined;
-  /** The number of the pull request each change named, none where it was the agent's own. */
-  changeNumbers: (number | undefined)[] = [];
   /** What Files changed handed the diff bundle's list, mount first, each draw after it. */
   lists: DiffListProps[] = [];
   /** The files, or the lines of them, the list was scrolled to, in order. */
@@ -220,7 +232,7 @@ class PullRequestTabWorld {
   drawnChanges: ReadChanges = () =>
     Promise.resolve({ pullRequest: { url: PAGE, truncated: false, files: [] } });
   /** How the host answers the parts of the control made or drawn last. */
-  drawnParts: PullRequestPartAnswers = {};
+  drawnParts: RepositoryPullRequestPartAnswers = {};
 }
 
 export const world = new PullRequestTabWorld();
@@ -292,7 +304,6 @@ beforeEach(() => {
   world.images = [];
   world.previews = [];
   world.changes = [];
-  world.changeNumbers = [];
   world.changeAnswer = { outcome: PULL_REQUEST_WRITE_OUTCOME.DONE };
   world.lists = [];
   world.listReveals = [];
@@ -311,14 +322,13 @@ beforeEach(() => {
 
       return Promise.resolve();
     },
-    [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: (payload) => {
-      world.changes.push([payload.agentId, payload.request]);
-      world.changeNumbers.push(payload.number);
+    [ACT_KIND.PULL_REQUESTS_ACTION]: ({ request, ...pullRequest }) => {
+      world.changes.push([pullRequest, request]);
       const answer = world.changeAnswer;
 
       return (world.changeHeld ?? Promise.resolve()).then(() => answer);
     },
-    [ACT_KIND.AGENTS_GITHUB_IMAGE]: ({ src }) => {
+    [ACT_KIND.PULL_REQUESTS_GITHUB_IMAGE]: ({ src }) => {
       world.images.push(src);
 
       return Promise.resolve(PIXEL);
@@ -352,18 +362,21 @@ export function published(state: PullRequestState) {
 
 /** The overview's three parts, the pickers' options, and the member's viewed marks, any of them answering otherwise than the fixtures above, which answer neither the options nor the marks. */
 interface OverviewReads {
-  readonly pullRequest?: PullRequestPartAnswers[typeof PULL_REQUEST_PART.PULL_REQUEST];
-  readonly reviewOptions?: PullRequestPartAnswers[typeof PULL_REQUEST_PART.REVIEW_OPTIONS];
-  readonly checks?: PullRequestPartAnswers[typeof PULL_REQUEST_PART.CHECKS];
-  readonly conversation?: PullRequestPartAnswers[typeof PULL_REQUEST_PART.CONVERSATION];
-  readonly viewed?: PullRequestPartAnswers[typeof PULL_REQUEST_PART.VIEWED];
+  readonly pullRequest?: RepositoryPullRequestPartAnswers[typeof PULL_REQUEST_PART.PULL_REQUEST];
+  readonly reviewOptions?: RepositoryPullRequestPartAnswers[typeof PULL_REQUEST_PART.REVIEW_OPTIONS];
+  readonly checks?: RepositoryPullRequestPartAnswers[typeof PULL_REQUEST_PART.CHECKS];
+  readonly conversation?: RepositoryPullRequestPartAnswers[typeof PULL_REQUEST_PART.CONVERSATION];
+  readonly viewed?: RepositoryPullRequestPartAnswers[typeof PULL_REQUEST_PART.VIEWED];
+  readonly published?: RepositoryPullRequestPartAnswers[typeof PULL_REQUEST_PART.PUBLISHED];
 }
 
 /** A read of the options or the marks the service did not answer. */
 const unanswered = () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED } as const);
 
-/** An agent's changes as the service answers them, by the agent and the number a tab names. */
-export type ReadChanges = (agentId: string, number?: number) => Promise<AgentChangesAnswerView>;
+/** A pull request's changes as the service answers them, by the pull request a tab names. */
+export type ReadChanges = (
+  pullRequest: RepositoryPullRequestParams,
+) => Promise<RepositoryChangesAnswerView>;
 
 /** The plan's agents, the one whose pull request it is among them, its parts held by the host and answering as given and the fixtures otherwise. */
 export function controlAnswering(
@@ -372,7 +385,7 @@ export function controlAnswering(
   readChanges: ReadChanges = () =>
     Promise.resolve({ pullRequest: { url: PAGE, truncated: false, files: [] } }),
 ): AgentsControl {
-  const answers: PullRequestPartAnswers = {
+  const answers: RepositoryPullRequestPartAnswers = {
     [PULL_REQUEST_PART.PULL_REQUEST]:
       reads.pullRequest ?? (() => Promise.resolve({ pullRequest: PULL_REQUEST })),
     [PULL_REQUEST_PART.CHECKS]: reads.checks ?? (() => Promise.resolve({ pullRequest: CHECKS })),
@@ -380,6 +393,9 @@ export function controlAnswering(
       reads.conversation ?? (() => Promise.resolve({ pullRequest: CONVERSATION })),
     [PULL_REQUEST_PART.REVIEW_OPTIONS]: reads.reviewOptions ?? unanswered,
     [PULL_REQUEST_PART.VIEWED]: reads.viewed ?? unanswered,
+    ...(reads.published === undefined
+      ? undefined
+      : { [PULL_REQUEST_PART.PUBLISHED]: reads.published }),
   };
 
   const control = agentsControl({
@@ -401,7 +417,7 @@ export function controlAnswering(
 export const changesOf = new WeakMap<AgentsControl, ReadChanges>();
 
 /** How the host answers each control's parts, which a test drawing several controls in turn answers as it draws each. */
-export const partsOf = new WeakMap<AgentsControl, PullRequestPartAnswers>();
+export const partsOf = new WeakMap<AgentsControl, RepositoryPullRequestPartAnswers>();
 
 /** A part the control drawn last does not answer, held unanswered. */
 const unanswering = () => new Promise<never>(() => undefined);
@@ -430,30 +446,32 @@ function answering<A>(part: PullRequestPart, read: Promise<A>): Promise<A> {
 /** The host's holds on the tab's parts, answered as the control made or drawn last says, so a control made anew as a tab draws again answers alike. */
 function holdDrawnParts(): void {
   answeredParts = new Set();
-  holdPullRequestParts(handHostReads({}).deliverParts, {
-    [PULL_REQUEST_PART.PULL_REQUEST]: (agentId, number) =>
+  holdRepositoryPullRequestParts(handHostReads({}).deliverParts, {
+    [PULL_REQUEST_PART.PULL_REQUEST]: (pullRequest) =>
       answering(
         PULL_REQUEST_PART.PULL_REQUEST,
-        (world.drawnParts[PULL_REQUEST_PART.PULL_REQUEST] ?? unanswering)(agentId, number),
+        (world.drawnParts[PULL_REQUEST_PART.PULL_REQUEST] ?? unanswering)(pullRequest),
       ),
-    [PULL_REQUEST_PART.CHECKS]: (agentId, number) =>
+    [PULL_REQUEST_PART.CHECKS]: (pullRequest) =>
       answering(
         PULL_REQUEST_PART.CHECKS,
-        (world.drawnParts[PULL_REQUEST_PART.CHECKS] ?? unanswering)(agentId, number),
+        (world.drawnParts[PULL_REQUEST_PART.CHECKS] ?? unanswering)(pullRequest),
       ),
-    [PULL_REQUEST_PART.CONVERSATION]: (agentId, number) =>
+    [PULL_REQUEST_PART.CONVERSATION]: (pullRequest) =>
       answering(
         PULL_REQUEST_PART.CONVERSATION,
-        (world.drawnParts[PULL_REQUEST_PART.CONVERSATION] ?? unanswering)(agentId, number),
+        (world.drawnParts[PULL_REQUEST_PART.CONVERSATION] ?? unanswering)(pullRequest),
       ),
-    [PULL_REQUEST_PART.REVIEW_OPTIONS]: (agentId, number) =>
-      (world.drawnParts[PULL_REQUEST_PART.REVIEW_OPTIONS] ?? unanswering)(agentId, number),
-    [PULL_REQUEST_PART.VIEWED]: (agentId, number) =>
-      (world.drawnParts[PULL_REQUEST_PART.VIEWED] ?? unanswering)(agentId, number),
+    [PULL_REQUEST_PART.REVIEW_OPTIONS]: (pullRequest) =>
+      (world.drawnParts[PULL_REQUEST_PART.REVIEW_OPTIONS] ?? unanswering)(pullRequest),
+    [PULL_REQUEST_PART.VIEWED]: (pullRequest) =>
+      (world.drawnParts[PULL_REQUEST_PART.VIEWED] ?? unanswering)(pullRequest),
+    [PULL_REQUEST_PART.PUBLISHED]: (pullRequest) =>
+      (world.drawnParts[PULL_REQUEST_PART.PUBLISHED] ?? unanswering)(pullRequest),
   });
   fakeActPort({
     ...fakeActPortCalls(),
-    ...answeringChanges((agentId, number) => world.drawnChanges(agentId, number)),
+    ...answeringChanges((pullRequest) => world.drawnChanges(pullRequest)),
   });
 }
 
@@ -480,8 +498,9 @@ export function Switching({
     Fragment,
     null,
     createElement(Toolbar, { actions }),
-    createElement(AgentPullRequestTab, {
-      agentId: AGENT.id,
+    createElement(PullRequestTab, {
+      pullRequest: PULL_REQUEST_KEY,
+      taskId: AGENT.taskId,
       control,
       shown: true,
       repository: "acme/relay",
@@ -585,24 +604,24 @@ export const NO_GITHUB: GitHubConnectControl = {
   disconnect: () => Promise.resolve(false),
 };
 
-/** Draws the agent's tab inside the workspace's member directory and the account's GitHub, its reads landed; inside the window's opener for a place in the app where one is given. */
+/** Draws the agent's tab inside the workspace's member directory and the account's GitHub, its reads landed; inside a panel that opens another pull request in a tab of its own where `openPullRequest` is given. */
 export async function draw(
   control: AgentsControl,
   first: PullRequestView = PULL_REQUEST_VIEW.CONVERSATION,
   github: GitHubConnectControl = NO_GITHUB,
-  openPlace?: (link: ReadLink) => void,
+  openPullRequest?: (pullRequest: NumberedAddress) => void,
 ) {
   world.drawnParts = partsOf.get(control) ?? world.drawnParts;
   world.drawnChanges = changesOf.get(control) ?? world.drawnChanges;
 
-  return drawn(createElement(Switching, { control, first }), github, openPlace);
+  return drawn(createElement(Switching, { control, first }), github, openPullRequest);
 }
 
-/** Draws `tab` inside the workspace's member directory and the account's GitHub, its reads landed; inside the window's opener for a place in the app where one is given. */
+/** Draws `tab` inside the workspace's member directory and the account's GitHub, its reads landed; inside a panel that opens another pull request in a tab of its own where `openPullRequest` is given. */
 export async function drawn(
   tab: React.ReactElement,
   github: GitHubConnectControl = NO_GITHUB,
-  openPlace?: (link: ReadLink) => void,
+  openPullRequest?: (pullRequest: NumberedAddress) => void,
 ) {
   holdDrawnParts();
   const container = document.body.appendChild(document.createElement("div"));
@@ -620,9 +639,12 @@ export async function drawn(
                 Fragment,
                 null,
                 createElement(ToastHost),
-                openPlace === undefined
+                openPullRequest === undefined
                   ? tab
-                  : createElement(OpenLinkProvider, { value: openPlace, children: tab }),
+                  : createElement(OpenPullRequestProvider, {
+                      value: openPullRequest,
+                      children: tab,
+                    }),
               ),
             ),
           }),

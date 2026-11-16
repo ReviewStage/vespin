@@ -16,9 +16,16 @@ import { PRODUCT_PLATFORM } from "./analytics/product-events.js";
 /**
  * The hosted API as a build sees it, one integer: moved when the wire
  * changes in a way a build before the move cannot read, so the service can
- * refuse every build below its floor as needing an update.
+ * refuse every build below its floor as needing an update. A build from 3
+ * on reads `show_media` and plays sound clips, in the transcript, a thread,
+ * an ask's options, and a description alike, so a service that keeps a clip
+ * may refuse the builds before it, which would draw one as a picture that
+ * never loads. A build from 4 on reads Cursor as a model provider and an
+ * agent's runtime (`MODEL_PROVIDER.CURSOR`, `AGENT_RUNTIME.CURSOR`), so a
+ * service may offer Cursor's models and agents to it alone until the floor
+ * passes 3.
  */
-export const HOSTED_API_VERSION = 2;
+export const HOSTED_API_VERSION = 4;
 
 /** The headers a client names itself in: which app and version, as `platform/version`, and the hosted API version it was built against. */
 export const CLIENT_HEADER = {

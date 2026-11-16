@@ -25,18 +25,18 @@ appId: dev.vespin.ios
 # The iPad's top tab bar carries no id, so there the tab is the Search right of Tasks.
 - runFlow:
     when:
-      notVisible: "Find a task, an Inbox item, or an agent."
+      notVisible: "Search Vespin"
     commands:
       - tapOn:
           text: "Search"
           rightOf: "Tasks"
-- assertVisible: "Find a task, an Inbox item, or an agent."
+- assertVisible: "Search Vespin"
 - takeScreenshot: search-empty
 # The field is focused as the tab opens; it is pressed anyway, which a
 # focused field takes as nothing. Words nothing answers say so.
 - tapOn: "Search Vespin"
 - inputText: "zzqx"
-- assertVisible: "No results match “zzqx”."
+- assertVisible: "No results for “zzqx”"
 - takeScreenshot: search-no-results
 # The task "Ledger rounding" leads Tasks, its agent "Fix ledger rounding"
 # stands under Agents, and a task the words do not name is left out.

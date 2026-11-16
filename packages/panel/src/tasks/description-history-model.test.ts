@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import { revisionSummary } from "@repo/features/description-history-words";
+import {
+  changedSections,
+  VERSION_CHANGE,
+  versionDiff,
+} from "@repo/features/description-version-diff";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
   DESCRIPTION_ACTOR,
@@ -16,15 +21,12 @@ import { MARKDOWN_MARK, MarkdownMessage } from "../markdown-message.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import {
-  changedSections,
   opensSections,
   REVISION_SOURCE,
   revisionAuthorOf,
   revisionOfSave,
   revisionSource,
   sourceLabel,
-  VERSION_CHANGE,
-  versionDiff,
 } from "./description-history-model.js";
 
 const HOUR = 3_600_000;

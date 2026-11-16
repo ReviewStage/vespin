@@ -67,14 +67,6 @@ export function searchPlaceholder(scope: SearchScope): string {
     : `Search ${SEARCH_SCOPE_TITLE[scope].toLowerCase()}`;
 }
 
-/** What the search says before anything is typed: what it finds. */
-export const SEARCH_FINDS = `Find a ${TERM.TASK.one}, an Inbox ${TERM.INBOX_ITEM.one}, or an ${TERM.AGENT.one}.`;
-
-/** What a search that found nothing says: "No results match “ledger”." */
-export function noResultsWords(query: string): string {
-  return `No ${TERM.RESULT.many} match “${query.trim()}”.`;
-}
-
 /** What opens a kind's every row from under All, as the panel words a list it cut short (code cards' and the Inbox's Show all). */
 export const SHOW_ALL = "Show all";
 

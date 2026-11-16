@@ -174,7 +174,6 @@ export interface Agent {
   readonly id: string;
   /** The account that started the agent, whose conversation it runs in and whose provider key pays for it. */
   readonly userId: string;
-  /** The task the agent works on. */
   readonly taskId: string;
   /** The workspace the agent belongs to. */
   readonly organizationId: string;
@@ -2511,8 +2510,8 @@ export function listWorkspaceAgents(
  * Every agent of the workspace a delete stops, not archived, any member's,
  * whether or not the owner deleting it sees it, oldest started first, the
  * first `offset` passed over, and at most `limit`. Read by the workspace
- * alone, as `workspaceConversationIds` reads it: the caller holds the
- * account to the workspace's owner first, since everything in it goes.
+ * alone: the caller holds the account to the workspace's owner first, since
+ * everything in it goes.
  */
 export function listAgentsOfDeletedWorkspace(
   organizationId: string,
