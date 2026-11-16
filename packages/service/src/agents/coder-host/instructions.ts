@@ -165,8 +165,10 @@ function namingLines(repository: string | null, ownTask: OwnTask, workspace: str
  * current, as the developer's own task menu would: In progress while open
  * or waiting, To do or Backlog when it waits on another task or is set
  * aside, Canceled when dropped, and Done once its work is finished. Done
- * withdraws the task's open asks and archives its other agents
- * (`update_task`), so it waits on both. A merge tells the agent nothing
+ * withdraws the task's open asks and archives its agents, the one that
+ * moved it once its turn ends (`../../tasks/task-finish.ts`), so it waits
+ * on both; a turn starting on the task moves it back into progress from
+ * any status. A merge tells the agent nothing
  * (`../../github/agent-wakes.ts`), so one that queued its pull request
  * books a wakeup to see it land.
  */
