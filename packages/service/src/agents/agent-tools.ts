@@ -1016,10 +1016,10 @@ export const UPDATE_TASK_TOOL = {
   description:
     "Change a task of your workspace by its id, as the developer's own task menu would, on behalf " +
     "of the developer you work for; name at least one change, and several go in one call. Mark a task " +
-    "Done, with status done, once its work is done, such as when its pull requests merged, or where " +
-    "the developer asked you to clean up: that withdraws every ask still open on its threads, so mark " +
-    "it done only once you no longer need them, and archives every other agent on the task, an idle " +
-    "one at once and one still at work once its turn ends; a change of its status off Done brings " +
+    "Done, with status done, once all of the task's work is done, such as when its pull requests " +
+    "merged, or where the developer asked you to clean up: that withdraws every ask still open on its " +
+    "threads, so mark it done only once you no longer need them, and archives every agent on the " +
+    "task, you included; Canceled does the same. A change of its status off Done brings " +
     "them back, while a turn that reopens the task does not. Never change a teammate's task still " +
     "in use unless the developer asked for it. A task is never archived: a settled one stands Done " +
     "or Canceled. A block is Linear's: the blocker's work comes first and the task it blocks waits " +
@@ -1170,8 +1170,9 @@ const UPDATE_AGENT_INPUT = Schema.Struct({
     describeWire(
       Schema.Boolean,
       "true to archive it, as the developer's Archive agent would: it leaves every list but the " +
-        "archived ones, takes no message, and is not woken, its transcript, branch, and pull request " +
-        "kept; refused while it is still working, and never yourself. false brings it back.",
+        "archived ones, and is not woken by GitHub or an automation; a message brings it back. Its " +
+        "transcript, branch, and pull request are kept; refused while it is still working, and " +
+        "never yourself. false brings it back.",
     ),
   ),
   reason: Schema.optionalKey(

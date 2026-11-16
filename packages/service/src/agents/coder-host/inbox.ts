@@ -171,7 +171,8 @@ export const INBOX_TOOLS = {
     name: INBOX_TOOL.WITHDRAW,
     description:
       "Withdraw the open ask of one of your threads, by its key, with why: you no longer need it, you found the answer yourself, " +
-      "or you checked that the to-do is done. The thread and its messages stay.",
+      "or you checked that the to-do is done. That closes the thread, and its messages stay; a thread " +
+      "already answered, closed, or withdrawn answers how it was.",
     inputSchema: inboxWithdrawInputSchema,
   },
   LIST: {

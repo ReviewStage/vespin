@@ -158,8 +158,8 @@ export const AUTOMATION_TOOL_REFUSAL = {
     `Not run: ${PRODUCT_NAME} does not take the automation as asked. Check the trigger, the repositories, ` +
     "the scope, and the agentId.",
   UNKNOWN_SERVERS:
-    "Not run: name each connection in disabledServers as your connections are named in your " +
-    "instructions, such as neon, sentry, or notion-2 for a second Notion account; these name none:",
+    "Not run: name each MCP server in disabledServers by its server name, such as `linear` for " +
+    "`mcp__linear__…`; these name none:",
   NOT_RUNNABLE:
     "Not run: the developer you work for may read that automation but not run it. A personal " +
     "automation is its creator's to run, and a workspace's every member's.",
@@ -203,7 +203,8 @@ const MODEL = describeWire(
 
 const SERVERS = describeWire(
   disabledServersSchema,
-  "Connections, as your instructions name them, each run's agent is not handed; the whole list.",
+  "MCP servers each run's agent is not handed, by server name (`linear` for `mcp__linear__…`); " +
+    "the whole list.",
 );
 
 const SCOPE = describeWire(
