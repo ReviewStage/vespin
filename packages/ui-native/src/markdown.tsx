@@ -21,6 +21,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AudioClip } from "./audio-clip.js";
 import { DraftCard } from "./draft-card.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
@@ -1058,7 +1059,7 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
   );
 }
 
-/** A picture's block: the video its address names, played in its place, or the picture. */
+/** A picture's block: the video or sound clip its address names, played in its place, or the picture. */
 function PictureBlock({
   source,
   alt,
@@ -1071,14 +1072,11 @@ function PictureBlock({
   const video = drawing.videoAt(source);
 
   if (video === undefined) return <Picture source={drawing.pictureSource(source)} alt={alt} />;
+  const label = alt.trim() === "" ? video.label : alt;
 
-  return (
-    <Video
-      source={video.source}
-      label={alt.trim() === "" ? video.label : alt}
-      onOpenElsewhere={video.onOpenElsewhere}
-    />
-  );
+  if (video.audio === true) return <AudioClip source={video.source} label={label} />;
+
+  return <Video source={video.source} label={label} onOpenElsewhere={video.onOpenElsewhere} />;
 }
 
 function BlockView({
@@ -1189,10 +1187,12 @@ type MarkdownProps = {
     | undefined;
 };
 
-/** A video the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, and where it opens where the player cannot read it. */
+/** A video or a sound clip the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, whether it is a sound clip, and where a video opens where the player cannot read it. */
 export interface MarkdownVideo {
   readonly source: string | undefined;
   readonly label: string;
+  /** Whether it is a sound clip, played in its strip (`AudioClip`) rather than a film's player. */
+  readonly audio?: boolean | undefined;
   readonly onOpenElsewhere?: (() => void) | undefined;
 }
 

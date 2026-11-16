@@ -70,8 +70,8 @@ import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
   answerKeeper,
-  selectInboxGroupsIn,
   selectInboxReader,
+  selectTaskListListed,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
 import { BUZZ } from "@repo/ui-native";
@@ -88,12 +88,10 @@ import {
   useTaskListRows,
 } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
+import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { type TaskRelationWrites, useTaskRelationWrites } from "./use-relations.js";
 import { useWorkspaceRepositories } from "./use-start.js";
-
-/** No holder of Inbox items read yet. */
-const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
 
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
 function refused(what: string): (cause: unknown) => void {
@@ -112,10 +110,7 @@ export function useWaiting(workspaceId: string | undefined): {
   readonly byTask: ReadonlyMap<string, number>;
   readonly byAgent: ReadonlyMap<string, number>;
 } {
-  const { data: groups = NO_GROUPS } = useQuery({
-    ...appStateQuery,
-    select: selectInboxGroupsIn(workspaceId),
-  });
+  const groups = useInboxGroupsIn(workspaceId);
 
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
 
@@ -482,13 +477,8 @@ function selectListingParts(state: AppStateSnapshot) {
     listStatus: state.tasks.listStatus,
     taskSections: state.tasks.taskSections,
     repositoryPins: state.tasks.repositoryPins,
-    agentsListed: selectAgentsListed(state),
+    agentsListed: selectTaskListListed(state),
   };
-}
-
-/** Whether the task list carries its agents yet, so a task's working agents are counted from them rather than its row's count. */
-function selectAgentsListed(state: AppStateSnapshot): boolean {
-  return state.tasks.taskAgents !== undefined;
 }
 
 /** The task list's rows as the listing reads them off its collections. */
@@ -735,7 +725,12 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   const tasks = useListedTasks();
   const listedAgents = useListedAgents();
   const pullRequests = useTaskListRows(collections.agentPullRequests);
-  const { data: agentsListed = false } = useQuery({ ...appStateQuery, select: selectAgentsListed });
+
+  const { data: agentsListed = false } = useQuery({
+    ...appStateQuery,
+    select: selectTaskListListed,
+  });
+
   const waiting = useWaiting(workspace?.id);
   const { held: statuses, setStatus } = useStatusWrites(tasks);
   const { rename, setPriority, setAssignee } = useTaskWrites();

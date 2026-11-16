@@ -23,7 +23,7 @@ import {
   type PlatformActProcedures,
   terminalProcedures,
 } from "@repo/host/act-port";
-import type { AppStateSnapshot } from "@repo/host/app-state";
+import type { AppStateRead } from "@repo/host/app-state";
 import { LEAVE } from "@repo/host/quit";
 import type { WireBoundaryInput } from "@repo/wire";
 import { Effect } from "effect";
@@ -309,14 +309,15 @@ export function registerDesktopIpc(services: DesktopServices): void {
      * The document as one window stands, answered before anything is drawn
      * over it: the host read once so no window is handed a state it never
      * told, and the microphone taken afresh, because macOS's answer is its
-     * own to move and moves while the app runs. Every later reading of the same
+     * own to move and moves while the app runs. The task list's lists are
+     * answered beside it, never in it. Every later reading of the same
      * document arrives on `app:state`.
      */
-    snapshotFor: async (sender): Promise<AppStateSnapshot> => {
+    snapshotFor: async (sender): Promise<AppStateRead> => {
       await run(operator.readBootstrap());
       native.refreshMicrophoneStatus();
 
-      return windows.appStateFor(sender);
+      return { ...windows.appStateFor(sender), taskList: state.taskList() };
     },
   });
 }

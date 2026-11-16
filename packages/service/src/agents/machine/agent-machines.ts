@@ -59,6 +59,8 @@ function routedLifecycle(cloud: MachineLifecycle, mac: DeviceMachineService): Ma
       bySession(session, (machine) => machine.diffCheckout(session, range)),
     phoneVideo: (session, path) =>
       bySession(session, (machine) => machine.phoneVideo(session, path)),
+    phoneAudio: (session, path) =>
+      bySession(session, (machine) => machine.phoneAudio(session, path)),
   };
 }
 

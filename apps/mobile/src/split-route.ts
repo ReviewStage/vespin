@@ -1,8 +1,8 @@
 // split-route.ts -- a tab's selection kept in its root route, so a link, a notification, or a fold lands on the item beside its list or pushed over it, as the window allows.
 
 import { iosRouteOnTab, iosRouteTab } from "@repo/features/ios-app-links";
-import { useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import { useOwnTab } from "./tab-route.js";
 import { useWindowSizeClass } from "./use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "./window-size-class.js";
@@ -51,7 +51,6 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
   const router = useRouter();
   const { selected } = useLocalSearchParams<{ selected?: string }>();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
-  const focused = useIsFocused();
   const [held, hold] = useState<HeldPick | undefined>(undefined);
   const routed = selected ?? (regular ? picked.get(tab) : undefined);
 
@@ -59,24 +58,25 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
   useEffect(() => hold(undefined), [routed]);
 
   useEffect(() => {
-    if (regular) {
-      if (selected !== undefined) picked.set(tab, selected);
+    if (regular && selected !== undefined) picked.set(tab, selected);
+  }, [regular, selected, tab]);
 
-      return;
-    }
+  // Note that the root hears its focus through an effect rather than reading it, because a read draws the root and its whole list again on every tab switch and every page pushed over it or popped.
+  useFocusEffect(
+    useCallback(() => {
+      if (regular) return;
 
-    if (!focused) return;
+      // Note that the item shown beside the list may be the tab's last pick rather than the param, so a fold pushes that one.
+      const shown = selected ?? picked.get(tab);
 
-    // Note that the item shown beside the list may be the tab's last pick rather than the param, so a fold pushes that one.
-    const shown = selected ?? picked.get(tab);
+      if (shown === undefined) return;
+      // Note that the item now stands pushed over the list, so the tab no longer holds it beside the list.
+      picked.delete(tab);
 
-    if (shown === undefined) return;
-    // Note that the item now stands pushed over the list, so the tab no longer holds it beside the list.
-    picked.delete(tab);
-
-    if (selected !== undefined) router.setParams({ selected: undefined });
-    router.push(itemRoute(tab, shown));
-  }, [regular, focused, selected, router, tab]);
+      if (selected !== undefined) router.setParams({ selected: undefined });
+      router.push(itemRoute(tab, shown));
+    }, [regular, selected, router, tab]),
+  );
 
   return {
     selected: held !== undefined && held.over === routed ? held.id : routed,

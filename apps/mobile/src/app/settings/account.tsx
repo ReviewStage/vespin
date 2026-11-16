@@ -23,6 +23,7 @@ import {
   SettingsForm,
   ToggleRow,
   useAsyncAction,
+  WORDS_ASK_KIND,
 } from "@repo/ui-native";
 import { actionRefused } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
@@ -169,6 +170,7 @@ export default function AccountScreen() {
         act={DELETE_ACCOUNT}
         destructive
         gate={account.email}
+        gateKind={WORDS_ASK_KIND.EMAIL}
         presented={asking}
         onAct={() => {
           setAsking(false);

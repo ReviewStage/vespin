@@ -1,14 +1,42 @@
 /**
- * task-list-collections.tsx -- the window's task-list collections handed to every surface beneath, and a read of one row of them that draws again only when that row moves.
+ * task-list-collections.tsx -- the window's task-list collections handed to every surface beneath, and its reads of them: one row that draws again only when that row moves, a task by id with its typed name, every task in an order, the tasks an address's step names, and rows looked up by id.
  *
  * The collections and the feed the window's follow writes them through are
  * `@repo/host/task-list-following`'s, shared with the iOS app; what is here
  * is the panel's React over them, bound to the panel's own React.
  */
 
+import type { ListedAgent } from "@repo/features/agent-wire";
+import type { TaskSummary } from "@repo/features/task-wire";
+import {
+  renamedTask,
+  renamedTasks,
+  sidebarTasks,
+  type TaskNames,
+} from "@repo/features/tasks-model";
 import type { TaskListCollections } from "@repo/host/task-list-following";
-import type { Collection } from "@tanstack/react-db";
-import { createContext, type ReactNode, use, useCallback, useSyncExternalStore } from "react";
+import { type Collection, eq, inArray, or, useLiveQuery } from "@tanstack/react-db";
+import {
+  createContext,
+  type ReactNode,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+
+/** The order a read of the whole list lists its tasks in. */
+export const NAMED_ORDER = {
+  /** Newest started first, as the host lists them. */
+  STARTED: "started",
+  /** The sidebar's: the pinned ones first, newest pinned first, then the rest, newest started first. */
+  PINNED_FIRST: "pinned-first",
+} as const;
+
+export type NamedOrder = (typeof NAMED_ORDER)[keyof typeof NAMED_ORDER];
 
 /** Hears that one row moved. */
 type RowHeard = () => void;
@@ -63,6 +91,21 @@ function listenToRow<Row extends object>(
   };
 }
 
+/** No name typed: what a read of the rows as listed draws over them. */
+const NO_NAMES_TYPED: TaskNames = new Map();
+
+/** A task step naming a task by its number in its workspace, as no id is. */
+const NUMBER_STEP = /^\d+$/u;
+
+/** No step asked: what a read of the tasks a step names answers. */
+const NO_STEPPED: readonly TaskSummary[] = [];
+
+/** The live queries' keys: the rows of each collection a reader by id has asked for. */
+const ROWS_KEY = {
+  TASKS: "task-list-rows-tasks",
+  AGENTS: "task-list-rows-agents",
+} as const;
+
 /** Nothing to listen for: what a read with no key subscribes with. */
 const LISTEN_TO_NOTHING = (): (() => void) => () => {};
 
@@ -87,6 +130,169 @@ export function useTaskListRow<Row extends object>(
 
   // Note that a render to markup reads the row as it stands, as a window's first frame does.
   return useSyncExternalStore(subscribe, read, read);
+}
+
+/**
+ * The task `taskId` names as the list holds it (`useTaskListRow`), its name
+ * drawn as it is being typed where it is (`typedNames`); none where the list
+ * holds no such task, or no id is given. The same object until that row or
+ * its typed name moves.
+ */
+export function useNamedTask(
+  taskId: string | undefined,
+  typedNames: TaskNames,
+): TaskSummary | undefined {
+  const row = useTaskListRow(useTaskListCollections().tasks, taskId);
+  const typed = taskId === undefined ? undefined : typedNames.get(taskId);
+
+  return useMemo(
+    () => (row === undefined || typed === undefined ? row : { ...row, name: typed }),
+    [row, typed],
+  );
+}
+
+/**
+ * Every task the list holds in `order`, held to the workspace `workspaceId`
+ * names where it names one, each name drawn as it is being typed where it
+ * is (`typedNames`). One live query keeps them, so the list is the same
+ * array until one of them or a typed name moves; for a reader that walks
+ * the whole list, as the palette's task rows, the Tasks page, and the
+ * Inbox's counts do. Note that these rows are the live query's, never the
+ * same objects `.get` answers.
+ */
+export function useNamedTasks(
+  typedNames: TaskNames,
+  order: NamedOrder,
+  workspaceId?: string | undefined,
+): readonly TaskSummary[] {
+  const collections = useTaskListCollections();
+
+  const every = useLiveQuery({
+    query: (q) => {
+      const all = q
+        .from({ task: collections.tasks })
+        .orderBy(({ task }) => task.createdAt, "desc")
+        .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" });
+
+      return workspaceId === undefined
+        ? all
+        : all.where(({ task }) => eq(task.workspaceId, workspaceId));
+    },
+  }).data;
+
+  return useMemo(() => {
+    const named = renamedTasks(every, typedNames);
+
+    if (order === NAMED_ORDER.STARTED) return named;
+    const { pinned, rest } = sidebarTasks(named);
+
+    return [...pinned, ...rest];
+  }, [every, typedNames, order]);
+}
+
+/**
+ * The tasks an address's step may name, as the list holds them: the one
+ * whose id it is, and, for a step reading as a number, each numbered so in
+ * any workspace, for the reader to hold to the workspace the address names;
+ * none while no step is given. One live query over those rows keeps them,
+ * so the list is the same array across a delivery moving any other task.
+ */
+export function useSteppedTasks(step: string | undefined): readonly TaskSummary[] {
+  const collections = useTaskListCollections();
+
+  const stepped = useLiveQuery({
+    query: (q) => {
+      if (step === undefined) return undefined;
+      const from = q.from({ task: collections.tasks });
+
+      if (!NUMBER_STEP.test(step)) return from.where(({ task }) => eq(task.id, step));
+      const number = Number(step);
+
+      return from.where(({ task }) => or(eq(task.id, step), eq(task.number, number)));
+    },
+  }).data;
+
+  return stepped ?? NO_STEPPED;
+}
+
+/** The task list's rows read by id, as the collections hold them now. */
+export interface TaskListRows {
+  /** The task listed under `taskId`, its name as it is being typed where it is; none where the list holds none. */
+  readonly task: (taskId: string) => TaskSummary | undefined;
+  /** The agent listed under `agentId`; none where the list holds none. */
+  readonly agent: (agentId: string) => ListedAgent | undefined;
+}
+
+/** The ids asked for that the live query does not yet follow, all of them sorted, or none where it follows each. */
+function widened(
+  asked: ReadonlySet<string>,
+  followed: readonly string[],
+): readonly string[] | undefined {
+  if (asked.size === followed.length) return undefined;
+
+  return [...asked].sort();
+}
+
+/**
+ * The task list's rows read by id (`.get`), for a reader that looks up a
+ * handful of rows in a plain function or a callback, each task's name drawn
+ * as it is being typed where it is (`typedNames`). Each id asked is followed
+ * from the next commit on by a live query over the ids asked (`inArray`), so
+ * the reader is drawn again when one of those rows moves and holds across a
+ * delivery moving any other; a lookup always reads the collection as it
+ * stands, so an id asked for the first time reads its row at once.
+ */
+export function useTaskListRows(typedNames: TaskNames = NO_NAMES_TYPED): TaskListRows {
+  const collections = useTaskListCollections();
+  // The ids asked for, which the live queries follow once committed. Note that they only grow, as the rows a reader looks up are few.
+  const asked = useRef({ tasks: new Set<string>(), agents: new Set<string>() }).current;
+
+  const [followed, setFollowed] = useState<{
+    readonly tasks: readonly string[];
+    readonly agents: readonly string[];
+  }>({ tasks: [], agents: [] });
+
+  const followedTasks = useLiveQuery({
+    queryKey: [ROWS_KEY.TASKS, followed.tasks],
+    query: (q) =>
+      q
+        .from({ task: collections.tasks })
+        .where(({ task }) => inArray(task.id, [...followed.tasks])),
+  }).data;
+
+  const followedAgents = useLiveQuery({
+    queryKey: [ROWS_KEY.AGENTS, followed.agents],
+    query: (q) =>
+      q
+        .from({ agent: collections.agents })
+        .where(({ agent }) => inArray(agent.id, [...followed.agents])),
+  }).data;
+
+  useEffect(() => {
+    const tasks = widened(asked.tasks, followed.tasks);
+    const agents = widened(asked.agents, followed.agents);
+
+    if (tasks === undefined && agents === undefined) return;
+    setFollowed({ tasks: tasks ?? followed.tasks, agents: agents ?? followed.agents });
+  });
+
+  // Note that the lookups are made again only once a row followed or a typed name moves, so what reads them holds across every other delivery.
+  return useMemo(
+    () => ({
+      task: (taskId: string) => {
+        asked.tasks.add(taskId);
+        const row = collections.tasks.get(taskId);
+
+        return row === undefined ? undefined : renamedTask(row, typedNames);
+      },
+      agent: (agentId: string) => {
+        asked.agents.add(agentId);
+
+        return collections.agents.get(agentId);
+      },
+    }),
+    [collections, asked, typedNames, followedTasks, followedAgents],
+  );
 }
 
 const TaskListCollectionsContext = createContext<TaskListCollections | undefined>(undefined);

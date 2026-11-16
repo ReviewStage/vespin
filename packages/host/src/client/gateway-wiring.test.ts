@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { IDLE_TASKS_VIEW, type TasksView } from "@repo/features/tasks-view";
+import { IDLE_TASKS_VIEW, type ListedTasksView } from "@repo/features/tasks-view";
 import {
   carried,
   GATEWAY_CLIENT_ROLE,
@@ -43,11 +43,13 @@ it.effect(
         state,
         node: { openExternal: () => Promise.resolve() },
       });
-      const view: TasksView = { ...IDLE_TASKS_VIEW, activeTaskId: "plan-1" };
+      const view: ListedTasksView = { ...IDLE_TASKS_VIEW, tasks: [], activeTaskId: "plan-1" };
 
       gateway.emit(GATEWAY_EVENT.TASKS_CHANGED, carried(view));
 
-      assert.equal(state.snapshot().tasks, view);
+      // The document holds the view's slice and the store its very lists beside it, neither rebuilt.
+      assert.deepEqual(state.snapshot().tasks, { ...IDLE_TASKS_VIEW, activeTaskId: "plan-1" });
+      assert.equal(state.taskList().tasks, view.tasks);
       assert.equal(state.snapshot().version, 1);
     }).pipe(Effect.scoped),
 );

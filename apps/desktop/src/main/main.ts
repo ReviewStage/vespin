@@ -147,11 +147,7 @@ async function main(): Promise<void> {
   // A copy that cannot update itself where it stands is offered the move
   // first, before anything stands that its quit would have to give back.
   if (await offerMoveToApplications(config)) return;
-  // This is an ordinary app with a window of its own: the bundle gives it a
-  // Dock tile and a place in Command-Tab, and these menus give its fields Copy
-  // and Paste, its window Close, Minimize, and Quit, and its own commands
-  // their shortcuts.
-  // The update item joins once the updater has said where it stands.
+  // The update item joins the menu bar once the updater has said where it stands.
   config.showMenuBar();
 
   const runtime = ManagedRuntime.make(composeDesktop(config, quit));
