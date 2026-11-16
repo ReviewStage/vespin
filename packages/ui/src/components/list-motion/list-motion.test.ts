@@ -56,6 +56,17 @@ interface Played {
 let root: Root | undefined;
 let played: Played[] = [];
 
+/** How far each row is drawn from its place by the glides it was handed, where a test draws them (`drawGlides`): each glide's first frame, added onto the last, as a browser draws a row the frame a glide starts. */
+let drawGlides = false;
+const shifted = new Map<Element, number>();
+
+/** Draws `row` `y` from its place, where its rect and its transform both say it, as a browser draws a row mid-glide. */
+function drawShift(row: Element, y: number): void {
+  shifted.set(row, y);
+
+  if (row instanceof HTMLElement) row.style.transform = `matrix(1, 0, 0, 1, 0, ${y})`;
+}
+
 type Motion = { onfinish: (() => void) | null; cancel: () => void };
 
 beforeEach(() => {
@@ -71,6 +82,12 @@ beforeEach(() => {
           canceled = true;
         },
       };
+
+      const glide = /^translate\(0px, (-?[\d.]+)px\)$/.exec(String(keyframes[0]?.transform ?? ""));
+
+      if (drawGlides && glide !== null) {
+        drawShift(this, (shifted.get(this) ?? 0) + Number(glide[1]));
+      }
 
       played.push({
         element: this,
@@ -101,11 +118,14 @@ beforeEach(() => {
     const column = [...(list.parentElement?.children ?? [])].indexOf(list);
     const top = topOf(this) ?? laidOut.indexOf(this) * ROW;
 
-    return new DOMRect(column * COLUMN, top, COLUMN, ROW);
+    return new DOMRect(column * COLUMN, top + (shifted.get(this) ?? 0), COLUMN, ROW);
   });
 });
 
 afterEach(() => {
+  drawGlides = false;
+  shifted.clear();
+  vi.useRealTimers();
   act(() => root?.unmount());
   root = undefined;
   document.body.replaceChildren();
@@ -237,13 +257,20 @@ function motionsOf(element: Element | undefined): Keyframe[][] {
   return played.filter((each) => each.element === element).map((each) => each.keyframes);
 }
 
+/** The clip a row is drawn behind, by its key; none for a row not drawn. */
+function clipOf(key: string): string | undefined {
+  const row = rowOf(key);
+
+  return row instanceof HTMLElement ? row.style.clipPath : undefined;
+}
+
 test("nothing plays the first time a list is drawn", () => {
   draw([["A", "B"]]);
 
   expect(played).toEqual([]);
 });
 
-test("a row arriving fades in, slides in from the leading edge, and stands clipped at the top of the row it pushed down as that row glides from where it stood", () => {
+test("a row arriving fades in and slides in from the leading edge, and the row it pushed down glides from where it stood", () => {
   const show = draw([["A", "B"]]);
 
   show([["A", "N", "B"]]);
@@ -251,7 +278,6 @@ test("a row arriving fades in, slides in from the leading edge, and stands clipp
   expect(motionsOf(rowOf("N"))).toEqual([
     [{ opacity: 0 }, { opacity: 1 }],
     [{ transform: "translateX(-16px)" }, { transform: "none" }],
-    [{ clipPath: `inset(0 0 ${ROW}px 0)` }, { clipPath: "inset(0 0 0px 0)" }],
   ]);
   expect(motionsOf(rowOf("B"))).toEqual([
     [{ transform: `translate(0px, ${-ROW}px)` }, { transform: "none" }],
@@ -259,34 +285,38 @@ test("a row arriving fades in, slides in from the leading edge, and stands clipp
   expect(motionsOf(rowOf("A"))).toEqual([]);
 });
 
-test("rows arriving together each stand clipped at the top of the row they pushed down, on the beat it glides on, so none stands over it", () => {
+test("a row arriving is clipped each frame at the top of the row it pushed down, where that row is drawn, and given its own clip back once that row has come to rest", () => {
+  vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] });
+  drawGlides = true;
   const show = draw([["A", "B"]]);
 
+  show([["A", "N", "B"]]);
+
+  const under = rowOf("B");
+  expect(clipOf("N")).toBe(`inset(0 0 ${ROW}px 0)`);
+
+  if (under !== undefined) drawShift(under, -ROW / 2);
+  vi.advanceTimersToNextFrame();
+
+  expect(clipOf("N")).toBe(`inset(0 0 ${ROW / 2}px 0)`);
+
+  if (under !== undefined) drawShift(under, 0);
+  vi.advanceTimersByTime(500);
+
+  expect(clipOf("N")).toBe("");
+});
+
+test("rows arriving together, and a row arriving while the row under them still glides, never stand over it", () => {
+  vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame", "performance"] });
+  drawGlides = true;
+  const show = draw([["A", "B"]]);
+
+  show([["A", "M", "B"]]);
   show([["A", "M", "N", "B"]]);
 
-  const clipOf = (key: string) =>
-    played.find((each) => each.element === rowOf(key) && "clipPath" in (each.keyframes[0] ?? {}));
-
-  const glide = played.find((each) => each.element === rowOf("B"));
-
-  expect(clipOf("M")?.keyframes).toEqual([
-    { clipPath: `inset(0 0 ${ROW}px 0)` },
-    { clipPath: "inset(0 0 0px 0)" },
-  ]);
-  expect(clipOf("N")?.keyframes).toEqual([
-    { clipPath: `inset(0 0 ${2 * ROW}px 0)` },
-    { clipPath: "inset(0 0 0px 0)" },
-  ]);
-
-  for (const key of ["M", "N"]) {
-    const clip = clipOf(key)?.timing;
-
-    expect([clip?.duration, clip?.easing, clip?.delay]).toEqual([
-      glide?.timing.duration,
-      glide?.timing.easing,
-      glide?.timing.delay,
-    ]);
-  }
+  // Note that B is drawn where it stood before either change, both glides it was handed at their first frame.
+  expect(clipOf("M")).toBe(`inset(0 0 ${ROW}px 0)`);
+  expect(clipOf("N")).toBe(`inset(0 0 ${2 * ROW}px 0)`);
 });
 
 test("a row pushed down in a list a transform around it draws at half its size glides as far as its layout moved it, not as far as it is drawn", () => {
@@ -404,7 +434,6 @@ test("a row listed again before its exit has played stands again, and comes back
   expect(motionsOf(back)).toEqual([
     [{ opacity: 0 }, { opacity: 1 }],
     [{ transform: "translateX(-16px)" }, { transform: "none" }],
-    [{ clipPath: `inset(0 0 ${ROW}px 0)` }, { clipPath: "inset(0 0 0px 0)" }],
   ]);
 });
 
