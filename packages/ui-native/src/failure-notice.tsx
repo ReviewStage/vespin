@@ -1,6 +1,7 @@
 // failure-notice.tsx -- the app's one notice: a banner of Liquid Glass that rises at the window's foot, over its bars, with a refusal's words and a Try again, a write that went with its Undo, or says once that the phone is offline, read aloud by VoiceOver and let go on its own.
 
 import { Host, HStack, Image, Spacer, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   Animation,
   accessibilityElement,
@@ -10,6 +11,7 @@ import {
   fixedSize,
   font,
   foregroundStyle,
+  frame,
   layoutPriority,
   lineLimit,
   offset,
@@ -52,9 +54,9 @@ import {
 import { useBarGlass, useKeyboardHeight } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { BUZZ, buzz } from "./haptics.js";
-import { LiftBarsProvider, type NoticeLift, useLiftBars } from "./notice-lift.js";
+import { FootRoomProvider, LiftBarsProvider, type NoticeLift, useLiftBars } from "./notice-lift.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What the banner's one button says, as the panel's refusals and its Undo toast offer it. */
@@ -73,6 +75,9 @@ const ARRIVAL = 120;
 
 /** How long it takes to slide in or out, in milliseconds, as the system's own banners do. */
 const SLIDE_MS = 280;
+
+/** The banner's own room above and below its line, in points, which its press's 44 pt target reaches into. */
+const BANNER_INSET = SPACE.ROW + 2;
 
 /** How far a swipe down must carry the banner before it lets it go, in points. */
 const SWIPE_AWAY = 24;
@@ -155,7 +160,9 @@ function NoticeBody({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
-  const ink = notice.kind === NOTICE_KIND.REFUSED ? colors.DANGER : colors.TEXT_MUTED;
+  // Note that a refusal draws as a problem line does, the attention glyph over the muted ink, rather than danger's red: it asks for a second try, not alarm.
+  const refused = notice.kind === NOTICE_KIND.REFUSED;
+  const ink = refused ? colors.ATTENTION : colors.TEXT_MUTED;
   const press = noticePress(notice);
   const glass = useBarGlass();
 
@@ -164,7 +171,7 @@ function NoticeBody({
       <HStack
         spacing={SPACE.ROW}
         modifiers={[
-          padding({ leading: SPACE.EDGE, trailing: SPACE.ROW, vertical: SPACE.ROW + 2 }),
+          padding({ leading: SPACE.EDGE, trailing: SPACE.ROW, vertical: BANNER_INSET }),
           ...glass,
           // Note that the banner contains its pieces as elements of their own, because an identifier on a plain stack passes down to them and stood over Try again's own.
           accessibilityElement("contain"),
@@ -177,7 +184,7 @@ function NoticeBody({
         <Text
           modifiers={[
             font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-            foregroundStyle(colors.TEXT),
+            foregroundStyle(refused ? colors.TEXT_MUTED : colors.TEXT),
             lineLimit(3),
             layoutPriority(1),
           ]}
@@ -186,17 +193,28 @@ function NoticeBody({
         </Text>
         <Spacer />
         {press === undefined ? null : (
+          // Note that the press takes its target's 44 pt on its label, not the button, since only a label's frame and shape answer a press; the word alone stood about 20 pt tall. The button then gives back the banner's own vertical padding, so the target reaches into it rather than growing the banner.
           <SwiftUIButton
-            label={press.label}
             onPress={onPress}
             modifiers={[
               buttonStyle("borderless"),
               tint(colors.TEXT),
-              font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
               fixedSize(),
+              padding({ vertical: -BANNER_INSET }),
               accessibilityIdentifier(press.identifier),
             ]}
-          />
+          >
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
+                foregroundStyle(colors.TEXT),
+                frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+                SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+              ]}
+            >
+              {press.label}
+            </Text>
+          </SwiftUIButton>
         )}
       </HStack>
     </Host>
@@ -266,7 +284,7 @@ function NoticeBanner({
 }) {
   const reduceMotion = useReduceMotion();
   const keyboard = useKeyboardHeight();
-  const { bottom: safeBottom } = useSafeAreaInsets();
+  const { bottom: safeBottom, left, right } = useSafeAreaInsets();
   const [place] = useState(() => new Animated.Value(0));
   const [drawn, setDrawn] = useState<ShownNotice | undefined>(notice);
   // Whether the banner stands in its place, or below it as it arrives and leaves.
@@ -356,8 +374,9 @@ function NoticeBanner({
 
   const foot = bannerFoot({ keyboard, safeBottom, lift, footRoom, placeFoot });
 
+  // Note that the banner keeps the window's side safe areas, so it stands short of a tab rail beside it, as the folded iPhone Duo stands one, as a docked composer does.
   return (
-    <View pointerEvents="box-none" style={[styles.edge, { bottom: foot }]}>
+    <View pointerEvents="box-none" style={[styles.edge, { bottom: foot, left, right }]}>
       <Animated.View
         style={[styles.lane, { opacity: place }]}
         pointerEvents="box-none"
@@ -379,15 +398,10 @@ function NoticeBanner({
  * and in the sheet on top while one does (`FailureNoticeLayer`), since a
  * sheet is a view of its own over the root, which would hide it.
  */
-export function FailureNoticeProvider({
-  children,
-  footRoom = 0,
-}: {
-  readonly children: ReactNode;
-  /** The room the window's own bar takes at its foot, such as a compact window's tab bar, which the notice stands over where no screen pins a bar of its own. */
-  readonly footRoom?: number;
-}) {
+export function FailureNoticeProvider({ children }: { readonly children: ReactNode }) {
   const [state, setState] = useState(NO_NOTICE);
+  // The room the window's own bar takes at its foot, which the layout holding the bar sets (`useNoticeFootRoom`).
+  const [footRoom, setFootRoom] = useState(0);
   const [layers, setLayers] = useState<readonly string[]>([]);
   const { bars, lift } = useLiftBars();
 
@@ -419,16 +433,18 @@ export function FailureNoticeProvider({
   return (
     <Notices.Provider value={notices}>
       <LiftBarsProvider value={bars}>
-        <Stage.Provider value={stage}>
-          {children}
-          <NoticeBanner
-            notice={top === undefined ? state.shown : undefined}
-            onGone={gone}
-            lift={lift}
-            footRoom={footRoom}
-            placeFoot={0}
-          />
-        </Stage.Provider>
+        <FootRoomProvider value={setFootRoom}>
+          <Stage.Provider value={stage}>
+            {children}
+            <NoticeBanner
+              notice={top === undefined ? state.shown : undefined}
+              onGone={gone}
+              lift={lift}
+              footRoom={footRoom}
+              placeFoot={0}
+            />
+          </Stage.Provider>
+        </FootRoomProvider>
       </LiftBarsProvider>
     </Notices.Provider>
   );

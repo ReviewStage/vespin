@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import { APP_SETTING_ID, EXPERIMENT, NO_EXPERIMENTS } from "@repo/settings";
+import { APP_SETTING_ID, EXPERIMENT } from "@repo/settings";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import { SETTINGS_SECTION, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { experimentsOn, settingsView } from "@repo/settings/testing";
@@ -206,10 +206,10 @@ test("an experiment is found by its name, what it brings, and what other apps ca
   }
 
   const experiments = [
+    "Cursor",
     "Move agents",
     "Goals",
     "Merge queue",
-    "Voice",
     "Turn changes",
     "Suggestions",
     "Rewind restores files",
@@ -308,22 +308,6 @@ function labelsFound(query: string, input: SettingsSearchInput = FULL_INPUT): re
 test("skills and rename each find the row the page draws", () => {
   assert.ok(labelsFound("skills").includes("Add skill"));
   assert.deepEqual(labelsFound("rename"), ["Rename workspace"]);
-});
-
-test("voice finds Agents' Voice row only while the Voice experiment is on", () => {
-  // Note that Settings › Experimental's own Voice row is found either way, so only the Agents page's rows are read.
-  const voiceFound = (experiments = NO_EXPERIMENTS) =>
-    (
-      searchSettings(
-        settingsSearchCorpus({ ...FULL_INPUT, settings: settingsView({ experiments }) }),
-        "voice",
-      )?.groups ?? []
-    )
-      .filter((group) => group.page === SETTINGS_VIEW.AGENTS)
-      .flatMap((group) => group.items.map((entry) => entry.label));
-
-  assert.ok(!voiceFound().includes("Voice"));
-  assert.ok(voiceFound(experimentsOn(EXPERIMENT.VOICE)).includes("Voice"));
 });
 
 test("mcp finds the Vespin MCP & CLI page's rows and none of the integrations", () => {

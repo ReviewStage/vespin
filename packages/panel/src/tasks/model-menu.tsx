@@ -40,7 +40,6 @@ import {
   MODE_GLYPH,
   MODE_GROUP,
   MODE_QUESTION,
-  MODES,
   modeMenuRows,
 } from "./agent-approvals.js";
 import {
@@ -364,11 +363,11 @@ export function ModelMenu(props: {
         submenu: {
           label: MODE_GROUP,
           heading: MODE_QUESTION,
-          rows: modeMenuRows(),
+          rows: modeMenuRows(control),
           value: control.mode,
           note: control.applies,
           onPick: (picked) => {
-            const mode = MODES.find((each) => each === picked);
+            const mode = control.modes.find((each) => each === picked);
 
             if (mode === undefined) return;
             onClose();

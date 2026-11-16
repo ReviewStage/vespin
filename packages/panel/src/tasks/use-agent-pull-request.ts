@@ -55,7 +55,7 @@ export function useAgentPullRequest(input: {
   known?: AgentPullRequest | undefined;
 }): AgentPublished {
   const { agentId, shown, known } = input;
-  const held = useQuery(pullRequestPublishedQuery(shown ? { agentId } : undefined)).data;
+  const held = useQuery(pullRequestPublishedQuery(shown ? agentId : undefined)).data;
 
   return useMemo(() => ({ published: publishedOf(held, known) }), [held, known]);
 }

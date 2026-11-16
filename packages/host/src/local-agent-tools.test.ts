@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { NodeChildProcessSpawner, NodeFileSystem, NodePath } from "@effect/platform-node";
 import { assert, describe, it } from "@effect/vitest";
-import type { AgentToolPin } from "@repo/agent-runner/pins";
+import type { AgentToolPart, AgentToolPin } from "@repo/agent-runner/pins";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { Effect, Layer, Option } from "effect";
@@ -39,6 +39,30 @@ const release = Effect.gen(function* () {
 
   return { archive, pin };
 });
+
+/** A part of the test's own: `package/index.js`, gzipped, pinned by its own size and digest, kept at `node_modules/part`. */
+const part = Effect.gen(function* () {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const scratch = yield* temporaryDirectoryScoped("agent-tool-part-");
+  yield* fileSystem.makeDirectory(`${scratch}/package`, { recursive: true });
+  yield* fileSystem.writeFileString(`${scratch}/package/index.js`, "export {};\n");
+  execFileSync("tar", ["-czf", `${scratch}/part.tgz`, "-C", scratch, "package"]);
+  const archive = readFileSync(`${scratch}/part.tgz`);
+
+  const pinned: AgentToolPart = {
+    ARCHIVE: "https://releases.test/part-1.0.tgz",
+    SHA256: createHash("sha256").update(archive).digest("hex"),
+    BYTES: archive.length,
+    ROOT: "package",
+    INTO: "node_modules/part",
+  };
+
+  return { archive, pinned };
+});
+
+/** Answers the build's archive or its part's, by the address asked. */
+const answering = (build: Uint8Array<ArrayBuffer>, piece: Uint8Array<ArrayBuffer>) =>
+  fakeHttpClientLayer((url) => new Response(url.includes("part-") ? piece : build));
 
 describe("localAgentTool", () => {
   it.effect(
@@ -85,6 +109,44 @@ describe("localAgentTool", () => {
         assert.isTrue(Option.isNone(found));
         assert.deepStrictEqual(yield* fileSystem.readDirectory(`${root}/agent-tools/tool`), []);
       }).pipe(Effect.scoped, Effect.provide(NODE)),
+  );
+
+  it.effect("keeps each part of a build whole at its place inside the build", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const root = yield* temporaryDirectoryScoped("agent-tools-");
+      const { archive, pin } = yield* release;
+      const { archive: piece, pinned } = yield* part;
+
+      const found = yield* localAgentTool(root, { ...pin, PARTS: [pinned] }).pipe(
+        Effect.provide(answering(archive, piece)),
+      );
+
+      const kept = `${root}/agent-tools/tool/1.0`;
+      assert.deepStrictEqual(found, Option.some(`${kept}/bin/tool`));
+      assert.strictEqual(
+        yield* fileSystem.readFileString(`${kept}/node_modules/part/index.js`),
+        "export {};\n",
+      );
+    }).pipe(Effect.scoped, Effect.provide(NODE)),
+  );
+
+  it.effect("keeps nothing of a build one of whose parts is not its pin's SHA-256", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const root = yield* temporaryDirectoryScoped("agent-tools-");
+      const { archive, pin } = yield* release;
+      const { archive: piece, pinned } = yield* part;
+      const tampered = Uint8Array.from(piece);
+      tampered[tampered.length - 1] = (tampered[tampered.length - 1] ?? 0) ^ 0xff;
+
+      const found = yield* localAgentTool(root, { ...pin, PARTS: [pinned] }).pipe(
+        Effect.provide(answering(archive, tampered)),
+      );
+
+      assert.isTrue(Option.isNone(found));
+      assert.deepStrictEqual(yield* fileSystem.readDirectory(`${root}/agent-tools/tool`), []);
+    }).pipe(Effect.scoped, Effect.provide(NODE)),
   );
 
   it.effect("fetches again a build whose pinned file changed on disk since it was kept", () =>

@@ -182,7 +182,7 @@ export function MenuChip(props: MenuChipProps) {
         <Section key={at} {...(group.title === undefined ? {} : { title: group.title })}>
           {group.choices.map((choice) => (
             <Toggle
-              key={choice.label}
+              key={choice.id ?? choice.label}
               {...choiceContent(choice, colors)}
               isOn={choice.on}
               onIsOnChange={() => choice.onPress()}
@@ -284,7 +284,7 @@ function ComposePage(props: ComposeSheetProps) {
   const muted = [font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)];
 
   return (
-    <Host style={{ flex: 1, backgroundColor: colors.GROUPED }} modifiers={[tint(colors.TEXT)]}>
+    <Host style={{ flex: 1, backgroundColor: colors.GROUND }} modifiers={[tint(colors.TEXT)]}>
       <ScrollView modifiers={[scrollDismissesKeyboard("immediately")]}>
         <VStack
           alignment="leading"

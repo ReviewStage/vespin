@@ -1,0 +1,31 @@
+# thread-run-event.yaml -- an Inbox thread where the line saying the agent withdrew its ask stands between that agent's messages, which it splits into two runs, each under its own head.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `answer.yaml` is, so no server is
+# reached. The rounding task's "Where the invoice's tax rounds" holds three
+# messages of one agent a minute or two apart, which would stand as one run,
+# but for the withdrawn ask's line after the first (`@repo/host/fixture-inbox`):
+# the first stands alone under its head, then the line, then the other two
+# under a second head of their own.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 30000
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Where the invoice's tax rounds"
+- extendedWaitUntil:
+    visible: ".*withdrew this.*"
+    timeout: 5000
+- assertVisible: ".*Should it round once, on the total\\?"
+- assertVisible: "Tax now rounds once, on the invoice's total."
+- assertVisible: "Added a test with three lines.*"
+- waitForAnimationToEnd
+- takeScreenshot: thread-run-event

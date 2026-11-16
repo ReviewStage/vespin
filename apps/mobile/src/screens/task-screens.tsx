@@ -3,15 +3,22 @@
 import { AGENT_MACHINE, AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionBlocks } from "@repo/features/description-blocks";
+import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
-import { INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
-import { iosAgentRoute, iosAppRouteOf, iosPullRequestRoute } from "@repo/features/ios-app-links";
+import { RESOLVE } from "@repo/features/inbox-ask-words";
+import { INBOX_LINE, INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
+import {
+  iosAgentRoute,
+  iosAppRouteOf,
+  iosRepositoryPullRequestRoute,
+} from "@repo/features/ios-app-links";
 import { taskActivity } from "@repo/features/ios-system-activity";
 import {
   LINK_DESTINATION,
   type LinkDestination,
   linkOf,
   linkWorkspaceStep,
+  pullRequestAddressOf,
   readLink,
   taskLinkStep,
   taskNumberOf,
@@ -35,6 +42,7 @@ import {
   TASK_RELATION_ORDER,
   TASK_RELATION_VERBS,
 } from "@repo/features/task-relation-model";
+import type { TaskSectionIcon } from "@repo/features/task-section-wire";
 import { MOVE_TO_SECTION, REMOVE_FROM_SECTION } from "@repo/features/task-sections-model";
 import {
   NO_ASSIGNEE_WORDS,
@@ -45,6 +53,7 @@ import {
 } from "@repo/features/task-standing-words";
 import {
   foldedTaskRows,
+  NO_REPOSITORY_KEY,
   TASK_TREE_GROUP,
   type TaskTree,
   type TaskTreeGroup,
@@ -52,7 +61,6 @@ import {
   taskTreeCollections,
 } from "@repo/features/task-tree-model";
 import {
-  TASK_PRIORITY,
   TASK_PRIORITY_ORDER,
   TASK_RELATION_KIND,
   TASK_STATUS,
@@ -101,6 +109,7 @@ import {
   LIST_LOOK,
   LinkRow,
   type ListLook,
+  ListRow,
   ListSection,
   menuWithout,
   NoSelection,
@@ -112,6 +121,7 @@ import {
   type RowAction,
   RowForEach,
   RowList,
+  type RowMenuGroup,
   type RowSubmenu,
   type RowSwipe,
   runsOnGlyph,
@@ -119,6 +129,7 @@ import {
   SplitView,
   STATUS_MARK_SYMBOL,
   type StandingMenus,
+  sectionEmoji,
   sectionGlyph,
   type TaskFold,
   TaskHead,
@@ -126,6 +137,7 @@ import {
   TaskRow,
   UNDER_SPLIT_SCREEN,
   useColors,
+  useMinute,
   useThreeColumns,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -151,6 +163,7 @@ import { type ListedMember, useListedMembers, useMemberPictures } from "../membe
 import { useMenuPhotos } from "../menu-photos.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns } from "../place-columns.js";
+import { usePushStood } from "../push-stood.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useTasksCollection } from "../sidebar-pick.js";
@@ -163,6 +176,7 @@ import {
   threadComments,
   threadOpen,
   threadsOnBlocks,
+  useCommentSettle,
   useTaskComments,
   useTaskCommentsRetry,
 } from "../tasks/use-comments.js";
@@ -349,6 +363,22 @@ function settleSwipes(
 }
 
 /**
+ * How a section leads its choice in Move to section's menu, as the panel's
+ * menu leads each with its icon: its glyph, or its emoji set before its
+ * name, since a menu item's image takes a symbol alone.
+ */
+function sectionChoiceLead(
+  title: string,
+  icon: TaskSectionIcon | undefined,
+): { readonly label: string; readonly symbol?: Glyph | undefined } {
+  const emoji = sectionEmoji(icon);
+
+  return emoji === undefined
+    ? { label: title, symbol: sectionGlyph(icon) }
+    : { label: `${emoji} ${title}` };
+}
+
+/**
  * A task's Move to section as a menu, as the panel's offers it: the member's
  * sections of its workspace, the one it stands in checked, a press putting it
  * on top of another, and Remove from section under them while it stands in
@@ -363,7 +393,8 @@ function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | u
     label: MOVE_TO_SECTION,
     symbol: GLYPH.MOVE,
     choices: placing.sections.map((section) => ({
-      label: section.title,
+      ...sectionChoiceLead(section.title, section.icon),
+      id: section.id,
       on: section.id === standing,
       onPress: () => {
         if (section.id !== standing) placing.moveToSection(task.id, section.id);
@@ -431,6 +462,11 @@ function placingSubmenus(task: TaskSummary, placing: TaskPlacing): readonly RowS
   );
 }
 
+/** A submenu as a list of none or one, for a menu only offered where it has something to hold. */
+function present(submenu: RowSubmenu | undefined): readonly RowSubmenu[] {
+  return submenu === undefined ? [] : [submenu];
+}
+
 /** A row's menu as a bar's ⋯ holds it, its acts' tones read as the bar reads them. */
 function barSubmenu(submenu: RowSubmenu): BarMenu {
   return {
@@ -488,20 +524,23 @@ function removeParentActs(task: TaskSummary, relations: TaskRelationWrites): rea
 type RowActsResult = {
   readonly trailingActions: readonly RowSwipe[];
   readonly leadingActions: readonly RowSwipe[];
-  readonly menuSubmenus: readonly RowSubmenu[];
   readonly menuActions: readonly RowAction[];
+  readonly menuGroups: readonly RowMenuGroup[];
 };
 
 /**
  * A row's acts, as the panel's row menu offers them on a phone: behind its
  * trailing swipe Mark done, offered on a task not yet done, which a full
  * swipe runs, and Status; behind its leading swipe Pin or Unpin, whichever
- * the task is not, which a full swipe runs; and in its long press menu,
- * after those, Task relation, which opens the Task relation sheet on a kind,
- * Move to section, and its repository (`placingSubmenus`), then Remove
- * parent, where it has one, and the panel's order: Copy link, which raises the share sheet, Rename, in
- * the system's name alert, Mark as read or unread, whichever the task is
- * not, Open in browser, and Permanently delete last, which asks first.
+ * the task is not, which a full swipe runs. Its long press menu groups them
+ * as the task page's ⋯ does (`taskMenu`), each group set apart by a divider:
+ * the swipes' acts with Mark as read or unread, whichever the task is not;
+ * then Task relation, which opens the Task relation sheet on a kind, and Move
+ * to section, with Remove parent where it has one; then Rename, in the
+ * system's name alert, and Copy link, which raises the share sheet; then
+ * More, holding its repository, its version history and Move to workspace
+ * where offered, and Open in browser; and Permanently delete alone, last,
+ * which asks first.
  * Priority and assignee are set from the chips on the task's page
  * (`standingMenus`).
  */
@@ -523,41 +562,68 @@ function rowActs(
         onPress: () => listing.pin(task.id, !pinned),
       },
     ],
-    menuSubmenus: [relationSubmenu(task, openRelation), ...placingSubmenus(task, listing.placing)],
     menuActions: [
-      ...removeParentActs(task, listing.relations),
-      {
-        label: WORDS.COPY_LINK,
-        symbol: GLYPH.LINK,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => copyTaskLink(task, listing.workspace),
-      },
-      {
-        label: WORDS.RENAME,
-        symbol: GLYPH.RENAME,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => askRename(task, listing.rename),
-      },
-      ...rowActions(historyActions(task, listing.doors.history)),
       {
         label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
         symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => listing.markRead(task.id, !unread),
       },
-      ...rowActions(moveActions(listing.doors.moveDoor(task))),
+    ],
+    menuGroups: [
       {
-        label: VERB.OPEN_IN_BROWSER,
-        symbol: GLYPH.OPEN_EXTERNALLY,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () =>
-          openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
+        submenus: [
+          relationSubmenu(task, openRelation),
+          ...present(sectionSubmenu(task, listing.placing)),
+        ],
+        actions: removeParentActs(task, listing.relations),
       },
       {
-        label: WORDS.DELETE,
-        symbol: GLYPH.DELETE,
-        tone: ROW_ACTION_TONE.DESTRUCTIVE,
-        onPress: () => listing.askDelete(task),
+        actions: [
+          {
+            label: WORDS.RENAME,
+            symbol: GLYPH.RENAME,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => askRename(task, listing.rename),
+          },
+          {
+            label: WORDS.COPY_LINK,
+            symbol: GLYPH.LINK,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => copyTaskLink(task, listing.workspace),
+          },
+        ],
+      },
+      {
+        // Note that the acts a phone reaches for least wait one level down in More, its repository, version history, Move to workspace and Open in browser, so the menu fits an iPhone 18 Pro's window under the lifted preview and Permanently delete stands in it rather than below its fold.
+        submenus: [
+          {
+            ...WORDS.MORE,
+            choices: [],
+            submenus: present(repositorySubmenu(task, listing.placing)),
+            actions: [
+              ...rowActions(historyActions(task, listing.doors.history)),
+              ...rowActions(moveActions(listing.doors.moveDoor(task))),
+              {
+                label: VERB.OPEN_IN_BROWSER,
+                symbol: GLYPH.OPEN_EXTERNALLY,
+                tone: ROW_ACTION_TONE.NEUTRAL,
+                onPress: () =>
+                  openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, listing.workspace),
+              },
+            ],
+          },
+        ],
+      },
+      {
+        actions: [
+          {
+            label: WORDS.DELETE,
+            symbol: GLYPH.DELETE,
+            tone: ROW_ACTION_TONE.DESTRUCTIVE,
+            onPress: () => listing.askDelete(task),
+          },
+        ],
       },
     ],
   };
@@ -643,11 +709,11 @@ export function TaskListRow({
       id={task.id}
       name={task.name}
       status={task.status ?? TASK_STATUS.TODO}
-      priority={task.priority ?? TASK_PRIORITY.NONE}
       unread={look.unread}
       finished={taskFinished(task)}
       needsYou={look.needsYou}
       agents={look.agents}
+      blocked={task.blocked === true}
       taskKey={keyed ? keyOf(task, listing.workspace) : undefined}
       depth={depth}
       {...rowActs(task, look.unread, listing, openRelation)}
@@ -904,6 +970,9 @@ function GroupSection({
   return (
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
+      glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
+      emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
+      repository={headPicture(group)}
       count={group.rows.length}
       foldable
       folded={hold.folded.has(group.key)}
@@ -1068,6 +1137,34 @@ function TasksTree({
   );
 }
 
+/**
+ * What a Tasks list group's header leads with, as the panel's sidebar
+ * heads each: a section with its own icon, a repository with the
+ * repository's mark, which stands in until its owner's picture draws
+ * (`headPicture`), the tasks with none with no-repository's; and nothing
+ * for Pinned and Following, whose words say what they are.
+ */
+function groupHeadGlyph(group: TaskTreeGroup): Glyph | undefined {
+  switch (group.kind) {
+    case TASK_TREE_GROUP.SECTION:
+      return sectionGlyph(group.icon);
+    case TASK_TREE_GROUP.REPOSITORY:
+      return group.key === NO_REPOSITORY_KEY ? GLYPH.NO_REPOSITORY : GLYPH.REPOSITORY;
+    case TASK_TREE_GROUP.PINNED:
+    case TASK_TREE_GROUP.FOLLOWING:
+      return undefined;
+  }
+}
+
+/** The repository whose owner's picture leads a repository group's header, as the panel's sidebar draws it; none for any other group, or the tasks with no repository. */
+function headPicture(group: TaskTreeGroup): string | undefined {
+  return group.kind === TASK_TREE_GROUP.REPOSITORY &&
+    group.title !== undefined &&
+    group.key !== NO_REPOSITORY_KEY
+    ? group.key
+    : undefined;
+}
+
 /** The glyph a collection's sidebar row leads with: Pinned's pin, Following's eye, and a section's own icon, as the panel's sidebar draws it (`sectionGlyph`). */
 function collectionGlyph(group: TaskTreeGroup): Glyph {
   if (group.kind === TASK_TREE_GROUP.PINNED) return GLYPH.PIN;
@@ -1092,6 +1189,7 @@ export function useSidebarTasks(): SidebarTasks {
         id={group.key}
         title={group.title ?? listing.tree.tasksHead}
         symbol={collectionGlyph(group)}
+        emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
         count={group.rows.length}
         onDropLink={dropOnto(group, listing)}
       />
@@ -1334,6 +1432,7 @@ function standingMenus(
 
 /** The task's head: its name, its chips, each opening its menu, who follows it, and who created it and when. */
 function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
+  const now = useMinute();
   const { task } = overview;
   const pictureOf = useMemberPictures();
   const following = useFollowingChip(task.id);
@@ -1364,7 +1463,7 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
       createdBy={
         task.createdBy === undefined
           ? undefined
-          : `${WORDS.CREATED_BY} ${task.createdBy.name}${LINE_PART}${provenanceText(task.createdAt, Date.now())}`
+          : `${WORDS.CREATED_BY} ${task.createdBy.name}${LINE_PART}${provenanceText(task.createdAt, now)}`
       }
     />
   );
@@ -1513,6 +1612,13 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
                   status={other?.status}
                   faded={other !== undefined && taskFinished(other)}
                   relation={TASK_RELATION_WORDS[kind]}
+                  relationMark={{
+                    glyph: RELATION_KIND_SYMBOL[kind],
+                    // Note that a blocker wants the reader, as the panel's pill draws it, until it's known done or canceled; one the list doesn't hold was never shown done, so it still blocks and stands in the attention ink.
+                    attention:
+                      kind === TASK_RELATION_KIND.BLOCKED_BY &&
+                      (other === undefined || !taskFinished(other)),
+                  }}
                   trailingActions={relationSwipes(task.id, id, kind, relations)}
                 />
               );
@@ -1698,14 +1804,25 @@ export function TaskAgentRow({
               state: pullRequest.state,
               queued: pullRequest.queued,
               onPress: () => {
+                const named = pullRequestAddressOf(pullRequest.url);
+
+                // Note that a line whose address names no pull request of GitHub's opens it there, as Safari reads it.
+                if (named === undefined) {
+                  openInSafari(pullRequest.url);
+
+                  return;
+                }
+
+                const key = { workspaceId: agent.workspaceId, ...named };
+
                 const opened = {
                   kind: PUSHED_PAGE.PULL_REQUEST,
+                  ...key,
                   agentId: agent.id,
-                  number: pullRequest.number,
                 } as const;
 
                 if (!toDetail(opened))
-                  router.push(onTab(iosPullRequestRoute(agent.id, pullRequest.number)));
+                  router.push(onTab(iosRepositoryPullRequestRoute(key, agent.id)));
               },
             }
       }
@@ -1771,6 +1888,7 @@ function OverviewAgents({
 
 /** The pages the task's agents showed, each opened whole on the app's own page screen, at the version the list holds. */
 function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
+  const now = useMinute();
   const router = useRouter();
   const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
@@ -1785,7 +1903,7 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
           key={page.id}
           symbol={GLYPH.PAGE}
           label={page.title}
-          detail={provenanceText(page.at, Date.now())}
+          detail={provenanceText(page.at, now)}
           onPress={() => {
             const opened = {
               kind: PUSHED_PAGE.TASK_PAGE,
@@ -1838,7 +1956,7 @@ function OverviewDescription({
   const router = useRouter();
   const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
-  const openLink = useOpenLink();
+  const openLink = useOpenLink(overview.task.workspaceId);
   const { task } = overview;
   const threads = useTaskComments(task.id);
   const blocks = useMemo(() => descriptionBlocks(body), [body]);
@@ -1951,19 +2069,85 @@ function ReadFailedRow({
   return <FailedReadRow label={words} act={WORDS.TRY_AGAIN} onPress={onRetry} />;
 }
 
+/** What the Comments section's last row says it shows in the threads' place, as the panel's comments pane toggles: the resolved threads, or the open ones again. */
+const COMMENTS_SHOWN = {
+  RESOLVED: "Show resolved comments",
+  OPEN: "Show open comments",
+} as const;
+
+/** What a resolved thread's row offers to stand it open again, as its page's bar does. */
+const REOPEN = "Reopen";
+
+/** How many replies follow a thread's first comment, as the panel's card at rest counts them. */
+function repliesWords(count: number): string | undefined {
+  if (count === 0) return undefined;
+
+  return count === 1 ? "1 reply" : `${count} replies`;
+}
+
 /**
- * The description's comment threads that still stand open, as the panel's
- * comments list holds them, the oldest started first: each its first
- * comment's words and when it last moved, opening the thread with its reply
- * field; none where no thread stands open.
+ * One description thread's row, in two lines as an Inbox thread's: its first
+ * comment's words with the time it last changed, then its replies' count
+ * and the words it is on, muted, as the panel's card in the comments list
+ * stands its quote and replies. A resolved one leads with the resolved
+ * glyph and mutes its words. A swipe from the trailing edge resolves it, or
+ * reopens it once resolved, which a full swipe runs; a press opens it.
  */
-function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
-  const router = useRouter();
-  const toDetail = useDetailPush();
-  const onOwnTab = useOnOwnTab();
-  const { task } = overview;
-  const open = useTaskComments(task.id).filter(threadOpen);
-  const retry = useTaskCommentsRetry(task.id);
+function CommentRow({
+  thread,
+  now,
+  onSettle,
+}: {
+  readonly thread: DescriptionCommentThread;
+  /** The minute the row's time is said against (`useMinute`). */
+  readonly now: number;
+  readonly onSettle: (thread: DescriptionCommentThread) => void;
+}) {
+  const open = threadOpen(thread);
+  const comments = threadComments(thread);
+  const replies = repliesWords(Math.max(comments.length - 1, 0));
+
+  return (
+    <ListRow
+      id={thread.id}
+      title={comments[0]?.words ?? thread.quote}
+      line={open ? INBOX_LINE.SAID : INBOX_LINE.RESOLVED}
+      summary={[replies, thread.quote].filter((part) => part !== undefined).join(LINE_PART)}
+      done={!open}
+      at={thread.updatedAt}
+      now={now}
+      trailingActions={[
+        {
+          label: open ? RESOLVE : REOPEN,
+          symbol: open ? GLYPH.RESOLVED : GLYPH.RESTORE,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => onSettle(thread),
+        },
+      ]}
+    />
+  );
+}
+
+/**
+ * The comment threads on a task's description, as the panel's comments pane
+ * lists them: the open ones, each a thread's row its list opens, and, where
+ * any are resolved, a last row that shows the resolved ones in their place
+ * and back, as the panel's Show resolved comments does. Nothing while none
+ * stands, and a row that reads them again where their read failed.
+ */
+function OverviewComments({
+  taskId,
+  threads,
+}: {
+  readonly taskId: string;
+  readonly threads: readonly DescriptionCommentThread[];
+}) {
+  const now = useMinute();
+  const retry = useTaskCommentsRetry(taskId);
+  const settle = useCommentSettle(taskId);
+  const [resolvedShown, setResolvedShown] = useState(false);
+  const open = threads.filter(threadOpen);
+  const resolved = threads.filter((thread) => !threadOpen(thread));
 
   if (retry !== undefined) {
     return (
@@ -1973,28 +2157,25 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
     );
   }
 
-  if (open.length === 0) return null;
+  // Note that the resolved list falls back to the open one once nothing in it stays resolved, as a reopen from its row or its thread leaves it.
+  const showingResolved = resolvedShown && resolved.length > 0;
+  const listed = showingResolved ? resolved : open;
+
+  if (open.length === 0 && resolved.length === 0) return null;
 
   return (
-    <ListSection title={WORDS.COMMENTS} count={open.length}>
-      {open.map((thread) => (
-        <LinkRow
-          key={thread.id}
-          symbol={GLYPH.COMMENT}
-          label={threadComments(thread)[0]?.words ?? thread.quote}
-          detail={provenanceText(thread.updatedAt, Date.now())}
-          onPress={() => {
-            if (toDetail({ kind: PUSHED_PAGE.COMMENTS, threadId: thread.id, taskId: task.id })) {
-              return;
-            }
-
-            router.push({
-              pathname: onOwnTab("/tasks/comments/[id]"),
-              params: { id: thread.id, task: task.id },
-            });
-          }}
-        />
+    <ListSection title={WORDS.COMMENTS} count={listed.length}>
+      {listed.map((thread) => (
+        <CommentRow key={thread.id} thread={thread} now={now} onSettle={settle} />
       ))}
+      {resolved.length === 0 ? null : (
+        <LinkRow
+          symbol={showingResolved ? GLYPH.COMMENT : GLYPH.RESOLVED}
+          label={showingResolved ? COMMENTS_SHOWN.OPEN : COMMENTS_SHOWN.RESOLVED}
+          detail={showingResolved ? undefined : `${resolved.length}`}
+          onPress={() => setResolvedShown(!showingResolved)}
+        />
+      )}
     </ListSection>
   );
 }
@@ -2019,6 +2200,7 @@ function OverviewPage({
   const router = useRouter();
   const toDetail = useDetailPush();
   const onTab = useOnTab();
+  const onOwnTab = useOnOwnTab();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
 
@@ -2027,15 +2209,22 @@ function OverviewPage({
     select: selectWorkspaceExperiment(task.workspaceId, EXPERIMENT.DESCRIPTIONS),
   });
 
+  const threads = useTaskComments(descriptions ? task.id : undefined);
   const related = new Set(overview.tasks.map((each) => each.id));
   const agents = new Set(overview.agents.map(({ agent }) => agent.id));
+  const commented = new Set(threads.map((thread) => thread.id));
 
-  // A related task opens on its own Overview, and an agent on its page, where its transcript and its composer stand.
+  // A related task opens on its own Overview, an agent on its page, where its transcript and its composer stand, and a comment thread on its own.
   const open = (id: string) => {
     if (related.has(id))
       router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id })));
     else if (agents.has(id) && !toDetail({ kind: PUSHED_PAGE.AGENT, agentId: id }))
       router.push(onTab(iosAgentRoute(id)));
+    else if (
+      commented.has(id) &&
+      !toDetail({ kind: PUSHED_PAGE.COMMENTS, threadId: id, taskId: task.id })
+    )
+      router.push({ pathname: onOwnTab("/tasks/comments/[id]"), params: { id, task: task.id } });
   };
 
   return (
@@ -2057,7 +2246,7 @@ function OverviewPage({
       ) : (
         <OverviewDescription overview={overview} body={document.description.body} />
       )}
-      {descriptions ? <OverviewComments overview={overview} /> : null}
+      {descriptions ? <OverviewComments taskId={task.id} threads={threads} /> : null}
     </RowList>
   );
 }
@@ -2414,7 +2603,9 @@ export function TaskScreen() {
   const handed = useHandToSplit(SPLIT_TAB.TASKS, handing) && handing !== undefined;
   // Note that the open is told apart by the task's id, as the split view's is, so a number found and handed over on an unfold carries the same open; a number not yet found shows no task to count.
   useSurfaceOpen(handed || handing === undefined ? undefined : PRODUCT_SURFACE.TASK, handing);
-  useTaskReadOnOpen(handed ? undefined : overview?.task.id);
+  // Note that the read waits for the push to end, since the list it redraws under a push still running left the page unpushed (`usePushStood`).
+  const stood = usePushStood();
+  useTaskReadOnOpen(handed || !stood ? undefined : overview?.task.id);
 
   return (
     <>

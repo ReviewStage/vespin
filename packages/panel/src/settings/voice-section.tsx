@@ -45,8 +45,8 @@ function PlayVoice({ voice }: { voice: LiveVoice }): React.JSX.Element {
  * A call runs on the account's own OpenAI key, which Codex's card above
  * holds, so the card has no key row of its own. Its one row is the schema's
  * (`SchemaSettingRows`): the voice, offered in groups by language and
- * region, with Play beside it. It stands only while the Voice experiment is
- * on, and so draws nothing, not even its card, while the schema offers no row.
+ * region, with Play beside it. It draws nothing, not even its card, while the
+ * schema offers no row.
  */
 export function VoiceSection({ view }: { view: SettingsRowsInput }): React.JSX.Element | null {
   const voice = view.settings.voice ?? DEFAULT_LIVE_VOICE;

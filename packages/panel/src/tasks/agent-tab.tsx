@@ -1,6 +1,12 @@
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import { bootHolds } from "@repo/features/agent-boot";
-import { goalConditions, goalControlLine, goalControlWords } from "@repo/features/agent-goal-model";
+import {
+  GOAL_REACH,
+  goalConditions,
+  goalControlLine,
+  goalControlWords,
+  goalReachOf,
+} from "@repo/features/agent-goal-model";
 import {
   AGENT_PART,
   type AgentPart,
@@ -21,6 +27,7 @@ import {
   turnStretches,
   wholeCallOf,
 } from "@repo/features/agent-parts";
+import { usageLimitAgentOf } from "@repo/features/agent-runtime-models";
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "@repo/features/agent-todos";
 import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
@@ -28,7 +35,6 @@ import {
   AGENT_BRIEF,
   AGENT_FAILURE,
   AGENT_MACHINE,
-  AGENT_RUNTIME,
   AGENT_SENDER,
   AGENT_STATUS,
   type AgentBrief,
@@ -279,7 +285,6 @@ import {
   tabTurnOf,
   teammateStarter,
   transcriptRowKey,
-  usageLimitAgentOf,
   WORKING_PHASE,
   type WorkingPhase,
   workerStatusOf,
@@ -387,13 +392,7 @@ import { useAgentQueue, useQueueEditing } from "./use-agent-queue.js";
 import { type AgentTranscriptControl, useAgentTranscript } from "./use-agent-transcript.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useKnownNames, useTaskStatus } from "./use-known-names.js";
-import {
-  CallEnds,
-  CallStarts,
-  NO_CALL_MARKS,
-  useVoiceShown,
-  VoiceLineRow,
-} from "./voice-call-rows.js";
+import { CallEnds, CallStarts, VoiceLineRow } from "./voice-call-rows.js";
 import { type CutBody, useWholePart, useWholePartDoor, WholePartsProvider } from "./whole-parts.js";
 import { WorkedFor, WorkingLine } from "./working-time.js";
 
@@ -2104,6 +2103,9 @@ export function AgentMessage({
     />
   );
 
+  // Note that a running turn with nothing to draw yet, as one the runner has just opened with only its step boundary, draws no message at all, because an empty one still stands a block's gap over the working line and moves it down as it lands.
+  if (moving && stretches.every((stretch) => stretch.rows?.length === 0)) return null;
+
   return stretches.map((stretch, index) => {
     if (stretch.line !== undefined) {
       const line = stretch.line;
@@ -2700,17 +2702,14 @@ function useReplySaid({
  * reached it, and the reply a running turn is still writing.
  */
 function transcriptPlacing(
-  held: readonly AgentTranscriptMessage[],
+  messages: readonly AgentTranscriptMessage[],
   working: boolean,
   undelivered: ReadonlySet<string>,
   unsent: ReadonlySet<string>,
   replayed: boolean,
-  voiceShown: boolean,
   standingCalls: readonly AgentStandingCall[],
   fromStart: boolean,
 ) {
-  // Note that the voice's lines on a call are drawn only where the Voice experiment is on, the caller's standing as any line of theirs where it is off.
-  const messages = voiceShown ? held : held.filter((message) => !isVoiceLine(message));
   const todos = todosPlace(messages, working);
 
   // Note that the opening is read only where the transcript's start is held, because a window of its newest messages, or a line still on its way before any page, would take a teammate's line for the brief and name its starter over it.
@@ -2732,7 +2731,7 @@ function transcriptPlacing(
   const newest = working ? placed.findLast((row) => isAgentTurn(row.message))?.message : undefined;
 
   const writing = newest?.finishedAt === undefined ? newest?.id : undefined;
-  const calls = voiceShown ? callMarksOf(placed, standingCalls) : NO_CALL_MARKS;
+  const calls = callMarksOf(placed, standingCalls);
 
   return { todos, first, opening, placed, writing, calls };
 }
@@ -2864,7 +2863,6 @@ function AgentTranscriptView({
   const { members, former } = useMemberDirectory();
   const undelivered = useUndeliveredLines();
   const unsent = useUnsentLines();
-  const voiceShown = useVoiceShown();
   // Note that the voice may talk on after the turn, so the current turn is the agent's newest, whatever row stands last.
   const lastTurn = messages.findLast(isAgentTurn);
 
@@ -2904,17 +2902,8 @@ function AgentTranscriptView({
   // Read through once for the messages held, so a draw that brings no page reads none of them again.
   const placing = useMemo(
     () =>
-      transcriptPlacing(
-        messages,
-        working,
-        undelivered,
-        unsent,
-        replayed,
-        voiceShown,
-        standingCalls,
-        fromStart,
-      ),
-    [messages, working, undelivered, unsent, replayed, voiceShown, standingCalls, fromStart],
+      transcriptPlacing(messages, working, undelivered, unsent, replayed, standingCalls, fromStart),
+    [messages, working, undelivered, unsent, replayed, standingCalls, fromStart],
   );
 
   // Each line that reached a turn, with who sent it, kept from draw to draw while neither moved.
@@ -3485,8 +3474,9 @@ function AgentTabView({
   // Note that nothing is rewound under a call into the agent, which the service refuses too (`rewind.ts`).
   const rewinds = boxOpen && transcript.calls.length === 0;
 
-  // Only Codex pauses a goal, and only the agent's starter may change it, while the box can send.
-  const pausesGoal = controlsQueue && boxOpen && agent.runtime === AGENT_RUNTIME.CODEX;
+  // Only Codex pauses a goal, Cursor keeps none, and only the agent's starter may change it, while the box can send.
+  const goalReach = goalReachOf(agent.runtime);
+  const pausesGoal = controlsQueue && boxOpen && goalReach === GOAL_REACH.PAUSES;
   const onEdit = useSteady(rewinds ? composer.edit : undefined);
   const onCancelEdit = useSteady(composer.dropEdit);
   const onSendEdit = useSteady(rewinds ? composer.sendEdit : undefined);
@@ -3846,16 +3836,21 @@ function AgentTabView({
           pending={pendingWords}
           readerId={readerId}
         />
-        <GoalDock
-          messages={kept}
-          going={pendingWords}
-          older={transcript.hasOlder}
-          working={standing.working}
-          onClear={controlsQueue && boxOpen ? () => composer.sendWords(GOAL_LINE.CLEAR) : undefined}
-          // Note that only Codex's goal pauses; Claude Code's stops only as it is cleared.
-          onPause={pausesGoal ? () => composer.sendWords(GOAL_LINE.PAUSE) : undefined}
-          onResume={pausesGoal ? () => composer.sendWords(GOAL_LINE.RESUME) : undefined}
-        />
+        {/* Note that a harness that keeps no goal draws no goal row, whatever its words say. */}
+        {goalReach === GOAL_REACH.NONE ? null : (
+          <GoalDock
+            messages={kept}
+            going={pendingWords}
+            older={transcript.hasOlder}
+            working={standing.working}
+            onClear={
+              controlsQueue && boxOpen ? () => composer.sendWords(GOAL_LINE.CLEAR) : undefined
+            }
+            // Note that only Codex's goal pauses; Claude Code's stops only as it is cleared.
+            onPause={pausesGoal ? () => composer.sendWords(GOAL_LINE.PAUSE) : undefined}
+            onResume={pausesGoal ? () => composer.sendWords(GOAL_LINE.RESUME) : undefined}
+          />
+        )}
         <AgentPicturesProvider value={pictures}>
           {/* Note that the dock reads whose Mac the agent uses, as the transcript above it does, to offer Show only on that Mac. */}
           <CallPlaceProvider owner={macOwner} route={callRoute}>
@@ -4128,6 +4123,7 @@ function AgentTabBody({
     unsend: control.onUnsend,
     rewind: control.onRewind,
     payer: planPayerOf(agent.runtime),
+    runtime: agent.runtime,
     starter,
     shown,
     onOpen:

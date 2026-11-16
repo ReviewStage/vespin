@@ -86,7 +86,11 @@ import {
 } from "../../http/http-effect.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { agentSpansAnnotated } from "../../observability/sentry.js";
-import { withCursorModels } from "../../providers/cursor-models.js";
+import {
+  CursorModelCatalog,
+  offersCursor,
+  withCursorModels,
+} from "../../providers/cursor-models.js";
 import {
   ModelCatalog,
   ModelChoiceRefused,
@@ -340,8 +344,17 @@ const modelChoicesRead = /* @__PURE__ */ Effect.fnUntraced(function* (
     apiVersion: HOSTED_API_VERSION,
   };
 
+  // Cursor's own list is read with the account's key only where it is offered at all.
+  const cursorModels = offersCursor(cursor)
+    ? yield* (yield* CursorModelCatalog).forAccount(userId)
+    : [];
+
   const offered = yield* hostedStoreOrUnavailable(
-    markedUnconnected(userId, withCursorModels(offeredToAccount(read, fastOffer), cursor), keys),
+    markedUnconnected(
+      userId,
+      withCursorModels(offeredToAccount(read, fastOffer), cursor, cursorModels),
+      keys,
+    ),
   );
 
   const stored = preferences?.agent;

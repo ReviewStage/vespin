@@ -97,6 +97,8 @@ export const SIDEBAR_ROW = {
 export const ROW_INSET = {
   /** The row's own leading inset, the dot's margin. */
   LEADING: SPACE.EDGE - MARK_SIZE.UNREAD - SPACE.TIGHT,
+  /** A row that draws no unread dot, such as a task's: the list's own edge, so its lead mark stands where a dotted row's does. */
+  PLAIN: SPACE.EDGE,
   /** Where the words, and the hairline under them, start from the screen's edge. */
   TEXT: SPACE.EDGE + MARK_SIZE.LEAD + SPACE.ROW,
   /** A row's top and bottom. */

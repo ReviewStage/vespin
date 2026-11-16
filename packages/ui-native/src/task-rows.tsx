@@ -12,6 +12,7 @@ import {
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityHidden,
   accessibilityHint,
   accessibilityIdentifier,
   accessibilityLabel,
@@ -74,6 +75,7 @@ import {
 } from "./marks.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { ProblemLine } from "./problem-line.js";
+import { useRollingCount } from "./rolling-count.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -250,14 +252,26 @@ type AgentRowProps = {
   readonly preview?: ReactElement | undefined;
 };
 
+/** How far past its words an agent row's pull request link takes a press, in points: out to either side short of the line's gap to its neighbors, up only to the gap under the line above, and down to the row's foot, or only to the gap under it where a fact stands below it at an accessibility size; so the row stays its height and its other words keep the row's own press. */
+const LINK_REACH = {
+  ACROSS: SPACE.TIGHT,
+  UP: 2,
+  DOWN: ROW_INSET.VERTICAL,
+  DOWN_TO_FACT: 2,
+} as const;
+
 /** An agent's pull request in its line: its state's glyph and its number, pressed to open it. */
 function PullRequestLink({
   pullRequest,
+  factBelow,
 }: {
   readonly pullRequest: NonNullable<AgentRowProps["pullRequest"]>;
+  /** Whether a fact stands on its own line under the link, as the needs-you count does at an accessibility size. */
+  readonly factBelow: boolean;
 }) {
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[pullRequestMarkState(pullRequest)];
+  const down = factBelow ? LINK_REACH.DOWN_TO_FACT : LINK_REACH.DOWN;
 
   return (
     <SwiftUIButton
@@ -268,7 +282,19 @@ function PullRequestLink({
         accessibilityHint(OPENS_PULL_REQUEST),
       ]}
     >
-      <HStack spacing={SPACE.TIGHT}>
+      {/* Note that the link takes a press past its words, down to the row's foot or the fact under it and out to either side, through a shape padded out and then taken back so the line lays out no taller; it stops short of the title above, which opens the agent. The shape stands on the label, since a borderless button takes a press only where its label is hit. */}
+      <HStack
+        spacing={SPACE.TIGHT}
+        modifiers={[
+          padding({ horizontal: LINK_REACH.ACROSS, top: LINK_REACH.UP, bottom: down }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          padding({
+            horizontal: -LINK_REACH.ACROSS,
+            top: -LINK_REACH.UP,
+            bottom: -down,
+          }),
+        ]}
+      >
         <ToneGlyph glyph={look.symbol} tone={look.tone} textStyle={TYPE_ROLE.ROW_LINE} hidden />
         <Text
           modifiers={[
@@ -360,7 +386,9 @@ export function AgentRow(props: AgentRowProps) {
             </Text>
           )}
           {resting ? null : <AgentStateWords working={state === AGENT_ROW_STATE.WORKING} />}
-          {pullRequest === undefined ? null : <PullRequestLink pullRequest={pullRequest} />}
+          {pullRequest === undefined ? null : (
+            <PullRequestLink pullRequest={pullRequest} factBelow={stacked && waiting > 0} />
+          )}
           {waiting === 0 ? null : (
             <Text
               modifiers={[
@@ -393,6 +421,8 @@ type RelationRowProps = {
   readonly status: TaskStatus | undefined;
   /** How the task stands to this one: "Blocked by", "Blocks"; or, in a picker, its key or why it cannot be picked; none where its section says it, as a task's Sub-tasks does. */
   readonly relation?: string | undefined;
+  /** The relation's kind's glyph, which leads its words as the panel's relation pill does, and whether it wants the reader, as a blocker still open does, which draws both in the attention ink. */
+  readonly relationMark?: { readonly glyph: Glyph; readonly attention: boolean } | undefined;
   /** Whether its words stand muted: a finished task's, as the panel mutes a settled row's name, or one a picker cannot pick, as it dims a task that cannot take the relation. */
   readonly faded?: boolean | undefined;
   /** What a swipe from the trailing edge reveals, such as Remove relation. */
@@ -401,12 +431,13 @@ type RelationRowProps = {
   readonly menuSubmenus?: readonly RowSubmenu[] | undefined;
 };
 
-/** A task related to the one shown, or one a picker offers: its status ring and name, and at the line's end how it stands to this one, its swipe and long press holding what changes that. */
+/** A task related to the one shown, or one a picker offers: its status ring and name, and at the line's end how it stands to this one, led by its kind's glyph where given, its swipe and long press holding what changes that. */
 export function RelationRow({
   id,
   name,
   status,
   relation,
+  relationMark,
   faded = false,
   trailingActions,
   menuSubmenus,
@@ -426,7 +457,23 @@ export function RelationRow({
       }
       title={name}
       ink={faded ? colors.TEXT_MUTED : colors.TEXT_BODY}
-      end={relation === undefined ? undefined : <EndWords words={relation} />}
+      end={
+        relation === undefined ? undefined : (
+          <HStack spacing={SPACE.TIGHT}>
+            {relationMark === undefined ? null : (
+              <ToneGlyph
+                glyph={relationMark.glyph}
+                tone={relationMark.attention ? STATUS_TONE.ATTENTION : STATUS_TONE.NEUTRAL}
+                hidden
+              />
+            )}
+            <EndWords
+              words={relation}
+              ink={relationMark?.attention === true ? colors.ACCENT_TEXT : undefined}
+            />
+          </HStack>
+        )
+      }
     />
   );
 
@@ -644,6 +691,8 @@ type GroupRowProps = {
   readonly id: string;
   readonly title: string;
   readonly symbol: Glyph;
+  /** The emoji a section's member chose as its icon, drawn as words in the glyph's place, as the panel's sidebar draws it. */
+  readonly emoji?: string | undefined;
   /** How many it holds, such as the Inbox's threads waiting on you; no count where none is given or it holds none, as Mail shows none on an empty mailbox. */
   readonly count?: number | undefined;
   /** What a flow finds the row by, such as the Search tab's id where the sidebar stands for the tab bar. */
@@ -659,16 +708,31 @@ type GroupRowProps = {
  * body's size, and how many it holds at the trailing edge in the muted ink,
  * the whole row in a rounded fill while it is picked.
  */
-export function GroupRow({ id, title, symbol, count: held, testId, onDropLink }: GroupRowProps) {
+export function GroupRow({
+  id,
+  title,
+  symbol,
+  emoji,
+  count: held,
+  testId,
+  onDropLink,
+}: GroupRowProps) {
   const colors = useColors();
   const count = held === 0 ? undefined : held;
   const leadWidth = useScaledSize(MARK_SIZE.SIDEBAR_LEAD);
+  const rolling = useRollingCount(count ?? 0);
 
   // Note that the name keeps one line at every text size and is cut short, and the count holds the line's end at its own width, as Mail's mailboxes stand, so a large size never breaks a name mid-word or drops the count under it.
   const row: ReactElement = (
     <HStack spacing={SPACE.ROW} alignment="center">
       <HStack modifiers={[frame({ width: leadWidth })]}>
-        <LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.SIDEBAR_GLYPH} />
+        {emoji === undefined ? (
+          <LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.SIDEBAR_GLYPH} />
+        ) : (
+          <Text modifiers={[font({ textStyle: TYPE_ROLE.SIDEBAR_GLYPH }), accessibilityHidden()]}>
+            {emoji}
+          </Text>
+        )}
       </HStack>
       <Text
         modifiers={[
@@ -688,6 +752,7 @@ export function GroupRow({ id, title, symbol, count: held, testId, onDropLink }:
             foregroundStyle(colors.TEXT_MUTED),
             lineLimit(1),
             fixedSize(),
+            ...rolling,
           ]}
         >
           {String(count)}
@@ -809,6 +874,7 @@ function ChangedWords({
 /** The count of a block's open comment threads at its trailing edge, as a document's margin marks them, opening them on a press. */
 function CommentCount({ comments }: { readonly comments: WordsComments }) {
   const colors = useColors();
+  const rolling = useRollingCount(comments.count);
 
   return (
     <SwiftUIButton
@@ -835,6 +901,7 @@ function CommentCount({ comments }: { readonly comments: WordsComments }) {
             font({ textStyle: TYPE_ROLE.TIME }),
             monospacedDigit(),
             foregroundStyle(colors.TEXT_MUTED),
+            ...rolling,
           ]}
         >
           {String(comments.count)}

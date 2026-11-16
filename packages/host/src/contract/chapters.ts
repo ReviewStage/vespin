@@ -1,10 +1,6 @@
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
-import {
-  pullRequestChaptersAnswerViewSchema,
-  pullRequestChaptersParamsSchema,
-  pullRequestChaptersReadParamsSchema,
-} from "@repo/features/pull-request-chapters-view";
+import { pullRequestChaptersAnswerViewSchema } from "@repo/features/pull-request-chapters-view";
 import { repositoryPullRequestParamsSchema } from "@repo/features/pull-request-view";
 import { ACT } from "@repo/sync";
 import { contractOf, declaredActs, hostAct } from "./declared-act.js";
@@ -22,14 +18,6 @@ import { followsContractOf, HOLD, liveFollow, liveFollows } from "./live-follow.
 
 /** The chapters' plain asks, answered by the agents' composer. */
 export const CHAPTERS_ACTS = declaredActs({
-  CHAPTERS_GENERATE: hostAct({
-    input: pullRequestChaptersParamsSchema,
-    output: pullRequestChaptersAnswerViewSchema,
-    refusal: "Could not generate the pull request's chapters on this system.",
-    panelOnly: true,
-    door: ACT.REMOTE_WORK,
-    unanswered: { failure: AGENT_CALL_FAILURE.UNANSWERED },
-  }),
   CHAPTERS_REPOSITORY_GENERATE: hostAct({
     input: repositoryPullRequestParamsSchema,
     output: pullRequestChaptersAnswerViewSchema,
@@ -42,17 +30,6 @@ export const CHAPTERS_ACTS = declaredActs({
 
 /** A pull request's chapters, followed for the Pull request tab that holds them. */
 export const CHAPTERS_FOLLOWS = liveFollows({
-  CHAPTERS_FOLLOW: liveFollow({
-    slice: LIVE_READ.PULL_REQUEST_CHAPTERS,
-    hold: HOLD.WINDOW,
-    key: pullRequestChaptersReadParamsSchema,
-    refusal: "Could not follow the pull request's chapters on this system.",
-    panelOnly: true,
-    retry: {
-      name: "CHAPTERS_RETRY",
-      refusal: "Could not read the pull request's chapters again on this system.",
-    },
-  }),
   CHAPTERS_REPOSITORY_FOLLOW: liveFollow({
     slice: LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS,
     hold: HOLD.WINDOW,

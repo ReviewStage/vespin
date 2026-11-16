@@ -156,19 +156,23 @@ function SheetBar({
   const colors = useColors();
   const close = useCloseSheet(kept);
 
+  // Note that the options are made once for their title and colors, because the stack sets a screen's options again whenever a new object comes, which a key typed would make.
+  const options = useMemo(
+    () => ({
+      headerShown: true,
+      title,
+      headerTintColor: colors.TEXT,
+      headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+      headerShadowVisible: false,
+      contentStyle: { backgroundColor: colors.GROUND },
+    }),
+    [title, colors],
+  );
+
   return (
     <>
       {/* Note that the bar has no ground of its own, so the system draws its buttons in glass over the sheet's. */}
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title,
-          headerTintColor: colors.TEXT,
-          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
-          headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.GROUPED },
-        }}
-      />
+      <Stack.Screen options={options} />
       <Stack.Toolbar placement="left">
         {/* Note that the sheet closes with the system's ✕, as Mail's compose sheet does, its word kept for VoiceOver. */}
         <Stack.Toolbar.Button
@@ -179,12 +183,9 @@ function SheetBar({
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         {file === undefined ? null : (
-          <Stack.Toolbar.Button
-            icon={glyphSymbol(GLYPH.FILE_FOR_LATER)}
-            accessibilityLabel={WORDS.FILE_FOR_LATER}
-            disabled={!file.ready}
-            onPress={file.onFile}
-          />
+          <Stack.Toolbar.Button disabled={!file.ready} onPress={file.onFile}>
+            {WORDS.FILE_FOR_LATER}
+          </Stack.Toolbar.Button>
         )}
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.SEND)}
@@ -215,6 +216,7 @@ function choicesOf(
 ): ChipMenuGroup["choices"] {
   return options.map((option) => ({
     label: option.label,
+    id: option.id,
     on: option.id === picked,
     onPress: () => onPick(option.id),
   }));
@@ -811,6 +813,9 @@ interface RelationPick {
   readonly clear: () => void;
 }
 
+/** What a menu of tasks to relate to reads of the pick: the tasks it may name, the one named, and how to name one. */
+type RelationChoices = Pick<RelationPick, "tasks" | "relation" | "pick">;
+
 /**
  * The relation New task starts its task in: none until one is picked from
  * the +, its kind and its task together, or Sub-task of `parent` where a
@@ -848,9 +853,13 @@ function useRelationPick(
 }
 
 /** The tasks a kind may name, as a menu's choices, the one named checked. */
-function taskChoices(pick: RelationPick, kind: TaskCreateRelationKind): ChipMenuGroup["choices"] {
+function taskChoices(
+  pick: RelationChoices,
+  kind: TaskCreateRelationKind,
+): ChipMenuGroup["choices"] {
   return pick.tasks.map((task) => ({
     label: task.name,
+    id: task.id,
     symbol: STATUS_MARK_SYMBOL[task.status ?? TASK_STATUS.TODO],
     tone: TASK_STATUS_TONE[task.status ?? TASK_STATUS.TODO],
     on: pick.relation?.kind === kind && pick.relation.taskId === task.id,
@@ -859,7 +868,7 @@ function taskChoices(pick: RelationPick, kind: TaskCreateRelationKind): ChipMenu
 }
 
 /** The + menu's Task relation, as the panel's + offers it: each kind, then the task it names; none while no task may be named. */
-function relationMenu(pick: RelationPick): BarMenu | undefined {
+function relationMenu(pick: RelationChoices): BarMenu | undefined {
   if (pick.tasks.length === 0) return undefined;
 
   return {
@@ -991,7 +1000,17 @@ export function NewTaskScreen({
       : (repository.failed ??
         (repository.read && repository.options.length === 0 ? WORDS.NO_REPOSITORIES : undefined));
 
-  const related = relationMenu(relation);
+  // Note that the relation picked, whose Swap task lists every open task, is drawn again only as the pick or the tasks change, never on a key typed; its acts set the pick, which never changes.
+  const head = useMemo(
+    () => <RelationChip pick={relation} />,
+    [relation.relation, relation.task, relation.tasks],
+  );
+
+  // Note that the relation menu, a choice for each open task under each kind, is made again only as the tasks or the pick change, never on a key typed.
+  const related = useMemo(
+    () => relationMenu({ tasks: relation.tasks, relation: relation.relation, pick: relation.pick }),
+    [relation.tasks, relation.relation, relation.pick],
+  );
 
   const start = () => {
     if (!drafted) return;
@@ -1023,7 +1042,7 @@ export function NewTaskScreen({
         kept={kept}
       />
       <FocusedComposeSheet
-        head={<RelationChip pick={relation} />}
+        head={head}
         words={{
           placeholder: WORDS.TASK_PLACEHOLDER,
           words: prompt,

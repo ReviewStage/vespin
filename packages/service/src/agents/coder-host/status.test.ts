@@ -1,4 +1,8 @@
-import { CONNECTION_LOST_DETAIL, connectionLostFailure } from "@repo/agent-runner/protocol";
+import {
+  CONNECTION_LOST_DETAIL,
+  CURSOR_SIGNED_OUT_DETAIL,
+  connectionLostFailure,
+} from "@repo/agent-runner/protocol";
 import type { AgentLine } from "@repo/database/models/agent-store";
 import {
   AGENT_BRIEF,
@@ -72,6 +76,12 @@ test("a turn its runner ended over a provider it waited for in vain reads as the
   expect(agentFailureOf(unprobed)).toBe(AGENT_FAILURE.MODEL);
 });
 
+test("a Cursor launch its Mac ended for want of a Cursor sign-in reads as the machine not signed in", () => {
+  expect(agentFailureOf(failedOnModel(`failed ${CURSOR_SIGNED_OUT_DETAIL}`))).toBe(
+    AGENT_FAILURE.MACHINE_SIGN_IN,
+  );
+});
+
 test("a local agent's summary names its Mac and when it last beat; an agent in a sandbox names none", () => {
   const DEVICE = "device-1";
 
@@ -126,6 +136,7 @@ test("a local agent's summary names its Mac and when it last beat; an agent in a
             model: null,
             lastSeenAt: new Date(lastSeenAt),
             codexExecutable: null,
+            cursorSdk: null,
             setup: null,
             setupFailure: null,
           },

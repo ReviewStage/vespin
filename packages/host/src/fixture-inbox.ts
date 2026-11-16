@@ -154,6 +154,7 @@ import {
   fixtureAgentOlderMessages,
   fixtureAgentPicture,
   fixtureAgentTranscript,
+  fixtureLongTranscript,
 } from "./fixture-agent-transcript.js";
 import {
   FIXTURE_PICTURE_PNG,
@@ -601,6 +602,9 @@ const INVITES_ITEMS: readonly InboxItem[] = [
             `![The invite page](${RECORDED_PICTURE_ADDRESS})`,
             "",
             "The recording is under this. The expired page is still the placeholder.",
+            "",
+            // Note that this links a settled thread, outside the Open list, so a flow can push it over this one and come back to step on from here.
+            "It goes out with the digest, on the day [@Which day the digest goes out](https://vespin.dev/personal/inbox/81e2a425-6d9f-4ab7-92df-00000000000d) settled.",
           ].join("\n"),
         ),
         files: [
@@ -687,7 +691,7 @@ const DIGEST_ITEMS: readonly InboxItem[] = [
   ),
 ];
 
-/** The rounding task's one item, closed by its agent once the question no longer stood. */
+/** The rounding task's items: one closed by its agent once the question no longer stood, and one whose ask the agent withdrew before posting on, so the line saying so stands between its messages. */
 const ROUNDING_ITEMS: readonly InboxItem[] = [
   item(
     21,
@@ -713,6 +717,27 @@ const ROUNDING_ITEMS: readonly InboxItem[] = [
       settledAt: LANDED - 4 * DAY + HOUR,
     },
   ),
+  // Note that the agent's three messages stand within a few minutes, so only the withdrawn ask's line between them splits them into two runs.
+  item(22, AGENT.ROUNDING, "tax-rounding", "Where the invoice's tax rounds", [
+    agentSaid(
+      320,
+      3 * DAY,
+      "Tax rounds per line today, so a three-line invoice can come out a cent off the tax on its total. Should it round once, on the total?",
+      {
+        type: INBOX_ASK.DECIDE,
+        options: [{ label: "Per line" }, { label: "On the total" }],
+        status: INBOX_ASK_STATUS.WITHDRAWN,
+        withdrawnReason: "The tax spec says to round once, on the total.",
+        withdrawnAt: LANDED - 3 * DAY + MINUTE,
+      },
+    ),
+    agentSaid(321, 3 * DAY - 2 * MINUTE, "Tax now rounds once, on the invoice's total."),
+    agentSaid(
+      322,
+      3 * DAY - 3 * MINUTE,
+      "Added a test with three lines whose per-line tax comes to a cent more than the total's.",
+    ),
+  ]),
 ];
 
 /** Each task's inbox, by the task's id. */
@@ -1767,7 +1792,13 @@ function stagedPages(state: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ
   return laid;
 }
 
-/** The threads on the reference journey's description: one open, Ada's question and its agent's answer, and one resolved, which its page leaves out. */
+/** The files Ada's question on the description carries, by the ids the service keeps them under: a screenshot and a PDF, so a comment's pictures and its file chips both stand on its thread. */
+const COMMENT_FILES = {
+  PICTURE: "c5169e82-a1d3-4efb-96b3-4d5e6f718293",
+  PLAN: "d627af93-b2e4-4f0c-a7c4-5e6f718293a4",
+} as const;
+
+/** The threads on the reference journey's description: one open, Ada's question with its files and its agent's answer, and one resolved, which its page leaves out. */
 const INVITES_THREADS: readonly DescriptionCommentThread[] = [
   {
     id: fixtureId(301),
@@ -1782,6 +1813,18 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
         kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
         writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
         words: "Should an owner be able to resend an expired invite from this page?",
+        files: [
+          {
+            attachmentId: COMMENT_FILES.PICTURE,
+            name: "expired-invite.png",
+            mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+          },
+          {
+            attachmentId: COMMENT_FILES.PLAN,
+            name: "resend-flow.pdf",
+            mediaType: AGENT_ATTACHMENT_TYPE.PDF,
+          },
+        ],
         at: LANDED - 3 * HOUR,
       },
       {
@@ -1820,7 +1863,7 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
 /** The threads a fixture run started on the invites task's description, by id, so a reply or a resolve on one finds it as it does a staged thread. */
 const STARTED_THREADS = new Map<string, DescriptionCommentThread>();
 
-/** The number the next reply the run keeps is given its id by, past every id the fixture stages, so each kept reply is keyed apart. */
+/** The number the next entry the run writes is given its id by, a kept reply or a resolve's or reopen's line, past every id the fixture stages, so each is keyed apart. */
 let nextReplyId = 1000;
 
 /** Keeps a started thread as it now stands, moved on a revision, and answers it. */
@@ -1899,6 +1942,9 @@ const INVITES_TRANSCRIPT = withQueued(
   fixtureAgentTranscript(INVITES_STARTED, ADA, "Build teammate invitations"),
 );
 
+/** The rounding agent's finished run, long enough that its page opens far below its first row, its words wide in places: a link, a code block, and a table. */
+const ROUNDING_TRANSCRIPT = fixtureLongTranscript(LANDED - 5 * DAY, ADA, "Fix ledger rounding");
+
 /** A transcript with one message of the account's queued behind its turn, which the agent's composer lists over its field with Steer and Delete. */
 function withQueued(transcript: AppTranscript): AppTranscript {
   const queued = {
@@ -1914,7 +1960,7 @@ function withQueued(transcript: AppTranscript): AppTranscript {
   return { ...transcript, word: { ...word, queue: { messages: [queued], revision: 1 } } };
 }
 
-/** The transcripts main holds with the invitations agent's laid over them, one object for each of main's. */
+/** The transcripts main holds with the invitations and rounding agents' laid over them, one object for each of main's. */
 const STAGED_TRANSCRIPTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT]
@@ -1930,6 +1976,7 @@ function stagedTranscripts(
   const staged = {
     ...held,
     [AGENT.INVITES]: { ...held[AGENT.INVITES], [OWN_TRANSCRIPT]: { rows: INVITES_TRANSCRIPT } },
+    [AGENT.ROUNDING]: { ...held[AGENT.ROUNDING], [OWN_TRANSCRIPT]: { rows: ROUNDING_TRANSCRIPT } },
   };
 
   STAGED_TRANSCRIPTS.set(held, staged);
@@ -2572,11 +2619,18 @@ const ANSWERS: StagedAnswers = {
 
     return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
   },
-  // Note that the reference task's PDF is read as the service reads a description's file, and any other is not there.
-  [ACT_KIND.TASKS_PICTURE_READ]: ({ taskId, attachmentId }) =>
-    taskId === FIXTURE_IDS.TASK && attachmentId === DESCRIPTION_PDF
+  // Note that a file Ada's question carries, and the reference task's PDF, are read as the service reads a description's, and any other is not there.
+  [ACT_KIND.TASKS_PICTURE_READ]: ({ taskId, attachmentId }) => {
+    if (taskId !== TASK.INVITES) return { failure: TASK_CALL_FAILURE.NOT_FOUND };
+
+    if (attachmentId === COMMENT_FILES.PICTURE) {
+      return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
+    }
+
+    return attachmentId === COMMENT_FILES.PLAN || attachmentId === DESCRIPTION_PDF
       ? { contentType: AGENT_ATTACHMENT_TYPE.PDF, base64: FIXTURE_PLAN_PDF }
-      : { failure: TASK_CALL_FAILURE.NOT_FOUND },
+      : { failure: TASK_CALL_FAILURE.NOT_FOUND };
+  },
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
   // Note that a version of the reference journey's description is read as the service reads one, and a restore is taken as the service takes one, though nothing here moves.
@@ -2641,7 +2695,7 @@ const ANSWERS: StagedAnswers = {
     return { item: takenBackNow(held, Date.now()), outcome: INBOX_TAKE_BACK.TAKEN };
   },
   // Note that a change to one of the invitations agent's pull requests is taken as GitHub takes one, and the run lays how it moved it over the parts (`pullRequestPartsAppState`).
-  [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
+  [ACT_KIND.PULL_REQUESTS_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
   // An agent's sandbox listens on two ports, one served by Vite, and shares neither, so its Ports sheet lists them and offers Share.
   [ACT_KIND.AGENTS_PORTS]: () => ({
     running: true,
@@ -2789,13 +2843,28 @@ const ANSWERS: StagedAnswers = {
 
     const started = STARTED_THREADS.has(thread.id);
 
-    // Note that a thread the run started keeps what was done to it, its replies and whether it stands resolved, so a later answer carries them; a staged thread answers as it stands.
-    if (started && action.action === DESCRIPTION_COMMENT_ACTION.RESOLVE) {
-      return { thread: keepStarted({ ...thread, status: DESCRIPTION_COMMENT_STATUS.RESOLVED }) };
-    }
+    // Note that a resolve or a reopen answers the thread at the status asked, with its line by Ada at the end, as the service answers one, so the host never draws it back as it stood; a thread the run started keeps it, with its replies, so a later answer carries them.
+    if (
+      action.action === DESCRIPTION_COMMENT_ACTION.RESOLVE ||
+      action.action === DESCRIPTION_COMMENT_ACTION.REOPEN
+    ) {
+      const resolving = action.action === DESCRIPTION_COMMENT_ACTION.RESOLVE;
 
-    if (started && action.action === DESCRIPTION_COMMENT_ACTION.REOPEN) {
-      return { thread: keepStarted({ ...thread, status: DESCRIPTION_COMMENT_STATUS.OPEN }) };
+      // Note that the line takes a fresh id from the run's count, as a kept reply does, so a thread settled twice never holds two rows of one key.
+      const line = {
+        id: fixtureId(nextReplyId++),
+        kind: resolving ? DESCRIPTION_COMMENT_ENTRY.RESOLVED : DESCRIPTION_COMMENT_ENTRY.REOPENED,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+        at: Date.now(),
+      };
+
+      const settled = {
+        ...thread,
+        status: resolving ? DESCRIPTION_COMMENT_STATUS.RESOLVED : DESCRIPTION_COMMENT_STATUS.OPEN,
+        entries: [...thread.entries, line],
+      };
+
+      return { thread: started ? keepStarted(settled) : settled };
     }
 
     if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) return { thread };

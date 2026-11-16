@@ -15,7 +15,6 @@ const HELD: ChipMarksHeld = {
   agentModel: (agentId) => (agentId === "a-1" ? "anthropic/claude-opus-5.5" : undefined),
   member: (userId) =>
     userId === "u-grace" ? { name: "Grace Hopper", picture: undefined } : undefined,
-  inboxItem: () => undefined,
   workspace: (slug) => (slug === "relay" ? RELAY : undefined),
 };
 

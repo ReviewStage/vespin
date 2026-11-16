@@ -5,8 +5,8 @@ import type { ChaptersGenerator } from "@repo/features/pull-request-chapters-liv
 import type { PullRequestChaptersAnswer } from "@repo/features/pull-request-chapters-wire";
 import { Duration, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
-import type { AppChapters, AppRepositoryPullRequestHeld } from "./app-state.js";
-import { ChaptersKey, heldChapters, heldRepositoryChapters } from "./chapters-follow.js";
+import type { AppRepositoryPullRequestHeld } from "./app-state.js";
+import { heldRepositoryChapters } from "./chapters-follow.js";
 import { RepositoryPullRequestKey } from "./pull-request-parts.js";
 import { polledLive } from "./testing/polled-live.js";
 
@@ -14,13 +14,18 @@ import { polledLive } from "./testing/polled-live.js";
  * chapters-follow.test.ts -- a pull request's held chapters take whether the
  * reader can generate them, and on what, from every answer: a key the reader
  * saves or swaps while the chapters are held draws at the next answer, though the chapters it
- * carries stand as they did, which no answer of rows alone would tell. A
- * pull request's chapters held by its repository and number are read for
- * that pull request and stand under its workspace, repository, and number.
+ * carries stand as they did, which no answer of rows alone would tell; and
+ * they are read for the pull request held, and stand under its workspace,
+ * repository, and number.
  * Synthetic ids, commits, and words.
  */
 
-const AGENT_ID = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
+/** The pull request held, by its workspace, repository, and number. */
+const KEY = new RepositoryPullRequestKey({
+  workspaceId: "workspace-personal",
+  repository: "acme/relay",
+  number: 7,
+});
 
 /** The newest claim as the statement selects it, made and ready. */
 const READY_ROW = {
@@ -49,31 +54,35 @@ it.effect(
       const live = polledLive(["chapters"] as const);
       live.set({ chapters: [READY_ROW] });
       let generator: ChaptersGenerator = { generatable: false };
-      const told: AppChapters[] = [];
+      const told: AppRepositoryPullRequestHeld<PullRequestChaptersAnswer>[] = [];
+      const sealed: RepositoryPullRequestKey[] = [];
 
-      const chapters = yield* heldChapters({
-        seal: (_key, poll, _userId, after) =>
-          Effect.map(poll ? live.poll(after) : Effect.succeed(live.first()), (answer) => ({
+      const chapters = yield* heldRepositoryChapters({
+        seal: (key, poll, _userId, after) => {
+          sealed.push(key);
+
+          return Effect.map(poll ? live.poll(after) : Effect.succeed(live.first()), (answer) => ({
             ...answer,
             ...generator,
-          })),
+          }));
+        },
         accountId: () => "user-reader",
         gate: () => true,
         tell: (held) => told.push(held),
       });
 
       const held = yield* Effect.forkScoped(
-        Effect.scoped(
-          Effect.andThen(
-            chapters.hold(new ChaptersKey({ agentId: AGENT_ID, number: 7 })),
-            Effect.never,
-          ),
-        ),
+        Effect.scoped(Effect.andThen(chapters.hold(KEY), Effect.never)),
       );
 
-      const drawn = () => told.at(-1)?.[AGENT_ID]?.["7"]?.rows?.pullRequest?.runsOn?.provider;
+      const pullRequest = () =>
+        told.at(-1)?.["workspace-personal"]?.["acme/relay"]?.["7"]?.rows?.pullRequest;
+
+      const drawn = () => pullRequest()?.runsOn?.provider;
 
       yield* nextPoll;
+      assert.deepEqual(sealed[0], KEY);
+      assert.equal(pullRequest()?.number, KEY.number, "the chapters stand under the pull request");
       assert.equal(drawn(), undefined, "the reader holds no key yet");
 
       generator = {
@@ -106,52 +115,9 @@ it.effect(
       live.set({});
       yield* nextPoll;
       assert.equal(
-        told.at(-1)?.[AGENT_ID]?.["7"]?.rows?.pullRequest?.runsOnChoices?.length,
+        pullRequest()?.runsOnChoices?.length,
         2,
         "a second key saved offers the pick though Generate runs on what it did",
-      );
-      yield* Fiber.interrupt(held);
-    }),
-);
-
-it.effect(
-  "a pull request's chapters held by its repository are read for it and stand under its workspace, repository, and number",
-  () =>
-    Effect.gen(function* () {
-      const live = polledLive(["chapters"] as const);
-      live.set({ chapters: [READY_ROW] });
-      const sealed: RepositoryPullRequestKey[] = [];
-      const told: AppRepositoryPullRequestHeld<PullRequestChaptersAnswer>[] = [];
-
-      const key = new RepositoryPullRequestKey({
-        workspaceId: "workspace-personal",
-        repository: "acme/relay",
-        number: 7,
-      });
-
-      const chapters = yield* heldRepositoryChapters({
-        seal: (asked, poll, _userId, after) => {
-          sealed.push(asked);
-
-          return Effect.map(poll ? live.poll(after) : Effect.succeed(live.first()), (answer) => ({
-            ...answer,
-            generatable: false,
-          }));
-        },
-        accountId: () => "user-reader",
-        gate: () => true,
-        tell: (held) => told.push(held),
-      });
-
-      const held = yield* Effect.forkScoped(
-        Effect.scoped(Effect.andThen(chapters.hold(key), Effect.never)),
-      );
-
-      yield* nextPoll;
-      assert.deepEqual(sealed[0], key);
-      assert.equal(
-        told.at(-1)?.["workspace-personal"]?.["acme/relay"]?.["7"]?.rows?.pullRequest?.number,
-        key.number,
       );
       yield* Fiber.interrupt(held);
     }),

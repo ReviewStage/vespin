@@ -30,7 +30,6 @@ import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
-import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import { ACTION_RESULT_STATUS, MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement, Fragment, useEffect } from "react";
@@ -339,9 +338,7 @@ async function drawnTab(input: {
     act(() =>
       parts.deliverParts({
         [LIVE_READ.PULL_REQUEST_PUBLISHED]: {
-          [SOURCE]: {
-            [OWN_PULL_REQUEST]: { rows: { repository, branch: null, pullRequest: null } },
-          },
+          [SOURCE]: { rows: { repository, branch: null, pullRequest: null } },
         },
       }),
     );

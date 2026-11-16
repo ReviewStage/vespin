@@ -25,7 +25,8 @@
 // (`updateCall`), and ends it with the call (`endCall`), and a press on it
 // (`CallPressIntent`, in the app's target) pings this module, which hands it
 // on as an event while JavaScript listens, since the call keeps the app
-// running. The Inbox widget, which the same
+// running, and draws a mute's new state on the activity at once, which
+// JavaScript's next state confirms. The Inbox widget, which the same
 // extension draws, is asked to draw again (`reloadInboxWidget`) once the
 // app's JavaScript has written its snapshot into the App Group
 // (`src/inbox-widget/`), since only WidgetKit's Swift can ask.
@@ -43,6 +44,17 @@ private struct KeptPhone: Codable {
   let deviceToken: String
   let environment: String
   let headers: [String: String]
+}
+
+/// How highly iOS ranks a voice call's activity among the app's, which decides the one the Dynamic Island shows: above the agents' activity, whose pushes carry no score and so rank at none, since a call standing is what the member is doing now.
+enum CallRelevance {
+  static let score: Double = 100
+}
+
+/// A press on the call's activity, as `CallPressIntent` pings it: what it sets, and the agent its activity shows.
+private struct CallPress {
+  let press: String
+  let agentId: String
 }
 
 public final class LiveActivityModule: Module {
@@ -73,6 +85,10 @@ public final class LiveActivityModule: Module {
   private var watchers: [Task<Void, Never>] = []
   private var stopObserver: NSObjectProtocol?
   private var callPressObserver: NSObjectProtocol?
+  /// Where the call's presses wait their turn, taken one at a time in the order they came.
+  private var callPressQueue: AsyncStream<CallPress>.Continuation?
+  /// The one task that takes the call's presses from their queue.
+  private var callPressTaker: Task<Void, Never>?
 
   public func definition() -> ModuleDefinition {
     Name("LiveActivity")
@@ -87,20 +103,31 @@ public final class LiveActivityModule: Module {
       self.stopObserver = NotificationCenter.default.addObserver(
         forName: Self.stopAsked, object: nil, queue: .main
       ) { [weak self] _ in Task { @MainActor in self?.handOnStops() } }
+      // Note that presses are taken one at a time, in the order they came, since each waits on the activity's update before it goes on, and two such waits may end in either order: a mute then an unmute must reach the call in that order, or the call ends muted.
+      let (callPresses, nextCallPress) = AsyncStream.makeStream(of: CallPress.self)
+      self.callPressQueue = nextCallPress
+      self.callPressTaker = Task { @MainActor [weak self] in
+        for await taken in callPresses {
+          guard let self else { return }
+          guard self.listening.contains("onCallPress") else { continue }
+          // Note that the activity shows a mute at once, rather than after JavaScript's round trip mirrors the call back, which felt delayed on a call; the mirror then confirms it, or sets it back where the call refused.
+          await Self.showCallPress(taken.press, agentId: taken.agentId)
+          self.sendEvent("onCallPress", ["press": taken.press, "agentId": taken.agentId])
+        }
+      }
       self.callPressObserver = NotificationCenter.default.addObserver(
         forName: Self.callPressed, object: nil, queue: .main
-      ) { [weak self] note in
+      ) { note in
         guard let press = note.userInfo?["press"] as? String,
           let agentId = note.userInfo?["agentId"] as? String
         else { return }
-        Task { @MainActor in
-          guard let self, self.listening.contains("onCallPress") else { return }
-          self.sendEvent("onCallPress", ["press": press, "agentId": agentId])
-        }
+        nextCallPress.yield(CallPress(press: press, agentId: agentId))
       }
     }
 
     OnDestroy {
+      self.callPressQueue?.finish()
+      self.callPressTaker?.cancel()
       self.watchers.forEach { $0.cancel() }
       if let stopObserver = self.stopObserver { NotificationCenter.default.removeObserver(stopObserver) }
       if let callPressObserver = self.callPressObserver {
@@ -191,7 +218,9 @@ public final class LiveActivityModule: Module {
       for activity in Activity<CallActivityAttributes>.activities {
         await activity.end(nil, dismissalPolicy: .immediate)
       }
-      _ = try Activity.request(attributes: called, content: .init(state: state, staleDate: nil))
+      _ = try Activity.request(
+        attributes: called,
+        content: .init(state: state, staleDate: nil, relevanceScore: CallRelevance.score))
     }
 
     // The call's activity set to a new state, from its JSON.
@@ -199,7 +228,8 @@ public final class LiveActivityModule: Module {
       let state = try JSONDecoder().decode(
         CallActivityAttributes.ContentState.self, from: Data(contentState.utf8))
       for activity in Activity<CallActivityAttributes>.activities {
-        await activity.update(.init(state: state, staleDate: nil))
+        await activity.update(
+          .init(state: state, staleDate: nil, relevanceScore: CallRelevance.score))
       }
     }
 
@@ -275,6 +305,25 @@ public final class LiveActivityModule: Module {
     if superseded.remove(id) != nil { return }
     // The ended activity's own token, so the service clears it only while it still holds that one.
     if listening.contains("onActivityEnded") { sendEvent("onActivityEnded", ["token": token]) }
+  }
+
+  /// The call's activity drawn with a mute press already set, for the agent the press names: the microphone's or the speaker's muted flag as the press sets it. End call and a press it doesn't know leave the activity to JavaScript.
+  @MainActor
+  private static func showCallPress(_ press: String, agentId: String) async {
+    for activity in Activity<CallActivityAttributes>.activities
+    where activity.attributes.agentId == agentId {
+      var state = activity.content.state
+      switch press {
+      case "mute-microphone": state.microphoneMuted = true
+      case "unmute-microphone": state.microphoneMuted = false
+      case "mute-speaker": state.speakerMuted = true
+      case "unmute-speaker": state.speakerMuted = false
+      default: return
+      }
+      guard state != activity.content.state else { continue }
+      await activity.update(
+        .init(state: state, staleDate: nil, relevanceScore: CallRelevance.score))
+    }
   }
 
   /// Hands each fresh Stop request on while JavaScript listens, dropping any too old to act on.

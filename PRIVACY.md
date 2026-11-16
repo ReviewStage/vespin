@@ -103,10 +103,10 @@ state, and checks, and any chapters you generate for it.
 
 ### Credentials you save
 
-If you save an Anthropic or OpenAI API key, a GitHub personal access token, or
-your Claude plan's setup token, or sign in with your ChatGPT plan, we store it
-encrypted with AES-256-GCM under a per-credential key that is itself encrypted
-with a server-only secret held outside the database. We keep a short hint
+If you save an Anthropic, OpenAI, or Cursor API key, a GitHub personal access
+token, or your Claude plan's setup token, or sign in with your ChatGPT plan, we
+store it encrypted with AES-256-GCM under a per-credential key that is itself
+encrypted with a server-only secret held outside the database. We keep a short hint
 (such as `sk-ant-…abcd`), the email of the ChatGPT account a plan signed in
 as, the name you give a plan, and whether the provider accepts it. We never
 log a saved credential or include it in analytics, error reports, or screen
@@ -480,6 +480,8 @@ laws:
 - Run your agents and the models they use, on your own keys
 - Authenticate your identity and manage your account and workspaces
 - Send workspace invitations and the Slack messages your workspace asked for
+- Send you onboarding emails and product updates, which you can unsubscribe
+  from at any time
 - Monitor and analyze usage to improve the Service
 - Detect, prevent, and address technical issues and security threats
 - Comply with legal obligations
@@ -505,7 +507,9 @@ data with:
   you saved, never ours. Titles, of your agents, tasks, and the threads you
   start, are generated on Anthropic under Vespin's own API key, from excerpts
   of an agent's opening message, your latest message, and its latest answer,
-  or of a thread's first message.
+  or of a thread's first message. An agent you run on Cursor runs on Cursor,
+  on the Cursor API key you saved, and Cursor's SDK, which runs it in the
+  agent's sandbox, also sends Cursor its own usage analytics of each run.
   Each call carries what the model needs, such as the description, the conversation,
   attached files, and what the agent read. These providers process it under
   their own policies.
@@ -518,7 +522,7 @@ data with:
 - **Infrastructure providers:** Vercel (hosting, agent sandboxes, and Vercel
   Connect, which holds integration tokens), Neon (database), PostHog (usage
   data, screen recordings, feedback, and setup answers), Sentry (error and
-  performance monitoring), Resend (email: for the onboarding emails a new account is sent,
+  performance monitoring), Resend (email: for onboarding emails and product updates,
   Resend is told your email address, your first name, when you signed up, whether
   you accepted a workspace invitation, and on which days you started a task),
   and Slack (feedback, setup answers, and Vespin's Slack bot).

@@ -11,12 +11,14 @@
  */
 
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { writeAccountPreferences } from "@repo/database/models/account-store";
+import { registerDevice } from "@repo/database/models/device-store";
 import { saveProviderKey } from "@repo/database/models/provider-key-store";
 import { user } from "@repo/database/schemas/auth";
-import { getTestDB } from "@repo/database/testing";
+import { DEVICE_LAYOUT, getTestDB } from "@repo/database/testing";
 import { CLIENT_HEADER, CLIENT_PLATFORM, clientHeaders } from "@repo/features/client-identity";
 import { type CatalogModel, MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
@@ -304,7 +306,7 @@ it.layer(getTestDB())("the models route", (it) => {
   );
 
   it.effect(
-    "Cursor's models follow the catalog's, each marked unconnected while no Cursor key pays, for an account with Cursor agents on and a client built to read Cursor, and never for an older client, one that names no version, or an account with it off",
+    "Cursor's models follow the catalog's, each marked unconnected while no Cursor key pays, and a Mac that keeps Cursor's SDK lists Cursor, for an account with Cursor agents on and a client built to read Cursor, and never for an older client, one that names no version, or an account with it off",
     () =>
       Effect.gen(function* () {
         const catalog = modelCatalogOf(CATALOG);
@@ -333,6 +335,23 @@ it.layer(getTestDB())("the models route", (it) => {
           experiments: { [EXPERIMENT.CURSOR]: true },
         });
 
+        yield* registerDevice("user-cursor", {
+          id: randomUUID(),
+          name: "Studio",
+          ...DEVICE_LAYOUT,
+          cursorSdk: "/Users/fixture/agent-tools/cursor-sdk/1.4.0/dist/esm/index.js",
+        });
+
+        const macProvidersOf = (client: Readonly<Record<string, string>>) =>
+          Effect.map(
+            answer(catalog, request(MODELS, { userId: "user-cursor", client })),
+            (answered) =>
+              // SAFETY: the group answers the wire's models answer; the test reads the Macs' providers alone.
+              (answered.body as { macs?: readonly { providers: readonly string[] }[] }).macs?.map(
+                (mac) => mac.providers,
+              ),
+          );
+
         assert.deepEqual(yield* cursorOf("user-cursor", desktop), [
           { id: "cursor/composer-2.5", unconnected: true },
           { id: "cursor/composer-2.5-fast", unconnected: true },
@@ -340,7 +359,11 @@ it.layer(getTestDB())("the models route", (it) => {
           { id: "cursor/grok-4.7", unconnected: true },
           { id: "cursor/grok-4.7-fast", unconnected: true },
         ]);
+        assert.deepEqual(yield* macProvidersOf(desktop), [
+          [MODEL_PROVIDER.ANTHROPIC, MODEL_PROVIDER.CURSOR],
+        ]);
         assert.deepEqual(yield* cursorOf("user-cursor", older), []);
+        assert.deepEqual(yield* macProvidersOf(older), [[MODEL_PROVIDER.ANTHROPIC]]);
         assert.deepEqual(yield* cursorOf("user-cursor", undefined), []);
         assert.deepEqual(yield* cursorOf("user-without-cursor", desktop), []);
       }),

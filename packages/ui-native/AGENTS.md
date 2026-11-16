@@ -146,9 +146,11 @@ builds a control of its own.
 - **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
   panel's three lines (the task's status ring and name, then the thread's
   title and time, then the glyph and words of what it asks; an agent's own
-  thread, with no task, in two), `TaskRow` a task on one line (its priority's
-  mark and status ring, as the panel's List row leads, its name, and at its end a thread that needs you, a failed agent,
-  one at work, or its pull request, then its key), and `AgentRow` an agent
+  thread, with no task, in two), `TaskRow` a task on one line (its status
+  ring, its name, set in semibold while it has news with no unread dot, and
+  at its end a thread that needs you, a failed agent, one at work, or its
+  pull request, then its key; its priority stands on the task's own
+  Priority chip, not the row), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
 - **Every glyph is the panel's own Lucide glyph for the same place** (the
   developer, Nov 12, 2026), named once in `glyph.ts`'s `GLYPH`, by what it
@@ -203,7 +205,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   A thread's path opens its task and its agent, as the panel's crumbs do: in a
   split view the path is a menu of them under a small chevron, as iOS's
   title menus stand (`PathTitle`'s `actions`), and in a compact window, whose
-  stack's title holds no menu, they lead its ⋯ menu. An
+  stack's title holds no menu, they lead its ⋯ menu, headed by the path. A
+  compact window's thread names itself in the stack's bar in the ink, as
+  Messages names a conversation, since it opens at its newest message with
+  its heading out of sight; a split view's detail keeps the path and title
+  heading the page, as Mail's message stands. An
   agent's page names the agent in the bar in the ink instead, as Messages
   names a conversation, since its transcript opens at its newest row, with
   where it stands and its model muted under the name ("Working · Opus 5.5"),
@@ -244,10 +250,17 @@ navigation, tab bar, swipes, menus, sheets and glass.
   `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
   words. An Inbox thread stands roomier, as Mail's message rows do
   (`ROW_INSET.THREAD_VERTICAL` above and below, `THREAD_LINE_GAP` between
-  its lines), while a task's row keeps the list's tighter inset. A row a
+  its lines), while a task's row keeps the list's tighter inset and draws no
+  dot, its ring standing at the list's edge (`ROW_INSET.PLAIN`) where a
+  dotted row's ring stands past the dot's margin, so the two line up. A row a
   split view's list keeps selected stands on a rounded `SELECTED` fill set in
   from the column's edges (`ROW_INSET.FILL`), its hairlines stepping aside, as
   Mail's selected message does; its words don't move.
+- **A list with nothing to show** still stands, its `EmptyState` its one
+  row (`RowList`'s `empty`), as iOS stands its content-unavailable view in a
+  list's place: a pull anywhere still reads it again, and the state's own
+  press, such as Try again, still takes a tap. A screen never swaps its list
+  for the state.
 - **Select mode** (`RowList`'s `choosing`) is SwiftUI's own edit mode, as
   Mail's Select: a round check leads each row, a tap ticks it, two fingers
   dragged down tick a run, and the swipes step aside. Its screen names the
@@ -255,7 +268,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   foot, a compact window's tab bar stepping aside for it.
 - **Group headers** (`ListSection`) are small and muted with a count, or
   finished of all as `2/5` (`progress`); a `foldable` one folds in place on
-  a press, its chevron on the left, its rows easing away and back; and one given `add` ends in a muted +,
+  a press, its chevron on the left, its rows easing away and back; one given a `glyph` leads its title
+  with what the group is, as the panel's sidebar leads a section with its icon and a repository with its
+  owner's picture (`RepositoryPicture`, its glyph standing in until it draws); and one given `add` ends in a muted +,
   one act or the system's menu of several, as Reminders' groups add, so an
   empty section stands as its header alone rather than a list of add rows.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants

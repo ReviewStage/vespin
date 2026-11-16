@@ -13,8 +13,14 @@ import {
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentStateWords } from "@repo/features/glyph-state";
+import { iosAppRouteOf, iosRepositoryPullRequestRoute } from "@repo/features/ios-app-links";
 import { agentActivity } from "@repo/features/ios-system-activity";
-import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
+import {
+  LINK_DESTINATION,
+  linkOf,
+  linkWorkspaceStep,
+  pullRequestAddressOf,
+} from "@repo/features/link-grammar";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
@@ -29,7 +35,7 @@ import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions
 import { MESSAGE_SUGGESTION_REFUSAL, sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TRANSCRIPT_COPY, type TranscriptCopy } from "@repo/features/transcript-copy";
-import { MCP_SERVER_LABEL, VERB } from "@repo/features/words";
+import { MCP_SERVER_LABEL, PATH_OPENS, VERB } from "@repo/features/words";
 import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
 import { PERMISSION_MODE_WORDS } from "@repo/settings";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
@@ -75,6 +81,7 @@ import {
   SkillSuggestions,
   StackBarTitle,
   SwitchRow,
+  shownFiles,
   shownMediaIds,
   type TRANSCRIPT_ITEM,
   type TranscriptItem,
@@ -92,13 +99,14 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   useAgentMedia,
   useAgentPullRequests,
   useAgentTranscript,
   useFollowedAgent,
   useOlderPages,
+  useSentFiles,
   useShownAgent,
   useTranscriptRetry,
   useWholeParts,
@@ -136,11 +144,15 @@ import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useInFront } from "../place-columns.js";
-import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
+import {
+  type PullRequestKey,
+  usePullRequestsRead,
+  usePullRequestWrites,
+} from "../pull-requests/use-pull-request.js";
 import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useOnOwnTab } from "../tab-route.js";
+import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { PageScreen } from "./page-screens.js";
 
@@ -262,15 +274,15 @@ function cardMergeOf(pullRequest: AgentOverviewPullRequest | undefined) {
  * card then draws as GitHub took it; it goes as it is answered.
  */
 function CardMergeAsk({
-  agentId,
+  pullRequestKey,
   pullRequest,
   onDone,
 }: {
-  readonly agentId: string;
+  readonly pullRequestKey: PullRequestKey;
   readonly pullRequest: AgentOverviewPullRequest;
   readonly onDone: () => void;
 }) {
-  const writes = usePullRequestWrites({ agentId, number: pullRequest.number });
+  const writes = usePullRequestWrites(pullRequestKey);
   const merge = cardMergeOf(pullRequest);
 
   if (merge === undefined) return null;
@@ -709,26 +721,43 @@ export function AgentConversation({
   const detailLeave = useDetailLeave();
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
+  const onTab = useOnTab();
   const navigation = useNavigation();
-  const openLink = useOpenLink();
   const colors = useColors();
   const agent = useFollowedAgent(id);
   // Note that an agent the list doesn't hold is named and placed from its own read, while what acts on it reads the list alone.
   const shown = useShownAgent(id);
+  const openLink = useOpenLink(shown?.workspaceId);
   const pullRequests = useAgentPullRequests(id);
+
+  const workspaceId = shown?.workspaceId;
+
+  /** A pull request of the agent's by its page on GitHub, as its repository and number name it in the agent's workspace; none while the agent is read. */
+  const keyOf = useCallback(
+    (url: string): PullRequestKey | undefined => {
+      const named = pullRequestAddressOf(url);
+
+      return workspaceId === undefined || named === undefined
+        ? undefined
+        : { workspaceId, ...named };
+    },
+    [workspaceId],
+  );
 
   const open = useMemo(
     () =>
-      pullRequests
-        .filter(({ state }) => state === PULL_REQUEST_STATE.OPEN)
-        .map(({ number }) => number),
-    [pullRequests],
+      pullRequests.flatMap(({ state, url }) => {
+        const key = state === PULL_REQUEST_STATE.OPEN ? keyOf(url) : undefined;
+
+        return key === undefined ? [] : [key];
+      }),
+    [pullRequests, keyOf],
   );
 
-  const offers = usePullRequestsRead(id, open);
+  const offers = usePullRequestsRead(open);
   // The pull request whose card's Merge is being asked about.
-  const [merging, setMerging] = useState<number | undefined>(undefined);
-  const asked = merging === undefined ? undefined : offers.get(merging);
+  const [merging, setMerging] = useState<PullRequestKey | undefined>(undefined);
+  const asked = merging === undefined ? undefined : offers(merging);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId);
@@ -796,6 +825,7 @@ export function AgentConversation({
   useEffect(() => whole.ask(cuts), [whole, cuts]);
 
   const mediaIds = useMemo(() => shownMediaIds(items), [items]);
+  const sentFiles = useSentFiles(useMemo(() => shownFiles(items), [items]));
   const drawn = useMemo(() => drawnCallIds(items), [items]);
   const approvals = useAgentApprovals(agent, id, drawn);
   const waitingWords = approvals.waiting?.words;
@@ -924,6 +954,17 @@ export function AgentConversation({
   // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
   // Note that Copy transcript waits only for the transcript's first answer, failed or not, since the copy reads the whole transcript itself.
   const copiable = held !== undefined;
+  const taskId = shown?.taskId;
+
+  // Note that the agent's task opens as a page pushed over it, as a thread's path opens its task and the panel's crumbs do: beside the list in a split view's detail, else on the stack the reader stands in. A compact stack's title holds no menu, so Open task leads the ⋯ menu.
+  const openTask =
+    taskId === undefined
+      ? undefined
+      : () => {
+          if (toDetail({ kind: PUSHED_PAGE.TASK, taskId })) return;
+          router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
+        };
+
   const copyable = address !== undefined || copiable;
   const openable = address !== undefined || openOptions !== undefined;
   const talk = useAgentTalk(id, shown?.taskId);
@@ -956,12 +997,18 @@ export function AgentConversation({
     });
   };
 
-  const openPullRequest = (number: number) => {
-    if (toDetail({ kind: PUSHED_PAGE.PULL_REQUEST, agentId: id, number })) return;
-    router.push({
-      pathname: onOwnTab("/tasks/agent/[id]/pull/[number]"),
-      params: { id, number: String(number) },
-    });
+  // Note that a pull request the agent's workspace is not read for yet opens on GitHub, which reads it whoever opened it.
+  const openPullRequest = (url: string) => {
+    const key = keyOf(url);
+
+    if (key === undefined) {
+      openInSafari(url);
+
+      return;
+    }
+
+    if (toDetail({ kind: PUSHED_PAGE.PULL_REQUEST, ...key, agentId: id })) return;
+    router.push(onOwnTab(iosRepositoryPullRequestRoute(key, id)));
   };
 
   const composerBar = (
@@ -999,22 +1046,30 @@ export function AgentConversation({
       onToggle={(item) => setToggles((held) => toggledAt(held, item))}
       onOpenPage={openPage}
       mediaSource={(pictureId) => media.sources.get(pictureId)}
+      fileSource={sentFiles.source}
+      onRetryFile={sentFiles.retry}
       onRetryMedia={media.retry}
       onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
       onOpenAddress={openInSafari}
-      onOpenPullRequest={(item) => openPullRequest(item.number)}
-      pullRequestActs={(item) =>
-        cardMergeOf(offers.get(item.number)) === undefined
+      onOpenPullRequest={(item) => openPullRequest(item.url)}
+      pullRequestActs={(item) => {
+        const key = keyOf(item.url);
+
+        return key === undefined || cardMergeOf(offers(key)) === undefined
           ? []
-          : [{ label: MERGE_WORD, onPress: () => setMerging(item.number) }]
-      }
+          : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
+      }}
     />
   );
 
   const asks = (
     <>
-      {asked === undefined ? null : (
-        <CardMergeAsk agentId={id} pullRequest={asked} onDone={() => setMerging(undefined)} />
+      {merging === undefined || asked === undefined ? null : (
+        <CardMergeAsk
+          pullRequestKey={merging}
+          pullRequest={asked}
+          onDone={() => setMerging(undefined)}
+        />
       )}
       <ConfirmAsk destructive {...talk.switching} />
       <ConfirmAsk
@@ -1084,8 +1139,15 @@ export function AgentConversation({
     <>
       <Stack.Screen options={screenOptions} />
       <Stack.Toolbar placement="right">
-        {copyable || openable ? (
+        {copyable || openable || openTask !== undefined ? (
           <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
+            {openTask === undefined ? null : (
+              <Stack.Toolbar.Menu inline>
+                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.TASK)} onPress={openTask}>
+                  {PATH_OPENS.TASK}
+                </Stack.Toolbar.MenuAction>
+              </Stack.Toolbar.Menu>
+            )}
             {/* Note that the groups keep the panel's order (`agentMenuGroups`): the copies, then the name, then where it opens, then archiving, and Permanently delete last and alone. */}
             {copyable ? (
               <Stack.Toolbar.Menu inline>

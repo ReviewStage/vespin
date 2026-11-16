@@ -7,9 +7,11 @@ import { AUDIO_PLAYER_PLACE, AudioPlayer, type AudioPlayerPlace } from "../../in
 
 /**
  * audio-player.test.ts -- a sound clip drawn again, as Expand draws it in
- * the viewer, starts where it was left rather than at its start. The
- * browser's media element is the boundary, so a stand-in seeks as one does,
- * telling its events, and the player is read by the time it shows.
+ * the viewer, starts where it was left rather than at its start; and > and
+ * its speed button step it along a voice message's speeds. The browser's
+ * media element is the boundary, so a stand-in seeks and changes its speed
+ * as one does, telling its events, and the player is read by the time and
+ * the speed it shows.
  */
 
 const roots: Root[] = [];
@@ -29,7 +31,15 @@ const LENGTH_S = 20;
 /** Makes the page's clip a stand-in that seeks as a browser's does, telling its events. */
 function standInMedia(audio: HTMLAudioElement): void {
   let at = 0;
+  let rate = 1;
   Object.defineProperties(audio, {
+    playbackRate: {
+      get: () => rate,
+      set: (next: number) => {
+        rate = next;
+        audio.dispatchEvent(new Event("ratechange"));
+      },
+    },
     paused: { get: () => true },
     duration: { get: () => LENGTH_S },
     currentTime: {
@@ -68,6 +78,8 @@ function mountPlayer(place: AudioPlayerPlace, onExpand?: () => void) {
     pressButton: (label: string) =>
       act(() => container.querySelector<HTMLElement>(`button[aria-label="${label}"]`)?.click()),
     time: () => container.querySelector(".ui-audio-player-time")?.textContent,
+    speed: () =>
+      container.querySelector('button[aria-label^="Playback speed"]')?.getAttribute("aria-label"),
   };
 }
 
@@ -78,4 +90,14 @@ test("a clip opened in the viewer starts where it was left", () => {
   inline.pressButton("Expand");
   const viewer = mountPlayer(AUDIO_PLAYER_PLACE.VIEWER);
   expect(viewer.time()).toBe("0:10 / 0:20");
+});
+
+test("> steps a clip's speed and its speed button walks on from there, back to 1× after 2×", () => {
+  const player = mountPlayer(AUDIO_PLAYER_PLACE.INLINE);
+  player.press(">");
+  expect(player.speed()).toBe("Playback speed: 1.5×");
+  player.pressButton("Playback speed: 1.5×");
+  expect(player.speed()).toBe("Playback speed: 2×");
+  player.pressButton("Playback speed: 2×");
+  expect(player.speed()).toBe("Playback speed: 1×");
 });
