@@ -15,16 +15,19 @@ import {
   EmptyState,
   GLYPH,
   GlassDock,
+  NOTICE_KIND,
   PATH_PART,
   Screen,
   ThreadPage,
   useColors,
+  useFailureNotices,
 } from "@repo/ui-native";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { type ReactNode, useMemo, useState } from "react";
-import { PUSHED_PAGE, useDetailLeave, useHandToDetail } from "../detail-stack.js";
+import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { PUSHED_PAGE, useDetailCovered, useDetailLeave, useHandToDetail } from "../detail-stack.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
+import { useInFront } from "../place-columns.js";
 import { useOnOwnTab } from "../tab-route.js";
 import {
   threadMessages,
@@ -61,6 +64,48 @@ const DESCRIPTION_UNREAD = readFailedWords("the description");
 
 /** What a failed read offers. */
 const TRY_AGAIN = "Try again";
+
+/** Where a refused start's field opens again: its task, its block's span and words, and the thread id it went under. */
+type Reopening = {
+  readonly taskId: string;
+  readonly from: string;
+  readonly to: string;
+  readonly quote: string;
+  readonly again: string;
+};
+
+/**
+ * How each thread standing in front puts the field its start was refused
+ * from back in its own place, by the thread's id. Note that a new thread
+ * opens before the service has taken it, so a refusal reopens its field only
+ * where the person still looks at it, and says so in the failure notice
+ * anywhere else; and that the thread's own page does the reopening, since
+ * only it knows where it now stands, in the tab's stack or a split view's
+ * detail, after a rotation moved it.
+ */
+const standingThreads = new Map<string, (reopening: Reopening) => void>();
+
+/** The threads a send opened whose page has not yet stood, so a refusal that comes first waits for it. */
+const openingThreads = new Set<string>();
+
+/** Refusals that came before their thread's page stood, by the thread's id, which the page reopens as it first stands. */
+const earlyRefusals = new Map<string, Reopening>();
+
+/** The block a refused start was measured on, with the description's text it was measured in, kept for the field it reopens. */
+interface MeasuredBlock {
+  readonly text: string;
+  readonly block: DescriptionBlock;
+}
+
+/**
+ * The blocks refused starts were measured on, by the thread id each went
+ * under, which the reopened field's route names. Note that the field takes
+ * the block and text the send was measured in rather than finding the block
+ * again in the description as it now stands, which an edit since may have
+ * moved, and that the text is too large for a route to carry. The words,
+ * their key and why are kept with the block's draft (`useCommentStart`).
+ */
+const refusedBlocks = new Map<string, MeasuredBlock>();
 
 /**
  * What a new comment's page shows where it has no block to answer: the
@@ -175,6 +220,43 @@ export function CommentThread({
   const reply = useCommentReply(taskId, id);
   const pictureOf = useMemberPictures();
 
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
+  const detail = useDetailLeave();
+  // Note that a thread stands only while it is in front, since a page pushed over it, in the tab's stack or a split view's detail, or another tab, keeps it mounted.
+  const focused = useIsFocused();
+  const inFront = useInFront();
+  const covered = useDetailCovered();
+  const standing = focused && inFront && !covered;
+
+  useEffect(() => {
+    if (!standing) return;
+
+    const reopen = (reopening: Reopening) => {
+      if (detail !== undefined) {
+        detail.replace({ kind: PUSHED_PAGE.NEW_COMMENT, ...reopening });
+
+        return;
+      }
+
+      const { taskId: task, ...span } = reopening;
+      router.replace({ pathname: onOwnTab("/tasks/comments/new"), params: { task, ...span } });
+    };
+
+    standingThreads.set(id, reopen);
+    openingThreads.delete(id);
+    const early = earlyRefusals.get(id);
+
+    if (early !== undefined) {
+      earlyRefusals.delete(id);
+      reopen(early);
+    }
+
+    return () => {
+      standingThreads.delete(id);
+    };
+  }, [standing, id, detail, router, onOwnTab]);
+
   const agents = new Map(
     (overview?.agents ?? []).map(
       ({ agent }) =>
@@ -247,9 +329,10 @@ export function CommentThread({
  * names, as a long press on the block opens it: the block's words quoted as
  * its heading, as the thread they start will quote them, and the comment
  * field docked over its foot, whose send starts the thread and opens it in
- * this screen's place, as a document's comment opens its thread once
- * posted. A send that did not land keeps its
- * words and says why in the field's head. The block is kept as it stood
+ * this screen's place at once, as a document's comment opens its thread.
+ * A send the service refused opens the field again on its words, with why
+ * in its head, where the thread still stands, and says why in the failure
+ * notice anywhere else. The block is kept as it stood
  * when the screen first found it, so an edit elsewhere in the description
  * never takes the field away; where the route names no block of the
  * description as read, it says so. In a window wide enough for three
@@ -262,13 +345,27 @@ export function NewCommentScreen() {
     from = "",
     to = "",
     quote = "",
-  } = useLocalSearchParams<{ task: string; from: string; to: string; quote: string }>();
+    again,
+  } = useLocalSearchParams<{
+    task: string;
+    from: string;
+    to: string;
+    quote: string;
+    again?: string;
+  }>();
 
-  const handed = useHandToDetail({ kind: PUSHED_PAGE.NEW_COMMENT, taskId, from, to, quote });
+  const handed = useHandToDetail({
+    kind: PUSHED_PAGE.NEW_COMMENT,
+    taskId,
+    from,
+    to,
+    quote,
+    again,
+  });
 
   if (handed) return null;
 
-  return <NewComment taskId={taskId} from={from} to={to} quote={quote} />;
+  return <NewComment taskId={taskId} from={from} to={to} quote={quote} again={again} />;
 }
 
 /** A new thread on one block of a task's description, as `NewCommentScreen` describes it; `inColumn` pushed over a split view's detail, its field at the column's foot. */
@@ -277,12 +374,15 @@ export function NewComment({
   from,
   to,
   quote,
+  again,
   inColumn = false,
 }: {
   readonly taskId: string;
   readonly from: string;
   readonly to: string;
   readonly quote: string;
+  /** The thread id a refused start went under, whose field this opens again on the block it was measured on. */
+  readonly again?: string | undefined;
   readonly inColumn?: boolean | undefined;
 }) {
   const router = useRouter();
@@ -303,29 +403,58 @@ export function NewComment({
   );
 
   // Note that the block is kept as it stood when first found, with the text it was measured in, because an edit elsewhere moves its offsets while it is being commented on, and the service carries a span measured in that text over to the text as it stands.
-  const [held, setHeld] = useState<{ readonly text: string; readonly block: DescriptionBlock }>();
+  const [held, setHeld] = useState<MeasuredBlock | undefined>(() =>
+    again === undefined ? undefined : refusedBlocks.get(again),
+  );
 
   if (held === undefined && found !== undefined) setHeld({ text: body, block: found });
   const block = held?.block;
+  const notices = useFailureNotices();
   const start = useCommentStart(overview?.task.id ?? taskId, held?.text ?? body, block);
   const path = commentPath(overview);
+  const task = overview?.task.id ?? taskId;
 
+  // Note that the start is a declared write, drawn under its own id at once, so its thread opens in this screen's place as it goes; a refusal reopens this field on the words, under the same key, where the thread still stands in front.
   const send = () => {
-    void start.send().then((threadId) => {
-      if (threadId === undefined) return;
-      const opened = overview?.task.id ?? taskId;
+    if (held === undefined) return;
+    const measured = held;
 
-      if (detail !== undefined) {
-        detail.replace({ kind: PUSHED_PAGE.COMMENTS, threadId, taskId: opened });
+    const threadId = start.send((refused, noticed) => {
+      const reopening = { taskId: task, from, to, quote, again: refused.threadId };
+      const reopen = standingThreads.get(refused.threadId);
+
+      if (reopen !== undefined || openingThreads.has(refused.threadId)) {
+        refusedBlocks.set(refused.threadId, measured);
+      }
+
+      if (reopen !== undefined) {
+        reopen(reopening);
 
         return;
       }
 
-      router.replace({
-        pathname: onOwnTab("/tasks/comments/[id]"),
-        params: { id: threadId, task: overview?.task.id ?? taskId },
-      });
+      if (openingThreads.delete(refused.threadId)) {
+        earlyRefusals.set(refused.threadId, reopening);
+
+        return;
+      }
+
+      // Note that a refusal the offline notice already said is not said again.
+      if (!noticed) notices.say({ kind: NOTICE_KIND.REFUSED, words: refused.note });
     });
+
+    if (threadId === undefined) return;
+    // Note that the same words sent again go under the same thread's id, so a refusal parked for an earlier send of them is let go rather than reopening this one.
+    earlyRefusals.delete(threadId);
+    openingThreads.add(threadId);
+
+    if (detail !== undefined) {
+      detail.replace({ kind: PUSHED_PAGE.COMMENTS, threadId, taskId: task });
+
+      return;
+    }
+
+    router.replace({ pathname: onOwnTab("/tasks/comments/[id]"), params: { id: threadId, task } });
   };
 
   const composer = {
