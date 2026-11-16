@@ -139,6 +139,8 @@ const TurnSchema = Schema.Struct({
   reconnecting: Schema.optionalKey(Schema.Number),
   /** The calls whose subagents run on in the background, by the key their end is named by (`NATIVE_MOMENT.SUBAGENT_RUNNING`). */
   subagents: Schema.optionalKey(Schema.Record(Schema.String, SubagentSchema)),
+  /** The calls it holds whose command the kernel killed for want of memory, by id, each with the sandbox's memory in GB, until it settles marked (`NATIVE_MOMENT.OUT_OF_MEMORY`). */
+  outOfMemory: Schema.optionalKey(Schema.Record(Schema.String, Schema.Number)),
   usage: Schema.optionalKey(UsageSchema),
   /** Why the newest model turn failed, where it did. */
   failure: Schema.optionalKey(Schema.String),
@@ -427,14 +429,17 @@ function withSettledSubagents(turn: Turn, callId: string): Turn {
   return { ...turn, subagents };
 }
 
-/** The turn with the call answered: no longer running, and any background subagent under it settled. */
+/** The turn with the call answered: no longer running, any background subagent under it settled, and its out-of-memory mark let go. */
 function withSettledCall(turn: Turn, callId: string): Turn {
-  const settled = withSettledSubagents(turn, callId);
+  const subagentsSettled = withSettledSubagents(turn, callId);
+  const { outOfMemory, ...settled } = subagentsSettled;
+  const { [callId]: _marked, ...stillKilled } = outOfMemory ?? {};
+  const kept = outOfMemory === undefined ? settled : { ...settled, outOfMemory: stillKilled };
 
-  if (settled.running === undefined) return settled;
-  const { [callId]: _answered, ...running } = settled.running;
+  if (kept.running === undefined) return kept;
+  const { [callId]: _answered, ...running } = kept.running;
 
-  return { ...settled, running };
+  return { ...kept, running };
 }
 
 type UnknownCallResult = { readonly name: string; readonly input: WireValue };
@@ -626,17 +631,33 @@ class Fold {
     );
   }
 
+  /** A held call's command killed out of memory, kept until its answer settles it marked; nothing for a call the turn does not hold. */
+  #outOfMemory(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.OUT_OF_MEMORY }>): void {
+    const turn = this.state.turn;
+
+    if (turn?.calls[moment.callId] === undefined) return;
+    this.#setTurn({
+      ...turn,
+      outOfMemory: { ...turn.outOfMemory, [moment.callId]: moment.memoryGb },
+    });
+  }
+
   #toolSettled(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.TOOL_SETTLED }>): void {
     const turn = this.state.turn;
     const name = turn?.calls[moment.callId];
 
     if (turn === undefined || name === undefined) return;
+    const memoryGb = turn.outOfMemory?.[moment.callId];
+
     this.#setTurn(
       this.#tell(withSettledCall(turn, moment.callId), {
         kind: RUN_EVENT.TOOL_CALL_SETTLED,
         callId: moment.callId,
         name,
-        settlement: moment.settlement,
+        settlement:
+          memoryGb === undefined
+            ? moment.settlement
+            : { ...moment.settlement, outOfMemory: { memoryGb } },
         // Note that an unknown tool's call keeps the input it started with, which names the tool it called.
         ...(moment.input !== undefined && name !== UNKNOWN_TOOL
           ? { input: moment.input }
@@ -999,6 +1020,10 @@ class Fold {
         return;
       case NATIVE_MOMENT.TOOL_SETTLED:
         this.#toolSettled(moment);
+
+        return;
+      case NATIVE_MOMENT.OUT_OF_MEMORY:
+        this.#outOfMemory(moment);
 
         return;
       case NATIVE_MOMENT.SUBAGENT_RUNNING:

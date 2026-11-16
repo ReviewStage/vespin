@@ -72,6 +72,133 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.37.0 — 2026-11-15
+
+### A cursor for each agent
+
+Each agent using an app on your Mac now moves a cursor of its own, gliding from
+one action to the next. While more than one agent's cursor is on screen, each
+wears a tag with its agent's name, so you can tell them apart; a lone cursor
+stays a bare arrow. Before, agents shared one cursor, and the latest to act took
+it over. A recording shows only its own agent's cursor.
+
+[#9530](https://github.com/ReviewStage/vespin/pull/9530),
+[#9533](https://github.com/ReviewStage/vespin/pull/9533)
+
+### Improvements
+
+- Settings › Cloud environment › Variables shows who added or last changed
+  each variable and when, copies a name with a click, and hides a config's
+  value until you reveal it
+  ([#9212](https://github.com/ReviewStage/vespin/pull/9212))
+- Opening an Inbox thread starts its agent, as opening its transcript does, so
+  your reply reaches a session that is already running
+  ([#9520](https://github.com/ReviewStage/vespin/pull/9520),
+  [#9526](https://github.com/ReviewStage/vespin/pull/9526))
+- A Claude Code agent's subagents work as Claude Code ships them: they can edit
+  and write files, start subagents of their own, and use Vespin's tools
+  ([#9512](https://github.com/ReviewStage/vespin/pull/9512))
+- A tool search's row reads Searched Slack tools for "send message", with the
+  server's chip, and ⌘F finds it by those words
+  ([#9514](https://github.com/ReviewStage/vespin/pull/9514),
+  [#9524](https://github.com/ReviewStage/vespin/pull/9524))
+- The side panel, its Pull request tab, and its code panes stand on the
+  window's own background, so they no longer read as a second, darker window
+  ([#9527](https://github.com/ReviewStage/vespin/pull/9527))
+- An agent's to-do updates fold in with the calls around them rather than
+  breaking a turn into separate rows
+  ([#9523](https://github.com/ReviewStage/vespin/pull/9523))
+- Opening a kind's row in the @ list writes its word, such as `@apps:`, so
+  what you type next searches inside it
+  ([#9536](https://github.com/ReviewStage/vespin/pull/9536))
+- A playing video's scrubber and time glide rather than jumping a quarter
+  second at a time
+  ([#9537](https://github.com/ReviewStage/vespin/pull/9537))
+- A task's description holds as many videos as it does pictures, up to 100
+  files in all ([#9521](https://github.com/ReviewStage/vespin/pull/9521))
+- An Inbox row whose thread waits on its agent after your reply says so,
+  rather than looking like it still waits on you
+  ([#9513](https://github.com/ReviewStage/vespin/pull/9513))
+
+### Fixes
+
+- Fixed a running call on a Mac naming the agent's default machine rather than
+  the one it ran on ([#9529](https://github.com/ReviewStage/vespin/pull/9529))
+- Fixed images a pull request's description links as `blob/…?raw=true` showing
+  as broken links ([#9534](https://github.com/ReviewStage/vespin/pull/9534))
+- Fixed the Inbox list drawing empty space where its rows should be
+  ([#9515](https://github.com/ReviewStage/vespin/pull/9515))
+- Fixed the sidebar showing a Done sub-task in a section while its parent was
+  hidden, hiding an open sub-task whose parent was hidden, and hiding a
+  Backlog or teammate's task you had put in a section
+  ([#9538](https://github.com/ReviewStage/vespin/pull/9538))
+
+## 0.36.0 — 2026-11-15
+
+### Cloud sandbox size
+
+Settings › Cloud environment › Sandbox sets how large every cloud agent's
+sandbox is in your workspace: 2 vCPUs and 4 GB, 4 vCPUs and 8 GB, or 8 vCPUs
+and 16 GB. Owners and admins choose it. New agents get the new size right
+away, and running ones get it the next time they start. When a command runs out
+of memory, an owner or admin sees an offer under it to move up a size, and on
+its next turn the agent is told that its sandbox grew.
+
+[#9481](https://github.com/ReviewStage/vespin/pull/9481),
+[#9488](https://github.com/ReviewStage/vespin/pull/9488),
+[#9489](https://github.com/ReviewStage/vespin/pull/9489)
+
+![Settings › Cloud environment in acme, its Sandbox section's Size menu open on 2 vCPUs · 4 GB marked Default, 4 vCPUs · 8 GB checked, and 8 vCPUs · 16 GB, over the Size row and the section's caption](apps/web/public/changelog/0.36.0/cloud-sandbox-size.png)
+
+### Improvements
+
+- When the service no longer takes your build of Vespin, an Update required
+  screen fills the window. It says where the update stands and offers Open in
+  browser so you can keep working meanwhile
+  ([#9426](https://github.com/ReviewStage/vespin/pull/9426))
+- This Mac's row in Settings › Machines reads Won't start when its host quits
+  each time it starts, so you can see why local agents can't run there
+  ([#9185](https://github.com/ReviewStage/vespin/pull/9185))
+- A workspace variable you change reaches each running cloud agent on its next
+  message, and every new Terminal tab starts with the workspace's variables
+  ([#9304](https://github.com/ReviewStage/vespin/pull/9304))
+- An agent running on one of your Macs can run commands on your other machines
+  too, and its chip opens Where this agent works with a Default machine row
+  ([#9096](https://github.com/ReviewStage/vespin/pull/9096))
+- When a machine refuses an agent's call, the agent is told what to do next and
+  keeps working instead of stopping to ask
+  ([#9191](https://github.com/ReviewStage/vespin/pull/9191))
+- A sentence that names a machine, such as Starting on or a refused call's
+  card, shows the machine's chip with its card
+  ([#9305](https://github.com/ReviewStage/vespin/pull/9305))
+- A failed call shows its failed mark at the end of its line, where its working
+  mark stood, and a pull request the service refused now reads as failed
+  ([#9289](https://github.com/ReviewStage/vespin/pull/9289))
+- An integration call's row ends in its account's chip only when that tells
+  you more: you have several accounts with that provider, or the server is a
+  custom one ([#9301](https://github.com/ReviewStage/vespin/pull/9301))
+- Punctuation typed right after a mention or attachment chip replaces the space
+  the box added after it, and one undo brings the space back
+  ([#9484](https://github.com/ReviewStage/vespin/pull/9484))
+- A text file over 100 KB attached to a message reaches the agent as a file on
+  its machine, up to about 3 MB, rather than being refused
+  ([#9486](https://github.com/ReviewStage/vespin/pull/9486))
+- Vespin uses much less of your Mac's CPU and memory when it saves its local
+  copy of your tasks ([#9493](https://github.com/ReviewStage/vespin/pull/9493))
+
+### Fixes
+
+- Fixed a teammate's message to an agent showing under the name of the person
+  who started the agent until the start of the transcript came into view
+  ([#9496](https://github.com/ReviewStage/vespin/pull/9496))
+- Fixed setup's team step losing the invitations it sent when you came back to
+  it ([#9501](https://github.com/ReviewStage/vespin/pull/9501))
+- Fixed archiving one running agent, or marking done a task with one running
+  agent, asking you to stop agents in the plural
+  ([#9410](https://github.com/ReviewStage/vespin/pull/9410))
+- Fixed an empty gap at the end of This Mac's row in Settings › Machines
+  ([#9509](https://github.com/ReviewStage/vespin/pull/9509))
+
 ## 0.35.0 — 2026-11-14
 
 ### Following

@@ -392,6 +392,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     installedSkills: SCREEN_ONLY,
     workspaceIntegrations: SCREEN_ONLY,
     pullRequestChapters: SCREEN_ONLY,
+    repositoryPullRequestChapters: SCREEN_ONLY,
+    repositoryPullRequestMoved: SCREEN_ONLY,
     integrationStatuses: SCREEN_ONLY,
     accountPreferences: SCREEN_ONLY,
   },
@@ -453,6 +455,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
   // A call's session is the panel's own, which holds the microphone and the WebRTC peer.
   voice: { open: SCREEN_ONLY },
   workspaceSlackBot: { connect: NEEDS_BROWSER },
+  workspaceEnvironment: { save: NOT_YET_BUILT },
   workspaces: {
     // A workspace's machines stand in the @ list; an agent is handed a mentioned machine's id, and a refused call names the machines it could reach.
     machines: SCREEN_ONLY,

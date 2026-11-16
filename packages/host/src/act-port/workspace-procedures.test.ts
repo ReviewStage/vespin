@@ -144,6 +144,14 @@ const REFUSAL_ROWS: Readonly<Record<keyof typeof WORKSPACE_ACTS, RefusalRow>> = 
     refusal: "Could not save that variable on this system.",
     payload: { ...WORKSPACE, name: "API_TOKEN", value: "fixture-value" },
   },
+  WORKSPACE_ENVIRONMENT_SAVE: {
+    refusal: "Could not save those variables on this system.",
+    payload: {
+      ...WORKSPACE,
+      secret: true,
+      variables: [{ name: "API_TOKEN", value: "fixture-value" }],
+    },
+  },
   WORKSPACE_ENVIRONMENT_DELETE: {
     refusal: "Could not delete that variable on this system.",
     payload: { ...WORKSPACE, name: "API_TOKEN" },

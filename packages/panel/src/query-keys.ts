@@ -69,7 +69,7 @@ export const QUERY_ROOT = {
   TASK_BY_NUMBER: "task-by-number",
   AGENT_MESSAGES: "agent-messages",
   REPOSITORY_SKILLS: "repository-skills",
-  AGENT_CHANGES: "agent-changes",
+  PULL_REQUEST_CHANGES: "pull-request-changes",
   AGENT_TURN_CHANGES: "agent-turn-changes",
   /** A cloud agent's listening ports and its shared link, as a host that forwards none asks the service for them (`tasks/agent-forward.tsx`). */
   AGENT_PORTS: "agent-ports",
@@ -105,7 +105,7 @@ const ACCOUNT_SCOPED_ROOTS: ReadonlySet<unknown> = new Set<string>([
   QUERY_ROOT.REPOSITORY_PATHS,
   QUERY_ROOT.AGENT_PART,
   QUERY_ROOT.TASK_NEWEST_REVISION,
-  QUERY_ROOT.AGENT_CHANGES,
+  QUERY_ROOT.PULL_REQUEST_CHANGES,
   QUERY_ROOT.TASK_REVISION,
   QUERY_ROOT.INSTALLED_SKILL,
   QUERY_ROOT.INSTALLED_SKILL_PREVIEW,
