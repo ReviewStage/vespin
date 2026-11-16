@@ -1,8 +1,10 @@
 // description-version-diff.ts -- a version of a task's description drawn against another, section by section, its changed words marked as written in or struck out, as every client draws a version.
 
 import { diffArrays } from "diff";
+import type { Nodes } from "mdast";
 import { type WordChange, wordChanges } from "./description-diff.js";
 import { type DescriptionSection, descriptionSections } from "./description-sections.js";
+import { markdownTree } from "./markdown-tree.js";
 import type { Description } from "./task-wire.js";
 
 /**
@@ -45,6 +47,14 @@ type VersionChange = (typeof VERSION_CHANGE)[keyof typeof VERSION_CHANGE];
 export interface VersionUnit {
   readonly key: string;
   readonly words: string;
+  /**
+   * The unit's words with no change in them, as the description that holds
+   * it reads them: what a client that cannot mark words inside a line, as the
+   * iPhone's Markdown cannot, draws in the marked words' place, with the
+   * reference definitions that description holds after them, so the unit
+   * drawn alone reads its reference links and pictures.
+   */
+  readonly plain: string;
   readonly change: VersionChange;
   readonly marks: readonly VersionMark[];
 }
@@ -139,7 +149,7 @@ function pairedUnit(base: string, shown: SectionWords): VersionUnit {
   const key = shown.heading;
 
   if (base === shown.text) {
-    return { key, words: shown.text, change: VERSION_CHANGE.SAME, marks: [] };
+    return { key, words: shown.text, plain: shown.text, change: VERSION_CHANGE.SAME, marks: [] };
   }
 
   let words = "";
@@ -156,7 +166,7 @@ function pairedUnit(base: string, shown: SectionWords): VersionUnit {
 
   const change = marks.length === 0 ? VERSION_CHANGE.SAME : VERSION_CHANGE.CHANGED;
 
-  return { key, words, change, marks };
+  return { key, words, plain: shown.text, change, marks };
 }
 
 /** A unit only one description holds, drawn whole as added or struck. */
@@ -164,7 +174,13 @@ function loneUnit(
   section: SectionWords,
   change: typeof VERSION_CHANGE.ADDED | typeof VERSION_CHANGE.REMOVED,
 ) {
-  return { key: section.heading, words: section.text, change, marks: [] } satisfies VersionUnit;
+  return {
+    key: section.heading,
+    words: section.text,
+    plain: section.text,
+    change,
+    marks: [],
+  } satisfies VersionUnit;
 }
 
 /**
@@ -225,6 +241,36 @@ function unitsAgainst(
   return units;
 }
 
+/** The reference definitions a description holds, as written, one to a line; none where it holds none. */
+function definitionsOf(body: string): string {
+  const found: string[] = [];
+
+  const walk = (node: Nodes) => {
+    const from = node.position?.start.offset;
+    const to = node.position?.end.offset;
+
+    if (node.type === "definition" && from !== undefined && to !== undefined) {
+      found.push(body.slice(from, to));
+    }
+
+    if ("children" in node) for (const child of node.children) walk(child);
+  };
+
+  walk(markdownTree(body));
+
+  return found.join("\n");
+}
+
+/**
+ * A unit's plain words with its description's reference definitions after
+ * them, so a reference link or picture written in one section and defined in
+ * another still reads when the unit is drawn alone; a definition draws
+ * nothing.
+ */
+function withDefinitions(unit: VersionUnit, definitions: string): VersionUnit {
+  return definitions === "" ? unit : { ...unit, plain: `${unit.plain}\n\n${definitions}` };
+}
+
 /**
  * A version of the description drawn against another, or drawn as it is against
  * nothing, as the first version is: every unit of either, each marked by
@@ -239,8 +285,19 @@ export function versionDiff(base: Description | null, shown: Description): Versi
       : unitsAgainst(sectionsOf(base), sectionsOf(shown));
 
   const changed = units.some((unit) => unit.change !== VERSION_CHANGE.SAME);
+  // Note that a struck unit reads through the base's definitions, and every other through the shown version's.
+  const shownDefinitions = definitionsOf(shown.body);
+  const baseDefinitions = base === null ? "" : definitionsOf(base.body);
 
-  return { units, changed };
+  return {
+    units: units.map((unit) =>
+      withDefinitions(
+        unit,
+        unit.change === VERSION_CHANGE.REMOVED ? baseDefinitions : shownDefinitions,
+      ),
+    ),
+    changed,
+  };
 }
 
 /** One section a revision changed, as its drill-in lists it: the unit of the version it is, its heading, and how it changed. */
