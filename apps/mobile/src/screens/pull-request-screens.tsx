@@ -243,8 +243,9 @@ interface ShownPress {
   readonly request: PullRequestActionRequest;
 }
 
-/** A press whose question stands, as it was when pressed: what the pull request offered, the change it sends, and its question's words, so a live read landing under the question changes neither what it says nor what it sends. */
+/** A press whose question stands, as it was when pressed: the pull request it was pressed on, what that offered, the change it sends, and its question's words, so neither a live read landing under the question nor an older route turning to another pull request changes what it says or where it sends. */
 interface AskedPress {
+  readonly on: PullRequestKey;
   readonly action: MergeAction;
   readonly request: PullRequestActionRequest;
   readonly words: string;
@@ -439,7 +440,7 @@ export function PullRequestPage({
   const id = agentId;
   useSurfaceOpen(PRODUCT_SURFACE.PULL_REQUEST, String(key.number));
   const colors = useColors();
-  const openLink = useOpenLink();
+  const openLink = useOpenLink(key.workspaceId);
   const agent = useFollowedAgent(id);
 
   const listed = useAgentPullRequests(id).find(
@@ -465,10 +466,17 @@ export function PullRequestPage({
   const press = shownPressOf(pullRequest, method, writes.pending);
   const offered = offeredActionOf(pullRequest);
 
+  const asks =
+    asked !== undefined &&
+    asked.action === offered &&
+    asked.on.workspaceId === key.workspaceId &&
+    asked.on.repository === key.repository &&
+    asked.on.number === key.number;
+
   // Note that a question is dropped as soon as the pull request no longer offers what it asks about, rather than only when its alert says it went, so it never stands again by itself the next time it offers that.
   useEffect(() => {
-    if (asked !== undefined && asked.action !== offered) setAsked(undefined);
-  }, [asked, offered]);
+    if (asked !== undefined && !asks) setAsked(undefined);
+  }, [asked, asks]);
   useScreenActivity((workspaces) =>
     agent === undefined || title === undefined
       ? undefined
@@ -641,6 +649,7 @@ export function PullRequestPage({
                 void writes.write(press.request);
               } else {
                 setAsked({
+                  on: key,
                   action: offered,
                   request: press.request,
                   words: press.words,
@@ -728,11 +737,11 @@ export function PullRequestPage({
       title={asked?.ask.title ?? MERGE_WORDS.MERGE_QUESTION}
       message={asked?.ask.message ?? `#${key.number} ${title}`}
       act={asked?.words ?? ""}
-      presented={asked !== undefined && asked.action === offered}
+      presented={asks}
       onAct={() => {
         setAsked(undefined);
 
-        if (asked !== undefined) void writes.write(asked.request);
+        if (asked !== undefined && asks) void writes.write(asked.request);
       }}
       onDismiss={() => setAsked(undefined)}
     />,
