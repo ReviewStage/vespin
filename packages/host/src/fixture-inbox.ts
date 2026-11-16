@@ -601,6 +601,9 @@ const INVITES_ITEMS: readonly InboxItem[] = [
             `![The invite page](${RECORDED_PICTURE_ADDRESS})`,
             "",
             "The recording is under this. The expired page is still the placeholder.",
+            "",
+            // Note that this links a settled thread, outside the Open list, so a flow can push it over this one and come back to step on from here.
+            "It goes out with the digest, on the day [@Which day the digest goes out](https://vespin.dev/personal/inbox/81e2a425-6d9f-4ab7-92df-00000000000d) settled.",
           ].join("\n"),
         ),
         files: [
@@ -1767,7 +1770,13 @@ function stagedPages(state: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ
   return laid;
 }
 
-/** The threads on the reference journey's description: one open, Ada's question and its agent's answer, and one resolved, which its page leaves out. */
+/** The files Ada's question on the description carries, by the ids the service keeps them under: a screenshot and a PDF, so a comment's pictures and its file chips both stand on its thread. */
+const COMMENT_FILES = {
+  PICTURE: "c5169e82-a1d3-4efb-96b3-4d5e6f718293",
+  PLAN: "d627af93-b2e4-4f0c-a7c4-5e6f718293a4",
+} as const;
+
+/** The threads on the reference journey's description: one open, Ada's question with its files and its agent's answer, and one resolved, which its page leaves out. */
 const INVITES_THREADS: readonly DescriptionCommentThread[] = [
   {
     id: fixtureId(301),
@@ -1782,6 +1791,18 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
         kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
         writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
         words: "Should an owner be able to resend an expired invite from this page?",
+        files: [
+          {
+            attachmentId: COMMENT_FILES.PICTURE,
+            name: "expired-invite.png",
+            mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+          },
+          {
+            attachmentId: COMMENT_FILES.PLAN,
+            name: "resend-flow.pdf",
+            mediaType: AGENT_ATTACHMENT_TYPE.PDF,
+          },
+        ],
         at: LANDED - 3 * HOUR,
       },
       {
@@ -2572,11 +2593,18 @@ const ANSWERS: StagedAnswers = {
 
     return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
   },
-  // Note that the reference task's PDF is read as the service reads a description's file, and any other is not there.
-  [ACT_KIND.TASKS_PICTURE_READ]: ({ taskId, attachmentId }) =>
-    taskId === FIXTURE_IDS.TASK && attachmentId === DESCRIPTION_PDF
+  // Note that a file Ada's question carries, and the reference task's PDF, are read as the service reads a description's, and any other is not there.
+  [ACT_KIND.TASKS_PICTURE_READ]: ({ taskId, attachmentId }) => {
+    if (taskId !== TASK.INVITES) return { failure: TASK_CALL_FAILURE.NOT_FOUND };
+
+    if (attachmentId === COMMENT_FILES.PICTURE) {
+      return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
+    }
+
+    return attachmentId === COMMENT_FILES.PLAN || attachmentId === DESCRIPTION_PDF
       ? { contentType: AGENT_ATTACHMENT_TYPE.PDF, base64: FIXTURE_PLAN_PDF }
-      : { failure: TASK_CALL_FAILURE.NOT_FOUND },
+      : { failure: TASK_CALL_FAILURE.NOT_FOUND };
+  },
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
   // Note that a version of the reference journey's description is read as the service reads one, and a restore is taken as the service takes one, though nothing here moves.

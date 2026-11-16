@@ -75,6 +75,7 @@ import {
   SkillSuggestions,
   StackBarTitle,
   SwitchRow,
+  shownFiles,
   shownMediaIds,
   type TRANSCRIPT_ITEM,
   type TranscriptItem,
@@ -99,6 +100,7 @@ import {
   useAgentTranscript,
   useFollowedAgent,
   useOlderPages,
+  useSentFiles,
   useShownAgent,
   useTranscriptRetry,
   useWholeParts,
@@ -796,6 +798,7 @@ export function AgentConversation({
   useEffect(() => whole.ask(cuts), [whole, cuts]);
 
   const mediaIds = useMemo(() => shownMediaIds(items), [items]);
+  const sentFiles = useSentFiles(useMemo(() => shownFiles(items), [items]));
   const drawn = useMemo(() => drawnCallIds(items), [items]);
   const approvals = useAgentApprovals(agent, id, drawn);
   const waitingWords = approvals.waiting?.words;
@@ -999,6 +1002,8 @@ export function AgentConversation({
       onToggle={(item) => setToggles((held) => toggledAt(held, item))}
       onOpenPage={openPage}
       mediaSource={(pictureId) => media.sources.get(pictureId)}
+      fileSource={sentFiles.source}
+      onRetryFile={sentFiles.retry}
       onRetryMedia={media.retry}
       onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
       onOpenAddress={openInSafari}
@@ -1349,7 +1354,12 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
           {mode === undefined ? null : (
             <ListSection
               title={PERMISSION_MODE_WORDS.GROUP}
-              footer={mode.note ?? PERMISSION_MODE_WORDS.APPLIES}
+              footer={
+                mode.note ??
+                [mode.missing, PERMISSION_MODE_WORDS.APPLIES]
+                  .filter((words) => words !== undefined)
+                  .join(" ")
+              }
               footerTone={footerToneOf(mode.note)}
             >
               <PickRows

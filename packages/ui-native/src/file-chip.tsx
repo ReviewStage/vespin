@@ -45,6 +45,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.TILE,
     borderWidth: StyleSheet.hairlineWidth,
   },
+  atEnd: { alignSelf: "flex-end" },
   words: { flexShrink: 1, gap: 1 },
   facts: { flexDirection: "row", flexWrap: "wrap", columnGap: SPACE.ROW - 2 },
 });
@@ -76,6 +77,10 @@ type FileChipProps = {
   readonly size: string | undefined;
   /** Reads the file again where its bytes could not be read, which a press on its chip then does; none offers nothing. */
   readonly onRetry?: (() => void) | undefined;
+  /** Whether it stands at its row's end, as a sent line's files do, rather than at its start. */
+  readonly atEnd?: boolean | undefined;
+  /** Whether its bytes are anywhere to open; one a line kept none of is drawn by its name and kind alone and opens nothing, as the panel's chip, whatever its source. */
+  readonly held?: boolean | undefined;
 };
 
 /** What a press on a chip whose file could not be read is heard to do. */
@@ -94,13 +99,23 @@ const READS_AGAIN = "Reads the file again";
  * be read reads them again. At an accessibility size its name wraps rather
  * than cuts.
  */
-export function FileChip({ name, mediaType, source, size, onRetry }: FileChipProps) {
+export function FileChip({
+  name,
+  mediaType,
+  source,
+  size,
+  onRetry,
+  atEnd = false,
+  held = true,
+}: FileChipProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
   const kind = kindOf(name, mediaType);
 
   // Note that a file whose bytes could not be read says so under its name in place of its kind, as the panel's chip does, and a press on it reads it again.
-  const unread = source === null;
+  const unread = held && source === null;
+  const waiting = held && source === undefined;
+  const opened = held ? (source ?? undefined) : undefined;
   const said = unread ? MEDIA_READ_WORDS.FILE_FAILED : kind;
 
   const heard = unread
@@ -110,24 +125,31 @@ export function FileChip({ name, mediaType, source, size, onRetry }: FileChipPro
   const fact = { fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED };
 
   const kept: Kept | undefined =
-    source == null ? undefined : { kind: KEPT_KIND.FILE, source, name, mediaType };
+    opened === undefined ? undefined : { kind: KEPT_KIND.FILE, source: opened, name, mediaType };
 
   const acts = useKeptActs(kept);
   const open = useQuickLook(kept);
-  const press = unread ? onRetry : open;
+  // Note that a chip whose bytes a line kept none of opens nothing, as the panel's chip, so it takes no press.
+  const press = !held ? undefined : unread ? onRetry : open;
 
   return (
     <HeldMenu acts={acts}>
       <Press
         onPress={press}
-        disabled={press === undefined}
+        disabled={waiting || press === undefined}
         accessibilityRole="button"
         accessibilityLabel={heard}
-        accessibilityHint={unread ? READS_AGAIN : FILE_WORDS.OPENS}
-        accessibilityState={{ busy: source === undefined }}
-        style={[styles.chip, { backgroundColor: colors.CARD, borderColor: colors.CHIP_EDGE }]}
+        accessibilityHint={
+          press === undefined ? undefined : unread ? READS_AGAIN : FILE_WORDS.OPENS
+        }
+        accessibilityState={{ busy: waiting }}
+        style={[
+          styles.chip,
+          atEnd ? styles.atEnd : null,
+          { backgroundColor: colors.CARD, borderColor: colors.CHIP_EDGE },
+        ]}
       >
-        {source === undefined ? (
+        {waiting ? (
           <ActivityIndicator color={colors.TEXT_MUTED} style={{ width: MARK_SIZE.LEAD }} />
         ) : (
           <SymbolView

@@ -21,7 +21,8 @@
  * after it dropped, since that takes none, and `/goal`, which the line asks
  * of the runner as a change of Codex's thread goal (`thread/goal/set` or
  * `thread/goal/clear`), read from the words after it. Cursor's SDK runs no
- * command either, and summarizes its conversation for `/compact` alone.
+ * command either, and summarizes its conversation for `/compact` alone; it
+ * keeps no goal, so a `/goal` line to it is refused.
  */
 
 import { SLASH_COMMAND } from "@repo/features/slash-command";
@@ -99,8 +100,9 @@ export function codexCommandRoute(name: string): CommandRoute {
 /**
  * How Cursor is handed a message opening with the command named: as the
  * runner's summary of the conversation for `/compact` (`agent.summarize`),
- * and as words for any other, `/goal` among them, since Cursor keeps no
- * goal and runs no command from a message.
+ * and as words for any other, since Cursor runs no command from a message.
+ * A `/goal` never reaches it: Cursor keeps no goal, so the line is refused
+ * before it is written (`steer.ts`).
  */
 export function cursorCommandRoute(name: string): CommandRoute {
   return name === SLASH_COMMAND.COMPACT ? COMMAND_ROUTE.COMPACT : COMMAND_ROUTE.WORDS;

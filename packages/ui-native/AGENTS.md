@@ -203,7 +203,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   A thread's path opens its task and its agent, as the panel's crumbs do: in a
   split view the path is a menu of them under a small chevron, as iOS's
   title menus stand (`PathTitle`'s `actions`), and in a compact window, whose
-  stack's title holds no menu, they lead its ⋯ menu. An
+  stack's title holds no menu, they lead its ⋯ menu, headed by the path. A
+  compact window's thread names itself in the stack's bar in the ink, as
+  Messages names a conversation, since it opens at its newest message with
+  its heading out of sight; a split view's detail keeps the path and title
+  heading the page, as Mail's message stands. An
   agent's page names the agent in the bar in the ink instead, as Messages
   names a conversation, since its transcript opens at its newest row, with
   where it stands and its model muted under the name ("Working · Opus 5.5"),

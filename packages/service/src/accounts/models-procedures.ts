@@ -34,7 +34,12 @@ import {
   type UserIdResolver,
 } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
-import { CursorModelCatalog, offersCursor, withCursorModels } from "../providers/cursor-models.js";
+import {
+  CursorModelCatalog,
+  macsWithCursor,
+  offersCursor,
+  withCursorModels,
+} from "../providers/cursor-models.js";
 import { ModelCatalog, offeredToAccount } from "../providers/model-catalog.js";
 
 export interface ModelsProcedureSeams {
@@ -80,7 +85,10 @@ export function modelsProcedures(seams: ModelsProcedureSeams) {
         cursorModels,
       );
 
-      const macs = yield* hostedStoreOrUnavailable(macOffers(context.userId));
+      const macs = macsWithCursor(
+        yield* hostedStoreOrUnavailable(macOffers(context.userId)),
+        cursorOffer,
+      );
 
       return {
         models: yield* hostedStoreOrUnavailable(markedUnconnected(context.userId, offered)),

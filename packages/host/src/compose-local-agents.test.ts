@@ -355,7 +355,12 @@ const followingDevice = (
       Layer.succeed(Reporter, { report: (line) => reported.push(line) }),
       Layer.succeed(LocalAgentPlatform, {
         launch: ({ node, env }) => ({ command: node, args: [], env }),
-        tools: { node: RUNNER, claude: CLIS.paths.claude, codex: CLIS.paths.codex },
+        tools: {
+          node: RUNNER,
+          claude: CLIS.paths.claude,
+          codex: CLIS.paths.codex,
+          cursorSdk: CLIS.paths.cursor,
+        },
         clis: fakeClis(ready),
         runnerBundle: "/opt/agent/agent-runner/agent-runner.mjs",
         runnerEnv: {},
@@ -410,8 +415,15 @@ it.effect(
           registered.map((each) => ({
             claudeExecutable: each.claudeExecutable,
             codexExecutable: each.codexExecutable,
+            cursorSdk: each.cursorSdk,
           })),
-          [{ claudeExecutable: CLIS.paths.claude, codexExecutable: CLIS.paths.codex }],
+          [
+            {
+              claudeExecutable: CLIS.paths.claude,
+              codexExecutable: CLIS.paths.codex,
+              cursorSdk: CLIS.paths.cursor,
+            },
+          ],
         );
         // Note that the uninstall removes the agents this record names, and no other install's.
         assert.ok(

@@ -15,8 +15,8 @@ import { loadModule, type RepositoryGuard, readJson, record, text } from "./guar
  * every host as it fetches; and the agents' image
  * (`apps/web/agent-image/Dockerfile`) installs the Agent SDK, Claude Code,
  * Codex, Cursor's SDK, and Playwright the pins name, its `ARG`s written out
- * beside them; and the Cursor SDK the runner types itself against is the one
- * `CURSOR_SDK_PIN` has the image install.
+ * beside them; and the Cursor SDK the runner types itself against, and the
+ * one every Mac fetches, is the one `CURSOR_SDK_PIN` has the image install.
  * A pin moved on one side alone builds, typechecks, and fails only in a
  * hosted sandbox.
  */
@@ -53,6 +53,8 @@ export interface AgentPins {
   readonly pinnedCodex: string;
   readonly hostClaudePins: readonly HostCliPin[];
   readonly hostCodexPins: readonly HostCliPin[];
+  /** The Cursor SDK a Mac fetches, and its platform package, each as the guard reads a host's pin. */
+  readonly hostCursorPins: readonly HostCliPin[];
   /** The Cursor SDK the runner's `package.json` names, which it is typed against. */
   readonly runnerCursorSdkDependency: string | undefined;
   readonly pinnedCursorSdk: string;
@@ -91,6 +93,7 @@ export function pinProblems(pins: AgentPins): readonly string[] {
   const hostPins = [
     { pins: pins.hostClaudePins, against: "CLAUDE_CODE_PIN.SDK_VERSION", pinned: pins.pinnedSdk },
     { pins: pins.hostCodexPins, against: "CODEX_PIN.VERSION", pinned: pins.pinnedCodex },
+    { pins: pins.hostCursorPins, against: "CURSOR_SDK_PIN.VERSION", pinned: pins.pinnedCursorSdk },
   ];
   for (const { pins: each, against, pinned } of hostPins) {
     for (const pin of each) {
@@ -152,6 +155,27 @@ function hostCliPins(pins: Record<string, unknown>, mac: string, linux: string):
   ];
 }
 
+/** The Cursor SDK a Mac fetches, read as a host's pin: the SDK's own archive, and its platform package's, which npm keeps at the same release. */
+function hostCursorPins(pins: Record<string, unknown>): HostCliPin[] {
+  const name = "CURSOR_SDK_MAC_PIN";
+  const pin = record(pins[name], name);
+  const version = text(pin.VERSION, `${name}.VERSION`);
+  const parts = Array.isArray(pin.PARTS) ? pin.PARTS : [];
+
+  const platform = parts
+    .map((part: unknown, index) => record(part, `${name}.PARTS[${index}]`))
+    .filter((part) => text(part.INTO, `${name}.PARTS's INTO`).includes("@cursor/sdk-"));
+
+  return [
+    { name, version, archive: text(pin.ARCHIVE, `${name}.ARCHIVE`) },
+    ...platform.map((part) => ({
+      name: `${name}.PARTS's ${text(part.INTO, `${name}.PARTS's INTO`)}`,
+      version,
+      archive: text(part.ARCHIVE, `${name}.PARTS's ARCHIVE`),
+    })),
+  ];
+}
+
 async function readPins(root: string): Promise<AgentPins> {
   const pins = await loadModule(root, `${RUNNER}/src/pins.ts`);
   const claude = record(pins.CLAUDE_CODE_PIN, "CLAUDE_CODE_PIN");
@@ -175,6 +199,7 @@ async function readPins(root: string): Promise<AgentPins> {
     pinnedCodex: text(codex.VERSION, "CODEX_PIN.VERSION"),
     hostClaudePins: hostCliPins(pins, "CLAUDE_CODE_MAC_PIN", "CLAUDE_CODE_LINUX_PINS"),
     hostCodexPins: hostCliPins(pins, "CODEX_MAC_PIN", "CODEX_LINUX_PINS"),
+    hostCursorPins: hostCursorPins(pins),
     runnerCursorSdkDependency: typeof cursorDependency === "string" ? cursorDependency : undefined,
     pinnedCursorSdk: text(cursor.VERSION, "CURSOR_SDK_PIN.VERSION"),
     pinnedPlaywright: text(playwright.VERSION, "PLAYWRIGHT_PIN.VERSION"),

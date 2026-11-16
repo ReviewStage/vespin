@@ -61,8 +61,13 @@
  *
  * Run from inside the app, through its launcher or the link the app moves
  * `~/.local/bin/vespin-host` to (`@repo/host/daemon`'s
- * `appHostCommandLinked`), every command but `run` and `version` says the
- * app runs this Mac's host and exits 1, changing nothing.
+ * `appHostCommandLinked`), every command but `run`, `version`, `status`, and
+ * `cursor-login` says the app runs this Mac's host and exits 1, changing
+ * nothing.
+ *
+ * `cursor-login` signs the Mac in to Cursor through the SDK the host keeps
+ * (`@repo/host/daemon`'s `cursorLogin`), the sign-in its local Cursor agents
+ * run on, and exits by how it ended (`CURSOR_LOGIN_EXIT`).
  *
  * `connect` is run as the box is set up or by hand: it prints the link and
  * the code a member approves in the app, waits for them to, and exits by how
@@ -90,7 +95,9 @@ import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   APP_RUNS_HOST_WORDS,
   appRefusesCommand,
+  CURSOR_LOGIN_EXIT,
   connectHostDevice,
+  cursorLogin,
   HOST_CONNECT_OUTCOME,
   HOST_DAEMON_END,
   HOST_LEAVE_OUTCOME,
@@ -188,6 +195,7 @@ const COMMAND = {
   LEAVE: "leave",
   VERSION: "version",
   STATUS: "status",
+  CURSOR_LOGIN: "cursor-login",
 } as const;
 
 /** How long `status --wait` waits for setup to end, so an install on a slow connection says so rather than hanging. */
@@ -198,7 +206,8 @@ const STATUS_READ_EVERY = Duration.seconds(2);
 
 /** What `status` says of each step, and the exit code each ends `--wait` with. */
 const STATUS_WORDS = {
-  [SETUP_STEP.SETTING_UP]: "Setting up: fetching Claude Code, Codex, and GitHub's CLI…",
+  [SETUP_STEP.SETTING_UP]:
+    "Setting up: fetching Claude Code, Codex, GitHub's CLI, and on a Mac Cursor's SDK…",
   [SETUP_STEP.FAILED]: "Failed",
   [SETUP_STEP.READY]: "Ready: this machine takes agents.",
 } as const;
@@ -731,6 +740,19 @@ function main(argv: readonly string[]): Effect.Effect<number, unknown, HostServi
     return status(runtime, values.wait === true);
   }
 
+  if (command === COMMAND.CURSOR_LOGIN) {
+    const { values } = parseArgs({ args: [...rest], options: { again: { type: "boolean" } } });
+    const arch = hostArch(runtime.os, process.arch);
+
+    return cursorLogin({
+      stateRoot: runtime.stateRoot,
+      pin: arch === undefined ? undefined : runtime.os.agentClis(arch).cursor,
+      deviceName: runtime.os.deviceName(),
+      again: values.again === true,
+      say: (line) => process.stdout.write(`${line}\n`),
+    }).pipe(Effect.orElseSucceed(() => CURSOR_LOGIN_EXIT.FAILED));
+  }
+
   if (command === COMMAND.CONNECT) {
     const { values } = parseArgs({
       args: [...rest],
@@ -750,7 +772,7 @@ function main(argv: readonly string[]): Effect.Effect<number, unknown, HostServi
 
   return Effect.sync(() =>
     process.stderr.write(
-      "usage: vespin-host run [--bundled] | connect [--origin <url>] [--name <name>] | status [--wait] | version | uninstall [--keep-agents]\n",
+      "usage: vespin-host run [--bundled] | connect [--origin <url>] [--name <name>] | status [--wait] | cursor-login [--again] | version | uninstall [--keep-agents]\n",
     ),
   ).pipe(Effect.as(CONNECT_EXIT.USAGE));
 }

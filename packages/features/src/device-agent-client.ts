@@ -77,7 +77,7 @@ export interface DeviceAgentUpdate {
   readonly updateFailure?: string | undefined;
 }
 
-/** What a Mac registers as: its name, its platform and architecture, which machine it is where it read it (`DeviceMachine`), its home folder, the Claude Code CLI it bundles, the Codex it checked where it has one, the lines beyond the first it takes, and where its setup stands until it is ready. */
+/** What a Mac registers as: its name, its platform and architecture, which machine it is where it read it (`DeviceMachine`), its home folder, the Claude Code CLI it bundles, the Codex it checked and the Cursor SDK it keeps where it has them, the lines beyond the first it takes, and where its setup stands until it is ready. */
 export interface DeviceAgentDevice extends DeviceMachine {
   readonly name: string;
   readonly platform: DevicePlatform;
@@ -91,6 +91,8 @@ export interface DeviceAgentDevice extends DeviceMachine {
   readonly attachmentsFolder: string;
   readonly claudeExecutable: string;
   readonly codexExecutable?: string | undefined;
+  /** The entry of the Cursor SDK it keeps, where it keeps one. */
+  readonly cursorSdk?: string | undefined;
   readonly capabilities: readonly DeviceCapability[];
   /** Where its setup stands while it is not ready to take an agent, and why it failed where it did; none once it is ready. */
   readonly setup?: DeviceSetup | undefined;
@@ -258,7 +260,7 @@ export class HostedDeviceAgentClient {
     deviceId: string,
     device: DeviceAgentDevice,
   ): Effect.Effect<boolean, never, HttpClient.HttpClient> {
-    const { codexExecutable, capabilities, setup, setupFailure, ...rest } = device;
+    const { codexExecutable, cursorSdk, capabilities, setup, setupFailure, ...rest } = device;
 
     // Note that a Mac with no Codex checked names none, which the service reads as no Codex,
     // and one with no capability names no list, which a service from before the field refuses.
@@ -266,6 +268,7 @@ export class HostedDeviceAgentClient {
       deviceId,
       ...rest,
       ...(codexExecutable === undefined ? undefined : { codexExecutable }),
+      ...(cursorSdk === undefined ? undefined : { cursorSdk }),
       ...(capabilities.length === 0 ? undefined : { capabilities }),
       // Likewise a device ready to take an agent names no setup, so only one a service from before the field would never list is refused.
       ...(setup === undefined ? undefined : { setup }),
