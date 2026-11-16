@@ -6,6 +6,9 @@ import { markdownTree } from "./markdown-tree.js";
 /** What leads an unordered list's item, as iOS's own lists mark one. */
 const BULLET = "• ";
 
+/** The marks a clip's ellipsis never follows: a sentence's or a clause's end, and spaces. */
+const CLIP_TRAIL = /[\s.,;:!?…]+$/u;
+
 /** A phrasing node's words: emphasis and strikethrough without their marks, code by its text, a link by its label, a picture by its alt words, and a hard break as a new line. */
 function phrasingWords(node: PhrasingContent): string {
   switch (node.type) {
@@ -90,4 +93,20 @@ export function markdownPlainText(text: string): string {
   return markdownTree(text)
     .children.flatMap((node) => blockLines(node))
     .join("\n");
+}
+
+/**
+ * Words clipped to a bound, with an ellipsis where they were cut: cut at the
+ * last whole word that fits, and never after a full stop or a comma, so a
+ * clip reads "the trace…" rather than "the trace.…" or "exponenti…". Note
+ * that one word longer than the bound is cut inside it, since nothing else
+ * would fit.
+ */
+export function clippedWords(words: string, bound: number): string {
+  if (words.length <= bound) return words;
+  const cut = words.slice(0, bound - 1);
+  const whole = /\s/u.test(words.charAt(bound - 1)) ? cut : cut.replace(/\s+\S*$/u, "");
+  const kept = (whole.trim() === "" ? cut : whole).replace(CLIP_TRAIL, "");
+
+  return `${kept}…`;
 }

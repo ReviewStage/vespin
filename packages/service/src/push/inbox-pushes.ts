@@ -82,7 +82,7 @@ import {
   openAskOf,
   recommendedLabels,
 } from "@repo/features/inbox-wire";
-import { markdownPlainText } from "@repo/features/markdown-plain-text";
+import { clippedWords, markdownPlainText } from "@repo/features/markdown-plain-text";
 import { agentName } from "@repo/features/model-label";
 import { PRESENCE } from "@repo/features/presence-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
@@ -138,11 +138,6 @@ export interface ThreadPushPost {
   readonly taskId: string;
 }
 
-/** Words clipped to a bound, with an ellipsis where they were cut. */
-function clipped(words: string, bound: number): string {
-  return words.length <= bound ? words : `${words.slice(0, bound - 1).trimEnd()}…`;
-}
-
 /**
  * The words as an alert's body says them: the Markdown said as plain text,
  * each mention by its label, a line to each line it draws, clipped to the
@@ -151,7 +146,7 @@ function clipped(words: string, bound: number): string {
  * lines past the first fill a banner's four lines and the expanded alert.
  */
 function bodyWords(text: string): string {
-  return clipped(markdownPlainText(text), ALERT_BOUND.BODY_CHARS);
+  return clippedWords(markdownPlainText(text), ALERT_BOUND.BODY_CHARS);
 }
 
 /** A title as an alert says it: its Markdown said as plain text on one line, or its words as written where that says nothing. */
@@ -164,7 +159,7 @@ function titleWords(title: string): string {
 /** The alert's title and body; a body that would say nothing is left out. */
 function alertOf(title: string, body: string) {
   return {
-    title: clipped(titleWords(title), ALERT_BOUND.TITLE_CHARS),
+    title: clippedWords(titleWords(title), ALERT_BOUND.TITLE_CHARS),
     ...(body === "" ? undefined : { body }),
   };
 }

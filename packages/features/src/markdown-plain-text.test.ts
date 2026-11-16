@@ -1,7 +1,7 @@
 // markdown-plain-text.test.ts -- Markdown said as plain text, as a notification's preview shows an agent's words.
 
 import { describe, expect, it } from "vitest";
-import { markdownPlainText } from "./markdown-plain-text.js";
+import { clippedWords, markdownPlainText } from "./markdown-plain-text.js";
 
 describe("markdownPlainText", () => {
   it.each([
@@ -37,5 +37,25 @@ describe("markdownPlainText", () => {
     ],
   ])("%s", (_, markdown, plain) => {
     expect(markdownPlainText(markdown)).toBe(plain);
+  });
+});
+
+describe("clippedWords", () => {
+  it.each([
+    ["words within the bound stand whole", "Ship it.", 20, "Ship it."],
+    [
+      "a cut word goes whole",
+      "Back off with exponential backoff",
+      30,
+      "Back off with exponential…",
+    ],
+    [
+      "no full stop stands before the ellipsis",
+      "It has the trace. I opened a fix",
+      19,
+      "It has the trace…",
+    ],
+  ])("%s", (_, words, bound, clipped) => {
+    expect(clippedWords(words, bound)).toBe(clipped);
   });
 });
