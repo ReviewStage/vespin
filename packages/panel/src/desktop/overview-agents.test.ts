@@ -9,6 +9,7 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import type { InboxItem } from "@repo/features/inbox-wire";
+import type { NumberedAddress } from "@repo/features/link-grammar";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -86,7 +87,7 @@ function waitingOn(agentId: string, count: number): ReadonlyMap<string, readonly
   return new Map([[agentId, items]]);
 }
 
-type Opened = { agents: string[]; pullRequests: string[]; phone: string[] };
+type Opened = { agents: string[]; pullRequests: NumberedAddress[]; phone: string[] };
 
 /** The group over `agents`, `NEWEST` holding a merged pull request, unfolded unless `folded` says, offering New agent on its head where `newAgent` says, a phone's where `phone` says; every agent, pull request, and start it opens recorded. */
 function mount(
@@ -152,7 +153,7 @@ function mount(
             waiting,
             shown: true,
             onOpenAgent: (agentId) => opened.agents.push(agentId),
-            onOpenPullRequest: (agentId) => opened.pullRequests.push(agentId),
+            onOpenPullRequest: (pullRequest) => opened.pullRequests.push(pullRequest),
             newAgent: newAgent
               ? { label: "New agent", onSelect: () => opened.phone.push("new agent") }
               : undefined,
@@ -195,7 +196,11 @@ test("the agents at work come first, then the newest, each saying where it runs,
 
   assert.ok(chip !== null);
   act(() => chip.click());
-  assert.deepEqual(opened, { agents: [], pullRequests: [NEWEST.id], phone: [] });
+  assert.deepEqual(opened, {
+    agents: [],
+    pullRequests: [{ repository: "acme/relay", number: 42 }],
+    phone: [],
+  });
 
   const press = [...list.querySelectorAll("button")].find((button) =>
     button.textContent?.includes(OLDEST.title),

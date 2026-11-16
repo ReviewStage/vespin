@@ -2,7 +2,7 @@
 
 import { IOS_TAB, type IosTab, iosRouteOnTab } from "@repo/features/ios-app-links";
 import { useThreeColumns } from "@repo/ui-native";
-import { type Href, useIsFocused, useRouter } from "expo-router";
+import { type Href, useFocusEffect, useIsFocused, useRouter } from "expo-router";
 import {
   createContext,
   useCallback,
@@ -410,6 +410,25 @@ export function useStandDetailFront(place: SidebarPlace, shown: boolean): void {
       if (front === place) standDetailFront(undefined);
     };
   }, [place, shown]);
+}
+
+/**
+ * Stands a tab root's detail in front while its tab is focused and `shown`
+ * holds, as `useStandDetailFront` does. Note that it hears focus through an
+ * effect rather than reading it, because a read would draw the whole root
+ * again on every tab switch, and hand the split view its columns anew.
+ */
+export function useStandFocusedDetailFront(place: SidebarPlace, shown: boolean): void {
+  useFocusEffect(
+    useCallback(() => {
+      if (!shown) return;
+      standDetailFront(place);
+
+      return () => {
+        if (front === place) standDetailFront(undefined);
+      };
+    }, [place, shown]),
+  );
 }
 
 /** How the detail in front stands, for the menu bar's Back: no split view in front, its own page alone, or a page pushed over it. */

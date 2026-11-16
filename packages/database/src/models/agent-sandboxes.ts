@@ -38,6 +38,7 @@ import {
   and,
   asc,
   eq,
+  gt,
   inArray,
   isNotNull,
   isNull,
@@ -58,6 +59,7 @@ import {
   type AgentSandboxState,
   agentSandboxTable,
 } from "../schemas/agent-sandbox.js";
+import { conversations } from "../schemas/storage.js";
 import { forgetAgentSandboxHolds } from "./agent-sandbox-holds.js";
 import { forgetTurnSnapshotsOfAgent, forgetTurnSnapshotsOfSandbox } from "./turn-state.js";
 
@@ -210,6 +212,50 @@ const findRelease = SqlSchema.findOneOption({
         .from(agentSandboxTable)
         .innerJoin(agentTable, eq(agentTable.id, agentSandboxTable.agentId))
         .where(eq(agentSandboxTable.sandboxName, sandboxName)),
+    ),
+});
+
+const RunningSandboxSchema = Schema.Struct({
+  agentId: Schema.String,
+  userId: Schema.String,
+  conversationId: Schema.String,
+  sessionId: Schema.String,
+});
+
+/** A workspace's agent whose current session's sandbox may be running, as a stop for a new size names it. */
+export type RunningAgentSandbox = typeof RunningSandboxSchema.Type;
+
+const findRunningOfWorkspace = SqlSchema.findAll({
+  Request: Schema.Struct({ organizationId: Schema.String, usedSince: Schema.Date }),
+  Result: RunningSandboxSchema,
+  execute: ({ organizationId, usedSince }) =>
+    Database.use((db) =>
+      db
+        .select({
+          agentId: agentTable.id,
+          userId: agentTable.userId,
+          conversationId: agentTable.conversationId,
+          sessionId: sql<string>`${conversations.runtimeSessionId}`,
+        })
+        .from(agentTable)
+        .innerJoin(conversations, eq(conversations.id, agentTable.conversationId))
+        .innerJoin(
+          agentSandboxTable,
+          and(
+            eq(agentSandboxTable.sandboxName, sandboxNamedFor(conversations.runtimeSessionId)),
+            eq(agentSandboxTable.agentId, agentTable.id),
+          ),
+        )
+        .where(
+          and(
+            eq(agentTable.organizationId, organizationId),
+            isNotNull(conversations.runtimeSessionId),
+            eq(agentSandboxTable.state, AGENT_SANDBOX_STATE.LIVE),
+            // Note that a sandbox booting is its delivery's, which opens it at the size standing.
+            isNull(agentSandboxTable.bootingSince),
+            gt(agentSandboxTable.usedAt, usedSince),
+          ),
+        ),
     ),
 });
 
@@ -435,4 +481,18 @@ export function settleAgentSandboxRelease(
       : Effect.void,
     settleReleasing({ sandboxName, state }),
   );
+}
+
+/**
+ * The workspace's agents whose current session's sandbox stands LIVE, not
+ * booting, and was used after `usedSince`, so may still be running: the ones
+ * a change of the workspace's sandbox size stops where nothing keeps them up
+ * (`@repo/service`'s `workspace-sandbox-size.ts`). A sandbox past that is
+ * stopped already, and resizes as it next opens.
+ */
+export function runningAgentSandboxesOf(
+  organizationId: string,
+  usedSince: Date,
+): SandboxUseEffect<readonly RunningAgentSandbox[]> {
+  return findRunningOfWorkspace({ organizationId, usedSince });
 }

@@ -1,6 +1,11 @@
 // _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, in a compact window, the prominent round + that opens New task, and over it the way back to a voice call standing; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation or while the Inbox stands in Select mode.
 
-import { type IosTab, iosRouteHidesTabs, iosTabOfGroup } from "@repo/features/ios-app-links";
+import {
+  type IosTab,
+  iosRouteAgent,
+  iosRouteHidesTabs,
+  iosTabOfGroup,
+} from "@repo/features/ios-app-links";
 import {
   CallAccessory,
   GLYPH,
@@ -30,11 +35,12 @@ import { useStandingCallCard } from "../../voice-call.js";
  * The way back to a call standing, in the tab bar's bottom accessory, full
  * over the bar and inline beside it once it has shrunk as a list scrolled.
  * Note that the system draws a copy for each placement, so it reads the
- * call from the provider rather than holding any of it.
+ * call from the provider rather than holding any of it. None stands while
+ * `shown`, the agent whose page is in front, is the call's own.
  */
-function CallWayBack() {
+function CallWayBack({ shown }: { readonly shown: string | undefined }) {
   const placement = NativeTabs.BottomAccessory.usePlacement();
-  const standing = useStandingCallCard();
+  const standing = useStandingCallCard(shown);
 
   if (standing === undefined) return null;
 
@@ -128,7 +134,9 @@ export default function TabsLayout() {
   useStackToRoutes({ threeColumns: appSidebar, regular: !iconOnly }, placeOfRoute(standing));
   // Note that a tab under the split view leaves its content clear, because NativeTabs paints each tab in the navigation theme's light ground, which flashed over the split as a page pushed.
   const underSplit = appSidebar ? UNDER_SPLIT_SCREEN.contentStyle : undefined;
-  const calling = useStandingCallCard() !== undefined;
+  // Note that the call's own agent's page holds the call's presses in its composer, so the way back stands aside there rather than repeat them.
+  const shownAgent = iosRouteAgent(pathname);
+  const calling = useStandingCallCard(shownAgent) !== undefined;
 
   // Note that the Inbox's Select mode hides the bar only while the Inbox's own list stands, so a link that opens another place never leaves the bar hidden over it.
   const choosing = useInboxChoosingOn() && atRoot && placeOfRoute(standing) === SIDEBAR_PLACE.INBOX;
@@ -145,7 +153,7 @@ export default function TabsLayout() {
       {/* Note that the accessory stands only while a call does, since the system keeps its room over the bar whatever it holds. */}
       {calling ? (
         <NativeTabs.BottomAccessory>
-          <CallWayBack />
+          <CallWayBack shown={shownAgent} />
         </NativeTabs.BottomAccessory>
       ) : null}
       <NativeTabs.Trigger name="(inbox)" accessibilityLabel="Inbox" contentStyle={underSplit}>
