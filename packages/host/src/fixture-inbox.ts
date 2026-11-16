@@ -124,6 +124,7 @@ import {
   COMMENT_SUBJECT,
   DESCRIPTION_COMMENT_CALL_FAILURE,
   type ListedTasksView,
+  TASK_CALL_FAILURE,
   type TaskListParts,
   type TasksView,
 } from "@repo/features/tasks-view";
@@ -327,6 +328,9 @@ function item(
 }
 
 const OPEN = { status: INBOX_ASK_STATUS.OPEN } as const;
+
+/** The PDF the reference task's description keeps as it keeps a picture, by the id the service keeps it under, so a description's file chip has one to draw. */
+const DESCRIPTION_PDF = "e738b0a4-c3f5-4a1d-b8d5-6f7182930b45";
 
 /** The recorded thread's files: a still its words draw, the recording sent after them, and the test plan as a PDF, by the attachment each is read by. */
 const RECORDED = {
@@ -1592,6 +1596,8 @@ const INVITES_DESCRIPTION = [
   "- File: [@invite.ts](https://github.com/ada/relay/blob/HEAD/src/members/invite.ts)",
   "- Date: [@Nov 16, 2026](mention://date/2026-11-16)",
   "",
+  `![Invite flow spec](https://vespin.dev/personal/task/${FIXTURE_IDS.TASK}/files/${DESCRIPTION_PDF})`,
+  "",
   "## Checks",
   "",
   "- [x] An invite is sent once per address",
@@ -2511,6 +2517,11 @@ const ANSWERS: StagedAnswers = {
 
     return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
   },
+  // Note that the reference task's PDF is read as the service reads a description's file, and any other is not there.
+  [ACT_KIND.TASKS_PICTURE_READ]: ({ taskId, attachmentId }) =>
+    taskId === FIXTURE_IDS.TASK && attachmentId === DESCRIPTION_PDF
+      ? { contentType: AGENT_ATTACHMENT_TYPE.PDF, base64: FIXTURE_PLAN_PDF }
+      : { failure: TASK_CALL_FAILURE.NOT_FOUND },
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
   // Note that a version of the reference journey's description is read as the service reads one, and a restore is taken as the service takes one, though nothing here moves.
