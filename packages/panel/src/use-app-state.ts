@@ -45,7 +45,6 @@ export {
   selectNetwork,
   selectNotifications,
   selectPortForwarding,
-  selectPullRequestPublished,
   selectRefusedAgents,
   selectRun,
   selectSessionReplay,

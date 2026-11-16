@@ -72,7 +72,6 @@ import type { IntegrationProviderParams } from "@repo/features/integration-view"
 import { integrationConnectionOf } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, type PagePlace } from "@repo/features/page-wire";
-import type { PullRequestChaptersReadParams } from "@repo/features/pull-request-chapters-view";
 import type { RepositoryPullRequestParams } from "@repo/features/pull-request-view";
 import {
   COMMENT_SUBJECT,
@@ -673,36 +672,9 @@ function pullRequestIds(
   return key === undefined ? undefined : [key.agentId, key.number ?? OWN_PULL_REQUEST];
 }
 
-/** A Pull request tab's pull request, by the agent and the number it names, or the agent's own. */
-export const pullRequestQuery = (key: AgentPullRequestReadParams | undefined) =>
-  liveReadQuery(LIVE_READ.PULL_REQUEST, pullRequestIds(key));
-
-/** A Pull request tab's checks, by the agent and the number it names, or the agent's own. */
-export const pullRequestChecksQuery = (key: AgentPullRequestReadParams | undefined) =>
-  liveReadQuery(LIVE_READ.PULL_REQUEST_CHECKS, pullRequestIds(key));
-
-/** A Pull request tab's conversation, by the agent and the number it names, or the agent's own. */
-export const pullRequestConversationQuery = (key: AgentPullRequestReadParams | undefined) =>
-  liveReadQuery(LIVE_READ.PULL_REQUEST_CONVERSATION, pullRequestIds(key));
-
 /** What the agent published, its branch and repository among it, by the agent and the number a tab names, or the agent's own. */
 export const pullRequestPublishedQuery = (key: AgentPullRequestReadParams | undefined) =>
   liveReadQuery(LIVE_READ.PULL_REQUEST_PUBLISHED, pullRequestIds(key));
-
-/** Which of a pull request's files the member marked viewed, by the agent and the number Files changed names, or the agent's own. */
-export const pullRequestViewedQuery = (key: AgentPullRequestReadParams | undefined) =>
-  liveReadQuery(LIVE_READ.PULL_REQUEST_VIEWED, pullRequestIds(key));
-
-/** What the reviewer and label pickers offer, by the agent and the number, or the agent's own. */
-export const reviewOptionsQuery = (key: AgentPullRequestReadParams | undefined) =>
-  liveReadQuery(LIVE_READ.REVIEW_OPTIONS, pullRequestIds(key));
-
-/** A pull request's chapters, by the agent and its number. */
-export const pullRequestChaptersQuery = (key: PullRequestChaptersReadParams | undefined) =>
-  liveReadQuery(
-    LIVE_READ.PULL_REQUEST_CHAPTERS,
-    key === undefined ? undefined : [key.agentId, key.number],
-  );
 
 /** The ids of a pull request named by its repository: the workspace, the repository, then the number; none while a surface names none. */
 function repositoryPullRequestKeyIds(
@@ -842,13 +814,6 @@ export const descriptionCommentsRetryMutation = () => actMutation(ACT_KIND.TASKS
 
 /** Try again on a task's plan. */
 export const heldTaskRetryMutation = () => actMutation(ACT_KIND.TASKS_HELD_RETRY);
-
-/** Try again on one part of a pull request, named by its part, its agent, and its number, which answers once its ask has landed, so a write's read-back can wait on it. */
-export const pullRequestPartRetryMutation = () =>
-  actMutation(ACT_KIND.AGENTS_PULL_REQUEST_PART_RETRY);
-
-/** Try again on a pull request's chapters. */
-export const pullRequestChaptersRetryMutation = () => actMutation(ACT_KIND.CHAPTERS_RETRY);
 
 /** Try again on one part of a pull request named by its part, its repository, and its number, which answers once its ask has landed. */
 export const repositoryPullRequestPartRetryMutation = () =>

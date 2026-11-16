@@ -131,7 +131,7 @@ import type { PullRequestSource } from "./pull-request-source.js";
 import { TranscriptWords } from "./transcript-blocks.js";
 
 /**
- * agent-chapters-tab.tsx -- the Chapters view of an agent's Pull request tab (`agent-pull-request-tab.tsx`): its pull request's diff told as chapters to review in order, each read as its title, risk, and summary over its own hunks, drawn by Files changed's own list.
+ * agent-chapters-tab.tsx -- the Chapters view of a Pull request tab (`agent-pull-request-tab.tsx`): its pull request's diff told as chapters to review in order, each read as its title, risk, and summary over its own hunks, drawn by Files changed's own list.
  *
  * The chapters are the workspace's newest for the pull request, which the
  * host holds while the tab is shown and follows over the service's live read
@@ -775,7 +775,6 @@ const NO_THREADS: ChangesThreads = { list: [], draw: () => null };
 
 /** The chapters ready: the rail, the chapter chosen, and its diff. */
 function ChaptersReading({
-  agentId,
   source,
   shown,
   repository,
@@ -790,7 +789,6 @@ function ChaptersReading({
   threads,
   lineComments,
 }: {
-  agentId: string;
   source: PullRequestSource;
   shown: boolean;
   repository: string | null;
@@ -1101,7 +1099,6 @@ function ChaptersReading({
             <AgentChangesTab
               // Note that each chapter's list stands on its own, its folds and the file stood on its own, as a chapter is its own page.
               key={at}
-              agentId={agentId}
               source={source}
               shown={shown}
               repository={repository}
@@ -1177,13 +1174,12 @@ function chaptersState(
 }
 
 /**
- * One agent's Chapters view: what its read and its Generate leave to draw
+ * A pull request's Chapters view: what its read and its Generate leave to draw
  * (`chaptersShown`), and, once the chapters are ready, the chapters over
  * the Pull request tab's read of the files, which they wait on as Files
  * changed does.
  */
 export function AgentChaptersTab({
-  agentId,
   source,
   shown,
   repository,
@@ -1193,7 +1189,6 @@ export function AgentChaptersTab({
   threads,
   lineComments,
 }: {
-  agentId: string;
   source: PullRequestSource;
   /** Whether the view is on screen, which is when its time counts and its keys' sheet stands. */
   shown: boolean;
@@ -1242,7 +1237,6 @@ export function AgentChaptersTab({
 
   return (
     <ChaptersReading
-      agentId={agentId}
       source={source}
       shown={shown}
       repository={repository}

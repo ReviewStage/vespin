@@ -3,7 +3,10 @@
  */
 
 import { ORPCError } from "@orpc/client";
-import type { AgentChangesAnswerView } from "@repo/features/agent-view";
+import type {
+  RepositoryChangesAnswerView,
+  RepositoryPullRequestParams,
+} from "@repo/features/pull-request-view";
 import type { TaskFileRequest } from "@repo/features/task-wire";
 import {
   type ListedApart,
@@ -305,19 +308,14 @@ export function readingFiles(
 }
 
 /**
- * The act port's read of an agent's changes answered through `read`, which
- * hears the agent and the pull request's number where a tab names one, for a
- * test to spread into its `fakeActPort`.
+ * The act port's read of a pull request's changes answered through `read`,
+ * which hears the pull request by its workspace, repository, and number, for
+ * a test to spread into its `fakeActPort`.
  */
 export function answeringChanges(
-  read: (agentId: string, number?: number) => Promise<AgentChangesAnswerView>,
-): Pick<FakeActPort, typeof AGENT_ACT_KIND.AGENTS_CHANGES> {
-  return {
-    [AGENT_ACT_KIND.AGENTS_CHANGES]: (payload) =>
-      "number" in payload && payload.number !== undefined
-        ? read(payload.agentId, payload.number)
-        : read(payload.agentId),
-  };
+  read: (pullRequest: RepositoryPullRequestParams) => Promise<RepositoryChangesAnswerView>,
+): Pick<FakeActPort, typeof PULL_REQUEST_ACT_KIND.PULL_REQUESTS_CHANGES> {
+  return { [PULL_REQUEST_ACT_KIND.PULL_REQUESTS_CHANGES]: (payload) => read(payload) };
 }
 
 /** Each port kind's procedure as a test answers it: its payload in, its answer or a rejection out. */
