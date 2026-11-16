@@ -19,7 +19,9 @@
  * Whatever stops a call short says why in the app's failure notice, the
  * error buzz with it, and lets the microphone go. While a call stands the
  * agent's transcript is held followed, so the way back to it says what the
- * agent does from any screen. Nothing here starts while the Voice
+ * agent does from any screen, and the call stands in a Live Activity of its
+ * own (`live-activity/call-activity.ts`), whose mutes and End call act on it
+ * from the Lock Screen and the Dynamic Island. Nothing here starts while the Voice
  * experiment is off, signed out, or behind the update screen, and any of
  * them ends a call under way, since no End call stands then. No audio
  * leaves the phone but to the session, and none is stored or counted.
@@ -72,6 +74,7 @@ import {
   useTaskListCollections,
   useTaskListRow,
 } from "./host/host-provider.js";
+import { useCallLiveActivity } from "./live-activity/call-activity.js";
 import { voiceAudioModule } from "./voice-audio-module.js";
 
 /** Why a call stopped short, in the words the notice says, as the panel's toast says them but where the phone's settings differ. */
@@ -308,9 +311,12 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
 
   const facts = useStandingFacts(call);
 
+  const standing = call === undefined ? undefined : { ...call, ...facts };
+  useCallLiveActivity(standing, session);
+
   const value: PhoneVoiceCall = {
     offered: callable,
-    call: call === undefined ? undefined : { ...call, ...facts },
+    call: standing,
     start: (into) => {
       if (callable) session.start(into);
     },

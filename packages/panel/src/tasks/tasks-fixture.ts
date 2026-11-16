@@ -785,6 +785,7 @@ export function fixtureAppState(state: AppStateSnapshot): AppStateSnapshot {
           agentAppState(
             settingsAppState(state.run.profile, plannedAppState(state)),
             FIXTURE_TASK_ID,
+            FIXTURE_FIRST.id,
           ),
           FIXTURE_WORKSPACE_IDS,
         ),

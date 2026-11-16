@@ -1,4 +1,4 @@
-// thread-page.tsx -- an Inbox thread: its path small in the bar, a menu of what it opens, its title as the page's heading, then each message flat, its writer's face or tile, name and time in SwiftUI and its words, pictures, videos, and files in React Native views.
+// thread-page.tsx -- an Inbox thread: its path small in the bar, a menu of what it opens, its title as the page's heading, then each message flat, its writer's face or tile, name and time in SwiftUI and its words, pictures, videos, sound clips, and files in React Native views.
 
 import {
   HStack,
@@ -35,6 +35,7 @@ import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
+import { AudioClip } from "./audio-clip.js";
 import { BarContent } from "./bar-content.js";
 import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
@@ -68,10 +69,11 @@ const styles = StyleSheet.create({
   words: { paddingLeft: WORDS_INSET, paddingRight: SPACE.EDGE, gap: SPACE.ROW },
 });
 
-/** What a message's file is drawn as after its words: a picture, a video in the system's player, or any other file, such as a PDF, as its chip. */
+/** What a message's file is drawn as after its words: a picture, a video in the system's player, a sound clip in its strip, or any other file, such as a PDF, as its chip. */
 export const THREAD_MEDIA = {
   PICTURE: "picture",
   VIDEO: "video",
+  AUDIO: "audio",
   FILE: "file",
 } as const;
 
@@ -90,6 +92,13 @@ export type ThreadMedia =
       readonly label: string;
       /** Opens the video where it plays, such as its thread in Safari, for one the system's player cannot read. */
       readonly onOpenElsewhere?: (() => void) | undefined;
+    }
+  | {
+      readonly kind: typeof THREAD_MEDIA.AUDIO;
+      readonly key: string;
+      /** The clip's file under the app's caches, named by its type's extension; none while its bytes are on their way. */
+      readonly source: string | undefined;
+      readonly label: string;
     }
   | {
       readonly kind: typeof THREAD_MEDIA.FILE;
@@ -132,6 +141,8 @@ type ThreadPageProps = {
   readonly pathActions?: BarMenu["actions"] | undefined;
   /** The thread's title, which heads the page. */
   readonly title: string;
+  /** Whether the title is the words the thread stands on, such as a description's comment, quoted as the panel's thread quotes them: muted, regular, and cut to two lines, rather than a heading of its own. */
+  readonly quoted?: boolean | undefined;
   readonly messages: readonly ThreadMessage[];
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */
   readonly repository?: string | null | undefined;
@@ -157,9 +168,21 @@ type ThreadPageProps = {
   readonly foot?: ReactNode | undefined;
 };
 
-/** A thread's heading under its bar: its title in 20 pt semibold, and how it ended under it, 13 pt muted, once it is settled. */
-function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standing">) {
+/** A thread's heading under its bar: its title in 20 pt semibold, or the words it stands on quoted in the body's muted size and cut to two lines, and how it ended under it, 13 pt muted, once it is settled. */
+function ThreadHead({
+  title,
+  quoted = false,
+  standing,
+}: Pick<ThreadPageProps, "title" | "quoted" | "standing">) {
   const colors = useColors();
+
+  // Note that a quoted block reads as what the thread is on, as the panel's quote line does, so a whole paragraph never stands as the page's bold title.
+  const look = quoted
+    ? [font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT_MUTED), lineLimit(2)]
+    : [
+        font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
+        foregroundStyle(colors.TEXT),
+      ];
 
   return (
     <VStack
@@ -167,15 +190,7 @@ function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standi
       spacing={SPACE.TIGHT}
       modifiers={[padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT })]}
     >
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
-          foregroundStyle(colors.TEXT),
-          accessibilityAddTraits(["isHeader"]),
-        ]}
-      >
-        {title}
-      </Text>
+      <Text modifiers={[...look, accessibilityAddTraits(["isHeader"])]}>{title}</Text>
       {standing === undefined ? null : (
         <Text
           modifiers={[
@@ -256,6 +271,8 @@ function MediaView({ media }: { readonly media: ThreadMedia }) {
       return (
         <Video source={media.source} label={media.label} onOpenElsewhere={media.onOpenElsewhere} />
       );
+    case THREAD_MEDIA.AUDIO:
+      return <AudioClip source={media.source} label={media.label} />;
     case THREAD_MEDIA.FILE:
       return (
         <FileChip
@@ -455,6 +472,7 @@ export function ThreadPage(props: ThreadPageProps) {
     status,
     pathActions,
     title,
+    quoted,
     messages,
     ask,
     acts = [],
@@ -489,7 +507,7 @@ export function ThreadPage(props: ThreadPageProps) {
               padding({ bottom: SPACE.PAGE + footRoom }),
             ]}
           >
-            <ThreadHead title={title} standing={standing} />
+            <ThreadHead title={title} quoted={quoted} standing={standing} />
             {messages.map((message) => (
               <MessageView key={message.id} message={message} {...drawing} />
             ))}

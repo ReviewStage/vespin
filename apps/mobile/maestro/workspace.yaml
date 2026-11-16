@@ -25,7 +25,7 @@ appId: dev.vespin.ios
 # Note that a menu row is heard as its name and who shares it together, so a
 # workspace is found by both.
 - assertVisible: "Relay, 6 members"
-- assertVisible: "Ada Lovelace, Settings"
+- assertVisible: "ada@example.com, Settings"
 - assertVisible: "New workspace"
 - assertVisible: "Workspace settings"
 - waitForAnimationToEnd

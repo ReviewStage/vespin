@@ -108,7 +108,7 @@ function wordsWorkspace(
 }
 
 /** The workspace the words a chip stands in are of (`wordsWorkspace`), its plan read by id from the task list's collections. */
-function useWordsWorkspace(where: ChipWhere): Workspace | undefined {
+export function useWordsWorkspace(where: ChipWhere): Workspace | undefined {
   const task = useTaskListRow(useTaskListCollections().tasks, where.taskId);
 
   return wordsWorkspace(useWorkspaces(), task, where, useContext(WordsWorkspaceContext));

@@ -140,6 +140,20 @@ export function ElevatedGround({ children }: { readonly children: ReactNode }) {
   return createElement(ElevatedContext.Provider, { value: true }, children);
 }
 
+/** A navigation bar's appearance: the window's own light or dark. */
+export type BarScheme = "light" | "dark";
+
+/**
+ * The light or dark a stack's navigation bar is drawn in, the window's own.
+ * Note that a native stack hands every bar a fixed appearance from its
+ * navigation theme, light unless a dark theme is provided, so with none a bar
+ * drew its glass, title and buttons light over a dark screen; each stack
+ * names the window's scheme instead (`headerUserInterfaceStyle`).
+ */
+export function useBarScheme(): BarScheme {
+  return useColorScheme() === "dark" ? "dark" : "light";
+}
+
 /** The ink a tone is drawn in. */
 export function toneColor(colors: BrandColors, tone: StatusTone): string {
   return colors[TONE_ROLE[tone]];
