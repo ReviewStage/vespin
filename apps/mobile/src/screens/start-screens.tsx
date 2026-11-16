@@ -38,7 +38,6 @@ import {
   buzz,
   Chip,
   type ChipMenuGroup,
-  ComposeSheet,
   ConfirmAsk,
   FieldChip,
   GLYPH,
@@ -58,6 +57,7 @@ import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { useCloseSheet } from "../close-sheet.js";
+import { FocusedComposeSheet } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useListedTasks } from "../host/host-provider.js";
 import { useOnTab } from "../tab-route.js";
@@ -139,7 +139,7 @@ const LANDING = {
 
 type Landing = (typeof LANDING)[keyof typeof LANDING];
 
-/** The sheet's bar: its name, Cancel at its leading edge, and Start at its trailing one, lit once there are words or pictures to send and while no start is out, with File for later before it on New task; and the ask a Cancel or a swipe down raises while the sheet holds a draft. */
+/** The sheet's bar: its name, the system's ✕ at its leading edge (Cancel to VoiceOver), and Start at its trailing one, lit once there are words or pictures to send and while no start is out, with File for later before it on New task; and the ask the ✕ or a swipe down raises while the sheet holds a draft. */
 function SheetBar({
   title,
   ready,
@@ -174,7 +174,12 @@ function SheetBar({
       {/* Note that the bar has no ground of its own, so the system draws its buttons in glass over the sheet's. */}
       <Stack.Screen options={options} />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={close}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        {/* Note that the sheet closes with the system's ✕, as Mail's compose sheet does, its word kept for VoiceOver. */}
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={WORDS.CANCEL}
+          onPress={close}
+        />
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         {file === undefined ? null : (
@@ -710,7 +715,7 @@ export function NewAgentScreen({
         onStart={start}
         kept={kept}
       />
-      <ComposeSheet
+      <FocusedComposeSheet
         title={
           opened === undefined
             ? undefined
@@ -1036,7 +1041,7 @@ export function NewTaskScreen({
         file={{ ready: filed !== undefined && placed && !starting, onFile: file }}
         kept={kept}
       />
-      <ComposeSheet
+      <FocusedComposeSheet
         head={head}
         words={{
           placeholder: WORDS.TASK_PLACEHOLDER,

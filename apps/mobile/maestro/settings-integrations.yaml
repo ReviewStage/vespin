@@ -1,4 +1,4 @@
-# settings-integrations.yaml -- Settings › Integrations on the Inbox fixture: the account's servers under Connected and Not connected, an expired one offering Reconnect, two accounts at one provider named apart, and Disconnect asked first and canceled.
+# settings-integrations.yaml -- Settings › Integrations on the Inbox fixture: the account's servers under Connected and Not connected, two accounts at one provider named apart, an expired one's page offering Reconnect, and a connection's page asking Disconnect first, canceled.
 #
 # Launched on the host's Inbox fixture, whose account holds Linear, two
 # Notion accounts, and an expired Sentry (`@repo/host/fixture-inbox`), so no
@@ -12,7 +12,7 @@ appId: dev.vespin.ios
 - assertVisible: "Recorded the invite flow"
 - tapOn:
     id: "workspace-switcher"
-- tapOn: ".*, Settings"
+- tapOn: "Settings, .*"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Integrations"
@@ -21,10 +21,22 @@ appId: dev.vespin.ios
 - assertVisible: "Connected"
 - assertVisible: "Not connected"
 - assertVisible: "Notion · Relay"
-- assertVisible: "Reconnect"
 - takeScreenshot: settings-integrations
-# A long press on a connected account offers Disconnect, which asks first.
-- longPressOn: "Linear"
+# The expired Sentry opens its own page, which leads with Reconnect.
+- tapOn: "Sentry"
+- waitForAnimationToEnd
+- assertVisible: "Sign-in expired"
+- assertVisible: "Reconnect"
+- takeScreenshot: settings-integration-expired
+- tapOn:
+    id: "BackButton"
+- waitForAnimationToEnd
+# A connected account's page closes with Disconnect, which asks first.
+- tapOn: "Linear"
+- waitForAnimationToEnd
+- assertVisible: "Connected"
+- scrollUntilVisible:
+    element: "Disconnect"
 - tapOn: "Disconnect"
 - assertVisible: "Disconnect Linear?"
 - waitForAnimationToEnd
