@@ -11,6 +11,8 @@ export type BarAccount = {
   readonly name: string;
   /** The account's sign-in picture, where it has one. */
   readonly picture?: string | undefined;
+  /** The account's email address, which a list of accounts names it by. */
+  readonly address?: string | undefined;
   /** What the button is heard as: where it goes, such as Settings, rather than whose photo it is. */
   readonly label: string;
   readonly onPress: () => void;

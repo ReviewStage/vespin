@@ -7,9 +7,9 @@ import {
   foregroundStyle,
   padding,
 } from "@expo/ui/swift-ui/modifiers";
-import type { TaskStatus } from "@repo/features/task-wire";
+import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { useAccessibilitySize } from "./accessibility.js";
-import { FieldChip, type FieldMenu, FollowingChip, StatusChip } from "./button.js";
+import { FieldChip, type FieldMenu, FollowingChip, PriorityChip, StatusChip } from "./button.js";
 import { GLYPH } from "./glyph.js";
 import type { Face } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
@@ -20,10 +20,12 @@ type PageHeaderProps = {
   readonly title: string;
   /** A line under the chips: where the thing stands, or what it asks. */
   readonly summary?: string | undefined;
+  /** Who made it and when, last and quietest in the system's footnote: "Created by Ada Lovelace · Oct 5". */
+  readonly byline?: string | undefined;
   /** A task's status, drawn as its chip under the title. */
   readonly status?: TaskStatus | undefined;
   /** A task's priority, drawn as a chip after its status. */
-  readonly priority?: string | undefined;
+  readonly priority?: TaskPriority | undefined;
   /** Who a task is assigned to, drawn as a chip with their face, or the words for no one beside an empty face. */
   readonly assignee?: (Face & { readonly nobody: boolean }) | undefined;
   /** Who follows a task, drawn as a chip under its fields that opens them; none where it carries no followers. */
@@ -38,6 +40,9 @@ export type StandingMenus = {
   readonly priority?: FieldMenu | undefined;
   readonly assignee?: FieldMenu | undefined;
 };
+
+/** The gap between a page's field chips, in points: at least 8, so a press meant for one never lands on its neighbor, since each is the system's small capsule rather than a 44 pt target. */
+const CHIP_GAP = SPACE.TIGHT * 2;
 
 /** Who follows a task as its page's chip says it (`FollowingChip`). */
 export type PageFollowing = {
@@ -56,10 +61,11 @@ export type PageFollowing = {
  * menu of its field's values where it carries one, and a line in the
  * body's ink. A task's followers stand under its fields as a chip that
  * opens them, on a line of its own, since a fourth chip runs off a phone's
- * screen.
+ * screen, and who made it stands last in the muted footnote, as Notes and
+ * Reminders say an item's provenance.
  */
 export function PageHeader(props: PageHeaderProps) {
-  const { title, summary, status, priority, assignee, following, menus } = props;
+  const { title, summary, byline, status, priority, assignee, following, menus } = props;
   const colors = useColors();
 
   const chips = status !== undefined || priority !== undefined || assignee !== undefined;
@@ -70,7 +76,7 @@ export function PageHeader(props: PageHeaderProps) {
   const chipRow = (
     <>
       {status === undefined ? null : <StatusChip status={status} menu={menus?.status} />}
-      {priority === undefined ? null : <FieldChip label={priority} menu={menus?.priority} />}
+      {priority === undefined ? null : <PriorityChip priority={priority} menu={menus?.priority} />}
       {assignee === undefined ? null : assignee.nobody ? (
         <FieldChip label={assignee.name} symbol={GLYPH.UNASSIGNED} menu={menus?.assignee} />
       ) : (
@@ -95,11 +101,11 @@ export function PageHeader(props: PageHeaderProps) {
         {title}
       </Text>
       {!chips ? null : stacked ? (
-        <VStack alignment="leading" spacing={SPACE.TIGHT + 2}>
+        <VStack alignment="leading" spacing={CHIP_GAP}>
           {chipRow}
         </VStack>
       ) : (
-        <HStack spacing={SPACE.TIGHT + 2}>{chipRow}</HStack>
+        <HStack spacing={CHIP_GAP}>{chipRow}</HStack>
       )}
       {following === undefined ? null : <FollowingChip {...following} />}
       {summary === undefined ? null : (
@@ -107,6 +113,13 @@ export function PageHeader(props: PageHeaderProps) {
           modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT_BODY)]}
         >
           {summary}
+        </Text>
+      )}
+      {byline === undefined ? null : (
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {byline}
         </Text>
       )}
     </VStack>
