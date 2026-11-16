@@ -718,9 +718,9 @@ function TranscriptRow({
               held={file.base64 !== undefined}
               name={file.name}
               mediaType={file.mediaType}
-              source={sentFileSource(drawing, item.place.message, file)}
+              source={sentFileSource(drawing, item.place.row, file)}
               size={file.size}
-              onRetry={sentFileRetry(drawing, item.place.message, file)}
+              onRetry={sentFileRetry(drawing, item.place.row, file)}
             />
           ))}
           {/* Note that a line of files alone draws no empty bubble under them. */}

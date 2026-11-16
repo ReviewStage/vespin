@@ -1117,7 +1117,7 @@ export function openCuts(items: readonly TranscriptItem[]): readonly AgentPartCu
   );
 }
 
-/** A file a sent line carried, as the app writes its bytes for the chip that opens it: the line's message, the file's place on it, and the file. */
+/** A file a sent line carried, as the app writes its bytes for the chip that opens it: the line it rode in on, by the line's own id, and the file, which holds its place on that line. */
 export interface ShownFile {
   readonly message: string;
   readonly file: SaidFile;
@@ -1128,7 +1128,8 @@ export function shownFiles(items: readonly TranscriptItem[]): readonly ShownFile
   return items.flatMap((item) =>
     item.kind === TRANSCRIPT_ITEM.SAID
       ? (item.files ?? []).flatMap((file) =>
-          file.base64 === undefined ? [] : [{ message: item.place.message, file }],
+          // Note that a line keeps its own id as its row, while a line that reached a turn under way shares the turn's message with every other such line, so the row keys its files apart.
+          file.base64 === undefined ? [] : [{ message: item.place.row, file }],
         )
       : [],
   );

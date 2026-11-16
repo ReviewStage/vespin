@@ -7,6 +7,7 @@ import {
   NO_TOGGLES,
   openCuts,
   SHOWN_MEDIA,
+  shownFiles,
   TRANSCRIPT_ITEM,
   transcriptItems,
   transcriptOriginOf,
@@ -114,6 +115,42 @@ describe("transcriptItems", () => {
         { name: "broken.txt", base64: "%%%" },
       ],
     });
+  });
+
+  it("keeps each line's files apart where two lines reach one turn while it runs", () => {
+    const note = (id: string, name: string) => ({
+      id,
+      role: MESSAGE_ROLE.USER,
+      parts: [
+        { type: "text" as const, text: id },
+        {
+          type: "file" as const,
+          mediaType: "text/plain",
+          filename: name,
+          url: "data:text/plain;base64,YQ==",
+        },
+      ],
+      arrivedIn: { journalId: "turn", afterStep: 1 },
+    });
+
+    const items = transcriptItems(
+      [
+        { id: "ask", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Go." }] },
+        note("first", "a.txt"),
+        note("second", "b.txt"),
+        {
+          id: "turn",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [{ type: "step-start" }, { type: "text", text: "Working." }],
+        },
+      ],
+      { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
+    );
+
+    expect(shownFiles(items).map(({ message, file }) => [message, file.name])).toEqual([
+      ["first", "a.txt"],
+      ["second", "b.txt"],
+    ]);
   });
 
   it("opens an automation's transcript on its run's prompt, from the automation and its pull request, with the pictures it carried, leaving later lines as sent", () => {
