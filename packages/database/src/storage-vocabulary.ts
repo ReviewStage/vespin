@@ -19,6 +19,7 @@ export const CONVERSATION_RUNTIME = {
   RETIRED: "eve",
   CLAUDE_CODE: "claude_code",
   CODEX: "codex",
+  CURSOR: "cursor",
 } as const;
 
 export type ConversationRuntime = (typeof CONVERSATION_RUNTIME)[keyof typeof CONVERSATION_RUNTIME];

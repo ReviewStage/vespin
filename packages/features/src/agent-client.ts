@@ -198,6 +198,7 @@ import {
 } from "./models-wire.js";
 import {
   chatGptDeviceLoginRequestSchema,
+  type ModelApiProvider,
   PROVIDER_KEY_QUERY,
   providerKeyForAgentsRequestSchema,
   providerKeyResetCreditRequestSchema,
@@ -557,7 +558,7 @@ export class HostedAgentClient {
 
   /** Whose API key the account's chapters run on where it saved both, written on its own as the account's chapters model, its provider's model of Haiku's tier, answering it as kept with the transaction it committed in. */
   writeChaptersProvider(
-    provider: ModelProvider,
+    provider: ModelApiProvider,
   ): Effect.Effect<ChaptersProviderAnswer, never, HttpClient.HttpClient> {
     return Effect.map(
       hostedCall(
