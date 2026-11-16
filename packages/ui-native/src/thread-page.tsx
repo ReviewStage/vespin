@@ -99,9 +99,10 @@ export type ThreadMedia =
   | {
       readonly kind: typeof THREAD_MEDIA.AUDIO;
       readonly key: string;
-      /** The clip's file under the app's caches, named by its type's extension; none while its bytes are on their way. */
-      readonly source: string | undefined;
+      /** The clip's file under the app's caches, named by its type's extension; none while its bytes are on their way, and `null` where they could not be read. */
+      readonly source: string | null | undefined;
       readonly label: string;
+      readonly onRetry: () => void;
     }
   | {
       readonly kind: typeof THREAD_MEDIA.FILE;
@@ -132,8 +133,19 @@ export type ThreadMessage = {
   readonly media: readonly ThreadMedia[];
   /** What the answer it carries says it was, "Chose Both", and whether it went ahead, a check in the done tone, or held back, a turn back in the muted ink. */
   readonly stamp?: { readonly words: string; readonly ahead: boolean } | undefined;
+  /** What happened to the thread after it, such as a member resolving it or the agent withdrawing its ask. */
+  readonly after?: readonly ThreadEvent[] | undefined;
   /** The form's values the answer filled, each field's name and what was put in it, which stand under the stamp, as the panel lists them. */
   readonly values?: readonly { readonly label: string; readonly words: string }[] | undefined;
+};
+
+/** A line of what happened to a thread: who did it, what they did in the panel's words, when, and an agent's why for a withdrawn ask. */
+type ThreadEvent = {
+  readonly key: string;
+  readonly who: { readonly name: string; readonly agent: boolean };
+  readonly did: string;
+  readonly at: number | undefined;
+  readonly reason?: string | undefined;
 };
 
 type ThreadPageProps = {
@@ -143,9 +155,15 @@ type ThreadPageProps = {
   readonly status?: TaskStatus | undefined;
   /** What the path opens, such as its task and its agent, as the panel's crumbs open them, which a press on the path offers as a menu; none leaves it words alone. */
   readonly pathActions?: BarMenu["actions"] | undefined;
+  /** Whether the path heads the page over its title rather than standing in the bar's middle, as in a split view's detail column, whose bar is left to the page's acts. */
+  readonly pathInHead?: boolean | undefined;
   /** The thread's title, which heads the page. */
   readonly title: string;
+  /** Whether the title is the words the thread stands on, such as a description's comment, quoted as the panel's thread quotes them: muted, regular, and cut to two lines, rather than a heading of its own. */
+  readonly quoted?: boolean | undefined;
   readonly messages: readonly ThreadMessage[];
+  /** What happened to the thread before every message read, such as a close on a thread nobody wrote on, drawn under its heading. */
+  readonly opening?: readonly ThreadEvent[] | undefined;
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */
   readonly repository?: string | null | undefined;
   /** Opens a link or a chip pressed, by the address it was written as, where the app draws it or in Safari. */
@@ -172,9 +190,24 @@ type ThreadPageProps = {
   readonly foot?: ReactNode | undefined;
 };
 
-/** A thread's heading under its bar: its title in 20 pt semibold, and how it ended under it, 13 pt muted, once it is settled. */
-function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standing">) {
+/** A thread's heading under its bar: its path where it heads the page, its title in 20 pt semibold, or the words it stands on quoted in the body's muted size and cut to two lines, and how it ended under it, 13 pt muted, once it is settled. */
+function ThreadHead({
+  title,
+  quoted = false,
+  standing,
+  path,
+}: Pick<ThreadPageProps, "title" | "quoted" | "standing"> & {
+  readonly path?: ReactNode | undefined;
+}) {
   const colors = useColors();
+
+  // Note that a quoted block reads as what the thread is on, as the panel's quote line does, so a whole paragraph never stands as the page's bold title.
+  const look = quoted
+    ? [font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT_MUTED), lineLimit(2)]
+    : [
+        font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
+        foregroundStyle(colors.TEXT),
+      ];
 
   return (
     <VStack
@@ -182,15 +215,8 @@ function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standi
       spacing={SPACE.TIGHT}
       modifiers={[padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT })]}
     >
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
-          foregroundStyle(colors.TEXT),
-          accessibilityAddTraits(["isHeader"]),
-        ]}
-      >
-        {title}
-      </Text>
+      {path}
+      <Text modifiers={[...look, accessibilityAddTraits(["isHeader"])]}>{title}</Text>
       {standing === undefined ? null : (
         <Text
           modifiers={[
@@ -216,8 +242,11 @@ export function PathTitle({
   path,
   status,
   actions = [],
+  wrap = false,
 }: Pick<ThreadPageProps, "path" | "status"> & {
   readonly actions?: BarMenu["actions"] | undefined;
+  /** Whether the words wrap rather than cut to one line, as where the path heads the page rather than standing in a bar. */
+  readonly wrap?: boolean | undefined;
 }) {
   const colors = useColors();
   const words = path.join(PATH_PART);
@@ -229,7 +258,7 @@ export function PathTitle({
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
           foregroundStyle(colors.TEXT_MUTED),
-          lineLimit(1),
+          ...(wrap ? [] : [lineLimit(1)]),
         ]}
       >
         {words}
@@ -299,7 +328,7 @@ function MediaView({ media }: { readonly media: ThreadMedia }) {
         />
       );
     case THREAD_MEDIA.AUDIO:
-      return <AudioClip source={media.source} label={media.label} />;
+      return <AudioClip source={media.source} label={media.label} onRetry={media.onRetry} />;
     case THREAD_MEDIA.FILE:
       return (
         <FileChip
@@ -341,6 +370,65 @@ function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["sta
       </Text>
       <Spacer />
     </HStack>
+  );
+}
+
+/**
+ * A line of what happened to the thread among its messages, as the panel's
+ * thread draws one: a glyph in the face's column, whoever did it, what
+ * they did and when, in the muted ink, and an agent's why for a
+ * withdrawn ask under it, where the messages' words start.
+ */
+function EventLine({
+  event,
+  now,
+}: {
+  readonly event: ThreadEvent;
+  readonly now?: number | undefined;
+}) {
+  const colors = useColors();
+  const resolved = !event.who.agent;
+  const moment = now ?? Date.now();
+  const when = event.at === undefined ? undefined : sinceText(event.at, moment);
+  const heard = `${event.who.name} ${event.did}${event.at === undefined ? "" : `, ${sinceHeard(event.at, moment)}`}${event.reason === undefined ? "" : `. ${event.reason}`}`;
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={SPACE.TIGHT}
+      modifiers={[
+        padding({ horizontal: SPACE.EDGE }),
+        accessibilityElement("ignore"),
+        accessibilityLabel(heard),
+      ]}
+    >
+      <HStack spacing={WRITER_GAP} alignment="firstTextBaseline">
+        <Image
+          {...glyphImage(resolved ? GLYPH.RESOLVED : GLYPH.UNDO)}
+          size={MARK_SIZE.GLYPH - 2}
+          color={colors.TEXT_MUTED}
+          modifiers={[frame({ width: MARK_SIZE.WRITER }), accessibilityHidden()]}
+        />
+        {/* Note that the line is one text, never a nested one, since `@expo/ui`'s native text keeps a nested child's first words. */}
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {`${event.who.name} ${event.did}${when === undefined ? "" : ` · ${when}`}`}
+        </Text>
+        <Spacer />
+      </HStack>
+      {event.reason === undefined ? null : (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            padding({ leading: MARK_SIZE.WRITER + WRITER_GAP }),
+          ]}
+        >
+          {event.reason}
+        </Text>
+      )}
+    </VStack>
   );
 }
 
@@ -407,7 +495,7 @@ function MessageView({
   now,
 }: Omit<
   ThreadPageProps,
-  "path" | "status" | "pathActions" | "title" | "messages" | "ask" | "menu" | "foot"
+  "path" | "status" | "pathActions" | "pathInHead" | "title" | "messages" | "ask" | "menu" | "foot"
 > & {
   readonly message: ThreadMessage;
 }) {
@@ -494,10 +582,11 @@ function MessageView({
  * scrolls it and draws its heading and each message's writer, and each
  * message's words and files stand in a React Native host as wide as the
  * page and as tall as they are, since SwiftUI has no piece that draws the
- * panel's Markdown. The path stands in the bar: a compact window's stack
- * names it as the screen's title, and a split view's detail column draws it
- * here. It opens at its newest message, as Messages and the panel's board
- * do. A message that lands while it is open is drawn at its foot, as the
+ * panel's Markdown. A compact window's stack names the path as the screen's
+ * title; elsewhere the page draws it, in the bar's middle or, where it asks,
+ * over its title, as a split view's detail column does, so its narrow bar
+ * holds the thread's acts with the path's words uncut. It opens at its
+ * newest message, as Messages and the panel's board do. A message that lands while it is open is drawn at its foot, as the
  * thread's document moves, and the open ask's card stands under the last.
  */
 export function ThreadPage(props: ThreadPageProps) {
@@ -505,8 +594,11 @@ export function ThreadPage(props: ThreadPageProps) {
     path,
     status,
     pathActions,
+    pathInHead = false,
     title,
+    quoted,
     messages,
+    opening,
     ask,
     acts = [],
     menu,
@@ -517,6 +609,11 @@ export function ThreadPage(props: ThreadPageProps) {
 
   // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
   const footRoom = useDockRoom();
+
+  // Note that the path heading the page wraps, so its words stand uncut, while the bar's keeps to one line.
+  const pathTitle = (
+    <PathTitle path={path} status={status} actions={pathActions} wrap={pathInHead} />
+  );
 
   // Note that a thread opens at its newest message and keeps to its foot as it grows or the keyboard rises, as Messages does and the panel's board does, while one too short to scroll stands under its heading.
   return (
@@ -540,12 +637,29 @@ export function ThreadPage(props: ThreadPageProps) {
               padding({ bottom: SPACE.PAGE + footRoom }),
             ]}
           >
-            <ThreadHead title={title} standing={standing} />
-            {messages.map((message) => (
-              <MessageView key={message.id} message={message} {...drawing} />
+            <ThreadHead
+              title={title}
+              quoted={quoted}
+              standing={standing}
+              path={pathInHead ? pathTitle : undefined}
+            />
+            {(opening ?? []).map((event) => (
+              <EventLine key={event.key} event={event} now={drawing.now} />
             ))}
+            {messages.map((message) => (
+              <VStack key={message.id} alignment="leading" spacing={SPACE.EDGE}>
+                <MessageView message={message} {...drawing} />
+                {(message.after ?? []).map((event) => (
+                  <EventLine key={event.key} event={event} now={drawing.now} />
+                ))}
+              </VStack>
+            ))}
+            {/* Note that the ask stands where the messages' words do, past the writers' faces, so a notice's Got it and a card line up under what they answer. */}
             {ask === undefined ? null : (
-              <VStack alignment="leading" modifiers={[padding({ horizontal: SPACE.EDGE })]}>
+              <VStack
+                alignment="leading"
+                modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}
+              >
                 {ask}
               </VStack>
             )}
@@ -554,9 +668,7 @@ export function ThreadPage(props: ThreadPageProps) {
         {foot}
       </VStack>
       <BarContent>
-        <ToolbarItem placement="principal">
-          <PathTitle path={path} status={status} actions={pathActions} />
-        </ToolbarItem>
+        {pathInHead ? null : <ToolbarItem placement="principal">{pathTitle}</ToolbarItem>}
         {barActItems(acts)}
         {menu === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">

@@ -1,11 +1,10 @@
 // split-route.ts -- a tab's selection kept in its root route, so a link, a notification, or a fold lands on the item beside its list or pushed over it, as the window allows.
 
 import { iosRouteOnTab, iosRouteTab } from "@repo/features/ios-app-links";
+import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { useOwnTab } from "./tab-route.js";
-import { useWindowSizeClass } from "./use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "./window-size-class.js";
 
 /** A tab whose root stands a split view in a regular window, by its root route. */
 export const SPLIT_TAB = {
@@ -98,6 +97,11 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
  * pushed onto another tab's stack, as a compact window opens a thread's task
  * on the Inbox's, stays a page there once the window turns regular, as an
  * agent's page does, because that tab's root has no list to select it in.
+ * Note that only the screen in front hands over, as `useSplitSelection`
+ * pushes only from it, because the hand-off pops every page above the root:
+ * an unfold under a page pushed over this one, or under a sheet, would close
+ * them and drop their drafts. A screen behind hands over once it next comes
+ * in front, and keeps drawing until it does.
  */
 export function useHandToSplit(tab: SplitTab, id: string | undefined): boolean {
   const router = useRouter();
@@ -105,9 +109,13 @@ export function useHandToSplit(tab: SplitTab, id: string | undefined): boolean {
   const own = useOwnTab();
   const handing = regular && (own === undefined || own === iosRouteTab(tab));
 
-  useEffect(() => {
-    if (handing && id !== undefined) router.dismissTo({ pathname: tab, params: { selected: id } });
-  }, [handing, router, tab, id]);
+  // Note that the hand-off runs as a focus effect rather than on a read of focus, as the roots hear theirs (#9516), so a screen behind never redraws on a page pushed over it or popped.
+  useFocusEffect(
+    useCallback(() => {
+      if (handing && id !== undefined)
+        router.dismissTo({ pathname: tab, params: { selected: id } });
+    }, [handing, router, tab, id]),
+  );
 
   return handing;
 }

@@ -84,8 +84,8 @@ function asked(
  * run and the agent's work on it, the dialog and its email shown and its
  * pull request opened; a second
  * ask, answered with the funnel's page and a recording of an invite
- * accepted; and a third the agent is still working on, its last call
- * running.
+ * accepted; and a third, sent as two lines a minute apart, the agent is
+ * still working on, its last call running.
  */
 function transcriptMessages(
   startedAt: number,
@@ -251,6 +251,12 @@ function transcriptMessages(
       "Add a way to resend an invite that expired.",
       reader,
       [EXPIRED_INVITES],
+    ),
+    asked(
+      "fixture-invites-resend-keep",
+      startedAt + 71 * MINUTE,
+      "Keep the old link working until the new one is sent.",
+      reader,
     ),
     {
       id: "fixture-invites-resend",

@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     gap: SPACE.ROW,
     paddingHorizontal: SPACE.ROW + 2,
     paddingVertical: SPACE.TIGHT * 2,
-    borderRadius: RADIUS.MEDIA,
+    borderRadius: RADIUS.TILE,
     borderWidth: StyleSheet.hairlineWidth,
   },
   atEnd: { alignSelf: "flex-end" },
@@ -343,7 +343,7 @@ export function FileChip({
           style={[
             styles.chip,
             atEnd ? styles.atEnd : null,
-            { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE },
+            { backgroundColor: colors.CARD, borderColor: colors.CHIP_EDGE },
           ]}
         >
           {waiting ? (

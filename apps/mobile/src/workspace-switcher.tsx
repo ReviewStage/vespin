@@ -9,7 +9,9 @@ import {
   newWorkspaceAction,
   SWITCHER_PRESENTATION,
   type SwitcherWorkspace,
+  WINDOW_SIZE_CLASS,
   type WorkspaceSwitcher,
+  windowSizeClass,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
@@ -18,7 +20,6 @@ import { useWindowDimensions } from "react-native";
 import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
 import { SETTINGS_ROUTE, useOpenSettings, useSettingsAccount } from "./settings-button.js";
-import { WINDOW_SIZE_CLASS, windowSizeClass } from "./window-size-class.js";
 
 /** No workspaces read yet, one list for every render. */
 const NO_WORKSPACES: readonly Workspace[] = [];
@@ -88,11 +89,10 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
   const signedIn = account !== undefined;
   const accountName = account?.name;
   const accountPicture = account?.picture;
+  const accountAddress = account?.address;
 
-  // Note that a phone turned on its side is wide enough for a regular window but too short for the popover's list, so the popover takes a window regular both ways, as an iPad's is.
   const presentation =
-    windowSizeClass(width) === WINDOW_SIZE_CLASS.REGULAR &&
-    windowSizeClass(height) === WINDOW_SIZE_CLASS.REGULAR
+    windowSizeClass(width, height) === WINDOW_SIZE_CLASS.REGULAR
       ? SWITCHER_PRESENTATION.POPOVER
       : SWITCHER_PRESENTATION.SHEET;
 
@@ -108,7 +108,12 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
       chosen: switcherWorkspace(chosen, chosen.id === first, photos),
       onChoose: choose,
       account: signedIn
-        ? { name: accountName ?? "", picture: accountPicture, onPress: () => openSettings() }
+        ? {
+            name: accountName ?? "",
+            picture: accountPicture,
+            address: accountAddress,
+            onPress: () => openSettings(),
+          }
         : undefined,
       actions: [newWorkspaceAction(() => router.push("/new-workspace"))],
       onWorkspaceSettings: () => openSettings(SETTINGS_ROUTE.WORKSPACE),
@@ -122,6 +127,7 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
     signedIn,
     accountName,
     accountPicture,
+    accountAddress,
     openSettings,
     router,
     presentation,
