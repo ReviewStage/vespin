@@ -30,7 +30,10 @@ import {
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
-import { VERSION_CHANGE_HEARD } from "@repo/features/description-history-words";
+import {
+  VERSION_CHANGE_HEARD,
+  VERSION_HISTORY_WORDS,
+} from "@repo/features/description-history-words";
 import { VERSION_CHANGE, type VersionUnit } from "@repo/features/description-version-diff";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { needsYouWords } from "@repo/features/inbox-list-model";
@@ -39,9 +42,11 @@ import type { ModelProvider } from "@repo/features/models-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
+import { sinceHeard } from "@repo/features/time-format";
 import type { ReactElement, ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { BrandMark } from "./brand-mark.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -54,11 +59,13 @@ import {
   RowHead,
   type RowSubmenu,
   type RowSwipe,
+  RowTime,
   rowPlacement,
 } from "./list-row.js";
 import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
 import {
   AgentTile,
+  Avatar,
   type Face,
   FailedMark,
   TaskStatusMark,
@@ -68,7 +75,7 @@ import {
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { ProblemLine } from "./problem-line.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What parts the pieces of an agent's line. */
@@ -487,6 +494,116 @@ export function LinkRow({
           end={detail === undefined ? null : <EndWords words={detail} />}
         />
       </HStack>
+    </SwiftUIButton>
+  );
+}
+
+/** Who wrote a version, by the mark its row leads with: a person, an agent, the app's own notetaker, or the history from before versions were kept. */
+export const VERSION_WRITER = {
+  PERSON: "person",
+  AGENT: "agent",
+  PRODUCT: "product",
+  EARLIER: "earlier",
+} as const;
+
+/** A version's writer as its mark draws them: a person by their face, an agent by its tile, name and harness's mark where it is known, and the notetaker and the earlier history by marks of their own. */
+export type VersionWriter =
+  | { readonly kind: typeof VERSION_WRITER.PERSON; readonly face: Face }
+  | {
+      readonly kind: typeof VERSION_WRITER.AGENT;
+      readonly name: string;
+      readonly harness: ModelProvider | undefined;
+    }
+  | { readonly kind: typeof VERSION_WRITER.PRODUCT }
+  | { readonly kind: typeof VERSION_WRITER.EARLIER };
+
+/** A version's writer's mark at a row's lead, as the panel's version rows lead: a person's face, an agent's tile with its harness's mark, the app's own mark (`BrandMark`), or the history glyph for the history before versions were kept; each grows with Dynamic Type, as a face does. */
+function VersionMark({ writer }: { readonly writer: VersionWriter }) {
+  const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.LEAD);
+
+  switch (writer.kind) {
+    case VERSION_WRITER.PERSON:
+      return <Avatar name={writer.face.name} picture={writer.face.picture} size={size} />;
+    case VERSION_WRITER.AGENT:
+      return <AgentTile name={writer.name} harness={writer.harness} size={size} />;
+    case VERSION_WRITER.PRODUCT:
+      return <BrandMark size={size} />;
+    case VERSION_WRITER.EARLIER:
+      return <LeadGlyph symbol={GLYPH.HISTORY} ink={colors.TEXT_MUTED} />;
+  }
+}
+
+type VersionRowProps = {
+  /** Who wrote the version, as its mark draws them. */
+  readonly writer: VersionWriter;
+  /** The writer as the row names them, such as "You". */
+  readonly name: string;
+  /** What the version did, such as "3 changes". */
+  readonly summary: string;
+  /** When it was last saved. */
+  readonly at: number;
+  readonly now: number;
+  /** Whether it is the description as it stands, which its line says first. */
+  readonly current: boolean;
+  /** Whether it heads its list, which then draws no hairline over it, as a plain list in Mail or Files begins. */
+  readonly first: boolean;
+  readonly onPress: () => void;
+};
+
+/**
+ * A description's version in its history, as the panel's version row stands
+ * and as Mail stands a message: the writer's face, their name and the time
+ * at the line's end, and what the version did under them on up to two lines,
+ * "Current" leading it on the description as it stands. VoiceOver hears it
+ * as one element, the writer then what it did and when, the time in words.
+ */
+export function VersionRow({
+  writer,
+  name,
+  summary,
+  at,
+  now,
+  current,
+  first,
+  onPress,
+}: VersionRowProps) {
+  const colors = useColors();
+  const said = current ? `${VERSION_HISTORY_WORDS.CURRENT} · ${summary}` : summary;
+
+  return (
+    <SwiftUIButton
+      onPress={onPress}
+      modifiers={[
+        ...rowPlacement(colors),
+        // Note that a headless plain list draws a hairline over its first row, which iOS's own plain lists leave out.
+        ...(first ? [listRowSeparator("hidden", "top")] : []),
+        buttonStyle("borderless"),
+        accessibilityLabel(name),
+        accessibilityValue([said, sinceHeard(at, now)].join(", ")),
+      ]}
+    >
+      <VStack alignment="leading" spacing={ROW_INSET.THREAD_LINE_GAP}>
+        <RowHead
+          unread={false}
+          faded={false}
+          lead={<VersionMark writer={writer} />}
+          title={name}
+          ink={colors.TEXT}
+          end={<RowTime at={at} now={now} />}
+        />
+        <RowLine>
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE }),
+              foregroundStyle(colors.TEXT_MUTED),
+              lineLimit(2),
+            ]}
+          >
+            {said}
+          </Text>
+        </RowLine>
+      </VStack>
     </SwiftUIButton>
   );
 }
