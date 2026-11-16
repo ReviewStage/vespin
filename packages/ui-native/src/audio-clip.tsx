@@ -7,11 +7,13 @@ import { useEffect, useState } from "react";
 import {
   type AccessibilityActionEvent,
   ActivityIndicator,
+  Animated,
+  Easing,
   StyleSheet,
   Text,
   View,
 } from "react-native";
-import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useReduceMotion, useScaledSize } from "./accessibility.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
 import { KEPT_KIND } from "./keep-model.js";
@@ -32,11 +34,19 @@ const AUDIO_CLIP_ID = "audio-clip";
 /** How far, in seconds, VoiceOver's swipe up or down moves a clip, as a podcast app's skip does. */
 const SEEK_STEP_SECONDS = 5;
 
-/** How often, in seconds, the player says where it stands while it plays, often enough that the bar moves smoothly under a short clip. */
+/** How often, in seconds, the player says where it stands while it plays, which the bar's glide is set back on (`useGlide`). */
 const TIME_STEP_SECONDS = 0.25;
 
 /** The playhead's time as `playheadText` takes it. */
 const SECOND_MS = 1000;
+
+/**
+ * How far, in seconds, one glide runs the bar ahead of the player's last
+ * report: past the next report, so the bar never stands waiting on a late
+ * one, and no further, since each report starts the glide again and a
+ * native timing animation lays out its every frame before it runs.
+ */
+const GLIDE_SECONDS = TIME_STEP_SECONDS * 2;
 
 /** How tall the bar is drawn, and how tall the press around it stands, so a finger finds it. */
 const BAR_HEIGHT = 4;
@@ -61,7 +71,8 @@ const styles = StyleSheet.create({
   button: { alignItems: "center", justifyContent: "center", borderRadius: 999 },
   barPress: { flex: 1, minWidth: 80, height: BAR_PRESS_HEIGHT, justifyContent: "center" },
   bar: { height: BAR_HEIGHT, borderRadius: BAR_HEIGHT / 2, overflow: "hidden" },
-  fill: { height: "100%" },
+  // Note that the fill is scaled from its left edge rather than sized, because the native driver moves a transform alone.
+  fill: { width: "100%", height: "100%", transformOrigin: "left" },
   unplayable: { justifyContent: "center", minHeight: BUTTON_SIZE + SPACE.TIGHT * 4 },
 });
 
@@ -79,6 +90,42 @@ type AudioClipProps = {
   /** What the clip is, its caption or its file's name, heard in its place. */
   readonly label: string;
 };
+
+/**
+ * The bar's fill, as a share of the clip, gliding between the player's
+ * reports of where it stands, which come a quarter second apart: while the
+ * clip plays, the fill runs on the native driver at the clip's own pace a
+ * little past where the next report will set it (`GLIDE_SECONDS`), so it
+ * moves on every frame the screen draws, and each report sets it back where
+ * the clip stands, so it never drifts from the player. Paused, ended, or
+ * sought, it stands where the clip does, and where the reader reduces motion
+ * it steps with each report rather than gliding.
+ */
+function useGlide(at: number, duration: number, playing: boolean): Animated.Value {
+  const share = duration > 0 ? Math.min(1, at / duration) : 0;
+  const [glide] = useState(() => new Animated.Value(share));
+  const reduceMotion = useReduceMotion();
+
+  useEffect(() => {
+    glide.setValue(share);
+    const seconds = Math.min(GLIDE_SECONDS, duration - at);
+
+    if (!playing || reduceMotion || seconds <= 0) return;
+
+    const run = Animated.timing(glide, {
+      toValue: share + seconds / duration,
+      duration: seconds * SECOND_MS,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    });
+
+    run.start();
+
+    return () => run.stop();
+  }, [glide, share, at, duration, playing, reduceMotion]);
+
+  return glide;
+}
 
 /**
  * A sound clip, played in place by the system's own player (AVPlayer,
@@ -141,7 +188,7 @@ export function AudioClip({ source, label }: AudioClipProps) {
   const failed = playback.status === "error";
   const ready = source !== undefined && playback.status === "readyToPlay";
   const duration = playback.duration > 0 ? playback.duration : player.duration;
-  const share = duration > 0 ? Math.min(1, playback.at / duration) : 0;
+  const glide = useGlide(playback.at, duration, playback.playing);
   const time = `${playheadText(playback.at * SECOND_MS)} / ${playheadText(duration * SECOND_MS)}`;
   const playWord = playback.playing ? PLAYBACK_WORD.PAUSE : PLAYBACK_WORD.PLAY;
 
@@ -240,8 +287,11 @@ export function AudioClip({ source, label }: AudioClipProps) {
           style={[styles.barPress, large ? styles.stackedBar : null]}
         >
           <View style={[styles.bar, { backgroundColor: colors.CHIP_EDGE }]}>
-            <View
-              style={[styles.fill, { width: `${share * 100}%`, backgroundColor: colors.TEXT }]}
+            <Animated.View
+              style={[
+                styles.fill,
+                { backgroundColor: colors.TEXT, transform: [{ scaleX: glide }] },
+              ]}
             />
           </View>
         </Press>
