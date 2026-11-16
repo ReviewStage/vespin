@@ -29,13 +29,17 @@ import { MemberDirectory } from "../member-directory.js";
 import { announcedAsAlert, mountAnnouncer } from "../testing/announcer.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { DESKTOP_LINKS, fakeAppPlatform } from "../testing/app-platform.js";
-import { handHostReads, handMembers, holdPullRequestParts } from "../testing/app-state.js";
+import {
+  handHostReads,
+  handMembers,
+  holdRepositoryPullRequestParts,
+} from "../testing/app-state.js";
 import { installEditorLayout } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { landedBundles, onSideBundles } from "../testing/side-bundles.js";
 import { agentsControl } from "../testing/tasks-control.js";
-import { AgentPullRequestTab } from "./agent-pull-request-tab.js";
+import { PullRequestTab } from "./agent-pull-request-tab.js";
 import { PULL_REQUEST_VIEW } from "./task-tab-model.js";
 
 /**
@@ -49,6 +53,9 @@ import { PULL_REQUEST_VIEW } from "./task-tab-model.js";
  * first, opens GitHub's words in its place. The editor is the real one, from
  * its bundle; GitHub is the act port's answer. Synthetic pull request.
  */
+
+/** The pull request as its tab names it: the workspace it reads it through, its repository, and its number. */
+const PULL_REQUEST_KEY = { workspaceId: "workspace-acme", repository: "acme/relay", number: 42 };
 
 const AGENT: AgentSummary = {
   id: "1e3c5a7b-9d2f-4b6e-8a1c-3e5f7a9b1d2c",
@@ -134,7 +141,7 @@ beforeEach(() => {
   fakeAppPlatform(DESKTOP_LINKS);
   fakeAppBridge({});
   fakeActPort({
-    [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: ({ request }) => {
+    [ACT_KIND.PULL_REQUESTS_ACTION]: ({ request }) => {
       changes.push(request);
 
       if (
@@ -170,7 +177,7 @@ async function settle(): Promise<void> {
 /** The agent's Pull request tab, its reads answering the description as GitHub holds it, which the member may edit or not. */
 async function drawTab(canEditDescription = true): Promise<HTMLElement> {
   // The host holds the tab's parts, its pull request read anew from what GitHub holds on each ask.
-  holdPullRequestParts(handHostReads({}).deliverParts, {
+  holdRepositoryPullRequestParts(handHostReads({}).deliverParts, {
     [PULL_REQUEST_PART.PULL_REQUEST]: () =>
       Promise.resolve({ pullRequest: pullRequestOf(onGitHub, canEditDescription) }),
     [PULL_REQUEST_PART.CHECKS]: () => Promise.resolve({ pullRequest: { checks: [] } }),
@@ -199,8 +206,9 @@ async function drawTab(canEditDescription = true): Promise<HTMLElement> {
     ]),
   });
 
-  const tab = createElement(AgentPullRequestTab, {
-    agentId: AGENT.id,
+  const tab = createElement(PullRequestTab, {
+    pullRequest: PULL_REQUEST_KEY,
+    taskId: AGENT.taskId,
     control,
     shown: true,
     repository: "acme/relay",

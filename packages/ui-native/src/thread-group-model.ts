@@ -3,7 +3,7 @@
 /** How long after a message the same writer's next one still joins its run: five minutes, as Slack groups a speaker's lines. */
 const RUN_REACH_MS = 5 * 60 * 1000;
 
-/** What a message is grouped by: who wrote it, and when. */
+/** What a message is grouped by: who wrote it, when, and what happened to the thread after it. */
 type Grouped = {
   readonly writer: {
     readonly name: string;
@@ -11,6 +11,7 @@ type Grouped = {
     readonly id?: string | undefined;
   };
   readonly at: number;
+  readonly after?: readonly unknown[] | undefined;
 };
 
 /** Whether two messages share a writer: by their ids where both are known, so two members of one name stand apart, and by their names where one isn't. */
@@ -22,8 +23,10 @@ function sameWriter(last: Grouped["writer"], next: Grouped["writer"]): boolean {
   return last.name === next.name;
 }
 
-/** Whether `next` joins the run `last` ends: the same writer within `RUN_REACH_MS` of it. */
+/** Whether `next` joins the run `last` ends: the same writer within `RUN_REACH_MS` of it, with no line of what happened, such as a resolve, standing between them. */
 function joins(last: Grouped, next: Grouped): boolean {
+  if ((last.after?.length ?? 0) > 0) return false;
+
   return (
     sameWriter(last.writer, next.writer) && next.at >= last.at && next.at - last.at <= RUN_REACH_MS
   );
@@ -31,8 +34,8 @@ function joins(last: Grouped, next: Grouped): boolean {
 
 /**
  * The messages in runs, in the order given: a new run starts at another
- * writer, or where the same writer comes back more than `RUN_REACH_MS`
- * later, so each run's head names who wrote it and when once, and the
+ * writer, after a line of what happened to the thread, or where the same
+ * writer comes back more than `RUN_REACH_MS` later, so each run's head names who wrote it and when once, and the
  * messages after its first stand under it with no head of their own.
  */
 export function threadRuns<Message extends Grouped>(

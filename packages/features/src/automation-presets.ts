@@ -46,7 +46,7 @@ export { AUTOMATION_PRESET, type AutomationPresetName } from "./automation-prese
  * Investigate Sentry alerts has an agent read the issue an alert fired on,
  * and open a fix or post what it found. It listens for an alert rule
  * firing, never for a new issue, which fires on every new error, and each
- * issue fires it once within its subject cooldown (`AutomationGuards`).
+ * issue fires it as often as the alert rule's own action interval allows.
  */
 
 /**

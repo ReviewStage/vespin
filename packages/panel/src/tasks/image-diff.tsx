@@ -1,5 +1,4 @@
 import { type AgentChangedFile, CHANGED_FILE_STATUS } from "@repo/features/agent-wire";
-import { ACT_KIND } from "@repo/host/acts";
 import {
   CHOICE_BAR_LOOK,
   ChoiceBar,
@@ -9,10 +8,9 @@ import {
   Slider,
 } from "@repo/ui";
 import { PICTURE_STATE, type PictureState, usePicture } from "@repo/ui/picture-read";
-import { useCallback, useEffect, useId, useState } from "react";
-import { askAct } from "../act.js";
+import { useEffect, useId, useState } from "react";
 import { pictureUnread } from "../failure-report.js";
-import { pictureQuery } from "../picture-query.js";
+import { type GitHubPictureScope, githubPictureQuery } from "./pull-request-pictures.js";
 
 /**
  * image-diff.tsx -- a changed image as Files changed draws it: the picture before and after, side by side, swiped, or one faded over the other, in place of "binary file".
@@ -69,9 +67,9 @@ const IMAGE_WORDS = {
 /** How far into the before the swipe or the fade starts, in percent. */
 const HALFWAY = 50;
 
-/** Where an image's sides are read: the agent whose repository they are in, the repository as `owner/name`, and the commits each side stands at. */
+/** Where an image's sides are read: the reach they are read through, the repository as `owner/name`, and the commits each side stands at. */
 export interface ImageSides {
-  readonly agentId: string;
+  readonly pictures: GitHubPictureScope;
   readonly repository: string;
   readonly headSha: string | undefined;
   readonly baseSha: string | undefined;
@@ -84,15 +82,6 @@ function rawAddress(repository: string, sha: string, path: string): string {
   const segments = [...repository.split("/"), sha, ...path.split("/")];
 
   return `https://raw.githubusercontent.com/${segments.map(encodeURIComponent).join("/")}`;
-}
-
-/** Reads a picture of the agent's repository through the service. */
-function useImageRead() {
-  return useCallback(
-    (agentId: string, address: string) =>
-      askAct(ACT_KIND.AGENTS_GITHUB_IMAGE, { agentId, src: address }),
-    [],
-  );
 }
 
 /** Whether `element` has come near the view, which it stays once it has; an element no document holds never does. */
@@ -134,17 +123,17 @@ function SidePicture({ state, label }: { state: PictureState; label: string }) {
 
 /** One side alone, under the word for what it is, and a note under it where it stands for two. */
 function OneSide({
-  agentId,
+  pictures,
   address,
   label,
   note,
 }: {
-  agentId: string;
+  pictures: GitHubPictureScope;
   address: string;
   label: string;
   note?: string | undefined;
 }): React.JSX.Element {
-  const state = usePicture(pictureQuery(agentId, address, useImageRead()), pictureUnread);
+  const state = usePicture(githubPictureQuery(pictures, address), pictureUnread);
 
   return (
     <div className="flex w-full flex-wrap justify-center gap-block-gap">
@@ -200,21 +189,20 @@ function Stacked({
 
 /** Both sides, as the comparison chosen sets them, once both are read; each side as it stands until then. */
 function BothSides({
-  agentId,
+  pictures,
   before,
   after,
   comparison,
   onComparison,
 }: {
-  agentId: string;
+  pictures: GitHubPictureScope;
   before: string;
   after: string;
   comparison: Comparison;
   onComparison: (comparison: Comparison) => void;
 }): React.JSX.Element {
-  const read = useImageRead();
-  const beforeState = usePicture(pictureQuery(agentId, before, read), pictureUnread);
-  const afterState = usePicture(pictureQuery(agentId, after, read), pictureUnread);
+  const beforeState = usePicture(githubPictureQuery(pictures, before), pictureUnread);
+  const afterState = usePicture(githubPictureQuery(pictures, after), pictureUnread);
   const { compare, amount } = comparison;
 
   const ready =
@@ -317,13 +305,13 @@ function ImageSidesNear({
   const [box, setBox] = useState<HTMLDivElement | null>(null);
   const near = useNearView(box);
   const { before, after } = sidesOf(file, sides);
-  const { agentId } = sides;
+  const { pictures } = sides;
 
   const drawn = (() => {
     if (before !== undefined && after !== undefined) {
       return (
         <BothSides
-          agentId={agentId}
+          pictures={pictures}
           before={before}
           after={after}
           comparison={comparison}
@@ -337,7 +325,7 @@ function ImageSidesNear({
 
       return (
         <OneSide
-          agentId={agentId}
+          pictures={pictures}
           address={after}
           label={added ? IMAGE_WORDS.ADDED : IMAGE_WORDS.AFTER}
           note={added ? undefined : IMAGE_WORDS.NO_BEFORE}
@@ -346,7 +334,7 @@ function ImageSidesNear({
     }
 
     return before === undefined ? null : (
-      <OneSide agentId={agentId} address={before} label={IMAGE_WORDS.DELETED} />
+      <OneSide pictures={pictures} address={before} label={IMAGE_WORDS.DELETED} />
     );
   })();
 

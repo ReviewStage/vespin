@@ -1,6 +1,12 @@
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import { bootHolds } from "@repo/features/agent-boot";
-import { goalConditions, goalControlLine, goalControlWords } from "@repo/features/agent-goal-model";
+import {
+  GOAL_REACH,
+  goalConditions,
+  goalControlLine,
+  goalControlWords,
+  goalReachOf,
+} from "@repo/features/agent-goal-model";
 import {
   AGENT_PART,
   type AgentPart,
@@ -21,14 +27,14 @@ import {
   turnStretches,
   wholeCallOf,
 } from "@repo/features/agent-parts";
+import { usageLimitAgentOf } from "@repo/features/agent-runtime-models";
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "@repo/features/agent-todos";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
   AGENT_FAILURE,
   AGENT_MACHINE,
-  AGENT_RUNTIME,
   AGENT_SENDER,
   AGENT_STATUS,
   type AgentBrief,
@@ -56,6 +62,7 @@ import {
 } from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
+import type { NumberedAddress } from "@repo/features/link-grammar";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
 import { cardTitle, plainWords } from "@repo/features/plain-words";
@@ -248,7 +255,7 @@ import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { useForwardToast } from "./agent-forward.js";
 import { GoalConditions, GoalDock, GoalNoticeView } from "./agent-goal.js";
-import { useRoutedMachine } from "./agent-machines.js";
+import { useCallRoute } from "./agent-machines.js";
 import {
   agentLines,
   agentName,
@@ -278,7 +285,6 @@ import {
   tabTurnOf,
   teammateStarter,
   transcriptRowKey,
-  usageLimitAgentOf,
   WORKING_PHASE,
   type WorkingPhase,
   workerStatusOf,
@@ -778,6 +784,7 @@ function ToolCallView({
         connection={view.connection}
         account={view.account}
         machine={view.machine}
+        namedMachine={view.namedMachine}
         subject={view.subject}
         description={view.description}
         files={view.files}
@@ -939,34 +946,31 @@ function TodosRow({
   );
 }
 
-/** Where the transcript draws the agent's to-do lists: the call whose list stays out of a finished turn's fold, the call whose list the agent is at, none once it stops, and the list as it stood after each of Claude Code's task calls (`taskTodos`). */
+/** Where the transcript draws the agent's to-do lists: the call whose list the agent is at, none once it stops, and the list as it stood after each of Claude Code's task calls (`taskTodos`). */
 interface TodosPlace {
-  readonly kept: string | undefined;
   readonly live: string | undefined;
   readonly lists: ReadonlyMap<string, AgentTodos["todos"]>;
 }
 
 /** A transcript that holds no to-do list, as the brain's does not. */
 const NO_TODOS: TodosPlace = {
-  kept: undefined,
   live: undefined,
   lists: new Map(),
 };
 
-/** Whether two places draw the to-do lists alike: the same calls kept and live, and each task call's list the one it was; none alike only with none. */
+/** Whether two places draw the to-do lists alike: the same call live, and each task call's list the one it was; none alike only with none. */
 function sameTodosPlace(a: TodosPlace | undefined, b: TodosPlace | undefined): boolean {
   if (a === undefined || b === undefined) return a === b;
 
-  return a.kept === b.kept && a.live === b.live && sameEntries(a.lists, b.lists);
+  return a.live === b.live && sameEntries(a.lists, b.lists);
 }
 
-/** Where the to-do lists are drawn for the transcript given: the newest kept, and live while the agent works. */
+/** Where the to-do lists are drawn for the transcript given: the newest live while the agent works. */
 function todosPlace(messages: readonly AgentTranscriptMessage[], working: boolean): TodosPlace {
   const lists = taskTodos(messages);
   const standing = newestTodos(messages, lists);
 
   return {
-    kept: standing?.callId,
     live: working ? standing?.callId : undefined,
     lists,
   };
@@ -1244,7 +1248,7 @@ function ToolPartView({
   }
 
   // A set of pictures the agent showed, or is showing, is drawn as itself; one refused keeps its row, where its error is read.
-  if (part.tool === AGENT_TOOL.SHOW_IMAGE && part.state !== TOOL_STATE.OUTPUT_ERROR) {
+  if (isShowMediaTool(part.tool) && part.state !== TOOL_STATE.OUTPUT_ERROR) {
     return <ShownPictures input={part.input} output={part.output} />;
   }
 
@@ -3486,8 +3490,9 @@ function AgentTabView({
   // Note that nothing is rewound under a call into the agent, which the service refuses too (`rewind.ts`).
   const rewinds = boxOpen && transcript.calls.length === 0;
 
-  // Only Codex pauses a goal, and only the agent's starter may change it, while the box can send.
-  const pausesGoal = controlsQueue && boxOpen && agent.runtime === AGENT_RUNTIME.CODEX;
+  // Only Codex pauses a goal, Cursor keeps none, and only the agent's starter may change it, while the box can send.
+  const goalReach = goalReachOf(agent.runtime);
+  const pausesGoal = controlsQueue && boxOpen && goalReach === GOAL_REACH.PAUSES;
   const onEdit = useSteady(rewinds ? composer.edit : undefined);
   const onCancelEdit = useSteady(composer.dropEdit);
   const onSendEdit = useSteady(rewinds ? composer.sendEdit : undefined);
@@ -3682,7 +3687,7 @@ function AgentTabView({
     !composer.sending;
 
   const macOwner = useKept(macOwnerOf(agent.startedBy, members, readerId, former), sameFields);
-  const routedMachine = useRoutedMachine(agent.id);
+  const callRoute = useCallRoute(agent.id);
   const disabledServers = servers.disabled;
 
   const mentioned = useMemo(
@@ -3729,7 +3734,7 @@ function AgentTabView({
 
   return (
     <AgentTabFrame ref={tab} label={name}>
-      <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+      <CallPlaceProvider owner={macOwner} route={callRoute}>
         <AgentPicturesProvider value={pictures}>
           <ComputerAppsProvider value={computerApps}>
             <WholePartsProvider value={wholeParts}>
@@ -3847,19 +3852,24 @@ function AgentTabView({
           pending={pendingWords}
           readerId={readerId}
         />
-        <GoalDock
-          messages={kept}
-          going={pendingWords}
-          older={transcript.hasOlder}
-          working={standing.working}
-          onClear={controlsQueue && boxOpen ? () => composer.sendWords(GOAL_LINE.CLEAR) : undefined}
-          // Note that only Codex's goal pauses; Claude Code's stops only as it is cleared.
-          onPause={pausesGoal ? () => composer.sendWords(GOAL_LINE.PAUSE) : undefined}
-          onResume={pausesGoal ? () => composer.sendWords(GOAL_LINE.RESUME) : undefined}
-        />
+        {/* Note that a harness that keeps no goal draws no goal row, whatever its words say. */}
+        {goalReach === GOAL_REACH.NONE ? null : (
+          <GoalDock
+            messages={kept}
+            going={pendingWords}
+            older={transcript.hasOlder}
+            working={standing.working}
+            onClear={
+              controlsQueue && boxOpen ? () => composer.sendWords(GOAL_LINE.CLEAR) : undefined
+            }
+            // Note that only Codex's goal pauses; Claude Code's stops only as it is cleared.
+            onPause={pausesGoal ? () => composer.sendWords(GOAL_LINE.PAUSE) : undefined}
+            onResume={pausesGoal ? () => composer.sendWords(GOAL_LINE.RESUME) : undefined}
+          />
+        )}
         <AgentPicturesProvider value={pictures}>
           {/* Note that the dock reads whose Mac the agent uses, as the transcript above it does, to offer Show only on that Mac. */}
-          <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+          <CallPlaceProvider owner={macOwner} route={callRoute}>
             <ComputerDock
               agentId={agent.id}
               messages={dockLines}
@@ -3903,7 +3913,7 @@ function AgentTabView({
               />
             )}
             {/* Note that the box's `@` reads whose Mac the agent uses, to list that Mac's apps or else the ones the reader's machines allow, named and drawn as the agent's calls kept them. */}
-            <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+            <CallPlaceProvider owner={macOwner} route={callRoute}>
               <AgentPicturesProvider value={pictures}>
                 <ComputerAppsProvider value={computerApps}>
                   <AgentComposer
@@ -3968,8 +3978,8 @@ interface AgentTabDoors {
   onOpenTarget?: DelegationDoors["onOpenTarget"];
   /** The cards its rows that open a tab hang, as those tabs hang them. */
   cards?: TranscriptCards | undefined;
-  /** Opens the agent's pull request, its checks, description, and conversation, in a tab of the side panel's own. */
-  onOpenPullRequest?: ((number?: number) => void) | undefined;
+  /** Opens a pull request the agent opened, by its repository and number, its checks, description, and conversation, in a tab of the side panel's own. */
+  onOpenPullRequest?: ((pullRequest: NumberedAddress) => void) | undefined;
   /** Hears the transcript the tab holds each time it moves, which the tab's hover card previews once the tab is not shown. */
   onHeld: (agentId: string, held: HeldTranscript) => void;
 }
@@ -4129,6 +4139,7 @@ function AgentTabBody({
     unsend: control.onUnsend,
     rewind: control.onRewind,
     payer: planPayerOf(agent.runtime),
+    runtime: agent.runtime,
     starter,
     shown,
     onOpen:
@@ -4310,8 +4321,7 @@ function AgentTabBody({
         doors={{
           openGitHub,
           copy: copyWithToast,
-          openPullRequest: onOpenPullRequest === undefined ? undefined : () => onOpenPullRequest(),
-          openPullRequestNumber: onOpenPullRequest,
+          openPullRequest: onOpenPullRequest,
         }}
         startedAt={agent.runStartedAt}
         counts={shown}
@@ -4449,7 +4459,7 @@ export function AgentSubagentTab({
   const wholeParts = useWholePartDoor(agentId, callId);
   const { members, former } = useMemberDirectory();
   const macOwner = useKept(macOwnerOf(owner?.startedBy, members, control.me, former), sameFields);
-  const routedMachine = useRoutedMachine(agentId);
+  const callRoute = useCallRoute(agentId);
   // The worker's lines, its task first, and what its rows draw from, kept from draw to draw while none of it moved.
   const lines = useMemo(() => workerLines(task, transcript.messages), [task, transcript.messages]);
   const computerApps = useMemo(() => computerAppsOf(lines), [lines]);
@@ -4476,7 +4486,7 @@ export function AgentSubagentTab({
 
   return (
     <AgentTabFrame ref={tab} label={name}>
-      <CallPlaceProvider owner={macOwner} machine={routedMachine}>
+      <CallPlaceProvider owner={macOwner} route={callRoute}>
         <AgentPicturesProvider value={pictures}>
           <ComputerAppsProvider value={computerApps}>
             <WholePartsProvider value={wholeParts}>

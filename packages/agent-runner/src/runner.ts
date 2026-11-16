@@ -1,5 +1,5 @@
 /**
- * runner.ts -- one launch of an agent: the bearer and the config line read, the harness the config names run (Claude Code here, Codex in `codex.ts`), and the launch's last event posted; for Claude Code, the CLI spawned and initialized by `startup()` and then run in streaming input mode, the service's lines fed to it, its messages posted out, and the launch ended when the agent's turn is.
+ * runner.ts -- one launch of an agent: the bearer and the config line read, the harness the config names run (Claude Code here, Codex in `codex.ts`, Cursor in `cursor.ts`), and the launch's last event posted; for Claude Code, the CLI spawned and initialized by `startup()` and then run in streaming input mode, the service's lines fed to it, its messages posted out, and the launch ended when the agent's turn is.
  *
  * Two loops run side by side. The input loop reads the service's lines, from stdin
  * or, where the config names the read, from the service (`lines.ts`), and acts on
@@ -47,7 +47,6 @@
 
 import { randomUUID, type UUID } from "node:crypto";
 import type {
-  AgentDefinition,
   HookCallback,
   HookCallbackMatcher,
   McpServerConfig,
@@ -87,6 +86,7 @@ import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import { ClaudeCode, type ClaudeCodeService, type ClaudeCodeSession } from "./claude-code.js";
 import { type GoalWatchedFile, goalWatchedFile, goalWatchedStore } from "./claude-goals.js";
 import { runCodex } from "./codex.js";
+import { runCursor } from "./cursor.js";
 import { type EventSink, openEventSink } from "./events.js";
 import {
   harnessEnvOf,
@@ -100,7 +100,7 @@ import {
 } from "./launch.js";
 import { readLines } from "./lines.js";
 import { openMcpRelay } from "./mcp-relay.js";
-import { MCP_SERVER, MCP_STARTUP, type McpServer, mcpServersOf } from "./mcp-servers.js";
+import { MCP_STARTUP, type McpServer, mcpServersOf } from "./mcp-servers.js";
 import {
   type Annotated,
   type ClaudeCodeMemoryWatch,
@@ -111,7 +111,6 @@ import {
   type CheckoutSnapshot,
   CLAUDE_CODE_TOOLS,
   CLAUDE_CODE_UNASKED_TOOLS,
-  CLAUDE_CODE_WORKER,
   type ClaudeCodeConfig,
   CONNECTION_LOST_DETAIL,
   connectionLostFailure,
@@ -154,8 +153,8 @@ const CLAUDE_CODE_MCP_STARTUP_WAIT = "CLAUDE_CODE_MCP_STARTUP_WAIT_MS";
 
 /**
  * The variables that set how long the CLI keeps its prompt cache: the main
- * conversation's alone, "5m" or "1h", which leaves workers and other
- * subagents on the CLI's default (`MAIN`); every request's an hour, set to
+ * conversation's alone, "5m" or "1h", which leaves subagents on the CLI's
+ * default (`MAIN`); every request's an hour, set to
  * "1" (`ALL`); and every request's five minutes, over both (`FORCE_SHORT`)
  * (CLI 2.1.304, as its binary reads them).
  */
@@ -170,34 +169,6 @@ const ANTHROPIC_BASE_URL = "ANTHROPIC_BASE_URL";
 
 /** The API's host where no base URL is set. */
 const ANTHROPIC_API_HOST = "api.anthropic.com";
-
-/** Claude Code's built-ins the worker goes without: those that write a file or start another worker. */
-const WORKER_DENIED_BUILT_INS = ["Edit", "Write", "NotebookEdit", "Agent"] as const;
-
-/**
- * The worker the agent hands a scoped job to (`CLAUDE_CODE_WORKER`): its
- * own model's, without the tools that write a file, start another worker,
- * or act through the service, and told to read only, which Bash and the
- * integration servers it keeps could still contradict. It keeps our
- * server's reads, such as a task or another agent's transcript, and is
- * denied the rest by name (`workerDenied`); a config that names none
- * denies it the whole server.
- */
-function workerOf(config: ClaudeCodeConfig): AgentDefinition {
-  const ours =
-    config.workerDenied === undefined
-      ? [`mcp__${MCP_SERVER}`]
-      : config.workerDenied.map((tool) => `mcp__${MCP_SERVER}__${tool}`);
-
-  return {
-    description:
-      "A read-only worker for one scoped job, such as a broad search, a comparison of approaches, or an investigation: it reads the checkout and the web and answers, and never edits, commits, or pushes.",
-    prompt:
-      "You are a read-only worker for an agent. Do the one job you were handed and answer with what it asks for. You are read-only in the checkout: never write, edit, move, or delete a file, never commit or push; run only commands that read, and use the connected services only to read from them.",
-    model: "inherit",
-    disallowedTools: [...WORKER_DENIED_BUILT_INS, ...ours],
-  };
-}
 
 const CLAUDE_EFFORTS: ReadonlySet<string> = new Set(Object.values(EFFORT));
 
@@ -435,7 +406,6 @@ function queryOptions(
     ...permissionsOf(mode, listed, approvals, config.allowedCommands ?? []),
     includePartialMessages: true,
     disallowedTools: [...CLAUDE_CODE_TOOLS.DENIED],
-    agents: { [CLAUDE_CODE_WORKER]: workerOf(config) },
     // The CLI's environment is the runner's own and, in the cloud's sandbox, the image's tools'
     // (`toolEnvOf`), less the bearer, which only the runner uses; Node
     // leaves an undefined one unset. Every command the agent runs inherits it,
@@ -1284,13 +1254,16 @@ export const runAgent = Effect.fn("agent-runner/runAgent")(function* (input: Run
 
   const bearer = Redacted.make(bearerValue);
 
-  const tokens = [RUNNER_ENV.CLAUDE_TOKEN, RUNNER_ENV.API_KEY, RUNNER_ENV.OPENAI_API_KEY].flatMap(
-    (name) => {
-      const value = input.env[name];
+  const tokens = [
+    RUNNER_ENV.CLAUDE_TOKEN,
+    RUNNER_ENV.API_KEY,
+    RUNNER_ENV.OPENAI_API_KEY,
+    RUNNER_ENV.CURSOR_API_KEY,
+  ].flatMap((name) => {
+    const value = input.env[name];
 
-      return value === undefined || value === "" ? [] : [Redacted.make(value)];
-    },
-  );
+    return value === undefined || value === "" ? [] : [Redacted.make(value)];
+  });
 
   const secrets = [bearer, ...tokens];
 
@@ -1396,7 +1369,9 @@ const runLaunch = Effect.fn("agent-runner/runLaunch")(function* (read: ReadLaunc
   const outcome: LaunchOutcome =
     config.harness === RUNNER_HARNESS.CODEX
       ? yield* runCodex({ ...context, config })
-      : yield* runClaudeCode({ ...context, config });
+      : config.harness === RUNNER_HARNESS.CURSOR
+        ? yield* runCursor({ ...context, config })
+        : yield* runClaudeCode({ ...context, config });
 
   const { end, failure, files } = outcome;
 

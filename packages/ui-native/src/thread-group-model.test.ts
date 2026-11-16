@@ -35,6 +35,11 @@ describe("threadRuns", () => {
       [["a"], ["b"]],
     ],
     [
+      "a line of what happened after a message, such as a resolve, ends its run",
+      [{ ...message("a", "Ada", 0), after: [{ key: "resolved" }] }, message("b", "Ada", 1)],
+      [["a"], ["b"]],
+    ],
+    [
       "a member named as the agent is still another writer",
       [message("a", "Relay", 0, true), message("b", "Relay", 1)],
       [["a"], ["b"]],

@@ -1,5 +1,6 @@
 // transcript.tsx -- an agent's transcript as the iPhone draws it: the app's one React Native list, lazy, anchored at its newest row, its rows the panel's anatomy in the brand's inks.
 
+import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -25,14 +26,19 @@ import {
   useReduceTransparency,
   useScaledSize,
 } from "./accessibility.js";
+import { AudioClip } from "./audio-clip.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
+import { FileChip } from "./file-chip.js";
 import { DOCK_FOLLOWS_KEYBOARD, useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
+import { IntegrationMark } from "./marks.js";
+import { MEDIA_BOUNDS } from "./media-frame.js";
+import { PictureSet } from "./picture-set.js";
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
@@ -44,11 +50,17 @@ import {
   CALL_STANDING,
   type CallStanding,
   type OriginPart,
+  type SaidFile,
+  SHOWN_MEDIA,
+  type ShownMedia,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptPlace,
 } from "./transcript-model.js";
 import { Video } from "./video.js";
+
+/** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart. */
+const RUN_GAP = 1;
 
 /** How far a row a fold or a group holds stands in, for each step it is held. */
 const DEPTH_INSET = 18;
@@ -58,14 +70,6 @@ const LATEST_REACH = 240;
 
 /** How near its newest row the list stands to keep it in view as rows land, in points. */
 const ANCHOR_REACH = 48;
-
-/**
- * The room the system's tab bar floats over at the screen's foot, past the
- * safe area, which the newest row stands clear of. Note
- * that the list keeps it at its own end, because a scroll to the end reaches
- * the end of the rows alone and not the room the system keeps for the bar.
- */
-const TAB_BAR_ROOM = 64;
 
 /** How wide the round control that brings the newest row into view stands, in points: the system's least target. */
 const JUMP_SIZE = 44;
@@ -122,9 +126,10 @@ const styles = StyleSheet.create({
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
   saidHeld: { alignSelf: "stretch", alignItems: "flex-end" },
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
+  stamp: { alignSelf: "center", fontWeight: "500", paddingBottom: SPACE.TIGHT },
   said: {
     maxWidth: "82%",
-    borderRadius: 18,
+    borderRadius: RADIUS.BUBBLE,
     paddingHorizontal: SPACE.ROW + 4,
     paddingVertical: SPACE.ROW,
   },
@@ -134,7 +139,7 @@ const styles = StyleSheet.create({
   chip: {
     flexShrink: 1,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 6,
+    borderRadius: RADIUS.TAG,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
@@ -143,10 +148,12 @@ const styles = StyleSheet.create({
     gap: SPACE.TIGHT + 2,
     paddingTop: SPACE.TIGHT,
   },
-  block: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
+  block: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.BLOCK, overflow: "hidden" },
   blockTitle: { paddingHorizontal: SPACE.ROW, paddingTop: 6 },
   blockText: { padding: SPACE.ROW, paddingTop: SPACE.TIGHT },
   media: { gap: SPACE.ROW },
+  // Note that each picture or recording sizes itself by the media's one rule (`mediaFrame`), and its caption wraps at the widest one stands.
+  shown: { maxWidth: MEDIA_BOUNDS.WIDTH, alignItems: "flex-start", gap: SPACE.TIGHT },
   page: {
     flexDirection: "row",
     alignItems: "center",
@@ -187,7 +194,7 @@ type InsetResult = { readonly paddingLeft: number };
 
 /** The step a row stands in by, for the folds that hold it. */
 function inset(depth: number): InsetResult {
-  return { paddingLeft: SPACE.PAGE + depth * DEPTH_INSET };
+  return { paddingLeft: SPACE.EDGE + depth * DEPTH_INSET };
 }
 
 /** Where a call or a group stands, at its line's end: the working mark while it runs, the failed mark once it failed, and nothing once it ended well; heard in its row's value rather than apart. */
@@ -246,18 +253,35 @@ function BodyBlock({
   );
 }
 
-/** A call's glyph at a row mark's size, the panel's own for its kind, through the system's symbol view (`patches/expo-symbols@58.0.4.patch`), so a call's row costs no SwiftUI host. */
-function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
+/**
+ * A call's glyph at a row mark's size, the panel's own for its kind, through
+ * the system's symbol view (`patches/expo-symbols@58.0.4.patch`), so a call's
+ * row costs no SwiftUI host; or, for a call of an integration's tool, the
+ * integration's mark, as the panel's row leads with it. Note that the mark
+ * alone takes a SwiftUI host, because the symbol view tints whatever it draws
+ * in one ink, which would flatten a mark in its brand's own colors.
+ */
+function CallGlyph({
+  callKind,
+  provider,
+}: {
+  readonly callKind: CallKind;
+  readonly provider: IntegrationProvider | undefined;
+}) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
 
-  return (
+  return provider === undefined ? (
     <SymbolView
       name={glyphSymbol(CALL_SYMBOL[callKind])}
       size={size}
       tintColor={colors.TEXT_MUTED}
       accessibilityElementsHidden
     />
+  ) : (
+    <InlineHost style={{ width: size, height: size }}>
+      <IntegrationMark provider={provider} size={size} ink={colors.TEXT_MUTED} />
+    </InlineHost>
   );
 }
 
@@ -288,6 +312,8 @@ function CallRow({
   const lines = large ? undefined : 1;
   const { line, chip } = item;
   const subject = line.subject === undefined || line.subject === "" ? undefined : line.subject;
+  // Note that the integration's mark is hidden from VoiceOver, so its name is heard in the mark's place.
+  const mark = item.provider === undefined ? undefined : INTEGRATION_NAME[item.provider];
   const standing = held?.waiting === true ? HELD_HEARD : CALL_STANDING_HEARD[item.standing];
 
   return (
@@ -297,7 +323,7 @@ function CallRow({
         onPress={() => onToggle(item)}
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
-        accessibilityLabel={[line.verb, chip, subject, item.runOn].filter(Boolean).join(" ")}
+        accessibilityLabel={[line.verb, chip, subject, mark, item.runOn].filter(Boolean).join(" ")}
         accessibilityValue={{
           text: item.open ? standing : `${standing}, ${COLLAPSED_HEARD}`,
         }}
@@ -305,7 +331,7 @@ function CallRow({
         hitSlop={LINE_REACH}
         style={styles.callLine}
       >
-        <CallGlyph callKind={item.callKind} />
+        <CallGlyph callKind={item.callKind} provider={item.provider} />
         <View style={[styles.callWords, large ? styles.wrapped : null]}>
           <Text
             numberOfLines={lines}
@@ -320,7 +346,10 @@ function CallRow({
           </Text>
           {chip === undefined ? null : (
             <View
-              style={[styles.chip, { backgroundColor: colors.WELL, borderColor: colors.CHIP_EDGE }]}
+              style={[
+                styles.chip,
+                { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE },
+              ]}
             >
               <Text
                 numberOfLines={lines}
@@ -540,8 +569,14 @@ interface RowDrawing {
   readonly onOpenPage: (
     item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>,
   ) => void;
-  /** The address a picture or a recording is drawn from, by its id; none while its bytes are on their way. */
-  readonly mediaSource: (id: string) => string | undefined;
+  /** The address a picture or a recording is drawn from, by its id; none while its bytes are on their way, and `null` where they could not be read. */
+  readonly mediaSource: (id: string) => string | null | undefined;
+  /** Reads a picture or a recording whose bytes could not be read again, by its id. */
+  readonly onRetryMedia?: ((id: string) => void) | undefined;
+  /** Where a file a sent line carried was written for its chip to open, by the line's message and the file's place on it; none while it is written, and `null` where it could not be. A file the line kept no bytes of is drawn by its name and kind alone. */
+  readonly fileSource?: ((message: string, key: string) => string | null | undefined) | undefined;
+  /** Writes a sent line's file again where it could not be written, by the line's message and the file's place on it. */
+  readonly onRetryFile?: ((message: string, key: string) => void) | undefined;
   /** Opens a recording the system's player cannot play where it plays. */
   readonly onOpenElsewhere?: (() => void) | undefined;
   /** Opens a web address in Safari, such as a pull request's page on GitHub. */
@@ -563,6 +598,67 @@ interface RowDrawing {
 /** A pull request an agent opened, as the transcript lists it. */
 type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
 
+/** What a picture a sent line kept by its id is drawn from, read as the agent's shown ones are; `null` for one the line names no way to, which stands as could not be read. */
+function saidSource(drawing: RowDrawing, pictureId: string | undefined): string | null | undefined {
+  return pictureId === undefined ? null : drawing.mediaSource(pictureId);
+}
+
+/** Where a sent line's file is opened from: the file the app wrote of its bytes, none while it is written, or `null` where it could not be or the list writes none, which the chip says it could not read. */
+function sentFileSource(
+  drawing: RowDrawing,
+  message: string,
+  file: SaidFile,
+): string | null | undefined {
+  return drawing.fileSource === undefined ? null : drawing.fileSource(message, file.key);
+}
+
+/** What writes a sent line's file again, where the transcript offers it. */
+function sentFileRetry(
+  drawing: RowDrawing,
+  message: string,
+  file: SaidFile,
+): (() => void) | undefined {
+  const retry = drawing.onRetryFile;
+
+  return retry === undefined ? undefined : () => retry(message, file.key);
+}
+
+/** What reads a picture or a recording again, by its id, where the transcript offers it. */
+function retryOf(drawing: RowDrawing, id: string): (() => void) | undefined {
+  const retry = drawing.onRetryMedia;
+
+  return retry === undefined ? undefined : () => retry(id);
+}
+
+/** One thing a call showed, as its kind draws it: a picture, a recording in the system's player, or a sound clip in its strip; one whose bytes could not be read offers Try again. */
+function ShownMediaView({
+  shown,
+  source,
+  onOpenElsewhere,
+  onRetry,
+}: {
+  readonly shown: ShownMedia;
+  readonly source: string | null | undefined;
+  readonly onOpenElsewhere: (() => void) | undefined;
+  readonly onRetry: (() => void) | undefined;
+}) {
+  switch (shown.kind) {
+    case SHOWN_MEDIA.VIDEO:
+      return (
+        <Video
+          source={source}
+          label={shown.label}
+          onOpenElsewhere={onOpenElsewhere}
+          onRetry={onRetry}
+        />
+      );
+    case SHOWN_MEDIA.AUDIO:
+      return <AudioClip source={source} label={shown.label} onRetry={onRetry} />;
+    case SHOWN_MEDIA.PICTURE:
+      return <Picture source={source} alt={shown.label} onRetry={onRetry} />;
+  }
+}
+
 /** One of the transcript's rows, as its kind draws it. */
 function TranscriptRow({
   item,
@@ -579,11 +675,23 @@ function TranscriptRow({
   switch (item.kind) {
     case TRANSCRIPT_ITEM.SAID:
       return (
-        <View style={[styles.row, styles.saidRow]}>
+        <View
+          style={[
+            styles.row,
+            styles.saidRow,
+            item.joinsAbove ? { paddingTop: RUN_GAP } : null,
+            item.joinsBelow ? { paddingBottom: RUN_GAP } : null,
+          ]}
+        >
+          {item.stamp === undefined ? null : (
+            <Text style={[styles.stamp, { fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }]}>
+              {item.stamp}
+            </Text>
+          )}
           {item.from === undefined ? null : (
             <OriginFrom parts={item.from} onOpenLink={drawing.onOpenLink} />
           )}
-          {item.sender === undefined ? null : (
+          {item.sender === undefined || item.joinsAbove ? null : (
             <Text
               accessibilityRole="header"
               style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT }}
@@ -591,24 +699,47 @@ function TranscriptRow({
               {item.sender}
             </Text>
           )}
-          <CopyWordsMenu words={item.words}>
-            <View style={styles.saidHeld}>
-              <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
-                <Markdown
-                  words={item.words}
-                  typed
-                  repository={drawing.repository}
-                  onOpenLink={drawing.onOpenLink}
-                />
+          {/* Note that the pictures a line carried stand over its words at its end, as Messages and the panel stand a message's photos over its bubble: one by the media's one rule, several as a set side by side. */}
+          <PictureSet
+            atEnd
+            pictures={(item.pictures ?? []).map((picture) => ({
+              key: picture.key,
+              source: picture.url ?? saidSource(drawing, picture.pictureId),
+              alt: picture.name,
+              onRetry:
+                picture.pictureId === undefined ? undefined : retryOf(drawing, picture.pictureId),
+            }))}
+          />
+          {/* Note that the other files a line carried, such as a PDF, stand under its pictures as their chips, as the panel stands a message's files over its bubble. */}
+          {(item.files ?? []).map((file) => (
+            <FileChip
+              key={file.key}
+              atEnd
+              held={file.base64 !== undefined}
+              name={file.name}
+              mediaType={file.mediaType}
+              source={sentFileSource(drawing, item.place.row, file)}
+              size={file.size}
+              onRetry={sentFileRetry(drawing, item.place.row, file)}
+            />
+          ))}
+          {/* Note that a line of files alone draws no empty bubble under them. */}
+          {item.words.trim() === "" &&
+          (item.pictures ?? []).length + (item.files ?? []).length > 0 ? null : (
+            <CopyWordsMenu words={item.words}>
+              <View style={styles.saidHeld}>
+                <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
+                  <Markdown
+                    words={item.words}
+                    typed
+                    repository={drawing.repository}
+                    onOpenLink={drawing.onOpenLink}
+                  />
+                </View>
               </View>
-            </View>
-          </CopyWordsMenu>
-          {item.body === undefined ? null : <OriginBody body={item.body} />}
-          {item.sent === undefined ? null : (
-            <Text style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}>
-              {item.sent}
-            </Text>
+            </CopyWordsMenu>
           )}
+          {item.body === undefined ? null : <OriginBody body={item.body} />}
         </View>
       );
     case TRANSCRIPT_ITEM.FOOT:
@@ -663,19 +794,35 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.FOLD:
       return <FoldRow item={item} onToggle={drawing.onToggle} />;
     case TRANSCRIPT_ITEM.MEDIA:
+      // Note that several pictures with no captions stand as one set side by side, as Messages groups photos; a recording, a sound clip, or a picture with its own caption, stands alone so its caption stays under it.
+      if (
+        item.media.length > 1 &&
+        item.media.every((shown) => shown.kind === SHOWN_MEDIA.PICTURE && shown.caption === "")
+      ) {
+        return (
+          <View style={[styles.row, inset(item.depth), styles.media]}>
+            <PictureSet
+              pictures={item.media.map((shown) => ({
+                key: shown.id,
+                source: drawing.mediaSource(shown.id),
+                alt: shown.label,
+                onRetry: retryOf(drawing, shown.id),
+              }))}
+            />
+          </View>
+        );
+      }
+
       return (
         <View style={[styles.row, inset(item.depth), styles.media]}>
           {item.media.map((shown) => (
-            <View key={shown.id} style={{ gap: SPACE.TIGHT }}>
-              {shown.video ? (
-                <Video
-                  source={drawing.mediaSource(shown.id)}
-                  label={shown.label}
-                  onOpenElsewhere={drawing.onOpenElsewhere}
-                />
-              ) : (
-                <Picture source={drawing.mediaSource(shown.id)} alt={shown.label} />
-              )}
+            <View key={shown.id} style={styles.shown}>
+              <ShownMediaView
+                shown={shown}
+                source={drawing.mediaSource(shown.id)}
+                onOpenElsewhere={drawing.onOpenElsewhere}
+                onRetry={retryOf(drawing, shown.id)}
+              />
               {shown.caption === "" ? null : (
                 <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
                   {shown.caption}
@@ -949,10 +1096,10 @@ export function AgentTranscript({
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now(), placeCall };
   const keyboard = useDockKeyboard();
   const dock = useDockRoom();
-  // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript. While the keyboard stands, the list's own keyboard inset holds the room under the bar, since the keyboard covers the safe area and the tab bar and the bar stands right on it.
+  // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript, and no more, since no tab bar stands under a conversation (`(tabs)/_layout.tsx`). While the keyboard stands, the list's own keyboard inset holds the room under the bar, since the keyboard covers the safe area and the bar stands right on it.
   // Note that a keyboard standing only partway over that room, as one an interactive drag is pulling down, takes only the part it covers, since the bar stands clear of the safe area until the keyboard rises past it.
-  const foot = Math.max(0, bottom + TAB_BAR_ROOM - keyboard) + dock;
-  // Note that Jump to latest stands just over the composer, on the keyboard while it stands past the safe area, rather than over the tab bar's room, since no tab bar stands under a conversation (`(tabs)/_layout.tsx`).
+  const foot = Math.max(0, bottom - keyboard) + dock;
+  // Note that Jump to latest stands just over the composer, on the keyboard while it stands past the safe area.
   const jumpFoot = Math.max(bottom, keyboard) + dock + SPACE.ROW;
 
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.

@@ -86,6 +86,7 @@
 import {
   AGENT_USER,
   CODEX_PIN,
+  CURSOR_SDK_ENTRY,
   RUNNER_DIRECTORY,
   RUNNER_UNIT,
   SANDBOX_TOOLS_DIRECTORY,
@@ -219,7 +220,7 @@ import {
   type RunnerRecord,
   type SandboxSetup,
 } from "./agent-machine.js";
-import { phoneVideoAsk, phoneVideoOf } from "./phone-video.js";
+import { phoneAudioAsk, phoneAudioOf, phoneVideoAsk, phoneVideoOf } from "./phone-video.js";
 
 /** Our state folder on the agent's own drive, beside the checkout, which a sandbox made again mounts as it stood. */
 const DRIVE_STATE_FOLDER = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/${SANDBOX_STATE_FOLDER}`;
@@ -260,6 +261,7 @@ const SANDBOX_LAYOUT: MachineLayout = {
   sharedFiles: SHARED_FILES_DIRECTORY,
   claudeExecutable: undefined,
   codexExecutable: CODEX_PIN.LINK,
+  cursorSdk: CURSOR_SDK_ENTRY,
   codexHome: CODEX_PIN.HOME,
   linesRead: true,
   diskSessions: false,
@@ -911,6 +913,11 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
     phoneVideo: (session, path) =>
       Effect.flatMap(runningSession(session), (running) =>
         Effect.map(api.run(running, phoneVideoAsk(path)), phoneVideoOf),
+      ),
+
+    phoneAudio: (session, path) =>
+      Effect.flatMap(runningSession(session), (running) =>
+        Effect.map(api.run(running, phoneAudioAsk(path)), phoneAudioOf),
       ),
   };
 }

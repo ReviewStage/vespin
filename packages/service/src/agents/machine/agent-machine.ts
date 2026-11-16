@@ -107,6 +107,8 @@ export interface MachineLayout {
   readonly claudeExecutable: string | undefined;
   /** The image's Codex in a sandbox, and on a Mac the one it checked against the pin; none on a Mac that checked none yet, which runs no Codex agent. */
   readonly codexExecutable: string | undefined;
+  /** Cursor's SDK as the image installs it in a sandbox (`CURSOR_SDK_ENTRY`); none on a Mac, which runs no Cursor agent yet. */
+  readonly cursorSdk: string | undefined;
   /** Where Codex keeps its threads (`CODEX_HOME`): a sandbox's home on its persisted disk; none on a Mac, whose Codex keeps its own default under the machine's home, which its runner finds by itself. */
   readonly codexHome: string | undefined;
   /**
@@ -223,7 +225,7 @@ interface MachineFirewall {
 export interface RunnerCredential {
   readonly variable: string;
   readonly value: Redacted.Redacted<string>;
-  readonly target: Pick<PlaceholderSwap, "domain" | "path">;
+  readonly target: Pick<PlaceholderSwap, "domain" | "path" | "alsoOn">;
   readonly header: string;
   readonly scheme: string;
   readonly slot: LaunchSwapKind;
@@ -558,6 +560,15 @@ export interface AgentMachineService {
    * sandbox on an older image have none, or the copy would not fit.
    */
   readonly phoneVideo: (
+    session: string,
+    path: string,
+  ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
+  /**
+   * An AAC M4A of the Ogg sound clip at the path, made as `phoneVideo`
+   * makes a recording's copy (`phone-video.ts`), for a player that plays no
+   * Ogg; nothing where the place has no encoder or the copy would not fit.
+   */
+  readonly phoneAudio: (
     session: string,
     path: string,
   ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
