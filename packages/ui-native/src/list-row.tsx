@@ -42,8 +42,8 @@ import { type InboxLineKind, NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
-import { TASK_PRIORITY_WORDS, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
-import { TASK_PRIORITY, type TaskPriority, type TaskStatus } from "@repo/features/task-wire";
+import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
+import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
@@ -58,7 +58,6 @@ import {
   type Face,
   FailedMark,
   NeedsYouDot,
-  TaskPriorityMark,
   TaskStatusMark,
   ToneGlyph,
   UnreadDot,
@@ -239,9 +238,7 @@ type TaskRowProps = RowActs & {
   readonly id: string;
   readonly name: string;
   readonly status: TaskStatus;
-  /** Its priority, whose mark leads the line before its status, as the panel's List row leads with it; none where the list draws no priority. */
-  readonly priority?: TaskPriority | undefined;
-  /** Whether the task has news unread, which carries the dot and sets its name in semibold. */
+  /** Whether the task has news unread, which sets its name in semibold, as the panel's task rows say it, with no dot. */
   readonly unread?: boolean | undefined;
   /** Whether the task is done or canceled, which mutes its name, as a search finds one. */
   readonly finished?: boolean | undefined;
@@ -386,12 +383,13 @@ export function rowPlacement(
   selected = false,
   vertical: number = ROW_INSET.VERTICAL,
   indent = 0,
+  leading: number = ROW_INSET.LEADING,
 ) {
   return [
     listRowBackground("clear"),
     listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
     padding({
-      leading: ROW_INSET.LEADING - ROW_INSET.FILL,
+      leading: leading - ROW_INSET.FILL,
       trailing: SPACE.EDGE - ROW_INSET.FILL,
       top: vertical,
       bottom: vertical,
@@ -510,6 +508,7 @@ export function RowFrame({
   link,
   vertical,
   indent,
+  leading,
   place = ROW_PLACE.LIST,
 }: RowActs & {
   readonly id: string;
@@ -518,6 +517,8 @@ export function RowFrame({
   readonly vertical?: number | undefined;
   /** How far past the list's text column the row's words start, where it stands in deeper, a second mark leads it, or its lead grows, so its hairline starts under them. */
   readonly indent?: number | undefined;
+  /** The row's leading inset: the unread dot's margin where none is given, or the list's edge for a row that draws no dot (`ROW_INSET.PLAIN`). */
+  readonly leading?: number | undefined;
   /** Whether it stands as a list's row or a sidebar's. */
   readonly place?: RowPlace | undefined;
 }) {
@@ -531,7 +532,7 @@ export function RowFrame({
     tag(id),
     ...(place === ROW_PLACE.SIDEBAR
       ? sidebarRowPlacement(colors, selected)
-      : rowPlacement(colors, selected, vertical, indent)),
+      : rowPlacement(colors, selected, vertical, indent, leading)),
     ...(heard === undefined
       ? []
       : [
@@ -640,6 +641,7 @@ function TitleWords({
  * row's chevron there.
  */
 export function RowHead({
+  dot = true,
   unread,
   faded,
   fold,
@@ -651,6 +653,8 @@ export function RowHead({
   end,
   trail,
 }: {
+  /** Whether the unread dot stands in the margin; a task's row draws none, its unread name standing in semibold alone, as the panel's task rows do. */
+  readonly dot?: boolean | undefined;
   readonly unread: boolean;
   readonly faded: boolean;
   /** A parent's fold chevron, standing before its lead mark; none for a row that folds nothing. */
@@ -681,31 +685,37 @@ export function RowHead({
   );
 
   // Note that at an accessibility size the line's end stands under the title rather than beside it, as Mail's rows stack their date, so the title keeps the row's width rather than wrapping a word to a line, and the dot stands on the title's first line rather than centered on the whole stack.
+  const line = (
+    <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
+      {/* Note that the fold and the marks stand centered on each other, so the chevron, laid out at no height, sits beside the ring rather than on the row's top edge where an accessibility size aligns the line to its top. */}
+      <HStack spacing={SPACE.ROW} alignment="center">
+        {fold}
+        {mark === undefined ? null : (
+          <HStack modifiers={[frame({ width: leadWidth })]}>{mark}</HStack>
+        )}
+        <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+      </HStack>
+      {beside}
+      {stacked ? (
+        <VStack alignment="leading" spacing={2}>
+          {words}
+          {end}
+        </VStack>
+      ) : (
+        words
+      )}
+      <Spacer />
+      {stacked ? null : end}
+      {trail}
+    </HStack>
+  );
+
+  if (!dot) return line;
+
   return (
     <HStack spacing={SPACE.TIGHT} alignment={stacked ? "firstTextBaseline" : "center"}>
       <UnreadDot unread={unread} faded={faded} />
-      <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
-        {/* Note that the fold and the marks stand centered on each other, so the chevron, laid out at no height, sits beside the ring rather than on the row's top edge where an accessibility size aligns the line to its top. */}
-        <HStack spacing={SPACE.ROW} alignment="center">
-          {fold}
-          {mark === undefined ? null : (
-            <HStack modifiers={[frame({ width: leadWidth })]}>{mark}</HStack>
-          )}
-          <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
-        </HStack>
-        {beside}
-        {stacked ? (
-          <VStack alignment="leading" spacing={2}>
-            {words}
-            {end}
-          </VStack>
-        ) : (
-          words
-        )}
-        <Spacer />
-        {stacked ? null : end}
-        {trail}
-      </HStack>
+      {line}
     </HStack>
   );
 }
@@ -897,12 +907,11 @@ function agentsHeard(agents: TaskAgentsStatus | undefined): string | undefined {
   }
 }
 
-/** What a task row is heard as: its name, then unread, its status, its priority where it has one, a thread that needs you, its agents, its key, and whether its sub-tasks are open. */
+/** What a task row is heard as: its name, then unread, its status, a thread that needs you, its agents, its key, and whether its sub-tasks are open. */
 function taskHeard(props: TaskRowProps): RowHeard {
   const {
     name,
     status,
-    priority,
     unread = false,
     needsYou = false,
     blocked = false,
@@ -916,7 +925,6 @@ function taskHeard(props: TaskRowProps): RowHeard {
     value: [
       unread && UNREAD_WORDS,
       TASK_STATUS_WORDS[status],
-      priority !== undefined && priority !== TASK_PRIORITY.NONE && TASK_PRIORITY_WORDS[priority],
       blocked && BLOCKED_WORDS,
       needsYou && NEEDS_YOU.LABEL,
       agentsHeard(agents),
@@ -1007,46 +1015,37 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
 }
 
 /**
- * One task on a single line, as Linear's rows stand: the dot while it has
- * news, its priority's mark where its list draws one, its status ring, its
- * name in 15 pt, and at the line's end what its agents say and its key. A
+ * One task on a single line, as Linear's rows stand: its status ring, its
+ * name in 15 pt, semibold while it has news, and at the line's end what its
+ * agents say and its key, as the panel's task rows draw it, with no unread
+ * dot and no priority's mark, which the task's own Priority chip says. Its
+ * ring stands at the list's edge, where an Inbox row's ring stands past the
+ * dot's margin, so the two lists' marks and words line up. A
  * task with sub-tasks leads with the panel's fold before its marks, whose
  * press opens them; its caller draws them as rows
  * of their own under it, a level deeper. Note that SwiftUI's disclosure is
  * not used, because a press on its row folds it rather than picking the row.
  */
 export function TaskRow(props: TaskRowProps) {
-  const {
-    id,
-    name,
-    status,
-    priority,
-    unread = false,
-    finished = false,
-    taskKey,
-    fold,
-    depth = 0,
-  } = props;
+  const { id, name, status, unread = false, finished = false, taskKey, fold, depth = 0 } = props;
 
   const colors = useColors();
   // Note that each level of sub-tasks stands in past a parent's fold, its column the lead's scaled width, so a sub-task's mark stands under its parent's at every size.
   const lead = useScaledSize(MARK_SIZE.LEAD);
-  const dot = useScaledSize(MARK_SIZE.UNREAD);
   const column = lead + SPACE.ROW;
-  // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth, past a parent's fold and the priority's mark, each a column of the lead's scaled width, and by however much the unread dot's column and the lead have grown, since the dot holds its width even while hidden.
-  const grown = lead - MARK_SIZE.LEAD + dot - MARK_SIZE.UNREAD;
-  const marks = (fold === undefined ? 0 : 1) + (priority === undefined ? 0 : 1);
-  const indent = depth * column + marks * column + grown;
+  // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth and past a parent's fold, each a column of the lead's scaled width, and by however much the lead has grown.
+  const grown = lead - MARK_SIZE.LEAD;
+  const indent = (depth + (fold === undefined ? 0 : 1)) * column + grown;
 
   const row: ReactElement = (
     <HStack modifiers={[padding({ leading: depth * column })]}>
       <RowHead
+        dot={false}
         unread={unread}
         faded={finished}
         fold={
           fold === undefined ? undefined : <SubTaskFold open={fold.open} onPress={fold.onToggle} />
         }
-        mark={priority === undefined ? undefined : <TaskPriorityMark priority={priority} />}
         lead={<TaskStatusMark status={status} />}
         title={name}
         ink={titleInk(colors, unread, finished)}
@@ -1093,6 +1092,7 @@ export function TaskRow(props: TaskRowProps) {
       id={id}
       row={row}
       indent={indent}
+      leading={ROW_INSET.PLAIN}
       menuActions={[...folding, ...(props.menuActions ?? [])]}
       heard={props.heard ?? taskHeard(props)}
     />
