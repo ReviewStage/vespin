@@ -27,7 +27,7 @@ import type {
   LocalAgentStore,
   LocalAgentStoreListResult,
 } from "@cursor/sdk";
-import { Effect, Option, Schema } from "effect";
+import { Data, Effect, Option, Schema } from "effect";
 import { RUNNER_TRANSCRIPTS } from "./protocol.js";
 import type { transcriptStore } from "./transcripts.js";
 
@@ -111,13 +111,16 @@ function blobMatches(
   );
 }
 
+/** The service did not take every row and blob the store wrote; what it did not take stays to be sent again. */
+export class StoreUnkept extends Data.TaggedError("StoreUnkept") {}
+
 /** A Cursor agent's store, as the launch hands it the SDK and mirrors it to the service. */
 export interface CursorStore {
   readonly store: LocalAgentStore;
   /** Whether the store holds the agent's row, so the launch resumes it rather than making it. */
   readonly holds: (agentId: string) => boolean;
-  /** The rows and blobs written since the last mirror, sent to the service in order; what it did not take goes with the next. */
-  readonly mirror: Effect.Effect<void>;
+  /** The rows and blobs written since the last mirror, sent to the service in order; fails where the service did not take them all, what it did not take going with the next. */
+  readonly mirror: Effect.Effect<void, StoreUnkept>;
 }
 
 /**
@@ -294,11 +297,7 @@ export function cursorStore(
       yield* Effect.tryPromise(() => transcripts.append(keyOf(agentId), batch));
       unsent.splice(0, batch.length);
     }
-  }).pipe(
-    Effect.catch(() =>
-      Effect.logWarning("agent-runner: the Cursor agent's store was not mirrored"),
-    ),
-  );
+  }).pipe(Effect.mapError(() => new StoreUnkept()));
 
   return { store, holds: (agentId) => agents.has(agentId), mirror };
 }

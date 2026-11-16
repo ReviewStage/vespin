@@ -316,6 +316,33 @@ it.effect(
 );
 
 it.effect(
+  "ends the launch failed where the service never takes the agent's store, so a turn the next launch cannot resume is never said kept",
+  () =>
+    Effect.gen(function* () {
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+        const call = JSON.parse(String(init?.body));
+
+        return call.call === RUNNER_TRANSCRIPTS.CALL.APPEND
+          ? new Response(null, { status: 503 })
+          : new Response(JSON.stringify({ entries: [], next: null }));
+      });
+
+      const service = fakeService();
+      const { write, run } = yield* launch([{ messages: RECORDED_TURN }], service);
+      yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL });
+      yield* write(message("Read the README.", LINE.FIRST));
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      vi.restoreAllMocks();
+      assert.deepEqual(messagesOf(service.applied).at(-1), {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.FAILED,
+        detail: "the agent's Cursor store could not be kept at the service",
+      });
+    }),
+);
+
+it.effect(
   "steers a message into the run going, sends one Cursor hands back as a follow-up as the next run on the model a model line chose, and ends the turn after it",
   () =>
     Effect.gen(function* () {

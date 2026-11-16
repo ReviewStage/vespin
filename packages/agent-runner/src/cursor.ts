@@ -65,7 +65,7 @@ import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import { type CursorAgentHandle, type CursorRun, CursorSdk } from "./cursor-sdk.js";
 import { type CursorStore, cursorStore, restoredEntries } from "./cursor-store.js";
 import { type CursorTools, openCursorTools } from "./cursor-tools.js";
-import { type LaunchContext, type LaunchOutcome, toolEnvOf } from "./launch.js";
+import { type LaunchContext, type LaunchOutcome, runsOnHost, toolEnvOf } from "./launch.js";
 import { mcpServersOf } from "./mcp-servers.js";
 import {
   type CheckoutSnapshot,
@@ -105,6 +105,15 @@ const SUMMARY_COMPLETED = "completed";
 
 /** What a launch whose store the service did not answer ends with. */
 const STORE_UNREAD = "the agent's Cursor store could not be read from the service";
+
+/** What a launch whose store the service would not take as it ended ends with. */
+const STORE_UNKEPT = "the agent's Cursor store could not be kept at the service";
+
+/** How many more times a launch's last mirror is sent where the service did not take it. */
+const STORE_RETRIES = 2;
+
+/** What a launch on a host ends with, since a host runs no Cursor agent yet. */
+const ON_HOST = "a host runs no Cursor agent yet";
 
 /** What a launch with no key to run Cursor on ends with. */
 const NO_KEY = "no Cursor API key was handed to the launch";
@@ -593,7 +602,12 @@ const takeRunEnded = Effect.fn("agent-runner/cursor/takeRunEnded")(function* (
 
   if (state.kind !== LAUNCH_STATE.RUN || state.run !== signal.run) return undefined;
   launch.state = IDLE;
-  yield* launch.store.mirror;
+  // A mirror the service did not take goes again with the next run's, and at the launch's end.
+  yield* launch.store.mirror.pipe(
+    Effect.catch(() =>
+      Effect.logWarning("agent-runner: the Cursor agent's store was not mirrored"),
+    ),
+  );
 
   // A stopped run's own messages end with it; those sent since the stop go as the next run.
   if (state.stopping) {
@@ -645,7 +659,11 @@ function takeSignal(
       return takeLine(launch, signal.text);
     case SIGNAL.INPUT_CLOSED: {
       // A run still going is let finish; the launch ends with it.
-      const idle = launch.state.kind === LAUNCH_STATE.IDLE && launch.waiting.length === 0;
+      // Note that a steer Cursor has not answered may yet send its message as a run, so it holds the launch too.
+      const idle =
+        launch.state.kind === LAUNCH_STATE.IDLE &&
+        launch.waiting.length === 0 &&
+        launch.steering === 0;
 
       return Effect.succeed(idle ? ended(RUNNER_END.INPUT_CLOSED) : undefined);
     }
@@ -719,6 +737,9 @@ export const runCursor = Effect.fn("agent-runner/runCursor")(function* (
   const { config } = context;
   const snapshots = yield* CheckoutSnapshots;
   const apiKey = context.env[RUNNER_ENV.CURSOR_API_KEY];
+
+  // Note that a host's harnesses run on the machine's own logins, which Cursor's launch reads none of yet.
+  if (runsOnHost(context.env)) return ended(RUNNER_END.FAILED, ON_HOST);
 
   if (apiKey === undefined || apiKey === "") return ended(RUNNER_END.FAILED, NO_KEY);
   const signals = yield* Queue.unbounded<Signal>();
@@ -801,9 +822,19 @@ export const runCursor = Effect.fn("agent-runner/runCursor")(function* (
   }
 
   launch.agent.close();
-  yield* launch.store.mirror;
+
+  // Note that a store the service never took leaves the next launch resuming an older conversation, so the launch fails rather than say its turn is kept.
+  const kept = yield* launch.store.mirror.pipe(
+    Effect.retry({ times: STORE_RETRIES }),
+    Effect.as(true),
+    Effect.catch(() => Effect.succeed(false)),
+  );
+
   // A turn the end cut short, or ended without an IDLE, still says what it changed.
   const files = yield* turnFilesOf(launch);
 
-  return files === undefined ? outcome : { ...outcome, files };
+  const settled =
+    kept || outcome.end === RUNNER_END.FAILED ? outcome : ended(RUNNER_END.FAILED, STORE_UNKEPT);
+
+  return files === undefined ? settled : { ...settled, files };
 });
