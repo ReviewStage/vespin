@@ -1,5 +1,5 @@
 /**
- * runner.ts -- one launch of an agent: the bearer and the config line read, the harness the config names run (Claude Code here, Codex in `codex.ts`), and the launch's last event posted; for Claude Code, the CLI spawned and initialized by `startup()` and then run in streaming input mode, the service's lines fed to it, its messages posted out, and the launch ended when the agent's turn is.
+ * runner.ts -- one launch of an agent: the bearer and the config line read, the harness the config names run (Claude Code here, Codex in `codex.ts`, Cursor in `cursor.ts`), and the launch's last event posted; for Claude Code, the CLI spawned and initialized by `startup()` and then run in streaming input mode, the service's lines fed to it, its messages posted out, and the launch ended when the agent's turn is.
  *
  * Two loops run side by side. The input loop reads the service's lines, from stdin
  * or, where the config names the read, from the service (`lines.ts`), and acts on
@@ -86,6 +86,7 @@ import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import { ClaudeCode, type ClaudeCodeService, type ClaudeCodeSession } from "./claude-code.js";
 import { type GoalWatchedFile, goalWatchedFile, goalWatchedStore } from "./claude-goals.js";
 import { runCodex } from "./codex.js";
+import { runCursor } from "./cursor.js";
 import { type EventSink, openEventSink } from "./events.js";
 import {
   harnessEnvOf,
@@ -1253,13 +1254,16 @@ export const runAgent = Effect.fn("agent-runner/runAgent")(function* (input: Run
 
   const bearer = Redacted.make(bearerValue);
 
-  const tokens = [RUNNER_ENV.CLAUDE_TOKEN, RUNNER_ENV.API_KEY, RUNNER_ENV.OPENAI_API_KEY].flatMap(
-    (name) => {
-      const value = input.env[name];
+  const tokens = [
+    RUNNER_ENV.CLAUDE_TOKEN,
+    RUNNER_ENV.API_KEY,
+    RUNNER_ENV.OPENAI_API_KEY,
+    RUNNER_ENV.CURSOR_API_KEY,
+  ].flatMap((name) => {
+    const value = input.env[name];
 
-      return value === undefined || value === "" ? [] : [Redacted.make(value)];
-    },
-  );
+    return value === undefined || value === "" ? [] : [Redacted.make(value)];
+  });
 
   const secrets = [bearer, ...tokens];
 
@@ -1365,7 +1369,9 @@ const runLaunch = Effect.fn("agent-runner/runLaunch")(function* (read: ReadLaunc
   const outcome: LaunchOutcome =
     config.harness === RUNNER_HARNESS.CODEX
       ? yield* runCodex({ ...context, config })
-      : yield* runClaudeCode({ ...context, config });
+      : config.harness === RUNNER_HARNESS.CURSOR
+        ? yield* runCursor({ ...context, config })
+        : yield* runClaudeCode({ ...context, config });
 
   const { end, failure, files } = outcome;
 

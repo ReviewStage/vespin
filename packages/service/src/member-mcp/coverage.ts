@@ -393,6 +393,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     workspaceIntegrations: SCREEN_ONLY,
     pullRequestChapters: SCREEN_ONLY,
     repositoryPullRequestChapters: SCREEN_ONLY,
+    repositoryPullRequestMoved: SCREEN_ONLY,
     integrationStatuses: SCREEN_ONLY,
     accountPreferences: SCREEN_ONLY,
   },

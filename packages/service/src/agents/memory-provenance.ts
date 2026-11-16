@@ -47,7 +47,7 @@ import {
   readMessageByClientId,
 } from "@repo/database/models/message-reads";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { AGENT_TOOL, CLAUDE_CODE_TOOL, CODEX_TOOL } from "@repo/features/agent-tools";
+import { AGENT_TOOL, CLAUDE_CODE_TOOL, CODEX_TOOL, CURSOR_TOOL } from "@repo/features/agent-tools";
 import { automationRun } from "@repo/features/model-label";
 import { toolPartName } from "@repo/wire/ui-messages";
 import { Effect, Predicate } from "effect";
@@ -93,6 +93,8 @@ const WEB_READS: ReadonlySet<string> = new Set([
   CLAUDE_CODE_TOOL.WEB_FETCH,
   CLAUDE_CODE_TOOL.WEB_SEARCH,
   CODEX_TOOL.WEB_SEARCH,
+  CURSOR_TOOL.WEB_SEARCH,
+  CURSOR_TOOL.WEB_FETCH,
 ]);
 
 /** The tool a journal's part calls, a dynamic tool's by its own name; none for a part that calls none. */

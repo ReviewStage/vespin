@@ -1,8 +1,9 @@
 import type { AgentPullRequestAnswerView } from "@repo/features/agent-view";
 import type { AgentPullRequest, AgentPullRequestAnswer } from "@repo/features/agent-wire";
+import { type NumberedAddress, pullRequestAddressOf } from "@repo/features/link-grammar";
 import type { ListedPullRequest } from "@repo/features/task-wire";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { pullRequestPublishedQuery } from "../live-reads.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 
@@ -96,4 +97,24 @@ export function useListedPullRequests(
  */
 export function useListedPullRequest(agentId: string): AgentPullRequest | undefined {
   return useTaskListRow(useTaskListCollections().agentPullRequests, agentId)?.pullRequest;
+}
+
+/**
+ * The pull request an agent's line in the task list names, by its
+ * repository and number, read as it is asked: what a link an earlier
+ * version wrote under the agent opens, its Changes or one of its review
+ * threads, since a Pull request tab names its pull request alone; none
+ * where the list names none for the agent.
+ */
+export function useAgentPullRequestAddress(): (agentId: string) => NumberedAddress | undefined {
+  const { agentPullRequests } = useTaskListCollections();
+
+  return useCallback(
+    (agentId: string) => {
+      const url = agentPullRequests.get(agentId)?.pullRequest.url;
+
+      return url === undefined ? undefined : pullRequestAddressOf(url);
+    },
+    [agentPullRequests],
+  );
 }

@@ -277,6 +277,8 @@ export const LIVE_READ = {
   PULL_REQUEST_CHAPTERS: "pullRequestChapters",
   /** One pull request's newest chapters, by the workspace, its repository, and its number: the service's `repositoryPullRequestChapters` query. */
   REPOSITORY_PULL_REQUEST_CHAPTERS: "repositoryPullRequestChapters",
+  /** When GitHub last said one pull request moved, and its head as GitHub last named it, by the workspace, its repository, and its number: the service's `repositoryPullRequestMoved` query, which the host follows for each pull request a Pull request tab holds by its repository and number, and asks its parts again as it moves. */
+  REPOSITORY_PULL_REQUEST_MOVED: "repositoryPullRequestMoved",
   /** The checks on one agent's pull request's head, keyed and fetched as `PULL_REQUEST`. */
   PULL_REQUEST_CHECKS: "pullRequestChecks",
   /** One agent's pull request's conversation and where its reviewers stand, keyed and fetched as `PULL_REQUEST`. */

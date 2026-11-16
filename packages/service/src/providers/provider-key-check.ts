@@ -12,16 +12,16 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 /**
  * provider-key-check.ts -- whether a provider accepts a key, asked before an account's own key is kept.
  *
- * One authenticated read that bills nothing: each provider's list of
- * models. A 200 is a key the provider accepts; a 401 or a 403 is one it
+ * One authenticated read that bills nothing: Anthropic's and OpenAI's list
+ * of models, and Cursor's read of the key's own owner. A 200 is a key the provider accepts; a 401 or a 403 is one it
  * refuses; anything else, a failure to connect, or no answer inside the
  * deadline is a provider that could not be asked, which keeps nothing and
  * may be tried again. The provider's body is never read and nothing of the
  * exchange is logged, since a provider's refusal can echo part of the key.
  *
- * A key spelled as the other provider's is refused before it is sent
+ * A key spelled as another provider's is refused before it is sent
  * anywhere, so an Anthropic key pasted into OpenAI's row never reaches
- * OpenAI.
+ * OpenAI, and neither reaches Cursor.
  *
  * An Anthropic key is also asked whether its organization may run fast
  * mode, which Anthropic grants organization by organization and offers no
@@ -40,6 +40,9 @@ const PROVIDER_CHECK = {
   },
   [PROVIDER_KEY_PROVIDER.OPENAI]: {
     URL: "https://api.openai.com/v1/models",
+  },
+  [PROVIDER_KEY_PROVIDER.CURSOR]: {
+    URL: "https://api.cursor.com/v1/me",
   },
 } as const;
 
@@ -65,12 +68,13 @@ const FAST_CHECK_TIMEOUT = Duration.seconds(8);
 /** How long the provider is given to answer before the save is answered unreachable. */
 const CHECK_TIMEOUT = Duration.seconds(10);
 
-/** Every Anthropic key's own prefix; an OpenAI key begins `sk-` without it. */
+/** Every Anthropic key's own prefix; an OpenAI key begins `sk-` without it, and a Cursor key `crsr_`. */
 const ANTHROPIC_KEY_PREFIX = "sk-ant-";
 const OPENAI_KEY_PREFIX = "sk-";
+const CURSOR_KEY_PREFIX = "crsr_";
 
-/** The prefix a hint keeps: `sk-` and the one lowercase word after it that names the key's kind, as `sk-ant-` or `sk-proj-`. */
-const HINT_PREFIX = /^sk-(?:[a-z]+-)?/u;
+/** The prefix a hint keeps: `sk-` and the one lowercase word after it that names the key's kind, as `sk-ant-` or `sk-proj-`, or Cursor's `crsr_`. */
+const HINT_PREFIX = /^(?:sk-(?:[a-z]+-)?|crsr_)/u;
 const HINT_TAIL_CHARS = 4;
 
 /** What a check answers: the key accepted, or why it is not kept. */
@@ -85,13 +89,20 @@ export type ProviderKeyCheck = (typeof PROVIDER_KEY_CHECK)[keyof typeof PROVIDER
 
 const HTTP_STATUS = { OK: 200, UNAUTHORIZED: 401, FORBIDDEN: 403, TOO_MANY_REQUESTS: 429 } as const;
 
-/** Whether the key is spelled as the other provider's. */
+/** Whether the key is spelled as another provider's. */
 function spelledForOther(provider: ProviderKeyProvider, key: string): boolean {
   const anthropic = key.startsWith(ANTHROPIC_KEY_PREFIX);
+  const openai = !anthropic && key.startsWith(OPENAI_KEY_PREFIX);
+  const cursor = key.startsWith(CURSOR_KEY_PREFIX);
 
-  return provider === PROVIDER_KEY_PROVIDER.ANTHROPIC
-    ? !anthropic && key.startsWith(OPENAI_KEY_PREFIX)
-    : anthropic;
+  switch (provider) {
+    case PROVIDER_KEY_PROVIDER.ANTHROPIC:
+      return openai || cursor;
+    case PROVIDER_KEY_PROVIDER.OPENAI:
+      return anthropic || cursor;
+    case PROVIDER_KEY_PROVIDER.CURSOR:
+      return anthropic || openai;
+  }
 }
 
 function checkRequest(
@@ -113,6 +124,11 @@ function checkRequest(
 
     case PROVIDER_KEY_PROVIDER.OPENAI:
       return HttpClientRequest.get(PROVIDER_CHECK[PROVIDER_KEY_PROVIDER.OPENAI].URL).pipe(
+        HttpClientRequest.bearerToken(Redacted.value(key)),
+      );
+
+    case PROVIDER_KEY_PROVIDER.CURSOR:
+      return HttpClientRequest.get(PROVIDER_CHECK[PROVIDER_KEY_PROVIDER.CURSOR].URL).pipe(
         HttpClientRequest.bearerToken(Redacted.value(key)),
       );
   }

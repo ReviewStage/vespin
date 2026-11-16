@@ -64,13 +64,13 @@ const ITEM_BESIDE: Readonly<Partial<Record<LinkDestinationName, ItemPlaceBeside>
         : { kind: THING.PAGE, pageId: at.pageId, place },
     );
   },
-  // An archived agent's Changes still opens beside the item, as its older link under the task did.
+  // An agent's Changes, as an earlier link names it, still opens beside the item, an archived agent's among them, as the pull request the agent's line names.
   CHANGES: (at, _workspace, here) =>
     at.kind === LINK_DESTINATION.CHANGES &&
     holdsAgent(at, here.taskId, here.heldIds ?? here.agentIds)
       ? beside({ kind: THING.CHANGES, agentId: at.agentId })
       : NOTHING,
-  // A review thread of an agent's pull request opens beside the item as its Changes does.
+  // A review thread of an agent's pull request, as an earlier link names it, opens beside the item as its Changes does.
   PULL_REQUEST_THREAD: (at, _workspace, here) =>
     at.kind === LINK_DESTINATION.PULL_REQUEST_THREAD &&
     holdsAgent(at, here.taskId, here.heldIds ?? here.agentIds)

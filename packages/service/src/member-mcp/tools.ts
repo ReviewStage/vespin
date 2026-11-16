@@ -4435,7 +4435,7 @@ const MEMBER_LIST_AUTOMATIONS_TOOL = memberMcpTool({
     "List the automations of a workspace the member belongs to that the member may read, " +
     "newest first: each with its id, name, whether it is on, its trigger, the start of its " +
     "prompt, the model and effort its runs take, its repositories, where its runs land, its " +
-    "guards, scope, when it is next due, its newest run, and whether the member made it " +
+    "scope, when it is next due, its newest run, and whether the member made it " +
     "(madeByYourDeveloper). Name an automationId to read that one whole, in whichever of the " +
     "member's workspaces it stands, its prompt in full and its newest runs, each with why it " +
     "was skipped or failed and the agent it started. An automation fires on a schedule, a " +
@@ -4516,8 +4516,8 @@ const MEMBER_RUN_AUTOMATION_TOOL = memberMcpTool({
   description:
     `Run an automation the member may run now, by its id as ${MEMBER_MCP_TOOL.LIST_AUTOMATIONS} ` +
     "answered it, in whichever of the member's workspaces it stands, as its Run now on the " +
-    "automations page would: one run, whatever its trigger, through the same guards a firing " +
-    "takes, starting its agent on its prompt as its creator, as a scheduled run would, or " +
+    "automations page would: one run, whatever its trigger, " +
+    "starting its agent on its prompt as its creator, as a scheduled run would, or " +
     "handing it to the one agent it names. A personal automation is its creator's to run, and " +
     "a workspace's every member's. Run one when the member asks for it, such as to try an " +
     "automation just made. Each call is a run of its own, so call it once for each. Answers " +
