@@ -22,6 +22,8 @@ import {
   ClaudeCodeConfigSchema,
   type CodexConfig,
   CodexConfigSchema,
+  type CursorConfig,
+  CursorConfigSchema,
   type InputLine,
   InputLineSchema,
   RUNNER_ENV,
@@ -737,6 +739,7 @@ const WHOLE = { onExcessProperty: EXCESS_KEYS.REFUSE } as const;
 const decodeRunnerConfig = Schema.decodeUnknownSync(RunnerConfigSchema);
 const decodeClaudeCodeConfig = Schema.decodeUnknownSync(ClaudeCodeConfigSchema);
 const decodeCodexConfig = Schema.decodeUnknownSync(CodexConfigSchema);
+const decodeCursorConfig = Schema.decodeUnknownSync(CursorConfigSchema);
 const decodeInputLine = Schema.decodeUnknownSync(InputLineSchema);
 
 /** A launch's config, of either harness, read whole: a key its schema does not name fails the read. */
@@ -750,6 +753,10 @@ export const readClaudeCodeConfig = (input: UnparsedWireValue): ClaudeCodeConfig
 /** A Codex launch's config, read whole: a key its schema does not name fails the read. */
 export const readCodexConfig = (input: UnparsedWireValue): CodexConfig =>
   decodeCodexConfig(input, WHOLE);
+
+/** A Cursor launch's config, read whole: a key its schema does not name fails the read. */
+export const readCursorConfig = (input: UnparsedWireValue): CursorConfig =>
+  decodeCursorConfig(input, WHOLE);
 
 /** A line a runner is handed, read whole: a key its schema does not name fails the read. */
 export const readInputLine = (input: UnparsedWireValue): InputLine => decodeInputLine(input, WHOLE);
