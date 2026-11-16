@@ -280,13 +280,17 @@ env:
     timeout: 5000
 - takeScreenshot: agent-pinned
 # Archive asks first, in the panel's words, since the agent still works and
-# archiving it stops it; Cancel leaves it.
+# archiving it stops it; putting the question away (a tap off the iPhone's
+# action sheet, the iPad alert's Cancel) leaves it.
 - tapOn: "Archive"
 - assertVisible: "Archive agent?"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-archive
-- tapOn: "Cancel"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Archive agent?"
 - assertNotVisible: "Archive agent?"
 - assertVisible: "Invite by email"
 # Confirmed, the archive is taken, as the fixture takes it, with no refusal
