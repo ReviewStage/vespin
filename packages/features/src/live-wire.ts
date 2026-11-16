@@ -287,6 +287,18 @@ export const LIVE_READ = {
   PULL_REQUEST_VIEWED: "pullRequestViewed",
   /** What the reviewer and label pickers of one agent's Pull request tab offer, its repository's labels, assignable users, and teams, keyed and fetched as `PULL_REQUEST`. */
   REVIEW_OPTIONS: "reviewOptions",
+  /** One pull request as a Pull request tab draws it, by the workspace whose installation reaches its repository, then the repository, then its number, with no agent: fetched by the host while a window holds it. */
+  REPOSITORY_PULL_REQUEST: "repositoryPullRequest",
+  /** The checks on one pull request's head, keyed and fetched as `REPOSITORY_PULL_REQUEST`. */
+  REPOSITORY_PULL_REQUEST_CHECKS: "repositoryPullRequestChecks",
+  /** One pull request's conversation and where its reviewers stand, keyed and fetched as `REPOSITORY_PULL_REQUEST`. */
+  REPOSITORY_PULL_REQUEST_CONVERSATION: "repositoryPullRequestConversation",
+  /** One pull request as GitHub holds it now with its head's checks and the branch it is from, keyed and fetched as `REPOSITORY_PULL_REQUEST`. */
+  REPOSITORY_PULL_REQUEST_PUBLISHED: "repositoryPullRequestPublished",
+  /** Which of one pull request's files the member marked viewed on GitHub, read on their own GitHub sign-in, keyed and fetched as `REPOSITORY_PULL_REQUEST`. */
+  REPOSITORY_PULL_REQUEST_VIEWED: "repositoryPullRequestViewed",
+  /** What the reviewer and label pickers offer of one pull request's repository, keyed and fetched as `REPOSITORY_PULL_REQUEST`. */
+  REPOSITORY_REVIEW_OPTIONS: "repositoryReviewOptions",
   /** One task's comments, its description's own threads or one page's: the service's `taskCommentsLive` query. */
   DESCRIPTION_COMMENTS: "taskComments",
   /** One task's description history, by the task: the service's `taskHistoryLive` query for its newest page, then the older pages its version history read past it, held for the windows that show it and a few they showed lately. */

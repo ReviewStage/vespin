@@ -104,6 +104,7 @@ const STAND_IN: DescriptionEditorModule = {
         return { base: merged, text: merged };
       },
       chooseMention: () => undefined,
+      retypeMention: () => undefined,
       insertBlock: () => undefined,
       markdown: () => props.markdown,
       replaceAnchors: () => undefined,
