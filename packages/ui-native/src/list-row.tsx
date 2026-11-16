@@ -935,9 +935,6 @@ function TaskEndMark({ needsYou = false, agents }: Pick<TaskRowProps, "needsYou"
   }
 }
 
-/** How far each level of sub-tasks stands in, in points: past a parent's fold, so a sub-task's mark stands under its parent's. */
-const SUB_TASK_INDENT = MARK_SIZE.LEAD + SPACE.ROW;
-
 /** What a parent's chevron is heard as, folded and open. */
 const SHOW_SUB_TASKS = "Show sub-tasks";
 const HIDE_SUB_TASKS = "Hide sub-tasks";
@@ -955,7 +952,11 @@ const FOLD_TARGET = 44;
  */
 function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPress: () => void }) {
   const colors = useColors();
-  const overhang = { across: (FOLD_TARGET - MARK_SIZE.LEAD) / 2, down: FOLD_TARGET / 2 };
+  // Note that the chevron and the column it lays out grow with the reader's text, as the ring beside it does, so it stands no speck beside large words.
+  const lead = useScaledSize(MARK_SIZE.LEAD);
+  const glyph = useScaledSize(MARK_SIZE.GLYPH - 4);
+  const target = Math.max(FOLD_TARGET, lead);
+  const overhang = { across: (target - lead) / 2, down: target / 2 };
 
   return (
     <Button
@@ -967,10 +968,10 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
     >
       <Image
         {...glyphImage(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
-        size={MARK_SIZE.GLYPH - 4}
+        size={glyph}
         color={colors.TEXT_MUTED}
         modifiers={[
-          frame({ width: FOLD_TARGET, height: FOLD_TARGET }),
+          frame({ width: target, height: target }),
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
           padding({
             leading: -overhang.across,
@@ -1007,11 +1008,13 @@ export function TaskRow(props: TaskRowProps) {
   } = props;
 
   const colors = useColors();
+  // Note that each level of sub-tasks stands in past a parent's fold, its column the lead's scaled width, so a sub-task's mark stands under its parent's at every size.
+  const lead = useScaledSize(MARK_SIZE.LEAD);
   // Note that the priority's column is the lead's, grown with Dynamic Type as the lead grows, so the hairline still starts under the name at an accessibility size; it is an offset past the list's own words, which a sub-task's depth adds to.
-  const priorityColumn = useScaledSize(MARK_SIZE.LEAD) + SPACE.ROW;
+  const priorityColumn = lead + SPACE.ROW;
 
   const row: ReactElement = (
-    <HStack modifiers={[padding({ leading: depth * SUB_TASK_INDENT })]}>
+    <HStack modifiers={[padding({ leading: depth * (lead + SPACE.ROW) })]}>
       <RowHead
         unread={unread}
         faded={finished}

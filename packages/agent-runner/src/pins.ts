@@ -1,5 +1,5 @@
 /**
- * pins.ts -- what a coding agent's sandbox pins of Claude Code and Codex: their versions and where the image puts them, read by the image, the sessions, and the protocol generator alike.
+ * pins.ts -- what a coding agent's sandbox pins of Claude Code, Codex, and Cursor's SDK: their versions and where the image puts them, read by the image, the sessions, and the protocol generator alike.
  *
  * The image (`apps/web/agent-image/Dockerfile`, which
  * `tools/oxlint/vespin/guards/agent-pins.ts` holds to these) installs
@@ -129,6 +129,24 @@ export const CODEX_PIN = {
   LINK: "/usr/local/bin/codex",
   HOME: `/home/${AGENT_USER}/.codex`,
 } as const;
+
+/**
+ * Cursor's TypeScript SDK, pinned exactly, with the platform package npm
+ * installs beside it on the sandbox's Linux x86-64 (`@cursor/sdk-linux-x64`:
+ * its tree-sitter bindings and the `rg` its search tools run), installed as
+ * root under a prefix only root writes. The runner imports the SDK from
+ * here rather than bundling it, so the SDK finds that package beside itself
+ * as it looks for it (`CURSOR_SDK_ENTRY`). It needs Node 22.13 or later.
+ */
+export const CURSOR_SDK_PIN = {
+  VERSION: "1.4.0",
+  DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/cursor-sdk`,
+  /** The SDK's ES module entry, under `DIRECTORY`. */
+  ENTRY: "node_modules/@cursor/sdk/dist/esm/index.js",
+} as const;
+
+/** The SDK's entry's whole path, which the service names in a Cursor launch's config (`sdk`). */
+export const CURSOR_SDK_ENTRY = `${CURSOR_SDK_PIN.DIRECTORY}/${CURSOR_SDK_PIN.ENTRY}`;
 
 /**
  * A binary a local agent's Mac or host fetches once and keeps (`@repo/host`'s

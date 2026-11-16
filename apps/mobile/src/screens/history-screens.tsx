@@ -6,8 +6,10 @@ import {
   VERSION_HISTORY_WORDS,
 } from "@repo/features/description-history-words";
 import { type VersionDiff, versionDiff } from "@repo/features/description-version-diff";
-import type { DescriptionRevisionLine } from "@repo/features/task-wire";
-import { agoText, dayAndTimeText } from "@repo/features/time-format";
+import { providerOf } from "@repo/features/model-label";
+import type { ModelProvider } from "@repo/features/models-wire";
+import { DESCRIPTION_ACTOR, type DescriptionLastEdit } from "@repo/features/task-wire";
+import { dayAndTimeText } from "@repo/features/time-format";
 import { readingWords, showMoreWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -15,7 +17,6 @@ import {
   DetailPage,
   EmptyState,
   GLYPH,
-  glyphSymbol,
   LIST_LOOK,
   LinkRow,
   ListSection,
@@ -24,12 +25,17 @@ import {
   Screen,
   useColors,
   useFailureNotices,
+  useMinute,
+  VERSION_WRITER,
+  VersionRow,
+  type VersionWriter,
   WordsRow,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useState } from "react";
 import { PUSHED_PAGE, useDetailLeave, useDetailPush, useHandToDetail } from "../detail-stack.js";
-import { useHostActs } from "../host/host-provider.js";
+import { useHostActs, useListedAgents } from "../host/host-provider.js";
+import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
 import {
@@ -50,9 +56,6 @@ export const VERSION_ROUTE = "/tasks/version/[id]";
 /** The route a task's version history is opened on. */
 export const HISTORY_ROUTE = "/tasks/history/[id]";
 
-/** The glyph each version's row leads with, the panel's restore arrow round a clock. */
-const VERSION_SYMBOL = GLYPH.HISTORY;
-
 /** The glyph the history stands under while it says nothing else. */
 const HISTORY_SYMBOL = GLYPH.HISTORY;
 
@@ -63,12 +66,32 @@ function versionNumber(spelled: string | undefined): number | undefined {
   return Number.isInteger(seq) && seq >= 1 ? seq : undefined;
 }
 
-/** The line under a version's writer: Current first on the newest, so a narrow row cuts off its summary rather than it, then what it did and how long ago. */
-function versionLine(line: DescriptionRevisionLine, newest: boolean, now: number): string {
-  const said = [revisionSummary(line), agoText(line.lastEdit.at, now)];
-
-  return (newest ? [VERSION_HISTORY_WORDS.CURRENT, ...said] : said).join(" · ");
+/** Who wrote a version, by the mark its row leads with, as the panel's version rows lead: a person by their face, its picture looked up only for a person, since a notetaker's version names the person whose call it was written on, whose photo is not its writer's. */
+function versionWriter(
+  lastEdit: DescriptionLastEdit,
+  pictureOf: PictureOf,
+  harness: ModelProvider | undefined,
+): VersionWriter {
+  switch (lastEdit.actor) {
+    case DESCRIPTION_ACTOR.DEVELOPER:
+      return {
+        kind: VERSION_WRITER.PERSON,
+        face: {
+          name: revisionWriterName(lastEdit, undefined),
+          picture: pictureOf(lastEdit.by?.userId),
+        },
+      };
+    case DESCRIPTION_ACTOR.AGENT:
+      return { kind: VERSION_WRITER.AGENT, name: revisionWriterName(lastEdit, undefined), harness };
+    case DESCRIPTION_ACTOR.NOTETAKER:
+      return { kind: VERSION_WRITER.PRODUCT };
+    case DESCRIPTION_ACTOR.EARLIER:
+      return { kind: VERSION_WRITER.EARLIER };
+  }
 }
+
+/** What the bar's Restore says, short for the bar; it is heard as the panel's whole "Restore this version". */
+const RESTORE_BAR = "Restore";
 
 /**
  * A task description's version history, as the panel's lists it: each
@@ -100,7 +123,17 @@ export function History({
   const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
   const history = useTaskHistory(id);
-  const now = Date.now();
+  const pictureOf = useMemberPictures();
+  const listedAgents = useListedAgents();
+
+  // An agent's version leads with its harness's mark where the task's agents still hold its model, as the panel's version rows do.
+  const harnessOf = (agentId: string | undefined): ModelProvider | undefined => {
+    const model = listedAgents.find((agent) => agent.id === agentId)?.model;
+
+    return model === undefined ? undefined : providerOf(model);
+  };
+
+  const now = useMinute();
   const revisions = history.page?.revisions ?? [];
   const earlier = history.page?.earlier;
   const newest = revisions[0]?.seq;
@@ -123,12 +156,16 @@ export function History({
             history.older === HISTORY_READ.FAILED ? VERSION_HISTORY_WORDS.OLDER_UNREAD : undefined
           }
         >
-          {revisions.map((line) => (
-            <LinkRow
+          {revisions.map((line, index) => (
+            <VersionRow
               key={line.seq}
-              symbol={VERSION_SYMBOL}
-              label={revisionWriterName(line.lastEdit, history.readerId)}
-              detail={versionLine(line, line.seq === newest, now)}
+              writer={versionWriter(line.lastEdit, pictureOf, harnessOf(line.agentId))}
+              name={revisionWriterName(line.lastEdit, history.readerId)}
+              summary={revisionSummary(line)}
+              at={line.lastEdit.at}
+              now={now}
+              current={line.seq === newest}
+              first={index === 0}
               onPress={() => {
                 const version = {
                   kind: PUSHED_PAGE.VERSION,
@@ -366,30 +403,33 @@ export function Version({
   const name = at === undefined ? VERSION_HISTORY_WORDS.TITLE : dayAndTimeText(at);
 
   if (inColumn) {
+    // Note that Restore stands dimmed on the description as it stands, heard as already current, as the compact bar keeps it, rather than leaving the column's bar.
     const restoreAct = {
-      label: VERSION_HISTORY_WORDS.RESTORE,
+      label: current ? VERSION_HISTORY_WORDS.ALREADY_CURRENT : VERSION_HISTORY_WORDS.RESTORE,
       symbol: GLYPH.RESTORE,
-      disabled: read === undefined || restoring,
+      disabled: current || read === undefined || restoring,
       onPress: restore,
     };
 
-    return <DetailPage bar={{ name, acts: current ? [] : [restoreAct] }}>{body}</DetailPage>;
+    return <DetailPage bar={{ name, acts: [restoreAct] }}>{body}</DetailPage>;
   }
 
   return (
     <>
       <Stack.Screen options={{ title: name }} />
-      {current ? null : (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            icon={glyphSymbol(GLYPH.RESTORE)}
-            tintColor={colors.TEXT}
-            accessibilityLabel={VERSION_HISTORY_WORDS.RESTORE}
-            disabled={read === undefined || restoring}
-            onPress={restore}
-          />
-        </Stack.Toolbar>
-      )}
+      {/* Note that Restore says what it does in words, as Pages' does, and stands dimmed on the description as it stands, heard as already current, as the panel keeps it, rather than vanishing. */}
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          tintColor={colors.TEXT}
+          accessibilityLabel={
+            current ? VERSION_HISTORY_WORDS.ALREADY_CURRENT : VERSION_HISTORY_WORDS.RESTORE
+          }
+          disabled={current || read === undefined || restoring}
+          onPress={restore}
+        >
+          {RESTORE_BAR}
+        </Stack.Toolbar.Button>
+      </Stack.Toolbar>
       <Screen>{body}</Screen>
     </>
   );
