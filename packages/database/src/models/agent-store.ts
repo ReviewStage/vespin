@@ -1990,6 +1990,13 @@ const OnPullRequestSchema = Schema.Struct({
   unarchivedOnly: Schema.Boolean,
 });
 
+const OnHeadSchema = Schema.Struct({
+  repository: Schema.String,
+  branches: Schema.Array(Schema.String),
+  sha: Schema.String,
+  limit: Schema.Number,
+});
+
 /** The condition that an agent stands unarchived, where the read asks for only those; none otherwise. */
 function unarchivedWhere(unarchivedOnly: boolean) {
   return unarchivedOnly ? isNull(agentTable.archivedAt) : undefined;
@@ -2077,6 +2084,29 @@ const findAgentsOnLinkedBranches = SqlSchema.findAll({
             namesDeliveredRepository(agentPullRequest.repository, repository),
             inArray(agentPullRequest.headBranch, [...branches]),
             unarchivedWhere(unarchivedOnly),
+          ),
+        )
+        .orderBy(desc(agentTable.createdAt), asc(agentTable.id))
+        .limit(limit),
+    ),
+});
+
+/** The unarchived agents that linked a pull request from one of a delivery's branches whose head, as GitHub last answered, is the commit named. */
+const findAgentsOnHead = SqlSchema.findAll({
+  Request: OnHeadSchema,
+  Result: AgentOnLinkedRowSchema,
+  execute: ({ repository, branches, sha, limit }) =>
+    Database.use((db) =>
+      db
+        .select(ON_LINKED_COLUMNS)
+        .from(agentPullRequest)
+        .innerJoin(agentTable, eq(agentTable.id, agentPullRequest.agentId))
+        .where(
+          and(
+            namesDeliveredRepository(agentPullRequest.repository, repository),
+            inArray(agentPullRequest.headBranch, [...branches]),
+            sql`${agentPullRequest.pullRequest} ->> 'headSha' = ${sha}`,
+            isNull(agentTable.archivedAt),
           ),
         )
         .orderBy(desc(agentTable.createdAt), asc(agentTable.id))
@@ -2836,6 +2866,28 @@ export function listAgentsOnPullRequest(
   const request = { repository, number, limit, unarchivedOnly: options.unarchivedOnly ?? false };
 
   return Effect.map(findAgentsOnPullRequest(request), (linked) =>
+    ownedNewestFirst(linkedFound(linked), limit),
+  );
+}
+
+/**
+ * The unarchived agents of any account that linked a pull request from one
+ * of the repository's branches named whose head, as GitHub last answered it
+ * (`agent_pull_request`), is the commit named, newest started first and at
+ * most `limit` of them, the head matched before the limit; none for no
+ * branch: what a delivery about a commit's checks finds the agents standing
+ * on it by, matched as the read by branches matches. Like that read, it
+ * names no account.
+ */
+export function listAgentsOnHead(
+  repository: string,
+  branches: readonly string[],
+  sha: string,
+  limit: number,
+): AgentStoreEffect<readonly OwnedAgent[]> {
+  if (branches.length === 0) return Effect.succeed([]);
+
+  return Effect.map(findAgentsOnHead({ repository, branches, sha, limit }), (linked) =>
     ownedNewestFirst(linkedFound(linked), limit),
   );
 }

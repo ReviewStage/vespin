@@ -264,8 +264,8 @@ const runningTurn = (owner: string, conversationId: string) =>
     }),
   );
 
-/** Pull request 41 linked to the agent with its head at the commit given, as a read of it leaves its row. */
-const publishedAt = (owner: string, agentId: string, headSha: string) =>
+/** Pull request 41 from the branch given linked to the agent with its head at the commit given, as a read of it leaves its row. */
+const publishedAt = (owner: string, agentId: string, headSha: string, ref: string) =>
   openedPullRequest(
     owner,
     agentId,
@@ -281,6 +281,7 @@ const publishedAt = (owner: string, agentId: string, headSha: string) =>
       headSha,
     },
     RELAY_FULL_NAME,
+    ref,
   );
 
 /** The page GitHub names for the check run of the id given. */
@@ -825,7 +826,7 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
         const agentSessions = fakeAgentSessions();
         const { owner, agent, ref, target } = yield* openAgent;
         yield* endedTurn(owner, agent.conversationId, MADE_AT - 60_000);
-        yield* publishedAt(owner, agent.id, HEAD);
+        yield* publishedAt(owner, agent.id, HEAD, ref);
         const github = githubReaching(INSTALLATIONS).layer;
 
         const heardAfter = (wake: AgentWake | undefined) =>
@@ -1033,7 +1034,7 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
         const agentSessions = fakeAgentSessions();
         const { owner, agent, ref } = yield* openAgentOn(GITHUB_ACCESS.TOKEN);
         yield* endedTurn(owner, agent.conversationId, MADE_AT - 60_000);
-        yield* publishedAt(owner, agent.id, HEAD);
+        yield* publishedAt(owner, agent.id, HEAD, ref);
 
         const failed: AgentWake = {
           kind: AGENT_WAKE.CHECK_FAILED,
@@ -1151,7 +1152,7 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
         const agentSessions = fakeAgentSessions();
         const { owner, agent, ref } = yield* openAgent;
         yield* runningTurn(owner, agent.conversationId);
-        yield* publishedAt(owner, agent.id, HEAD);
+        yield* publishedAt(owner, agent.id, HEAD, ref);
 
         const held: Held = {
           checkRuns: [checkRun(1, "lint", "success", MADE_AT), checkRun(2, "test", null, MADE_AT)],
@@ -1286,10 +1287,10 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
 
         const read = yield* openAgent;
         yield* endedTurn(read.owner, read.agent.conversationId, MADE_AT - 60_000);
-        yield* publishedAt(read.owner, read.agent.id, HEAD);
+        yield* publishedAt(read.owner, read.agent.id, HEAD, read.ref);
         const unread = yield* openAgent;
         yield* endedTurn(unread.owner, unread.agent.conversationId, MADE_AT - 60_000);
-        yield* publishedAt(unread.owner, unread.agent.id, HEAD);
+        yield* publishedAt(unread.owner, unread.agent.id, HEAD, unread.ref);
         // A newer agent that ended its turn on a branch at the failed commit with no pull request there is not told.
         yield* TestClock.adjust("1 second");
         const branchOnly = yield* openAgent;
@@ -1408,17 +1409,18 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
 
         const idle = yield* openAgent;
         yield* endedTurn(idle.owner, idle.agent.conversationId, MADE_AT - 60_000);
-        yield* publishedAt(idle.owner, idle.agent.id, HEAD);
+        yield* publishedAt(idle.owner, idle.agent.id, HEAD, idle.ref);
         const movedOn = yield* openAgent;
         yield* runningTurn(movedOn.owner, movedOn.agent.conversationId);
         yield* publishedAt(
           movedOn.owner,
           movedOn.agent.id,
           "4567cdef4567cdef4567cdef4567cdef4567cdef",
+          movedOn.ref,
         );
         const unchecked = yield* openAgent;
         yield* runningTurn(unchecked.owner, unchecked.agent.conversationId);
-        yield* publishedAt(unchecked.owner, unchecked.agent.id, HEAD);
+        yield* publishedAt(unchecked.owner, unchecked.agent.id, HEAD, unchecked.ref);
 
         const told = [yield* deliver(idle.ref), yield* deliver(movedOn.ref)];
         held.checkRuns = [];

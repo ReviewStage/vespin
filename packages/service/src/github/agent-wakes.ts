@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
-import { readAgentPullRequests } from "@repo/database/models/agent-pull-requests";
 import {
   type Agent,
   type AgentLatestTurn,
   hasRepository,
   latestTurnsOfReached,
   listAgentsOnBranches,
+  listAgentsOnHead,
   listAgentsOnPullRequest,
   type OwnedAgent,
 } from "@repo/database/models/agent-store";
@@ -247,9 +247,6 @@ const UNNAMED_CHECKS_ROOM = 120;
 
 /** What GitHub appends to an App's login, which a failed check is told by and an App's words told apart by. */
 const BOT_LOGIN_SUFFIX = "[bot]";
-
-/** The most unarchived agents one delivery reads, newest started first, to find the one it tells. */
-const MAXIMUM_AGENTS_PER_WAKE = 10;
 
 /** How each review verdict reads in the line, by GitHub's own word for it. */
 const VERDICT_WORDS: ReadonlyMap<string, string> = new Map([
@@ -1148,17 +1145,6 @@ function checksOfWake(
   }
 }
 
-/** Whether a pull request the agent linked in the repository it was found on has the wake's commit as its head, as the read of its pull requests this delivery made left them (`agent_pull_request`). */
-const standsOnHead = (wake: AgentWake, { userId, agent, on }: OwnedAgent) =>
-  Effect.map(readAgentPullRequests(userId, agent.id), (rows) =>
-    rows.some(
-      ({ repository, pullRequest }) =>
-        repository.toLowerCase() === on.repository.toLowerCase() &&
-        pullRequest.headSha !== undefined &&
-        pullRequest.headSha === wake.sha,
-    ),
-  );
-
 /**
  * The key every check finished is told under: the repository, the commit,
  * and a digest of every check's outcome, so a delivery read again tells
@@ -1171,32 +1157,39 @@ function checksCompletedKey(wake: AgentWake, checks: HeadChecks): string {
   return JSON.stringify([AGENT_WAKE.CHECKS_COMPLETED, wake.repository, wake.sha, outcomes]);
 }
 
-/** The unarchived agents a delivery is about, newest started first: those on its branches, or, for a comment, those whose pull request it is. */
+/**
+ * The agent a delivery is about, as a list of none or one: the newest
+ * unarchived one, so a continued or forked agent and its source never both
+ * act on one pull request. For a check line, the newest whose pull request
+ * on its branches has that commit as its head, as the read of its pull
+ * requests this delivery made left it (`agent_pull_request`), so checks on a
+ * commit an agent pushed past, or on another branch the commit is on, are
+ * not its; for any other, the newest on its branches, or, for a comment,
+ * whose pull request it is.
+ */
 function agentsOf(wake: AgentWake) {
+  const ofChecks =
+    wake.kind === AGENT_WAKE.CHECKS_COMPLETED || wake.kind === AGENT_WAKE.CHECK_FAILED;
+
+  if (ofChecks) {
+    return wake.sha === undefined
+      ? Effect.succeed<readonly OwnedAgent[]>([])
+      : listAgentsOnHead(wake.repository, wake.branches, wake.sha, 1);
+  }
+
   const unarchived = { unarchivedOnly: true };
 
   if (wake.branches.length > 0) {
-    return listAgentsOnBranches(
-      wake.repository,
-      wake.branches,
-      MAXIMUM_AGENTS_PER_WAKE,
-      unarchived,
-    );
+    return listAgentsOnBranches(wake.repository, wake.branches, 1, unarchived);
   }
 
   if (wake.pullRequest === undefined) return Effect.succeed<readonly OwnedAgent[]>([]);
 
-  return listAgentsOnPullRequest(
-    wake.repository,
-    wake.pullRequest,
-    MAXIMUM_AGENTS_PER_WAKE,
-    unarchived,
-  );
+  return listAgentsOnPullRequest(wake.repository, wake.pullRequest, 1, unarchived);
 }
 
 /**
- * Tells the newest unarchived agent the delivery is about, for a check line
- * the newest standing on that head (`standsOnHead`), where `agentIsWoken`
+ * Tells the agent the delivery is about (`agentsOf`), where `agentIsWoken`
  * admits it, through the sessions `sessionsFor` answers for its owner, under
  * the delivery's id; answers how many were told. Every check finished is
  * told only where they all did, under its own key
@@ -1215,18 +1208,9 @@ export const wakeAgents = /* @__PURE__ */ Effect.fn("web/githubWakeAgents")(func
   if (deliveryId === "") return 0;
   const now = yield* Clock.currentTimeMillis;
   const checksCompleted = wake.kind === AGENT_WAKE.CHECKS_COMPLETED;
-  const ofChecks = checksCompleted || wake.kind === AGENT_WAKE.CHECK_FAILED;
 
   const told = yield* Effect.gen(function* () {
-    const found = yield* agentsOf(wake);
-
-    // Checks on a commit an agent has pushed past, or on another branch the commit is on, are not its.
-    const candidates = ofChecks
-      ? yield* Effect.filter(found, (owned) => standsOnHead(wake, owned))
-      : found;
-
-    // Only the newest, so a continued or forked agent and its source never both act on one pull request.
-    const agents = candidates.slice(0, 1);
+    const agents = yield* agentsOf(wake);
     const turns = yield* latestTurnsOfReached(agents.map(({ agent }) => agent.conversationId));
 
     const woken = agents.filter(({ agent }) =>
