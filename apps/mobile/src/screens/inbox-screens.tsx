@@ -52,7 +52,6 @@ import {
   BUTTON_LOOK,
   EmptyState,
   GLYPH,
-  GlassDock,
   glyphSymbol,
   isBarMenu,
   LIST_LOOK,
@@ -95,6 +94,7 @@ import {
   useStackRoot,
   useStandFocusedDetailFront,
 } from "../detail-stack.js";
+import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
@@ -877,7 +877,14 @@ function ThreadDetail({
         : {
             acts,
             menu: menuWithout(menu, acts),
-            foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
+            foot: (
+              <ThreadComposer
+                item={item}
+                answer={answer}
+                agentName={agentName}
+                inColumn={{ inFront }}
+              />
+            ),
           })}
     />
   );
@@ -917,9 +924,9 @@ function ThreadDetail({
           ))}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
-      <GlassDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
+      <FocusedDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
         <Screen>{page}</Screen>
-      </GlassDock>
+      </FocusedDock>
       {remind.sheet}
     </>
   );

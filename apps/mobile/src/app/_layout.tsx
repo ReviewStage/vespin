@@ -11,6 +11,7 @@ import {
   FailureNoticeProvider,
   KeepingProvider,
   NO_GROUND,
+  TAB_BAR_ROOM,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -269,6 +270,8 @@ function KeptScreens() {
  * drew light beside the dark tab bar.
  */
 export default function RootLayout() {
+  // Note that a compact window's tab bar floats at its foot, which the notice stands over; a regular window's tabs stand at its top or its side.
+  const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const dark = useColorScheme() === "dark";
   const colors = useColors();
   const theme = useMemo(() => navigationTheme(colors, dark), [colors, dark]);
@@ -276,7 +279,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={theme}>
       <HostProvider>
-        <FailureNoticeProvider>
+        <FailureNoticeProvider footRoom={compact ? TAB_BAR_ROOM : 0}>
           <VoiceCallProvider>
             <KeptScreens />
           </VoiceCallProvider>

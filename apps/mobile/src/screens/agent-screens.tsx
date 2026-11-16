@@ -57,7 +57,6 @@ import {
   FORM_SPACING,
   footerToneOf,
   GLYPH,
-  GlassDock,
   type Glyph,
   glyphSymbol,
   HeldCallBanner,
@@ -131,8 +130,10 @@ import {
   useDetailPush,
   useHandToDetail,
 } from "../detail-stack.js";
+import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
+import { useInFront } from "../place-columns.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
 import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
@@ -299,6 +300,7 @@ function AgentComposerBar({
   inColumn = false,
   call,
   otherCall,
+  shown,
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
@@ -313,6 +315,8 @@ function AgentComposerBar({
   readonly call: ComposerCall | undefined;
   /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
+  /** Whether its column stands in front, which the composer at a column's foot tells the app's notice; the docked composer's dock is told by its screen. */
+  readonly shown: boolean;
 }) {
   const said = composer.note ?? note;
   const { banner, waiting } = approvals;
@@ -369,7 +373,7 @@ function AgentComposerBar({
     head,
   };
 
-  return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
+  return inColumn ? <ComposerFoot {...props} shown={shown} /> : <Composer {...props} />;
 }
 
 /**
@@ -699,6 +703,8 @@ export function AgentConversation({
   readonly inColumn?: boolean | undefined;
 }) {
   useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
+  // Whether the page stands in front in a split view's detail, its tab shown and no page pushed over it, which its composer at the column's foot tells the notice.
+  const inFront = useInFront();
   const toDetail = useDetailPush();
   const detailLeave = useDetailLeave();
   const router = useRouter();
@@ -968,6 +974,7 @@ export function AgentConversation({
       call={talk.call}
       otherCall={otherCall}
       inColumn={inColumn}
+      shown={inFront && !covered}
     />
   );
 
@@ -1203,7 +1210,7 @@ export function AgentConversation({
         ) : null}
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
-      <GlassDock bar={composerBar}>{transcriptView}</GlassDock>
+      <FocusedDock bar={composerBar}>{transcriptView}</FocusedDock>
       {asks}
     </>
   );
