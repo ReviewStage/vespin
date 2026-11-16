@@ -55,8 +55,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.ROW,
     borderRadius: 8,
   },
-  // Note that at an accessibility size the bar wraps under the play button and the time rather than standing beside them, so the bar keeps its room and the time is never cut.
+  // Note that at an accessibility size the bar stands on a row of its own under the play button and the time, whatever the strip's width, so the bar keeps its room and the time is never cut.
   stacked: { flexWrap: "wrap" },
+  stackedBar: { flexBasis: "100%" },
   button: { alignItems: "center", justifyContent: "center", borderRadius: 999 },
   barPress: { flex: 1, minWidth: 80, height: BAR_PRESS_HEIGHT, justifyContent: "center" },
   bar: { height: BAR_HEIGHT, borderRadius: BAR_HEIGHT / 2, overflow: "hidden" },
@@ -236,7 +237,7 @@ export function AudioClip({ source, label }: AudioClipProps) {
         <Press
           onPress={(event) => seekAt(event.nativeEvent.locationX)}
           onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}
-          style={styles.barPress}
+          style={[styles.barPress, large ? styles.stackedBar : null]}
         >
           <View style={[styles.bar, { backgroundColor: colors.CHIP_EDGE }]}>
             <View
