@@ -70,6 +70,8 @@ interface ReachedRepository {
   readonly bearer: GitHubBearer;
   readonly access: GitHubTokenAccess;
   readonly subject: PullRequestSubject;
+  /** GitHub's id for the repository, where the read of it that minted the token named one. */
+  readonly repositoryId: number | undefined;
 }
 
 /** The pull request reached: the token it was read on, what its reads name it against, and it as GitHub holds it now. */
@@ -106,7 +108,7 @@ export const reachedRepository = /* @__PURE__ */ Effect.fnUntraced(function* (
     author: null,
   };
 
-  return { bearer, access, subject } satisfies ReachedRepository;
+  return { bearer, access, subject, repositoryId: repository.id } satisfies ReachedRepository;
 });
 
 /**

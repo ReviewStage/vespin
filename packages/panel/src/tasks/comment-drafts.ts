@@ -1,3 +1,4 @@
+import type { NumberedAddress } from "@repo/features/link-grammar";
 import { DRAFT_PLACE, type LineCommentPlace } from "../composer-drafts.js";
 import type { DiffListSelection } from "../diff-view/contract.js";
 import type { CommentLines } from "./changes-model.js";
@@ -10,7 +11,7 @@ import type { CommentLines } from "./changes-model.js";
  * comment per last line and side, so picking lines that end where an open
  * comment ends moves that comment onto them rather than opening a second.
  * Its words are not kept here but in the drafts store (`composer-drafts.ts`),
- * by its agent, file, side, and last line (`lineCommentPlace`), apart from
+ * by its pull request, file, side, and last line (`lineCommentPlace`), apart from
  * whether it stands open, so a comment closed unsent and opened there again
  * comes back with what was written, after the tab closed or the window
  * reloaded as well; a comment GitHub took lets its words go. The lines of
@@ -70,16 +71,22 @@ export function lightDraft(drafts: CommentDrafts, id: string): CommentDrafts {
   return drafts.lit === id ? drafts : { ...drafts, lit: id };
 }
 
-/** Where the words of a comment on an agent's changes are kept: by the agent, the pull request its tab names (none for the agent's own), the file, and the side and last line it stands under. */
+/** Where the words of a comment on a pull request's changes are kept: by the pull request, its repository and number, the file, and the side and last line it stands under. */
 export function lineCommentPlace(
-  agentId: string,
-  number: number | undefined,
+  pullRequest: NumberedAddress,
   draft: CommentDraft,
 ): LineCommentPlace {
   const { side, line } = draft.lines;
-  const place = { kind: DRAFT_PLACE.LINE_COMMENT, agentId, path: draft.picked.path, side, line };
+  const { repository, number } = pullRequest;
 
-  return number === undefined ? place : { ...place, number };
+  return {
+    kind: DRAFT_PLACE.LINE_COMMENT,
+    repository,
+    number,
+    path: draft.picked.path,
+    side,
+    line,
+  };
 }
 
 /**
