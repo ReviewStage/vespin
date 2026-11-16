@@ -1,0 +1,48 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow wwidget
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run flow when ".*Would Like to Send You Notifications.*" is visible...
+Run flow when ".*Would Like to Send You Notifications.*" is visible... SKIPPED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Press Home key... COMPLETED
+Wait for animation to end... COMPLETED
+Long press on point (50%,80%)... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot ${P}-1-home-edit...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Tap on (Optional) "Edit"... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot ${P}-2-edit-menu... COMPLETED
+Tap on (Optional) "Add Widget"... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot ${P}-3-widget-gallery... COMPLETED
+Tap on (Optional) "Search Widgets"... COMPLETED
+Input text Vespin... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Tap on (Optional) "Vespin", Index: 1... WARNED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot ${P}-4-preview-small... COMPLETED
+Swipe from (85%,45%) to (15%,45%) in 500 ms... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot ${P}-5-preview-medium... COMPLETED
+Tap on (Optional) "Add Widget"... WARNED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot ${P}-6-home-with-widget... COMPLETED
+Tap on (Optional) "Done"... WARNED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot ${P}-7-home-widget-settled... COMPLETED
+Long press on point (50%,80%)... COMPLETED
+Tap on (Optional) "Edit"... WARNED
+Tap on (Optional) "Customize"... WARNED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot ${P}-8-customize... COMPLETED
+Tap on (Optional) "Tinted"... WARNED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot ${P}-9-tinted... COMPLETED
+Press Home key... COMPLETED
