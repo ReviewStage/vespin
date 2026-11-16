@@ -119,7 +119,6 @@ export default function FeedbackScreen() {
   const [signed, setSigned] = useState(true);
   // Why the note did not go, or what a bound or the picker refused, said under the field as every refusal reads, until the words change.
   const [note, setNote] = useState<string | undefined>(undefined);
-  // Whether the last note went, said under the field until the reader writes again.
   // The kind whose note just went, which alone says so, since words edited or a kind switched to while it was out were never sent.
   const [thanked, setThanked] = useState<FeedbackKind | undefined>(undefined);
   useAnnounced(thanked === kind ? FEEDBACK_WORDS.SENT : undefined);
@@ -276,7 +275,12 @@ export default function FeedbackScreen() {
                   label={FEEDBACK_COPY[kind].field}
                   initialWords={message}
                   onWords={(typed) => {
-                    setWords((held) => ({ ...held, [kind]: typed }));
+                    // Note that the words typed are kept at once, so a send answering before this render commits sees them as edited rather than clearing them.
+                    held.current = {
+                      ...held.current,
+                      words: { ...held.current.words, [kind]: typed },
+                    };
+                    setWords((current) => ({ ...current, [kind]: typed }));
                     // Note that writing again takes away what stood under the field, so a refusal that no longer holds never hides the count.
                     setNote(undefined);
                     setThanked(undefined);
