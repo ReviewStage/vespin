@@ -10,8 +10,8 @@ import type * as HttpClient from "effect/http/HttpClient";
 import {
   type AccountCallEffects,
   accountCall,
-  type CallCredential,
   callAnswered,
+  type HostedServiceOptions,
   jsonOf,
 } from "./account-call.js";
 import { startRefusedAs } from "./agent-client.js";
@@ -164,20 +164,11 @@ export type TaskCallResult<Answer, Failure> =
       readonly cause?: FailureFacts;
     };
 
-export interface HostedTaskClientOptions {
-  /** What authorizes each call on the signed-in account, read fresh for every attempt. */
-  credential: CallCredential;
-  /** The hosted service origin, without a trailing slash. */
-  serviceBaseUrl: string;
-  requestTimeoutMs?: number;
-}
-
 const UNANSWERED = { ok: false, failure: TASK_CALL_FAILURE.UNANSWERED } as const;
 
 /** Why a keep the service refused in band was not kept, as the editor hears it. */
 const KEEP_REFUSED = {
   [DESCRIPTION_ATTACHMENT_REFUSAL.TOO_MANY]: PICTURE_KEEP_FAILURE.TOO_MANY,
-  [DESCRIPTION_ATTACHMENT_REFUSAL.TOO_MANY_VIDEOS]: PICTURE_KEEP_FAILURE.TOO_MANY_VIDEOS,
 } as const satisfies Record<
   (typeof DESCRIPTION_ATTACHMENT_REFUSAL)[keyof typeof DESCRIPTION_ATTACHMENT_REFUSAL],
   (typeof PICTURE_KEEP_FAILURE)[keyof typeof PICTURE_KEEP_FAILURE]
@@ -337,7 +328,7 @@ export class HostedTaskClient {
   readonly #call: AccountCallEffects;
   readonly #hosted: HostedClient;
 
-  constructor(options: HostedTaskClientOptions) {
+  constructor(options: HostedServiceOptions) {
     const { credential } = options;
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,

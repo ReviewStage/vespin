@@ -23,21 +23,35 @@ import {
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { NEEDS_YOU } from "@repo/features/inbox-list-model";
+import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
-import { TASK_STATUS_TONE, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
-import type { TaskStatus } from "@repo/features/task-wire";
+import {
+  TASK_PRIORITY_WORDS,
+  TASK_STATUS_TONE,
+  TASK_STATUS_WORDS,
+} from "@repo/features/task-standing-words";
+import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
+import { identityLetter } from "@repo/features/workspace-tile";
 import { useState } from "react";
-import { Image as Photo, PixelRatio, View } from "react-native";
+import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { monogramOf } from "./monogram.js";
-import { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
+import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
+import {
+  PRIORITY_MARK_BARRED,
+  PRIORITY_MARK_SYMBOL,
+  PRIORITY_MARK_TONE,
+  STATUS_MARK_SYMBOL,
+} from "./status-mark-model.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
+import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { MARK_SIZE } from "./tokens/space.js";
+import { TASK_PRIORITY_UNLIT_OPACITY } from "./tokens/task-status-symbols.js";
 import { TYPE_ROLE } from "./tokens/type.js";
+import { tileHue } from "./workspace-tile-model.js";
 
-/** The share of an avatar's width its letters stand at. */
-const MONOGRAM_SCALE = 0.42;
+/** The share of an avatar's width its letter stands at, half of it, as the panel's avatar sets its letter. */
+const LETTER_SCALE = 0.5;
 
 /** How faint a done row's dot stands, as the panel fades a done row's unread column. */
 const FADED_OPACITY = 0.45;
@@ -56,7 +70,7 @@ export function UnreadDot({
   readonly faded?: boolean;
 }) {
   const colors = useColors();
-  const dot = useScaledSize(MARK_SIZE.DOT);
+  const dot = useScaledSize(MARK_SIZE.UNREAD);
 
   return (
     <Circle
@@ -117,14 +131,62 @@ export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
   );
 }
 
-/** A person as a mark draws them: their name, whose letters stand in for a picture, and their sign-in picture where one is known. */
+/**
+ * A task's priority as its bars, as the panel marks it: the lit bars in its
+ * ink over every bar it can light, drawn faint, urgent's square in the
+ * attention ink, heard as the priority's name. Note that the faint bars are
+ * a symbol of their own beneath the lit ones, each in one ink, since a
+ * palette of two layers drew the whole mark black on iOS.
+ */
+export function TaskPriorityMark({ priority }: { readonly priority: TaskPriority }) {
+  const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
+  const ink = toneColor(colors, PRIORITY_MARK_TONE[priority]);
+
+  const lit = (
+    <Image
+      {...glyphImage(PRIORITY_MARK_SYMBOL[priority])}
+      size={size}
+      color={ink}
+      modifiers={[accessibilityLabel(TASK_PRIORITY_WORDS[priority])]}
+    />
+  );
+
+  if (!PRIORITY_MARK_BARRED.has(priority)) return lit;
+
+  return (
+    <ZStack>
+      <Image
+        {...glyphImage(GLYPH.PRIORITY_BARS)}
+        size={size}
+        color={ink}
+        modifiers={[opacity(TASK_PRIORITY_UNLIT_OPACITY), accessibilityHidden()]}
+      />
+      {lit}
+    </ZStack>
+  );
+}
+
+/** What a face is of, which its shape says: a person, in a circle, or an App or its bot, in the rounded square the panel and GitHub draw one in. */
+export const FACE_KIND = {
+  PERSON: "person",
+  APP: "app",
+} as const;
+
+export type FaceKind = (typeof FACE_KIND)[keyof typeof FACE_KIND];
+
+/** A person as a mark draws them: their name, whose first letter stands in for a picture, and their sign-in picture where one is known. */
 export type Face = {
   readonly name: string;
+  /** What its letter's hue is read off, such as a member's id, as the panel keys a person's disc, so they wear one color on every client; their name where none is given. */
+  readonly id?: string | undefined;
   readonly picture?: string | undefined;
+  /** What it is of, a person where none is given. */
+  readonly kind?: FaceKind | undefined;
 };
 
 type AvatarProps = {
-  /** The person's or agent's name, which the avatar draws the letters of and is heard as. */
+  /** The person's or agent's name, which the avatar draws the first letter of and is heard as. */
   readonly name: string;
   /** Its width, in points; a row's where none is given. */
   readonly size?: number | undefined;
@@ -168,40 +230,54 @@ export function AvatarPhoto({
 }
 
 /**
- * A person's face on the brand's avatar tile: their photo where a picture is
+ * A person's face: their photo where a picture is
  * given, from a host `@repo/features/account-picture` lets a picture load
- * from and asked for at the size it is drawn, and their letters otherwise.
- * Note that the letters stand only until the photo has drawn, so they show
- * while it loads and once it fails, which takes the photo away, but never
- * through a photo's transparent pixels.
+ * from and asked for at the size it is drawn, and their name's first letter
+ * otherwise, as the panel's avatar draws one (`identityLetter`).
+ * An App, or its bot, stands in a rounded square rather than a circle, as
+ * the panel and GitHub tell one from a person. The letter stands on the
+ * identity hue read off its id, or its name where none is given, as the panel's `Avatar` draws a person's letter, so
+ * a face holds its edge on the dark ground too. Note that the letter stands
+ * only until the photo has drawn, so it shows while the photo loads and once it
+ * fails, which takes the photo away, but never through a photo's
+ * transparent pixels.
  */
 export function Avatar({
   name,
   size = MARK_SIZE.AVATAR,
   picture,
+  kind = FACE_KIND.PERSON,
+  id = name,
 }: AvatarProps & {
-  /** The address of the person's photo, such as their sign-in picture; their letters alone where none is given. */
+  /** The address of the person's photo, such as their sign-in picture; their letter alone where none is given. */
   readonly picture?: string | undefined;
+  readonly kind?: FaceKind | undefined;
+  /** What its letter's hue is read off, such as a member's id; its name where none is given. */
+  readonly id?: string | undefined;
 }) {
-  const colors = useColors();
+  const dark = useColorScheme() === "dark";
   const pinned = pinnedPictureUrl(picture);
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const [drawn, setDrawn] = useState<string | undefined>(undefined);
   const photoDrawn = pinned !== undefined && pinned === drawn && pinned !== failed;
+  const corner = kind === FACE_KIND.APP ? size * TILE_ROUNDING : size / 2;
 
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityLabel(name)]}>
       {photoDrawn ? null : (
         <>
-          <Circle modifiers={[foregroundStyle(colors.AVATAR_TILE)]} />
+          <RoundedRectangle
+            cornerRadius={corner}
+            modifiers={[foregroundStyle(tileHue(id, dark))]}
+          />
           <Text
             modifiers={[
-              font({ size: size * MONOGRAM_SCALE, weight: "semibold", design: "rounded" }),
-              foregroundStyle(colors.AVATAR_INK),
+              font({ size: size * LETTER_SCALE, weight: "semibold", design: "rounded" }),
+              foregroundStyle(ON_IDENTITY),
               accessibilityHidden(),
             ]}
           >
-            {monogramOf(name)}
+            {identityLetter(name)}
           </Text>
         </>
       )}
@@ -209,6 +285,7 @@ export function Avatar({
         <AvatarPhoto
           address={accountPictureAt(pinned, size * PixelRatio.get())}
           size={size}
+          corner={corner}
           onLoad={() => setDrawn(pinned)}
           onFail={() => setFailed(pinned)}
         />
@@ -234,12 +311,14 @@ const TILE_MARK_SCALE = 0.72;
 /**
  * The image sets each harness's mark is drawn from, which the app's config
  * writes into its asset catalog (`apps/mobile/app.config.ts`): Claude Code's
- * Clawd from the brand's path in its own clay, and Codex's picture from the
- * files the panel serves, each as the panel's `HarnessMark` draws it.
+ * Clawd from the brand's path in its own clay, Codex's picture from the
+ * files the panel serves, and Cursor's cube from the brand's path in the
+ * row's ink, each as the panel's `HarnessMark` draws it.
  */
-const HARNESS_MARK_ASSET = {
+export const HARNESS_MARK_ASSET = {
   [MODEL_PROVIDER.ANTHROPIC]: "ClawdMark",
   [MODEL_PROVIDER.OPENAI]: "CodexMark",
+  [MODEL_PROVIDER.CURSOR]: "CursorMark",
 } as const satisfies Record<ModelProvider, string>;
 
 /**
@@ -284,6 +363,45 @@ export function AgentTile({
         />
       )}
     </ZStack>
+  );
+}
+
+/** The mark of the harness a model runs in, as the panel leads a model's name with it: Claude Code's Clawd or Codex's picture, in its own colors, at `size`, unheard beside the name it leads. */
+export function HarnessMark({
+  provider,
+  size = MARK_SIZE.FACE,
+}: {
+  readonly provider: ModelProvider;
+  readonly size?: number | undefined;
+}) {
+  return (
+    <Image
+      assetName={HARNESS_MARK_ASSET[provider]}
+      modifiers={[resizable(), frame({ width: size, height: size }), accessibilityHidden()]}
+    />
+  );
+}
+
+/** An integration's mark, as the panel leads a call of its tool with it: the provider's own vector at `size`, a template mark in `ink`, unheard beside the words it leads. */
+export function IntegrationMark({
+  provider,
+  size,
+  ink,
+}: {
+  readonly provider: IntegrationProvider;
+  readonly size: number;
+  readonly ink: string;
+}) {
+  return (
+    <Image
+      assetName={INTEGRATION_MARK_ASSET[provider]}
+      modifiers={[
+        resizable(),
+        frame({ width: size, height: size }),
+        foregroundStyle(ink),
+        accessibilityHidden(),
+      ]}
+    />
   );
 }
 

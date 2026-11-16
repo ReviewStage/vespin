@@ -129,12 +129,10 @@ export const ADD_SUGGESTION_TOOL = {
     "agent's, may edit it, and sends it as themselves; nothing runs until they do. Use it " +
     "where your reply or a thread names a next step that runs apart from your own work, such " +
     "as a follow-up found along the way, rather than asking the developer to start it by hand; " +
-    "never for what you will do yourself. Give its label and exactly one of start or send. It " +
-    "is checked now, so a refusal says what to mend. Answers `accepted` with the suggestion's " +
-    "link, which you write in your reply, or in a thread's message, as `[<label>](<link>)` at " +
-    "the end of the line it is about, where the developer sees it as the suggestion, or " +
-    "`rejected` and why none was made. A suggestion is sent once, whoever sends it, and what " +
-    "it reaches reads that you suggested it.",
+    "never for what you will do yourself. Give its label and exactly one of start or send. " +
+    "Write the link it answers in your reply, or in a thread's message, as `[<label>](<link>)` at " +
+    "the end of the line it is about, where the developer sees it as the suggestion. A suggestion " +
+    "is sent once, whoever sends it, and what it reaches reads that you suggested it.",
   inputSchema: ADD_SUGGESTION_INPUT,
 } as const;
 

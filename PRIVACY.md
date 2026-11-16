@@ -117,7 +117,12 @@ A workspace's owners and admins can save environment variables for the
 workspace, which we store sealed the same way. Each of the workspace's cloud
 agents is handed them as environment variables in its sandbox as it starts a
 turn, so the agent can read them, and a value it reads or prints may reach its
-model and its transcript. Agents on your Mac are never handed them.
+model and its transcript. Agents on your Mac are never handed them. A variable
+is a secret unless the one who saves it marks it otherwise: a secret's value is
+never shown to anyone once saved, while one saved as a config, such as
+`NODE_ENV`, is shown to every member of the workspace in Settings. We keep who
+added each variable and who last changed it, and show both to the workspace's
+members.
 
 ### Integrations and connected apps
 
@@ -154,7 +159,11 @@ agent wants each app, and you can answer Allow once, Always allow, or Deny.
 For an app you allow, the agent reads its window's controls and their text and
 a screenshot of the window, and clicks and types in it. The screenshot is sent
 to the agent's model provider, and a full-size copy and the app's icon are
-stored with the agent's transcript and deleted with it. Vespin never offers
+stored with the agent's transcript and deleted with it. After each click,
+keystroke, scroll, or drag, Vespin on your Mac also takes one picture of the
+window once it settles, so the members watching see it catch up with the
+agent; it is stored with the transcript the same way and is never sent to the
+agent's model provider. Vespin never offers
 agents terminals, password managers, System Settings, or Vespin itself, but
 **anything an allowed app's window shows goes too**, a message or a password
 on screen included. You can take an app off the always-allowed list, or turn
@@ -438,6 +447,15 @@ While you look at a thread, task, agent, or pull request, the app tells iOS
 its title and its vespin.dev link, so Handoff can offer it on your other
 devices signed in to the same Apple Account. iOS hands them to those devices
 directly, and the app does not offer them to Siri suggestions or to search.
+
+### Members' pictures on your iPhone
+
+So a menu can lead each member of a workspace with their face, such as a
+task's Assignee menu, the Vespin iOS app keeps a small copy of each member's
+sign-in picture as a file in its caches on your iPhone or iPad. It downloads
+each one from the Google or GitHub address the app already draws it from,
+sends it nowhere else, and keeps it only in the caches iOS may clear when the
+device needs room; deleting the app deletes them.
 
 ## 3\. Legal basis for processing
 

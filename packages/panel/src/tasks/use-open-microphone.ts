@@ -26,7 +26,7 @@ export const MICROPHONE_REFUSAL = {
   FAILED: "failed",
 } as const;
 
-export type MicrophoneRefusal = (typeof MICROPHONE_REFUSAL)[keyof typeof MICROPHONE_REFUSAL];
+type MicrophoneRefusal = (typeof MICROPHONE_REFUSAL)[keyof typeof MICROPHONE_REFUSAL];
 
 /** The microphone opened, or why it was not. */
 export type OpenedMicrophone =

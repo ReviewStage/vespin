@@ -1,7 +1,11 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { NO_ITEMS, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import {
+  LINK_DESTINATION,
+  type NumberedAddress,
+  pullRequestAddressOf,
+} from "@repo/features/link-grammar";
 import { agentName } from "@repo/features/model-label";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -35,7 +39,6 @@ import {
 } from "@repo/ui";
 import { DescriptionCommentsProvider } from "@repo/ui/description-comments";
 import { GLYPH } from "@repo/ui/icons";
-import { pullRequestAgentOf } from "@repo/ui/pull-request-link";
 import {
   agentOfTab,
   agentTab,
@@ -64,6 +67,7 @@ import { useAutomationsDoor, useVersionHistoryDoor } from "../places/routed-door
 import { renameWrite } from "../rename-write.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
+import { NAMED_ORDER, useNamedTask, useNamedTasks } from "../task-list-collections.js";
 import { AgentCard, agentSubject } from "../tasks/agent-ref.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
@@ -134,9 +138,16 @@ import {
 import { OverviewAgents } from "./overview-agents.js";
 import { OverviewHead } from "./overview-head.js";
 import { OverviewPages } from "./overview-pages.js";
-import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
 import {
-  changesTabOf,
+  PhoneBack,
+  PhoneHead,
+  PlaceMore,
+  phoneBar,
+  phoneFindGroups,
+  type TaskHeadBack,
+} from "./phone-head.js";
+import {
+  listedAgentOf,
   SIDE_PANEL_HOLDER,
   SidePanel,
   type SidePanelDrawing,
@@ -156,7 +167,6 @@ import {
   screenBack,
   TASK_PANE,
   TaskHead,
-  type TaskHeadBack,
   type TaskPane,
   taskPaneOf,
 } from "./task-pane-switcher.js";
@@ -212,6 +222,9 @@ import { useStandingDoor } from "./task-row-parts.js";
  * task whose repository belongs to another of the account's workspaces says
  * which, with the press that moves it there (`stranded-task-banner.tsx`).
  */
+
+/** No task open: what a task's relation menus offer while none is. */
+const NO_TASKS: readonly TaskSummary[] = [];
 
 /** What the task's page says to a reader while the task is read. */
 const TASK_LOADING_LABEL = readingWords("the task");
@@ -447,7 +460,7 @@ function DescriptionDocument({
   away: TaskHeadBack;
 }): React.JSX.Element {
   const { region } = tasks;
-  const pins = usePins(tasks.drawnTasks);
+  const pins = usePins(tasks.typedNamesNow);
   const account = useWindowAccount();
   // The tab a phone's panel shows past the plan, which its header is named by, and the tab its column shows, whose menu the header's ⋯ offers on the agent's screen (`strip-tabs.tsx`'s `ShownTab`).
   const [shownTab, setShownTab] = useState<ShownTab | undefined>(undefined);
@@ -475,11 +488,13 @@ function DescriptionDocument({
   });
 
   // The task's comments are held from its open while it is shown, for its description's margin and list, so its first ready frame marks them; none are read while its workspace, the listed one while it is read, has Descriptions off.
+  // The open task as the list holds it, read by its id, its name as it is being typed.
+  const listedActive = useNamedTask(tasks.activeTaskId, tasks.typedNames);
+
   const shownWorkspaceId =
     region.kind === TASK_REGION.READY
       ? region.task.workspaceId
-      : (tasks.tasks.find((each) => each.id === tasks.activeTaskId)?.workspaceId ??
-        tasks.workspace?.id);
+      : (listedActive?.workspaceId ?? tasks.workspace?.id);
 
   const descriptionsOn = useWorkspaceExperiment(shownWorkspaceId, EXPERIMENT.DESCRIPTIONS);
 
@@ -560,17 +575,14 @@ function DescriptionDocument({
   // The task the page stands on: as read, or, while its description is read, as the list holds it, so its bars, its
   // tabs, and its agents draw at once rather than wait on the description.
   const opened: TaskSummary | undefined =
-    read ??
-    (region.kind === TASK_REGION.READING
-      ? tasks.tasks.find((each) => each.id === tasks.activeTaskId)
-      : undefined);
+    read ?? (region.kind === TASK_REGION.READING ? listedActive : undefined);
 
   // The task renamed is the one the page stands on, so its rename opens while its description is still read.
   const taskId = opened?.id;
-  const renaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const renaming = useMutation(useTaskRename(tasks.typedNamesNow));
   const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_TERMS));
   // Note that the title bar's field asks on a mutation of its own, so a name the description's title was refused does not open it over the words being typed there.
-  const barRenaming = useMutation(useTaskRename(tasks.drawnTasks));
+  const barRenaming = useMutation(useTaskRename(tasks.typedNamesNow));
   const barRename = useInlineRename(taskId, renameWrite(barRenaming, TASK_RENAME_TERMS));
 
   // The open task's one rename door, which its title's menu and ⌘K ask: it opens the field over the task's name where the window heads the task, a phone's head or the title bar.
@@ -581,17 +593,15 @@ function DescriptionDocument({
 
   useOfferTaskRename(taskId, beginRename);
 
-  const listedOpen =
-    opened === undefined
-      ? undefined
-      : (tasks.tasks.find((each) => each.id === opened.id) ?? opened);
+  const listedOpened = useNamedTask(opened?.id, tasks.typedNames);
+  const listedOpen = opened === undefined ? undefined : (listedOpened ?? opened);
 
   const stranded = useStrandedTaskBanner(tasks, listedOpen);
 
   // The workspace's agents an `@` offers after the task's own, named by the tasks the window lists.
   const readMentionAgents = useMentionAgentsReader(
     opened?.workspaceId,
-    tasks.tasks,
+    useNamedTasks(tasks.typedNames, NAMED_ORDER.STARTED),
     tasks.agents.models,
   );
 
@@ -732,14 +742,12 @@ function DescriptionDocument({
   };
 
   // An agent's pull request chip opens its pull request in the side panel, beside its tab, in
-  // the one Pull request tab the "+" offers for that pull request (`showPullRequest`), on its conversation.
-  const openPullRequest = (agentId: string, number?: number) =>
+  // the one Pull request tab for that pull request (`showPullRequest`), on its conversation.
+  const openPullRequest = (pullRequest: NumberedAddress) =>
     showPullRequest(
       { ...sidePanel, onOpen: openPanelTab },
-      agents,
-      agentId,
+      pullRequest,
       PULL_REQUEST_VIEW.CONVERSATION,
-      number,
     );
 
   // An agent a mention names wears its tab's tile and hangs its tab's card, read as its tab reads them.
@@ -756,19 +764,25 @@ function DescriptionDocument({
   const agentPullRequests = agents.pullRequests;
 
   const changesPeople = useChangesPeopleOf(
-    useMemo(() => [...agentPullRequests.keys()], [agentPullRequests]),
+    useMemo(
+      () =>
+        [...agentPullRequests].flatMap(([agentId, each]) => {
+          const address = pullRequestAddressOf(each.url);
+
+          return address === undefined ? [] : [[agentId, address] as const];
+        }),
+      [agentPullRequests],
+    ),
   );
 
   const pullRequestCard = (url: string) => {
-    const owned = [...agents.pullRequests].map(([agentId, each]) => ({ agentId, url: each.url }));
     // A page under an agent's pull request, as its files, is still that pull request, as its press says.
-    const owner = pullRequestAgentOf(url, owned);
+    const address = pullRequestAddressOf(url);
+    const listed = address === undefined ? undefined : listedAgentOf(agents, address);
 
-    if (owner === undefined) return undefined;
-    const agentId = changesTabOf(agents, owner, tasks.sidePanel.changes).changes;
-    const pullRequest = agents.pullRequests.get(agentId);
-
-    if (pullRequest === undefined) return undefined;
+    if (listed === undefined) return undefined;
+    const { pullRequest } = listed;
+    const agentId = listed.agent.id;
 
     const card = tabCard({
       kind: TAB_KIND.CHANGES,
@@ -866,7 +880,7 @@ function DescriptionDocument({
   const openWaitingThread = useSteadyDoor((item: InboxItem) => {
     if (openedId === undefined) return;
 
-    if (phone) tasks.onShowInbox({ taskId: openedId, itemId: item.id });
+    if (phone) tasks.onShowInbox({ taskId: openedId, itemId: item.id, itemAgentId: item.agentId });
     else agentThreads.onOpen(item.agentId, item.id);
   });
 
@@ -1015,14 +1029,12 @@ function DescriptionDocument({
   const workspaceName = home?.name ?? "";
   // The task's path and its add menu name and offer the tasks of its own workspace, and a press on the parent's crumb opens it as a list's row would.
   const openedWorkspace = opened?.workspaceId;
-  const { tasks: everyTask, onSelect: selectTask, relationMenu } = tasks;
+  const { onSelect: selectTask, relationMenu } = tasks;
   const onNewRelatedTask = tasks.newTask.onOpenRelated;
   const { onSetTaskBlock, onSetTaskParent } = relationWrites;
-
-  const blockTasks = useMemo(
-    () => everyTask.filter((each) => each.workspaceId === openedWorkspace),
-    [everyTask, openedWorkspace],
-  );
+  const ofWorkspace = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, openedWorkspace);
+  // Note that with no task open there is no workspace whose tasks it may relate.
+  const blockTasks = openedWorkspace === undefined ? NO_TASKS : ofWorkspace;
 
   // A task the head names, a crumb or a related row, opens on its plan, as a list's row does.
   const openTask = useSteadyDoor(selectTask);
@@ -1239,7 +1251,6 @@ function DescriptionDocument({
           kind: HERE.TASK,
           taskId: openedId ?? "",
           repository: openedRepository,
-          pullRequests: agents.pullRequests,
           agentIds: agents.agentIds,
           heldIds: agents.heldIds,
         },

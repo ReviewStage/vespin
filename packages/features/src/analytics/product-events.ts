@@ -336,6 +336,7 @@ export const PRODUCT_EXPERIMENT = {
   VOICE: "voice",
   GOALS: "goals",
   MOVE_AGENTS: "move-agents",
+  CURSOR: "cursor",
 } as const;
 
 export type ProductExperiment = (typeof PRODUCT_EXPERIMENT)[keyof typeof PRODUCT_EXPERIMENT];
@@ -698,7 +699,7 @@ const DEPLOYMENT_COMMIT_PATTERN = /^[0-9a-f]{40}$/;
  * Either shape has no room for a word, which is what keeps the property out
  * of free text.
  */
-export function isProductBuildVersion(value: string): boolean {
+function isProductBuildVersion(value: string): boolean {
   return parseReleaseVersion(value) !== undefined || DEPLOYMENT_COMMIT_PATTERN.test(value);
 }
 

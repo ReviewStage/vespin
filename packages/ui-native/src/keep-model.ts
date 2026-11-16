@@ -1,5 +1,5 @@
 /**
- * keep-model.ts -- what a person may do with a picture, a recording, or a file a message carried: copy it, save it to Photos, or share it, as iOS offers for each kind, read from the bytes the app holds.
+ * keep-model.ts -- what a person may do with a picture, a recording, a sound clip, or a file a message carried: copy it, save it to Photos, or share it, as iOS offers for each kind, read from the bytes the app holds.
  *
  * The panel's viewer copies and saves only a file whose bytes the window
  * holds (`heldBytes` in `@repo/panel`'s `attachment-viewer.tsx`), never one
@@ -7,15 +7,16 @@
  * from its `data:` address, a recording or a file only from the file the app
  * wrote under its caches. Photos takes a picture the system decodes and an
  * MP4, never a WebM or an SVG, and the pasteboard takes a picture the system
- * decodes or a text file's words; anything may be shared.
+ * decodes or a text file's words, never a sound clip; anything may be shared.
  */
 
 import { GLYPH, type Glyph } from "./glyph.js";
 
-/** What is kept: a picture, a recording, or any other file a message carried. */
+/** What is kept: a picture, a recording, a sound clip, or any other file a message carried. */
 export const KEPT_KIND = {
   PICTURE: "picture",
   VIDEO: "video",
+  SOUND: "sound",
   FILE: "file",
 } as const;
 
@@ -30,7 +31,7 @@ export const KEEP_ACT = {
 
 export type KeepAct = (typeof KEEP_ACT)[keyof typeof KEEP_ACT];
 
-/** A picture, a recording, or a file, by where its bytes are and what it is named. */
+/** A picture, a recording, a sound clip, or a file, by where its bytes are and what it is named. */
 export type Kept =
   | {
       readonly kind: typeof KEPT_KIND.PICTURE;
@@ -41,7 +42,13 @@ export type Kept =
     }
   | {
       readonly kind: typeof KEPT_KIND.VIDEO;
-      /** The file the app wrote it to, named by its type's extension (`cachedVideo`). */
+      /** The file the app wrote it to, named by its type's extension (`cachedPlayed`). */
+      readonly source: string;
+      readonly name: string;
+    }
+  | {
+      readonly kind: typeof KEPT_KIND.SOUND;
+      /** The file the app wrote it to, named by its type's extension (`cachedPlayed`). */
       readonly source: string;
       readonly name: string;
     }
@@ -130,6 +137,9 @@ export function keepActs(kept: Kept): readonly KeepAct[] {
       return kept.source.toLowerCase().endsWith(PHOTOS_VIDEO_EXTENSION)
         ? [KEEP_ACT.SAVE_TO_PHOTOS, KEEP_ACT.SHARE]
         : [KEEP_ACT.SHARE];
+    // Note that a clip is only shared, since neither Photos nor the pasteboard holds one.
+    case KEPT_KIND.SOUND:
+      return [KEEP_ACT.SHARE];
     case KEPT_KIND.FILE:
       return kept.mediaType.startsWith(TEXT_TYPE)
         ? [KEEP_ACT.COPY, KEEP_ACT.SHARE]

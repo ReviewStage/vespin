@@ -1090,9 +1090,11 @@ function listenerFor(
     },
     onNotification: (notification) =>
       Effect.gen(function* () {
-        yield* seen.context.sink.emit(
-          reviewed(yield* Effect.promise(() => annotate(notification))),
-        );
+        const annotated = yield* Effect.promise(() => annotate(notification));
+
+        // A command killed out of memory is marked just ahead of its item's completion, so the service settles it marked.
+        for (const killed of annotated.killed) yield* seen.context.sink.emit(killed);
+        yield* seen.context.sink.emit(reviewed(annotated.message));
 
         if (notification.method === METHOD.SERVER_REQUEST_RESOLVED) {
           // App-server settled an ask itself, as an interrupt does: it is withdrawn, where it still waits.

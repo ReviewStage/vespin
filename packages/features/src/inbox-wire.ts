@@ -14,6 +14,7 @@ import {
   agentMessageRequestSchema,
   hasWordsOrFiles,
 } from "./agent-wire.js";
+import { AUDIO_TYPE } from "./audio-signature.js";
 import { markersAsNames } from "./file-marker.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { commitShaSchema } from "./link-grammar.js";
@@ -218,13 +219,17 @@ export type InboxImageType = (typeof INBOX_IMAGE_TYPE)[keyof typeof INBOX_IMAGE_
 
 /**
  * The types a file of an item's may be kept and served under: any a
- * message's file travels as, or a recording the agent made of what it did,
- * a WebM or an H.264 MP4, drawn in its words as it draws a picture.
+ * message's file travels as, a recording the agent made of what it did, a
+ * WebM or an H.264 MP4, or a sound clip it made, each drawn in its words as
+ * it draws a picture. Note that a file's type is read as words on the wire
+ * (`inboxAnswerFileSchema`), so naming a type here leaves a released reader
+ * able to read an item that holds one.
  */
 export const INBOX_FILE_TYPE = {
   ...AGENT_ATTACHMENT_TYPE,
   WEBM: WEBM_TYPE,
   MP4: MP4_TYPE,
+  ...AUDIO_TYPE,
 } as const;
 
 export type InboxFileType = (typeof INBOX_FILE_TYPE)[keyof typeof INBOX_FILE_TYPE];
@@ -615,8 +620,6 @@ const inboxPostOptionSchema = EffectSchema.Struct({
     ),
   ),
 });
-
-export type InboxPostOption = typeof inboxPostOptionSchema.Type;
 
 /** One field of a form: its type, its label, which names its value in the answer, whether it must be filled, and a select's options, one perhaps recommended. */
 const inboxFieldSchema = EffectSchema.Struct({
