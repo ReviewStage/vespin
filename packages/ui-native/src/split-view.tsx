@@ -37,6 +37,7 @@ import {
 import type { TaskStatus } from "@repo/features/task-wire";
 import {
   Fragment,
+  memo,
   type ReactElement,
   type ReactNode,
   useEffect,
@@ -255,8 +256,14 @@ function MenuActs({ group }: { readonly group: BarMenuGroup }) {
   );
 }
 
-/** A bar's menu as SwiftUI's: each choice a toggle the system checks, then a rule, then each act, then each group behind a rule of its own. */
-export function BarMenuButton({
+/**
+ * A bar's menu as SwiftUI's: each choice a toggle the system checks, then a
+ * rule, then each act, then each group behind a rule of its own. Note that it
+ * is drawn again only for a menu changed, because a menu of many choices,
+ * such as one listing every open task, would otherwise build each of them
+ * anew on every key typed beside it.
+ */
+export const BarMenuButton = memo(function BarMenuButton({
   menu,
   modifiers = [],
 }: {
@@ -273,7 +280,7 @@ export function BarMenuButton({
     >
       {menu.choices.map((choice) => (
         <Toggle
-          key={choice.label}
+          key={choice.id ?? choice.label}
           {...choiceContent(choice, colors)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
@@ -289,7 +296,7 @@ export function BarMenuButton({
       ))}
     </Menu>
   );
-}
+});
 
 /** A bar's menu standing in its bar, such as a column's ⋯, its glyph alone in the bar's glass. */
 export function BarMenuItem({ menu }: { readonly menu: BarMenu }) {
