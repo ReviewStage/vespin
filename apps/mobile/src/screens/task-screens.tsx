@@ -2562,22 +2562,27 @@ export function TaskScreen() {
   const handed = useHandToSplit(SPLIT_TAB.TASKS, handing) && handing !== undefined;
   // Note that the open is told apart by the task's id, as the split view's is, so a number found and handed over on an unfold carries the same open; a number not yet found shows no task to count.
   useSurfaceOpen(handed || handing === undefined ? undefined : PRODUCT_SURFACE.TASK, handing);
+
+  const barTitle =
+    overview === undefined ? "" : taskPath(overview.task, overview.workspace).join(PATH_PART);
+
+  // Note that the screen's options are the same object across draws while its title and ink stand, as its bar's items are, since the stack hands the header its options by identity, and a new object on a draw that changed nothing rebuilt the bar's ⋯ natively, after which its acts pressed nothing.
+  const screenOptions = useMemo(
+    () => ({
+      headerBackTitle: TASKS_TITLE,
+      title: barTitle,
+      headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
+    }),
+    [barTitle, colors.TEXT_MUTED],
+  );
+
   // Note that the read waits for the push to end, since the list it redraws under a push still running left the page unpushed (`usePushStood`).
   const stood = usePushStood();
   useTaskReadOnOpen(handed || !stood ? undefined : overview?.task.id);
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          headerBackTitle: TASKS_TITLE,
-          title:
-            overview === undefined
-              ? ""
-              : taskPath(overview.task, overview.workspace).join(PATH_PART),
-          headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
-        }}
-      />
+      <Stack.Screen options={screenOptions} />
       {menu === undefined || overview === undefined ? null : (
         <Stack.Toolbar placement="right">{barItems}</Stack.Toolbar>
       )}
