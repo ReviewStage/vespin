@@ -58,7 +58,6 @@ import { providerModelOf } from "../../providers/model-catalog.js";
 import { LaunchRefused, type MachineLayout } from "../machine/agent-machine.js";
 import { LAUNCH_SWAP } from "../sandbox-firewall.js";
 import { KEY_REFUSAL, PLAN_REFUSAL, type SessionTurn } from "../sessions/agent-sessions.js";
-import { WORKER_DENIED_TOOLS } from "../tool-catalog/catalog.js";
 import { BEARER_PREFIX } from "../workspace-mcp/bearer.js";
 import { launchPayerOf, roomAfterLimit } from "./agent-runtime-choice.js";
 import { claudeCodeCommandRoute } from "./harness-commands.js";
@@ -126,7 +125,7 @@ const ON_MACHINE_LOGIN: HarnessLaunch = { env: {} };
 /**
  * The half of Claude Code agents whose launches keep the main conversation's
  * prompt cache for an hour rather than the CLI's default five minutes, its
- * workers left on that default: those whose id, a UUID
+ * subagents left on that default: those whose id, a UUID
  * as Postgres writes it, begins with one of these hex digits. Note that the
  * weekly agent audit reads this rule to tell the halves apart, recomputing it
  * from `agent.id` alone (`left(agent.id::text, 1) between '0' and '7'`), so
@@ -298,7 +297,6 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
         firstSequence,
         eventsUrl: options.eventsUrl,
         mcpUrl: options.mcpUrl,
-        workerDenied: WORKER_DENIED_TOOLS,
         integrations: yield* options.integrations(agent),
         ...(layout.installedSkills === undefined
           ? undefined

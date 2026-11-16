@@ -1,8 +1,9 @@
 import { Schema as EffectSchema, Result } from "effect";
 import { Base64 } from "effect/encoding";
-import { isVideoType } from "./conversation-picture-wire.js";
+import { AUDIO_TYPE } from "./audio-signature.js";
+import { isPlayedType } from "./conversation-picture-wire.js";
 import { INBOX_BOUNDS, INBOX_IMAGE_TYPE, type InboxImageType } from "./inbox-wire.js";
-import { mediaDimensions, sniffMediaType } from "./media-signature.js";
+import { measuredMedia, sniffMediaType } from "./media-signature.js";
 import { MAX_REQUEST_DATA_URL_BYTES } from "./request-body-limit.js";
 import { MP4_TYPE, WEBM_TYPE } from "./video-signature.js";
 
@@ -14,12 +15,13 @@ import { MP4_TYPE, WEBM_TYPE } from "./video-signature.js";
  * photo is; the service keeps its bytes and serves them under the type they
  * were sniffed to be. A WebM an agent recorded of what it did is kept the
  * same way, as it is, never re-encoded, and played where a picture would be
- * drawn. A description's pictures (`description-attachment-wire.ts`) are one use; nothing
- * here names what a picture belongs to. The bytes must be the image or the
- * video the label names, because every reader draws or plays them as one.
- * Note that `PICTURE_TYPE` stays the image types alone, because a reader
- * that hands a picture to a model as an image (`look_at_picture`) must
- * never be handed a video.
+ * drawn, and so is a sound clip an agent made, played as sound. A
+ * description's pictures (`description-attachment-wire.ts`) are one use;
+ * nothing here names what a picture belongs to. The bytes must be the
+ * image, the video, or the clip the label names, because every reader draws
+ * or plays them as one. Note that `PICTURE_TYPE` stays the image types
+ * alone, because a reader that hands a picture to a model as an image
+ * (`look_at_picture`) must never be handed a video or a clip.
  */
 
 /**
@@ -34,16 +36,17 @@ export type PictureType = InboxImageType;
 /** An image picture's media type as the wire carries it. */
 export const pictureTypeSchema = EffectSchema.Literals(Object.values(PICTURE_TYPE));
 
-/** The types a kept picture may be: one of the images, or a recording an agent made, a WebM or an H.264 MP4, played rather than drawn. */
+/** The types a kept picture may be: one of the images, a recording an agent made, a WebM or an H.264 MP4, or a sound clip it made, each played rather than drawn. */
 export const PICTURE_MEDIA_TYPE = {
   ...PICTURE_TYPE,
   WEBM: WEBM_TYPE,
   MP4: MP4_TYPE,
+  ...AUDIO_TYPE,
 } as const;
 
 type PictureMediaType = (typeof PICTURE_MEDIA_TYPE)[keyof typeof PICTURE_MEDIA_TYPE];
 
-/** A kept picture's media type as the wire carries it: an image's or a video's. */
+/** A kept picture's media type as the wire carries it: an image's, a video's, or a clip's. */
 export const pictureMediaTypeSchema = EffectSchema.Literals(Object.values(PICTURE_MEDIA_TYPE));
 
 export const PICTURE_BOUNDS = {
@@ -53,7 +56,7 @@ export const PICTURE_BOUNDS = {
    * well under.
    */
   MAX_BYTES: 1_500_000,
-  /** The most bytes one video may hold, decoded: the bound the inbox keeps a recording under. */
+  /** The most bytes one video or sound clip may hold, decoded: the bound the inbox keeps a recording under. */
   MAX_VIDEO_BYTES: INBOX_BOUNDS.MAX_VIDEO_BYTES,
   /**
    * The most bytes one video sent as a `data:` URL may hold, decoded. Note
@@ -70,22 +73,23 @@ const PICTURE_DATA_URL = /^data:([^;,]+);base64,([A-Za-z0-9+/]+={0,2})$/u;
 
 const isPictureMediaType = EffectSchema.is(pictureMediaTypeSchema);
 
-/** A picture, as its bytes under its media type: an image, or a video. */
+/** A picture, as its bytes under its media type: an image, a video, or a sound clip. */
 export interface Picture {
   readonly contentType: PictureMediaType;
   readonly bytes: Uint8Array;
 }
 
-/** Whether a picture is a video, played rather than drawn, and never handed to a model as an image. */
-export function isVideoPicture(picture: Picture): boolean {
-  return isVideoType(picture.contentType);
+/** Whether a picture is a video or a sound clip, played rather than drawn, and never handed to a model as an image. */
+export function isPlayedPicture(picture: Picture): boolean {
+  return isPlayedType(picture.contentType);
 }
 
 /**
  * The picture a `data:` URL holds, where its type is one of
- * `PICTURE_MEDIA_TYPE` and its bytes read as that image, or as a WebM that
- * states its size, as an inbox post's recording must; nothing for any other
- * text.
+ * `PICTURE_MEDIA_TYPE` and its bytes read as that image, as a recording
+ * that states its size, as an inbox post's must, or as that sound clip, an
+ * MP4 that holds sound and no video read as an M4A (`measuredMedia`);
+ * nothing for any other text.
  */
 export function pictureOfDataUrl(text: string): Picture | undefined {
   const [, contentType, base64] = PICTURE_DATA_URL.exec(text) ?? [];
@@ -96,19 +100,21 @@ export function pictureOfDataUrl(text: string): Picture | undefined {
 
   const bytes = Base64.decode(base64);
 
-  if (Result.isFailure(bytes) || sniffMediaType(bytes.success) !== contentType) return undefined;
-  const picture: Picture = { contentType, bytes: bytes.success };
+  if (Result.isFailure(bytes)) return undefined;
+  const sniffed = sniffMediaType(bytes.success);
 
-  if (isVideoPicture(picture) && mediaDimensions(picture.bytes, contentType) === undefined) {
-    return undefined;
-  }
+  // Note that a played file's type is settled from all of its bytes, because an M4A opens as an MP4 does.
+  const read =
+    sniffed === undefined || !isPlayedType(sniffed)
+      ? sniffed
+      : measuredMedia(bytes.success, sniffed)?.contentType;
 
-  return picture;
+  return read === contentType ? { contentType, bytes: bytes.success } : undefined;
 }
 
-/** The most bytes a picture sent as a `data:` URL may hold: an image's bound, or a sent video's. */
+/** The most bytes a picture sent as a `data:` URL may hold: an image's bound, or a sent video's or clip's. */
 function sentBytesOf(picture: Picture): number {
-  return isVideoPicture(picture) ? PICTURE_BOUNDS.MAX_SENT_VIDEO_BYTES : PICTURE_BOUNDS.MAX_BYTES;
+  return isPlayedPicture(picture) ? PICTURE_BOUNDS.MAX_SENT_VIDEO_BYTES : PICTURE_BOUNDS.MAX_BYTES;
 }
 
 /** A picture to keep, as the `data:` URL it is sent as: one `pictureOfDataUrl` reads, within its type's byte bound. */

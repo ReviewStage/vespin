@@ -49,7 +49,7 @@ import { DockRow, GlassDock, useDockRoom } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
-import { choiceColor, type MenuChoice } from "./list-row.js";
+import { choiceContent, type MenuChoice } from "./list-row.js";
 import { HarnessMark } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
@@ -188,7 +188,7 @@ export function MenuChip(props: MenuChipProps) {
           {group.choices.map((choice) => (
             <Toggle
               key={choice.id ?? choice.label}
-              {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
+              {...choiceContent(choice, colors)}
               isOn={choice.on}
               onIsOnChange={() => choice.onPress()}
             />
@@ -225,6 +225,8 @@ export type ComposeWords = {
   readonly onWords: (words: string) => void;
   /** The name a flow finds the field by. */
   readonly testId: string;
+  /** Takes words pasted long enough to come as a file, answering whether it did; they paste as words where none is given. */
+  readonly onLongPaste?: ((words: string) => boolean) | undefined;
 };
 
 /** What the sheet's + adds: a menu of what it offers, or its one act, such as a picture, and the name a flow finds it by. */
@@ -300,6 +302,7 @@ function ComposePage(props: ComposeSheetProps) {
             placeholder={words.placeholder}
             words={words.words}
             onWords={words.onWords}
+            onLongPaste={words.onLongPaste}
             autoFocus
             testId={words.testId}
             look={WORDS_LOOK.PAGE}

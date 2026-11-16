@@ -36,15 +36,15 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { labelFill } from "@repo/features/label-fill";
-import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
-import type { TaskStatus } from "@repo/features/task-wire";
+import { TASK_PRIORITY_WORDS, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
+import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactElement, type ReactNode } from "react";
 import { useColorScheme } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { choiceColor, type MenuChoice } from "./list-row.js";
-import { Avatar, type Face, TaskStatusMark, ToneGlyph } from "./marks.js";
+import { choiceContent, type MenuChoice } from "./list-row.js";
+import { Avatar, type Face, TaskPriorityMark, TaskStatusMark, ToneGlyph } from "./marks.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -281,52 +281,65 @@ function segmentWords(scope: Scope): string {
   return scope.count === undefined ? scope.label : `${scope.label} ${scope.count}`;
 }
 
-/**
- * A list's scopes as the system's segmented control under the screen's
- * title, as Mail and the App Store switch between a list's views, over the
- * list they scope. It stands over the list rather than in it, so it stays
- * when the scope chosen lists nothing. Note that the system draws it, in
- * its own glass and its own selection, so it reads as iOS's rather than a
- * row of capsules of our own. In a split view's list column, whose 320 pt
- * cut the segments' words short, it stands as the system's menu picker
- * instead: one button naming the scope chosen, opening the others.
- */
-export function ScopePicker({
-  label,
-  scopes,
-  look = SCOPE_LOOK.SEGMENTED,
-  children,
-}: {
+/** A list's scopes as a `ScopePicker` or a `RowList` stands them: what the control chooses, heard by VoiceOver, its scopes, and its look. */
+export type ListScopes = {
   /** What the control chooses, heard by VoiceOver before the scope chosen and kept off screen, such as "Filter". */
   readonly label: string;
   readonly scopes: readonly Scope[];
   readonly look?: ScopeLook | undefined;
-  /** The list the control scopes, or what stands in its place while it lists nothing. */
-  readonly children: ReactNode;
-}) {
+};
+
+/**
+ * A list's scopes as the system draws them, in its own glass and its own
+ * selection, so they read as iOS's rather than a row of capsules of our
+ * own: its segmented control, as Mail and the App Store switch between a
+ * list's views, or, in a split view's list column, whose 320 pt cut the
+ * segments' words short, its menu picker, one button naming the scope
+ * chosen and opening the others.
+ */
+export function ScopeControl({ label, scopes, look = SCOPE_LOOK.SEGMENTED }: ListScopes) {
   const chosen = scopes.find((scope) => scope.selected);
 
   return (
+    <Picker<string>
+      label={label}
+      selection={chosen?.label ?? ""}
+      onSelectionChange={(label) => scopes.find((scope) => scope.label === label)?.onPress()}
+      modifiers={[
+        pickerStyle(look),
+        labelsHidden(),
+        ...(look === SCOPE_LOOK.MENU
+          ? [frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]
+          : []),
+        padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT, bottom: SPACE.TIGHT * 2 }),
+      ]}
+    >
+      {scopes.map((scope) => (
+        <Text key={scope.label} modifiers={[tag(scope.label)]}>
+          {segmentWords(scope)}
+        </Text>
+      ))}
+    </Picker>
+  );
+}
+
+/**
+ * A list's scopes standing over what they scope while it lists nothing, so
+ * another scope is one tap away from an empty one, or over a form's fields.
+ * A list that has rows stands its scopes as its own first row instead
+ * (`RowList`'s `scopes`), so they scroll away with the rows, as Mail's
+ * categories do, and the rows meet the bar's own edge.
+ */
+export function ScopePicker({
+  children,
+  ...control
+}: ListScopes & {
+  /** What the control scopes: what stands in a list's place while it lists nothing, or a form. */
+  readonly children: ReactNode;
+}) {
+  return (
     <VStack spacing={0}>
-      <Picker<string>
-        label={label}
-        selection={chosen?.label ?? ""}
-        onSelectionChange={(label) => scopes.find((scope) => scope.label === label)?.onPress()}
-        modifiers={[
-          pickerStyle(look),
-          labelsHidden(),
-          ...(look === SCOPE_LOOK.MENU
-            ? [frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]
-            : []),
-          padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT, bottom: SPACE.TIGHT * 2 }),
-        ]}
-      >
-        {scopes.map((scope) => (
-          <Text key={scope.label} modifiers={[tag(scope.label)]}>
-            {segmentWords(scope)}
-          </Text>
-        ))}
-      </Picker>
+      <ScopeControl {...control} />
       {children}
     </VStack>
   );
@@ -337,6 +350,8 @@ type FieldChipProps = {
   readonly label: string;
   /** A task's status, whose ring leads the chip. */
   readonly status?: TaskStatus | undefined;
+  /** A task's priority, whose bars lead the chip. */
+  readonly priority?: TaskPriority | undefined;
   /** A person, whose face leads the chip, their picture where one is known. */
   readonly face?: Face | undefined;
   /** A glyph leading the chip where neither does, in the muted ink. */
@@ -357,6 +372,8 @@ export type FieldMenu = {
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
 function fieldMark(props: FieldChipProps, colors: BrandColors, glyphSize: number): ReactNode {
   if (props.status !== undefined) return <TaskStatusMark status={props.status} />;
+
+  if (props.priority !== undefined) return <TaskPriorityMark priority={props.priority} />;
 
   if (props.face !== undefined) {
     return (
@@ -450,7 +467,7 @@ function FieldValuesMenu({
         <Toggle
           // Note that a choice is keyed by its place, since two members may share a name.
           key={at}
-          {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
+          {...choiceContent(choice, colors)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />
@@ -468,6 +485,17 @@ export function StatusChip({
   readonly menu?: FieldMenu | undefined;
 }) {
   return <FieldChip label={TASK_STATUS_WORDS[status]} status={status} menu={menu} />;
+}
+
+/** A task's priority as a field's chip, its bars leading its name, as the panel's chip draws it. */
+export function PriorityChip({
+  priority,
+  menu,
+}: {
+  readonly priority: TaskPriority;
+  readonly menu?: FieldMenu | undefined;
+}) {
+  return <FieldChip label={TASK_PRIORITY_WORDS[priority]} priority={priority} menu={menu} />;
 }
 
 /**

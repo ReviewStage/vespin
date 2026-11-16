@@ -21,7 +21,7 @@ import {
   type ListedAgent,
   listedAgentOfPage,
 } from "@repo/features/agent-wire";
-import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { isPlayedType } from "@repo/features/conversation-picture-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -40,7 +40,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cachedVideo } from "../cached-media.js";
+import { cachedPlayed } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useHostActs,
@@ -261,28 +261,28 @@ function mediaReadFailed(agentId: string, pictureId: string, cause: unknown, aga
   );
 }
 
-/** One picture or recording the agent showed, read through the host into what it is drawn from. */
+/** One picture, recording, or sound clip the agent showed, read through the host into what it is drawn from. */
 async function agentMediaSource(
   acts: ReturnType<typeof useHostActs>,
   agentId: string,
   pictureId: string,
 ): Promise<string> {
-  // Note that a recording is asked for as its MP4 copy, which the system's player plays, where the service kept one.
+  // Note that a recording, or an Ogg clip, is asked for as its MP4 copy, which the system's player plays, where the service kept one; anything else is answered as it is.
   const read = await acts[ACT_KIND.AGENTS_PICTURE]({ agentId, pictureId, playable: MP4_TYPE });
 
   if (!("base64" in read)) throw new Error(`The picture was not read: ${read.failure}.`);
 
-  return isVideoType(read.contentType)
-    ? cachedVideo(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64)
+  return isPlayedType(read.contentType)
+    ? cachedPlayed(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64)
     : `data:${read.contentType};base64,${read.base64}`;
 }
 
 /**
- * What each picture and recording the agent showed is drawn from, by its
- * id, read once through the host as the panel reads one
+ * What each picture, recording, and sound clip the agent showed is drawn
+ * from, by its id, read once through the host as the panel reads one
  * (`ACT_KIND.AGENTS_PICTURE`): a picture as a `data:` address, and a
- * recording, its MP4 copy where the service kept one, as a file of the
- * app's caches, written whole before it is drawn, since the system's player
+ * recording or a clip, its MP4 copy where the service kept one, as a file of
+ * the app's caches, written whole before it is drawn, since the system's player
  * reads a file; one on its way, or that could not be read, is absent. Note
  * that each is asked for once while the agent's page stands, however often
  * the transcript moves; that one whose read failed is tried again on its

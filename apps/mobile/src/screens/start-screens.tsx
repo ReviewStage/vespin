@@ -1,9 +1,13 @@
 // start-screens.tsx -- the two sheets that start work, each a compose sheet as Mail's stands: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus above the keyboard; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules, or File for later, which files it with no agent.
 
-import { AGENT_STATUS, hasWordsOrFiles } from "@repo/features/agent-wire";
+import {
+  AGENT_ATTACHMENT_TYPE,
+  AGENT_STATUS,
+  type AgentAttachment,
+  hasWordsOrFiles,
+} from "@repo/features/agent-wire";
+import { attachmentText } from "@repo/features/attachment-model";
 import { AGENT_STATUS_WORDS } from "@repo/features/automation-list-model";
-import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
-import { devicePlatformOf } from "@repo/features/device-platform";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
@@ -15,13 +19,14 @@ import { REMOVE_RELATION, TASK_RELATION_MENU } from "@repo/features/task-relatio
 import { TASK_CREATE_RELATION_WORDS, TASK_STATUS_TONE } from "@repo/features/task-standing-words";
 import {
   isTaskSettled,
+  TASK_BOUNDS,
   TASK_CREATE_RELATION_KIND,
   TASK_STATUS,
   type TaskCreateRelation,
   type TaskCreateRelationKind,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { filedTaskOf } from "@repo/features/tasks-model";
+import { type FiledTask, filedTaskOf } from "@repo/features/tasks-model";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
@@ -38,11 +43,12 @@ import {
   MENU_CHIP_LOOK,
   MenuChip,
   type PickOption,
+  runsOnGlyph,
   STATUS_MARK_SYMBOL,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useNavigation, useRouter } from "expo-router";
 import { useMemo, useRef, useState } from "react";
 import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
@@ -251,15 +257,6 @@ function ModelChip({ pick }: { readonly pick: ModelPick }) {
   );
 }
 
-/** The panel's glyph for where an agent runs, as its Runs on chip leads with it: the cloud's, or a device's by its platform, a server's for Linux and a laptop's otherwise. */
-function placeGlyph(pick: ModelPick, runsOn: string): Glyph {
-  const device = pick.devices.find((each) => each.deviceId === runsOn);
-
-  if (runsOn === CLOUD || device === undefined) return GLYPH.CLOUD;
-
-  return devicePlatformOf(device) === DEVICE_PLATFORM.LINUX ? GLYPH.HOST : GLYPH.MAC;
-}
-
 /** Where the agent runs, Cloud or one of the account's devices, as a capsule; none where the account may run an agent on no device of its own. */
 function RunsOnChip({
   pick,
@@ -273,12 +270,31 @@ function RunsOnChip({
   if (pick.devices.length === 0) return null;
   const options = runsOnOptions(pick.devices);
 
+  // Note that each place leads with the panel's runs-on mark: the cloud's, or its device's by its platform.
+  const glyphOf = (place: string) =>
+    runsOnGlyph({
+      cloud: place === CLOUD,
+      platform: pick.devices.find((device) => device.deviceId === place)?.platform,
+    });
+
   return (
     <MenuChip
       look={MENU_CHIP_LOOK.DOCK}
       label={labelOf(options, runsOn) ?? WORDS.RUNS_ON}
-      symbol={placeGlyph(pick, runsOn)}
-      menu={{ groups: [{ title: WORDS.RUNS_ON, choices: choicesOf(options, runsOn, onRunsOn) }] }}
+      symbol={glyphOf(runsOn)}
+      menu={{
+        groups: [
+          {
+            title: WORDS.RUNS_ON,
+            choices: options.map((option) => ({
+              label: option.label,
+              symbol: glyphOf(option.id),
+              on: option.id === runsOn,
+              onPress: () => onRunsOn(option.id),
+            })),
+          },
+        ],
+      }}
     />
   );
 }
@@ -340,19 +356,74 @@ function RepositoryChip({
 
 type UseSheetStartResult = {
   readonly starting: boolean;
-  /** What the sheet says beside its spinner while a start is out, such as "Starting…"; none for a task filed for later, which says nothing. */
-  readonly pending: string | undefined;
-  readonly go: (
-    start: () => Promise<StartAnswer>,
-    refusal?: string | undefined,
-    says?: string | undefined,
-  ) => void;
+  readonly go: (start: () => Promise<StartAnswer>, refusal?: string | undefined) => void;
 };
 
 /** What the sheet says while an agent's start is out, as the panel names an agent starting. */
 const STARTING_WORDS = AGENT_STATUS_WORDS[AGENT_STATUS.STARTING];
 
 type Started = { answer?: StartAnswer };
+
+/** A route in a navigator's state, as React Navigation hands it: its key, its params, and the navigator under it. */
+type RouteNode = {
+  readonly key?: string | undefined;
+  readonly params?: object | undefined;
+  readonly state?: NavigatorState | undefined;
+};
+
+/** A navigator's state, as React Navigation hands it. */
+type NavigatorState = {
+  readonly index?: number | undefined;
+  readonly routes: readonly RouteNode[];
+};
+
+/** Where the reader stands: the focused route by its key, and its params as written, which a split view's pick moves. */
+type Standing = { readonly key: string | undefined; readonly params: string | undefined };
+
+/** The route focused inside `route`, as `getCurrentRoute` descends to it. */
+function focusedIn(route: RouteNode | undefined): RouteNode | undefined {
+  const state = route?.state;
+
+  if (state === undefined) return route;
+
+  return focusedIn(state.routes[state.index ?? state.routes.length - 1]);
+}
+
+/** A navigator, as React Navigation hands it, read only for its state and the navigator over it. */
+type Navigator = {
+  readonly getState: () => NavigatorState;
+  readonly getParent: () => Navigator | undefined;
+};
+
+/**
+ * The navigator a sheet was presented on: the first, from the sheet's own up,
+ * with a route beneath its top. Note that it is found by walking up, because
+ * a sheet may stand in a stack of its own, as New task's layout does.
+ */
+function presentingNavigator(own: Navigator): Navigator {
+  const state = own.getState();
+  const parent = own.getParent();
+
+  return (state.index ?? 0) > 0 || parent === undefined ? own : presentingNavigator(parent);
+}
+
+/** Where the reader stands in a navigator, `back` routes below its top: the focused route there, by key and params. */
+function standingIn(navigator: Navigator, back: number): Standing {
+  const state = navigator.getState();
+  const at = (state.index ?? state.routes.length - 1) - back;
+
+  return standingOf(at < 0 ? undefined : focusedIn(state.routes[at]));
+}
+
+/** Where a route stands, by its key and its params, which React Navigation keeps serializable. */
+function standingOf(route: RouteNode | undefined): Standing {
+  return { key: route?.key, params: JSON.stringify(route?.params) };
+}
+
+/** Whether the reader stands where they stood: the same route, with the same row selected. */
+function sameStanding(was: Standing, now: Standing): boolean {
+  return was.key === now.key && was.params === now.params;
+}
 
 /**
  * Sends a start once, while none is out: on an agent started, the sheet
@@ -369,17 +440,11 @@ function useSheetStart(
   const router = useRouter();
   const onTab = useOnTab();
   const write = useWrite();
-  // Note that what a start says is held with it, so a task filed for later shows the spinner without the words an agent's start says.
-  const [out, setOut] = useState<{ readonly says: string | undefined } | undefined>(undefined);
-  const starting = out !== undefined;
+  const [starting, setStarting] = useState(false);
   // Note that a start out is also held in a ref, so two presses in one frame, which both read the render's state, start one task.
   const sending = useRef(false);
 
-  const go = (
-    start: () => Promise<StartAnswer>,
-    refusal?: string | undefined,
-    says?: string | undefined,
-  ) => {
+  const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
     if (sending.current) return;
 
     if (refusal !== undefined) {
@@ -390,7 +455,7 @@ function useSheetStart(
     }
 
     sending.current = true;
-    setOut({ says });
+    setStarting(true);
     setNote(undefined);
     const started: Started = {};
     // Note that a start refused says why in the sheet, under its words, rather than in the notice.
@@ -421,11 +486,103 @@ function useSheetStart(
       })
       .finally(() => {
         sending.current = false;
-        setOut(undefined);
+        setStarting(false);
       });
   };
 
-  return { starting, pending: out?.says, go };
+  return { starting, go };
+}
+
+/**
+ * New task's start, as the panel's New task sends it: the sheet closes the
+ * moment Start is pressed, and the start goes on as a write, opening the
+ * task's page once it lands, where its new agent stands among its agents. A start
+ * refused is said in the failure notice, whose Try again sends the same
+ * start again. Note that this never makes a second task, because the task's
+ * id and its agent's key are minted once per sheet (`useStartTask`,
+ * `useFileTask`), and the service answers a start it already made with the
+ * same task. Pictures the service would refuse still hold the sheet, saying
+ * why under its words.
+ */
+function useClosingStart(
+  kept: KeptWords,
+  setNote: (note: string | undefined) => void,
+): UseSheetStartResult {
+  const router = useRouter();
+  const navigation: Navigator = useNavigation();
+  const onTab = useOnTab();
+  const write = useWrite();
+  // Note that a start goes once, so a second press while the sheet slides away sends nothing.
+  const [sent, setSent] = useState(false);
+
+  const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
+    if (sent) return;
+
+    if (refusal !== undefined) {
+      setNote(refusal);
+      buzz(BUZZ.WARNING);
+
+      return;
+    }
+
+    setSent(true);
+    // Note that where the reader stands is kept as Start is pressed, in the navigator the sheet was presented on: the sheet, and the route it uncovers.
+    const presenting = presentingNavigator(navigation);
+    const sheet = standingIn(presenting, 0);
+    const uncovered = standingIn(presenting, 1);
+    kept.release();
+    router.dismiss();
+    const started: Started = {};
+
+    void write(
+      () =>
+        start().then((answer) => {
+          started.answer = answer;
+
+          return answer;
+        }),
+      {
+        refused: (answer) => ("refused" in answer ? answer.refused : undefined),
+        retry: true,
+        went: BUZZ.SUCCESS,
+      },
+    ).then((went) => {
+      const answer = started.answer;
+
+      if (!went || answer === undefined || "refused" in answer) return;
+      // Note that the task opens only while the reader stands where Start left them, on the same route with the same row selected, so a page they opened or a row they picked meanwhile stands.
+      const now = standingIn(presenting, 0);
+
+      if (!sameStanding(sheet, now) && !sameStanding(uncovered, now)) return;
+      // Note that only the task's page opens, its new agent standing in its Agents section, because a second route pushed over it races the split view's hand-off and leaves the task behind.
+      router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })));
+    });
+  };
+
+  return { starting: sent, go };
+}
+
+/**
+ * The task File for later files from the sheet's words and the files it
+ * holds: none while it holds a picture, which goes only with an agent's
+ * start. Note that a long paste held as a text file is filed as words after
+ * the words typed, since a task filed for later carries no file, so a pasted
+ * description can still be filed, while it fits in a brief.
+ */
+function filedOf(
+  prompt: string,
+  files: readonly AgentAttachment[] | undefined,
+): FiledTask | undefined {
+  const held = files ?? [];
+
+  if (held.some((file) => file.mediaType !== AGENT_ATTACHMENT_TYPE.TEXT)) return undefined;
+  const words = [prompt.trim(), ...held.map((file) => attachmentText(file.data).trim())];
+  const kept = words.filter((each) => each !== "").join("\n\n");
+
+  // Note that pasted text a brief would cut holds File for later back rather than being filed short, since a paste may run far past a brief's bound.
+  if (held.length > 0 && kept.length > TASK_BOUNDS.MAX_BRIEF_CHARS) return undefined;
+
+  return filedTaskOf(kept);
 }
 
 /** The skills a `/` offers, as the compose sheet takes them. */
@@ -465,7 +622,7 @@ export function NewAgentScreen({
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const kept = useKeptWords(drafted);
-  const { starting, pending, go } = useSheetStart(kept, setNote);
+  const { starting, go } = useSheetStart(kept, setNote);
   const skills = useSkillOffer(prompt, setPrompt, { taskId: taskId });
 
   // Note that a suggestion's start sends its own title and branch beside the words, files, and model the sheet holds.
@@ -496,7 +653,6 @@ export function NewAgentScreen({
             })
           : startSuggested(opened.suggestion),
       pictures.refusal,
-      STARTING_WORDS,
     );
 
   return (
@@ -508,7 +664,7 @@ export function NewAgentScreen({
         kept={kept}
       />
       <ComposeSheet
-        busy={starting ? { says: pending } : undefined}
+        busy={starting ? { says: STARTING_WORDS } : undefined}
         title={
           opened === undefined
             ? undefined
@@ -521,6 +677,7 @@ export function NewAgentScreen({
           placeholder: WORDS.AGENT_PLACEHOLDER,
           words: prompt,
           onWords: setPrompt,
+          onLongPaste: pictures.pasteText,
           testId: TEST_IDS.NEW_AGENT.WORDS,
         }}
         skills={offered(skills)}
@@ -715,8 +872,8 @@ function RelationChip({ pick }: { readonly pick: RelationPick }) {
  * task and starts its agent in one act, as Home does, in the workspace the
  * app works in, or the one a share draft it opens on was kept for; File for
  * later before it files the task in the Backlog under its words with no
- * agent, offered on words alone, since pictures go only with an agent's
- * start. A task's New sub-task opens it as a sub-task of `parent`, in the
+ * agent, offered on words and pasted text alone, since pictures go only
+ * with an agent's start. A task's New sub-task opens it as a sub-task of `parent`, in the
  * parent's workspace, which a task opened by a link may hold apart from the
  * one the app works in, since a tree stands in one.
  */
@@ -748,9 +905,9 @@ export function NewTaskScreen({
   const pictures = useAttachedPictures(setNote, draft?.pictures);
   // Note that a share draft's pictures are read as the sheet opens, and nothing starts or files until they are in, so its words never go without them.
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
-  const filed = pictures.files === undefined && !pictures.opening ? filedTaskOf(prompt) : undefined;
+  const filed = pictures.opening ? undefined : filedOf(prompt, pictures.files);
   const kept = useKeptWords(drafted);
-  const { starting, pending, go } = useSheetStart(kept, setNote);
+  const { starting, go } = useClosingStart(kept, setNote);
   const place = { repository: repository.picked, relation: relation.relation };
   const tree = inTree(relation.relation) ? relation.task : undefined;
   // Note that a `/` offers the skills of the repository the task starts in, its tree's where it joins one, as the panel's New task reads them.
@@ -796,7 +953,6 @@ export function NewTaskScreen({
           ...place,
         }),
       pictures.refusal,
-      STARTING_WORDS,
     );
   };
 
@@ -814,12 +970,12 @@ export function NewTaskScreen({
         kept={kept}
       />
       <ComposeSheet
-        busy={starting ? { says: pending } : undefined}
         head={head}
         words={{
           placeholder: WORDS.TASK_PLACEHOLDER,
           words: prompt,
           onWords: setPrompt,
+          onLongPaste: pictures.pasteText,
           testId: TEST_IDS.NEW_TASK.WORDS,
         }}
         skills={offered(skills)}

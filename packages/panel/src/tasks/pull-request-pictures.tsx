@@ -11,7 +11,7 @@ import { askAct } from "../act.js";
 import { useDrawnDark } from "../drawn-dark.js";
 import { pictureUnread } from "../failure-report.js";
 import { PictureBlock } from "../picture-block.js";
-import { type PictureReader, pictureQuery } from "../picture-query.js";
+import { nestedPictureQuery } from "../picture-query.js";
 import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
 import {
   type GitHubPictureDrawer,
@@ -25,7 +25,9 @@ import { useOpenLink } from "./use-open-link.js";
  *
  * GitHub's rendering (`body_html`) names each picture by an address the
  * window may not read itself, so each is read once through the service on
- * the App's token as the agent's (`githubImageOf`) and kept in the window's
+ * the App's token (`githubImageOf`), through the workspace's installation on
+ * the pull request's repository, or as the agent's where an agent's
+ * transcript draws a GitHub line (`GitHubPictureScope`), and kept in the window's
  * picture cache (`@repo/ui/picture-read`). A picture standing alone is
  * drawn as a description's picture is (`../picture-block.tsx`), its press
  * (Enlarge) opening the window's file viewer (`attachment-viewer.tsx`)
@@ -49,19 +51,34 @@ const PICTURE_WORDS = {
   UNNAMED: "Picture",
 } as const;
 
+/**
+ * Whose reach a picture GitHub's rendering names is read through: a
+ * workspace's installation on a repository, as a Pull request tab reads its
+ * pull request's, or an agent's, as its transcript reads a GitHub line's.
+ */
+export type GitHubPictureScope =
+  | { readonly workspaceId: string; readonly repository: string }
+  | { readonly agentId: string };
+
 /** How a picture drawn in an entry's words opens that entry's viewer. */
 interface EntryViewerDoor {
-  readonly open: (agentId: string, src: string) => void;
+  readonly open: (scope: GitHubPictureScope, src: string) => void;
 }
 
 const EntryViewerContext = createContext<EntryViewerDoor | undefined>(undefined);
 
-/** How the tab reads a picture GitHub names through the service, on the App's token as the agent's (`githubImageOf`). */
-export function useGitHubImageRead(): PictureReader {
-  return useCallback(
-    (owner: string, address: string) =>
-      askAct(ACT_KIND.AGENTS_GITHUB_IMAGE, { agentId: owner, src: address }),
-    [],
+/** The query a picture GitHub names is read and kept under, by the scope it is read through and its address, read through the service on the App's token (`githubImageOf`). */
+export function githubPictureQuery(scope: GitHubPictureScope, src: string) {
+  if ("agentId" in scope) {
+    return nestedPictureQuery([scope.agentId], src, (address) =>
+      askAct(ACT_KIND.AGENTS_GITHUB_IMAGE, { agentId: scope.agentId, src: address }),
+    );
+  }
+
+  const { workspaceId, repository } = scope;
+
+  return nestedPictureQuery([workspaceId, repository], src, (address) =>
+    askAct(ACT_KIND.PULL_REQUESTS_GITHUB_IMAGE, { workspaceId, repository, src: address }),
   );
 }
 
@@ -115,24 +132,23 @@ function heldFiles(
 
 /** The viewer over an entry's pictures, from the one named, walking those the window holds. */
 function EntryViewer({
-  agentId,
+  scope,
   pictures,
   src,
   onSrc,
   onClose,
 }: {
-  agentId: string;
+  scope: GitHubPictureScope;
   pictures: readonly RenderingPicture[];
   src: string;
   onSrc: (src: string) => void;
   onClose: () => void;
 }): ReactNode {
   const openLink = useOpenLink();
-  const read = useGitHubImageRead();
 
   // Note that every picture of the entry is watched, so one still being read joins the walk as it lands.
   const reads = useQueries({
-    queries: pictures.map(({ src }) => pictureQuery(agentId, src, read)),
+    queries: pictures.map(({ src }) => githubPictureQuery(scope, src)),
     combine: (results) => results.map((result) => result.data),
   });
 
@@ -176,10 +192,14 @@ export function EntryPictures({
 }): React.JSX.Element {
   const dark = useDrawnDark();
   const pictures = useMemo(() => picturesOf(html, dark), [html, dark]);
-  const [viewing, setViewing] = useState<{ readonly agentId: string; readonly src: string }>();
+
+  const [viewing, setViewing] = useState<{
+    readonly scope: GitHubPictureScope;
+    readonly src: string;
+  }>();
 
   const door = useMemo<EntryViewerDoor>(
-    () => ({ open: (agentId, src) => setViewing({ agentId, src }) }),
+    () => ({ open: (scope, src) => setViewing({ scope, src }) }),
     [],
   );
 
@@ -188,10 +208,10 @@ export function EntryPictures({
       {children}
       {viewing === undefined ? null : (
         <EntryViewer
-          agentId={viewing.agentId}
+          scope={viewing.scope}
           pictures={pictures}
           src={viewing.src}
-          onSrc={(src) => setViewing({ agentId: viewing.agentId, src })}
+          onSrc={(src) => setViewing({ scope: viewing.scope, src })}
           onClose={() => setViewing(undefined)}
         />
       )}
@@ -215,19 +235,19 @@ function writtenAspect(written: GitHubPictureWritten): string | undefined {
  * draws.
  */
 function GitHubPicture({
-  agentId,
+  scope,
   src,
   alt,
   inline,
   written,
 }: {
-  agentId: string;
+  scope: GitHubPictureScope;
   src: string;
   alt: string;
   inline: boolean;
   written: GitHubPictureWritten;
 }): React.JSX.Element {
-  const state = usePicture(pictureQuery(agentId, src, useGitHubImageRead()), pictureUnread);
+  const state = usePicture(githubPictureQuery(scope, src), pictureUnread);
   const door = useContext(EntryViewerContext);
 
   // Note that an inline picture whose read did not land is its link too, because it stands in a line, where no Retry may stand.
@@ -236,7 +256,7 @@ function GitHubPicture({
   }
 
   if (!inline) {
-    const open = door === undefined ? undefined : () => door.open(agentId, src);
+    const open = door === undefined ? undefined : () => door.open(scope, src);
 
     return <PictureBlock state={state} alt={alt} caption={undefined} onOpen={open} />;
   }
@@ -287,13 +307,13 @@ function PictureSkeleton({
   );
 }
 
-/** How the tab draws a picture GitHub's rendering names: one it may read through the service as the agent's, and none else. */
-export function usePictureDrawer(agentId: string): GitHubPictureDrawer {
+/** How a picture GitHub's rendering names is drawn: one the service may read through the scope given, and none else. Note that the caller keeps the scope while its ids stand, because every entry drawn with the drawer draws anew on a new one. */
+export function usePictureDrawer(scope: GitHubPictureScope): GitHubPictureDrawer {
   return useCallback(
     (src, alt, inline, written) =>
       githubImageOf(src) === undefined ? undefined : (
-        <GitHubPicture agentId={agentId} src={src} alt={alt} inline={inline} written={written} />
+        <GitHubPicture scope={scope} src={src} alt={alt} inline={inline} written={written} />
       ),
-    [agentId],
+    [scope],
   );
 }

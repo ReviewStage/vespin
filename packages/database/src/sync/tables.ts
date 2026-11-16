@@ -41,6 +41,7 @@ import { device } from "../schemas/device.js";
 import { deviceAgentLine, deviceAgentRequest } from "../schemas/device-agent.js";
 import { githubInstallation } from "../schemas/github-installation.js";
 import { githubPersonalToken } from "../schemas/github-personal-token.js";
+import { githubPullRequestMove } from "../schemas/github-pull-request-move.js";
 import { githubRepositoryRead } from "../schemas/github-repository-read.js";
 import { hostPairing } from "../schemas/host-pairing.js";
 import { inboxItem } from "../schemas/inbox.js";
@@ -69,6 +70,7 @@ import { taskSection, taskSectionEntry } from "../schemas/task-section.js";
 import { voiceCallTable } from "../schemas/voice-call.js";
 import { workspaceExperiment } from "../schemas/workspace-experiment.js";
 import { workspaceFormerSlug } from "../schemas/workspace-former-slug.js";
+import { workspaceSandboxSize } from "../schemas/workspace-sandbox-size.js";
 import { TOPIC } from "./notification.js";
 import { defineSyncTable, LOG, type SyncTable } from "./sync-table.js";
 
@@ -733,6 +735,16 @@ export const pullRequestChaptersSync = defineSyncTable(pullRequestChapters, {
 });
 
 /**
+ * When GitHub last said a pull request moved, on its repository's topic by
+ * GitHub's id, which only the open Pull request tabs following that
+ * repository's pull requests are woken on. No column is ignored: a delivery
+ * moves `moved_at` on every write, which is what a tab follows.
+ */
+export const githubPullRequestMoveSync = defineSyncTable(githubPullRequestMove, {
+  topics: [{ kind: TOPIC.GITHUB_REPOSITORY, column: githubPullRequestMove.repositoryId }],
+});
+
+/**
  * A workspace's memory, on its workspace's memory topic, which only the open
  * memory reads of the workspace are woken on: the workspace's own topic
  * would wake every member's task list on each agent's `save_memory`. No
@@ -888,6 +900,16 @@ export const agentDelegationSync = defineSyncTable(agentDelegationTable, {
   ],
 });
 
+/**
+ * A workspace's sandbox size, on the workspace's topic, so every member's
+ * task list reads its agents' size again as it changes; logged, since the
+ * list's delta read takes the agents of a moved size.
+ */
+export const workspaceSandboxSizeSync = defineSyncTable(workspaceSandboxSize, {
+  topics: [{ kind: TOPIC.WORKSPACE, column: workspaceSandboxSize.organizationId }],
+  log: LOG.EVERY,
+});
+
 export const SYNC_TABLES: readonly SyncTable[] = [
   taskSync,
   taskBlockSync,
@@ -904,6 +926,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   personalWorkspaceSync,
   workspaceFormerSlugSync,
   workspaceExperimentSync,
+  workspaceSandboxSizeSync,
   githubInstallationSync,
   githubPersonalTokenSync,
   githubRepositoryReadSync,
@@ -938,6 +961,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   taskPageVersionSync,
   agentBrowserTabSync,
   pullRequestChaptersSync,
+  githubPullRequestMoveSync,
   memorySync,
   memoryRecallSync,
   installedSkillSync,
