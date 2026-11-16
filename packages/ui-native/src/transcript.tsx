@@ -1,5 +1,6 @@
 // transcript.tsx -- an agent's transcript as the iPhone draws it: the app's one React Native list, lazy, anchored at its newest row, its rows the panel's anatomy in the brand's inks.
 
+import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -25,6 +26,7 @@ import {
   useReduceTransparency,
   useScaledSize,
 } from "./accessibility.js";
+import { AudioClip } from "./audio-clip.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { FileChip } from "./file-chip.js";
@@ -34,6 +36,7 @@ import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
+import { IntegrationMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
 import { PictureSet } from "./picture-set.js";
 import { Press } from "./press.js";
@@ -48,6 +51,8 @@ import {
   type CallStanding,
   type OriginPart,
   type SaidFile,
+  SHOWN_MEDIA,
+  type ShownMedia,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptPlace,
@@ -244,18 +249,35 @@ function BodyBlock({
   );
 }
 
-/** A call's glyph at a row mark's size, the panel's own for its kind, through the system's symbol view (`patches/expo-symbols@58.0.4.patch`), so a call's row costs no SwiftUI host. */
-function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
+/**
+ * A call's glyph at a row mark's size, the panel's own for its kind, through
+ * the system's symbol view (`patches/expo-symbols@58.0.4.patch`), so a call's
+ * row costs no SwiftUI host; or, for a call of an integration's tool, the
+ * integration's mark, as the panel's row leads with it. Note that the mark
+ * alone takes a SwiftUI host, because the symbol view tints whatever it draws
+ * in one ink, which would flatten a mark in its brand's own colors.
+ */
+function CallGlyph({
+  callKind,
+  provider,
+}: {
+  readonly callKind: CallKind;
+  readonly provider: IntegrationProvider | undefined;
+}) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
 
-  return (
+  return provider === undefined ? (
     <SymbolView
       name={glyphSymbol(CALL_SYMBOL[callKind])}
       size={size}
       tintColor={colors.TEXT_MUTED}
       accessibilityElementsHidden
     />
+  ) : (
+    <InlineHost style={{ width: size, height: size }}>
+      <IntegrationMark provider={provider} size={size} ink={colors.TEXT_MUTED} />
+    </InlineHost>
   );
 }
 
@@ -286,6 +308,8 @@ function CallRow({
   const lines = large ? undefined : 1;
   const { line, chip } = item;
   const subject = line.subject === undefined || line.subject === "" ? undefined : line.subject;
+  // Note that the integration's mark is hidden from VoiceOver, so its name is heard in the mark's place.
+  const mark = item.provider === undefined ? undefined : INTEGRATION_NAME[item.provider];
   const standing = held?.waiting === true ? HELD_HEARD : CALL_STANDING_HEARD[item.standing];
 
   return (
@@ -295,7 +319,7 @@ function CallRow({
         onPress={() => onToggle(item)}
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
-        accessibilityLabel={[line.verb, chip, subject, item.runOn].filter(Boolean).join(" ")}
+        accessibilityLabel={[line.verb, chip, subject, mark, item.runOn].filter(Boolean).join(" ")}
         accessibilityValue={{
           text: item.open ? standing : `${standing}, ${COLLAPSED_HEARD}`,
         }}
@@ -303,7 +327,7 @@ function CallRow({
         hitSlop={LINE_REACH}
         style={styles.callLine}
       >
-        <CallGlyph callKind={item.callKind} />
+        <CallGlyph callKind={item.callKind} provider={item.provider} />
         <View style={[styles.callWords, large ? styles.wrapped : null]}>
           <Text
             numberOfLines={lines}
@@ -602,6 +626,36 @@ function retryOf(drawing: RowDrawing, id: string): (() => void) | undefined {
   return retry === undefined ? undefined : () => retry(id);
 }
 
+/** One thing a call showed, as its kind draws it: a picture, a recording in the system's player, or a sound clip in its strip; a picture or a recording whose bytes could not be read offers Try again. */
+function ShownMediaView({
+  shown,
+  source,
+  onOpenElsewhere,
+  onRetry,
+}: {
+  readonly shown: ShownMedia;
+  readonly source: string | null | undefined;
+  readonly onOpenElsewhere: (() => void) | undefined;
+  readonly onRetry: (() => void) | undefined;
+}) {
+  switch (shown.kind) {
+    case SHOWN_MEDIA.VIDEO:
+      return (
+        <Video
+          source={source}
+          label={shown.label}
+          onOpenElsewhere={onOpenElsewhere}
+          onRetry={onRetry}
+        />
+      );
+    case SHOWN_MEDIA.AUDIO:
+      // Note that a clip whose bytes could not be read stands as one on its way, since its strip offers no Try again yet.
+      return <AudioClip source={source ?? undefined} label={shown.label} />;
+    case SHOWN_MEDIA.PICTURE:
+      return <Picture source={source} alt={shown.label} onRetry={onRetry} />;
+  }
+}
+
 /** One of the transcript's rows, as its kind draws it. */
 function TranscriptRow({
   item,
@@ -730,10 +784,10 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.FOLD:
       return <FoldRow item={item} onToggle={drawing.onToggle} />;
     case TRANSCRIPT_ITEM.MEDIA:
-      // Note that several pictures with no captions stand as one set side by side, as Messages groups photos; a recording, or a picture with its own caption, stands alone so its caption stays under it.
+      // Note that several pictures with no captions stand as one set side by side, as Messages groups photos; a recording, a sound clip, or a picture with its own caption, stands alone so its caption stays under it.
       if (
         item.media.length > 1 &&
-        item.media.every((shown) => !shown.video && shown.caption === "")
+        item.media.every((shown) => shown.kind === SHOWN_MEDIA.PICTURE && shown.caption === "")
       ) {
         return (
           <View style={[styles.row, inset(item.depth), styles.media]}>
@@ -753,20 +807,12 @@ function TranscriptRow({
         <View style={[styles.row, inset(item.depth), styles.media]}>
           {item.media.map((shown) => (
             <View key={shown.id} style={styles.shown}>
-              {shown.video ? (
-                <Video
-                  source={drawing.mediaSource(shown.id)}
-                  label={shown.label}
-                  onOpenElsewhere={drawing.onOpenElsewhere}
-                  onRetry={retryOf(drawing, shown.id)}
-                />
-              ) : (
-                <Picture
-                  source={drawing.mediaSource(shown.id)}
-                  alt={shown.label}
-                  onRetry={retryOf(drawing, shown.id)}
-                />
-              )}
+              <ShownMediaView
+                shown={shown}
+                source={drawing.mediaSource(shown.id)}
+                onOpenElsewhere={drawing.onOpenElsewhere}
+                onRetry={retryOf(drawing, shown.id)}
+              />
               {shown.caption === "" ? null : (
                 <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
                   {shown.caption}

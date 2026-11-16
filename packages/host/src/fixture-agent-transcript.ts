@@ -144,7 +144,7 @@ function transcriptMessages(
         ),
         { type: "step-start" },
         toolPart(
-          AGENT_TOOL.SHOW_IMAGE,
+          AGENT_TOOL.SHOW_MEDIA,
           "fixture-invites-shots",
           {
             images: [

@@ -22,6 +22,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AudioClip } from "./audio-clip.js";
 import { DraftCard } from "./draft-card.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
@@ -1078,7 +1079,7 @@ export function Picture({ source, alt, tileAspect, onRetry, fill = false }: Pict
   );
 }
 
-/** A picture's block: the video its address names, played in its place, or the picture. */
+/** A picture's block: the video or sound clip its address names, played in its place, or the picture. */
 function PictureBlock({
   source,
   alt,
@@ -1102,10 +1103,15 @@ function PictureBlock({
     );
   }
 
+  const label = alt.trim() === "" ? video.label : alt;
+
+  // Note that a clip whose bytes could not be read stands as one on its way, since its strip offers no Try again yet.
+  if (video.audio === true) return <AudioClip source={video.source ?? undefined} label={label} />;
+
   return (
     <Video
       source={video.source}
-      label={alt.trim() === "" ? video.label : alt}
+      label={label}
       onOpenElsewhere={video.onOpenElsewhere}
       onRetry={video.onRetry}
     />
@@ -1220,10 +1226,12 @@ type MarkdownProps = {
     | undefined;
 };
 
-/** A video the words name as a picture, played in its place: the file it plays from, none while it is on its way and `null` where it could not be read, its name, where it opens where the player cannot read it, and what reads it again. */
+/** A video or a sound clip the words name as a picture, played in its place: the file it plays from, none while it is on its way and `null` where it could not be read, its name, whether it is a sound clip, where a video opens where the player cannot read it, and what reads it again. */
 export interface MarkdownVideo {
   readonly source: string | null | undefined;
   readonly label: string;
+  /** Whether it is a sound clip, played in its strip (`AudioClip`) rather than a film's player. */
+  readonly audio?: boolean | undefined;
   readonly onOpenElsewhere?: (() => void) | undefined;
   readonly onRetry?: (() => void) | undefined;
 }
