@@ -235,7 +235,7 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..95c9de4367df2853066c81d9f06320bb
                let url = URL(string: url),
                let data = try? Data(contentsOf: url),
 diff --git a/ios/ListView.swift b/ios/ListView.swift
-index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..ea261e4bd4e838b367dc6b2b8a1aaa83d15380aa 100644
+index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..6deb490e1bfb0ec626fa760cdffdee49483121bb 100644
 --- a/ios/ListView.swift
 +++ b/ios/ListView.swift
 @@ -5,13 +5,17 @@ import SwiftUI
@@ -281,10 +281,10 @@ index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..ea261e4bd4e838b367dc6b2b8a1aaa83
 +      }
 +      .onChange(of: editMode) { newMode in
 +        // Note that a drag that switches edit mode on drops the row the list held open, as Mail's does, so the drag ticks only the rows it crosses, even before JavaScript answers with its own selection.
-+        if newMode.isEditing, props.editing != true {
++        if newMode == .active, props.editing != true {
 +          selection.subtract(Self.getHashableSetFromEither(props.selection))
 +        }
-+        handleEditingChange(editing: newMode.isEditing)
++        handleEditingChange(editing: newMode == .active)
 +      }
 +    } else if props.selection != nil {
        List(selection: $selection) {
@@ -296,10 +296,10 @@ index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..ea261e4bd4e838b367dc6b2b8a1aaa83
      }
 -    props.onSelectionChange(["selection": selectionArray])
 +    // Note that the edit mode rides with the selection, since a two-finger drag ticks a row and switches edit mode on in one change, and its two events may reach JavaScript in either order.
-+    props.onSelectionChange(["selection": selectionArray, "editing": editMode.isEditing])
++    props.onSelectionChange(["selection": selectionArray, "editing": editMode == .active])
 +  }
 +
-+  // Note that the selection rides with the edit mode, since a drag that switches it on has already ticked the rows it crossed.
++  // Note that the selection rides with the edit mode, since a drag that switches it on has already ticked the rows it crossed. Only the full edit mode counts, never the transient one SwiftUI may stand a list in while a row's swipe actions show, so a swipe never starts Select mode.
 +  func handleEditingChange(editing: Bool) {
 +    if (props.editing == true) == editing { return }
 +    props.onEditingChange(["editing": editing, "selection": Self.selectionArray(selection)])
