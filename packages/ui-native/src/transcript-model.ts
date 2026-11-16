@@ -728,7 +728,18 @@ function callItems(
   const opened = openedPullRequest(part, base, reading.pullRequests);
 
   // Note that a pull request the call opened stands as its card alone, as a set of pictures shown stands as its pictures, since the call's line named the same pull request over it; a call refused opens none and keeps its line with the reason.
-  return opened.length === 0 ? [call, ...page, ...mediaItem] : [...page, ...opened, ...mediaItem];
+  if (opened.length > 0) return [...page, ...opened, ...mediaItem];
+
+  // Note that a finished call a page's card stands for is drawn as its card alone, as the card names the page the call's line would say again.
+  if (
+    page.length > 0 &&
+    call.kind === TRANSCRIPT_ITEM.CALL &&
+    call.standing === CALL_STANDING.DONE &&
+    !open
+  )
+    return [...page, ...mediaItem];
+
+  return [call, ...page, ...mediaItem];
 }
 
 /** One part as its items; none for what the agent thought, or a part with nothing to draw. */
@@ -892,9 +903,9 @@ export function transcriptItems(
 
 /**
  * The items with their working line saying that the agent waits on the
- * reader (`waitingOnYouWords`), as the panel's does, so an agent held for
- * an answer never reads as working on; the items as they stand where none
- * waits.
+ * reader (`waitingOnYouWords`), as the panel's does, and its folds not
+ * turning, so an agent held for an answer never reads as working on; the
+ * items as they stand where none waits.
  */
 export function withWaitingLine(
   items: readonly TranscriptItem[],
@@ -903,7 +914,11 @@ export function withWaitingLine(
   if (waiting === undefined) return items;
 
   return items.map((item) =>
-    item.kind === TRANSCRIPT_ITEM.WORKING ? { ...item, words: waiting, waiting: true } : item,
+    item.kind === TRANSCRIPT_ITEM.WORKING
+      ? { ...item, words: waiting, waiting: true }
+      : item.kind === TRANSCRIPT_ITEM.FOLD
+        ? { ...item, running: false }
+        : item,
   );
 }
 
