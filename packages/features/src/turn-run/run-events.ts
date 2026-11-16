@@ -14,6 +14,7 @@ import type {
   UsageLimitNotice,
 } from "@repo/wire/ui-messages";
 import type { UIMessage } from "ai";
+import type { OutOfMemory } from "../out-of-memory-wire.js";
 import type { TurnFilesSummaryView } from "../turn-files-wire.js";
 import type { RunModelUsage, RunStatus, RunUsage, TurnFailure } from "./requests.js";
 import { spokenProse } from "./spoken-prose.js";
@@ -146,7 +147,7 @@ function isToolRefusalStatus(status: string): status is ToolRefusalStatus {
  * answer — an acceptance, a tool's plain output, or an envelope whose status
  * is unknown — is available, envelope and all.
  */
-export type ToolCallSettlement =
+export type ToolCallSettlement = (
   | {
       readonly state: typeof TOOL_CALL_SETTLEMENT.OUTPUT_AVAILABLE;
       readonly output: UnparsedWireValue;
@@ -157,7 +158,11 @@ export type ToolCallSettlement =
       readonly output: UnparsedWireValue;
       readonly errorText: string;
       readonly status: ToolRefusalStatus;
-    };
+    }
+) & {
+  /** Where the kernel killed the call's command for want of memory, the sandbox's memory as it ran (`out-of-memory-wire.ts`). */
+  readonly outOfMemory?: OutOfMemory;
+};
 
 /** What every event of the stream carries beside its own fields. */
 interface RunEventBase {

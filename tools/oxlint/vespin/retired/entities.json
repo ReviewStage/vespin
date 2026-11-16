@@ -109,8 +109,8 @@
         "packages/ui/src/marks/"
       ],
       "baseline": {
-        "packages/panel/src/settings/memory-page.tsx": 1,
-        "packages/panel/src/settings/pages.tsx": 1
+        "packages/panel/src/settings/pages.tsx": 1,
+        "packages/panel/src/settings/people-filter.tsx": 1
       }
     },
     {

@@ -474,7 +474,7 @@ it.effect(
 );
 
 it.effect(
-  "a picture kept answers its id, a description at its bound of pictures or of videos answers so, and one the account may not write answers not found",
+  "a picture kept answers its id, a description at its bound of pictures answers so, and one the account may not write answers not found",
   () =>
     Effect.gen(function* () {
       const picture = "data:image/png;base64,iVBORw0KGgo=";
@@ -498,10 +498,6 @@ it.effect(
         {
           failure: PICTURE_KEEP_FAILURE.TOO_MANY,
         },
-      );
-      assert.deepEqual(
-        yield* keep(200, () => ({ refused: DESCRIPTION_ATTACHMENT_REFUSAL.TOO_MANY_VIDEOS })),
-        { failure: PICTURE_KEEP_FAILURE.TOO_MANY_VIDEOS },
       );
       assert.deepEqual(yield* keep(404, () => ({ error: HOSTED_API_ERROR.NOT_FOUND })), {
         failure: TASK_CALL_FAILURE.NOT_FOUND,

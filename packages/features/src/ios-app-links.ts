@@ -67,6 +67,7 @@ const IOS_ROUTE = {
   INBOX: "/inbox",
   TASKS: "/tasks",
   AGENT: "/tasks/agent",
+  COMMENTS: "/tasks/comments",
   PULL_REQUEST: "pull",
 } as const;
 
@@ -162,7 +163,7 @@ export function iosPullRequestRoute(agentId: string, number: number): string {
  * (`(inbox)`, `(tasks)`, `(search)`), so one tab's link can open on another's
  * stack.
  */
-const IOS_TAB = {
+export const IOS_TAB = {
   INBOX: "inbox",
   TASKS: "tasks",
   SEARCH: "search",
@@ -208,9 +209,10 @@ export function iosRouteOnTab(route: string, standing: IosTab | undefined): stri
 /**
  * Whether the route is a conversation, which a compact window's tab bar
  * steps aside for, as Messages hides its tabs in a chat so the composer
- * stands alone at the foot: a thread (`/inbox/<id>`), an agent's page, or
- * a pull request it opened. A list, a task, and a page the agent showed keep
- * the bar.
+ * stands alone at the foot: a thread (`/inbox/<id>`), an agent's page, a
+ * pull request it opened, or a comment's thread on a task's description or a
+ * new comment, each ending in its reply field. A list, a task, and a page the
+ * agent showed keep the bar.
  */
 export function iosRouteHidesTabs(pathname: string): boolean {
   const [tab, first, second, third] = pathname.split("/").filter((segment) => segment !== "");
@@ -218,9 +220,24 @@ export function iosRouteHidesTabs(pathname: string): boolean {
 
   if (route === IOS_ROUTE.INBOX) return first !== undefined;
 
+  if (`${route}/${first ?? ""}` === IOS_ROUTE.COMMENTS) return second !== undefined;
+
   if (`${route}/${first ?? ""}` !== IOS_ROUTE.AGENT || second === undefined) return false;
 
   return third === undefined || third === IOS_ROUTE.PULL_REQUEST;
+}
+
+/**
+ * The agent whose own page the route is, whose composer holds a voice
+ * call's presses while the call is into it; none on any other route,
+ * a page under the agent's included, such as a pull request it opened.
+ */
+export function iosRouteAgent(pathname: string): string | undefined {
+  const [tab, first, agentId, under] = pathname.split("/").filter((segment) => segment !== "");
+
+  if (`/${tab ?? ""}/${first ?? ""}` !== IOS_ROUTE.AGENT || under !== undefined) return undefined;
+
+  return agentId;
 }
 
 /**

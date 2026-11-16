@@ -38,6 +38,7 @@ export const SETTINGS_SEARCH_ROW = {
   ALWAYS_ALLOWED: "always-allowed",
   API_KEY_ANTHROPIC: "api-key-anthropic",
   API_KEY_OPENAI: "api-key-openai",
+  API_KEY_CURSOR: "api-key-cursor",
   /** Skills' first group, whose heading holds its Add skill. */
   ADD_SKILL: "add-skill",
   /** Our MCP & CLI page's Connected, the outside agents the account let in. */
@@ -62,6 +63,8 @@ export const SETTINGS_SEARCH_ROW = {
   EXPERIMENTS_WORKSPACE: "experiments-workspace",
   /** Settings › Experimental's group of the experiments the account chooses for itself alone. */
   EXPERIMENTS_ACCOUNT: "experiments-account",
+  /** Cloud environment's Sandbox, the size every cloud agent's sandbox in the workspace opens with. */
+  ENVIRONMENT_SANDBOX: "environment-sandbox",
   /** Cloud environment's Variables, the workspace's variables its cloud agents start with. */
   ENVIRONMENT_VARIABLES: "environment-variables",
   /** Cloud environment's Install software, the workspace's install script. */
@@ -92,4 +95,5 @@ export const EXPERIMENT_ANCHOR = {
   [EXPERIMENT.VOICE]: "experiment-voice",
   [EXPERIMENT.GOALS]: "experiment-goals",
   [EXPERIMENT.MOVE_AGENTS]: "experiment-move-agents",
+  [EXPERIMENT.CURSOR]: "experiment-cursor",
 } as const satisfies Record<Experiment, string>;

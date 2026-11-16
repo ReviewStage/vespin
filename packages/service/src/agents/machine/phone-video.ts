@@ -1,5 +1,5 @@
 /**
- * phone-video.ts -- the command that makes an H.264 MP4 of an agent's WebM recording in the agent's own sandbox, for a player that plays no WebM, and the copy its run prints.
+ * phone-video.ts -- the commands that make an H.264 MP4 of an agent's WebM recording, or an AAC M4A of its Ogg sound clip, in the agent's own sandbox, for a player that plays neither, and the copy each run prints.
  *
  * iOS's player (AVPlayer) plays no WebM, which is all an agent records, so
  * the service keeps an MP4 of each recording beside it, and the attachment
@@ -21,9 +21,16 @@
  * goes into the copy as AAC; a screen recording has none, and its copy none
  * either. The run prints it as base64 on one line, as the machine's other
  * reads do.
+ *
+ * iOS's player plays no Ogg either, which a sound clip an agent made may
+ * be, so beside an Ogg clip the service keeps an AAC M4A of it, made the
+ * same way by a sibling command (`phoneAudioAsk`): the input read as an Ogg
+ * file through the file protocol alone, its first sound track encoded as
+ * AAC at ever lower bit rates until one fits the bound, its index moved
+ * ahead of its media.
  */
 
-import { PHONE_VIDEO_BOUNDS, streamableMp4 } from "@repo/features/video-signature";
+import { mp4IsSoundOnly, PHONE_VIDEO_BOUNDS, streamableMp4 } from "@repo/features/video-signature";
 import type { CommandAsk, CommandRun } from "@repo/sandbox";
 
 /** How a run ends where it made no copy. */
@@ -39,6 +46,12 @@ const AUDIO_BITRATE = "64k";
 
 /** The name the script runs under, as `$0`. */
 const PHONE_VIDEO_SCRIPT_NAME = "phone-video";
+
+/** The name the clip's script runs under, as `$0`. */
+const PHONE_AUDIO_SCRIPT_NAME = "phone-audio";
+
+/** The bit rates a clip's AAC copy is tried at in turn, each smaller than the last. */
+const AUDIO_ENCODINGS = ["128k", "64k", "32k"] as const;
 
 /** The most seconds one encoding may take, inside a tool call's own bound. */
 const ENCODE_SECONDS = 60;
@@ -73,6 +86,24 @@ const PHONE_VIDEO_SCRIPT = [
   `exit ${PHONE_VIDEO_EXIT.TOO_LARGE}`,
 ].join("\n");
 
+/**
+ * The clip's script, as positional parameters take it: the Ogg's path and
+ * the copy's most bytes, as the recording's takes them.
+ */
+const PHONE_AUDIO_SCRIPT = [
+  "set -u -o pipefail",
+  'src="$1" max="$2"',
+  `[ -f "$src" ] && [ -r "$src" ] || exit ${PHONE_VIDEO_EXIT.NO_FILE}`,
+  `command -v ffmpeg >/dev/null 2>&1 || exit ${PHONE_VIDEO_EXIT.NO_ENCODER}`,
+  "out=$(mktemp -d) || exit 1",
+  "trap 'rm -rf \"$out\"' EXIT",
+  ...AUDIO_ENCODINGS.flatMap((bitrate) => [
+    `timeout ${ENCODE_SECONDS} ffmpeg -nostdin -loglevel error -protocol_whitelist file -f ogg -i "file:$src" -map 0:a:0 -vn -c:a aac -b:a ${bitrate} -movflags +faststart -f mp4 -y "$out/copy.m4a" || exit ${PHONE_VIDEO_EXIT.ENCODER}`,
+    '[ "$(stat -c %s "$out/copy.m4a")" -le "$max" ] && { base64 -w 0 <"$out/copy.m4a"; exit 0; }',
+  ]),
+  `exit ${PHONE_VIDEO_EXIT.TOO_LARGE}`,
+].join("\n");
+
 /** Makes an MP4 of the WebM at the absolute path, as the sandbox's default user; read its run with `phoneVideoOf`. */
 export function phoneVideoAsk(path: string): CommandAsk {
   return {
@@ -93,6 +124,30 @@ export function phoneVideoOf(run: Pick<CommandRun, "exitCode" | "stdout">): Uint
   const bytes = new Uint8Array(Buffer.from(run.stdout.trim(), "base64"));
 
   if (bytes.byteLength > PHONE_VIDEO_BOUNDS.MAX_BYTES || !streamableMp4(bytes)) return undefined;
+
+  return bytes;
+}
+
+/** Makes an AAC M4A of the Ogg clip at the absolute path, as the sandbox's default user; read its run with `phoneAudioOf`. */
+export function phoneAudioAsk(path: string): CommandAsk {
+  return {
+    command: "bash",
+    args: [
+      "-c",
+      PHONE_AUDIO_SCRIPT,
+      PHONE_AUDIO_SCRIPT_NAME,
+      path,
+      String(PHONE_VIDEO_BOUNDS.MAX_BYTES),
+    ],
+  };
+}
+
+/** The clip's copy a run printed; nothing where it made none, or what it printed is no M4A of sound alone. */
+export function phoneAudioOf(run: Pick<CommandRun, "exitCode" | "stdout">): Uint8Array | undefined {
+  if (run.exitCode !== 0) return undefined;
+  const bytes = new Uint8Array(Buffer.from(run.stdout.trim(), "base64"));
+
+  if (bytes.byteLength > PHONE_VIDEO_BOUNDS.MAX_BYTES || !mp4IsSoundOnly(bytes)) return undefined;
 
   return bytes;
 }
