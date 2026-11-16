@@ -1088,7 +1088,9 @@ const actOnAddressed = Effect.fnUntraced(function* (addressed: SlackAddressed) {
     }
   }
 
+  // Note that a workspace holding no token starts nothing, because its bot could neither read the message's thread and files nor answer.
   for (const { organizationId, bot } of bots) {
+    if (!bot.connected) continue;
     const member = yield* memberIn(bot, email, organizationId, addressed);
 
     if (Option.isNone(member)) continue;
@@ -1251,6 +1253,10 @@ export function postTurnToSlack(
     const agent = yield* readAgentOfConversation(turn.userId, turn.conversationId);
 
     if (Option.isNone(agent)) return;
+    const bot = yield* slack.forWorkspace(agent.value.organizationId);
+
+    // Note that a workspace holding no token claims nothing, so its turn is neither marked posted nor its agent archived unseen.
+    if (!bot.connected) return;
     const place = yield* turnPlace(agent.value, turn.turnId);
 
     if (Option.isNone(place)) return;
@@ -1271,7 +1277,6 @@ export function postTurnToSlack(
 
     if ("run" in place.value) {
       const { userId, organizationId, automationName } = place.value.run;
-      const bot = yield* slack.forWorkspace(organizationId);
 
       const dm = yield* bot.dm(userId, runResultContent(automationName, link, turn, words));
 
@@ -1291,7 +1296,6 @@ export function postTurnToSlack(
     }
 
     const { channelId, threadTs } = place.value.thread;
-    const bot = yield* slack.forWorkspace(agent.value.organizationId);
     const outcome = turnOutcome(turn, words);
     yield* bot.reply(channelId, threadTs, {
       text: outcome.text,

@@ -779,13 +779,16 @@ export function settleThreadDms(
     const slack = yield* Effect.serviceOption(SlackBot);
 
     if (Option.isNone(slack) || !slack.value.configured) return;
-    const claimed = yield* claimSettledDms(itemId);
-
-    if (claimed.length === 0) return;
     const place = yield* findItemPlace(itemId);
 
     if (Option.isNone(place)) return;
     const bot = yield* slack.value.forWorkspace(place.value.organizationId);
+
+    // Note that a workspace holding no token claims nothing, so its DMs are rewritten once its token opens again.
+    if (!bot.connected) return;
+    const claimed = yield* claimSettledDms(itemId);
+
+    if (claimed.length === 0) return;
     const { title } = place.value;
     const link = threadLink(itemId, place.value);
     yield* Effect.forEach(
