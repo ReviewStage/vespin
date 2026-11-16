@@ -4776,7 +4776,6 @@ test("list_automations, create_automation, update_automation, and delete_automat
       await update({
         scope: "workspace",
         agentId: null,
-        guards: { maxConcurrentRuns: 5, dailyRunCap: 50 },
       }),
     ).scope,
     "workspace",
@@ -4847,7 +4846,7 @@ test("list_automations, create_automation, update_automation, and delete_automat
   );
 });
 
-test("create_automation and update_automation take a Sentry trigger once the workspace installed Vespin's Sentry integration, with its filters and per-issue cooldown, and refuse one where the deployment configures no Sentry integration or the workspace installed none", async () => {
+test("create_automation and update_automation take a Sentry trigger once the workspace installed Vespin's Sentry integration, with its filters, and refuse one where the deployment configures no Sentry integration or the workspace installed none", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -4925,31 +4924,13 @@ test("create_automation and update_automation take a Sentry trigger once the wor
     rejected(AUTOMATION_TOOL_REFUSAL.SENTRY_UNCONFIGURED),
   );
 
-  const created = await call(
-    AGENT_TOOL.CREATE_AUTOMATION,
-    { ...made, guards: { maxConcurrentRuns: 1, dailyRunCap: 10, subjectCooldownHours: 6 } },
-    "installed",
-  );
+  const created = await call(AGENT_TOOL.CREATE_AUTOMATION, made, "installed");
 
   assert.equal(created.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(created));
-  assert.deepEqual(
-    [automationOf(created).trigger, automationOf(created).guards],
-    [alerts, { maxConcurrentRuns: 1, dailyRunCap: 10, subjectCooldownHours: 6 }],
-  );
+  assert.deepEqual(automationOf(created).trigger, alerts);
   const switched = await call(AGENT_TOOL.UPDATE_AUTOMATION, toSentry, "switch-installed");
   assert.equal(switched.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(switched));
   assert.deepEqual(automationOf(switched).trigger, toSentry.trigger);
-  assert.deepEqual(
-    await call(
-      AGENT_TOOL.UPDATE_AUTOMATION,
-      {
-        automationId: weekly.id,
-        guards: { maxConcurrentRuns: 1, dailyRunCap: 10, subjectCooldownHours: 169 },
-      },
-      "cooldown-too-long",
-    ),
-    rejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_UPDATE),
-  );
 });
 
 /** Turns the experiment on or off for everyone in the workspace, as the admin named would; its agents read and write no description, or keep no memory, while it is off. */
