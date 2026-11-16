@@ -47,7 +47,8 @@ export function useAddFollowerDoor(): (taskId: string) => void {
  * face and address, one who already follows dimmed and saying so. A press
  * adds the member, their machines off, as the panel's offer adds a person
  * mentioned, and closes the sheet at once; where the service refuses, the
- * app's failure notice says why, with Try again.
+ * app's failure notice says why, with Try again. Where the members could
+ * not be read, Try again reads them again.
  */
 export function AddFollowerScreen({ taskId }: { readonly taskId: string }) {
   const router = useRouter();
@@ -93,7 +94,7 @@ export function AddFollowerScreen({ taskId }: { readonly taskId: string }) {
     task === undefined ? (
       <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : failed ? (
-      <EmptyState title={WORDS.READ_FAILED} symbol={GLYPH.PEOPLE} />
+      <EmptyState title={WORDS.READ_FAILED} symbol={GLYPH.PEOPLE} retry={offer.retry} />
     ) : people === undefined ? (
       <EmptyState title={WORDS.READING} symbol={GLYPH.PEOPLE} loading />
     ) : people.length === 0 ? (

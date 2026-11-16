@@ -14,7 +14,6 @@ import {
   DetailPage,
   EmptyState,
   GLYPH,
-  GlassDock,
   NOTICE_KIND,
   PATH_PART,
   Screen,
@@ -22,9 +21,10 @@ import {
   useColors,
   useFailureNotices,
 } from "@repo/ui-native";
-import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { PUSHED_PAGE, useDetailCovered, useDetailLeave, useHandToDetail } from "../detail-stack.js";
+import { FocusedDock, useFocusShown } from "../focus-shown.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import { useInFront } from "../place-columns.js";
@@ -212,6 +212,9 @@ export function CommentThread({
   readonly taskId: string;
   readonly inColumn?: boolean | undefined;
 }) {
+  const columnShown = useInFront();
+  const covered = useDetailCovered();
+  const inFront = columnShown && !covered;
   const colors = useColors();
   const openLink = useOpenLink();
   const overview = useTaskOverview(taskId);
@@ -224,10 +227,7 @@ export function CommentThread({
   const onOwnTab = useOnOwnTab();
   const detail = useDetailLeave();
   // Note that a thread stands only while it is in front, since a page pushed over it, in the tab's stack or a split view's detail, or another tab, keeps it mounted.
-  const focused = useIsFocused();
-  const inFront = useInFront();
-  const covered = useDetailCovered();
-  const standing = focused && inFront && !covered;
+  const standing = useFocusShown() && inFront;
 
   useEffect(() => {
     if (!standing) return;
@@ -295,7 +295,7 @@ export function CommentThread({
   if (inColumn) {
     return (
       <DetailPage bar={thread === undefined ? { path: { path, status: task?.status } } : {}}>
-        {page(<ComposerFoot {...composer} />) ?? (
+        {page(<ComposerFoot {...composer} shown={inFront} />) ?? (
           <ThreadMissing taskId={taskId} overview={overview} />
         )}
       </DetailPage>
@@ -315,9 +315,9 @@ export function CommentThread({
           <ThreadMissing taskId={taskId} overview={overview} />
         </Screen>
       ) : (
-        <GlassDock bar={<Composer {...composer} />}>
+        <FocusedDock bar={<Composer {...composer} />}>
           <Screen>{page()}</Screen>
-        </GlassDock>
+        </FocusedDock>
       )}
     </>
   );
@@ -385,6 +385,9 @@ export function NewComment({
   readonly again?: string | undefined;
   readonly inColumn?: boolean | undefined;
 }) {
+  const columnShown = useInFront();
+  const covered = useDetailCovered();
+  const inFront = columnShown && !covered;
   const router = useRouter();
   const detail = useDetailLeave();
   const onOwnTab = useOnOwnTab();
@@ -489,7 +492,7 @@ export function NewComment({
       <DetailPage
         bar={block === undefined ? { path: { path, status: overview?.task.status } } : {}}
       >
-        {page(<ComposerFoot {...composer} />) ?? empty}
+        {page(<ComposerFoot {...composer} shown={inFront} />) ?? empty}
       </DetailPage>
     );
   }
@@ -505,9 +508,9 @@ export function NewComment({
       {block === undefined ? (
         <Screen>{empty}</Screen>
       ) : (
-        <GlassDock bar={<Composer {...composer} />}>
+        <FocusedDock bar={<Composer {...composer} />}>
           <Screen>{page()}</Screen>
-        </GlassDock>
+        </FocusedDock>
       )}
     </>
   );

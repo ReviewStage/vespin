@@ -28,6 +28,7 @@ appId: dev.vespin.ios
 - tapOn: "Earlier"
 - waitForAnimationToEnd
 - assertVisible: "Context"
+- assertVisible: "Goal"
 - takeScreenshot: task-version
 - tapOn: "Restore this version"
 - waitForAnimationToEnd
