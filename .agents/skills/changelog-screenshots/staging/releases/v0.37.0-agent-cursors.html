@@ -36,7 +36,7 @@
       #stage { position: absolute; left: 0; top: 0; width: 640px; height: 424.27px; zoom: 3.75; }
 
       /* Menu bar */
-      .menubar { position: absolute; left: 0; top: 0; width: 640px; height: 22px; display: flex;
+      .menubar { display: none !important; position: absolute; left: 0; top: 0; width: 640px; height: 22px; display: flex;
         align-items: center; padding: 0 14px; font-size: 11.5px; letter-spacing: -0.01em;
         background: rgba(255,255,255,.42); backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4); }
       .menubar .apple { width: 12px; height: 14px; margin-right: 16px; fill: var(--ink); }
@@ -55,18 +55,18 @@
       .lights i:nth-child(3) { background: #28c840; }
 
       /* Browser */
-      #win-a { left: 22px; top: 42px; width: 296px; height: 340px; }
+      #win-a { left: 28px; top: 44px; width: 340px; height: 318px; }
       .toolbar { position: absolute; left: 0; top: 0; right: 0; height: 37px; border-bottom: 0.5px solid #e2e2e2; background: #fbfbfb; }
       .toolbar .nav { position: absolute; left: 74px; top: 12px; display: flex; gap: 10px; }
       .toolbar .nav svg { width: 13px; height: 13px; fill: none; stroke: #8a8a8a; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
       .toolbar .nav svg + svg { stroke: #c4c4c4; }
-      .address { position: absolute; left: 120px; top: 7px; width: 162px; height: 23px; border-radius: 7px;
+      .address { position: absolute; left: 124px; top: 7px; width: 196px; height: 23px; border-radius: 7px;
         background: #efefef; font-size: 10.5px; color: #3a3a3a; display: flex; align-items: center; justify-content: center; overflow: hidden; }
       .address .host { color: #6c6c6c; }
       .address .paths { position: relative; height: 13px; overflow: hidden; display: inline-block; }
       .address .paths span { display: block; line-height: 13px; }
       .page { position: absolute; left: 0; right: 0; top: 37px; bottom: 0; }
-      .col { position: absolute; left: 50px; width: 200px; top: 0; }
+      .col { position: absolute; left: 70px; width: 200px; top: 0; }
       .h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
       .sub { margin-top: 7px; height: 6px; width: 118px; border-radius: 3px; background: var(--bar); }
       .label { font-size: 10px; color: var(--muted); font-weight: 500; }
@@ -87,15 +87,15 @@
       .signout { display: inline-block; margin-top: 20px; font-size: 11px; font-weight: 500; color: #3a3a3a; padding: 5px 12px; border-radius: 7px; border: 0.75px solid #dcdcdc; }
 
       /* Reminders */
-      #win-b { left: 330px; top: 42px; width: 288px; height: 340px; }
-      .side { position: absolute; left: 0; top: 0; bottom: 0; width: 112px; background: #f4f4f3; border-right: 0.5px solid #e4e4e4; }
+      #win-b { left: 352px; top: 100px; width: 262px; height: 280px; }
+      .side { position: absolute; left: 0; top: 0; bottom: 0; width: 100px; background: #f4f4f3; border-right: 0.5px solid #e4e4e4; }
       .side .group { position: absolute; left: 14px; top: 44px; height: 5px; width: 44px; border-radius: 3px; background: #dedede; }
       .side .lists { position: absolute; left: 7px; right: 7px; top: 58px; }
       .side .li { height: 26px; border-radius: 6px; display: flex; align-items: center; padding: 0 7px; gap: 8px; font-size: 11px; font-weight: 500; }
       .side .li.on { background: #e3e3e2; }
       .side .li i { width: 15px; height: 15px; border-radius: 50%; flex: none; }
       .side .li b { height: 5px; border-radius: 3px; background: #dcdcdc; }
-      .main { position: absolute; left: 112px; top: 0; right: 0; bottom: 0; }
+      .main { position: absolute; left: 100px; top: 0; right: 0; bottom: 0; }
       .main .title { position: absolute; left: 20px; top: 38px; font-size: 21px; font-weight: 700; color: var(--blue); letter-spacing: -0.02em; }
       .rows { position: absolute; left: 0; right: 0; top: 84px; }
       .row { height: 30px; overflow: hidden; }
@@ -273,7 +273,7 @@
 
     <script>
       // Rows of the list: widths repeat every three, so three checked rows later the list reads as it began.
-      const WIDTHS = [112, 88, 124];
+      const WIDTHS = [96, 72, 104];
       const rows = document.getElementById("rows");
       for (let i = 0; i < 12; i++) {
         rows.insertAdjacentHTML("beforeend",
@@ -290,7 +290,7 @@
       const GLIDE = 0.55;
 
       // Note that the arrow's tip is the cursor's origin, so a point is where the tip lands.
-      const at = { rest: [192, 238], email: [170, 193], password: [170, 251], create: [174, 297], signout: [162, 254], bHome: [516, 211], check: [467, 141] };
+      const at = { rest: [218, 240], email: [196, 195], password: [196, 253], create: [200, 299], signout: [188, 256], bHome: [526, 269], check: [477, 199] };
 
       const glide = (c, to, t) => tl.to(c, { x: to[0], y: to[1], duration: GLIDE, ease: "power2.inOut" }, t);
       const press = (c, t) => tl.fromTo(`${c} .ripple`, { scale: 0.4, opacity: 1 }, { scale: 1.4, opacity: 0, duration: 0.42, ease: "power1.out", immediateRender: false }, t);
