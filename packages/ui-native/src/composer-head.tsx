@@ -1,4 +1,4 @@
-// composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures attached to the message as thumbnails, each taken off by its ×, and the skills a `/` offers.
+// composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures attached to the message as thumbnails and its pasted text files as tiles, each taken off by its ×, and the skills a `/` offers.
 
 import { Button, HStack, Image, ScrollView, Text, VStack, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -166,7 +166,7 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
   );
 }
 
-/** A picture's thumbnail over a composer's field, as Messages draws one: a square cropped from it, its corners rounded as a card's. */
+/** A picture's thumbnail over a composer's field, as Messages draws one: a square cropped from it, its corners rounded as a card's; a pasted text file stands as a tile of the same size. */
 const THUMBNAIL = { SIZE: 56, CORNER: 10 } as const;
 
 /** How large the × in a thumbnail's corner stands, the system's mini control, its mark small inside it. */
@@ -175,28 +175,48 @@ const DETACH_MARK = 9;
 /** How far the × stands in from the thumbnail's corner. */
 const DETACH_INSET = SPACE.TIGHT;
 
-/** What a picture's × is heard as, by the name it goes under ("Remove Picture 1"). */
+/** What a file's × is heard as, by the name it goes under ("Remove Picture 1", "Remove Pasted text 1.txt"). */
 function detachWords(name: string): string {
   return `Remove ${name}`;
 }
 
-/** One picture attached to the message: the name it goes under ("Picture 1"), and the address its thumbnail draws from, such as a `data:` address of its bytes. */
+/** One file attached to the message, by the name the message carries it under ("Picture 1", "Pasted text 1.txt"): a picture with the address its thumbnail draws from, such as a `data:` address of its bytes, or a long paste taken as a text file, which has none. */
 export type AttachedPicture = {
   readonly id: string;
   readonly name: string;
-  readonly address: string;
+  readonly address?: string | undefined;
 };
 
 /** Does nothing, for a thumbnail's load and failure, which the composer has no use for: its own bytes are drawn, and the × stands either way. */
 function ignore() {}
 
+/** A pasted text file's tile, a thumbnail's size: the document glyph on the well. */
+function TextFileTile() {
+  const colors = useColors();
+
+  return (
+    <ZStack
+      modifiers={[
+        frame({ width: THUMBNAIL.SIZE, height: THUMBNAIL.SIZE }),
+        SwiftModifiers.background(
+          colors.WELL,
+          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: THUMBNAIL.CORNER }),
+        ),
+      ]}
+    >
+      <Image {...glyphImage(GLYPH.FILE_TEXT)} size={MARK_SIZE.LEAD} color={colors.TEXT_MUTED} />
+    </ZStack>
+  );
+}
+
 /**
- * The pictures attached to the message as a row of thumbnails, scrolling
- * sideways where they outrun the bar, as Messages and the panel show what a
- * message carries before it goes. Note that only the × in a thumbnail's
- * corner takes the picture off, so a press meant to look at a picture never
- * removes it; VoiceOver hears each as its × alone, "Remove Picture 1", since
- * the thumbnail says nothing a reader could act on.
+ * The files attached to the message as a row of thumbnails, a pasted text
+ * file as a tile of the same size, scrolling sideways where they outrun the
+ * bar, as Messages and the panel show what a message carries before it
+ * goes. Note that only the × in a thumbnail's corner takes the file off, so
+ * a press meant to look at a picture never removes it; VoiceOver hears each
+ * as its × alone, "Remove Picture 1", since the thumbnail says nothing a
+ * reader could act on.
  */
 export function AttachedPictures({
   pictures,
@@ -218,13 +238,17 @@ export function AttachedPictures({
             alignment="topTrailing"
             modifiers={[frame({ width: THUMBNAIL.SIZE, height: THUMBNAIL.SIZE })]}
           >
-            <AvatarPhoto
-              address={picture.address}
-              size={THUMBNAIL.SIZE}
-              corner={THUMBNAIL.CORNER}
-              onLoad={ignore}
-              onFail={ignore}
-            />
+            {picture.address === undefined ? (
+              <TextFileTile />
+            ) : (
+              <AvatarPhoto
+                address={picture.address}
+                size={THUMBNAIL.SIZE}
+                corner={THUMBNAIL.CORNER}
+                onLoad={ignore}
+                onFail={ignore}
+              />
+            )}
             <Button
               onPress={() => onDetach(picture.id)}
               modifiers={[

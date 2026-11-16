@@ -214,7 +214,9 @@ export default function FeedbackScreen() {
 
       if (!edited) {
         setWords((current) => ({ ...current, [kind]: "" }));
-        setSends((count) => count + 1);
+
+        // Note that the field is drawn afresh only while the page still stands, because a new field takes the keyboard as it appears, and a List torn down around a field taking focus aborts the app.
+        if (standing.current) setSends((count) => count + 1);
       }
       // Note that the page is never let go here: with nothing left on it, nothing is drafted and Back leaves without asking, while a second note written after keeps the ask.
     });

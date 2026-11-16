@@ -52,13 +52,14 @@ const AGENTS_NOTE =
 const RUNTIME_LABEL = {
   [AGENT_RUNTIME.CLAUDE_CODE]: "Claude Code",
   [AGENT_RUNTIME.CODEX]: "Codex",
+  [AGENT_RUNTIME.CURSOR]: "Cursor",
   [AGENT_RUNTIME.RETIRED]: "Retired runtime",
 } as const satisfies Record<AgentRuntime, string>;
 
 const NO_RUNTIME_LABEL = "Not recorded";
 
-/** How many harnesses the table's skeleton stands a row for: the two live ones. */
-const HARNESS_SKELETON_ROWS = 2;
+/** How many harnesses the table's skeleton stands a row for: the three live ones. */
+const HARNESS_SKELETON_ROWS = 3;
 
 const NO_FIGURE = "—";
 

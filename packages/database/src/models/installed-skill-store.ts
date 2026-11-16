@@ -387,7 +387,6 @@ function groupedFiles(
   return [...skills.values()].map(({ skill, files }) => ({ ...skill, files }));
 }
 
-/** Runs the effect in one transaction. */
 function inTransaction<A, E, R>(
   effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E | TaskStoreFailure, R | DatabaseServices> {

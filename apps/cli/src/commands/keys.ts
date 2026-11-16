@@ -15,10 +15,11 @@
 
 import { CLI_EXIT } from "@repo/features/cli-exit";
 import {
+  MODEL_API_PROVIDERS,
+  type ModelApiProvider,
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_REJECTION,
-  type ProviderKeyProvider,
   type ProviderKeyRejection,
   type ProviderKeysAnswer,
   pastedKeyFits,
@@ -32,19 +33,19 @@ import { askService, session } from "../session.js";
 const PLAN_KIND = {
   [PROVIDER_KEY_PROVIDER.ANTHROPIC]: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
   [PROVIDER_KEY_PROVIDER.OPENAI]: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
-} as const satisfies Record<ProviderKeyProvider, string>;
+} as const satisfies Record<ModelApiProvider, string>;
 
 /** How each provider's key and plan are named in a sentence. */
 const PROVIDER_WORDS = {
   [PROVIDER_KEY_PROVIDER.ANTHROPIC]: { key: "Anthropic API key", plan: "Claude plan" },
   [PROVIDER_KEY_PROVIDER.OPENAI]: { key: "OpenAI API key", plan: "ChatGPT plan" },
-} as const satisfies Record<ProviderKeyProvider, { key: string; plan: string }>;
+} as const satisfies Record<ModelApiProvider, { key: string; plan: string }>;
 
 /** The word for on and off that `for-agents` takes. */
 const SWITCH = { ON: "on", OFF: "off" } as const;
 
 /** Why a save kept nothing, in the words a person reads; never the provider's, which may quote the key. */
-function rejectionWords(provider: ProviderKeyProvider, plan: boolean, why: ProviderKeyRejection) {
+function rejectionWords(provider: ModelApiProvider, plan: boolean, why: ProviderKeyRejection) {
   const name = plan ? PROVIDER_WORDS[provider].plan : PROVIDER_WORDS[provider].key;
 
   switch (why) {
@@ -72,7 +73,7 @@ interface Credential {
 
 /** The account's keys and plans by provider, each provider listed whether it holds any or not. */
 function providersJson(keys: ProviderKeysAnswer) {
-  return Object.values(PROVIDER_KEY_PROVIDER).map((provider) => {
+  return MODEL_API_PROVIDERS.map((provider) => {
     const credentials: Credential[] = [
       ...keys.keys
         .filter((key) => key.provider === provider)
@@ -130,7 +131,7 @@ function keysAnswer(keys: ProviderKeysAnswer, lines?: readonly string[]) {
 /** Whether the account holds the provider's key (or plan), the one an id names where it names one. */
 function holds(
   keys: ProviderKeysAnswer,
-  provider: ProviderKeyProvider,
+  provider: ModelApiProvider,
   plan: boolean,
   id: string | undefined,
 ) {
@@ -143,7 +144,7 @@ function holds(
 }
 
 /** A usage failure naming the key or plan the account does not hold. */
-function notHeld(provider: ProviderKeyProvider, plan: boolean, id: string | undefined) {
+function notHeld(provider: ModelApiProvider, plan: boolean, id: string | undefined) {
   const name = plan ? PROVIDER_WORDS[provider].plan : PROVIDER_WORDS[provider].key;
 
   return new CommandFailed({
@@ -155,7 +156,8 @@ function notHeld(provider: ProviderKeyProvider, plan: boolean, id: string | unde
   });
 }
 
-const providerArgument = Argument.Literals("provider", Object.values(PROVIDER_KEY_PROVIDER)).pipe(
+/** The providers whose keys the command keeps; Cursor's key is kept from Settings once its agents are offered. */
+const providerArgument = Argument.Literals("provider", MODEL_API_PROVIDERS).pipe(
   Argument.withDescription("anthropic or openai"),
 );
 
