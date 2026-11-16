@@ -41,6 +41,7 @@ import {
   CHOOSE_AN_ITEM_WORDS,
   NO_RESULTS_HINT,
   noResultsForWords,
+  PATH_OPENS,
   SELECTION_WORDS,
   selectedWords,
 } from "@repo/features/words";
@@ -166,9 +167,6 @@ const NARROWING_SCOPES: ReadonlySet<InboxShow> = new Set([
 
 /** The bar's menu of the Inbox's other acts, a round glass ⋯ as iOS draws a toolbar's menu. */
 const MORE = { label: "More", symbol: GLYPH.MORE } as const;
-
-/** What a thread's path opens, as the panel's crumbs open its task and its agent. */
-const PATH_OPENS = { TASK: "Open task", AGENT: "Open agent" } as const;
 
 /** What ends Select mode, as the system's own Done does. */
 const SELECT_DONE = "Done";
