@@ -7,15 +7,19 @@ import {
   BAR_TITLE,
   type BrandColors,
   ChipMarkProvider,
+  ElevatedGround,
   FailureNoticeLayer,
   FailureNoticeProvider,
   KeepingProvider,
   NO_GROUND,
+  TAB_BAR_ROOM,
   useColors,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactElement, type ReactNode, useEffect, useMemo, useState } from "react";
 import { useColorScheme } from "react-native";
 import { MachineAsks } from "../agents/machine-asks.js";
 import { useCrashReportAccount } from "../crash-reports.js";
@@ -33,10 +37,8 @@ import { SHORT_SHEET_DETENTS } from "../sheet-stack.js";
 import { holdSplash } from "../splash.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useChipMarks } from "../tasks/chip-marks.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
 import { VoiceCallProvider } from "../voice-call.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
@@ -65,6 +67,23 @@ function navigationTheme(colors: BrandColors, dark: boolean) {
     },
   };
 }
+
+/** The routes the root stack presents as sheets over the app. */
+const SHEET_ROUTE = {
+  SETTINGS: "settings",
+  START_TASK: "start-task",
+  START_AGENT: "start-agent",
+  AGENT_MODEL: "agent-model",
+  AGENT_PORTS: "agent-ports",
+  TASK_RELATION: "task-relation",
+  MOVE_TASK: "move-task",
+  TASK_FOLLOWING: "task-following",
+  ADD_FOLLOWER: "add-follower",
+  NEW_WORKSPACE: "new-workspace",
+} as const;
+
+/** The sheets, each drawn on the lifted ground in dark. */
+const LIFTED_SHEETS: ReadonlySet<string> = new Set(Object.values(SHEET_ROUTE));
 
 /** The presentations that stand a screen in a sheet over the root, which would hide a notice drawn there. */
 const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set(["modal", "formSheet"]);
@@ -103,21 +122,39 @@ function SheetNoticeLayer({
   return <FailureNoticeLayer inFront={useScreenInFront(navigation)}>{children}</FailureNoticeLayer>;
 }
 
-/** A root screen, wrapped in a place of its own for the failure notice where it stands as a sheet, so a notice shows over the sheet rather than behind it. */
+/**
+ * A root screen, wrapped in a place of its own for the failure notice where it
+ * stands as a sheet, so a notice shows over the sheet rather than behind it,
+ * and drawn on the lifted ground where it is one of the app's sheets, since
+ * every sheet stands over the window it was opened from, as a card on an
+ * iPhone and a form sheet on an iPad, and iOS lifts what it presents in dark;
+ * the app's own pages keep the plain ground. A short sheet at half height in a
+ * compact window (`sheetAllowedDetents`) stands on iOS's own Liquid Glass
+ * alone, so it isn't lifted.
+ */
 function screenLayout({
+  route,
   options,
   navigation,
   children,
 }: {
-  readonly options: { readonly presentation?: string | undefined };
+  readonly route: { readonly name: string };
+  readonly options: {
+    readonly presentation?: string | undefined;
+    readonly sheetAllowedDetents?: unknown;
+  };
   readonly navigation: ScreenFocus;
-  readonly children: ReactNode;
-}) {
-  return SHEET_PRESENTATIONS.has(options.presentation) ? (
+  readonly children: ReactElement;
+}): ReactElement {
+  const placed = SHEET_PRESENTATIONS.has(options.presentation) ? (
     <SheetNoticeLayer navigation={navigation}>{children}</SheetNoticeLayer>
   ) : (
-    <>{children}</>
+    children
   );
+
+  const lifted = LIFTED_SHEETS.has(route.name) && options.sheetAllowedDetents === undefined;
+
+  return lifted ? <ElevatedGround>{placed}</ElevatedGround> : placed;
 }
 
 /**
@@ -205,35 +242,44 @@ function GuardedScreens() {
           <Stack.Screen name="(tabs)" />
           {/* Note that each sheet's title is named here as well as on its screen, so it never reads the route's name, which New task has kept when opened from the tab bar's round +. */}
           <Stack.Screen
-            name="settings"
+            name={SHEET_ROUTE.SETTINGS}
             options={{ presentation: sheetPresentation, title: "Settings" }}
           />
           <Stack.Screen
-            name="start-task"
+            name={SHEET_ROUTE.START_TASK}
             options={{ presentation: sheetPresentation, title: "New task" }}
           />
           <Stack.Screen
-            name="start-agent"
+            name={SHEET_ROUTE.START_AGENT}
             options={{ presentation: sheetPresentation, title: "New agent" }}
           />
           {/* Note that Options opens whole rather than as a short sheet, since its rows run past half the screen and half height cut Ask for approval mid-row. */}
           <Stack.Screen
-            name="agent-model"
+            name={SHEET_ROUTE.AGENT_MODEL}
             options={{ presentation: sheetPresentation, title: "Options" }}
           />
-          <Stack.Screen name="agent-ports" options={{ ...shortSheet, title: "Ports" }} />
           <Stack.Screen
-            name="task-relation"
+            name={SHEET_ROUTE.AGENT_PORTS}
+            options={{ ...shortSheet, title: "Ports" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.TASK_RELATION}
             options={{ presentation: sheetPresentation, title: "Task relation" }}
           />
-          <Stack.Screen name="move-task" options={{ ...shortSheet, title: "Move to workspace" }} />
-          <Stack.Screen name="task-following" options={{ ...shortSheet, title: "Followers" }} />
           <Stack.Screen
-            name="add-follower"
+            name={SHEET_ROUTE.MOVE_TASK}
+            options={{ ...shortSheet, title: "Move to workspace" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.TASK_FOLLOWING}
+            options={{ ...shortSheet, title: "Followers" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.ADD_FOLLOWER}
             options={{ presentation: sheetPresentation, title: "Add a follower" }}
           />
           <Stack.Screen
-            name="new-workspace"
+            name={SHEET_ROUTE.NEW_WORKSPACE}
             options={{ presentation: sheetPresentation, title: "New workspace" }}
           />
         </Stack.Protected>
@@ -269,6 +315,8 @@ function KeptScreens() {
  * drew light beside the dark tab bar.
  */
 export default function RootLayout() {
+  // Note that a compact window's tab bar floats at its foot, which the notice stands over; a regular window's tabs stand at its top or its side.
+  const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const dark = useColorScheme() === "dark";
   const colors = useColors();
   const theme = useMemo(() => navigationTheme(colors, dark), [colors, dark]);
@@ -276,7 +324,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={theme}>
       <HostProvider>
-        <FailureNoticeProvider>
+        <FailureNoticeProvider footRoom={compact ? TAB_BAR_ROOM : 0}>
           <VoiceCallProvider>
             <KeptScreens />
           </VoiceCallProvider>

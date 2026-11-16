@@ -1,4 +1,4 @@
-# settings-integrations-tools.yaml -- Settings › Integrations reading each connected server's tools on the Inbox fixture: a server whose tools answered stands quiet under Connected, one whose read couldn't be answered says so with Try again, and an account at a provider holding two is renamed from its menu.
+# settings-integrations-tools.yaml -- Settings › Integrations reading each connected server's tools on the Inbox fixture: a server whose tools answered stands quiet under Connected, one whose read couldn't be answered says so, its page offering Try again, and an account at a provider holding two is renamed from its page.
 #
 # Launched on the host's Inbox fixture, whose Linear and Relay Notion list
 # their tools and whose Personal Notion's read failed, and whose rename is
@@ -20,10 +20,11 @@ appId: dev.vespin.ios
 - tapOn: "Integrations"
 - waitForAnimationToEnd
 - assertVisible: "The tools could not be read."
-- assertVisible: "Try again"
 - takeScreenshot: settings-integrations-tools
-# The Personal Notion's menu offers Rename, which asks for the label in the system's alert.
-- longPressOn: "Notion · Personal"
+# The Personal Notion's page offers Try again first, then Rename, which asks for the label in the system's alert.
+- tapOn: "Notion · Personal"
+- waitForAnimationToEnd
+- assertVisible: "Try again"
 - tapOn: "Rename"
 - assertVisible: "Rename Notion account"
 - takeScreenshot: settings-integrations-rename
