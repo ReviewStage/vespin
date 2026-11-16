@@ -1566,6 +1566,13 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
                   status={other?.status}
                   faded={other !== undefined && taskFinished(other)}
                   relation={TASK_RELATION_WORDS[kind]}
+                  relationMark={{
+                    glyph: RELATION_KIND_SYMBOL[kind],
+                    // Note that a blocker wants the reader, as the panel's pill draws it, until it's known done or canceled; one the list doesn't hold was never shown done, so it still blocks and stands in the attention ink.
+                    attention:
+                      kind === TASK_RELATION_KIND.BLOCKED_BY &&
+                      (other === undefined || !taskFinished(other)),
+                  }}
                   trailingActions={relationSwipes(task.id, id, kind, relations)}
                 />
               );
