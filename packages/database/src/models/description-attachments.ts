@@ -1,18 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { isVideoType } from "@repo/features/conversation-picture-wire";
 import {
   DESCRIPTION_ATTACHMENT_BOUNDS,
   type DescriptionFile,
   descriptionFileTypeSchema,
 } from "@repo/features/description-attachment-wire";
-import { PICTURE_MEDIA_TYPE } from "@repo/features/picture-wire";
 import {
   MP4_TYPE,
   PLAYABLE_VIDEO_TYPE,
   type PlayableVideoType,
   playableVideoTypeSchema,
 } from "@repo/features/video-signature";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
@@ -25,8 +23,8 @@ import { reachableTask, taskReachableBy } from "./workspace-store.js";
  * description-attachments.ts -- a description's pictures and files: keep one and read one.
  *
  * A picture, a video an agent recorded, or a PDF is kept under the plan row's own
- * lock, so the counts it is held to, every picture's and every video's,
- * cannot be crossed by a second upload. Every read names the account beside the
+ * lock, so the count it is held to cannot be crossed by a second
+ * upload. Every read names the account beside the
  * plan and gates on its membership of the plan's workspace, so a member
  * reads a picture a teammate pasted and a plan of a workspace the account is
  * not in reads as no plan, exactly as in `task-store.ts`. A picture stays
@@ -34,18 +32,16 @@ import { reachableTask, taskReachableBy } from "./workspace-store.js";
  * named it.
  */
 
-/** What keeping a picture came to: kept under its new id, refused for the description's count of pictures or of videos, or no plan to keep it on. */
+/** What keeping a picture came to: kept under its new id, refused for the description's count of pictures, or no plan to keep it on. */
 export const DESCRIPTION_ATTACHMENT_KEEP = {
   KEPT: "kept",
   TOO_MANY: "too-many",
-  TOO_MANY_VIDEOS: "too-many-videos",
   NO_TASK: "no-plan",
 } as const;
 
 export type DescriptionAttachmentKeep =
   | { readonly status: typeof DESCRIPTION_ATTACHMENT_KEEP.KEPT; readonly id: string }
   | { readonly status: typeof DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY }
-  | { readonly status: typeof DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY_VIDEOS }
   | { readonly status: typeof DESCRIPTION_ATTACHMENT_KEEP.NO_TASK };
 
 /** A description's pictures among every attachment: the ones its task owns alone. */
@@ -65,17 +61,14 @@ const lockOpenTask = SqlSchema.findOneOption({
     ),
 });
 
-/** How many pictures the description holds, and how many of them are videos. */
+/** How many pictures the description holds. */
 const countPictures = SqlSchema.findOne({
   Request: Schema.Struct({ taskId: Schema.String }),
-  Result: Schema.Struct({ count: Schema.Number, videos: Schema.Number }),
+  Result: Schema.Struct({ count: Schema.Number }),
   execute: ({ taskId }) =>
     Database.use((db) =>
       db
-        .select({
-          count: sql<number>`count(*)::int`,
-          videos: sql<number>`(count(*) filter (where ${inArray(attachment.contentType, [PICTURE_MEDIA_TYPE.WEBM, PICTURE_MEDIA_TYPE.MP4])}))::int`,
-        })
+        .select({ count: sql<number>`count(*)::int` })
         .from(attachment)
         .where(and(eq(attachment.taskId, taskId), descriptionPicture)),
     ),
@@ -146,9 +139,9 @@ export type DescriptionAttachmentToKeep = DescriptionFile & {
 
 /**
  * Keeps one picture, video, or PDF on the description, uploaded by the account, under a
- * new id, a PDF counted among its pictures; refused where the description already holds its bound of pictures, or a
- * video where it holds its bound of videos, and nothing where the account
- * reaches no such plan.
+ * new id, a PDF or a video counted among its pictures; refused where the description
+ * already holds its bound of pictures, and nothing where the account reaches no
+ * such plan.
  */
 export function keepDescriptionAttachment(
   userId: string,
@@ -163,19 +156,12 @@ export function keepDescriptionAttachment(
         if (Option.isNone(locked)) return { status: DESCRIPTION_ATTACHMENT_KEEP.NO_TASK } as const;
 
         // A count that returned no row is the database breaking its own contract, not an outcome.
-        const { count, videos } = yield* countPictures({ taskId }).pipe(
+        const { count } = yield* countPictures({ taskId }).pipe(
           Effect.catchTag("NoSuchElementError", Effect.die),
         );
 
         if (count >= DESCRIPTION_ATTACHMENT_BOUNDS.MAX_PER_DESCRIPTION) {
           return { status: DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY } as const;
-        }
-
-        if (
-          isVideoType(picture.contentType) &&
-          videos >= DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION
-        ) {
-          return { status: DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY_VIDEOS } as const;
         }
 
         const id = randomUUID();

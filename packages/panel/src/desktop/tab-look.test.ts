@@ -34,9 +34,10 @@ import { fakeAppPlatform } from "../testing/app-platform.js";
 import { DESKTOP_CAPABILITIES, handCapabilities, withExperiments } from "../testing/app-state.js";
 import { editorBundleLanded } from "../testing/composer.js";
 import { restOn } from "../testing/hint-rest.js";
+import { overEveryTask } from "../testing/history-rows.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { agentsControl, tasksControl } from "../testing/tasks-control.js";
+import { agentsControl, listedTasksOf, tasksControl } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { DesktopTasks } from "./desktop-tasks.js";
 import { taskCardOf } from "./task-card.js";
@@ -91,6 +92,28 @@ function agent(id: string, title: string, status: AgentSummary["status"]): Agent
 
 const WORKING = agent("8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21", "Invite flow", AGENT_STATUS.RUNNING);
 const DONE = agent("9d2b7b5f-4e3f-4e9c-9c77-7a5d8b3f4c32", "Expiry job", AGENT_STATUS.COMPLETED);
+
+/** The task's line for the pull request its done agent opened, which names that pull request's tab and its row in the "+". */
+const TASK_PULL_REQUESTS = [
+  {
+    taskId: TASK.id,
+    pullRequests: [
+      {
+        number: 42,
+        title: "Expire invitations",
+        url: "https://github.com/acme/relay/pull/42",
+        state: PULL_REQUEST_STATE.OPEN,
+        checks: CHECK_SUMMARY.PASSING,
+        additions: 210,
+        deletions: 14,
+        agentId: DONE.id,
+      },
+    ],
+  },
+];
+
+/** The pull request the done agent opened, by its repository and number. */
+const RELAY_42 = { repository: "acme/relay", number: 42 } as const;
 
 const DRAFT = "draft-1";
 
@@ -180,7 +203,7 @@ function taskDrawn(shown: Shown) {
       ...base.sidePanel,
       open: true,
       tab: shown.tab ?? SIDE_PANEL_TAB.COMMENTS,
-      changes: [changesTab(DONE.id)],
+      changes: [changesTab(RELAY_42)],
       terminals: [terminalTab(WORKING.id, "2f6e0c1a-5b3d-4c8e-9a1f-7d2b4e6a8c10", "Cloud 1")],
       pages: [pageTab(FUNNEL.id)],
     },
@@ -210,7 +233,7 @@ function taskDrawn(shown: Shown) {
   // The window's tasks' cards, as the shell hands them to everything it holds.
   const chipCards = {
     taskCard: (taskId: string, now: number) => {
-      const task = tasks.tasks.find((each) => each.id === taskId);
+      const task = listedTasksOf(tasks).find((each) => each.id === taskId);
 
       return task === undefined ? undefined : taskCardOf(tasks, task, now);
     },
@@ -222,7 +245,11 @@ function taskDrawn(shown: Shown) {
       createElement(
         ChipCards,
         { value: chipCards },
-        createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
+        overEveryTask(
+          tasks,
+          createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
+          TASK_PULL_REQUESTS,
+        ),
       ),
     ),
   );
@@ -265,7 +292,7 @@ function rowLooks(column: Element): Map<string, Look> {
   return new Map(rows);
 }
 
-test("the side panel's + offers an agent's Pull request in the look its tab wears, named by its number and title rather than its agent's name", async () => {
+test("the side panel's + offers the task's pull request in the look its tab wears, named by its number and title rather than its agent's name", async () => {
   const panel = (await mount()).querySelector(".side-panel-tabs");
   assert.ok(panel, "the side panel's strip");
   const tabs = tabLooks(panel);
@@ -404,7 +431,7 @@ test("a page's tab keeps its page drawn while another tab or the task's details 
 
   const frame = pageFrame();
   assert.ok(frame, "the page is drawn in its tab");
-  await redraw({ tab: changesTab(DONE.id) });
+  await redraw({ tab: changesTab(RELAY_42) });
   await redraw({ tab: pageTab(FUNNEL.id) });
   assert.ok(pageFrame() === frame, "the page stands in the frame it was left in");
   // The task's details take the page, side panel and all, and are left again.

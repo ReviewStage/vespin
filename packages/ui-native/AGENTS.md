@@ -26,7 +26,14 @@ builds a control of its own.
   a path, a page's main acts as glyphs in the bar's one glass before its ⋯
   (two or three, dimmed rather than gone with nothing picked, the rest left
   in ⋯ by `menuWithout`), a list's scopes as Mail's filter button
-  (`scopeMenu`, beside the app sidebar only), a `BarMenu` such as the ⋯ menu, an
+  (`scopeMenu`, beside the app sidebar only), a line under its title
+  (`titleLine`) such as the narrowing scope's "Filtered by:" line (`scopeSubtitle`), as
+  Mail's, which `Screen`'s `subtitle` sets under a compact screen's stack bar
+  too (`barSubtitle`: SwiftUI's `navigationSubtitle` for a column, the
+  stack's `UINavigationItem.subtitle` for a screen, each standing whether
+  or not it has words, since a modifier coming or going redraws all under
+  it), a
+  `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says, and `SplitOverTabs`, the one split view a window wide enough
   for three columns stands over the hidden tabs, in front of a tab's root and
@@ -44,8 +51,8 @@ builds a control of its own.
   pictures and choices, `ComposeSheet` for a sheet that starts work (its
   words filling the page, and the + and `MenuChip` capsule menus in glass
   over the keyboard),
-  `SwitchRow` for an agent's options, `RenameAsk` (the system's alert a name is
-  typed in),
+  `SwitchRow` for an agent's options, `askForName` (the system's alert a name is
+  typed in, its act preferred, for a task and an agent alike),
   `AccountButton`, `FailureNoticeProvider` (the app's one notice that a
   write did not go: a banner of Liquid Glass sliding down from the top with
   the refusal's words and Try again, said aloud by VoiceOver, faded rather
@@ -81,8 +88,8 @@ builds a control of its own.
   Native list (a lazy `FlatList`, drawn newest last and anchored there, with
   Jump to latest once the reader scrolls back, and its older pages read as
   the reader scrolls up to its oldest row, which holds its place as they
-  land), under `AgentHead`, where the agent stands and its model; a call
-  the agent holds for an answer says so under its line with Deny and Allow; its rows
+  land); a call the agent holds for an answer says so under its line with
+  Deny and Allow; its rows
   are read by `transcript-model.ts` from the panel's own parts, folds, and
   call lines (`@repo/features/agent-parts`, `turn-rows`, `tool-call-model`),
   the agent's thinking left out, and each call leads with the glyph for its
@@ -123,8 +130,8 @@ builds a control of its own.
 - **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
   panel's three lines (the task's status ring and name, then the thread's
   title and time, then the glyph and words of what it asks; an agent's own
-  thread, with no task, in two), `TaskRow` a task on one line (its status
-  ring, its name, and at its end a thread that needs you, a failed agent,
+  thread, with no task, in two), `TaskRow` a task on one line (its priority's
+  mark and status ring, as the panel's List row leads, its name, and at its end a thread that needs you, a failed agent,
   one at work, or its pull request, then its key), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
 - **Every glyph is the panel's own Lucide glyph for the same place** (the
@@ -138,8 +145,10 @@ builds a control of its own.
   takes a bare SF Symbol's name; `apps/mobile`'s tab icons and toolbar
   items, which expo-router types as plain names, take `GLYPH.X` too
   (`glyphSymbol` where a symbol's name is asked for). SF Symbols stay only
-  where iOS draws the thing its own way (Share, and the chevron at the end of
-  a Settings row that goes on) or where the panel draws a
+  where iOS draws the thing its own way (Share, the chevron at the end of a
+  Settings row that goes on, the small arrow out at the end of one that
+  leaves the app, and the up-and-down chevron at the end of one whose press
+  opens a menu) or where the panel draws a
   mark of its own rather than a Lucide glyph (a check box, a face, an MCP
   server, the panel's product mark). A task's status ring is the panel's own
   mark, cut into the asset catalog from `@repo/brand`'s table
@@ -169,8 +178,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   bold at its bar's leading edge (`inlineLarge`), as Mail names the mailbox
   over its list, and its search is one button at the window's trailing edge,
   as Mail's is; a list standing first, as a portrait iPad's, keeps its title
-  small and inline, since its bar also holds the switcher, compose, ⋯ and
-  the sidebar button. A pushed page shows its path (task › agent, repository › key) small
+  small and inline, since its bar also holds the switcher, ⋯ and the
+  sidebar button. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading
   under it; a split view's detail column draws the same path in its bar. A
   thread's path opens its task and its agent, as the panel's crumbs do: in a
@@ -178,7 +187,10 @@ navigation, tab bar, swipes, menus, sheets and glass.
   title menus stand (`PathTitle`'s `actions`), and in a compact window, whose
   stack's title holds no menu, they lead its ⋯ menu. An
   agent's page names the agent in the bar in the ink instead, as Messages
-  names a conversation, since its transcript opens at its newest row.
+  names a conversation, since its transcript opens at its newest row, with
+  where it stands and its model muted under the name ("Working · Opus 5.5"),
+  a press on them opening Options: `StackBarTitle` as a compact stack's title
+  view, and `ColumnBar`'s `subtitle` in a split view's detail.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
@@ -233,11 +245,14 @@ navigation, tab bar, swipes, menus, sheets and glass.
   row that acts, such as New agent. `Screen` tints in `TEXT`, so a piece
   asks for copper by name. Status tones stand on the status marks alone: a
   task's ring, and a pull request's state.
-- **Scopes and capsules.** A list's scopes are `ScopePicker`, the system's
-  segmented control under its title, as Mail and the App Store switch a
-  list's views; in a split view's 320 pt list column, which cuts the
-  segments' words short, the system's menu picker naming the scope chosen
-  (`SCOPE_LOOK.MENU`). `Chip` is a capsule an act or a choice stands in, such as a
+- **Scopes and capsules.** A list's scopes are the system's segmented
+  control under its title, as Mail and the App Store switch a list's views;
+  in a split view's 320 pt list column, which cuts the segments' words
+  short, the system's menu picker naming the scope chosen
+  (`SCOPE_LOOK.MENU`). A list with rows stands them as its first row
+  (`RowList`'s `scopes`), so they scroll away with the rows as Mail's
+  categories do; one listing nothing stands them over its empty state
+  (`ScopePicker`), so another scope is one tap away. `Chip` is a capsule an act or a choice stands in, such as a
   pull request card's acts; `FieldChip` and `StatusChip` read a task's
   status, priority and assignee, and where handed a `FieldMenu`, open the
   system's pull-down menu of the field's values, as Reminders' fields do. Each stands
