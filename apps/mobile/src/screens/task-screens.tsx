@@ -37,6 +37,7 @@ import {
   TASK_RELATION_ORDER,
   TASK_RELATION_VERBS,
 } from "@repo/features/task-relation-model";
+import type { TaskSectionIcon } from "@repo/features/task-section-wire";
 import { MOVE_TO_SECTION, REMOVE_FROM_SECTION } from "@repo/features/task-sections-model";
 import {
   NO_ASSIGNEE_WORDS,
@@ -124,6 +125,7 @@ import {
   SplitView,
   STATUS_MARK_SYMBOL,
   type StandingMenus,
+  sectionEmoji,
   sectionGlyph,
   type TaskFold,
   TaskHead,
@@ -357,6 +359,22 @@ function settleSwipes(
 }
 
 /**
+ * How a section leads its choice in Move to section's menu, as the panel's
+ * menu leads each with its icon: its glyph, or its emoji set before its
+ * name, since a menu item's image takes a symbol alone.
+ */
+function sectionChoiceLead(
+  title: string,
+  icon: TaskSectionIcon | undefined,
+): { readonly label: string; readonly symbol?: Glyph | undefined } {
+  const emoji = sectionEmoji(icon);
+
+  return emoji === undefined
+    ? { label: title, symbol: sectionGlyph(icon) }
+    : { label: `${emoji} ${title}` };
+}
+
+/**
  * A task's Move to section as a menu, as the panel's offers it: the member's
  * sections of its workspace, the one it stands in checked, a press putting it
  * on top of another, and Remove from section under them while it stands in
@@ -371,8 +389,8 @@ function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | u
     label: MOVE_TO_SECTION,
     symbol: GLYPH.MOVE,
     choices: placing.sections.map((section) => ({
-      label: section.title,
-      symbol: sectionGlyph(section.icon),
+      ...sectionChoiceLead(section.title, section.icon),
+      id: section.id,
       on: section.id === standing,
       onPress: () => {
         if (section.id !== standing) placing.moveToSection(task.id, section.id);
@@ -950,6 +968,7 @@ function GroupSection({
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
       glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
+      emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
       repository={headPicture(group)}
       count={group.rows.length}
       foldable
@@ -1167,6 +1186,7 @@ export function useSidebarTasks(): SidebarTasks {
         id={group.key}
         title={group.title ?? listing.tree.tasksHead}
         symbol={collectionGlyph(group)}
+        emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
         count={group.rows.length}
         onDropLink={dropOnto(group, listing)}
       />
