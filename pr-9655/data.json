@@ -1,0 +1,47 @@
+[
+  {
+    "kind": "Decide · Postgres or Redis",
+    "title": "Pick the **outbox** store",
+    "text": "The repo already runs [@Postgres](https://github.com/acme/relay/blob/HEAD/db/schema.ts) for jobs, so an outbox table costs **no new service**.\n\nWhich should I build?\n\n- **Postgres outbox**: one table, polled every 2 s\n- **Redis streams**: lower latency, one more thing to run",
+    "beforeTitle": "Pick the **outbox** store",
+    "afterTitle": "Pick the outbox store",
+    "before": "The repo already runs @Postgres for jobs, so an outbox table costs **no new service**.",
+    "after": "The repo already runs @Postgres for jobs, so an outbox table costs no new service.\nWhich should I build?\n• Postgres outbox: one table, polled every 2 s\n• Redis streams: lower latency, one more thing to run"
+  },
+  {
+    "kind": "Post · a link and code",
+    "title": "Flaky `checkout.test.ts` fixed",
+    "text": "Found it: the test raced the [retry timer](https://github.com/acme/relay/pull/482) because it used real time.\n\n```ts\nawait TestClock.adjust(\"2 seconds\");\nexpect(attempts).toBe(2);\n```\n\nIt passes *20 of 20* under load now.",
+    "beforeTitle": "Flaky `checkout.test.ts` fixed",
+    "afterTitle": "Flaky checkout.test.ts fixed",
+    "before": "Found it: the test raced the [retry timer](https://github.com/acme/relay/pull/482) because it used real time.",
+    "after": "Found it: the test raced the retry timer because it used real time.\nawait TestClock.adjust(\"2 seconds\");\nIt passes 20 of 20 under load now."
+  },
+  {
+    "kind": "Answer · a numbered list",
+    "title": "Release notes for 2.4",
+    "text": "## Before I cut 2.4\n\n1. Confirm the **migration** ran on staging\n2. Bump `HOSTED_API_VERSION` to 14\n3. Tell me the release date\n\nI'll draft the notes once you answer.",
+    "beforeTitle": "Release notes for 2.4",
+    "afterTitle": "Release notes for 2.4",
+    "before": "## Before I cut 2.4",
+    "after": "Before I cut 2.4\n1. Confirm the migration ran on staging\n2. Bump HOSTED_API_VERSION to 14\n3. Tell me the release date\nI'll draft the notes once you answer."
+  },
+  {
+    "kind": "Post · multi-paragraph",
+    "title": "Sign-in outage, root cause",
+    "text": "Google's token endpoint answered **503** for about 9 minutes, starting 14:02 UTC.\n\nOur retry ran *once* with no backoff, so every sign-in in that window failed. [@Sentry issue](https://vespin.dev/stage/inbox/abc) has the trace.\n\nI opened [@#9661 Back off on token refresh](https://github.com/acme/relay/pull/9661) with exponential backoff and a test that fails without it.",
+    "beforeTitle": "Sign-in outage, root cause",
+    "afterTitle": "Sign-in outage, root cause",
+    "before": "Google's token endpoint answered **503** for about 9 minutes, starting 14:02 UTC.",
+    "after": "Google's token endpoint answered 503 for about 9 minutes, starting 14:02 UTC.\nOur retry ran once with no backoff, so every sign-in in that window failed. @Sentry issue has the trace.\nI opened @#9661 Back off on token refresh with exponenti…"
+  },
+  {
+    "kind": "Do · a quote and a table",
+    "title": "Rotate the Stripe webhook secret",
+    "text": "> Stripe flagged the old secret as exposed in a CI log.\n\nPlease rotate it in the dashboard, then paste nothing here: set `STRIPE_WEBHOOK_SECRET` on Vercel.\n\n| Env | Status |\n| - | - |\n| Production | needs rotation |",
+    "beforeTitle": "Rotate the Stripe webhook secret",
+    "afterTitle": "Rotate the Stripe webhook secret",
+    "before": "> Stripe flagged the old secret as exposed in a CI log.",
+    "after": "Stripe flagged the old secret as exposed in a CI log.\nPlease rotate it in the dashboard, then paste nothing here: set STRIPE_WEBHOOK_SECRET on Vercel."
+  }
+]
