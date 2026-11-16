@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   symbol: {
     width: "100%",
     aspectRatio: TILE_ASPECT,
-    borderRadius: RADIUS.TAG * 2,
+    borderRadius: RADIUS.TILE,
     alignItems: "center",
     justifyContent: "center",
   },

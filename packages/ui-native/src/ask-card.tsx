@@ -38,7 +38,7 @@ import {
 import { FIELD_WORDS, SELECTION_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactNode, useRef } from "react";
-import { useAnnounced } from "./accessibility.js";
+import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
 import { CHIP_LOOK, Chip } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { ProblemLine } from "./problem-line.js";
@@ -151,20 +151,24 @@ export function AskNote({ words }: { readonly words: string }) {
   return <ProblemLine text={words} id={ASK_NOTE_ID} />;
 }
 
-/** The card's acts in a row under it, each a small capsule with its glyph, as the panel's presses under an ask stand. */
+/** The card's acts in a row under it, each a small capsule with its glyph, as the panel's presses under an ask stand; one to a line at the accessibility sizes, as a page's chips stand, rather than squeezed side by side. */
 export function AskActs({ acts }: { readonly acts: readonly AskAct[] }) {
-  return (
-    <HStack spacing={SPACE.TIGHT * 2}>
-      {acts.map((act) => (
-        <Chip
-          key={act.label}
-          label={act.label}
-          symbol={act.symbol}
-          look={act.quiet === true ? CHIP_LOOK.QUIET : CHIP_LOOK.BORDERED}
-          onPress={act.onPress}
-        />
-      ))}
-    </HStack>
+  const chips = acts.map((act) => (
+    <Chip
+      key={act.label}
+      label={act.label}
+      symbol={act.symbol}
+      look={act.quiet === true ? CHIP_LOOK.QUIET : CHIP_LOOK.BORDERED}
+      onPress={act.onPress}
+    />
+  ));
+
+  return useAccessibilitySize() ? (
+    <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
+      {chips}
+    </VStack>
+  ) : (
+    <HStack spacing={SPACE.TIGHT * 2}>{chips}</HStack>
   );
 }
 

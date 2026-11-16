@@ -5,9 +5,10 @@ import {
   revisionWriterName,
   VERSION_HISTORY_WORDS,
 } from "@repo/features/description-history-words";
+import { type VersionDiff, versionDiff } from "@repo/features/description-version-diff";
 import type { DescriptionRevisionLine } from "@repo/features/task-wire";
 import { agoText, dayAndTimeText } from "@repo/features/time-format";
-import { readingWords, showMoreWords, VERB } from "@repo/features/words";
+import { readingWords, showMoreWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   BUZZ,
@@ -31,7 +32,10 @@ import { PUSHED_PAGE, useDetailLeave, useDetailPush, useHandToDetail } from "../
 import { useHostActs } from "../host/host-provider.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
-import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
+import {
+  type DescriptionPictures,
+  useDescriptionPictures,
+} from "../tasks/use-description-pictures.js";
 import {
   HISTORY_READ,
   useNewestVersion,
@@ -106,7 +110,7 @@ export function History({
       <EmptyState
         title={VERSION_HISTORY_WORDS.UNREAD}
         symbol={GLYPH.FAILED}
-        action={{ label: VERB.RETRY, onPress: history.retry }}
+        retry={history.retry}
       />
     ) : history.read === HISTORY_READ.READING ? (
       <EmptyState title={readingWords("the version history")} symbol={HISTORY_SYMBOL} loading />
@@ -213,6 +217,49 @@ export function VersionScreen() {
   return <Version taskId={id} seq={seq} at={opened} newest={newest} />;
 }
 
+/**
+ * A version's words against the version before it, as the panel's version
+ * page draws them: each section a row, one written in or changed edged in
+ * green, one struck edged in red and dimmed. The phone's Markdown draws no
+ * mark inside its words, so a changed section reads as it was written,
+ * its struck words left out (`plain`). A version that changed nothing says so under
+ * its words; the first, with nothing before it, says nothing.
+ */
+function VersionWords({
+  diff,
+  first,
+  onOpenLink,
+  pictureSource,
+  videoAt,
+  fileAt,
+}: DescriptionPictures & {
+  readonly diff: VersionDiff;
+  readonly first: boolean;
+  readonly onOpenLink: (address: string) => void;
+}) {
+  const unchanged = !first && !diff.changed;
+
+  return (
+    <RowList look={LIST_LOOK.PLAIN}>
+      <ListSection footer={unchanged ? VERSION_HISTORY_WORDS.NO_CHANGE : undefined}>
+        {diff.units.map((unit, at) => (
+          <WordsRow
+            // A section's heading may stand twice, struck and written again, so its place keys it.
+            key={at}
+            words={unit.plain}
+            change={unit.change}
+            last={at === diff.units.length - 1}
+            onOpenLink={onOpenLink}
+            pictureSource={pictureSource}
+            videoAt={videoAt}
+            fileAt={fileAt}
+          />
+        ))}
+      </ListSection>
+    </RowList>
+  );
+}
+
 /** One version and its restore; `at` its latest save, which titles it, and `newest` the description as it stands, which a restore's Undo puts back, each none where the route did not carry it; `inColumn` pushed over a split view's detail, where a restore that went goes back in its column. */
 export function Version({
   taskId,
@@ -242,7 +289,23 @@ export function Version({
   const current = standingNow === seq;
   const answer = version.data;
   const read = answer === undefined || "failure" in answer ? undefined : answer.revision;
-  const { pictureSource, videoAt, fileAt } = useDescriptionPictures(read?.description.body);
+
+  // Note that the version and the one before it are each read for their pictures on their own, since a section struck from the one before draws through that version's own reference definitions, which share names with the version's.
+  const shownPictures = useDescriptionPictures(read?.description.body);
+  const struckPictures = useDescriptionPictures(read?.previous?.body);
+
+  // Note that a picture the version itself names keeps what its own read says, `null` where it cannot be drawn among it, and only one it never named is asked of the version before.
+  const pictureSource = (written: string) => {
+    const shown = shownPictures.pictureSource(written);
+
+    return shown === undefined ? struckPictures.pictureSource(written) : shown;
+  };
+
+  const videoAt = (written: string) =>
+    shownPictures.videoAt(written) ?? struckPictures.videoAt(written);
+
+  const fileAt = (written: string) =>
+    shownPictures.fileAt(written) ?? struckPictures.fileAt(written);
 
   const restore = () => {
     if (restoring) return;
@@ -287,20 +350,17 @@ export function Version({
     <EmptyState
       title={VERSION_HISTORY_WORDS.VERSION_UNREAD}
       symbol={GLYPH.FAILED}
-      action={{ label: VERB.RETRY, onPress: () => void version.refetch() }}
+      retry={() => void version.refetch()}
     />
   ) : (
-    <RowList look={LIST_LOOK.PLAIN}>
-      <ListSection>
-        <WordsRow
-          words={read.description.body}
-          onOpenLink={openLink}
-          pictureSource={pictureSource}
-          videoAt={videoAt}
-          fileAt={fileAt}
-        />
-      </ListSection>
-    </RowList>
+    <VersionWords
+      diff={versionDiff(read.previous, read.description)}
+      first={read.previous === null}
+      onOpenLink={openLink}
+      pictureSource={pictureSource}
+      videoAt={videoAt}
+      fileAt={fileAt}
+    />
   );
 
   const name = at === undefined ? VERSION_HISTORY_WORDS.TITLE : dayAndTimeText(at);
