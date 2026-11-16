@@ -342,6 +342,7 @@ it.layer(SUITE)("a voice call held lease by lease", (it) => {
         const lease = { callId: call.id, callerId, epoch: 1 };
 
         // A session that closed while no lease listened, which answers every attach 503 rather than 404 (live test, Nov 16).
+        // Note that the lease bears about a minute of deliveries first, so an outage that short never orphans a live call.
         const closedUnheard = Layer.mergeAll(
           Layer.succeed(HostedEnvironment, VOICE_CALLER_ENVIRONMENT),
           Layer.succeed(LiveSidebands, {
