@@ -47,7 +47,7 @@ export type CardPadding = (typeof CARD_PADDING)[keyof typeof CARD_PADDING];
 
 /**
  * How a card stands on its page: on the page's surface; raised on an opaque
- * ground in a strong edge and a smaller corner, as a card set inside a
+ * ground in a smaller corner, as a card set inside a
  * thread's words is; tinted with the hover's wash, as what a transcript
  * folds open is; on the code's own ground, as a file's lines are; its edge
  * alone, on whatever ground it stands on; or sunk in the page's well with no
@@ -64,11 +64,13 @@ export const CARD_LOOK = {
 
 export type CardLook = (typeof CARD_LOOK)[keyof typeof CARD_LOOK];
 
-/** A card's corner: a page's card's; a control's, for a card set among lines rather than on a page; or a menu's, for a card that stands over the page as a menu does. Note that a raised card wears the control's unless it wears the menu's. */
+/** A card's corner: a page's card's; a control's, for a card set among lines rather than on a page; a menu's, for a card that stands over the page as a menu does; or a dialog's, for a card standing over the whole window. Note that a raised card wears the control's unless it wears the menu's or the dialog's. */
 export const CARD_CORNER = {
   CARD: "card",
   CONTROL: "control",
   MENU: "menu",
+  /** A dialog's, which a raised card standing over the whole window wears whatever its look. */
+  DIALOG: "dialog",
 } as const;
 
 export type CardCorner = (typeof CARD_CORNER)[keyof typeof CARD_CORNER];
@@ -81,15 +83,23 @@ export const CARD_ELEMENT = {
   LI: "li",
   SECTION: "section",
   SPAN: "span",
+  /** A card its foot's submit sends, as a message box is: a form the browser never checks, so no browser bubble is drawn over it and its owner says what is wrong. */
+  FORM: "form",
 } as const;
 
 export type CardElement = (typeof CARD_ELEMENT)[keyof typeof CARD_ELEMENT];
 
-/** The shadow a card stands on: none; a hairline's lift off the well it stands in, as a board's card; or a menu's, standing over the page, as an open comment thread or a summary drawn over its rail. */
+/** The shadow a card stands on: none; a hairline's lift off the well it stands in, as a board's card; Geist's card shadow, which every card stands on unless it asks for another or sits in the page's well; a menu's, standing over the page, as an open comment thread or a summary drawn over its rail; a dialog's; or a toast's. */
 export const CARD_SHADOW = {
   NONE: "none",
   SOFT: "soft",
+  /** Geist's card shadow (`--ui-shadow-card`), standing a card off the page: every card's unless it asks for another. */
+  CARD: "card",
   MENU: "menu",
+  /** A dialog's, standing over the dimmed window. */
+  DIALOG: "dialog",
+  /** A toast's, standing over the window's corner. */
+  TOAST: "toast",
 } as const;
 
 export type CardShadow = (typeof CARD_SHADOW)[keyof typeof CARD_SHADOW];
@@ -97,8 +107,8 @@ export type CardShadow = (typeof CARD_SHADOW)[keyof typeof CARD_SHADOW];
 /**
  * How a card a whole-card press covers answers the pointer resting on it:
  * not at all; with the hover's wash laid over its ground, as a comment
- * thread at rest; or lifting, its edge strengthened and its shadow deepened,
- * as a board's card rises off its column.
+ * thread at rest; or lifting, its shadow deepened, as a board's card rises
+ * off its column.
  */
 export const CARD_HOVER = {
   NONE: "none",
@@ -111,58 +121,77 @@ export type CardHover = (typeof CARD_HOVER)[keyof typeof CARD_HOVER];
 /** What a card a dragged row is carried over wears while it is, set by the drag on the element itself. */
 export const CARD_DROP_TARGET = "data-drop-target";
 
-/** Each padding's room inside the edge. */
+/**
+ * Each padding's room inside the edge. Note that none sets no class at all,
+ * because a utility outranks the owner's own room in `@layer components`
+ * (the auth page's card), and the frame sets no padding to undo.
+ */
 const PADDING_CLASS: Record<CardPadding, string> = {
   [CARD_PADDING.FLUSH]: "p-0",
-  [CARD_PADDING.NONE]: "p-0",
+  [CARD_PADDING.NONE]: "",
   [CARD_PADDING.SNUG]: "px-card py-card-snug",
   [CARD_PADDING.COMPACT]: "px-card py-card-compact",
   [CARD_PADDING.REGULAR]: "p-card",
 };
 
-/**
- * Each look's ground and edge. Note that a well's edge is there but unseen,
- * so ringed as a drop target the card keeps its size, the ring fading in as
- * a hover does, unless the card lifts, whose own transition says it.
- */
+/** Each look's ground. Its edge is not a look's: every card wears the one edge (`edgeClass`). */
 const LOOK_CLASS: Record<CardLook, string> = {
-  [CARD_LOOK.SURFACE]: "bg-card-surface border-border",
-  [CARD_LOOK.RAISED]: "bg-background border-border-strong",
-  [CARD_LOOK.TINT]: "bg-muted border-border",
-  [CARD_LOOK.CODE]: "bg-card-code border-border",
-  [CARD_LOOK.OUTLINE]: "bg-transparent border-border",
-  [CARD_LOOK.WELL]: "bg-well border-transparent",
+  [CARD_LOOK.SURFACE]: "bg-card-surface",
+  [CARD_LOOK.RAISED]: "bg-background",
+  [CARD_LOOK.TINT]: "bg-muted",
+  [CARD_LOOK.CODE]: "bg-card-code",
+  [CARD_LOOK.OUTLINE]: "bg-transparent",
+  [CARD_LOOK.WELL]: "bg-well",
 };
+
+/**
+ * The one edge every card wears, defined here once so no card draws its own:
+ * the card's edge (`--ui-color-card-edge`), which the frames that cannot
+ * draw this component read too, but for a well's, which is there but unseen, so
+ * ringed as a drop target the card keeps its size, the ring fading in as a
+ * hover does, unless the card lifts, whose own transition says it.
+ */
+function edgeClass(look: CardLook): string {
+  return look === CARD_LOOK.WELL ? "border-transparent" : "border-card-edge";
+}
 
 /** The shadow a card stands on, by `CARD_SHADOW`. */
 const SHADOW_CLASS: Record<CardShadow, string> = {
   [CARD_SHADOW.NONE]: "",
   [CARD_SHADOW.SOFT]: "shadow-card-soft",
+  [CARD_SHADOW.CARD]: "shadow-card",
   [CARD_SHADOW.MENU]: "shadow-menu",
+  [CARD_SHADOW.DIALOG]: "shadow-dialog",
+  [CARD_SHADOW.TOAST]: "shadow-toast",
 };
 
 /**
  * How a card answers the pointer resting on it, or holds that look while
  * `lit`. Note that the wash is laid over the card's own ground as an image,
  * so a card on an opaque ground stays opaque under it and one with none
- * takes the wash alone; a card that lifts strengthens its edge and deepens
- * its shadow, its edge left to a drop target's ring while it is one.
+ * takes the wash alone; a card that lifts deepens its shadow, keeping the
+ * one edge every card wears.
  */
 const HOVER_CLASS: Record<CardHover, string> = {
   [CARD_HOVER.NONE]: "",
   [CARD_HOVER.WASH]:
     "hover:bg-[linear-gradient(var(--color-muted),var(--color-muted))] data-[lit=true]:bg-[linear-gradient(var(--color-muted),var(--color-muted))]",
-  [CARD_HOVER.LIFT]:
-    "hover:not-data-[drop-target=true]:border-border-strong data-[lit=true]:not-data-[drop-target=true]:border-border-strong hover:shadow-card-lift data-[lit=true]:shadow-card-lift",
+  [CARD_HOVER.LIFT]: "hover:shadow-card-lift data-[lit=true]:shadow-card-lift",
 };
+
+/** The edge while what it holds stops its form, shaken and in the danger ink, as a text field's is. */
+const INVALID_CLASS =
+  "data-[invalid=true]:animate-field-shake data-[invalid=true]:border-destructive";
 
 /** The card a dragged row is carried over, ringed and washed, so it reads as the one the row will land in. */
 const DROP_TARGET_CLASS =
   "data-[drop-target=true]:border-card-drop data-[drop-target=true]:bg-[linear-gradient(var(--color-muted),var(--color-muted))]";
 
-/** A card's corner: a menu's where asked, else a raised card's smaller one, else the corner asked for. */
+/** A card's corner: a menu's or a dialog's where asked, else a raised card's smaller one, else the corner asked for. */
 function cornerClass(look: CardLook, corner: CardCorner): string {
   if (corner === CARD_CORNER.MENU) return "rounded-menu";
+
+  if (corner === CARD_CORNER.DIALOG) return "rounded-dialog";
 
   if (look === CARD_LOOK.RAISED) return "rounded-card-raised";
 
@@ -193,6 +222,11 @@ function transitionClass(look: CardLook, hover: CardHover): string {
   return "transition-[border-color] duration-(--ui-duration-hover) ease-plain";
 }
 
+/** The shadow a card stands on where it asks for none in particular: Geist's card shadow, but for a well, which has no edge to stand a shadow under. */
+function defaultShadow(look: CardLook): CardShadow {
+  return look === CARD_LOOK.WELL ? CARD_SHADOW.NONE : CARD_SHADOW.CARD;
+}
+
 /** Every class a card's frame wears for the choices made, its owner's last. */
 function frameClass(
   look: CardLook,
@@ -206,12 +240,14 @@ function frameClass(
   return [
     "ui-card",
     LOOK_CLASS[look],
+    edgeClass(look),
     cornerClass(look, corner),
     PADDING_CLASS[padding],
     overflowClass(look, padding),
     dashed ? "border-dashed" : "",
     SHADOW_CLASS[shadow],
     HOVER_CLASS[hover],
+    INVALID_CLASS,
     DROP_TARGET_CLASS,
     transitionClass(look, hover),
     className ?? "",
@@ -226,10 +262,11 @@ export function Card({
   look = CARD_LOOK.SURFACE,
   corner = CARD_CORNER.CARD,
   padding = CARD_PADDING.REGULAR,
-  shadow = CARD_SHADOW.NONE,
+  shadow: asked,
   hover = CARD_HOVER.NONE,
   lit = false,
   dashed = false,
+  invalid = false,
   className,
   ref,
   children,
@@ -239,19 +276,24 @@ export function Card({
   look?: CardLook;
   corner?: CardCorner;
   padding?: CardPadding;
-  shadow?: CardShadow;
+  /** The shadow it stands on; Geist's card shadow where none is asked for, but in a well. */
+  shadow?: CardShadow | undefined;
   /** How it answers the pointer resting on it, where a press covers it. */
   hover?: CardHover;
   /** Whether it holds its hover's look with no pointer on it, as while the menu it opened stands or its words are pointed at elsewhere. */
   lit?: boolean | undefined;
   /** Whether its edge is dashed, as the frame of what is missing is. */
   dashed?: boolean | undefined;
+  /** Whether what it holds stops its form, which shakes it and edges it in the danger ink. */
+  invalid?: boolean | undefined;
   /** The owner's own class, which names and places it and sets nothing of its frame. */
   className?: string | undefined;
   /** The card's element, for what measures against it. */
   ref?: Ref<HTMLElement> | undefined;
   children: ReactNode;
 }): React.JSX.Element {
+  const shadow = asked ?? defaultShadow(look);
+
   return (
     <ShadcnCard
       {...rest}
@@ -265,9 +307,40 @@ export function Card({
       data-hover={hover === CARD_HOVER.NONE ? undefined : hover}
       data-lit={lit ? "true" : undefined}
       data-dashed={dashed ? "true" : undefined}
+      data-invalid={invalid ? "true" : undefined}
+      noValidate={Element === CARD_ELEMENT.FORM ? true : undefined}
     >
       {children}
     </ShadcnCard>
+  );
+}
+
+/**
+ * A popup Base UI draws (a popover, a menu, a hover card) drawn as a card
+ * floating over the page, as its `render`: raised, at a menu's corner, on a
+ * menu's shadow, holding what Base UI hands it, so a floating surface wears
+ * the one edge every card does.
+ */
+export function MenuCardFrame({
+  as,
+  children,
+  ...props
+}: HTMLAttributes<HTMLElement> & {
+  as?: CardElement | undefined;
+  inert?: boolean | undefined;
+  ref?: Ref<HTMLElement> | undefined;
+}): React.JSX.Element {
+  return (
+    <Card
+      {...props}
+      {...(as === undefined ? {} : { as })}
+      look={CARD_LOOK.RAISED}
+      corner={CARD_CORNER.MENU}
+      shadow={CARD_SHADOW.MENU}
+      padding={CARD_PADDING.NONE}
+    >
+      {children}
+    </Card>
   );
 }
 

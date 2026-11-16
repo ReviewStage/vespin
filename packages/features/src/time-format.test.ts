@@ -15,6 +15,7 @@ import {
   scheduledText,
   sinceHeard,
   sinceText,
+  timeLeftText,
   untilText,
   workingTime,
 } from "./time-format.js";
@@ -54,6 +55,13 @@ test("a run's length counts in seconds, then minutes, then hours, then days past
   assert.equal(workingTime(47 * 3_600_000), "47h");
   assert.equal(workingTime((21 * 24 + 9) * 3_600_000 + 1_000), "21d 9h");
   assert.equal(workingTime(-5), "0s");
+});
+
+test("the time left counts down as a clock, a part second still counting, and stops at 0:00", () => {
+  assert.equal(timeLeftText(252_000), "4:12");
+  assert.equal(timeLeftText(251_200), "4:12");
+  assert.equal(timeLeftText(5_000), "0:05");
+  assert.equal(timeLeftText(-1), "0:00");
 });
 
 test("a calendar day is named in UTC whatever the zone the reader is in", () => {

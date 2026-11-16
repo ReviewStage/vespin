@@ -34,7 +34,7 @@ export const AGENT_GOAL_STATE = {
   BUDGET_LIMITED: "budget_limited",
 } as const;
 
-export type AgentGoalState = (typeof AGENT_GOAL_STATE)[keyof typeof AGENT_GOAL_STATE];
+type AgentGoalState = (typeof AGENT_GOAL_STATE)[keyof typeof AGENT_GOAL_STATE];
 
 /** The agent's goal as its transcript says it stands. */
 export interface AgentGoal {
@@ -55,7 +55,7 @@ export interface AgentGoal {
 export const GOAL_ASK_WAIT_MS = 30_000;
 
 /** A `/goal` line the developer sent, as what it asks of the goal. */
-export interface GoalAsked {
+interface GoalAsked {
   readonly ask: GoalAsk;
   /** Epoch milliseconds it was sent; none where the transcript does not say. */
   readonly sentAt: number | undefined;
@@ -249,7 +249,7 @@ export function goalControlLine(message: AgentTranscriptMessage): boolean {
 }
 
 /** The goal as it reads once a line asks a move of it, ahead of the harness's word: none where it asks the goal cleared. */
-export function goalAsked(goal: AgentGoal | undefined, asked: GoalAsked): AgentGoal | undefined {
+function goalAsked(goal: AgentGoal | undefined, asked: GoalAsked): AgentGoal | undefined {
   const { ask } = asked;
 
   switch (ask.kind) {

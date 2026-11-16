@@ -75,7 +75,7 @@ export function useTaskTicks(
   editable: boolean | undefined,
 ): TaskTicks {
   const writing = useThreadWriting();
-  const writes = usePullRequestWrites(writing?.agentId ?? "", writing?.onWritten ?? noop);
+  const writes = usePullRequestWrites(writing?.onWritten ?? noop);
   const { write } = writes;
 
   const draw = useCallback<MarkdownTaskTick>(

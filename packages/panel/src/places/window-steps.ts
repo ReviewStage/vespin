@@ -24,7 +24,7 @@
  * (`window-history.ts`'s `writeStep`).
  */
 
-import { linkOf, type ReadLink, taskLinkStep } from "@repo/features/link-grammar";
+import { linkOf, type ReadLink } from "@repo/features/link-grammar";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { type StripTab, tabKey, taggedStripTab } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
@@ -37,6 +37,7 @@ import type { InboxRoute } from "../inbox-route.js";
 import { workspaceMembersQuery } from "../live-reads.js";
 import type { RouteAccess } from "../route-gates.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
+import type { HistoryRows } from "./history-rows.js";
 import { placeParamsOf } from "./place-params.js";
 import {
   type PlaceThere,
@@ -606,22 +607,24 @@ export interface StepReach {
  * Which steps the window can still go to, each as its place's declaration
  * says (`routedStepStands`): where its gate lets it, what it names is still
  * there, a task's step by its task and its column's tab, and its workspace is
- * still the one listed. It keeps what the window has seen, as it is drawn:
- * every task ever listed, by its id and by the step its links name it by,
- * and the tabs each task's column last stood with.
+ * still the one listed. A task is read by its id (`history-rows.ts`), which
+ * keeps every task ever listed, by its id and by the step its links name it
+ * by; it keeps the tabs each task's column last stood with, as it is drawn.
  */
 export function useStepReach(input: {
   readonly access: RouteAccess;
   readonly tasks: Pick<
     TasksControl,
-    "boundFor" | "tasks" | "listFailed" | "mainTabs" | "workspace" | "workspaces"
+    "boundFor" | "listFailed" | "mainTabs" | "workspace" | "workspaces"
   >;
+  /** The task list's rows, by id. */
+  readonly rows: HistoryRows;
   /** Whether the window sees the column of the task bound for now: its tabs are known, and neither the Inbox nor a version history stands over it. */
   readonly columnSeen: boolean;
   /** What reach reads of the Automations pages beyond where they stand: the automations deleted (`automations-route.ts`). */
   readonly automations: Pick<AutomationsRoute, "deletedNow">;
 }): StepReach {
-  const { access, tasks, columnSeen, automations } = input;
+  const { access, tasks, rows, columnSeen, automations } = input;
   const { boundFor } = tasks;
   const router = useRouter();
   // The tabs each task's column stood with as the window last stood on it, so a step on a tab since closed is passed over.
@@ -633,17 +636,6 @@ export function useStepReach(input: {
   }
 
   const listedWorkspace = tasks.workspace?.id;
-  // Only grows, so writing it as the list is drawn is the same on every render.
-  const everListed = useRef(new Set<string>()).current;
-  // Each task ever listed by the step its links name it by, under its workspace, so a version history's address finds its task once it is deleted.
-  const everStepped = useRef(new Map<string, Map<string, string>>()).current;
-
-  for (const task of tasks.tasks) {
-    everListed.add(task.id);
-    const stepped = everStepped.get(task.workspaceId) ?? new Map<string, string>();
-    stepped.set(taskLinkStep(task), task.id);
-    everStepped.set(task.workspaceId, stepped);
-  }
 
   const historyTaskOf = (matches: RouteMatches) => {
     if (routedPlaceOf(matches, access) !== ROUTED_PLACE.VERSION_HISTORY) return undefined;
@@ -653,7 +645,8 @@ export function useStepReach(input: {
     if (workspace === undefined || taskId === undefined) return undefined;
     const home = workspaceOfSlug(tasks.workspaces, workspace)?.id;
 
-    return (home === undefined ? undefined : everStepped.get(home)?.get(taskId)) ?? taskId;
+    // Note that a task ever listed is found by the step its links name it by, so a version history's address finds its task once it is deleted.
+    return (home === undefined ? undefined : rows.everStepped(home, taskId)) ?? taskId;
   };
 
   // Whether the column's tab a task's step showed still stands on its strip, as far as the window last saw it; a task not seen since is taken to.
@@ -668,8 +661,8 @@ export function useStepReach(input: {
   const taskStands = (taskId: string) =>
     taskId === boundFor ||
     tasks.listFailed ||
-    !everListed.has(taskId) ||
-    tasks.tasks.some((task) => task.id === taskId);
+    !rows.everListed(taskId) ||
+    rows.task(taskId) !== undefined;
 
   // What a routed step's declaration reads to say whether it is still there (`routedStepStands`), a task's by what its step holds.
   const thereOf = (matches: RouteMatches, taskStep: TaskStep | undefined): PlaceThere => ({
@@ -704,8 +697,10 @@ export function useStepNames(input: {
   readonly access: RouteAccess;
   readonly tasks: Pick<
     TasksControl,
-    "tasks" | "activeTaskId" | "agents" | "liveAgents" | "pages" | "workspace"
+    "typedNames" | "activeTaskId" | "agents" | "pages" | "workspace"
   >;
+  /** The task list's rows, by id. */
+  readonly rows: HistoryRows;
   /** What naming reads of the Inbox beyond where it stands: the item a door chose, by its id (`inbox-route.ts`). */
   readonly inbox: Pick<InboxRoute, "choiceOf">;
   readonly historyTaskOf: StepReach["historyTaskOf"];
@@ -716,7 +711,7 @@ export function useStepNames(input: {
   /** The steps known as they stand. */
   readonly entries: () => readonly StepEntry[];
 }): (to: Place) => StepTitle | undefined {
-  const { access, tasks, inbox, historyTaskOf, personStanding, entries } = input;
+  const { access, tasks, rows, inbox, historyTaskOf, personStanding, entries } = input;
   const router = useRouter();
 
   const personListed = useSyncExternalStore(
@@ -751,5 +746,8 @@ export function useStepNames(input: {
     );
   };
 
-  return (to: Place) => liveStepTitle(routedNamed(to), titleOf(to), tasks, members);
+  const { typedNames, activeTaskId, agents, pages } = tasks;
+  const naming = { typedNames, activeTaskId, agents, pages, rows };
+
+  return (to: Place) => liveStepTitle(routedNamed(to), titleOf(to), naming, members);
 }

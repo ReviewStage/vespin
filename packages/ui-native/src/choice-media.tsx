@@ -1,19 +1,22 @@
-// choice-media.tsx -- what one option of a decide ask carries, under its row on the choice card: every picture, recording, page, and address as an equal tile with its caption, in React Native views SwiftUI hosts.
+// choice-media.tsx -- what one option of a decide ask carries, under its row on the choice card: every picture, recording, sound clip, page, and address as an equal tile with its caption, in React Native views SwiftUI hosts.
 
 import { SymbolView } from "expo-symbols";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
+import { AudioClip } from "./audio-clip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { Picture } from "./markdown.js";
+import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
-/** What a piece of an option's media is drawn as: a picture, a recording in the system's player, a page the agent showed, or a live address. */
+/** What a piece of an option's media is drawn as: a picture, a recording in the system's player, a sound clip in its strip, a page the agent showed, or a live address. */
 export const CHOICE_MEDIA = {
   PICTURE: "picture",
   VIDEO: "video",
+  AUDIO: "audio",
   PAGE: "page",
   LINK: "link",
 } as const;
@@ -25,7 +28,7 @@ export type ChoiceMedia = {
   readonly kind: ChoiceMediaKind;
   /** Its caption, a page's title, or an address's words, under its tile. */
   readonly title: string;
-  /** The file a picture or a recording is drawn from; none while its bytes are on their way. */
+  /** The file a picture, a recording, or a sound clip is drawn from; none while its bytes are on their way. */
   readonly source?: string | undefined;
   /** Opens a page or an address, or a recording the system's player cannot read. */
   readonly onOpen?: (() => void) | undefined;
@@ -77,7 +80,7 @@ function SymbolTile({ piece }: { readonly piece: ChoiceMedia }) {
   if (symbol === undefined) return null;
 
   return (
-    <Pressable
+    <Press
       onPress={() => piece.onOpen?.()}
       accessibilityRole={piece.kind === CHOICE_MEDIA.PAGE ? "button" : "link"}
       accessibilityLabel={`${TILE_WORD[piece.kind] ?? ""}: ${piece.title}`}
@@ -85,17 +88,18 @@ function SymbolTile({ piece }: { readonly piece: ChoiceMedia }) {
       style={[styles.symbol, { backgroundColor: colors.WELL }]}
     >
       <SymbolView name={glyphSymbol(symbol)} size={MARK_SIZE.LEAD} tintColor={colors.TEXT_MUTED} />
-    </Pressable>
+    </Press>
   );
 }
 
-/** One piece as its tile: a picture opening full screen, a recording in the system's player, or a page's or an address's symbol, its caption under it. */
+/** One piece as its tile: a picture opening full screen, a recording in the system's player, a sound clip in its strip, or a page's or an address's symbol, its caption under it. */
 function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
   const colors = useColors();
   const large = useAccessibilitySize();
 
   return (
-    <View style={large ? styles.wholeTile : styles.tile}>
+    // Note that a sound clip's strip takes the row's width, since half of a phone's leaves its bar no room beside its time.
+    <View style={large || piece.kind === CHOICE_MEDIA.AUDIO ? styles.wholeTile : styles.tile}>
       {piece.kind === CHOICE_MEDIA.PICTURE ? (
         <Picture source={piece.source} alt={piece.title} tileAspect={TILE_ASPECT} />
       ) : piece.kind === CHOICE_MEDIA.VIDEO ? (
@@ -105,6 +109,8 @@ function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
           onOpenElsewhere={piece.onOpen}
           tileAspect={TILE_ASPECT}
         />
+      ) : piece.kind === CHOICE_MEDIA.AUDIO ? (
+        <AudioClip source={piece.source} label={piece.title} />
       ) : (
         <SymbolTile piece={piece} />
       )}
@@ -124,7 +130,8 @@ function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
  * accessibility size with its whole caption, wrapping under: as the panel draws them, so a choice between designs reads the
  * same on a phone. A picture stands whole in its tile and opens full screen
  * on a press, as a message's does; a recording plays in the system's
- * player, full screen from its controls; a page and an address stand as
+ * player, full screen from its controls; a sound clip plays in its strip,
+ * which stands no taller than it needs; a page and an address stand as
  * their symbol and open on a press. Each caption is one line, cut short
  * where it runs long, and each tile is heard by its whole caption.
  */

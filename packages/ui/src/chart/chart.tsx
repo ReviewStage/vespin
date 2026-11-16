@@ -19,6 +19,7 @@ import * as React from "react";
 import type { TooltipValueType } from "recharts";
 import * as RechartsPrimitive from "recharts";
 import { cn } from "../cn.js";
+import { MenuCardFrame } from "../components/card/card.js";
 import { isSafeChartCssColor, isSafeChartCssKey } from "./chart-css.js";
 
 // Format: { THEME_NAME: CSS_SELECTOR }
@@ -186,6 +187,17 @@ function ChartTooltipSwatch({ color }: { color: string | undefined }) {
 }
 
 /**
+ * The tooltip's frame: a card floating over the plot (`MenuCardFrame`),
+ * raised at a menu's corner on a menu's shadow, so it wears the one edge
+ * every card does; `chart.css` lays out what it holds. Note that its grid
+ * and its inset are utilities here, because the card's own `block` and
+ * `p-0` are and would otherwise win over the stylesheet's layer.
+ */
+function ChartTooltipCard({ children }: { children: React.ReactNode }) {
+  return <MenuCardFrame className="ui-chart-tooltip grid px-2 py-1.5">{children}</MenuCardFrame>;
+}
+
+/**
  * A tooltip for a chart that is not recharts', one it places itself: the
  * same floating card as `ChartTooltipContent`, over `label`, with one row per
  * series under it, each its color's swatch, its name, and its value.
@@ -203,7 +215,7 @@ function ChartTooltipFrame({
   }[];
 }) {
   return (
-    <div className="ui-chart-tooltip">
+    <ChartTooltipCard>
       <div className="ui-chart-tooltip-label">{label}</div>
       {rows.map((row) => (
         <ChartTooltipRow
@@ -213,7 +225,7 @@ function ChartTooltipFrame({
           value={<span className="ui-chart-tooltip-value">{row.value}</span>}
         />
       ))}
-    </div>
+    </ChartTooltipCard>
   );
 }
 
@@ -273,7 +285,7 @@ function ChartTooltipContent({
   }
 
   return (
-    <div className="ui-chart-tooltip">
+    <ChartTooltipCard>
       {tooltipLabel}
       <div className="ui-chart-tooltip-rows">
         {payload
@@ -315,7 +327,7 @@ function ChartTooltipContent({
             );
           })}
       </div>
-    </div>
+    </ChartTooltipCard>
   );
 }
 

@@ -21,6 +21,7 @@
  */
 
 import { Predicate } from "effect";
+import type { IntegrationProvider } from "./integration-wire.js";
 import { COMPUTER_ACTION, type ComputerAction } from "./machine-command-wire.js";
 import { countWords } from "./words.js";
 
@@ -111,7 +112,7 @@ export const CALL_KIND = {
   CREATE_TASK: "create-task",
   SHOW_PAGE: "show-page",
   READ_PAGE: "read-page",
-  /** Pictures a coding agent showed from its sandbox (`show_image`), drawn as a row only where the call was refused; a shown set draws as its pictures. */
+  /** Pictures a coding agent showed from its sandbox (`show_media`), drawn as a row only where the call was refused; a shown set draws as its pictures. */
   SHOW_IMAGE: "show-image",
   /** A pull request a coding agent opened (`open_pull_request`), its row naming it by its number and title, which opens its Pull request tab; a refusal folds open its reason instead. */
   OPEN_PULL_REQUEST: "open-pull-request",
@@ -159,7 +160,7 @@ export const CALL_WORDS = {
   [CALL_KIND.READ_FILE]: { verb: "Read", code: true },
   [CALL_KIND.WRITE_FILE]: { verb: "Wrote", code: true },
   [CALL_KIND.EDIT]: { verb: "Edited", code: true },
-  [CALL_KIND.SEARCH]: { verb: "Searched", code: true },
+  [CALL_KIND.SEARCH]: { verb: "Searched for", code: true },
   [CALL_KIND.WEB_SEARCH]: { verb: "Searched the web for", code: false },
   [CALL_KIND.WEB_PAGE]: { verb: "Fetched", code: true },
   [CALL_KIND.LOAD_SKILL]: { verb: "Loaded skill", code: true },
@@ -183,7 +184,7 @@ export const CALL_WORDS = {
   [CALL_KIND.READ_AGENT]: { verb: "Read the agent", code: false },
   [CALL_KIND.MESSAGE_AGENT]: { verb: "Messaged the agent", code: false },
   [CALL_KIND.START_AGENT]: { verb: "Started an agent", code: false },
-  [CALL_KIND.ADD_SUGGESTION]: { verb: "Suggested", code: false },
+  [CALL_KIND.ADD_SUGGESTION]: { verb: "Suggested:", code: false },
   [CALL_KIND.ARCHIVE_AGENT]: { verb: "Archived the agent", code: false },
   [CALL_KIND.UNARCHIVE_AGENT]: { verb: "Unarchived the agent", code: false },
   [CALL_KIND.LIST_MODELS]: { verb: "Listed the models", code: false },
@@ -232,9 +233,6 @@ export const CALL_WORDS = {
 /** What a row of a call that ran on the developer's own Mac says of where it ran, beside its line. */
 const ON_YOUR_MAC = "On your Mac";
 
-/** What a row of a call in the agent's own browser says of where it ran, beside its line. */
-const IN_THE_BROWSER = "Browser";
-
 /** What each of the browser's actions says it did, on a browser call's line. */
 const BROWSER_ACTION_WORDS: ReadonlyMap<string, string> = new Map([
   ["list", "listed the tabs"],
@@ -270,6 +268,27 @@ const COMPUTER_ACTION_WORDS = {
   [COMPUTER_ACTION.STOP_RECORDING]: "Stopped recording",
 } as const satisfies { readonly [Action in ComputerAction]: string };
 
+/** What a computer call's line says it would have done where its machine ran nothing, as "Didn't look at" Notes. */
+const COMPUTER_ACTION_NOT_RUN_WORDS = {
+  [COMPUTER_ACTION.LIST_APPS]: "Didn't list the apps",
+  [COMPUTER_ACTION.GET_APP_STATE]: "Didn't look at",
+  [COMPUTER_ACTION.CLICK]: "Didn't click in",
+  [COMPUTER_ACTION.TYPE_TEXT]: "Didn't type in",
+  [COMPUTER_ACTION.PRESS_KEY]: "Didn't press a key in",
+  [COMPUTER_ACTION.SCROLL]: "Didn't scroll in",
+  [COMPUTER_ACTION.DRAG]: "Didn't drag in",
+  [COMPUTER_ACTION.SET_VALUE]: "Didn't set a value in",
+  [COMPUTER_ACTION.PERFORM_SECONDARY_ACTION]: "Didn't act in",
+  [COMPUTER_ACTION.RECORD]: "Didn't start recording",
+  [COMPUTER_ACTION.STOP_RECORDING]: "Didn't stop recording",
+} as const satisfies { readonly [Action in ComputerAction]: string };
+
+/** What a call that ran nothing on its machine says in its kind's verb's place: a command not run, or an app not used where its action is one this build does not know. */
+export const MACHINE_NOT_RUN_WORDS = {
+  COMMAND: "Didn't run",
+  APP: "Didn't use",
+} as const;
+
 const COMPUTER_ACTIONS: ReadonlySet<string> = new Set(Object.values(COMPUTER_ACTION));
 
 /** Whether a call's action is one this build knows. */
@@ -284,11 +303,19 @@ export function computerCallWords(action: string | undefined): string | undefine
     : COMPUTER_ACTION_WORDS[action];
 }
 
+/** What a computer call's line says where its machine ran nothing: what it would have done, or that it used no app where its action is one this build does not know. */
+export function computerNotRunWords(action: string | undefined): string {
+  return action === undefined || !isComputerAction(action)
+    ? MACHINE_NOT_RUN_WORDS.APP
+    : COMPUTER_ACTION_NOT_RUN_WORDS[action];
+}
+
 /**
  * What a browser call's line says it did, in place of its kind's verb: each
  * action it named once, in the order first named, and "in" where the tab it
- * acted on follows as the subject; nothing where it named no action this
- * build knows, so the kind's own verb stands.
+ * acted on follows as the subject, or "in the browser" where it names none;
+ * nothing where it named no action this build knows, so the kind's own verb
+ * stands.
  */
 export function browserCallWords(
   actions: readonly string[],
@@ -301,7 +328,8 @@ export function browserCallWords(
   if (said === "") return undefined;
   const line = `${said.charAt(0).toUpperCase()}${said.slice(1)}`;
 
-  return tabNamed ? `${line} in` : line;
+  // Note that a call naming no tab names the browser itself, since its row wears no tag of where it ran.
+  return tabNamed ? `${line} in` : `${line} in the browser`;
 }
 
 /**
@@ -354,6 +382,7 @@ const MADE_CALL_WORDS = {
   [CALL_KIND.RESOLVE_THREAD]: "Resolved a thread on",
   [CALL_KIND.REOPEN_THREAD]: "Reopened a thread on",
   [CALL_KIND.INBOX_POST]: "Posted",
+  [CALL_KIND.INBOX_THREAD_READ]: "Read",
   [CALL_KIND.INBOX_WITHDRAW]: "Withdrew an ask on",
   [CALL_KIND.CREATE_TASK]: "Made",
   [CALL_KIND.READ_TASK]: "Read",
@@ -373,23 +402,66 @@ export function madeCallLine(kind: MadeCallKind): CallLine {
   return { verb: MADE_CALL_WORDS[kind], subject: undefined, code: false };
 }
 
+/**
+ * How the line of a search of a server's tools reads where the server's chip
+ * follows its verb: "Searched", then "tools for" and the query in quotes,
+ * so the row reads "Searched" then the server's chip then "tools for “send
+ * message”"; "tools" alone for a search that named no query.
+ */
+export function searchToolsLine(query: string | undefined): CallLine {
+  const subject = query === undefined || query === "" ? "tools" : `tools for “${query}”`;
+
+  return { verb: "Searched", subject, code: false };
+}
+
 /** Whether a call is a shell command, wherever it ran: its line may say its description, and its body draws it behind a prompt. */
 export function isCommandKind(kind: CallKind): boolean {
   return kind === CALL_KIND.COMMAND || kind === CALL_KIND.MACHINE_COMMAND;
 }
 
 /**
+ * Whether a call's reader leads its row with the mark of the integration it
+ * ran on: the panel and the iPhone do, so the mark already says the
+ * provider; a copy carries no mark, so its words must say it.
+ */
+export const CALL_MARK = {
+  LEADS: "leads",
+  NONE: "none",
+} as const;
+
+export type CallMark = (typeof CALL_MARK)[keyof typeof CALL_MARK];
+
+/** What says where a call ran: its kind, and for a call of an MCP server's tool, the server, the integration it is, and the account among several it ran on (`ToolCallView`). */
+export interface PlacedCall {
+  readonly kind: CallKind;
+  readonly server?: string | undefined;
+  readonly provider?: IntegrationProvider | undefined;
+  readonly account?: string | undefined;
+}
+
+/**
  * Where a call ran, as its row says beside its line, or nothing for a call
  * that ran where its tab says. A command on a Mac ran on the Mac of the
- * agent's starter, whom a row that knows them draws in these words' place;
- * a call of an MCP server's tool ran on the server it names.
+ * agent's starter, whom a row that knows them draws in these words' place.
+ * A call of an MCP server's tool, or a search of its tools, says only what
+ * its row's mark does not: under the mark, the account among its owner's
+ * several ("Acme"), a server of no integration's by its name, and nothing
+ * for an integration's lone account; with no mark, the server as its card
+ * names it, which says the account too ("Linear · Acme"). A browser call
+ * says none, since its icon and its words already say the browser.
  */
-export function callPlace(kind: CallKind, server?: string): string | undefined {
-  if (kind === CALL_KIND.MCP_TOOL || kind === CALL_KIND.SEARCH_TOOLS) return server;
+export function callPlace(call: PlacedCall, mark: CallMark): string | undefined {
+  const { kind, server, provider, account } = call;
 
-  if (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) return ON_YOUR_MAC;
+  if (kind === CALL_KIND.MCP_TOOL || kind === CALL_KIND.SEARCH_TOOLS) {
+    if (mark === CALL_MARK.NONE || provider === undefined) return server;
 
-  return kind === CALL_KIND.BROWSER ? IN_THE_BROWSER : undefined;
+    return account;
+  }
+
+  return kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER
+    ? ON_YOUR_MAC
+    : undefined;
 }
 
 /** What a call's line says: the verb, or a described command's purpose, then the subject, and whether the subject is code. */
@@ -495,7 +567,7 @@ export const ROW_PART = {
   WORDS: "words",
   /** A call, which runs together with the calls beside it, and which a group counts. */
   CALL: "call",
-  /** A call that stands on a row of its own, as an agent's to-do list does. */
+  /** A call that stands on a row of its own, as a set of pictures an agent showed does. */
   LONE_CALL: "lone-call",
   /** A subagent, which runs together with the calls beside it, and which a group counts apart from the calls. */
   SUBAGENT: "subagent",
@@ -603,14 +675,14 @@ export function sameTurnRow<B>(a: TurnRow<B>, b: TurnRow<B>): boolean {
 }
 
 /** What a run's blocks hold, as its group's line counts them. */
-export interface Held {
+interface Held {
   readonly calls: number;
   readonly subagents: number;
   readonly startedAgents: number;
 }
 
-/** What a group's line says it holds: its calls, a coding agent's start among them, then its subagents, in the same words while the turn moves and once it has finished; a whole turn folded closed says its work in the same words (`turnWorkSummary`). */
-export function groupSummary({ calls, subagents, startedAgents }: Held): string {
+/** What a group's line says it holds: its calls, a coding agent's start among them, then its subagents, in the same words while the turn moves and once it has finished. */
+function groupSummary({ calls, subagents, startedAgents }: Held): string {
   const tools = calls + startedAgents;
 
   const said = [

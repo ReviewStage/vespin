@@ -194,7 +194,7 @@ export interface DeviceCaller extends HostedCaller {
  * device's caller, which the device-agents procedures and the runner token
  * route both take.
  */
-export const deviceCallerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
+const deviceCallerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   request: Request,
 ): Effect.fn.Return<DeviceCaller, HostedRefusal, DatabaseServices> {
   const host = yield* hostCallerOf(request);

@@ -124,9 +124,9 @@ const githubImageEndpoint = /* @__PURE__ */ Effect.fn("web/agentGitHubImageEndpo
   if (!hasRepository(agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
   const read = yield* Effect.gen(function* () {
-    const { token } = yield* agentPullRequestReach(userId, agent);
+    const { bearer } = yield* agentPullRequestReach(userId, agent);
 
-    return yield* githubImage(token, agent.repository, image);
+    return yield* githubImage(bearer, agent.repository, image);
   }).pipe(githubReadRefusal);
 
   if (Option.isNone(read)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
@@ -175,7 +175,7 @@ const inboxAttachmentEndpoint = /* @__PURE__ */ Effect.fn("web/inboxAttachmentEn
 
 /**
  * GET serves one picture a tool answered an agent, kept beside its
- * transcript (`coder-host/show-image.ts`, `browser/browser-tool.ts`), as
+ * transcript (`coder-host/show-media.ts`, `browser/browser-tool.ts`), as
  * its bytes under the media type the service sniffed them to be, to whoever
  * may read the agent; one of
  * its workers' where the path names the delegation call, read from that

@@ -50,7 +50,7 @@ const numberedSection = (ownerId: string) =>
     const slug = yield* slugOf(workspace);
     const words = `Follow [@Rollout](${LINK_ORIGIN}/${slug}/task/${created.number}#rollout).`;
 
-    return { workspace, task: { ...created, document: DESCRIPTION }, words };
+    return { workspace, task: { ...created, description: DESCRIPTION }, words };
   });
 
 /** A task of the owner's in a workspace of its own, which the message's agent works on. */
@@ -59,7 +59,7 @@ const agentTask = (ownerId: string) =>
     const workspace = yield* openWorkspace(ownerId);
     const created = yield* createTask(ownerId, { name: "Billing", organizationId: workspace });
 
-    return { workspace, task: { ...created, document: DESCRIPTION } };
+    return { workspace, task: { ...created, description: DESCRIPTION } };
   });
 
 it.layer(getTestDB())("a task a message names by its number", (it) => {

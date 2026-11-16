@@ -21,7 +21,7 @@ import { SwitchRow } from "./switch-row.js";
  * value and words, the one chosen, and what picking one does, which stores
  * that option and records which of its own was picked.
  */
-export interface OwnOptions {
+interface OwnOptions {
   /** The schema's option every own option stores; listed itself only while it is stored and no own option is chosen. */
   readonly token: string;
   /** Each own option by its value and words, which are a person's own and kept masked in a screen recording, and the acts its ⋯ opens. */

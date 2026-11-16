@@ -51,7 +51,7 @@ import { agentSandboxName, agentSandboxOf } from "../agent-sandbox-open.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { type RepositoryCredential, sandboxFirewall } from "../sandbox-firewall.js";
 import { CODER } from "./bounds.js";
-import { agentRepositoryToken } from "./checkout.js";
+import { agentRepositoryToken, repositoryCredentialOf } from "./checkout.js";
 
 export const SNAPSHOT = {
   /** The most a Start waits on the copy, the source's sandbox woken and the push included. */
@@ -297,7 +297,7 @@ export const copySourceWork = /* @__PURE__ */ Effect.fn("web/copySourceWork")(fu
       sessionId: session.sessionId,
       branch: snapshotBranch(source, forked, idempotencyKey),
       message: `Snapshot of ${source.title ?? source.model} for ${forked ? TAKEN_UP.FORKED : TAKEN_UP.CONTINUED} agent`,
-      credential: agentRepositoryToken(target, source),
+      credential: Effect.map(agentRepositoryToken(target, source), repositoryCredentialOf),
     });
   }).pipe(
     Effect.catch((failure) =>

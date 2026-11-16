@@ -35,7 +35,7 @@ async function pictureFile(address: string, name: string, pdf: boolean): Promise
   if (named === undefined) return undefined;
 
   const read = askAct(ACT_KIND.TASKS_PICTURE_READ, {
-    planId: named.taskId,
+    taskId: named.taskId,
     attachmentId: named.attachmentId,
   }).catch(() => undefined);
 

@@ -11,7 +11,7 @@
 
 import type { AdminHarnessReliability } from "@repo/features/admin-answer-wire";
 import type { AdminCost, AdminCostHarness } from "@repo/features/admin-cost-wire";
-import { ADMIN_RELIABILITY_WINDOWS, type AdminMetricsWindow } from "@repo/features/admin-wire";
+import { ADMIN_RELIABILITY_WINDOWS } from "@repo/features/admin-wire";
 import { AGENT_RUNTIME, type AgentRuntime } from "@repo/features/agent-wire";
 import { formatCompact, formatCount, formatPercent, formatUsd } from "@repo/features/number-format";
 import { readFailedWords } from "@repo/features/words";
@@ -26,14 +26,19 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useAdminDoors } from "../admin-doors.js";
 import { adminAgentsQuery, useAdminSignOut } from "../admin-queries.js";
-import { adminReadView } from "../admin-read-view.js";
+import {
+  type AdminRosterChoice,
+  type AdminScreenShell,
+  type AdminWindowChoice,
+  adminReadView,
+} from "../admin-read-view.js";
 import { AGENT_FAILURES_SERIES, agentFailureRows } from "../charts/agent-failures.js";
 import { BreakdownChart, BreakdownChartSkeleton } from "../charts/breakdown-chart.js";
 import { CHART_PAIR_EVEN } from "../charts/chart-frame.js";
 import { AdminSection, STAT_LAYOUT, StatCards, type StatSpec } from "../charts/stat-card.js";
 import { AdminViewOptions, windowWords } from "../chrome/controls.js";
 import { PageNote } from "../chrome/notes.js";
-import { AdminPage, type ViewerAccount } from "../chrome/page-header.js";
+import { AdminPage } from "../chrome/page-header.js";
 import { PageSkeleton } from "../chrome/page-skeleton.js";
 import { reliabilityWindow, windowedReadQuery } from "../routing.js";
 
@@ -47,13 +52,14 @@ const AGENTS_NOTE =
 const RUNTIME_LABEL = {
   [AGENT_RUNTIME.CLAUDE_CODE]: "Claude Code",
   [AGENT_RUNTIME.CODEX]: "Codex",
+  [AGENT_RUNTIME.CURSOR]: "Cursor",
   [AGENT_RUNTIME.RETIRED]: "Retired runtime",
 } as const satisfies Record<AgentRuntime, string>;
 
 const NO_RUNTIME_LABEL = "Not recorded";
 
-/** How many harnesses the table's skeleton stands a row for: the two live ones. */
-const HARNESS_SKELETON_ROWS = 2;
+/** How many harnesses the table's skeleton stands a row for: the three live ones. */
+const HARNESS_SKELETON_ROWS = 3;
 
 const NO_FIGURE = "—";
 
@@ -310,16 +316,7 @@ export function AgentsScreen({
   account,
   onSignOut,
   frame,
-}: {
-  hideAdmins: boolean;
-  onHideAdminsChange: (hide: boolean) => void;
-  windowDays: AdminMetricsWindow;
-  onWindowDaysChange: (windowDays: AdminMetricsWindow) => void;
-  account: ViewerAccount | undefined;
-  onSignOut: () => Promise<void>;
-  /** Applied around every answer but the gate's own cards, which stand alone. */
-  frame: (content: React.JSX.Element) => React.JSX.Element;
-}): React.JSX.Element {
+}: AdminScreenShell & AdminRosterChoice & AdminWindowChoice): React.JSX.Element {
   const { reads, gate } = useAdminDoors();
   // Note that the page reads both answers over Reliability's windows, the week or the month, so their figures cover the same days.
   const shownWindow = reliabilityWindow(windowDays);
