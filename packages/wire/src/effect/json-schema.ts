@@ -197,12 +197,15 @@ function betweenBounds(payload: Schema.Json | undefined): Option.Option<Bounds> 
 }
 
 /**
- * Flags that leave what a pattern matches as its source says: a `pattern` is
- * read as a Unicode expression, and a global or indices flag changes nothing
- * a single test admits. Any other flag (`i`, `m`, `s`, `y`, `v`) changes the
- * match, so the source alone would show the model a different rule.
+ * The flags of a pattern whose source says what it matches: a `pattern` is
+ * read as a Unicode expression, so its declaration must be one (`u`), and a
+ * global or indices flag changes nothing a single test admits. Without `u` the
+ * source can mean another rule or none (`/^..$/` admits one emoji, `/\\a/` is
+ * no Unicode expression), and any other flag (`i`, `m`, `s`, `y`, `v`) changes
+ * the match, so the source alone would show the model a different rule.
+ * `RegExp.prototype.flags` spells its flags in one fixed order.
  */
-const SHOWABLE_PATTERN_FLAGS = /^[dgu]*$/u;
+const SHOWABLE_PATTERN_FLAGS = /^d?g?u$/u;
 
 const readPattern = Schema.decodeUnknownOption(
   Schema.Struct({

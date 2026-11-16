@@ -82,20 +82,31 @@ test("a range emits its ends as minimum and maximum, or exclusively where it exc
   );
 });
 
-test("a strict bound emits as exclusiveMinimum or exclusiveMaximum", () => {
-  assert.deepEqual(
-    emitJsonSchema(Schema.Number.check(Schema.isLessThan(10), Schema.isGreaterThan(0))),
-    { type: "number", exclusiveMinimum: 0, exclusiveMaximum: 10 },
-  );
+test("a lower bound that excludes its end emits as exclusiveMinimum", () => {
+  assert.deepEqual(emitJsonSchema(Schema.Number.check(Schema.isGreaterThan(0))), {
+    type: "number",
+    exclusiveMinimum: 0,
+  });
 });
 
-test("a pattern emits its source, and one whose flags change the match is refused as it is emitted", () => {
+test("an upper bound that excludes its end emits as exclusiveMaximum", () => {
+  assert.deepEqual(emitJsonSchema(Schema.Number.check(Schema.isLessThan(10))), {
+    type: "number",
+    exclusiveMaximum: 10,
+  });
+});
+
+test("a Unicode pattern emits its source, and one whose source would show another rule is refused as it is emitted", () => {
   assert.deepEqual(
     emitJsonSchema(Schema.String.check(Schema.isMaxLength(80), Schema.isPattern(/^[a-z]+$/u))),
     { type: "string", maxLength: 80, pattern: "^[a-z]+$" },
   );
-  assert.throws(
-    () => emitJsonSchema(Schema.String.check(Schema.isPattern(/^[a-z]+$/iu))),
-    /no bound the node can say/u,
-  );
+
+  // Note that without `u` the source `^..$` admits one emoji and with it two, and `i` widens the match.
+  for (const pattern of [/^..$/, /^[a-z]+$/iu]) {
+    assert.throws(
+      () => emitJsonSchema(Schema.String.check(Schema.isPattern(pattern))),
+      /no bound the node can say/u,
+    );
+  }
 });
