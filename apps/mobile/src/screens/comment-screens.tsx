@@ -8,6 +8,7 @@ import { readFailedWords, readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import {
   AskNote,
+  AttachedPictures,
   BAR_TITLE,
   BUTTON_LOOK,
   Composer,
@@ -32,6 +33,7 @@ import { useOpenLink } from "../open-link.js";
 import { useInFront } from "../place-columns.js";
 import { useOnOwnTab } from "../tab-route.js";
 import {
+  type CommentReply,
   threadMessages,
   threadOpen,
   useCommentMedia,
@@ -55,6 +57,18 @@ const WORDS = {
   RESOLVE: "Resolve",
   REOPEN: "Reopen",
 } as const;
+
+/** A comment field's head: the pictures it carries, each taken off on a press, and what its last send or a picture's bound said; none while it holds neither. */
+function fieldHead(pictures: CommentReply["pictures"], note: string | undefined) {
+  if (pictures.attached.length === 0 && note === undefined) return undefined;
+
+  return (
+    <>
+      <AttachedPictures pictures={pictures.attached} onDetach={pictures.detach} />
+      {note === undefined ? null : <AskNote words={note} />}
+    </>
+  );
+}
 
 /** What a thread's page says while the task's comments are first read. */
 const READING_COMMENTS = readingWords("the comments");
@@ -283,7 +297,9 @@ export function CommentThread({
     onWords: reply.onWords,
     sendable: reply.sendable,
     onSend: reply.send,
-    head: reply.note === undefined ? undefined : <AskNote words={reply.note} />,
+    head: fieldHead(reply.pictures, reply.note),
+    onAdd: reply.pictures.attach,
+    onDropPictures: reply.pictures.drop,
   };
 
   // Note that a split view's detail bar stands Resolve or Reopen among the page's acts, as a compact window's toolbar stands it, since a column draws no stack toolbar.
@@ -494,7 +510,9 @@ export function NewComment({
     onWords: start.onWords,
     sendable: start.sendable,
     onSend: send,
-    head: start.note === undefined ? undefined : <AskNote words={start.note} />,
+    head: fieldHead(start.pictures, start.note),
+    onAdd: start.pictures.attach,
+    onDropPictures: start.pictures.drop,
   };
 
   const empty = <BlockState overview={overview} />;
