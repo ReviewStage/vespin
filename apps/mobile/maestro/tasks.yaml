@@ -7,6 +7,8 @@ appId: dev.vespin.ios
 # a run left in landscape fails every flow after it.
 onFlowComplete:
   - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # Launched on the host's Inbox fixture, as `inbox.yaml` is, so the tree holds
 # the fixture's tasks, pinned, sectioned, and in two repositories, and no
@@ -258,11 +260,21 @@ onFlowComplete:
     visible: "Invites sent in the staging workspace.*"
     timeout: 90000
 - takeScreenshot: task-page
-- tapOn: "More"
+# Note that a page pushed over an iPad's detail column stands Open in
+# browser in the column's bar itself, and a compact window keeps it in ⋯
+# (`PageScreen`'s `inColumn`), so ⋯ is opened, and closed, only there.
+- runFlow:
+    file: subflows/bar-act.yaml
+    env:
+      ACT: Open in browser
 - assertVisible: "Open in browser"
 - takeScreenshot: task-page-menu
 - runFlow:
-    file: subflows/dismiss.yaml
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - runFlow:
+          file: subflows/dismiss.yaml
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd

@@ -10,6 +10,8 @@ appId: dev.vespin.ios
 # text styles and React Native's font scale both follow. Each wait is capped
 # at five seconds, since an agent's page draws its turn still running, whose
 # mark never stops moving.
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # The Inbox, on the host's Inbox fixture as `inbox.yaml` launches it, so no
 # server is reached: each row heard as one element by its title, so a flow
@@ -119,11 +121,20 @@ appId: dev.vespin.ios
     timeout: 30000
 - tapOn:
     id: "workspace-switcher"
-# Note that the switcher's list is scrolled to the account's row, which at
-# this text size a short window, the iPhone Duo's, stands below its foot.
-- scrollUntilVisible:
-    element: ".*, Settings"
-    direction: DOWN
+# Note that the switcher is waited for before its list is scrolled to the
+# account's row, which at this text size a short window, the iPhone Duo's,
+# stands below its foot, and that an iPad's switcher, a popover a swipe off
+# it closes, is not scrolled at all.
+- extendedWaitUntil:
+    visible: "Ada Lovelace, Personal workspace"
+    timeout: 10000
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - scrollUntilVisible:
+          element: ".*, Settings"
+          direction: DOWN
 - tapOn: ".*, Settings"
 - waitForAnimationToEnd:
     timeout: 5000
