@@ -15,6 +15,14 @@ export {
   StepList,
 } from "./ask-card.js";
 
+export {
+  ConfirmAsk,
+  WORDS_ASK_KIND,
+  WordsAsk,
+  type WordsAskAct,
+  type WordsAskKind,
+} from "./asks.js";
+
 export { AuthPage } from "./auth-page.js";
 
 export { type BarSubtitle, StackBarTitle } from "./bar-title.js";
@@ -203,7 +211,6 @@ export {
 } from "./pull-request-look.js";
 
 export {
-  ConfirmAsk,
   githubFace,
   MARK_FACE,
   type MarkFace,
@@ -211,10 +218,6 @@ export {
   MergeActRow,
   type MergeMethodChoice,
   PullRequestHead,
-  WORDS_ASK_KIND,
-  WordsAsk,
-  type WordsAskAct,
-  type WordsAskKind,
   WriteNoteRow,
 } from "./pull-request-page.js";
 
@@ -319,6 +322,9 @@ export {
   type LinkRowTone,
   RelationRow,
   TaskHead,
+  VERSION_WRITER,
+  VersionRow,
+  type VersionWriter,
   WordsRow,
 } from "./task-rows.js";
 
@@ -344,7 +350,7 @@ export {
 
 export { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 
-export { MARK_SIZE, SPACE } from "./tokens/space.js";
+export { MARK_SIZE, SPACE, TAB_BAR_ROOM } from "./tokens/space.js";
 
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
@@ -379,7 +385,15 @@ export {
   useAsyncAction,
 } from "./use-async-action.js";
 
+export { useThreeColumns, useWindowSizeClass } from "./use-window-size-class.js";
+
 export { Video } from "./video.js";
+
+export {
+  WINDOW_SIZE_CLASS,
+  type WindowSizeClass,
+  windowSizeClass,
+} from "./window-size-class.js";
 
 export {
   newWorkspaceAction,

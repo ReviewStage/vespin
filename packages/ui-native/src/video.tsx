@@ -1,11 +1,15 @@
-// video.tsx -- a video a message carried, played in iOS's own player through expo-video, at its message's width.
+// video.tsx -- a video a message carried, played in iOS's own player through expo-video, at its own shape held to the media's one rule, or saying so where its bytes did not land.
 
-import { useVideoPlayer, type VideoPlayerStatus, type VideoTrack, VideoView } from "expo-video";
+import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
+import { useVideoPlayer, type VideoPlayerStatus, VideoView } from "expo-video";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
 import { KEPT_KIND } from "./keep-model.js";
+import { MediaBox } from "./media-box.js";
+import { MediaFailed } from "./media-failed.js";
+import { type MediaSize, mediaFrame } from "./media-frame.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { RADIUS, SPACE } from "./tokens/space.js";
@@ -23,29 +27,11 @@ const OPENS_IN_SAFARI = "Opens the video in Safari";
 /** What opens a video the player cannot play where it plays. */
 const OPEN_IN_SAFARI = "Open in Safari";
 
-/** A film's shape, width over height, which a video's well stands at until the player has read its own. */
-const FILM_ASPECT = 16 / 9;
-
-/** The tallest a video stands, width over height: a portrait recording stands no taller than 3 by 4, its picture fitted inside, so one video never fills the screen. */
-const TALLEST_ASPECT = 3 / 4;
-
-/** A video's own shape, width over height, as its track reads, held no taller than `TALLEST_ASPECT`; none while the track is not read. */
-function trackAspect(track: VideoTrack | null): number | undefined {
-  if (track === null || track.size.width <= 0 || track.size.height <= 0) return undefined;
-
-  return Math.max(TALLEST_ASPECT, track.size.width / track.size.height);
-}
-
 /** What a playable video is heard to do, as a video in Messages opens: the system's player full screen, whose controls VoiceOver reads there. */
 const OPENS_FULL_SCREEN = "Opens the video full screen";
 
 const styles = StyleSheet.create({
-  frame: {
-    width: "100%",
-    aspectRatio: FILM_ASPECT,
-    borderRadius: RADIUS.BLOCK,
-    overflow: "hidden",
-  },
+  frame: { width: "100%", borderRadius: RADIUS.BLOCK, overflow: "hidden" },
   unplayable: {
     alignItems: "center",
     justifyContent: "center",
@@ -58,14 +44,16 @@ const styles = StyleSheet.create({
 });
 
 type VideoProps = {
-  /** The file the video plays from, such as one the thread wrote under the app's caches; none while its bytes are on their way, which stands its well alone. */
-  readonly source: string | undefined;
+  /** The file the video plays from, such as one the thread wrote under the app's caches; none while its bytes are on their way, which stands its well alone, and `null` where they could not be read, which says so in its well. */
+  readonly source: string | null | undefined;
   /** What the video is, its file's name, heard in its place. */
   readonly label: string;
   /** Opens the video where it plays, offered where the system's player cannot read it; none offers nothing. */
   readonly onOpenElsewhere?: (() => void) | undefined;
-  /** A tile's fixed shape, width over height; the video's own, once the player has read it, where none is given. */
+  /** A tile's fixed shape, width over height, as wide as its tile; the video's own shape and size, held to `MEDIA_BOUNDS`, where none is given. */
   readonly tileAspect?: number | undefined;
+  /** Reads the video again where its bytes could not be read; none offers nothing. */
+  readonly onRetry?: (() => void) | undefined;
 };
 
 /**
@@ -80,107 +68,131 @@ type VideoProps = {
  * video's name, which opens the system's player full screen, where its
  * controls are read, as a video in Messages is.
  */
-export function Video({ source, label, onOpenElsewhere, tileAspect }: VideoProps) {
+export function Video({ source, label, onOpenElsewhere, tileAspect, onRetry }: VideoProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
   const player = useVideoPlayer(source ?? null);
   const view = useRef<VideoView>(null);
   const [status, setStatus] = useState<VideoPlayerStatus>(player.status);
-  const [ownAspect, setOwnAspect] = useState(() => trackAspect(player.videoTrack));
+  const [natural, setNatural] = useState<MediaSize | null | undefined>(undefined);
   useEffect(() => {
     setStatus(player.status);
-    setOwnAspect(trackAspect(player.videoTrack));
+    // Note that a track the player read before this listens is taken as it stands, since its change has already gone by.
+    setNatural(player.videoTrack?.size);
     const listening = player.addListener("statusChange", ({ status: next }) => setStatus(next));
 
-    const tracking = player.addListener("videoTrackChange", ({ videoTrack }) =>
-      setOwnAspect(trackAspect(videoTrack)),
+    const sized = player.addListener("videoTrackChange", ({ videoTrack }) =>
+      setNatural(videoTrack?.size),
     );
 
     return () => {
       listening.remove();
-      tracking.remove();
+      sized.remove();
     };
   }, [player]);
-  // Note that a tile keeps the shape its grid gives it, and a message's video takes its own once read, as Messages draws one, rather than a film's 16 by 9 whatever was recorded.
-  const aspect = tileAspect ?? ownAspect;
-  const tiled = aspect === undefined ? undefined : { aspectRatio: aspect };
   const failed = status === "error";
 
+  // Note that a tile fills its tile at the tile's shape, and any other video stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
+  const frame = tileAspect === undefined ? mediaFrame(natural) : undefined;
+  const tiled = { aspectRatio: tileAspect ?? frame?.aspectRatio };
+
   const acts = useKeptActs(
-    source === undefined ? undefined : { kind: KEPT_KIND.VIDEO, source, name: label },
+    source == null ? undefined : { kind: KEPT_KIND.VIDEO, source, name: label },
   );
+
+  // Note that a video whose bytes could not be read says so in its well with Try again, as a picture does, rather than spin as one still on its way.
+  if (source === null) {
+    return (
+      <MediaBox frame={frame}>
+        <MediaFailed
+          line={MEDIA_READ_WORDS.VIDEO_FAILED}
+          heard={`${label} ${MEDIA_READ_WORDS.COULD_NOT_READ}`}
+          onRetry={onRetry}
+          style={[styles.frame, tiled]}
+        />
+      </MediaBox>
+    );
+  }
 
   if (source === undefined || failed) {
     // Note that a well offering Open in Safari stands as two elements to VoiceOver, its words and its link, since one element would hide the link.
     const offers = failed && onOpenElsewhere !== undefined;
 
     return (
-      <HeldMenu acts={acts}>
-        <View
-          style={[
-            styles.frame,
-            tiled,
-            styles.unplayable,
-            failed && large ? styles.grown : null,
-            { backgroundColor: colors.WELL },
-          ]}
-          accessible={!offers}
-          accessibilityLabel={offers ? undefined : failed ? `${label}. ${CANNOT_PLAY}` : label}
-        >
-          {failed ? null : <ActivityIndicator color={colors.TEXT_MUTED} />}
-          {failed ? (
-            <Text
-              style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}
-              accessibilityLabel={`${label}. ${CANNOT_PLAY}`}
-            >
-              {CANNOT_PLAY}
-            </Text>
-          ) : null}
-          {offers ? (
-            <Press
-              onPress={onOpenElsewhere}
-              accessibilityRole="link"
-              accessibilityHint={OPENS_IN_SAFARI}
-              hitSlop={SPACE.ROW}
-            >
+      <MediaBox frame={frame}>
+        <HeldMenu acts={acts}>
+          <View
+            style={[
+              styles.frame,
+              tiled,
+              styles.unplayable,
+              failed && large ? styles.grown : null,
+              { backgroundColor: colors.WELL },
+            ]}
+            accessible={!offers}
+            accessibilityLabel={offers ? undefined : failed ? `${label}. ${CANNOT_PLAY}` : label}
+          >
+            {failed ? null : <ActivityIndicator color={colors.TEXT_MUTED} />}
+            {failed ? (
               <Text
-                style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT_BODY }}
+                style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}
+                accessibilityLabel={`${label}. ${CANNOT_PLAY}`}
               >
-                {OPEN_IN_SAFARI}
+                {CANNOT_PLAY}
               </Text>
-            </Press>
-          ) : null}
-        </View>
-      </HeldMenu>
+            ) : null}
+            {offers ? (
+              <Press
+                onPress={onOpenElsewhere}
+                accessibilityRole="link"
+                accessibilityHint={OPENS_IN_SAFARI}
+                hitSlop={SPACE.ROW}
+              >
+                <Text
+                  style={{
+                    fontSize: TEXT_SIZE.FOOTNOTE,
+                    fontWeight: "600",
+                    color: colors.TEXT_BODY,
+                  }}
+                >
+                  {OPEN_IN_SAFARI}
+                </Text>
+              </Press>
+            ) : null}
+          </View>
+        </HeldMenu>
+      </MediaBox>
     );
   }
 
   // Note that the player stands as one element, its name, which opens it full screen, as a video in Messages does, because the system's inline player nests a dozen views under it, and a thread's video in an iPad's split view stood past the depth XCTest can serialize (Foundation's "Too many nested arrays or dictionaries"), so no flow could read that screen.
   return (
-    <HeldMenu acts={acts}>
-      <View
-        style={[styles.frame, tiled]}
-        accessible
-        accessibilityLabel={label}
-        accessibilityHint={OPENS_FULL_SCREEN}
-        onAccessibilityTap={() => void view.current?.enterFullscreen()}
-        testID={status === "readyToPlay" ? VIDEO_PLAYER_ID : undefined}
-      >
-        <VideoView
-          ref={view}
-          player={player}
-          nativeControls
-          contentFit="contain"
-          fullscreenOptions={{ enable: true }}
-          allowsPictureInPicture
-          style={[StyleSheet.absoluteFill, { backgroundColor: colors.WELL }]}
-        />
-        {status === "readyToPlay" ? null : (
-          <View style={styles.spinner} pointerEvents="none">
-            <ActivityIndicator color={colors.TEXT_MUTED} />
-          </View>
-        )}
-      </View>
-    </HeldMenu>
+    <MediaBox frame={frame}>
+      <HeldMenu acts={acts}>
+        <View
+          style={[styles.frame, tiled]}
+          accessible
+          accessibilityLabel={label}
+          accessibilityHint={OPENS_FULL_SCREEN}
+          onAccessibilityTap={() => void view.current?.enterFullscreen()}
+          testID={status === "readyToPlay" ? VIDEO_PLAYER_ID : undefined}
+        >
+          <VideoView
+            ref={view}
+            player={player}
+            nativeControls
+            contentFit="contain"
+            fullscreenOptions={{ enable: true }}
+            allowsPictureInPicture
+            style={[StyleSheet.absoluteFill, { backgroundColor: colors.WELL }]}
+          />
+          {status === "readyToPlay" ? null : (
+            <View style={styles.spinner} pointerEvents="none">
+              <ActivityIndicator color={colors.TEXT_MUTED} />
+            </View>
+          )}
+        </View>
+      </HeldMenu>
+    </MediaBox>
   );
 }

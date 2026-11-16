@@ -1,10 +1,14 @@
 // sheet-stack.tsx -- the stack a sheet stands its one screen in, so the bar its screen asks for is the sheet's own navigation bar, in the window's light or dark, and whether a short sheet stands at half height, where its own glass is its ground.
 
-import { NO_GROUND, useBarScheme, useReduceTransparency } from "@repo/ui-native";
+import {
+  NO_GROUND,
+  useBarScheme,
+  useReduceTransparency,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
+} from "@repo/ui-native";
 import { type NativeStackNavigationProp, Stack, useNavigation } from "expo-router";
 import { useEffect, useState } from "react";
-import { useWindowSizeClass } from "./use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "./window-size-class.js";
 
 /** A short sheet's heights in a compact window, as fractions of the screen: UIKit's medium, then its large; it opens at the first. */
 export const SHORT_SHEET_DETENTS = [0.5, 1];
