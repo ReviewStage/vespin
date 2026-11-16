@@ -1,9 +1,10 @@
 import { isAudioType } from "@repo/features/conversation-picture-wire";
 import { playheadText } from "@repo/features/time-format";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ExpandIcon, PauseIcon, PlayIcon } from "../../icons/lucide-glyphs.js";
 import { motionHeld } from "../../motion-timing.js";
 import { notePictureOrigin } from "../../picture-expand.js";
+import { usePlayingFrames } from "../../playing-frames.js";
 import { WAVEFORM_FLOOR, waveformPeaks } from "../../waveform.js";
 import { BUTTON_VARIANT, IconButton } from "../button/button.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, Card } from "../card/card.js";
@@ -17,11 +18,13 @@ import { dataUrlBytes, dataUrlMediaType, useBlobUrl } from "../video-player/vide
  * A clip is drawn as its waveform, the loudness of each stretch of it as a
  * bar (`../../waveform.ts`), read from its samples once the browser has
  * decoded them, a flat line standing in until then and for good where the
- * browser cannot decode it. The waveform is the scrubber: a bare slider
- * stands over it (`SLIDER_LOOK.BARE`), its thumb riding where the clip
- * stands, the bars before it in the words' ink and the rest muted, so a
- * press or a drag anywhere along it seeks there, and the slider's own keys
- * step it. Beside it stand Play and Pause, how far it has run of how long,
+ * browser cannot decode it. The waveform is the scrubber: its bars up to
+ * where the clip stands are in the words' ink and the rest muted, with no
+ * dot over them, as a voice message's waveform stands, and a bare slider
+ * over it (`SLIDER_LOOK.BARE`) takes a press or a drag anywhere along it to
+ * seek there and the slider's own keys to step it; the keyboard's ring
+ * stands around the waveform while the slider holds the focus
+ * (`audio-player.css`). Beside it stand Play and Pause, how far it has run of how long,
  * and Expand where the place has a viewer to open. There is no volume
  * control and no mute: the system's volume is the one a reader already
  * reaches for, as for a recording's sound (`../video-player/`).
@@ -237,8 +240,9 @@ function PlayerButton({
 }
 
 /**
- * The clip's waveform, its bars before `played` (a share of its length) in
- * the words' ink and the rest muted, stretched to the room it stands in;
+ * The clip's waveform, its bars up to `played` (a share of its length) in
+ * the words' ink, cut exactly there, and the rest muted, stretched to the
+ * room it stands in;
  * a flat line while its samples are read. It is hidden from a reader, since
  * the slider over it says where the clip stands.
  */
@@ -250,30 +254,39 @@ function Waveform({
   played: number;
 }): React.JSX.Element {
   const shown = peaks ?? FLAT;
+  const reach = useId();
+  const width = shown.length * BAR.PITCH;
+
+  const bars = shown.map((peak, at) => {
+    const height = peak * WAVEFORM_HEIGHT;
+
+    return (
+      <rect
+        // Note that a bar's place is its identity: a waveform never reorders.
+        key={at}
+        x={at * BAR.PITCH}
+        y={(WAVEFORM_HEIGHT - height) / 2}
+        width={BAR.WIDTH}
+        height={height}
+      />
+    );
+  });
 
   return (
     <svg
       className="ui-audio-player-waveform block size-full"
-      viewBox={`0 0 ${String(BARS * BAR.PITCH)} ${String(WAVEFORM_HEIGHT)}`}
+      viewBox={`0 0 ${String(width)} ${String(WAVEFORM_HEIGHT)}`}
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      {shown.map((peak, at) => {
-        const height = peak * WAVEFORM_HEIGHT;
-        const reached = (at + 0.5) / shown.length <= played;
-
-        return (
-          <rect
-            // Note that a bar's place is its identity: a waveform never reorders.
-            key={at}
-            x={at * BAR.PITCH}
-            y={(WAVEFORM_HEIGHT - height) / 2}
-            width={BAR.WIDTH}
-            height={height}
-            className={reached ? "fill-foreground" : "fill-border-strong"}
-          />
-        );
-      })}
+      <clipPath id={reach}>
+        <rect x={0} y={0} width={played * width} height={WAVEFORM_HEIGHT} />
+      </clipPath>
+      <g className="fill-border-strong">{bars}</g>
+      {/* Note that the played bars are the same bars cut at where the clip stands, so the ink runs on through a bar rather than lighting it whole. */}
+      <g className="fill-foreground" clipPath={`url(#${reach})`}>
+        {bars}
+      </g>
     </svg>
   );
 }
@@ -306,6 +319,11 @@ export function AudioPlayer({
     const duration = Number.isFinite(shown.duration) ? shown.duration : 0;
     setPlayback({ playing: !shown.paused, at: Math.min(shown.currentTime, duration), duration });
   };
+
+  // While it plays, its place is read on every frame, so the scrubber and the waveform's played bars glide rather than step at each `timeupdate`.
+  usePlayingFrames(playback.playing, () => {
+    if (audio.current !== null) read(audio.current);
+  });
 
   const time = `${playheadText(playback.at * MS_PER_SECOND)} / ${playheadText(playback.duration * MS_PER_SECOND)}`;
   const played = playback.duration === 0 ? 0 : playback.at / playback.duration;

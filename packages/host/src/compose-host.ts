@@ -9,6 +9,7 @@ import {
   HostedIntegrationsClient,
   HostedMachineCommandClient,
   HostedMcpClientsClient,
+  HostedPullRequestClient,
   HostedTaskClient,
   HostedTerminalClient,
   HostedWorkspaceClient,
@@ -332,6 +333,11 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       credential: account.credential,
     });
 
+    const pullRequestClient = new HostedPullRequestClient({
+      serviceBaseUrl: kernel.hostedServiceBaseUrl,
+      credential: account.credential,
+    });
+
     /** The account signed in now, by its id, which every live read names. */
     const accountId = () => {
       const signedIn = account.session.snapshot();
@@ -513,6 +519,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
             : undefined;
         },
         client: agentClient,
+        pullRequests: pullRequestClient,
         ports: agentPortsClient,
         listed: tasks.listed,
         pullRequestListings: tasks.pullRequestListings,
