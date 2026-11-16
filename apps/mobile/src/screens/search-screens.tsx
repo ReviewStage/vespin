@@ -55,7 +55,7 @@ import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { AgentConversation } from "./agent-screens.js";
-import { SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
+import { PLUS_TAB, SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
 import { useRemind } from "./inbox-remind.js";
 import { InboxItemRows, ThreadColumn } from "./inbox-screens.js";
 import {
@@ -349,7 +349,6 @@ function SearchStackScreen(words: SearchWords) {
   const field = useRefilledSearchField(query);
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
-  // Note that a regular window's tab bar has no round +, so its Search offers New task in its bar, as the other tabs' lists do.
   const regular = useWindowSizeClass() !== WINDOW_SIZE_CLASS.COMPACT;
   // Note that what is typed is read through a ref the commit writes, so the focus effect runs only as the tab opens, never on a key or on Cancel clearing the field.
   const typed = useRef(query);
@@ -374,7 +373,8 @@ function SearchStackScreen(words: SearchWords) {
         />
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
-      {regular ? (
+      {/* Note that an iPad's tab bar has no round +, so its Search offers New task in its bar, as its lists do. */}
+      {PLUS_TAB ? null : (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button
             icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
@@ -382,7 +382,7 @@ function SearchStackScreen(words: SearchWords) {
             onPress={compose.onPress}
           />
         </Stack.Toolbar>
-      ) : null}
+      )}
       {query.trim() === "" ? (
         <Screen>{SEARCH_IDLE}</Screen>
       ) : (

@@ -141,7 +141,7 @@ import { type ListedMember, useListedMembers, useMemberPictures } from "../membe
 import { useMenuPhotos } from "../menu-photos.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns } from "../place-columns.js";
-import { useRefilledSearchField } from "../search-field.js";
+import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
@@ -180,9 +180,11 @@ import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
+  PLUS_TAB,
   SIDEBAR_PLACE,
   type SidebarPlace,
   type SidebarTasks,
+  useComposeAction,
   useListColumn,
   usePortraitDetailBar,
 } from "./app-sidebar.js";
@@ -1886,8 +1888,10 @@ function TasksStackList(words: TasksSearch) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
+  const compose = useComposeAction();
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const field = useRefilledSearchField(search);
+  const placement = useHeldSearchPlacement(search);
 
   return (
     <>
@@ -1895,13 +1899,23 @@ function TasksStackList(words: TasksSearch) {
         <Stack.SearchBar
           ref={field}
           placeholder={SEARCH_TASKS}
-          placement="integratedButton"
+          placement={placement}
           allowToolbarIntegration={false}
           onChangeText={(event) => setSearch(event.nativeEvent.text)}
           onCancelButtonPress={() => setSearch("")}
         />
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
+      {/* Note that a narrow iPad window's tab bar has no round +, so its list's bar offers New task, as its wider windows' bars do. */}
+      {PLUS_TAB ? null : (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
+            accessibilityLabel={compose.label}
+            onPress={compose.onPress}
+          />
+        </Stack.Toolbar>
+      )}
       <Screen>
         <TasksTree
           listing={listing}
@@ -2179,8 +2193,6 @@ export function TaskScreen() {
   // Note that the open is told apart by the task's id, as the split view's is, so a number found and handed over on an unfold carries the same open; a number not yet found shows no task to count.
   useSurfaceOpen(handed || handing === undefined ? undefined : PRODUCT_SURFACE.TASK, handing);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
-
-  if (handed) return null;
 
   return (
     <>

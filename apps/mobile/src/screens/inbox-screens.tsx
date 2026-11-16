@@ -104,7 +104,7 @@ import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns, useInFront } from "../place-columns.js";
-import { useRefilledSearchField } from "../search-field.js";
+import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
@@ -114,7 +114,13 @@ import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, useListColumn, usePortraitDetailBar } from "./app-sidebar.js";
+import {
+  PLUS_TAB,
+  SIDEBAR_PLACE,
+  useComposeAction,
+  useListColumn,
+  usePortraitDetailBar,
+} from "./app-sidebar.js";
 import { useDetailStackColumn } from "./detail-stack-column.js";
 import {
   NO_THREAD_ACTS,
@@ -940,18 +946,21 @@ export function ThreadColumn({
   );
 }
 
-/** The list's search words and how to change them, held by the tab's root screen above its two layouts. */
-type InboxSearch = { readonly search: string; readonly setSearch: (search: string) => void };
+/** What the tab's root screen holds above its two layouts, so a rotation or a fold keeps it: the list's search words and how to change them, and the Remind me picker sheet its rows' menus open. */
+type InboxHeld = {
+  readonly search: string;
+  readonly setSearch: (search: string) => void;
+  readonly remind: ReturnType<typeof useRemind>;
+};
 
 /** What the list screens share: the scope and its pills, the search, the listing under both, and the acts on it. */
-function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | undefined) {
+function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
   const listing = useInboxListing({ show, search, chosen });
   // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
   useAppReadyCount(listing.listed.length > 0 || listing.feed === INBOX_FEED.ANSWERED);
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
-  const remind = useRemind();
   const selecting = useInboxChoosing();
 
   const menu = moreMenu(listing.unread, acts.markAll, {
@@ -998,15 +1007,17 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
 // edge, and its search and its ⋯ menu as round
 // glass buttons at its trailing one, each row pushing its thread as the Stack's
 // next screen.
-function InboxStackList(words: InboxSearch) {
+function InboxStackList(held: InboxHeld) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
+  const compose = useComposeAction();
 
   const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing, chooseStart } =
-    useInboxScreen(words);
+    useInboxScreen(held);
 
   const field = useRefilledSearchField(search);
+  const placement = useHeldSearchPlacement(search);
 
   // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
   return (
@@ -1016,7 +1027,7 @@ function InboxStackList(words: InboxSearch) {
           <Stack.SearchBar
             ref={field}
             placeholder={SEARCH_INBOX}
-            placement="integratedButton"
+            placement={placement}
             allowToolbarIntegration={false}
             onChangeText={(event) => setSearch(event.nativeEvent.text)}
             onCancelButtonPress={() => setSearch("")}
@@ -1033,6 +1044,14 @@ function InboxStackList(words: InboxSearch) {
           <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
             {toolbarMenuActions(menu)}
           </Stack.Toolbar.Menu>
+        )}
+        {/* Note that a narrow iPad window's tab bar has no round +, so its list's bar offers New task, as its wider windows' bars do. */}
+        {choosing !== undefined || PLUS_TAB ? null : (
+          <Stack.Toolbar.Button
+            icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
+            accessibilityLabel={compose.label}
+            onPress={compose.onPress}
+          />
         )}
       </Stack.Toolbar>
       {choosing === undefined ? null : (
@@ -1089,7 +1108,6 @@ function InboxStackList(words: InboxSearch) {
           />
         )}
       </Screen>
-      {remind.sheet}
     </>
   );
 }
@@ -1106,14 +1124,14 @@ function InboxStackList(words: InboxSearch) {
 function InboxSplitScreen({
   selected,
   select,
-  words,
+  held,
 }: {
   readonly selected: string | undefined;
   readonly select: (id: string) => void;
-  readonly words: InboxSearch;
+  readonly held: InboxHeld;
 }) {
   const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing, chooseStart } =
-    useInboxScreen(words, selected);
+    useInboxScreen(held, selected);
 
   const threeColumns = useThreeColumns();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
@@ -1207,22 +1225,35 @@ function InboxSplitScreen({
           />
         </Screen>
       )}
-      {remind.sheet}
     </>
   );
 }
 
-/** The Inbox tab's root screen: its list, laid out by the window's size class, its search held here so a rotation or a fold keeps it. */
+/**
+ * The Inbox tab's root screen: its list, laid out by the window's size
+ * class. Note that a rotation or a fold swaps one layout for the other,
+ * redrawing all under it, so what must outlive the swap is held here: the
+ * search, and Remind me's picker sheet, drawn beside the layout rather than
+ * in it, so a picker open on a thread stays open across the swap.
+ */
 export function InboxListScreen() {
   const sizeClass = useWindowSizeClass();
   const { selected, select } = useSplitSelection(SPLIT_TAB.INBOX);
   const [search, setSearch] = useState("");
+  const remind = useRemind();
   useSurfaceOpen(PRODUCT_SURFACE.INBOX);
 
-  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-    <InboxSplitScreen selected={selected} select={select} words={{ search, setSearch }} />
-  ) : (
-    <InboxStackList search={search} setSearch={setSearch} />
+  const held = { search, setSearch, remind };
+
+  return (
+    <>
+      {sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
+        <InboxSplitScreen selected={selected} select={select} held={held} />
+      ) : (
+        <InboxStackList {...held} />
+      )}
+      {remind.sheet}
+    </>
   );
 }
 
@@ -1232,8 +1263,6 @@ export function InboxThreadScreen() {
   const { listed, readerId, feed, retry } = useInboxThread(id);
   const handed = useHandToSplit(SPLIT_TAB.INBOX, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.THREAD, id);
-
-  if (handed) return null;
 
   return (
     <>

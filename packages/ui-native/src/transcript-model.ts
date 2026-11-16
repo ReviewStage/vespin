@@ -725,7 +725,10 @@ function callItems(
           },
         ];
 
-  return [call, ...page, ...openedPullRequest(part, base, reading.pullRequests), ...mediaItem];
+  const opened = openedPullRequest(part, base, reading.pullRequests);
+
+  // Note that a pull request the call opened stands as its card alone, as a set of pictures shown stands as its pictures, since the call's line named the same pull request over it; a call refused opens none and keeps its line with the reason.
+  return opened.length === 0 ? [call, ...page, ...mediaItem] : [...page, ...opened, ...mediaItem];
 }
 
 /** One part as its items; none for what the agent thought, or a part with nothing to draw. */

@@ -14,9 +14,11 @@
  */
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { markedAs, type ReadMark } from "@repo/features/read-mark";
 import {
   FOLLOWER_CALL_FAILURE,
   type ListedApart,
+  type ListedTasksView,
   listedApart,
   TASK_CALL_FAILURE,
   type TaskListParts,
@@ -61,15 +63,36 @@ const FIXTURE_WORKSPACE_IDS: readonly string[] = [FIXTURE_IDS.WORKSPACE];
 /** Each task list as staged, so a list staged already is never staged twice, which would list its tasks twice. */
 const stagedLists = new WeakSet<TaskListParts>();
 
-/** The fixture's tasks laid over the list held beside the document, or the list held where it is staged already, its agents on the choices the run made: the tasks slice, and the lists beside it. */
+/** A read mark a run's screen set on one of the fixture's tasks, and the instant it was set. */
+type KeptReadMark = { readonly mark: ReadMark; readonly at: number };
+
+/** The read marks each run's screens set on the fixture's tasks, by task, each map replaced whole as one is set. */
+type KeptReadMarks = ReadonlyMap<string, KeptReadMark>;
+
+/** The tasks of a list with the read marks a run set laid on them, as the host draws a mark: the list itself where no task's mark moved. */
+function markedTasksView(list: ListedTasksView, marks: KeptReadMarks): ListedTasksView {
+  if (marks.size === 0) return list;
+
+  return {
+    ...list,
+    tasks: list.tasks.map((task) => {
+      const kept = marks.get(task.id);
+
+      return kept === undefined ? task : { ...task, ...markedAs(kept.mark, task, kept.at) };
+    }),
+  };
+}
+
+/** The fixture's tasks laid over the list held beside the document, or the list held where it is staged already, its agents on the choices the run made and its rows on the read marks it set: the tasks slice, and the lists beside it. */
 function stagedTasks(
   held: AppStateSnapshot,
   lists: TaskListParts,
   choices: AgentChoices,
+  marks: KeptReadMarks,
 ): ListedApart {
   const view = { ...held.tasks, ...lists };
   const listed = stagedLists.has(lists) ? view : inboxTasksView(held.run.profile, view);
-  const apart = listedApart(chosenTasksView(listed, choices));
+  const apart = listedApart(markedTasksView(chosenTasksView(listed, choices), marks));
   stagedLists.add(apart.lists);
 
   return apart;
@@ -119,6 +142,12 @@ const CHOICES = new WeakMap<object, AgentChoices>();
 
 /** Nothing changed yet. */
 const NO_CHOICES: AgentChoices = new Map();
+
+/** The read marks each run's screens set on the fixture's tasks, by the store the run stages. */
+const READ_MARKS = new WeakMap<object, KeptReadMarks>();
+
+/** No read mark set yet. */
+const NO_READ_MARKS: KeptReadMarks = new Map();
 
 /** What the store is handed: whole slices of the document. */
 type StorePatch = Parameters<AppStateStore["update"]>[0];
@@ -183,7 +212,12 @@ export function stageFixture(
     ? machineAskAppState(saved, ANSWERED_ASKS.get(state) ?? NO_ANSWERED_ASKS)
     : saved;
 
-  const listed = stagedTasks(held, state.taskList(), CHOICES.get(state) ?? NO_CHOICES);
+  const listed = stagedTasks(
+    held,
+    state.taskList(),
+    CHOICES.get(state) ?? NO_CHOICES,
+    READ_MARKS.get(state) ?? NO_READ_MARKS,
+  );
 
   const staged = {
     ...reminded,
@@ -205,6 +239,29 @@ function keepReminder(
   const { itemId, until } = payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_REMIND>;
   REMINDERS.set(state, new Map(REMINDERS.get(state) ?? NO_REMINDERS).set(itemId, until));
   stageFixture(state);
+}
+
+/**
+ * Keeps a read mark the fixture took, Mark as read or unread or the read an
+ * open sends, and lays it over the document at once, as the host draws one;
+ * nothing for any other act. Note that the fixture answers the mark itself,
+ * since the host's own drawing of it stands only until the fixture lays its
+ * tasks over the list again, which a run with no service does as the write
+ * goes unanswered.
+ */
+function keepReadMark(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): boolean {
+  if (kind !== ACT_KIND.TASKS_MARK_READ) return false;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const { taskId, readMark } = payload as PortActPayload<typeof ACT_KIND.TASKS_MARK_READ>;
+  const kept: KeptReadMark = { mark: readMark, at: Date.now() };
+  READ_MARKS.set(state, new Map(READ_MARKS.get(state) ?? NO_READ_MARKS).set(taskId, kept));
+  stageFixture(state);
+
+  return true;
 }
 
 /** Keeps an Inbox read mark the fixture took and lays it over the document at once, as the host draws one; nothing for any other act. */
@@ -366,8 +423,9 @@ function memberAt<Member>(
  * window's side, and every other act sent to the host. The invitations
  * agent's older page is read as the service would read it, though its first
  * read is not heard back, so a flow sees Try again, and the next lays the
- * page before the transcript's first message. Note that a mark is
- * echoed and moves no dot, as on the panel's, but a change to one of the
+ * page before the transcript's first message. Note that a thread's read
+ * mark and a task's each move their row's dot (`keepInboxReadMark`,
+ * `keepReadMark`), and a change to one of the
  * fixture's pull requests moves it on the document of `state`, as GitHub
  * would, so a screen draws it merged or out of the queue, and a reminder
  * set or cleared moves its item there, as the host draws one, so the Inbox
@@ -405,6 +463,9 @@ export function fixtureActs(
         const older = olderRead(state, profile, kind as PortActKind, payload);
 
         if (older !== undefined) return Promise.resolve(older);
+
+        // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
+        if (keepReadMark(state, kind as PortActKind, payload)) return Promise.resolve(true);
 
         // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
         const staged = inboxActAnswer(profile, kind as PortActKind, payload);
