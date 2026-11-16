@@ -1,4 +1,4 @@
-// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation or while the Inbox stands in Select mode.
+// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing, which the app sidebar's foot holds where the bar is hidden; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation or while the Inbox stands in Select mode.
 
 import {
   type IosTab,
@@ -23,7 +23,7 @@ import { usePathname, useRouter, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { useEffect, useState } from "react";
 import { Platform } from "react-native";
-import { isStackedRoute, useStackToRoutes } from "../../detail-stack.js";
+import { isStackedRoute, PUSHED_PAGE, useStackToRoutes, useTopPage } from "../../detail-stack.js";
 import { useInboxChoosingOn } from "../../inbox/inbox-choosing.js";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
@@ -143,8 +143,12 @@ export default function TabsLayout() {
   useStackToRoutes({ threeColumns: appSidebar, regular: !iconOnly }, placeOfRoute(standing));
   // Note that a tab under the split view leaves its content clear, because NativeTabs paints each tab in the navigation theme's light ground, which flashed over the split as a page pushed.
   const underSplit = appSidebar ? UNDER_SPLIT_SCREEN.contentStyle : undefined;
-  // Note that the call's own agent's page holds the call's presses in its composer, so the way back stands aside there rather than repeat them.
-  const shownAgent = iosRouteAgent(pathname);
+  // Note that the call's own agent's page holds the call's presses in its composer, so the way back stands aside there rather than repeat them; in a split view's detail the page is pushed on the detail's own stack rather than routed, so it is read there while the tab's root stands.
+  const detailPage = useTopPage(atRoot ? placeOfRoute(standing) : undefined);
+
+  const shownAgent =
+    detailPage?.kind === PUSHED_PAGE.AGENT ? detailPage.agentId : iosRouteAgent(pathname);
+
   const calling = useStandingCallCard(shownAgent) !== undefined;
 
   // Note that the Inbox's Select mode hides the bar only while the Inbox's own list stands, so a link that opens another place never leaves the bar hidden over it.
@@ -221,7 +225,11 @@ export default function TabsLayout() {
     <PageDrawerProvider value={PushedPageView}>
       <SplitOverTabs
         tabs={tabs}
-        split={appSidebar ? <AppSplit place={placeOfRoute(standing)} front={atRoot} /> : undefined}
+        split={
+          appSidebar ? (
+            <AppSplit place={placeOfRoute(standing)} front={atRoot} shownAgent={shownAgent} />
+          ) : undefined
+        }
         front={atRoot}
       />
     </PageDrawerProvider>
