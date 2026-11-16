@@ -434,6 +434,11 @@ function placingSubmenus(task: TaskSummary, placing: TaskPlacing): readonly RowS
   );
 }
 
+/** A submenu as a list of none or one, for a menu only offered where it has something to hold. */
+function present(submenu: RowSubmenu | undefined): readonly RowSubmenu[] {
+  return submenu === undefined ? [] : [submenu];
+}
+
 /** A row's menu as a bar's ⋯ holds it, its acts' tones read as the bar reads them. */
 function barSubmenu(submenu: RowSubmenu): BarMenu {
   return {
@@ -502,12 +507,12 @@ type RowActsResult = {
  * the task is not, which a full swipe runs. Its long press menu groups them
  * as the task page's ⋯ does (`taskMenu`), each group set apart by a divider:
  * the swipes' acts with Mark as read or unread, whichever the task is not;
- * then Task relation, which opens the Task relation sheet on a kind, Move to
- * section, and its repository (`placingSubmenus`), with Remove parent where
- * it has one; then Rename, in the system's name alert, and Copy link, which
- * raises the share sheet; then More, holding its version history and Move
- * to workspace where offered, and Open in browser; and Permanently delete
- * alone, last, which asks first.
+ * then Task relation, which opens the Task relation sheet on a kind, and Move
+ * to section, with Remove parent where it has one; then Rename, in the
+ * system's name alert, and Copy link, which raises the share sheet; then
+ * More, holding its repository, its version history and Move to workspace
+ * where offered, and Open in browser; and Permanently delete alone, last,
+ * which asks first.
  * Priority and assignee are set from the chips on the task's page
  * (`standingMenus`).
  */
@@ -539,7 +544,10 @@ function rowActs(
     ],
     menuGroups: [
       {
-        submenus: [relationSubmenu(task, openRelation), ...placingSubmenus(task, listing.placing)],
+        submenus: [
+          relationSubmenu(task, openRelation),
+          ...present(sectionSubmenu(task, listing.placing)),
+        ],
         actions: removeParentActs(task, listing.relations),
       },
       {
@@ -559,11 +567,12 @@ function rowActs(
         ],
       },
       {
-        // Note that the acts a phone reaches for least wait one level down in More, so the menu fits an iPhone's window under the lifted preview and Permanently delete stands in it rather than below its fold.
+        // Note that the acts a phone reaches for least wait one level down in More, its repository, version history, Move to workspace and Open in browser, so the menu fits an iPhone 18 Pro's window under the lifted preview and Permanently delete stands in it rather than below its fold.
         submenus: [
           {
             ...WORDS.MORE,
             choices: [],
+            submenus: present(repositorySubmenu(task, listing.placing)),
             actions: [
               ...rowActions(historyActions(task, listing.doors.history)),
               ...rowActions(moveActions(listing.doors.moveDoor(task))),
