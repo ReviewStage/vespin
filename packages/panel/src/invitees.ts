@@ -15,7 +15,10 @@ import { appStateQuery, selectAccount } from "./use-app-state.js";
  * or lifted, and is simply never sent, as Slack leaves one: its chip says
  * why, and nothing waits on it. Each address is
  * known by its lower case, as the service knows it, so one typed twice
- * stands once.
+ * stands once. An address the workspace already invited, which a form
+ * coming back to a workspace it made reads from the service, stands as sent
+ * ahead of the form's own, so a reload does not hide it and typing it again
+ * adds nothing.
  */
 
 /** Why an address typed is not sent, its chip's hint. */
@@ -76,13 +79,14 @@ function keyOf(email: string): string {
   return email.toLowerCase();
 }
 
-/** The invitees `typed` adds to `now`, each address once, the reader's own (`yours`) marked as theirs. */
+/** The invitees `typed` adds to `now`, each address once and none already `sent`, the reader's own (`yours`) marked as theirs. */
 function joined(
   now: readonly Invitee[],
   typed: string,
   yours: string | undefined,
+  sent: readonly Invitee[] = [],
 ): readonly Invitee[] {
-  const known = new Set(now.map((one) => keyOf(one.email)));
+  const known = new Set([...sent, ...now].map((one) => keyOf(one.email)));
 
   const added = inviteesOf(typed)
     .filter((one) => !known.has(keyOf(one.email)))
@@ -102,30 +106,44 @@ function joined(
   return [...now, ...added];
 }
 
+/** The addresses already invited (`invited`) that the form's own invitees (`now`) do not hold, each as a sent chip. */
+function sentOf(invited: readonly string[], now: readonly Invitee[]): readonly Invitee[] {
+  const held = new Set(now.map((one) => keyOf(one.email)));
+
+  return invited.flatMap((email): Invitee[] =>
+    held.has(keyOf(email))
+      ? []
+      : [{ email, words: email, typed: email, state: EMAIL_CHIP_STATE.SENT }],
+  );
+}
+
 function pendingOf(invitees: readonly Invitee[]): readonly string[] {
   return invitees.flatMap((one) => (one.state === EMAIL_CHIP_STATE.DRAFT ? [one.email] : []));
 }
 
 /**
- * The addresses a form invites, the reader's own (`yours`) marked as theirs.
+ * The addresses a form invites, the reader's own (`yours`) marked as theirs,
+ * after those the workspace already invited (`invited`).
  * Note that the words still being typed are held here beside the chips,
  * because a press reads them too: an address typed and never ended by a
  * comma is still one the form sends.
  */
-export function useInvitees(yours: string | undefined): Invitees {
+export function useInvitees(yours: string | undefined, invited: readonly string[] = []): Invitees {
   const { mutateAsync: sendWorkspaceInvite } = useMutation(actMutation(ACT_KIND.WORKSPACE_INVITE));
   const [invitees, setInvitees] = useState<readonly Invitee[]>([]);
   const [typed, setTyped] = useState("");
+
+  const sent = sentOf(invited, invitees);
 
   const mark = (email: string, state: EmailChipState, reason?: string) =>
     setInvitees((now) => now.map((one) => (one.email === email ? { ...one, state, reason } : one)));
 
   return {
-    chips: invitees.map(({ email, ...chip }) => ({ id: keyOf(email), ...chip })),
+    chips: [...sent, ...invitees].map(({ email, ...chip }) => ({ id: keyOf(email), ...chip })),
     typed,
     onTyped: setTyped,
-    pending: pendingOf(joined(invitees, typed, yours)),
-    add: (words) => setInvitees((now) => joined(now, words, yours)),
+    pending: pendingOf(joined(invitees, typed, yours, sent)),
+    add: (words) => setInvitees((now) => joined(now, words, yours, sentOf(invited, now))),
     remove: (id) => setInvitees((now) => now.filter((one) => keyOf(one.email) !== id)),
     clear: () => {
       setInvitees([]);
@@ -136,7 +154,7 @@ export function useInvitees(yours: string | undefined): Invitees {
         now.filter((one) => one.state !== EMAIL_CHIP_STATE.DRAFT || emails.includes(one.email)),
       ),
     commit: () => {
-      const next = joined(invitees, typed, yours);
+      const next = joined(invitees, typed, yours, sent);
       setInvitees(next);
       setTyped("");
 

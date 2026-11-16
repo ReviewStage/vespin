@@ -950,10 +950,9 @@ export const tasksPictureKeepParamsSchema = EffectSchema.Struct({
   picture: descriptionFileDataUrlSchema,
 });
 
-/** Why a picture was not kept: the description holds its bound of pictures, or of videos, as the service answers in band, or how its procedure failed: the plan is not the account's to write, or no answer. */
+/** Why a picture was not kept: the description holds its bound of pictures, as the service answers in band, or how its procedure failed: the plan is not the account's to write, or no answer. */
 export const PICTURE_KEEP_FAILURE = {
   TOO_MANY: "too-many",
-  TOO_MANY_VIDEOS: "too-many-videos",
   ...failureSetOf(taskFilesContract.keepPicture),
 } as const;
 

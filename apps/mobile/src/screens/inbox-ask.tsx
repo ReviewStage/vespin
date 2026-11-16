@@ -1,6 +1,6 @@
 // inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, a notice's Got it, the composer that sends them with a note, replies, or starts a new thread with the agent, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
 
-import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
   fieldValueOf,
@@ -50,6 +50,7 @@ import {
 } from "@repo/ui-native";
 import { Predicate } from "effect";
 import type { ReactNode } from "react";
+import { useFocusShown } from "../focus-shown.js";
 import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
 import { REMIND_ME } from "./inbox-remind.js";
 
@@ -88,26 +89,41 @@ function typedValue(
 
 /** What an open ask's option media is opened and drawn by: each file's bytes as read, a page in the app or Safari, an address in Safari, and a recording the player cannot read on the web. */
 export interface OptionMediaDoors {
-  readonly source: (attachmentId: string) => string | undefined;
+  /** A file's bytes as read: none while on their way, and `null` where they could not be read. */
+  readonly source: (attachmentId: string) => string | null | undefined;
+  /** Reads a file whose bytes could not be read again. */
+  readonly retry: (attachmentId: string) => void;
   readonly openPage: (page: InboxOptionPage) => void;
   readonly openLink: (address: string) => void;
   readonly openVideoElsewhere: () => void;
 }
 
-/** What a picture's and a recording's tile is called where its agent gave it no caption. */
+/** What a picture's, a recording's, and a sound clip's tile is called where its agent gave it no caption, as the CLI names each. */
 const PICTURE_WORD = "Picture";
 const RECORDING_WORD = "Recording";
+const SOUND_CLIP_WORD = "Sound clip";
 
 /** One piece of an option's media as the card draws it: a file from its bytes as read, under its caption, and a page or an address opened through `doors`. */
 function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedia {
   switch (piece.type) {
     case INBOX_OPTION_MEDIA.FILE: {
       const recording = isVideoType(piece.mediaType);
+      const source = doors.source(piece.attachmentId);
+
+      if (isAudioType(piece.mediaType)) {
+        return {
+          kind: CHOICE_MEDIA.AUDIO,
+          title: piece.caption ?? SOUND_CLIP_WORD,
+          source,
+          onRetry: () => doors.retry(piece.attachmentId),
+        };
+      }
 
       return {
         kind: recording ? CHOICE_MEDIA.VIDEO : CHOICE_MEDIA.PICTURE,
         title: piece.caption ?? (recording ? RECORDING_WORD : PICTURE_WORD),
-        source: doors.source(piece.attachmentId),
+        source,
+        onRetry: () => doors.retry(piece.attachmentId),
         onOpen: recording ? doors.openVideoElsewhere : undefined,
       };
     }
@@ -244,6 +260,7 @@ export function OpenAskCard({
             {
               label: ASK_PRESS.NOT_DONE,
               symbol: GLYPH.UNDO,
+              quiet: true,
               onPress: () => press(INBOX_REPLY.NOT_DONE),
             },
           ]}
@@ -296,15 +313,17 @@ export function ThreadComposer({
   item,
   answer,
   agentName,
-  inColumn = false,
+  inColumn,
 }: {
   readonly item: InboxItem;
   readonly answer: ThreadAnswer;
   /** The thread's agent's name, which the new thread's switch names. */
   readonly agentName: string;
-  /** Whether it stands at a SwiftUI column's foot, a split view's detail, rather than docked over the screen. */
-  readonly inColumn?: boolean;
+  /** Whether it stands at a SwiftUI column's foot, a split view's detail, rather than docked over the screen, and whether that column stands in front: the app's notice stands over its composer only while the column does and the thread's screen is the one in front of its stack. */
+  readonly inColumn?: { readonly inFront: boolean } | undefined;
 }) {
+  // Note that the thread's screen hears its focus here rather than reading it whole, so a change of focus draws only the composer again (`useFocusShown`).
+  const focused = useFocusShown();
   const { draft, onDraft, answerReady, send, asNew, setAsNew, start } = answer;
 
   const placeholder = asNew
@@ -332,7 +351,11 @@ export function ThreadComposer({
     },
   };
 
-  return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
+  return inColumn === undefined ? (
+    <Composer {...props} />
+  ) : (
+    <ComposerFoot {...props} shown={inColumn.inFront && focused} />
+  );
 }
 
 /** What the thread's ⋯ menu acts through: its read mark, Remind me's times, and its link copied. */

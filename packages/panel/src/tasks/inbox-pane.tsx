@@ -9,6 +9,7 @@ import {
   type InboxDraft,
 } from "@repo/features/inbox-draft";
 import {
+  INBOX_EVENT_WORDS,
   INBOX_THREAD_EVENT,
   type InboxCloser,
   type InboxHolder,
@@ -672,20 +673,6 @@ function Waiting({ on }: { on: InboxItem["startedBy"] }): React.JSX.Element | nu
 }
 
 /**
- * What the agent's line says it did to an ask of its own, after its name:
- * withdrew it, or replaced it by a newer question where the post that
- * replaced it asks one, by a newer message where it asks nothing, as a post
- * that asks nothing replaces the ask it posts over, or by one the thread
- * read no longer carries.
- */
-const AGENT_DID = {
-  WITHDREW: "withdrew this",
-  REPLACED_BY_QUESTION: "replaced this with a newer question",
-  REPLACED_BY_MESSAGE: "replaced this with a newer message",
-  REPLACED: "replaced this",
-} as const;
-
-/**
  * What ends an agent's message whose ask of words alone was answered, where
  * the thread read carries the reply: a small pill saying "Answered", with
  * no card, the reply's words being the answer.
@@ -826,9 +813,6 @@ function threadRows(
   return rows;
 }
 
-/** What a member resolving the item says after their name. */
-const RESOLVED_IT = "resolved this without an answer";
-
 /**
  * The closer as the wire names a member: by the name the read gives them,
  * else the directory's, else, for the reader, by their id alone, which the
@@ -885,7 +869,7 @@ function ThreadEvent({
         kind={COMMENT.CLOSED}
         author={commentAuthor(closer)}
         nameRef={<ActorRef actor={closer} nameOnly />}
-        said={RESOLVED_IT}
+        said={INBOX_EVENT_WORDS.RESOLVED}
         at={line.at}
         now={now}
         messageId={line.note?.id}
@@ -905,7 +889,7 @@ function ThreadEvent({
         place={place}
         kind={COMMENT.WITHDRAWN}
         {...agent}
-        said={AGENT_DID.WITHDREW}
+        said={INBOX_EVENT_WORDS.WITHDREW}
         at={line.at}
         now={now}
       >
@@ -916,10 +900,10 @@ function ThreadEvent({
 
   const said =
     line.by === undefined
-      ? AGENT_DID.REPLACED
+      ? INBOX_EVENT_WORDS.REPLACED
       : line.by.ask === undefined
-        ? AGENT_DID.REPLACED_BY_MESSAGE
-        : AGENT_DID.REPLACED_BY_QUESTION;
+        ? INBOX_EVENT_WORDS.REPLACED_BY_MESSAGE
+        : INBOX_EVENT_WORDS.REPLACED_BY_QUESTION;
 
   return (
     <InboxComment

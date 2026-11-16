@@ -1,7 +1,11 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { NO_ITEMS, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import {
+  LINK_DESTINATION,
+  type NumberedAddress,
+  pullRequestAddressOf,
+} from "@repo/features/link-grammar";
 import { agentName } from "@repo/features/model-label";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -35,7 +39,6 @@ import {
 } from "@repo/ui";
 import { DescriptionCommentsProvider } from "@repo/ui/description-comments";
 import { GLYPH } from "@repo/ui/icons";
-import { pullRequestAgentOf } from "@repo/ui/pull-request-link";
 import {
   agentOfTab,
   agentTab,
@@ -144,7 +147,7 @@ import {
   type TaskHeadBack,
 } from "./phone-head.js";
 import {
-  changesTabOf,
+  listedAgentOf,
   SIDE_PANEL_HOLDER,
   SidePanel,
   type SidePanelDrawing,
@@ -739,14 +742,12 @@ function DescriptionDocument({
   };
 
   // An agent's pull request chip opens its pull request in the side panel, beside its tab, in
-  // the one Pull request tab the "+" offers for that pull request (`showPullRequest`), on its conversation.
-  const openPullRequest = (agentId: string, number?: number) =>
+  // the one Pull request tab for that pull request (`showPullRequest`), on its conversation.
+  const openPullRequest = (pullRequest: NumberedAddress) =>
     showPullRequest(
       { ...sidePanel, onOpen: openPanelTab },
-      agents,
-      agentId,
+      pullRequest,
       PULL_REQUEST_VIEW.CONVERSATION,
-      number,
     );
 
   // An agent a mention names wears its tab's tile and hangs its tab's card, read as its tab reads them.
@@ -763,19 +764,25 @@ function DescriptionDocument({
   const agentPullRequests = agents.pullRequests;
 
   const changesPeople = useChangesPeopleOf(
-    useMemo(() => [...agentPullRequests.keys()], [agentPullRequests]),
+    useMemo(
+      () =>
+        [...agentPullRequests].flatMap(([agentId, each]) => {
+          const address = pullRequestAddressOf(each.url);
+
+          return address === undefined ? [] : [[agentId, address] as const];
+        }),
+      [agentPullRequests],
+    ),
   );
 
   const pullRequestCard = (url: string) => {
-    const owned = [...agents.pullRequests].map(([agentId, each]) => ({ agentId, url: each.url }));
     // A page under an agent's pull request, as its files, is still that pull request, as its press says.
-    const owner = pullRequestAgentOf(url, owned);
+    const address = pullRequestAddressOf(url);
+    const listed = address === undefined ? undefined : listedAgentOf(agents, address);
 
-    if (owner === undefined) return undefined;
-    const agentId = changesTabOf(agents, owner, tasks.sidePanel.changes).changes;
-    const pullRequest = agents.pullRequests.get(agentId);
-
-    if (pullRequest === undefined) return undefined;
+    if (listed === undefined) return undefined;
+    const { pullRequest } = listed;
+    const agentId = listed.agent.id;
 
     const card = tabCard({
       kind: TAB_KIND.CHANGES,
@@ -873,7 +880,7 @@ function DescriptionDocument({
   const openWaitingThread = useSteadyDoor((item: InboxItem) => {
     if (openedId === undefined) return;
 
-    if (phone) tasks.onShowInbox({ taskId: openedId, itemId: item.id });
+    if (phone) tasks.onShowInbox({ taskId: openedId, itemId: item.id, itemAgentId: item.agentId });
     else agentThreads.onOpen(item.agentId, item.id);
   });
 
@@ -1244,7 +1251,6 @@ function DescriptionDocument({
           kind: HERE.TASK,
           taskId: openedId ?? "",
           repository: openedRepository,
-          pullRequests: agents.pullRequests,
           agentIds: agents.agentIds,
           heldIds: agents.heldIds,
         },
