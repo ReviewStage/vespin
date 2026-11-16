@@ -21,6 +21,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AudioClip } from "./audio-clip.js";
 import { DraftCard } from "./draft-card.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
@@ -1058,7 +1059,7 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
   );
 }
 
-/** A picture's block: the video its address names, played in its place, or the picture. */
+/** A picture's block: the video or sound clip its address names, played in its place, or the picture. */
 function PictureBlock({
   source,
   alt,
@@ -1071,14 +1072,11 @@ function PictureBlock({
   const video = drawing.videoAt(source);
 
   if (video === undefined) return <Picture source={drawing.pictureSource(source)} alt={alt} />;
+  const label = alt.trim() === "" ? video.label : alt;
 
-  return (
-    <Video
-      source={video.source}
-      label={alt.trim() === "" ? video.label : alt}
-      onOpenElsewhere={video.onOpenElsewhere}
-    />
-  );
+  if (video.audio === true) return <AudioClip source={video.source} label={label} />;
+
+  return <Video source={video.source} label={label} onOpenElsewhere={video.onOpenElsewhere} />;
 }
 
 function BlockView({
@@ -1173,6 +1171,8 @@ type MarkdownProps = {
   readonly onOpenLink: (address: string) => void;
   /** Whether a person typed the words line by line, whose line breaks are kept; an agent's join as Markdown reads them. */
   readonly typed?: boolean | undefined;
+  /** Whether raw HTML in the words stays unseen, as GitHub's page hides a pull request body's comments and tags; it is drawn as written where none is given. */
+  readonly hidesHtml?: boolean | undefined;
   /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way, and `null` where it could not be read. Each is drawn from the address it names where none is given. */
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
   /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
@@ -1187,10 +1187,12 @@ type MarkdownProps = {
     | undefined;
 };
 
-/** A video the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, and where it opens where the player cannot read it. */
+/** A video or a sound clip the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, whether it is a sound clip, and where a video opens where the player cannot read it. */
 export interface MarkdownVideo {
   readonly source: string | undefined;
   readonly label: string;
+  /** Whether it is a sound clip, played in its strip (`AudioClip`) rather than a film's player. */
+  readonly audio?: boolean | undefined;
   readonly onOpenElsewhere?: (() => void) | undefined;
 }
 
@@ -1226,6 +1228,7 @@ export function Markdown({
   repository = null,
   onOpenLink,
   typed,
+  hidesHtml,
   pictureSource = namedSource,
   videoAt = noVideo,
   headings = false,
@@ -1236,8 +1239,9 @@ export function Markdown({
   const { fontScale, width } = useWindowDimensions();
 
   const blocks = useMemo(
-    () => markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed }),
-    [words, repository, typed],
+    () =>
+      markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed, hidesHtml }),
+    [words, repository, typed, hidesHtml],
   );
 
   const drawing: Drawing = {

@@ -36,7 +36,7 @@ import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
-import type { TaskStatus } from "@repo/features/task-wire";
+import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
@@ -153,8 +153,7 @@ function RowLine({ children }: { readonly children: ReactNode }) {
 type TaskHeadProps = {
   readonly name: string;
   readonly status: TaskStatus | undefined;
-  /** Its priority's name. */
-  readonly priority: string | undefined;
+  readonly priority: TaskPriority | undefined;
   /** Who it is assigned to, or the words for no one. */
   readonly assignee: Face & { readonly nobody: boolean };
   /** Who created it and when, the line under its chips: "Created by Ada Lovelace · Oct 5". */
@@ -216,6 +215,8 @@ type AgentRowProps = {
   readonly state: AgentRowState;
   /** Where it runs: "Cloud", or the device's name. */
   readonly runsOn: string;
+  /** The glyph that leads where it runs, as the panel's row draws it: the cloud's, or its device's. */
+  readonly runsOnGlyph?: Glyph | undefined;
   /** How many of its threads wait on the reader; none said at none. */
   readonly waiting: number;
   /** The pull request it opened, its state's glyph and number in its line, pressed to open it. */
@@ -310,7 +311,14 @@ export function AgentRow(props: AgentRowProps) {
         lead={<AgentTile name={name} harness={harness} size={tile} />}
         title={name}
         ink={colors.TEXT}
-        end={<EndWords words={runsOn} />}
+        end={
+          <HStack spacing={SPACE.TIGHT}>
+            {props.runsOnGlyph === undefined ? null : (
+              <ToneGlyph glyph={props.runsOnGlyph} tone={STATUS_TONE.NEUTRAL} hidden />
+            )}
+            <EndWords words={runsOn} />
+          </HStack>
+        }
       />
       {!told && waiting === 0 ? null : (
         <RowLine>
@@ -544,6 +552,8 @@ type WordsRowProps = {
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
   /** What GitHub holds of a pull request or issue a chip in the words names, by its page, which the chip says where it stands. */
   readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
+  /** Whether raw HTML in the words stays unseen, as GitHub's page hides a pull request body's comments and tags. */
+  readonly hidesHtml?: boolean | undefined;
 };
 
 /** The count of a block's open comment threads at its trailing edge, as a document's margin marks them, opening them on a press. */
@@ -602,6 +612,7 @@ export function WordsRow({
   pictureSource,
   videoAt,
   linkStanding,
+  hidesHtml,
 }: WordsRowProps) {
   const colors = useColors();
 
@@ -615,6 +626,7 @@ export function WordsRow({
           pictureSource={pictureSource}
           videoAt={videoAt}
           linkStanding={linkStanding}
+          hidesHtml={hidesHtml}
           headings
         />
       </View>

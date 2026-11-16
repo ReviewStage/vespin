@@ -44,6 +44,8 @@ export const NATIVE_MOMENT = {
   TOOL_STARTED: "tool_started",
   /** A tool answered. */
   TOOL_SETTLED: "tool_settled",
+  /** A command the kernel killed for want of memory, said ahead of its answer: its call settles marked with the sandbox's memory. */
+  OUT_OF_MEMORY: "out_of_memory",
   /**
    * A subagent call answered that its subagent runs on in the background:
    * the call stays open, as a delegation's row runs, until `SUBAGENT_ENDED`
@@ -149,6 +151,12 @@ export type NativeMoment =
       readonly settlement: ToolCallSettlement;
       /** The call's input as it stood when it answered, for a harness that fills it in after the start (Codex); it replaces the started one. */
       readonly input?: UnparsedWireValue;
+    }
+  | {
+      readonly kind: typeof NATIVE_MOMENT.OUT_OF_MEMORY;
+      readonly callId: string;
+      /** The sandbox's memory as the command ran, in whole GB. */
+      readonly memoryGb: number;
     }
   | {
       readonly kind: typeof NATIVE_MOMENT.SUBAGENT_RUNNING;

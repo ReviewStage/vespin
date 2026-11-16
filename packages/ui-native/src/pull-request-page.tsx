@@ -41,6 +41,7 @@ import { GLYPH, type MarkLook } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Avatar, FACE_KIND, type Face, ToneGlyph } from "./marks.js";
+import { GoesMark, PUSH_ROW_GOES } from "./settings-form.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -247,7 +248,27 @@ type MarkRowProps = {
   readonly standing?: string | undefined;
   /** Whose row it is, by their face, where the panel draws one: a reviewer, or the App that runs a check. */
   readonly face?: { readonly of: Face; readonly stands: MarkFace } | undefined;
+  /** The address a press on it opens out of the app, such as a check's run, marked at its end by the arrow out; none where it takes no press. */
+  readonly opens?: string | undefined;
 };
+
+/** What a row that opens an address out of the app is heard to do, in the arrow's place: GitHub by name where the address is GitHub's, since a check's run may be another CI's page. */
+const OPENS_HEARD = {
+  GITHUB: "Opens on GitHub",
+  WEB: "Opens on the web",
+} as const;
+
+/** GitHub's own host, which a pull request's page and most checks' runs stand on. */
+const GITHUB_HOST = "github.com";
+
+/** What a press on a row opening `address` is heard to do. */
+function opensHeard(address: string): string {
+  const host = URL.canParse(address) ? new URL(address).hostname : "";
+
+  return host === GITHUB_HOST || host.endsWith(`.${GITHUB_HOST}`)
+    ? OPENS_HEARD.GITHUB
+    : OPENS_HEARD.WEB;
+}
 
 /**
  * A row of a pull request's page, such as a check or a reviewer: its mark
@@ -256,10 +277,10 @@ type MarkRowProps = {
  * hairline under the words. A reviewer's face takes the lead column, its
  * mark moving to the line's end before its words, as the panel's facepile
  * wears where each stands; a check's App stands by its avatar beside the
- * mark. The row is heard as one element: its name, where it stands, and
- * then its words.
+ * mark. A row that opens an address out of the app ends in its arrow. The row is heard as one
+ * element: its name, where it stands, its words, and where a press goes.
  */
-export function MarkRow({ id, mark, title, detail, standing, face }: MarkRowProps) {
+export function MarkRow({ id, mark, title, detail, standing, face, opens }: MarkRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(MARK_SIZE.FACE);
   const glyph = <ToneGlyph glyph={mark.symbol} tone={mark.tone} textStyle={TYPE_ROLE.ROW_TITLE} />;
@@ -302,6 +323,7 @@ export function MarkRow({ id, mark, title, detail, standing, face }: MarkRowProp
           words
         )
       }
+      trail={opens === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.OUT} />}
     />
   );
 
@@ -309,15 +331,19 @@ export function MarkRow({ id, mark, title, detail, standing, face }: MarkRowProp
     <RowFrame
       id={id}
       row={row}
-      heard={{ label: title, value: [standing !== detail && standing, detail] }}
+      heard={{
+        label: title,
+        value: [standing !== detail && standing, detail, opens !== undefined && opensHeard(opens)],
+      }}
     />
   );
 }
 
 /**
  * What a change GitHub did not make leaves to say, as a list's row: our
- * sentence by a warning in the danger ink, and GitHub's own words quoted
- * under it where it said some.
+ * sentence in the muted ink by a warning in the attention ink, as the
+ * failure notice and the panel's problem line draw a refusal, and GitHub's
+ * own words quoted under it where it said some.
  */
 export function WriteNoteRow({
   words,
@@ -344,12 +370,14 @@ export function WriteNoteRow({
     >
       <ToneGlyph
         glyph={GLYPH.FAILED}
-        tone={STATUS_TONE.DANGER}
+        tone={STATUS_TONE.ATTENTION}
         textStyle={TYPE_ROLE.ROW_LINE}
         hidden
       />
       <VStack alignment="leading" spacing={2}>
-        <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT)]}>
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
           {words}
         </Text>
         {said === undefined ? null : (

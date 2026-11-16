@@ -38,6 +38,25 @@ export function pictureQuery(owner: string, id: string, read?: PictureReader) {
   });
 }
 
+/**
+ * The picture `id` of an owner one id does not name, its ids in order from
+ * the outermost (a workspace, then its repository), read through `read`, kept
+ * beside every other picture so a change of account lets it go too
+ * (`forgetPictures`).
+ */
+export function nestedPictureQuery(
+  owner: readonly string[],
+  id: string,
+  read: (id: string) => Promise<PictureAnswer>,
+) {
+  return queryOptions({
+    queryKey: [QUERY_ROOT.PICTURE, ...owner, id],
+    queryFn: () => readPicture(read(id)),
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
 /** Where the picture stands in `client` now, without reading it; reading where no place has read it. */
 export function pictureNow(client: QueryClient, owner: string, id: string): PictureState {
   return pictureStateOf(client.getQueryData(pictureQuery(owner, id).queryKey));

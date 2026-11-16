@@ -26,7 +26,14 @@ builds a control of its own.
   a path, a page's main acts as glyphs in the bar's one glass before its ⋯
   (two or three, dimmed rather than gone with nothing picked, the rest left
   in ⋯ by `menuWithout`), a list's scopes as Mail's filter button
-  (`scopeMenu`, beside the app sidebar only), a `BarMenu` such as the ⋯ menu, an
+  (`scopeMenu`, beside the app sidebar only), a line under its title
+  (`titleLine`) such as the narrowing scope's "Filtered by:" line (`scopeSubtitle`), as
+  Mail's, which `Screen`'s `subtitle` sets under a compact screen's stack bar
+  too (`barSubtitle`: SwiftUI's `navigationSubtitle` for a column, the
+  stack's `UINavigationItem.subtitle` for a screen, each standing whether
+  or not it has words, since a modifier coming or going redraws all under
+  it), a
+  `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says, and `SplitOverTabs`, the one split view a window wide enough
   for three columns stands over the hidden tabs, in front of a tab's root and
@@ -123,8 +130,8 @@ builds a control of its own.
 - **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
   panel's three lines (the task's status ring and name, then the thread's
   title and time, then the glyph and words of what it asks; an agent's own
-  thread, with no task, in two), `TaskRow` a task on one line (its status
-  ring, its name, and at its end a thread that needs you, a failed agent,
+  thread, with no task, in two), `TaskRow` a task on one line (its priority's
+  mark and status ring, as the panel's List row leads, its name, and at its end a thread that needs you, a failed agent,
   one at work, or its pull request, then its key), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
 - **Every glyph is the panel's own Lucide glyph for the same place** (the
