@@ -9,9 +9,13 @@ import {
   SEARCH_FOUND_TITLE,
   SEARCH_SCOPE,
   SEARCH_SCOPE_TITLE,
+  type SearchFoundKind,
   type SearchScope,
+  SHOW_ALL,
   scopedFound,
   searchPlaceholder,
+  showAllHeard,
+  shownOfWords,
 } from "@repo/features/search-found-model";
 import {
   CHOOSE_AN_ITEM_WORDS,
@@ -177,6 +181,7 @@ function FoundList({
   found,
   query,
   scope,
+  setScope,
   listing,
   selected,
   onOpen,
@@ -188,6 +193,8 @@ function FoundList({
   /** What was typed, whose words each row's title sets in bold. */
   readonly query: string;
   readonly scope: SearchScope;
+  /** Narrows the search to one kind, as a section's Show all does. */
+  readonly setScope: (scope: SearchScope) => void;
   /** The Tasks listing a task's row acts through, its status asking first where it stops agents. */
   readonly listing: TasksListing;
   /** The row drawn selected, whose page stands beside the results; none in a compact window. */
@@ -206,6 +213,22 @@ function FoundList({
   // Note that a heading names a kind only among the others, so a kind's own scope lists its rows under none.
   const titled = scope === SEARCH_SCOPE.ALL;
 
+  // Note that a kind cut short under All ends its header in Show all, which narrows to the kind, and one cut short under its own scope says so under its rows, so no cut is silent.
+  const cut = (kind: SearchFoundKind) => {
+    const total = found[kind].length;
+    const listed = shown[kind].length;
+
+    if (listed >= total) return {};
+
+    if (titled) {
+      return {
+        more: { label: SHOW_ALL, heard: showAllHeard(kind, total), onPress: () => setScope(kind) },
+      };
+    }
+
+    return { footer: shownOfWords(listed, total) };
+  };
+
   return (
     <RowList
       look={LIST_LOOK.PLAIN}
@@ -221,6 +244,7 @@ function FoundList({
         <ListSection
           title={titled ? SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.TASKS] : undefined}
           count={found.tasks.length}
+          {...cut(SEARCH_FOUND_KIND.TASKS)}
         >
           <TaskRows tasks={shown.tasks} listing={listing} />
         </ListSection>
@@ -229,6 +253,7 @@ function FoundList({
         <ListSection
           title={titled ? SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.INBOX] : undefined}
           count={found.inbox.length}
+          {...cut(SEARCH_FOUND_KIND.INBOX)}
         >
           <InboxItemRows
             listed={shown.inbox}
@@ -244,6 +269,7 @@ function FoundList({
         <ListSection
           title={titled ? SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.AGENTS] : undefined}
           count={found.agents.length}
+          {...cut(SEARCH_FOUND_KIND.AGENTS)}
         >
           {shown.agents.map((line) => (
             <TaskAgentRow
@@ -342,6 +368,7 @@ function useSearchScreen(
       found={found}
       query={query}
       scope={scope}
+      setScope={setScope}
       listing={listing}
       selected={pick?.picked?.id}
       onOpen={open}
