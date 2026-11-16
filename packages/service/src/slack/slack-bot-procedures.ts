@@ -1,7 +1,7 @@
 /**
  * slack-bot-procedures.ts -- a workspace's own Slack bot read, connected, and disconnected, and the repositories and channels its Slack starts use.
  *
- * Six procedures the signed-in desktop calls with its bearer:
+ * Seven procedures the signed-in desktop calls with its bearer:
  *
  * - `GET /api/workspaces/slack-bot` takes any member, and answers whether
  *   this deployment holds the bot and the Slack team the workspace's bot is
@@ -9,6 +9,10 @@
  * - `POST /api/workspaces/slack-bot/connect` takes an owner or admin, asks
  *   Slack which team the bot's token answers for (`auth.test`), and keeps
  *   it as the workspace's installation.
+ * - `POST /api/workspaces/slack-bot/install` takes an owner or admin, and
+ *   answers Slack's authorize address for our Slack app, carrying a
+ *   single-use intent; Slack returns the browser to the callback
+ *   (`slack-install-app.ts`), which connects the bot with its own token.
  * - `POST /api/workspaces/slack-bot/disconnect` takes an owner or admin,
  *   and deletes the installation, every member's Slack id with it; the
  *   bot stays installed in Slack, where only Slack's admins remove it.
@@ -37,6 +41,7 @@ import {
   changeSlackChannel,
   connectSlackBot,
   disconnectSlackBot,
+  installSlackBot,
   readSlackBot,
   setSlackDefaultRepository,
   setSlackNotifications,
@@ -46,7 +51,7 @@ export interface SlackBotProcedureSeams {
   resolveUserId: UserIdResolver;
 }
 
-/** The workspace Slack bot resource: connect and disconnect to an owner or admin, and the read and the member's own switch to any member, each the operation of the same name (`slack-bot-operations.ts`). */
+/** The workspace Slack bot resource: connect, install, and disconnect to an owner or admin, and the read and the member's own switch to any member, each the operation of the same name (`slack-bot-operations.ts`). */
 export function slackBotProcedures(seams: SlackBotProcedureSeams) {
   const resource = hosted.workspaceSlackBot.use(accountMiddleware(seams.resolveUserId));
 
@@ -56,6 +61,11 @@ export function slackBotProcedures(seams: SlackBotProcedureSeams) {
     }),
     connect: resource.connect.effect(function* ({ input, context }) {
       return yield* connectSlackBot(context.userId, input.workspaceId);
+    }),
+    install: resource.install.effect(function* ({ input, context }) {
+      const { origin } = new URL(context.request.url);
+
+      return yield* installSlackBot(context.userId, input.workspaceId, origin);
     }),
     disconnect: resource.disconnect.effect(function* ({ input, context }) {
       return yield* disconnectSlackBot(context.userId, input.workspaceId);

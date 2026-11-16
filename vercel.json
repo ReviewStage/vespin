@@ -240,6 +240,10 @@
           "dest": "/api/default.js?route=slack/events"
         },
         {
+          "src": "/api/slack/oauth/callback",
+          "dest": "/api/default.js?route=slack/oauth/callback"
+        },
+        {
           "src": "/api/triggers/sentry",
           "dest": "/api/default.js?route=triggers/sentry"
         },

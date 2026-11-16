@@ -628,6 +628,8 @@ export const INTEGRATION_LANDING_STATUS = {
   UNAVAILABLE: "unavailable",
   /** The provider's account is already installed for another workspace, which keeps it. */
   ALREADY_CONNECTED: "already-connected",
+  /** The person who approved the install at the provider is not the owner or admin who started it. */
+  NOT_PERMITTED: "not-permitted",
 } as const;
 
 export type IntegrationLandingStatus =
