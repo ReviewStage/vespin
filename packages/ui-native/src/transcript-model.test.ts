@@ -10,6 +10,7 @@ import {
   TRANSCRIPT_ITEM,
   transcriptItems,
   transcriptOriginOf,
+  withWaitingLine,
 } from "./transcript-model.js";
 
 const PICTURE = { id: "picture-1", mediaType: "image/png", width: 320, height: 180, byteCount: 10 };
@@ -109,6 +110,68 @@ describe("transcriptItems", () => {
       },
       { kind: TRANSCRIPT_ITEM.SAID, words: "Thanks.", sender: undefined },
     ]);
+  });
+
+  it("stands one sender's lines sent close together in a run, and the day and time only over talk that picks up again, never joining the reader to an app", () => {
+    const minute = 60 * 1000;
+    const ada = { name: "Ada", userId: "u1" };
+    const grace = { name: "Grace", userId: "u2" };
+
+    const line = (
+      id: string,
+      minutes: number,
+      sentBy: { readonly name: string; readonly userId?: string } = ada,
+    ) => ({
+      id,
+      role: MESSAGE_ROLE.USER,
+      parts: [{ type: "text" as const, text: id }],
+      sentAt: minutes * minute,
+      sentBy,
+    });
+
+    const items = transcriptItems(
+      [
+        line("a", 0),
+        line("b", 1),
+        line("c", 2, grace),
+        line("d", 3, grace),
+        line("e", 40),
+        line("f", 41, { name: "Morning triage" }),
+      ],
+      { writing: false, readerId: "u1", toggles: NO_TOGGLES, now: 41 * minute, pullRequests: [] },
+    );
+
+    expect(
+      items.map((item) =>
+        item.kind === TRANSCRIPT_ITEM.SAID
+          ? [item.words, item.joinsAbove, item.joinsBelow, item.sender, item.stamp !== undefined]
+          : item.kind,
+      ),
+    ).toEqual([
+      ["a", false, true, undefined, true],
+      ["b", true, false, undefined, false],
+      ["c", false, true, "Grace", false],
+      ["d", true, false, "Grace", false],
+      ["e", false, false, undefined, true],
+      ["f", false, false, "Morning triage", false],
+    ]);
+  });
+
+  it("names an app's line while the reader is not yet known", () => {
+    const items = transcriptItems(
+      [
+        {
+          id: "fired",
+          role: MESSAGE_ROLE.USER,
+          parts: [{ type: "text", text: "Triage the new issues." }],
+          sentAt: 0,
+          sentBy: { name: "Morning triage" },
+        },
+      ],
+      { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 1, pullRequests: [] },
+    );
+
+    expect(items).toMatchObject([{ kind: TRANSCRIPT_ITEM.SAID, sender: "Morning triage" }]);
   });
 
   it("heads a line sent from a suggestion by the agent that suggested it", () => {
@@ -227,7 +290,7 @@ describe("transcriptItems", () => {
       },
     },
   ])(
-    "draws a pull request a call opened as the task list holds it, or as it was opened where the list holds none ($card.state)",
+    "draws a pull request a call opened as the task list holds it, or as it was opened where the list holds none, in the call's place ($card.state)",
     ({ held, card }) => {
       const items = transcriptItems([OPENED], {
         writing: false,
@@ -242,8 +305,47 @@ describe("transcriptItems", () => {
         url: "https://github.com/ada/relay/pull/128",
         ...card,
       });
+      expect(items.some((item) => item.kind === TRANSCRIPT_ITEM.CALL)).toBe(false);
     },
   );
+});
+
+describe("withWaitingLine", () => {
+  it("stops a fold's spinner while the agent waits on the reader", () => {
+    const done = (id: string) => ({
+      type: "tool-bash",
+      toolCallId: id,
+      state: "output-available",
+      input: { command: `pnpm test ${id}` },
+      output: { stdout: "ok" },
+    });
+
+    const items = transcriptItems(
+      [
+        {
+          id: "work",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            done("a"),
+            done("b"),
+            {
+              type: "tool-bash",
+              toolCallId: "c",
+              state: "input-available",
+              input: { command: "pnpm test c" },
+            },
+          ],
+        },
+      ],
+      { writing: true, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
+    );
+
+    const folds = (shown: readonly (typeof items)[number][]) =>
+      shown.flatMap((item) => (item.kind === TRANSCRIPT_ITEM.FOLD ? [item.running] : []));
+
+    expect(folds(items)).toEqual([true]);
+    expect(folds(withWaitingLine(items, "Waiting on you · 1 approval"))).toEqual([false]);
+  });
 });
 
 describe("a call whose answer its page carried cut", () => {

@@ -219,6 +219,14 @@ function CapsuleWords({
   );
 }
 
+/** How a `Chip` stands: bordered, as an act's capsule, or quiet, its words alone in the ink, as the panel's quiet button stands the lesser of two acts. */
+export const CHIP_LOOK = {
+  BORDERED: "bordered",
+  QUIET: "quiet",
+} as const;
+
+export type ChipLook = (typeof CHIP_LOOK)[keyof typeof CHIP_LOOK];
+
 type ChipProps = {
   readonly label: string;
   readonly symbol?: Glyph | undefined;
@@ -228,6 +236,8 @@ type ChipProps = {
   readonly selected?: boolean | undefined;
   /** What a press does, heard after the chip's words where they leave it unsaid, such as a picture's × taking it off a message. */
   readonly hint?: string | undefined;
+  /** How it stands, bordered unless the lesser of two acts names it quiet. */
+  readonly look?: ChipLook | undefined;
   readonly onPress: () => void;
 };
 
@@ -239,15 +249,29 @@ type ChipProps = {
  * Contrast. VoiceOver hears the chosen one as selected, since its fill
  * alone says so on screen.
  */
-export function Chip({ label, symbol, count, selected = false, hint, onPress }: ChipProps) {
+export function Chip({
+  label,
+  symbol,
+  count,
+  selected = false,
+  hint,
+  look = CHIP_LOOK.BORDERED,
+  onPress,
+}: ChipProps) {
   const colors = useColors();
+
+  const style = selected
+    ? "borderedProminent"
+    : look === CHIP_LOOK.QUIET
+      ? "borderless"
+      : "bordered";
 
   return (
     <SwiftUIButton
       {...actContent(count === undefined ? label : `${label} ${count}`, symbol, "subheadline")}
       onPress={onPress}
       modifiers={[
-        buttonStyle(selected ? "borderedProminent" : "bordered"),
+        buttonStyle(style),
         SwiftModifiers.buttonBorderShape("capsule"),
         controlSize("small"),
         tint(colors.TEXT),
@@ -276,9 +300,11 @@ export const SCOPE_LOOK = {
 
 export type ScopeLook = (typeof SCOPE_LOOK)[keyof typeof SCOPE_LOOK];
 
-/** A scope as its segment names it: its label, and its count after it where it has one. */
+/** A scope as its segment names it: its label, and its count after it while it holds anything, as a split view's filter menu leaves out a 0. */
 function segmentWords(scope: Scope): string {
-  return scope.count === undefined ? scope.label : `${scope.label} ${scope.count}`;
+  return scope.count === undefined || scope.count === 0
+    ? scope.label
+    : `${scope.label} ${scope.count}`;
 }
 
 /** A list's scopes as a `ScopePicker` or a `RowList` stands them: what the control chooses, heard by VoiceOver, its scopes, and its look. */
@@ -360,6 +386,8 @@ type FieldChipProps = {
   readonly mark?: { readonly glyph: Glyph; readonly tone: StatusTone } | undefined;
   /** What a press offers, the field's other values, where the reader may change it; a chip with none takes no press. */
   readonly menu?: FieldMenu | undefined;
+  /** What VoiceOver hears for a chip that takes no press, where its words alone don't say what it is, such as the task an agent starts on and its status; its words otherwise. */
+  readonly heard?: string | undefined;
 };
 
 /** A field's values as its chip's menu offers them: the field's name, which VoiceOver hears before its value, and each value, the one it holds checked. */
@@ -419,7 +447,7 @@ export function FieldChip(props: FieldChipProps) {
       modifiers={[
         ...capsuleModifiers(colors, false),
         ...(menu === undefined
-          ? [accessibilityElement("ignore"), accessibilityLabel(props.label)]
+          ? [accessibilityElement("ignore"), accessibilityLabel(props.heard ?? props.label)]
           : []),
       ]}
     >
