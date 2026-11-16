@@ -34,6 +34,7 @@ import { useOnOwnTab } from "../tab-route.js";
 import {
   threadMessages,
   threadOpen,
+  useCommentMedia,
   useCommentReply,
   useCommentSettle,
   useCommentStart,
@@ -228,6 +229,7 @@ export function CommentThread({
   const threads = useTaskComments(overview?.task.id);
   const thread = threads.find((each) => each.id === id);
   const reply = useCommentReply(taskId, id);
+  const media = useCommentMedia(overview?.task.id, thread);
   const settle = useCommentSettle(taskId);
   const pictureOf = useMemberPictures();
 
@@ -298,7 +300,7 @@ export function CommentThread({
         path={path}
         status={task?.status}
         title={quoteOf(thread.quote, thread.anchor !== undefined)}
-        messages={threadMessages(thread, agents, pictureOf)}
+        messages={threadMessages(thread, agents, pictureOf, media)}
         repository={task?.repository}
         onOpenLink={openLink}
         standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}
