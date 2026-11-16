@@ -1,4 +1,9 @@
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
+import {
+  VERSION_CHANGE,
+  type VersionDiff,
+  versionDiff,
+} from "@repo/features/description-version-diff";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { dayAndTimeText, momentText } from "@repo/features/time-format";
 import { readFailedWords } from "@repo/features/words";
@@ -29,7 +34,6 @@ import { unreadShown } from "../failure-report.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { type ToastNotice, useToast } from "../toast.js";
 import { TOAST_ONLY_UNDO, toastOnlyUndo, type UndoWrite } from "../undo-stack.js";
-import { VERSION_CHANGE, type VersionDiff, versionDiff } from "./description-history-model.js";
 import { DescriptionPictures, useDescriptionPictureDrawer } from "./description-pictures.js";
 import { DocumentScroll } from "./document-frame.js";
 import { type MentionedTask, useMentionLink } from "./task-mentions.js";
@@ -53,7 +57,7 @@ import { useOpenLink } from "./use-open-link.js";
  * show. The version is drawn whole against the version before it, which
  * shows what that revision changed: words written in wear the accent and
  * words struck out are struck, so neither reads by its color alone
- * (`description-history-model.ts`). A Mermaid fence draws as its diagram, and one
+ * (`@repo/features/description-version-diff`). A Mermaid fence draws as its diagram, and one
  * whose code the revision changed as its code with the changes marked,
  * since two diagrams side by side would hide what changed (`../description-diagram.tsx`).
  * A version is drawn under the plan's name, as
@@ -71,9 +75,6 @@ import { useOpenLink } from "./use-open-link.js";
 
 /** A line over a version: what it is compared with, or why it is not drawn, in the body's muted type a group's gap over the version. */
 const VERSION_NOTE = "version-note mt-0 mb-section-gap text-body text-muted-foreground";
-
-/** What the view says over a version that changed nothing from the one before it. */
-const NO_CHANGE_LINE = "This version changed nothing from the one before it.";
 
 /**
  * The placeholder page's shape while a version is read: a section's heading
@@ -246,20 +247,20 @@ function VersionContent({
     );
   }
 
-  const diff = versionDiff(read.previous, read.document);
+  const diff = versionDiff(read.previous, read.description);
   // Note that the first version is compared with nothing, so it is never said to have changed nothing.
   const unchanged = read.previous !== null && !diff.changed;
 
   return (
     <>
-      {unchanged ? <p className={VERSION_NOTE}>{NO_CHANGE_LINE}</p> : null}
+      {unchanged ? <p className={VERSION_NOTE}>{VERSION_HISTORY_WORDS.NO_CHANGE}</p> : null}
       {task === undefined ? (
         <VersionBody diff={diff} title={title} section={section} task={task} />
       ) : (
         // A version struck a picture as well as wrote one in, so both texts name the pictures it draws.
         <DescriptionPictures
           taskId={task.taskId}
-          text={`${read.document.body}\n${read.previous?.body ?? ""}`}
+          text={`${read.description.body}\n${read.previous?.body ?? ""}`}
         >
           <VersionBody diff={diff} title={title} section={section} task={task} />
         </DescriptionPictures>

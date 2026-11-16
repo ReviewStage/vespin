@@ -7,7 +7,9 @@
  * Claude Code says a project's own blocking Stop hook in the same shape as
  * its checker's verdict, so a verdict counts only where its condition is a
  * goal's. A `/goal` line the developer sent moves the goal as shown at once,
- * ahead of the harness's word (`goalAsShown`).
+ * ahead of the harness's word (`goalAsShown`). Cursor keeps no goal, and
+ * the app builds none of its own, so a Cursor agent is offered no `/goal`,
+ * draws no goal row, and is refused a `/goal` line (`goalRefusalWords`).
  */
 
 import { MESSAGE_ROLE } from "@repo/wire";
@@ -19,7 +21,14 @@ import {
   goalAskOf,
 } from "@repo/wire/ui-messages";
 import { AGENT_PART, agentPart, agentParts, arrivedParts, placedMessages } from "./agent-parts.js";
-import { AGENT_SENDER, type AgentTranscriptMessage } from "./agent-wire.js";
+import { runtimeModelRule } from "./agent-runtime-models.js";
+import {
+  AGENT_RUNTIME,
+  AGENT_SENDER,
+  type AgentRuntime,
+  type AgentTranscriptMessage,
+} from "./agent-wire.js";
+import { leadingCommand, SLASH_COMMAND } from "./slash-command.js";
 
 /** Where a goal stands. */
 export const AGENT_GOAL_STATE = {
@@ -34,7 +43,44 @@ export const AGENT_GOAL_STATE = {
   BUDGET_LIMITED: "budget_limited",
 } as const;
 
-export type AgentGoalState = (typeof AGENT_GOAL_STATE)[keyof typeof AGENT_GOAL_STATE];
+type AgentGoalState = (typeof AGENT_GOAL_STATE)[keyof typeof AGENT_GOAL_STATE];
+
+/** What an agent's harness does with a goal: keeps none, sets and clears one (Claude Code's `/goal`), or pauses and resumes it too (Codex's thread goal). */
+export const GOAL_REACH = {
+  NONE: "none",
+  SETS: "sets",
+  PAUSES: "pauses",
+} as const;
+
+export type GoalReach = (typeof GOAL_REACH)[keyof typeof GOAL_REACH];
+
+/** Each runtime's goal, so a new harness says what it does with one before it builds. */
+const RUNTIME_GOAL_REACH = {
+  [AGENT_RUNTIME.RETIRED]: GOAL_REACH.NONE,
+  [AGENT_RUNTIME.CLAUDE_CODE]: GOAL_REACH.SETS,
+  [AGENT_RUNTIME.CODEX]: GOAL_REACH.PAUSES,
+  [AGENT_RUNTIME.CURSOR]: GOAL_REACH.NONE,
+} as const satisfies Record<AgentRuntime, GoalReach>;
+
+/** What the agent's harness does with a goal; one that sets it where the runtime is not known yet, as a Start's box before its model decides one. */
+export function goalReachOf(runtime: AgentRuntime | undefined): GoalReach {
+  return runtime === undefined ? GOAL_REACH.SETS : RUNTIME_GOAL_REACH[runtime];
+}
+
+/** Whether the agent's harness runs a goal at all. */
+export function runsGoal(runtime: AgentRuntime | undefined): boolean {
+  return goalReachOf(runtime) !== GOAL_REACH.NONE;
+}
+
+/** What a `/goal` line sent to an agent whose harness keeps no goal says as it is refused; none for any other line, or a harness that runs one. */
+export function goalRefusalWords(
+  runtime: AgentRuntime | undefined,
+  text: string,
+): string | undefined {
+  if (runsGoal(runtime) || leadingCommand(text)?.name !== SLASH_COMMAND.GOAL) return undefined;
+
+  return `${runtimeModelRule(runtime).name} agents don't run goals.`;
+}
 
 /** The agent's goal as its transcript says it stands. */
 export interface AgentGoal {
@@ -55,7 +101,7 @@ export interface AgentGoal {
 export const GOAL_ASK_WAIT_MS = 30_000;
 
 /** A `/goal` line the developer sent, as what it asks of the goal. */
-export interface GoalAsked {
+interface GoalAsked {
   readonly ask: GoalAsk;
   /** Epoch milliseconds it was sent; none where the transcript does not say. */
   readonly sentAt: number | undefined;
@@ -249,7 +295,7 @@ export function goalControlLine(message: AgentTranscriptMessage): boolean {
 }
 
 /** The goal as it reads once a line asks a move of it, ahead of the harness's word: none where it asks the goal cleared. */
-export function goalAsked(goal: AgentGoal | undefined, asked: GoalAsked): AgentGoal | undefined {
+function goalAsked(goal: AgentGoal | undefined, asked: GoalAsked): AgentGoal | undefined {
   const { ask } = asked;
 
   switch (ask.kind) {

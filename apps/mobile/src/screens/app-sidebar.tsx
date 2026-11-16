@@ -1,4 +1,4 @@
-// app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned, Following, and the member's sections, each a collection of tasks with its count, as Mail lists its mailboxes; and New task, the list column's compose button.
+// app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned, Following, and the member's sections, each a collection of tasks with its count, as Mail lists its mailboxes; and New task, the compose button leading the detail's bar.
 
 import {
   AccountBarItem,
@@ -7,7 +7,6 @@ import {
   GLYPH,
   GroupRow,
   LIST_LOOK,
-  type ListLook,
   ListSection,
   MARK_SIZE,
   RowList,
@@ -16,11 +15,11 @@ import {
 } from "@repo/ui-native";
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
+import { Platform } from "react-native";
 import { useInboxBadge } from "../inbox/use-inbox.js";
 import { useSettingsAccount } from "../settings-button.js";
 import { keepSidebarPlace, keepTasksCollection, useTasksCollection } from "../sidebar-pick.js";
 import { useSidebarShown } from "../sidebar-shown.js";
-import { useThreeColumns } from "../use-window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 
 /** The places the sidebar's first rows open, each a tab's root. */
@@ -34,9 +33,9 @@ export type SidebarPlace = (typeof SIDEBAR_PLACE)[keyof typeof SIDEBAR_PLACE];
 
 /**
  * Each place's row and the tab root it opens, in the sidebar's order. Note
- * that Search carries the Search tab's own id, since the sidebar stands for
- * the tab bar a regular window hides, so a flow finds it the same way in
- * either window.
+ * that each carries its tab's own id, since the sidebar stands for the tab
+ * bar a regular window hides, so a flow finds it the same way in either
+ * window.
  */
 const PLACES = [
   {
@@ -44,14 +43,14 @@ const PLACES = [
     title: "Inbox",
     symbol: GLYPH.INBOX,
     route: "/inbox",
-    testId: undefined,
+    testId: "inbox-tab",
   },
   {
     id: SIDEBAR_PLACE.TASKS,
     title: "Tasks",
     symbol: GLYPH.TASK,
     route: "/tasks",
-    testId: undefined,
+    testId: "tasks-tab",
   },
   {
     id: SIDEBAR_PLACE.SEARCH,
@@ -62,7 +61,7 @@ const PLACES = [
   },
 ] as const;
 
-/** New task as a list's bar offers it, under the compose glyph, as the tab bar's round + names it. */
+/** New task as the detail's bar offers it, under the compose glyph, as the tab bar's round + names it. */
 const NEW_TASK = { label: "New task", symbol: GLYPH.NEW_TASK } as const;
 
 /** The collections of tasks the sidebar lists under its places: Pinned, Following, and each of the member's sections. */
@@ -104,15 +103,39 @@ export function placeRoute(place: SidebarPlace): string {
 }
 
 /**
- * New task as every list column's bar offers it in a regular window, its one
- * trailing act beside the list's search and ⋯, as Mail's compose button
- * stands over its list; ⌘N opens it from the menu bar too. A compact
- * window keeps the tab bar's round + instead.
+ * Whether the tab bar stands its round + for New task: on an iPhone, the
+ * iPhone Duo's either posture included, and never on an iPad, read by the
+ * device's idiom rather than the window. Note that the + is never hidden as
+ * the window crosses between compact and regular, because expo-router keys
+ * the tabs' view on the names of the tabs that stand, so a + coming or going
+ * would mount every tab again and drop its pages and drafts on each fold,
+ * rotation, or resize.
+ */
+export const PLUS_TAB = !(Platform.OS === "ios" && Platform.isPad);
+
+/**
+ * New task where the tab bar has no round + (`PLUS_TAB`): the compose button
+ * leading the detail's bar beside Expand, as Mail's stands over its message,
+ * or in a list's or Search's own bar where no detail stands beside it; ⌘N
+ * opens it from the menu bar too. A window wide enough for three columns
+ * hides the tab bar, so its detail's bar leads with compose on an iPhone too.
  */
 export function useComposeAction(): BarAction {
   const router = useRouter();
 
   return { ...NEW_TASK, onPress: () => router.push("/start-task") };
+}
+
+/**
+ * The detail's bar beside a regular window's first column, led on an iPad by
+ * New task's compose as a landscape window's detail bar is and Mail's stands
+ * over its message. The open Duo keeps the tab rail's round + instead, so no
+ * window offers New task twice.
+ */
+export function usePortraitDetailBar(bar: ColumnBar | undefined): ColumnBar {
+  const compose = useComposeAction();
+
+  return PLUS_TAB ? { ...bar } : { ...bar, lead: [compose] };
 }
 
 /**
@@ -124,7 +147,6 @@ export function useComposeAction(): BarAction {
  * is never out of reach.
  */
 export function useListColumn(list: ListColumn): FirstColumn {
-  const compose = useComposeAction();
   const account = useSettingsAccount();
   const switcher = useWorkspaceSwitcher();
   const { shown, setShown } = useSidebarShown();
@@ -142,8 +164,8 @@ export function useListColumn(list: ListColumn): FirstColumn {
 
   return {
     sidebar: list.view,
-    // Note that an action the list's bar names, such as Select mode's Done, stands in New task's place.
-    sidebarBar: { ...list.bar, leading, action: list.bar.action ?? compose },
+    // Note that New task leads the detail's bar instead (`usePortraitDetailBar`), as in a landscape window and Mail, so the narrow list's bar keeps only its own acts, such as Select mode's Done, and acts it leads with, such as Select all, stand in the switcher's place, as on the iPhone, since a second leading item folds into the bar's overflow.
+    sidebarBar: { ...list.bar, leading: (list.bar.lead ?? []).length > 0 ? undefined : leading },
     sidebarShown: shown,
     onSidebarShownChange: setShown,
   };
@@ -232,9 +254,4 @@ export function useAppSidebar(
     sidebarShown: shown,
     onSidebarShownChange: setShown,
   };
-}
-
-/** How a tab's list stands: plain beside the app sidebar, in the sidebar's look where it stands first. */
-export function useListLook(): ListLook {
-  return useThreeColumns() ? LIST_LOOK.PLAIN : LIST_LOOK.SIDEBAR;
 }

@@ -3,11 +3,24 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
+import {
+  BAR_TITLE,
+  type BrandColors,
+  ChipMarkProvider,
+  ElevatedGround,
+  FailureNoticeLayer,
+  FailureNoticeProvider,
+  KeepingProvider,
+  NO_GROUND,
+  useColors,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack } from "expo-router";
-import { hide as hideSplash } from "expo-splash-screen";
-import { useEffect } from "react";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { type ReactElement, type ReactNode, useEffect, useMemo, useState } from "react";
+import { useColorScheme } from "react-native";
+import { MachineAsks } from "../agents/machine-asks.js";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
@@ -19,15 +32,129 @@ import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 import { useShareSheet } from "../share-sheet.js";
+import { SHORT_SHEET_DETENTS } from "../sheet-stack.js";
+import { holdSplash } from "../splash.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useChipMarks } from "../tasks/chip-marks.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
+import { VoiceCallProvider } from "../voice-call.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
-/** A short sheet's heights in a compact window, as fractions of the screen: UIKit's medium, then its large. */
-const SHORT_SHEET_DETENTS = [0.5, 1];
+// The splash stands until the host's first screen has drawn (`HostProvider`), rather than going with expo-router's own hide over a blank screen.
+holdSplash();
+
+/**
+ * The navigators' theme: react-navigation's own for the color scheme, its
+ * `dark` flag following the system's and its colors the brand's, so a screen
+ * or a bar that sets no ground, title or tint of its own stands on the
+ * brand's ground in its ink, never a white body or the system's blue.
+ */
+function navigationTheme(colors: BrandColors, dark: boolean) {
+  const base = dark ? DarkTheme : DefaultTheme;
+
+  return {
+    ...base,
+    dark,
+    colors: {
+      primary: colors.TEXT,
+      background: colors.GROUND,
+      card: colors.GROUND,
+      text: colors.TEXT,
+      border: colors.CHIP_EDGE,
+      notification: colors.ACCENT,
+    },
+  };
+}
+
+/** The routes the root stack presents as sheets over the app. */
+const SHEET_ROUTE = {
+  SETTINGS: "settings",
+  START_TASK: "start-task",
+  START_AGENT: "start-agent",
+  AGENT_MODEL: "agent-model",
+  AGENT_PORTS: "agent-ports",
+  TASK_RELATION: "task-relation",
+  MOVE_TASK: "move-task",
+  TASK_FOLLOWING: "task-following",
+  ADD_FOLLOWER: "add-follower",
+  NEW_WORKSPACE: "new-workspace",
+} as const;
+
+/** The sheets, each drawn on the lifted ground in dark. */
+const LIFTED_SHEETS: ReadonlySet<string> = new Set(Object.values(SHEET_ROUTE));
+
+/** The presentations that stand a screen in a sheet over the root, which would hide a notice drawn there. */
+const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set(["modal", "formSheet"]);
+
+/** What a root screen's layout is told of its screen's place in the stack: whether it is the one in front, and when that changes. */
+interface ScreenFocus {
+  readonly isFocused: () => boolean;
+  readonly addListener: (event: "focus" | "blur", listener: () => void) => () => void;
+}
+
+/** Whether the screen `navigation` names is the one in front, followed as it comes forward and goes behind. */
+function useScreenInFront(navigation: ScreenFocus): boolean {
+  const [inFront, setInFront] = useState(() => navigation.isFocused());
+
+  useEffect(() => {
+    const comes = navigation.addListener("focus", () => setInFront(true));
+    const goes = navigation.addListener("blur", () => setInFront(false));
+
+    return () => {
+      comes();
+      goes();
+    };
+  }, [navigation]);
+
+  return inFront;
+}
+
+/** A sheet's place for the failure notice, which holds the notice only while the sheet is in front, so a page opened over it, as a notification opens one, shows its own refusals. */
+function SheetNoticeLayer({
+  navigation,
+  children,
+}: {
+  readonly navigation: ScreenFocus;
+  readonly children: ReactNode;
+}) {
+  return <FailureNoticeLayer inFront={useScreenInFront(navigation)}>{children}</FailureNoticeLayer>;
+}
+
+/**
+ * A root screen, wrapped in a place of its own for the failure notice where it
+ * stands as a sheet, so a notice shows over the sheet rather than behind it,
+ * and drawn on the lifted ground where it is one of the app's sheets, since
+ * every sheet stands over the window it was opened from, as a card on an
+ * iPhone and a form sheet on an iPad, and iOS lifts what it presents in dark;
+ * the app's own pages keep the plain ground. A short sheet at half height in a
+ * compact window (`sheetAllowedDetents`) stands on iOS's own Liquid Glass
+ * alone, so it isn't lifted.
+ */
+function screenLayout({
+  route,
+  options,
+  navigation,
+  children,
+}: {
+  readonly route: { readonly name: string };
+  readonly options: {
+    readonly presentation?: string | undefined;
+    readonly sheetAllowedDetents?: unknown;
+  };
+  readonly navigation: ScreenFocus;
+  readonly children: ReactElement;
+}): ReactElement {
+  const placed = SHEET_PRESENTATIONS.has(options.presentation) ? (
+    <SheetNoticeLayer navigation={navigation}>{children}</SheetNoticeLayer>
+  ) : (
+    children
+  );
+
+  const lifted = LIFTED_SHEETS.has(route.name) && options.sheetAllowedDetents === undefined;
+
+  return lifted ? <ElevatedGround>{placed}</ElevatedGround> : placed;
+}
 
 /**
  * The screens, each behind the account's standing: the tabs, Settings, and
@@ -53,7 +180,8 @@ const SHORT_SHEET_DETENTS = [0.5, 1];
  * (`host-connect-link.ts`).
  * Over every screen stands the one notice of a write that did not go
  * (`use-write.ts`), which lets its offline word go once the service answers,
- * and every word with its Try again once the account it was said for is gone.
+ * and every word with its Try again once the account it was said for is gone;
+ * while a sheet stands, it stands in the sheet on top (`screenLayout`).
  */
 function GuardedScreens() {
   const { data: signedIn = false } = useQuery({
@@ -79,6 +207,7 @@ function GuardedScreens() {
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  const colors = useColors();
   const sheetPresentation = regular ? "formSheet" : "modal";
 
   // Note that a short sheet, a list to pick from or a few rows, opens at half height with its grabber in a compact window, and pulls up to full, as Maps' and Mail's short sheets do; a regular window's form sheet keeps its own size.
@@ -88,42 +217,68 @@ function GuardedScreens() {
         presentation: "formSheet" as const,
         sheetAllowedDetents: SHORT_SHEET_DETENTS,
         sheetGrabberVisible: true,
+        // Note that the route under the sheet's own stack paints no ground, so at half height the sheet's glass shows through to its screen, which paints none there either (`useSheetAtHalf`).
+        contentStyle: { backgroundColor: NO_GROUND },
       };
 
   return (
     <>
       <MenuCommands signedIn={signedIn && !updateNeeded} />
-      <Stack screenOptions={{ headerShown: false }}>
+      {/* An ask one of the developer's machines holds for an agent, over whatever screen stands. */}
+      <MachineAsks signedIn={signedIn && !updateNeeded} />
+      {/* Note that every sheet's bar takes the ink here as its default, so a sheet that sets no ink of its own never stands its title in the system's black on the dark ground; a sheet's own options still win, key by key. */}
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          headerTintColor: colors.TEXT,
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+          headerShadowVisible: false,
+        }}
+        screenLayout={screenLayout}
+      >
         <Stack.Protected guard={signedIn && !updateNeeded}>
           <Stack.Screen name="index" />
           <Stack.Screen name="(tabs)" />
           {/* Note that each sheet's title is named here as well as on its screen, so it never reads the route's name, which New task has kept when opened from the tab bar's round +. */}
           <Stack.Screen
-            name="settings"
+            name={SHEET_ROUTE.SETTINGS}
             options={{ presentation: sheetPresentation, title: "Settings" }}
           />
           <Stack.Screen
-            name="start-task"
+            name={SHEET_ROUTE.START_TASK}
             options={{ presentation: sheetPresentation, title: "New task" }}
           />
           <Stack.Screen
-            name="start-agent"
+            name={SHEET_ROUTE.START_AGENT}
             options={{ presentation: sheetPresentation, title: "New agent" }}
           />
-          <Stack.Screen name="agent-model" options={{ ...shortSheet, title: "Options" }} />
-          <Stack.Screen name="agent-ports" options={{ ...shortSheet, title: "Ports" }} />
+          {/* Note that Options opens whole rather than as a short sheet, since its rows run past half the screen and half height cut Ask for approval mid-row. */}
           <Stack.Screen
-            name="task-relation"
+            name={SHEET_ROUTE.AGENT_MODEL}
+            options={{ presentation: sheetPresentation, title: "Options" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.AGENT_PORTS}
+            options={{ ...shortSheet, title: "Ports" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.TASK_RELATION}
             options={{ presentation: sheetPresentation, title: "Task relation" }}
           />
-          <Stack.Screen name="move-task" options={{ ...shortSheet, title: "Move to workspace" }} />
-          <Stack.Screen name="task-following" options={{ ...shortSheet, title: "Followers" }} />
           <Stack.Screen
-            name="add-follower"
+            name={SHEET_ROUTE.MOVE_TASK}
+            options={{ ...shortSheet, title: "Move to workspace" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.TASK_FOLLOWING}
+            options={{ ...shortSheet, title: "Followers" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.ADD_FOLLOWER}
             options={{ presentation: sheetPresentation, title: "Add a follower" }}
           />
           <Stack.Screen
-            name="new-workspace"
+            name={SHEET_ROUTE.NEW_WORKSPACE}
             options={{ presentation: sheetPresentation, title: "New workspace" }}
           />
         </Stack.Protected>
@@ -142,27 +297,36 @@ function GuardedScreens() {
 function KeptScreens() {
   return (
     <KeepingProvider keeping={useKeeping()}>
-      <GuardedScreens />
+      <ChipMarkProvider markOf={useChipMarks()}>
+        <GuardedScreens />
+      </ChipMarkProvider>
     </KeepingProvider>
   );
 }
 
 /**
- * The root, with the splash taken down once it first draws. Note that
- * expo-router takes the splash down once a launch, a frame after its
- * navigation is ready, and that one try can be lost (its frame canceled, or
- * the native splash not standing yet), which leaves the splash over every
- * screen for the whole launch while the app answers under it. So the root
- * takes it down as well; a hide with no splash standing does nothing.
+ * The root: the host, the one notice of a write that did not go, the voice
+ * call, which outlives every screen, and the screens under them, in the
+ * navigators' theme. Note that the theme's `dark` flag follows the system's
+ * color scheme, because expo-router's stack sets every navigation bar's
+ * style from it, and with no theme given it read the light default, so in
+ * dark every bar's buttons, its search field and the keyboard it raised
+ * drew light beside the dark tab bar.
  */
 export default function RootLayout() {
-  useEffect(() => hideSplash(), []);
+  const dark = useColorScheme() === "dark";
+  const colors = useColors();
+  const theme = useMemo(() => navigationTheme(colors, dark), [colors, dark]);
 
   return (
-    <HostProvider>
-      <FailureNoticeProvider>
-        <KeptScreens />
-      </FailureNoticeProvider>
-    </HostProvider>
+    <ThemeProvider value={theme}>
+      <HostProvider>
+        <FailureNoticeProvider>
+          <VoiceCallProvider>
+            <KeptScreens />
+          </VoiceCallProvider>
+        </FailureNoticeProvider>
+      </HostProvider>
+    </ThemeProvider>
   );
 }

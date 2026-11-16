@@ -4,7 +4,7 @@
  * What the list holds, in what order, and what each row says are the list
  * model's (`@repo/features/inbox-list-model`), which the panel's Inbox reads
  * too, over the holders the host's document groups
- * (`@repo/host/app-state-reads`' `selectInboxGroupsIn`); this only reads them
+ * (`inbox-groups.ts`); this only reads them
  * into the app's Query client and sends the panel's acts on the host's port,
  * each thread drawn with the reader's sends still out (`use-thread-answer.ts`).
  */
@@ -48,7 +48,6 @@ import {
   type InboxFeed,
   inboxFeedHolds,
   selectInboxFeed,
-  selectInboxGroupsIn,
   selectInboxReader,
   selectTaskListStatus,
   selectWorkspaces,
@@ -59,13 +58,14 @@ import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
-import { cachedFile, cachedVideo } from "../cached-media.js";
+import { cachedFile, cachedPlayed } from "../cached-media.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useHostActs } from "../host/host-provider.js";
+import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { dismissThreadNotifications } from "../notification-task.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
+import { useInboxGroupsIn } from "./inbox-groups.js";
 import {
   refusedWords,
   SETTLE,
@@ -90,11 +90,8 @@ const CLOSE_WENT = {
   UNREACHED: "unreached",
 } as const;
 
-/** No holder read yet. */
-const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
-
 type UseChosenInboxResult = {
-  readonly groups: ReturnType<ReturnType<typeof selectInboxGroupsIn>>;
+  readonly groups: readonly InboxGroup[];
   readonly chosen: Workspace | undefined;
   readonly workspaces: number;
 };
@@ -110,16 +107,13 @@ export function useChosenInbox(): UseChosenInboxResult {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
 
-  const { data: groups = NO_GROUPS } = useQuery({
-    ...appStateQuery,
-    select: selectInboxGroupsIn(chosen?.id),
-  });
+  const groups = useInboxGroupsIn(chosen?.id);
 
   return { groups: useSendsDrawn(groups), chosen, workspaces: workspaces.length };
 }
 
 /** The holders of the chosen workspace's Inbox items alone (`useChosenInbox`). */
-function useInboxGroups(): ReturnType<ReturnType<typeof selectInboxGroupsIn>> {
+function useInboxGroups(): readonly InboxGroup[] {
   return useChosenInbox().groups;
 }
 
@@ -246,10 +240,7 @@ type UseInboxThreadResult = {
 export function useInboxThread(id: string | undefined): UseInboxThreadResult {
   const acts = useHostActs();
 
-  const { data: read = NO_GROUPS } = useQuery({
-    ...appStateQuery,
-    select: selectInboxGroupsIn(undefined),
-  });
+  const read = useInboxGroupsIn(undefined);
 
   const groups = useSendsDrawn(read);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
@@ -275,7 +266,7 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
 
   const { home, again } = useItemHome(id, lookedFor);
   const found = home === undefined || Predicate.isString(home) ? undefined : home;
-  const homed = useHomeGroups(found?.planId);
+  const homed = useHomeGroups(found?.taskId);
   const outside = useSendsDrawn(homed.groups);
   const listed = inFeed ?? (lookedFor ? listedIn(outside, id) : undefined);
 
@@ -407,25 +398,19 @@ const NO_HOME_GROUPS: readonly InboxGroup[] = [];
 function useHomeGroups(taskId: string | undefined): HomeGroups {
   const acts = useHostActs();
   useLiveFollow(taskId, (id) =>
-    acts[ACT_KIND.AGENTS_INBOX_FOLLOW]({ kind: INBOX_SCOPE_KIND.PLAN, id }),
+    acts[ACT_KIND.AGENTS_INBOX_FOLLOW]({ kind: INBOX_SCOPE_KIND.TASK, id }),
   );
 
   const heldRead = useCallback(
     (state: AppStateSnapshot) =>
       taskId === undefined
         ? undefined
-        : state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.PLAN][taskId],
-    [taskId],
-  );
-
-  const taskOf = useCallback(
-    (state: AppStateSnapshot) =>
-      taskId === undefined ? undefined : state.tasks.tasks.find((task) => task.id === taskId),
+        : state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.TASK][taskId],
     [taskId],
   );
 
   const { data: read } = useQuery({ ...appStateQuery, select: heldRead });
-  const { data: task } = useQuery({ ...appStateQuery, select: taskOf });
+  const task = useTaskListRow(useTaskListCollections().tasks, taskId);
   const rows = read?.rows;
 
   const groups = useMemo(
@@ -448,7 +433,7 @@ function useHomeGroups(taskId: string | undefined): HomeGroups {
     read: stands,
     again: () => {
       if (taskId === undefined) return;
-      acts[ACT_KIND.AGENTS_INBOX_RETRY]({ kind: INBOX_SCOPE_KIND.PLAN, id: taskId }).catch(
+      acts[ACT_KIND.AGENTS_INBOX_RETRY]({ kind: INBOX_SCOPE_KIND.TASK, id: taskId }).catch(
         refused("Reading the thread's task inbox again"),
       );
     },
@@ -684,18 +669,26 @@ export function useReadOnOpen(listed: InboxListed | undefined): void {
 
 /** A thread's files as read: what each is drawn from, and how big each is, in words, by its attachment. */
 interface ThreadMediaRead {
-  readonly sources: ReadonlyMap<string, string>;
+  /** What each file is drawn from, by its attachment: an address once read, `null` once its read failed, and absent while it is on its way. */
+  readonly sources: ReadonlyMap<string, string | null>;
   readonly sizes: ReadonlyMap<string, string>;
 }
 
-/** What a file of the thread is read into, by its kind: a picture's `data:` address, or a video's or another file's address under the app's caches. */
+/** A thread's files as read, and what reads one that failed again. */
+export interface ThreadFiles extends ThreadMediaRead {
+  /** Reads a file whose read failed again, by its attachment, standing it on its way meanwhile. */
+  readonly retry: (attachmentId: string) => void;
+}
+
+/** What a file of the thread is read into, by its kind: a picture's `data:` address, or a video's, a sound clip's, or another file's address under the app's caches. */
 function sourceOf(
   each: InboxMessageMedia,
   read: { readonly contentType: string; readonly base64: string },
 ): Promise<string> {
   switch (each.kind) {
     case INBOX_MEDIA.VIDEO:
-      return cachedVideo(INBOX_MEDIA_PREFIX, each.attachmentId, read.contentType, read.base64);
+    case INBOX_MEDIA.AUDIO:
+      return cachedPlayed(INBOX_MEDIA_PREFIX, each.attachmentId, read.contentType, read.base64);
     case INBOX_MEDIA.FILE:
       return cachedFile(
         INBOX_MEDIA_PREFIX,
@@ -712,24 +705,29 @@ function sourceOf(
 /**
  * What each of a thread's files is drawn from, by its attachment, read once
  * through the host as the panel reads one (`AGENTS_INBOX_ATTACHMENT`): a
- * picture as a `data:` address, a video, asked for as its MP4 copy, as a
- * file of the app's caches, since the system's player reads a file, which an
- * older recording with no copy answers as a WebM the player cannot play, and
+ * picture as a `data:` address, a video or a sound clip, asked for as its
+ * MP4 copy, as a file of the app's caches, since the system's player reads a
+ * file, which an older recording with no copy answers as a WebM the player
+ * cannot play, and an Ogg clip before the service keeps its copy as the Ogg,
+ * and
  * any other file, such as a PDF, as a file of the app's caches under its own
  * name, which its viewer and the share sheet read; with each one's size in
- * words, which a file's chip says. One still on its way, or that could not
- * be read, is absent. Note that each file is asked for once while
+ * words, which a file's chip says. One still on its way is absent, and one
+ * that could not be read is `null` until `retry` reads it again. Note that each file is asked for once while
  * the thread stands, whatever `media` list names it, because the thread's
  * item is made anew on every change to it, its read mark as it opens among
  * them, and each read carries the whole file; one whose read failed is asked
- * for again on the thread's next change.
+ * for again only by its Try again, since the thread's next change, such as
+ * its read mark, would otherwise read the whole file again unseen.
  */
 export function useThreadMedia(
   itemId: string | undefined,
   media: readonly InboxMessageMedia[],
-): ThreadMediaRead {
+): ThreadFiles {
   const acts = useHostActs();
   const [read, setRead] = useState<ThreadMediaRead>(NOTHING_READ);
+  // How many times a file was read again, which asks the effect to read what was let go.
+  const [retries, setRetries] = useState(0);
 
   // The thread the files were asked for, and the attachments asked for on it.
   const asked = useRef<{ readonly itemId: string | undefined; readonly ids: Set<string> }>({
@@ -751,14 +749,20 @@ export function useThreadMedia(
       if (ids.has(each.attachmentId)) continue;
       ids.add(each.attachmentId);
 
-      // A read that fails is forgotten, so the thread's next change asks for it again.
-      const forget = (cause: unknown) => {
-        if (asked.current.itemId === itemId) ids.delete(each.attachmentId);
+      // Note that a read that fails is marked failed, so its file says so with Try again rather than spinning on, and stays asked until Try again lets it go.
+      const failed = (cause: unknown) => {
         refused("Reading a thread's file")(cause);
+
+        if (asked.current.itemId !== itemId) return;
+        setRead((held) => ({
+          sources: new Map(held.sources).set(each.attachmentId, null),
+          sizes: held.sizes,
+        }));
       };
 
-      // A video is asked for as the MP4 copy iOS's player plays, which an older recording kept without one answers as its WebM.
-      const playable = each.kind === INBOX_MEDIA.VIDEO ? ({ playable: MP4_TYPE } as const) : {};
+      // A video or a sound clip is asked for as the MP4 copy iOS's player plays, which only a recording or an Ogg clip is kept with: one kept without it, an older recording's WebM or any other clip, is answered as it is.
+      const played = each.kind === INBOX_MEDIA.VIDEO || each.kind === INBOX_MEDIA.AUDIO;
+      const playable = played ? ({ playable: MP4_TYPE } as const) : {};
       acts[ACT_KIND.AGENTS_INBOX_ATTACHMENT]({
         itemId,
         attachmentId: each.attachmentId,
@@ -778,9 +782,20 @@ export function useThreadMedia(
             sizes: new Map(held.sizes).set(each.attachmentId, size),
           }));
         })
-        .catch(forget);
+        .catch(failed);
     }
-  }, [acts, itemId, media]);
+  }, [acts, itemId, media, retries]);
 
-  return read;
+  const retry = useCallback((attachmentId: string) => {
+    asked.current.ids.delete(attachmentId);
+    setRead((held) => {
+      const sources = new Map(held.sources);
+      sources.delete(attachmentId);
+
+      return { sources, sizes: held.sizes };
+    });
+    setRetries((count) => count + 1);
+  }, []);
+
+  return { ...read, retry };
 }

@@ -63,25 +63,20 @@ import {
 } from "@repo/features/agent-wire";
 import { githubImageOf, imageTypeOfPath } from "@repo/features/github-image";
 import { REACTION, type Reaction } from "@repo/features/pull-request-write-wire";
+import type { GitHubFailure } from "@repo/github";
 import {
   GITHUB_CHECK_CONCLUSION,
   type GitHubCheckConclusion,
   isFailingConclusion,
 } from "@repo/wire";
-import { Duration, Effect, Fiber, Option, type Redacted, Schema } from "effect";
-import type * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import type * as HttpClientResponse from "effect/http/HttpClientResponse";
+import { Duration, Effect, Fiber, Option, Schema } from "effect";
 import {
-  GITHUB_HTTP_STATUS,
-  type GitHubUnavailable,
-  githubPost,
+  type GitHubBearer,
   githubRead,
-  readBody,
-  repositoryPath,
-  send,
+  PAGING,
+  readOptional,
+  repositoryParts,
 } from "./github-app.js";
-import { rateLimited } from "./github-rate-gate.js";
 import { type StackCandidate, type StackEntry, stackOf } from "./pull-request-stack.js";
 
 /** A pull request as much as the agent's pill and its summary row draw: where it stands, its head, and its size. */
@@ -122,21 +117,21 @@ interface GitHubLabel {
   readonly color: string;
 }
 
-/** What a read fails with: GitHub unreachable or answering off its shape. */
-export type PullRequestReadFailure = GitHubUnavailable;
+/** What a read fails with: GitHub's failure, as `@repo/github` says it. */
+export type PullRequestReadFailure = GitHubFailure;
 
-type Read<A> = Effect.Effect<A, PullRequestReadFailure, HttpClient.HttpClient>;
+type Read<A> = Effect.Effect<A, PullRequestReadFailure>;
 
 /** GitHub's own two words for an open or closed pull request. */
 const GITHUB_PULL_STATE = { OPEN: "open", CLOSED: "closed" } as const;
 
 /** How many pull requests of a branch are asked for: the newest alone, since a branch has at most one open and the newest is the one that stands for it. */
-const NEWEST_ONE = "1";
+const NEWEST_ONE = 1;
 const SORT = { CREATED: "created", DESCENDING: "desc" } as const;
 const ANY_STATE = "all";
 
 /** GitHub pages check runs and statuses a hundred to a page; a head with more is read as its first hundred. */
-const CHECKS_PER_PAGE = "100";
+const CHECKS_PER_PAGE = 100;
 
 /** A commit status's state that reads as failing. */
 const FAILING_STATUS_STATES: ReadonlySet<string> = new Set(["failure", "error"]);
@@ -321,25 +316,19 @@ const PEOPLE_PER_PAGE = 100;
  */
 const PEOPLE_MAX_PAGES = { REVIEWS: 30 } as const;
 
-/** A path segment as GitHub takes it, so a branch spelled with a slash stays one branch. */
-function segment(value: string): string {
-  return encodeURIComponent(value);
+/** A listing's every item as one answer, for its schema to read whole. */
+function listed<A>(
+  listing: Effect.Effect<ReadonlyArray<A>, GitHubFailure>,
+): Effect.Effect<{ readonly data: ReadonlyArray<A> }, GitHubFailure> {
+  return Effect.map(listing, (items) => ({ data: items }));
 }
 
-/** One read sent on the token, its answer read and closed; not found is none, and any other status the status it is. */
-function readOptional<A>(
-  request: HttpClientRequest.HttpClientRequest,
-  schema: Schema.Codec<A, unknown>,
-): Read<Option.Option<A>> {
-  return Effect.scoped(
-    Effect.flatMap(
-      send(request),
-      (response): Effect.Effect<Option.Option<A>, GitHubUnavailable> =>
-        response.status === GITHUB_HTTP_STATUS.NOT_FOUND
-          ? Effect.succeed(Option.none())
-          : Effect.map(readBody(response, schema), Option.some),
-    ),
-  );
+/** A listing read up to `maxPages` pages and cut there, rather than failed where it runs on: what a bounded listing of people or comments reads. */
+function cutAt(maxPages: number) {
+  return {
+    maxPages,
+    enough: (items: ReadonlyArray<unknown>) => items.length >= maxPages * PAGING.PER_PAGE,
+  };
 }
 
 /** A moment GitHub spells as ISO 8601, as epoch milliseconds; none where it spells none or one that does not parse. */
@@ -396,14 +385,19 @@ function pullRequestOf(record: typeof PullRequestSchema.Type): GitHubPullRequest
 
 /** One pull request of the repository by number, whole; none where the repository has no such one. */
 export function pullRequestByNumber(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
 ): Read<Option.Option<GitHubPullRequest>> {
   return Effect.map(
     readOptional(
-      githubRead(`${repositoryPath(fullName)}/pulls/${number}`, token),
-      PullRequestSchema,
+      githubRead(
+        bearer.client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
+          ...repositoryParts(fullName),
+          pull_number: number,
+        }),
+        PullRequestSchema,
+      ),
     ),
     Option.map(pullRequestOf),
   );
@@ -415,41 +409,45 @@ export function pullRequestByNumber(
  * and the number names the rest, since the sizes travel only on the one.
  */
 export function pullRequestOfBranch(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   branch: string,
 ): Read<Option.Option<GitHubPullRequest>> {
-  const [owner = ""] = fullName.split("/");
+  const parts = repositoryParts(fullName);
 
-  const listing = githubRead(`${repositoryPath(fullName)}/pulls`, token).pipe(
-    HttpClientRequest.setUrlParams({
-      head: `${owner}:${branch}`,
-      state: ANY_STATE,
-      sort: SORT.CREATED,
-      direction: SORT.DESCENDING,
-      per_page: NEWEST_ONE,
-    }),
-  );
+  const listing = bearer.client.request("GET /repos/{owner}/{repo}/pulls", {
+    ...parts,
+    head: `${parts.owner}:${branch}`,
+    state: ANY_STATE,
+    sort: SORT.CREATED,
+    direction: SORT.DESCENDING,
+    per_page: NEWEST_ONE,
+  });
 
-  return Effect.flatMap(readOptional(listing, ListedPullRequestsSchema), (listed) => {
-    const [newest] = Option.getOrElse(listed, () => []);
+  return Effect.flatMap(readOptional(githubRead(listing, ListedPullRequestsSchema)), (found) => {
+    const [newest] = Option.getOrElse(found, () => []);
 
     return newest === undefined
       ? Effect.succeed(Option.none())
-      : pullRequestByNumber(token, fullName, newest.number);
+      : pullRequestByNumber(bearer, fullName, newest.number);
   });
 }
 
 /** Whether the repository holds the branch now. */
 export function branchStands(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   branch: string,
 ): Read<boolean> {
   return Effect.map(
     readOptional(
-      githubRead(`${repositoryPath(fullName)}/branches/${segment(branch)}`, token),
-      Schema.Struct({ name: Schema.String }),
+      githubRead(
+        bearer.client.request("GET /repos/{owner}/{repo}/branches/{branch}", {
+          ...repositoryParts(fullName),
+          branch,
+        }),
+        Schema.Struct({ name: Schema.String }),
+      ),
     ),
     Option.isSome,
   );
@@ -512,19 +510,6 @@ function summaryOf(checks: HeadChecks): CheckSummary {
   return checks.any ? CHECK_SUMMARY.PASSING : CHECK_SUMMARY.NONE;
 }
 
-/**
- * Whether a 403 is the App not being given what the read needs, rather than
- * GitHub's rate limit, which answers 403 too: a limit is a read GitHub did
- * not answer, never a head with no checks.
- */
-function forbiddenNotLimited(
-  response: HttpClientResponse.HttpClientResponse,
-): Effect.Effect<boolean> {
-  return response.status === GITHUB_HTTP_STATUS.FORBIDDEN
-    ? Effect.map(rateLimited(response), (limited) => !limited)
-    : Effect.succeed(false);
-}
-
 /** How a check run ended, where it has; none while it runs, or for a conclusion GitHub adds that the wire does not name. */
 function runConclusionOf(status: string, conclusion: string | null): GitHubCheckConclusion | null {
   if (status !== COMPLETED || conclusion === null) return null;
@@ -532,11 +517,15 @@ function runConclusionOf(status: string, conclusion: string | null): GitHubCheck
   return RUN_CONCLUSION.get(conclusion) ?? null;
 }
 
-/** A head's checks read as one answer, or as none where the App may not read them, said once in the log. */
+/**
+ * A head's checks read as one answer, or as none where the App may not read
+ * them (`GitHubForbidden`, which a rate limit never is), said once in the
+ * log; a rate limit is a read GitHub did not answer, never a head with no checks.
+ */
 function readChecks<A>(
   what: string,
-  request: HttpClientRequest.HttpClientRequest,
-  schema: Schema.Codec<A, unknown>,
+  request: Effect.Effect<{ readonly data: unknown }, GitHubFailure>,
+  schema: Schema.Decoder<A>,
   tally: (answer: A) => HeadChecks,
 ): Read<HeadChecks> {
   const none: HeadChecks = {
@@ -547,21 +536,15 @@ function readChecks<A>(
     checks: [],
   };
 
-  return Effect.scoped(
-    Effect.flatMap(send(request), (response: HttpClientResponse.HttpClientResponse) => {
-      if (response.status === GITHUB_HTTP_STATUS.NOT_FOUND) return Effect.succeed(none);
-
-      return Effect.flatMap(forbiddenNotLimited(response), (forbidden) =>
-        forbidden
-          ? Effect.as(
-              Effect.logWarning(
-                `the GitHub App may not read a head's ${what}; the checks read as none`,
-              ),
-              none,
-            )
-          : Effect.map(readBody(response, schema), tally),
-      );
-    }),
+  return githubRead(request, schema).pipe(
+    Effect.map(tally),
+    Effect.catchTag("GitHubNotFound", () => Effect.succeed(none)),
+    Effect.catchTag("GitHubForbidden", () =>
+      Effect.as(
+        Effect.logWarning(`the GitHub App may not read a head's ${what}; the checks read as none`),
+        none,
+      ),
+    ),
   );
 }
 
@@ -574,16 +557,15 @@ function readChecks<A>(
  * together: the set the pull request's checks count.
  */
 export function headChecksOf(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   sha: string,
 ): Read<HeadChecks> {
-  const commit = `${repositoryPath(fullName)}/commits/${segment(sha)}`;
-  const perPage = HttpClientRequest.setUrlParams({ per_page: CHECKS_PER_PAGE });
+  const commit = { ...repositoryParts(fullName), ref: sha, per_page: CHECKS_PER_PAGE };
 
   const runs = readChecks(
     "check runs",
-    githubRead(`${commit}/check-runs`, token).pipe(perPage),
+    bearer.client.request("GET /repos/{owner}/{repo}/commits/{ref}/check-runs", commit),
     CheckRunsSchema,
     (answer) => ({
       failing: answer.check_runs.some(
@@ -605,7 +587,7 @@ export function headChecksOf(
 
   const statuses = readChecks(
     "commit statuses",
-    githubRead(`${commit}/status`, token).pipe(perPage),
+    bearer.client.request("GET /repos/{owner}/{repo}/commits/{ref}/status", commit),
     CombinedStatusSchema,
     (answer) => ({
       failing: answer.statuses.some((status) => FAILING_STATUS_STATES.has(status.state)),
@@ -634,11 +616,11 @@ export function headChecksOf(
 
 /** The checks on one head as one word: its check runs and its commit statuses together. */
 export function checkSummaryOf(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   sha: string,
 ): Read<CheckSummary> {
-  return Effect.map(headChecksOf(token, fullName, sha), summaryOf);
+  return Effect.map(headChecksOf(bearer, fullName, sha), summaryOf);
 }
 
 /**
@@ -685,31 +667,25 @@ export interface PullRequestFiles {
 }
 
 /**
- * The pull request's changed files, a page at a time until a page comes
- * back short or the bound is reached, cut short where the pull request
+ * The pull request's changed files, page after page as GitHub's `link`
+ * header leads until the bound is reached, cut short where the pull request
  * counts more files than were read; none where the repository has no such
  * pull request. `changedFiles` is the count the pull request's own read
  * answered.
  */
 export const pullRequestFiles = /* @__PURE__ */ Effect.fn("web/pullRequestFiles")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   pullRequest: { readonly number: number; readonly changedFiles: number },
-): Effect.fn.Return<PullRequestFiles, PullRequestReadFailure, HttpClient.HttpClient> {
-  const files: AgentChangedFile[] = [];
-  const path = `${repositoryPath(fullName)}/pulls/${pullRequest.number}/files`;
+): Effect.fn.Return<PullRequestFiles, PullRequestReadFailure> {
+  const listing = bearer.client.paginate(
+    "GET /repos/{owner}/{repo}/pulls/{pull_number}/files",
+    { ...repositoryParts(fullName), pull_number: pullRequest.number, per_page: FILES_PER_PAGE },
+    cutAt(Math.ceil(CHANGES_BOUNDS.MAX_FILES / FILES_PER_PAGE)),
+  );
 
-  for (let page = 1; files.length < CHANGES_BOUNDS.MAX_FILES; page += 1) {
-    const request = githubRead(path, token).pipe(
-      HttpClientRequest.setUrlParams({ per_page: String(FILES_PER_PAGE), page: String(page) }),
-    );
-
-    const read = Option.getOrElse(yield* readOptional(request, PullRequestFilesSchema), () => []);
-    files.push(...read.map(changedFileOf));
-
-    if (read.length < FILES_PER_PAGE) break;
-  }
-
+  const read = yield* readOptional(githubRead(listed(listing), PullRequestFilesSchema));
+  const files = Option.getOrElse(read, () => []).map(changedFileOf);
   const kept = files.slice(0, CHANGES_BOUNDS.MAX_FILES);
 
   return { files: kept, truncated: pullRequest.changedFiles > kept.length };
@@ -730,15 +706,17 @@ const MAX_COMMIT_MESSAGES = 100;
  * words and its diff tell most of its story, and the messages only help.
  */
 export function pullRequestCommitMessages(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
 ): Read<readonly string[]> {
-  const request = githubRead(`${repositoryPath(fullName)}/pulls/${number}/commits`, token).pipe(
-    HttpClientRequest.setUrlParams({ per_page: String(MAX_COMMIT_MESSAGES) }),
-  );
+  const request = bearer.client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}/commits", {
+    ...repositoryParts(fullName),
+    pull_number: number,
+    per_page: MAX_COMMIT_MESSAGES,
+  });
 
-  return Effect.map(readOptional(request, PullRequestCommitsSchema), (read) =>
+  return Effect.map(readOptional(githubRead(request, PullRequestCommitsSchema)), (read) =>
     Option.getOrElse(read, () => []).map(({ commit }) => commit.message),
   );
 }
@@ -779,22 +757,23 @@ function readAtBase(file: AgentChangedFile): boolean {
  * draws the after alone.
  */
 export const readCommits = /* @__PURE__ */ Effect.fn("web/readCommits")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   pullRequest: Option.Option<Pick<GitHubPullRequest, "headSha" | "baseSha">>,
   files: readonly AgentChangedFile[],
-): Effect.fn.Return<ReadCommits, never, HttpClient.HttpClient> {
+): Effect.fn.Return<ReadCommits> {
   if (Option.isNone(pullRequest)) return {};
   const { headSha, baseSha } = pullRequest.value;
 
   if (baseSha === undefined || !files.some(readAtBase)) return { headSha };
 
-  const request = githubRead(
-    `${repositoryPath(fullName)}/compare/${segment(baseSha)}...${segment(headSha)}`,
-    token,
-  ).pipe(HttpClientRequest.setUrlParams({ per_page: "1" }));
+  const request = bearer.client.request("GET /repos/{owner}/{repo}/compare/{basehead}", {
+    ...repositoryParts(fullName),
+    basehead: `${baseSha}...${headSha}`,
+    per_page: 1,
+  });
 
-  const compared = yield* readOptional(request, CompareSchema).pipe(
+  const compared = yield* readOptional(githubRead(request, CompareSchema)).pipe(
     Effect.catch((failure) =>
       Effect.as(
         Effect.logWarning(`a pull request's merge base could not be read: ${failure._tag}`),
@@ -920,30 +899,15 @@ const NOBODY: PullRequestPeople = {
   comments: [],
 };
 
-/** Every page of a listing, in GitHub's order, until one comes back short or the bound is reached; none where GitHub finds no such listing. */
-const everyPage = /* @__PURE__ */ Effect.fnUntraced(function* <A>(
-  token: Redacted.Redacted,
-  path: string,
-  schema: Schema.Codec<readonly A[], unknown>,
-  maxPages: number,
-  rendered = false,
-) {
-  const listed: A[] = [];
-
-  for (let page = 1; page <= maxPages; page += 1) {
-    const request = githubRead(path, token).pipe(
-      HttpClientRequest.setUrlParams({ per_page: String(PEOPLE_PER_PAGE), page: String(page) }),
-      rendered ? withRendering : (each) => each,
-    );
-
-    const read = Option.getOrElse(yield* readOptional(request, schema), () => []);
-    listed.push(...read);
-
-    if (read.length < PEOPLE_PER_PAGE) break;
-  }
-
-  return listed;
-});
+/** Every page of a listing, in GitHub's order, as its schema reads it; none where GitHub finds no such listing. */
+function everyPage<A, I>(
+  listing: Effect.Effect<ReadonlyArray<I>, GitHubFailure>,
+  schema: Schema.Decoder<readonly A[]>,
+): Read<readonly A[]> {
+  return Effect.map(readOptional(githubRead(listed(listing), schema)), (read) =>
+    Option.getOrElse(read, () => []),
+  );
+}
 
 /**
  * Who the pull request names, read on the token in two asks at once: the
@@ -953,16 +917,28 @@ const everyPage = /* @__PURE__ */ Effect.fnUntraced(function* <A>(
  * the repository holds no such pull request.
  */
 export const pullRequestPeople = /* @__PURE__ */ Effect.fn("web/pullRequestPeople")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
-): Effect.fn.Return<PullRequestPeople, PullRequestReadFailure, HttpClient.HttpClient> {
-  const path = `${repositoryPath(fullName)}/pulls/${number}`;
+): Effect.fn.Return<PullRequestPeople, PullRequestReadFailure> {
+  const pullRequest = { ...repositoryParts(fullName), pull_number: number };
 
   const [pull, reviews] = yield* Effect.all(
     [
-      readOptional(githubRead(path, token), PullRequestPeopleSchema),
-      everyPage(token, `${path}/reviews`, ReviewsSchema, PEOPLE_MAX_PAGES.REVIEWS),
+      readOptional(
+        githubRead(
+          bearer.client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", pullRequest),
+          PullRequestPeopleSchema,
+        ),
+      ),
+      everyPage(
+        bearer.client.paginate(
+          "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+          { ...pullRequest, per_page: PEOPLE_PER_PAGE },
+          cutAt(PEOPLE_MAX_PAGES.REVIEWS),
+        ),
+        ReviewsSchema,
+      ),
     ],
     { concurrency: "unbounded" },
   );
@@ -1011,21 +987,24 @@ const REVIEW_COMMENTS_MAX_PAGES = 3;
  * none where the repository holds no such review.
  */
 export const reviewLineComments = /* @__PURE__ */ Effect.fn("web/reviewLineComments")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
   reviewId: number,
-): Effect.fn.Return<
-  readonly GitHubReviewLineComment[],
-  PullRequestReadFailure,
-  HttpClient.HttpClient
-> {
+): Effect.fn.Return<readonly GitHubReviewLineComment[], PullRequestReadFailure> {
   const comments = yield* everyPage(
-    token,
-    `${repositoryPath(fullName)}/pulls/${number}/reviews/${reviewId}/comments`,
+    bearer.client.paginate(
+      "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}/comments",
+      {
+        ...repositoryParts(fullName),
+        pull_number: number,
+        review_id: reviewId,
+        per_page: PEOPLE_PER_PAGE,
+        headers: WITH_RENDERING,
+      },
+      cutAt(REVIEW_COMMENTS_MAX_PAGES),
+    ),
     ReviewLineCommentsSchema,
-    REVIEW_COMMENTS_MAX_PAGES,
-    true,
   );
 
   return comments.map((comment) => ({
@@ -1076,13 +1055,22 @@ export type RenderedBody =
       readonly reviewId: number;
     };
 
-/** The path GitHub answers a comment or a review at, under its repository. */
-function renderedBodyPath(fullName: string, body: RenderedBody): string {
-  const repository = repositoryPath(fullName);
+/** A comment or a review read with GitHub's rendering of its words, under its repository. */
+function renderedBodyRead(bearer: GitHubBearer, fullName: string, body: RenderedBody) {
+  const repository = repositoryParts(fullName);
 
   return body.kind === RENDERED_BODY.ISSUE_COMMENT
-    ? `${repository}/issues/comments/${body.commentId}`
-    : `${repository}/pulls/${body.number}/reviews/${body.reviewId}`;
+    ? bearer.client.request("GET /repos/{owner}/{repo}/issues/comments/{comment_id}", {
+        ...repository,
+        comment_id: body.commentId,
+        headers: WITH_RENDERING,
+      })
+    : bearer.client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews/{review_id}", {
+        ...repository,
+        pull_number: body.number,
+        review_id: body.reviewId,
+        headers: WITH_RENDERING,
+      });
 }
 
 /**
@@ -1091,13 +1079,12 @@ function renderedBodyPath(fullName: string, body: RenderedBody): string {
  * holds no such comment or review, or GitHub rendered nothing.
  */
 export const renderedBody = /* @__PURE__ */ Effect.fn("web/renderedBody")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   body: RenderedBody,
-): Effect.fn.Return<Option.Option<string>, PullRequestReadFailure, HttpClient.HttpClient> {
+): Effect.fn.Return<Option.Option<string>, PullRequestReadFailure> {
   const read = yield* readOptional(
-    withRendering(githubRead(renderedBodyPath(fullName, body), token)),
-    RenderedBodySchema,
+    githubRead(renderedBodyRead(bearer, fullName, body), RenderedBodySchema),
   );
 
   return Option.flatMap(read, (each) => Option.fromNullishOr(renderingOf(each.body_html)));
@@ -1110,12 +1097,8 @@ export const renderedBody = /* @__PURE__ */ Effect.fn("web/renderedBody")(functi
  */
 const FULL_MEDIA_TYPE = "application/vnd.github.full+json";
 
-/** A read asking for GitHub's rendering of every body it answers, beside the body. */
-function withRendering(
-  request: HttpClientRequest.HttpClientRequest,
-): HttpClientRequest.HttpClientRequest {
-  return HttpClientRequest.setHeader(request, "accept", FULL_MEDIA_TYPE);
-}
+/** The headers of a read asking for GitHub's rendering of every body it answers, beside the body. */
+const WITH_RENDERING = { accept: FULL_MEDIA_TYPE } as const;
 
 /** A team as GitHub names one: its slug, which a review request names it by, and its name. */
 const TeamSchema = Schema.Struct({ slug: Schema.String, name: Schema.String });
@@ -1429,16 +1412,19 @@ function pullHeadRef(number: number): string {
  * their own.
  */
 export function pullRequestChecks(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
 ): Read<readonly PullRequestCheck[]> {
-  const commit = `${repositoryPath(fullName)}/commits/${segment(pullHeadRef(number))}`;
-  const perPage = HttpClientRequest.setUrlParams({ per_page: CHECKS_PER_PAGE });
+  const commit = {
+    ...repositoryParts(fullName),
+    ref: pullHeadRef(number),
+    per_page: CHECKS_PER_PAGE,
+  };
 
   const runs = readListed(
     "check runs",
-    githubRead(`${commit}/check-runs`, token).pipe(perPage),
+    bearer.client.request("GET /repos/{owner}/{repo}/commits/{ref}/check-runs", commit),
     ListedCheckRunsSchema,
     (answer): readonly PullRequestCheck[] =>
       answer.check_runs.map((run) =>
@@ -1458,7 +1444,7 @@ export function pullRequestChecks(
 
   const statuses = readListed(
     "commit statuses",
-    githubRead(`${commit}/status`, token).pipe(perPage),
+    bearer.client.request("GET /repos/{owner}/{repo}/commits/{ref}/status", commit),
     ListedStatusesSchema,
     (answer): readonly PullRequestCheck[] =>
       answer.statuses.map((status) => {
@@ -1487,23 +1473,21 @@ export function pullRequestChecks(
 /** A head's checks of one kind, or none where the App may not read them, said once in the log. */
 function readListed<A>(
   what: string,
-  request: HttpClientRequest.HttpClientRequest,
-  schema: Schema.Codec<A, unknown>,
-  listed: (answer: A) => readonly PullRequestCheck[],
+  request: Effect.Effect<{ readonly data: unknown }, GitHubFailure>,
+  schema: Schema.Decoder<A>,
+  checksOf: (answer: A) => readonly PullRequestCheck[],
 ): Read<readonly PullRequestCheck[]> {
-  return Effect.scoped(
-    Effect.flatMap(send(request), (response: HttpClientResponse.HttpClientResponse) => {
-      if (response.status === GITHUB_HTTP_STATUS.NOT_FOUND) return Effect.succeed([]);
+  const none: readonly PullRequestCheck[] = [];
 
-      return Effect.flatMap(forbiddenNotLimited(response), (forbidden) =>
-        forbidden
-          ? Effect.as(
-              Effect.logWarning(`the GitHub App may not read a head's ${what}; none are listed`),
-              [],
-            )
-          : Effect.map(readBody(response, schema), listed),
-      );
-    }),
+  return githubRead(request, schema).pipe(
+    Effect.map(checksOf),
+    Effect.catchTag("GitHubNotFound", () => Effect.succeed(none)),
+    Effect.catchTag("GitHubForbidden", () =>
+      Effect.as(
+        Effect.logWarning(`the GitHub App may not read a head's ${what}; none are listed`),
+        none,
+      ),
+    ),
   );
 }
 
@@ -1597,8 +1581,6 @@ fragment Reaction on ReactionGroup {
     }
   }
 }`;
-
-const GRAPHQL_PATH = "/graphql";
 
 /** How many of the repository's open pull requests one page of a stack's read lists: GitHub's most. */
 const STACK_CANDIDATES = 100;
@@ -1712,31 +1694,24 @@ const ThreadSchema = Schema.Struct({
   }),
 });
 
-/** GitHub's GraphQL answer: its data where it read any, and its errors where it met some. */
+/** GitHub's GraphQL answer's data to the conversation read. */
 const ConversationAnswerSchema = Schema.Struct({
-  data: Schema.optionalKey(
-    Schema.NullOr(
-      Schema.Struct({
-        repository: Schema.NullOr(
-          Schema.Struct({
-            pullRequest: Schema.NullOr(
-              Schema.Struct({
-                id: Schema.optionalKey(Schema.String),
-                reactionGroups: ReactionGroupsSchema,
-                comments: ReactedListSchema,
-                reviews: ReactedListSchema,
-                reviewThreads: Schema.Struct({
-                  totalCount: Schema.Number,
-                  nodes: Schema.Array(Schema.NullOr(ThreadSchema)),
-                }),
-              }),
-            ),
+  repository: Schema.NullOr(
+    Schema.Struct({
+      pullRequest: Schema.NullOr(
+        Schema.Struct({
+          id: Schema.optionalKey(Schema.String),
+          reactionGroups: ReactionGroupsSchema,
+          comments: ReactedListSchema,
+          reviews: ReactedListSchema,
+          reviewThreads: Schema.Struct({
+            totalCount: Schema.Number,
+            nodes: Schema.Array(Schema.NullOr(ThreadSchema)),
           }),
-        ),
-      }),
-    ),
+        }),
+      ),
+    }),
   ),
-  errors: Schema.optionalKey(Schema.Array(Schema.Struct({ message: Schema.String }))),
 });
 
 /** The reactions a read names, by GitHub's id for what wears them. */
@@ -1882,53 +1857,46 @@ function threadOf(node: typeof ThreadSchema.Type): GitHubReviewThread | undefine
  * because the rest of the overview stands without them.
  */
 function conversationGraphOf(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
-): Effect.Effect<ReadGraph, never, HttpClient.HttpClient> {
+): Effect.Effect<ReadGraph> {
   const [owner = "", name = ""] = fullName.split("/");
 
-  const request = githubPost(GRAPHQL_PATH, token, {
-    query: CONVERSATION_QUERY,
-    variables: { owner, name, number },
-  });
+  return bearer.client
+    .graphql(CONVERSATION_QUERY, { owner, name, number }, ConversationAnswerSchema)
+    .pipe(
+      Effect.flatMap((answer) => {
+        const pullRequest = answer.repository?.pullRequest;
 
-  return Effect.scoped(
-    Effect.flatMap(send(request), (response) => readBody(response, ConversationAnswerSchema)),
-  ).pipe(
-    Effect.flatMap((answer) => {
-      const pullRequest = answer.data?.repository?.pullRequest;
+        if (pullRequest == null) {
+          return Effect.as(
+            Effect.logWarning(`GitHub answered no review threads of pull request ${number}`),
+            NO_GRAPH,
+          );
+        }
 
-      if (pullRequest == null) {
-        return Effect.as(
+        const listed = pullRequest.reviewThreads;
+        const nodes = listed.nodes.flatMap((node) => (node === null ? [] : [node]));
+
+        return Effect.succeed({
+          threads: nodes.flatMap((node) => threadOf(node) ?? []),
+          left: Math.max(0, listed.totalCount - listed.nodes.length),
+          descriptionReactions: reactionsOf(pullRequest.reactionGroups),
+          descriptionSubject: pullRequest.id,
+          commentReactions: reactionsById(pullRequest.comments),
+          reviewReactions: reactionsById(pullRequest.reviews),
+        });
+      }),
+      Effect.catch((failure) =>
+        Effect.as(
           Effect.logWarning(
-            `GitHub answered no review threads of pull request ${number} (${answer.errors?.length ?? 0} errors)`,
+            `the review threads of pull request ${number} were not read: ${failure._tag}`,
           ),
           NO_GRAPH,
-        );
-      }
-
-      const listed = pullRequest.reviewThreads;
-      const nodes = listed.nodes.flatMap((node) => (node === null ? [] : [node]));
-
-      return Effect.succeed({
-        threads: nodes.flatMap((node) => threadOf(node) ?? []),
-        left: Math.max(0, listed.totalCount - listed.nodes.length),
-        descriptionReactions: reactionsOf(pullRequest.reactionGroups),
-        descriptionSubject: pullRequest.id,
-        commentReactions: reactionsById(pullRequest.comments),
-        reviewReactions: reactionsById(pullRequest.reviews),
-      });
-    }),
-    Effect.catch((failure) =>
-      Effect.as(
-        Effect.logWarning(
-          `the review threads of pull request ${number} were not read: ${failure._tag}`,
         ),
-        NO_GRAPH,
       ),
-    ),
-  );
+    );
 }
 
 /** When a thread was started: its first comment's time. */
@@ -2064,43 +2032,36 @@ const OPEN_PULL_REQUESTS_QUERY = `query OpenPullRequests($owner: String!, $name:
 }`;
 
 const OpenPullRequestsAnswerSchema = Schema.Struct({
-  data: Schema.optionalKey(
-    Schema.NullOr(
-      Schema.Struct({
-        repository: Schema.NullOr(
-          Schema.Struct({
-            pullRequests: Schema.Struct({
-              nodes: Schema.Array(
-                Schema.NullOr(
-                  Schema.Struct({
-                    number: Schema.Number,
-                    title: Schema.String,
-                    url: Schema.String,
-                    isDraft: Schema.Boolean,
-                    headRefName: Schema.String,
-                    baseRefName: Schema.String,
-                    isCrossRepository: Schema.Boolean,
-                    mergeQueueEntry: Schema.optional(
-                      Schema.NullOr(Schema.Struct({ position: Schema.Number })),
-                    ),
-                  }),
-                ),
+  repository: Schema.NullOr(
+    Schema.Struct({
+      pullRequests: Schema.Struct({
+        nodes: Schema.Array(
+          Schema.NullOr(
+            Schema.Struct({
+              number: Schema.Number,
+              title: Schema.String,
+              url: Schema.String,
+              isDraft: Schema.Boolean,
+              headRefName: Schema.String,
+              baseRefName: Schema.String,
+              isCrossRepository: Schema.Boolean,
+              mergeQueueEntry: Schema.optional(
+                Schema.NullOr(Schema.Struct({ position: Schema.Number })),
               ),
-              pageInfo: Schema.Struct({
-                hasNextPage: Schema.Boolean,
-                endCursor: Schema.NullOr(Schema.String),
-              }),
             }),
-          }),
+          ),
         ),
+        pageInfo: Schema.Struct({
+          hasNextPage: Schema.Boolean,
+          endCursor: Schema.NullOr(Schema.String),
+        }),
       }),
-    ),
+    }),
   ),
-  errors: Schema.optionalKey(Schema.Array(Schema.Unknown)),
 });
 
 type OpenPullRequestNodes = NonNullable<
-  NonNullable<NonNullable<typeof OpenPullRequestsAnswerSchema.Type.data>["repository"]>
+  typeof OpenPullRequestsAnswerSchema.Type.repository
 >["pullRequests"]["nodes"];
 
 /** The open pull requests a page lists, as a stack is worked out from them. */
@@ -2133,56 +2094,44 @@ function candidatesOf(nodes: OpenPullRequestNodes): readonly StackCandidate[] {
  * because the header stands without its stack.
  */
 function openPullRequestsOf(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
-): Effect.Effect<readonly StackCandidate[] | undefined, never, HttpClient.HttpClient> {
+): Effect.Effect<readonly StackCandidate[] | undefined> {
   const [owner = "", name = ""] = fullName.split("/");
 
   const page = (
     after: string | null,
     held: readonly StackCandidate[],
     pages: number,
-  ): Effect.Effect<
-    readonly StackCandidate[] | undefined,
-    PullRequestReadFailure,
-    HttpClient.HttpClient
-  > => {
-    const request = githubPost(GRAPHQL_PATH, token, {
-      query: OPEN_PULL_REQUESTS_QUERY,
-      variables: { owner, name, after },
-    });
+  ): Effect.Effect<readonly StackCandidate[] | undefined, PullRequestReadFailure> =>
+    bearer.client
+      .graphql(OPEN_PULL_REQUESTS_QUERY, { owner, name, after }, OpenPullRequestsAnswerSchema)
+      .pipe(
+        Effect.flatMap((answer) => {
+          const listed = answer.repository?.pullRequests;
 
-    return Effect.scoped(
-      Effect.flatMap(send(request), (response) => readBody(response, OpenPullRequestsAnswerSchema)),
-    ).pipe(
-      Effect.flatMap((answer) => {
-        const listed = answer.data?.repository?.pullRequests;
+          if (listed === undefined) {
+            return Effect.as(
+              Effect.logWarning(`GitHub answered no open pull requests of the repository`),
+              undefined,
+            );
+          }
 
-        if (listed === undefined) {
-          return Effect.as(
-            Effect.logWarning(
-              `GitHub answered no open pull requests of the repository (${answer.errors?.length ?? 0} errors)`,
-            ),
-            undefined,
-          );
-        }
+          const read = [...held, ...candidatesOf(listed.nodes)];
+          const { hasNextPage, endCursor } = listed.pageInfo;
 
-        const read = [...held, ...candidatesOf(listed.nodes)];
-        const { hasNextPage, endCursor } = listed.pageInfo;
+          if (!hasNextPage || endCursor === null) return Effect.succeed(read);
 
-        if (!hasNextPage || endCursor === null) return Effect.succeed(read);
+          if (pages + 1 >= STACK_PAGES) {
+            return Effect.as(
+              Effect.logWarning(`the repository holds more open pull requests than a stack reads`),
+              undefined,
+            );
+          }
 
-        if (pages + 1 >= STACK_PAGES) {
-          return Effect.as(
-            Effect.logWarning(`the repository holds more open pull requests than a stack reads`),
-            undefined,
-          );
-        }
-
-        return page(endCursor, read, pages + 1);
-      }),
-    );
-  };
+          return page(endCursor, read, pages + 1);
+        }),
+      );
 
   return page(null, [], 0).pipe(
     Effect.catch((failure) =>
@@ -2204,21 +2153,24 @@ function openPullRequestsOf(
  * such pull request.
  */
 export const pullRequestOverview = /* @__PURE__ */ Effect.fn("web/pullRequestOverview")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
   stacked: boolean,
-): Effect.fn.Return<
-  Option.Option<GitHubOverviewPullRequest>,
-  PullRequestReadFailure,
-  HttpClient.HttpClient
-> {
-  const path = `${repositoryPath(fullName)}/pulls/${number}`;
-
+): Effect.fn.Return<Option.Option<GitHubOverviewPullRequest>, PullRequestReadFailure> {
   const [read, open] = yield* Effect.all(
     [
-      readOptional(withRendering(githubRead(path, token)), OverviewPullSchema),
-      stacked ? openPullRequestsOf(token, fullName) : Effect.succeed(undefined),
+      readOptional(
+        githubRead(
+          bearer.client.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
+            ...repositoryParts(fullName),
+            pull_number: number,
+            headers: WITH_RENDERING,
+          }),
+          OverviewPullSchema,
+        ),
+      ),
+      stacked ? openPullRequestsOf(bearer, fullName) : Effect.succeed(undefined),
     ],
     { concurrency: "unbounded" },
   );
@@ -2278,36 +2230,41 @@ export const pullRequestOverview = /* @__PURE__ */ Effect.fn("web/pullRequestOve
  */
 export const pullRequestConversation = /* @__PURE__ */ Effect.fn("web/pullRequestConversation")(
   function* <R = never>(
-    token: Redacted.Redacted,
+    bearer: GitHubBearer,
     fullName: string,
     pullRequest: { readonly number: number; readonly url: string },
     viewer: Effect.Effect<ViewerReads | undefined, never, R> = Effect.succeed(undefined),
-  ): Effect.fn.Return<
-    GitHubOverviewConversation,
-    PullRequestReadFailure,
-    HttpClient.HttpClient | R
-  > {
+  ): Effect.fn.Return<GitHubOverviewConversation, PullRequestReadFailure, R> {
     const { number } = pullRequest;
+
+    const listing = {
+      ...repositoryParts(fullName),
+      per_page: PEOPLE_PER_PAGE,
+      headers: WITH_RENDERING,
+    };
+
     // The member's own read runs beside the App's and is waited on only briefly once they land, so it never holds the conversation.
     const viewing = yield* Effect.forkChild(viewer);
 
     const [comments, reviews, graph] = yield* Effect.all(
       [
         everyPage(
-          token,
-          `${repositoryPath(fullName)}/issues/${number}/comments`,
+          bearer.client.paginate(
+            "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+            { ...listing, issue_number: number },
+            cutAt(COMMENTS_MAX_PAGES),
+          ),
           IssueCommentsSchema,
-          COMMENTS_MAX_PAGES,
-          true,
         ),
         everyPage(
-          token,
-          `${repositoryPath(fullName)}/pulls/${number}/reviews`,
+          bearer.client.paginate(
+            "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+            { ...listing, pull_number: number },
+            cutAt(PEOPLE_MAX_PAGES.REVIEWS),
+          ),
           ReviewsSchema,
-          PEOPLE_MAX_PAGES.REVIEWS,
-          true,
         ),
-        conversationGraphOf(token, fullName, number),
+        conversationGraphOf(bearer, fullName, number),
       ],
       { concurrency: "unbounded" },
     );
@@ -2430,30 +2387,22 @@ const VIEWER_REACTIONS_QUERY = `query ViewerReactions($owner: String!, $name: St
 }`;
 
 const ViewerAnswerSchema = Schema.Struct({
-  data: Schema.optionalKey(
-    Schema.NullOr(
-      Schema.Struct({
-        repository: Schema.NullOr(
-          Schema.Struct({
-            pullRequest: Schema.NullOr(
-              Schema.Struct({
-                id: Schema.String,
-                reactionGroups: ViewerGroupsSchema,
-                comments: ViewedListSchema,
-                reviews: ViewedListSchema,
-                reviewThreads: Schema.optionalKey(
-                  Schema.Struct({
-                    nodes: Schema.Array(
-                      Schema.NullOr(Schema.Struct({ comments: ViewedListSchema })),
-                    ),
-                  }),
-                ),
-              }),
-            ),
-          }),
-        ),
-      }),
-    ),
+  repository: Schema.NullOr(
+    Schema.Struct({
+      pullRequest: Schema.NullOr(
+        Schema.Struct({
+          id: Schema.String,
+          reactionGroups: ViewerGroupsSchema,
+          comments: ViewedListSchema,
+          reviews: ViewedListSchema,
+          reviewThreads: Schema.optionalKey(
+            Schema.Struct({
+              nodes: Schema.Array(Schema.NullOr(Schema.Struct({ comments: ViewedListSchema }))),
+            }),
+          ),
+        }),
+      ),
+    }),
   ),
 });
 
@@ -2474,57 +2423,52 @@ function givenOf(groups: (typeof ViewedSchema.Type)["reactionGroups"]): Readonly
  * the conversation unmarked rather than failing it, said once in the log.
  */
 export function viewerReactionsOf(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
-): Effect.Effect<ViewerReads | undefined, never, HttpClient.HttpClient> {
+): Effect.Effect<ViewerReads | undefined> {
   const [owner = "", name = ""] = fullName.split("/");
 
-  const request = githubPost(GRAPHQL_PATH, token, {
-    query: VIEWER_REACTIONS_QUERY,
-    variables: { owner, name, number },
-  });
+  return bearer.client
+    .graphql(VIEWER_REACTIONS_QUERY, { owner, name, number }, ViewerAnswerSchema)
+    .pipe(
+      Effect.map((answer) => {
+        const pullRequest = answer.repository?.pullRequest;
 
-  return Effect.scoped(
-    Effect.flatMap(send(request), (response) => readBody(response, ViewerAnswerSchema)),
-  ).pipe(
-    Effect.map((answer) => {
-      const pullRequest = answer.data?.repository?.pullRequest;
+        if (pullRequest == null) return undefined;
 
-      if (pullRequest == null) return undefined;
+        const viewed = [
+          ...(pullRequest.comments?.nodes ?? []),
+          ...(pullRequest.reviews?.nodes ?? []),
+          ...(pullRequest.reviewThreads?.nodes ?? []).flatMap(
+            (thread) => thread?.comments?.nodes ?? [],
+          ),
+        ];
 
-      const viewed = [
-        ...(pullRequest.comments?.nodes ?? []),
-        ...(pullRequest.reviews?.nodes ?? []),
-        ...(pullRequest.reviewThreads?.nodes ?? []).flatMap(
-          (thread) => thread?.comments?.nodes ?? [],
+        const given = new Map<string, ReadonlySet<Reaction>>([
+          [pullRequest.id, givenOf(pullRequest.reactionGroups)],
+        ]);
+
+        const editable = new Map<string, boolean>();
+
+        for (const node of viewed) {
+          if (node === null) continue;
+          given.set(node.id, givenOf(node.reactionGroups));
+
+          if (node.viewerCanUpdate !== undefined) editable.set(node.id, node.viewerCanUpdate);
+        }
+
+        return { given, editable };
+      }),
+      Effect.catch((failure) =>
+        Effect.as(
+          Effect.logWarning(
+            `the member's own reactions on pull request ${number} were not read: ${failure._tag}`,
+          ),
+          undefined,
         ),
-      ];
-
-      const given = new Map<string, ReadonlySet<Reaction>>([
-        [pullRequest.id, givenOf(pullRequest.reactionGroups)],
-      ]);
-
-      const editable = new Map<string, boolean>();
-
-      for (const node of viewed) {
-        if (node === null) continue;
-        given.set(node.id, givenOf(node.reactionGroups));
-
-        if (node.viewerCanUpdate !== undefined) editable.set(node.id, node.viewerCanUpdate);
-      }
-
-      return { given, editable };
-    }),
-    Effect.catch((failure) =>
-      Effect.as(
-        Effect.logWarning(
-          `the member's own reactions on pull request ${number} were not read: ${failure._tag}`,
-        ),
-        undefined,
       ),
-    ),
-  );
+    );
 }
 
 /**
@@ -2571,36 +2515,29 @@ const DeploymentSchema = Schema.Struct({
   ),
 });
 
-/** GitHub's GraphQL answer to the deployments read: its data where it read any, and its errors where it met some. */
+/** GitHub's GraphQL answer's data to the deployments read. */
 const DeploymentsAnswerSchema = Schema.Struct({
-  data: Schema.optionalKey(
-    Schema.NullOr(
-      Schema.Struct({
-        repository: Schema.NullOr(
-          Schema.Struct({
-            pullRequest: Schema.NullOr(
-              Schema.Struct({
-                commits: Schema.Struct({
-                  nodes: Schema.Array(
-                    Schema.NullOr(
-                      Schema.Struct({
-                        commit: Schema.Struct({
-                          deployments: Schema.NullOr(
-                            Schema.Struct({ nodes: Schema.Array(Schema.NullOr(DeploymentSchema)) }),
-                          ),
-                        }),
-                      }),
+  repository: Schema.NullOr(
+    Schema.Struct({
+      pullRequest: Schema.NullOr(
+        Schema.Struct({
+          commits: Schema.Struct({
+            nodes: Schema.Array(
+              Schema.NullOr(
+                Schema.Struct({
+                  commit: Schema.Struct({
+                    deployments: Schema.NullOr(
+                      Schema.Struct({ nodes: Schema.Array(Schema.NullOr(DeploymentSchema)) }),
                     ),
-                  ),
+                  }),
                 }),
-              }),
+              ),
             ),
           }),
-        ),
-      }),
-    ),
+        }),
+      ),
+    }),
   ),
-  errors: Schema.optionalKey(Schema.Array(Schema.Struct({ message: Schema.String }))),
 });
 
 /** GitHub's words for where a deployment or its newest status stands, as the wire says each; any it adds reads as still deploying. */
@@ -2666,48 +2603,41 @@ function newestOfEach(
  * failing the checks read it stands beside.
  */
 export function pullRequestDeployments(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
-): Effect.Effect<readonly PullRequestDeployment[], never, HttpClient.HttpClient> {
+): Effect.Effect<readonly PullRequestDeployment[]> {
   const [owner = "", name = ""] = fullName.split("/");
 
-  const request = githubPost(GRAPHQL_PATH, token, {
-    query: DEPLOYMENTS_QUERY,
-    variables: { owner, name, number },
-  });
+  return bearer.client
+    .graphql(DEPLOYMENTS_QUERY, { owner, name, number }, DeploymentsAnswerSchema)
+    .pipe(
+      Effect.flatMap((answer) => {
+        const head = answer.repository?.pullRequest?.commits.nodes.at(-1);
+        const listed = head?.commit.deployments;
 
-  return Effect.scoped(
-    Effect.flatMap(send(request), (response) => readBody(response, DeploymentsAnswerSchema)),
-  ).pipe(
-    Effect.flatMap((answer) => {
-      const head = answer.data?.repository?.pullRequest?.commits.nodes.at(-1);
-      const listed = head?.commit.deployments;
+        if (listed === undefined || listed === null) {
+          return Effect.as(
+            Effect.logWarning(`GitHub answered no deployments of pull request ${number}`),
+            [],
+          );
+        }
 
-      if (listed === undefined || listed === null) {
-        return Effect.as(
+        const deployments = listed.nodes.flatMap((node) =>
+          node === null ? [] : (deploymentOf(node) ?? []),
+        );
+
+        return Effect.succeed(newestOfEach(deployments));
+      }),
+      Effect.catch((failure) =>
+        Effect.as(
           Effect.logWarning(
-            `GitHub answered no deployments of pull request ${number} (${answer.errors?.length ?? 0} errors)`,
+            `the deployments of pull request ${number} were not read: ${failure._tag}`,
           ),
           [],
-        );
-      }
-
-      const deployments = listed.nodes.flatMap((node) =>
-        node === null ? [] : (deploymentOf(node) ?? []),
-      );
-
-      return Effect.succeed(newestOfEach(deployments));
-    }),
-    Effect.catch((failure) =>
-      Effect.as(
-        Effect.logWarning(
-          `the deployments of pull request ${number} were not read: ${failure._tag}`,
         ),
-        [],
       ),
-    ),
-  );
+    );
 }
 
 /** One comment of the member's own pending review, as GitHub holds it: where it stands, the published thread it replies on where it does, its words, and who, as an account. */
@@ -2767,82 +2697,72 @@ const VIEWER_PENDING_QUERY = `query ViewerPendingReview($owner: String!, $name: 
 const GraphQLSideSchema = Schema.Literals(["LEFT", "RIGHT"]);
 
 const ViewerPendingAnswerSchema = Schema.Struct({
-  data: Schema.optionalKey(
-    Schema.NullOr(
-      Schema.Struct({
-        repository: Schema.NullOr(
-          Schema.Struct({
-            pullRequest: Schema.NullOr(
-              Schema.Struct({
-                reviews: Schema.Struct({
-                  nodes: Schema.Array(
-                    Schema.NullOr(
-                      Schema.Struct({
-                        id: Schema.String,
-                        viewerDidAuthor: Schema.Boolean,
-                        comments: Schema.Struct({ totalCount: Schema.Number }),
-                      }),
-                    ),
-                  ),
+  repository: Schema.NullOr(
+    Schema.Struct({
+      pullRequest: Schema.NullOr(
+        Schema.Struct({
+          reviews: Schema.Struct({
+            nodes: Schema.Array(
+              Schema.NullOr(
+                Schema.Struct({
+                  id: Schema.String,
+                  viewerDidAuthor: Schema.Boolean,
+                  comments: Schema.Struct({ totalCount: Schema.Number }),
                 }),
-                reviewThreads: Schema.optionalKey(
-                  Schema.Struct({
-                    nodes: Schema.Array(
-                      Schema.NullOr(
-                        Schema.Struct({
-                          id: Schema.String,
-                          path: Schema.String,
-                          line: Schema.NullOr(Schema.Number),
-                          startLine: Schema.NullOr(Schema.Number),
-                          diffSide: GraphQLSideSchema,
-                          startDiffSide: Schema.NullOr(GraphQLSideSchema),
-                          opening: Schema.optionalKey(
-                            Schema.Struct({
-                              nodes: Schema.Array(
-                                Schema.NullOr(Schema.Struct({ state: Schema.String })),
-                              ),
-                            }),
-                          ),
-                          comments: Schema.Struct({
-                            nodes: Schema.Array(
-                              Schema.NullOr(
-                                Schema.Struct({
-                                  id: Schema.String,
-                                  state: Schema.String,
-                                  body: Schema.String,
-                                  bodyHTML: Schema.optionalKey(Schema.NullOr(Schema.String)),
-                                  createdAt: Schema.String,
-                                  author: Schema.NullOr(
-                                    Schema.Struct({
-                                      __typename: Schema.String,
-                                      login: Schema.String,
-                                      avatarUrl: Schema.optionalKey(Schema.String),
-                                      databaseId: Schema.optionalKey(Schema.NullOr(Schema.Number)),
-                                    }),
-                                  ),
-                                  pullRequestReview: Schema.NullOr(
-                                    Schema.Struct({ id: Schema.String }),
-                                  ),
-                                }),
-                              ),
-                            ),
-                          }),
-                        }),
-                      ),
-                    ),
-                  }),
-                ),
-              }),
+              ),
             ),
           }),
-        ),
-      }),
-    ),
+          reviewThreads: Schema.optionalKey(
+            Schema.Struct({
+              nodes: Schema.Array(
+                Schema.NullOr(
+                  Schema.Struct({
+                    id: Schema.String,
+                    path: Schema.String,
+                    line: Schema.NullOr(Schema.Number),
+                    startLine: Schema.NullOr(Schema.Number),
+                    diffSide: GraphQLSideSchema,
+                    startDiffSide: Schema.NullOr(GraphQLSideSchema),
+                    opening: Schema.optionalKey(
+                      Schema.Struct({
+                        nodes: Schema.Array(Schema.NullOr(Schema.Struct({ state: Schema.String }))),
+                      }),
+                    ),
+                    comments: Schema.Struct({
+                      nodes: Schema.Array(
+                        Schema.NullOr(
+                          Schema.Struct({
+                            id: Schema.String,
+                            state: Schema.String,
+                            body: Schema.String,
+                            bodyHTML: Schema.optionalKey(Schema.NullOr(Schema.String)),
+                            createdAt: Schema.String,
+                            author: Schema.NullOr(
+                              Schema.Struct({
+                                __typename: Schema.String,
+                                login: Schema.String,
+                                avatarUrl: Schema.optionalKey(Schema.String),
+                                databaseId: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+                              }),
+                            ),
+                            pullRequestReview: Schema.NullOr(Schema.Struct({ id: Schema.String })),
+                          }),
+                        ),
+                      ),
+                    }),
+                  }),
+                ),
+              ),
+            }),
+          ),
+        }),
+      ),
+    }),
   ),
 });
 
 type PendingAnswerPull = NonNullable<
-  NonNullable<NonNullable<typeof ViewerPendingAnswerSchema.Type.data>["repository"]>["pullRequest"]
+  NonNullable<typeof ViewerPendingAnswerSchema.Type.repository>["pullRequest"]
 >;
 
 /** GitHub's GraphQL word for a side, as the wire spells it. */
@@ -2913,37 +2833,32 @@ function pendingCommentsOf(pull: PendingAnswerPull, reviewId: string): GitHubPen
  * conversation without it rather than failing it, said once in the log.
  */
 export function viewerPendingReviewOf(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
-): Effect.Effect<ViewerPendingReview | null, never, HttpClient.HttpClient> {
+): Effect.Effect<ViewerPendingReview | null> {
   const [owner = "", name = ""] = fullName.split("/");
 
-  const request = githubPost(GRAPHQL_PATH, token, {
-    query: VIEWER_PENDING_QUERY,
-    variables: { owner, name, number },
-  });
+  return bearer.client
+    .graphql(VIEWER_PENDING_QUERY, { owner, name, number }, ViewerPendingAnswerSchema)
+    .pipe(
+      Effect.map((answer) => {
+        const pull = answer.repository?.pullRequest;
+        const own = pull?.reviews.nodes.find((node) => node?.viewerDidAuthor === true);
 
-  return Effect.scoped(
-    Effect.flatMap(send(request), (response) => readBody(response, ViewerPendingAnswerSchema)),
-  ).pipe(
-    Effect.map((answer) => {
-      const pull = answer.data?.repository?.pullRequest;
-      const own = pull?.reviews.nodes.find((node) => node?.viewerDidAuthor === true);
+        if (pull == null || own == null) return null;
 
-      if (pull == null || own == null) return null;
-
-      return { comments: own.comments.totalCount, drafts: pendingCommentsOf(pull, own.id) };
-    }),
-    Effect.catch((failure) =>
-      Effect.as(
-        Effect.logWarning(
-          `the member's own pending review on pull request ${number} was not read: ${failure._tag}`,
+        return { comments: own.comments.totalCount, drafts: pendingCommentsOf(pull, own.id) };
+      }),
+      Effect.catch((failure) =>
+        Effect.as(
+          Effect.logWarning(
+            `the member's own pending review on pull request ${number} was not read: ${failure._tag}`,
+          ),
+          null,
         ),
-        null,
       ),
-    ),
-  );
+    );
 }
 
 /** What the member reading may do to the pull request, as GitHub answers on their own token: edit it, and merge it past its base's rules. */
@@ -2954,21 +2869,15 @@ const VIEWER_RIGHTS_QUERY = `query ViewerRights($owner: String!, $name: String!,
 }`;
 
 const ViewerRightsAnswerSchema = Schema.Struct({
-  data: Schema.optionalKey(
-    Schema.NullOr(
-      Schema.Struct({
-        repository: Schema.NullOr(
-          Schema.Struct({
-            pullRequest: Schema.NullOr(
-              Schema.Struct({
-                viewerCanUpdate: Schema.Boolean,
-                viewerCanMergeAsAdmin: Schema.Boolean,
-              }),
-            ),
-          }),
-        ),
-      }),
-    ),
+  repository: Schema.NullOr(
+    Schema.Struct({
+      pullRequest: Schema.NullOr(
+        Schema.Struct({
+          viewerCanUpdate: Schema.Boolean,
+          viewerCanMergeAsAdmin: Schema.Boolean,
+        }),
+      ),
+    }),
   ),
 });
 
@@ -2990,37 +2899,32 @@ export const NO_VIEWER_RIGHTS: ViewerRights = { canEditDescription: false, canBy
  * failing the read, said once in the log.
  */
 export function viewerRightsOf(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   number: number,
-): Effect.Effect<ViewerRights, never, HttpClient.HttpClient> {
+): Effect.Effect<ViewerRights> {
   const [owner = "", name = ""] = fullName.split("/");
 
-  const request = githubPost(GRAPHQL_PATH, token, {
-    query: VIEWER_RIGHTS_QUERY,
-    variables: { owner, name, number },
-  });
+  return bearer.client
+    .graphql(VIEWER_RIGHTS_QUERY, { owner, name, number }, ViewerRightsAnswerSchema)
+    .pipe(
+      Effect.map((answer) => {
+        const pull = answer.repository?.pullRequest;
 
-  return Effect.scoped(
-    Effect.flatMap(send(request), (response) => readBody(response, ViewerRightsAnswerSchema)),
-  ).pipe(
-    Effect.map((answer) => {
-      const pull = answer.data?.repository?.pullRequest;
-
-      return {
-        canEditDescription: pull?.viewerCanUpdate === true,
-        canBypassRules: pull?.viewerCanMergeAsAdmin === true,
-      };
-    }),
-    Effect.catch((failure) =>
-      Effect.as(
-        Effect.logWarning(
-          `what the member may do to pull request ${number} was not read: ${failure._tag}`,
+        return {
+          canEditDescription: pull?.viewerCanUpdate === true,
+          canBypassRules: pull?.viewerCanMergeAsAdmin === true,
+        };
+      }),
+      Effect.catch((failure) =>
+        Effect.as(
+          Effect.logWarning(
+            `what the member may do to pull request ${number} was not read: ${failure._tag}`,
+          ),
+          NO_VIEWER_RIGHTS,
         ),
-        NO_VIEWER_RIGHTS,
       ),
-    ),
-  );
+    );
 }
 
 /** The repository's labels, as its pickers list them. */
@@ -3056,18 +2960,17 @@ export interface GitHubReviewOptions {
  * GitHub that did not answer, fails the read, so the pickers read it again
  * rather than hold an empty list that is no answer at all.
  */
-function optionsListing<A>(
-  token: Redacted.Redacted,
-  path: string,
-  schema: Schema.Codec<readonly A[], unknown>,
+function optionsListing<A, I>(
+  listing: Effect.Effect<ReadonlyArray<I>, GitHubFailure>,
+  schema: Schema.Decoder<readonly A[]>,
   what: string,
 ): Read<readonly A[]> {
-  return everyPage(token, path, schema, OPTIONS_MAX_PAGES).pipe(
-    Effect.map((listed) => listed.slice(0, OVERVIEW_BOUNDS.MAX_OPTIONS)),
-    Effect.catch((failure) =>
-      failure.status === GITHUB_HTTP_STATUS.FORBIDDEN
-        ? Effect.as(Effect.logWarning(`the App may not read the repository's ${what}`), [])
-        : Effect.fail(failure),
+  const none: readonly A[] = [];
+
+  return everyPage(listing, schema).pipe(
+    Effect.map((read) => read.slice(0, OVERVIEW_BOUNDS.MAX_OPTIONS)),
+    Effect.catchTag("GitHubForbidden", () =>
+      Effect.as(Effect.logWarning(`the App may not read the repository's ${what}`), none),
     ),
   );
 }
@@ -3079,16 +2982,29 @@ function optionsListing<A>(
  */
 export const pullRequestReviewOptions = /* @__PURE__ */ Effect.fn("web/pullRequestReviewOptions")(
   function* (
-    token: Redacted.Redacted,
+    bearer: GitHubBearer,
     fullName: string,
-  ): Effect.fn.Return<GitHubReviewOptions, PullRequestReadFailure, HttpClient.HttpClient> {
-    const path = repositoryPath(fullName);
+  ): Effect.fn.Return<GitHubReviewOptions, PullRequestReadFailure> {
+    const repository = { ...repositoryParts(fullName), per_page: PEOPLE_PER_PAGE };
+    const paging = cutAt(OPTIONS_MAX_PAGES);
 
     const [labels, users, teams] = yield* Effect.all(
       [
-        optionsListing(token, `${path}/labels`, LabelsSchema, "labels"),
-        optionsListing(token, `${path}/assignees`, AssigneesSchema, "assignees"),
-        optionsListing(token, `${path}/teams`, TeamsSchema, "teams"),
+        optionsListing(
+          bearer.client.paginate("GET /repos/{owner}/{repo}/labels", repository, paging),
+          LabelsSchema,
+          "labels",
+        ),
+        optionsListing(
+          bearer.client.paginate("GET /repos/{owner}/{repo}/assignees", repository, paging),
+          AssigneesSchema,
+          "assignees",
+        ),
+        optionsListing(
+          bearer.client.paginate("GET /repos/{owner}/{repo}/teams", repository, paging),
+          TeamsSchema,
+          "teams",
+        ),
       ],
       { concurrency: "unbounded" },
     );

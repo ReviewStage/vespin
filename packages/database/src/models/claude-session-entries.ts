@@ -111,7 +111,7 @@ const insertEntries = SqlSchema.void({
           sessionId,
           subpath,
           entry,
-          opens: opensTranscript(subpath, entry),
+          opens: opensTranscript(projectKey, subpath, entry),
         })),
       ),
     ),
@@ -342,17 +342,24 @@ const findOpening = SqlSchema.findOneOption({
     ),
 });
 
+/** The project a Cursor agent's store is kept under, as its runner keys it (`@repo/agent-runner`'s `RUNNER_TRANSCRIPTS.CURSOR_PROJECT`). */
+const CURSOR_PROJECT = "cursor";
+
 /**
  * Whether the entry opens its transcript: a Claude Code session's root,
  * the main transcript's user entry with no parent, which every later entry
- * of its chain descends from; or a Codex rollout's first line, its
- * `session_meta`. The migration that added the mark backfilled it by the
+ * of its chain descends from; a Codex rollout's first line, its
+ * `session_meta`; or a Cursor agent's row, which its runner writes as it
+ * makes the agent and again as each run checkpoints it, each naming the
+ * blobs written before it, so any of them stands for the agent whole. The migration that added the mark backfilled it by the
  * same predicate. Note that a CLI that stopped writing either marks nothing,
  * so its sessions start afresh rather than resume a transcript we cannot
  * tell is whole.
  */
-function opensTranscript(subpath: string | null, entry: SessionEntry): boolean {
+function opensTranscript(projectKey: string, subpath: string | null, entry: SessionEntry): boolean {
   if (entry.type === "session_meta") return true;
+
+  if (projectKey === CURSOR_PROJECT) return subpath === null && entry.type === "agent";
 
   return subpath === null && entry.type === "user" && entry.parentUuid === null;
 }

@@ -11,6 +11,7 @@ import {
   type GitHubTokenAnswer,
   githubTokenAnswerSchema,
 } from "@repo/features/github-token-wire";
+import { MEMBER_TOKEN_ABSENCE } from "@repo/github";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { HTTP_STATUS, jsonResponse, recordingHttpClient } from "@repo/wire/testing";
@@ -20,8 +21,9 @@ import { SqlClient } from "effect/sql";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import { recordingProductAnalytics, SERVER_EVENT } from "../events/server-events.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
+import { fixtureGitHubApp, GITHUB_APP_SETTINGS } from "../testing/github-app-fake.js";
 import { hostedAnswer } from "../testing/hosted-route.js";
-import { GITHUB_TOKEN_ABSENCE, memberGitHubToken } from "./github-token.js";
+import { memberGitHubToken } from "./github-token.js";
 import { githubTokenProcedures } from "./github-token-procedures.js";
 
 /**
@@ -123,7 +125,7 @@ const openMembers = Effect.gen(function* () {
   });
 
   const fake = recordingHttpClient((request) =>
-    github(request.authorization?.replace(/^Bearer /u, "") ?? ""),
+    github(request.authorization?.replace(/^(?:Bearer|token) /iu, "") ?? ""),
   );
 
   const procedures = githubTokenProcedures({
@@ -151,6 +153,7 @@ const openMembers = Effect.gen(function* () {
         Layer.succeed(Clock.Clock, yield* Clock.Clock),
         Layer.succeed(HostedEnvironment, environment),
         fake.layer,
+        Layer.provide(fixtureGitHubApp(GITHUB_APP_SETTINGS), fake.layer),
         ANALYTICS.layer,
         Logger.layer([recorder]),
       );
@@ -242,8 +245,8 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
             [
               "GET",
               "https://api.github.com/user",
-              `Bearer ${TOKEN.GOOD}`,
-              "application/vnd.github+json",
+              `token ${TOKEN.GOOD}`,
+              "application/vnd.github.v3+json",
               "2022-11-28",
             ],
           ],
@@ -263,7 +266,7 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
           Effect.provideService(HostedEnvironment, ENVIRONMENT),
         );
 
-        assert.deepEqual(afterUse, Result.fail(GITHUB_TOKEN_ABSENCE.INVALID));
+        assert.deepEqual(afterUse, Result.fail(MEMBER_TOKEN_ABSENCE.INVALID));
         assert.equal(answerOf(yield* ask(owner)).token?.status, GITHUB_TOKEN_STATUS.INVALID);
 
         assert.deepEqual(answerOf(yield* ask(owner, "DELETE")), { token: null });
@@ -272,7 +275,7 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
           Effect.provideService(HostedEnvironment, ENVIRONMENT),
         );
 
-        assert.deepEqual(removed, Result.fail(GITHUB_TOKEN_ABSENCE.NONE));
+        assert.deepEqual(removed, Result.fail(MEMBER_TOKEN_ABSENCE.NONE));
       }),
   );
 
@@ -441,7 +444,6 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
     "a save whose body is not sent as JSON is refused as an invalid request, keeps nothing, and asks GitHub nothing",
     () =>
       Effect.gen(function* () {
-        // Note that the old group read any body as JSON; oRPC reads one only under a JSON content type.
         const { owner, ask, send, checks } = yield* openMembers;
 
         const untyped = new Request(new URL(TOKEN_PATH, ORIGIN), {

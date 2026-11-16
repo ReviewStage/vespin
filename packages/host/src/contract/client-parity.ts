@@ -58,6 +58,9 @@ const WEB = {
   COMPUTER_USE: byDesign(
     "Agents use apps on the Mac through its own helper, which a tab cannot run",
   ),
+  CALL_WINDOW: byDesign(
+    "A tab cannot float a window over other apps; its call card docks inside the tab",
+  ),
   CLI: byDesign(
     "A tab cannot run the install script; the MCP & CLI page shows the command to paste",
   ),
@@ -107,12 +110,25 @@ const IOS = {
   DESKTOP_ONLY: byDesign("A desktop-only platform concern, refused by the iOS host"),
   DESK_TOOLS: byDesign("iOS v1 leaves the terminal and the live view to the desktop and the web"),
   DICTATION: byDesign("iOS uses the keyboard's own dictation"),
+  CALL_WINDOW: byDesign(
+    "iOS floats no window over other apps; a call keeps on with the screen locked, and its way back stands over the tab bar",
+  ),
   DIFF: byDesign("iOS v1 opens the diff on GitHub"),
+  REPOSITORY_PULL_REQUEST: notYet(
+    "iOS's pull request screen reads its pull request through its agent for now, not by its repository and number",
+  ),
   CHANGELOG: byDesign("iOS opens the changelog in its own Safari sheet (Settings › What's new)"),
   CONTACT_MAIL: byDesign("iOS writes the contact mail itself through openURL (Settings › Email)"),
   LINKS: byDesign("iOS opens a link through the system itself (openURL)"),
+  MACHINE_SETTINGS: notYet(
+    "iOS's Machines page lists the hosts; each machine's own settings for agents' commands and apps are the desktop's and the web's for now",
+  ),
   HOSTS_STANDING: byDesign(
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
+  ),
+  PINNED_TABS: byDesign("iOS pins no tab to a sidebar, so no pinned tab's task is read for one"),
+  MACHINE_ASKS_RETRY: notYet(
+    "iOS follows a machine's asks and the machines that name them, but doesn't read either again after a failed read yet",
   ),
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
@@ -122,6 +138,9 @@ const IOS = {
   ),
   MENTION_APPS: notYet(
     "iOS's composers offer skills after a `/` and no `@` list yet, so no app is offered to mention",
+  ),
+  MENTION_MACHINES: notYet(
+    "iOS's composers offer skills after a `/` and no `@` list yet, so no machine is offered to mention",
   ),
   MERGE_QUEUE: notYet("iOS leaves the Merge queue page to the desktop and the web for now"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
@@ -133,7 +152,7 @@ const IOS = {
   SOUNDS: byDesign("The phone plays only its push sound, never the account's chosen sounds"),
   TASKS: notYet("iOS v1's Tasks tab and task page don't offer this yet"),
   ACTIVE_TASK: byDesign(
-    "iOS follows each open task's description by its id (TASKS_DOCUMENT_FOLLOW), so it has no one active task to select or leave",
+    "iOS follows each open task's description by its id (TASKS_HELD_FOLLOW), so it has no one active task to select or leave",
   ),
   CODE_COLOR: byDesign(
     "iOS's host colors no code (compose-mobile.ts answers plainCodeLines), so a fenced block draws plain in mono",
@@ -214,6 +233,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.SOUND_REMOVE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.SOUND_CHOOSE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.DICTATION_TRANSCRIBE]: panel(IOS.DICTATION),
+  [PORT_ACT_KIND.VOICE_OPEN]: EVERYWHERE,
   [PORT_ACT_KIND.ACCOUNT_ACTIVE]: panel(IOS.PRESENCE),
   [PORT_ACT_KIND.PUSH_DEVICE_REGISTER]: PHONE_ONLY,
   [PORT_ACT_KIND.PUSH_DEVICE_UNREGISTER]: PHONE_ONLY,
@@ -226,6 +246,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_MODELS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_MODELS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_DEFAULT_WRITE]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_SET_DEFAULT_MACHINE]: panel(IOS.RUN_ON_MAC_STANDING),
   [PORT_ACT_KIND.AGENTS_CHAPTERS_PROVIDER_WRITE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.AGENTS_PREFERENCES_RETRY]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.HOSTS_FOLLOW]: EVERYWHERE,
@@ -233,6 +254,13 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.HOSTS_PRESENCE_FOLLOW]: panel(IOS.HOSTS_STANDING),
   [PORT_ACT_KIND.HOSTS_PRESENCE_REFRESH]: panel(IOS.HOSTS_STANDING),
   [PORT_ACT_KIND.HOSTS_REMOVE]: EVERYWHERE,
+  [PORT_ACT_KIND.MACHINES_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.MACHINES_RETRY]: panel(IOS.MACHINE_ASKS_RETRY),
+  [PORT_ACT_KIND.MACHINES_CHANGE]: panel(IOS.MACHINE_SETTINGS),
+  [PORT_ACT_KIND.MACHINES_REMOVE]: panel(IOS.MACHINE_SETTINGS),
+  [PORT_ACT_KIND.MACHINE_ASKS_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.MACHINE_ASKS_RETRY]: panel(IOS.MACHINE_ASKS_RETRY),
+  [PORT_ACT_KIND.MACHINE_ASK_ANSWER]: EVERYWHERE,
   [PORT_ACT_KIND.HOSTS_THIS_MAC_SET]: desktopOnly(
     byDesign("Runs agents on the Mac the app is on, which a tab is not"),
     byDesign("Runs agents on the Mac the app is on, which a phone is not"),
@@ -316,6 +344,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.CHAPTERS_FOLLOW]: panel(IOS.DIFF),
   [PORT_ACT_KIND.CHAPTERS_RETRY]: panel(IOS.DIFF),
   [PORT_ACT_KIND.CHAPTERS_GENERATE]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_RETRY]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_GENERATE]: panel(IOS.DIFF),
 
   [PORT_ACT_KIND.CLI_INSTALL]: desktopOnly(WEB.CLI, IOS.DESKTOP_ONLY),
 
@@ -363,6 +394,12 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.PORT_FORWARD_SET]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.PORT_SHARE_SET]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
 
+  [PORT_ACT_KIND.PULL_REQUESTS_PART_FOLLOW]: panel(IOS.REPOSITORY_PULL_REQUEST),
+  [PORT_ACT_KIND.PULL_REQUESTS_PART_RETRY]: panel(IOS.REPOSITORY_PULL_REQUEST),
+  [PORT_ACT_KIND.PULL_REQUESTS_CHANGES]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.PULL_REQUESTS_GITHUB_IMAGE]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.PULL_REQUESTS_ACTION]: panel(IOS.REPOSITORY_PULL_REQUEST),
+
   [PORT_ACT_KIND.SETTING_UPDATE]: EVERYWHERE,
   [PORT_ACT_KIND.SETTINGS_RESET]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.EXPERIMENT_SET]: panel(IOS.SETTINGS),
@@ -391,6 +428,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_SET_FOLLOWER_MACHINES]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_ADD_FOLLOWER]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REMOVE_FOLLOWER]: panel(IOS.FOLLOWERS),
+  [PORT_ACT_KIND.TASKS_FOLLOWER_MACHINES]: panel(IOS.HOVER),
   [PORT_ACT_KIND.GITHUB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.WEB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.GITHUB_CONNECT]: panel(IOS.SETTINGS),
@@ -408,6 +446,11 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_BROWSER_TABS_FOLLOW]: panel(IOS.DESK_TOOLS),
   [PORT_ACT_KIND.TASKS_COLOR_CODE]: panel(IOS.CODE_COLOR),
   [PORT_ACT_KIND.TASKS_FIND]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_RELATIONS_READ]: panel(IOS.HOVER),
+  [PORT_ACT_KIND.TASKS_SEARCH]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_LOAD]: panel(IOS.PINNED_TABS),
+  [PORT_ACT_KIND.TASKS_SETTLED_PAGE]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_PERSON_PAGE]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_REVISIONS]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REVISION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_RESTORE]: EVERYWHERE,
@@ -418,8 +461,8 @@ export const CLIENT_PARITY = {
     ios: YES,
   },
   [PORT_ACT_KIND.TASKS_PAGES_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_DOCUMENT_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_DOCUMENT_RETRY]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_HELD_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_HELD_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_HISTORY_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_HISTORY_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PICTURE_READ]: EVERYWHERE,
@@ -463,6 +506,8 @@ export const CLIENT_PARITY = {
   ),
   [PORT_ACT_KIND.WINDOW_MENU_OFFERS]: desktopOnly(WEB.MENU_BAR, IOS.MENU_BAR),
   [PORT_ACT_KIND.WINDOW_HANDOFF]: desktopOnly(WEB.HANDOFF, IOS.HANDOFF),
+  [PORT_ACT_KIND.WINDOW_VOICE_CALL]: desktopOnly(WEB.CALL_WINDOW, IOS.CALL_WINDOW),
+  [PORT_ACT_KIND.VOICE_CALL_PRESS]: desktopOnly(WEB.CALL_WINDOW, IOS.CALL_WINDOW),
   [PORT_ACT_KIND.FEEDBACK_SEND]: EVERYWHERE,
 
   [PORT_ACT_KIND.WORKSPACE_CREATE]: EVERYWHERE,
@@ -480,7 +525,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.WORKSPACE_SLACK_BOT_REPOSITORY]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_SLACK_BOT_CHANNEL]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_MEMBERS_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.WORKSPACE_MEMBERS_RETRY]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.WORKSPACE_MEMBERS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.WORKSPACE_INTEGRATIONS_FOLLOW]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_INTEGRATIONS_RETRY]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_SLACK_CHANNELS_FOLLOW]: panel(IOS.SETTINGS),
@@ -500,9 +545,13 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.WORKSPACE_ENVIRONMENT_LIST]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_ENVIRONMENT_PUT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_ENVIRONMENT_DELETE]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.WORKSPACE_ENVIRONMENT_SAVE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_RUN_ACTIONS_PUT]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.WORKSPACE_SANDBOX_SIZE_READ]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.WORKSPACE_SANDBOX_SIZE_PUT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_MERGE_QUEUE_READ]: panel(IOS.MERGE_QUEUE),
+  [PORT_ACT_KIND.WORKSPACE_MACHINES_READ]: panel(IOS.MENTION_MACHINES),
 } as const satisfies Record<PortActKind, ClientParityRow>;

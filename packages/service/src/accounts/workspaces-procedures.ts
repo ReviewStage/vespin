@@ -1,5 +1,5 @@
 /**
- * workspaces-procedures.ts -- the account's workspaces as the Mac reads and asks for them: the list, a workspace created, renamed, given a slug or a photo, handed over, or deleted, and its members read, removed, given a role, or left.
+ * workspaces-procedures.ts -- the account's workspaces as the Mac reads and asks for them: the list, a workspace created, renamed, given a slug or a photo, handed over, or deleted, its members read, removed, given a role, or left, and its members' machines read.
  *
  * `GET /api/workspaces` answers every workspace the bearer's account is a
  * member of, the one made for it first and the rest by name, each with the
@@ -9,7 +9,10 @@
  * given through the organization plugin's server-only create, the account
  * its owner.
  * `GET /api/workspaces/members` answers a workspace's members to a member
- * of it, and who its work still names but left. `POST /api/workspaces/members/remove`
+ * of it, and who its work still names but left. `GET /api/workspaces/machines`
+ * answers its members' machines to a member of it, or one member's: each
+ * one's name, platform, whose it is, and whether it is there now, and none of someone not in it
+ * (`workspaceMachinesOf`). `POST /api/workspaces/members/remove`
  * lets the owner remove an admin or a member, and an admin a member alone;
  * `POST /api/workspaces/members/role` lets the owner alone make a member an
  * admin or an admin a member; `POST /api/workspaces/transfer` lets the owner
@@ -59,12 +62,14 @@
  * unauthenticated and an oversized body as too large whatever it carries.
  */
 
+import { workspaceMachinesOf } from "@repo/database/models/device-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import type { WorkspaceSeams } from "@repo/database/models/workspace-seams";
 import { ensurePersonalWorkspace, listWorkspaces } from "@repo/database/models/workspace-store";
 import { WORKSPACE_MEMBERS_QUERY } from "@repo/features/workspace-wire";
 import { isExperiment, isWorkspaceExperiment } from "@repo/settings";
-import { Effect } from "effect";
+import { Clock, Duration, Effect } from "effect";
+import { ONLINE_WITHIN } from "../agents/machine-routing.js";
 import {
   HOSTED_REFUSAL,
   hostedStoreOrUnavailable,
@@ -110,6 +115,20 @@ export function workspacesProcedures(seams: WorkspacesProcedureSeams) {
         context.userId,
         input[WORKSPACE_MEMBERS_QUERY.WORKSPACE_ID],
       );
+    }),
+    machines: account.machines.effect(function* ({ context, input }) {
+      const workspace = yield* answeredWorkspace(context.userId, input.workspaceId);
+
+      // Note that a machine reads online as routing reads it reachable, its app having listened within the same window.
+      const listenedSince = new Date(
+        (yield* Clock.currentTimeMillis) - Duration.toMillis(ONLINE_WITHIN),
+      );
+
+      const machines = yield* hostedStoreOrUnavailable(
+        workspaceMachinesOf(context.userId, workspace.id, listenedSince, input.userId),
+      );
+
+      return { machines };
     }),
     removeMember: account.removeMember.effect(function* ({ context, input }) {
       return yield* workspaceMemberRemove(context.userId, input.workspaceId, input.userId);

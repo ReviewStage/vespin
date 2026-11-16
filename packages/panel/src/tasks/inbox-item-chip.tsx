@@ -3,33 +3,32 @@ import { type InboxListed, NEEDS_YOU, taskHolder } from "@repo/features/inbox-li
 import type { InboxItem } from "@repo/features/inbox-wire";
 import type { AppInboxItems, AppInboxSlice, AppInboxWaitingItem } from "@repo/host/app-state";
 import { HoverCard, HoverCardHead, HoverCardNote, Time, useMinute } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useMemo } from "react";
 import { inboxItemsQuery } from "../live-reads.js";
-import { appStateQuery, selectInbox, selectTasks } from "../use-app-state.js";
-import { InboxItemCard, inboxItemGlyph } from "./inbox-item-parts.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import { appStateQuery, selectInbox } from "../use-app-state.js";
+import { InboxItemCard } from "./inbox-item-parts.js";
 import { useMentionedPlace } from "./mentioned-place.js";
 
 /**
- * inbox-item-chip.tsx -- a chip of an Inbox item: what it asks as its glyph and its Inbox row's own card, whatever the item's standing.
+ * inbox-item-chip.tsx -- a chip of an Inbox item: its Inbox row's own card, whatever the item's standing.
  *
  * A link to an item names the task that holds it and the item, or, as an
  * older link does, the agent that posted it, or the item alone. Main's
  * document holds only what waits, in brief, so the item is drawn from the
  * account's feed of every item (`live-reads.ts`), which the host holds for
- * the session, as the Inbox draws it: the glyph its row's second line leads
- * with for what it asks (`inboxLineGlyph`), never its agent's tile, which
- * would draw it as a chip of the agent, and the card its row hangs
- * (`InboxItemCard`), waiting or answered. Until the feed is read, where it
+ * the session, as the Inbox draws it: the card its row hangs
+ * (`InboxItemCard`), waiting or answered. Its glyph is the Inbox's own,
+ * whatever it asks (`entity-mark.tsx`). Until the feed is read, where it
  * holds nothing of the item, as of one settled past its bound, or where the
- * window does not hold its task, the chip draws the thread's glyph, and the
- * card main's brief makes of an item still waiting, else its own card.
+ * window does not hold its task, the chip draws the card main's brief makes
+ * of an item still waiting, else its own card.
  */
 
 /** Where a link to an item says it stands: under a task, under the agent that posted it, or nowhere, by its id alone. */
 type InboxItemPlace =
-  | { readonly planId: string; readonly itemId: string }
+  | { readonly taskId: string; readonly itemId: string }
   | { readonly agentId: string; readonly itemId: string }
   | { readonly itemId: string };
 
@@ -41,27 +40,27 @@ function waitingTaskOf(inbox: AppInboxSlice | undefined, itemId: string): string
 /** An item the feed holds, and the plan it holds it under. */
 interface FedItem {
   readonly item: InboxItem;
-  readonly planId: string;
+  readonly taskId: string;
 }
 
 /** The item a link names as the feed holds it, and the plan the feed holds it under; none where the feed holds no such item. Note that a link under its agent, or by the item alone, leaves the plan to be found among every plan's. */
 function fedItemOf(fed: AppInboxItems | undefined, place: InboxItemPlace): FedItem | undefined {
   if (fed === undefined) return undefined;
-  const plans = fed[INBOX_SCOPE_KIND.PLAN];
+  const plans = fed[INBOX_SCOPE_KIND.TASK];
 
   const named = (item: InboxItem) =>
     item.id === place.itemId && (!("agentId" in place) || item.agentId === place.agentId);
 
-  if ("planId" in place) {
-    const item = plans[place.planId]?.find(named);
+  if ("taskId" in place) {
+    const item = plans[place.taskId]?.find(named);
 
-    return item === undefined ? undefined : { item, planId: place.planId };
+    return item === undefined ? undefined : { item, taskId: place.taskId };
   }
 
-  for (const [planId, items] of Object.entries(plans)) {
+  for (const [taskId, items] of Object.entries(plans)) {
     const item = items.find(named);
 
-    if (item !== undefined) return { item, planId };
+    if (item !== undefined) return { item, taskId };
   }
 
   return undefined;
@@ -75,28 +74,27 @@ function fedItemOf(fed: AppInboxItems | undefined, place: InboxItemPlace): FedIt
  * plan the feed holds the item under, else by main's brief while it waits.
  */
 function useLinkedItem(place: InboxItemPlace): InboxListed | undefined {
-  const planId = "planId" in place ? place.planId : undefined;
+  const namedTask = "taskId" in place ? place.taskId : undefined;
   const namedAgent = "agentId" in place ? place.agentId : undefined;
   const { itemId } = place;
   const fed = useQuery(inboxItemsQuery()).data;
-  const tasks = useQuery({ ...appStateQuery, select: selectTasks }).data;
   const inbox = useQuery({ ...appStateQuery, select: selectInbox }).data;
 
   const found = useMemo(() => {
-    if (planId !== undefined) return fedItemOf(fed, { planId, itemId });
+    if (namedTask !== undefined) return fedItemOf(fed, { taskId: namedTask, itemId });
 
     return fedItemOf(fed, namedAgent === undefined ? { itemId } : { agentId: namedAgent, itemId });
-  }, [fed, planId, namedAgent, itemId]);
+  }, [fed, namedTask, namedAgent, itemId]);
 
   const item = found?.item;
-  const taskId = planId ?? found?.planId ?? waitingTaskOf(inbox, itemId);
+  const taskId = namedTask ?? found?.taskId ?? waitingTaskOf(inbox, itemId);
+  const task = useTaskListRow(useTaskListCollections().tasks, taskId);
 
   return useMemo(() => {
-    if (item === undefined || taskId === undefined) return undefined;
-    const task = tasks?.tasks.find((each) => each.id === taskId);
+    if (item === undefined || task === undefined) return undefined;
 
-    return task === undefined ? undefined : { holder: taskHolder(task), item };
-  }, [item, taskId, tasks]);
+    return { holder: taskHolder(task), item };
+  }, [item, task]);
 }
 
 /** The brief main holds of an item that waits on the reader, by its id; none for one settled or unknown. */
@@ -131,18 +129,6 @@ export function useInboxItemTitle(place: InboxItemPlace): string | undefined {
   const waiting = useWaitingBrief(place.itemId);
 
   return listed?.item.title ?? waiting?.title;
-}
-
-/**
- * An item's glyph on its chip: what it asks, as its row's second line leads
- * with it (`inboxLineGlyph`), so the chip reads as a thread rather than as
- * the agent that posted it, whose tile its card still wears; the thread's
- * glyph where it asks nothing, and until the item is read.
- */
-export function InboxItemChipGlyph({ place }: { place: InboxItemPlace }): ReactNode {
-  const listed = useLinkedItem(place);
-
-  return listed === undefined ? <GLYPH.THREAD /> : inboxItemGlyph(listed.item);
 }
 
 /** An item's card on its chip: the card its Inbox row hangs, whether it waits or not; while its inbox is read, or where that failed, the brief card of an item still waiting; else `fallback`. */

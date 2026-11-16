@@ -25,13 +25,14 @@ import { transcriptWindowPartRowSchema, transcriptWindowRowSchema } from "./tran
  * (`packages/service/src/agents/coder-host/transcript-live.ts`): its
  * messages, its turns, its conversation's journal revision and title, the
  * agent's title, its workers' titles and delegations, its queue, a
- * device agent's newest launch line, and its first launch's boot; and its newest
+ * device agent's newest launch line, its first launch's boot, and the voice
+ * calls standing on it; and its newest
  * messages themselves as rows (`window`, `windowParts`), which the reader
  * draws as they arrive; to a reader that names a cursor, only those written
  * or amended past it, which it joins by message id onto the ones it holds.
  * What stands beside them on a page, the agent's
  * status, cost, workers, and where its launch stands, is still read from
- * the service, once the turns, titles, workers, queue, or launch move. The service answers
+ * the service, once the turns, titles, workers, queue, launch, or calls move. The service answers
  * `not-found` for an agent the account does not reach, and `unavailable`
  * where its deployment's Realtime is misconfigured, which the desktop
  * answers by asking again.
@@ -136,9 +137,25 @@ export const AGENT_TRANSCRIPT_READ = liveRead({
       order: [["attempt", ORDER.ASC]],
       optional: true,
     }),
+    /** The voice calls standing on the agent, a row each by its id, opened and gone with the call; none on a worker's transcript, and absent from a service older than it. */
+    calls: liveRows({
+      row: EffectSchema.Struct({ id: EffectSchema.String }),
+      key: "id",
+      order: [["id", ORDER.ASC]],
+      optional: true,
+    }),
   },
   /** A desktop that follows the window's own rows drops the count of its messages (`transcript-follow.ts`'s `followedRead`), so the digest it sends is over these alone. */
-  olderParts: ["turns", "conversation", "agent", "workers", "queueRevision", "launch", "boot"],
+  olderParts: [
+    "turns",
+    "conversation",
+    "agent",
+    "workers",
+    "queueRevision",
+    "launch",
+    "boot",
+    "calls",
+  ],
   refuses: refuses(HOSTED_API_ERROR.NOT_FOUND),
 });
 

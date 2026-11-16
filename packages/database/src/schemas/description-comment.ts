@@ -15,7 +15,7 @@ import { task } from "./task.js";
  * description-comment.ts -- comments on a task's plan: a thread anchored to words of the plan's text, and each of its entries.
  *
  * A thread's anchor is kept here as offsets into the plan's Markdown
- * (`task.document`) rather than written into the text, so every reader of the
+ * (`task.description`) rather than written into the text, so every reader of the
  * text reads none of it; the plan's one save moves every anchor with its
  * words (`@repo/features/description-comment-anchor`), and nulls both offsets of an
  * anchor whose every word it deleted, the thread keeping its quote. The

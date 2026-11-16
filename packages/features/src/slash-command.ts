@@ -23,7 +23,7 @@ export const SLASH_COMMAND = {
 
 export type SlashCommand = (typeof SLASH_COMMAND)[keyof typeof SLASH_COMMAND];
 
-/** The lines that change an agent's goal from its row: clear it, which both harnesses' `/goal` takes, and pause or resume it, which Codex's alone does. */
+/** The lines that change an agent's goal from its row: clear it, which Claude Code's and Codex's `/goal` take, and pause or resume it, which Codex's alone does (`agent-goal-model.ts`'s `GOAL_REACH`). */
 export const GOAL_LINE = {
   CLEAR: "/goal clear",
   PAUSE: "/goal pause",

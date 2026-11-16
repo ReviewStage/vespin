@@ -7,9 +7,10 @@ import { cn } from "../cn.js";
  * The component is shadcn's own source, kept as close to it as the window
  * allows, so a later `shadcn add card` reads as a small diff. Its local
  * changes: it is made as whichever element its place reads it as (`as`),
- * since a card stands as a list's item, a figure, or a span in running
- * words as well as a `div`; it is a positioned block, the containing block
- * of what is hung on it, rather than a flex column with a gap of its own,
+ * since a card stands as a list's item, a figure, a span in running
+ * words, or a form a message is sent from as well as a `div`; it is a
+ * positioned block, the containing block of what is hung on it, rather
+ * than a flex column with a gap of its own,
  * because what it holds sets itself; it has no `size` prop, no type or ink
  * of its own, and no ring, since its edge is a border in the hairline ink,
  * which a dragged row's ring recolors; and its ground, corner, and inset
@@ -22,7 +23,7 @@ import { cn } from "../cn.js";
  */
 
 /** The elements a card may be made as. */
-type CardElement = "div" | "article" | "figure" | "li" | "section" | "span";
+type CardElement = "div" | "article" | "figure" | "li" | "section" | "span" | "form";
 
 function Card({
   as = "div",
@@ -30,6 +31,7 @@ function Card({
   ...props
 }: HTMLAttributes<HTMLElement> & {
   as?: CardElement | undefined;
+  noValidate?: boolean | undefined;
   ref?: Ref<HTMLElement> | undefined;
 }) {
   return createElement(as, {

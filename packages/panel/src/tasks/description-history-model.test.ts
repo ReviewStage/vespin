@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import { revisionSummary } from "@repo/features/description-history-words";
+import {
+  changedSections,
+  VERSION_CHANGE,
+  versionDiff,
+} from "@repo/features/description-version-diff";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
   DESCRIPTION_ACTOR,
@@ -16,21 +21,18 @@ import { MARKDOWN_MARK, MarkdownMessage } from "../markdown-message.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import {
-  changedSections,
   opensSections,
   REVISION_SOURCE,
   revisionAuthorOf,
   revisionOfSave,
   revisionSource,
   sourceLabel,
-  VERSION_CHANGE,
-  versionDiff,
 } from "./description-history-model.js";
 
 const HOUR = 3_600_000;
 const AGENT_ID = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 const NOW = Date.UTC(2026, 9, 11, 18, 0);
-const DOCUMENT_TEXT = DOCUMENT_TASK.document.body.trimEnd();
+const DOCUMENT_TEXT = DOCUMENT_TASK.description.body.trimEnd();
 const DEAN = { userId: "user-dean", name: "Dean Stratakos" };
 const CHARLES = { userId: "user-charles", name: "Charles Pan" };
 
@@ -216,6 +218,14 @@ test("a version against the one before it marks the words written in and struck 
   assert.deepEqual(marked(diff, MARKDOWN_MARK.DELETED), ["Only admins"]);
   assert.deepEqual(marked(diff, MARKDOWN_MARK.INSERTED), ["Any member"]);
   assert.equal(diff.units[0]?.words, "## Goal\n\nOnly adminsAny member can invite.");
+
+  // A line struck and written over two lines still reads, unmarked, as the version wrote it.
+  const listed = versionDiff(
+    documentOf(["## Goal\n\n- a\n- b c"]),
+    documentOf(["## Goal\n\n- d c"]),
+  );
+
+  assert.equal(listed.units[0]?.plain, "## Goal\n\n- d c");
 });
 
 test("a picture replaced in a version reads as the old one struck and the new one written in, each whole", () => {
