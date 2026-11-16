@@ -486,6 +486,17 @@ it.layer(getTestDB())("the preferences snapshot's agent part", (it) => {
       }),
   );
 
+  it.effect("moves to a Cursor model for an account with Cursor agents on and a Cursor key", () =>
+    Effect.gen(function* () {
+      const { owner, ask } = yield* openAccounts;
+      yield* connectAgentApiKeys(owner, { providers: [PROVIDER_KEY_PROVIDER.CURSOR] });
+      yield* writeAccountPreferences(owner, { experiments: { [EXPERIMENT.CURSOR]: true } });
+      const composer = { model: "cursor/composer-2.5", effort: "default" };
+      assert.deepEqual(partOf(yield* ask(request(owner, { agent: composer })), "agent"), composer);
+      assert.deepEqual(partOf(yield* ask(request(owner)), "agent"), composer);
+    }),
+  );
+
   it.effect("is GPT-6.1 Sol for an account only an OpenAI key pays for, until it stores one", () =>
     Effect.gen(function* () {
       const { owner, ask } = yield* openAccounts;
