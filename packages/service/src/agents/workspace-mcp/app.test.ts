@@ -83,7 +83,7 @@ import {
   runAgentEditDescription,
   runAgentLookAtPicture,
   runAgentOpenPullRequest,
-  runAgentShowImage,
+  runAgentShowMedia,
   runAgentShowPage,
 } from "../coder-host/agent-doors.js";
 import { DESCRIPTION_EDIT_REFUSAL } from "../coder-host/description-edit.js";
@@ -446,7 +446,7 @@ const SERVED_TOOLS = [
   "open_pull_request",
   "edit_description",
   "look_at_picture",
-  "show_image",
+  "show_media",
   "show_page",
   ...AGENT_TOOLS,
   "read_comments",
@@ -497,7 +497,7 @@ const DOOR_OF: Readonly<
   open_pull_request: (admitted, input) => runAgentOpenPullRequest(admitted, input),
   edit_description: (admitted, input) => runAgentEditDescription(admitted, input, 0, NO_SANDBOX),
   look_at_picture: (admitted, input) => runAgentLookAtPicture(admitted, input, true, NO_SANDBOX),
-  show_image: (admitted, input) => runAgentShowImage(admitted, input, NO_SANDBOX),
+  show_media: (admitted, input) => runAgentShowMedia(admitted, input, NO_SANDBOX),
   show_page: (admitted, input) => runAgentShowPage(admitted, input, NO_SANDBOX),
   read_comments: commentTool("read_comments"),
   reply_to_comment: commentTool("reply_to_comment"),

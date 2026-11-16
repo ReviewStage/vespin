@@ -47,6 +47,7 @@ test("a file of a repository is asked for by its repository, ref, and path, howe
     "https://raw.githubusercontent.com/acme/relay/pr-assets/pr-42/before%20and%20after.PNG",
     "https://raw.githubusercontent.com/acme/relay/pr-assets/pr-42/before%20and%20after.PNG?token=ignored",
     "https://github.com/acme/relay/raw/pr-assets/pr-42/before%20and%20after.PNG",
+    "https://github.com/acme/relay/blob/pr-assets/pr-42/before%20and%20after.PNG?raw=true",
   ]) {
     assert.deepEqual(githubImageOf(address), file, address);
   }

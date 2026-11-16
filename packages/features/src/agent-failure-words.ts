@@ -90,6 +90,7 @@ const LAUNCH_STOPPED_WORDS = {
 const HARNESS_NAMES = {
   [AGENT_RUNTIME.CLAUDE_CODE]: "Claude Code",
   [AGENT_RUNTIME.CODEX]: "Codex",
+  [AGENT_RUNTIME.CURSOR]: "Cursor",
 } as const satisfies Record<NativeAgentRuntime, string>;
 
 /** Why a host's launch never started, by the reason the host said, as the sentence that says it and how to mend it. */

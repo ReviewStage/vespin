@@ -157,7 +157,7 @@ export const PANEL_COMMAND = {
   ADD_RELATION: unkeyed("Add task relation", <NetworkIcon />),
   REMOVE_PARENT: unkeyed(REMOVE_PARENT, <UnlinkIcon />),
   OPEN_ON_GITHUB: keyed(APP_COMMAND.OPEN_ON_GITHUB, <GLYPH.OPEN_ON_GITHUB />),
-  /** A pull request in its agent's Pull request tab, offered where a press opens its page on GitHub instead (`pull-request-opens.ts`). */
+  /** A pull request in its Pull request tab, offered where a press opens its page on GitHub instead (`pull-request-opens.ts`). */
   OPEN_IN_APP: unkeyed(`Open in ${PRODUCT_NAME}`, <GLYPH.PULL_REQUEST />),
   COPY_GITHUB_LINK: unkeyed("Copy GitHub link", <GLYPH.LINK />),
 } as const satisfies Record<string, PanelCommand>;
