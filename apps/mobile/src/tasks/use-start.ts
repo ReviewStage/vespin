@@ -412,9 +412,12 @@ export function useStartTask(
 ): (ask: StartAsk & TaskPlace) => Promise<StartAnswer> {
   const acts = useHostActs();
   const [key] = useState(randomUUID);
+  // Note that the task's id is minted once, as the agent's key is, so a start sent again makes no second task.
+  const [id] = useState(randomUUID);
 
   return async ({ prompt, attachments, picked, runsOn, ...place }) => {
     const answer = await acts[ACT_KIND.TASKS_START]({
+      id,
       ...placeOf(workspaceId, place),
       planning: false,
       agent: {
@@ -450,9 +453,12 @@ export function useFileTask(
   workspaceId: string | undefined,
 ): (ask: { readonly filed: FiledTask } & TaskPlace) => Promise<StartAnswer> {
   const acts = useHostActs();
+  // Note that the task's id is minted once per sheet, so a filing sent again files no second task.
+  const [id] = useState(randomUUID);
 
   return async ({ filed, ...place }) => {
     const answer = await acts[ACT_KIND.TASKS_START]({
+      id,
       ...placeOf(workspaceId, place),
       ...filed,
       status: TASK_STATUS.BACKLOG,
