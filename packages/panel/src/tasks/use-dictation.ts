@@ -1,4 +1,5 @@
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { base64Of } from "@repo/features/attached-files";
 import { DICTATION_AUDIO_TYPE, DICTATION_BOUNDS } from "@repo/features/dictation-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { ACT_KIND } from "@repo/host/acts";
@@ -11,7 +12,6 @@ import { type RefObject, useEffect, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import type { ComposerEditorHandle, ComposerMark } from "../description-editor/contract.js";
 import { useOpenAiKeyMissing, useOpenApiKeys } from "../openai-key.js";
-import { base64Of } from "./attached-files.js";
 import { MICROPHONE_REFUSAL, useOpenMicrophone } from "./use-open-microphone.js";
 
 /**

@@ -39,7 +39,7 @@ import {
   type AgentStartFrom,
   base64Bytes,
 } from "@repo/features/agent-wire";
-import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { isPlayedType } from "@repo/features/conversation-picture-wire";
 import { mentionMarkdownLink } from "@repo/features/link-grammar";
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice } from "@repo/features/models-wire";
@@ -514,8 +514,8 @@ const sourceFileOf = (source: Agent, file: FileUIPart, name: string) =>
     if (inline !== undefined || kept === undefined || !("id" in kept)) return inline;
     const picture = yield* readConversationPicture(source.conversationId, kept.id);
 
-    // A video an agent showed is no file a message carries, so a Start names it as not attached.
-    if (Option.isNone(picture) || isVideoType(picture.value.contentType)) return undefined;
+    // A video or a sound clip an agent showed is no file a message carries, so a Start names it as not attached.
+    if (Option.isNone(picture) || isPlayedType(picture.value.contentType)) return undefined;
 
     return {
       name,

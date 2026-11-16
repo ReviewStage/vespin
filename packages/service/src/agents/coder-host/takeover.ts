@@ -244,7 +244,12 @@ function wordsOf(prompt: string | undefined, note: string | undefined): string |
   return words.length === 0 ? undefined : words.join("\n\n");
 }
 
-/** How many of the note's files are text files, which the harness is handed inlined, and how many images and PDFs. */
+/**
+ * How many of the note's files are text files and how many images and PDFs.
+ * Note that a text file written into the machine rather than inlined still
+ * counts as text, because the replay card parts a first message's files by
+ * their type alone (`replay-card-model.ts`), released windows among them.
+ */
 function noteFilesOf(files: readonly AgentAttachment[]): NoteFiles {
   const text = files.filter((file) => file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT).length;
 

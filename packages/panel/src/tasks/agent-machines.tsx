@@ -27,7 +27,7 @@ import { showToast } from "../toast.js";
 import { MachineGlyph } from "./workspace-machines.js";
 
 /**
- * agent-machines.tsx -- the machine an agent's terminal commands and computer use go to: its Default machine row in the Cloud chip's popover, and the machine a call still unanswered names.
+ * agent-machines.tsx -- the machine an agent's terminal commands and computer use go to: its Default machine row in its place chip's popover, and the machine a call still unanswered names.
  *
  * The agent's tools as the service answers them (`LIVE_READ.WORKSPACE_TOOLS`)
  * say where a call naming no machine would go now (`runOnMac.machine`), and
@@ -39,8 +39,10 @@ import { MachineGlyph } from "./workspace-machines.js";
  * with the reason. Its submenu, under the one heading that says what it is
  * for, lists each machine with the same dot and its owner's face, an offline one
  * still picked, since it may come back, and a pick sets the agent's default
- * on the service, which answers the agent's tools as they then stand. An
- * agent offered no `run_on_mac`, one on a device, has no such row.
+ * on the service, which answers the agent's tools as they then stand. A
+ * local agent with no default reads None, since a call naming no machine
+ * would go to the one it runs on, whose own shell runs it. An agent
+ * offered no `run_on_mac` has no such row.
  */
 
 /** The Default machine row's id, which no place's id is. */
@@ -59,18 +61,38 @@ function useAgentTools(agentId: string | undefined): WorkspaceToolsAnswer | unde
   return useQuery(workspaceToolsQuery(agentId)).data;
 }
 
-/** The machine a call the agent makes now would go to, by its id and name, the same object while neither moved; none where the service names none. */
-export function useRoutedMachine(
-  agentId: string | undefined,
-): { readonly id: string; readonly name: string } | undefined {
-  const machine = useAgentTools(agentId)?.runOnMac?.machine;
-  const id = machine?.id;
-  const name = machine?.name;
+/** A machine a call still unanswered names, by its id and name. */
+export interface CallRouteMachine {
+  readonly id: string;
+  readonly name: string;
+}
 
-  return useMemo(
-    () => (id === undefined || name === undefined ? undefined : { id, name }),
-    [id, name],
-  );
+/** The machine a call still unanswered goes to, given the id of the machine it names, none where it names none; none where the window cannot tell. */
+export type CallRoute = (named: string | undefined) => CallRouteMachine | undefined;
+
+/**
+ * Where a call the agent makes now goes, as the service routes it
+ * (`machine-routing.ts`): the machine it names, found among those the agent
+ * may use, or else the one a call naming none goes to now. A call naming a
+ * machine the agent's tools do not list goes unnamed until it answers,
+ * rather than naming the default it does not go to.
+ */
+function callRouteOf(tools: WorkspaceToolsAnswer | undefined): CallRoute {
+  const routed = tools?.runOnMac?.machine;
+  const machines = tools?.machines ?? [];
+
+  return (named) => {
+    const machine = named === undefined ? routed : machines.find((listed) => listed.id === named);
+
+    return machine === undefined ? undefined : { id: machine.id, name: machine.name };
+  };
+}
+
+/** Where a call the agent makes now goes (`callRouteOf`), the same door while the agent's tools stand as they were. */
+export function useCallRoute(agentId: string | undefined): CallRoute {
+  const tools = useAgentTools(agentId);
+
+  return useMemo(() => callRouteOf(tools), [tools]);
 }
 
 /** The agent's default machine set on the service, a refusal said in a toast. */
@@ -95,8 +117,8 @@ function setDefaultMachine(agentId: string, machineId: string): void {
   );
 }
 
-/** The value the row ends in, muted as the Agent runs in row's is: a teammate's face where the machine is theirs, then its name; or None. */
-function DefaultValue({
+/** The value a row of the place popover ends in, muted: a teammate's face where the machine is theirs, then its name; or None, for the Default machine row with none. */
+export function MachineValue({
   name,
   face,
 }: {
@@ -157,7 +179,7 @@ export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
         <MachineGlyph machine={{ online }} />
       ),
     end: (
-      <DefaultValue
+      <MachineValue
         name={chosen === undefined ? undefined : nameOf(chosen)}
         face={chosen === undefined ? undefined : faceOf(standing.owner)}
       />

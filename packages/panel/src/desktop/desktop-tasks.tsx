@@ -873,7 +873,7 @@ function DescriptionDocument({
   const openWaitingThread = useSteadyDoor((item: InboxItem) => {
     if (openedId === undefined) return;
 
-    if (phone) tasks.onShowInbox({ taskId: openedId, itemId: item.id });
+    if (phone) tasks.onShowInbox({ taskId: openedId, itemId: item.id, itemAgentId: item.agentId });
     else agentThreads.onOpen(item.agentId, item.id);
   });
 
