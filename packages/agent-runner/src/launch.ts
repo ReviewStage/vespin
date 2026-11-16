@@ -54,13 +54,12 @@ export function harnessEnvOf(
  * machine's own tools, a repository's Playwright among them, away from where
  * they keep their things.
  */
-export function toolEnvOf(
-  env: Readonly<Record<string, string | undefined>>,
-): Readonly<Record<string, string>> {
+export function toolEnvOf(env: Readonly<Record<string, string | undefined>>) {
   if (runsOnHost(env)) return {};
 
   // Note that a `NODE_PATH` the launch already carries stays, ahead of the image's.
   const nodePath = [env.NODE_PATH, SANDBOX_TOOL_ENV.NODE_PATH].filter(Boolean).join(":");
+
   return { ...SANDBOX_TOOL_ENV, NODE_PATH: nodePath };
 }
 
