@@ -11,6 +11,7 @@ import {
   type InboxCounts,
   type InboxListed,
   type InboxListView,
+  type InboxPinnedRun,
   type InboxRun,
   type InboxShow,
   type InboxWhose,
@@ -65,6 +66,7 @@ import {
   ListMotion,
   ListRow,
   MENU_ITEM_MARK,
+  motionKey,
   motionRows,
   NAV_COUNT_SHOWN,
   NOTE_LINE_LOOK,
@@ -1472,8 +1474,10 @@ function useRowFocusKept(rows: InboxRowPresses): RowFocus {
     const found = rows.find(row);
 
     if (found !== undefined && found.closest(LIST_LEAVING_SELECTOR) === null) {
-      // Note that a row moving into or out of Pinned is drawn anew, which drops the keyboard to the page, so it is handed back.
-      if (document.activeElement === document.body) found.focus();
+      // Note that a row moving into or out of Pinned is drawn anew, which drops the keyboard to the page or leaves it in the row it moved from, now leaving, so it is handed back.
+      const held = document.activeElement;
+
+      if (held === document.body || held?.closest(LIST_LEAVING_SELECTOR) !== null) found.focus();
 
       return;
     }
@@ -1552,15 +1556,18 @@ interface RowsPlace {
  * (`VirtualRows`), as a mail app's list does, so a long list draws as
  * quickly as a short one; every row while a find bar
  * stands open, and the row holding the keyboard wherever the list is
- * scrolled.
+ * scrolled. Every row of a run leaving with its heading (`leaving`) is
+ * drawn as leaving, out of the keyboard's rows.
  */
 function InboxRows({
   items,
   place,
+  leaving = false,
   row,
 }: {
   items: readonly InboxListed[];
   place: RowsPlace;
+  leaving?: boolean;
   row: (listed: InboxListed, leaving: boolean, at: VirtualRowPlace) => React.ReactNode;
 }): React.JSX.Element {
   const drawn = useLeaving(items, (listed) => listed.item.id);
@@ -1587,7 +1594,7 @@ function InboxRows({
       {(index, at) => {
         const entry = drawn[index];
 
-        return entry === undefined ? null : row(entry.value, entry.leaving, at);
+        return entry === undefined ? null : row(entry.value, entry.leaving || leaving, at);
       }}
     </VirtualRows>
   );
@@ -1599,6 +1606,16 @@ const RUN_WORDS = {
   [INBOX_RUN.REST]: "Everything else",
 } as const satisfies Record<InboxRun, string>;
 
+/** The one run a list stands its items in where nothing pinned heads them: Everything else, under no heading (`InboxRuns`). */
+function oneRun(view: InboxListView): readonly InboxPinnedRun[] {
+  return [{ run: INBOX_RUN.REST, items: view.items, count: view.items.length, folded: false }];
+}
+
+/** A run's key, by which it leaves the list. */
+function runKeyOf({ run }: InboxPinnedRun): string {
+  return run;
+}
+
 /**
  * The list's rows: in one run, or, where the pinned tasks' items stand
  * first and one is listed (`inboxPinnedRuns`), those under Pinned and the
@@ -1607,6 +1624,13 @@ const RUN_WORDS = {
  * stand, and how many items it holds, so it reads as a section folded or
  * open. A heading's press folds its run or opens it, as `onFold` keeps it,
  * and a folded run draws none of its rows.
+ *
+ * The one run is Everything else with its heading not drawn, so as Pinned
+ * comes or goes its rows stay drawn where they stand and glide to where the
+ * change stands them, rather than being drawn anew. A run no longer listed
+ * is drawn on, its heading with it, until its exit has played
+ * (`ListMotion`), holding only the rows listed nowhere else, so a row that
+ * moved to the other run glides across rather than leaving a copy behind.
  */
 function InboxRuns({
   view,
@@ -1620,28 +1644,38 @@ function InboxRuns({
   /** Folds a run or opens it; none where the runs never fold. */
   onFold: ((run: InboxRun, folded: boolean) => void) | undefined;
 }): React.JSX.Element {
-  const runs = inboxPinnedRuns(view);
-
-  if (runs === undefined) return <InboxRows items={view.items} place={place} row={row} />;
+  // Note that the runs are made once for the view they are made from, because `useLeaving` reads a new list as a change.
+  const headed = view.runs !== undefined;
+  const runs = useMemo(() => inboxPinnedRuns(view) ?? oneRun(view), [view]);
+  const listed = useMemo(() => new Set(view.items.map(({ item }) => item.id)), [view]);
+  const drawn = useLeaving(runs, runKeyOf);
 
   return (
     <>
-      {runs.map(({ run, items, count, folded }) => (
-        <GroupHeader
-          key={run}
-          look={GROUP_LOOK.SECTION}
-          heading={GROUP_HEADING.NONE}
-          head={GROUP_HEAD.STICKS}
-          label={RUN_WORDS[run]}
-          count={{ ...groupCount(count, TERM.INBOX_ITEM), shown: NAV_COUNT_SHOWN.ALWAYS }}
-          fold={
-            onFold === undefined
-              ? undefined
-              : { open: !folded, onOpenChange: (open) => onFold(run, !open) }
-          }
-        >
-          {folded ? null : <InboxRows items={items} place={place} row={row} />}
-        </GroupHeader>
+      {drawn.map(({ key, value: { run, items, count, folded }, leaving }) => (
+        <div key={key} {...motionKey(key)}>
+          <GroupHeader
+            look={GROUP_LOOK.SECTION}
+            heading={GROUP_HEADING.NONE}
+            head={headed || leaving ? GROUP_HEAD.STICKS : GROUP_HEAD.NONE}
+            label={RUN_WORDS[run]}
+            count={{ ...groupCount(count, TERM.INBOX_ITEM), shown: NAV_COUNT_SHOWN.ALWAYS }}
+            fold={
+              onFold === undefined || !headed || leaving
+                ? undefined
+                : { open: !folded, onOpenChange: (open) => onFold(run, !open) }
+            }
+          >
+            {folded ? null : (
+              <InboxRows
+                items={leaving ? items.filter(({ item }) => !listed.has(item.id)) : items}
+                place={place}
+                leaving={leaving}
+                row={row}
+              />
+            )}
+          </GroupHeader>
+        </div>
       ))}
     </>
   );
