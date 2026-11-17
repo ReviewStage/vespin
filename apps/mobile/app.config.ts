@@ -195,6 +195,13 @@ type AppExtension = {
   readonly SYMBOLS?: readonly string[];
   readonly ENTITLEMENTS?: Readonly<Record<string, PlistValue>>;
   readonly INFO?: Readonly<Record<string, PlistValue>>;
+  /**
+   * System frameworks the target links by name. Note that Swift links an
+   * imported framework only once a symbol of its is used, and a conformance
+   * to an Objective-C protocol uses none, so an extension point whose context
+   * class lives in a framework the code merely conforms to names it here.
+   */
+  readonly FRAMEWORKS?: readonly string[];
 };
 
 const EXTENSION_SWIFT_VERSION = "5.0";
@@ -243,6 +250,8 @@ const NOTIFICATION_CONTENT: AppExtension = {
   SOURCES: [{ FROM: "notification-content", NAME: "NotificationViewController.swift" }],
   EXTENSION_POINT: "com.apple.usernotifications.content-extension",
   PRINCIPAL_CLASS: "NotificationViewController",
+  // Note that the extension point's context class is UserNotificationsUI's, so an appex that doesn't link it traps as SpringBoard connects.
+  FRAMEWORKS: ["UserNotificationsUI"],
   ATTRIBUTES: {
     UNNotificationExtensionCategory: ["inbox-decide", "inbox-reply"],
     UNNotificationExtensionInitialContentSizeRatio: 0.4,
@@ -756,6 +765,11 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
         ...(entitlements.length === 0
           ? undefined
           : { CODE_SIGN_ENTITLEMENTS: `${extension.TARGET}/${entitlements[0]}` }),
+        ...(extension.FRAMEWORKS === undefined
+          ? undefined
+          : {
+              OTHER_LDFLAGS: `"${["$(inherited)", ...extension.FRAMEWORKS.map((name) => `-framework ${name}`)].join(" ")}"`,
+            }),
       });
     }
 
