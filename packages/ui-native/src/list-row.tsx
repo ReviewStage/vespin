@@ -32,6 +32,8 @@ import {
   listRowSeparator,
   listRowSeparatorTint,
   type ModifierConfig,
+  menuIndicator,
+  menuStyle,
   monospacedDigit,
   padding,
   tag,
@@ -49,6 +51,7 @@ import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
 import {
+  createContext,
   Fragment,
   type ReactElement,
   type ReactNode,
@@ -73,7 +76,12 @@ import {
   WorkingMark,
 } from "./marks.js";
 import { useMinute } from "./minute.js";
-import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
+import {
+  RowChoosingContext,
+  RowOpenContext,
+  RowSearchedContext,
+  RowSelectedContext,
+} from "./row-open.js";
 import { searchedTitleMarkdown } from "./searched-title-model.js";
 import {
   type BrandColors,
@@ -269,6 +277,8 @@ type TaskRowProps = RowActs & {
   readonly fold?: RowFold | undefined;
   /** How deep it stands under the tasks above it, which sets it in from the list's edge. */
   readonly depth?: number | undefined;
+  /** Its status as a menu its ring opens, each status by its mark in its tone, as the panel's row opens its status chip; none where the row only reads, where the ring is its mark alone. */
+  readonly statusMenu?: RowSubmenu | undefined;
 };
 
 /** A row's act as a button of its long press menu or its swipe: red where it takes something away, through the system's destructive role where `roled`, and otherwise in `ink`, the muted ink a menu's glyph takes unless a swipe asks for its fill. */
@@ -512,6 +522,13 @@ function asking(
   );
 }
 
+/**
+ * What a menu standing in a row's own content, such as its status ring's,
+ * tells as one of its acts is pressed, so a question the act raises waits
+ * for that menu to go too (`useMenuGoing`); nothing outside a row.
+ */
+const RowMenuGoingContext = createContext<() => void>(() => undefined);
+
 /** An act as the long press menu stands it, `going` told as it is pressed. */
 function pressedInMenu(action: RowAction, going: () => void): RowAction {
   return {
@@ -644,8 +661,13 @@ export function RowFrame({
   const groups = menuGroups.filter(menuGroupFilled);
   const ownGroup = swiped.length + menuSubmenus.length + menuActions.length > 0;
 
+  // Note that the row's own content hears the hold too, so a menu standing in it, such as a task's status ring, holds the row's question as the long press menu does.
+  const content = (
+    <RowMenuGoingContext.Provider value={menuGoing.pressed}>{row}</RowMenuGoingContext.Provider>
+  );
+
   if (!ownGroup && groups.length === 0 && preview === undefined) {
-    return <HStack modifiers={frameModifiers}>{asking(row, question)}</HStack>;
+    return <HStack modifiers={frameModifiers}>{asking(content, question, menuGoing.going)}</HStack>;
   }
 
   const opening: readonly RowAction[] =
@@ -678,7 +700,7 @@ export function RowFrame({
           </Fragment>
         ))}
       </ContextMenu.Items>
-      <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
+      <ContextMenu.Trigger>{content}</ContextMenu.Trigger>
       {preview === undefined ? null : (
         <ContextMenu.Preview>
           <VStack modifiers={[SwiftModifiers.onDisappear(menuGoing.gone)]}>{preview}</VStack>
@@ -1130,6 +1152,90 @@ export function FoldChevron({
   );
 }
 
+/** What a task's status ring is heard as, among its row's actions: the menu it opens. */
+const STATUS_WORD = "Status";
+
+/**
+ * A task's status ring that opens its Status menu, as the panel's row opens
+ * its status chip and Reminders sets a task from its circle: the system's
+ * menu, anchored on the ring, each status by its mark in its tone and the
+ * current one checked. Its target is 44 pt tall and reaches only toward the
+ * row's leading edge, by `edge`, and into the gap before the name, so a
+ * press on the name still opens the task; beside a parent's fold it reaches
+ * none of the way, since the chevron's 44 pt square already overhangs the
+ * gap between them, and a ring standing over that overhang took a press
+ * meant for the fold. It is the
+ * mark alone where its row only reads, or while its list stands in Select
+ * mode. Note that its row stays one element to VoiceOver, which offers the
+ * menu among the row's actions as Status, since a heard row keeps its
+ * children's acts as its own.
+ */
+export function StatusRing({
+  status,
+  menu,
+  edge,
+}: {
+  readonly status: TaskStatus;
+  readonly menu: RowSubmenu | undefined;
+  /** How far toward the row's leading edge its target reaches: the row's leading inset, or nothing beside a fold, whose chevron's square takes the gap. */
+  readonly edge: number;
+}) {
+  const colors = useColors();
+  const choosing = useContext(RowChoosingContext);
+  const going = useContext(RowMenuGoingContext);
+  const lead = useScaledSize(MARK_SIZE.LEAD);
+  const target = Math.max(FOLD_TARGET, lead);
+
+  if (menu === undefined || choosing) return <TaskStatusMark status={status} />;
+
+  // Note that a status its menu sets may ask first, such as Done while the task's agents work, so a choice holds that question until the menu has gone, as the row's long press menu does; this menu lifts no preview, so it waits out the deadline.
+  const held = submenuInMenu(menu, going);
+
+  // Note that the ring never reaches past the gap before the name.
+  const reach = {
+    leading: edge,
+    trailing: SPACE.ROW,
+    vertical: (target - lead) / 2,
+  };
+
+  return (
+    <Menu
+      label={
+        <HStack
+          modifiers={[
+            frame({ width: lead + reach.leading + reach.trailing, height: target }),
+            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          ]}
+        >
+          <TaskStatusMark status={status} />
+        </HStack>
+      }
+      modifiers={[
+        menuStyle("button"),
+        buttonStyle("borderless"),
+        menuIndicator("hidden"),
+        accessibilityLabel(STATUS_WORD),
+        padding({
+          leading: -reach.leading,
+          trailing: -reach.trailing,
+          top: -reach.vertical,
+          bottom: -reach.vertical,
+        }),
+        zIndex(1),
+      ]}
+    >
+      {held.choices.map((choice) => (
+        <Toggle
+          key={choice.label}
+          {...choiceContent(choice, colors)}
+          isOn={choice.on}
+          onIsOnChange={() => choice.onPress()}
+        />
+      ))}
+    </Menu>
+  );
+}
+
 /** A fold's item in its row's long press menu, so a person who reaches the row as one element, through VoiceOver or Voice Control, still opens what it folds; none for a row that folds nothing. */
 export function foldActions(fold: RowFold | undefined, words: FoldWords): readonly RowAction[] {
   if (fold === undefined) return [];
@@ -1178,7 +1284,13 @@ export function TaskRow(props: TaskRowProps) {
         unread={unread}
         faded={finished}
         fold={fold === undefined ? undefined : <FoldChevron fold={fold} words={SUB_TASK_FOLD} />}
-        lead={<TaskStatusMark status={status} />}
+        lead={
+          <StatusRing
+            status={status}
+            menu={props.statusMenu}
+            edge={fold === undefined ? ROW_INSET.PLAIN : 0}
+          />
+        }
         title={name}
         ink={titleInk(colors, unread, finished)}
         end={
