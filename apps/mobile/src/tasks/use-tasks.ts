@@ -447,17 +447,12 @@ function agentsByTask(
   return byTask;
 }
 
-/** A task's agents not archived, in the order its Overview lists them: those waiting on the reader first. */
+/** A task's agents not archived, in the order its Overview lists them: the oldest started first. */
 function taskAgentsInOrder(
   byTask: ReadonlyMap<string, readonly ListedAgent[]>,
   taskId: string,
-  waitingByAgent: ReadonlyMap<string, number>,
 ): readonly ListedAgent[] {
-  return inAgentListOrder(
-    byTask.get(taskId) ?? [],
-    (agent) => agent,
-    (agent) => (waitingByAgent.get(agent.id) ?? 0) > 0,
-  );
+  return inAgentListOrder(byTask.get(taskId) ?? [], (agent) => agent);
 }
 
 /**
@@ -640,7 +635,7 @@ export function useTasksListing(search: string): ReadListing {
 
     const glanceOf = (taskId: string): TaskGlance => ({
       waiting: waiting.byTask.get(taskId) ?? 0,
-      agents: taskAgentsInOrder(byTask, taskId, waiting.byAgent),
+      agents: taskAgentsInOrder(byTask, taskId),
     });
 
     return {
@@ -819,8 +814,8 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   return useMemo(() => {
     if (task === undefined) return undefined;
 
-    const agents = taskAgentsInOrder(agentsByTask(listedAgents), task.id, waiting.byAgent).map(
-      (agent) => agentLine(agent, waiting.byAgent, pullRequests),
+    const agents = taskAgentsInOrder(agentsByTask(listedAgents), task.id).map((agent) =>
+      agentLine(agent, waiting.byAgent, pullRequests),
     );
 
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);

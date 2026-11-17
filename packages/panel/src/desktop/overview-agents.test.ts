@@ -21,9 +21,9 @@ import { agentsControl } from "../testing/tasks-control.js";
 import { OverviewAgents } from "./overview-agents.js";
 
 /**
- * overview-agents.test.ts -- the plan's agents list those waiting on the
- * developer first, each counting what needs them, then those at work,
- * then the newest started, each saying where it runs itself; a row opens its agent, its ⋯ offers the
+ * overview-agents.test.ts -- the plan's agents list oldest started first,
+ * whether waiting on the developer, each counting what needs them, or at
+ * work, each saying where it runs itself; a row opens its agent, its ⋯ offers the
  * agent's menu, its pull request's chip opens
  * the pull request and not the agent, and a task with no agent draws no
  * group; New agent stands on the group's head, and on a phone the task's
@@ -180,14 +180,14 @@ function rowWords(row: Element): string {
   return (row.textContent ?? "").replace(time, "");
 }
 
-test("the agents at work come first, then the newest, each saying where it runs, each row and chip opening its own", () => {
+test("the agents list oldest started first, the one at work among them, each saying where it runs, each row and chip opening its own", () => {
   const { host, opened } = mount([OLDEST, WORKING, NEWEST]);
   const list = host.querySelector('[aria-label="Agents"]');
   assert.ok(list !== null);
   const rows = [...list.querySelectorAll("li")].map(rowWords);
   assert.deepEqual(
     rows.map((row) => row.replace("#42", "")),
-    ["Expired invite pageStudio", "Invite emailCloud", "Research providersRemoved device"],
+    ["Research providersRemoved device", "Expired invite pageStudio", "Invite emailCloud"],
   );
 
   const chip = host.querySelector<HTMLAnchorElement>(
@@ -261,19 +261,19 @@ test("an agent's row offers the agent's menu from its ⋯, as its row on a perso
   assert.ok(labels.includes("Permanently delete"));
 });
 
-test("an agent waiting on the developer comes first, counting what needs them but not naming the thread, and a phone's Inbox row leaves that thread to it", () => {
+test("an agent waiting on the developer keeps its place, counting what needs them but not naming the thread, and a phone's Inbox row leaves that thread to it", () => {
   const { host } = mount([OLDEST, WORKING, NEWEST], {
     phone: true,
-    waiting: waitingOn(OLDEST.id, 1),
+    waiting: waitingOn(NEWEST.id, 1),
   });
 
   const rows = [...(host.querySelector('[aria-label="Agents"]')?.querySelectorAll("li") ?? [])];
   assert.deepEqual(
     rows.map((row) => rowWords(row).replace("#42", "")),
     [
-      "Research providers1 needs youRemoved device",
+      "Research providersRemoved device",
       "Expired invite pageStudio",
-      "Invite emailCloud",
+      "Invite email1 needs youCloud",
     ],
   );
   assert.doesNotMatch(host.textContent ?? "", /thread needs you/u, "no Inbox row says it again");
@@ -381,5 +381,5 @@ test("the agents are chosen together by their boxes, and a row chosen among seve
   );
   act(() => items[0]?.click());
   await act(async () => undefined);
-  assert.deepEqual(archived, [[NEWEST.id, OLDEST.id]]);
+  assert.deepEqual(archived, [[OLDEST.id, NEWEST.id]]);
 });
