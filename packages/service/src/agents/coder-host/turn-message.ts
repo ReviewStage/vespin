@@ -11,6 +11,7 @@
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { accountExperimentOn } from "@repo/database/models/account-store";
 import {
   type Agent,
   readNativeHanded,
@@ -232,7 +233,16 @@ export function coderTurnMessage(
     const memories = task?.opening === true ? yield* memoriesOf(agent, task.words) : undefined;
     const clock = { now, timeZone: admitted.timeZone };
     const standing = task?.text ?? timeWithLead(standingContext(undefined, clock));
-    const kind = turnKindWords(handed, turn.spoken === true);
+
+    // Note that only a spoken turn reads whether the agent ends its turns with `end_turn`, the one turn its words change on.
+    const endsTurns =
+      turn.spoken === true &&
+      (yield* accountExperimentOn(agent.userId, EXPERIMENT.TURN_END).pipe(
+        Effect.tapError(logStoreFailure),
+        Effect.orElseSucceed(() => false),
+      ));
+
+    const kind = turnKindWords(handed, turn.spoken === true, endsTurns);
     const resized = handed.resized === undefined ? undefined : resizedWords(handed.resized);
     const taskHanded = task === undefined ? handed.task : task.key;
 

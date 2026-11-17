@@ -886,6 +886,8 @@ body,
 .desktop-agent,
 .desktop-inbox {
   --reading-room: calc((100% - var(--ui-page-measure)) / 2);
+  /* The column's inset, which the way back to the newest line keeps to (`--spacing-conversation-scroll-end`). */
+  --conversation-column-inset: max(var(--content-inset), var(--reading-room));
   position: relative;
 }
 
@@ -1591,6 +1593,7 @@ body,
      where it is spent: a percentage there is of the box's frame, which is
      the panel's width. */
   --reading-room: calc((100% - var(--ui-page-measure)) / 2);
+  --conversation-column-inset: max(var(--content-inset), var(--reading-room));
   position: relative;
   /* The container every tab answers its width from (`@container
      side-panel`, tasks.css), so one width lays out every tab narrow; it

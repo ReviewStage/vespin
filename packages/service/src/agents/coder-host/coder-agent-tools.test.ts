@@ -1309,7 +1309,7 @@ test("start_agent starts an agent on the caller's own task as the deployment act
   assert.ok(message.includes(`"${caller.name}"`) && message.includes(caller.id), message);
   // It reports back by message.
   assert.ok(
-    message.includes(`call ${AGENT_TOOL.MESSAGE_AGENT} with its agentId, ${caller.id}.`),
+    message.includes(`Message it with ${AGENT_TOOL.MESSAGE_AGENT}, its agentId ${caller.id}, `),
     message,
   );
   // An agent's own pick of a model is no member's new default.

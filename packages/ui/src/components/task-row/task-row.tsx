@@ -93,12 +93,17 @@ import {
  * (`hint`), the task's card beside the row while the pointer rests on it,
  * as Home's Recent hangs it.
  *
- * A row may stand nested under another (`depth`), its name in by a nest
- * for each level, its other columns still lined up with every row's; and a
- * row with rows nested under it folds them (`fold`), by a chevron before
- * its name, a control of its own beside the press, and by → and ← on the
- * press, as a `ListRow`'s fold does; a reader hears its level and its place
- * among its siblings (`nest`), as a `ListRow`'s reader does.
+ * A row may stand nested under another (`depth`), as a sidebar's nested
+ * row stands: its status mark and its name in by a nest for each level, so
+ * its mark stands under the name of the row it is nested under, its other
+ * columns still lined up with every row's. A row with rows nested under it
+ * folds them (`fold`), by a chevron that is a control of its own beside the
+ * press, and by → and ← on the press, as a `ListRow`'s fold does: the
+ * chevron stands over the status mark, which gives way to it while the
+ * pointer rests on the row or the keyboard is on the chevron, and stands at
+ * rest on a screen with no hover; a list drawing no status stands it before
+ * the name. A reader hears its level and its place among its siblings
+ * (`nest`), as a `ListRow`'s reader does.
  *
  * A group's quick add draws its draft as a row of the same cells, raised
  * as a card off the list (`TaskRowDraft`), so it reads as the row it is
@@ -255,6 +260,13 @@ const OVER_ITS_CONTROLS =
   "pointer-events-none relative z-1 [&_a]:pointer-events-auto [&_button]:pointer-events-auto";
 
 /**
+ * A nested row's status mark, in by the nest its name stands in, moved
+ * rather than laid out, so the status column stays as wide as every row's
+ * and the names of the rows at the top stay where they stand.
+ */
+const STATUS_NEST = "start-task-row-nest";
+
+/**
  * Whether each cell stands over the row's press: the chips take their own
  * presses, and a cell left empty, a nested row's relation among them,
  * leaves the press its own.
@@ -263,7 +275,7 @@ const CELL_PRESS = {
   [TASK_ROW_CELL.RELATION]: OVER_WHERE_FILLED,
   [TASK_ROW_CELL.PRIORITY]: "pointer-events-auto relative z-1",
   [TASK_ROW_CELL.KEY]: "pointer-events-none",
-  [TASK_ROW_CELL.STATUS]: "pointer-events-auto relative z-1",
+  [TASK_ROW_CELL.STATUS]: `pointer-events-auto relative z-1 ${STATUS_NEST}`,
   [TASK_ROW_CELL.REPOSITORY]: "pointer-events-none",
   [TASK_ROW_CELL.WAITING]: "pointer-events-none",
   [TASK_ROW_CELL.SUB_TASKS]: "pointer-events-none",
@@ -353,8 +365,8 @@ const NAME_CELL =
 /** The name's ink: the text's, or the muted ink for a row whose task is settled. */
 const NAME_INK = { REST: "text-foreground", SETTLED: "text-muted-foreground" } as const;
 
-/** A nested row's name, in by a nest for each level it stands at. */
-const NESTED = "ps-list-row-nest";
+/** A nested row's name, in by a nest for each level it stands at, as its status mark is (`task-row.css`). */
+const NESTED = "ps-task-row-nest";
 
 /** What a row's press shows: its name on one line. */
 const PRESS = "ui-task-row-press flex min-w-0 items-center";
@@ -371,9 +383,18 @@ const NOTE = "ui-task-row-note text-caption text-danger";
 /** A row folding the rows nested under it: its chevron, then its press. */
 const FOLDS = "ui-task-row-folds flex min-w-0 items-center";
 
-/** The fold's chevron, a control of its own beside the press, standing over it, a glyph's size. */
-const FOLD =
-  "ui-task-row-fold relative z-1 me-icon-gap grid min-h-control-icon min-w-control-icon flex-none cursor-press place-items-center rounded-control border-0 bg-transparent p-0 text-muted-foreground";
+/** The fold's chevron, a control of its own beside the press, in the muted ink. */
+const FOLD_BASE =
+  "ui-task-row-fold z-1 grid cursor-press place-items-center rounded-control border-0 bg-transparent p-0 text-muted-foreground";
+
+/** The chevron before the name, a glyph's size, where the list draws no status. */
+const FOLD = `${FOLD_BASE} relative me-icon-gap min-h-control-icon min-w-control-icon flex-none`;
+
+/** The chevron standing over the status mark's cell, which gives way to it (`task-row.css`). */
+const FOLD_OVER_STATUS = `${FOLD_BASE} ui-task-row-fold-over absolute inset-0`;
+
+/** The status mark's own box in its cell, which gives way to the fold's chevron standing over it. */
+const STATUS_MARK = "ui-task-row-status inline-flex items-center";
 
 /** A list of its own: one grid of the cells its rows draw, its rows edge to edge. */
 const ROWS =
@@ -473,12 +494,15 @@ function RowCells({
   flag,
   underMore,
   placed = false,
+  statusFold,
 }: {
   cells: readonly TaskRowCell[];
   content: Partial<Record<TaskRowCell, ReactNode>>;
   flag?: ReactNode;
   underMore: AfterColumn | undefined;
   placed?: boolean;
+  /** The fold's chevron, standing over the status mark; none where the row folds nothing. */
+  statusFold?: ReactNode;
 }): React.JSX.Element {
   const drawn = inOrder(cells);
 
@@ -492,7 +516,14 @@ function RowCells({
           underMore={underMore}
           placed={placed}
         >
-          {content[cell]}
+          {cell === TASK_ROW_CELL.STATUS && statusFold !== undefined ? (
+            <>
+              <span className={STATUS_MARK}>{content[cell]}</span>
+              {statusFold}
+            </>
+          ) : (
+            content[cell]
+          )}
         </RowCell>
       ))}
       {afterColumns(cells).map((column) =>
@@ -547,6 +578,13 @@ function RowItem({
   return <li {...item} className={placed ? PLACED_ROW[edges] : ROW[edges]} />;
 }
 
+/** A row's style: where its run places it, and how deep it stands, which its status mark and its name stand in by. */
+function rowStyle(depth: number, place: VirtualRowPlace | undefined): CSSProperties | undefined {
+  if (depth === 0) return place?.style;
+
+  return { ...place?.style, ...cssCustomProperties({ "--ui-list-row-depth": depth }) };
+}
+
 /** The name's cell, the one the row's press stands in, in by a nest for each level the row stands at. */
 function NameCell({
   settled = false,
@@ -563,7 +601,6 @@ function NameCell({
         .join(" ")
         .trim()}
       data-cell="name"
-      style={depth === 0 ? undefined : cssCustomProperties({ "--ui-list-row-depth": depth })}
     >
       {children}
     </span>
@@ -749,6 +786,25 @@ export function TaskRow({
     fold.onOpenChange(asked);
   };
 
+  // Note that the chevron stands over the status mark, as a sidebar row's over its glyph, where the list draws a status to stand it over.
+  const overStatus = fold !== undefined && cells.includes(TASK_ROW_CELL.STATUS);
+
+  const chevron =
+    fold === undefined ? null : (
+      <button
+        type="button"
+        className={overStatus ? FOLD_OVER_STATUS : FOLD}
+        aria-label={fold.label}
+        aria-expanded={fold.open}
+        onClick={() => fold.onOpenChange(!fold.open)}
+      >
+        {/* Note that the chevron turns on the one turn every fold makes (`disclosure.css`). */}
+        <span className="ui-disclosure-turn" data-open={fold.open}>
+          <FoldChevronIcon />
+        </span>
+      </button>
+    );
+
   const pressed = (
     <CardPress
       ref={press}
@@ -802,6 +858,7 @@ export function TaskRow({
       {...rowMenu.props}
       data-editing={editor === undefined ? undefined : "true"}
       data-depth={depth === 0 ? undefined : depth}
+      style={rowStyle(depth, place)}
       {...nestedItem(depth, nest)}
       data-settled={settled ? "true" : undefined}
       data-unread={unread ? "true" : undefined}
@@ -809,22 +866,11 @@ export function TaskRow({
       aria-current={current ? "true" : undefined}
     >
       <NameCell settled={settled} depth={depth}>
-        {fold === undefined ? (
+        {fold === undefined || overStatus ? (
           named
         ) : (
           <span className={FOLDS}>
-            <button
-              type="button"
-              className={FOLD}
-              aria-label={fold.label}
-              aria-expanded={fold.open}
-              onClick={() => fold.onOpenChange(!fold.open)}
-            >
-              {/* Note that the chevron turns on the one turn every fold makes (`disclosure.css`). */}
-              <span className="ui-disclosure-turn" data-open={fold.open}>
-                <FoldChevronIcon />
-              </span>
-            </button>
+            {chevron}
             <span className="flex min-w-0 flex-1 flex-col items-stretch">{named}</span>
           </span>
         )}
@@ -835,6 +881,7 @@ export function TaskRow({
         flag={flag}
         underMore={underMore}
         placed={place !== undefined}
+        statusFold={overStatus ? chevron : undefined}
       />
       <span className={MORE} data-cell="more">
         {rowMenu.more({ size: BUTTON_SIZE.COMPACT, describedBy: nameId })}

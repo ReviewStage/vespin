@@ -1,5 +1,5 @@
 /**
- * device-machine.test.ts -- a local agent's machine over a real dialect: its launch laid out under the agents folder its Mac registered, its launch's secrets sealed in the row and handed over open once, a read that waits for its Mac's answer or is unavailable while the Mac is away, a launch or a message refused while it is away, a turn whose runner the Mac settled as gone settled lost, a run taken from a Mac quiet past its lease, and, over the sync hub, every write to the agent's lines and requests notifying its account, which wakes the Mac's held reads and the machine's waits within a coalesce window.
+ * device-machine.test.ts -- a local agent's machine over a real dialect: its launch laid out under the agents folder its Mac registered, its launch's secrets sealed in the row and handed over open once, a read that waits for its Mac's answer or is unavailable while the Mac is away, a tool's relative path read under the agent's own checkout there, a launch or a message refused while it is away, a turn whose runner the Mac settled as gone settled lost, a run taken from a Mac quiet past its lease, and, over the sync hub, every write to the agent's lines and requests notifying its account, which wakes the Mac's held reads and the machine's waits within a coalesce window.
  *
  * Synthetic accounts, agents, Macs, bearers, and keys throughout.
  */
@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { CHECKOUT_DIFF_EXIT } from "@repo/agent-runner/checkout-diff";
-import { Database } from "@repo/database/core/query";
+import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { RUNNER_LOST_DETAIL } from "@repo/database/models/abandoned-turns";
 import {
   hasRepository,
@@ -52,7 +52,8 @@ import {
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { SandboxUnavailable } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
+import { ACTION_RESULT_STATUS, TURN_ORIGIN, TURN_STATUS, unparsedWire } from "@repo/wire";
+import { pngBytes } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
 import { Clock, Effect, Fiber, Layer, Option, Redacted, Schema } from "effect";
 import { TestClock } from "effect/testing";
@@ -66,6 +67,7 @@ import {
 import { openLocalAgent } from "../../testing/local-agent.js";
 import { sandboxDouble } from "../../testing/repository-sandbox.js";
 import { wokenOnHub } from "../../testing/sync-woken.js";
+import { runAgentShowMedia } from "../coder-host/agent-doors.js";
 import {
   agentCheckoutPlan,
   agentRepositoryRead,
@@ -86,7 +88,13 @@ import {
   settledDeviceAgentLine,
 } from "../device-agent.js";
 import { AgentSandbox, type AgentSandboxService } from "../terminal/agent-sandbox.js";
-import { CHECKOUT_DIFF_OUTCOME, LaunchRefused, RESTORE_OUTCOME } from "./agent-machine.js";
+import { agentSandboxDoors } from "../workspace-mcp/sandbox-door.js";
+import {
+  AgentMachine,
+  CHECKOUT_DIFF_OUTCOME,
+  LaunchRefused,
+  RESTORE_OUTCOME,
+} from "./agent-machine.js";
 import { deviceMachine, MAC_MACHINE } from "./device-machine.js";
 
 const RING = `1:${Buffer.alloc(32, 7).toString("base64")}`;
@@ -474,6 +482,50 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           "nothing was asked of it",
         );
       }),
+    );
+
+    it.effect(
+      "a file a local agent's tool names relative to its checkout is asked of its Mac under that agent's own checkout",
+      () =>
+        Effect.gen(function* () {
+          const { userId, deviceId, agent, session } = yield* openLocalAgent();
+          const context = yield* Effect.context<DatabaseServices>();
+
+          const run = <A, E>(effect: Effect.Effect<A, E, DatabaseServices>) =>
+            Effect.runPromiseWith(context)(effect);
+
+          const admitted = {
+            caller: userId,
+            target: { userId, conversationId: agent.conversationId },
+            runtimeSessionId: session,
+            timeZone: undefined,
+          };
+
+          const doors = agentSandboxDoors(run, Layer.effect(AgentMachine, deviceMachine))(admitted);
+
+          const showing = yield* Effect.forkChild(
+            runAgentShowMedia(
+              admitted,
+              unparsedWire({ images: [{ path: "shots/members.png", caption: "Members" }] }),
+              doors.files,
+            ),
+          );
+
+          const request = yield* untilAsked(userId, deviceId);
+          yield* claimDeviceAgentRequest(userId, deviceId, request.id);
+          yield* answerDeviceAgentRequest(userId, deviceId, request.id, {
+            kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
+            bytes: pngBytes(1200, 720),
+          });
+          yield* TestClock.adjust("1 second");
+          const shown = yield* Fiber.join(showing);
+
+          assert.equal(
+            request.args["path"],
+            `/Users/fixture/.vespin/agents/${agent.id}/repository/shots/members.png`,
+          );
+          assert.equal(shown["status"], ACTION_RESULT_STATUS.ACCEPTED);
+        }),
     );
 
     it.effect(

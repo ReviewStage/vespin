@@ -391,6 +391,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
 
         const sandbox: InboxSandboxDoor = () =>
           Promise.resolve({
+            checkout: "/workspace/repository",
             readFile: () => Promise.resolve(null),
             writeFile: (file) => {
               written.push({ name: file.name, contents: [...file.contents] });

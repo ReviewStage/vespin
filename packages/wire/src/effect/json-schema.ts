@@ -143,8 +143,11 @@ interface Bounds {
   readonly minLength?: number;
   readonly maxLength?: number;
   readonly minimum?: number;
+  readonly exclusiveMinimum?: number;
   readonly maximum?: number;
+  readonly exclusiveMaximum?: number;
   readonly integer?: true;
+  readonly pattern?: string;
 }
 
 type BoundKey = keyof Bounds;
@@ -162,8 +165,58 @@ const EFFECT_CHECK = {
   MAX_LENGTH: "effect/schema/isMaxLength",
   GREATER_THAN_OR_EQUAL_TO: "effect/schema/isGreaterThanOrEqualTo",
   LESS_THAN_OR_EQUAL_TO: "effect/schema/isLessThanOrEqualTo",
+  GREATER_THAN: "effect/schema/isGreaterThan",
+  LESS_THAN: "effect/schema/isLessThan",
+  BETWEEN: "effect/schema/isBetween",
   INT: "effect/schema/isInt",
+  PATTERN: "effect/schema/isPattern",
 } as const;
+
+const readBetween = Schema.decodeUnknownOption(
+  Schema.Struct({
+    minimum: Schema.Number,
+    maximum: Schema.Number,
+    exclusiveMinimum: Schema.optionalKey(Schema.Boolean),
+    exclusiveMaximum: Schema.optionalKey(Schema.Boolean),
+  }),
+);
+
+/**
+ * A range is its two ends, each under the inclusive or the exclusive name
+ * its own flag picks, which is how `isBetween` states itself.
+ */
+function betweenBounds(payload: Schema.Json | undefined): Option.Option<Bounds> {
+  return Option.map(readBetween(payload), (range) => ({
+    ...(range.exclusiveMinimum === true
+      ? { exclusiveMinimum: range.minimum }
+      : { minimum: range.minimum }),
+    ...(range.exclusiveMaximum === true
+      ? { exclusiveMaximum: range.maximum }
+      : { maximum: range.maximum }),
+  }));
+}
+
+/**
+ * The flags of a pattern whose source says what it matches: a `pattern` is
+ * read as a Unicode expression, so its declaration must be one (`u`), and a
+ * global or indices flag changes nothing a single test admits. Without `u` the
+ * source can mean another rule or none (`/^..$/` admits one emoji, `/\\a/` is
+ * no Unicode expression), and any other flag (`i`, `m`, `s`, `y`, `v`) changes
+ * the match, so the source alone would show the model a different rule.
+ * `RegExp.prototype.flags` spells its flags in one fixed order.
+ */
+const SHOWABLE_PATTERN_FLAGS = /^d?g?u$/u;
+
+const readPattern = Schema.decodeUnknownOption(
+  Schema.Struct({
+    source: Schema.String,
+    flags: Schema.String.check(Schema.isPattern(SHOWABLE_PATTERN_FLAGS)),
+  }),
+);
+
+function patternBounds(payload: Schema.Json | undefined): Option.Option<Bounds> {
+  return Option.map(readPattern(payload), ({ source }) => ({ pattern: source }));
+}
 
 /**
  * The checks whose bound the node carries, by the identifier Effect's own
@@ -193,7 +246,17 @@ const BOUND_READERS = new Map<string, (payload: Schema.Json | undefined) => Opti
     EFFECT_CHECK.LESS_THAN_OR_EQUAL_TO,
     Schema.decodeUnknownOption(Schema.Struct({ maximum: Schema.Number })),
   ],
+  [
+    EFFECT_CHECK.GREATER_THAN,
+    Schema.decodeUnknownOption(Schema.Struct({ exclusiveMinimum: Schema.Number })),
+  ],
+  [
+    EFFECT_CHECK.LESS_THAN,
+    Schema.decodeUnknownOption(Schema.Struct({ exclusiveMaximum: Schema.Number })),
+  ],
+  [EFFECT_CHECK.BETWEEN, betweenBounds],
   [EFFECT_CHECK.INT, () => Option.some(INTEGER)],
+  [EFFECT_CHECK.PATTERN, patternBounds],
 ]);
 
 /**
@@ -278,7 +341,7 @@ function gatherBounds(
   const bounds = reader(check.annotations?.representation?.payload);
 
   if (Option.isNone(bounds)) {
-    throw unshowable(ast, "its bound annotation does not carry the bound its id names");
+    throw unshowable(ast, "its bound annotation carries no bound the node can say");
   }
 
   for (const key of Object.keys(bounds.value)) {
@@ -345,27 +408,44 @@ type ArrayNodeDraft = Draft<Extract<JsonSchemaNode, { type: "array" }>>;
 
 /**
  * A `string` node's keys in the builder's order: `type`, then `minLength`, then
- * `maxLength`. The order is fixed here rather than by the order the checks
- * were piped, because the bytes are what is being held still.
+ * `maxLength`, then `pattern`. The order is fixed here rather than by the
+ * order the checks were piped, because the bytes are what is being held still.
  */
 function stringNode(ast: SchemaAST.AST, bounds: Bounds): JsonSchemaNode {
-  const { minLength, maxLength } = takeBounds(ast, bounds, ["minLength", "maxLength"]);
+  const { minLength, maxLength, pattern } = takeBounds(ast, bounds, [
+    "minLength",
+    "maxLength",
+    "pattern",
+  ]);
+
   const node: StringNodeDraft = { type: "string" };
 
   if (minLength !== undefined) node.minLength = minLength;
 
   if (maxLength !== undefined) node.maxLength = maxLength;
 
+  if (pattern !== undefined) node.pattern = pattern;
+
   return node;
 }
 
+/** A number node's keys: `type`, then its lower end, then its upper end, each inclusive before exclusive. */
 function numberNode(ast: SchemaAST.AST, bounds: Bounds): JsonSchemaNode {
-  const { minimum, maximum, integer } = takeBounds(ast, bounds, ["minimum", "maximum", "integer"]);
+  const { minimum, exclusiveMinimum, maximum, exclusiveMaximum, integer } = takeBounds(
+    ast,
+    bounds,
+    ["minimum", "exclusiveMinimum", "maximum", "exclusiveMaximum", "integer"],
+  );
+
   const node: NumberNodeDraft = { type: integer === true ? "integer" : "number" };
 
   if (minimum !== undefined) node.minimum = minimum;
 
+  if (exclusiveMinimum !== undefined) node.exclusiveMinimum = exclusiveMinimum;
+
   if (maximum !== undefined) node.maximum = maximum;
+
+  if (exclusiveMaximum !== undefined) node.exclusiveMaximum = exclusiveMaximum;
 
   return node;
 }

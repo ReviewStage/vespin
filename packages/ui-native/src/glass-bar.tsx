@@ -67,6 +67,9 @@ export const BAR_RADIUS = 24;
  */
 export const BAR_EDGE = 2;
 
+/** How far the bar stands in from its column's edges, so what stands over its end, such as Jump to latest, can stand over its last press. */
+export const BAR_MARGIN = SPACE.ROW + 2;
+
 /** How far apart the row's pieces stand: not at all, since a press's frame holds the room around its mark that the row's spacing held before. */
 export const BAR_ROW_SPACING = 0;
 
@@ -91,11 +94,11 @@ const styles = StyleSheet.create({
   // The bar's column, as wide as the dock and no wider than the reading width a wide window centers its content at.
   column: { width: "100%" },
   // A row with no bar stands in from the screen's edges as far as a bar does.
-  row: { marginHorizontal: SPACE.ROW + 2 },
+  row: { marginHorizontal: BAR_MARGIN },
   // What stands over a bar in a glass of its own, as far in as the bar and apart from it.
-  above: { marginHorizontal: SPACE.ROW + 2, marginBottom: SPACE.TIGHT * 2 },
+  above: { marginHorizontal: BAR_MARGIN, marginBottom: SPACE.TIGHT * 2 },
   bar: {
-    marginHorizontal: SPACE.ROW + 2,
+    marginHorizontal: BAR_MARGIN,
     padding: BAR_EDGE,
     borderRadius: BAR_RADIUS,
   },
