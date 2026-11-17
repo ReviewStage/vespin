@@ -23,11 +23,16 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: notification-ask
 - tapOn: "Turn On Notifications"
+# Note that the prompt is answered only where it still stands, since a
+# simulator's Maestro may answer a system alert by itself; either way the row
+# must be gone once allowed, which is what the flow checks.
 - extendedWaitUntil:
     visible: "Allow"
     timeout: 10000
+    optional: true
 - tapOn:
     text: "Allow"
+    optional: true
 - waitForAnimationToEnd
 - assertNotVisible: "Know when an agent needs you"
 - assertNotVisible: "Notifications are off"
