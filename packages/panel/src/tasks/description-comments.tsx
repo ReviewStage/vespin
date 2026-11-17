@@ -1344,6 +1344,12 @@ function ReplyField({
       if (!sent) {
         keepAttempt(place, out);
 
+        // Note that words refused once their card gave way to the thread, drawn before the service refused it, stand as not sent, their files with them, rather than as a draft.
+        if (!standing.current) {
+          update((now) => (now.text.trim() === out.words ? { ...now, text: "" } : now));
+          addUnsent([out]);
+        }
+
         return;
       }
 

@@ -1413,6 +1413,25 @@ test("a thread being started keeps its words marked and its card in place, its w
   const keys = started.map((each) => each.clientKey);
   assert.equal(keys[2], keys[1], "words refused go again under their key");
   assert.equal(keys[3], keys[2], "so do words refused once the field moved on");
+  await act(async () => answers[3]?.resolve({ note: "not posted" }));
+
+  // Words refused once their thread was drawn, which the host then takes back, stand as not sent.
+  typeInto(field(), "Lost on the way");
+  act(() => {
+    field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+
+  const lost = started[4];
+  assert.ok(lost);
+  rethread([threadOn(lost.id ?? "", "Admins can withdraw", "Lost on the way", lost)]);
+  rethread([]);
+  await act(async () => answers[4]?.resolve({ note: "not posted" }));
+  comment();
+  assert.equal(wordsIn(field()), "");
+  assert.equal(
+    pending()?.querySelector("[data-unsent] .comment-words")?.textContent,
+    "Lost on the way",
+  );
 });
 
 test("a thread's resolve reads as its writer's own line, drawn as a comment's head, an agent of another task named as the workspace's list names it, and an empty tab says how a thread starts", async () => {
