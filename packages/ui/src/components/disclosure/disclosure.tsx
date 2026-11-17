@@ -182,6 +182,8 @@ export function useDisclosurePreviewShown(inBody: boolean): boolean {
 export function useDisclosureFold(
   defaultOpen: boolean,
   control?: DisclosureControl | undefined,
+  /** Whether a close may give up the body's room at once; not where something takes the body's place once it is gone, which then moves what stands under it once, by what is left. */
+  givesUpRoom = true,
 ): DisclosureFold {
   const [kept, setKept] = useState(defaultOpen);
   const open = control === undefined ? kept : control.open;
@@ -224,7 +226,7 @@ export function useDisclosureFold(
   // there, which opens only a `details` that is closed.
   const finding = useContext(FindContext);
   // Note that only a close a press asked for, under a motion that will close over it, gives up the body's room at once, because only that commit is read by the motion.
-  const closedOver = replay !== undefined && asked === false;
+  const closedOver = givesUpRoom && replay !== undefined && asked === false;
 
   const motion = finding
     ? undefined

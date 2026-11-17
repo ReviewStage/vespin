@@ -657,14 +657,54 @@ function roundsBar(declaration: CssDeclaration, block: CssBlock, file: string): 
 /** What names a fold's moving parts: its body, its root's motion mark, and its chevron. */
 const FOLD_PART = /\.ui-disclosure-(?:body|turn)(?![\w-])|\[data-disclosure(?![\w-])/u;
 
+/** A fold's root by its motion mark, whose own children are the fold's parts. */
+const FOLD_ROOT = /\[data-disclosure(?![\w-])/u;
+
+/**
+ * The selector a block's declarations stand under, its nesting resolved:
+ * each nested selector joined to every one of its parent's, at its `&`
+ * where it names one, else as a descendant.
+ */
+function resolvedSelector(block: CssBlock): string {
+  let parents = [""];
+  for (const prelude of block.preludes) {
+    if (prelude.startsWith("@") || prelude === "") continue;
+    const children = splitTopLevel(prelude, /,/u);
+    parents = parents.flatMap((parent) =>
+      children.map((child) =>
+        parent === ""
+          ? child
+          : child.includes("&")
+            ? child.replaceAll("&", parent)
+            : `${parent} ${child}`,
+      ),
+    );
+  }
+  return parents.join(", ");
+}
+
+/**
+ * Whether one complex selector targets a fold's part: its last compound
+ * names one, a `:not()` or `:has()` aside, or it is a fold root's own
+ * child, its summary or body. Note that a part's descendant is no part, so
+ * a spinner inside a fold's body turns as it likes.
+ */
+function targetsFoldPart(selector: string): boolean {
+  const compounds = splitTopLevel(selector.replace(/\s*>\s*/gu, " >"), /\s/u);
+  const last = compounds.at(-1) ?? "";
+  if (FOLD_PART.test(withoutNegations(last))) return true;
+  const parent = compounds.at(-2) ?? "";
+  return last.startsWith(">") && FOLD_ROOT.test(withoutNegations(parent));
+}
+
 /**
  * Whether a declaration moves a fold its own way: a transition or an
- * animation under a selector naming a fold's moving part anywhere in it,
- * since a fold is timed once, in the disclosure's sheet, on the beats what
- * stands under it glides on.
+ * animation on a fold's moving part, since a fold is timed once, in the
+ * disclosure's sheet, on the beats what stands under it glides on.
  */
 function movesFold(declaration: CssDeclaration, block: CssBlock): boolean {
-  return MOTION_PROPERTY.test(declaration.property) && FOLD_PART.test(selectorOf(block));
+  if (!MOTION_PROPERTY.test(declaration.property)) return false;
+  return splitTopLevel(resolvedSelector(block), /,/u).some(targetsFoldPart);
 }
 
 /** What places a grid's items along its columns, which an `auto` column grows under. */
