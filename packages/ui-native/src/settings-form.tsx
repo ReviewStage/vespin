@@ -42,7 +42,6 @@ import {
   scrollContentBackground,
   scrollDismissesKeyboard,
   tint,
-  useScrollGeometryChange,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
@@ -235,7 +234,6 @@ function PressedRow({
  * half-height sheet's own glass.
  */
 export function SettingsForm({
-  onContentHeight,
   clear = false,
   spacing = FORM_SPACING.REGULAR,
   children,
@@ -244,22 +242,13 @@ export function SettingsForm({
   readonly clear?: boolean | undefined;
   /** How far apart its sections stand; a short sheet's stand close, so its first section doesn't sit under an empty band. */
   readonly spacing?: FormSpacing;
-  /** Told the height its rows stand in, as they lay out, for a popover that fits it; none where the form fills its place. */
-  readonly onContentHeight?: ((height: number) => void) | undefined;
   readonly children: ReactNode;
 }) {
   const colors = useColors();
 
-  const measured = useScrollGeometryChange(
-    onContentHeight === undefined
-      ? undefined
-      : (geometry) => onContentHeight(geometry.contentHeight),
-  );
-
   return (
     <Form
       modifiers={[
-        ...(measured === null ? [] : [measured]),
         ...(spacing === FORM_SPACING.COMPACT ? [listSectionSpacing("compact")] : []),
         scrollContentBackground("hidden"),
         scrollDismissesKeyboard("immediately"),

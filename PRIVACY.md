@@ -474,13 +474,16 @@ its title and its vespin.dev link, so Handoff can offer it on your other
 devices signed in to the same Apple Account. iOS hands them to those devices
 directly, and the app does not offer them to Siri suggestions or to search.
 
-### Members' pictures on your iPhone
+### Members' and workspaces' pictures on your iPhone
 
 So a menu can lead each member of a workspace with their face, such as a
-task's Assignee menu, the Vespin iOS app keeps a small copy of each member's
-sign-in picture as a file in its caches on your iPhone or iPad. It downloads
-each one from the Google or GitHub address the app already draws it from,
-sends it nowhere else, and keeps it only in the caches iOS may clear when the
+task's Assignee menu, and each of your workspaces with its photo, such as the
+workspace switcher, the Vespin iOS app keeps a small copy of each member's
+sign-in picture, your own included, and of each of your workspaces' photos as
+a file in its caches on your iPhone or iPad. It downloads a sign-in picture
+from the Google or GitHub address the app already draws it from, and writes a
+workspace's photo from the copy the app already holds, sends neither
+anywhere else, and keeps them only in the caches iOS may clear when the
 device needs room; deleting the app deletes them.
 
 ## 3\. Legal basis for processing

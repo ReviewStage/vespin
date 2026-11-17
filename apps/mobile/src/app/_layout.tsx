@@ -79,6 +79,8 @@ const SHEET_ROUTE = {
   TASK_FOLLOWING: "task-following",
   ADD_FOLLOWER: "add-follower",
   NEW_WORKSPACE: "new-workspace",
+  AGENT_KEY: "agent-key",
+  CHATGPT_SIGN_IN: "chatgpt-sign-in",
 } as const;
 
 /** The sheets, each drawn on the lifted ground in dark. */
@@ -281,6 +283,14 @@ function GuardedScreens() {
           <Stack.Screen
             name={SHEET_ROUTE.NEW_WORKSPACE}
             options={{ presentation: sheetPresentation, title: "New workspace" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.AGENT_KEY}
+            options={{ presentation: sheetPresentation, title: "Agent key" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.CHATGPT_SIGN_IN}
+            options={{ presentation: sheetPresentation, title: "Codex plan" }}
           />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn && !updateNeeded}>

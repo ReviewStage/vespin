@@ -5,6 +5,7 @@ import {
   HStack,
   Image,
   Picker,
+  SecureField,
   Text,
   TextField,
   type TextFieldRef,
@@ -39,10 +40,11 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** How many lines the words take before anything is typed, and the most they grow to before they scroll. */
 const WORDS_LINES = { min: 4, max: 12 } as const;
 
-/** Where a sheet's words stand: a row of a Form on the surface, a row holding one line such as a name, or the sheet's own page, growing with no bound as Mail's message body does. */
+/** Where a sheet's words stand: a row of a Form on the surface, a row holding one line such as a name, a row holding one line kept from sight such as a key or a token, as a password field keeps it, or the sheet's own page, growing with no bound as Mail's message body does. */
 export const WORDS_LOOK = {
   ROW: "row",
   LINE: "line",
+  SECRET: "secret",
   PAGE: "page",
 } as const;
 
@@ -126,6 +128,26 @@ export function WordsField({
     onWords(words);
   };
 
+  const marks = [
+    font({ textStyle: TYPE_ROLE.ROW_TITLE }),
+    SwiftModifiers.disabled(disabled),
+    ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
+    ...(label === undefined ? [] : [accessibilityLabel(label)]),
+  ];
+
+  // Note that a secret stands in the system's secure field, which keeps its words from sight and from the screen's recording, as a password field does; it takes no long paste and no correction.
+  if (look === WORDS_LOOK.SECRET) {
+    return (
+      <SecureField
+        text={text}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        onTextChange={type}
+        modifiers={[...marks, listRowBackground(colors.RAISED)]}
+      />
+    );
+  }
+
   // Note that a row of one line, such as a name, stands as one line, as Settings' name fields do, rather than in a box a few lines tall.
   const bounds = {
     [WORDS_LOOK.ROW]: [lineLimit(WORDS_LINES), listRowBackground(colors.RAISED)],
@@ -148,11 +170,8 @@ export function WordsField({
       autoFocus={autoFocus}
       onTextChange={type}
       modifiers={[
-        font({ textStyle: TYPE_ROLE.ROW_TITLE }),
+        ...marks,
         ...bounds,
-        SwiftModifiers.disabled(disabled),
-        ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
-        ...(label === undefined ? [] : [accessibilityLabel(label)]),
         // Note that turning correction off turns iOS's smart dashes and quotes off with it, so `--skill` stays two hyphens.
         ...(verbatim ? [autocorrectionDisabled(), textInputAutocapitalization("never")] : []),
       ]}

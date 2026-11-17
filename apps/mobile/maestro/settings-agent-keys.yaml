@@ -1,0 +1,52 @@
+# settings-agent-keys.yaml -- Settings › Agents' plans and keys on the Inbox fixture: Claude's and Codex's sections with nothing connected, a Claude token's paste sheet with its command and secure field, an API key's sheet with its provider's page, and Codex's ChatGPT sign-in sheet.
+#
+# Launched on the host's Inbox fixture, whose account holds no plan or key
+# (`fixture-host.ts`'s `stagedKeys`), so each harness offers only its ways to
+# add one, and no server is reached: the ChatGPT sign-in asks the fixture for
+# a code, which it may refuse, so the flow shoots whichever the sheet stands.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: "Settings, .*"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Agents"
+- tapOn: "Agents"
+- waitForAnimationToEnd
+- assertVisible: "Paste a Claude token"
+- assertVisible: "Sign in with ChatGPT"
+- takeScreenshot: settings-agent-keys
+# A Claude plan's token: the command that prints it, then the secure field.
+- tapOn: "Paste a Claude token"
+- waitForAnimationToEnd
+- assertVisible: "Run this in a terminal"
+- assertVisible:
+    id: "agent-key-field"
+- takeScreenshot: settings-agent-key-token
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+# An API key: the provider's page to make one, then the field.
+- tapOn: "Add an Anthropic API key"
+- waitForAnimationToEnd
+- assertVisible: "Create an API key"
+- takeScreenshot: settings-agent-key-api
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+# Codex's plan through ChatGPT's device code.
+- scrollUntilVisible:
+    element: "Sign in with ChatGPT"
+- tapOn: "Sign in with ChatGPT"
+- waitForAnimationToEnd
+- assertVisible: "Codex plan"
+- takeScreenshot: settings-chatgpt-sign-in
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+- assertVisible: "Paste a Claude token"
