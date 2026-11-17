@@ -51,6 +51,7 @@ import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
 import {
+  createContext,
   Fragment,
   type ReactElement,
   type ReactNode,
@@ -521,6 +522,13 @@ function asking(
   );
 }
 
+/**
+ * What a menu standing in a row's own content, such as its status ring's,
+ * tells as one of its acts is pressed, so a question the act raises waits
+ * for that menu to go too (`useMenuGoing`); nothing outside a row.
+ */
+const RowMenuGoingContext = createContext<() => void>(() => undefined);
+
 /** An act as the long press menu stands it, `going` told as it is pressed. */
 function pressedInMenu(action: RowAction, going: () => void): RowAction {
   return {
@@ -653,8 +661,13 @@ export function RowFrame({
   const groups = menuGroups.filter(menuGroupFilled);
   const ownGroup = swiped.length + menuSubmenus.length + menuActions.length > 0;
 
+  // Note that the row's own content hears the hold too, so a menu standing in it, such as a task's status ring, holds the row's question as the long press menu does.
+  const content = (
+    <RowMenuGoingContext.Provider value={menuGoing.pressed}>{row}</RowMenuGoingContext.Provider>
+  );
+
   if (!ownGroup && groups.length === 0 && preview === undefined) {
-    return <HStack modifiers={frameModifiers}>{asking(row, question)}</HStack>;
+    return <HStack modifiers={frameModifiers}>{asking(content, question, menuGoing.going)}</HStack>;
   }
 
   const opening: readonly RowAction[] =
@@ -687,7 +700,7 @@ export function RowFrame({
           </Fragment>
         ))}
       </ContextMenu.Items>
-      <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
+      <ContextMenu.Trigger>{content}</ContextMenu.Trigger>
       {preview === undefined ? null : (
         <ContextMenu.Preview>
           <VStack modifiers={[SwiftModifiers.onDisappear(menuGoing.gone)]}>{preview}</VStack>
@@ -1167,10 +1180,14 @@ export function StatusRing({
 }) {
   const colors = useColors();
   const choosing = useContext(RowChoosingContext);
+  const going = useContext(RowMenuGoingContext);
   const lead = useScaledSize(MARK_SIZE.LEAD);
   const target = Math.max(FOLD_TARGET, lead);
 
   if (menu === undefined || choosing) return <TaskStatusMark status={status} />;
+
+  // Note that a status its menu sets may ask first, such as Done while the task's agents work, so a choice holds that question until the menu has gone, as the row's long press menu does; this menu lifts no preview, so it waits out the deadline.
+  const held = submenuInMenu(menu, going);
 
   // Note that the ring never reaches past the gap before the name.
   const reach = {
@@ -1205,7 +1222,7 @@ export function StatusRing({
         zIndex(1),
       ]}
     >
-      {menu.choices.map((choice) => (
+      {held.choices.map((choice) => (
         <Toggle
           key={choice.label}
           {...choiceContent(choice, colors)}
