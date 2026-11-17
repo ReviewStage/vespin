@@ -406,10 +406,8 @@ const SENTRY_LAUNCH_ENVIRONMENT: SentryEnvironment = SENTRY.RELEASED ? "producti
 // starts the native half again on its own options, and off for a fixture run.
 // Note that the JavaScript filters cannot reach this window, so it sends only
 // what a native crash report holds, with no request breadcrumbs. A build
-// without a DSN, a local or simulator one, starts nothing natively: the empty
-// DSN is refused, and so is the start's `{}` fallback, which left the SDK
-// starting on no options at all and faulting at launch, so the patched
-// `RNSentrySDK` returns instead (`pnpm-workspace.yaml`'s patch for it).
+// without a DSN, a local or simulator one, gets no native start at all
+// (`useNativeInit` off), since the SDK's start faults on an empty DSN.
 const SENTRY_LAUNCH_OPTIONS = {
   dsn: SENTRY.DSN,
   enabled: SENTRY.DSN !== "",
@@ -924,13 +922,10 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
         `webcredentials:${ASSOCIATED_DOMAIN}`,
         `activitycontinuation:${ASSOCIATED_DOMAIN}`,
       ],
-      // The TestFlight build takes its pushes from production APNs, which
-      // the distribution profile release-ios.yml exports it with allows; a
-      // simulator build is unsigned and carries no entitlement at all.
       // The App Group it shares files with its extensions through, and the
       // Keychain group it shares the share sheet's token through, after its own.
+      // Its APNs environment is expo-notifications' plugin's, below.
       entitlements: {
-        "aps-environment": "production",
         ...APP_GROUP_ENTITLEMENTS,
         [KEYCHAIN_GROUPS_ENTITLEMENT]: [
           `$(AppIdentifierPrefix)${BUNDLE_IDENTIFIER}`,
@@ -941,8 +936,6 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // asking on every build: the app's one cipher of its own (the host's
       // sealed files, `keychain-cipher.ts`) protects only its own data at
       // rest, and everything on the wire is the system's HTTPS.
-      // iOS wakes the app for a settled thread's background push, which
-      // clears its notification (`src/notification-task.ts`).
       // The member's running agents stand in a Live Activity the service
       // starts and updates by push (`live-activity/`).
       // A call into an agent keeps on with the screen locked or another app
@@ -952,7 +945,7 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // app is kept running for a call alone.
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
-        UIBackgroundModes: ["remote-notification", "audio"],
+        UIBackgroundModes: ["audio"],
         NSSupportsLiveActivities: true,
         // A screen handed over from another of the member's devices arrives
         // as our own activity type, spelled again in Swift
@@ -971,6 +964,14 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
     },
     plugins: [
       "expo-router",
+      // The TestFlight build takes its pushes from production APNs
+      // (`aps-environment`), which the distribution profile release-ios.yml
+      // exports it with allows; a simulator build is unsigned and carries no
+      // entitlement at all. iOS wakes the app for a settled thread's
+      // background push, which clears its notification
+      // (`src/notification-task.ts`), so the plugin adds the
+      // `remote-notification` background mode beside `audio`.
+      ["expo-notifications", { mode: "production", enableBackgroundRemoteNotifications: true }],
       // A message's photo is picked in the system's photo picker, which reads
       // only what the person picks, so the camera is never asked for. Both
       // purpose strings are still named here, since the picker's plugin
@@ -1007,7 +1008,7 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
           project: SENTRY.PROJECT,
           url: SENTRY.URL,
           disableAutoUpload: !process.env.SENTRY_AUTH_TOKEN,
-          useNativeInit: true,
+          useNativeInit: SENTRY.DSN !== "",
           options: SENTRY_LAUNCH_OPTIONS,
         },
       ],
