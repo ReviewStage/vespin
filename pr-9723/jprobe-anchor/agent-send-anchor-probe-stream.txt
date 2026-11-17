@@ -1,0 +1,18 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "composedMessage CONTAINS "[anchor-probe]""
+Timestamp               Ty Process[PID:TID]
+2026-11-17 06:05:23.670 I  Vespin[60286:c656c24] [com.facebook.react.log:javascript] [anchor-probe] transcript room 72 foot 106 at 1794913523670
+2026-11-17 06:05:23.670 I  Vespin[60286:c656c24] [com.facebook.react.log:javascript] [anchor-probe] transcript rows 22 at 1794913523670
+2026-11-17 06:05:25.498 I  Vespin[60286:c656c24] [com.facebook.react.log:javascript] [anchor-probe] transcript content 126 anchored true at 1794913525498
+2026-11-17 06:05:25.500 I  Vespin[60286:c656c24] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -116 gap -632 at 1794913525500
+2026-11-17 06:05:25.664 I  Vespin[60286:c656c24] [com.facebook.react.log:javascript] [anchor-probe] transcript room 191.6666717529297 foot 225.6666717529297 at 1794913525664
+2026-11-17 06:05:25.664 I  Vespin[60286:c656c24] [com.facebook.react.log:javascript] [anchor-probe] transcript content 1572 anchored true at 1794913525664
+2026-11-17 06:05:26.333 I  Vespin[60286:c656c24] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 0 gap -748 at 1794913526333
+2026-11-17 06:05:26.333 I  Vespin[60286:c656c24] [com.facebook.react.log:javascript] [anchor-probe] transcript content 2100 anchored true at 1794913526333
+2026-11-17 06:05:26.334 I  Vespin[60286:c656c24] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 698 gap 0 at 1794913526334
+2026-11-17 06:05:26.334 I  Vespin[60286:c656c24] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 1088 gap 0 at 1794913526334
+2026-11-17 06:05:26.368 I  Vespin[60286:c656c24] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 1226 gap 0 at 1794913526368
+2026-11-17 06:05:26.499 I  Vespin[60286:c656c24] [com.facebook.react.log:javascript] [anchor-probe] transcript content 2050 anchored true at 1794913526499
+2026-11-17 06:05:26.501 I  Vespin[60286:c656c24] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 1210 gap -34 at 1794913526501
+2026-11-17 06:05:26.501 I  Vespin[60286:c656c24] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 1176 gap 0 at 1794913526501
+Child process terminated with signal 15: Terminated

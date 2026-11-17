@@ -1,0 +1,21 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "composedMessage CONTAINS "[anchor-probe]""
+Timestamp               Ty Process[PID:TID]
+2026-11-17 06:04:03.588 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] room 72 at 1794913443588
+2026-11-17 06:04:03.588 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] messages 1 at 1794913443588
+2026-11-17 06:04:03.635 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] room 14 at 1794913443635
+2026-11-17 06:04:04.418 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] geometry offset 0 content 322 container 724 at 1794913444418
+2026-11-17 06:04:04.418 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] geometry offset -116 content 322 container 724 at 1794913444418
+2026-11-17 06:04:04.418 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] geometry offset -116 content 376 container 724 at 1794913444418
+2026-11-17 06:04:04.424 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] room 58 at 1794913444424
+2026-11-17 06:04:04.446 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] geometry offset -116 content 420 container 724 at 1794913444446
+2026-11-17 06:04:27.901 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] geometry offset -116 content 386 container 724 at 1794913467901
+2026-11-17 06:04:27.904 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] room 128 at 1794913467904
+2026-11-17 06:04:27.918 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] geometry offset -116 content 456 container 724 at 1794913467918
+2026-11-17 06:04:50.397 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] messages 2 at 1794913490397
+2026-11-17 06:04:50.953 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] geometry offset -116 content 890 container 724 at 1794913490953
+2026-11-17 06:04:50.953 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] geometry offset 51 content 891 container 724 at 1794913490953
+2026-11-17 06:04:50.960 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] room 58 at 1794913490960
+2026-11-17 06:04:51.004 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] geometry offset -19 content 821 container 724 at 1794913491004
+2026-11-17 06:04:51.004 I  Vespin[38489:c64aea9] [com.facebook.react.log:javascript] [anchor-probe] geometry offset -19 content 821 container 724 at 1794913491004
+Child process terminated with signal 15: Terminated

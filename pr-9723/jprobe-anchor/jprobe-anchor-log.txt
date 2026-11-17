@@ -1,0 +1,12 @@
+== bundle PANC base 9e717920ab
+  built 9e717920ab base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+thread-send part1: fails 0 shots 4 
+thread-send part2: fails 0 shots 2 
+thread-send: 18 probe lines; marker TAP-MARK thread-send host_epoch_ms=1794913473956 host_time=06:04:33
+agent-send part1: fails 1 shots 1 Assert that "The dialog takes an address.*" is visible... FAILED
+agent-send part2: fails 1 shots 1 Tap on "Send"... FAILED
+agent-send: 15 probe lines; marker TAP-MARK agent-send host_epoch_ms=1794913566362 host_time=06:06:06
