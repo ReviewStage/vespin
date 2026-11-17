@@ -49,7 +49,7 @@ import {
   useTaskListCollections,
   useTaskListRow,
 } from "../host/host-provider.js";
-import { useWrite } from "../use-write.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** What an agent's recordings are named under among the app's caches. */
 const AGENT_MEDIA_PREFIX = "agent";
@@ -225,6 +225,8 @@ export function useAgentRowActs(): {
         write(() => acts[ACT_KIND.AGENTS_PIN]({ agentId, pinned }), {
           refused: (answer) => ("failure" in answer ? failed : undefined),
           unanswered: failed,
+          // Note that the pin is its agent's subject, so a later Pin or Unpin holds off a stale Try again.
+          subject: { kind: WRITE_SUBJECT.AGENT_PIN, id: agentId },
           retry: true,
           went: BUZZ.SELECTION,
         });
