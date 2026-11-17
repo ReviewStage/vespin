@@ -1,29 +1,12 @@
-// launch-phases.ts -- what a launch found of the lists kept on the phone, and how long its host took to stand, noted as the host starts and stands, for `app:ready` to count beside its own time.
-
-import { PRODUCT_KEPT_STORE, type ProductKeptStore } from "@repo/features/analytics";
-import { ENTITY_STORE_FILE_NAME } from "@repo/host";
-import { File } from "expo-file-system";
-import { hostStateRoot } from "./host/device-seams.js";
+// launch-phases.ts -- how long a launch's host took to stand, noted as the host starts and stands, for `app:ready` to count beside its own time.
 
 /** React Native's own startup marks, which its `performance` holds beside the web's and its types leave out. */
 interface StartupPerformance {
   readonly rnStartupTiming?: { readonly startTime?: number | null };
 }
 
-/** Whether the lists' file stood in the host's folder as this launch's host started; none before it starts. */
-let keptBefore: boolean | undefined;
-
-/** What this launch's host found of the kept lists once it stood, and how long after the launch's start it stood; none before it stands. */
-let stood: { readonly keptStore: ProductKeptStore; readonly ms: number | undefined } | undefined;
-
-/** Whether the host's kept lists (`entities.sealed`) stand in its folder now; no where the file can't be read for any reason. */
-function keptFileStands(): boolean {
-  try {
-    return new File(`file://${hostStateRoot()}`, ENTITY_STORE_FILE_NAME).exists;
-  } catch {
-    return false;
-  }
-}
+/** How long after the launch's start this launch's host stood; none before it stands. */
+let stood: { readonly ms: number | undefined } | undefined;
 
 /**
  * The time since React Native's own start of this launch, in milliseconds, or
@@ -43,32 +26,17 @@ export function sinceLaunch(): number | undefined {
   }
 }
 
-/** Notes, as the host starts, whether the kept lists' file an older build left stands, which the host deletes unread as it opens. */
+/** Notes that the host starts, clearing what an earlier start noted. */
 export function noteHostStarting(): void {
-  keptBefore = keptFileStands();
   stood = undefined;
 }
 
-/**
- * Notes, once the host stood, how long it took and what it found of the kept
- * lists: kept where the file stood before and still does, since the host
- * opens it before it stands; dropped where the host deleted it as it opened;
- * none where there was no file to open.
- */
+/** Notes, once the host stood, how long it took. */
 export function noteHostStood(): void {
-  const after = keptFileStands();
-
-  const keptStore =
-    keptBefore !== true
-      ? PRODUCT_KEPT_STORE.NONE
-      : after
-        ? PRODUCT_KEPT_STORE.KEPT
-        : PRODUCT_KEPT_STORE.DROPPED;
-
-  stood = { keptStore, ms: sinceLaunch() };
+  stood = { ms: sinceLaunch() };
 }
 
-/** What this launch's host found and how long it took to stand, once it stood; none before. */
+/** How long this launch's host took to stand, once it stood; none before. */
 export function launchStood(): typeof stood {
   return stood;
 }

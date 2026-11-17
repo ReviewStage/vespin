@@ -37,7 +37,6 @@ import {
 import { LocalDatabaseDriver } from "./local-database.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
 import { oauthAccountSourceLayer } from "./oauth-account-source.js";
-import { ENTITY_STORE_FILE_NAME } from "./retired-entity-file.js";
 import type { SecretCipher as SecretCipherType } from "./settings-store.js";
 import { fixedAccountSource } from "./testing/fixed-account-source.js";
 import { machineOver } from "./testing/host-machine.js";
@@ -219,7 +218,7 @@ describe("the file an older build kept the account's lists in", () => {
     Effect.gen(function* () {
       const stateRoot = yield* temporaryDirectoryScoped("host-entities-");
       const fileSystem = yield* FileSystem.FileSystem;
-      const file = (yield* Path.Path).join(stateRoot, ENTITY_STORE_FILE_NAME);
+      const file = (yield* Path.Path).join(stateRoot, "entities.sealed");
       yield* fileSystem.writeFileString(file, "sealed lists");
 
       const account = {

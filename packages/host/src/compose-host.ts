@@ -40,9 +40,9 @@ import {
 import type { SettingsUpdateResult } from "@repo/settings/wire";
 import { entityPool } from "@repo/sync";
 import { Effect, Layer, Option, Stream } from "effect";
-import type * as FileSystem from "effect/FileSystem";
+import * as FileSystem from "effect/FileSystem";
 import * as HttpClient from "effect/http/HttpClient";
-import type * as Path from "effect/Path";
+import * as Path from "effect/Path";
 import type { ChildProcessSpawner } from "effect/process";
 import { composeAccount } from "./compose-account.js";
 import { composeAccountAsks } from "./compose-account-asks.js";
@@ -97,7 +97,6 @@ import { localCopy } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
 import { HOST_NODE_CAPABILITY } from "./node-capabilities.js";
 import { offlineRefusedCount } from "./queued-writes.js";
-import { forgetEntityStore } from "./retired-entity-file.js";
 import { createGatewayService } from "./service.js";
 import {
   enrolledHostDeviceId,
@@ -257,6 +256,24 @@ interface PlatformConcernRequirements {
     | MirrorPlatform;
 }
 
+/** The file an older build kept the account's lists and queues in, beside the settings file. */
+const RETIRED_ENTITY_FILE = "entities.sealed";
+
+/**
+ * Deletes the file an older build kept the account's lists and queues in,
+ * and a temporary file a cut-off write left beside it, unread: a release
+ * before this one imported its queues into the local database.
+ */
+const forgetRetiredEntityFile = Effect.fn("host/forgetRetiredEntityFile")(function* (
+  directory: string,
+) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const file = path.join(directory, RETIRED_ENTITY_FILE);
+  yield* Effect.ignore(fileSystem.remove(file, { force: true }));
+  yield* Effect.ignore(fileSystem.remove(`${file}.tmp`, { force: true }));
+});
+
 /**
  * Every concern constructed, linked, and merged, with nothing yet begun: the
  * composers in the launch's order, the arming that follows the last of them,
@@ -284,8 +301,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const { report } = yield* Reporter;
     const localDriver = yield* Effect.serviceOption(LocalDatabaseDriver);
     const fileSystemContext = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
-    // Note that the file an older build kept the account's queues in is deleted unread, since a release before this one imported them into the local database.
-    yield* Effect.provideContext(forgetEntityStore(kernel.stateRoot), fileSystemContext);
+    yield* Effect.provideContext(forgetRetiredEntityFile(kernel.stateRoot), fileSystemContext);
 
     const settings = yield* composeSettings();
     const account = yield* composeAccount({ settings });
@@ -762,7 +778,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       yield* pool.letGoQueued;
       yield* agents.refused.forgotten;
       offlineRefused.clear();
-      yield* Effect.provideContext(forgetEntityStore(kernel.stateRoot), fileSystemContext);
+      yield* Effect.provideContext(forgetRetiredEntityFile(kernel.stateRoot), fileSystemContext);
 
       if (local !== undefined) yield* local.forget;
     });
