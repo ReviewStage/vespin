@@ -891,5 +891,23 @@ export function useThreadMedia(
     setRetries((count) => count + 1);
   }, []);
 
-  return { ...read, retry };
+  // Note that a picture of a reply still held is drawn from its bytes in the render that first draws it, rather than after the read above lands, so its bubble never stands as a spinner first.
+  const sources = useMemo(() => {
+    const held = media.flatMap((each) => {
+      const bytes =
+        itemId === undefined ||
+        each.kind !== INBOX_MEDIA.PICTURE ||
+        read.sources.has(each.attachmentId)
+          ? undefined
+          : pending?.(itemId, each.attachmentId);
+
+      return bytes === undefined
+        ? []
+        : [[each.attachmentId, `data:${bytes.contentType};base64,${bytes.base64}`] as const];
+    });
+
+    return held.length === 0 ? read.sources : new Map([...read.sources, ...held]);
+  }, [itemId, media, pending, read.sources]);
+
+  return { sources, sizes: read.sizes, retry };
 }
