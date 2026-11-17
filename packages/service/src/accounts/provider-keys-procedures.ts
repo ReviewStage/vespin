@@ -134,19 +134,6 @@ const DEVICE_POLL_BRAKE = {
   maxTrackedUsers: 10_000,
 } as const;
 
-/**
- * A plan's usage checked by hand, per account: each press is a call to
- * the plan's provider on its token, and a Claude plan's spends a sliver of
- * the plan, so they are braked well past what a developer pressing Refresh
- * usage reaches, and short of a loop spending the plan or hammering the
- * provider.
- */
-const USAGE_REFRESH_BRAKE = {
-  windowMs: Duration.toMillis(Duration.minutes(1)),
-  maxRequestsPerWindow: 10,
-  maxTrackedUsers: 10_000,
-} as const;
-
 export interface ProviderKeysProcedureSeams {
   resolveUserId: UserIdResolver;
 }
@@ -316,7 +303,6 @@ function subscriptionRefusalOf(
 export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
   const brake = createRateBrake(SAVE_BRAKE);
   const pollBrake = createRateBrake(DEVICE_POLL_BRAKE);
-  const refreshBrake = createRateBrake(USAGE_REFRESH_BRAKE);
   const signingKeys = chatGptSigningKeys();
   const keyed = hosted.account.use(accountMiddleware(seams.resolveUserId)).use(keyRingMiddleware);
 
@@ -469,26 +455,24 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       return Option.isNone(outcome) ? keys : { ...keys, resetCredit: outcome.value };
     }),
 
-    /** One of the account's plans' usage checked again now, however fresh its reading: a Codex plan's asked of its usage endpoint, a Claude plan's read from the headers of a one-token quota check (`claude-usage.ts`). Answers the keys as they then stand; a plan it does not hold, a press past the brake, or one whose provider answered nothing keeps what it held. */
+    /** One of the account's plans' usage checked again now, however fresh its reading: a Codex plan's asked of its usage endpoint, a Claude plan's read from the headers of a one-token quota check (`claude-usage.ts`). Answers the keys as they then stand; a plan it does not hold, or one whose provider answered nothing keeps what it held. */
     refreshPlanUsage: keyed.refreshPlanUsage.effect(function* ({ context, input }) {
       const { userId, ring } = context;
 
-      if (yield* refreshBrake.check(userId)) {
-        const [codex, claude] = yield* hostedStoreOrUnavailable(
-          Effect.all([
-            listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH),
-            listProviderKeyRows(userId, PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN),
-          ]),
-        );
+      const [codex, claude] = yield* hostedStoreOrUnavailable(
+        Effect.all([
+          listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH),
+          listProviderKeyRows(userId, PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN),
+        ]),
+      );
 
-        const mine = (row: ProviderKeyRow) => row.id === input.subscriptionId;
-        const codexPlan = codex.find(mine);
-        const claudePlan = claude.find(mine);
+      const mine = (row: ProviderKeyRow) => row.id === input.subscriptionId;
+      const codexPlan = codex.find(mine);
+      const claudePlan = claude.find(mine);
 
-        if (codexPlan !== undefined) yield* rereadPlanUsage(userId, ring, codexPlan);
+      if (codexPlan !== undefined) yield* rereadPlanUsage(userId, ring, codexPlan);
 
-        if (claudePlan !== undefined) yield* rereadClaudeUsage(userId, ring, claudePlan);
-      }
+      if (claudePlan !== undefined) yield* rereadClaudeUsage(userId, ring, claudePlan);
 
       return yield* keysAnswer(context);
     }),
