@@ -7,9 +7,11 @@ import type {
   AdminWorkspaceDetail,
   AdminWorkspaceList,
 } from "@repo/features/admin-answer-wire";
+import type { AdminBilling } from "@repo/features/admin-billing-wire";
 import type { AdminCatalog } from "@repo/features/admin-catalog-wire";
 import type { AdminCost } from "@repo/features/admin-cost-wire";
 import type {
+  AdminBillingQuery,
   AdminDayQuery,
   AdminRefused,
   AdminUserQuery,
@@ -49,6 +51,7 @@ export interface AdminReads {
   readonly catalog: (signal: AbortSignal) => Promise<AdminCatalog>;
   readonly metrics: (query: AdminWindowedQuery, signal: AbortSignal) => Promise<AdminMetrics>;
   readonly cost: (query: AdminWindowedQuery, signal: AbortSignal) => Promise<AdminCost>;
+  readonly billing: (query: AdminBillingQuery, signal: AbortSignal) => Promise<AdminBilling>;
   readonly reliability: (
     query: AdminWindowedQuery,
     signal: AbortSignal,

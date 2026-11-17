@@ -19,6 +19,11 @@ import {
 } from "../providers/posthog.js";
 import type { AdminViewer } from "./admin-access.js";
 import { readAdminAccountSource } from "./admin-account-queries.js";
+import {
+  readAdminAccountSandboxUsage,
+  readAdminBilling,
+  readAdminWorkspaceBilling,
+} from "./admin-billing-queries.js";
 import { buildAdminCatalog } from "./admin-catalog.js";
 import { readAdminCost } from "./admin-cost-queries.js";
 import { buildAdminDayDetail } from "./admin-day.js";
@@ -152,6 +157,7 @@ export function hostedAdminSeams(api: AdminSessionApi): AdminProcedureSeams {
         overview: buildAdminOverview(sources.overview, now, windowDays),
       })),
     readCost: (now, scope, windowDays) => readAdminCost({ now, scope, windowDays }),
+    readBilling: readAdminBilling,
     readUsers: (now, scope, viewerId, windowDays, search) =>
       Effect.map(readAdminUsersSource({ now, scope, search, viewerId, windowDays }), (source) =>
         buildAdminUserList(source, now, windowDays, search),
@@ -162,12 +168,14 @@ export function hostedAdminSeams(api: AdminSessionApi): AdminProcedureSeams {
           [
             readAdminUserSource({ userId, now, windowDays }),
             readAdminAccountSource({ userId, now, windowDays }),
+            readAdminAccountSandboxUsage(userId, now),
           ],
           { concurrency: "unbounded" },
         ),
-        ([source, support]) =>
+        ([source, support, sandboxUsage]) =>
           source && {
             ...buildAdminUserDetail(source, support, now, windowDays),
+            sandboxUsage,
             analyticsPersonUrl:
               analyticsConsoleUrl && posthogPersonConsoleUrl(analyticsConsoleUrl, userId),
           },
@@ -187,8 +195,10 @@ export function hostedAdminSeams(api: AdminSessionApi): AdminProcedureSeams {
       ),
     readWorkspace: (id, now) =>
       Effect.map(
-        readAdminWorkspaceSource({ now, id }),
-        (source) => source && buildAdminWorkspaceDetail(source, now),
+        Effect.all([readAdminWorkspaceSource({ now, id }), readAdminWorkspaceBilling(id, now)], {
+          concurrency: "unbounded",
+        }),
+        ([source, billing]) => source && { ...buildAdminWorkspaceDetail(source, now), billing },
       ),
     writeFavorite: (adminId, userId, favorite) => writeAdminFavorite({ adminId, userId, favorite }),
   };

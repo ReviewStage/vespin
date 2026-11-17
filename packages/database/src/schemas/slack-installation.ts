@@ -17,10 +17,10 @@ import { organization, user } from "./auth.js";
 /**
  * slack-installation.ts -- the Slack workspace a workspace's bot is connected to, and who each member is there.
  *
- * Our Slack bot is one app whose token Vercel Connect holds; an owner
- * or admin connects it to a workspace, which stores the Slack team the
- * token answers for. A workspace holds at most one, so the row is keyed on
- * the workspace. `linked_by_user_id` is the member who connected it, null
+ * Our Slack bot is our own Slack app; an owner or admin installs it into
+ * a workspace's Slack team, which stores the team the install answers
+ * for. A workspace holds at most one, so the row is keyed on the
+ * workspace. `linked_by_user_id` is the member who connected it, null
  * once their account is gone. The row leaves with its workspace, and a
  * Disconnect deletes it.
  *
@@ -42,13 +42,12 @@ import { organization, user } from "./auth.js";
  * starts, and one for each channel the bot is in; a channel's leaves with
  * its installation, and when the bot leaves the channel.
  *
- * Once the bot runs on our own Slack app, installed per workspace, the row
- * also holds the bot token Slack granted that workspace, sealed by
+ * The row also holds the bot token Slack granted that workspace's install, sealed by
  * `models/provider-key-seal.ts` under the provider keys' ring with purposes
  * of its own and the workspace and team bound beside them, with the bot's
  * own Slack user id and id, the scopes it was granted, and the app that
  * granted it. Those seven are set together or none is: none on a row linked
- * through the Vercel connector, and none once Slack revoked the token. The
+ * before the bot ran on our own app, and none once Slack revoked the token. The
  * Enterprise Grid org an install was made in, and whether it was made across
  * the org, are kept beside them as Bolt's installation keeps them. The token leaves with the row.
  */

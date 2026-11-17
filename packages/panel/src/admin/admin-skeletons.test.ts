@@ -30,6 +30,7 @@ const UNANSWERED: AdminReads = {
   catalog: unanswered,
   metrics: unanswered,
   cost: unanswered,
+  billing: unanswered,
   reliability: unanswered,
   users: unanswered,
   user: unanswered,
@@ -160,6 +161,7 @@ test("an account's skeleton stands every section the account page states, its ac
     "Keys and connections",
     "Defaults and experiments",
     "Recent failures · 30 days",
+    "Sandbox usage this month",
     "Hosted tier · retired",
   ]);
   expect(region.textContent).toContain("An active day is a UTC day the account created a task");

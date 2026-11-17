@@ -26,6 +26,7 @@ export const STYLE_RULE = {
   BAR_CORNER: "bar-corner",
   GRID_COLUMNS: "grid-columns",
   EDGE_CLIP: "edge-clip",
+  FOLD_MOTION: "fold-motion",
 } as const;
 export type StyleRule = (typeof STYLE_RULE)[keyof typeof STYLE_RULE];
 
@@ -98,6 +99,11 @@ export const STYLE_RULES: Readonly<
       "a box that rounds its corners, draws a border, and clips what it holds (`overflow` hidden or clip): Chromium clips a layer it composites apart, a playing video's among them, at the box's outer corner and paints it over the border's curve, so the box keeps its border and `@repo/ui`'s `EdgeClip` clips inside it",
     backlog: true,
   },
+  [STYLE_RULE.FOLD_MOTION]: {
+    refuses:
+      "a fold's motion moved off its beat: a transition or animation on a fold's body, root, or chevron (`.ui-disclosure-body`, `[data-disclosure]`, `.ui-disclosure-turn`) outside `disclosure.css`, which times every fold on the beats what stands under it glides on, so a surface's fold never opens or closes on a motion of its own",
+    backlog: true,
+  },
 };
 
 export const STYLE_RULE_IDS: readonly StyleRule[] = Object.values(STYLE_RULE);
@@ -115,6 +121,7 @@ const TOOLING = [".agents/", ".claude/"];
  */
 const RULE_EXEMPT_FOLDERS: Readonly<Partial<Record<StyleRule, readonly string[]>>> = {
   [STYLE_RULE.PICKER_WIDTH]: ["packages/ui/", "apps/catalog/"],
+  [STYLE_RULE.FOLD_MOTION]: ["packages/ui/src/components/disclosure/"],
 };
 
 /**
@@ -647,6 +654,93 @@ function roundsBar(declaration: CssDeclaration, block: CssBlock, file: string): 
   return !(file === SHEET_CORNER_FILE && SHEET_CORNER_VALUE.test(declaration.value.trim()));
 }
 
+/** What names a fold's moving parts: its body, its root's motion mark, and its chevron. */
+const FOLD_PART = /\.ui-disclosure-(?:body|turn)(?![\w-])|\[data-disclosure(?![\w-])/u;
+
+/** A fold's root by its motion mark, whose own children are the fold's parts. */
+const FOLD_ROOT = /\[data-disclosure(?![\w-])/u;
+
+/**
+ * The selector a block's declarations stand under, its nesting resolved:
+ * each nested selector joined to every one of its parent's, at its `&`
+ * where it names one, else as a descendant.
+ */
+function resolvedSelector(block: CssBlock): string {
+  let parents = [""];
+  for (const prelude of block.preludes) {
+    if (prelude.startsWith("@") || prelude === "") continue;
+    const children = splitTopLevel(prelude, /,/u);
+    parents = parents.flatMap((parent) =>
+      children.map((child) =>
+        parent === ""
+          ? child
+          : child.includes("&")
+            ? child.replaceAll("&", parent)
+            : `${parent} ${child}`,
+      ),
+    );
+  }
+  return parents.join(", ");
+}
+
+/**
+ * Whether one complex selector targets a fold's part: its last compound
+ * names one, a `:not()` or `:has()` aside, or it is a fold root's own
+ * child, its summary or body. Note that a part's descendant is no part, so
+ * a spinner inside a fold's body turns as it likes.
+ */
+function targetsFoldPart(selector: string): boolean {
+  const { compounds, combinators } = compoundsOf(selector);
+  const last = compounds.at(-1) ?? "";
+  if (FOLD_PART.test(withoutNegations(last))) return true;
+  const parent = compounds.at(-2) ?? "";
+  return combinators.at(-1) === ">" && FOLD_ROOT.test(withoutNegations(parent));
+}
+
+/**
+ * A complex selector's compounds, and the combinator joining each to the
+ * one before it (a space for a descendant), cut only at the top level, so a
+ * `~=` in an attribute or a `>` inside `:has()` stays in its compound.
+ */
+function compoundsOf(selector: string): {
+  readonly compounds: readonly string[];
+  readonly combinators: readonly string[];
+} {
+  const compounds: string[] = [];
+  const combinators: string[] = [];
+  let current = "";
+  let pending = "";
+  let depth = 0;
+  for (const char of selector) {
+    if (char === "(" || char === "[") depth += 1;
+    if (char === ")" || char === "]") depth -= 1;
+    const cuts = depth === 0 && (/\s/u.test(char) || char === ">" || char === "+" || char === "~");
+    if (!cuts) {
+      if (current === "" && compounds.length > 0) combinators.push(pending === "" ? " " : pending);
+      current += char;
+      continue;
+    }
+    if (current !== "") {
+      compounds.push(current);
+      current = "";
+      pending = "";
+    }
+    if (!/\s/u.test(char)) pending = char;
+  }
+  if (current !== "") compounds.push(current);
+  return { compounds, combinators };
+}
+
+/**
+ * Whether a declaration moves a fold its own way: a transition or an
+ * animation on a fold's moving part, since a fold is timed once, in the
+ * disclosure's sheet, on the beats what stands under it glides on.
+ */
+function movesFold(declaration: CssDeclaration, block: CssBlock): boolean {
+  if (!MOTION_PROPERTY.test(declaration.property)) return false;
+  return splitTopLevel(resolvedSelector(block), /,/u).some(targetsFoldPart);
+}
+
 /** What places a grid's items along its columns, which an `auto` column grows under. */
 const ITEMS_PLACEMENT = /^(?:place|justify)-items$/u;
 
@@ -1066,7 +1160,8 @@ export function styleViolations(
         const rule =
           cssRuleOf(declaration, block) ??
           (widensCrumb(declaration, block, capped) ? STYLE_RULE.CRUMB_WIDTH : undefined) ??
-          (roundsBar(declaration, block, file) ? STYLE_RULE.BAR_CORNER : undefined);
+          (roundsBar(declaration, block, file) ? STYLE_RULE.BAR_CORNER : undefined) ??
+          (movesFold(declaration, block) ? STYLE_RULE.FOLD_MOTION : undefined);
         if (rule === undefined) continue;
         violations.push({
           rule,

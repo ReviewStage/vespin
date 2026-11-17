@@ -83,6 +83,10 @@
  * a fold's rows once their fade is done (`useDisclosureFold`), is taken
  * out in a commit the lists never drew, so it tells the motion as it goes
  * (`useListMotionReplay`), and what that moved glides as any commit's would.
+ * A fold pressed shut tells it the commit closes (`LIST_MOTION_REPLAY.CLOSE`):
+ * its body gives up its room as it rolls up, and what stands under it closes
+ * over it on the exit's tokens, at once, as the rows under an unrolled row
+ * close over it, rather than traveling the spring after it.
  *
  * The one move the layout would still make above a leaving row is the
  * scroller's: a list scrolled to its end that grows shorter is scrolled back
@@ -150,6 +154,17 @@ export const LIST_MOTION_WAY = {
 
 export type ListMotionWay = (typeof LIST_MOTION_WAY)[keyof typeof LIST_MOTION_WAY];
 
+/** What a commit something under the motion asks it to read does: moves what it moved on the spring, or closes over room it gave up on the exit's tokens. */
+export const LIST_MOTION_REPLAY = {
+  MOVE: "move",
+  CLOSE: "close",
+} as const;
+
+export type ListMotionReplay = (typeof LIST_MOTION_REPLAY)[keyof typeof LIST_MOTION_REPLAY];
+
+/** Asks the motion around the caller to read its next commit, as `beat` says it moves. */
+export type ListMotionReplayer = (beat?: ListMotionReplay) => void;
+
 type MotionRowsResult = { readonly "data-motion-rows": "" };
 
 /** The attributes a list whose children move wears, spread on it. */
@@ -186,10 +201,11 @@ interface Leaver {
   standAgain: (() => void) | undefined;
 }
 
-/** What the lists under one motion hand it in a commit: the entries that began to leave, and what asks it to read a commit it would not draw. */
+/** What the lists under one motion hand it in a commit: the entries that began to leave, what asks it to read a commit it would not draw, and whether the commit asked for closes. */
 interface Leaves {
   readonly pending: Leaver[];
-  readonly replay: () => void;
+  readonly replay: ListMotionReplayer;
+  closes: boolean;
 }
 
 /** A point from the root's top left corner, in CSS pixels. */
@@ -218,6 +234,8 @@ interface Batch {
   readonly before: Snapshot;
   waiting: number;
   readonly leavers: Leaver[];
+  /** Whether a fold asked for the commit as one that closes (`LIST_MOTION_REPLAY.CLOSE`). */
+  closes: boolean;
 }
 
 /** A leaving element as the motion takes it, and what lets its entry go. */
@@ -379,16 +397,14 @@ export function useLeaving<T>(
   return drawn;
 }
 
-/** What asks nothing of a motion, where none stands around the caller. */
-const NO_REPLAY = (): void => undefined;
-
 /**
  * What something under a `ListMotion` calls in the same breath as it leaves
  * the layout on a state of its own, so the motion reads that commit and
- * glides what it moved; nothing, where no motion stands around it.
+ * glides what it moved; none where no motion stands around it, which tells
+ * the caller that nothing under it will glide.
  */
-export function useListMotionReplay(): () => void {
-  return useContext(LeavesContext)?.replay ?? NO_REPLAY;
+export function useListMotionReplay(): ListMotionReplayer | undefined {
+  return useContext(LeavesContext)?.replay;
 }
 
 /** Every mover under `root`, outside any list a drag moves and any motion of its own inside it. */
@@ -947,7 +963,7 @@ class ListMotionPlayer extends Component<
     let batch = batches.get(root);
 
     if (batch === undefined) {
-      const opened: Batch = { before: snapshotOf(root), waiting: 0, leavers: [] };
+      const opened: Batch = { before: snapshotOf(root), waiting: 0, leavers: [], closes: false };
       batch = opened;
       batches.set(root, opened);
       // Note that a commit no motion heard the end of is not one the next commit starts from.
@@ -967,6 +983,8 @@ class ListMotionPlayer extends Component<
     batch: Batch | null,
   ): void {
     const leavers = this.props.leaves.pending.splice(0);
+    const { closes } = this.props.leaves;
+    this.props.leaves.closes = false;
     const root = this.props.root.current;
     root?.setAttribute(ROOT_ATTRIBUTE, "");
 
@@ -977,6 +995,7 @@ class ListMotionPlayer extends Component<
     }
 
     batch.leavers.push(...leavers);
+    batch.closes ||= closes;
     batch.waiting -= 1;
 
     // Note that the last motion over the root to hear the commit plays it, with every exit the others were handed.
@@ -1002,7 +1021,8 @@ class ListMotionPlayer extends Component<
    * Plays a commit over the root: the exits of what leaves, the glides of
    * what that moved, and the root's height held at the scroller's end.
    * Note that the rows a leaving row unrolled away from close over it as it
-   * rolls up, on its exit's tokens, where the rest glide after it.
+   * rolls up, on its exit's tokens, where the rest glide after it, and that
+   * what stands under a fold pressed shut closes over it the same way.
    */
   private play(root: HTMLElement, batch: Batch, reading: boolean): void {
     const { before } = batch;
@@ -1028,7 +1048,7 @@ class ListMotionPlayer extends Component<
 
     if (spring === undefined) return;
     const left = leaving.length > 0 && exit !== undefined;
-    const closes = left && way === LIST_MOTION_WAY.UNROLL;
+    const closes = (left && way === LIST_MOTION_WAY.UNROLL) || (batch.closes && exit !== undefined);
     // Note that the change that ends the read lands the last of it, which arrives as the rest of it did.
     playMoves(root, before, {
       wait: left && !closes ? Number(exit.duration) : 0,
@@ -1150,10 +1170,18 @@ export function ListMotion({
 }): React.JSX.Element {
   const [replays, setReplays] = useState(0);
 
-  const [leaves] = useState<Leaves>(() => ({
-    pending: [],
-    replay: () => setReplays((count) => count + 1),
-  }));
+  const [leaves] = useState<Leaves>(() => {
+    const made: Leaves = {
+      pending: [],
+      replay: (beat = LIST_MOTION_REPLAY.MOVE) => {
+        if (beat === LIST_MOTION_REPLAY.CLOSE) made.closes = true;
+        setReplays((count) => count + 1);
+      },
+      closes: false,
+    };
+
+    return made;
+  });
 
   return (
     <LeavesContext.Provider value={leaves}>

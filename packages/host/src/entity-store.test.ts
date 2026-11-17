@@ -3,8 +3,7 @@ import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
-import { entityPool, type FieldChange, fieldKind, type WriteDeclaration } from "@repo/sync";
-import { Effect, Exit, Layer, Path, PubSub, Result, Schema, Scope, Stream } from "effect";
+import { Effect, Exit, Layer, Path, PubSub, Result, Scope, Stream } from "effect";
 import { Base64 } from "effect/encoding";
 import * as FileSystem from "effect/FileSystem";
 import { TestClock } from "effect/testing";
@@ -144,11 +143,48 @@ it.effect.each([
       Effect.flatMap(fileOf(directory), (file) => fileSystem.exists(file)),
     );
 
-    const fits = reopenedAs === DANA && !otherSchemas;
+    // Note that the shapes' hash is a hint only, so rows kept under another build's still read where they still fit these shapes.
+    const fits = reopenedAs === DANA;
     assert.deepEqual(reopened.store.stored(KEPT_READ.TASK_LIST), fits ? LIST : undefined);
     assert.deepEqual(reopened.store.stored(KEPT_READ.INBOX), fits ? INBOX : undefined);
     assert.equal(stays, fits);
   }).pipe(Effect.provide(files)),
+);
+
+it.effect(
+  "a build that changed one shape costs only the rows that no longer read: the other reads stand, a row with a retired field or without an added optional one still reads, and the Inbox drops the item that doesn't and its sync id",
+  () =>
+    Effect.gen(function* () {
+      const directory = yield* temporaryDirectoryScoped("entity-store-");
+      const first = yield* opened(directory, DANA);
+      yield* first.store.keep(KEPT_READ.TASK_LIST, LIST);
+      yield* first.store.keep(KEPT_READ.INBOX, INBOX);
+      yield* first.closed;
+
+      // An older build kept a second thread whose status this build no longer reads, under its own shapes' hash.
+      const fileSystem = yield* FileSystem.FileSystem;
+      const kept = JSON.parse(yield* openedText(directory));
+      const [thread] = INBOX.items;
+      assert.ok(thread !== undefined);
+
+      const stale = {
+        ...thread,
+        item: { ...thread.item, id: "6b5a4f3e-2d1c-4b0a-9f8e-7d6c5b4a3f2e", status: 42 },
+      };
+
+      kept.hash = "another build's";
+      kept.reads[KEPT_READ.INBOX].items.push(stale);
+      // The kept thread also holds a field this build retired, and lacks the optional ones it added (a reminder), as most shape changes leave a row: it still reads.
+      kept.reads[KEPT_READ.INBOX].items[0].item.retiredField = "an older build's";
+      const sealed = Base64.encode(testCipher().encrypt(JSON.stringify(kept)));
+      yield* fileSystem.writeFileString(yield* fileOf(directory), sealed);
+
+      const reopened = yield* opened(directory, DANA);
+
+      assert.deepEqual(reopened.store.stored(KEPT_READ.TASK_LIST), LIST);
+      assert.deepEqual(reopened.store.stored(KEPT_READ.INBOX), { items: INBOX.items });
+      yield* reopened.closed;
+    }).pipe(Effect.provide(files)),
 );
 
 it.effect(
@@ -220,45 +256,34 @@ it.effect(
     }).pipe(Effect.provide(files)),
 );
 
-/** A plan's row as the waiting write below renames it. */
-interface Row {
-  readonly id: string;
-  readonly name: string;
-}
+it.effect(
+  "the writes an older build kept waiting are carried through every save until the local database imported them",
+  () =>
+    Effect.gen(function* () {
+      const directory = yield* temporaryDirectoryScoped("entity-store-");
+      const waiting = [{ name: "tasks.rename", key: "rename-old", input: { taskId: "t1" } }];
+      const kept = { hash: "an older build's", accountId: DANA, reads: {}, queue: waiting };
+      const sealed = Base64.encode(testCipher().encrypt(JSON.stringify(kept)));
+      yield* (yield* FileSystem.FileSystem).writeFileString(yield* fileOf(directory), sealed);
 
-it.effect("a write waiting for the service is written within half a second of its queuing", () =>
-  Effect.gen(function* () {
-    const directory = yield* temporaryDirectoryScoped("entity-store-");
-    const pool = yield* entityPool({ mintKey: () => "rename-1", replayRefused: Effect.void });
+      // Note that each launch keeps a list, so its quit saves the file whole.
+      const upgraded = yield* opened(directory, DANA);
+      yield* upgraded.store.keep(KEPT_READ.TASK_LIST, LIST);
+      yield* upgraded.closed;
 
-    const rename: WriteDeclaration<Row, FieldChange<Row>, string, string> = {
-      kind: fieldKind((row: Row) => row.id),
-      keys: () => ["1"],
-      change: (name) => () => ({ name }),
-      send: () => Effect.succeed({ refused: "unreachable", unanswered: true as const }),
-      queue: { name: "plans.rename", input: Schema.String, queued: () => "waits" },
-    };
+      const imported = yield* opened(directory, DANA);
+      const queue = imported.store.queue;
+      assert.ok(queue, "a file that read hands out its queue");
+      yield* queue.imported;
+      yield* imported.store.keep(KEPT_READ.INBOX, INBOX);
+      yield* imported.closed;
 
-    const scope = yield* Scope.make();
-    yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
-    yield* Scope.provide(scope)(
-      openEntityStore({
-        directory,
-        cipher: testCipher(),
-        accountId: DANA,
-        queued: pool.queued,
-        queueMoves: pool.queueMoves,
-      }),
-    );
-    yield* pool.write(rename, "Invites");
+      const after = yield* opened(directory, DANA);
+      yield* after.closed;
 
-    yield* TestClock.adjust("500 millis");
-    yield* writtenText(directory);
-
-    assert.deepEqual(JSON.parse(yield* openedText(directory)).queue, [
-      { name: "plans.rename", key: "rename-1", input: "Invites" },
-    ]);
-  }).pipe(Effect.provide(files)),
+      assert.deepEqual(queue.entries, waiting);
+      assert.deepEqual(after.store.queue?.entries, []);
+    }).pipe(Effect.provide(files)),
 );
 
 it.effect(
@@ -273,8 +298,8 @@ it.effect(
       yield* keptAgainWith(directory, { refused });
 
       const upgraded = yield* opened(directory, DANA);
-      assert.deepEqual(upgraded.store.refused.entries, refused);
-      yield* upgraded.store.refused.imported;
+      assert.deepEqual(upgraded.store.refused?.entries, refused);
+      yield* upgraded.store.refused?.imported ?? Effect.void;
       yield* upgraded.closed;
 
       assert.equal("refused" in JSON.parse(yield* openedText(directory)), false);

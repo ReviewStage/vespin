@@ -10,6 +10,7 @@ import {
   CircleDollarSignIcon,
   GaugeIcon,
   LayoutDashboardIcon,
+  ReceiptIcon,
   ScrollTextIcon,
   UsersIcon,
   WrenchIcon,
@@ -28,6 +29,7 @@ export interface AdminPlace {
 const PLACE_BY_TAB = {
   [ADMIN_TAB.DASHBOARD]: { label: "Overview", icon: <LayoutDashboardIcon /> },
   [ADMIN_TAB.COST]: { label: "Cost", icon: <CircleDollarSignIcon /> },
+  [ADMIN_TAB.BILLING]: { label: "Billing", icon: <ReceiptIcon /> },
   [ADMIN_TAB.RELIABILITY]: { label: "Reliability", icon: <ActivityIcon /> },
   [ADMIN_TAB.AGENTS]: { label: "Agents", icon: <EntityGlyph kind={ENTITY_KIND.AGENT} /> },
   [ADMIN_TAB.TOOLS]: { label: "Tools", icon: <WrenchIcon /> },

@@ -976,7 +976,7 @@ const localPlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, nodeS
 function signedInLocal(
   stateRoot: string,
   harness: Effect.Success<ReturnType<typeof queueFollowed>>,
-  sealed: SealedQueues = { queue: [] },
+  sealed: SealedQueues = { queue: undefined },
 ) {
   return Effect.gen(function* () {
     const scope = yield* Scope.make();
@@ -1042,7 +1042,7 @@ it.effect(
 
       // Note that what the file kept went through JSON, as the sealed file does.
       const sealed: SealedQueues = {
-        queue: [],
+        queue: undefined,
         refused: {
           entries: JSON.parse(JSON.stringify(before.refused.kept())),
           imported: Effect.sync(() => {
@@ -2277,8 +2277,9 @@ it.effect(
       yield* open;
       yield* settled;
 
+      // Note that the store's items are marked kept until the answer takes their place, so a launch can tell which drew its first Inbox.
       assert.deepEqual(accountItems(), [
-        byPlan({ [TASK_ID]: [kept], [OTHER_TASK_ID]: [OTHER_ITEM] }),
+        { ...byPlan({ [TASK_ID]: [kept], [OTHER_TASK_ID]: [OTHER_ITEM] }), kept: true },
         byPlan({ [TASK_ID]: [HELD_ITEM] }),
       ]);
       assert.equal(asked.includes("account-items-live:user-dana"), false, "asked past the kept id");

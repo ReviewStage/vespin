@@ -64,7 +64,12 @@ import { dropLink } from "./interactions.js";
 import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
-import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
+import {
+  RowChoosingContext,
+  RowOpenContext,
+  RowSearchedContext,
+  RowSelectedContext,
+} from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -356,7 +361,9 @@ export function RowList({
             {lead === undefined || choosing !== undefined ? null : lead}
             {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
             {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
-            <RowSearchedContext value={searchedWords}>{children}</RowSearchedContext>
+            <RowSearchedContext value={searchedWords}>
+              <RowChoosingContext value={choosing !== undefined}>{children}</RowChoosingContext>
+            </RowSearchedContext>
             {empty === undefined ? null : <EmptyRow>{empty}</EmptyRow>}
           </RowSelectedContext>
         </RowOpenContext>

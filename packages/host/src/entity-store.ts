@@ -27,13 +27,15 @@
  * Keychain keeps (`xchacha-cipher.ts`), which seals straight to the file's
  * text; a host whose source hands no cipher, as a browser tab's,
  * keeps none. It names the account it was kept for and a hash of the row
- * shapes it was kept at, so a file of another account, of another build's
- * shapes, or one that will not open, is deleted and read as none, and every
- * read reads whole. A store saves lists that moved at most every
+ * shapes it was kept at: a file of another account, or one that will not
+ * open, is deleted and read as none, and every read reads whole; one kept at
+ * another build's shapes keeps each read, Inbox item and workspace's rows that
+ * still reads (`tolerantReads`), so an update that changes one shape costs
+ * only its rows, and those are read whole. A store saves lists that moved at most every
  * `SAVE_EVERY`, or only at the moments the shell names where it names any
- * (`KeptListsDue`, the phone's app going to the background), the writes
- * waiting for the service `QUEUE_SETTLE` after they move, and both once
- * more as it closes; a sign-out forgets it,
+ * (`KeptListsDue`, the phone's app going to the background), the messages
+ * refused `QUEUE_SETTLE` after they move, and both once more as it closes;
+ * a sign-out forgets it,
  * which deletes the file. Rows
  * kept where none of them moved but where they stand (`keepUnmoved`), as the
  * task list's sync id moving alone, are written only beside the next save of
@@ -42,15 +44,18 @@
  * every row that moved since it, and the rows the file kept at that id are
  * the very rows the service held there.
  *
- * Beside the lists it keeps the row writes made while the service could not
- * be reached, as the sync engine hands them out (`EntityPool.queued`) and
- * takes them back at the next launch (`requeue`): each a write's name, its
- * idempotency key, and its input. They are the account's own, so they
- * outlast a build of other row shapes where they still read, and leave with
- * the file at a sign-out. The messages the service refused are kept in the
- * account's local database (`local-copy.ts`); a file an older build wrote
- * may still hold them, which the store hands out unread until the database
- * takes them (`refused.imported`), and then writes the file without them.
+ * The row writes waiting for the service are kept in the local database's
+ * outbox alone, and the messages the service refused in its `refused`
+ * table (`local-queues.ts`). A file an older build kept may still
+ * hold them (`queue`): the store hands them out for the account's own file
+ * (`queue.entries`), for the local database to import once, and carries
+ * them through every save until it says they were imported
+ * (`queue.imported`), so a database that would not open never leaves them
+ * nowhere on disk. So may the messages refused that waited on the member's
+ * Retry, Edit, or Delete (`refused`), each in the form the agents' record
+ * of messages on their way reads back (`agent-queue-writes.ts`), which this
+ * file holds unread: handed out (`refused.entries`) and carried the same
+ * way until the database says it holds them (`refused.imported`).
  */
 
 import { AUTOMATIONS_READ } from "@repo/features/automation-live";
@@ -65,6 +70,7 @@ import { repositoryPinSchema } from "@repo/features/task-wire";
 import { WORKSPACE_INVITATIONS_READ, WORKSPACE_MEMBERS_READ } from "@repo/features/workspace-live";
 import { workspaceSchema } from "@repo/features/workspace-wire";
 import type { QueuedEntry } from "@repo/sync";
+import { isRecord, type UnparsedWireValue } from "@repo/wire";
 import {
   Clock,
   Duration,
@@ -95,9 +101,9 @@ export const ENTITY_STORE_FILE_NAME = "entities.sealed";
 const SAVE_EVERY = Duration.seconds(30);
 
 /**
- * How long a store waits once the writes waiting for the service moved
- * before it writes them, so a burst of them is written once. Note that it is
- * short, since they are what a crash would lose.
+ * How long a store waits once the messages refused moved before it writes
+ * them, so a burst of them is written once. Note that it is short, since
+ * they are what a crash would lose.
  */
 const QUEUE_SETTLE = Duration.millis(500);
 
@@ -120,6 +126,15 @@ type KeptByWorkspace =
   | typeof KEPT_READ.INVITATIONS
   | typeof KEPT_READ.AUTOMATIONS;
 
+/** One workspace's invitations as the file keeps them, with the origin they were read from. */
+const keptInvitationsSchema = Schema.Struct({
+  origin: Schema.String,
+  invitations: WORKSPACE_INVITATIONS_READ.rows.fields.invitations,
+});
+
+/** One Inbox item as the file keeps it, with the plan it is on. */
+const keptInboxItemSchema = Schema.Struct({ item: inboxItemSchema, taskId: Schema.String });
+
 /** Each kept read's rows as the file keeps them: what its follow last answered, the task list's and the Inbox's with the sync id they were read at. */
 const keptRowsSchema = Schema.Struct({
   [KEPT_READ.TASK_LIST]: Schema.Struct({
@@ -136,17 +151,11 @@ const keptRowsSchema = Schema.Struct({
   }),
   [KEPT_READ.WORKSPACES]: Schema.Array(workspaceSchema),
   [KEPT_READ.MEMBERS]: Schema.Record(Schema.String, WORKSPACE_MEMBERS_READ.rows),
-  [KEPT_READ.INVITATIONS]: Schema.Record(
-    Schema.String,
-    Schema.Struct({
-      origin: Schema.String,
-      invitations: WORKSPACE_INVITATIONS_READ.rows.fields.invitations,
-    }),
-  ),
+  [KEPT_READ.INVITATIONS]: Schema.Record(Schema.String, keptInvitationsSchema),
   [KEPT_READ.AUTOMATIONS]: Schema.Record(Schema.String, AUTOMATIONS_READ.rows),
   [KEPT_READ.INBOX]: Schema.Struct({
     /** The first items the follow held, as it took them from the service, each with the plan it is on. */
-    items: Schema.Array(Schema.Struct({ item: inboxItemSchema, taskId: Schema.String })),
+    items: Schema.Array(keptInboxItemSchema),
     /** The sync id the items were read at, kept only where they are every item the follow held, so the next launch reads past it; absent where the follow kept only its first ones, and reads whole. */
     at: Schema.optionalKey(Schema.String),
   }),
@@ -155,7 +164,7 @@ const keptRowsSchema = Schema.Struct({
 /** Each kept read's rows, as a read hands them to the store and takes them back. */
 export type KeptRows = typeof keptRowsSchema.Type;
 
-/** A row write waiting for the service, as the engine hands it out: its name, its key, and its input in its declaration's kept form. */
+/** A row write waiting for the service as an older build kept it here: its name, its key, and its input in its declaration's kept form. */
 const queuedEntrySchema = Schema.Struct({
   name: Schema.String,
   key: Schema.String,
@@ -173,16 +182,16 @@ const keptReadsSchema = Schema.Struct({
   [KEPT_READ.INBOX]: Schema.optionalKey(keptRowsSchema.fields[KEPT_READ.INBOX]),
 });
 
-/** What the file holds once opened: whose it is, the shapes its rows were kept at, the rows, the writes waiting, and any messages refused an older build kept. */
+/** What the file holds once opened: whose it is, the shapes its rows were kept at, the rows, the writes an older build kept waiting until they are imported, and the messages refused. */
 const keptSchema = Schema.Struct({
   hash: Schema.String,
   accountId: Schema.String,
   reads: keptReadsSchema,
-  queue: Schema.Array(queuedEntrySchema),
+  queue: Schema.optionalKey(Schema.Array(queuedEntrySchema)),
   refused: Schema.optionalKey(Schema.Array(Schema.Unknown)),
 });
 
-/** The file opened as far as its account and its waiting writes, whatever shapes its rows were kept at. */
+/** The file opened as far as its account, the writes an older build kept waiting in it, and its messages refused, whatever shapes its rows were kept at. */
 const envelopeSchema = Schema.Struct({
   hash: Schema.String,
   accountId: Schema.String,
@@ -195,6 +204,123 @@ type Envelope = typeof envelopeSchema.Type;
 
 const decodeEnvelope = Schema.decodeUnknownResult(Schema.fromJsonString(envelopeSchema));
 const decodeReads = Schema.decodeUnknownResult(keptReadsSchema);
+
+/** What of a kept read still read at these shapes, and how many of its rows didn't. */
+interface Tolerated<Rows> {
+  readonly rows: Rows;
+  readonly dropped: number;
+}
+
+/** What of a file's reads still read at these shapes, and how many reads, Inbox items or workspaces' rows didn't. */
+interface ToleratedReads {
+  readonly reads: Partial<KeptRows>;
+  readonly dropped: number;
+}
+
+/** `value` as `schema` reads it, or none where it doesn't. */
+function decodedAs<Type>(
+  schema: Schema.Codec<Type, unknown>,
+  value: UnparsedWireValue,
+): Type | undefined {
+  return Result.getOrUndefined(Schema.decodeUnknownResult(schema)(value));
+}
+
+/** A record's entries each read as `schema`, those that don't read left out; none where `value` is no record. */
+function entriesAs<Type>(
+  schema: Schema.Codec<Type, unknown>,
+  value: UnparsedWireValue,
+): Tolerated<Record<string, Type>> | undefined {
+  if (!isRecord(value)) return undefined;
+  const rows: Record<string, Type> = {};
+  let dropped = 0;
+
+  for (const [key, entry] of Object.entries(value)) {
+    const row = decodedAs(schema, entry);
+
+    if (row === undefined) dropped += 1;
+    else rows[key] = row;
+  }
+
+  return { rows, dropped };
+}
+
+/** The kept Inbox read: each item read on its own, those that don't read left out, and its sync id kept only where every item read. */
+function keptInboxOf(
+  value: UnparsedWireValue,
+): Tolerated<KeptRows[typeof KEPT_READ.INBOX]> | undefined {
+  if (!isRecord(value) || !Array.isArray(value.items)) return undefined;
+  const items = value.items.flatMap((each) => decodedAs(keptInboxItemSchema, each) ?? []);
+  const dropped = value.items.length - items.length;
+  const at = decodedAs(Schema.String, value.at);
+
+  // Note that the sync id goes with any item left out, since a read past it answers only items that moved, and one left out that never moves would never be answered again.
+  return { rows: dropped === 0 && at !== undefined ? { items, at } : { items }, dropped };
+}
+
+/**
+ * The reads a file kept at other row shapes, each read on its own, and
+ * within the Inbox each item, and within a read kept per workspace each
+ * workspace's rows, so a build that changes one shape costs only the rows of
+ * it that no longer read: the rest are drawn at once, and the reads left out
+ * are read whole from the service, as a fresh install's are. Counts how many
+ * reads, items or workspaces' rows were left out beside what read.
+ */
+function tolerantReads(value: UnparsedWireValue): ToleratedReads {
+  if (!isRecord(value)) return { reads: {}, dropped: 0 };
+  const fields = keptRowsSchema.fields;
+  let dropped = 0;
+
+  /** `read` as its own shape reads it whole, counted as left out where it was kept and doesn't read. */
+  const whole = <Read extends KeptRead>(
+    read: Read,
+    schema: Schema.Codec<KeptRows[Read], unknown>,
+  ) => {
+    const kept = value[read];
+
+    if (kept === undefined) return undefined;
+    const rows = decodedAs(schema, kept);
+
+    if (rows === undefined) dropped += 1;
+
+    return rows;
+  };
+
+  /** `read` kept per workspace, each workspace's rows read on their own. */
+  const byWorkspace = <Row>(read: KeptByWorkspace, schema: Schema.Codec<Row, unknown>) => {
+    const kept = value[read];
+
+    if (kept === undefined) return undefined;
+    const entries = entriesAs(schema, kept);
+    dropped += entries?.dropped ?? 1;
+
+    return entries?.rows;
+  };
+
+  const keptInbox = value[KEPT_READ.INBOX];
+  const inbox = keptInbox === undefined ? undefined : keptInboxOf(keptInbox);
+  dropped += keptInbox === undefined ? 0 : (inbox?.dropped ?? 1);
+
+  const taskList = whole(KEPT_READ.TASK_LIST, fields[KEPT_READ.TASK_LIST]);
+  const sidebar = whole(KEPT_READ.SIDEBAR, fields[KEPT_READ.SIDEBAR]);
+  const workspaces = whole(KEPT_READ.WORKSPACES, fields[KEPT_READ.WORKSPACES]);
+  const members = byWorkspace(KEPT_READ.MEMBERS, WORKSPACE_MEMBERS_READ.rows);
+  const invitations = byWorkspace(KEPT_READ.INVITATIONS, keptInvitationsSchema);
+  const automations = byWorkspace(KEPT_READ.AUTOMATIONS, AUTOMATIONS_READ.rows);
+
+  // Note that a read left out stands absent, as a read that never answered does.
+  const reads: Partial<KeptRows> = {
+    ...(taskList === undefined ? undefined : { [KEPT_READ.TASK_LIST]: taskList }),
+    ...(sidebar === undefined ? undefined : { [KEPT_READ.SIDEBAR]: sidebar }),
+    ...(workspaces === undefined ? undefined : { [KEPT_READ.WORKSPACES]: workspaces }),
+    ...(members === undefined ? undefined : { [KEPT_READ.MEMBERS]: members }),
+    ...(invitations === undefined ? undefined : { [KEPT_READ.INVITATIONS]: invitations }),
+    ...(automations === undefined ? undefined : { [KEPT_READ.AUTOMATIONS]: automations }),
+    ...(inbox === undefined ? undefined : { [KEPT_READ.INBOX]: inbox.rows }),
+  };
+
+  return { reads, dropped };
+}
+
 const encodeKept = Schema.encodeEffect(Schema.fromJsonString(keptSchema));
 
 /** The account's lists as they were kept, and what moved since, written within `SAVE_EVERY`. */
@@ -219,17 +345,28 @@ export interface EntityStore {
     workspaceId: string,
     rows: KeptRows[Read][string],
   ) => Effect.Effect<void>;
-  /** The row writes waiting for the service as the file held them when the store opened, oldest first. */
-  readonly queue: readonly QueuedEntry[];
-  /** The messages the service refused that an older build kept in the file, until the local database takes them. */
-  readonly refused: {
-    /** As the file held them when the store opened, each in the form its reader kept it in. */
-    readonly entries: readonly unknown[];
-    /** Has the store write the file without them, since the local database holds them now. */
-    readonly imported: Effect.Effect<void>;
-  };
+  /** The row writes waiting for the service an older build kept in the account's own file, for the local database to import once; none where the file was there but would not read, so nothing is marked imported before it does. */
+  readonly queue: SealedWrites | undefined;
+  /** The messages the service refused an older build kept in the account's own file, for the local database to import once; none where the file was there but would not read. */
+  readonly refused: SealedRefusals | undefined;
   /** Deletes the file and keeps nothing more, as a sign-out does. */
   readonly forget: Effect.Effect<void>;
+}
+
+/** The row writes an older build kept waiting in the file: carried through every save until `imported`, then never written again. */
+export interface SealedWrites {
+  /** The writes as the file held them when the store opened, oldest first. */
+  readonly entries: readonly QueuedEntry[];
+  /** Tells the store the local database holds them now, so its next save leaves them out. */
+  readonly imported: Effect.Effect<void>;
+}
+
+/** The messages the service refused an older build kept in the file: carried through every save until `imported`, then never written again. */
+export interface SealedRefusals {
+  /** As the file held them when the store opened, each in the form its reader kept it in. */
+  readonly entries: readonly unknown[];
+  /** Tells the store the local database holds them now, so its next save, written soon, leaves them out. */
+  readonly imported: Effect.Effect<void>;
 }
 
 export interface EntityStoreOptions {
@@ -239,10 +376,6 @@ export interface EntityStoreOptions {
   readonly cipher: SecretCipher;
   /** The account signed in, whose lists alone the file may hold. */
   readonly accountId: string;
-  /** The row writes waiting for the service now, oldest first, which every save keeps beside the lists. */
-  readonly queued?: () => readonly QueuedEntry[];
-  /** Each moving of `queued`, which has the store write them `QUEUE_SETTLE` later. */
-  readonly queueMoves?: Stream.Stream<void>;
   /** Each moment the shell asks the lists written (`KeptListsDue`); where given, lists that moved are written only then and as the store closes, never every `SAVE_EVERY`. */
   readonly listsDue?: Stream.Stream<void>;
 }
@@ -297,7 +430,7 @@ function sealedText(cipher: SecretCipher, plain: string): string {
   return cipher.sealText?.(plain) ?? Base64.encode(cipher.encrypt(plain));
 }
 
-/** The file's text opened and read as far as its account and its waiting writes, or none where it will not open or is not a store's. */
+/** The file's text opened and read as far as its account, its older waiting writes, and its messages refused, or none where it will not open or is not a store's. */
 function opened(cipher: SecretCipher, text: string): Envelope | undefined {
   const sealed = text.trim();
   const { openText } = cipher;
@@ -330,8 +463,9 @@ export function forgetEntityStore(
 
 /**
  * The account's store for as long as the caller's scope stands: the file
- * read and opened, deleted where it is another account's, of other row
- * shapes, or will not open; what moves written at most every `SAVE_EVERY`,
+ * read and opened, deleted where it is another account's or will not open,
+ * and kept as far as its rows still read where it is of other row shapes;
+ * what moves written at most every `SAVE_EVERY`,
  * and once more as the scope closes, unless it was forgotten.
  */
 export function openEntityStore(
@@ -342,33 +476,45 @@ export function openEntityStore(
     const services = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
     const hash = yield* keptRowsHash;
 
-    const text = yield* Effect.orElseSucceed(
-      readSettingsFileText(directory, ENTITY_STORE_FILE_NAME),
-      () => undefined,
-    );
+    const textRead = yield* Effect.result(readSettingsFileText(directory, ENTITY_STORE_FILE_NAME));
+    const text = Result.getOrUndefined(textRead);
 
     const read = text === undefined ? undefined : opened(cipher, text);
     const ours = read !== undefined && read.accountId === accountId;
 
-    const kept =
+    // Note that the shapes' hash is a hint: where it matches, the reads are read whole at once, and otherwise, or where they still don't read, each read is read on its own, keeping what of them still reads.
+    const whole =
       ours && read.hash === hash ? Result.getOrUndefined(decodeReads(read.reads)) : undefined;
 
-    // Note that a file that is not this account's at these shapes is deleted before anything reads it, so no other account's rows are ever drawn.
+    // SAFETY: the file's text was read with `fromJsonString`, so its reads are what `JSON.parse` answers, a JSON value.
+    const tolerant =
+      ours && whole === undefined ? tolerantReads(read.reads as UnparsedWireValue) : undefined;
+
+    const kept = whole ?? tolerant?.reads;
+
+    // Note that a file that is not this account's, or will not open, is deleted before anything reads it, so no other account's rows are ever drawn.
     if (text !== undefined && kept === undefined) yield* removed(directory);
     const stored: Partial<KeptRows> = kept ?? {};
-    // Note that the account's own waiting writes outlast other row shapes, and are kept again at the next save.
-    const queue: readonly QueuedEntry[] = ours ? (read.queue ?? []) : [];
-    const queued = options.queued ?? (() => queue);
+    // Note that the account's own waiting writes an older build kept outlast other row shapes, for the local database to import.
+    const legacyQueue: readonly QueuedEntry[] = ours ? (read.queue ?? []) : [];
+    /** The older waiting writes each save still carries, until the local database imported them. */
+    let queueCarried = legacyQueue;
+    // Note that the account's own messages refused an older build kept outlast other row shapes, for the local database to import.
     const refusedKept: readonly unknown[] = ours ? (read.refused ?? []) : [];
-    /** The refusals an older build kept, carried on in the file until the local database takes them. */
+    /** The older messages refused each save still carries, until the local database imported them. */
     let refusedCarried = refusedKept;
-    /** What waits on the member or the service, the writes waiting and any refusals carried, as one text a save compares. */
-    const waitingNow = () => JSON.stringify([queued(), refusedCarried]);
+    /** The messages refused carried, as one text a save compares. */
+    const waitingNow = () => JSON.stringify(refusedCarried);
     let reads: Partial<KeptRows> = stored;
-    let dirty = kept === undefined && (queue.length > 0 || refusedKept.length > 0);
+
+    // Note that rows kept at other shapes are written again at the next save, at these shapes and under this hash, so the next launch reads them whole.
+    let dirty =
+      tolerant !== undefined ||
+      (kept === undefined && (legacyQueue.length > 0 || refusedKept.length > 0));
+
     /** Whether rows kept since the last save moved nothing but where they stand (`keepUnmoved`), which only a save of something that moved, or the last, writes. */
     let unmoved = false;
-    let savedQueue = JSON.stringify([queue, refusedKept]);
+    let savedRefused = JSON.stringify(refusedKept);
     let forgotten = false;
     const lock = yield* Semaphore.make(1);
     let savedAt = yield* Clock.currentTimeMillis;
@@ -376,25 +522,20 @@ export function openEntityStore(
     const save = (closing: boolean) =>
       lock.withPermits(1)(
         Effect.flatMap(Clock.currentTimeMillis, (now) => {
-          const waiting = queued();
-          const refused = refusedCarried;
-          const waitingText = JSON.stringify([waiting, refused]);
+          const waitingText = waitingNow();
           const listsDue = dirty && (closing || now - savedAt >= Duration.toMillis(SAVE_EVERY));
-          const moved = listsDue || waitingText !== savedQueue;
+          const moved = listsDue || waitingText !== savedRefused;
 
           if (!(moved || (closing && unmoved)) || forgotten) return Effect.void;
           dirty = false;
           unmoved = false;
-          savedQueue = waitingText;
+          savedRefused = waitingText;
           savedAt = now;
 
-          return encodeKept({
-            hash,
-            accountId,
-            reads,
-            queue: waiting,
-            ...(refused.length > 0 ? { refused } : undefined),
-          }).pipe(
+          const queue = queueCarried.length > 0 ? { queue: queueCarried } : undefined;
+          const refused = refusedCarried.length > 0 ? { refused: refusedCarried } : undefined;
+
+          return encodeKept({ hash, accountId, reads, ...queue, ...refused }).pipe(
             Effect.map((plain) => sealedText(cipher, plain)),
             Effect.flatMap((sealed) =>
               writeSettingsFileAtomic(directory, sealed, undefined, ENTITY_STORE_FILE_NAME),
@@ -413,15 +554,15 @@ export function openEntityStore(
     const woken = Effect.asVoid(Queue.offer(wake, undefined));
 
     /**
-     * The saver: once the writes waiting moved, a save `QUEUE_SETTLE` later;
+     * The saver: once the messages refused moved, a save `QUEUE_SETTLE` later;
      * once lists moved, where the shell names no moments of its own, one when `SAVE_EVERY` has passed since the last save,
-     * sooner where the writes waiting move meanwhile; otherwise asleep until
+     * sooner where the messages refused move meanwhile; otherwise asleep until
      * woken. Note that it ends once the store is forgotten, since nothing it
      * would save is kept.
      */
     const saver = Effect.gen(function* () {
       while (!forgotten) {
-        if (waitingNow() !== savedQueue) {
+        if (waitingNow() !== savedRefused) {
           yield* Effect.sleep(QUEUE_SETTLE);
         } else if (dirty && options.listsDue === undefined) {
           const left = savedAt + Duration.toMillis(SAVE_EVERY) - (yield* Clock.currentTimeMillis);
@@ -439,15 +580,6 @@ export function openEntityStore(
         yield* save(false);
       }
     });
-
-    if (options.queueMoves !== undefined) {
-      yield* Effect.forkScoped(
-        Stream.runForEach(options.queueMoves, () => woken),
-        {
-          startImmediately: true,
-        },
-      );
-    }
 
     // Note that a moment the shell names writes the lists whole, as the store closing does, since the app may not run again before it is ended.
     if (options.listsDue !== undefined) {
@@ -469,16 +601,24 @@ export function openEntityStore(
 
     return {
       stored: (read) => stored[read],
-      queue,
-      refused: {
-        entries: refusedKept,
-        imported: Effect.suspend(() => {
-          if (refusedCarried.length === 0) return Effect.void;
-          refusedCarried = [];
+      queue: Result.isFailure(textRead)
+        ? undefined
+        : {
+            entries: legacyQueue,
+            imported: Effect.sync(() => {
+              queueCarried = [];
+            }),
+          },
+      refused: Result.isFailure(textRead)
+        ? undefined
+        : {
+            entries: refusedKept,
+            imported: Effect.suspend(() => {
+              refusedCarried = [];
 
-          return woken;
-        }),
-      },
+              return woken;
+            }),
+          },
       keep: (kept, rows) =>
         Effect.andThen(
           Effect.sync(() => {

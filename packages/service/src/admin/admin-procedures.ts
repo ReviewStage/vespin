@@ -1,7 +1,7 @@
 /**
  * admin-procedures.ts -- the admin dashboard's reads and its one star write, as one hosted resource.
  *
- * The reads answer the dashboard's screens (the catalog, metrics, cost, reliability, the
+ * The reads answer the dashboard's screens (the catalog, metrics, cost, billing, reliability, the
  * roster, one account, one day, the workspaces, and one workspace); the write is the Users
  * tab's star, PUT to set it and DELETE to take it back. Each answers for its
  * own query and its own refusals (`admin-*.ts`) and is answered as it was
@@ -17,6 +17,7 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { hosted } from "../orpc/base.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
+import { type AdminBillingOptions, handleAdminBilling } from "./admin-billing.js";
 import { type AdminCatalogOptions, handleAdminCatalog } from "./admin-catalog.js";
 import { type AdminCostOptions, handleAdminCost } from "./admin-cost.js";
 import { type AdminDayOptions, handleAdminDay } from "./admin-day.js";
@@ -38,6 +39,8 @@ export interface AdminProcedureSeams {
   readMetrics: AdminMetricsOptions["readMetrics"];
   /** The Cost screen's read, which prices at the model catalog the instance holds. */
   readCost: AdminCostOptions<DatabaseServices | ModelCatalog>["readCost"];
+  /** The Billing screen's read, from the usage ledger. */
+  readBilling: AdminBillingOptions["readBilling"];
   readUsers: AdminUsersOptions["readUsers"];
   readUser: AdminUserOptions["readUser"];
   readDay: AdminDayOptions["readDay"];
@@ -51,6 +54,9 @@ export function adminProcedures(seams: AdminProcedureSeams) {
   const gated = hosted.admin.use(adminGateMiddleware(seams.resolveViewer));
 
   return {
+    billing: gated.billing.effect(function* ({ input }) {
+      return yield* handleAdminBilling({ query: input, readBilling: seams.readBilling });
+    }),
     catalog: gated.catalog.effect(function* () {
       return yield* handleAdminCatalog({ readCatalog: seams.readCatalog });
     }),

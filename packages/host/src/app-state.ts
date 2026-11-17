@@ -285,6 +285,8 @@ export interface AppInboxSlice {
 export interface AppHostRead<Rows> {
   rows?: Rows;
   failed?: true;
+  /** Whether the rows are the ones the phone kept on disk, drawn before the service's first answer took their place; only the account's Inbox sets it (`account-items-follow.ts`). */
+  kept?: true;
 }
 
 /** A read that has not answered yet, as every read stands as a session opens. */

@@ -111,7 +111,7 @@ const findMemberTotals = SqlSchema.findAll({
 });
 
 /** The UTC calendar month the instant falls in: its first instant, and the next month's. */
-function utcMonthOf(instant: Date) {
+export function utcMonthOf(instant: Date) {
   const year = instant.getUTCFullYear();
   const month = instant.getUTCMonth();
 

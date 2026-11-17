@@ -104,6 +104,7 @@ function detail(overrides: Partial<AdminUserDetail["account"]> = {}): AdminUserD
       },
     },
     support: support(),
+    sandboxUsage: { month: "2026-10", workspaces: [] },
   };
 }
 
