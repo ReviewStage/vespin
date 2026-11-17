@@ -85,7 +85,7 @@ export {
   MenuChip,
 } from "./compose-sheet.js";
 
-export { Composer, ComposerFoot, type ComposerMenu } from "./composer.js";
+export { Composer, ComposerFoot, type ComposerMenu, type ComposerSaving } from "./composer.js";
 
 export {
   type AttachedPicture,

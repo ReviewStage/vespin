@@ -1,4 +1,4 @@
-// queued-lines.tsx -- the messages queued behind an agent's turn, standing in a glass of their own over its composer, as the panel stands its queue over the box: each with Steer and Delete, a long press offering them with Move Up and Move Down, and Resume while the queue stands paused.
+// queued-lines.tsx -- the messages queued behind an agent's turn, standing in a glass of their own over its composer, as the panel stands its queue over the box: each with Steer and Delete, a long press offering them with Edit, Move Up and Move Down, one being edited muted with Cancel, and Resume while the queue stands paused.
 
 import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -23,7 +23,9 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** The panel's words for a queued message's acts, and the long press's two for its place. */
 const WORDS = {
   STEER: "Steer",
+  EDIT: "Edit",
   DELETE: "Delete",
+  CANCEL: "Cancel",
   RESUME: "Resume",
   MOVE_UP: "Move Up",
   MOVE_DOWN: "Move Down",
@@ -42,6 +44,10 @@ const LARGE_ROW_PRESSES = 2.5;
 export type QueuedLine = {
   readonly id: string;
   readonly words: string;
+  /** Whether its words stand in a field being edited, this one's or another window's, which stops the queue at it. */
+  readonly editing?: boolean | undefined;
+  /** Whether its words may be taken into the field to edit, as a message of words alone may. */
+  readonly editable?: boolean | undefined;
 };
 
 type QueuedLinesProps = {
@@ -56,6 +62,10 @@ type QueuedLinesProps = {
   readonly onMove?: ((from: number, to: number) => void) | undefined;
   /** Lets a paused queue hand its messages on again; Resume is not offered where none is given. */
   readonly onResume?: (() => void) | undefined;
+  /** Takes a queued message's words into the field to edit; Edit is not offered where none is given, or on a message with files. */
+  readonly onEdit?: ((id: string) => void) | undefined;
+  /** Gives up an edit standing on a message, this field's or another window's; Cancel is not offered where none is given. */
+  readonly onCancelEdit?: ((id: string) => void) | undefined;
 };
 
 /** A queued line's small act at its end: its words in the body's ink, or its glyph alone, pressed anywhere in a frame of a press's size. */
@@ -97,16 +107,26 @@ function LineAct({
   );
 }
 
-/** A queued message's Steer and Delete, where each is offered. */
+/** A queued message's Steer and Delete, where each is offered, or Cancel while it is being edited. */
 function QueuedActs({
-  id,
+  line,
   onSteer,
   onDelete,
+  onCancelEdit,
 }: {
-  readonly id: string;
+  readonly line: QueuedLine;
   readonly onSteer: QueuedLinesProps["onSteer"];
   readonly onDelete: QueuedLinesProps["onDelete"];
+  readonly onCancelEdit: QueuedLinesProps["onCancelEdit"];
 }) {
+  const { id } = line;
+
+  if (line.editing === true) {
+    return onCancelEdit === undefined ? null : (
+      <LineAct label={WORDS.CANCEL} onPress={() => onCancelEdit(id)} />
+    );
+  }
+
   return (
     <>
       {onSteer === undefined ? null : <LineAct label={WORDS.STEER} onPress={() => onSteer(id)} />}
@@ -119,11 +139,26 @@ function QueuedActs({
 
 /** A queued line's long press: Steer, Move Up where a line stands above it, Move Down where one stands below, and Delete, each where it is offered. */
 function heldActs(
-  id: string,
+  line: QueuedLine,
   place: number,
   count: number,
-  { onSteer, onDelete, onMove }: Pick<QueuedLinesProps, "onSteer" | "onDelete" | "onMove">,
+  {
+    onSteer,
+    onDelete,
+    onMove,
+    onEdit,
+    onCancelEdit,
+  }: Pick<QueuedLinesProps, "onSteer" | "onDelete" | "onMove" | "onEdit" | "onCancelEdit">,
 ): HeldAct[] {
+  const { id } = line;
+
+  // Note that a message being edited offers only its Cancel, as the panel's edited row does, since the queue stops at it.
+  if (line.editing === true) {
+    return onCancelEdit === undefined
+      ? []
+      : [{ label: WORDS.CANCEL, symbol: GLYPH.REMOVE, onPress: () => onCancelEdit(id) }];
+  }
+
   const up: HeldAct[] =
     onMove === undefined || place === 0
       ? []
@@ -144,6 +179,9 @@ function heldActs(
     ...(onSteer === undefined
       ? []
       : [{ label: WORDS.STEER, symbol: GLYPH.STEER, onPress: () => onSteer(id) }]),
+    ...(onEdit === undefined || line.editable !== true
+      ? []
+      : [{ label: WORDS.EDIT, symbol: GLYPH.RENAME, onPress: () => onEdit(id) }]),
     ...up,
     ...down,
     ...(onDelete === undefined
@@ -165,9 +203,11 @@ function QueuedRow({
   acts,
   onSteer,
   onDelete,
+  onCancelEdit,
 }: {
   readonly line: QueuedLine;
   readonly acts: readonly HeldAct[];
+  readonly onCancelEdit: QueuedLinesProps["onCancelEdit"];
   readonly onSteer: QueuedLinesProps["onSteer"];
   readonly onDelete: QueuedLinesProps["onDelete"];
 }) {
@@ -186,14 +226,17 @@ function QueuedRow({
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-          foregroundStyle(colors.TEXT_BODY),
+          // Note that a message being edited stands muted in its place, as the panel's edited row does, the queue stopping at it.
+          foregroundStyle(line.editing === true ? colors.TEXT_MUTED : colors.TEXT_BODY),
           lineLimit(large ? QUEUED_LINES_LARGE : 1),
           frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
         ]}
       >
         {line.words}
       </Text>
-      {large ? null : <QueuedActs id={line.id} onSteer={onSteer} onDelete={onDelete} />}
+      {large ? null : (
+        <QueuedActs line={line} onSteer={onSteer} onDelete={onDelete} onCancelEdit={onCancelEdit} />
+      )}
     </HStack>
   );
 
@@ -204,7 +247,12 @@ function QueuedRow({
         <VStack alignment="trailing" spacing={0}>
           {words}
           <HStack spacing={SPACE.ROW}>
-            <QueuedActs id={line.id} onSteer={onSteer} onDelete={onDelete} />
+            <QueuedActs
+              line={line}
+              onSteer={onSteer}
+              onDelete={onDelete}
+              onCancelEdit={onCancelEdit}
+            />
           </HStack>
         </VStack>
       ) : (
@@ -219,8 +267,9 @@ function QueuedRow({
  * its composer in a glass of their own, as the panel's queue dock stands
  * over its box: each on one line led by the panel's queued glyph, with
  * Steer, which sends it into the turn now, and Delete. A long press on a
- * line offers the same with Move Up and Move Down, each only where a line
- * stands to pass. Why the queue stands paused heads them, with Resume. Note
+ * line offers the same with Edit, Move Up and Move Down, each only where a
+ * line stands to pass, and one being edited stands muted with Cancel. Why
+ * the queue stands paused heads them, with Resume. Note
  * that the lines stand at the height their words take, and past three they
  * scroll, so a long queue never pushes the composer off the screen; no line
  * is dragged, since SwiftUI drags a row only in its list, which cannot size
@@ -233,6 +282,8 @@ export function QueuedLines({
   onDelete,
   onMove,
   onResume,
+  onEdit,
+  onCancelEdit,
 }: QueuedLinesProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
@@ -250,9 +301,16 @@ export function QueuedLines({
         <VStack key={line.id} modifiers={rowLook}>
           <QueuedRow
             line={line}
-            acts={heldActs(line.id, index, lines.length, { onSteer, onDelete, onMove })}
+            acts={heldActs(line, index, lines.length, {
+              onSteer,
+              onDelete,
+              onMove,
+              onEdit,
+              onCancelEdit,
+            })}
             onSteer={onSteer}
             onDelete={onDelete}
+            onCancelEdit={onCancelEdit}
           />
         </VStack>
       ))}
