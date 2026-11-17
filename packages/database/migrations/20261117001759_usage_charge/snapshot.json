@@ -1,8 +1,12 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "468a1733-969b-4468-b0bf-51d14aa32e10",
-  "prevIds": ["5c40c862-2d95-4da7-afb6-a9b9f3c96ada"],
+  "id": "2243bab1-8557-4896-a17e-2e9fc406d439",
+  "prevIds": [
+    "5c40c862-2d95-4da7-afb6-a9b9f3c96ada",
+    "c1c90347-aa29-40c9-acef-a9b532d06960",
+    "dd321e6f-a660-49d9-9201-ddb9df945603"
+  ],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -325,6 +329,12 @@
     {
       "isRlsEnabled": false,
       "name": "github_personal_token",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "github_pull_request_move",
       "entityType": "tables",
       "schema": "public"
     },
@@ -703,6 +713,12 @@
     {
       "isRlsEnabled": false,
       "name": "workspace_sandbox_script_run",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "workspace_sandbox_size",
       "entityType": "tables",
       "schema": "public"
     },
@@ -7003,6 +7019,19 @@
     {
       "type": "text",
       "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "cursor_sdk",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
       "notNull": true,
       "dimensions": 1,
       "default": "'{}'",
@@ -8035,6 +8064,71 @@
       "entityType": "columns",
       "schema": "public",
       "table": "github_personal_token"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "repository_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "github_pull_request_move"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "number",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "github_pull_request_move"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "head_ref",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "github_pull_request_move"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "head_sha",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "github_pull_request_move"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "moved_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "github_pull_request_move"
     },
     {
       "type": "text",
@@ -11686,6 +11780,123 @@
       "table": "slack_installation"
     },
     {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bot_key_version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "slack_installation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bot_sealed_data_key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "slack_installation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bot_sealed_token",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "slack_installation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bot_user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "slack_installation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 1,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bot_scopes",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "slack_installation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "bot_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "slack_installation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "app_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "slack_installation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "enterprise_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "slack_installation"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "is_enterprise_install",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "slack_installation"
+    },
+    {
       "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
@@ -14087,6 +14298,45 @@
       "table": "workspace_environment_variable"
     },
     {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "true",
+      "generated": null,
+      "identity": null,
+      "name": "secret",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_environment_variable"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_environment_variable"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_environment_variable"
+    },
+    {
       "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
@@ -14592,6 +14842,45 @@
       "entityType": "columns",
       "schema": "public",
       "table": "workspace_sandbox_script_run"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_sandbox_size"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "2",
+      "generated": null,
+      "identity": null,
+      "name": "vcpus",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_sandbox_size"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_sandbox_size"
     },
     {
       "type": "uuid",
@@ -16733,6 +17022,34 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "github_mention_agent"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "repository_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "head_ref",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "github_pull_request_move_head",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "github_pull_request_move"
     },
     {
       "nameExplicit": true,
@@ -21392,6 +21709,32 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["created_by"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "workspace_environment_variable_created_by_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_environment_variable"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["updated_by"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "workspace_environment_variable_updated_by_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_environment_variable"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["organization_id"],
       "schemaTo": "public",
       "tableTo": "organization",
@@ -21493,6 +21836,19 @@
       "entityType": "fks",
       "schema": "public",
       "table": "workspace_sandbox_script_run"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["organization_id"],
+      "schemaTo": "public",
+      "tableTo": "organization",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "workspace_sandbox_size_organization_id_organization_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_sandbox_size"
     },
     {
       "nameExplicit": false,
@@ -21612,6 +21968,14 @@
       "entityType": "pks",
       "schema": "public",
       "table": "admin_favorite"
+    },
+    {
+      "columns": ["repository_id", "number"],
+      "nameExplicit": false,
+      "name": "github_pull_request_move_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "github_pull_request_move"
     },
     {
       "columns": ["user_id", "repository"],
@@ -22470,6 +22834,14 @@
       "entityType": "pks"
     },
     {
+      "columns": ["organization_id"],
+      "nameExplicit": false,
+      "name": "workspace_sandbox_size_pkey",
+      "schema": "public",
+      "table": "workspace_sandbox_size",
+      "entityType": "pks"
+    },
+    {
       "columns": ["id"],
       "nameExplicit": false,
       "name": "workspace_token_repository_pkey",
@@ -22657,7 +23029,7 @@
       "table": "attachment"
     },
     {
-      "value": "(\"conversation_id\" is null or octet_length(\"bytes\") <= 4000000) and (not (\"task_id\" is not null and num_nonnulls(\"inbox_item_id\", \"conversation_id\", \"description_comment_id\") = 0) or octet_length(\"bytes\") <= 1500000 or (\"content_type\" in ('video/webm', 'video/mp4') and octet_length(\"bytes\") <= 4000000) or (\"content_type\" = 'application/pdf' and octet_length(\"bytes\") <= 3000000))",
+      "value": "(\"conversation_id\" is null or octet_length(\"bytes\") <= 4000000) and (not (\"task_id\" is not null and num_nonnulls(\"inbox_item_id\", \"conversation_id\", \"description_comment_id\") = 0) or octet_length(\"bytes\") <= 1500000 or (\"content_type\" in ('video/webm', 'video/mp4', 'audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/ogg') and octet_length(\"bytes\") <= 4000000) or (\"content_type\" = 'application/pdf' and octet_length(\"bytes\") <= 3000000))",
       "name": "attachment_bytes_bound",
       "entityType": "checks",
       "schema": "public",
@@ -22678,8 +23050,8 @@
       "table": "attachment"
     },
     {
-      "value": "\"mp4_bytes\" is null or (\"content_type\" = 'video/webm' and octet_length(\"mp4_bytes\") <= 4000000)",
-      "name": "attachment_mp4_copy",
+      "value": "\"mp4_bytes\" is null or (\"content_type\" in ('video/webm', 'audio/ogg') and octet_length(\"mp4_bytes\") <= 4000000)",
+      "name": "attachment_phone_copy",
       "entityType": "checks",
       "schema": "public",
       "table": "attachment"
@@ -22692,7 +23064,7 @@
       "table": "attachment"
     },
     {
-      "value": "(\"inbox_item_id\" is null and \"kind\" is null) or (\"inbox_item_id\" is not null and ((\"kind\" = 'image' and octet_length(\"bytes\") <= 1500000 and \"name\" is null and \"position\" is null and \"inbox_message_id\" is null) or (\"kind\" = 'answer' and octet_length(\"bytes\") <= 3000000 and \"name\" is not null and \"position\" is not null and \"inbox_message_id\" is null) or (\"kind\" = 'message' and (octet_length(\"bytes\") <= 3000000 or (\"content_type\" in ('video/webm', 'video/mp4') and octet_length(\"bytes\") <= 4000000)) and \"name\" is not null and \"position\" is not null and \"inbox_message_id\" is not null)))",
+      "value": "(\"inbox_item_id\" is null and \"kind\" is null) or (\"inbox_item_id\" is not null and ((\"kind\" = 'image' and octet_length(\"bytes\") <= 1500000 and \"name\" is null and \"position\" is null and \"inbox_message_id\" is null) or (\"kind\" = 'answer' and octet_length(\"bytes\") <= 3000000 and \"name\" is not null and \"position\" is not null and \"inbox_message_id\" is null) or (\"kind\" = 'message' and (octet_length(\"bytes\") <= 3000000 or (\"content_type\" in ('video/webm', 'video/mp4', 'audio/wav', 'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/ogg') and octet_length(\"bytes\") <= 4000000)) and \"name\" is not null and \"position\" is not null and \"inbox_message_id\" is not null)))",
       "name": "attachment_inbox_kind",
       "entityType": "checks",
       "schema": "public",
@@ -22748,6 +23120,13 @@
       "table": "machine_command"
     },
     {
+      "value": "num_nonnulls(\"bot_key_version\", \"bot_sealed_data_key\", \"bot_sealed_token\", \"bot_user_id\", \"bot_scopes\", \"bot_id\", \"app_id\") in (0, 7)",
+      "name": "slack_installation_bot_token_whole",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "slack_installation"
+    },
+    {
       "value": "\"parent_task_id\" <> \"id\"",
       "name": "task_parent_not_self",
       "entityType": "checks",
@@ -22774,6 +23153,13 @@
       "entityType": "checks",
       "schema": "public",
       "table": "usage_charge"
+    },
+    {
+      "value": "\"vcpus\" in (2, 4, 8)",
+      "name": "workspace_sandbox_size_vcpus",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "workspace_sandbox_size"
     }
   ],
   "renames": []
