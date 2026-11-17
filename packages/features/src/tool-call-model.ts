@@ -975,8 +975,8 @@ function subagentCallView(
 /** What a refused pull request's line says in place of its verb, since it opened none. */
 const PULL_REQUEST_REFUSED = "Could not open pull request";
 
-/** A pull request's answer as its body draws it: its JSON where it opened one, the words of its reason where it was refused. */
-function pullRequestAnswer(
+/** A call's answer as its body draws it: its JSON where it did what was asked, the words of its reason where it was refused. */
+function answerOrReason(
   output: WireValue | undefined,
   reason: string | undefined,
 ): ToolBlock | undefined {
@@ -1005,7 +1005,26 @@ function openedPullRequestView(
     subject: number === undefined ? title : `#${number} ${title}`,
     ...(reason === undefined ? undefined : { description: PULL_REQUEST_REFUSED, refused: true }),
     input: input === undefined ? textBlock("") : jsonBlock(input),
-    output: pullRequestAnswer(output, reason),
+    output: answerOrReason(output, reason),
+  };
+}
+
+/** What a refused Slack message's line says in place of its verb, since it sent nothing. */
+const SLACK_MESSAGE_REFUSED = "Didn't send on Slack:";
+
+/** A `send_slack_message` call's row: the words it sent; a refused call says it sent none, its answer drawn as the text of its reason. */
+function slackMessageView(
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+): ToolCallView {
+  const reason = stringAt(output, "reason");
+
+  return {
+    kind: CALL_KIND.SLACK_MESSAGE,
+    subject: messageWords(input) ?? "",
+    ...(reason === undefined ? undefined : { description: SLACK_MESSAGE_REFUSED, refused: true }),
+    input: input === undefined ? textBlock("") : jsonBlock(input),
+    output: answerOrReason(output, reason),
   };
 }
 
@@ -1675,10 +1694,7 @@ const AGENT_TOOL_VIEWS = {
       output: output === undefined ? undefined : jsonBlock(output),
     };
   },
-  [AGENT_TOOL.SEND_SLACK_MESSAGE]: ({ input, output }) => ({
-    ...namedCall(CALL_KIND.SLACK_MESSAGE, input, output, undefined),
-    subject: messageWords(input) ?? "",
-  }),
+  [AGENT_TOOL.SEND_SLACK_MESSAGE]: ({ input, output }) => slackMessageView(input, output),
   [AGENT_TOOL.END_TURN]: ({ input, output }) =>
     namedCall(CALL_KIND.END_TURN, input, output, undefined),
 } as const satisfies Record<AgentTool, ToolReader>;

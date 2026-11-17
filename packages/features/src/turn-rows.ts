@@ -484,8 +484,8 @@ export interface CallLine {
  * place, as Claude Code and Cursor name a command, and the command's first
  * line after them as its preview, the whole of it in the row's body; or,
  * for a browser call, what it did (`browserCallWords`) before the tab's
- * title, which is words; or, for a pull request that was refused, that it
- * opened none, before the title it asked for.
+ * title, which is words; or, for a pull request or a Slack message that
+ * was refused, that it opened or sent none, before what it asked for.
  */
 export function callLine(
   kind: CallKind,
@@ -499,7 +499,8 @@ export function callLine(
   if (
     kind === CALL_KIND.BROWSER ||
     kind === CALL_KIND.COMPUTER ||
-    kind === CALL_KIND.OPEN_PULL_REQUEST
+    kind === CALL_KIND.OPEN_PULL_REQUEST ||
+    kind === CALL_KIND.SLACK_MESSAGE
   ) {
     return { verb: description, subject, code: false };
   }
