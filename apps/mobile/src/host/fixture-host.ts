@@ -44,6 +44,7 @@ import {
   inboxReadMarksAppState,
   inboxRemindersAppState,
   inboxTasksView,
+  type KeptQueues,
   MEMORY_SAVE_REFUSED,
   machineAskAppState,
   NEW_MEMORY_ID,
@@ -52,6 +53,8 @@ import {
   type PullRequestMove,
   pullRequestMoveOf,
   pullRequestPartsAppState,
+  queueAfter,
+  queuedAppState,
   type SavedMemoryWords,
   savedMemoriesAppState,
 } from "@repo/host/fixture-inbox";
@@ -159,6 +162,12 @@ const CHOICES = new WeakMap<object, AgentChoices>();
 /** Nothing changed yet. */
 const NO_CHOICES: AgentChoices = new Map();
 
+/** The queues each run changed, by the store the run stages, each map replaced whole as one is changed. */
+const QUEUES = new WeakMap<object, KeptQueues>();
+
+/** No queue changed yet. */
+const NO_QUEUES: KeptQueues = new Map();
+
 /** The read marks each run's screens set on the fixture's tasks, by the store the run stages. */
 const READ_MARKS = new WeakMap<object, KeptReadMarks>();
 
@@ -211,9 +220,12 @@ export function stageFixture(
 
   if (inbox === held) return;
 
-  const parts = olderPageAppState(
-    pullRequestPartsAppState(inbox, MOVES.get(state) ?? NO_MOVES),
-    OLDER_ASKS.get(state) ?? 0,
+  const parts = queuedAppState(
+    olderPageAppState(
+      pullRequestPartsAppState(inbox, MOVES.get(state) ?? NO_MOVES),
+      OLDER_ASKS.get(state) ?? 0,
+    ),
+    QUEUES.get(state) ?? NO_QUEUES,
   );
 
   const saved = savedMemoriesAppState(
@@ -339,6 +351,20 @@ function keepChoice(
   stageFixture(state);
 }
 
+/** Keeps the queue a change to it or a Stop the fixture took leaves its agent, and lays it over the document at once, as the host draws one; nothing for any other act. */
+function keepQueue(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): void {
+  const held = QUEUES.get(state) ?? NO_QUEUES;
+  const after = queueAfter(held, kind, payload);
+
+  if (after === undefined) return;
+  QUEUES.set(state, new Map(held).set(after.agentId, after.queue));
+  stageFixture(state);
+}
+
 /** Keeps how a change the fixture took moved its pull request, and lays it over the document at once; nothing for any other act. */
 function keepMove(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
@@ -456,7 +482,9 @@ function memberAt<Member>(
  * would, so a screen draws it merged or out of the queue, and a reminder
  * set or cleared moves its item there, as the host draws one, so the Inbox
  * puts it away under Reminders, and a change of an agent's model, permission
- * mode, servers, name, or pin moves the agent there, as the host draws one.
+ * mode, servers, name, or pin moves the agent there, as the host draws one,
+ * and a change to its queue moves the queue there, a Stop pausing it, so a
+ * flow may move a queued message and Resume.
  * Where `refusesWrites`, the writes `REFUSED_WRITES` names are refused
  * before anything else answers them, so a flow sees the failure notice.
  */
@@ -505,6 +533,8 @@ export function fixtureActs(
         keepInboxReadMark(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepChoice(state, kind as PortActKind, payload);
+        // SAFETY: as above.
+        keepQueue(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepMemory(state, kind as PortActKind, payload);
         // SAFETY: as above.
