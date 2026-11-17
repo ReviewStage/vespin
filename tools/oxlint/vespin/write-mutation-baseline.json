@@ -1,7 +1,6 @@
 {
   "packages/panel/src/admin/app-admin-doors.tsx": 1,
   "packages/panel/src/tasks/agent-forward.tsx": 5,
-  "packages/panel/src/tasks/agent-machines.tsx": 1,
   "packages/panel/src/tasks/browser-live-port.ts": 2,
   "packages/panel/src/tasks/follow-offer-dock.tsx": 1,
   "packages/panel/src/tasks/machine-refusal-card.tsx": 1,
