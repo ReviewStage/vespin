@@ -14,9 +14,11 @@ import {
   listRowInsets,
   listRowSeparator,
   listStyle,
+  onGeometryChange,
   padding,
   scrollContentBackground,
 } from "@expo/ui/swift-ui/modifiers";
+import { useState } from "react";
 import { useWindowDimensions } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { useBarGlass } from "./glass-bar.js";
@@ -41,7 +43,7 @@ const QUEUED_LINES_LARGE = 3;
 /** How many queued messages stand in sight before the rest scroll, as the panel's dock stands about three. */
 const LINES_IN_SIGHT = 3;
 
-/** How tall a queued message, or why the queue stands paused, stands at an accessibility size, its few lines beside or over its acts, in rows of a press's height. */
+/** How tall a queued message stands at an accessibility size before it is measured, its few lines over its acts, in rows of a press's height. */
 const LARGE_ROW_PRESSES = 2.5;
 
 /** The most of the window's height the queue takes, so the composer and the keyboard always keep the rest. */
@@ -168,6 +170,22 @@ function heldActs(
   ];
 }
 
+/**
+ * How tall the list of messages stands: the first few rows whole, as tall as
+ * each was measured, and no more of them than the window's share holds, but
+ * always the first, so a row is never cut through its words; the rest scroll.
+ */
+function sightHeight(rows: readonly number[], most: number): number {
+  let height = 0;
+
+  for (const row of rows.slice(0, LINES_IN_SIGHT)) {
+    if (height > 0 && height + row > most) break;
+    height += row;
+  }
+
+  return height;
+}
+
 /** Where a message dragged from `from` lands, as the panel's move takes it, from SwiftUI's destination, which counts the places before the message is taken out. */
 function landing(from: number, destination: number): number {
   return destination > from ? destination - 1 : destination;
@@ -254,16 +272,20 @@ export function QueuedLines({
   const press = useScaledSize(PRESS_SIZE);
   const screen = useWindowDimensions();
   const glass = useBarGlass();
+  // How tall each message's row stood when last laid out, by its id.
+  const [measured, setMeasured] = useState<ReadonlyMap<string, number>>(new Map());
 
   if (lines.length === 0 && paused === undefined) return null;
 
-  const row = large ? press * LARGE_ROW_PRESSES : press;
-  const header = paused === undefined ? 0 : row;
+  // Note that a row not yet laid out counts as tall as a row of its size stands, so the list never opens short of it.
+  const unmeasured = large ? press * LARGE_ROW_PRESSES : press;
+  const rows = lines.map((line) => measured.get(line.id) ?? unmeasured);
+  const height = sightHeight(rows, screen.height * MOST_OF_WINDOW);
 
-  const height = Math.min(
-    Math.min(lines.length, LINES_IN_SIGHT) * row + header,
-    screen.height * MOST_OF_WINDOW,
-  );
+  const measure = (id: string) =>
+    onGeometryChange(({ height: next }) =>
+      setMeasured((held) => (held.get(id) === next ? held : new Map(held).set(id, next))),
+    );
 
   const rowLook = [
     listRowBackground("clear"),
@@ -271,19 +293,14 @@ export function QueuedLines({
     listRowSeparator("hidden"),
   ];
 
+  // Note that why the queue paused stands over the list rather than in it, so it takes the height its words wrap to, which no row's measure foretells.
   return (
-    <List
-      modifiers={[
-        listStyle("plain"),
-        scrollContentBackground("hidden"),
-        // Note that the list always scrolls, since a row's words or why the queue paused may wrap past the height laid for them, and Resume stands at that line's end.
-        frame({ height }),
-        padding({ vertical: SPACE.TIGHT }),
-        ...glass,
-      ]}
-    >
+    <VStack spacing={0} modifiers={[padding({ vertical: SPACE.TIGHT }), ...glass]}>
       {paused === undefined ? null : (
-        <HStack spacing={SPACE.ROW} modifiers={rowLook}>
+        <HStack
+          spacing={SPACE.ROW}
+          modifiers={[padding({ leading: SPACE.ROW, trailing: SPACE.TIGHT })]}
+        >
           <Text
             modifiers={[
               font({ textStyle: TYPE_ROLE.ROW_LINE }),
@@ -298,31 +315,42 @@ export function QueuedLines({
           )}
         </HStack>
       )}
-      <List.ForEach
-        data={lines}
-        keyExtractor={(line) => line.id}
-        recycling={false}
-        {...(onMove === undefined
-          ? {}
-          : {
-              onMove: (sources: number[], destination: number) => {
-                const from = sources[0];
+      {lines.length === 0 ? null : (
+        <List
+          modifiers={[
+            listStyle("plain"),
+            scrollContentBackground("hidden"),
+            // Note that the list always scrolls, since past its first few rows, or the window's share, the rest wait below them.
+            frame({ height }),
+          ]}
+        >
+          <List.ForEach
+            data={lines}
+            keyExtractor={(line) => line.id}
+            recycling={false}
+            {...(onMove === undefined
+              ? {}
+              : {
+                  onMove: (sources: number[], destination: number) => {
+                    const from = sources[0];
 
-                if (from !== undefined) onMove(from, landing(from, destination));
-              },
-            })}
-      >
-        {({ item, index }) => (
-          <VStack modifiers={rowLook}>
-            <QueuedRow
-              line={item}
-              acts={heldActs(item.id, index, lines.length, { onSteer, onDelete, onMove })}
-              onSteer={onSteer}
-              onDelete={onDelete}
-            />
-          </VStack>
-        )}
-      </List.ForEach>
-    </List>
+                    if (from !== undefined) onMove(from, landing(from, destination));
+                  },
+                })}
+          >
+            {({ item, index }) => (
+              <VStack modifiers={[...rowLook, measure(item.id)]}>
+                <QueuedRow
+                  line={item}
+                  acts={heldActs(item.id, index, lines.length, { onSteer, onDelete, onMove })}
+                  onSteer={onSteer}
+                  onDelete={onDelete}
+                />
+              </VStack>
+            )}
+          </List.ForEach>
+        </List>
+      )}
+    </VStack>
   );
 }
