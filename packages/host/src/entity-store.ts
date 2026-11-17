@@ -1,16 +1,20 @@
 /**
- * entity-store.ts -- the account's waiting writes kept on disk between launches, sealed under the Keychain's key, read back at the next launch so they are sent again.
+ * entity-store.ts -- the file an older build kept the account's lists and queues in, sealed under the Keychain's key: read once at sign-in so the local database imports its queues, and carried until it has.
  *
- * It keeps the row writes made while the service could not be reached, as
- * the sync engine hands them out (`EntityPool.queued`) and takes them back
- * at the next launch (`requeue`): each a write's name, its idempotency key,
- * and its input. It keeps the messages the service refused that wait on the
- * member's Retry, Edit, or Delete too, as the agents' record of messages on
- * their way hands them out (`agent-queue-writes.ts`): their words, their
- * key, their files' names, and why they did not go, each kept in the form
- * that record reads back, which this file holds unread. The lists are kept
- * in the account's local database (`local-copy.ts`) instead, and a file a
- * build before kept them in is read for its queues alone.
+ * The lists are kept in the account's local database (`local-copy.ts`), the
+ * row writes waiting for the service in its outbox, and the messages the
+ * service refused in its `refused` table (`local-queues.ts`). A file an
+ * older build kept may still hold the writes (`queue`): the store hands
+ * them out for the account's own file (`queue.entries`), for the local
+ * database to import once, and carries them through every save until it
+ * says they were imported (`queue.imported`), so a database that would not
+ * open never leaves them nowhere on disk. So may the messages refused that
+ * waited on the member's Retry, Edit, or Delete (`refused`), each in the
+ * form the agents' record of messages on their way reads back
+ * (`agent-queue-writes.ts`), which this file holds unread: handed out
+ * (`refused.entries`) and carried the same way until the database says it
+ * holds them (`refused.imported`). The lists such a file kept are never
+ * read, and are written out of it by its next save.
  *
  * The file is `entities.sealed` beside `settings.json`, written whole
  * through a temporary file of its own (`writeSettingsFileAtomic`), sealed by
@@ -19,8 +23,8 @@
  * Keychain keeps (`xchacha-cipher.ts`), which seals straight to the file's
  * text; a host whose source hands no cipher, as a browser tab's, keeps none.
  * It names the account it was kept for, so a file of another account, or
- * one that will not open, is deleted and read as none. A store writes the
- * queues `QUEUE_SETTLE` after they move, at the moments the shell names
+ * one that will not open, is deleted and read as none. A store writes what
+ * it carries `QUEUE_SETTLE` after it moves, at the moments the shell names
  * where it names any (`KeptListsDue`, the phone's app going to the
  * background), and once more as it closes; a sign-out forgets it, which
  * deletes the file.
@@ -46,15 +50,15 @@ import type { SecretCipher } from "./settings-store.js";
 /** The sealed file, beside the settings file in the state root. */
 export const ENTITY_STORE_FILE_NAME = "entities.sealed";
 
-/** What the file names as its hash once it keeps no lists, which a build before reads as other row shapes and so reads its queues alone. */
-const NO_LISTS = "none";
-
 /**
- * How long a store waits once the writes waiting for the service moved
- * before it writes them, so a burst of them is written once. Note that it is
- * short, since they are what a crash would lose.
+ * How long a store waits once what it carries moved before it writes it, so
+ * a burst of moves is written once. Note that it is short, since what it
+ * carries is what a crash would lose.
  */
 const QUEUE_SETTLE = Duration.millis(500);
+
+/** What the file names as its hash once it keeps no lists, which a build before reads as other row shapes and so reads its queues alone. */
+const NO_LISTS = "none";
 
 /** A row write waiting for the service, as the engine hands it out: its name, its key, and its input in its declaration's kept form. */
 const queuedEntrySchema = Schema.Struct({
@@ -64,9 +68,10 @@ const queuedEntrySchema = Schema.Struct({
 });
 
 /**
- * What the file holds: whose it is, the writes waiting, and the messages
- * refused. Note that it still names a hash and the reads, kept empty, since
- * a build before reads its queues only from a file that names them.
+ * What the file holds: whose it is, the writes an older build kept waiting
+ * until they are imported, and the messages refused. Note that it still
+ * names a hash and the reads, kept empty, since a build before reads its
+ * queues only from a file that names them.
  */
 const keptSchema = Schema.Struct({
   hash: Schema.String,
@@ -81,14 +86,30 @@ type Kept = typeof keptSchema.Type;
 const decodeKept = Schema.decodeUnknownResult(Schema.fromJsonString(keptSchema));
 const encodeKept = Schema.encodeEffect(Schema.fromJsonString(keptSchema));
 
-/** The account's waiting writes as they were kept, written as they move. */
+/** The queues an older build kept in the account's file, carried until the local database imports them. */
 export interface EntityStore {
-  /** The row writes waiting for the service as the file held them when the store opened, oldest first. */
-  readonly queue: readonly QueuedEntry[];
-  /** The messages the service refused as the file held them when the store opened, each in the form its reader kept it in. */
-  readonly refused: readonly unknown[];
+  /** The row writes waiting for the service an older build kept in the account's own file, for the local database to import once; none where the file was there but would not read, so nothing is marked imported before it does. */
+  readonly queue: SealedWrites | undefined;
+  /** The messages the service refused an older build kept in the account's own file, for the local database to import once; none where the file was there but would not read. */
+  readonly refused: SealedRefusals | undefined;
   /** Deletes the file and keeps nothing more, as a sign-out does. */
   readonly forget: Effect.Effect<void>;
+}
+
+/** The row writes an older build kept waiting in the file: carried through every save until `imported`, then never written again. */
+export interface SealedWrites {
+  /** The writes as the file held them when the store opened, oldest first. */
+  readonly entries: readonly QueuedEntry[];
+  /** Tells the store the local database holds them now, so its next save, written soon, leaves them out. */
+  readonly imported: Effect.Effect<void>;
+}
+
+/** The messages the service refused an older build kept in the file: carried through every save until `imported`, then never written again. */
+export interface SealedRefusals {
+  /** As the file held them when the store opened, each in the form its reader kept it in. */
+  readonly entries: readonly unknown[];
+  /** Tells the store the local database holds them now, so its next save, written soon, leaves them out. */
+  readonly imported: Effect.Effect<void>;
 }
 
 export interface EntityStoreOptions {
@@ -96,16 +117,8 @@ export interface EntityStoreOptions {
   readonly directory: string;
   /** The account source's cipher, which seals the file. */
   readonly cipher: SecretCipher;
-  /** The account signed in, whose lists alone the file may hold. */
+  /** The account signed in, whose queues alone the file may hold. */
   readonly accountId: string;
-  /** The row writes waiting for the service now, oldest first, which every save keeps beside the lists. */
-  readonly queued?: () => readonly QueuedEntry[];
-  /** Each moving of `queued`, which has the store write them `QUEUE_SETTLE` later. */
-  readonly queueMoves?: Stream.Stream<void>;
-  /** The messages the service refused now, each in the form its reader keeps it in, which every save keeps beside the writes waiting. */
-  readonly refused?: () => readonly unknown[];
-  /** Each moving of `refused`, which has the store write them `QUEUE_SETTLE` later. */
-  readonly refusedMoves?: Stream.Stream<void>;
   /** Each moment the shell asks the store written (`KeptListsDue`), as the store closing does. */
   readonly listsDue?: Stream.Stream<void>;
 }
@@ -115,7 +128,7 @@ function sealedText(cipher: SecretCipher, plain: string): string {
   return cipher.sealText?.(plain) ?? Base64.encode(cipher.encrypt(plain));
 }
 
-/** The file's text opened and read as far as its account and its waiting writes, or none where it will not open or is not a store's. */
+/** The file's text opened and read as far as its account, its older waiting writes, and its messages refused, or none where it will not open or is not a store's. */
 function opened(cipher: SecretCipher, text: string): Kept | undefined {
   const sealed = text.trim();
   const { openText } = cipher;
@@ -149,8 +162,8 @@ export function forgetEntityStore(
 /**
  * The account's store for as long as the caller's scope stands: the file
  * read and opened, deleted where it is another account's or will not open;
- * the queues written `QUEUE_SETTLE` after they move, and once more as the
- * scope closes where they moved or the file still holds a build's lists,
+ * what it carries written `QUEUE_SETTLE` after it moves, and once more as
+ * the scope closes where it moved or the file still holds a build's lists,
  * unless it was forgotten.
  */
 export function openEntityStore(
@@ -159,47 +172,37 @@ export function openEntityStore(
   return Effect.gen(function* () {
     const { directory, cipher, accountId } = options;
     const services = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
-
-    const text = yield* Effect.orElseSucceed(
-      readSettingsFileText(directory, ENTITY_STORE_FILE_NAME),
-      () => undefined,
-    );
-
+    const textRead = yield* Effect.result(readSettingsFileText(directory, ENTITY_STORE_FILE_NAME));
+    const text = Result.getOrUndefined(textRead);
     const read = text === undefined ? undefined : opened(cipher, text);
     const ours = read !== undefined && read.accountId === accountId;
 
-    // Note that a file that is not this account's is deleted before anything reads it, so no other account's writes are ever sent.
+    // Note that a file that is not this account's, or will not open, is deleted before anything reads it, so no other account's writes are ever sent.
     if (text !== undefined && !ours) yield* removed(directory);
-    const queue: readonly QueuedEntry[] = ours ? (read.queue ?? []) : [];
-    const queued = options.queued ?? (() => queue);
+    const legacyQueue: readonly QueuedEntry[] = ours ? (read.queue ?? []) : [];
+    /** The older waiting writes each save still carries, until the local database imported them. */
+    let queueCarried = legacyQueue;
     const refusedKept: readonly unknown[] = ours ? (read.refused ?? []) : [];
-    const refusedNow = options.refused ?? (() => refusedKept);
-    /** What waits on the member or the service, the writes waiting and the messages refused, as one text a save compares. */
-    const waitingNow = () => JSON.stringify([queued(), refusedNow()]);
+    /** The older messages refused each save still carries, until the local database imported them. */
+    let refusedCarried = refusedKept;
+    /** What the store carries, as one text a save compares. */
+    const carriedNow = () => JSON.stringify([queueCarried, refusedCarried]);
     /** Whether the file still holds the lists a build before kept in it, which the next save, or the last, writes out. */
     let listsLeft = ours && read.hash !== NO_LISTS;
-    let savedQueue = JSON.stringify([queue, refusedKept]);
+    let savedText = carriedNow();
     let forgotten = false;
     const lock = yield* Semaphore.make(1);
 
     const save = (closing: boolean) =>
       lock.withPermits(1)(
         Effect.suspend(() => {
-          const waiting = queued();
-          const refused = refusedNow();
-          const waitingText = JSON.stringify([waiting, refused]);
+          const carried = carriedNow();
 
-          if (!((closing && listsLeft) || waitingText !== savedQueue) || forgotten) {
-            return Effect.void;
-          }
+          if (!((closing && listsLeft) || carried !== savedText) || forgotten) return Effect.void;
+          const queue = queueCarried.length > 0 ? { queue: queueCarried } : undefined;
+          const refused = refusedCarried.length > 0 ? { refused: refusedCarried } : undefined;
 
-          return encodeKept({
-            hash: NO_LISTS,
-            accountId,
-            reads: {},
-            queue: waiting,
-            refused,
-          }).pipe(
+          return encodeKept({ hash: NO_LISTS, accountId, reads: {}, ...queue, ...refused }).pipe(
             Effect.map((plain) => sealedText(cipher, plain)),
             Effect.flatMap((sealed) =>
               writeSettingsFileAtomic(directory, sealed, undefined, ENTITY_STORE_FILE_NAME),
@@ -208,7 +211,7 @@ export function openEntityStore(
             Effect.tap(() =>
               Effect.sync(() => {
                 listsLeft = false;
-                savedQueue = waitingText;
+                savedText = carried;
               }),
             ),
             // Note that a failure is logged by its kind alone, since a message's words may be among its message.
@@ -225,13 +228,13 @@ export function openEntityStore(
     const woken = Effect.asVoid(Queue.offer(wake, undefined));
 
     /**
-     * The saver: once the writes waiting moved, a save `QUEUE_SETTLE` later;
-     * otherwise asleep until woken. Note that it ends once the store is
-     * forgotten, since nothing it would save is kept.
+     * The saver: once what the store carries moved, a save `QUEUE_SETTLE`
+     * later; otherwise asleep until woken. Note that it ends once the store
+     * is forgotten, since nothing it would save is kept.
      */
     const saver = Effect.gen(function* () {
       while (!forgotten) {
-        if (waitingNow() === savedQueue) {
+        if (carriedNow() === savedText) {
           yield* Queue.take(wake);
           continue;
         }
@@ -241,22 +244,6 @@ export function openEntityStore(
         yield* save(false);
       }
     });
-
-    if (options.queueMoves !== undefined) {
-      yield* Effect.forkScoped(
-        Stream.runForEach(options.queueMoves, () => woken),
-        {
-          startImmediately: true,
-        },
-      );
-    }
-
-    if (options.refusedMoves !== undefined) {
-      yield* Effect.forkScoped(
-        Stream.runForEach(options.refusedMoves, () => woken),
-        { startImmediately: true },
-      );
-    }
 
     // Note that a moment the shell names writes the file as the store closing does, since the app may not run again before it is ended.
     if (options.listsDue !== undefined) {
@@ -270,8 +257,26 @@ export function openEntityStore(
     yield* Effect.addFinalizer(() => save(true));
 
     return {
-      queue,
-      refused: refusedKept,
+      queue: Result.isFailure(textRead)
+        ? undefined
+        : {
+            entries: legacyQueue,
+            imported: Effect.suspend(() => {
+              queueCarried = [];
+
+              return woken;
+            }),
+          },
+      refused: Result.isFailure(textRead)
+        ? undefined
+        : {
+            entries: refusedKept,
+            imported: Effect.suspend(() => {
+              refusedCarried = [];
+
+              return woken;
+            }),
+          },
       forget: lock.withPermits(1)(
         Effect.suspend(() => {
           forgotten = true;

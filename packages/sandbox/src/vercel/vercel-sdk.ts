@@ -231,6 +231,8 @@ const STOP_WAIT = {
   TRIES: 10,
   /** How long the stop and the reads may take together, a slow read among them, before the delete goes on with none. */
   DEADLINE: Duration.seconds(10),
+  /** How long one read of a sandbox's sessions before its delete may take, a resume's among them. */
+  READ: Duration.seconds(5),
 } as const;
 
 /** How a session Vercel lists ended, by its status; one still up, or on its way, ended in none. */
@@ -1025,9 +1027,17 @@ type DeleteCapture =
   | { readonly name: string; readonly sessions: readonly SandboxSession[] }
   | { readonly name: string; readonly unread: Refused };
 
-/** The named sandbox's sessions, ended or not, read before its delete; never throws, so a delete goes on whatever the read answered. */
+/**
+ * The named sandbox's sessions, ended or not, read before its delete;
+ * never throws, so a delete goes on whatever the read answered. Note that
+ * the read is cut off at `STOP_WAIT.READ` and answers unread, because a
+ * resume waits on it beside its lookups, and a stalled list must not stall
+ * every resume.
+ */
 function sessionsRead(name: string, under: Under, signal: AbortSignal): Promise<DeleteCapture> {
-  return sandboxSessions(name, under, signal).then(
+  const bounded = AbortSignal.any([signal, AbortSignal.timeout(Duration.toMillis(STOP_WAIT.READ))]);
+
+  return sandboxSessions(name, under, bounded).then(
     (sessions) => ({ name, sessions }),
     (cause: unknown) => ({ name, unread: sdkFailure(SANDBOX_CALL.SESSIONS, cause) }),
   );

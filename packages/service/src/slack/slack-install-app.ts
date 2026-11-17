@@ -22,13 +22,11 @@
  * answers the bot's own id, as Bolt's installer reads it. An install into a
  * whole Enterprise Grid org names no team, and is refused as not completed.
  *
- * The address travels where anyone could hand it to someone else, so the
- * Slack user who approved the install (`authed_user`) must be the member who
- * began it: the member's own email, looked up in the team on the new token
- * (`users.lookupByEmail`), must find that same Slack user, or the install is
- * refused as not permitted and nothing is kept. Only then is the team linked
- * to the workspace as Connect links it (`linkSlackInstallation`) and the bot
- * token sealed beside it (`saveSlackBotToken`), in one transaction.
+ * Slack's guide asks nothing of who approves the install beyond Slack's own
+ * check that they may install apps in that Slack workspace, so neither do
+ * we: the member who began it must still manage the workspace, and the
+ * team is then linked to the workspace (`linkSlackInstallation`) and the bot token sealed beside it
+ * (`saveSlackBotToken`), in one transaction.
  *
  * The token and the code are used here and sealed or dropped; neither is
  * logged, and a failure is logged by Slack's error code alone. Whatever
@@ -62,7 +60,6 @@ import {
   HttpServerResponse,
 } from "effect/http";
 import { SqlClient } from "effect/sql";
-import { readAccountPerson } from "../accounts/account-person.js";
 import type { HostedEnvironment } from "../environment.js";
 import {
   type HostedRefusal,
@@ -98,16 +95,12 @@ const CALLBACK_QUERY = {
 const SLACK_METHOD = {
   OAUTH_V2_ACCESS: "oauth.v2.access",
   AUTH_TEST: "auth.test",
-  USERS_LOOKUP_BY_EMAIL: "users.lookupByEmail",
 } as const;
 
 type SlackMethod = (typeof SLACK_METHOD)[keyof typeof SLACK_METHOD];
 
 /** Slack's `error` on the Redirect URL where the person canceled the install. */
 const SLACK_ACCESS_DENIED = "access_denied";
-
-/** Slack's error code for an email that matches no one in the team. */
-const SLACK_USERS_NOT_FOUND = "users_not_found";
 
 /** Slack's error code as a log line may keep it: a short slug, and nothing shaped like a sentence or a token. */
 const SLACK_CODE_PATTERN = /^[a-z][a-z0-9_]{0,62}$/u;
@@ -135,16 +128,12 @@ const AccessSchema = Schema.Struct({
   team: Schema.NullOr(Schema.Struct({ id: Schema.String, name: Schema.String })),
   enterprise: Schema.NullOr(Schema.Struct({ id: Schema.String })),
   is_enterprise_install: Schema.Boolean,
-  authed_user: Schema.Struct({ id: Schema.String }),
 });
 
 type SlackAccess = typeof AccessSchema.Type;
 
 /** `auth.test`'s answer on the bot's token: the bot's own id. */
 const AuthTestSchema = Schema.Struct({ bot_id: Schema.String });
-
-/** `users.lookupByEmail`'s answer: the Slack user the email names. */
-const LookupSchema = Schema.Struct({ user: Schema.Struct({ id: Schema.String }) });
 
 /** Why Slack did not grant an install: it refused, by its error code where it gave one, or did not answer. */
 class SlackInstallFailure extends Data.TaggedError("SlackInstallFailure")<{
@@ -259,32 +248,6 @@ function exchangeCode(settings: SlackAppSettings, code: string, redirectUri: str
   );
 }
 
-/** Whether the member's own email finds, in the team, the Slack user who approved the install. */
-const installedByMember = Effect.fn("web/slackInstalledByMember")(function* (
-  userId: string,
-  token: Redacted.Redacted<string>,
-  installerId: string,
-) {
-  const email = (yield* hostedStoreOrUnavailable(readAccountPerson(userId)))?.email;
-
-  if (email === undefined) return false;
-
-  const found = yield* slackCall(
-    SLACK_METHOD.USERS_LOOKUP_BY_EMAIL,
-    { email },
-    LookupSchema,
-    CALL_AUTH.bot(token),
-  ).pipe(
-    Effect.map((answer) => Option.some(answer.user.id)),
-    Effect.catchIf(
-      (failure) => failure.code === SLACK_USERS_NOT_FOUND,
-      () => Effect.succeedNone,
-    ),
-  );
-
-  return Option.contains(found, installerId);
-});
-
 /** The team linked to the workspace and the bot token sealed beside it, in one transaction. */
 const keepInstall = Effect.fn("web/slackKeepInstall")(function* (
   userId: string,
@@ -323,9 +286,9 @@ const keepInstall = Effect.fn("web/slackKeepInstall")(function* (
 });
 
 /**
- * The grant proven and kept: the code exchanged, the bot's id read, the
- * installer confirmed as the member, and the install kept; a refusal at
- * Slack lands as not completed, and no answer as unavailable.
+ * The grant proven and kept: the code exchanged, the bot's id read, and the
+ * install kept; a refusal at Slack lands as not completed, and no answer as
+ * unavailable.
  */
 const grantedLanding = Effect.fn("web/slackGrantedLanding")(function* (
   settings: SlackAppSettings,
@@ -349,10 +312,6 @@ const grantedLanding = Effect.fn("web/slackGrantedLanding")(function* (
 
   const token = Redacted.make(access.access_token);
   const bot = yield* slackCall(SLACK_METHOD.AUTH_TEST, {}, AuthTestSchema, CALL_AUTH.bot(token));
-
-  if (!(yield* installedByMember(userId, token, access.authed_user.id))) {
-    return INTEGRATION_LANDING_STATUS.NOT_PERMITTED;
-  }
 
   const saved = yield* keepInstall(userId, organizationId, access, access.team, bot.bot_id);
 

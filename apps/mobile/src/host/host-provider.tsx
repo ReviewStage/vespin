@@ -19,6 +19,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { crashReportsErrorReporting, reportHostFailure } from "../crash-reports.js";
+import { noteHostStarting, noteHostStood } from "../launch-phases.js";
 import { HostFailedScreen, HostStartingScreen } from "../screens/host-failed.js";
 import { releaseSplashAfterFrame } from "../splash.js";
 import { followAppStateInto } from "./app-state-query.js";
@@ -224,6 +225,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
     let started: StandingMobileHost | undefined;
     let stopFollowing: (() => void) | undefined;
     setStanding(undefined);
+    noteHostStarting();
     startMobileHost(launchOptions()).then(
       async (host) => {
         started = host;
@@ -241,6 +243,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
         }
 
         if (live) {
+          noteHostStood();
           setStanding({
             client,
             taskList: following.taskList,

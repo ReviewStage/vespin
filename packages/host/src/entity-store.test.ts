@@ -2,18 +2,16 @@ import assert from "node:assert/strict";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
-import { entityPool, type FieldChange, fieldKind, type WriteDeclaration } from "@repo/sync";
-import { Effect, Exit, Layer, Path, PubSub, Result, Schema, Scope, Stream } from "effect";
+import { Effect, Exit, Layer, Path, Result, Scope } from "effect";
 import { Base64 } from "effect/encoding";
 import * as FileSystem from "effect/FileSystem";
-import { TestClock } from "effect/testing";
 import { ENTITY_STORE_FILE_NAME, openEntityStore } from "./entity-store.js";
 import { testCipher } from "./testing/test-cipher.js";
 
 /**
- * The account's waiting writes kept on disk, over a state root of the test's
- * own and a cipher standing in for the Keychain's: what a store kept comes
- * back to the same account alone. Synthetic accounts and rows throughout.
+ * The queues an older build kept on disk, over a state root of the test's
+ * own and a cipher standing in for the Keychain's: carried until the local
+ * database imports them. Synthetic accounts and rows throughout.
  */
 
 const DANA = "user-dana";
@@ -46,90 +44,49 @@ const openedText = (directory: string) =>
     return testCipher().decrypt(Result.getOrThrow(Base64.decode(sealed)));
   });
 
-/** The sealed file's text once a save has written it. */
-const writtenText = (directory: string) =>
-  Effect.gen(function* () {
-    const fileSystem = yield* FileSystem.FileSystem;
-    const file = yield* fileOf(directory);
-    // Note that the write is the disk's own, which no test clock moves, so the test waits on the file itself.
-    yield* Effect.repeat(fileSystem.exists(file), { until: (exists) => exists, times: 10_000 });
-
-    return yield* fileSystem.readFileString(file);
-  });
-
-/** A plan's row as the waiting write below renames it. */
-interface Row {
-  readonly id: string;
-  readonly name: string;
-}
-
-it.effect("a write waiting for the service is written within half a second of its queuing", () =>
-  Effect.gen(function* () {
-    const directory = yield* temporaryDirectoryScoped("entity-store-");
-    const pool = yield* entityPool({ mintKey: () => "rename-1", replayRefused: Effect.void });
-
-    const rename: WriteDeclaration<Row, FieldChange<Row>, string, string> = {
-      kind: fieldKind((row: Row) => row.id),
-      keys: () => ["1"],
-      change: (name) => () => ({ name }),
-      send: () => Effect.succeed({ refused: "unreachable", unanswered: true as const }),
-      queue: { name: "plans.rename", input: Schema.String, queued: () => "waits" },
-    };
-
-    const scope = yield* Scope.make();
-    yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
-    yield* Scope.provide(scope)(
-      openEntityStore({
-        directory,
-        cipher: testCipher(),
-        accountId: DANA,
-        queued: pool.queued,
-        queueMoves: pool.queueMoves,
-      }),
-    );
-    yield* pool.write(rename, "Invites");
-
-    yield* TestClock.adjust("500 millis");
-    yield* writtenText(directory);
-
-    assert.deepEqual(JSON.parse(yield* openedText(directory)).queue, [
-      { name: "plans.rename", key: "rename-1", input: "Invites" },
-    ]);
-  }).pipe(Effect.provide(files)),
-);
-
 it.effect(
-  "the messages refused are written within half a second of moving, and read back at the next launch by the same account alone",
+  "the writes an older build kept waiting are carried through every save until the local database imported them",
   () =>
     Effect.gen(function* () {
       const directory = yield* temporaryDirectoryScoped("entity-store-");
-      const moves = yield* PubSub.unbounded<void>();
-      let refused: readonly unknown[] = [];
-      const scope = yield* Scope.make();
+      const waiting = [{ name: "tasks.rename", key: "rename-old", input: { taskId: "t1" } }];
+      const kept = { hash: "an older build's", accountId: DANA, reads: {}, queue: waiting };
+      const sealed = Base64.encode(testCipher().encrypt(JSON.stringify(kept)));
+      yield* (yield* FileSystem.FileSystem).writeFileString(yield* fileOf(directory), sealed);
 
-      yield* Scope.provide(scope)(
-        openEntityStore({
-          directory,
-          cipher: testCipher(),
-          accountId: DANA,
-          refused: () => refused,
-          refusedMoves: Stream.fromPubSub(moves),
-        }),
-      );
+      // Note that the file still names an older build's hash, so the first quit writes it again.
+      const upgraded = yield* opened(directory, DANA);
+      yield* upgraded.closed;
 
-      yield* Effect.yieldNow;
-      refused = [{ id: "line-1", text: "Rebase on main" }];
-      yield* PubSub.publish(moves, undefined);
-      yield* TestClock.adjust("500 millis");
-      yield* writtenText(directory);
-      yield* Scope.close(scope, Exit.void);
+      const imported = yield* opened(directory, DANA);
+      const queue = imported.store.queue;
+      assert.ok(queue, "a file that read hands out its queue");
+      yield* queue.imported;
+      yield* imported.closed;
 
-      const again = yield* opened(directory, DANA);
-      assert.deepEqual(again.store.refused, refused);
-      yield* again.closed;
+      const after = yield* opened(directory, DANA);
+      yield* after.closed;
 
-      const another = yield* opened(directory, "user-ravi");
-      assert.deepEqual(another.store.refused, []);
-      yield* another.closed;
+      assert.deepEqual(queue.entries, waiting);
+      assert.deepEqual(after.store.queue?.entries, []);
+    }).pipe(Effect.provide(files)),
+);
+
+it.effect(
+  "the messages refused an older build kept are handed out until the local database takes them, and the file is then written without them",
+  () =>
+    Effect.gen(function* () {
+      const directory = yield* temporaryDirectoryScoped("entity-store-");
+      const refused = [{ id: "line-1", text: "Rebase on main" }];
+      const kept = { hash: "an older build's", accountId: DANA, reads: {}, refused };
+      const sealed = Base64.encode(testCipher().encrypt(JSON.stringify(kept)));
+      yield* (yield* FileSystem.FileSystem).writeFileString(yield* fileOf(directory), sealed);
+
+      const upgraded = yield* opened(directory, DANA);
+      assert.deepEqual(upgraded.store.refused?.entries, refused);
+      yield* upgraded.store.refused?.imported ?? Effect.void;
+      yield* upgraded.closed;
+
+      assert.equal("refused" in JSON.parse(yield* openedText(directory)), false);
     }).pipe(Effect.provide(files)),
 );

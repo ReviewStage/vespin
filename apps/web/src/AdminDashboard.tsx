@@ -18,6 +18,7 @@ import {
 } from "@repo/panel/admin/routing";
 import { AccountScreen } from "@repo/panel/admin/screens/account";
 import { AgentsScreen } from "@repo/panel/admin/screens/agents";
+import { BillingScreen } from "@repo/panel/admin/screens/billing";
 import { CostScreen } from "@repo/panel/admin/screens/cost";
 import { DashboardScreen } from "@repo/panel/admin/screens/dashboard";
 import { DayScreen } from "@repo/panel/admin/screens/day";
@@ -215,6 +216,17 @@ function AdminDashboardPage(): React.JSX.Element {
         onSignOut={signOut}
         onOpenAccount={openAccount}
         frame={(content) => shell(ADMIN_TAB.COST, content)}
+      />
+    );
+  }
+
+  if (view.kind === ADMIN_TAB.BILLING) {
+    return (
+      <BillingScreen
+        account={viewer}
+        onSignOut={signOut}
+        onOpenWorkspace={openWorkspace}
+        frame={(content) => shell(ADMIN_TAB.BILLING, content)}
       />
     );
   }

@@ -23,16 +23,22 @@ import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, type LinkDestination, taskLinkStep } from "@repo/features/link-grammar";
 import { TASK_REGION } from "@repo/features/tasks-model";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
+import { SETTINGS_PAGE_TITLE } from "@repo/settings/settings-views";
 import type { StripTab } from "@repo/ui/tab-strip-model";
 import { type HistoryLocation, useRouter } from "@tanstack/react-router";
 import { useMemo, useSyncExternalStore } from "react";
-import { adminLinkFields } from "../admin/routing.js";
+import { adminLinkFields, adminViewWords } from "../admin/routing.js";
 import {
+  ADMIN_WORDS,
+  AUTOMATION_RUNS_WORDS,
+  AUTOMATIONS_WORDS,
   HOME_WORDS,
   INBOX_WORDS,
   MERGE_QUEUE_WORDS,
   NAMED_STEP,
   type NamedStep,
+  NEW_AUTOMATION_WORDS,
+  SETTINGS_WORDS,
   type StepTitleTasks,
   taskName,
   VERSION_HISTORY_WORDS,
@@ -57,7 +63,7 @@ import {
   workspaceRouteStands,
 } from "../route-gates.js";
 import type { TaskListRows } from "../task-list-collections.js";
-import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import { stripTabSurface } from "../tasks/strip-tab-kinds.js";
 import { MAIN_TAB } from "../tasks/task-tab-model.js";
 import type { MainTab } from "../tasks/use-main-tabs.js";
@@ -203,6 +209,27 @@ function listedChoiceTask(
   return tasks.rows.task(chosen.taskId)?.workspaceId === listedId ? chosen.taskId : undefined;
 }
 
+/** What an Automations page's step says under its name: the runs tab's word, a new automation's, or the automation's own name once read; nothing for the list. */
+function automationsDetail(place: AutomationsPlace, views: RoutedViews): string | undefined {
+  switch (place.kind) {
+    case AUTOMATIONS_PAGE.RUNS:
+      return AUTOMATION_RUNS_WORDS;
+    case AUTOMATIONS_PAGE.NEW:
+      return NEW_AUTOMATION_WORDS;
+    case AUTOMATIONS_PAGE.EDIT:
+      return views.automationName;
+    default:
+      return undefined;
+  }
+}
+
+/** What an Automations page's step is called: the pages' name, over what `automationsDetail` says of the page standing. */
+function automationsTitle(place: AutomationsPlace, views: RoutedViews): StepTitle {
+  const detail = automationsDetail(place, views);
+
+  return detail === undefined ? { label: AUTOMATIONS_WORDS } : { label: AUTOMATIONS_WORDS, detail };
+}
+
 function noDraft(): undefined {
   return undefined;
 }
@@ -296,7 +323,11 @@ export const ROUTED_PLACE = {
     overThePlan: false,
     inTaskPlace: false,
     listedOnly: false,
-    title: () => ({ label: "Settings" }),
+    // A page is named under Settings, so its pages' steps read apart; its page list by Settings alone.
+    title: (_tasks, _under, views) =>
+      views.settings === undefined
+        ? { label: SETTINGS_WORDS }
+        : { label: SETTINGS_WORDS, detail: SETTINGS_PAGE_TITLE[views.settings] },
     named: () => undefined,
     links: ({ tasks, at, listed, under }) => {
       if (at.settings === undefined) return under();
@@ -325,8 +356,11 @@ export const ROUTED_PLACE = {
     overThePlan: false,
     inTaskPlace: false,
     listedOnly: false,
-    // Note that Admin's step is named as the place the window's state holds under it, as it was while Admin stood in for that place.
-    title: (_tasks, under) => under(),
+    // A view is named under Admin, so its sections' and pages' steps read apart.
+    title: (_tasks, under, views) =>
+      views.admin === undefined
+        ? under()
+        : { label: ADMIN_WORDS, detail: adminViewWords(views.admin) },
     named: () => undefined,
     // Its workspace is only the one listed, since the place reads every workspace's accounts.
     links: ({ at, listed, under }) => {
@@ -414,7 +448,7 @@ export const ROUTED_PLACE = {
     inTaskPlace: false,
     listedOnly: true,
     title: (_tasks, under, views) =>
-      views.automations === undefined ? under() : { label: "Automations" },
+      views.automations === undefined ? under() : automationsTitle(views.automations, views),
     named: () => undefined,
     links: ({ views, listed, under }) => {
       const place = views.automations;

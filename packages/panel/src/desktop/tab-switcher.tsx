@@ -49,6 +49,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND, commandForKey } from "@repo/settings/shortcuts";
 import { createWait, DIALOG_SIZE, Dialog, TabCard, TabCards, VisuallyHidden } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Effect } from "effect";
 import { HistoryIcon } from "lucide-react";
@@ -57,7 +58,15 @@ import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { overlayHoldsKeyboard, useAppCommand, useOverlayHold } from "../app-commands.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
-import { HOME_WORDS, INBOX_WORDS, VERSION_HISTORY_WORDS } from "../history-titles.js";
+import {
+  ADMIN_WORDS,
+  AUTOMATIONS_WORDS,
+  HOME_WORDS,
+  INBOX_WORDS,
+  MERGE_QUEUE_WORDS,
+  SETTINGS_WORDS,
+  VERSION_HISTORY_WORDS,
+} from "../history-titles.js";
 import { MemberDirectory, usePerson } from "../member-directory.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import type { TaskStep } from "../places/task-step.js";
@@ -113,10 +122,14 @@ const PLACE_LOOKS: ReadonlyMap<
   [ROUTED_PLACE.BOARD, { icon: <EntityGlyph kind={ENTITY_KIND.BOARD} />, word: "Tasks" }],
   [
     ROUTED_PLACE.AUTOMATIONS,
-    { icon: <EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />, word: "Automations" },
+    { icon: <EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />, word: AUTOMATIONS_WORDS },
   ],
-  [ROUTED_PLACE.SETTINGS, { icon: <EntityGlyph kind={ENTITY_KIND.SETTINGS} />, word: "Settings" }],
-  [ROUTED_PLACE.ADMIN, { icon: <EntityGlyph kind={ENTITY_KIND.ADMIN} />, word: "Admin" }],
+  [
+    ROUTED_PLACE.SETTINGS,
+    { icon: <EntityGlyph kind={ENTITY_KIND.SETTINGS} />, word: SETTINGS_WORDS },
+  ],
+  [ROUTED_PLACE.ADMIN, { icon: <EntityGlyph kind={ENTITY_KIND.ADMIN} />, word: ADMIN_WORDS }],
+  [ROUTED_PLACE.MERGE_QUEUE, { icon: <GLYPH.QUEUED />, word: MERGE_QUEUE_WORDS }],
   [ROUTED_PLACE.VERSION_HISTORY, { icon: <HistoryIcon />, word: VERSION_HISTORY_WORDS }],
 ]);
 

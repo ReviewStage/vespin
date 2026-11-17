@@ -271,13 +271,15 @@ export function followAccountItems(
       let held: Held | undefined;
       /** The items as last drawn, a standing write's among them, by the plan each is on. */
       let told = NO_ITEMS;
+      /** Whether the items drawn are still the store's, before the read's first answer took their place. */
+      let drawnFromStore = false;
 
-      /** Tells the items as last drawn, once the read first answered or the store's were drawn. */
+      /** Tells the items as last drawn, once the read first answered or the store's were drawn, marked kept while they are still the store's. */
       const toldNow = Effect.suspend(() => {
         if (held === undefined) return Effect.void;
         answered = true;
 
-        return tell({ rows: told });
+        return tell(drawnFromStore ? { rows: told, kept: true } : { rows: told });
       });
 
       /** Draws the items `ids` names again, a write standing over them, on the plans the read answered them on. */
@@ -333,6 +335,7 @@ export function followAccountItems(
         const fromStore = heldOfKept(stored, kept);
         withinWindow(fromStore, yield* Clock.currentTimeMillis);
         held = fromStore;
+        drawnFromStore = true;
         told = inboxItemsPatched(told, fromStore.keys(), new Map(), fromStore, items.row);
         yield* toldNow;
       }
@@ -351,6 +354,7 @@ export function followAccountItems(
 
       const landed = (decoded: AccountInboxItemsLiveRows, standing?: SyncStanding) =>
         Effect.gen(function* () {
+          drawnFromStore = false;
           const was = held ?? new Map<string, HeldItem>();
           const after = heldAfter(was, decoded, standing, yield* Clock.currentTimeMillis);
           yield* taken(was, after.held, after.sent, after.placed, standing);

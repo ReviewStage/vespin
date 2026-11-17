@@ -137,9 +137,14 @@ out, goes to the agent's model and into its transcript. Where you connect more
 than one account at a service, a call your agent makes keeps the display name
 of the account it ran on (which can be an email address), and anyone who can
 open the task sees it beside the call. If your workspace
-connects Vespin's Slack bot, we store your Slack user id, and messages you send
-the bot, with the earlier messages of that Slack thread, are handed to an
-agent. If you allow an app such as Claude Code or Cursor to connect to our MCP
+adds Vespin's Slack bot to its Slack, we store the bot token Slack grants that
+install, encrypted the same way as the credentials you save (see Credentials
+you save above), with the Slack team's id and name, the bot's own Slack ids,
+and the scopes it was granted; we delete them when the workspace disconnects
+the bot, when the app is uninstalled from that Slack or its token revoked
+there, and with the workspace. The bot also keeps your Slack user id, and
+messages you send the bot, with the earlier messages of that Slack thread, are
+handed to an agent. If you allow an app such as Claude Code or Cursor to connect to our MCP
 server, we store a record of the app, your consent, and hashed tokens.
 
 ### Commands on your Mac
@@ -246,7 +251,11 @@ screen you open (the Inbox, a thread, a task, an agent, a page, a pull
 request, or Settings) and whether the window showed one column or two, never
 which thread, task, or agent it was, and, once each time it opens, how long
 it took to show your Inbox, rounded down to a step (under a second, then 1,
-2, 3, 5, 8, 13, or 20 seconds or more), never how many threads it held, and,
+2, 3, 5, 8, 13, or 20 seconds or more), never how many threads it held,
+with how long the app took to start before it, on the same steps, whether
+the lists it keeps on the phone were there to draw from, dropped by an
+update, or missing, whether the Inbox first showed those kept threads or
+the Service's answer, and the app's build number, and,
 each time you send a reply in a thread, how long it took to show in the
 thread, rounded down to a step (under 0.1 seconds, then 0.1, 0.2, 0.3, 0.5,
 0.8, 1.3, 2, 3, or 5 seconds or more), and whether it carried pictures, never
@@ -442,13 +451,11 @@ Protection, and deletes it when you sign out. Your sign-in tokens are still
 kept encrypted under a key in the macOS Keychain, or in the iPhone's
 Keychain, which never leaves that iPhone.
 
-The app draws your lists from the database. Until a coming release moves
-them there too, it also keeps your waiting changes and undelivered messages
-in an older file, `entities.sealed`, encrypted under a key in the Keychain,
-and deletes it when you sign out; the lists a build before kept in that file
-are written out of it the first time it is saved again. When that release
-switches over, it moves your waiting changes and undelivered messages from
-the file into the database and deletes the file. Transcripts
+An older build kept the same lists, waiting changes, and undelivered
+messages in one file, `entities.sealed`, encrypted under a key in the
+Keychain. The app moves the waiting changes and undelivered messages from
+it into the database once, writes the lists out of it, and deletes the file
+when you sign out; a coming release deletes it for good. Transcripts
 and pictures you open are held in memory only.
 
 ### Spotlight and Handoff on your iPhone

@@ -6,6 +6,7 @@ import {
   useImperativeHandle,
   useLayoutEffect,
   useRef,
+  useState,
 } from "react";
 import { isComposingKey } from "../../composing-key.js";
 import { said } from "../../said.js";
@@ -41,7 +42,8 @@ import { Tooltip } from "../tooltip/hint.js";
  * A group that folds (`fold`) is pressed on its head, which says whether the
  * group stands open in `aria-expanded`. The fold is a Disclosure's
  * (`useDisclosureFold`): a press that opens unrolls the rows as they fade in,
- * a press that closes fades them out before they leave the layout, and the
+ * a press that closes rolls them up as they fade, the rows it last drew held
+ * through that exit though its holder hands none once folded, and the
  * chevron is the Disclosure's own, turning on the one turn every fold makes
  * (disclosure.css), all timed on the motion tokens reduced motion zeroes. The
  * glyph gives way to the chevron while the head is hovered or has the
@@ -536,13 +538,20 @@ export function GroupHeader({
   // Note that a group with no head has nothing to press, so it folds nothing.
   const folds = fold !== undefined && headed;
 
+  // Note that a group leaving rows standing once folded fades its rows where they stand, so what stands under it moves once, by what the standing rows leave.
   const { state, details } = useDisclosureFold(
     fold !== undefined && "defaultOpen" in fold ? fold.defaultOpen : true,
     fold !== undefined && "open" in fold ? fold : undefined,
+    !said(standing),
   );
 
+  // Note that the rows a fold last drew are held through its exit, because a holder that hands none the moment it folds would take them out before they fade.
+  const [drewn, setDrewn] = useState(children);
+
+  if (folds && state.open && drewn !== children) setDrewn(children);
+  const body = folds && !state.open ? drewn : children;
   // Note that a group with no rows draws no body, so its fold names none.
-  const rows = (!folds || state.drawn) && said(children);
+  const rows = (!folds || state.drawn) && said(body);
   const Heading = heading;
 
   // Note that a narrow column counts an open group only under the pointer, because its head has no room to spare for a figure at rest.
@@ -635,7 +644,7 @@ export function GroupHeader({
             data-inset="none"
             inert={folds && state.leaving}
           >
-            {children}
+            {body}
           </div>
         ) : null}
         {folds && !state.drawn && said(standing) ? standing : null}

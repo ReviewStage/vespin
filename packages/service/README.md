@@ -374,9 +374,15 @@ variables above for every environment that receives its deliveries.
 ## The Vespin Slack bot
 
 Vespin's own Slack bot writes to a workspace's members in Slack. It is our
-own Slack app, apart from the Slack connector each member connects for their
-agents (`SLACK_CONNECTOR_UID`), installed in each workspace's Slack team, whose
-install grants that workspace its own bot token, kept sealed in
+own Slack app ("Vespin"), apart from the Slack connector each member connects
+for their agents (`SLACK_CONNECTOR_UID`). An owner or admin adds it to the
+workspace's Slack team with Add to Slack under Settings › Workspace › Slack
+bot, Slack's OAuth v2 (https://docs.slack.dev/authentication/installing-with-oauth/):
+the hosted procedure (`installSlackBot`) answers Slack's authorize address,
+asking for the bot scopes `SLACK_BOT_SCOPES` lists and no user scope, and
+Slack returns the browser to `/api/slack/oauth/callback`
+(`src/slack/slack-install-app.ts`), which exchanges the code
+(`oauth.v2.access`). Each install grants that workspace its own bot token, kept sealed in
 `slack_installation` under `PROVIDER_KEY_ENCRYPTION_KEYS`, one per workspace;
 Disconnect deletes it. `src/slack/slack-bot.ts`'s `SlackBot.forWorkspace`
 opens the workspace's token for each piece of work, and every call made for
@@ -412,8 +418,7 @@ or else by the email Slack holds for them (`users.info`). The bot reacts to
 the message with 👀 (`eyes`), replying in the thread only to refuse, the
 thread is kept against the agent in `slack_agent_thread`, a later mention in
 that thread is sent to the agent instead, and every settled turn of the agent
-is posted back in the thread once, with the agent's link (`SettledTurnListener`). The Slack app must
-subscribe to the `app_mention` and `message.im` bot events.
+is posted back in the thread once, with the agent's link (`SettledTurnListener`).
 
 Slack sends our app's requests, events and interactivity alike, straight to
 `/api/slack/events`, signed with the app's signing secret
@@ -426,8 +431,36 @@ challenge, and an `app_uninstalled` event, or a `tokens_revoked` event that
 names a bot token, deletes the installation of every workspace connected to
 that team, with its bot token and its members' Slack ids, unless it was linked
 after the event's `event_time`, so a late or repeated delivery never takes a
-reinstall. The Slack app must
-also subscribe to those two events.
+reinstall. Every other event is acknowledged unread.
+
+**Setting up the Slack app.** The app lives at `https://api.slack.com/apps`,
+and its manifest (https://docs.slack.dev/reference/app-manifest/) holds:
+
+- Three variables from its Basic Information, for every environment Slack
+  reaches (`SLACK_APP_ENVIRONMENT`, `src/slack/slack-app.ts`):
+  `SLACK_APP_CLIENT_ID` and `SLACK_APP_CLIENT_SECRET`, its App Credentials,
+  which Add to Slack and the code exchange read, and
+  `SLACK_APP_SIGNING_SECRET`, which the events route checks. A deployment
+  missing one still builds: Add to Slack answers unavailable without all
+  three, and the events route without the signing secret.
+- `oauth_config.redirect_urls`: `https://<deployment>/api/slack/oauth/callback`,
+  which must match the `redirect_uri` an install sends.
+- `oauth_config.scopes.bot`: exactly `SLACK_BOT_SCOPES`, since an install
+  asks for that list.
+- `settings.event_subscriptions.request_url`:
+  `https://<deployment>/api/slack/events`, which Slack verifies with its
+  `url_verification` challenge, and the bot events `app_mention`,
+  `message.im`, `reaction_added`, `app_uninstalled`, `tokens_revoked`, and
+  `app_home_opened`
+  (https://docs.slack.dev/reference/events/).
+- `settings.interactivity`: `is_enabled` set to `true`, which Slack requires
+  with any interactivity setting, and `request_url` the same
+  `https://<deployment>/api/slack/events`, where an ask's buttons arrive as
+  `block_actions`.
+- `features.agent_view`, the Agent messaging experience, in which a
+  member's conversation with the bot happens in the app's Messages tab;
+  the older `features.assistant_view` cannot be chosen by a new app, and a
+  switch to `agent_view` cannot be undone.
 
 An owner or admin names the repository a Slack start defaults to under
 Settings › Workspace › Slack bot (`POST /api/workspaces/slack-bot/repository`,

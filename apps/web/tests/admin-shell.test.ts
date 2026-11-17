@@ -188,6 +188,7 @@ test("one sidebar lists the measures", async () => {
   expect(sectionNames(sidebar)).toEqual([
     "Overview",
     "Cost",
+    "Billing",
     "Reliability",
     "Agents",
     "Tools",

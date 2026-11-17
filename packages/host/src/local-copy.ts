@@ -1,7 +1,6 @@
 /**
- * local-copy.ts -- the signed-in account's local database as the sync engine's store: opened at sign-in, written as the pool answers and its writes wait, read back as each kept read first stands, and deleted at sign-out.
+ * local-copy.ts -- the signed-in account's local database as the sync engine's store: opened at sign-in, written as the pool answers and its writes wait, read back as each kept read first stands and as its waiting writes and refused agent messages are laid over the pool, and deleted at sign-out.
  *
- * This is the shadow release of the local database (`local-database.ts`).
  * The pool is handed one store for its life (`PoolOptions.store`), which
  * forwards to the database open now and does nothing while none is, so a
  * sign-in opens it without rebuilding the pool. Its kept reads' answers go
@@ -11,28 +10,50 @@
  * Each kept read draws from it as it first stands (`loaded`), before the
  * service answers, as Linear's local bootstrap does, and its follow reads
  * past the cursor it kept; a read stood while none is open loads nothing.
- * The queues are still laid back from `entities.sealed`. A database that
- * will not open leaves the store doing nothing for that sign-in, and the failure is reported to Sentry by its
- * tag and its cause's kind, never by a row or a path, which is what the
- * release's gate reads.
+ *
+ * The outbox is the only place waiting writes are kept: an open answers
+ * them oldest first, for the caller to lay back over the pool (`requeue`)
+ * before any read draws, having imported once the queue an older build
+ * kept in `entities.sealed`. A database that will not open leaves the store doing
+ * nothing for that sign-in and answers the sealed queue, which the file
+ * goes on carrying until a database imports it, so this launch
+ * still sends it, and the failure is reported to Sentry by its tag and its
+ * cause's kind, never by a row or a path, which is what the release's gate
+ * reads.
+ *
+ * The `refused` table is likewise the only place the agent messages the
+ * service refused are kept: an open lays back what it holds, and the first
+ * open whose table holds none takes the ones an older build kept in
+ * `entities.sealed` (`sealed.refused`), telling the file to drop them only
+ * once the table reads them all back. Where the database will not open, or
+ * its table will not read, they are laid back from the file and kept in
+ * memory for that launch alone, as the waiting writes are.
  */
 
 import { failureKind, reportUnexpected } from "@repo/runtime/effect";
 import type { KeptAnswer, OutboxStore, PoolStore, QueuedEntry, RowsStore } from "@repo/sync";
 import { Effect, Exit, type Path, Result, Scope, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
+import type { SealedRefusals, SealedWrites } from "./entity-store.js";
 import {
   forgetLocalDatabase,
   type LocalDatabaseDriver,
   type LocalDatabaseFailed,
   openLocalDatabase,
 } from "./local-database.js";
-import { localOutbox, localRefused } from "./local-queues.js";
+import {
+  type LocalQueueReadFailed,
+  type LocalRefused,
+  localOutbox,
+  localRefused,
+} from "./local-queues.js";
 import { localRows } from "./local-rows.js";
 
-/** What Sentry is told of a local database that would not open or be deleted. */
+/** What Sentry is told of a local database that would not open, read a queue back, or be deleted. */
 const LOCAL_DATABASE_REPORT = {
   OPEN_FAILED: "host.localDatabase.openFailed",
+  OUTBOX_UNREAD: "host.localDatabase.outboxUnread",
+  REFUSED_UNREAD: "host.localDatabase.refusedUnread",
   FORGET_FAILED: "host.localDatabase.forgetFailed",
 } as const;
 
@@ -42,14 +63,36 @@ export interface RefusedMessages {
   readonly kept: () => readonly unknown[];
   /** Each moving of them. */
   readonly moves: Stream.Stream<void>;
+  /** `account`'s, as they were kept, laid back. */
+  readonly restored: (account: string, kept: readonly unknown[]) => Effect.Effect<void>;
+}
+
+/** What `entities.sealed` held of the account's queues as it opened, read once for the database to import. */
+export interface SealedQueues {
+  /** The row writes an older build kept waiting there, which the file carries until told they were imported; none where the file was not read, which imports and marks nothing. */
+  readonly queue: SealedWrites | undefined;
+  /** The messages refused an older build kept there, carried the same way; none where the file was not read. */
+  readonly refused?: SealedRefusals | undefined;
 }
 
 /** The account's database, from its sign-in until its sign-out. */
 export interface LocalCopy {
   /** The pool's store for its life: the database open now, or nothing while none is. */
   readonly store: PoolStore;
-  /** Opens `accountId`'s database where none stands, its refused messages kept as they move; a failure is reported and leaves none open. */
-  readonly open: (accountId: string, refused: RefusedMessages) => Effect.Effect<void>;
+  /**
+   * Opens `accountId`'s database where none stands, its refused messages
+   * laid back from it, or from `sealed.refused` the first time, and kept as
+   * they move, and answers its waiting writes, oldest first,
+   * `sealed.queue` imported once first and the file told so; a failure is
+   * reported, leaves none open, answers `sealed.queue`'s entries, and leaves
+   * the file carrying them. One standing already
+   * answers none, since its writes were laid back as it opened.
+   */
+  readonly open: (
+    accountId: string,
+    refused: RefusedMessages,
+    sealed: SealedQueues,
+  ) => Effect.Effect<readonly QueuedEntry[]>;
   /** Closes the database and deletes the folder of the account it was last opened for, as a sign-out does. */
   readonly forget: Effect.Effect<void>;
 }
@@ -62,7 +105,10 @@ interface Opened {
 }
 
 /** Reports `failure` by its tag and its cause's kind alone. */
-function reported(kind: string, failure: LocalDatabaseFailed): Effect.Effect<void> {
+function reported(
+  kind: string,
+  failure: LocalDatabaseFailed | LocalQueueReadFailed,
+): Effect.Effect<void> {
   return reportUnexpected(kind, { failure: failure._tag, cause: failureKind(failure.cause) });
 }
 
@@ -96,9 +142,44 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
     },
   };
 
-  const open = (accountId: string, refused: RefusedMessages) =>
+  const open = (accountId: string, refused: RefusedMessages, sealed: SealedQueues) =>
     Effect.gen(function* () {
-      if (opened !== undefined) return;
+      /**
+       * The refused messages laid back from the table, or from the file where
+       * it holds none, and kept as they move. Note that a table that will not
+       * read is left as it stands, and the file keeps carrying its refusals.
+       */
+      const refusedOpened = (kept: LocalRefused, scope: Scope.Scope) =>
+        Effect.gen(function* () {
+          const stored = yield* Effect.result(kept.kept);
+
+          if (Result.isFailure(stored)) {
+            yield* reported(LOCAL_DATABASE_REPORT.REFUSED_UNREAD, stored.failure);
+
+            return yield* refused.restored(accountId, sealed.refused?.entries ?? []);
+          }
+
+          // Note that an empty table takes the file's refusals, which a database opened before this build mirrored, so a table that holds any is the newer word.
+          yield* refused.restored(
+            accountId,
+            stored.success.length === 0 ? (sealed.refused?.entries ?? []) : stored.success,
+          );
+          const keep = Effect.suspend(() => kept.keep(refused.kept()));
+          yield* keep;
+          // Note that a write to the table logs its failure rather than failing, so the file drops its refusals only once the table reads them all back.
+          const written = yield* Effect.result(kept.kept);
+
+          if (Result.isSuccess(written) && written.success.length === refused.kept().length) {
+            if (sealed.refused !== undefined) yield* sealed.refused.imported;
+          }
+
+          yield* Effect.forkIn(
+            Stream.runForEach(refused.moves, () => keep),
+            scope,
+          );
+        });
+
+      if (opened !== undefined) return [];
       account = accountId;
       const scope = yield* Scope.make();
 
@@ -108,23 +189,29 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
 
       if (Result.isFailure(connection)) {
         yield* Scope.close(scope, Exit.void);
+        yield* reported(LOCAL_DATABASE_REPORT.OPEN_FAILED, connection.failure);
+        yield* refused.restored(accountId, sealed.refused?.entries ?? []);
 
-        return yield* reported(LOCAL_DATABASE_REPORT.OPEN_FAILED, connection.failure);
+        return sealed.queue?.entries ?? [];
       }
 
-      const kept = localRefused(connection.success);
-      const keep = Effect.suspend(() => kept.keep(refused.kept()));
-      // Note that the messages are kept once as they stand, since they were laid back before the database opened.
-      yield* keep;
-      yield* Effect.forkIn(
-        Stream.runForEach(refused.moves, () => keep),
-        scope,
-      );
-      opened = {
-        rows: localRows(connection.success),
-        outbox: localOutbox(connection.success),
-        scope,
-      };
+      yield* refusedOpened(localRefused(connection.success), scope);
+      const outbox = localOutbox(connection.success);
+      opened = { rows: localRows(connection.success), outbox, scope };
+
+      // Note that an outbox that will not read back leaves its writes on disk for the next launch, and this one sends the sealed queue.
+      const restored = yield* Effect.result(outbox.restored(sealed.queue?.entries));
+
+      if (Result.isFailure(restored)) {
+        yield* reported(LOCAL_DATABASE_REPORT.OUTBOX_UNREAD, restored.failure);
+
+        return sealed.queue?.entries ?? [];
+      }
+
+      // Note that the file is told only once the import is committed, so it never drops a write the database does not hold.
+      if (sealed.queue !== undefined) yield* sealed.queue.imported;
+
+      return restored.success;
     }).pipe(Effect.provideContext(context));
 
   const forget = Effect.gen(function* () {
