@@ -1,14 +1,21 @@
 /**
  * slack-events-app.ts -- our Slack bot's one inbound route: a press of an ask's button in a member's DM answers the ask, as the member would in the app.
  *
- * Vercel Connect holds the bot's Slack app and forwards every request Slack
- * sends it, events and interactivity alike, to this one path, with a Vercel
- * OIDC token as its bearer in place of Slack's own signature, so the
- * deployment keeps no Slack signing secret. Nothing of a request is read
- * past its bounded bytes before that token holds
- * (`createConnectWebhookVerifier`, which fails closed off Vercel).
+ * Slack sends every request for our own Slack app, events and interactivity
+ * alike, to this one path, signed with the app's signing secret
+ * (`SLACK_APP_SIGNING_SECRET`): `X-Slack-Signature` is `v0=` and the
+ * HMAC-SHA256 of `v0:<timestamp>:<raw body>`, its timestamp the
+ * `X-Slack-Request-Timestamp` header, as Slack's "Verifying requests from
+ * Slack" lays out. Nothing of a request is read past its bounded bytes
+ * before that signature holds, compared in constant time, and its
+ * timestamp stands within five minutes of our clock, so a request
+ * replayed later is refused; a deployment missing the secret answers
+ * unavailable and reads nothing.
  * Interactivity arrives form-encoded, its JSON under `payload`; an event
- * arrives as JSON: Slack's URL check is answered, and a message a member
+ * arrives as JSON: Slack's URL check is answered, an uninstall of the app
+ * from a team, or a revoke of its bot token there, deletes the
+ * installation of every workspace connected to that team, and with it its
+ * token and its members' Slack ids, and a message a member
  * addressed to the bot, a mention or a direct message, is acknowledged and
  * acted on once the answer has left (`slack-agent-starts.ts`); every other
  * event is acknowledged unread.
@@ -32,18 +39,20 @@
  * taken is handed to the agent as its "Thread answer", and the DM is
  * rewritten to say the option chosen; a press on an ask already settled
  * rewrites the DM to say where it stands. Of a request nothing is logged
- * but a fixed line: its kind as it is heard, and a refused bearer.
+ * but a fixed line: its kind as it is heard, and a refused signature.
  */
 
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { deleteSlackTeamInstallations } from "@repo/database/models/slack-installation-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_REPLY, knownAsk } from "@repo/features/inbox-wire";
 import { causeKind } from "@repo/runtime/effect";
 import { EXCESS_KEYS, HTTP_METHOD, type UnparsedWireValue } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { type ConnectWebhookVerifier, createConnectWebhookVerifier } from "@vercel/connect/chat";
-import { Effect, Layer, Option, Result, Schema } from "effect";
+import { Clock, Config, Effect, Layer, Option, Redacted, Result, Schema } from "effect";
 import { HttpRouter, HttpServerRequest } from "effect/http";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
+import { text } from "../core.js";
 import { afterResponse } from "../http/after-response.js";
 import {
   HOSTED_REFUSAL,
@@ -71,7 +80,7 @@ import {
   settledLine,
 } from "./thread-dms.js";
 
-/** The path Connect's trigger forwards Slack's requests to, under the deployment's origin. */
+/** The path Slack sends our app's events and interactivity to, under the deployment's origin. */
 const SLACK_EVENTS_PATH = "/api/slack/events";
 
 /** Slack caps an interaction's payload far below this; bounded all the same before anything is read. */
@@ -83,17 +92,35 @@ const INTERACTION_FIELD = "payload";
 /** The content type interactivity arrives as. */
 const FORM_CONTENT_TYPE = "application/x-www-form-urlencoded";
 
-/** The kinds of request read: a press of a button, and Slack's check of the URL. */
+/** The variable the secret Slack signs our app's requests with is read from. */
+const SLACK_APP_ENVIRONMENT = { SIGNING_SECRET: "SLACK_APP_SIGNING_SECRET" } as const;
+
+/** Slack's request signature: its headers, the version it is made under, and how far its timestamp may stand from our clock. */
+const SLACK_SIGNATURE = {
+  HEADER: "x-slack-signature",
+  TIMESTAMP_HEADER: "x-slack-request-timestamp",
+  VERSION: "v0",
+  FRESH_SECONDS: 5 * 60,
+} as const;
+
+/** A timestamp as Slack writes it: whole seconds since the epoch. */
+const UNIX_SECONDS = /^\d{1,12}$/u;
+
+/** The kinds of request read: a press of a button, Slack's check of the URL, and an event. */
 const SLACK_REQUEST_TYPE = {
   BLOCK_ACTIONS: "block_actions",
   URL_VERIFICATION: "url_verification",
+  EVENT_CALLBACK: "event_callback",
+} as const;
+
+/** The events that end our app's hold on a team: its uninstall, and a revoke of its tokens there. */
+const SLACK_LIFECYCLE_EVENT = {
+  APP_UNINSTALLED: "app_uninstalled",
+  TOKENS_REVOKED: "tokens_revoked",
 } as const;
 
 /** The header Slack marks its retry of an event with, which is dropped, since the first delivery was acted on. */
 const SLACK_RETRY_HEADER = "x-slack-retry-num";
-
-/** Where a verifier is told the request came, which it reads only for its headers. */
-const VERIFIED_ORIGIN = "https://slack.connect.invalid";
 
 /** A press as far as it is read: who pressed, in which team, the DM it was in, the buttons' action ids and values, and the checkboxes ticked in that DM. */
 const BlockActionsSchema = Schema.Struct({
@@ -134,6 +161,25 @@ const UrlVerificationSchema = Schema.Struct({
   challenge: Schema.String,
 });
 
+/**
+ * An uninstall or a revoke as far as it is read: the team, when Slack
+ * says it happened (whole seconds since the epoch), and for a revoke, the bot users whose tokens went; a revoke of user tokens alone
+ * names no bot.
+ */
+const LifecycleEventSchema = Schema.Struct({
+  type: Schema.Literal(SLACK_REQUEST_TYPE.EVENT_CALLBACK),
+  team_id: Schema.String,
+  event_time: Schema.Number,
+  event: Schema.Struct({
+    type: Schema.Literals(Object.values(SLACK_LIFECYCLE_EVENT)),
+    tokens: Schema.optionalKey(
+      Schema.Struct({ bot: Schema.optionalKey(Schema.Array(Schema.String)) }),
+    ),
+  }),
+});
+
+type LifecycleEvent = typeof LifecycleEventSchema.Type;
+
 /** A request read against the few fields it is read for; every other key Slack sends is dropped unread. */
 function readRequest<S extends Schema.ConstraintDecoder<unknown>>(
   schema: S,
@@ -142,23 +188,71 @@ function readRequest<S extends Schema.ConstraintDecoder<unknown>>(
   return readEither(schema, { excess: EXCESS_KEYS.DROP })(payload);
 }
 
-/** Whether Connect's bearer on the request holds, as the verifier says; one that throws or answers nothing holds not. */
-function verified(
-  verify: ConnectWebhookVerifier,
-  authorization: string | undefined,
+/**
+ * Whether Slack's signature on the request holds: made under its version,
+ * over the timestamp and the raw body, with the secret, and the timestamp
+ * within five minutes of now either way. The secret is revealed here
+ * alone, into the HMAC the compare reads.
+ */
+function signatureHolds(
+  secret: Redacted.Redacted,
+  timestamp: string | undefined,
+  signature: string | undefined,
   body: Uint8Array,
-): Effect.Effect<boolean> {
-  const headers = authorization === undefined ? undefined : { authorization };
+  nowMillis: number,
+): boolean {
+  if (timestamp === undefined || signature === undefined || !UNIX_SECONDS.test(timestamp)) {
+    return false;
+  }
 
-  const request = new Request(new URL(SLACK_EVENTS_PATH, VERIFIED_ORIGIN), {
-    method: HTTP_METHOD.POST,
-    ...(headers === undefined ? undefined : { headers }),
-  });
+  if (Math.abs(nowMillis / 1000 - Number(timestamp)) > SLACK_SIGNATURE.FRESH_SECONDS) return false;
+  const prefix = `${SLACK_SIGNATURE.VERSION}=`;
 
-  return Effect.tryPromise(async () => Boolean(await verify(request, body))).pipe(
-    Effect.orElseSucceed(() => false),
-  );
+  if (!signature.startsWith(prefix)) return false;
+  const offered = Buffer.from(signature.slice(prefix.length), "hex");
+
+  const wanted = createHmac("sha256", Redacted.value(secret))
+    .update(`${SLACK_SIGNATURE.VERSION}:${timestamp}:`)
+    .update(body)
+    .digest();
+
+  return offered.length === wanted.length && timingSafeEqual(offered, wanted);
 }
+
+/** The signing secret as the deployment's environment holds it, trimmed; none where it is unset or blank. */
+const signingSecret = Effect.map(
+  Config.option(Config.Redacted(SLACK_APP_ENVIRONMENT.SIGNING_SECRET)),
+  (read) => {
+    const named = text(Option.getOrUndefined(Option.map(read, Redacted.value)));
+
+    return named === undefined ? undefined : Redacted.make(named);
+  },
+).pipe(Effect.orElseSucceed(() => undefined));
+
+/**
+ * Whether the event ends our app's hold on its team: an uninstall always,
+ * a revoke only where a bot's token went, since the app keeps no user's.
+ */
+function endsInstallation(lifecycle: LifecycleEvent): boolean {
+  const { event } = lifecycle;
+
+  if (event.type === SLACK_LIFECYCLE_EVENT.APP_UNINSTALLED) return true;
+
+  return (event.tokens?.bot ?? []).length > 0;
+}
+
+/**
+ * Deletes the installation of every workspace connected to the team that
+ * stood when the event happened, its bot token and its members' Slack ids
+ * going with it, in one statement. Note that one linked after it is the
+ * team's install again and stands, because Slack may deliver an event
+ * late or more than once (its retries run up to minutes later).
+ */
+const forgetTeam = /* @__PURE__ */ Effect.fnUntraced(function* (lifecycle: LifecycleEvent) {
+  // Note that the event's whole second is taken as its end, so an install made in that second is gone with it.
+  const happened = new Date((lifecycle.event_time + 1) * 1000);
+  yield* hostedStoreOrUnavailable(deleteSlackTeamInstallations(lifecycle.team_id, happened));
+});
 
 /** The request's JSON: interactivity's under its form field, an event's as the body is. */
 function requestPayload(
@@ -329,62 +423,72 @@ const answerPress = /* @__PURE__ */ Effect.fnUntraced(function* (press: BlockAct
   );
 });
 
-/** POST: one request Connect forwarded, its bearer confirmed before anything of it is read. */
-const eventsEndpoint = (verify: ConnectWebhookVerifier) =>
-  Effect.gen(function* () {
-    const request = yield* HttpServerRequest.HttpServerRequest;
+/** POST: one request Slack sent, its signature confirmed before anything of it is read. */
+const eventsEndpoint = Effect.gen(function* () {
+  const request = yield* HttpServerRequest.HttpServerRequest;
 
-    if (request.method !== HTTP_METHOD.POST) {
-      return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
-    }
+  if (request.method !== HTTP_METHOD.POST) {
+    return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
+  }
 
-    const body = yield* readBodyBytesEffect(MAXIMUM_REQUEST_BYTES);
+  const secret = yield* signingSecret;
 
-    if (!(yield* verified(verify, request.headers.authorization, body))) {
-      yield* Effect.logWarning("A Slack request was refused: Connect's bearer did not hold");
+  if (secret === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+  const body = yield* readBodyBytesEffect(MAXIMUM_REQUEST_BYTES);
+  const now = yield* Clock.currentTimeMillis;
+  const timestamp = request.headers[SLACK_SIGNATURE.TIMESTAMP_HEADER];
+  const signature = request.headers[SLACK_SIGNATURE.HEADER];
 
-      return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-    }
+  if (!signatureHolds(secret, timestamp, signature, body, now)) {
+    yield* Effect.logWarning("A Slack request was refused: its signature did not hold");
 
-    const payload = yield* requestPayload(request.headers["content-type"], body);
-    const check = readRequest(UrlVerificationSchema, payload);
+    return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+  }
 
-    if (Result.isSuccess(check)) {
-      yield* Effect.logInfo("A Slack request was heard", {
-        kind: SLACK_REQUEST_TYPE.URL_VERIFICATION,
-      });
+  const payload = yield* requestPayload(request.headers["content-type"], body);
+  const check = readRequest(UrlVerificationSchema, payload);
 
-      return hostedJsonResponse(200, { challenge: check.success.challenge });
-    }
+  if (Result.isSuccess(check)) {
+    yield* Effect.logInfo("A Slack request was heard", {
+      kind: SLACK_REQUEST_TYPE.URL_VERIFICATION,
+    });
 
-    const press = readRequest(BlockActionsSchema, payload);
+    return hostedJsonResponse(200, { challenge: check.success.challenge });
+  }
 
-    if (Result.isSuccess(press)) {
-      yield* Effect.logInfo("A Slack request was heard", {
-        kind: SLACK_REQUEST_TYPE.BLOCK_ACTIONS,
-      });
-      // Slack is answered before the press is acted on, so the press never waits on the agent or on Slack.
-      yield* afterResponse(
-        "a Slack press",
-        answerPress(press.success).pipe(
-          Effect.catchCause((cause) =>
-            Effect.logWarning("a Slack press was not acted on", { failure: causeKind(cause) }),
-          ),
-        ),
-      );
-    } else yield* actOnSlackEvent(payload, request.headers[SLACK_RETRY_HEADER] !== undefined);
+  const lifecycle = readRequest(LifecycleEventSchema, payload);
+
+  if (Result.isSuccess(lifecycle)) {
+    yield* Effect.logInfo("A Slack request was heard", { kind: lifecycle.success.event.type });
+
+    // Note that a retry is acted on too, since the delete takes only what stood when the event happened.
+    if (endsInstallation(lifecycle.success)) yield* forgetTeam(lifecycle.success);
 
     return hostedJsonResponse(200, {});
-  });
+  }
 
-/**
- * The group: the one path Connect forwards to, and the hosted vocabulary's
- * own refusal for any other. The verifier is Connect's own unless a caller
- * hands another, as a test does in place of Vercel's keys.
- */
-export function slackEventsApp(verify: ConnectWebhookVerifier = createConnectWebhookVerifier()) {
-  return Layer.mergeAll(
-    HttpRouter.add(ANY_METHOD, SLACK_EVENTS_PATH, hostedRefusing(eventsEndpoint(verify))),
-    hostedNotFoundRoute,
-  );
-}
+  const press = readRequest(BlockActionsSchema, payload);
+
+  if (Result.isSuccess(press)) {
+    yield* Effect.logInfo("A Slack request was heard", {
+      kind: SLACK_REQUEST_TYPE.BLOCK_ACTIONS,
+    });
+    // Slack is answered before the press is acted on, so the press never waits on the agent or on Slack.
+    yield* afterResponse(
+      "a Slack press",
+      answerPress(press.success).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("a Slack press was not acted on", { failure: causeKind(cause) }),
+        ),
+      ),
+    );
+  } else yield* actOnSlackEvent(payload, request.headers[SLACK_RETRY_HEADER] !== undefined);
+
+  return hostedJsonResponse(200, {});
+});
+
+/** The group: the one path Slack sends to, and the hosted vocabulary's own refusal for any other. */
+export const slackEventsApp = Layer.mergeAll(
+  HttpRouter.add(ANY_METHOD, SLACK_EVENTS_PATH, hostedRefusing(eventsEndpoint)),
+  hostedNotFoundRoute,
+);

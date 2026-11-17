@@ -415,6 +415,20 @@ that thread is sent to the agent instead, and every settled turn of the agent
 is posted back in the thread once, with the agent's link (`SettledTurnListener`). The Slack app must
 subscribe to the `app_mention` and `message.im` bot events.
 
+Slack sends our app's requests, events and interactivity alike, straight to
+`/api/slack/events`, signed with the app's signing secret
+(`SLACK_APP_SIGNING_SECRET`). The route checks `X-Slack-Signature`, the
+`v0` HMAC-SHA256 of `v0:<timestamp>:<raw body>`, in constant time, and
+refuses a request whose `X-Slack-Request-Timestamp` stands more than five
+minutes from its clock, before it reads anything of the body; a deployment
+missing the secret answers unavailable. It answers Slack's `url_verification`
+challenge, and an `app_uninstalled` event, or a `tokens_revoked` event that
+names a bot token, deletes the installation of every workspace connected to
+that team, with its bot token and its members' Slack ids, unless it was linked
+after the event's `event_time`, so a late or repeated delivery never takes a
+reinstall. The Slack app must
+also subscribe to those two events.
+
 An owner or admin names the repository a Slack start defaults to under
 Settings › Workspace › Slack bot (`POST /api/workspaces/slack-bot/repository`,
 kept as `slack_installation.default_repository`) and one per channel
