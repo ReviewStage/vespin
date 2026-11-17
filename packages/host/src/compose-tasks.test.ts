@@ -55,7 +55,7 @@ import { Deferred, Duration, Effect, Exit, Fiber, Layer, Scope, Stream } from "e
 import { TestClock } from "effect/testing";
 import type { AppDescriptionComments } from "./app-state.js";
 import type { TasksClient } from "./compose-tasks.js";
-import { KEPT_READ, NO_SEALED_WRITES, openEntityStore } from "./entity-store.js";
+import { KEPT_READ, openEntityStore } from "./entity-store.js";
 import { FIXTURE_IDS, FIXTURE_PAGE } from "./fixture-stage.js";
 import { localCopy } from "./local-copy.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
@@ -367,7 +367,7 @@ const launchedOver = (directory: string, key: string) =>
     const waiting = yield* copy.open(
       "user-dana",
       { kept: () => [], moves: Stream.empty },
-      { queue: NO_SEALED_WRITES },
+      { queue: undefined },
     );
 
     return { pool, waiting };

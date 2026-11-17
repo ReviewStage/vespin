@@ -51,8 +51,8 @@ export interface RefusedMessages {
 
 /** What `entities.sealed` held of the account's queues as it opened, read once for the database to import. */
 export interface SealedQueues {
-  /** The row writes an older build kept waiting there, which the file carries until told they were imported. */
-  readonly queue: SealedWrites;
+  /** The row writes an older build kept waiting there, which the file carries until told they were imported; none where the file was not read, which imports and marks nothing. */
+  readonly queue: SealedWrites | undefined;
 }
 
 /** The account's database, from its sign-in until its sign-out. */
@@ -136,7 +136,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
         yield* Scope.close(scope, Exit.void);
         yield* reported(LOCAL_DATABASE_REPORT.OPEN_FAILED, connection.failure);
 
-        return sealed.queue.entries;
+        return sealed.queue?.entries ?? [];
       }
 
       const kept = localRefused(connection.success);
@@ -151,16 +151,16 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
       opened = { rows: localRows(connection.success), outbox, scope };
 
       // Note that an outbox that will not read back leaves its writes on disk for the next launch, and this one sends the sealed queue.
-      const restored = yield* Effect.result(outbox.restored(sealed.queue.entries));
+      const restored = yield* Effect.result(outbox.restored(sealed.queue?.entries));
 
       if (Result.isFailure(restored)) {
         yield* reported(LOCAL_DATABASE_REPORT.OUTBOX_UNREAD, restored.failure);
 
-        return sealed.queue.entries;
+        return sealed.queue?.entries ?? [];
       }
 
       // Note that the file is told only once the import is committed, so it never drops a write the database does not hold.
-      yield* sealed.queue.imported;
+      if (sealed.queue !== undefined) yield* sealed.queue.imported;
 
       return restored.success;
     }).pipe(Effect.provideContext(context));

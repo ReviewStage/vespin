@@ -232,16 +232,17 @@ it.effect(
       yield* upgraded.closed;
 
       const imported = yield* opened(directory, DANA);
-      const carried = imported.store.queue.entries;
-      yield* imported.store.queue.imported;
+      const queue = imported.store.queue;
+      assert.ok(queue, "a file that read hands out its queue");
+      yield* queue.imported;
       yield* imported.store.keep(KEPT_READ.INBOX, INBOX);
       yield* imported.closed;
 
       const after = yield* opened(directory, DANA);
       yield* after.closed;
 
-      assert.deepEqual(carried, waiting);
-      assert.deepEqual(after.store.queue.entries, []);
+      assert.deepEqual(queue.entries, waiting);
+      assert.deepEqual(after.store.queue?.entries, []);
     }).pipe(Effect.provide(files)),
 );
 

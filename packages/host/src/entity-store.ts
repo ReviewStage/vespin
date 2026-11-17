@@ -225,8 +225,8 @@ export interface EntityStore {
     workspaceId: string,
     rows: KeptRows[Read][string],
   ) => Effect.Effect<void>;
-  /** The row writes waiting for the service an older build kept in the account's own file, for the local database to import once. */
-  readonly queue: SealedWrites;
+  /** The row writes waiting for the service an older build kept in the account's own file, for the local database to import once; none where the file was there but would not read, so nothing is marked imported before it does. */
+  readonly queue: SealedWrites | undefined;
   /** The messages the service refused as the file held them when the store opened, each in the form its reader kept it in. */
   readonly refused: readonly unknown[];
   /** Deletes the file and keeps nothing more, as a sign-out does. */
@@ -240,9 +240,6 @@ export interface SealedWrites {
   /** Tells the store the local database holds them now, so its next save leaves them out. */
   readonly imported: Effect.Effect<void>;
 }
-
-/** No older waiting writes, as a host with no file, or a file that held none, hands the local database. */
-export const NO_SEALED_WRITES: SealedWrites = { entries: [], imported: Effect.void };
 
 export interface EntityStoreOptions {
   /** The state root the settings file stands in. */
@@ -354,10 +351,8 @@ export function openEntityStore(
     const services = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
     const hash = yield* keptRowsHash;
 
-    const text = yield* Effect.orElseSucceed(
-      readSettingsFileText(directory, ENTITY_STORE_FILE_NAME),
-      () => undefined,
-    );
+    const textRead = yield* Effect.result(readSettingsFileText(directory, ENTITY_STORE_FILE_NAME));
+    const text = Result.getOrUndefined(textRead);
 
     const read = text === undefined ? undefined : opened(cipher, text);
     const ours = read !== undefined && read.accountId === accountId;
@@ -475,12 +470,14 @@ export function openEntityStore(
 
     return {
       stored: (read) => stored[read],
-      queue: {
-        entries: legacyQueue,
-        imported: Effect.sync(() => {
-          queueCarried = [];
-        }),
-      },
+      queue: Result.isFailure(textRead)
+        ? undefined
+        : {
+            entries: legacyQueue,
+            imported: Effect.sync(() => {
+              queueCarried = [];
+            }),
+          },
       refused: refusedKept,
       keep: (kept, rows) =>
         Effect.andThen(

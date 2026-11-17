@@ -81,12 +81,7 @@ import {
   ThisMacHost,
   type ThisMacHostSeam,
 } from "./effect/seams.js";
-import {
-  type EntityStore,
-  forgetEntityStore,
-  NO_SEALED_WRITES,
-  openEntityStore,
-} from "./entity-store.js";
+import { type EntityStore, forgetEntityStore, openEntityStore } from "./entity-store.js";
 import { ActRefused, type HostActTable } from "./host-acts.js";
 import {
   HOST_CONCERN,
@@ -800,7 +795,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       const signedInId = account.signedIn() ? accountId() : undefined;
 
       if (local === undefined || signedInId === undefined) return;
-      const sealed = { queue: entities?.store.queue ?? NO_SEALED_WRITES };
+      const sealed = { queue: entities?.store.queue };
       const waiting = yield* local.open(signedInId, agents.refused, sealed);
       yield* pool.requeue(waiting, [...tasks.queueable, ...agents.queueable]);
     });

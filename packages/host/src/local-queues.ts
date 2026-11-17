@@ -7,9 +7,10 @@
  * down, so the disk holds what the pool holds and nothing saves the queue
  * from memory. A launch reads it back oldest first, to lay it back over
  * the pool (`requeue`). The first launch of a database that never imported
- * them takes the waiting writes an older build kept in `entities.sealed`
- * into an empty outbox in the same transaction that marks them imported
- * (`META_KEY.OUTBOX_IMPORTED`), so they are imported once and never again.
+ * them, and that read `entities.sealed`, takes in each waiting write an
+ * older build kept there whose key the outbox does not hold, in the same
+ * transaction that marks them imported (`META_KEY.OUTBOX_IMPORTED`), so
+ * they are imported once and never again.
  *
  * The refused messages are kept in the form `agent-queue-writes.ts` hands
  * them out (`refusedKept`): each time that record moves, the entries it no
@@ -67,10 +68,12 @@ function inTransaction(connection: LocalDatabaseConnection, step: () => void): v
 }
 
 /**
- * `sealed` inserted into `connection`'s outbox, oldest first, where it never
- * imported any, and marked imported, in one transaction. Note that an
- * outbox already holding writes keeps only its own, because a build that
- * wrote it beside `entities.sealed` holds the same writes there.
+ * `sealed` inserted into `connection`'s outbox behind its own, oldest first,
+ * where it never imported any, and marked imported, in one transaction.
+ * Note that a write whose key the outbox holds already is skipped, since a
+ * build that wrote both kept it in each, and that one already sent and
+ * gone from the outbox is harmless to send again, since the service takes
+ * a key once.
  */
 function imported(connection: LocalDatabaseConnection, sealed: readonly QueuedEntry[]): void {
   inTransaction(connection, () => {
@@ -79,15 +82,12 @@ function imported(connection: LocalDatabaseConnection, sealed: readonly QueuedEn
       .all(META_KEY.OUTBOX_IMPORTED);
 
     if (mark !== undefined) return;
-    const [held] = connection.prepare("SELECT seq FROM outbox LIMIT 1").all();
 
-    if (held === undefined) {
-      const inserted = connection.prepare(
-        "INSERT OR IGNORE INTO outbox (name, idempotency_key, input) VALUES (?, ?, ?)",
-      );
+    const inserted = connection.prepare(
+      "INSERT OR IGNORE INTO outbox (name, idempotency_key, input) VALUES (?, ?, ?)",
+    );
 
-      for (const entry of sealed) inserted.run(entry.name, entry.key, JSON.stringify(entry.input));
-    }
+    for (const entry of sealed) inserted.run(entry.name, entry.key, JSON.stringify(entry.input));
 
     connection
       .prepare("INSERT INTO meta (key, value) VALUES (?, ?)")
@@ -114,9 +114,9 @@ const decodeRefusedTexts = Schema.decodeUnknownSync(Schema.Array(refusedTextSche
 
 /** The account's waiting writes in `connection`, as the pool reports them and a launch reads them back. */
 export interface LocalOutbox extends OutboxStore {
-  /** Every waiting write kept, oldest added first, `sealed` imported into an empty outbox first where this database never imported any. */
+  /** Every waiting write kept, oldest added first, `sealed` imported first where this database never imported any; none where `entities.sealed` was not read, which imports nothing and marks nothing. */
   readonly restored: (
-    sealed: readonly QueuedEntry[],
+    sealed: readonly QueuedEntry[] | undefined,
   ) => Effect.Effect<readonly QueuedEntry[], LocalQueueReadFailed>;
 }
 
@@ -145,7 +145,7 @@ export function localOutbox(connection: LocalDatabaseConnection): LocalOutbox {
     restored: (sealed) =>
       Effect.try({
         try: () => {
-          imported(connection, sealed);
+          if (sealed !== undefined) imported(connection, sealed);
 
           return decodeOutboxRows(
             connection

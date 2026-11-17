@@ -41,6 +41,25 @@ it.effect("reads the waiting writes back oldest first after a reopen, less those
   }).pipe(Effect.scoped, Effect.provide(platform)),
 );
 
+it.effect(
+  "imports entities.sealed's writes behind the outbox's own once the file was read, and only once",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped();
+      const outbox = localOutbox(yield* openLocalDatabase(root, ACCOUNT));
+      yield* outbox.added(RENAME);
+
+      const unread = yield* outbox.restored(undefined);
+      const imported = yield* outbox.restored([PIN, RENAME]);
+      yield* outbox.removed(PIN);
+      const again = yield* outbox.restored([PIN]);
+
+      assert.deepEqual(unread, [RENAME]);
+      assert.deepEqual(imported, [RENAME, PIN]);
+      assert.deepEqual(again, [RENAME]);
+    }).pipe(Effect.scoped, Effect.provide(platform)),
+);
+
 it.effect("reads the refused messages back in order after a reopen, less those let go", () =>
   Effect.gen(function* () {
     const root = yield* temporaryDirectoryScoped();
