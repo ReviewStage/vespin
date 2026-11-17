@@ -71,11 +71,14 @@ export function soundsProcedures(seams: SoundsProcedureSeams) {
     }),
 
     renameSound: signedIn.renameSound.effect(function* ({ context, input }) {
-      const sound = yield* hostedStoreOrUnavailable(
+      const renamed = yield* hostedStoreOrUnavailable(
         renameSound(context.userId, input.id, input.name),
       );
 
-      return { sound: Option.getOrNull(sound) };
+      return Option.match(renamed, {
+        onNone: () => GONE,
+        onSome: ({ sound, txid }) => ({ sound, txid }),
+      });
     }),
 
     removeSound: signedIn.removeSound.effect(function* ({ context, input }) {
@@ -87,9 +90,11 @@ export function soundsProcedures(seams: SoundsProcedureSeams) {
     }),
 
     chooseSound: signedIn.chooseSound.effect(function* ({ context, input }) {
-      const id = yield* hostedStoreOrUnavailable(chooseSound(context.userId, input.slot, input.id));
+      const chosen = yield* hostedStoreOrUnavailable(
+        chooseSound(context.userId, input.slot, input.id),
+      );
 
-      return { slot: input.slot, id };
+      return { slot: input.slot, ...chosen };
     }),
   };
 }

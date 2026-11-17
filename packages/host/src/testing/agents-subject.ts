@@ -17,6 +17,7 @@ import {
   type HostDoneAnswerView,
   type MemoriesAnswerView,
   type MemorySaveAnswerView,
+  type SoundStateView,
   TRANSCRIPT_KIND,
 } from "@repo/features/agent-view";
 import {
@@ -308,6 +309,10 @@ function fakeService() {
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
   let forgetGate: Effect.Effect<void> = Effect.void;
+  /** What a sound's rename answers, once its gate lets it; no such sound, from the start. */
+  let renameAnswer: SoundStateView = { sound: null };
+  /** What a sound's rename waits on before the service answers it; nothing from the start. */
+  let renameGate: Effect.Effect<void> = Effect.void;
   /** What a memory's save answers, once its gate lets it; unanswered from the start. */
   let saveAnswer: MemorySaveAnswerView = { failure: AGENT_CALL_FAILURE.UNANSWERED };
   /** What a memory's save waits on before the service answers it; nothing from the start. */
@@ -785,7 +790,11 @@ function fakeService() {
       ),
     readSound: () => Effect.succeed({ clip: null }),
     addSound: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
-    renameSound: () => Effect.succeed({ sound: null }),
+    renameSound: () =>
+      Effect.andThen(
+        Effect.suspend(() => renameGate),
+        Effect.sync(() => renameAnswer),
+      ),
     removeSound: () => Effect.succeed({ sound: null }),
     chooseSound: ({ slot }) => Effect.succeed({ slot, id: null }),
     markActive: () => Effect.sync(() => void asked.push("active")),
@@ -1034,6 +1043,11 @@ function fakeService() {
     answerForgets: (answer: MemoriesAnswerView, gate: Effect.Effect<void> = Effect.void) => {
       forgetAnswer = answer;
       forgetGate = gate;
+    },
+    /** What each sound's rename answers from now on, and what it waits on before it does. */
+    answerRenames: (answer: SoundStateView, gate: Effect.Effect<void> = Effect.void) => {
+      renameAnswer = answer;
+      renameGate = gate;
     },
     /** What each memory's save answers from now on, and what it waits on before it does. */
     answerSaves: (answer: MemorySaveAnswerView, gate: Effect.Effect<void> = Effect.void) => {
@@ -1372,6 +1386,7 @@ export function subject(
       leaveStartsUnanswered: service.leaveStartsUnanswered,
       answerRemoves: service.answerRemoves,
       answerForgets: service.answerForgets,
+      answerRenames: service.answerRenames,
       answerSaves: service.answerSaves,
       answerPresence: service.answerPresence,
       holdCommandAdds: service.holdCommandAdds,

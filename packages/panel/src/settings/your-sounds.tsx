@@ -194,15 +194,19 @@ function useSlot(
     true,
   );
 
-  const { mutate: sendChoice } = useMutation(pressMutation(ACT_KIND.SOUND_CHOOSE));
+  const choosing = useMutation(pressMutation(ACT_KIND.SOUND_CHOOSE));
   const stored = view.settings[field] === token;
   const chosen = chosenSound(sounds, slot)?.id;
 
   // Note that the row is stored as the account's own only once the service
   // took this very choice, so a refused one, or one that answers another
   // sound because this one was removed meanwhile, leaves the sound it played.
+  // The host draws the choice at once, and the row draws it from the press
+  // while the choice and then that write are out (`standing`); a write out
+  // while the token is stored already is the forget's, which changes nothing
+  // drawn.
   const choose = (id: string) => {
-    sendChoice(
+    choosing.mutate(
       { slot, id },
       {
         onSuccess: (answer) => {
@@ -234,6 +238,7 @@ function useSlot(
           },
         })),
         chosen,
+        standing: choosing.isPending || write.busy,
         pick: choose,
       },
       foot: [{ id: "add", label: SOUND_WORDS.ADD, icon: <PlusIcon />, onPress: () => add(slot) }],

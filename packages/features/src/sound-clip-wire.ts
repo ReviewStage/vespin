@@ -131,8 +131,11 @@ export const soundRenameRequestSchema = EffectSchema.Struct({
   name: soundNameSchema,
 });
 
-/** A sound renamed or removed, as the service answers: the sound as it now stands, or null where the account keeps no such sound. */
-export const soundStateSchema = EffectSchema.Struct({ sound: EffectSchema.NullOr(soundSchema) });
+/** A sound renamed or removed, as the service answers: the sound as it now stands, or null where the account keeps no such sound; a rename, the transaction it committed in, which the account's live read carries. */
+export const soundStateSchema = EffectSchema.Struct({
+  sound: EffectSchema.NullOr(soundSchema),
+  txid: EffectSchema.optionalKey(EffectSchema.String),
+});
 
 /** Which of the account's sounds one of its two sounds plays (PUT), or none to let it go. */
 export const soundChoiceRequestSchema = EffectSchema.Struct({
@@ -140,10 +143,11 @@ export const soundChoiceRequestSchema = EffectSchema.Struct({
   id: EffectSchema.NullOr(soundIdSchema),
 });
 
-/** A choice as the service answers it: the sound the slot now plays, or null where none, a sound the account keeps no longer among it. */
+/** A choice as the service answers it: the sound the slot now plays, or null where none, a sound the account keeps no longer among it; and the transaction it committed in, where it changed a row, which the account's live read carries. */
 export const soundChoiceAnswerSchema = EffectSchema.Struct({
   slot: soundClipSlotSchema,
   id: EffectSchema.NullOr(EffectSchema.String),
+  txid: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 /** A sound's clip as its read answers it (GET): its bytes in base64 under its type, with their SHA-256, or null where the account keeps no such sound. */

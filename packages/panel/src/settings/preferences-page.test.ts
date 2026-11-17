@@ -21,7 +21,7 @@ import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { fakeActPort, quietHold } from "../testing/app-bridge.js";
+import { fakeActPort, fakeActPortCalls, quietHold } from "../testing/app-bridge.js";
 import { DESKTOP_CAPABILITIES, handHostReads } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { SettingsPanel, type SettingsPanelProps } from "./settings-panel.js";
@@ -315,4 +315,61 @@ test("each sound lists the account's own sounds by name, the one it plays chosen
   assert.ok(ask.includes("Add a sound…"));
   assert.equal(actsOf(page, "When an agent finishes: Glass"), "Rename…Delete");
   assert.ok(page.textContent?.includes("Your sounds"));
+});
+
+test("a sound of the account's own picked for a sound is named by its pop-up at once, while the service is asked", async () => {
+  const page = draw(
+    SIGNED_IN,
+    appSettingsView(
+      appSettingsWire(
+        settingsView({ soundWhen: SOUND_WHEN.ALWAYS, completionSound: COMPLETION_SOUND.CUSTOM }),
+      ),
+    ),
+  );
+
+  const rain = { id: "sound-rain", name: "Rain on tin", sha256: "a-hash" };
+
+  const preferencesWith = (ask: string | undefined) => ({
+    rows: {
+      agent: undefined,
+      chaptersModel: CHAPTERS_MODEL.HAIKU,
+      slackNotifications: true,
+      sounds: { list: [rain], choices: { finish: rain.id, ask } },
+    },
+  });
+
+  // The service is asked and never answers here, as a choice still out.
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.SOUND_CHOOSE]: () => new Promise(() => undefined),
+  });
+  act(() => reads.deliverPreferences(preferencesWith(undefined)));
+  // The finish plays it already, so its pop-up naming it says the sounds landed.
+  await vi.waitFor(() => menuOf(page, `When an agent finishes: ${rain.name}`));
+
+  const opener = await vi.waitFor(
+    () =>
+      page.querySelector<HTMLButtonElement>(
+        'button[aria-label="When something needs you: Knock"]',
+      ) ?? assert.fail("the ask's pop-up is drawn"),
+  );
+
+  act(() => opener.click());
+  const menu = document.getElementById(opener.getAttribute("aria-controls") ?? "");
+
+  const option =
+    [...(menu?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])].find((each) =>
+      each.textContent?.startsWith(rain.name),
+    ) ?? assert.fail("the account's own sound is offered");
+
+  act(() => option.click());
+  // The host draws the choice over the account's row the moment it is asked.
+  act(() => reads.deliverPreferences(preferencesWith(rain.id)));
+
+  await vi.waitFor(() =>
+    assert.ok(
+      page.querySelector(`button[aria-label="When something needs you: ${rain.name}"]`),
+      "named by the sound picked while the service is asked",
+    ),
+  );
 });
