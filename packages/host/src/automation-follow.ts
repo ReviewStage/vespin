@@ -1,11 +1,10 @@
 import { AUTOMATION_CALL_FAILURE } from "@repo/features/automation-view";
 import { LIVE_SIGNED_OUT } from "@repo/features/live-wire";
-import { Effect, Option, Schema, type Scope, Stream } from "effect";
+import { Effect, Option, type Schema, type Scope } from "effect";
 import { drawnAtEdges } from "./live-collection.js";
 import {
+  followTakingRows,
   LIVE_GONE,
-  LiveBroken,
-  liveRows,
   restarting,
   type SealedRead,
   type TxWait,
@@ -15,11 +14,11 @@ import {
  * automation-follow.ts -- a workspace's automations, an automation's runs, or a workspace's runs, followed on the service's live read for as long as the windows hold them, their rows taken as each poll answers them, and a history built again whenever its rows move and whenever the clock alone moves a run's agent.
  *
  * The live read is fetched from the service and followed over its held poll
- * (`live-follow.ts`). The rows are decoded where they arrive and taken the
- * moment their poll answers, before the follow carries the answer's txids
- * on to a write waiting for them, so a write confirmed on a read finds its
- * rows already taken: a workspace's automations by the collection that
- * builds the list (`automation-collections.ts`), and a history by
+ * (`followTakingRows`). The rows are decoded where they arrive and taken
+ * the moment their poll answers, before the follow carries the answer's
+ * txids on to a write waiting for them, so a write confirmed on a read
+ * finds its rows already taken: a workspace's automations by the collection
+ * that builds the list (`automation-collections.ts`), and a history by
  * `historyAtEdges`, which builds it (`@repo/features/automation-live`) at
  * the host's own instant, and again at the one instant the clock alone
  * moves a run's agent, the end of a grace.
@@ -53,52 +52,6 @@ function goneWhereNotFound<Part extends string>(
   return "failure" in read
     ? { failure: read.failure, gone: read.failure === AUTOMATION_CALL_FAILURE.NOT_FOUND }
     : read;
-}
-
-/**
- * Rows followed from the first answer, taken, decoded, the moment each poll
- * answers them, before the follow carries the answer's txids on to a write
- * waiting for them, until the read breaks.
- */
-function takenRows<Part extends string, Rows>(
-  schema: Schema.Codec<Rows, unknown>,
-  dependencies: AutomationFollowDependencies<Part, Rows>,
-  first: SealedRead<Part>,
-  poll: (
-    after: string | undefined,
-  ) => Effect.Effect<SealedRead<Part> | { readonly failure: string; readonly gone: boolean }>,
-): Effect.Effect<void, LiveBroken> {
-  const decode = Schema.decodeUnknownOption(schema);
-
-  /** Takes an answer's rows, answering whether they decoded; one carrying none inline takes nothing. */
-  const taken = (read: SealedRead<Part>) => {
-    const parts = Object.entries<{ readonly rows?: readonly unknown[] }>(read.queries);
-
-    if (parts.some(([, query]) => query.rows === undefined)) return Effect.succeed(true);
-    const rows = decode(Object.fromEntries(parts.map(([part, query]) => [part, query.rows])));
-
-    return Option.isSome(rows)
-      ? Effect.as(dependencies.take(rows.value), true)
-      : Effect.succeed(false);
-  };
-
-  return Effect.gen(function* () {
-    if (!(yield* taken(first))) return yield* new LiveBroken({ reason: "a row did not decode" });
-
-    const takenPoll = (after: string | undefined) =>
-      Effect.flatMap(poll(after), (read) =>
-        "failure" in read
-          ? Effect.succeed(read)
-          : Effect.map(taken(read), (decoded) =>
-              decoded ? read : { failure: "a row did not decode" },
-            ),
-      );
-
-    const onTxWait = dependencies.onTxWait;
-    yield* Stream.runDrain(
-      liveRows({ poll: takenPoll, ...(onTxWait === undefined ? undefined : { onTxWait }) }, first),
-    );
-  });
 }
 
 /**
@@ -141,9 +94,17 @@ export function followAutomationRead<Part extends string, Rows>(
       return goneWhereNotFound(read);
     };
 
+    const { onTxWait } = dependencies;
+
     // A follow the service ended for good, as one whose automation is gone, ends here at once, rather than starting again.
-    const gone = yield* takenRows(schema, dependencies, sealed, (after) =>
-      Effect.map(dependencies.live(true, after), noted),
+    const gone = yield* followTakingRows(
+      {
+        poll: (after) => Effect.map(dependencies.live(true, after), noted),
+        ...(onTxWait === undefined ? undefined : { onTxWait }),
+      },
+      sealed,
+      schema,
+      dependencies.take,
     ).pipe(
       Effect.as(false),
       Effect.catch((broken) => Effect.succeed(broken.reason === LIVE_GONE)),

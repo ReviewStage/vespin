@@ -5,14 +5,14 @@ import {
   workspacesOfLiveRows,
 } from "@repo/features/workspace-live";
 import type { Workspace } from "@repo/features/workspace-wire";
-import { Effect, Option, Schema, Stream } from "effect";
+import { type Effect, type Schema, Stream } from "effect";
 import {
   decodedLiveRows,
-  LiveBroken,
+  followTakingRows,
+  type LiveBroken,
   type LiveFailure,
-  liveRows,
+  type LiveFollowDependencies,
   type SealedRead,
-  type TxWait,
 } from "./live-follow.js";
 
 /**
@@ -30,8 +30,6 @@ type Sealed<Answer> = Answer | LiveFailure;
 export interface LiveReadDependencies<Answer> {
   /** The read's rows inline, held until they move past `after`; a failure where the service answered none. */
   readonly poll: (after: string | undefined) => Effect.Effect<Sealed<Answer>>;
-  /** Hears the read's wait for a write's transaction where it has one, and none once let go (`live-follow.ts`). */
-  readonly onTxWait?: (wait: TxWait | undefined) => void;
 }
 
 /**
@@ -46,11 +44,7 @@ function liveMoves<Part extends string, Rows, Built>(
   schema: Schema.Decoder<Rows>,
   build: (rows: Rows) => Built,
 ): Stream.Stream<Built, LiveBroken> {
-  return decodedLiveRows(
-    { poll: dependencies.poll, onTxWait: dependencies.onTxWait },
-    first,
-    schema,
-  ).pipe(Stream.map(build));
+  return decodedLiveRows({ poll: dependencies.poll }, first, schema).pipe(Stream.map(build));
 }
 
 /** The account's workspaces each time their rows change, as the held read would list them. */
@@ -64,65 +58,21 @@ export function workspacesMoves(
 /** The sidebar read's parts: its sections, the tasks and the agents in them, and its pinned repositories. */
 type SidebarPart = "sections" | "entries" | "agentEntries" | "pins";
 
-const decodeSidebarRows = Schema.decodeUnknownOption(SIDEBAR_READ.rows);
-
-/** An answer's rows decoded, every part's; none where it carries none inline, and failed where a row does not decode. */
-function sidebarRowsOf(read: SealedRead<SidebarPart>): Option.Option<SidebarRows> | "undecoded" {
-  const { sections, entries, agentEntries, pins } = read.queries;
-
-  if ([sections, entries, agentEntries, pins].some((part) => part.rows === undefined)) {
-    return Option.none();
-  }
-
-  const rows = decodeSidebarRows({
-    sections: sections.rows,
-    entries: entries.rows,
-    agentEntries: agentEntries.rows,
-    pins: pins.rows,
-  });
-
-  return Option.isSome(rows) ? Option.some(sidebarRowsOfLive(rows.value)) : "undecoded";
-}
-
 /**
  * The account's sidebar followed until it is gone, each answer's rows,
  * every part's, decoded and handed to `take` the moment its poll answers,
  * before the follow carries the answer's txids on to a write waiting for
- * them. So a write confirmed on the sidebar finds its rows already taken
- * (`sidebar-collections.ts`), where a reader of the follow's stream may
- * not have taken them yet. An answer whose rows do not decode is a failed
- * poll, asked again; a first one fails the follow, which the caller seals
- * again.
+ * them (`followTakingRows`). So a write confirmed on the sidebar finds its
+ * rows already taken (`sidebar-collections.ts`). An answer whose rows do
+ * not decode is a failed poll, asked again; a first one fails the follow,
+ * which the caller seals again.
  */
 export function followSidebarRows(
-  dependencies: LiveReadDependencies<SealedRead<SidebarPart>>,
+  dependencies: LiveFollowDependencies<SidebarPart>,
   first: SealedRead<SidebarPart>,
   take: (rows: SidebarRows) => Effect.Effect<void>,
 ): Effect.Effect<void, LiveBroken> {
-  const taken = (read: SealedRead<SidebarPart>) =>
-    Effect.suspend(() => {
-      const rows = sidebarRowsOf(read);
-
-      if (rows === "undecoded") return Effect.succeed(false);
-
-      return Option.isSome(rows) ? Effect.as(take(rows.value), true) : Effect.succeed(true);
-    });
-
-  return Effect.gen(function* () {
-    if (!(yield* taken(first))) return yield* new LiveBroken({ reason: "a row did not decode" });
-
-    const poll = (after: string | undefined) =>
-      Effect.flatMap(dependencies.poll(after), (read) =>
-        "failure" in read
-          ? Effect.succeed(read)
-          : Effect.map(taken(read), (decoded) =>
-              decoded ? read : { failure: "a row did not decode" },
-            ),
-      );
-
-    const { onTxWait } = dependencies;
-    yield* Stream.runDrain(
-      liveRows({ poll, ...(onTxWait === undefined ? undefined : { onTxWait }) }, first),
-    );
-  });
+  return followTakingRows(dependencies, first, SIDEBAR_READ.rows, (rows) =>
+    take(sidebarRowsOfLive(rows)),
+  );
 }

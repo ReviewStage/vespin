@@ -3,15 +3,14 @@ import {
   type TaskListLiveAnswer,
   type TaskListLiveRows,
 } from "@repo/features/task-list-live";
-import { Effect, Option, Schema, Stream } from "effect";
+import { Effect } from "effect";
 import {
+  followTakingRows,
   LIVE_GONE,
-  LiveBroken,
+  type LiveBroken,
   type LiveFailure,
-  liveRows,
   restarting,
   type SyncStanding,
-  syncStandingOf,
   type TxWait,
 } from "./live-follow.js";
 
@@ -28,7 +27,8 @@ import {
  * longer. The rows are decoded where they arrive and handed on with where
  * the answer stands (`task-list-collections.ts` joins them and builds the
  * list), before the follow carries the answer's txids on to a write waiting
- * for them, so a write confirmed on the list finds its rows already taken.
+ * for them (`followTakingRows`), so a write confirmed on the list finds its
+ * rows already taken.
  *
  * A read the service did not answer is asked for again, and a follow that
  * stops for good started again, after `LIVE_RESTART`. Each says so as it
@@ -67,62 +67,30 @@ export interface TaskListFollowDependencies {
   readonly onTxWait?: (wait: TxWait | undefined) => void;
 }
 
-const decodeRows = Schema.decodeUnknownOption(TASK_LIST_READ.rows);
-
-/** An answer's rows decoded; none where it carries none inline, and failed where a row does not decode. Note that its issues part carries none, for a released desktop alone. */
-function rowsOf(read: TaskListLiveAnswer): Option.Option<TaskListLiveRows> | "undecoded" {
-  const { tasks, agents } = read.queries;
-
-  if (tasks.rows === undefined || agents.rows === undefined) return Option.none();
-  const rows = decodeRows({ tasks: tasks.rows, agents: agents.rows });
-
-  return Option.isSome(rows) ? rows : "undecoded";
-}
-
-/** The rows each answer carries taken as its poll answers, with where it stands by sync id, for as long as the follow stands; it fails where the read is gone or a first row does not decode. */
+/** The rows each answer carries taken as its poll answers (`followTakingRows`), with where it stands by sync id and what it says beside them, for as long as the follow stands; it fails where the read is gone or a first row does not decode. */
 function followRows(
   dependencies: TaskListFollowDependencies,
   first: TaskListLiveAnswer,
 ): Effect.Effect<void, LiveBroken> {
-  const taken = (read: TaskListLiveAnswer) => {
-    const rows = rowsOf(read);
+  const { onTxWait, behind } = dependencies;
 
-    if (rows === "undecoded") return Effect.succeed(false);
-
-    return Option.isSome(rows)
-      ? Effect.as(
-          dependencies.take(rows.value, syncStandingOf<"tasks" | "agents">(read), {
-            ...(read.taskWorkspaces === undefined
-              ? undefined
-              : { taskWorkspaces: read.taskWorkspaces }),
-            ...(read.liveSince === undefined ? undefined : { liveSince: read.liveSince }),
-          }),
-          true,
-        )
-      : Effect.succeed(true);
-  };
-
-  return Effect.gen(function* () {
-    if (!(yield* taken(first))) return yield* new LiveBroken({ reason: "a row did not decode" });
-
-    const poll = (_after: string | undefined, _cursor?: string, sync?: string) =>
-      Effect.flatMap(dependencies.live(sync), (read) =>
-        "failure" in read
-          ? Effect.succeed(read)
-          : Effect.map(taken(read), (decoded) =>
-              decoded ? read : { failure: "a row did not decode" },
-            ),
-      );
-
-    const { onTxWait, behind } = dependencies;
-    // Note that the issues part, which answers no rows and a released desktop alone follows, is followed as every part is, though this build reads none of it.
-    yield* Stream.runDrain(
-      liveRows<"tasks" | "agents">(
-        { poll, behind, ...(onTxWait === undefined ? undefined : { onTxWait }) },
-        first,
-      ),
-    );
-  });
+  // Note that the issues part, which answers no rows and a released desktop alone follows, is followed as every part is, though this build reads none of it.
+  return followTakingRows<"tasks" | "agents", TaskListLiveRows, TaskListLiveAnswer>(
+    {
+      poll: (_after, _cursor, sync) => dependencies.live(sync),
+      behind,
+      ...(onTxWait === undefined ? undefined : { onTxWait }),
+    },
+    first,
+    TASK_LIST_READ.rows,
+    (rows, standing, read) =>
+      dependencies.take(rows, standing, {
+        ...(read.taskWorkspaces === undefined
+          ? undefined
+          : { taskWorkspaces: read.taskWorkspaces }),
+        ...(read.liveSince === undefined ? undefined : { liveSince: read.liveSince }),
+      }),
+  );
 }
 
 /** The task list, followed live until interrupted or until the service says it never will again. */

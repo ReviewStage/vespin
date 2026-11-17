@@ -17,6 +17,7 @@ import { TestClock } from "effect/testing";
 import {
   confirmWrite,
   decodedLiveRows,
+  followTakingRows,
   liveRows,
   type SealedRead,
   type TxWait,
@@ -362,16 +363,16 @@ const followedWithWait = Effect.gen(function* () {
   let handed: TxWait | undefined;
 
   const following = yield* Effect.forkChild(
-    Stream.runDrain(
-      liveRows<Part>(
-        {
-          poll: live.poll,
-          onTxWait: (wait) => {
-            handed = wait;
-          },
+    followTakingRows<Part, unknown>(
+      {
+        poll: live.poll,
+        onTxWait: (wait) => {
+          handed = wait;
         },
-        live.first(),
-      ),
+      },
+      live.first(),
+      Schema.Unknown,
+      () => Effect.void,
     ),
   );
 
@@ -451,16 +452,16 @@ it.effect(
       let handed: TxWait | undefined;
 
       const following = yield* Effect.forkChild(
-        Stream.runDrain(
-          liveRows<Part>(
-            {
-              poll: () => Effect.sync(() => standing),
-              onTxWait: (wait) => {
-                handed = wait;
-              },
+        followTakingRows<Part, unknown>(
+          {
+            poll: () => Effect.sync(() => standing),
+            onTxWait: (wait) => {
+              handed = wait;
             },
-            standing,
-          ),
+          },
+          standing,
+          Schema.Unknown,
+          () => Effect.void,
         ),
       );
 

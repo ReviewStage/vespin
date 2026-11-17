@@ -3198,19 +3198,32 @@ it.effect(
       };
       const history = polledLive<"revisions">(["revisions"]);
       service.historyLives[INVITES] = history;
-      const { follow, call } = yield* subject(service);
+      const { follow, call, pushed } = yield* subject(service);
       yield* follow("TASKS_HISTORY_FOLLOW", { taskId: INVITES });
       yield* followSettled;
       // An answer Sync woke hands the held history its wait for a write's transaction.
       yield* answered(() => history.set({ revisions: [historyRow(1, 1_000)] }, ["tx-earlier"]));
 
-      const restoring = yield* Effect.forkChild(call("TASKS_RESTORE", { taskId: INVITES, seq: 1 }));
+      // The version history as it stood the moment the restore was answered.
+      const restoring = yield* Effect.forkChild(
+        Effect.map(call("TASKS_RESTORE", { taskId: INVITES, seq: 1 }), (restored) => ({
+          restored,
+          shown: pushed.findLast(([kind]) => kind === LIVE_READ.HISTORY),
+        })),
+      );
+
       yield* followSettled;
       assert.equal(restoring.pollUnsafe(), undefined, "no answer before the history carries it");
       yield* answered(() =>
         history.set({ revisions: [historyRow(2, 2_000), historyRow(1, 1_000)] }, ["txid-1"]),
       );
-      assert.deepEqual(yield* Fiber.join(restoring), true);
+      assert.deepEqual(yield* Fiber.join(restoring), {
+        restored: true,
+        shown: [
+          LIVE_READ.HISTORY,
+          { [INVITES]: { rows: { revisions: [historyLine(2, 2_000), historyLine(1, 1_000)] } } },
+        ],
+      });
     }),
 );
 

@@ -3,8 +3,8 @@ import {
   type TaskRecordLiveAnswer,
   type TaskRecordLiveRows,
 } from "@repo/features/task-record-live";
-import { type Effect, Stream } from "effect";
-import { decodedLiveRows, type LiveBroken, type LiveFailure, type TxWait } from "./live-follow.js";
+import { Effect } from "effect";
+import { followTakingRows, type LiveBroken, type LiveFailure, type TxWait } from "./live-follow.js";
 
 /**
  * task-record-follow.ts -- where an open task's description stands, followed by the host over the service's held poll, so the description is read again only once its mark moved.
@@ -43,28 +43,31 @@ function descriptionMarkOf(rows: TaskRecordLiveRows): string {
 }
 
 /**
- * Each delivery that moved the description, with its last save as it delivered it,
- * from the first answer, which always moves it, for as long as the caller's
- * scope stands. It fails where the read is gone or a row does not decode,
- * which the caller answers by reading it again.
+ * The record followed until it is gone, each answer's rows taken the moment
+ * its poll answers (`followTakingRows`), and each answer that moved the
+ * description handed to `moved` with its last save as it delivered it, from
+ * the first answer, which always moves it, before the follow carries the
+ * answer's transactions on to a write waiting for them. So a write of the
+ * description confirmed on the record finds the move that shows it already
+ * handed on. It fails where the read is gone or a first row does not
+ * decode, which the caller answers by reading it again.
  */
-export function taskRecordMoves(
+export function followTaskRecord(
   dependencies: TaskRecordFollowDependencies,
   first: TaskRecordLiveAnswer,
-): Stream.Stream<TaskRecordMove, LiveBroken> {
-  return decodedLiveRows(
-    { poll: dependencies.poll, onTxWait: dependencies.onTxWait },
-    first,
-    TASK_RECORD_READ.rows,
-  ).pipe(
-    Stream.mapAccum(
-      (): string | undefined => undefined,
-      (before: string | undefined, rows: TaskRecordLiveRows) => {
-        const mark = descriptionMarkOf(rows);
-        const moved = mark === before ? [] : [{ descriptionSavedAt: rows.description[0]?.savedAt }];
+  moved: (move: TaskRecordMove) => Effect.Effect<void>,
+): Effect.Effect<void, LiveBroken> {
+  /** The description's rows as the last answer delivered them; none before the first. */
+  let before: string | undefined;
 
-        return [mark, moved] as const;
-      },
-    ),
+  return followTakingRows(dependencies, first, TASK_RECORD_READ.rows, (rows) =>
+    Effect.suspend(() => {
+      const mark = descriptionMarkOf(rows);
+
+      if (mark === before) return Effect.void;
+      before = mark;
+
+      return moved({ descriptionSavedAt: rows.description[0]?.savedAt });
+    }),
   );
 }
