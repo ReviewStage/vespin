@@ -22,7 +22,7 @@ export const LLMS_TEXT_FILE = "llms.txt";
 const RELATED_FALLBACK_COUNT = 3;
 
 /** What `llms.txt` says the product is: the home page's own description (`index.html`). */
-const LLMS_SUMMARY = `${PRODUCT_NAME} is an inbox for all your coding agents. They post to it when they need you, and you answer them there.`;
+const LLMS_SUMMARY = `${PRODUCT_NAME} is where your team and its coding agents work through every task together.`;
 
 /** The heading a guide's FAQ stands under, on its page and in its Markdown copy. */
 export const GUIDE_FAQ_HEADING = "Frequently asked questions";
