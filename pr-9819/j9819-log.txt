@@ -1,0 +1,20 @@
+== bundle P9819 base 696b3596e5
+  built 696b3596e5 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+ipad26-light-navigation: fails 2 shots 9   Tap on id: workspace-switcher... FAILED
+ipad26-light-portrait: fails 0 shots 4 
+ipad26-light-back: fails 1 shots 1 Tap on "Ledger rounding"... FAILED
+ipad26-dark-navigation: fails 2 shots 9   Tap on id: workspace-switcher... FAILED
+ipad26-dark-portrait: fails 0 shots 4 
+ipad26-dark-back: fails 1 shots 1 Tap on "Ledger rounding"... FAILED
+ipad27-light-navigation: fails 2 shots 9   Tap on id: workspace-switcher... FAILED
+ipad27-light-portrait: fails 0 shots 4 
+ipad27-light-back: fails 1 shots 1 Tap on "Ledger rounding"... FAILED
+ipad27-dark-navigation: fails 2 shots 9   Tap on id: workspace-switcher... FAILED
+ipad27-dark-portrait: fails 0 shots 4 
+ipad27-dark-back: fails 1 shots 1 Tap on "Ledger rounding"... FAILED
+duo-light-portrait: fails 0 shots 4 
+iphone-light-portrait: fails 0 shots 4 
