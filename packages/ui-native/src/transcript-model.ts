@@ -93,6 +93,7 @@ import {
   TURN_ROW,
   type TurnRow,
 } from "@repo/features/turn-rows";
+import { toldTurnsOf } from "@repo/features/voice-call-lines";
 import { isRecord, isWireNumber, isWireString, MESSAGE_ROLE } from "@repo/wire";
 
 /** The kinds of item the transcript's list draws. */
@@ -997,6 +998,8 @@ export function transcriptItems(
   reading: TranscriptReading,
 ): readonly TranscriptItem[] {
   const placed = placedMessages(messages);
+  // A turn whose reply the voice told on a call folds its written words with its work, as the panel's does.
+  const told = toldTurnsOf(placed);
   const { origin } = reading;
 
   // Note that an automation's prompt is the first line anyone sent, which the run's card stands in place of.
@@ -1017,7 +1020,7 @@ export function transcriptItems(
     }
 
     const moving = reading.writing && at === placed.length - 1;
-    const rows = agentRows(message, moving, { arrived });
+    const rows = agentRows(message, moving, { arrived, told: told.has(message.id) });
 
     const turn = turnStretches(rows).flatMap((stretch) =>
       stretch.line === undefined

@@ -130,6 +130,7 @@ import {
   isAgentTurn,
   isVoiceLine,
   spokenLineOf,
+  toldTurnsOf,
 } from "@repo/features/voice-call-lines";
 import { VOICE_CALL_STAGE, type VoiceCallStage } from "@repo/features/voice-wire";
 import { replyFromWords } from "@repo/features/words";
@@ -1854,13 +1855,15 @@ function TurnFoot({
 interface StretchPlace {
   readonly standings: ReadonlyMap<string, AgentSubagentStanding> | undefined;
   readonly arrived: readonly ArrivedLine[];
+  /** Whether the voice told the turn's reply on a call (`toldTurnsOf`), which folds its words with its work. */
+  readonly told: boolean;
 }
 
 /** A turn's rows as its message draws them, cut at every line that reached it (`turnStretches`). */
 function turnStretchesOf(
   message: AgentTranscriptMessage,
   moving: boolean,
-  { standings, arrived }: StretchPlace,
+  { standings, arrived, told }: StretchPlace,
 ): readonly TurnStretch[] {
   const workers = new Map(
     [...(standings?.values() ?? [])].map(
@@ -1872,6 +1875,7 @@ function turnStretchesOf(
     agentRows(message, moving, {
       workers,
       arrived: arrived.map((line) => line.message),
+      told,
     }),
   );
 }
@@ -1890,9 +1894,12 @@ export function AgentMessage({
   wakeupDelay,
   taskId,
   forkable = true,
+  told = false,
   piece,
 }: {
   message: AgentTranscriptMessage;
+  /** Whether the voice told this turn's reply on a call (`toldTurnsOf`), which folds its words with its work once it has finished. */
+  told?: boolean;
   /** The piece of a long turn this draws (`turn-pieces.ts`), its stretches read for it; the whole message where none. */
   piece?: TurnPiece | undefined;
   /** Whether its tab may offer to fork at it. */
@@ -2098,7 +2105,7 @@ export function AgentMessage({
 
   const stretches =
     piece?.stretches ??
-    turnStretchesOf(message, moving, { standings: delegation?.standings, arrived });
+    turnStretchesOf(message, moving, { standings: delegation?.standings, arrived, told });
 
   const first = piece?.first ?? true;
 
@@ -2556,7 +2563,8 @@ function sameRead(
     read.message === message &&
     read.moving === moving &&
     read.place.standings === place.standings &&
-    read.place.arrived === place.arrived
+    read.place.arrived === place.arrived &&
+    read.place.told === place.told
   );
 }
 
@@ -2576,7 +2584,7 @@ function useLogEntries(
   return useMemo(() => {
     const held = reads.current;
     const next = new Map<string, PiecesRead>();
-    const { placed, writing } = placing;
+    const { placed, writing, told } = placing;
 
     const entries = placed.flatMap((row, index): LogEntry[] => {
       const { message } = row;
@@ -2592,7 +2600,7 @@ function useLogEntries(
       }
 
       const moving = message.id === writing;
-      const place: StretchPlace = { standings, arrived };
+      const place: StretchPlace = { standings, arrived, told: told.has(message.id) };
       const was = held.get(message.id);
 
       const read =
@@ -2755,8 +2763,10 @@ function transcriptPlacing(
 
   const writing = newest?.finishedAt === undefined ? newest?.id : undefined;
   const calls = callMarksOf(placed, standingCalls);
+  // A turn whose reply the voice told on a call folds its written words with its work.
+  const told = toldTurnsOf(placed);
 
-  return { todos, first, opening, placed, writing, calls };
+  return { todos, first, opening, placed, writing, calls, told };
 }
 
 /** The transcript as the tab draws it: the messages, or what stands in their place. */
@@ -3063,7 +3073,7 @@ function AgentTranscriptView({
   ]);
 
   if (!holding && messages.length > 0) {
-    const { todos, first, opening, placed, writing, calls } = placing;
+    const { todos, first, opening, placed, writing, calls, told } = placing;
 
     // Whose call each call was, by its caller: a teammate's, or none for the reader's own.
     const callerOf = (caller: AgentSender) => lineSender(caller, readerId, members, former);
@@ -3219,6 +3229,7 @@ function AgentTranscriptView({
                               : undefined
                           }
                           arrived={arrivals.get(message.id) ?? NO_ARRIVED}
+                          told={told.has(message.id)}
                           piece={piece}
                         />
                         {!tails ? null : message === first &&

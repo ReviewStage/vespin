@@ -84,6 +84,32 @@ test("a finished turn folds only its work, so every one of its words stands, an 
   assert.deepEqual(rowsOf(turn, true), rowsOf(turn, false));
 });
 
+test("a finished turn the voice told folds its words with its work, a reply with no work alone, while a told turn that moves keeps them open", () => {
+  const turn = [
+    call("git log"),
+    words("I answered on the thread."),
+    call("gh pr checks"),
+    arrived("GitHub reviewed the pull request."),
+    words("Every check passed."),
+  ];
+
+  const told = (blocks: readonly Block[], moving: boolean) =>
+    scanned(turnRows(blocks, READING, { moving, told: true }));
+
+  const closed = { open: false, running: false };
+
+  assert.deepEqual(told(turn, false), [
+    [
+      "2 tool calls, written reply",
+      ["git log", "I answered on the thread.", "gh pr checks"],
+      closed,
+    ],
+    "GitHub reviewed the pull request.",
+    ["Written reply", ["Every check passed."], closed],
+  ]);
+  assert.deepEqual(told(turn, true), rowsOf(turn, true));
+});
+
 test("a message that reached a turn while it ran stands where it arrived, between the groups, each counting its own calls", () => {
   const turn = [
     call("a"),
