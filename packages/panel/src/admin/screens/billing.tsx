@@ -188,10 +188,12 @@ export function BillingScreen({
   const { reads, gate } = useAdminDoors();
   // Note that no month chosen reads the current one, which the service names, since a client's clock may disagree on the month.
   const [month, setMonth] = useState<string | undefined>(undefined);
+
   const read = useQuery({
     ...adminBillingQuery(reads, billingReadQuery(month)),
     enabled: !gate.heldAtGate(),
   });
+
   const withdraw = useAdminSignOut(onSignOut);
   const signOut = () => withdraw.mutate();
   const answered = read.data;

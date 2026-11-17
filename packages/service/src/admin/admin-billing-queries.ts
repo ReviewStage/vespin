@@ -154,6 +154,7 @@ function readWorkspaceBillingSource(
 
     const userIds = memberTotals.flatMap((row) => (row.userId === null ? [] : [row.userId]));
     const faces = userIds.length === 0 ? [] : yield* findAccountFaces(userIds);
+
     const faceById = new Map(
       faces.map(({ role, ...face }) => [face.id, { ...face, admin: isAdminRole(role) }]),
     );

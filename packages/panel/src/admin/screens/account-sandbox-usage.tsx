@@ -10,7 +10,6 @@ import type {
   AdminAccountWorkspaceUsage,
 } from "@repo/features/admin-answer-wire";
 import { formatUsd } from "@repo/features/number-format";
-import { formatMonth } from "@repo/features/time-format";
 import { Badge, GAP, Inline, STATUS_TONE } from "@repo/ui";
 import {
   createDataTableColumnHelper,
@@ -24,7 +23,8 @@ import { useMemo } from "react";
 import { AdminSection } from "../charts/stat-card.js";
 import { WorkspaceCell } from "../workspace-cell.js";
 
-const USAGE_TITLE = "Sandbox usage";
+/** The section's heading, loading or loaded alike: the month is the current UTC one. */
+const USAGE_TITLE = "Sandbox usage this month";
 
 /** How many workspaces the table's skeleton stands a row for, about an account's few. */
 const USAGE_SKELETON_ROWS = 2;
@@ -65,10 +65,9 @@ export function AccountSandboxUsageSection({
   onOpenWorkspace: (id: string) => void;
 }): React.JSX.Element {
   const columns = useMemo(() => usageColumns(onOpenWorkspace), [onOpenWorkspace]);
-  const title = usage === undefined ? USAGE_TITLE : `${USAGE_TITLE} · ${formatMonth(usage.month)}`;
 
   return (
-    <AdminSection title={title}>
+    <AdminSection title={USAGE_TITLE}>
       {usage === undefined ? (
         <DataTableSkeleton
           label={USAGE_TITLE}
