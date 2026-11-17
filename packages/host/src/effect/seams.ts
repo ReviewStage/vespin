@@ -34,7 +34,7 @@ import type { AccountSourceSeam } from "../account-source.js";
 import type { ComputerUseHelperSeam } from "../computer-use-helper.js";
 import type { LaunchdJob } from "../daemon/launchd-job.js";
 import type { RunMode as RunModeFacts } from "../run-mode.js";
-import type { SecretCipher as SecretCipherSeam } from "../settings-store.js";
+import type { SecretCipher as SecretCipherSeam, TokenVault } from "../settings-store.js";
 
 /** The app's own application-state root, given explicitly. */
 export class StateRoot extends Context.Service<StateRoot, string>()("@repo/host/StateRoot") {}
@@ -70,6 +70,16 @@ export class Environment extends Context.Service<Environment, ConfigProvider.Con
  */
 export class SecretCipher extends Context.Service<SecretCipher, SecretCipherSeam>()(
   "@repo/host/SecretCipher",
+) {}
+
+/**
+ * Where the platform keeps the account's tokens itself, as the iPhone's
+ * Keychain does through `expo-secure-store`, which the OAuth source hands the
+ * settings store in its cipher's place where the shell provides one. The
+ * desktop provides none, so its tokens stay sealed by `SecretCipher`.
+ */
+export class PlatformTokenVault extends Context.Service<PlatformTokenVault, TokenVault>()(
+  "@repo/host/PlatformTokenVault",
 ) {}
 
 /** The ids the host mints for its own records. */

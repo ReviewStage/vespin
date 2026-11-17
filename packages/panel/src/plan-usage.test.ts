@@ -57,6 +57,18 @@ test("a plan's windows are named by their length and any one model they count, a
     [NOW + 90 * MINUTE, NOW + 4 * 24 * 60 * MINUTE, undefined],
   );
   assert.equal(meters?.heard, "Updated 2h ago");
+
+  // Note that a fresh reading still says when it was heard, which only a stale one says where `heard` is read.
+  const fresh = planUsageMeters(
+    {
+      ...PLAN,
+      usageWindows: [{ usedPercent: 64, windowMins: WEEK_MINS }],
+      usageHeardAt: NOW - 10_000,
+    },
+    NOW,
+  );
+
+  assert.deepEqual([fresh?.updated, fresh?.heard], ["Updated just now", undefined]);
   assert.equal(
     planUsageMeters({ ...PLAN, usageWindows: [], usageHeardAt: NOW - MINUTE }, NOW),
     undefined,

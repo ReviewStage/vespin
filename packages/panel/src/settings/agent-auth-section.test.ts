@@ -34,6 +34,7 @@ import {
 } from "../testing/app-platform.js";
 import { DESKTOP_CAPABILITIES, handHostReads, handState, stateWith } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { ToastHost } from "../toast.js";
 import { AgentConnectSection } from "./agent-auth-section.js";
 import { AgentsPage } from "./agents-page.js";
 
@@ -242,6 +243,22 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
       deliverKeys({ rows: held });
 
       return Promise.resolve(done({ outcome: CHATGPT_DEVICE_LOGIN.CONNECTED, keys: held }));
+    case ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE: {
+      // A Claude plan's provider answers a fresh reading; a Codex plan's answers nothing, so the service keeps what it held.
+      const { subscriptionId } = request.payload;
+
+      held = {
+        ...held,
+        subscriptions: subscriptions.map((one) =>
+          one.id === subscriptionId && one.kind === PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN
+            ? { ...one, usageHeardAt: AT + 1 }
+            : one,
+        ),
+      };
+
+      return written(held);
+    }
+
     case ACT_KIND.PROVIDER_KEYS_USE_RESET_CREDIT:
       return Promise.resolve(done({ ...held, resetCredit: RESET_CREDIT_OUTCOME.RESET }));
     default:
@@ -298,6 +315,17 @@ async function mount(
   await vi.waitFor(() => assert.equal(harnessRowsStand(container), true));
 
   return container;
+}
+
+/** The window's toasts, mounted beside the page, and the words they stand with. */
+function mountToasts(): () => string {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() => root.render(withQueryClient(createElement(ToastHost))));
+
+  return () =>
+    [...document.querySelectorAll(".ui-toast")].map((toast) => toast.textContent).join("|");
 }
 
 /** Setup's Connect an agent, and whether either harness stood connected after each answer. */
@@ -566,7 +594,7 @@ test("a Codex plan with room offers its resets as one press, whose question list
   );
 });
 
-test("each plan's ⋯ offers Refresh usage, which asks the service for that plan's usage", async () => {
+test("each plan's ⋯ offers Refresh usage, which asks the service for that plan's usage and says whether it brought back a newer reading", async () => {
   held = {
     keys: [],
     subscriptions: [
@@ -577,12 +605,16 @@ test("each plan's ⋯ offers Refresh usage, which asks the service for that plan
   const page = await mount();
   await vi.waitFor(() => credential(page, "ana@work.test"));
 
+  const toasts = mountToasts();
+
   await choose(credential(page, "Claude plan"), "Claude plan", "Refresh usage");
+  await vi.waitFor(() => assert.match(toasts(), /Usage refreshed/u));
   await choose(credential(page, "ana@work.test"), "ana@work.test", "Refresh usage");
   assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE), [
     { subscriptionId: CLAUDE_PLAN.id },
     { subscriptionId: "chatgpt-1" },
   ]);
+  await vi.waitFor(() => assert.match(toasts(), /Couldn't refresh usage/u));
 });
 
 test("each harness's card stands where a link to its section lands", async () => {

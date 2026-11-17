@@ -76,6 +76,7 @@ export const ACCOUNT_PREFERENCE_FIELDS = [
   APP_SETTING_SCHEMA.onboardingSurvey.field,
   APP_SETTING_SCHEMA.introsSeen.field,
   APP_SETTING_SCHEMA.githubWakesOff.field,
+  APP_SETTING_SCHEMA.inbox.field,
 ] as const satisfies readonly AppSettingField[];
 
 export type AccountPreferenceField = (typeof ACCOUNT_PREFERENCE_FIELDS)[number];
@@ -97,7 +98,7 @@ const ACCOUNT_PREFERENCE_FIELD_SET: ReadonlySet<string> = new Set(ACCOUNT_PREFER
 
 const SHARED_PREFERENCE_FIELD_SET: ReadonlySet<string> = new Set(SHARED_PREFERENCE_FIELDS);
 
-/** The preferences each riding a part of the snapshot of its own, named as the preference is: where the account's app links open, where its pull requests open, what Enter does in an agent's box while it works, who authors an agent's commits, how a new agent's actions are approved, whether the account finished setup, where it stands in setup, when and which sound plays as an agent finishes, which plays as something needs the account, which voice a call speaks with, whether a notification is posted, what it answered in setup's survey, which intros it has seen, and which GitHub activity no longer wakes its agents. */
+/** The preferences each riding a part of the snapshot of its own, named as the preference is: where the account's app links open, where its pull requests open, what Enter does in an agent's box while it works, who authors an agent's commits, how a new agent's actions are approved, whether the account finished setup, where it stands in setup, when and which sound plays as an agent finishes, which plays as something needs the account, which voice a call speaks with, whether a notification is posted, what it answered in setup's survey, which intros it has seen, which GitHub activity no longer wakes its agents, and whether its Inbox is on. */
 const OWN_PART_FIELDS = [
   APP_SETTING_SCHEMA.linkOpen.field,
   APP_SETTING_SCHEMA.pullRequestOpen.field,
@@ -114,6 +115,7 @@ const OWN_PART_FIELDS = [
   APP_SETTING_SCHEMA.onboardingSurvey.field,
   APP_SETTING_SCHEMA.introsSeen.field,
   APP_SETTING_SCHEMA.githubWakesOff.field,
+  APP_SETTING_SCHEMA.inbox.field,
 ] as const satisfies readonly AccountPreferenceField[];
 
 type OwnPartField = (typeof OWN_PART_FIELDS)[number];
@@ -470,6 +472,21 @@ export function settingFromOption<Field extends AppSettingField>(
 ): AppSettingValue<Field> | undefined {
   // SAFETY: The control belongs to the field selected, so its stored type is that field's.
   return settingControl(field)?.stored(token, view) as AppSettingValue<Field> | undefined;
+}
+
+/**
+ * The token a choice row draws for `value` stored in `field`, as its control
+ * reads it: the reverse of `settingFromOption`, so a row draws the pick a
+ * write still out asks for. A field with no control draws the value as is.
+ */
+export function optionFromSetting<Field extends AppSettingField>(
+  field: Field,
+  value: AppSettingValue<Field> | undefined,
+): string {
+  const control = settingControl(field);
+
+  // SAFETY: The value is the field selected's own, which its control reads at the one width every field's shares.
+  return control === undefined ? String(value) : control.value(value as StoredSettingValue);
 }
 
 /** What a counted setting change reports: which setting, and the shape of its new value. */

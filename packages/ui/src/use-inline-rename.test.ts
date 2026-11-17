@@ -9,9 +9,9 @@ import { type InlineRename, useInlineRename } from "./use-inline-rename.js";
 
 /**
  * use-inline-rename.test.ts -- a surface's rename opens for the subject it
- * draws, asks for the name an edit ends on, reopens on a refusal holding the
- * name that was typed and says the refusal until the next edit, lets a refusal
- * a later ask replaced go unsaid, and says nothing of one subject's refusal
+ * draws, asks for the name an edit ends on, draws that name while it is out,
+ * reopens on a refusal holding the name that was typed and says the refusal
+ * until the next edit, lets a refusal a later ask replaced go unsaid, and says nothing of one subject's refusal
  * over another. The rename is a mutation of the surface's own, on a client of
  * each surface's own, its answers handed to React a tick after they land.
  */
@@ -61,6 +61,7 @@ function mount(subjectId: string, onRename: (subjectId: string, name: string) =>
     rename = useInlineRename(id, {
       run: (subject, name) => mutation.mutate({ subjectId: subject, name }),
       asked: mutation.variables,
+      pending: mutation.isPending,
       refused: !mutation.isPending && (mutation.isError || mutation.data === false),
       reset: mutation.reset,
     });
@@ -108,14 +109,15 @@ test("an edit opens for the subject drawn, asks for the name it ends on, and a r
   await until(() => assert.equal(surface.now().refused, false));
 });
 
-test("a refusal reopens the field holding the name that was typed", async () => {
+test("the name asked is drawn while it is out, and a refusal reopens the field holding it", async () => {
   const service = heldService();
   const surface = mount("plan-1", service.onRename);
   act(() => surface.now().begin());
   act(() => surface.now().end("Ship the launch"));
   assert.equal(surface.now().editing, false);
-  assert.equal(surface.now().asked, undefined);
+  assert.equal(surface.now().asked, "Ship the launch");
   await until(() => assert.equal(service.asks.length, 1));
+  assert.equal(surface.now().asked, "Ship the launch");
   service.asks[0]?.answer(false);
   await until(() => assert.equal(surface.now().editing, true));
   assert.equal(surface.now().asked, "Ship the launch");

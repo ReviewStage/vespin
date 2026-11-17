@@ -526,19 +526,22 @@ function portTool<const Name extends string>(
 /** Loaded from the first turn (`CatalogTool`'s `alwaysLoad`). */
 const LOADED: Served = { alwaysLoad: true };
 
+/** Loaded from the first turn, behind the starter's Inbox. */
+const INBOX_LOADED: Served = { ...LOADED, gate: TOOL_GATE.INBOX };
+
 /** Every tool served, in the order `tools/list` names them. */
 const CATALOG = [
-  // The threads, posted to the inbox.
+  // The threads, posted to the inbox, where the agent's starter keeps one; a thread is read by its id even where not, since a teammate's agent may still post one.
   served(
     INBOX_TOOLS.POST,
     (admitted, input, { sandbox }) =>
       runAgentInbox(admitted, { tool: INBOX_TOOL.POST, input, sandbox }),
-    LOADED,
+    INBOX_LOADED,
   ),
   served(
     INBOX_TOOLS.LIST,
     (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.LIST, input }),
-    LOADED,
+    INBOX_LOADED,
   ),
   served(INBOX_TOOLS.READ, (admitted, input) =>
     runAgentInbox(admitted, { tool: INBOX_TOOL.READ, input }),
@@ -546,7 +549,7 @@ const CATALOG = [
   served(
     INBOX_TOOLS.WITHDRAW,
     (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.WITHDRAW, input }),
-    LOADED,
+    INBOX_LOADED,
   ),
   // The pull request, the description, and pages and pictures.
   served(OPEN_PULL_REQUEST_TOOL, (admitted, input) => runAgentOpenPullRequest(admitted, input), {

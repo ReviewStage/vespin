@@ -9,9 +9,7 @@ import { heldStill } from "./landing-paint.js";
  * starts over at its end, and where motion is held stands at its last step,
  * where the whole story is told. Every time a scene shows counts back from
  * one fixed moment, so a page drawn on any day says the same ages, and a
- * prerendered page and the browser agree. A page too narrow for a whole
- * window shows a scene's telling moment alone (`landing.css`), so a scene
- * may play only the end of its story there, from that moment on.
+ * prerendered page and the browser agree.
  */
 
 /** The moment every scene's times count back from. */
@@ -19,33 +17,25 @@ export const STORY_NOW = Date.UTC(2026, 10, 2, 21, 52);
 
 export const MINUTE = 60_000;
 
-/** The width under which the page draws a phone's landing, as `landing.css`'s container query steps. */
-const NARROW_PAGE = 640;
+/** How long before a loop's end a scene starts fading out, in milliseconds, so it starts over from a blank rather than cutting back to its start. */
+const LOOP_FADE = 450;
+
+/**
+ * Marks `scene` as leaving its loop while `left`, the milliseconds before
+ * the loop ends, is within `LOOP_FADE`, which the scene's sheets read to
+ * fade out and, once the loop starts over, back in (`landing.css`).
+ */
+function markLoopEnd(scene: HTMLElement, left: number): void {
+  const ending = left <= LOOP_FADE;
+
+  if (ending === (scene.dataset.loop === "out")) return;
+
+  if (ending) scene.dataset.loop = "out";
+  else delete scene.dataset.loop;
+}
 
 /** Nothing: no part of a scene is ever pressed. */
 export function still(): void {}
-
-/** Whether the landing page the element `ref` names stands on is under 640px wide; false until it is measured. */
-export function useNarrowPage(ref: RefObject<HTMLDivElement | null>): boolean {
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const page = ref.current?.closest(".ui-landing-page");
-
-    // Note that a document with no layout, as jsdom's is, stays wide, because it has no page to measure.
-    if (!page || typeof ResizeObserver === "undefined") return undefined;
-
-    const watch = new ResizeObserver(([entry]) => {
-      const width = entry?.contentRect.width ?? 0;
-      setNarrow(width > 0 && width < NARROW_PAGE);
-    });
-
-    watch.observe(page);
-
-    return () => watch.disconnect();
-  }, [ref]);
-
-  return narrow;
-}
 
 /**
  * A story's step, from 0 to `count - 1`, held `beat` milliseconds each, on a
@@ -84,7 +74,10 @@ export function useStory(
     const tick = (ms: number): void => {
       if (shown && previous !== undefined) played += ms - previous;
       previous = ms;
+      const total = count * beat;
+
       setStep(Math.floor(played / beat) % count);
+      markLoopEnd(scene, total - (played % total));
       frame = requestAnimationFrame(tick);
     };
 
@@ -97,4 +90,97 @@ export function useStory(
   }, [ref, count, beat]);
 
   return step;
+}
+
+/**
+ * A timeline's beat, from 0 to `durations.length - 1`, each held its own
+ * duration in milliseconds, on the same clock as `useStory`: running only
+ * while the element `ref` names is on screen, looping at its end, and
+ * standing at its last beat where motion is held.
+ */
+export function useTimeline(
+  ref: RefObject<HTMLDivElement | null>,
+  durations: readonly number[],
+): number {
+  const [beat, setBeat] = useState(0);
+  useEffect(() => {
+    const scene = ref.current;
+
+    if (!scene) return undefined;
+
+    if (heldStill()) {
+      setBeat(durations.length - 1);
+
+      return undefined;
+    }
+
+    const total = durations.reduce((sum, duration) => sum + duration, 0);
+    let shown = false;
+    let played = 0;
+    let previous: number | undefined;
+    let frame = 0;
+
+    const watch = new IntersectionObserver(([entry]) => {
+      shown = entry?.isIntersecting ?? false;
+    });
+
+    watch.observe(scene);
+
+    // Note that we walk the durations to find the beat the loop's time falls in, since each beat holds its own.
+    const tick = (ms: number): void => {
+      if (shown && previous !== undefined) played += ms - previous;
+      previous = ms;
+      let left = played % total;
+      let at = 0;
+
+      while (at < durations.length - 1 && left >= (durations[at] ?? 0)) {
+        left -= durations[at] ?? 0;
+        at += 1;
+      }
+
+      setBeat(at);
+      markLoopEnd(scene, total - (played % total));
+      frame = requestAnimationFrame(tick);
+    };
+
+    frame = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      watch.disconnect();
+    };
+  }, [ref, durations]);
+
+  return beat;
+}
+
+/**
+ * How much of `words` a hand has typed: none before `typing`, a character at
+ * a time while it is, at an uneven pace that lingers at each space, and all
+ * of it once `typed`.
+ */
+export function useTyping(words: string, typing: boolean, typed: boolean): string {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    if (!typing) return undefined;
+    setCount(0);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    // Note that each key's wait is drawn from its place in the words, so every loop types alike.
+    const next = (at: number): void => {
+      if (at > words.length) return;
+      setCount(at);
+      const key = words.charAt(at);
+      const wait = (key === " " ? 90 : 30) + ((at * 37) % 40);
+      timer = setTimeout(() => next(at + 1), wait);
+    };
+
+    next(0);
+
+    return () => clearTimeout(timer);
+  }, [words, typing]);
+
+  if (typing) return words.slice(0, count);
+
+  return typed ? words : "";
 }

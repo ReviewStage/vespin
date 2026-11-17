@@ -47,6 +47,8 @@ export const TOOL_GATE = {
   TURN_END: "turn-end",
   /** The member whose Mac the agent reaches has Computer use on, as their own experiment. */
   COMPUTER_USE: "computer-use",
+  /** The agent's starter keeps an Inbox, which its threads are posted to. */
+  INBOX: "inbox",
 } as const;
 
 export type ToolGate = (typeof TOOL_GATE)[keyof typeof TOOL_GATE];
@@ -94,6 +96,10 @@ export const GATES: Readonly<Record<ToolGate, Gate>> = {
   },
   [TOOL_GATE.COMPUTER_USE]: {
     opens: (_agent, experiments) => experiments.computerUseOn,
+    refusal: EXPERIMENT_OFF_REFUSAL,
+  },
+  [TOOL_GATE.INBOX]: {
+    opens: (_agent, experiments) => experiments.inboxOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
 };

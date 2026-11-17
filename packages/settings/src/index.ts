@@ -175,6 +175,7 @@ export {
   describedSettings,
   isAppSettingField,
   isSettingsResetScope,
+  optionFromSetting,
   ownPreferenceFromWire,
   type SettingsRowsInput,
   type StoredAppSettings,

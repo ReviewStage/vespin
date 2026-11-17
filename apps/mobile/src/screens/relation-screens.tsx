@@ -26,7 +26,6 @@ import {
   EmptyState,
   GLYPH,
   type Glyph,
-  glyphSymbol,
   LIST_LOOK,
   LinkRow,
   ListSection,
@@ -39,7 +38,7 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useNavigation, useRouter } from "expo-router";
 import { useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskRelationWrites } from "../tasks/use-relations.js";
@@ -48,7 +47,6 @@ import { TaskMissing } from "./task-missing.js";
 
 /** The sheet's own words. */
 const WORDS = {
-  BACK: "Back",
   CANCEL: "Cancel",
   TASK_NOT_FOUND: "Task not found",
 } as const;
@@ -165,21 +163,27 @@ function KindRows({ onKind }: { readonly onKind: (kind: TaskRelationKind) => voi
  */
 export function TaskRelationScreen({
   taskId,
-  kind: opened,
+  kind,
+  pushed = false,
 }: {
   readonly taskId: string;
   readonly kind?: TaskRelationKind | undefined;
+  /** Whether the kind was picked in the sheet, its page pushed over the kinds with the system's own back. */
+  readonly pushed?: boolean | undefined;
 }) {
   const router = useRouter();
+  const navigation = useNavigation();
   const colors = useColors();
   const overview = useTaskOverview(taskId);
   const writes = useTaskRelationWrites();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
-  const [chosen, setChosen] = useState<TaskRelationKind | undefined>(opened);
   const [search, setSearch] = useState("");
-  const kind = chosen;
-  // Whether the kind was picked in this sheet rather than handed to it, so a step back to the kinds stands.
-  const stepped = opened === undefined && kind !== undefined;
+  // Note that the sheet is closed by the stack it was presented on, so a kind's page pushed inside the sheet closes the whole sheet rather than stepping back to the kinds.
+  const closeSheet = () => navigation.getParent()?.goBack();
+
+  // Note that a kind picked here opens as its own page pushed inside the sheet's stack, so the system's back chevron and an edge swipe return to the kinds.
+  const openKind = (picked: TaskRelationKind) =>
+    router.push({ pathname: "/task-relation/pick", params: { task: taskId, kind: picked } });
 
   const bar = (
     <>
@@ -205,30 +209,10 @@ export function TaskRelationScreen({
           />
         )}
       </Stack.Screen>
-      {stepped ? (
-        <>
-          {/* Note that a kind picked inside the sheet steps back to the kinds, as a pushed page's back chevron does, with Cancel moving to the other end. */}
-          <Stack.Toolbar placement="left">
-            <Stack.Toolbar.Button
-              icon={glyphSymbol(GLYPH.BACK)}
-              accessibilityLabel={WORDS.BACK}
-              onPress={() => {
-                setChosen(undefined);
-                setSearch("");
-              }}
-            />
-          </Stack.Toolbar>
-          <Stack.Toolbar placement="right">
-            <Stack.Toolbar.Button onPress={() => router.back()}>
-              {WORDS.CANCEL}
-            </Stack.Toolbar.Button>
-          </Stack.Toolbar>
-        </>
-      ) : (
-        <Stack.Toolbar placement="left">
-          <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
-        </Stack.Toolbar>
-      )}
+      {/* Note that a pushed kind's page leaves its leading end to the system's back chevron, so Cancel stands at the other end. */}
+      <Stack.Toolbar placement={pushed ? "right" : "left"}>
+        <Stack.Toolbar.Button onPress={closeSheet}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+      </Stack.Toolbar>
     </>
   );
 
@@ -249,7 +233,7 @@ export function TaskRelationScreen({
       <>
         {bar}
         <Screen>
-          <KindRows onKind={setChosen} />
+          <KindRows onKind={openKind} />
         </Screen>
       </>
     );
@@ -289,7 +273,7 @@ export function TaskRelationScreen({
 
     if (picked === undefined || picked.why !== undefined) return;
     writes.relate(subject.id, kind, id);
-    router.back();
+    closeSheet();
   };
 
   const newSubTask =

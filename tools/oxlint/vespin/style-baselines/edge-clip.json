@@ -1,5 +1,5 @@
 {
   "apps/catalog/src/catalog.css": 5,
-  "packages/ui/src/components/landing/landing.css": 3,
+  "packages/ui/src/components/landing/landing.css": 1,
   "packages/ui/src/components/photo-pick/photo-pick.tsx": 1
 }

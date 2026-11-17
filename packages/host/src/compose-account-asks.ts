@@ -41,6 +41,7 @@ import { declaredWrite, type EntityPool } from "@repo/sync";
 import { Clock, Duration, Effect, Option, Schedule, type Scope, Semaphore } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import { type AccountGateDependencies, type Asked, askedOf, gateOf } from "./account-gate.js";
+import { soundChosen, soundRenamed } from "./account-preferences-follow.js";
 import {
   type AppAllowedCommandList,
   type AppDevicePresence,
@@ -592,9 +593,16 @@ function actsOf(
     // Note that a sound's bytes and name pass through once, to the window that asked or on to the service, and are noted nowhere, as the service keeps them alone.
     SOUND_READ: (read) => asked(client.readSound(read)),
     SOUND_ADD: (add) => asked(client.addSound(add)),
-    SOUND_RENAME: (rename) => asked(client.renameSound(rename)),
+    // A rename and a choice are drawn over the account's row the moment they are asked.
+    SOUND_RENAME: declaredWrite(
+      pool,
+      soundRenamed((rename) => asked(client.renameSound(rename)), dependencies.accountId),
+    ),
     SOUND_REMOVE: (removal) => asked(client.removeSound(removal)),
-    SOUND_CHOOSE: (choice) => asked(client.chooseSound(choice)),
+    SOUND_CHOOSE: declaredWrite(
+      pool,
+      soundChosen((choice) => asked(client.chooseSound(choice)), dependencies.accountId),
+    ),
     // Note that the clip passes through once and is noted nowhere, because its words are the developer's voice.
     DICTATION_TRANSCRIBE: (clip) => asked(client.transcribeDictation(clip)),
     // Note that the offer and the answer pass through once and are noted nowhere, as the call's audio never touches the host.

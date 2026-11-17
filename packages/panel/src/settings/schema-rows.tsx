@@ -1,6 +1,7 @@
 import {
   type AppSettingField,
   isAppSettingId,
+  optionFromSetting,
   type SETTINGS_PAGE as SCHEMA_SETTINGS_PAGE,
   SETTING_SECTION,
   type SettingSection,
@@ -31,7 +32,11 @@ interface OwnOptions {
     readonly actions?: RowActions | undefined;
   }[];
   readonly chosen: string | undefined;
+  /** Whether the own option chosen stands for the row though the setting does not store its token yet, as while a pick of one is out. */
+  readonly standing: boolean;
   readonly pick: (value: string) => void;
+  /** Lets go of an own pick still out, as a pick of the schema's options replaces it. */
+  readonly letGo: () => void;
 }
 
 /**
@@ -136,12 +141,19 @@ function SchemaChoiceRow({
   /** What the section adds to the menu, where it adds anything. */
   menu: ChoiceMenu | undefined;
 }): React.JSX.Element {
-  const write = useSettingRowWrite(field, (token: string) => settingFromOption(field, token, view));
+  const write = useSettingRowWrite(
+    field,
+    (token: string) => settingFromOption(field, token, view),
+    (value) => optionFromSetting(field, value),
+  );
+
   const own = menu?.own;
 
-  // Note that an own option stands for its token in the setting, so the menu draws the own option chosen where the token is stored.
+  // Note that an own option stands for its token in the setting, so the menu draws the own option chosen where the token is stored, or from the pick while it is out.
   const shown =
-    own !== undefined && value === own.token && own.chosen !== undefined ? own.chosen : value;
+    own !== undefined && (value === own.token || own.standing) && own.chosen !== undefined
+      ? own.chosen
+      : value;
 
   const listed = [
     ...(own?.options.map((option) => ({
@@ -158,6 +170,18 @@ function SchemaChoiceRow({
         section: menu?.section?.(option.value) ?? option.group,
       })),
   ];
+
+  // Note that a pick of the schema's options lets go of an own pick still out, so the newest pick is the one that stands.
+  const picked =
+    own === undefined
+      ? write
+      : {
+          ...write,
+          run: (token: string) => {
+            own.letGo();
+            write.run(token);
+          },
+        };
 
   return (
     <SelectRow
@@ -183,7 +207,7 @@ function SchemaChoiceRow({
       action={action}
       foot={menu?.foot}
       error={menu?.error}
-      write={write}
+      write={picked}
     />
   );
 }
