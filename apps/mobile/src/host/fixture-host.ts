@@ -267,7 +267,7 @@ export function stageFixture(
     ...reminded,
     tasks: listed.tasks,
     network: stagedNetwork(held, updateNeeded),
-    [LIVE_READ.PROVIDER_KEYS]: stagedKeys(held),
+    [LIVE_READ.PROVIDER_KEYS]: stagedKeys(inbox),
   };
 
   state.update(stagedPatch(held, staged), listed.lists);
