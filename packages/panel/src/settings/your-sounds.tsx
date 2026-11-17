@@ -11,6 +11,7 @@ import {
   APP_SETTING_DEFAULTS,
   APP_SETTING_SCHEMA,
   type AppSettingField,
+  optionFromSetting,
   type SettingsRowsInput,
   settingFromOption,
 } from "@repo/settings";
@@ -190,7 +191,7 @@ function useSlot(
   const write = useSettingRowWrite(
     field,
     (value: string) => settingFromOption(field, value, view),
-    undefined,
+    (value) => optionFromSetting(field, value),
     true,
   );
 

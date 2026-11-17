@@ -24,7 +24,7 @@ import { SchemaSettingRows } from "./schema-rows.js";
 /**
  * schema-rows.test.ts -- a schema row as the reader meets it: a toggle is a
  * switch named by its row, a short choice a pop-up naming the stored value,
- * each writing what it is moved to, and a refused write said under the row
+ * each drawing and writing what it is moved to, and a refused write said under the row
  * that asked, its control pressable again.
  */
 
@@ -160,8 +160,9 @@ async function settle(): Promise<void> {
   await act(async () => undefined);
 }
 
-test("Zoom is a pop-up naming the stored size, and choosing another size writes it", async () => {
+test("Zoom is a pop-up naming the stored size, and choosing another names it at once and writes it", async () => {
   const page = mount();
+  held = Promise.withResolvers<ActionResult>();
   const zoom = control(page, "Zoom: 100%");
   // The pop-up is the picker's menu, which the settings search lands on through the chip.
   assert.equal(zoom.getAttribute("data-search-anchor"), "zoom");
@@ -174,6 +175,10 @@ test("Zoom is a pop-up naming the stored size, and choosing another size writes 
   act(() => optionNamed("125%").click());
 
   await vi.waitFor(() => assert.deepEqual(written, [["zoom", 125]]));
+  control(page, "Zoom: 125%");
+  held.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
+  await settle();
+  control(page, "Zoom: 125%");
 });
 
 test("choosing the size a pop-up already names writes nothing", async () => {
@@ -291,7 +296,7 @@ test("a choice the store refuses says why under its own row and marks its pop-up
   answer = { status: ACTION_RESULT_STATUS.ACCEPTED };
   choose("90%");
   await vi.waitFor(() =>
-    assert.equal(control(page, "Zoom: 100%").getAttribute("aria-invalid"), null),
+    assert.equal(control(page, "Zoom: 90%").getAttribute("aria-invalid"), null),
   );
   assert.deepEqual(written, [
     ["zoom", 125],

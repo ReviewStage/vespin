@@ -4,7 +4,7 @@
  * A row that writes takes the state of a `useMutation` its caller holds,
  * the setting's (`settingMutation`) or another act's, read through
  * `rowWrite`, so nothing of the row's keeps a write's pending or refusal of
- * its own. A switch draws the value the newest write asks for while it is
+ * its own. Every row draws the value the newest write asks for while it is
  * out, as the Optimistic Updates guide's "via the UI" draws a mutation's
  * `variables`, and goes on drawing it once landed until the stored value
  * agrees, since the document carrying it may arrive after the answer; a
@@ -43,13 +43,14 @@ export interface RowWrite<Value> {
 
 /**
  * How a row's value is asked of a mutation, found refused in its answer,
- * and read back from what it asked, for a row that draws a write ahead of
- * its answer; none for a row that rests until it answers.
+ * and read back from what it asked. Note that `drawn` is required, because
+ * a row that rested on its stored value until the answer would draw the old
+ * value back between the press and the answer.
  */
 interface RowWriteTerms<Value, Answer, Variables> {
   readonly ask: (value: Value) => Variables;
   readonly refused: (answer: Answer) => string | undefined;
-  readonly drawn?: ((variables: Variables) => Value) | undefined;
+  readonly drawn: (variables: Variables) => Value;
 }
 
 /** A row's change: its caller's write, or a plain change of its caller's draft. */
@@ -76,12 +77,13 @@ export function rowWrite<Value, Answer, Variables>(
 ): RowWrite<Value> {
   const { mutate, reset, variables, data, error, isPending, isSuccess, submittedAt } = mutation;
   const refusal = isPending ? undefined : refusalOf(data, error, terms.refused);
-  const { drawn } = terms;
-  const ahead = variables !== undefined && refusal === undefined && drawn !== undefined;
 
   return {
     run: (value) => mutate(terms.ask(value)),
-    ahead: ahead ? { value: drawn(variables) } : undefined,
+    ahead:
+      variables !== undefined && refusal === undefined
+        ? { value: terms.drawn(variables) }
+        : undefined,
     busy: isPending,
     refusal,
     savedAt: isSuccess && refusal === undefined ? submittedAt : 0,
@@ -92,32 +94,33 @@ export function rowWrite<Value, Answer, Variables>(
 /**
  * The write of the setting `field`, as its row's `useMutation(settingMutation())`
  * stands: the row's value stored as `stored` answers, and read back from the
- * stored value through `drawn` for a row that draws its write ahead.
+ * stored value through `drawn`, as the row draws its write ahead.
  */
-function settingRowWrite<Value>(
+function settingRowWrite<Field extends AppSettingField, Value>(
   mutation: UseMutationResult<SettingsUpdateResult, Error, SettingWrite>,
-  field: AppSettingField,
-  stored: (value: Value) => AppSettingValue<AppSettingField>,
-  drawn?: (value: AppSettingValue<AppSettingField>) => Value,
+  field: Field,
+  stored: (value: Value) => AppSettingValue<Field>,
+  drawn: (value: AppSettingValue<Field>) => Value,
 ): RowWrite<Value> {
   return rowWrite(mutation, {
     ask: (value) => ({ field, value: stored(value) }),
     refused: actionRefused,
-    drawn: drawn === undefined ? undefined : (variables) => drawn(variables.value),
+    // SAFETY: the row's mutation is its own and sends only `field`, so what it asked is that field's value.
+    drawn: (variables) => drawn(variables.value as AppSettingValue<Field>),
   });
 }
 
 /**
  * One row's write of the setting `field`, on a `useMutation(settingMutation())`
  * of its own, so a row's write in flight never stands in another's: its
- * value stored as `stored` answers, read back through `drawn` for a row
- * that draws its write ahead, and each refusal said in a toast where
+ * value stored as `stored` answers, read back through `drawn` as the row
+ * draws its write ahead, and each refusal said in a toast where
  * `toasts` asks, as a switch's are.
  */
-export function useSettingRowWrite<Value>(
-  field: AppSettingField,
-  stored: (value: Value) => AppSettingValue<AppSettingField>,
-  drawn?: (value: AppSettingValue<AppSettingField>) => Value,
+export function useSettingRowWrite<Field extends AppSettingField, Value>(
+  field: Field,
+  stored: (value: Value) => AppSettingValue<Field>,
+  drawn: (value: AppSettingValue<Field>) => Value,
   toasts = false,
 ): RowWrite<Value> {
   const mutation = useMutation({

@@ -12,6 +12,7 @@
 
 import {
   APP_SETTING_SCHEMA,
+  type AppSettingField,
   GITHUB_WAKE,
   GITHUB_WAKE_LIST,
   type GitHubWake,
@@ -54,7 +55,7 @@ function offWords(off: number): string | undefined {
 export function GitHubWakesRow({ view }: { view: SettingsRowsInput }): React.JSX.Element {
   const stored = storedList(view.settings.githubWakesOff);
 
-  const write = useSettingRowWrite<string>(
+  const write = useSettingRowWrite<AppSettingField, string>(
     APP_SETTING_SCHEMA.githubWakesOff.field,
     (list) => list,
     (value) => storedList(value) ?? "",

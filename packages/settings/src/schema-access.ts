@@ -472,6 +472,21 @@ export function settingFromOption<Field extends AppSettingField>(
   return settingControl(field)?.stored(token, view) as AppSettingValue<Field> | undefined;
 }
 
+/**
+ * The token a choice row draws for `value` stored in `field`, as its control
+ * reads it: the reverse of `settingFromOption`, so a row draws the pick a
+ * write still out asks for. A field with no control draws the value as is.
+ */
+export function optionFromSetting<Field extends AppSettingField>(
+  field: Field,
+  value: AppSettingValue<Field> | undefined,
+): string {
+  const control = settingControl(field);
+
+  // SAFETY: The value is the field selected's own, which its control reads at the one width every field's shares.
+  return control === undefined ? String(value) : control.value(value as StoredSettingValue);
+}
+
 /** What a counted setting change reports: which setting, and the shape of its new value. */
 interface SettingAnalytics {
   id: AppSettingId;
