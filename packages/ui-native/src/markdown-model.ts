@@ -20,7 +20,13 @@ import {
 import { githubPageAsked } from "@repo/features/link-standing-model";
 import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import { markdownTree } from "@repo/features/markdown-tree";
-import { LINK_CHIP, linkChipOf, MENTION_KIND, type Mention } from "@repo/features/mention-link";
+import {
+  LINK_CHIP,
+  linkChipOf,
+  MENTION_KIND,
+  type Mention,
+  mentionChipLabel,
+} from "@repo/features/mention-link";
 import { placeChipLook } from "@repo/features/place-chip-model";
 import { type ReplyButtonLink, readReplyButtonLink } from "@repo/features/reply-button-wire";
 import { Match } from "effect";
@@ -306,7 +312,8 @@ function linkChip(href: string, label: string, reading: MarkdownReading): Markdo
   }
 
   const entity = entityOfMention(chip.mention);
-  const drawn = chipOf(entity.kind, chip.name, linkTarget(href), entity);
+  const shown = mentionChipLabel(chip.mention, chip.name);
+  const drawn = chipOf(entity.kind, shown, linkTarget(href), entity);
   const github = githubAddressOf(chip.mention);
 
   return github === undefined ? drawn : { ...drawn, github };

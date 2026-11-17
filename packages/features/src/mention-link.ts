@@ -1207,6 +1207,26 @@ export function linkChipOf(
   return { kind: LINK_CHIP.PLACE, link, name };
 }
 
+/**
+ * The words a mention's chip shows, as every surface that draws words draws
+ * them: a pull request by the key its name opens with (`#42`, `relay#42`),
+ * since its title fades mid-word in a chip and its card keeps the title;
+ * any other mention, or a pull request whose name opens with no key of its
+ * own number, by its name. Note that only a key naming the link's own
+ * number is cut to, so words that merely start with another `#12` stay as
+ * written, and a key off another repository keeps its repository, which
+ * says which one it is.
+ */
+export function mentionChipLabel(mention: Mention, name: string): string {
+  if (mention.kind !== MENTION_KIND.LINK) return name;
+  const page = readGitHubPage(mention.url);
+
+  if (page?.kind !== GITHUB_PAGE.PULL_REQUEST) return name;
+  const [key = ""] = name.split(/\s/u, 1);
+
+  return key.length < name.length && key.endsWith(`#${page.number}`) ? key : name;
+}
+
 /** Words pasted whole that are one link drawn as a chip (`linkChipOf`), as that chip; nothing for any other words. */
 export function pastedLinkChip(words: string, repository: string | null): LinkChip | undefined {
   const address = words.trim();
