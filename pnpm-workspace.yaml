@@ -188,19 +188,18 @@ patchedDependencies:
 # symbol's own image (`withTintColor`, rendering kept original), as Mail's Flag
 # menu hands its colored flags to the menu; and `photoSize`, which draws a `file://`
 # `uiImage` round at a menu glyph's size with its rendering kept original, so
-# the Assignee menu leads each member with their face. It also adds
-# `scrollContentMargins`, SwiftUI's `contentMargins(_:_:for: .scrollContent)`,
-# which stands a plain list's rows in the reading column across a wide window
-# while the list keeps the whole width, so a drag beside the column scrolls it
-# as Mail's does; `listSectionMargins` moved no plain list's rows. And it hands
+# the Assignee menu leads each member with their face. And it hands
 # a `List` its edit mode as a binding (`editing`, `onEditingChange`), so a
 # two-finger drag down a list can switch Select mode on. And it gives a
 # `ToolbarItem` a `spacerBefore`, which stands the item after a `Spacer` in
 # one `ToolbarItemGroup`, since iOS 26 centers a keyboard bar's lone item,
 # such as a number pad's Done, which neither a `Spacer` inside the item nor
-# a `ToolbarSpacer` moves to the trailing edge. Delete it when an `@expo/ui` release offers a tinted
-# image and a photo a menu keeps, scroll content margins, and a toolbar
-# spacer.
+# a `ToolbarSpacer` moves to the trailing edge. It patches only `build/`,
+# which Metro and TypeScript read, never `src/`; a modifier alone goes in the
+# app's own `modules/native-interactions` instead, as `sideMargins` does.
+# 58.0.29 changes none of the files it patches. Delete it when an `@expo/ui`
+# release offers a tinted image and a photo a menu keeps, a list's edit mode
+# as a binding, and a toolbar spacer.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
 #
 # `@tiptap/extension-list` 3.33.1 strips an ordered list item's continuation
