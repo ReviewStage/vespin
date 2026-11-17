@@ -14,7 +14,8 @@
  *
  * The cursor is opaque to the pool, the read's cursor and its answer's
  * other fields together, so it is kept as one JSON value, none where the
- * read answered none. A read with no workspace is kept under the empty
+ * read answered none or a held key has no row, as a failed earlier write
+ * leaves one, so the next launch reads it from the start. A read with no workspace is kept under the empty
  * one.
  *
  * The pool runs on without its store, so a failed write is logged and
@@ -102,9 +103,16 @@ function written(connection: LocalDatabaseConnection, answer: KeptAnswer): void 
 
     for (const key of letGo) rowGone.run(answer.kind, key, answer.kind, key);
 
+    // Note that a held key with no row keeps no cursor, because an earlier write that failed left rows out the pool no longer hands again, and only a read from the start brings them back.
+    const [missing] = connection
+      .prepare(
+        "SELECT 1 AS missing FROM held LEFT JOIN row ON row.kind = held.kind AND row.key = held.key WHERE held.read = ? AND held.workspace = ? AND row.key IS NULL LIMIT 1",
+      )
+      .all(answer.read, workspace);
+
     connection
       .prepare("INSERT OR REPLACE INTO cursor (read, workspace, cursor) VALUES (?, ?, ?)")
-      .run(answer.read, workspace, cursor);
+      .run(answer.read, workspace, missing === undefined ? cursor : null);
   });
 }
 

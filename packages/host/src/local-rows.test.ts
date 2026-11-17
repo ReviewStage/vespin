@@ -90,3 +90,19 @@ it.effect("keeps a row two reads hold as one lets it go, and deletes it once nei
     assert.deepEqual((yield* rows.loaded(sidebar))?.rows, []);
   }).pipe(Effect.scoped, Effect.provide(platform)),
 );
+
+it.effect("keeps no cursor while a held key has no row, so the read starts over", () =>
+  Effect.gen(function* () {
+    const root = yield* temporaryDirectoryScoped();
+    const rows = localRows(yield* openLocalDatabase(root, ACCOUNT));
+    const name = { read: "taskList", kind: "plan", workspace: "w1" };
+
+    // Note that the second answer holds a key whose row an earlier, failed write never stored.
+    yield* rows.answered(
+      answer("taskList", { upserted: [{ key: "p1", row: FIRST }], held: ["p1"] }),
+    );
+    yield* rows.answered(answer("taskList", { held: ["p1", "p2"], cursor: { syncId: "42" } }));
+
+    assert.deepEqual(yield* rows.loaded(name), { rows: [FIRST], cursor: undefined });
+  }).pipe(Effect.scoped, Effect.provide(platform)),
+);
