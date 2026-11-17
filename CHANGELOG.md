@@ -74,6 +74,69 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.39.0 — 2026-11-17
+
+### Starter tasks
+
+A new workspace's Home now offers starter tasks under the prompt box: press
+one to see what an agent can do, with no need to think of a task first.
+
+[#9767](https://github.com/ReviewStage/vespin/pull/9767)
+
+### Improvements
+
+- Lists now load from a local database that saves only what changed
+  ([#9760](https://github.com/ReviewStage/vespin/pull/9760),
+  [#9759](https://github.com/ReviewStage/vespin/pull/9759),
+  [#9761](https://github.com/ReviewStage/vespin/pull/9761))
+- An agent another agent started sits nested under it in a task's Agents
+  ([#9665](https://github.com/ReviewStage/vespin/pull/9665))
+- A task's agents list oldest first and stay put as they work
+  ([#9711](https://github.com/ReviewStage/vespin/pull/9711))
+- Agents now hear when their pull request merges or closes
+  ([#9716](https://github.com/ReviewStage/vespin/pull/9716))
+- You can turn off each kind of GitHub event that wakes an agent
+  ([#9740](https://github.com/ReviewStage/vespin/pull/9740))
+- Escape closes what's open and never leaves the page
+  ([#9691](https://github.com/ReviewStage/vespin/pull/9691),
+  [#9673](https://github.com/ReviewStage/vespin/pull/9673))
+- ‹ is always Back, and Back returns to exactly what you were looking at
+  ([#9697](https://github.com/ReviewStage/vespin/pull/9697),
+  [#9698](https://github.com/ReviewStage/vespin/pull/9698),
+  [#9766](https://github.com/ReviewStage/vespin/pull/9766))
+- Calls stay quiet while the agent works, and fold its written replies
+  ([#9742](https://github.com/ReviewStage/vespin/pull/9742),
+  [#9747](https://github.com/ReviewStage/vespin/pull/9747),
+  [#9772](https://github.com/ReviewStage/vespin/pull/9772))
+- An agent started by talking gets named as soon as you speak
+  ([#9744](https://github.com/ReviewStage/vespin/pull/9744),
+  [#9749](https://github.com/ReviewStage/vespin/pull/9749))
+- Agents post to your Inbox only when they need you
+  ([#9712](https://github.com/ReviewStage/vespin/pull/9712))
+- An automation's finished runs now mark their task Done
+  ([#9731](https://github.com/ReviewStage/vespin/pull/9731))
+- A cleaner automation editor that says why MCP servers are read-only
+  ([#9741](https://github.com/ReviewStage/vespin/pull/9741))
+- GitHub chips no longer grow a state word after they load
+  ([#9701](https://github.com/ReviewStage/vespin/pull/9701))
+
+### Fixes
+
+- Fixed task keys and short links changing look when you edit a description
+  ([#9680](https://github.com/ReviewStage/vespin/pull/9680))
+- Fixed a stopped subagent showing as failed
+  ([#9708](https://github.com/ReviewStage/vespin/pull/9708))
+- Fixed a provider's refusal reading as a vague failure
+  ([#9709](https://github.com/ReviewStage/vespin/pull/9709))
+- Fixed ‹ Automations doing nothing when workspaces fail to load
+  ([#9714](https://github.com/ReviewStage/vespin/pull/9714))
+- Fixed adding Vespin to Slack when someone else approved it
+  ([#9758](https://github.com/ReviewStage/vespin/pull/9758))
+- Fixed the sidebar's bottom row sitting out of line with its top
+  ([#9756](https://github.com/ReviewStage/vespin/pull/9756))
+- Fixed tall sections jumping as they fold open or closed
+  ([#9751](https://github.com/ReviewStage/vespin/pull/9751))
+
 ## 0.38.0 — 2026-11-16
 
 ### Talk to your agents

@@ -427,7 +427,7 @@ function SearchStackScreen(words: SearchWords) {
   useEffect(() => {
     if (focusAsked === undefined) return;
 
-    field.current?.focus();
+    field.focusOnce();
     router.setParams({ [SEARCH_FOCUS_PARAM]: undefined });
   }, [focusAsked, field, router]);
 
