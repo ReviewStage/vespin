@@ -29,7 +29,7 @@ import {
   type AgentAttachment,
   base64Bytes,
 } from "@repo/features/agent-wire";
-import { pictureName } from "@repo/features/file-marker";
+import { nextPictureName, pictureName } from "@repo/features/file-marker";
 import { PASTED_TEXT_BYTES, pastedFile } from "@repo/features/long-paste";
 import { encodeWithin, PICTURE_LONG_EDGE } from "@repo/features/picture-fit";
 import type { AttachedPicture } from "@repo/ui-native";
@@ -50,6 +50,9 @@ const PICTURE_REFUSAL = {
   TOO_MUCH: "These files are too large to send together.",
   UNREADABLE: (name: string) => `${name} couldn't be read.`,
 } as const;
+
+/** What a holder says where the photo picker did not open, as a refusal's note stands beside the box. */
+export const PICKER_FAILED = "Photos couldn't be opened. Try again.";
 
 /** How many pictures a holder carries, how large each and all of them may be, how they are compressed as they are read, and what a holder that is full says. */
 export interface PictureBounds {
@@ -94,6 +97,22 @@ function jpegOf(base64: string | null | undefined): ReadPicture | undefined {
 /** Whether a file held is a pasted text file rather than a picture. */
 function isText(file: AgentAttachment): boolean {
   return file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT;
+}
+
+/**
+ * The files a holder that keeps its pictures itself attached, such as an
+ * Inbox thread's draft, as the composer's head draws them: each by its name,
+ * a picture with the `data:` address its thumbnail draws from, and a pasted
+ * text file with none, which draws as its tile.
+ */
+export function attachedFiles(
+  files: readonly AgentAttachment[],
+): readonly { readonly id: string; readonly name: string; readonly address?: string }[] {
+  return files.map((file) =>
+    isText(file)
+      ? { id: file.name, name: file.name }
+      : { id: file.name, name: file.name, address: `data:${file.mediaType};base64,${file.data}` },
+  );
 }
 
 /** The next picture's name, numbered past every picture held, a pasted text file not counted. */
@@ -218,6 +237,78 @@ export interface AttachedPictures {
   readonly pasteText: (words: string) => boolean;
 }
 
+/** Pictures read from the system's picker, as base64, or none for one the library could not read, not yet named or bounded. */
+export type PickedPictures = readonly (string | null | undefined)[];
+
+/** The pictures a holder that keeps its own takes of those picked, and what the library or a bound said of the rest. */
+export interface PicturesTaken {
+  readonly files: readonly AgentAttachment[];
+  readonly note: string | undefined;
+}
+
+/**
+ * Opens the system's photo picker for a holder that keeps its pictures
+ * itself, such as a thread's draft, whose sends and refusals hold them,
+ * offering as many as `held` leaves room for: the pictures picked, which
+ * `takePictures` names and bounds against what the holder holds once the
+ * picker answers, since a refusal may have put pictures back meanwhile.
+ */
+export async function pickPictures(
+  held: number,
+  bounds: PictureBounds = MESSAGE_PICTURES,
+): Promise<PickedPictures> {
+  const picked = await launchImageLibraryAsync({
+    mediaTypes: ["images"],
+    allowsMultipleSelection: true,
+    selectionLimit: Math.max(1, bounds.most - held),
+  });
+
+  if (picked.canceled) return [];
+
+  // Note that each is drawn within its long edge and compressed as the holder's own picks are, since the picker's quality never resizes a camera's photo.
+  return Promise.all(
+    picked.assets.map((asset) => readPicture(asset.uri, bounds).catch(() => undefined)),
+  );
+}
+
+/**
+ * The pictures picked a holder holding `held` takes: each named past every
+ * picture's name it holds, so none takes the name of one still held, and
+ * taken while the holder stays within its bounds, one the library could not
+ * read, or one past a bound, left out, with what the first left out says.
+ */
+export function takePictures(
+  held: readonly AgentAttachment[],
+  picked: PickedPictures,
+  bounds: PictureBounds = MESSAGE_PICTURES,
+): PicturesTaken {
+  const names = held.map((file) => file.name);
+  const files: AgentAttachment[] = [];
+  let note: string | undefined;
+
+  for (const base64 of picked) {
+    const name = nextPictureName(names);
+    names.push(name);
+
+    if (base64 === null || base64 === undefined) {
+      note ??= PICTURE_REFUSAL.UNREADABLE(name);
+      continue;
+    }
+
+    const file = { name, mediaType: AGENT_ATTACHMENT_TYPE.JPEG, data: base64 };
+
+    const refused = pictureRefusal(
+      [...held, ...files, file].map((each) => ({ id: each.name, file: each })),
+      bounds,
+    );
+
+    if (refused === undefined) files.push(file);
+    else note ??= refused;
+  }
+
+  return { files, note };
+}
+
 /** Where a holder's pictures are kept beyond its screen, such as a comment's draft: the pictures it opens on, and where each change goes. */
 export interface KeptPictures {
   readonly held: readonly HeldPicture[];
@@ -302,7 +393,10 @@ export function useAttachedPictures(
           setReads((count) => count - 1);
         }
       })
-      .catch((cause: unknown) => console.error("The photo picker did not open.", cause));
+      .catch((cause: unknown) => {
+        console.error("The photo picker did not open.", cause);
+        onNote(PICKER_FAILED);
+      });
   };
 
   // Every pasted file's name the holder has handed out, so a file taken off or sent frees no number a later paste reuses.
