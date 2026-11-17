@@ -2,9 +2,18 @@
 
 import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
 import { useEffect, useSyncExternalStore } from "react";
+import { useWindowDimensions } from "react-native";
 
-/** A person's choice, for this launch; none until they make one, or once it lapses. */
-let held: boolean | undefined;
+/**
+ * A person's choice, held with the window's shape it was made in, so a turn
+ * from landscape to portrait or back lets it lapse; none until they make one.
+ * Note that a portrait iPad's split view folds its list on its own, which it
+ * reports as hidden, and without the shape that fold stood as the person's
+ * choice once the window turned back to landscape.
+ */
+type Choice = { readonly landscape: boolean; readonly shown: boolean };
+
+let held: Choice | undefined;
 
 const listeners = new Set<() => void>();
 
@@ -16,7 +25,7 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-function choose(choice: boolean | undefined): void {
+function choose(choice: Choice | undefined): void {
   held = choice;
 
   for (const listener of listeners) listener();
@@ -33,11 +42,15 @@ type UseSidebarShownResult = {
  * show, hide, or toggle it. It stands until a person hides it, with the
  * system's sidebar button, a swipe, or the menu bar, and that choice holds
  * across the tabs, since every tab's split view reads this one answer,
- * until the window turns compact (`useSidebarChoiceLapse`).
+ * until the window turns to the other orientation or compact
+ * (`useSidebarChoiceLapse`).
  */
 export function useSidebarShown(): UseSidebarShownResult {
-  const shown = useSyncExternalStore(subscribe, () => held) ?? true;
-  const setShown = (next: boolean) => choose(next);
+  const { width, height } = useWindowDimensions();
+  const landscape = width > height;
+  const choice = useSyncExternalStore(subscribe, () => held);
+  const shown = choice?.landscape === landscape ? choice.shown : true;
+  const setShown = (next: boolean) => choose({ landscape, shown: next });
 
   return { shown, setShown, toggle: () => setShown(!shown) };
 }
