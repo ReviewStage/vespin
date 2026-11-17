@@ -1,5 +1,5 @@
 /**
- * local-copy.ts -- the signed-in account's local database as the sync engine's store: opened at sign-in, written as the pool answers and its writes wait, its waiting writes and refused agent messages read back to be laid over the pool, and deleted at sign-out.
+ * local-copy.ts -- the signed-in account's local database as the sync engine's store: opened at sign-in, written as the pool answers and its writes wait, read back as each kept read first stands and as its waiting writes and refused agent messages are laid over the pool, and deleted at sign-out.
  *
  * The pool is handed one store for its life (`PoolOptions.store`), which
  * forwards to the database open now and does nothing while none is, so a
@@ -7,12 +7,14 @@
  * to `localRows`, its waiting writes to `localOutbox`, and the agent
  * messages the service refused to `localRefused`, each move written whole.
  *
+ * Each kept read draws from it as it first stands (`loaded`), before the
+ * service answers, as Linear's local bootstrap does, and its follow reads
+ * past the cursor it kept; a read stood while none is open loads nothing.
+ *
  * The outbox is the only place waiting writes are kept: an open answers
  * them oldest first, for the caller to lay back over the pool (`requeue`)
  * before any read draws, having imported once the queue an older build
- * kept in `entities.sealed`. The rows are not loaded yet: the store's
- * `loaded` answers none, so each read still draws first from
- * `entities.sealed`. A database that will not open leaves the store doing
+ * kept in `entities.sealed`. A database that will not open leaves the store doing
  * nothing for that sign-in and answers the sealed queue, which the file
  * goes on carrying until a database imports it, so this launch
  * still sends it, and the failure is reported to Sentry by its tag and its
@@ -129,7 +131,6 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
 
   yield* Effect.addFinalizer(() => close);
 
-  // Note that no rows are loaded in this release, so every read draws first from `entities.sealed`.
   const store: PoolStore = {
     outbox: {
       added: (entry: QueuedEntry) => opened?.outbox.added(entry) ?? Effect.void,
@@ -137,7 +138,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
     },
     rows: {
       answered: (answer: KeptAnswer) => opened?.rows.answered(answer) ?? Effect.void,
-      loaded: () => Effect.undefined,
+      loaded: (name) => opened?.rows.loaded(name) ?? Effect.undefined,
     },
   };
 

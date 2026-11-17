@@ -191,12 +191,12 @@ export interface AutomationListCollections {
   readonly holds: (automationId: string) => boolean;
 }
 
-/** A workspace's automations, drawn from the follow's first answer on. */
+/** A workspace's automations, drawn from the follow's first answer on, or from what the local database held of them. */
 export function automationListCollections(
   dependencies: AutomationListDependencies,
 ): Effect.Effect<AutomationListCollections, never, Scope.Scope> {
   return Effect.gen(function* () {
-    // Note that nothing is drawn before the follow first answers, nor once the scope closed, since a follow let go draws for no window.
+    // Note that nothing is drawn before the follow first answers, where the local database held nothing, nor once the scope closed, since a follow let go draws for no window.
     let answered = false;
     let open = true;
     yield* Effect.addFinalizer(() =>
@@ -224,6 +224,10 @@ export function automationListCollections(
 
       return automationsGraceEdge(rows, at);
     });
+
+    // Note that the automations the local database held are drawn as the service last answered them, until the follow answers anew.
+    answered = automations.loaded;
+    yield* drawn;
 
     return {
       answer: (rows) =>

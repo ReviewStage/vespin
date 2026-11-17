@@ -44,9 +44,8 @@ import {
   type WriteDeclaration,
   type Written,
 } from "@repo/sync";
-import { Effect, Equal, MutableHashMap, Option, type Scope } from "effect";
+import { Effect, Equal, MutableHashMap, Option, Schema, type Scope } from "effect";
 import { type AppWorkspaceInvitations, NO_KEYS_HELD } from "./app-state.js";
-import { type EntityStore, KEPT_READ } from "./entity-store.js";
 import { KEPT_LIST } from "./kept-lists.js";
 import {
   type CarriedWaits,
@@ -68,6 +67,13 @@ interface PooledInvitation extends InvitationRow {
 
 /** A pending invitation as the pool holds it, by its id, a cancel its deletion and an invite its making. */
 const WORKSPACE_INVITATION = fieldKind((row: PooledInvitation) => row.id);
+
+/** What the local database keeps beside a workspace's invitations, as the read's cursor: the service's own origin each accept link is built on. */
+const keptInvitationsSchema = Schema.Struct({ origin: Schema.String });
+
+type KeptInvitations = typeof keptInvitationsSchema.Type;
+
+const decodeKept = Schema.decodeUnknownOption(keptInvitationsSchema);
 
 /** A seal the service did not answer, `gone` where the read names nothing the account reaches any more. */
 
@@ -91,8 +97,6 @@ export interface WorkspaceInvitationsDependencies {
   readonly tell: (held: AppWorkspaceInvitations) => void;
   /** The sync engine's pool, which each held workspace's invitations stand in while it is followed. */
   readonly pool: EntityPool;
-  /** The signed-in account's lists kept on disk, which a workspace's invitations are drawn from before its read first answers, and each answer is kept in; none where nothing keeps them. */
-  readonly entities: () => EntityStore | undefined;
 }
 
 /** The workspaces' invitations the windows hold, and the invitation writes drawn over them. */
@@ -136,7 +140,7 @@ function rowOfInvitation(workspaceId: string, made: WorkspaceInvitation): Pooled
 function followInvitations(
   workspaceId: string,
   answers: HeldAnswers<readonly WorkspaceInvitation[]>,
-  dependencies: Pick<WorkspaceInvitationsDependencies, "seal" | "pool" | "entities"> & {
+  dependencies: Pick<WorkspaceInvitationsDependencies, "seal" | "pool"> & {
     readonly stand: (
       waits: CarriedWaits<PooledInvitation>,
     ) => Effect.Effect<void, never, Scope.Scope>;
@@ -176,14 +180,9 @@ function followInvitations(
 
       const waits = yield* carriedWaits(() => invitations.synced());
       yield* dependencies.stand(waits);
-      // Note that the invitations kept on disk are drawn as the service last answered them, on the origin it answered, until the read answers anew.
-      const kept = dependencies.entities()?.storedIn(KEPT_READ.INVITATIONS, workspaceId);
-
-      if (kept !== undefined) {
-        yield* invitations.answer(kept.invitations.map((row) => ({ workspaceId, ...row })));
-        origin = kept.origin;
-        yield* drawn;
-      }
+      // Note that the invitations the local database held are drawn as the service last answered them, on the origin it answered, kept as the read's cursor, until the read answers anew.
+      origin = Option.getOrUndefined(decodeKept(invitations.stored))?.origin;
+      yield* drawn;
 
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
@@ -207,12 +206,11 @@ function followInvitations(
           WORKSPACE_INVITATIONS_READ.rows,
           (rows) =>
             Effect.gen(function* () {
-              yield* invitations.answer(rows.invitations.map((row) => ({ workspaceId, ...row })));
+              yield* invitations.answer(
+                rows.invitations.map((row) => ({ workspaceId, ...row })),
+                { cursor: { origin: first.origin } satisfies KeptInvitations },
+              );
               origin = first.origin;
-              yield* dependencies.entities()?.keepIn(KEPT_READ.INVITATIONS, workspaceId, {
-                origin: first.origin,
-                invitations: rows.invitations,
-              }) ?? Effect.void;
               yield* waits.answered;
               yield* drawn;
             }),
@@ -258,7 +256,6 @@ export function workspaceInvitationsReads(
         followInvitations(workspaceId, answers, {
           seal: dependencies.seal,
           pool: dependencies.pool,
-          entities: dependencies.entities,
           stand: stand(workspaceId),
         }),
     });

@@ -100,7 +100,6 @@ import { type AppTokenRepositories, type AppWorkspacePhotos, NO_KEYS_HELD } from
 import type { AccountComposer } from "./compose-account.js";
 import type { Composer } from "./composer.js";
 import { type TASKS_ACTS, type WORKSPACE_ACTS, WORKSPACE_FOLLOWS } from "./contract/index.js";
-import { type EntityStore, KEPT_READ } from "./entity-store.js";
 import type { HostMethodTable } from "./gateway-door.js";
 import { heldFetch } from "./held-fetch.js";
 import { ActRefused, type HostActTable, liveTold } from "./host-acts.js";
@@ -251,8 +250,6 @@ export interface WorkspacesDependencies {
   focus: WindowFocus;
   /** The sync engine's pool, which the workspaces, their people, invitations, and integrations stand in. */
   pool: EntityPool;
-  /** The signed-in account's lists kept on disk, which the gate opening draws before the service answers and each answer keeps; none where nothing keeps them. */
-  entities: () => EntityStore | undefined;
   /** GitHub's standing as an integration asked again, as a GitHub disconnect that answered asks; done once each ask has landed (`compose-integrations.ts`). */
   githubMoved: Effect.Effect<void>;
   /** Counts a product event, as a workspace experiment an admin turned on or off is counted once the service takes it. */
@@ -507,8 +504,6 @@ function workspacesAnswered(
       tasks.draw({ workspacesStatus: TASKS_READ.READY });
     }
 
-    yield* dependencies.entities()?.keep(KEPT_READ.WORKSPACES, workspaces) ?? Effect.void;
-
     if (reinstalled.size > 0) yield* tasks.repositoriesMovedIn(reinstalled);
   });
 }
@@ -618,26 +613,24 @@ function workspaceList(reach: WorkspacesReach) {
 
     const followed = workspacesFollowed(reach, () => list.rows, workspacesFollow);
 
-    /** The workspaces as the entity store kept them, drawn as the service last answered them, only where nothing has answered them since. */
-    const drawnFromDisk = Effect.gen(function* () {
-      const workspaces = dependencies.entities()?.stored(KEPT_READ.WORKSPACES);
+    /**
+     * The workspaces stood again on the local database the gate just
+     * opened, since they first stood before it was, only where nothing has
+     * answered them since, and drawn as the service last answered them.
+     */
+    const standOnLocal = Effect.gen(function* () {
+      if (tasks.view().workspacesStatus === TASKS_READ.READY) return;
+      yield* Scope.close(list.scope, Exit.void);
+      list = yield* openWorkspaces;
 
-      // Note that a list of none, as a build before #6753 could keep, is no list: the follow's first answer draws one.
-      if (
-        workspaces !== undefined &&
-        workspaces.length > 0 &&
-        tasks.view().workspacesStatus !== TASKS_READ.READY
-      ) {
-        yield* list.rows.answer(workspaces);
-        tasks.draw({ workspacesStatus: TASKS_READ.READY });
-      }
+      if (list.rows.loaded) tasks.draw({ workspacesStatus: TASKS_READ.READY });
     });
 
     return {
       /** The session's workspaces, which a write is drawn and sent through. */
       rows: () => list.rows,
       followed,
-      drawnFromDisk,
+      standOnLocal,
       photosReset: photos.reset,
       /** The follow let go and the session's workspaces closed, a new session's opened in their place. */
       reset: Effect.gen(function* () {
@@ -678,7 +671,6 @@ function workspacePeople(reach: WorkspacesReach) {
         ),
       tell: liveTold(kernel.emit, WORKSPACE_FOLLOWS.WORKSPACE_MEMBERS_FOLLOW),
       pool: dependencies.pool,
-      entities: dependencies.entities,
     });
 
     const invitationsReads = yield* workspaceInvitationsReads({
@@ -693,7 +685,6 @@ function workspacePeople(reach: WorkspacesReach) {
         ),
       tell: liveTold(kernel.emit, WORKSPACE_FOLLOWS.WORKSPACE_INVITATIONS_FOLLOW),
       pool: dependencies.pool,
-      entities: dependencies.entities,
     });
 
     return { membersReads, invitationsReads };
@@ -1710,7 +1701,7 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
       yield* integrated.slackChannels.open;
 
       if (!gate()) return;
-      yield* list.drawnFromDisk;
+      yield* list.standOnLocal;
       yield* list.followed;
       yield* github.opened;
     }),

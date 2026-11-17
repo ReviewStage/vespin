@@ -73,7 +73,6 @@ import { TestClock } from "effect/testing";
 import { type AppTranscript, type AppTranscripts, OWN_TRANSCRIPT } from "../app-state.js";
 import { type AccountAsksClient, composeAccountAsks } from "../compose-account-asks.js";
 import { type AgentClient, composeAgents, type PullRequestClient } from "../compose-agents.js";
-import type { EntityStore } from "../entity-store.js";
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "../kept-content.js";
 import { windowFocus } from "../window-focus.js";
 import { type PolledLive, polledLive } from "./polled-live.js";
@@ -1262,7 +1261,6 @@ export function subject(
     agentListed?: (agentId: string) => AgentSummary | undefined;
     repositoriesMoved?: Effect.Effect<void>;
     pool?: EntityPool;
-    entities?: EntityStore;
   } = {},
 ) {
   return Effect.gen(function* () {
@@ -1301,7 +1299,6 @@ export function subject(
       },
       ...(options.listed === undefined ? undefined : { listed: options.listed }),
       ...(options.agentListed === undefined ? undefined : { agentListed: options.agentListed }),
-      ...(options.entities === undefined ? undefined : { entities: () => options.entities }),
       pool,
     }).pipe(Effect.provide(noNetwork));
 

@@ -9,9 +9,8 @@ import {
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import { ACCOUNT_INBOX_ITEMS } from "@repo/features/live-wire";
 import type { EntityPool, HeldRows } from "@repo/sync";
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Option, Schema } from "effect";
 import type { AppHostRead, AppInboxItems } from "./app-state.js";
-import { type EntityStore, KEPT_READ, type KeptRows } from "./entity-store.js";
 import { type AccountWideReads, INBOX_ITEM, type InboxChange } from "./inbox-collections.js";
 import { KEPT_LIST } from "./kept-lists.js";
 import {
@@ -53,31 +52,30 @@ import {
  * read again after `LIVE_RESTART`, whole, keeping what it told; one refused
  * before it ever answered is told as failed.
  *
- * Each answer read at a sync id is kept on disk (`entity-store.ts`'s
- * `KEPT_READ.INBOX`): the items as the follow took them from the service,
- * never with a write drawn over them, the first in the order a plan's list
- * draws them that fit in `KEPT_CHARACTERS`. The follow's first attempt
- * draws what the store kept before it reads, so a launch draws the Inbox at
- * once, and reads past the sync id it was kept at where the store kept
- * every item, since a read past an id answers every item that moved since
- * it; where it kept only the first, the id is not kept, and the first read
- * is whole, since an item left out that never moved would never be
- * answered again.
+ * Each answer is kept in the local database (`PoolRead.kept`): the items
+ * as the follow took them from the service, never with a write drawn over
+ * them, the first in the order a plan's list draws them that fit in
+ * `KEPT_CHARACTERS`, with the plan each is on and the sync id they were
+ * read at as the read's cursor. The follow draws what the database held as
+ * its read stands, before it reads, so a launch draws the Inbox at once,
+ * and its first attempt reads past the sync id kept where the database
+ * kept every item, since a read past an id answers every item that moved
+ * since it; where it kept only the first, the first read is whole, since
+ * an item left out that never moved would never be answered again.
  */
 
 /**
  * The most characters of items kept on disk, as JSON: about 1 MB, an Inbox
  * of some 130 threads whole, so its first read goes past the sync id it was
  * kept at, and the first 600 or so of a larger one. Note that it is bound,
- * because the file is opened and decoded whole before a launch draws: since
- * the iPhone seals it natively (#9270), the open is about 6 ms a MB, and the
- * kept rows' decode on Hermes about 55 ms a MB on the iPhone 18 Pro and the
- * iOS 26.5 iPad alike, so this many add about 60 ms, where a 640-thread
- * Inbox's 4.8 MB would add about 0.3 s to every launch.
+ * because the items are read and decoded whole before a launch draws the
+ * Inbox: the kept rows' decode on Hermes is about 55 ms a MB on the iPhone
+ * 18 Pro and the iOS 26.5 iPad alike, so this many add about 60 ms, where a
+ * 640-thread Inbox's 4.8 MB would add about 0.3 s to every launch.
  */
-export const KEPT_CHARACTERS = 1_000_000;
+const KEPT_CHARACTERS = 1_000_000;
 
-/** The items the local database keeps: the first, in the order the read answered them, whose JSON fits in `KEPT_CHARACTERS`. */
+/** The items the local database keeps: the first, in the order a plan's list draws them, whose JSON fits in `KEPT_CHARACTERS`. */
 const KEPT_INBOX_BOUND = {
   size: (item: InboxItem) => JSON.stringify(item).length,
   within: KEPT_CHARACTERS,
@@ -104,8 +102,6 @@ export interface AccountItemsDependencies {
   readonly pool: EntityPool;
   /** The account's own reads, among which the feed's wait stands while it is followed. */
   readonly accountWide: AccountWideReads;
-  /** The signed-in account's lists kept on disk, which the feed is kept among; none where nothing keeps them. */
-  readonly entities?: () => EntityStore | undefined;
 }
 
 type HeldAfterResult = {
@@ -166,24 +162,40 @@ function withinWindow(held: Map<string, HeldItem>, now: number): void {
   }
 }
 
-type KeptInbox = KeptRows[typeof KEPT_READ.INBOX];
+/**
+ * What the local database keeps beside the items, as the read's cursor: the
+ * sync id they were read at, where they were, and the plan each item held
+ * is on, since an item names none of its own. The pool keeps it whole even
+ * where the bound left items out, so the plans of the items it kept are
+ * always among it.
+ */
+const keptInboxSchema = Schema.Struct({
+  at: Schema.optionalKey(Schema.String),
+  plans: Schema.Record(Schema.String, Schema.String),
+});
 
-/** What the store keeps of `held`, read at `at`: its first items in the order a plan's list draws them, as many as fit in `KEPT_CHARACTERS`, and the sync id only where that is every item. */
-function keptOf(held: Held, at: string): KeptInbox {
-  const items: HeldItem[] = [];
-  let characters = 0;
+type KeptInbox = typeof keptInboxSchema.Type;
 
-  for (const { id } of inboxInOrder([...held.values()].map((each) => each.item))) {
-    const each = held.get(id);
+const decodeKept = Schema.decodeUnknownOption(keptInboxSchema);
 
-    if (each === undefined) continue;
-    characters += JSON.stringify(each).length;
+/** What the local database keeps beside `held`, read at the sync id `standing` names where it names one. */
+function keptOf(held: Held, standing: SyncStanding | undefined): KeptInbox {
+  const plans = Object.fromEntries([...held].map(([id, { taskId }]) => [id, taskId]));
 
-    if (characters > KEPT_CHARACTERS) break;
-    items.push(each);
+  return standing === undefined ? { plans } : { at: standing.next, plans };
+}
+
+/** The items `kept` holds a plan for among `items`, as the local database held them, each on its plan. */
+function heldOfKept(items: readonly InboxItem[], kept: KeptInbox): Map<string, HeldItem> {
+  const held = new Map<string, HeldItem>();
+
+  for (const item of items) {
+    const taskId = kept.plans[item.id];
+
+    if (taskId !== undefined) held.set(item.id, { item, taskId });
   }
 
-  return items.length === held.size ? { items, at } : { items };
+  return held;
 }
 
 /** No item on any plan, as the feed is told before it first answers. */
@@ -247,27 +259,27 @@ export function followAccountItems(
 ): Effect.Effect<void> {
   /** Whether any read answered, so a later refusal keeps what was told. */
   let answered = false;
-  /** The feed as the store kept it, which the first attempt alone draws and reads past. */
-  let fromDisk = dependencies.entities?.()?.stored(KEPT_READ.INBOX);
+  /** Whether no attempt has read yet, so the first alone reads past the sync id the local database kept. */
+  let firstAttempt = true;
 
   const attempt = Effect.scoped(
     Effect.gen(function* () {
-      const kept = fromDisk;
-      fromDisk = undefined;
+      const resumes = firstAttempt;
+      firstAttempt = false;
       let wait: TxWait | undefined;
       /** Every item as the follow last took it, with its plan. */
       let held: Held | undefined;
       /** The items as last drawn, a standing write's among them, by the plan each is on. */
       let told = NO_ITEMS;
       /** Whether the items drawn are still the store's, before the read's first answer took their place. */
-      let fromStore = false;
+      let drawnFromStore = false;
 
       /** Tells the items as last drawn, once the read first answered or the store's were drawn, marked kept while they are still the store's. */
       const toldNow = Effect.suspend(() => {
         if (held === undefined) return Effect.void;
         answered = true;
 
-        return tell(fromStore ? { rows: told, kept: true } : { rows: told });
+        return tell(drawnFromStore ? { rows: told, kept: true } : { rows: told });
       });
 
       /** Draws the items `ids` names again, a write standing over them, on the plans the read answered them on. */
@@ -292,36 +304,47 @@ export function followAccountItems(
 
       yield* dependencies.accountWide.stand(() => wait);
 
-      /** The items `after` holds taken in place of those `was` held, `sent` the ones that came with it, at the sync id `at` names, and told. */
+      /** The items `after` holds taken in place of those `was` held, `sent` the ones that came with it, read where `standing` says, and told. */
       const taken = (
         was: Held,
         after: Held,
         sent: readonly InboxItem[],
         placed: readonly string[],
-        at: bigint | undefined,
+        standing: SyncStanding | undefined,
       ) =>
         Effect.gen(function* () {
           held = after;
+          const at = syncIdOf(standing);
 
+          // Note that the items are held in the order a plan's list draws them, so the local database keeps the first of them that fit.
           const moved = yield* items.answer(sent, {
-            held: [...after.keys()],
+            held: inboxInOrder([...after.values()].map((each) => each.item)).map((item) => item.id),
             ...(at === undefined ? undefined : { at }),
+            cursor: keptOf(after, standing),
           });
 
           told = inboxItemsPatched(told, [...moved, ...placed], was, after, items.row);
           yield* toldNow;
         });
 
-      // Note that the store's items are drawn before the first read, so a launch draws the Inbox at once, and at no sync id, so the read's first answer takes their place whatever id it was read at.
+      // Note that the items the local database held are drawn before the first read, so a launch draws the Inbox at once, and taken at no sync id, so the read's first answer takes their place whatever id it was read at.
+      const kept = items.loaded ? Option.getOrUndefined(decodeKept(items.stored)) : undefined;
+      const stored = items.synced();
+
       if (kept !== undefined) {
-        const stored = new Map(kept.items.map((each) => [each.item.id, each]));
-        withinWindow(stored, yield* Clock.currentTimeMillis);
-        const sent = [...stored.values()].map((each) => each.item);
-        fromStore = true;
-        yield* taken(new Map(), stored, sent, [], undefined);
+        const fromStore = heldOfKept(stored, kept);
+        withinWindow(fromStore, yield* Clock.currentTimeMillis);
+        held = fromStore;
+        drawnFromStore = true;
+        told = inboxItemsPatched(told, fromStore.keys(), new Map(), fromStore, items.row);
+        yield* toldNow;
       }
 
-      const first = yield* dependencies.seal(userId, kept?.at ?? "");
+      // Note that the first read goes past the sync id kept only where the local database kept every item, since one left out that never moved would never be answered again.
+      const every = kept !== undefined && stored.length === Object.keys(kept.plans).length;
+      const from = resumes && every ? (kept.at ?? "") : "";
+
+      const first = yield* dependencies.seal(userId, from);
 
       if ("failure" in first) {
         if (!answered) yield* tell({ failed: true });
@@ -331,20 +354,10 @@ export function followAccountItems(
 
       const landed = (decoded: AccountInboxItemsLiveRows, standing?: SyncStanding) =>
         Effect.gen(function* () {
-          fromStore = false;
+          drawnFromStore = false;
           const was = held ?? new Map<string, HeldItem>();
           const after = heldAfter(was, decoded, standing, yield* Clock.currentTimeMillis);
-          yield* taken(was, after.held, after.sent, after.placed, syncIdOf(standing));
-          const entities = dependencies.entities?.();
-
-          // Note that only an answer read at a sync id is kept, and one that moved no item is written only beside the next save of something that did, or as the store closes.
-          if (entities !== undefined && standing !== undefined) {
-            const keptNow = keptOf(after.held, standing.next);
-
-            yield* after.sent.length > 0 || after.held.size !== was.size
-              ? entities.keep(KEPT_READ.INBOX, keptNow)
-              : entities.keepUnmoved(KEPT_READ.INBOX, keptNow);
-          }
+          yield* taken(was, after.held, after.sent, after.placed, standing);
         });
 
       yield* followTakingRows(

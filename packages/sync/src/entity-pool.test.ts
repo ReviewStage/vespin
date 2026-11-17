@@ -74,6 +74,39 @@ function shownOver(pool: EntityPool, row: Row) {
   });
 }
 
+it.effect(
+  "a read that adopts and stands after a write laid back from the store shows what it made, and none of a write asked before it stood",
+  () =>
+    Effect.gen(function* () {
+      const make: WriteDeclaration<Row, FieldChange<Row>, Row, string> = {
+        kind: ROW,
+        keys: (row) => [row.id],
+        change: (row) => ({ made: row }),
+        send: () => Effect.succeed({ refused: "unreachable", unanswered: true as const }),
+        queue: {
+          name: "make",
+          input: Schema.Struct({ id: Schema.String, name: Schema.String, runs: Schema.Number }),
+          queued: () => "waits",
+        },
+      };
+
+      const pool = yield* entityPool({ mintKey: () => "key-1", replayRefused: Effect.void });
+      const laid = { id: "1", name: "Made offline", runs: 0 };
+      yield* pool.requeue([{ name: "make", key: "key-0", input: laid }], [anyWrite(make)]);
+
+      const asked = yield* Effect.forkChild(
+        pool.write(MAKES, { id: "2", name: "Made now", runs: 0 }),
+      );
+
+      yield* settled;
+
+      const late = yield* standing(pool, true);
+
+      assert.deepEqual(late.rows.rows(), [laid]);
+      yield* Fiber.interrupt(asked);
+    }).pipe(Effect.scoped),
+);
+
 it.effect("two reads hold one row, which leaves the pool only once the last lets it go", () =>
   Effect.gen(function* () {
     const pool = yield* entityPool();
@@ -409,7 +442,7 @@ it.effect(
 );
 
 it.effect(
-  "a bounded kept read hands the store only its first rows that fit, and no cursor once it leaves one out",
+  "a bounded kept read hands the store only its first rows that fit, and its cursor whole once it leaves one out",
   () =>
     Effect.gen(function* () {
       const { rows, told } = yield* keptStanding({
@@ -434,7 +467,7 @@ it.effect(
             held: ["1", "2"],
             cursor: "c1",
           },
-          { upserted: [], held: ["1", "2"], cursor: undefined },
+          { upserted: [], held: ["1", "2"], cursor: "c2" },
         ],
       );
     }),
@@ -522,6 +555,7 @@ it.effect(
 
       assert.deepEqual(rows.rows(), [triage, { ...deploy, name: "Renamed" }]);
       assert.deepEqual(rows.stored, { syncId: 7 });
+      assert.equal(rows.loaded, true);
       assert.deepEqual(told, [], "what the store held is not handed back to it");
 
       const ship = { id: "3", name: "Ship", runs: 0 };
@@ -542,5 +576,6 @@ it.effect("a kept read the store holds nothing of stands empty, with no cursor",
 
     assert.deepEqual(rows.rows(), []);
     assert.equal(rows.stored, undefined);
+    assert.equal(rows.loaded, false);
   }),
 );

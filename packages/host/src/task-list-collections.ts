@@ -77,7 +77,7 @@ import {
   createLiveQueryCollection,
   localOnlyCollectionOptions,
 } from "@tanstack/db";
-import { Effect, FiberSet, type Scope } from "effect";
+import { Effect, FiberSet, Option, Schema, type Scope } from "effect";
 import { drawnRows } from "./drawn-rows.js";
 import { KEPT_LIST } from "./kept-lists.js";
 import { drawnAtEdges, drawnPerTick } from "./live-collection.js";
@@ -132,9 +132,14 @@ export interface TaskListCollections {
     rows: TaskListLiveRows,
     standing?: SyncStanding,
     liveSince?: number,
+    kept?: TaskListKept,
   ) => Effect.Effect<boolean>;
-  /** The plans and agents the list holds as the service answered them, with no write drawn over them, as the entity store keeps them. */
-  readonly synced: () => TaskListLiveRows;
+  /**
+   * Where the local database kept the list it held as it stood, which the
+   * follow reads past, and the list is drawn from at once; none where it
+   * held neither its plans nor its agents.
+   */
+  readonly stored: () => StoredTaskList | undefined;
   /** Whether the list draws the task or the agent `id` names, from its follow or as a cold one. */
   readonly holds: (id: string) => boolean;
   /** Marks a read outside the list as it is asked: where the follow's answers stand, and its own place among such reads. */
@@ -148,6 +153,25 @@ export interface TaskListCollections {
    * it.
    */
   readonly cold: (rows: TaskListLiveRows, mark: ColdMark) => Effect.Effect<void>;
+}
+
+/**
+ * What the local database keeps beside the list's rows, as each read's
+ * cursor: the sync id they were read at, and the workspaces the answer said
+ * hold any task, where it said.
+ */
+const taskListKeptSchema = Schema.Struct({
+  at: Schema.String,
+  taskWorkspaces: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
+type TaskListKept = typeof taskListKeptSchema.Type;
+
+const decodeKept = Schema.decodeUnknownOption(taskListKeptSchema);
+
+/** Where the list the local database held was kept at; none where the two reads were kept at different ids, as a quit between their writes leaves them. */
+interface StoredTaskList {
+  readonly kept: TaskListKept | undefined;
 }
 
 /** Where a read outside the list was asked: the follow's answers given by then, and how many such reads were asked before it. */
@@ -424,6 +448,23 @@ export function taskListCollections(
 
     const ticks = yield* drawnPerTick(drawn);
 
+    // Note that the rows the local database held are the list's own as it stands, drawn at once with any a write laid back made, so its follow's next answer settles them as any it held.
+    const shownAtStand = plans.rows().length + agents.rows().length > 0;
+
+    if (plans.loaded || agents.loaded || shownAtStand) {
+      planKeys = new Set(plans.synced().map((row) => row.id));
+      agentKeys = new Set(agents.synced().map((row) => row.id));
+      yield* inChunks(
+        plans.rows().map((row) => row.id),
+        plansDrawn,
+      );
+      yield* inChunks(
+        agents.rows().map((row) => row.id),
+        agentsDrawn,
+      );
+      yield* ticks.drawn;
+    }
+
     const mark = (): ColdMark => {
       coldAsked += 1;
 
@@ -504,7 +545,7 @@ export function taskListCollections(
       });
 
     return {
-      answer: (answeredRows, standing, liveSince) =>
+      answer: (answeredRows, standing, liveSince, kept) =>
         Effect.suspend(() => {
           // Note that one past a sync id joins what it names onto the rows held, less those it lets go, and a whole one holds its rows alone.
           const past = standing?.past !== undefined;
@@ -596,7 +637,7 @@ export function taskListCollections(
           for (const row of rows.agents) if (!gone.has(row.id)) agentKeys.add(row.id);
 
           const at = syncIdOf(standing);
-          const sinceAt = at === undefined ? undefined : { at };
+          const sinceAt = { ...(at === undefined ? undefined : { at }), cursor: kept };
 
           // Note that one past a sync id hands the pool only what moved and what it let go, the list's own and any a write's answer laid among its rows, so its work is as large as the change.
           const answered = (held: ReadonlySet<string>, letGo: Iterable<string>): Answered =>
@@ -618,7 +659,13 @@ export function taskListCollections(
             return plansMoved.length + agentsMoved.length > 0;
           });
         }),
-      synced: () => ({ tasks: plans.synced(), agents: agents.synced() }),
+      stored: () => {
+        if (!plans.loaded && !agents.loaded) return undefined;
+        const plansAt = Option.getOrUndefined(decodeKept(plans.stored));
+        const agentsAt = Option.getOrUndefined(decodeKept(agents.stored));
+
+        return { kept: plansAt !== undefined && plansAt.at === agentsAt?.at ? plansAt : undefined };
+      },
       holds: (id) =>
         plans.holds(id) || agents.holds(id) || coldPlans.holds(id) || coldAgents.holds(id),
       mark,
