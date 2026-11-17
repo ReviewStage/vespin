@@ -1,0 +1,48 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad26 - iOS 26.5 - ABD9B3FE-4859-40A8-85F9-63B98B47142F
+ > Flow firstrun
+Set orientation ${ORIENT}...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {authServer=stub})... COMPLETED
+Take screenshot ${P}-1a-launch... COMPLETED
+Assert that "Sign in to Vespin" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-1b-sign-in... COMPLETED
+Tap on "Continue with GitHub"... COMPLETED
+Take screenshot ${P}-2-after-continue... COMPLETED
+Assert that (Optional) ".*Would Like to Send You Notifications.*" is visible... COMPLETED
+Take screenshot ${P}-3-notification-prompt... COMPLETED
+Run flow when ${DENY == 'true'} is true...
+Run flow when false is true... SKIPPED
+Run flow when ${DENY != 'true'} is true...
+  Tap on (Optional) "Allow"... COMPLETED
+Run flow when true is true... COMPLETED
+Wait for animation to end within 4000 ms... COMPLETED
+Take screenshot ${P}-4a-after-sign-in... COMPLETED
+Tap on (Optional) "Tasks"... WARNED
+Wait for animation to end within 4000 ms... COMPLETED
+Take screenshot ${P}-4b-tasks... COMPLETED
+Run flow when id: search-tab is visible...
+Run flow when id: search-tab is visible... SKIPPED
+Run flow when id: search-tab is not visible...
+  Tap on (Optional) "Search"... WARNED
+Run flow when id: search-tab is not visible... COMPLETED
+Wait for animation to end within 4000 ms... COMPLETED
+Take screenshot ${P}-4c-search... COMPLETED
+Tap on (Optional) "Inbox"... WARNED
+Wait for animation to end within 3000 ms... COMPLETED
+Tap on (Optional) id: workspace-switcher... WARNED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot ${P}-5a-switcher... COMPLETED
+Tap on (Optional) "Settings, .*"... WARNED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot ${P}-5b-settings... COMPLETED
+Scrolling DOWN until id: settings-notifications is visible with speed 40, visibility percentage 100%, timeout 8000 ms, with centering disabled... WARNED
+Tap on (Optional) id: settings-notifications... WARNED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot ${P}-5c-settings-notifications... COMPLETED
