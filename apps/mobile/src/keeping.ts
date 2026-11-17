@@ -34,7 +34,7 @@ import {
   useFailureNotices,
 } from "@repo/ui-native";
 import { StringFormat, setImageAsync, setStringAsync } from "expo-clipboard";
-import { randomUUID } from "expo-crypto";
+import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from "expo-crypto";
 import { Directory, File, Paths } from "expo-file-system";
 import { Asset, requestPermissionsAsync } from "expo-media-library";
 import { useMemo } from "react";
@@ -92,19 +92,20 @@ function picturesBytes(kept: Kept) {
   return held;
 }
 
-/** The file Photos or the share sheet takes: a picture written under the app's caches, named for what it shows, or the file a recording or a file already is. */
+/**
+ * The file Quick Look, Photos, or the share sheet takes: a picture written
+ * under the app's caches, named for what it shows, or the file a recording or
+ * a file already is. Note that a picture's folder is named by a digest of its
+ * bytes, so a picture opened, shared, or saved again is the file already
+ * written rather than a second write of it.
+ */
 async function fileOf(kept: Kept): Promise<string> {
   if (kept.kind !== KEPT_KIND.PICTURE) return kept.source;
   const held = picturesBytes(kept);
   const name = kept.name.trim().slice(0, NAME_MAX).trim() || PICTURE_NAME;
+  const digest = await digestStringAsync(CryptoDigestAlgorithm.SHA256, held.base64);
 
-  return cachedFile(
-    KEPT_PREFIX,
-    randomUUID(),
-    `${name}.${held.extension}`,
-    held.mediaType,
-    held.base64,
-  );
+  return cachedFile(KEPT_PREFIX, digest, `${name}.${held.extension}`, held.mediaType, held.base64);
 }
 
 /** Copies a picture as a picture, or a text file's words. */
