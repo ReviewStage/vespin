@@ -5,12 +5,18 @@ import { REMIND_TIMES } from "@repo/features/inbox-remind-times";
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import {
   MENU_COMMAND,
+  MENU_OWN_PAGE,
   MENU_SUBJECT,
   type MenuCommand,
   type MenuFocus,
+  type MenuOwnPage,
+  type MenuRouteParams,
   menuFocusOf,
+  menuOwnPageOf,
 } from "@repo/features/ios-menu-commands";
 import {
+  GITHUB_PAGE,
+  gitHubPageLink,
   LINK_DESTINATION,
   type LinkDestination,
   linkOf,
@@ -124,6 +130,46 @@ interface Subject {
   readonly threadUnread: boolean;
 }
 
+/**
+ * The address a pushed pull request or page opens in the browser: the pull
+ * request on GitHub, or the page on vespin.dev in its task's workspace,
+ * which a task's page names itself and an agent's page takes from its task.
+ */
+function ownPageAddress(
+  page: MenuOwnPage,
+  task: TaskSummary | undefined,
+  agentTaskId: string | undefined,
+  stepOf: (workspaceId: string | undefined) => string | undefined,
+): string | undefined {
+  switch (page.kind) {
+    case MENU_OWN_PAGE.PULL_REQUEST:
+      return gitHubPageLink({
+        kind: GITHUB_PAGE.PULL_REQUEST,
+        repository: page.repository,
+        number: page.number,
+      });
+    case MENU_OWN_PAGE.TASK_PAGE: {
+      const step = stepOf(page.workspaceId ?? task?.workspaceId);
+
+      const place = {
+        kind: LINK_DESTINATION.PAGE,
+        taskId: page.taskId,
+        pageId: page.pageId,
+      } as const;
+
+      return step === undefined ? undefined : linkOf(place, step);
+    }
+
+    case MENU_OWN_PAGE.AGENT_PAGE: {
+      const step = stepOf(task?.workspaceId);
+
+      return step === undefined || agentTaskId === undefined
+        ? undefined
+        : linkOf({ kind: LINK_DESTINATION.PAGE, taskId: agentTaskId, pageId: page.pageId }, step);
+    }
+  }
+}
+
 /** Whether a link's word names the task: its id, or its number as a task link spells one. */
 function namesTask(task: TaskSummary, named: string): boolean {
   return task.id === named || (task.number !== undefined && String(task.number) === named);
@@ -132,8 +178,9 @@ function namesTask(task: TaskSummary, named: string): boolean {
 /** Reads what the route stands in front into what each command may do to it. */
 function useSubject(signedIn: boolean): Subject {
   const pathname = usePathname();
-  const { selected } = useGlobalSearchParams<{ selected?: string }>();
-  const focus: MenuFocus = signedIn ? menuFocusOf(pathname, selected) : { kind: MENU_SUBJECT.NONE };
+  const params = useGlobalSearchParams<MenuRouteParams>();
+  const focus: MenuFocus = signedIn ? menuFocusOf(pathname, params) : { kind: MENU_SUBJECT.NONE };
+  const ownPage = signedIn ? menuOwnPageOf(pathname, params) : undefined;
 
   const thread = useInboxThread(focus.kind === MENU_SUBJECT.THREAD ? focus.id : undefined).listed;
   const collections = useTaskListCollections();
@@ -202,6 +249,12 @@ function useSubject(signedIn: boolean): Subject {
 
     if (task.pinnedAt !== undefined) toggled.push(MENU_COMMAND.PIN);
   }
+
+  // Note that a pushed pull request or page opens itself in the browser, not the agent or task it stands over.
+  if (ownPage !== undefined)
+    address = ownPageAddress(ownPage, task, agent?.taskId, (id) =>
+      linkWorkspaceStep(id, workspaces),
+    );
 
   if (address !== undefined) enabled.push(MENU_COMMAND.OPEN_IN_BROWSER);
 
