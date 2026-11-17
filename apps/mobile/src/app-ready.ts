@@ -1,31 +1,18 @@
 // app-ready.ts -- counts how long a launch in front took to show the Inbox, once a launch, on a rung, as `app:ready`.
 
 import { PRODUCT_SURFACE_EVENT, productLaunchSeconds } from "@repo/features/analytics";
+import Constants from "expo-constants";
 import { useEffect, useState } from "react";
 import { AppState } from "react-native";
 import { useHostCount } from "./host/host-provider.js";
+import { launchStood, sinceLaunch } from "./launch-phases.js";
 import { launchLeftFront } from "./launch-state.js";
-
-/** React Native's own startup marks, which its `performance` holds beside the web's and its types leave out. */
-interface StartupPerformance {
-  readonly rnStartupTiming?: { readonly startTime?: number | null };
-}
 
 /** Whether this launch has counted, or let go of, its first Inbox, which it does once. */
 let counted = false;
 
-/** The time since React Native's own start of this launch, in milliseconds, or none where the runtime keeps no start. */
-function sinceLaunch(): number | undefined {
-  // Note that React Native's startup timing is read inside a guard, since a runtime that keeps none throws on the read.
-  try {
-    // SAFETY: React Native's `performance` holds `rnStartupTiming` (react-native/src/private/webapis/performance/Performance.js); every member is read as optional.
-    const start = (performance as Performance & StartupPerformance).rnStartupTiming?.startTime;
-
-    return start === null || start === undefined ? undefined : performance.now() - start;
-  } catch {
-    return undefined;
-  }
-}
+/** The build number this build was released as (`CFBundleVersion`), which a rung of the launch is read beside; none where the build names none. */
+const BUILD_NUMBER = Constants.expoConfig?.ios?.buildNumber;
 
 /**
  * Counts, once a launch, the time from React Native's start to the first
@@ -67,6 +54,15 @@ export function useAppReadyCount(shown: boolean): void {
     const elapsed = sinceLaunch();
 
     if (elapsed === undefined) return;
-    count(PRODUCT_SURFACE_EVENT.APP_READY, { launch_seconds: productLaunchSeconds(elapsed) });
+    const stood = launchStood();
+
+    count(PRODUCT_SURFACE_EVENT.APP_READY, {
+      launch_seconds: productLaunchSeconds(elapsed),
+      ...(stood?.ms === undefined
+        ? undefined
+        : { standing_seconds: productLaunchSeconds(stood.ms) }),
+      ...(stood === undefined ? undefined : { kept_store: stood.keptStore }),
+      ...(BUILD_NUMBER === undefined ? undefined : { app_build: BUILD_NUMBER }),
+    });
   }, [count, shown, active]);
 }

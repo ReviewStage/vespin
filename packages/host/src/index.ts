@@ -11,13 +11,14 @@
  * barrel says: every name here has a client that reaches it, and a name a
  * client does not reach yet is added when one arrives.
  */
+
+export { ENTITY_STORE_FILE_NAME } from "./entity-store.js";
 export {
   appProcesses,
   type ElectronProcessName,
   type ProcessTableRow,
   readProcessTable,
 } from "./mac-resources.js";
-
 export { type RunMode, runModeFor, sentryReportingEnabled } from "./run-mode.js";
 
 export type { SecretCipher } from "./settings-store.js";

@@ -170,6 +170,29 @@ test("a launch travels its time to the first rows on a rung, never as the raw ti
   );
 });
 
+test("a launch may add when its host stood, what it found kept and its build number, each read strictly", () => {
+  const phases = {
+    [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: 8,
+    [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: 1,
+    [PRODUCT_EVENT_PROPERTY.KEPT_STORE]: "dropped",
+    [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "52",
+  };
+
+  assert.deepEqual(
+    productEventFromWire({ name: PRODUCT_EVENT.APP_READY, at: AT, properties: phases }),
+    { name: PRODUCT_EVENT.APP_READY, at: AT, properties: phases },
+  );
+  // A build number is digits alone, so a word sent in its place refuses the event rather than travel.
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.APP_READY,
+      at: AT,
+      properties: { ...phases, [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "52 beta" },
+    }),
+    undefined,
+  );
+});
+
 test("a reply's wait to stand in its thread travels on a rung, with what it carried, never its words or the raw time", () => {
   assert.equal(productDrawnMilliseconds(640), 500);
   assert.equal(productDrawnMilliseconds(40), 0);
