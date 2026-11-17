@@ -48,7 +48,14 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
-import { Fragment, type ReactElement, type ReactNode, useContext } from "react";
+import {
+  Fragment,
+  type ReactElement,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
@@ -486,9 +493,79 @@ function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
     : actionButton(swipe, colors);
 }
 
-/** A row's content with the question its acts ask standing by it, where its acts ask any. */
-function asking(content: ReactElement, question: RowQuestion | undefined): ReactElement {
-  return question === undefined ? content : <RowAsking question={question}>{content}</RowAsking>;
+/** How long the system's long press menu takes to go once one of its acts is pressed, its preview settling back into the row. */
+const MENU_GOES_MS = 450;
+
+/** A row's content with the question its acts ask standing by it, where its acts ask any, held back while its menu is still going. */
+function asking(
+  content: ReactElement,
+  question: RowQuestion | undefined,
+  menuGoing = false,
+): ReactElement {
+  if (question === undefined) return content;
+
+  return (
+    <RowAsking question={menuGoing ? { ...question, presented: false } : question}>
+      {content}
+    </RowAsking>
+  );
+}
+
+/** An act as the long press menu stands it, `going` told as it is pressed. */
+function pressedInMenu(action: RowAction, going: () => void): RowAction {
+  return {
+    ...action,
+    onPress: () => {
+      going();
+      action.onPress();
+    },
+  };
+}
+
+/** A submenu as the long press menu stands it, each of its choices and acts, and those of the menus inside it, telling `going` as they are pressed. */
+function submenuInMenu(submenu: RowSubmenu, going: () => void): RowSubmenu {
+  return {
+    ...submenu,
+    choices: submenu.choices.map((choice) => ({
+      ...choice,
+      onPress: () => {
+        going();
+        choice.onPress();
+      },
+    })),
+    submenus: submenu.submenus?.map((inner) => submenuInMenu(inner, going)),
+    actions: submenu.actions?.map((action) => pressedInMenu(action, going)),
+  };
+}
+
+/** A swiped act as the long press menu stands it again, telling `going` as it is pressed. */
+function swipeInMenu(swipe: RowSwipe, going: () => void): RowSwipe {
+  return isSubmenu(swipe) ? submenuInMenu(swipe, going) : pressedInMenu(swipe, going);
+}
+
+/**
+ * Whether a question an act of the row's long press menu raised waits for
+ * the menu to go, and what tells it an act was pressed there. Note that the
+ * question waits, because SwiftUI stands it from the row while the menu's
+ * preview still settles back into that row, and a dialog asked for then was
+ * let go unseen, the menu closing on nothing (j9729, on main, Nov 17); a
+ * row that raises no question never waits.
+ */
+function useMenuGoing(question: RowQuestion | undefined) {
+  const [going, setGoing] = useState(false);
+
+  useEffect(() => {
+    if (!going) return;
+    const timer = setTimeout(() => setGoing(false), MENU_GOES_MS);
+
+    return () => clearTimeout(timer);
+  }, [going]);
+
+  const pressed = (): void => {
+    if (question !== undefined) setGoing(true);
+  };
+
+  return { going, pressed };
 }
 
 /**
@@ -539,6 +616,7 @@ export function RowFrame({
   const open = useContext(RowOpenContext);
   const selected = useContext(RowSelectedContext) === id;
   const swiped = [...trailingActions, ...leadingActions];
+  const menuGoing = useMenuGoing(question);
 
   // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
   const frameModifiers = [
@@ -573,19 +651,25 @@ export function RowFrame({
           { label: VERB.OPEN, tone: ROW_ACTION_TONE.NEUTRAL, onPress: () => open(id) },
         ];
 
+  const going = menuGoing.pressed;
+
   const menu = asking(
     <ContextMenu>
       <ContextMenu.Items>
         {opening.map((action) => actionButton(action, colors))}
         {opening.length > 0 && ownGroup ? <Divider /> : null}
-        {swiped.map((swipe) => swipeMenuButton(swipe, colors))}
-        {menuSubmenus.map((submenu) => rowSubmenu(submenu, colors))}
-        {menuActions.map((action) => actionButton(action, colors))}
+        {swiped.map((swipe) => swipeMenuButton(swipeInMenu(swipe, going), colors))}
+        {menuSubmenus.map((submenu) => rowSubmenu(submenuInMenu(submenu, going), colors))}
+        {menuActions.map((action) => actionButton(pressedInMenu(action, going), colors))}
         {groups.map((group, at) => (
           <Fragment key={menuGroupKey(group)}>
             {at === 0 && opening.length === 0 && !ownGroup ? null : <Divider />}
-            {(group.submenus ?? []).map((submenu) => rowSubmenu(submenu, colors))}
-            {(group.actions ?? []).map((action) => actionButton(action, colors))}
+            {(group.submenus ?? []).map((submenu) =>
+              rowSubmenu(submenuInMenu(submenu, going), colors),
+            )}
+            {(group.actions ?? []).map((action) =>
+              actionButton(pressedInMenu(action, going), colors),
+            )}
           </Fragment>
         ))}
       </ContextMenu.Items>
@@ -593,6 +677,7 @@ export function RowFrame({
       {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
     </ContextMenu>,
     question,
+    menuGoing.going,
   );
 
   // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal.
