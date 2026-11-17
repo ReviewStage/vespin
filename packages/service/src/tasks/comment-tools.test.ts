@@ -6,7 +6,7 @@ import { startDescriptionCommentThread } from "@repo/database/models/description
 import { writePage } from "@repo/database/models/task-pages";
 import { createTask, saveDescriptionText } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
-import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
+import { getTestDB, joinWorkspace, openTaskAgent, openWorkspace } from "@repo/database/testing";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   DESCRIPTION_COMMENT_ACTOR,
@@ -73,7 +73,7 @@ const openThreadedTask = Effect.gen(function* () {
 
   assert.ok("answer" in started && "thread" in started.answer);
 
-  return { owner, taskId, thread: started.answer.thread };
+  return { owner, workspace, taskId, thread: started.answer.thread };
 });
 
 /** A call made as the owner, with Plans on unless said. */
@@ -156,15 +156,16 @@ it.layer(getTestDB())("the comment tools", (it) => {
     "a page's threads are read by naming the page, each with its version and element, and a resolved one takes no reply; with Plans off the page's alone are reached",
     () =>
       Effect.gen(function* () {
-        const { owner, taskId, thread } = yield* openThreadedTask;
+        const { owner, workspace, taskId, thread } = yield* openThreadedTask;
         const writer = asOwner(owner, taskId);
+        const agentId = yield* openTaskAgent(owner, workspace, taskId);
 
         const page = Option.getOrThrow(
           yield* writePage(
             owner,
             taskPageOwner(taskId),
             { title: "Invite funnel", html: "<p>12 sent</p>" },
-            { kind: PAGE_SHOWER.APP },
+            { kind: PAGE_SHOWER.AGENT, agentId },
           ),
         );
 

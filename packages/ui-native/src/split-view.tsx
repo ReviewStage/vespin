@@ -36,6 +36,8 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
 import {
+  Fragment,
+  memo,
   type ReactElement,
   type ReactNode,
   useEffect,
@@ -49,12 +51,16 @@ import { type BarSubtitle, ColumnBarTitle } from "./bar-title.js";
 import type { Scope } from "./button.js";
 import { GLYPH, type Glyph } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
-import { choiceColor, type MenuChoice } from "./list-row.js";
+import { BAR_KIND, barSubtitle } from "./interactions.js";
+import { choiceContent, type MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
 import { useColors } from "./tokens/colors.js";
 
 /** What the first column holds, so it is drawn afresh as that changes. */
 const FIRST_COLUMN = { APP_SIDEBAR: "app-sidebar", LIST: "list" } as const;
+
+/** What a bar's subtitle opens with while a filter narrows its list, as Mail's does. */
+const FILTERED_BY = "Filtered by:";
 
 /** Where the split view stands against the tabs' screens: over a tab's root, or behind the page a tab pushed over it. */
 const LAYER = { FRONT: 1, BEHIND: 0 } as const;
@@ -94,30 +100,42 @@ export type BarAction = {
   readonly onPress: () => void;
 };
 
+/** An act a menu holds, by its words and its glyph. */
+export type BarMenuAction = {
+  readonly label: string;
+  /** Its glyph; none for an act that stands as words alone, such as a reminder's time. */
+  readonly symbol?: Glyph | undefined;
+  /** What the menu says under its words, such as when a reminder's time comes due. */
+  readonly detail?: string | undefined;
+  readonly disabled?: boolean | undefined;
+  /** Whether the act takes something away for good, such as Permanently delete, which the system draws red. */
+  readonly destructive?: boolean | undefined;
+  readonly onPress: () => void;
+};
+
+/** One group of a menu's acts, set apart from the rest by the system's rule, as Mail's ⋯ groups Reply apart from Move: its acts, then the menus within it. */
+export type BarMenuGroup = {
+  readonly actions: readonly BarMenuAction[];
+  readonly submenus?: readonly BarMenu[] | undefined;
+};
+
 /**
  * A bar's menu, as a list's View options: the choices one of which is on,
  * such as a list's scopes, checked as the system checks them, and the acts
- * under them, such as Mark all as read.
+ * under them, such as Mark all as read; then each of its `groups`, set
+ * apart by a rule, the one way a menu groups its acts.
  */
 export type BarMenu = {
   readonly label: string;
   readonly symbol: Glyph;
   readonly choices: readonly MenuChoice[];
-  readonly actions: readonly {
-    readonly label: string;
-    /** Its glyph; none for an act that stands as words alone, such as a reminder's time. */
-    readonly symbol?: Glyph | undefined;
-    /** What the menu says under its words, such as when a reminder's time comes due. */
-    readonly detail?: string | undefined;
-    readonly disabled?: boolean | undefined;
-    /** Whether the act takes something away for good, such as Permanently delete, which the system draws red. */
-    readonly destructive?: boolean | undefined;
-    readonly onPress: () => void;
-  }[];
+  readonly actions: readonly BarMenuAction[];
   /** Menus within it, after its acts, such as a task's Status. */
   readonly submenus?: readonly BarMenu[] | undefined;
-  /** Acts after its menus, past a rule, such as an agent's Permanently delete, which stands last. */
-  readonly last?: BarMenu["actions"] | undefined;
+  /** Whether the menu stands dimmed and opens on nothing, as a bar's act does while it can't act. */
+  readonly disabled?: boolean | undefined;
+  /** Groups after its acts and menus, each set apart by a rule, such as a task's ⋯ setting Permanently delete apart. */
+  readonly groups?: readonly BarMenuGroup[] | undefined;
 };
 
 /** A list's search, the system's field over its column: what it says before anything is typed, what is typed now, and what is called with each change. */
@@ -144,6 +162,8 @@ export type BarPath = {
  */
 export type ColumnBar = {
   readonly title?: string | undefined;
+  /** A line under the list's `title`, as Mail names its filter under Inbox, drawn by the system's own bar (`barSubtitle`); never with a `name`, whose line is its `subtitle`. */
+  readonly titleLine?: string | undefined;
   /** A pushed page's name, small and inline in the ink, as a compact window's stack names an agent's page; never with a `title`. */
   readonly name?: string | undefined;
   /** A muted line under the page's `name`, such as an agent's state and model, standing with it in the bar's middle; never without a `name`. */
@@ -163,7 +183,7 @@ export type ColumnBar = {
   readonly foot?: readonly BarFootItem[] | undefined;
 };
 
-/** What a bar's foot holds: an act, or a menu that opens from its glyph, such as Remind me's times. */
+/** What a bar's foot holds: an act, or a menu that opens from its glyph (from its words at a list column's foot), such as Remind me's times. */
 export type BarFootItem = BarAction | BarMenu;
 
 /** Whether a foot's item is a menu rather than one act. */
@@ -175,6 +195,8 @@ type SplitViewProps = {
   /** The app's sidebar: its places, then Pinned and the member's sections, as a `RowList` in its sidebar look. */
   readonly sidebar: ReactNode;
   readonly sidebarBar?: ColumnBar | undefined;
+  /** What stands at the app sidebar's foot under its list, such as the way back to a call (`CallSidebarFoot`); drawn only beside a list, where the sidebar is the app's own. */
+  readonly sidebarFoot?: ReactNode | undefined;
   /** The list between the sidebar and the detail, such as the Inbox's threads; two columns where none is given. */
   readonly content?: ReactNode | undefined;
   readonly contentBar?: ColumnBar | undefined;
@@ -211,64 +233,92 @@ export type DetailStack = {
   readonly onPathChange: (path: readonly string[]) => void;
 };
 
-/** One act of a bar's menu as SwiftUI's button, red where it takes something away for good. */
-function MenuAct({ action }: { readonly action: BarMenu["actions"][number] }) {
+/** What a group is told apart by, since it has no name of its own: the words of its first act, or of its first menu. */
+export function groupKey(group: BarMenuGroup): string {
+  return group.actions[0]?.label ?? group.submenus?.[0]?.label ?? "";
+}
+
+/** A menu's acts and the menus within it, as SwiftUI's buttons and menus. */
+function MenuActs({ group }: { readonly group: BarMenuGroup }) {
   return (
-    <SwiftUIButton
-      {...menuActContent(action.label, action.symbol, action.detail)}
-      onPress={action.onPress}
-      modifiers={[disabled(action.disabled === true)]}
-      {...(action.destructive === true ? { role: "destructive" } : {})}
-    />
+    <>
+      {group.actions.map((action) => (
+        <SwiftUIButton
+          key={action.label}
+          {...menuActContent(action.label, action.symbol, action.detail)}
+          onPress={action.onPress}
+          modifiers={[disabled(action.disabled === true)]}
+          {...(action.destructive === true ? { role: "destructive" } : {})}
+        />
+      ))}
+      {(group.submenus ?? []).map((submenu) => (
+        <BarMenuButton key={submenu.label} menu={submenu} />
+      ))}
+    </>
   );
 }
 
-/** A bar's menu as SwiftUI's: each choice a toggle the system checks, then a rule, then each act. */
-export function BarMenuButton({
+/**
+ * A bar's menu as SwiftUI's: each choice a toggle the system checks, then a
+ * rule, then each act, then each group behind a rule of its own. Note that it
+ * is drawn again only for a menu changed, because a menu of many choices,
+ * such as one listing every open task, would otherwise build each of them
+ * anew on every key typed beside it.
+ */
+export const BarMenuButton = memo(function BarMenuButton({
   menu,
   modifiers = [],
+  worded = false,
 }: {
   readonly menu: BarMenu;
   /** How the menu's trigger is drawn where it stands, such as in a bar; a submenu takes none. */
   readonly modifiers?: readonly ModifierConfig[] | undefined;
+  /** Whether its trigger reads as its words alone rather than its glyph, as a list column's foot holds its acts. */
+  readonly worded?: boolean | undefined;
 }) {
   const colors = useColors();
 
   return (
-    <Menu label={menuLabel(menu.label, menu.symbol)} modifiers={[...modifiers]}>
+    <Menu
+      label={worded ? menu.label : menuLabel(menu.label, menu.symbol)}
+      modifiers={[...modifiers, disabled(menu.disabled === true)]}
+    >
       {menu.choices.map((choice) => (
         <Toggle
-          key={choice.label}
-          {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
+          key={choice.id ?? choice.label}
+          {...choiceContent(choice, colors)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />
       ))}
       {menu.actions.length === 0 ? null : <Divider />}
-      {menu.actions.map((action) => (
-        <MenuAct key={action.label} action={action} />
-      ))}
-      {(menu.submenus ?? []).map((submenu) => (
-        <BarMenuButton key={submenu.label} menu={submenu} />
-      ))}
-      {(menu.last ?? []).length === 0 ? null : <Divider />}
-      {(menu.last ?? []).map((action) => (
-        <MenuAct key={action.label} action={action} />
+      <MenuActs group={menu} />
+      {(menu.groups ?? []).map((group) => (
+        <Fragment key={groupKey(group)}>
+          <Divider />
+          <MenuActs group={group} />
+        </Fragment>
       ))}
     </Menu>
   );
-}
+});
 
 /** A bar's menu standing in its bar, such as a column's ⋯, its glyph alone in the bar's glass. */
 export function BarMenuItem({ menu }: { readonly menu: BarMenu }) {
   return <BarMenuButton menu={menu} modifiers={BAR_ITEM_MENU} />;
 }
 
-/** A bar act as SwiftUI's button, its symbol alone, heard by its words, or its words where it has no symbol, dimmed while it can't act. */
-function BarActionButton({ action }: { readonly action: BarAction }) {
+/** A bar act as SwiftUI's button, its symbol alone, heard by its words, or its words where it has no symbol or stands `worded`, dimmed while it can't act. */
+function BarActionButton({
+  action,
+  worded = false,
+}: {
+  readonly action: BarAction;
+  readonly worded?: boolean | undefined;
+}) {
   return (
     <SwiftUIButton
-      {...actContent(action.label, action.symbol)}
+      {...actContent(action.label, worded ? undefined : action.symbol)}
       onPress={action.onPress}
       modifiers={[disabled(action.disabled === true)]}
     />
@@ -314,15 +364,27 @@ export function scopeMenu(label: string, scopes: readonly Scope[], narrowed: boo
   };
 }
 
-/** A menu with the acts and menus a bar already stands as glyphs left out, so ⋯ holds only the rest. */
+/** What a bar says under its title while its filter narrows the list, as Mail's "Filtered by: Unread"; nothing while it shows the list whole. */
+export function scopeSubtitle(scopes: readonly Scope[], narrowed: boolean): string | undefined {
+  const chosen = scopes.find((scope) => scope.selected);
+
+  return narrowed && chosen !== undefined ? `${FILTERED_BY} ${chosen.label}` : undefined;
+}
+
+/** A menu with the acts and menus a bar already stands as glyphs left out, so ⋯ holds only the rest, and a group left empty drops with its rule. */
 export function menuWithout(menu: BarMenu, acts: readonly BarFootItem[]): BarMenu {
   const barred = new Set(acts.map((act) => act.label));
 
-  return {
-    ...menu,
-    actions: menu.actions.filter((action) => !barred.has(action.label)),
-    submenus: menu.submenus?.filter((submenu) => !barred.has(submenu.label)),
-  };
+  const kept = (group: BarMenuGroup): BarMenuGroup => ({
+    actions: group.actions.filter((action) => !barred.has(action.label)),
+    submenus: group.submenus?.filter((submenu) => !barred.has(submenu.label)),
+  });
+
+  const groups = menu.groups
+    ?.map(kept)
+    .filter((group) => group.actions.length > 0 || (group.submenus ?? []).length > 0);
+
+  return { ...menu, ...kept(menu), groups };
 }
 
 /**
@@ -416,6 +478,7 @@ function Column({
           : bar.name !== undefined
             ? [navigationTitle(bar.name), toolbarTitleDisplayMode("inline")]
             : [toolbarTitleDisplayMode("inline")]),
+        barSubtitle(BAR_KIND.COLUMN, bar.titleLine),
       ]}
     >
       {ruled ? (
@@ -475,9 +538,14 @@ function Column({
             <BarMenuItem menu={bar.menu} />
           </ToolbarItem>
         )}
+        {/* Note that a column's foot holds its acts by their words, as Files' and Mail's edit bars do on an iPad, since a regular window has the room and a bare glyph there left Mark as read, Remind me and Resolve to be guessed. */}
         {(bar.foot ?? []).map((item) => (
           <ToolbarItem key={item.label} placement="bottomBar">
-            {isBarMenu(item) ? <BarMenuItem menu={item} /> : <BarActionButton action={item} />}
+            {isBarMenu(item) ? (
+              <BarMenuButton menu={item} modifiers={BAR_ITEM_MENU} worded />
+            ) : (
+              <BarActionButton action={item} worded />
+            )}
           </ToolbarItem>
         ))}
       </BarContent>
@@ -712,6 +780,7 @@ function useColumnsBack(detailOnly: boolean, settle: (reported: ColumnVisibility
 export function SplitView({
   sidebar,
   sidebarBar,
+  sidebarFoot,
   content,
   contentBar,
   detail,
@@ -759,9 +828,19 @@ export function SplitView({
     >
       <NavigationSplitView.Sidebar>
         {/* Note that the sidebar column is drawn afresh as it changes from the app's sidebar to the list or back, so its search field starts from the list's query rather than keeping what the other held. */}
+        {/* Note that the app sidebar stands its list in a stack with its foot whether or not a foot stands, so a foot coming or going never draws the list anew, its scroll and folds lost. */}
         <Column
           key={content === undefined ? FIRST_COLUMN.LIST : FIRST_COLUMN.APP_SIDEBAR}
-          view={sidebar}
+          view={
+            content === undefined ? (
+              sidebar
+            ) : (
+              <VStack spacing={0}>
+                {sidebar}
+                {sidebarFoot}
+              </VStack>
+            )
+          }
           bar={sidebarBar}
           sidebar
           clear={content !== undefined}
@@ -817,7 +896,9 @@ export function KeptColumns({
  * is. The split view stands in front while a tab's root stands, and behind
  * the tabs while a tab has pushed a page over its root, which slides in over
  * the split view, since the root under it draws nothing of its own; behind,
- * it takes no touch and VoiceOver passes over it. With no
+ * it takes no touch and VoiceOver passes over it. In front, the tabs under it
+ * are passed over in turn, so a page a tab pushed before, or a tab's root,
+ * is never read or matched from behind the split view. With no
  * split view, the tabs stand alone in the same place, so a rotation across
  * the line keeps every tab's stack.
  */
@@ -834,7 +915,12 @@ export function SplitOverTabs({
 
   return (
     <View style={layers.stand}>
-      <View style={[layers.tabs, { zIndex: LAYER.FRONT - layer }]}>{tabs}</View>
+      <View
+        style={[layers.tabs, { zIndex: LAYER.FRONT - layer }]}
+        accessibilityElementsHidden={split !== undefined && front}
+      >
+        {tabs}
+      </View>
       {split === undefined ? null : (
         <View
           style={[layers.split, { zIndex: layer }]}

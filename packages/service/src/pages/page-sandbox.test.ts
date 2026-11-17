@@ -4,7 +4,13 @@ import { it } from "@effect/vitest";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { writePage } from "@repo/database/models/task-pages";
 import { user } from "@repo/database/schemas/auth";
-import { getTestDB, joinWorkspace, leaveWorkspace, startTask } from "@repo/database/testing";
+import {
+  getTestDB,
+  joinWorkspace,
+  leaveWorkspace,
+  openTaskAgent,
+  startTask,
+} from "@repo/database/testing";
 import {
   PAGE_FRAME_STATUS,
   PAGE_IN_MAC_APP_PATH,
@@ -69,15 +75,16 @@ const openAccount = Effect.gen(function* () {
   return id;
 });
 
-/** A task in a fresh workspace with one page on it, and a teammate in that workspace. */
+/** A task in a fresh workspace with one page on it, shown by its agent, and a teammate in that workspace. */
 const pageOnTask = Effect.gen(function* () {
   const starter = yield* openAccount;
   const teammate = yield* openAccount;
   const task = yield* startTask(starter, { name: "Teammate invitations" });
   yield* joinWorkspace(task.workspaceId, teammate);
+  const agentId = yield* openTaskAgent(starter, task.workspaceId, task.id);
 
   const page = Option.getOrThrow(
-    yield* writePage(starter, taskPageOwner(task.id), CHART, { kind: PAGE_SHOWER.APP }),
+    yield* writePage(starter, taskPageOwner(task.id), CHART, { kind: PAGE_SHOWER.AGENT, agentId }),
   );
 
   return { starter, teammate, task, page };

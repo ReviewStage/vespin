@@ -2,11 +2,11 @@
  * permission-mode.ts -- how a coding agent's actions are approved, in the words the Codex app offers them: the default a new agent starts on, and the names and hints a running agent's model menu offers too.
  *
  * The modes are the agent's own (`@repo/features`'s `AGENT_PERMISSION_MODE`),
- * offered most asking first and Full access last, as Codex orders them. Only
- * a Claude Code agent takes a mode that asks, so the default reaches a new
- * Claude Code agent alone; any other starts on Full access. The account's,
- * carried to every Mac and the web, and read by the service as an agent
- * starts.
+ * offered most asking first and Full access last, as Codex orders them. Each
+ * harness takes the modes `@repo/features`'s `modesOf` names, so the default
+ * reaches a new agent only where its harness takes it; one whose harness
+ * does not starts on Full access. The account's, carried to every Mac and
+ * the web, and read by the service as an agent starts.
  */
 
 import {

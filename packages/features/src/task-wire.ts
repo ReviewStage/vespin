@@ -29,8 +29,8 @@ import { trimmedText } from "./text-schema.js";
  * document's `body` with no title line, since the name is its own, and an
  * empty `assumptions` list, since its assumptions are a section of the text;
  * the list stays on the wire because a desktop through v0.11.0 requires it.
- * The text is written by the task's notetaker and its coding agents through
- * notes, and by the developer whole. The service keeps every save as a
+ * The text is written by the task's coding agents through notes, and by the
+ * developer whole. The service keeps every save as a
  * revision of the description under the writer who made it, and a task carries its
  * newest as `lastEdit`, which is what the window's "Edited by" line reads,
  * and who last changed each section as `sectionEdits`, by heading.
@@ -634,31 +634,29 @@ export const TASK_LIST_ARCHIVED = {
 } as const;
 
 /**
- * Who wrote a revision of a description: the developer, the notetaker on a call
- * (whom the developer knows by the app's name), a coding agent, or, for the one
- * revision a description from before history starts with, nobody the service can
- * name.
+ * Who wrote a revision of a description: the developer, a coding agent, or,
+ * for the one revision a description from before history starts with, nobody
+ * the service can name.
  */
 export const DESCRIPTION_ACTOR = {
   DEVELOPER: "developer",
-  NOTETAKER: "notetaker",
   AGENT: "agent",
   EARLIER: "earlier",
 } as const;
 
 export type DescriptionActor = (typeof DESCRIPTION_ACTOR)[keyof typeof DESCRIPTION_ACTOR];
 
-/** Who made a task: its member by hand, the app on their call, or a coding agent acting for them; never `earlier`, which names no maker. */
+/** Who made a task: its member by hand, or a coding agent acting for them; never `earlier`, which names no maker. */
 export type TaskCreatorActor = Exclude<DescriptionActor, typeof DESCRIPTION_ACTOR.EARLIER>;
 
 /**
- * Who made a task where its member did not make it by hand: the app on their
- * call, or a coding agent acting for them, by the agent's id while its row
- * stands, which the window reads its title, harness, automation, and task
- * from among the agents it already lists.
+ * Who made a task where its member did not make it by hand: a coding agent
+ * acting for them, by the agent's id while its row stands, which the window
+ * reads its title, harness, automation, and task from among the agents it
+ * already lists.
  */
 const taskOriginSchema = EffectSchema.Struct({
-  actor: EffectSchema.Literals([DESCRIPTION_ACTOR.NOTETAKER, DESCRIPTION_ACTOR.AGENT]),
+  actor: EffectSchema.Literal(DESCRIPTION_ACTOR.AGENT),
   agentId: EffectSchema.optionalKey(wireUuidSchema),
 });
 
@@ -731,9 +729,9 @@ const taskSummaryFields = {
    */
   createdBy: EffectSchema.optionalKey(memberRefSchema),
   /**
-   * Who made the task for `createdBy`, where they did not make it by hand:
-   * the app on their call, or a coding agent; absent for a task its member made
-   * by hand, and from a service before it was sent.
+   * Who made the task for `createdBy`, where they did not make it by hand: a
+   * coding agent; absent for a task its member made by hand, and from a
+   * service before it was sent.
    */
   origin: EffectSchema.optionalKey(taskOriginSchema),
   /** Where the task stands; absent from a service before tasks had one. */
@@ -973,9 +971,9 @@ const agentEditLineSchema = EffectSchema.Struct({
 });
 
 /**
- * The member a revision names: the developer whose edit or restore it is, or
- * the one whose call the notetaker wrote it on, by their account's id and the
- * name it holds now, a member who has since left the workspace among them.
+ * The member a revision names: the developer whose edit or restore it is, by
+ * their account's id and the name it holds now, a member who has since left
+ * the workspace among them.
  * The window calls the member You only where the id is its own account's.
  */
 const descriptionEditorSchema = memberRefSchema;

@@ -85,13 +85,16 @@ const ITEM_ID = "item_4b9e";
 /** A coding agent of the workspace, which an automation started. */
 const SWEEP_AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 
+/** A coding agent the window holds no row of, which showed the plans' pages. */
+const SHOWING_AGENT = "3f9b2d7e-4c1a-4e8f-9a6b-2d5c8e1f7a40";
+
 /** The page the open plan holds. */
 const UNFURL_PAGE: PageLine = {
   id: PAGE_ID,
   title: "Unfurl matrix",
   version: 3,
   at: AT,
-  shownBy: { kind: PAGE_SHOWER.APP },
+  shownBy: { kind: PAGE_SHOWER.AGENT, agentId: SHOWING_AGENT },
 };
 
 /** A plan the window does not hold open, and a page on it, read as its card is hung. */
@@ -102,7 +105,7 @@ const ROLLOUT_PAGE: PageLine = {
   title: "Rollout tracker",
   version: 1,
   at: AT,
-  shownBy: { kind: PAGE_SHOWER.APP },
+  shownBy: { kind: PAGE_SHOWER.AGENT, agentId: SHOWING_AGENT },
 };
 
 const SAM = "user-sam";
@@ -548,7 +551,7 @@ test("a page's chip hangs its title, its version and who showed it, and when it 
 
   assert.equal(page.card, "data-page-card");
   assert.equal(page.name, "Unfurl matrix");
-  assert.deepEqual([page.sub, page.detailWords], ["Version 3", ["Shown by Vespin"]]);
+  assert.deepEqual([page.sub, page.detailWords], ["Version 3", ["Shown by Agent"]]);
   assert.ok(page.corner, "the corner says when the page last moved");
   assert.deepEqual([other.name, other.notes], ["Old draft", [PAGE_UNREAD]]);
   // A page id the open plan holds, named on another plan, is not the open plan's page.
@@ -556,7 +559,7 @@ test("a page's chip hangs its title, its version and who showed it, and when it 
   // A page of a plan not open hangs its tab's card all the same, as an Inbox item's bar names it.
   assert.equal(read.card, "data-page-card");
   assert.equal(read.name, "Rollout tracker");
-  assert.deepEqual([read.sub, read.detailWords], [undefined, ["Shown by Vespin"]]);
+  assert.deepEqual([read.sub, read.detailWords], [undefined, ["Shown by Agent"]]);
 });
 
 test("a file's and a folder's chips hang their path, their repository, and where they are read", async () => {

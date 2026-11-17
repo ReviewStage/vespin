@@ -73,6 +73,7 @@ const DECLARED_TABLES = [
   "github_installation",
   "github_mention_agent",
   "github_personal_token",
+  "github_pull_request_move",
   "github_rate_hold",
   "github_repository",
   "github_repository_read",
@@ -151,6 +152,7 @@ const DECLARED_TABLES = [
   "workspace_repository_run_action",
   "workspace_repository_setup",
   "workspace_sandbox_script_run",
+  "workspace_sandbox_size",
   "workspace_token_repository",
   "write_receipt",
 ].sort();

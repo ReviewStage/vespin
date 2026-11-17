@@ -43,7 +43,7 @@ export const TERM = {
 /** The glossary's verbs: the one label each act goes by. */
 export const VERB = {
   SIGN_OUT: "Sign out",
-  RETRY: "Retry",
+  TRY_AGAIN: "Try again",
   RECONNECT: "Reconnect",
   OPEN: "Open",
   OPEN_IN_BROWSER: "Open in browser",
@@ -66,6 +66,7 @@ export const MCP_SERVER_LABEL = {
  */
 export const FIELD_WORDS = {
   OPTIONAL: "Optional",
+  REQUIRED: "Required",
   SAVED: "Saved",
   SHOW: "Show",
   HIDE: "Hide",
@@ -143,6 +144,14 @@ export function backToWords(place: string): string {
 export function noMatchWords(noun: Noun): string {
   return `No ${noun.many} match`;
 }
+
+/** What a search that found nothing says as its title, as Apple's apps head one: "No results for “ledger”". */
+export function noResultsForWords(query: string): string {
+  return `No ${TERM.RESULT.many} for “${query.trim()}”`;
+}
+
+/** The line under a search that found nothing, Apple's own. */
+export const NO_RESULTS_HINT = "Check the spelling or try a new search.";
 
 /** What a place with nothing in it yet says: "No tasks yet". */
 export function noneYetWords(noun: Noun): string {
@@ -259,3 +268,6 @@ export const SIGN_IN_FAILURE_WORDS = {
   [SIGN_IN_FAILURE.OFFLINE]: "You're offline. Connect to the internet, then sign in.",
   [SIGN_IN_FAILURE.UNFINISHED]: "Sign-in didn't finish. Try again.",
 } as const satisfies Record<SignInFailure, string>;
+
+/** What a page's path opens, as the panel's crumbs open a thread's or an agent's task, and a thread's agent. */
+export const PATH_OPENS = { TASK: "Open task", AGENT: "Open agent" } as const;

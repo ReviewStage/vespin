@@ -36,10 +36,10 @@ import { taskReachableBy } from "./workspace-store.js";
  * its whole text, so reading one or going back to one is a read and never a
  * replay.
  * Saves the same writer makes one after another are one revision, moved on
- * by each: the notetaker's, a coding agent's, or the developer's, each
+ * by each: a coding agent's, or the developer's, each
  * while the revision's latest save is a few minutes old at most. A
- * revision names the member it was made for, the developer editing or the
- * one whose turn the notetaker wrote on, so two members' saves are never one
+ * revision names the member it was made for, the developer editing, so two
+ * members' saves are never one
  * revision, and each reads the other's by name. A description
  * that was written before history began has no revision for that content, so
  * the first save that finds it records it first, under `earlier`, at the
@@ -67,11 +67,10 @@ export const DESCRIPTION_REVISION = {
 } as const;
 
 /**
- * Who made a save: the notetaker, a coding agent, or the developer, editing
+ * Who made a save: a coding agent, or the developer, editing
  * a field or, with the revision they restored, restoring one.
  */
 export type DescriptionWriter =
-  | { readonly actor: typeof DESCRIPTION_ACTOR.NOTETAKER }
   | { readonly actor: typeof DESCRIPTION_ACTOR.AGENT; readonly agentId: string }
   | { readonly actor: typeof DESCRIPTION_ACTOR.DEVELOPER; readonly restoredFrom?: number };
 
@@ -80,8 +79,8 @@ export interface DescriptionSaveRecord {
   readonly taskId: string;
   readonly writer: DescriptionWriter;
   /**
-   * The member the save is made for: the developer editing, or the one whose
-   * turn the notetaker writes on. A coding agent's save names none.
+   * The member the save is made for: the developer editing. A coding agent's
+   * save names none.
    */
   readonly userId: string;
   /** The description's text before the save. */

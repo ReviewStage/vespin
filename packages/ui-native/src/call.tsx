@@ -1,4 +1,4 @@
-// call.tsx -- a voice call into an agent as the phone draws it: Talk in an agent's composer, the call's presses there while the call is into that agent, and the slim way back to the call's agent over the tab bar from every other screen.
+// call.tsx -- a voice call into an agent as the phone draws it: Talk in an agent's composer, the call's presses there while the call is into that agent, and the slim way back to the call's agent from every other screen, over the tab bar or at the foot of an iPad's app sidebar.
 
 import {
   Host,
@@ -13,6 +13,7 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHint,
   accessibilityLabel,
+  background,
   buttonStyle,
   font,
   foregroundStyle,
@@ -27,7 +28,7 @@ import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { AgentTile } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, RADIUS, SIDEBAR_ROW, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What a composer offers of calls: Talk at rest, or the call's presses while a call into its agent stands. */
@@ -73,7 +74,12 @@ const styles = StyleSheet.create({
   accessory: { flex: 1 },
 });
 
-/** A press's frame in a row of glyph buttons: Apple's least target, its mark centered, the whole frame taking the press. */
+/**
+ * A press's frame in a row of glyph buttons: Apple's least target, its mark
+ * centered, the whole frame taking the press. Note that it stands on the
+ * glyph, the button's label, never on the button, since a borderless or
+ * plain button takes a press only where its label is hit.
+ */
 const PRESS_FRAME = [
   frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
   SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
@@ -97,12 +103,13 @@ function CallGlyphPress({
   return (
     <SwiftUIButton
       onPress={onPress}
-      modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel(label)]}
+      modifiers={[buttonStyle("borderless"), accessibilityLabel(label)]}
     >
       <Image
         {...glyphImage(glyph)}
         size={size}
         color={danger ? colors.DANGER_TEXT : colors.TEXT_MUTED}
+        modifiers={PRESS_FRAME}
       />
     </SwiftUIButton>
   );
@@ -177,8 +184,9 @@ export function ComposerCallPresses({ call }: { readonly call: ComposerCall }) {
  * the microphone's mute and End call. It carries no words of the
  * conversation and decides nothing: every press is handed back to its
  * owner, which holds the call. It stands over the tab bar
- * (`CallAccessory`), and over the composer of an agent the call is not
- * into, where the tab bar steps aside.
+ * (`CallAccessory`), at the foot of the app sidebar where the tab bar is
+ * hidden (`CallSidebarFoot`), and over the composer of an agent the call is
+ * not into, where the tab bar steps aside.
  */
 export function CallCardRow({
   call,
@@ -202,7 +210,11 @@ export function CallCardRow({
           accessibilityHint(OPEN_HINT),
         ]}
       >
-        <HStack spacing={SPACE.TIGHT * 2}>
+        {/* Note that the shape stands on the label's row, the Spacer's blank run included, since a plain button takes a press only where its label is hit. */}
+        <HStack
+          spacing={SPACE.TIGHT * 2}
+          modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+        >
           <AgentTile
             name={call.agentName}
             harness={call.harness}
@@ -252,11 +264,47 @@ export function CallAccessory({
   readonly inline: boolean;
   readonly onOpen: () => void;
 }) {
+  // Note that the host centers the row in the accessory's height, because a host places its SwiftUI at its top leading corner by default, so a row shorter than the accessory stood high, its tile and words above the glass's middle.
   return (
-    <Host style={styles.accessory}>
+    <Host style={styles.accessory} alignment="leading">
       <VStack modifiers={[padding({ leading: SPACE.ROW })]}>
         <CallCardRow call={call} inline={inline} onOpen={onOpen} />
       </VStack>
     </Host>
+  );
+}
+
+/**
+ * The way back to a call's agent at the foot of the app sidebar, where a
+ * window wide enough for three columns hides the tab bar and its accessory,
+ * as the panel docks its call card at the sidebar's foot: the full row on a
+ * rounded card set in from the sidebar's edges as a selected row's fill is.
+ * Note that the card is the panel's translucent `FILL_STRONG`, as a selected
+ * row's is, because the sidebar stands on the system's glass, which an
+ * opaque gray matched and vanished into.
+ */
+export function CallSidebarFoot({
+  call,
+  onOpen,
+}: {
+  readonly call: StandingCallCard;
+  readonly onOpen: () => void;
+}) {
+  const colors = useColors();
+
+  return (
+    <VStack
+      modifiers={[
+        // Note that the row stands only a little inside its card above and below, because its presses already stand Apple's least target.
+        padding({ horizontal: SIDEBAR_ROW.SIDE, vertical: SPACE.TIGHT }),
+        background(
+          colors.FILL_STRONG,
+          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD }),
+        ),
+        padding({ horizontal: SIDEBAR_ROW.EDGE, bottom: SIDEBAR_ROW.EDGE }),
+      ]}
+    >
+      <CallCardRow call={call} onOpen={onOpen} />
+    </VStack>
   );
 }

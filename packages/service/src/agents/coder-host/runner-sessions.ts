@@ -127,7 +127,7 @@ import {
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import { accountExperimentOn } from "@repo/database/models/account-store";
-import { agentSandboxHeld } from "@repo/database/models/agent-sandbox-holds";
+import { agentSandboxHeld, WORK_BEATS } from "@repo/database/models/agent-sandbox-holds";
 import { agentSandboxRelease } from "@repo/database/models/agent-sandboxes";
 import {
   type Agent,
@@ -168,12 +168,16 @@ import {
   withdrawRunnerLine,
 } from "@repo/database/models/runner-line-store";
 import { turnAwaitedByLine } from "@repo/database/models/turn-state";
-import { openWorkspaceEnvironment } from "@repo/database/models/workspace-environment-store";
+import {
+  listWorkspaceVariables,
+  openWorkspaceEnvironment,
+} from "@repo/database/models/workspace-environment-store";
 import {
   readInstallScript,
   readRepositorySetup,
 } from "@repo/database/models/workspace-sandbox-script-store";
 import { type ConversationTarget, storeWriter } from "@repo/database/models/writer";
+import type { AgentSandboxBeatKind } from "@repo/database/schemas/agent-sandbox";
 import type { RunnerLineFile } from "@repo/database/schemas/runner-line";
 import {
   AGENT_PERMISSION_MODE,
@@ -191,7 +195,8 @@ import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-w
 import { causeKind, failureKind } from "@repo/runtime/effect";
 import {
   isSandboxError,
-  type Sandbox,
+  SANDBOX_STATUS,
+  Sandbox,
   type SandboxError,
   type SandboxFile,
   SandboxUnavailable,
@@ -226,7 +231,7 @@ import {
 import { AfterResponse, afterResponse } from "../../http/after-response.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { agentSpanAttributes, sentryRunnerTrace } from "../../observability/sentry.js";
-import { agentSandboxName } from "../agent-sandbox-open.js";
+import { agentSandboxName, agentSandboxOf } from "../agent-sandbox-open.js";
 import { writtenTextLine } from "../attached-files.js";
 import {
   AgentMachine,
@@ -291,7 +296,7 @@ import {
 } from "./runtime-sessions.js";
 import { nativeSkills } from "./skills.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
-import type { TurnHanded } from "./turn-context.js";
+import { handedToFreshSession, type SandboxResized, type TurnHanded } from "./turn-context.js";
 import { TURN_DELIVERY } from "./turn-delivery-bounds.js";
 import {
   coderTurnMessage,
@@ -673,8 +678,9 @@ function stopLine(launch: number): InputLine {
 
 /**
  * What a runner was launched with that it cannot take up while it runs: its
- * credential, the integrations it was handed, and its permission mode
- * where it asks, as a digest. A warm
+ * credential, the integrations it was handed, its permission mode where it
+ * asks, and its workspace's variables as their names and when each was last
+ * set (`workspaceVariableStampsOf`), never their values, as a digest. A warm
  * runner whose fingerprint no longer matches is relaunched rather than
  * handed the next message (`sendHolding`). The digest is one-way and
  * truncated, so the record carries nothing of the credential. Note that a
@@ -682,14 +688,17 @@ function stopLine(launch: number): InputLine {
  * never its placeholder, which every launch mints afresh, under the key a
  * slot once named it by, so a digest reads as it did; that a declared
  * credential its machine hands the runner itself is read among the
- * variables, as one the harness set there itself once was; and that a
- * launch holding none digests what it did before any was held.
+ * variables, as one the harness set there itself once was; that a launch
+ * holding none digests what it did before any was held; and that a launch
+ * whose workspace holds no variable digests what it did before they were
+ * read, so its runner stays warm across the change.
  */
 function launchFingerprint(
   credential: HarnessLaunch,
   delivered: DeliveredCredentials,
   integrations: readonly IntegrationServer[],
   mode: AgentPermissionMode,
+  variables: readonly VariableStamp[],
 ): string {
   const declared = credential.credentials ?? [];
   const isHeld = (each: RunnerCredential) => delivered.swaps.has(each.slot);
@@ -721,8 +730,10 @@ function launchFingerprint(
   // Note that full access is digested as nothing, as every launch before modes was, so its runners stay warm across the change.
   const asks = mode === AGENT_PERMISSION_MODE.FULL_ACCESS ? undefined : mode;
 
+  const stamps = variables.length === 0 ? undefined : variables;
+
   return createHash("sha256")
-    .update(JSON.stringify({ env, names, held: swapped, mode: asks }))
+    .update(JSON.stringify({ env, names, held: swapped, mode: asks, variables: stamps }))
     .digest("hex")
     .slice(0, FINGERPRINT_CHARS);
 }
@@ -771,6 +782,25 @@ export function workspaceEnvironmentOf(agent: Agent, machine: AgentMachineKind) 
     if (ring === undefined || Result.isFailure(ring)) return {};
 
     return yield* openWorkspaceEnvironment(ring.success, agent.organizationId);
+  });
+}
+
+/** One of the workspace's variables as a launch's fingerprint reads it: its name, and when it was last set. */
+type VariableStamp = readonly [name: string, setAt: number];
+
+/**
+ * The agent's workspace's variables as its launch's fingerprint reads them
+ * on a cloud machine, by name and when each was last set, in name order,
+ * so a variable added, changed, or deleted since the launch relaunches a
+ * warm runner on its next message (`staleWarm`) and none of their values is
+ * read; none on a Mac, which is handed none.
+ */
+function workspaceVariableStampsOf(agent: Agent, machine: AgentMachineKind) {
+  return Effect.gen(function* () {
+    if (machine !== AGENT_MACHINE.VERCEL) return [];
+    const listed = yield* listWorkspaceVariables(agent.organizationId);
+
+    return listed.map((each): VariableStamp => [each.name, each.updatedAt.getTime()]);
   });
 }
 
@@ -1226,6 +1256,9 @@ export const runnerSessions = <
           return { firstSequence, ...config, opening };
         });
 
+        // Note that the stamps are read before the values, so a variable set between the two reads leaves the fingerprint older than the launch, and the next message relaunches it.
+        const variables = yield* workspaceVariableStampsOf(agent, kind);
+
         const [launch, sources, environment, integrations] = yield* Effect.all(
           [
             made,
@@ -1255,6 +1288,7 @@ export const runnerSessions = <
             delivered,
             integrations,
             permissionModeOf(agent),
+            variables,
           ),
         };
       }).pipe(Effect.withSpan("web/runnerLaunchPrepared"));
@@ -1533,7 +1567,7 @@ export const runnerSessions = <
         const handed = Option.isSome(pending)
           ? pending.value
           : fresh
-            ? {}
+            ? handedToFreshSession(yield* readNativeTurnHanded(target))
             : yield* readNativeTurnHanded(target);
 
         const admitted: AdmittedConversation = {
@@ -1986,7 +2020,8 @@ export const runnerSessions = <
 
     /**
      * Whether the runner is warm, no turn of the agent's under way, and was
-     * launched with a credential, integrations, or a permission mode that have changed since,
+     * launched with a credential, integrations, a permission mode, or
+     * workspace variables that have changed since,
      * which it cannot take up while it runs. A runner at work keeps going on
      * what it has, and one from before fingerprints were tagged is never
      * read as stale.
@@ -1994,6 +2029,7 @@ export const runnerSessions = <
     const staleWarm = (
       agent: Agent,
       layout: MachineLayout,
+      kind: AgentMachineKind,
       runner: RunnerMark,
       turnRunning: boolean,
     ) =>
@@ -2007,6 +2043,7 @@ export const runnerSessions = <
           delivered,
           yield* options.integrations(agent),
           permissionModeOf(agent),
+          yield* workspaceVariableStampsOf(agent, kind),
         );
 
         return now !== runner.fingerprint;
@@ -2163,7 +2200,7 @@ export const runnerSessions = <
                 handedAt,
               )) ||
             (yield* stopWritten(machine, running)) ||
-            (yield* staleWarm(agent, layout, running.mark, turnRunning))
+            (yield* staleWarm(agent, layout, standing.machine, running.mark, turnRunning))
           ) {
             if (handsOn) {
               yield* letGo(standing, agent.id, running.handle);
@@ -3289,7 +3326,11 @@ const runnerRetiredIfIdle = (userId: string, agentId: string) =>
  * message sent while the sandbox stops is never taken by the runner the stop
  * ends, whose sandbox may run on a moment past the stop's answer.
  */
-const stoppedHolding = (machine: MachineLifecycle, unheld: UnheldSandbox) =>
+const stoppedHolding = (
+  machine: MachineLifecycle,
+  unheld: UnheldSandbox,
+  beats?: readonly AgentSandboxBeatKind[],
+) =>
   Effect.gen(function* () {
     const { userId, agentId, sessionId } = unheld;
     const found = yield* machine.findPlace(userId, sessionId);
@@ -3300,7 +3341,7 @@ const stoppedHolding = (machine: MachineLifecycle, unheld: UnheldSandbox) =>
     if (running === undefined) return false;
     const sandboxName = agentSandboxName(sessionId);
 
-    if (yield* agentSandboxHeld(sandboxName, new Date(yield* Clock.currentTimeMillis))) {
+    if (yield* agentSandboxHeld(sandboxName, new Date(yield* Clock.currentTimeMillis), beats)) {
       return false;
     }
 
@@ -3374,6 +3415,74 @@ export const sandboxStoppedIfUnheld = Effect.fn("web/sandboxStoppedIfUnheld")(fu
   const machine = yield* deploymentLifecycle;
 
   return yield* holdingRunner(unheld.agentId, stoppedHolding(machine, unheld));
+});
+
+/**
+ * Whether the session's sandbox reads stopped, asked again while it still
+ * stops (`CODER.RESUME_WHILE_ENDING`): Vercel answers a stop before its
+ * snapshot is taken, and a sandbox resumed while it stops comes back at the
+ * size it stood at, never resized (`@repo/sandbox`'s `getOrCreate`). False
+ * where it never read stopped in that wait, or could not be read.
+ */
+const settledStopped = (sessionId: string) =>
+  Effect.gen(function* () {
+    const standing = yield* agentSandboxOf(yield* Sandbox, sessionId);
+
+    return standing?.status === SANDBOX_STATUS.STOPPED;
+  }).pipe(
+    Effect.repeat({
+      schedule: Schedule.spaced(CODER.RESUME_WHILE_ENDING.SPACING),
+      times: CODER.RESUME_WHILE_ENDING.TRIES,
+      until: (stopped) => stopped,
+    }),
+    Effect.orElseSucceed(() => false),
+  );
+
+/** An agent's sandbox a change of its workspace's size names: the sandbox, and the conversation its next turn's message is composed for. */
+export interface ResizedSandbox extends UnheldSandbox {
+  readonly conversationId: string;
+}
+
+/**
+ * An agent's sandbox stopped for a change of its workspace's size, so its
+ * next message resumes it at the new size (`sandbox-machine.ts` resizes a
+ * stopped sandbox before it resumes): only where no turn of the agent's may
+ * be at work, no message waits for a launch, and nothing a member does in it
+ * holds it (a Terminal tab, port forwarding, or the Browser view), as
+ * `sandboxStoppedIfUnheld` decides, but that its chat shown, which keeps it
+ * warm for the next message alone, holds nothing here. Where it stopped,
+ * the lease is held until the sandbox reads stopped (`settledStopped`), so
+ * the next open, which waits on the lease, finds it stopped and resizes it,
+ * and only then is the agent's next turn told the size it resumes at
+ * (`turn-message.ts`), written under the same lease, so no message composed
+ * between misses it.
+ * Answers whether the sandbox was stopped.
+ */
+export const sandboxStoppedForSize = Effect.fn("web/sandboxStoppedForSize")(function* (
+  resized: ResizedSandbox,
+  size: SandboxResized,
+) {
+  const machine = yield* deploymentLifecycle;
+
+  const target: ConversationTarget = {
+    userId: resized.userId,
+    conversationId: resized.conversationId,
+  };
+
+  return yield* holdingRunner(
+    resized.agentId,
+    Effect.gen(function* () {
+      if (!(yield* stoppedHolding(machine, resized, WORK_BEATS))) return false;
+
+      // Note that the agent is told its new size only once the sandbox reads stopped, since one still stopping resumes at its old size.
+      if (yield* settledStopped(resized.sessionId)) {
+        const handed = yield* readNativeTurnHanded(target);
+        yield* recordNativeTurnHanded(target, { ...handed, resized: size });
+      }
+
+      return true;
+    }),
+  );
 });
 
 /**

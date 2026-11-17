@@ -37,6 +37,7 @@ import {
   fakeWorkspaceSeams,
   getTestDB,
   joinWorkspace,
+  openTaskAgent,
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
@@ -157,12 +158,13 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, agentSessions, ask } = yield* openTask();
+        const agentId = yield* openTaskAgent(owner, task.workspaceId, task.id);
 
         const shown = yield* writePage(
           owner,
           taskPageOwner(task.id),
           { title: "Chart", html: "<h1>Chart</h1>" },
-          { kind: PAGE_SHOWER.APP },
+          { kind: PAGE_SHOWER.AGENT, agentId },
         );
 
         assert.ok(Option.isSome(shown));

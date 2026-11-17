@@ -69,6 +69,14 @@ import { Redacted, Result, Schema } from "effect";
  * row and no other name's. The rewrap does not visit those rows: a version
  * stays in the ring until every variable sealed under it is set again.
  *
+ * A workspace's Slack bot token, which Slack granted when the workspace
+ * installed our Slack app, is sealed the same way for as long as the
+ * installation holds it (`slack_installation`), with purposes of its own
+ * (`luke/slack-bot-token/*`) and the workspace and the Slack team bound in
+ * place of an account, so a token opens for no other workspace's row and
+ * no other team's. The rewrap does not visit those rows: a version stays in
+ * the ring until every workspace sealed under it installs the app again.
+ *
  * Rotation is a new version at the head of the environment's list: new
  * saves wrap under it, and `scripts/rewrap-provider-keys.sh` moves every
  * standing row onto it by unwrapping and rewrapping its data key, never
@@ -109,6 +117,10 @@ const SEAL_PURPOSE = {
   WORKSPACE_ENVIRONMENT: {
     DATA_KEY: "luke/workspace-environment/data-key",
     SECRET: "luke/workspace-environment/value",
+  },
+  SLACK_BOT_TOKEN: {
+    DATA_KEY: "luke/slack-bot-token/data-key",
+    SECRET: "luke/slack-bot-token/token",
   },
 } as const;
 
@@ -164,6 +176,21 @@ export interface SealedWorkspaceVariable {
 export interface WorkspaceVariableOwner {
   readonly organizationId: string;
   readonly name: string;
+}
+
+/** What a Slack installation's row holds of its bot token. */
+export interface SealedSlackBotToken {
+  readonly keyVersion: number;
+  /** base64 of nonce, ciphertext, and tag: the data key under the key-encryption key. */
+  readonly sealedDataKey: string;
+  /** base64 of nonce, ciphertext, and tag: the token under the data key. */
+  readonly sealedToken: string;
+}
+
+/** Whose a Slack bot token is: the workspace and the Slack team it was granted in, which its seal binds. */
+export interface SlackBotTokenOwner {
+  readonly organizationId: string;
+  readonly teamId: string;
 }
 
 /** What a seal kept in one text column holds, as a launch line's secrets and a sandbox firewall's launch swaps are: the version, the wrapped data key, and the seal. */
@@ -595,4 +622,33 @@ export function openWorkspaceVariable(
   );
 
   return value === undefined ? Result.fail(PROVIDER_KEY_UNREADABLE) : Result.succeed(value);
+}
+
+/** A workspace's Slack bot token sealed for its installation's row under a fresh data key, wrapped under the ring's current version. */
+export function sealSlackBotToken(
+  ring: KeyRing,
+  owner: SlackBotTokenOwner,
+  token: Redacted.Redacted<string>,
+): SealedSlackBotToken {
+  const names = [owner.organizationId, owner.teamId];
+  const { sealed, ...wrapped } = sealSecret(ring, SEAL_PURPOSE.SLACK_BOT_TOKEN, names, token);
+
+  return { ...wrapped, sealedToken: sealed };
+}
+
+/** The bot token a Slack installation's row seals, or unreadable where any part of it does not open for this workspace and team. */
+export function openSlackBotToken(
+  ring: KeyRing,
+  owner: SlackBotTokenOwner,
+  sealed: SealedSlackBotToken,
+): Result.Result<Redacted.Redacted<string>, ProviderKeyUnreadable> {
+  const token = openSecret(
+    ring,
+    SEAL_PURPOSE.SLACK_BOT_TOKEN,
+    [owner.organizationId, owner.teamId],
+    sealed,
+    sealed.sealedToken,
+  );
+
+  return token === undefined ? Result.fail(PROVIDER_KEY_UNREADABLE) : Result.succeed(token);
 }

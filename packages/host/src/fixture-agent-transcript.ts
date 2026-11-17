@@ -1,5 +1,5 @@
 /**
- * fixture-agent-transcript.ts -- the transcript the Inbox fixture's invitations agent holds, long enough to scroll: its words, its thinking, its calls, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn.
+ * fixture-agent-transcript.ts -- the transcripts the Inbox fixture's agents hold: the invitations agent's, long enough to scroll, with its words, its thinking, its calls, a file the account sent, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn; and the rounding agent's, ten finished turns with wide words.
  *
  * The Inbox fixture lays it on the document where the host holds an
  * agent's transcript (`LIVE_READ.TRANSCRIPT`), so the panel's agent page
@@ -38,6 +38,14 @@ const KEPT = {
   RECORDING: "fixture-recording-accept",
 } as const;
 
+/** The file the account sent with its ask to resend an expired invite: the invites that expired, as a short CSV sent as plain text as every text file is, so a sent line's file chip has a text file to count the lines of. */
+const EXPIRED_INVITES = {
+  type: "file",
+  mediaType: AGENT_ATTACHMENT_TYPE.TEXT,
+  filename: "expired-invites.csv",
+  url: "data:text/plain;base64,ZW1haWwsZXhwaXJlZAprYXRoZXJpbmVAZXhhbXBsZS5jb20sMjAyNi0xMS0wMgptYXJjb0BleGFtcGxlLmNvbSwyMDI2LTExLTA1Cg==",
+} as const;
+
 /** The fixture's picture as the service keeps one: a screenshot-sized PNG. */
 function keptPicture(id: string): WireRecord {
   return { id, mediaType: AGENT_ATTACHMENT_TYPE.PNG, width: 320, height: 180, byteCount: 7549 };
@@ -53,17 +61,18 @@ function runningPart(tool: string, callId: string, input: WireRecord): WireRecor
   return { type: `tool-${tool}`, toolCallId: callId, state: "input-available", input };
 }
 
-/** The account's line asking for a turn, `at` milliseconds into the run. */
+/** The account's line asking for a turn, `at` milliseconds into the run, with the files it sent after its words. */
 function asked(
   id: string,
   at: number,
   text: string,
   sender: { readonly userId: string; readonly name: string },
+  files: readonly WireRecord[] = [],
 ): AgentTranscriptMessage {
   return {
     id,
     role: MESSAGE_ROLE.USER,
-    parts: [{ type: "text", text }],
+    parts: [{ type: "text", text }, ...files],
     sentAt: at,
     sentBy: { kind: AGENT_SENDER.MEMBER, userId: sender.userId, name: sender.name },
   };
@@ -75,8 +84,8 @@ function asked(
  * run and the agent's work on it, the dialog and its email shown and its
  * pull request opened; a second
  * ask, answered with the funnel's page and a recording of an invite
- * accepted; and a third the agent is still working on, its last call
- * running.
+ * accepted; and a third, sent as two lines a minute apart, the agent is
+ * still working on, its last call running.
  */
 function transcriptMessages(
   startedAt: number,
@@ -135,7 +144,7 @@ function transcriptMessages(
         ),
         { type: "step-start" },
         toolPart(
-          AGENT_TOOL.SHOW_IMAGE,
+          AGENT_TOOL.SHOW_MEDIA,
           "fixture-invites-shots",
           {
             images: [
@@ -241,6 +250,13 @@ function transcriptMessages(
       startedAt + 70 * MINUTE,
       "Add a way to resend an invite that expired.",
       reader,
+      [EXPIRED_INVITES],
+    ),
+    asked(
+      "fixture-invites-resend-keep",
+      startedAt + 71 * MINUTE,
+      "Keep the old link working until the new one is sent.",
+      reader,
     ),
     {
       id: "fixture-invites-resend",
@@ -325,6 +341,67 @@ export function fixtureAgentTranscript(
     messages: transcriptMessages(startedAt, reader),
     cursor: "3:0",
     word: { status: AGENT_STATUS.RUNNING, runStartedAt: startedAt, title, caughtUp: true },
+    pages: 1,
+  };
+}
+
+/** The rounding agent's last words, which its page opens on. */
+const FIXTURE_LONG_LATEST =
+  "Rounding is settled: every total now rounds half-cents to even, as the bank's statements do.";
+
+/** What the account asked the rounding agent, turn by turn, before its last turn: words long enough to wrap, a link no line holds, and a name with no break in it. */
+const LONG_ASKS = [
+  "Where do totals round today?",
+  "Compare with https://ledger.example.com/statements/2026/11/reconciliation?account=operating-usd&view=line-items&rounding=half-even&include=adjustments,fees,refunds",
+  "Does ROUNDING_MODE_HALF_EVEN_FOR_EVERY_LEDGER_TOTAL_AND_EVERY_INVOICE_LINE need a flag of its own?",
+  "Show me the cases the tests cover, side by side.",
+  "What does the invoice's tax line do with a half cent?",
+  "Which reports read the rounded totals?",
+  "Can the old totals be recomputed without a migration?",
+  "Write down what changes for a customer reading their statement.",
+  "Run the whole ledger suite once more.",
+  "Anything left before this is settled?",
+] as const;
+
+/** What the rounding agent answered each ask, in Markdown as an agent writes: some of it a code block whose lines run long, and a table wider than a phone. */
+const LONG_ANSWERS = [
+  "Totals round in `src/ledger/total.ts`, half-cents **up**, through one helper every report shares. Invoices call the same helper per line, then sum, so an invoice can come out a cent off the ledger's own total.",
+  "That statement rounds half-cents to even. Here is the helper as it stands:\n\n```ts\nexport function roundCents(amountInMillicents: number, mode: RoundingMode = ROUNDING_MODE.HALF_UP): number { return mode === ROUNDING_MODE.HALF_UP ? Math.floor(amountInMillicents / 10 + 0.5) : roundHalfEven(amountInMillicents / 10); }\n```\n\nSwitching the default to half-even matches the bank.",
+  "No flag: the ledger has one rounding rule, and a flag would let two reports disagree again. The mode stays a parameter for the tests alone.",
+  "| Amount | Half up | Half even | Bank | Invoice line | Ledger total |\n| --- | --- | --- | --- | --- | --- |\n| 0.125 | 0.13 | 0.12 | 0.12 | 0.13 | 0.12 |\n| 0.135 | 0.14 | 0.14 | 0.14 | 0.14 | 0.14 |\n| 2.675 | 2.68 | 2.68 | 2.68 | 2.68 | 2.68 |\n| 1.005 | 1.01 | 1.00 | 1.00 | 1.01 | 1.00 |",
+  "It rounds per line, then sums, so three lines can come to a cent more than the tax on the total. Once tax rounds once on the total, the two agree.",
+  "The monthly statement, the revenue report, and the customer export. All three read `total.ts`, so they move together.",
+  "Yes. Totals are computed on read from the stored millicents, so nothing stored changes; only what a report shows does.",
+  "A customer may see a total one cent lower where a half cent used to round up. No balance changes, since balances are kept unrounded.",
+  "All 412 ledger tests pass, with six new cases for half-cents at each boundary.",
+] as const;
+
+/** The rounding agent's run, ten turns long and finished, its last words its last row: a transcript long enough that its page opens far below its first row, with long links, a wide code block, and a wide table among its words. */
+export function fixtureLongTranscript(
+  startedAt: number,
+  reader: { readonly userId: string; readonly name: string },
+  title: string,
+): AppTranscript {
+  const turns = LONG_ASKS.flatMap((ask, turn): readonly AgentTranscriptMessage[] => {
+    const at = startedAt + turn * 6 * MINUTE;
+    const answer = LONG_ANSWERS[turn] ?? FIXTURE_LONG_LATEST;
+
+    return [
+      asked(`fixture-rounding-ask-${turn}`, at, ask, reader),
+      {
+        id: `fixture-rounding-answer-${turn}`,
+        role: MESSAGE_ROLE.ASSISTANT,
+        parts: [{ type: "step-start" }, { type: "text", text: answer }],
+        startedAt: at + MINUTE,
+        finishedAt: at + 2 * MINUTE,
+      },
+    ];
+  });
+
+  return {
+    messages: turns,
+    cursor: `${turns.length}:0`,
+    word: { status: AGENT_STATUS.COMPLETED, runStartedAt: startedAt, title, caughtUp: true },
     pages: 1,
   };
 }

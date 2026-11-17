@@ -499,6 +499,8 @@ const deviceField = { deviceId: wireUuidSchema };
 /**
  * A register: the Mac's id, its name, its home folder, and the CLI it
  * bundles, both absolute, the Codex binary it runs, absent until it has one,
+ * the entry of the Cursor SDK it keeps, absent on a device that keeps none
+ * (a Linux host, and a host from before it), which runs no Cursor agent,
  * its platform and architecture, and the capabilities its follower has
  * (`DEVICE_CAPABILITY`), absent for none. The device sends each key only when it names something
  * beyond the default, so a service from before it, which refuses a key it
@@ -534,6 +536,7 @@ export const deviceAgentRegisterRequestSchema = EffectSchema.Struct({
   attachmentsFolder: macPath,
   claudeExecutable: macPath,
   codexExecutable: EffectSchema.optionalKey(macPath),
+  cursorSdk: EffectSchema.optionalKey(macPath),
   capabilities: EffectSchema.optionalKey(
     EffectSchema.Array(EffectSchema.Literals(Object.values(DEVICE_CAPABILITY))).check(
       EffectSchema.isMaxLength(16),

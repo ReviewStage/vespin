@@ -57,7 +57,8 @@
               ]
             },
             "at": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$"
             },
             "timezone": {
               "type": "string",
@@ -239,7 +240,8 @@
       "type": "array",
       "items": {
         "type": "string",
-        "maxLength": 140
+        "maxLength": 140,
+        "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*\\/(?!\\.{1,2}$)[A-Za-z0-9_.-]+$"
       },
       "maxItems": 10,
       "description": "owner/name, reached by the workspace's GitHub installation; runs start in the first. [] for none, which a GitHub trigger cannot take. Create defaults to none."
@@ -276,26 +278,6 @@
         }
       ],
       "description": "Hand every run to this agent, by its list_agents id, so runs share its memory; null for a new agent each run, the default."
-    },
-    "guards": {
-      "type": "object",
-      "properties": {
-        "maxConcurrentRuns": {
-          "type": "integer"
-        },
-        "dailyRunCap": {
-          "type": "integer"
-        },
-        "subjectCooldownHours": {
-          "type": "integer"
-        }
-      },
-      "required": [
-        "maxConcurrentRuns",
-        "dailyRunCap"
-      ],
-      "additionalProperties": false,
-      "description": "maxConcurrentRuns 1 to 5, default 1; dailyRunCap 1 to 50, default 10; subjectCooldownHours, per Sentry issue, 1 to 168, default 24."
     },
     "scope": {
       "type": "string",

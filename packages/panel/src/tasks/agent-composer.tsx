@@ -1,4 +1,6 @@
 import { DENIES_WAITING } from "@repo/features/agent-approval-model";
+import { runsGoal } from "@repo/features/agent-goal-model";
+import { runtimeOfProvider } from "@repo/features/agent-runtime-models";
 import { SERVER_HANDED } from "@repo/features/agent-servers-model";
 import {
   AGENT_BOUNDS,
@@ -441,6 +443,12 @@ export function AgentComposer({
   onContinueInCloud?: ((carry: MoveCarry) => void) | undefined;
 }): React.JSX.Element {
   const connected = useConnected();
+  // Note that a Start's box has no runtime yet, so the harness its chosen model runs on stands for it.
+  const provider = model === undefined ? undefined : providerOf(model.choice.model);
+
+  const runtime =
+    model?.runtime ?? (provider === undefined ? undefined : runtimeOfProvider(provider));
+
   // Who pays, as the chip's menu names it, is the context popover's last line too.
   const paying = model === undefined ? payer : paidByOf(payer, usage, model.runtime);
 
@@ -452,7 +460,7 @@ export function AgentComposer({
     paying === undefined ? undefined : (
       <PayerValue
         payer={paying}
-        provider={model === undefined ? undefined : providerOf(model.choice.model)}
+        provider={provider}
         usage={usage}
         owner={owner}
         planName={planName}
@@ -482,11 +490,11 @@ export function AgentComposer({
   const goalsOn =
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.GOALS) }).data === true;
 
-  // Note that `/model` needs only the model chip, so New task's box and a draft's run it, while `/compact` and `/clear` need a session, and `/goal` a session or a first message, while the Goals experiment is on.
+  // Note that `/model` needs only the model chip, so New task's box and a draft's run it, while `/compact` and `/clear` need a session, and `/goal` a session or a first message, on a harness that runs a goal, while the Goals experiment is on.
   const reach = {
     model: model !== undefined,
     session: onClear !== undefined,
-    goal: goalsOn && (onClear !== undefined || startsGoal),
+    goal: goalsOn && runsGoal(runtime) && (onClear !== undefined || startsGoal),
   };
 
   const statuses = useIntegrationStatuses();
@@ -507,7 +515,6 @@ export function AgentComposer({
       update: (next) =>
         composer.updateHeld((now) => ({ ...now, attachments: next(now.attachments) })),
     },
-    pastesTextAsFile: true,
     self: agentId,
     skills,
     // Note that an edit of a queued message runs no command, chosen as typed, since it saves back into its place.

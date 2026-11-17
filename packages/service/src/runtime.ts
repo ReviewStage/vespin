@@ -32,9 +32,11 @@ import { pullRequestLinksLayer } from "./github/pull-request-links.js";
 import { integrationConnectFromEnvironment } from "./integrations/integration-connect.js";
 import { sentryLogger } from "./observability/sentry.js";
 import { pageLinksFromEnvironment } from "./pages/page-links.js";
+import { cursorModelCatalogLayer } from "./providers/cursor-models.js";
 import { modelCatalogLayer } from "./providers/model-catalog.js";
 import { apnsSenderFromEnvironment } from "./push/apns.js";
 import { apnsHttp2Transport } from "./push/apns-http2.js";
+import { slackAppFromEnvironment } from "./slack/slack-app.js";
 import { slackBotFromEnvironment } from "./slack/slack-bot.js";
 import { syncFromEnvironment } from "./sync/hub.js";
 import { sentryAppFromEnvironment } from "./triggers/sentry/sentry-app-config.js";
@@ -103,7 +105,9 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
  * `IntegrationConnect` is the one place each integration's connector UID and
  * allowlist are read, for the account routes that connect and disconnect an account and
  * the agents that read its tokens alike. `SlackBot` is the one place the
- * bot's own connector is read (`slack/slack-bot.ts`).
+ * bot's own connector is read (`slack/slack-bot.ts`), and `SlackApp` the one
+ * place our own Slack app's client and signing secrets are
+ * (`slack/slack-app.ts`).
  *
  * `SettledTurnListener` is here because the store writer tells it of every
  * coding agent turn it settles, on whichever function the settle ran: it
@@ -188,6 +192,7 @@ export const webServices = Layer.mergeAll(
   sentryAppFromEnvironment,
   integrationConnectFromEnvironment,
   slackBot,
+  slackAppFromEnvironment,
   webLogger,
   syncFromEnvironment,
   bearerCallersLayer,
@@ -202,6 +207,9 @@ export const webServices = Layer.mergeAll(
   githubDeliveryReadsFromEnvironment,
   voiceCallLeasesFromEnvironment,
   modelCatalogLayer.pipe(Layer.provide(Layer.merge(FetchHttpClient.layer, hostedEnvironment))),
+  cursorModelCatalogLayer.pipe(
+    Layer.provide(Layer.merge(FetchHttpClient.layer, hostedEnvironment)),
+  ),
   pullRequestLinksLayer,
   productAnalyticsFromEnvironment.pipe(
     Layer.provide(Layer.mergeAll(FetchHttpClient.layer, hostedEnvironment, webSqlClient)),

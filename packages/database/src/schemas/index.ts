@@ -58,6 +58,8 @@ export * from "./github-mention.js";
 
 export * from "./github-personal-token.js";
 
+export * from "./github-pull-request-move.js";
+
 export * from "./github-rate-hold.js";
 
 export * from "./github-repository.js";
@@ -147,6 +149,8 @@ export * from "./workspace-former-slug.js";
 export * from "./workspace-sandbox-script.js";
 
 export * from "./workspace-sandbox-script-run.js";
+
+export * from "./workspace-sandbox-size.js";
 
 export * from "./workspace-token-repository.js";
 

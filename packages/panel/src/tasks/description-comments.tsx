@@ -93,7 +93,7 @@ import {
   usePressAway,
   VisuallyHidden,
 } from "@repo/ui";
-import { type Actor, APP_ACTOR, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
+import { type Actor, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
 import { neverBusyAct } from "@repo/ui/confirm-state";
 import {
   type DescriptionCommentsControl,
@@ -236,11 +236,10 @@ import {
 /**
  * The words a thread is on, quoted over it in the quote's face every quote
  * wears (`@repo/ui/quote-face`), a message's and the message box's alike:
- * whole where they are words chosen, as a selection or a Reply chooses
- * them, and two lines at most where they are a whole block or element,
- * which may run on for a section; struck out where the words are gone.
+ * whole, words chosen and a whole block or element alike, so a comment
+ * always says all of what it is on; struck out where the words are gone.
  */
-const COMMENT_QUOTE_CLASS = `${QUOTE_CLASS} comment-quote data-[clipped=true]:line-clamp-2 data-[gone=true]:line-through data-[gone=true]:decoration-quote-strike`;
+const COMMENT_QUOTE_CLASS = `${QUOTE_CLASS} comment-quote data-[gone=true]:line-through data-[gone=true]:decoration-quote-strike`;
 
 /**
  * A card's place in the margin: a card already there travels to its next
@@ -518,10 +517,6 @@ function useWriter(
   const person = usePerson(writer.by);
   const written = useWriterSubject(agents, writer);
 
-  if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) {
-    return { author: commentAuthor(APP_ACTOR), nameRef: <ActorRef actor={APP_ACTOR} nameOnly /> };
-  }
-
   if (written !== undefined && agents !== undefined) {
     const { agentId, subject, elsewhere } = written;
 
@@ -586,10 +581,7 @@ function WriterMark({
 }): ReactNode {
   const person = usePerson(writer.by);
   const written = useWriterSubject(agents, writer);
-  let actor: Actor = person;
-
-  if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) actor = APP_ACTOR;
-  else if (written !== undefined) actor = written.subject.tile;
+  const actor: Actor = written === undefined ? person : written.subject.tile;
 
   return <ActorMark actor={actor} />;
 }
@@ -1509,31 +1501,28 @@ function GoneQuote({
   );
 }
 
-/** A quote line over a comment: the words it is on, whole where they were chosen, or a press that shows them where they stand, labeled `label`, where one is offered. */
+/** A quote line over a comment: the words it is on, whole, or a press that shows them where they stand, labeled `label`, where one is offered. */
 function QuoteLine({
   words,
   label,
-  whole = false,
   gone = false,
   onShow,
 }: {
   words: string;
   label: string;
-  /** Whether the words were chosen, a few of a block's, so they are quoted whole rather than cut to two lines. */
-  whole?: boolean;
   gone?: boolean;
   onShow?: (() => void) | undefined;
 }): React.JSX.Element {
   if (onShow === undefined) {
     return (
-      <blockquote className={COMMENT_QUOTE_CLASS} data-clipped={!whole} data-gone={gone}>
+      <blockquote className={COMMENT_QUOTE_CLASS} data-gone={gone}>
         {words}
       </blockquote>
     );
   }
 
   return (
-    <blockquote className={COMMENT_QUOTE_CLASS} data-clipped={!whole} data-gone={gone}>
+    <blockquote className={COMMENT_QUOTE_CLASS} data-gone={gone}>
       <Tooltip label={label}>
         <LineButton look={LINE_BUTTON_LOOK.QUOTE} onClick={onShow}>
           {words}
@@ -1557,7 +1546,6 @@ function ThreadQuote({
     <QuoteLine
       words={thread.quote}
       label={thread.page === undefined ? COMMENT_WORDS.SHOW_WORDS : COMMENT_WORDS.SHOW_ELEMENT}
-      whole={thread.scope === DESCRIPTION_COMMENT_SCOPE.WORDS}
       gone={gone}
       onShow={onShowWords}
     />
@@ -3821,9 +3809,7 @@ function PreviewComment({
 
   return (
     <Comment {...head}>
-      {quote === undefined ? null : (
-        <QuoteLine words={quote} label={COMMENT_WORDS.SHOW_ELEMENT} whole />
-      )}
+      {quote === undefined ? null : <QuoteLine words={quote} label={COMMENT_WORDS.SHOW_ELEMENT} />}
       <CommentWords words={words} files={shown.named} />
     </Comment>
   );
@@ -4026,7 +4012,6 @@ export function PendingPageComment({
           <QuoteLine
             words={quoted}
             label={COMMENT_WORDS.SHOW_ELEMENT}
-            whole={comment.reply === undefined && element?.words === true}
             onShow={
               shownPath === undefined || onShow === undefined ? undefined : () => onShow(shownPath)
             }

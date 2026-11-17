@@ -1,6 +1,4 @@
-import { Schema as EffectSchema } from "effect";
 import { pullRequestChaptersContract } from "./contract/pull-request-chapters.js";
-import { githubPullRequestNumberSchema } from "./github-repositories-wire.js";
 import { answerView, failureSetOf } from "./hosted-failure.js";
 import { HOSTED_API_ERROR } from "./service-wire.js";
 
@@ -38,20 +36,6 @@ export const PULL_REQUEST_CHAPTERS_CALL_FAILURE = failureSetOf(
   { generate: pullRequestChaptersContract.generate },
   { as: PULL_REQUEST_CHAPTERS_RENAMES },
 );
-
-/** One agent's Pull request tab, as the panel names the pull request whose chapters it reads or generates: the agent's own, or the one of its repository by number. */
-export const pullRequestChaptersParamsSchema = EffectSchema.Struct({
-  agentId: EffectSchema.NonEmptyString,
-  number: EffectSchema.optionalKey(githubPullRequestNumberSchema),
-});
-
-/** A read of a pull request's chapters, which names the number the tab's own read of it found. */
-export const pullRequestChaptersReadParamsSchema = EffectSchema.Struct({
-  agentId: EffectSchema.NonEmptyString,
-  number: githubPullRequestNumberSchema,
-});
-
-export type PullRequestChaptersReadParams = typeof pullRequestChaptersReadParamsSchema.Type;
 
 /** A pull request's chapters, as the panel hears a read or a Generate: the answer, or why there is none. */
 export const pullRequestChaptersAnswerViewSchema = answerView(

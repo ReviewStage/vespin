@@ -1,0 +1,1 @@
+ALTER TABLE "device" ADD COLUMN "cursor_sdk" text;

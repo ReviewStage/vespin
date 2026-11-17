@@ -1462,6 +1462,16 @@ test("a view that leaves no task standing says so, though an empty section still
   assert.match(page.textContent ?? "", /No tasks match this view/);
 });
 
+test("a filter kept while Made by offered the app's own tasks still reads, its other choices standing", async () => {
+  window.localStorage.setItem(
+    "app.tasksFilter",
+    JSON.stringify({ [ACME.id]: { status: [TASK_STATUS.CANCELED], madeBy: ["app", "person"] } }),
+  );
+  const page = await mountPage();
+
+  assert.match(page.textContent ?? "", /No tasks match this view/);
+});
+
 test("a row leads its repository with its owner's picture, one address for every row of that owner, so the window asks GitHub for it once", async () => {
   const page = await mountPage();
 

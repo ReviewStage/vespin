@@ -3,6 +3,7 @@
   "properties": {
     "connection": {
       "type": "string",
+      "pattern": "^(executor|github|gmail|google-calendar|google-drive|granola|linear|mercury|neon|notion|posthog|resend|sentry|slack|stripe|supabase|vercel|ycombinator)(?:-([2-9]|[1-9][0-9]{1,2}))?$",
       "description": "The account, by the connection name list_integrations answered, such as notion, or notion-2 for a second Notion account."
     }
   },

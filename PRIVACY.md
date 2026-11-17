@@ -103,10 +103,10 @@ state, and checks, and any chapters you generate for it.
 
 ### Credentials you save
 
-If you save an Anthropic or OpenAI API key, a GitHub personal access token, or
-your Claude plan's setup token, or sign in with your ChatGPT plan, we store it
-encrypted with AES-256-GCM under a per-credential key that is itself encrypted
-with a server-only secret held outside the database. We keep a short hint
+If you save an Anthropic, OpenAI, or Cursor API key, a GitHub personal access
+token, or your Claude plan's setup token, or sign in with your ChatGPT plan, we
+store it encrypted with AES-256-GCM under a per-credential key that is itself
+encrypted with a server-only secret held outside the database. We keep a short hint
 (such as `sk-ant-…abcd`), the email of the ChatGPT account a plan signed in
 as, the name you give a plan, and whether the provider accepts it. We never
 log a saved credential or include it in analytics, error reports, or screen
@@ -117,7 +117,12 @@ A workspace's owners and admins can save environment variables for the
 workspace, which we store sealed the same way. Each of the workspace's cloud
 agents is handed them as environment variables in its sandbox as it starts a
 turn, so the agent can read them, and a value it reads or prints may reach its
-model and its transcript. Agents on your Mac are never handed them.
+model and its transcript. Agents on your Mac are never handed them. A variable
+is a secret unless the one who saves it marks it otherwise: a secret's value is
+never shown to anyone once saved, while one saved as a config, such as
+`NODE_ENV`, is shown to every member of the workspace in Settings. We keep who
+added each variable and who last changed it, and show both to the workspace's
+members.
 
 ### Integrations and connected apps
 
@@ -443,6 +448,15 @@ its title and its vespin.dev link, so Handoff can offer it on your other
 devices signed in to the same Apple Account. iOS hands them to those devices
 directly, and the app does not offer them to Siri suggestions or to search.
 
+### Members' pictures on your iPhone
+
+So a menu can lead each member of a workspace with their face, such as a
+task's Assignee menu, the Vespin iOS app keeps a small copy of each member's
+sign-in picture as a file in its caches on your iPhone or iPad. It downloads
+each one from the Google or GitHub address the app already draws it from,
+sends it nowhere else, and keeps it only in the caches iOS may clear when the
+device needs room; deleting the app deletes them.
+
 ## 3\. Legal basis for processing
 
 We process your personal information on the following legal bases, as
@@ -466,6 +480,8 @@ laws:
 - Run your agents and the models they use, on your own keys
 - Authenticate your identity and manage your account and workspaces
 - Send workspace invitations and the Slack messages your workspace asked for
+- Send you onboarding emails and product updates, which you can unsubscribe
+  from at any time
 - Monitor and analyze usage to improve the Service
 - Detect, prevent, and address technical issues and security threats
 - Comply with legal obligations
@@ -491,7 +507,9 @@ data with:
   you saved, never ours. Titles, of your agents, tasks, and the threads you
   start, are generated on Anthropic under Vespin's own API key, from excerpts
   of an agent's opening message, your latest message, and its latest answer,
-  or of a thread's first message.
+  or of a thread's first message. An agent you run on Cursor runs on Cursor,
+  on the Cursor API key you saved, and Cursor's SDK, which runs it in the
+  agent's sandbox, also sends Cursor its own usage analytics of each run.
   Each call carries what the model needs, such as the description, the conversation,
   attached files, and what the agent read. These providers process it under
   their own policies.
@@ -504,7 +522,7 @@ data with:
 - **Infrastructure providers:** Vercel (hosting, agent sandboxes, and Vercel
   Connect, which holds integration tokens), Neon (database), PostHog (usage
   data, screen recordings, feedback, and setup answers), Sentry (error and
-  performance monitoring), Resend (email: for the onboarding emails a new account is sent,
+  performance monitoring), Resend (email: for onboarding emails and product updates,
   Resend is told your email address, your first name, when you signed up, whether
   you accepted a workspace invitation, and on which days you started a task),
   and Slack (feedback, setup answers, and Vespin's Slack bot).

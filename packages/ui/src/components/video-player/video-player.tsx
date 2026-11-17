@@ -22,11 +22,29 @@ import {
   SpeakerIcon,
   SpeakerOffIcon,
 } from "../../icons/lucide-glyphs.js";
+import { useMediaPlace } from "../../media-place.js";
 import { motionHeld } from "../../motion-timing.js";
 import { notePictureOrigin } from "../../picture-expand.js";
-import { BUTTON_SIZE, BUTTON_VARIANT, Button, IconButton } from "../button/button.js";
+import { usePlayingFrames } from "../../playing-frames.js";
+import { BUTTON_VARIANT, IconButton } from "../button/button.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, Card } from "../card/card.js";
 import { EDGE_CLIP_ELEMENT, EDGE_CLIP_LAYOUT, EdgeClip } from "../edge-clip/edge-clip.js";
+import {
+  claimKey,
+  endOf,
+  MEDIA_KEY_ACT,
+  MEDIA_PILL,
+  MEDIA_SPEEDS,
+  type MediaKeyAct,
+  mediaKey,
+  modifiedKey,
+  NORMAL_SPEED,
+  nextSpeed,
+  SpeedButton,
+  setSpeed,
+  speedText,
+  toggleOf,
+} from "../media-controls/media-controls.js";
 import { SLIDER_LENGTH, Slider } from "../slider/slider.js";
 import { SPINNER_INK, SPINNER_SIZE, Spinner } from "../spinner/spinner.js";
 import { Tooltip } from "../tooltip/hint.js";
@@ -84,12 +102,11 @@ import { Tooltip } from "../tooltip/hint.js";
  * its size is read it says it as `--ui-video-natural-width` and
  * `--ui-video-natural-height`, plain numbers the place may fit it by.
  *
- * A recording keeps its place wherever it is drawn: each player notes where
- * it stands as it plays (`places`, by the video's bytes), so the same
- * recording drawn again, in the viewer an Expand opens or in a player drawn
- * anew, starts where it was left, and a player played again after another
- * moved the same recording, as the inline one after the viewer closes, goes
- * on from there.
+ * A recording keeps its place wherever it is drawn (`useMediaPlace`, as a
+ * sound clip's does), so the same recording drawn again, in the viewer an
+ * Expand opens or in a player drawn anew, starts where it was left, and a
+ * player played again after another moved the same recording, as the
+ * inline one after the viewer closes, goes on from there.
  *
  * Until its first frame's size is read, the frame holds the shape it will
  * take, its known size or a screenshot's (`LOADING_SIZE`), on the veil, the
@@ -120,8 +137,6 @@ const VIDEO_LABEL = {
   PREVIOUS_FRAME: "Previous frame",
   NEXT_FRAME: "Next frame",
   SEEK: "Seek",
-  SPEED: "Playback speed",
-  SPEED_HINT: "Playback speed (< slower, > faster)",
   EXPAND: "Expand",
   FULL_SCREEN: "Full screen",
   EXIT_FULL_SCREEN: "Exit full screen",
@@ -166,32 +181,8 @@ const HEADER_BASE64_CHARS = 16_384;
  */
 const SOUND_HEAD_BASE64_CHARS = 262_144;
 
-/** How far an arrow key seeks, in seconds. */
-const ARROW_SEEK_S = 5;
-
 /** The keyframes whose end takes the flash, its fade (`video-player.css`). */
 const FLASH_OUT = "ui-video-player-flash-out";
-
-/** What a key flashes over the video: an arrow's jump, or a speed key's speed. */
-const FLASH_KIND = {
-  JUMP: "jump",
-  SPEED: "speed",
-} as const;
-
-/** The speeds the player plays at, slowest first; the bar's speed button walks them round, and < and > step along them. */
-const SPEEDS: readonly number[] = [0.25, 0.5, 1, 1.5, 2];
-
-/** The speed a video starts at. */
-const NORMAL_SPEED = 1;
-
-/** The keys that play or pause the player while focus is in it. */
-const TOGGLE_KEYS: ReadonlySet<string> = new Set([" ", "k", "K"]);
-
-/** How far each arrow seeks, in seconds, while focus is in the player. */
-const SEEK_KEYS: ReadonlyMap<string, number> = new Map([
-  ["ArrowLeft", -ARROW_SEEK_S],
-  ["ArrowRight", ARROW_SEEK_S],
-]);
 
 /** Which way each key steps a frame while focus is in the player: comma back, period on, as on the video sites. */
 const FRAME_KEYS: ReadonlyMap<string, number> = new Map([
@@ -199,26 +190,11 @@ const FRAME_KEYS: ReadonlyMap<string, number> = new Map([
   [SHORTCUT_KEY.PERIOD.key, 1],
 ]);
 
-/** Which way each key steps the speed while focus is in the player: < slower, > faster. */
-const SPEED_KEYS: ReadonlyMap<string, number> = new Map([
-  ["<", -1],
-  [">", 1],
-]);
-
-/** Where Home and End send the video: its start, or its end. */
-const END_KEYS = { START: SHORTCUT_KEY.HOME.key, END: SHORTCUT_KEY.END.key } as const;
-
 /** The keys the frame buttons name in their hints, as the Keyboard shortcuts page lists them. */
 const FRAME_CHORD = {
   PREVIOUS: IN_CONTEXT_SHORTCUTS[IN_CONTEXT_KEY.VIDEO_FRAME_BACK].chord,
   NEXT: IN_CONTEXT_SHORTCUTS[IN_CONTEXT_KEY.VIDEO_FRAME_AHEAD].chord,
 } as const satisfies Record<string, ShortcutChord>;
-
-/**
- * How many recordings' places are kept, the latest played; past it the
- * oldest is let go, since each is keyed by its whole `data:` URL.
- */
-const PLACES_KEPT = 16;
 
 /** Where a video plays: in place of a picture, or in the file viewer. */
 export const VIDEO_PLAYER_PLACE = {
@@ -228,18 +204,13 @@ export const VIDEO_PLAYER_PLACE = {
 
 export type VideoPlayerPlace = (typeof VIDEO_PLAYER_PLACE)[keyof typeof VIDEO_PLAYER_PLACE];
 
-/** What one key asks the flash to say: how far a jump went in seconds, signed, or the speed it set. */
-type FlashAsk =
-  | { readonly kind: typeof FLASH_KIND.JUMP; readonly seconds: number }
-  | { readonly kind: typeof FLASH_KIND.SPEED; readonly speed: number };
-
 /**
  * The flash over the video: what it says, which run of presses it belongs
  * to, which arrives once, and which press stood it last, each standing it
  * again.
  */
 interface Flash {
-  readonly ask: FlashAsk;
+  readonly ask: MediaKeyAct;
   readonly run: number;
   readonly press: number;
 }
@@ -258,24 +229,6 @@ interface Playback {
   readonly speed: number;
 }
 
-/** Where a recording was left: the second it stood at, and the player that stood it there. */
-interface Place {
-  readonly at: number;
-  readonly by: symbol;
-}
-
-/** Where each recording was last left, by its `data:` URL, the latest last. */
-const places = new Map<string, Place>();
-
-/** Notes where `dataUrl` was left, letting the oldest place go past `PLACES_KEPT`. */
-function keepPlace(dataUrl: string, place: Place): void {
-  places.delete(dataUrl);
-  places.set(dataUrl, place);
-  const oldest = places.keys().next().value;
-
-  if (places.size > PLACES_KEPT && oldest !== undefined) places.delete(oldest);
-}
-
 /** Whether the reader took the sound away last, which every player drawn after it starts by. */
 let soundOff = false;
 
@@ -290,21 +243,30 @@ export function isVideoDataUrl(dataUrl: string): boolean {
 }
 
 /**
- * The `blob:` address a video's `data:` URL plays from, made from its bytes
- * here and let go of as what draws it goes, the player or a thumb's still:
- * neither window's policy lets media load from a `data:` address, nor fetch
- * one, where both allow `blob:`. Note that the bytes are copied into an
- * array of their own length one by one, because `Uint8Array.from` over the
- * decoded string first lists every character, tens of megabytes for a
- * recording, which a phone with several on screen runs out of room for.
+ * The bytes a `data:` URL holds. Note that they are copied into an array of
+ * their own length one by one, because `Uint8Array.from` over the decoded
+ * string first lists every character, tens of megabytes for a recording,
+ * which a phone with several on screen runs out of room for.
+ */
+export function dataUrlBytes(dataUrl: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
+  const bytes = new Uint8Array(binary.length);
+
+  for (let at = 0; at < binary.length; at += 1) bytes[at] = binary.charCodeAt(at);
+
+  return bytes;
+}
+
+/**
+ * The `blob:` address a video's or a sound clip's `data:` URL plays from,
+ * made from its bytes here and let go of as what draws it goes, the player
+ * or a thumb's still: neither window's policy lets media load from a
+ * `data:` address, nor fetch one, where both allow `blob:`.
  */
 export function useBlobUrl(dataUrl: string): string | undefined {
   const [url, setUrl] = useState<string>();
   useEffect(() => {
-    const binary = atob(dataUrl.slice(dataUrl.indexOf(",") + 1));
-    const bytes = new Uint8Array(binary.length);
-
-    for (let at = 0; at < binary.length; at += 1) bytes[at] = binary.charCodeAt(at);
+    const bytes = dataUrlBytes(dataUrl);
     const made = URL.createObjectURL(new Blob([bytes], { type: dataUrlMediaType(dataUrl) }));
     setUrl(made);
 
@@ -409,23 +371,10 @@ function useFullScreen(
  * Note that a WebM a recorder wrote as it went states none, which the
  * browser reports as infinite, so it is sought past its end once, which
  * makes the browser read the length, and brought back to where it was left
- * as the length lands (`resume`).
+ * as the length lands (`useMediaPlace`'s `resume`).
  */
 function probeLength(video: HTMLVideoElement): void {
   if (!Number.isFinite(video.duration)) video.currentTime = Number.MAX_SAFE_INTEGER;
-}
-
-/** Plays a paused video, or pauses a playing one. */
-function toggleOf(video: HTMLVideoElement | null): void {
-  if (video === null) return;
-
-  if (video.paused) video.play().catch(() => undefined);
-  else video.pause();
-}
-
-/** Where a video ends, in seconds, or where it stands while its length is not yet known. */
-function endOf(video: HTMLVideoElement): number {
-  return Number.isFinite(video.duration) ? video.duration : video.currentTime;
 }
 
 /**
@@ -442,77 +391,27 @@ function stepFrame(video: HTMLVideoElement, frame: number, by: number): void {
   video.currentTime = Math.min(end, (next + 0.5) * frame);
 }
 
-/** The speed `by` steps along from `speed`, held at the slowest and the fastest. */
-function speedBy(speed: number, by: number): number {
-  const at = SPEEDS.indexOf(speed);
-  const from = at === -1 ? SPEEDS.indexOf(NORMAL_SPEED) : at;
-
-  return SPEEDS[Math.min(SPEEDS.length - 1, Math.max(0, from + by))] ?? NORMAL_SPEED;
-}
-
-/** The speed after `speed` as the speed button walks them, back to the slowest after the fastest. */
-function nextSpeed(speed: number): number {
-  return SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length] ?? NORMAL_SPEED;
-}
-
 /**
- * Sets a video's speed, its default too, because loading its address again
- * puts a video back at its default.
- */
-function setSpeed(video: HTMLVideoElement | null, speed: number): void {
-  if (video === null) return;
-  video.defaultPlaybackRate = speed;
-  video.playbackRate = speed;
-}
-
-/** A speed as the bar spells it: "0.25×", "1×". */
-function speedText(speed: number): string {
-  return `${String(speed)}×`;
-}
-
-/**
- * Answers a key pressed while focus is in the player: plays or pauses,
- * seeks, steps a frame, goes to an end, or changes the speed, and keeps the
- * key from the place around it. Note that Space on one of the bar's buttons
- * is left to the button, which it presses.
+ * Answers a key pressed while focus is in the player: comma and period
+ * step a frame, and the rest are every player's (`mediaKey`), a jump or a
+ * speed flashing over the video.
  */
 function playerKey(
   event: React.KeyboardEvent<HTMLElement>,
   video: HTMLVideoElement | null,
   frame: number,
-  onFlash: (ask: FlashAsk) => void,
+  onFlash: (act: MediaKeyAct) => void,
 ): void {
-  if (video === null || event.metaKey || event.ctrlKey || event.altKey) return;
-  const onButton = event.target instanceof HTMLButtonElement;
-  const seek = SEEK_KEYS.get(event.key);
   const step = FRAME_KEYS.get(event.key);
-  const speed = SPEED_KEYS.get(event.key);
 
-  if (TOGGLE_KEYS.has(event.key) && !(onButton && event.key === " ")) {
-    // A held key plays or pauses once, not again with each repeat; a held arrow or frame key goes on.
-    if (!event.repeat) toggleOf(video);
-  } else if (seek !== undefined) {
-    const from = video.currentTime;
-    video.currentTime = Math.min(endOf(video), Math.max(0, from + seek));
+  if (video === null || step === undefined || modifiedKey(event)) {
+    mediaKey(event, video, MEDIA_SPEEDS.VIDEO, onFlash);
 
-    // A jump at an end that moves nothing flashes nothing; one cut short by an end still says the key's step, as the video sites do.
-    if (video.currentTime !== from) onFlash({ kind: FLASH_KIND.JUMP, seconds: seek });
-  } else if (step !== undefined) {
-    stepFrame(video, frame, step);
-  } else if (event.key === END_KEYS.START || event.key === END_KEYS.END) {
-    video.currentTime = event.key === END_KEYS.START ? 0 : endOf(video);
-  } else if (speed !== undefined) {
-    const next = speedBy(video.playbackRate, speed);
-
-    // A speed key at the slowest or the fastest changes nothing and flashes nothing.
-    if (next !== video.playbackRate) onFlash({ kind: FLASH_KIND.SPEED, speed: next });
-    setSpeed(video, next);
-  } else {
     return;
   }
 
-  event.preventDefault();
-  event.stopPropagation();
+  stepFrame(video, frame, step);
+  claimKey(event);
 }
 
 /** One of the bar's buttons, its name its hint, with the key that reaches it where it has one. */
@@ -539,17 +438,20 @@ function BarButton({
  * same kind of thing (a jump the same way, which it adds to, or a speed),
  * else a run of its own.
  */
-function flashOn(was: Flash | undefined, ask: FlashAsk): Flash {
+function flashOn(was: Flash | undefined, ask: MediaKeyAct): Flash {
   const press = (was?.press ?? 0) + 1;
 
   if (was === undefined || was.ask.kind !== ask.kind)
     return { ask, run: (was?.run ?? 0) + 1, press };
 
-  if (ask.kind === FLASH_KIND.SPEED) return { ask, run: was.run, press };
+  if (ask.kind === MEDIA_KEY_ACT.SPEED) return { ask, run: was.run, press };
 
-  if (was.ask.kind === FLASH_KIND.JUMP && Math.sign(was.ask.seconds) === Math.sign(ask.seconds)) {
+  if (
+    was.ask.kind === MEDIA_KEY_ACT.JUMP &&
+    Math.sign(was.ask.seconds) === Math.sign(ask.seconds)
+  ) {
     return {
-      ask: { kind: FLASH_KIND.JUMP, seconds: was.ask.seconds + ask.seconds },
+      ask: { kind: MEDIA_KEY_ACT.JUMP, seconds: was.ask.seconds + ask.seconds },
       run: was.run,
       press,
     };
@@ -557,10 +459,6 @@ function flashOn(was: Flash | undefined, ask: FlashAsk): Flash {
 
   return { ask, run: was.run + 1, press };
 }
-
-/** The pill a flash is drawn as: the window's hint pill, its corner, edge, padding, and type, in the veil's ink. */
-const FLASH_PILL =
-  "ui-video-player-flash flex items-center gap-icon-gap rounded-tooltip border border-tooltip-edge bg-veil px-2 py-1 text-tag font-tag whitespace-nowrap tabular-nums text-on-veil [&>svg]:size-caption-leading [&>svg]:flex-none";
 
 /**
  * The flash over the video a key gives: a jump on the side it went, its
@@ -573,10 +471,10 @@ const FLASH_PILL =
  */
 function KeyFlash({ flash, onGone }: { flash: Flash; onGone: () => void }): React.JSX.Element {
   const { ask } = flash;
-  const back = ask.kind === FLASH_KIND.JUMP && ask.seconds < 0;
+  const back = ask.kind === MEDIA_KEY_ACT.JUMP && ask.seconds < 0;
 
   const side =
-    ask.kind === FLASH_KIND.SPEED ? "justify-center" : back ? "justify-start" : "justify-end";
+    ask.kind === MEDIA_KEY_ACT.SPEED ? "justify-center" : back ? "justify-start" : "justify-end";
 
   return (
     <span
@@ -586,12 +484,12 @@ function KeyFlash({ flash, onGone }: { flash: Flash; onGone: () => void }): Reac
       <span key={flash.run} className="flex animate-tooltip-in">
         <span
           key={flash.press}
-          className={FLASH_PILL}
+          className={`ui-video-player-flash ${MEDIA_PILL}`}
           onAnimationEnd={(event) => {
             if (event.animationName === FLASH_OUT) onGone();
           }}
         >
-          {ask.kind === FLASH_KIND.SPEED ? (
+          {ask.kind === MEDIA_KEY_ACT.SPEED ? (
             speedText(ask.speed)
           ) : (
             <>
@@ -603,28 +501,6 @@ function KeyFlash({ flash, onGone }: { flash: Flash; onGone: () => void }): Reac
         </span>
       </span>
     </span>
-  );
-}
-
-/** The bar's speed button, its words the speed it plays at, which a press walks round; its hint names the keys that step it. */
-function SpeedButton({
-  speed,
-  onPress,
-}: {
-  speed: number;
-  onPress: () => void;
-}): React.JSX.Element {
-  return (
-    <Tooltip label={VIDEO_LABEL.SPEED_HINT}>
-      <Button
-        label={`${VIDEO_LABEL.SPEED}: ${speedText(speed)}`}
-        variant={BUTTON_VARIANT.MEDIA}
-        size={BUTTON_SIZE.COMPACT}
-        onClick={onPress}
-      >
-        {speedText(speed)}
-      </Button>
-    </Tooltip>
   );
 }
 
@@ -748,7 +624,7 @@ function VideoBar({
         onChange={onSeek}
       />
       <span className={BAR_EXTRA}>
-        <SpeedButton speed={playback.speed} onPress={onSpeed} />
+        <SpeedButton speed={playback.speed} variant={BUTTON_VARIANT.MEDIA} onPress={onSpeed} />
       </span>
       {onExpand === undefined || full ? null : (
         <BarButton label={VIDEO_LABEL.EXPAND} icon={<ExpandIcon />} onPress={onExpand} />
@@ -812,10 +688,7 @@ export function VideoPlayer({
           aspectRatio: `${String(LOADING_SIZE.width)} / ${String(LOADING_SIZE.height)}`,
         };
 
-  // This player, named in the places it keeps, so it can tell another's from its own.
-  const [self] = useState(() => Symbol(VIDEO_LABEL.PLAYER));
-  // The recording whose place this player keeps, once it has taken up where that one was left.
-  const keeps = useRef<string>(undefined);
+  const kept = useMediaPlace(dataUrl);
   // Note that whether it starts is read once, as it mounts, because a video hears autoplay only then.
   const [starts] = useState(() => viewer && !motionHeld());
 
@@ -830,18 +703,13 @@ export function VideoPlayer({
       speed: shown.playbackRate,
     });
 
-    if (moved && keeps.current !== undefined) {
-      keepPlace(keeps.current, { at: Math.min(shown.currentTime, duration), by: self });
-    }
+    if (moved) kept.keep(shown);
   };
 
-  // Once its length is known, the video goes to where it was left, or its start, which also ends the seek that read the length.
-  const resume = (shown: HTMLVideoElement) => {
-    if (keeps.current !== undefined || !Number.isFinite(shown.duration)) return;
-    keeps.current = dataUrl;
-    const left = places.get(dataUrl)?.at ?? 0;
-    shown.currentTime = left < shown.duration ? left : 0;
-  };
+  // While it plays, its place is read on every frame, so the scrubber and the playhead glide rather than step at each `timeupdate`.
+  usePlayingFrames(playback.playing, () => {
+    if (video.current !== null) read(video.current);
+  });
 
   const expand =
     onExpand === undefined
@@ -902,34 +770,27 @@ export function VideoPlayer({
           if (viewer) setNatural({ width: shown.videoWidth, height: shown.videoHeight });
           setReadUrl(url);
           // A new address is a new recording, whose place is taken up afresh.
-          keeps.current = undefined;
+          kept.forget();
           probeLength(shown);
-          resume(shown);
+          // Once its length is known, the video goes to where it was left, which also ends the seek that read the length.
+          kept.resume(shown);
           read(shown);
         }}
         onDurationChange={(event) => {
-          resume(event.currentTarget);
+          kept.resume(event.currentTarget);
           read(event.currentTarget);
         }}
         onTimeUpdate={(event) => read(event.currentTarget)}
         onPlay={(event) => {
-          const shown = event.currentTarget;
-          const left = keeps.current === undefined ? undefined : places.get(keeps.current);
-
           // Played again after another player moved the same recording, it goes on from there.
-          if (left !== undefined && left.by !== self) {
-            shown.currentTime = left.at < shown.duration ? left.at : 0;
-          }
-
-          read(shown);
+          kept.rejoin(event.currentTarget);
+          read(event.currentTarget);
         }}
         onPause={(event) => read(event.currentTarget)}
         onEnded={(event) => read(event.currentTarget)}
         onRateChange={(event) => read(event.currentTarget, false)}
         // A new address resets the old one's time before its own loads, which is no place of the old recording's.
-        onEmptied={() => {
-          keeps.current = undefined;
-        }}
+        onEmptied={kept.forget}
       />
       {flash === undefined ? null : <KeyFlash flash={flash} onGone={() => setFlash(undefined)} />}
       {loaded ? (
@@ -947,7 +808,7 @@ export function VideoPlayer({
             if (video.current !== null) stepFrame(video.current, frameSeconds, by);
           }}
           onSeek={seek}
-          onSpeed={() => setSpeed(video.current, nextSpeed(playback.speed))}
+          onSpeed={() => setSpeed(video.current, nextSpeed(MEDIA_SPEEDS.VIDEO, playback.speed))}
           onExpand={expand}
           onFullScreen={toggleFullScreen}
         />

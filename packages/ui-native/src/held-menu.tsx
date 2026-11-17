@@ -1,7 +1,11 @@
 // held-menu.tsx -- the menu a long press opens on a picture, a recording, a file, or a message, as iOS's own apps open one: its acts in the system's menu over the thing lifted, and the full-screen viewer's share button holding the same acts.
 
 import { Button, ContextMenu, Host, Image, Menu, RNHostView } from "@expo/ui/swift-ui";
-import { accessibilityIdentifier, accessibilityLabel } from "@expo/ui/swift-ui/modifiers";
+import {
+  accessibilityIdentifier,
+  accessibilityLabel,
+  menuOrder,
+} from "@expo/ui/swift-ui/modifiers";
 import type { DraftCopy } from "@repo/features/draft-text";
 import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
 import { StyleSheet, View } from "react-native";
@@ -139,12 +143,17 @@ export function HeldSwiftMenu({
  */
 export function HeldMenu({
   acts,
+  width: known,
   children,
 }: {
   readonly acts: readonly HeldAct[];
+  /** The width the held views stand in where the caller knows it before they are laid out, as a transcript's row does, so they are bounded from their first frame; else the width the menu measures where it stands. */
+  readonly width?: number | undefined;
   readonly children: ReactElement;
 }) {
-  const [width, setWidth] = useState<number | undefined>(undefined);
+  const [measured, setWidth] = useState<number | undefined>(undefined);
+  // Note that a width known up front bounds the views on their first layout, since one measured comes a frame later, and the views laid out unbounded in that frame stood one line wide past the screen, their host's height a step behind their words.
+  const width = known ?? measured;
 
   if (acts.length === 0) return children;
 
@@ -175,7 +184,12 @@ export function HeldActsButton({ acts }: { readonly acts: readonly HeldAct[] }) 
             color="white"
           />
         }
-        modifiers={[accessibilityLabel(SHARE_LABEL), accessibilityIdentifier("viewer-share")]}
+        modifiers={[
+          accessibilityLabel(SHARE_LABEL),
+          accessibilityIdentifier("viewer-share"),
+          // Note that the menu keeps its acts in the held thing's own order, Copy, Save to Photos, then Share…, though it opens upward from the viewer's foot, where the system would turn it over.
+          menuOrder("fixed"),
+        ]}
       >
         <HeldActButtons acts={acts} />
       </Menu>
@@ -186,12 +200,19 @@ export function HeldActsButton({ acts }: { readonly acts: readonly HeldAct[] }) 
 /** A message's React Native views, whose long press offers Copy message; the views alone for a message of no words. */
 export function CopyWordsMenu({
   words,
+  width,
   children,
 }: {
   readonly words: string;
+  /** The width the message stands in where the caller knows it before it is laid out (`HeldMenu`'s `width`). */
+  readonly width?: number | undefined;
   readonly children: ReactElement;
 }) {
-  return <HeldMenu acts={useCopyWordsActs(words)}>{children}</HeldMenu>;
+  return (
+    <HeldMenu acts={useCopyWordsActs(words)} width={width}>
+      {children}
+    </HeldMenu>
+  );
 }
 
 /** A message drawn in SwiftUI, such as a thread's, whose long press offers Copy message; the message alone where it has no words. */

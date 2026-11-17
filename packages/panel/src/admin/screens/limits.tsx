@@ -29,11 +29,7 @@ import {
 import { AGENT_QUEUE_BOUNDS } from "@repo/features/agent-queue-wire";
 import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
-import {
-  AUTOMATION_BOUNDS,
-  AUTOMATION_DEFAULT_GUARDS,
-  AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS,
-} from "@repo/features/automation-wire";
+import { AUTOMATION_BOUNDS } from "@repo/features/automation-wire";
 import { BROWSER_AGENT_LIMITS } from "@repo/features/browser-agent-actions";
 import { CONVERSATION_PICTURE_BOUNDS } from "@repo/features/conversation-picture-wire";
 import { DESCRIPTION_ATTACHMENT_BOUNDS } from "@repo/features/description-attachment-wire";
@@ -43,7 +39,7 @@ import { MACHINE_COMMAND_BOUNDS } from "@repo/features/machine-command-wire";
 import { MEMORY_BOUNDS } from "@repo/features/memory-wire";
 import { formatBytes, formatCount } from "@repo/features/number-format";
 import { PICTURE_BOUNDS } from "@repo/features/picture-wire";
-import { SANDBOX_SIZE } from "@repo/features/sandbox-size";
+import { SANDBOX_SIZE, SANDBOX_VCPU_SIZES } from "@repo/features/sandbox-size";
 import { TASK_BOUNDS } from "@repo/features/task-wire";
 import { workingTime } from "@repo/features/time-format";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
@@ -80,14 +76,10 @@ interface LimitGroup {
 
 const SECOND_MS = 1000;
 
-const HOUR_MS = 60 * 60 * SECOND_MS;
-
 /** A span in milliseconds, as a run's time is said: "10m", "24h", "7d". */
 const span = (ms: number) => workingTime(ms);
 
 const seconds = (count: number) => span(count * SECOND_MS);
-
-const hours = (count: number) => span(count * HOUR_MS);
 
 const characters = (count: number) => `${formatCount(count)} characters`;
 
@@ -96,12 +88,6 @@ const limit = (label: string, figure: string, constant: string): Limit => ({
   figure,
   constant,
 });
-
-/** The vCPUs a repository's sandbox is given over the default, one row each. */
-const SANDBOX_OVERRIDES: readonly Limit[] = [...SANDBOX_SIZE.VCPUS_BY_REPOSITORY].map(
-  ([repository, vcpus]) =>
-    limit(`Sandbox vCPUs for ${repository}`, `${vcpus} vCPU`, "SANDBOX_SIZE.VCPUS_BY_REPOSITORY"),
-);
 
 /** Every limit the page draws, by area, in the order it draws them. */
 const LIMIT_GROUPS: readonly LimitGroup[] = [
@@ -176,46 +162,11 @@ const LIMIT_GROUPS: readonly LimitGroup[] = [
         formatCount(DESCRIPTION_ATTACHMENT_BOUNDS.MAX_PER_DESCRIPTION),
         "DESCRIPTION_ATTACHMENT_BOUNDS.MAX_PER_DESCRIPTION",
       ),
-      limit(
-        "Recordings in a description",
-        formatCount(DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION),
-        "DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION",
-      ),
     ],
   },
   {
     title: "Automations",
     limits: [
-      limit(
-        "Concurrent runs an automation may allow",
-        formatCount(AUTOMATION_BOUNDS.MAX_CONCURRENT_RUNS),
-        "AUTOMATION_BOUNDS.MAX_CONCURRENT_RUNS",
-      ),
-      limit(
-        "Concurrent runs by default",
-        formatCount(AUTOMATION_DEFAULT_GUARDS.maxConcurrentRuns),
-        "AUTOMATION_DEFAULT_GUARDS.maxConcurrentRuns",
-      ),
-      limit(
-        "Runs a day an automation may allow",
-        formatCount(AUTOMATION_BOUNDS.MAX_DAILY_RUNS),
-        "AUTOMATION_BOUNDS.MAX_DAILY_RUNS",
-      ),
-      limit(
-        "Runs a day by default",
-        formatCount(AUTOMATION_DEFAULT_GUARDS.dailyRunCap),
-        "AUTOMATION_DEFAULT_GUARDS.dailyRunCap",
-      ),
-      limit(
-        "Cooldown on the same subject by default",
-        hours(AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS),
-        "AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS",
-      ),
-      limit(
-        "Longest cooldown on the same subject",
-        hours(AUTOMATION_BOUNDS.MAX_SUBJECT_COOLDOWN_HOURS),
-        "AUTOMATION_BOUNDS.MAX_SUBJECT_COOLDOWN_HOURS",
-      ),
       limit(
         "Automation prompt",
         characters(AUTOMATION_BOUNDS.MAX_PROMPT_CHARS),
@@ -231,13 +182,17 @@ const LIMIT_GROUPS: readonly LimitGroup[] = [
   {
     title: "Machines",
     limits: [
-      limit("Sandbox vCPUs", `${SANDBOX_SIZE.VCPUS} vCPU`, "SANDBOX_SIZE.VCPUS"),
+      limit("Sandbox vCPUs, by default", `${SANDBOX_SIZE.VCPUS} vCPU`, "SANDBOX_SIZE.VCPUS"),
+      limit(
+        "Sandbox vCPUs a workspace may choose",
+        `${SANDBOX_VCPU_SIZES.join(", ")} vCPU`,
+        "SANDBOX_VCPUS",
+      ),
       limit(
         "Sandbox memory per vCPU",
         `${SANDBOX_SIZE.MEMORY_GB_PER_VCPU} GB`,
         "SANDBOX_SIZE.MEMORY_GB_PER_VCPU",
       ),
-      ...SANDBOX_OVERRIDES,
       limit(
         "Command on a Mac, by default",
         seconds(MACHINE_COMMAND_BOUNDS.DEFAULT_TIMEOUT_SECONDS),
