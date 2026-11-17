@@ -1,0 +1,22 @@
+show --last 10s --style compact --predicate eventMessage CONTAINS "j8954t parse probe"
+parse check: line '' -> , now 1794898203.980
+udid: CE9E34B9-693F-475C-8AC7-308952029222 is_local: True
+iphone prep: fails NOSTART (steps 5, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+iphone picture center: 184 296
+iphone open 1 (picture): (a) ql line 2617 ms | (b)/(c) sheet 2065 drawn 3443 frames 28 | 299:0.59/0.14/0.22 707:0.59/0.03/0.21 1210:0.59/0.03/0.21 1664:0.59/0.14/0.22 2065:0.99/0.00/0.00 2510:0.99/0.00/0.00 2959:0.00/0.00/1.00 3443:0.00/0.13/1.00 3923:0.00/0.13/1.00 4391:0.00/0.13/1.00 4848:0.00/0.13/1.00 5295:0.00/0.13/1.00 5730:0.00/0.13/1.00 6155:0.00/0.13/1.00 6598:0.00/0.13/1.00 7009:0.00/0.13/1.00 7447:0.00/0.13/1.00 7871:0.00/0.13/1.00 8335:0.00/0.13/1.00 8798:0.00/0.13/1.00 9253:0.00/0.13/1.00 9680:0.00/0.13/1.00 10118:0.00/0.13/1.00 10523:0.00/0.13/1.00 10944:0.00/0.13/1.00 11394:0.00/0.13/1.00 11846:0.00/0.13/1.00 12273:0.00/0.13/1.00
+iphone close 1: fails NOSTART (steps 5, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+iphone open 2 (picture): (a) ql line 1076 ms | (b)/(c) ValueError: could not convert string to float: 'k--00596ms'
+iphone close 2: fails NOSTART (steps 5, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+iphone pdf chip center: 138 687
+iphone open 3 (pdf): (a) ql line 1082 ms | (b)/(c) ValueError: could not convert string to float: 'k-+09794ms'
+iphone close 3: fails NOSTART (steps 4, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+udid: BAD5C9D5-2CB3-466D-8272-09ADD64A74E8 is_local: True
+m5 prep: fails NOSTART (steps 5, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+m5 picture center: 504 373
+m5 open 1 (picture): (a) ql line 2615 ms | (b)/(c) sheet 2286 drawn None frames 9 | 1046:0.79/0.04/0.07 2286:1.00/0.00/0.00 2844:1.00/0.00/0.00 3305:0.00/0.04/1.00 4380:0.00/0.04/1.00 6019:0.00/0.04/1.00 7489:0.00/0.04/1.00 9058:0.00/0.04/1.00 10552:0.00/0.04/1.00
+m5 close 1: fails NOSTART (steps 5, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+m5 open 2 (picture): (a) ql line 1321 ms | (b)/(c) ValueError: could not convert string to float: 'k-+04380ms'
+m5 close 2: fails NOSTART (steps 5, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+m5 pdf chip center: 459 764
+m5 open 3 (pdf): (a) ql line 1123 ms | (b)/(c) ValueError: could not convert string to float: 'k-+03457ms'
+m5 close 3: fails NOSTART (steps 4, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
