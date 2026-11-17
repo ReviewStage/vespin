@@ -192,8 +192,6 @@ export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-
 
 export { useMinute, useToday } from "./minute.js";
 
-export { useNoticeFootRoom } from "./notice-lift.js";
-
 export { SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
@@ -370,7 +368,7 @@ export {
 
 export { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 
-export { MARK_SIZE, SPACE, TAB_BAR_ROOM } from "./tokens/space.js";
+export { MARK_SIZE, SPACE } from "./tokens/space.js";
 
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
@@ -408,7 +406,7 @@ export {
   useAsyncAction,
 } from "./use-async-action.js";
 
-export { useTabRail, useThreeColumns, useWindowSizeClass } from "./use-window-size-class.js";
+export { useThreeColumns, useWindowSizeClass } from "./use-window-size-class.js";
 
 export { Video } from "./video.js";
 

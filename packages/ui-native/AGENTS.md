@@ -62,13 +62,13 @@ builds a control of its own.
   `lead`, that asks in place for what the app lacks, as Apple asks: why in
   one line, the act that raises the system's own prompt or, once refused,
   opens Settings, never worded "Allow", and Not Now), `FailureNoticeProvider` (the app's one notice that a
-  write did not go: a banner of Liquid Glass rising at the window's foot,
-  over the composer or the compact tab bar there (`useNoticeLift`), as Mail
-  and Messages stand Undo, so it never covers the heading or search field it
-  speaks of, with the refusal's words and Try again, said aloud by VoiceOver, faded rather
-  than slid where the reader reduces motion, standing over the app's root
-  view (not a `FullWindowOverlay`, whose window never drew on iOS 27.2), and
-  said once for a stretch offline, `failure-notice-model.ts`),
+  write did not go: a banner of Liquid Glass in one fixed place, dropping in
+  under the top bar inside the safe area as the system's banners drop in,
+  swiped up to let go, with the refusal's words and Try again, said aloud by
+  VoiceOver, faded rather than slid where the reader reduces motion, standing
+  over the app's root view or the sheet on top (`FailureNoticeLayer`; not a
+  `FullWindowOverlay`, whose window never drew on iOS 27.2), and said once
+  for a stretch offline, `failure-notice-model.ts`),
   and the marks (`UnreadDot`, `NeedsYouDot`,
   `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
