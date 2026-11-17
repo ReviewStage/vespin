@@ -2,8 +2,9 @@
  * gates.ts -- what opens each of our narrowed tools to an agent, declared once, and where an agent stands against them.
  *
  * A tool of the catalog (`catalog.ts`) is offered every agent, or stands
- * behind one gate: the agent's repository, the sandbox of ours it runs in,
- * its workspace's Memory, or its workspace's Task descriptions. Each gate is
+ * behind its gates, each of which must open: the agent's task, its
+ * repository, the sandbox of ours it runs in, or one of its workspace's
+ * experiments, such as Memory or Task descriptions. Each gate is
  * declared here once, with how it is read off the agent and the words a
  * call it shuts would be refused with, so the list an agent is offered and
  * a refusal of a call it makes anyway read the same rule. An agent's
@@ -31,8 +32,10 @@ import {
   NO_EXPERIMENT_ON,
 } from "../workspace-experiment-on.js";
 
-/** The gates a tool may stand behind; each tool stands behind one at most. */
+/** The gates a tool may stand behind; a tool stands behind every one it names. */
 export const TOOL_GATE = {
+  /** The agent works on a task: one its pages, its browser, and its suggestions stand on. */
+  TASK: "task",
   /** The agent works in a repository: a checkout to open a pull request from. */
   REPOSITORY: "repository",
   /** The agent runs in a sandbox of ours rather than on the developer's own machine. */
@@ -69,6 +72,10 @@ interface Gate {
  * otherwise words its own (`CatalogTool`'s `refused`).
  */
 export const GATES: Readonly<Record<ToolGate, Gate>> = {
+  [TOOL_GATE.TASK]: {
+    opens: (agent) => agent.taskId !== null,
+    refusal: "Not run: you work on no task, and this tool works only for an agent on one.",
+  },
   [TOOL_GATE.REPOSITORY]: {
     opens: (agent) => hasRepository(agent),
     refusal: CODER_REFUSAL.NO_REPOSITORY,

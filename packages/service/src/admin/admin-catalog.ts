@@ -261,7 +261,8 @@ function tools(): AdminCatalogTool[] {
     inputSchema: JSON.stringify(tool.inputSchema, null, SCHEMA_INDENT),
     definitionChars: tool.description.length + JSON.stringify(tool.inputSchema).length,
     loading: tool.alwaysLoad ? ADMIN_TOOL_LOADING.FIRST_TURN : ADMIN_TOOL_LOADING.SEARCH,
-    gate: tool.gate ?? null,
+    // Note that a tool behind several gates names them together, so the wire keeps its one name.
+    gate: tool.gates?.join(", ") ?? null,
   }));
 }
 
