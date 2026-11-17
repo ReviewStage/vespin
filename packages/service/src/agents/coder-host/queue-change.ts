@@ -28,6 +28,7 @@ import {
   takeQueuedMessage,
 } from "@repo/database/models/agent-queue-store";
 import type { Agent } from "@repo/database/models/agent-store";
+import { agentTaskId } from "@repo/database/models/agent-store";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { bootHolds } from "@repo/features/agent-boot";
 import { type AgentQueueChange, QUEUE_CHANGE } from "@repo/features/agent-wire";
@@ -98,7 +99,7 @@ const applyChange = Effect.fn("web/applyQueueChange")(function* (
 
       if (outcome === QUEUE_OUTCOME.FULL) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
 
-      if (outcome === QUEUE_OUTCOME.QUEUED) yield* followAsMessaged(userId, agent.taskId);
+      if (outcome === QUEUE_OUTCOME.QUEUED) yield* followAsMessaged(userId, agentTaskId(agent));
 
       return;
     }

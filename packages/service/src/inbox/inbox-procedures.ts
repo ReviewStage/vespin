@@ -15,6 +15,7 @@
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
+  agentTaskId,
   readAgent,
   readVisibleAgent,
   readVisibleAgentWorkspace,
@@ -771,7 +772,8 @@ export const startAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
   if (!controlsAgent(userId, agent.value)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
-  const { userId: starterId, taskId } = agent.value;
+  const { userId: starterId } = agent.value;
+  const taskId = agentTaskId(agent.value);
 
   const written = yield* hostedStoreOrUnavailable(
     startInboxThread(

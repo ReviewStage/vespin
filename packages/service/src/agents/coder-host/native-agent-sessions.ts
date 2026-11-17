@@ -16,7 +16,7 @@
  */
 
 import { readAccountPreferences } from "@repo/database/models/account-store";
-import { type Agent, hasRepository } from "@repo/database/models/agent-store";
+import { type Agent, agentTaskId, hasRepository } from "@repo/database/models/agent-store";
 import { readNativeSequence } from "@repo/database/models/native-projection-store";
 import { readTaskHeader } from "@repo/database/models/task-store";
 import { readAccountNames } from "@repo/database/models/workspace-store";
@@ -56,7 +56,7 @@ export interface NativeAgentSessionsOptions {
 
 /** The number the agent's task goes by in its workspace, which its link names it by; none where it is not read, and the link names the task's id. */
 const agentTaskNumber = (userId: string, agent: Agent) =>
-  readTaskHeader(userId, agent.taskId).pipe(
+  readTaskHeader(userId, agentTaskId(agent)).pipe(
     Effect.map((header) => Option.getOrUndefined(header)?.number),
     Effect.tapError(logStoreFailure),
     Effect.orElseSucceed(() => undefined),

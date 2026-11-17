@@ -4,6 +4,7 @@ import { readAccountPreferences } from "@repo/database/models/account-store";
 import {
   type Agent,
   type AgentLatestTurn,
+  agentTaskId,
   hasRepository,
   latestTurnsOfReached,
   listAgentsOnBranches,
@@ -1217,7 +1218,7 @@ function checksOfWake(
 
 /** Whether the agent's task stands open, neither Done nor Canceled, so a turn starting on it reopens nothing; one its owner no longer reaches is not. */
 const onOpenTask = ({ userId, agent }: OwnedAgent) =>
-  Effect.map(readTaskHeader(userId, agent.taskId), (header) =>
+  Effect.map(readTaskHeader(userId, agentTaskId(agent)), (header) =>
     Option.exists(header, ({ status }) => !isTaskSettled(status)),
   );
 

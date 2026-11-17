@@ -349,7 +349,8 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
       ordered: false,
       columns: {
         id: agentTable.id,
-        taskId: agentTable.taskId,
+        // Note that the row is read only for an agent on a task (the filter below), so its task is never null here.
+        taskId: sql<string>`${agentTable.taskId}`,
         workspaceId: agentTable.organizationId,
         model: agentTable.model,
         effort: agentTable.effort,
@@ -437,8 +438,9 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         .leftJoin(agentBootTable, eq(agentBootTable.agentId, agentTable.id))
         .leftJoinLateral(latest, sql`true`)
         .where(
-          // An agent on a task is listed only where the account reaches the task too, as a read of it by its id is.
-          and(agentVisibleTo(userId), narrowed),
+          // An agent on a task is listed only where the account reaches the task too, as a read of it by its id is;
+          // an agent on no task stays off the list, which released clients read with a task on every agent.
+          and(agentVisibleTo(userId), isNotNull(agentTable.taskId), narrowed),
         ),
   );
 }

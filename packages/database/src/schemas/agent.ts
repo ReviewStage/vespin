@@ -255,10 +255,8 @@ export const agentTable = pgTable(
   "agent",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** The task the agent works on; every agent works on one, and leaves with it. */
-    taskId: uuid("task_id")
-      .notNull()
-      .references(() => task.id, { onDelete: "cascade" }),
+    /** The task the agent works on, and leaves with; null for an agent that works on none. */
+    taskId: uuid("task_id").references(() => task.id, { onDelete: "cascade" }),
     /** The workspace the agent belongs to, its task's or its automation's. */
     organizationId: text("organization_id")
       .notNull()

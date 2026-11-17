@@ -6,6 +6,7 @@ import {
   type Agent,
   type AgentLatestTurn,
   type AgentStoreEffect,
+  agentTaskId,
   dispatchMentioningServers,
   latestTurnsOfReached,
   RUNNING_TURN_STATUSES,
@@ -408,9 +409,10 @@ const handedToHarness = (
  * nothing while it still takes one.
  */
 const refusalNow = /* @__PURE__ */ Effect.fnUntraced(function* (userId: string, agent: Agent) {
-  const tasks = yield* taskNamesOf(userId, [agent.taskId]);
+  const taskId = agentTaskId(agent);
+  const tasks = yield* taskNamesOf(userId, [taskId]);
 
-  if (!tasks.has(agent.taskId)) return HOSTED_REFUSAL.NOT_FOUND;
+  if (!tasks.has(taskId)) return HOSTED_REFUSAL.NOT_FOUND;
   const now = yield* readAgent(userId, agent.id);
 
   return Option.isNone(now) || now.value.archivedAt !== null ? HOSTED_REFUSAL.NOT_FOUND : undefined;
@@ -515,7 +517,9 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
         ),
       ),
       // The sender reaches the agent, as the routing read holds, and its task too, read as the sender.
-      task: Effect.result(hostedStoreOrUnavailable(readTaskDescription(userId, agent.taskId))),
+      task: Effect.result(
+        hostedStoreOrUnavailable(readTaskDescription(userId, agentTaskId(agent))),
+      ),
       workspace: Effect.result(hostedStoreOrUnavailable(agentWorkspace(userId, agent))),
       sessionId: Effect.result(hostedStoreOrUnavailable(recordedRuntimeSession(target))),
       // Read before the harness is asked, so an ended session settles the turn it was running and never one begun since.
@@ -1030,7 +1034,8 @@ export const steerMemberWords = /* @__PURE__ */ Effect.fn("web/steerMemberWords"
   });
 
   // A member who messages one of the task's agents follows the task, with their machines on where they did not yet; a repeat wrote nothing new.
-  if (written.outcome !== STEER_OUTCOME.REPEATED) yield* followAsMessaged(userId, agent.taskId);
+  if (written.outcome !== STEER_OUTCOME.REPEATED)
+    yield* followAsMessaged(userId, agentTaskId(agent));
 
   if (written.sent !== undefined) {
     yield* recordServerEvent(

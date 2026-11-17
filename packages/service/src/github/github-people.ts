@@ -23,7 +23,7 @@
  */
 
 import { Database, type DatabaseServices } from "@repo/database/core/query";
-import { listAgentsOnPullRequest } from "@repo/database/models/agent-store";
+import { agentTaskId, listAgentsOnPullRequest } from "@repo/database/models/agent-store";
 import { account, member } from "@repo/database/schemas/auth";
 import type {
   AgentAuthor,
@@ -228,7 +228,7 @@ const stackOwnerOf = (
           each.organizationId === agent.organizationId && each.archivedAt === null,
       )?.agent;
 
-      return owner === undefined ? undefined : { id: owner.id, taskId: owner.taskId };
+      return owner === undefined ? undefined : { id: owner.id, taskId: agentTaskId(owner) };
     }),
     Effect.catch((failure) =>
       Effect.as(

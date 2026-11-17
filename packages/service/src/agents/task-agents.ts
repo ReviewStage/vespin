@@ -1,6 +1,7 @@
 import {
   type AgentLatestTurn,
   type AgentStoreEffect,
+  agentTaskId,
   lastSettledTurnsOfReached,
   latestTurnsOfReached,
   listPublishedAgents,
@@ -198,7 +199,8 @@ export function withTaskAgents(
     const byTask = new Map<string, ReadAgent[]>();
 
     for (const agent of held) {
-      const { conversationId, taskId } = agent.agent;
+      const { conversationId } = agent.agent;
+      const taskId = agentTaskId(agent.agent);
 
       const line = agentLine(
         agent,
