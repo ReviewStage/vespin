@@ -1303,8 +1303,10 @@ test("a reply's field empties as it is sent and takes the next at once, each sen
   assert.notEqual(keys[2], keys[1]);
 });
 
-test("a thread being started keeps its words marked and its card in place, taking nothing, until the thread it was sent as is drawn, which takes over open, and words refused come back into its field, or stand as not sent where it moved on to other words", async () => {
-  const answers: PromiseWithResolvers<{ note: string }>[] = [];
+test("a thread being started keeps its words marked and its card in place, its words in its field and taking nothing more, until the thread it was sent as is drawn, which takes over open, its draft let go as the words land, and words refused stay as its draft", async () => {
+  type StartAnswer = Awaited<ReturnType<DescriptionCommentsControl["start"]>>;
+
+  const answers: PromiseWithResolvers<StartAnswer>[] = [];
 
   const { container, started, rethread } = wide(() =>
     drawn(
@@ -1318,7 +1320,7 @@ test("a thread being started keeps its words marked and its card in place, takin
       true,
       undefined,
       () => {
-        const answer = Promise.withResolvers<{ note: string }>();
+        const answer = Promise.withResolvers<StartAnswer>();
         answers.push(answer);
 
         return answer.promise;
@@ -1354,19 +1356,20 @@ test("a thread being started keeps its words marked and its card in place, takin
   assert.equal(start.id, start.clientKey);
   assert.ok(pending(), "the card stands until the thread is drawn");
   assert.ok(marked("pending"), "its words stay marked meanwhile");
+  assert.equal(wordsIn(field()), "Ask Vespin about retries", "its words stay in its field");
   assert.ok(
     pending()?.hasAttribute("inert"),
     "it takes nothing meanwhile, which the thread would leave behind",
   );
 
   // The host draws the thread under the id its first comment's key names.
-  rethread([
-    threadOn(start.id ?? "", "Admins can withdraw", "Ask Vespin about retries", {
-      scope: start.scope,
-      quote: start.quote,
-      anchor: start.anchor,
-    }),
-  ]);
+  const thread = threadOn(start.id ?? "", "Admins can withdraw", "Ask Vespin about retries", {
+    scope: start.scope,
+    quote: start.quote,
+    anchor: start.anchor,
+  });
+
+  rethread([thread]);
 
   assert.equal(pending(), null, "the card gives way to the thread");
   assert.equal(
@@ -1375,16 +1378,18 @@ test("a thread being started keeps its words marked and its card in place, takin
   );
   assert.ok(marked(start.id ?? ""), "the thread's words are marked in their place");
 
+  await act(async () => answers[0]?.resolve({ thread }));
   rethread([]);
   comment();
+  assert.equal(wordsIn(field()), "", "the words landed are no draft");
   typeInto(field(), "Or a code?");
   act(() => {
     field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
   await act(async () => answers[1]?.resolve({ note: "not posted" }));
-  assert.equal(wordsIn(field()), "Or a code?", "words refused come back into the field");
+  assert.equal(wordsIn(field()), "Or a code?", "words refused stay in the field");
 
-  // A thread started on other words while the words are out keeps its own, and the words refused stand as not sent on theirs.
+  // A thread started on other words while the words are out keeps its own, and the words refused stay as the draft on theirs.
   act(() => {
     field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
@@ -1400,7 +1405,7 @@ test("a thread being started keeps its words marked and its card in place, takin
   assert.equal(wordsIn(field()), "Other words");
 
   comment();
-  assert.equal(pending()?.querySelector("[data-unsent] .comment-words")?.textContent, "Or a code?");
+  assert.equal(wordsIn(field()), "Or a code?");
 });
 
 test("a thread's resolve reads as its writer's own line, drawn as a comment's head, an agent of another task named as the workspace's list names it, and an empty tab says how a thread starts", async () => {

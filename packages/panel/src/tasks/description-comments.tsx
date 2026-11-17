@@ -1205,6 +1205,7 @@ function ReplyField({
   failure,
   variant = REPLY_VARIANT.REPLY,
   review,
+  holdsSent = false,
 }: {
   label: string;
   /** Where the words are kept unsent, so Esc, a press away, or the thread closing finds them as the field opens again. */
@@ -1224,6 +1225,8 @@ function ReplyField({
   variant?: ReplyVariant;
   /** Where the words may be held in the writer's review rather than posted; none where they may not. */
   review?: CommentReview | undefined;
+  /** Whether words sent stay in the field until they land, as a thread's first comment does while its card stands in for the thread; it empties once they do. */
+  holdsSent?: boolean;
 }): React.JSX.Element {
   const { draft, update } = useDraft(place);
   const words = draft.text;
@@ -1313,13 +1316,29 @@ function ReplyField({
     const same = was?.words === trimmed && sameFiles(was.attachments, attachments);
     // Note that the key is let go as the words go, since the same words sent again while they are out, or once they land, are a new comment.
     attempt.current = undefined;
+    const out = { words: trimmed, attachments, key: same ? was.key : crypto.randomUUID() };
+
+    if (holdsSent) {
+      keepSent(out);
+
+      return;
+    }
+
     // Note that the field empties as the words are sent, since a send may wait on the ones before it and on those its mentions hand the thread to.
     setWords("");
     files.set([]);
-    go({
-      words: trimmed,
-      attachments,
-      key: same ? was.key : crypto.randomUUID(),
+    go(out);
+  };
+
+  // Note that words kept in the field as they are sent leave its draft once they land, its card gone with its thread drawn by then; refused, they are still there, sent again under their key.
+  const keepSent = (out: CommentSend) => {
+    void onSend(out.words, out.key, out.attachments).then((sent) => {
+      if (sent) {
+        setWords("");
+        files.set([]);
+      } else if (Equal.equals(placeNow.current, place)) {
+        attempt.current = out;
+      }
     });
   };
 
@@ -1853,6 +1872,7 @@ function PendingCard({
   onStarted,
   onCancel,
   review,
+  standsIn = false,
   sent = false,
 }: {
   /** What the thread is started on, which its unsent words are kept under. */
@@ -1867,6 +1887,8 @@ function PendingCard({
   onCancel: () => void;
   /** Where its first comment may be held in the writer's review rather than posted; the card closes once it is. */
   review?: CommentReview | undefined;
+  /** Whether it stands in for its thread from the send until the thread is drawn, its words kept in its field meanwhile; it gives way as they are sent otherwise. */
+  standsIn?: boolean;
   /** Whether its words were sent and it stands in for their thread until the thread is drawn, taking nothing meanwhile, since what it took would be left behind as the thread takes over. */
   sent?: boolean;
 }): React.JSX.Element {
@@ -1879,6 +1901,7 @@ function PendingCard({
         autoFocus
         onCancel={onCancel}
         variant={REPLY_VARIANT.FIRST}
+        holdsSent={standsIn}
         review={
           review === undefined
             ? undefined
@@ -2800,6 +2823,7 @@ export function DescriptionCommentLayer({
         begin={descriptionBegin(pending, text)}
         onCancel={close}
         onStarted={startedFromPending}
+        standsIn
         sent={handing !== undefined}
       />
     );
@@ -2913,6 +2937,7 @@ export function DescriptionCommentLayer({
                   begin={descriptionBegin(card.pending, text)}
                   onCancel={close}
                   onStarted={startedFromPending}
+                  standsIn
                   sent={handing !== undefined}
                 />
               ) : null}
