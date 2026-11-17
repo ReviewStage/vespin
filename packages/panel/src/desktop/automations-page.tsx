@@ -46,7 +46,6 @@ import {
   IconButton,
   Inline,
   ListRow,
-  NO_BACK_KEY,
   NOT_FOUND_THING,
   NotFound,
   OneLine,
@@ -987,12 +986,7 @@ const AUTOMATIONS_PLACE_NAME = "automations";
 /** The bar of an automation's page that has no automation to show: its way back to the list, at the column's edge; on a phone, the back's glyph alone in its corner (`phone-head.tsx`). */
 function backBar(onBack: () => void, phone: boolean): ToolbarProps {
   const back = (
-    <BackButton
-      label={AUTOMATIONS_PLACE}
-      place={AUTOMATIONS_PLACE_NAME}
-      command={NO_BACK_KEY}
-      onBack={onBack}
-    />
+    <BackButton label={AUTOMATIONS_PLACE} place={AUTOMATIONS_PLACE_NAME} onBack={onBack} />
   );
 
   if (phone) return phoneBar({ place: "automation", start: back, end: null });
@@ -1172,7 +1166,9 @@ function AutomationsPages({
   const offered = useOfferedPresets(workspace?.id);
   // The automation the new page made, whose page is that same editor still, so what was typed while it was made stands.
   const [made, setMade] = useState<string | undefined>(undefined);
-  const back = () => door.open({ kind: AUTOMATIONS_PAGE.LIST });
+  // Note that a phone's ‹ and a bar's ‹ are the window's Back (`door.back`), while a wide editor's crumb opens the list.
+  const back = door.back;
+  const crumbBack = room === SHELL_ROOM.NARROW ? door.back : () => door.open();
   const { place } = standing;
 
   if (place.kind === AUTOMATIONS_PAGE.LIST) {
@@ -1219,7 +1215,7 @@ function AutomationsPages({
 
   if (place.kind === AUTOMATIONS_PAGE.EDIT && opened === undefined) {
     return read === undefined ? (
-      <ReadingPage onBack={back} room={room} offersOwner={offersOwner} />
+      <ReadingPage onBack={crumbBack} room={room} offersOwner={offersOwner} />
     ) : (
       <GonePage onBack={back} phone={room === SHELL_ROOM.NARROW} />
     );
@@ -1244,7 +1240,7 @@ function AutomationsPages({
       offersOwner={offersOwner}
       repositories={tasks.newTask.repositoriesIn(workspace?.id)}
       writes={automations}
-      onBack={back}
+      onBack={crumbBack}
       onOpenAgent={(agentId) => openRunAgent(tasks, agentId)}
       linked={place.kind === AUTOMATIONS_PAGE.EDIT ? place : undefined}
       placeLeave={tasks.placeLeave}

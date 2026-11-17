@@ -544,7 +544,6 @@ function AppWindow(): React.JSX.Element {
   const settingsPlace = useSettingsRoute({
     workspaces: tasks.workspaces,
     listedId: tasks.workspace?.id,
-    narrow: room === SHELL_ROOM.NARROW,
   });
 
   settingsRoute.current = settingsPlace;

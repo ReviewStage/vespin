@@ -58,11 +58,12 @@
  * workspace their address names, so Back passes over them once another is
  * listed. A workspace's address naming none of the reader's is the router's
  * too, not found, but no step: a link to it takes the step's place, and Back
- * and Forward pass over it. Settings is one step
- * however many of its pages are turned, since each turn replaces its entry
- * (`settings-link.ts`), so Back from any page of it returns to wherever it
- * was opened from; leaving one for a place the window's state says is the
- * router's move there, a visit after it (`TasksControl.onLeaveRouted`). A description's version
+ * and Forward pass over it. Each page of Settings turned is a step of its
+ * own (`settings-link.ts`), so Back returns to the page shown before, and
+ * Settings' way out goes back past all of its pages to wherever it was
+ * opened from (`away`); leaving a routed place for a place the window's
+ * state says is the router's move there, a visit after it
+ * (`TasksControl.onLeaveRouted`). A description's version
  * history is one step the same way, whichever version is chosen in it or
  * whichever revision's sections are open, since each choice replaces its
  * entry (`version-history-route.ts`), and its address is where it stands, so
@@ -114,13 +115,13 @@
  * to the other takes the step standing in place. Going to a step stands its
  * sub-step from the step alone, so a move the history makes by itself, as a
  * browser's Back does, lands on the screen the step was. The screens' own
- * ways back to their lists, the side panel's ways out among them, are each
- * place's own (`narrow-backs.ts`), which read this history through
- * `behind`: a step back where the list is the step behind, and otherwise
- * the list taking the step standing in place, which a list a narrow screen
- * went up to takes (`upTo`), so shutting a panel opened over the plan steps
- * back to the plan rather than adding a step that Back would open the panel
- * again from. A
+ * ways back to their lists, and every ‹ of the window's, are each place's
+ * own (`narrow-backs.ts`), which read this history through `behind`: one
+ * step back, as Back takes, and only where none stands behind, the list
+ * taking the step standing in place. The side panel's ways out over the
+ * plan step back to the plan, or have it take the panel's step in place
+ * (`upTo`), rather than adding a step that Back would open the panel again
+ * from. A
  * step between two such panes of one page leaves no page, so it never asks
  * first, as leaving an automation with unsaved changes does. A phone's way
  * out of a task goes back past all of the task's own steps at once, to the
@@ -289,13 +290,15 @@ export interface RecentSteps {
 export interface WindowHistory extends NavigationHistory {
   /** Leaves the version history for its task: a step back where the task is the step behind, else a visit. */
   onLeaveVersionHistory: () => void;
-  /** The step `onLeave` goes back to; none where no step behind stands on another page. */
+  /** The step `onLeave` goes back to; none where no step behind stands on another place. */
   away: AwayStep | undefined;
   /**
-   * Leaves the page standing for the nearest step behind it on another page,
-   * passing over the page's own panes and tabs, as a phone's way back out of
-   * a task goes back to the list it was opened from and pushes nothing;
-   * where none stands, as on a task a link loaded, it opens Home.
+   * Leaves the place standing for the nearest step behind it on another
+   * place, passing over the place's own steps, a task's panes and tabs, or
+   * every page of Settings, as a phone's way back out of a task goes back
+   * to the list it was opened from, and Settings' way out to where it was
+   * opened from, pushing nothing; where none stands, as on a task a link
+   * loaded, it opens Home.
    */
   onLeave: () => void;
 }
@@ -577,12 +580,14 @@ function useWindowSteps(input: {
   opened: number;
   /** Whether an address is on a task's own place. */
   onTaskRoute: (address: string) => boolean;
+  /** Whether two steps stand on one place, which a way out passes over whole (`awayFrom`). */
+  samePlace: (one: Place, other: Place) => boolean;
 }): NavigationHistory & {
   backTo: (place: Place) => boolean;
   upTo: (place: Place, stand: () => void) => void;
   /** A step back, answering whether one stood behind to take, though the leave ask may yet hold it. */
   stepBack: () => boolean;
-  /** The step behind on another page (`awayFrom`), where one stands. */
+  /** The step behind on another place (`awayFrom`), where one stands. */
   away: AwayStep | undefined;
   /** Goes back to that step, answering whether one stood there to go to. */
   stepAway: () => boolean;
@@ -600,6 +605,7 @@ function useWindowSteps(input: {
   visitStep: (to: Place) => void;
 } {
   const { record, place, address, reachable, named, placeLeave, opened, onTaskRoute } = input;
+  const { samePlace } = input;
   // Note that the presses read the steps known as they land, because a key can land between a move and the render that
   // shows it, and the latest `place`, `reachable`, `stand`, and the leave's door through a ref, so a press stays the
   // same function across renders.
@@ -658,6 +664,7 @@ function useWindowSteps(input: {
       write === undefined ? known : afterWrite(record, write),
       reachable,
       named,
+      samePlace,
     );
 
     if (drawn.current === undefined || !sameReading(drawn.current, next)) drawn.current = next;
@@ -876,7 +883,8 @@ function useWindowSteps(input: {
     upTo,
     stepBack: () => step(-1),
     away: reading.away,
-    stepAway: () => goTo(numberAt(record.known, awayFrom(record.known, latest.current.reachable))),
+    stepAway: () =>
+      goTo(numberAt(record.known, awayFrom(record.known, latest.current.reachable, samePlace))),
     visit,
     standIn: () => {
       record.standIn = standingStep(record) === undefined ? undefined : record.standing;
@@ -1193,6 +1201,17 @@ export function useWindowHistory(input: {
     [router, access],
   );
 
+  // Whether two steps are one place a way out passes over whole: one page, or two of Settings' pages.
+  const samePlace = useCallback(
+    (one: Place, other: Place) => {
+      const onSettings = (to: Place) =>
+        routedPlaceOf(router.matchRoutes(pathOf(to.address)), access) === ROUTED_PLACE.SETTINGS;
+
+      return samePage(one, other) || (onSettings(one) && onSettings(other));
+    },
+    [router, access],
+  );
+
   const {
     backTo,
     upTo,
@@ -1215,6 +1234,7 @@ export function useWindowHistory(input: {
     placeLeave: tasks.placeLeave,
     opened: tasks.sidePanel.opened,
     onTaskRoute,
+    samePlace,
   });
 
   // A place a narrow room stands another in the place of, as a phone has no Home, stands that one as its declaration says.

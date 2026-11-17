@@ -7,12 +7,13 @@
  * item over its list, a Settings page or a version over its list, and an
  * automation's runs over its setup. Which of a place's panes is such a step,
  * and in which rooms, is its declaration's answer (`ROUTED_PLACE`'s
- * `narrowBack`), and its way back is one rule for every place: a step back
- * where the list is the step behind, and otherwise the list standing in the
- * pane's step, as a link opened on an item leaves no list behind it to go
- * back to. A wide room holds no such step, so there each way back only
- * stands the list, but for an Inbox item, whose address is its own in every
- * room.
+ * `narrowBack`), and its way back is one rule for every place, and every ‹
+ * of the window's: it is the window's Back, one step back through the
+ * history, whatever stands behind, and only where nothing does, as on a
+ * pane a link or a reload opened, the list it names stands in the pane's
+ * step (`useBackOr`, which every other ‹ takes the same way). A wide room
+ * holds no such step, so there each way back only stands the list, but for
+ * an Inbox item, whose address is its own in every room.
  *
  * The step behind is the window's history's to say, since TanStack Router's
  * history names only the entry standing, so the history is read through the
@@ -51,7 +52,7 @@ interface PaneOver {
 
 /** Each place's ways back, as its doors take them. */
 export interface NarrowBacks {
-  /** The way back from `place`'s pane to its list at `list`, none where none stands under it; `stand` stands the list in the pane's place. */
+  /** The way back from `place`'s pane to its list at `list`, none where none stands under it: one step back where the pane is a step of its own, else `stand`, which stands the list in the pane's place. */
   readonly list: (place: RoutedPlace, list: string | undefined, stand: () => void) => void;
   /** The way out of the side panel standing only full screen over `over`, the whole pane; `shut` shuts it. */
   readonly pane: (over: PaneOver, shut: () => void) => void;
@@ -65,6 +66,19 @@ function stepIn(place: RoutedPlace, narrow: boolean): boolean {
   );
 }
 
+/**
+ * A ‹ that is the window's Back: one step back, whatever stands behind, and
+ * only where none does, `stand`, which stands the place the ‹ names in the
+ * step's place, as a page a link opened has nothing behind it to go back to.
+ */
+export function useBackOr(): (stand: () => void) => void {
+  const exits = useRoutedExits();
+
+  return (stand) => {
+    if (!exits.behind.stepBack()) stand();
+  };
+}
+
 /** The ways back in a room `narrow` or not, reading the window's history as each is pressed. */
 export function useNarrowBacks(narrow: boolean): NarrowBacks {
   const exits = useRoutedExits();
@@ -72,9 +86,7 @@ export function useNarrowBacks(narrow: boolean): NarrowBacks {
 
   return {
     list: (place, list, stand) => {
-      if (!stepIn(place, narrow) || list === undefined || !exits.behind.backTo({ address: list })) {
-        stand();
-      }
+      if (!stepIn(place, narrow) || list === undefined || !exits.behind.stepBack()) stand();
     },
     pane: (over, shut) => {
       // Note that a phone's panel a link opened over an Inbox item steps back to it shut, where that is the step behind.

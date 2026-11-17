@@ -235,7 +235,6 @@ function mount(
     settings = useSettingsRoute({
       workspaces: [ACME],
       listedId: ACME.id,
-      narrow: room === SHELL_ROOM.NARROW,
     });
     admin = useAdminRoute({ listedSlug: () => ACME.slug });
     automations = useAutomationsRoute({
@@ -656,20 +655,31 @@ test("on a narrow stage a version chosen from the list is a step, which Back and
   assert.equal(window.history().canGoForward, true, "the way back stepped back to the list");
 });
 
-test("on a narrow stage a Settings page a link opened has no list behind it, so the way back stands the list in the page's step and Back leaves Settings", () => {
+test("on a narrow stage the way back from a Settings page a link opened, with no list behind it, is the window's Back, which leaves Settings for the step behind", () => {
   const window = mount(SHELL_ROOM.NARROW, ON_TASK);
   // A link turns to Settings on its page in one navigation.
   window.openSettings({ page: SETTINGS_VIEW.APPEARANCE });
   assert.deepEqual(window.addresses(), [TASK_PATH, "/acme/settings/appearance"]);
 
   window.press(() => window.back().settings());
-  assert.equal(window.settings().listed, true);
-  assert.deepEqual(window.addresses(), [TASK_PATH, "/acme/settings"]);
-  assert.equal(window.history().canGoForward, false);
+  assert.equal(window.settings().standing, false, "the way back leaves Settings for the task");
+  assert.equal(window.standingAddress(), TASK_PATH);
+  assert.equal(window.history().canGoForward, true, "as Back does, the page standing ahead");
+});
+
+test("each Settings page turned is a step of its own, which Back returns to, and Settings' way out goes back past all of its pages to where it was opened from", () => {
+  const window = mount(SHELL_ROOM.WIDE, ON_TASK);
+  window.openSettings({ page: SETTINGS_VIEW.ACCOUNT });
+  window.openSettings({ page: SETTINGS_VIEW.APPEARANCE });
 
   act(() => window.history().onBack());
-  assert.equal(window.settings().standing, false, "Back leaves Settings for the task");
-  assert.equal(window.standingAddress(), TASK_PATH);
+  assert.equal(window.settings().view, SETTINGS_VIEW.ACCOUNT, "Back turns to the page before");
+  act(() => window.history().onForward());
+  assert.equal(window.settings().view, SETTINGS_VIEW.APPEARANCE);
+
+  act(() => window.history().onLeave());
+  assert.equal(window.settings().standing, false, "the way out leaves Settings");
+  assert.equal(window.standingAddress(), TASK_PATH, "for the task it was opened from");
 });
 
 test("a pairing's link loaded at its own address opens Settings in that entry's place, so Back leaves the tab rather than landing on the link again", () => {
@@ -687,18 +697,11 @@ test("a pairing's link loaded at its own address opens Settings in that entry's 
   assert.equal(window.history().canGoBack, false);
 });
 
-test("on the desktop's width none of a narrow room's panes is a step: the side panel opened by its toggle, a Settings page, and a version", () => {
+test("on the desktop's width none of a narrow room's panes is a step: the side panel opened by its toggle, and a version", () => {
   const moves: readonly [Standing, (window: Window) => void][] = [
     [
       { ...ON_TASK, panel: { open: false, tab: PAGE_TAB } },
       (window) => window.press(() => window.tab().sidePanel.onToggle()),
-    ],
-    [
-      ON_TASK,
-      (window) => {
-        window.openSettings({ page: SETTINGS_VIEW.ACCOUNT, listed: true });
-        window.openSettings({ page: SETTINGS_VIEW.APPEARANCE });
-      },
     ],
     [
       ON_TASK,
@@ -712,13 +715,10 @@ test("on the desktop's width none of a narrow room's panes is a step: the side p
   for (const [start, open] of moves) {
     const window = mount(SHELL_ROOM.WIDE, start);
     open(window);
-    // Each screen's way back to its list, which a wide room draws no button for, stands nothing new either.
-    window.press(() => {
-      window.back().settings();
-      window.back().versions();
-    });
-    // Note that Settings and a version history, entered, are a step of their own after the task, however their pages turn.
-    const entered = window.settings().standing || window.versions().open ? 1 : 0;
+    // The versions' way back to their list, which a wide room draws no button for, stands nothing new either.
+    window.press(() => window.back().versions());
+    // Note that a version history, entered, is a step of its own after the task, however its versions turn.
+    const entered = window.versions().open ? 1 : 0;
     assert.equal(window.addresses().length, 1 + entered, "one step, however the panes turn");
     assert.equal(window.history().canGoBack, entered === 1);
     unmountAll();
@@ -839,21 +839,24 @@ test("on a narrow stage an automation's runs chosen from its setup are a step, w
   assert.equal(window.history().canGoForward, true, "the way back was a step back");
 });
 
-test("on a narrow stage an automation opened on its runs, as a run's link opens it, has no setup behind it, so the way back stands the setup in the runs' step", async () => {
-  const window = mount(SHELL_ROOM.NARROW, ON_TASK);
-  window.openAutomation(LINKED_RUN);
+test("on a narrow stage an automation's runs a link loaded, with nothing behind them, take the way back as the setup standing in the runs' step", async () => {
+  const runs = `/acme/automation/${AUTOMATION}/run/run-1`;
+
+  const window = mount(
+    SHELL_ROOM.NARROW,
+    ON_TASK,
+    windowRouter(createMemoryHistory({ initialEntries: [runs] })),
+  );
+
   await settle();
   assert.equal(window.automations().runs, true);
-  assert.equal(window.addresses().length, 2);
+  assert.deepEqual(window.addresses(), [runs]);
 
   window.press(() => window.back().runs());
   await settle();
   assert.equal(window.automations().runs, false);
-  assert.deepEqual(window.addresses(), [
-    `/acme/task/${DOCUMENT_TASK.id}`,
-    `/acme/automation/${AUTOMATION}`,
-  ]);
-  assert.equal(window.history().canGoForward, false);
+  assert.deepEqual(window.addresses(), [`/acme/automation/${AUTOMATION}`]);
+  assert.equal(window.history().canGoBack, false);
 });
 
 test("on a narrow stage Back and Forward between an automation's setup and a run a link opened move the window there without asking to leave its unsaved work", async () => {

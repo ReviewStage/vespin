@@ -725,7 +725,7 @@ test("the Board stands at its workspace's /tasks and a person's page at /person/
   ]);
 });
 
-test("the Admin place stands at its workspace's /admin though a task stands under it, a section at /admin/<section> in place, and an account's page at /admin/user/<id> as a step, as Copy link copies each", async () => {
+test("the Admin place stands at its workspace's /admin though a task stands under it, a section at /admin/<section> and an account's page at /admin/user/<id> each as a step, as Copy link copies each", async () => {
   const copied: string[] = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
   const task = onTask([ACME]);
@@ -738,6 +738,7 @@ test("the Admin place stands at its workspace's /admin though a task stands unde
 
   assert.deepEqual(window.addresses(), [
     `/acme/task/${DOCUMENT_TASK.id}`,
+    "/acme/admin",
     "/acme/admin/cost",
     "/acme/admin/user/user-ada",
   ]);

@@ -20,7 +20,15 @@ function AdminRoutePlace(): React.JSX.Element {
 
   if (!adminAccess) return <AdminRouteLoading />;
 
-  return <DesktopAdmin room={room} view={view} shown={tasks.shown} onOpen={admin.open} />;
+  return (
+    <DesktopAdmin
+      room={room}
+      view={view}
+      shown={tasks.shown}
+      onOpen={admin.open}
+      onBack={admin.back}
+    />
+  );
 }
 
 export const adminLazyRoute = createLazyRoute("/places/$workspace/admin")({
