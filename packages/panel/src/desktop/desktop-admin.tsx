@@ -35,11 +35,19 @@ export interface DesktopAdminProps {
   /** Whether the window is on screen, which a find waits on. */
   readonly shown: boolean;
   readonly onOpen: (view: AdminView) => void;
+  /** A phone's ‹ back to a section: one step back, else the section in the page's step. */
+  readonly onBack: (view: AdminView) => void;
 }
 
-export function DesktopAdmin({ room, view, shown, onOpen }: DesktopAdminProps): React.JSX.Element {
+export function DesktopAdmin({
+  room,
+  view,
+  shown,
+  onOpen,
+  onBack,
+}: DesktopAdminProps): React.JSX.Element {
   return (
-    <AdminPlaceFrameProvider value={adminFrame(room, view, onOpen)}>
+    <AdminPlaceFrameProvider value={adminFrame(room, view, onOpen, onBack)}>
       {/* Each view is found in as one scope, its bar under the view's toolbar; another view closes it. */}
       <PageFind page={FIND_PAGE.ADMIN} at={adminViewKey(view)} active={shown}>
         <AdminPlace view={view} onOpen={onOpen} />

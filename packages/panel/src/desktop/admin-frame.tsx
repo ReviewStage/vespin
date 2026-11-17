@@ -57,6 +57,7 @@ export function adminFrame(
   room: ShellRoom,
   view: AdminView,
   onOpen: (view: AdminView) => void,
+  onBack: (view: AdminView) => void,
 ): AdminPlaceFrame {
   return {
     title: ADMIN_TITLE,
@@ -71,5 +72,6 @@ export function adminFrame(
     ),
     acts: <OpenInBrowser />,
     phone: room === SHELL_ROOM.NARROW,
+    back: onBack,
   };
 }

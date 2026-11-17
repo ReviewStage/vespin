@@ -37,6 +37,7 @@ import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-pl
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useVersionHistoryRoute } from "../version-history-route.js";
 import { useBoardRoute, usePersonRoute } from "../workspace-routes.js";
+import { useBackOr } from "./narrow-backs.js";
 
 /** A way of landing that does nothing more than the move. */
 const NOTHING = (): void => undefined;
@@ -130,6 +131,8 @@ export function usePersonDoor(tasks: Pick<TasksControl, "workspace" | "workspace
 export interface AdminDoor {
   /** Opens the place on `view`, on the Overview where none is named, under the workspace it stands in, else the listed one. */
   readonly open: (view?: AdminView) => void;
+  /** A page's ‹ back to its section `view`: one step back, else the section in the page's step (`useBackOr`). */
+  readonly back: (view: AdminView) => void;
   /** Reads the place ahead of a press the pointer says is coming, its chunk, charts and all. */
   readonly preload: () => void;
 }
@@ -142,8 +145,11 @@ export function useAdminDoor(tasks: Pick<TasksControl, "placeLeave" | "workspace
     listedSlug: () => (workspace === undefined ? undefined : stepOf(workspace)),
   });
 
+  const backOr = useBackOr();
+
   return {
     open: (view) => placeLeave.arrive(() => route.onOpen(view), NOTHING),
+    back: (view) => backOr(() => placeLeave.arrive(() => route.onOpen(view, true), NOTHING)),
     preload: route.onPreload,
   };
 }
@@ -152,6 +158,8 @@ export function useAdminDoor(tasks: Pick<TasksControl, "placeLeave" | "workspace
 export interface AutomationsDoor {
   /** Opens the page asked for, the list where none is, under the listed workspace; nothing while none is listed. */
   readonly open: (place?: AutomationsPlace) => void;
+  /** A page's ‹ back to the list: one step back, else the list in the page's step (`useBackOr`). */
+  readonly back: () => void;
 }
 
 /** The Automations pages' doors, under the listed workspace as the tab stands. */
@@ -161,20 +169,24 @@ export function useAutomationsDoor(
   // Note that the room reaches only the pages' runs, which no door here turns (`TasksControl.onAutomationRuns`).
   const route = useAutomationsRoute({ narrow: false });
   const { placeLeave, workspace } = tasks;
+  const backOr = useBackOr();
+
+  // Opens `place` under the listed workspace, as a step of its own or in the step's place where `inPlace`.
+  const open = (place: AutomationsPlace, inPlace: boolean) =>
+    placeLeave.arrive(() => {
+      if (workspace !== undefined) route.onOpen(place, stepOf(workspace), inPlace);
+    }, NOTHING);
 
   return {
-    open: (place = { kind: AUTOMATIONS_PAGE.LIST }) =>
-      placeLeave.arrive(() => {
-        if (workspace !== undefined) route.onOpen(place, stepOf(workspace));
-      }, NOTHING),
+    open: (place = { kind: AUTOMATIONS_PAGE.LIST }) => open(place, false),
+    back: () => backOr(() => open({ kind: AUTOMATIONS_PAGE.LIST }, true)),
   };
 }
 
-/** The Merge queue page: the presses that open and leave it. */
+/** The Merge queue page: the press that opens it. */
 export interface MergeQueueDoor {
   /** Opens the page under the listed workspace, marking the pull request at the GitHub address `pullRequest` where one is named; nothing while none is listed. */
   readonly open: (pullRequest?: string) => void;
-  readonly close: () => void;
 }
 
 /** The Merge queue page's doors, under the listed workspace as the tab stands. */
@@ -189,7 +201,6 @@ export function useMergeQueueDoor(
       placeLeave.arrive(() => {
         if (workspace !== undefined) route.onOpen(stepOf(workspace), pullRequest);
       }, NOTHING),
-    close: () => placeLeave.arrive(route.onClose, NOTHING),
   };
 }
 
@@ -243,10 +254,10 @@ export function useInboxDoor(tasks: Pick<TasksControl, "placeLeave" | "workspace
   };
 }
 
-/** A version history: the press that leaves it, and its read ahead of a press. */
+/** A version history: the way out of it, and its read ahead of a press. */
 export interface VersionHistoryDoor {
-  /** Leaves the version history for its task, its side panel as it was. */
-  readonly close: () => void;
+  /** The way out's ‹: one step back, else the history's task in its step (`useBackOr`). */
+  readonly back: () => void;
   /** Reads the history of `taskId` ahead of a press the pointer says is coming. */
   readonly preload: (taskId: string) => void;
 }
@@ -258,9 +269,10 @@ export function useVersionHistoryDoor(
   // Note that the room reaches only the moves within the history standing, which no door here makes.
   const route = useVersionHistoryRoute({ narrow: false });
   const listed = useTaskListCollections().tasks;
+  const backOr = useBackOr();
 
   return {
-    close: route.onClose,
+    back: () => backOr(route.onGiveWay),
     preload: (taskId) => {
       const address = versionHistoryAddressOf({ ...tasks, task: (id) => listed.get(id) }, taskId);
 

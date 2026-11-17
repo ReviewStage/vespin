@@ -234,7 +234,7 @@ function Shell({
 
 /** Settings as the window holds it, by the router (`settings-link.ts`), opened plainly or by the link given, as the window's root opens it. */
 function SettingsWindow({ link }: { link: SettingsLink | undefined }): React.JSX.Element {
-  const place = useSettingsRoute({ workspaces: [], listedId: undefined, narrow: false });
+  const place = useSettingsRoute({ workspaces: [], listedId: undefined });
   const opened = useRef(false);
   useEffect(() => {
     if (opened.current) return;

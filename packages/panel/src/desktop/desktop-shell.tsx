@@ -86,7 +86,7 @@ import {
   AutomationsToolbar,
 } from "./automation-list-frame.js";
 import { READING_AUTOMATIONS } from "./automation-words.js";
-import { backPlaceOf } from "./back-place.js";
+import { awayPlaceOf, backPlaceOf } from "./back-place.js";
 import { AgentRoutePage } from "./desktop-agent-page.js";
 import { DesktopInbox } from "./desktop-inbox.js";
 import type { SettingsStep } from "./desktop-settings.js";
@@ -135,13 +135,15 @@ function AdminLoading({
   room,
   view,
   onOpen,
+  onBack,
 }: {
   room: ShellRoom;
   view: AdminView;
   onOpen: (view: AdminView) => void;
+  onBack: (view: AdminView) => void;
 }): React.JSX.Element {
   return (
-    <AdminPlaceFrameProvider value={adminFrame(room, view, onOpen)}>
+    <AdminPlaceFrameProvider value={adminFrame(room, view, onOpen, onBack)}>
       <AdminCollectionPage
         title={ADMIN_TITLE}
         controls={null}
@@ -152,7 +154,6 @@ function AdminLoading({
     </AdminPlaceFrameProvider>
   );
 }
-
 
 /** Where Settings' way out leads where no step stands behind it, as a hint names it. */
 const TASKS_EXIT_PLACE = "tasks";
@@ -1393,7 +1394,7 @@ export function AdminRouteLoading(): React.JSX.Element {
   const admin = useAdminDoor(tasks);
   const view = useAdminView();
 
-  return <AdminLoading room={room} view={view} onOpen={admin.open} />;
+  return <AdminLoading room={room} view={view} onOpen={admin.open} onBack={admin.back} />;
 }
 
 /**
@@ -1408,7 +1409,11 @@ export function SettingsFrame({
   children: (exit: () => void) => React.ReactNode;
 }): React.JSX.Element {
   const { tasks, history, room, onTabChange } = useShellPlaces();
-  const exitSettings = history.canGoBack ? history.onBack : () => onTabChange(PANEL_TAB.TASKS);
+
+  // Note that its way out goes back past all of its pages to where it was opened from, as one step out of Settings.
+  const exitSettings =
+    history.away === undefined ? () => onTabChange(PANEL_TAB.TASKS) : history.onLeave;
+
   const settingsBar = room === SHELL_ROOM.NARROW && tasks.signedIn;
 
   return (
@@ -1424,17 +1429,16 @@ export function SettingsFrame({
  * (`version-history-route.lazy.tsx`), its versions listed where the sidebar
  * was: a chip in a version's words hangs the cards the description's own
  * words do, and New task's dialog stands over it as it does over the tasks.
- * Its way out goes back a step, or leaves it for its task where none stands
- * behind it.
+ * Its way out goes back a step, or leaves it for its task in its step where
+ * none stands behind it.
  */
 export function VersionHistoryFrame({
   children,
 }: {
   children: (exit: () => void) => React.ReactNode;
 }): React.JSX.Element {
-  const { tasks, history, room, mentionedAgents, chipCards, newTaskDialog } = useShellPlaces();
-  const historyDoor = useVersionHistoryDoor(tasks);
-  const exitHistory = history.canGoBack ? history.onBack : historyDoor.close;
+  const { tasks, room, mentionedAgents, chipCards, newTaskDialog } = useShellPlaces();
+  const exitHistory = useVersionHistoryDoor(tasks).back;
 
   return (
     <div className="desktop-shell" data-room={room}>
@@ -1473,7 +1477,7 @@ export function SettingsRouteLoading(): React.JSX.Element {
       {(exit) => (
         <SettingsLoading
           onExit={exit}
-          place={backPlaceOf(history, TASKS_EXIT_PLACE)}
+          place={awayPlaceOf(history.away, TASKS_EXIT_PLACE)}
           onList={settingsStep.onList}
           hidden={hiddenColumns(room, settingsStep.listed)}
         />

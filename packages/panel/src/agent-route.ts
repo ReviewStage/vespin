@@ -24,13 +24,12 @@ export interface AgentRoute {
   readonly workspace: string | undefined;
   /** Opens the page of `agentId` under the workspace whose address step is `workspace`. */
   readonly onOpen: (agentId: string, workspace: string) => void;
-  readonly onClose: () => void;
 }
 
 /**
- * An agent's page as the router stands it, left by the window's routed exit,
- * and kept standing by its stay where a leave was asked of it before a door asked for
- * the page standing. Note that the page standing is read from where the
+ * An agent's page as the router stands it, kept standing by the window's
+ * routed stay where a leave was asked of it before a door asked for the
+ * page standing. Note that the page standing is read from where the
  * router's history stands at the call rather than as the window was last
  * drawn, because a tab landing on the page's address opens its link in the
  * same turn, before the window draws it standing (`load-link.ts`).
@@ -63,5 +62,5 @@ export function useAgentRoute(): AgentRoute {
     });
   };
 
-  return { agentId, workspace, onOpen, onClose: () => exits.leave() };
+  return { agentId, workspace, onOpen };
 }

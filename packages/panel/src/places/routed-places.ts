@@ -623,12 +623,12 @@ export const ROUTED_PLACE = {
 
       return { label: INBOX_WORDS, detail };
     },
-    // An Inbox step is named by its chosen item's task, else the one its list is narrowed to.
+    // An Inbox step is named by its chosen item's thread and task, else the task its list is narrowed to.
     named: (params, search, { itemTask }) => {
       const holder = params.itemId === undefined ? undefined : itemTask(params.itemId);
       const narrowed = params.taskId ?? search.get("task") ?? undefined;
 
-      return { kind: NAMED_STEP.INBOX, taskId: holder ?? narrowed };
+      return { kind: NAMED_STEP.INBOX, taskId: holder ?? narrowed, itemId: params.itemId };
     },
     links: ({ tasks, rows, views, at, listed, under }) => {
       if (!views.inbox.open) return under();

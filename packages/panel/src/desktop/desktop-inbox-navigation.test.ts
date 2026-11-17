@@ -191,7 +191,7 @@ test("an item a link names before the account's task list is read says no Not fo
   );
 });
 
-test("an Inbox too narrow for the list and the item side by side shows the chosen item alone, the whole Inbox wide, under a way back that Back's chord takes as well, the keyboard landing on the item's row; a row pressed opens its item again", async () => {
+test("an Inbox too narrow for the list and the item side by side shows the chosen item alone, the whole Inbox wide, under a way back, the keyboard landing on the item's row, while Back's chord is left to the window's history, as the toolbar's Back is; a row pressed opens its item again", async () => {
   const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   layOut(page, 800);
@@ -211,7 +211,10 @@ test("an Inbox too narrow for the list and the item side by side shows the chose
   assert.deepEqual(columnsShown(page), ["item"]);
   assert.equal(page.querySelector("[data-inbox-title]")?.textContent, "Expire after 7 days?");
   assert.ok(document.activeElement === backToList(page), "the keyboard lands on the way back");
-  act(() => runAppCommand(APP_COMMAND.BACK));
+  act(() => {
+    assert.equal(runAppCommand(APP_COMMAND.BACK), false, "the item offers no Back of its own");
+  });
+  act(() => backToList(page).click());
   assert.deepEqual(columnsShown(page), ["list"]);
   assert.ok(
     document.activeElement === rowNamed(page, "Expire after 7 days?"),

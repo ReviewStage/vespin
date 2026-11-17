@@ -95,8 +95,9 @@ afterEach(() => {
 async function open(
   view: AdminView,
   options: { room?: ShellRoom } = {},
-): Promise<{ page: HTMLElement; opened: AdminView[] }> {
+): Promise<{ page: HTMLElement; opened: AdminView[]; backs: AdminView[] }> {
   const opened: AdminView[] = [];
+  const backs: AdminView[] = [];
   const page = document.body.appendChild(document.createElement("div"));
   root = createRoot(page);
   act(() =>
@@ -107,6 +108,7 @@ async function open(
           view,
           shown: true,
           onOpen: (next) => opened.push(next),
+          onBack: (next) => backs.push(next),
         }),
       ),
     ),
@@ -116,7 +118,7 @@ async function open(
     expect(page.querySelector('[role="status"][aria-busy="true"]')).toBeNull(),
   );
 
-  return { page, opened };
+  return { page, opened, backs };
 }
 
 /** The bar of sections, each option by its name and whether it is the one chosen. */
@@ -192,14 +194,14 @@ test("on a phone a section is headed by Open in browser, the place's name and ra
 test("on a phone an account's page has one way back, to the section it stands under, in place of the crumb", async () => {
   // An account whose read is not answered stands its page and head over the failure.
   answer = { refused: ADMIN_UNANSWERED };
-  const { page, opened } = await open({ kind: "account", id: ADA.id }, { room: SHELL_ROOM.NARROW });
+  const { page, backs } = await open({ kind: "account", id: ADA.id }, { room: SHELL_ROOM.NARROW });
 
   const head = readPhoneHead(page, "admin");
   assert.deepEqual(head.start, ["Users"]);
   assert.ok(head.end.length <= 1, "one control at most in the end corner");
   assert.equal(page.querySelector('.admin-head nav[aria-label="Path"]'), null, "no crumb");
   pressInPhoneHead(page, "admin", "Users");
-  assert.deepEqual(opened, [{ kind: "users" }]);
+  assert.deepEqual(backs, [{ kind: "users" }], "taken as the window's Back");
 });
 
 test("a wide room heads an account's page by its crumb back to its section, with no bar of sections and no phone's header", async () => {

@@ -113,7 +113,6 @@ import {
   MoreButton,
   matchingRows,
   moreLabel,
-  NO_BACK_KEY,
   NO_CONTEXT_MENU,
   PAGE_FRAME,
   POPOVER_ALIGN,
@@ -1299,16 +1298,9 @@ interface RunsControl {
 /** Where a phone's way back from an automation's page leads, as its hint names it. */
 const AUTOMATIONS_PLACE_NAME = "automations";
 
-/** A phone's way back from an automation's page to the list, the glyph alone in its corner. */
+/** A phone's way back from an automation's page to the list, the glyph alone in its corner, which is the window's Back. */
 function AutomationsBack({ onBack }: { onBack: () => void }): React.JSX.Element {
-  return (
-    <BackButton
-      label={AUTOMATIONS_PLACE}
-      place={AUTOMATIONS_PLACE_NAME}
-      command={NO_BACK_KEY}
-      onBack={onBack}
-    />
-  );
+  return <BackButton label={AUTOMATIONS_PLACE} place={AUTOMATIONS_PLACE_NAME} onBack={onBack} />;
 }
 
 /** What the toolbar's way to a narrow room's runs says. */

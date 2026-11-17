@@ -447,6 +447,8 @@ function drawLoadingNarrow(
               ...props.history,
               canGoBack: true,
               onBack: () => went.push("back"),
+              away: { title: { label: "Inbox" } },
+              onLeave: () => went.push("leave"),
               steps: {
                 back: [
                   {
@@ -483,7 +485,7 @@ async function mountLoadingNarrow(
   return drawn;
 }
 
-test("on a phone, while Settings is still loading, its list and its page stand headed as they will be: the way out or back, and the title centered", async () => {
+test("on a phone, while Settings is still loading, its list and its page stand headed as they will be: the way out, which leaves Settings past its pages, or back, and the title centered", async () => {
   const list = await mountLoadingNarrow(PANEL_TAB.SETTINGS, {}, true);
   assert.deepEqual(readPhoneHead(list.page, "settings-pages"), {
     start: ["Back"],
@@ -491,7 +493,7 @@ test("on a phone, while Settings is still loading, its list and its page stand h
     end: [],
   });
   pressInPhoneHead(list.page, "settings-pages", "Back");
-  assert.deepEqual(list.went, ["back"]);
+  assert.deepEqual(list.went, ["leave"]);
   act(() => root?.unmount());
 
   const page = await mountLoadingNarrow(PANEL_TAB.SETTINGS, {}, false);
@@ -1205,13 +1207,14 @@ test("while the Automations pages are still loading their frame stands the list 
   );
 });
 
-test("while a version history's chunk is still loading, its Back row and Escape leave the history, as they do once it stands, and on a phone its list stands headed as it will be, by the way out and its title", async () => {
+test("while a version history's chunk is still loading, its Back row and Escape leave the history for its task in its step, with no step behind it, as they do once it stands, and on a phone its list stands headed as it will be, by the way out and its title", async () => {
   const closed: string[] = [];
   const history = { ...tasksControl().history, open: true };
   // The history's chunk is held on its way for the whole case, so its frame stands by construction rather than by timing.
   routed().router.routesById["/version-history"].lazy(() => Promise.withResolvers<never>().promise);
   handState({});
   const page = mount(false, { history, leave: () => closed.push("closed") });
+  const { history: entries } = routed().router;
   // The router goes to the history, whose frame stands while its chunk is read.
   await act(async () => {
     await Promise.resolve();
@@ -1229,23 +1232,31 @@ test("while a version history's chunk is still loading, its Back row and Escape 
   );
 
   assert.ok(back, "the Back row stands");
-  act(() => back.click());
+  const entered = entries.length;
   act(() => {
     assert.ok(runAppCommand(APP_COMMAND.EXIT_VERSION_HISTORY), "Escape leaves the history");
   });
-  assert.deepEqual(closed, ["closed", "closed"]);
+  await settle();
+  assert.equal(entries.location.pathname, "/acme/task/1");
+  assert.equal(entries.length, entered, "the task takes the history's step");
+  assert.deepEqual(closed, [], "rather than a step after it");
   act(() => root?.unmount());
 
-  // Note that the chunk is still on its way, so the phone's frame is drawn in the same turn.
-  const phone = drawLoadingNarrow(PANEL_TAB.TASKS, { history: { ...history, listed: true } }, true);
+  // Note that the chunk is still on its way, so the phone's frame stands once the router is back on the history.
+  const phone = await mountLoadingNarrow(
+    PANEL_TAB.TASKS,
+    { history: { ...history, listed: true } },
+    true,
+  );
+
   assert.deepEqual(readPhoneHead(phone.page, "version-log"), {
     start: ["Back"],
     title: "Version history",
     end: [],
   });
   pressInPhoneHead(phone.page, "version-log", "Back");
-  assert.deepEqual(phone.went, ["back"]);
   await settle();
+  assert.equal(entries.location.pathname, "/acme/task/1");
 });
 
 test("the Automations page stands in the plan's place, titled for the listed workspace", async () => {

@@ -245,9 +245,9 @@ export type InboxChoice =
  */
 export interface InboxViewControl {
   /**
-   * Goes back from the item chosen to its list, which stands the list alone where the Inbox shows one column: a step
-   * back where the list is the step behind, else its route's own move, unasked (`inbox-route.ts`), standing the list in
-   * the item's step (`places/narrow-backs.ts`). The Inbox's other doors are `places/routed-doors.ts`'s `useInboxDoor`,
+   * Goes back from the item chosen to its list, which stands the list alone where the Inbox shows one column: the
+   * window's Back, one step back, else, where none stands behind, its route's own move, unasked (`inbox-route.ts`),
+   * standing the list in the item's step (`places/narrow-backs.ts`). The Inbox's other doors are `places/routed-doors.ts`'s `useInboxDoor`,
    * and where it stands, what is chosen in it, and its narrowing are read through `useInboxView`.
    */
   readonly onClear: () => void;

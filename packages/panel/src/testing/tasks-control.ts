@@ -427,14 +427,12 @@ export const AGENT_AWAY: AgentRoute = {
   agentId: undefined,
   workspace: undefined,
   onOpen: ignore,
-  onClose: ignore,
 };
 
 /** A workspace not there for the reader standing nowhere, for a tasks tab drawn with no router to stand it. */
 export const UNKNOWN_WORKSPACE_AWAY: UnknownWorkspaceRoute = {
   workspace: undefined,
   onOpen: ignore,
-  onClose: ignore,
 };
 
 /** Home standing nowhere, for a tasks tab drawn with no router to stand it. */
@@ -442,7 +440,6 @@ export const HOME_AWAY: HomeRoute = {
   open: false,
   standingIn: undefined,
   onOpen: ignore,
-  onClose: ignore,
   onTurn: ignore,
 };
 

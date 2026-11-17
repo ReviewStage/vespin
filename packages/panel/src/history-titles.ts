@@ -21,8 +21,9 @@ import type { RoutedViews } from "./workspace-routes.js";
  * only while its task is open: the page by what the window's title calls it
  * (`window-title.ts`), and a task's step by the task, with the tabs its
  * column and side panel showed under it, "Fix token refresh · Code". An
- * Inbox item's step names the task the item is of. A Settings page is
- * named by its page alone.
+ * Inbox item's step names the item's thread and the task it is of, so the
+ * items of one task are told apart. A Settings page is named by its page
+ * alone.
  *
  * A step listed later is named again as what it names stands now
  * (`liveStepTitle`), by the ids it stood on: a task by the name the task
@@ -47,9 +48,10 @@ export const MERGE_QUEUE_WORDS = "Merge queue";
 /** What Home is called, as its step and its page name it. */
 export const HOME_WORDS = "Home";
 
-/** What a step's name is read again from: the task list's rows by id, the names being typed for tasks, and the open task's agents and pages. */
+/** What a step's name is read again from: the task list's rows by id, the names being typed for tasks, the open task's agents and pages, and the thread an Inbox item's id names, where the account's items are read. */
 type StepNameTasks = Pick<TasksControl, "typedNames" | "activeTaskId" | "agents" | "pages"> & {
   readonly rows: HistoryRows;
+  readonly itemTitle?: ((itemId: string) => string | undefined) | undefined;
 };
 
 /** The name an agent of a task goes by now: as the open task's agents say, else as the list followed live does, where it lists the agent on that task; none where neither names it. */
@@ -183,7 +185,11 @@ export type NamedStep =
       readonly side: SidePanelTab | undefined;
     }
   | { readonly kind: typeof NAMED_STEP.VERSION_HISTORY; readonly taskId: string }
-  | { readonly kind: typeof NAMED_STEP.INBOX; readonly taskId: string | undefined }
+  | {
+      readonly kind: typeof NAMED_STEP.INBOX;
+      readonly taskId: string | undefined;
+      readonly itemId: string | undefined;
+    }
   | { readonly kind: typeof NAMED_STEP.PERSON; readonly userId: string };
 
 /** The name a person goes by now, by their id, as the workspace's members say; none for someone not among them, or while they are unread. */
@@ -246,9 +252,14 @@ export function liveStepTitle(
 
     case NAMED_STEP.INBOX: {
       // Note that an Inbox step names an item only where it was kept naming one, as one column standing its list names none.
-      const detail = kept?.detail === undefined ? undefined : taskName(tasks, step.taskId);
+      const task = kept?.detail === undefined ? undefined : taskName(tasks, step.taskId);
+      const thread = step.itemId === undefined ? undefined : tasks.itemTitle?.(step.itemId);
+      const shown = [thread, task ?? kept?.detail].filter((part) => part !== undefined);
 
-      return { label: kept?.label ?? INBOX_WORDS, detail: detail ?? kept?.detail };
+      return {
+        label: kept?.label ?? INBOX_WORDS,
+        detail: shown.length === 0 ? undefined : shown.join(" · "),
+      };
     }
 
     case NAMED_STEP.PERSON: {

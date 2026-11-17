@@ -8,21 +8,20 @@
  * item chosen, the whole Inbox wide, else the list. Nothing is chosen until
  * a row's press, a link, Next, or a thread started from its box chooses it, so an item is chosen
  * exactly when it is shown, and an Inbox that narrows, as a side panel opening
- * beside it narrows it, goes on showing the item it showed. Its way back,
- * which Back's chord takes as well, chooses nothing, which stands the list
- * again. The line is drawn by the Inbox's own width rather than the
- * window's, because the window's Inbox and a task's own Inbox tab stand in
+ * beside it narrows it, goes on showing the item it showed. Its way back
+ * chooses nothing, which stands the list again; Back's chord is the
+ * window's own step back, as on every page, which lands on the list where
+ * the list is the step behind. The line is drawn by the Inbox's own width
+ * rather than the window's, because the window's Inbox and a task's own Inbox tab stand in
  * columns of their own, beside a sidebar, a side panel, or neither. A holder
  * hears whether the Inbox shows one column (`InboxChoosing`), as the window
  * does, so its history holds the list and the item as steps of their own by
  * this line rather than by the window's room, which is narrower.
  */
 
-import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { TOOLBAR_LOOK } from "@repo/ui";
 import { useVirtualRuns, type VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import { type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react";
-import { useAppCommand } from "../app-commands.js";
 import { useColumnSplit } from "../column-split.js";
 import { centerWithin, scrollerOf } from "../scroll-within.js";
 
@@ -319,8 +318,6 @@ export function useInboxColumns(chosen: string | undefined, choosing: InboxChoos
           onClear();
         }
       : undefined;
-
-  useAppCommand(APP_COMMAND.BACK, back);
 
   return {
     ref,
