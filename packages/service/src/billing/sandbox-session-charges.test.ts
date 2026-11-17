@@ -1,5 +1,5 @@
 /**
- * sandbox-session-charges.test.ts -- the daily read of sandbox sessions into the usage ledger, over the test's own database and `Sandbox` kept in memory: each ended session of a sandbox a workspace owns is charged to it once, at Vercel's rates for its region, and a second run changes nothing. Synthetic accounts, sandboxes, and sessions throughout.
+ * sandbox-session-charges.test.ts -- sandbox sessions charged into the usage ledger, over the test's own database and `Sandbox` kept in memory: by the daily read, each ended session of a sandbox a workspace owns once, at Vercel's rates for its region, a second run changing nothing; and as its sandbox is deleted. Synthetic accounts, sandboxes, and sessions throughout.
  */
 
 import assert from "node:assert/strict";
@@ -18,7 +18,10 @@ import { Sandbox, type SandboxSession, SESSION_END, type SessionEnd } from "@rep
 import { memorySandbox } from "@repo/sandbox/testing";
 import { Effect } from "effect";
 import { TestClock } from "effect/testing";
-import { chargeEndedSandboxSessions } from "./sandbox-session-charges.js";
+import {
+  chargeEndedSandboxSessions,
+  endedSessionsChargedOnDelete,
+} from "./sandbox-session-charges.js";
 
 const NOW = new Date("2026-11-16T12:00:00Z");
 const HOUR_MS = 3_600_000;
@@ -57,7 +60,7 @@ function session(
   };
 }
 
-it.layer(getTestDB())("the usage ledger's daily read of sandbox sessions", (it) => {
+it.layer(getTestDB())("sandbox sessions in the usage ledger", (it) => {
   it.effect(
     "charges each ended session of an owned sandbox once, at its region's rates, and a second run changes nothing",
     () =>
@@ -85,18 +88,19 @@ it.layer(getTestDB())("the usage ledger's daily read of sandbox sessions", (it) 
 
         const memory = memorySandbox();
         memory.state.sessions.push(
-          // 21.78 CPU-seconds at $0.128 an hour, and 8 GB for one started minute at $0.0212 a GB-hour: $0.0036011.
+          // 21.78 CPU-seconds at $0.128 an hour, 8 GB for one started minute at $0.0212 a GB-hour, and 1,288,336 bytes out at $0.15 a GB: $0.0037944.
           session(agentSandbox, SESSION_END.STOPPED, {
             durationMs: 18_277,
             activeCpuMs: 21_780,
             networkTransfer: { ingressBytes: 41_246_989, egressBytes: 1_288_336 },
           }),
-          // Failed, so its CPU time is not charged: 4 GB for two started minutes at sfo1's $0.0294 a GB-hour, $0.00392.
+          // Failed, so its CPU time and transfer are not charged: 4 GB for two started minutes at sfo1's $0.0294 a GB-hour, $0.00392.
           session(driveSandbox, SESSION_END.FAILED, {
             region: "sfo1",
             memoryMb: 4096,
             durationMs: 61_000,
             activeCpuMs: 5_000,
+            networkTransfer: { ingressBytes: 0, egressBytes: 9_000_000_000 },
           }),
           // Still running, so not yet charged.
           session(agentSandbox, undefined, { durationMs: undefined }),
@@ -114,7 +118,7 @@ it.layer(getTestDB())("the usage ledger's daily read of sandbox sessions", (it) 
         assert.deepEqual(yield* run, { ended: 4, charged: 0, unowned: 1, unpriced: 1 });
 
         assert.deepEqual(yield* workspaceMonthTotals(acme, NOW), [
-          { kind: USAGE_KIND.SANDBOX_SESSION, amountMicroUsd: 3_601 + 3_920 },
+          { kind: USAGE_KIND.SANDBOX_SESSION, amountMicroUsd: 3_794 + 3_920 },
         ]);
 
         const byMember = yield* workspaceMonthMemberTotals(acme, NOW);
@@ -122,10 +126,37 @@ it.layer(getTestDB())("the usage ledger's daily read of sandbox sessions", (it) 
         assert.deepEqual(
           new Map(byMember.map((total) => [total.userId, total.amountMicroUsd])),
           new Map([
-            [member, 3_601],
+            [member, 3_794],
             [null, 3_920],
           ]),
         );
       }),
+  );
+
+  it.effect("charges a deleted sandbox's ended sessions as it is deleted", () =>
+    Effect.gen(function* () {
+      const member = yield* openAccount;
+      const acme = yield* openWorkspace(member);
+      const sandboxName = `agent-sandbox-${randomUUID()}`;
+
+      yield* recordSandboxOwner({
+        sandboxName,
+        organizationId: acme,
+        agentId: null,
+        userId: member,
+        createdAt: NOW,
+      });
+
+      const memory = memorySandbox();
+      memory.stand({ name: sandboxName });
+      // 8 GB for one started minute at $0.0212 a GB-hour: $0.0028267.
+      memory.state.sessions.push(session(sandboxName, SESSION_END.STOPPED, { durationMs: 60_000 }));
+
+      yield* memory.service.delete(sandboxName).pipe(Effect.provide(endedSessionsChargedOnDelete));
+
+      assert.deepEqual(yield* workspaceMonthTotals(acme, NOW), [
+        { kind: USAGE_KIND.SANDBOX_SESSION, amountMicroUsd: 2_827 },
+      ]);
+    }),
   );
 });

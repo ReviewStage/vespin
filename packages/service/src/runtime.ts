@@ -22,6 +22,7 @@ import { workspaceDriveBuildsFromEnvironment } from "./agents/workspace-drive-bu
 import { bearerCallersLayer } from "./auth/bearer-callers.js";
 import { signInRevocationFromEnvironment } from "./auth/sign-in-revocation.js";
 import { automationCadenceFromEnvironment } from "./automations/automation-cadence.js";
+import { endedSessionsChargedOnDelete } from "./billing/sandbox-session-charges.js";
 import { webSqlClient } from "./db/sql-client.js";
 import { hostedEnvironment } from "./environment.js";
 import { productAnalyticsFromEnvironment } from "./events/server-events.js";
@@ -179,6 +180,8 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
 export const webServices = Layer.mergeAll(
   // The sandboxes are the edge's to pick, which provides its provider's adapter beneath these.
   Layer.effect(Sandbox, Effect.service(Sandbox)),
+  // A deleted sandbox's ended sessions, read by the adapter just before its delete, are charged to the ledger.
+  endedSessionsChargedOnDelete.pipe(Layer.provide(webSqlClient)),
   FetchHttpClient.layer,
   webSqlClient,
   hostedEnvironment,

@@ -211,6 +211,18 @@ export interface SandboxService {
 export class Sandbox extends Context.Service<Sandbox, SandboxService>()("@repo/sandbox/Sandbox") {}
 
 /**
+ * What is done with a sandbox's ended sessions just before it is deleted.
+ * Note that it is handed them there, because a provider forgets a deleted
+ * sandbox's sessions with it, so what they used can be read only before;
+ * the deployment charges them (`@repo/service`'s
+ * `billing/sandbox-session-charges.ts`), and anywhere else nothing is done.
+ * It never fails: what it does with them is its own to log.
+ */
+export const EndedSessionsOnDelete = Context.Reference<
+  (sessions: readonly SandboxSession[]) => Effect.Effect<void>
+>("@repo/sandbox/EndedSessionsOnDelete", { defaultValue: () => () => Effect.void });
+
+/**
  * How long a sandbox runs past its last touch: what every open and create
  * runs for, and how far ahead of now each touch puts its end. Five minutes
  * with no agent or terminal activity, the bound every sandbox stops by:
