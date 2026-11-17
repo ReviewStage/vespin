@@ -119,8 +119,8 @@ export default function TabsLayout() {
   const pathname = usePathname();
   const conversation = iosRouteHidesTabs(pathname);
   const { tab: standing, atRoot } = useTabStanding(useSegments());
-  // Note that a page open in the detail's stack stays in front as the window turns compact, pushed over the window instead.
-  useStackToRoutes(!iconOnly, placeOfRoute(standing));
+  // Note that a page open in the detail's stack stays in front as the window turns compact, pushed over the window instead, only while the tab's root stands, so a page already routed over it is never covered.
+  useStackToRoutes(!iconOnly, atRoot ? placeOfRoute(standing) : undefined);
   // Note that the call's own agent's page holds the call's presses in its composer, so the way back stands aside there rather than repeat them; in a split view's detail the page is pushed on the detail's own stack rather than routed, so it is read there while the tab's root stands.
   const detailPage = useTopPage(atRoot ? placeOfRoute(standing) : undefined);
 
