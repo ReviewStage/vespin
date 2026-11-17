@@ -18,9 +18,11 @@ const LEADING_SPACE = /^(?:[ \t]*\r?\n)*(?: {0,3}(?=\S))?/u;
  * would draw as stray marks.
  */
 export function markdownLeads(text: string): readonly string[] {
+  const start = LEADING_SPACE.exec(text)?.[0].length ?? 0;
+
   return markdownTree(text).children.flatMap((block) => {
     const end = block.position?.end.offset;
-    const lead = end === undefined ? "" : text.slice(0, end).replace(LEADING_SPACE, "").trimEnd();
+    const lead = end === undefined || end <= start ? "" : text.slice(start, end).trimEnd();
 
     return lead === "" ? [] : [lead];
   });

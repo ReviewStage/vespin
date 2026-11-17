@@ -296,10 +296,14 @@ function payloadBytes(payload: ApnsPayload): number {
  * expanded notification then draws the body.
  */
 function withMarkdown(payload: ApnsPayload, text: string, body: string | undefined): ApnsPayload {
-  const leads = markdownLeads(text);
   const room = PAYLOAD_BOUND.BYTES - PAYLOAD_BOUND.SPARE;
+  let markdown: string | undefined;
 
-  const markdown = leads.findLast((lead) => payloadBytes({ ...payload, markdown: lead }) <= room);
+  // Note that each lead holds the one before it, so the walk stops at the first past the bound and never measures a long post whole.
+  for (const lead of markdownLeads(text)) {
+    if (payloadBytes({ ...payload, markdown: lead }) > room) break;
+    markdown = lead;
+  }
 
   return markdown === undefined || markdown === body ? payload : { ...payload, markdown };
 }
