@@ -78,10 +78,10 @@ export interface AdminReads {
  * does: the service's answer, the shape the procedure answers, or a refusal
  * by its word; one no screen tells apart rejects as the screen's own failure.
  */
-async function readAnswered<T>(
+async function readAnswered<T, Query extends object>(
   ask: (params: AdminReadParams) => Promise<AdminReadAnswer>,
   procedure: AdminReadParams["procedure"],
-  query: object,
+  query: Query,
 ): Promise<T> {
   // SAFETY: every admin query is a set of optional string parameters (`admin-wire.ts`).
   const answered = await ask({ procedure, query: query as Record<string, string> });
