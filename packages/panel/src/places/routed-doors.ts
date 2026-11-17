@@ -82,11 +82,10 @@ export function versionHistoryAddressOf(
     : { workspace: under, task: task === undefined ? taskId : taskLinkStep(task) };
 }
 
-/** The listed workspace's Board: the presses that open and leave it, and its read ahead of a press. */
+/** The listed workspace's Board: the press that opens it, and its read ahead of a press. */
 export interface BoardDoor {
   /** Opens the listed workspace's Board; nothing while none is listed. */
   readonly open: () => void;
-  readonly close: () => void;
   /** Reads the Board ahead of a press the pointer says is coming. */
   readonly preload: () => void;
 }
@@ -101,29 +100,24 @@ export function useBoardDoor(tasks: Pick<TasksControl, "placeLeave" | "workspace
       placeLeave.arrive(() => {
         if (workspace !== undefined) route.onOpen(stepOf(workspace));
       }, NOTHING),
-    close: () => placeLeave.arrive(route.onClose, NOTHING),
     preload: () => {
       if (workspace !== undefined) route.onPreload(stepOf(workspace));
     },
   };
 }
 
-/** A person's page: the press that leaves it, and its read ahead of a press. */
+/** A person's page: its read ahead of a press. */
 export interface PersonDoor {
-  readonly close: () => void;
   /** Reads their page ahead of a press the pointer says is coming, in `workspaceId`, or the listed workspace where none is named. */
   readonly preload: (userId: string, workspaceId?: string) => void;
 }
 
 /** A person's page's doors, the listed workspace as the tab stands its home where a press names none. */
-export function usePersonDoor(
-  tasks: Pick<TasksControl, "placeLeave" | "workspace" | "workspaces">,
-): PersonDoor {
+export function usePersonDoor(tasks: Pick<TasksControl, "workspace" | "workspaces">): PersonDoor {
   const route = usePersonRoute();
-  const { placeLeave, workspace, workspaces } = tasks;
+  const { workspace, workspaces } = tasks;
 
   return {
-    close: () => placeLeave.arrive(route.onClose, NOTHING),
     preload: (userId, workspaceId) => {
       const home = workspaces.find((each) => each.id === workspaceId) ?? workspace;
 
@@ -132,11 +126,10 @@ export function usePersonDoor(
   };
 }
 
-/** Admin: the presses that open and leave it, and its read ahead of a press. */
+/** Admin: the press that opens it, and its read ahead of a press. */
 export interface AdminDoor {
   /** Opens the place on `view`, on the Overview where none is named, under the workspace it stands in, else the listed one. */
   readonly open: (view?: AdminView) => void;
-  readonly close: () => void;
   /** Reads the place ahead of a press the pointer says is coming, its chunk, charts and all. */
   readonly preload: () => void;
 }
@@ -151,16 +144,14 @@ export function useAdminDoor(tasks: Pick<TasksControl, "placeLeave" | "workspace
 
   return {
     open: (view) => placeLeave.arrive(() => route.onOpen(view), NOTHING),
-    close: route.onClose,
     preload: route.onPreload,
   };
 }
 
-/** The Automations pages: the presses that open and leave them. */
+/** The Automations pages: the press that opens them. */
 export interface AutomationsDoor {
   /** Opens the page asked for, the list where none is, under the listed workspace; nothing while none is listed. */
   readonly open: (place?: AutomationsPlace) => void;
-  readonly close: () => void;
 }
 
 /** The Automations pages' doors, under the listed workspace as the tab stands. */
@@ -176,7 +167,6 @@ export function useAutomationsDoor(
       placeLeave.arrive(() => {
         if (workspace !== undefined) route.onOpen(place, stepOf(workspace));
       }, NOTHING),
-    close: () => placeLeave.arrive(route.onClose, NOTHING),
   };
 }
 

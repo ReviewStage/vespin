@@ -43,7 +43,7 @@ import { restOn } from "../testing/hint-rest.js";
 import { relayout } from "../testing/resize-observer.js";
 import { layScrollerOut } from "../testing/scroller.js";
 import { handInbox, tasksControl } from "../testing/tasks-control.js";
-import { leavingBy, windowRouter } from "../testing/window-router.js";
+import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { useInboxWaiting } from "./places-waiting.js";
 import { TasksPage } from "./tasks-page.js";
@@ -84,9 +84,6 @@ const roots: Root[] = [];
 /** The tasks the page opened, in order. */
 let opened: string[] = [];
 
-/** How many times the page was closed. */
-let closed = 0;
-
 /** Each change of where a task stands the page sent, in order. */
 let sent: [string, TaskStanding][] = [];
 
@@ -113,7 +110,6 @@ let drawsWrites = false;
 
 beforeEach(() => {
   opened = [];
-  closed = 0;
   sent = [];
   marked = [];
   written = [];
@@ -256,7 +252,7 @@ async function mountPage(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
-  // The window's router, whose routed exits the page's close leaves by, as the window's history does.
+  // The window's router, which the page's doors move, as the window's history does.
   const { provide } = windowRouter();
 
   const draw = (workspace: Workspace) => {
@@ -278,7 +274,6 @@ async function mountPage(
           createElement(
             Fragment,
             null,
-            leavingBy(() => (closed += 1)),
             overListedTasks(control, createElement(TasksPage, { tasks: control, room })),
             createElement(ToastHost),
           ),
@@ -765,14 +760,6 @@ test("on a phone the page is headed by one ⋯, its title centered before it, an
     null,
     "a menu closed before is not opened again by the switch",
   );
-});
-
-test("Escape closes the page from the List as from the Board", async () => {
-  await mountPage();
-  act(() => {
-    assert.ok(runAppCommand(APP_COMMAND.EXIT_BOARD), "the page's way out is offered");
-  });
-  assert.equal(closed, 1);
 });
 
 test("a row says its key and status to a screen reader, its leading marks being decoration", async () => {

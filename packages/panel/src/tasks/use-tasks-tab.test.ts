@@ -91,12 +91,10 @@ import {
   type AutomationsDoor,
   type BoardDoor,
   type InboxDoor,
-  type PersonDoor,
   useAdminDoor,
   useAutomationsDoor,
   useBoardDoor,
   useInboxDoor,
-  usePersonDoor,
 } from "../places/routed-doors.js";
 import { useRoutedExits } from "../places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
@@ -337,9 +335,6 @@ const SENT_ON_MUTATIONS: readonly PortActKind[] = [
 /** The Board's doors in the window last mounted, as a surface holds them. */
 let boardDoor: BoardDoor | undefined;
 
-/** A person's page's doors in the window last mounted, as a surface holds them. */
-let personDoor: PersonDoor | undefined;
-
 /** Admin's doors in the window last mounted, as a surface holds them. */
 let adminDoor: AdminDoor | undefined;
 
@@ -553,7 +548,6 @@ function mount(
     everyNow = useNamedTasks(control.typedNames, NAMED_ORDER.PINNED_FIRST);
     // The routed places' doors, and how they stand, as the window's surfaces hold them.
     boardDoor = useBoardDoor(control);
-    personDoor = usePersonDoor(control);
     adminDoor = useAdminDoor(control);
     automationsDoor = useAutomationsDoor(control);
     inboxDoor = useInboxDoor(control);
@@ -3858,18 +3852,6 @@ const ROUTED_DOORS: [
     FROM_BOARD,
   ],
   ["the version history, sought to a version", (control) => control.onOpenHistory(BILLING.id, 1)],
-  ["the Board's close", () => boardDoor?.close(), FROM_BOARD],
-  [
-    "a person's page's close",
-    () => personDoor?.close(),
-    (control) => control.onOpenPerson("user-ada", "Ada"),
-  ],
-  [
-    "an agent's page's close",
-    (control) => control.agentView.onClose(),
-    (control) => control.agentView.onOpen(AGENT_ID),
-  ],
-  ["Automations' close", () => automationsDoor?.close(), () => automationsDoor?.open()],
   ["the Inbox's close", () => inboxRoute?.onClose()],
 ];
 

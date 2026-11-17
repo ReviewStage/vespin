@@ -2633,10 +2633,8 @@ export function SidePanelChord({
 
 /**
  * Grows the panel over the document, or brings it back beside it. It stands
- * while the panel is open, so it offers the full-screen chord, and the menu
- * bar's way out while the panel fills the window. Escape's own way out is the
- * window's Escape, which steps back one layer at a time. A panel on its way
- * out offers neither: what it draws is no longer what the panel is.
+ * while the panel is open, so it offers the full-screen chord. A panel on its
+ * way out offers none: what it draws is no longer what the panel is.
  */
 function FullScreenToggle({
   fullScreen,
@@ -2649,7 +2647,6 @@ function FullScreenToggle({
 }): React.JSX.Element {
   const label = fullScreen ? "Exit full screen" : "Expand panel";
   useAppCommand(APP_COMMAND.TOGGLE_FULL_SCREEN, leaving ? undefined : onToggle);
-  useAppCommand(APP_COMMAND.EXIT_FULL_SCREEN, fullScreen && !leaving ? onToggle : undefined);
 
   return (
     <Tooltip label={label} command={APP_COMMAND.TOGGLE_FULL_SCREEN}>
@@ -3540,6 +3537,13 @@ function PanelFrame({
 
     return playExit(aside.current, room.current, leaving, onLeft);
   }, [leaving, onLeft]);
+
+  // Escape takes the panel out of filling the window, wherever it fills it: beside its document again, or shut by
+  // its way back where the room holds it only full screen (`places/narrow-backs.ts`).
+  useAppCommand(
+    APP_COMMAND.EXIT_FULL_SCREEN,
+    panel.fullScreen && leaving === PANEL_LEAVING.NONE ? panel.onToggleFullScreen : undefined,
+  );
 
   const fullScreenToggle = panel.fullScreenOnly ? null : (
     <FullScreenToggle

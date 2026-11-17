@@ -811,7 +811,6 @@ export function mountPages(start: AutomationsPlace, workspace: Workspace = WORKS
         agentId: undefined,
         onOpen: (agentId: string) =>
           arriveAt(`/${WORKSPACE.slug}/agent/${agentId}`, () => world.agentsOpened.push(agentId)),
-        onClose: () => undefined,
       },
       liveAgents: world.liveAgents,
       onShowAgent: (taskId: string, agentId: string) =>

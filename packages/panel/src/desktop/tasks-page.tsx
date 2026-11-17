@@ -53,9 +53,8 @@ import { useSettledPages } from "./use-settled-pages.js";
 /**
  * tasks-page.tsx -- the window's Tasks page: the listed workspace's tasks as a List or as the Board, chosen by a switch beside its title, narrowed by its Filter and laid out by its View options.
  *
- * It stands in the plan's place, opened by the sidebar's Tasks row, and its
- * way out is `EXIT_BOARD`, so Back, Escape, and the window's history treat it
- * as the place the Board alone once was.
+ * It stands in the plan's place, opened by the sidebar's Tasks row, and the
+ * window's history treats it as the place the Board alone once was.
  *
  * Its toolbar ends in Filter and View options (`tasks-page-options.tsx`).
  * The filter is the page's, one for both views and one for each workspace,

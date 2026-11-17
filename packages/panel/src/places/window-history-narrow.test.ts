@@ -148,18 +148,11 @@ function tasksTab(
       strip: at.panel.tab === undefined ? [] : [at.panel.tab],
       onClose: () => panel({ open: false, tab: undefined }),
     },
-    // As the real one does, a panel filling the window is the nearer layer than the task.
-    back: () => {
-      if (at.panel.open) shut();
-
-      return true;
-    },
-    // As the real one does, an agent's page opens and leaves by the router.
+    // As the real one does, an agent's page opens by the router.
     agentView: {
       ...base.agentView,
       agentId: agent.agentId,
       onOpen: (agentId) => agent.onOpen(agentId, ACME.slug),
-      onClose: agent.onClose,
     },
     // As the real doors do, the Inbox opens by the router, narrowed to the task named or to none.
     onShowInbox: ({ taskId }) => inbox.onOpen(inboxAt(taskId)),

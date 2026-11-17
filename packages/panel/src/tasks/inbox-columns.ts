@@ -9,8 +9,8 @@
  * a row's press, a link, Next, or a thread started from its box chooses it, so an item is chosen
  * exactly when it is shown, and an Inbox that narrows, as a side panel opening
  * beside it narrows it, goes on showing the item it showed. Its way back,
- * which Back's chord and Escape take as well, chooses nothing, which stands
- * the list again. The line is drawn by the Inbox's own width rather than the
+ * which Back's chord takes as well, chooses nothing, which stands the list
+ * again. The line is drawn by the Inbox's own width rather than the
  * window's, because the window's Inbox and a task's own Inbox tab stand in
  * columns of their own, beside a sidebar, a side panel, or neither. A holder
  * hears whether the Inbox shows one column (`InboxChoosing`), as the window
@@ -321,7 +321,6 @@ export function useInboxColumns(chosen: string | undefined, choosing: InboxChoos
       : undefined;
 
   useAppCommand(APP_COMMAND.BACK, back);
-  useAppCommand(APP_COMMAND.INBOX_LIST, back);
 
   return {
     ref,

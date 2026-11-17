@@ -113,6 +113,7 @@ import {
   MoreButton,
   matchingRows,
   moreLabel,
+  NO_BACK_KEY,
   NO_CONTEXT_MENU,
   PAGE_FRAME,
   POPOVER_ALIGN,
@@ -1298,13 +1299,13 @@ interface RunsControl {
 /** Where a phone's way back from an automation's page leads, as its hint names it. */
 const AUTOMATIONS_PLACE_NAME = "automations";
 
-/** A phone's way back from an automation's page to the list, the glyph alone in its corner, with the key that leaves Automations. */
+/** A phone's way back from an automation's page to the list, the glyph alone in its corner. */
 function AutomationsBack({ onBack }: { onBack: () => void }): React.JSX.Element {
   return (
     <BackButton
       label={AUTOMATIONS_PLACE}
       place={AUTOMATIONS_PLACE_NAME}
-      command={APP_COMMAND.EXIT_AUTOMATIONS}
+      command={NO_BACK_KEY}
       onBack={onBack}
     />
   );
@@ -2901,7 +2902,7 @@ export function AutomationEditor({
   const savedAgentId =
     saved !== undefined && saved.repository === draft.repository ? saved.agentId : null;
 
-  // Note that a new draft nothing was changed in is no work to lose, so Escape may leave it.
+  // Note that a new draft nothing was changed in is no work to lose, so a way out leaves it unasked.
   const written =
     automation === undefined ? unreadable !== undefined || !sameDraft(draft, start) : dirty;
 
@@ -2913,9 +2914,6 @@ export function AutomationEditor({
   const hidden = hiddenColumns(split.columns, !runsAlone);
   const screen = useScreenRef(useNarrowFocus(split.columns, !runsAlone, EDITOR_SCREENS), split.ref);
   const runsScreen = useId();
-  // Escape goes back to the list, asking first, as every way out does, where something written would be lost;
-  // from the runs standing alone, it goes back to the setup first.
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, runsAlone ? () => onRuns(false) : onBack);
   const runsPanel = useRunsPanel();
   const toggleRuns = single ? () => onRuns(!runsShown) : runsPanel.onToggle;
   // The form glides to its new middle as the Runs panel comes and goes (pane-motion.tsx).
@@ -2997,7 +2995,7 @@ export function AutomationEditor({
     );
   };
 
-  // Note that any way out of the page, a crumb, Escape, a run's agent, the sidebar, ⌘K, history,
+  // Note that any way out of the page, a crumb, a run's agent, the sidebar, ⌘K, history,
   // or Settings, asks first while something written would be lost, and goes once Leave is pressed.
   // Note that the dialog's stage alone says whether a leave is asked; the move it holds is kept beside it only for its answer to reach.
   const leavingBy = useRef<{ readonly leave: () => void; readonly stay: () => void } | undefined>(

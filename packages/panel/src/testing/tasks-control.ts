@@ -633,7 +633,7 @@ export function tasksControl(overrides: TasksControlOverrides = {}): ListingTask
       pages: undefined,
       onTaskAgents: () => undefined,
     },
-    agentView: { agentId: undefined, onOpen: ignore, onClose: ignore },
+    agentView: { agentId: undefined, onOpen: ignore },
     onThreadsShown: ignore,
     onOpenPerson: ignore,
     atHome: false,
@@ -657,7 +657,6 @@ export function tasksControl(overrides: TasksControlOverrides = {}): ListingTask
     onDraftName: ignore,
     liveAgents: [],
     listedPullRequests: undefined,
-    back: () => false,
     placeLeave: NO_LEAVE_ASK,
     ...set,
     // Note that the tasks given are laid last, over those a tab spread into `overrides` listed.
