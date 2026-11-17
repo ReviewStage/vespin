@@ -72,6 +72,7 @@ import {
 import { useFrontSteps, useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
 import { placeOfRoute, type SidebarPlace } from "../screens/app-sidebar.js";
+import { SEARCH_FOCUS_PARAM } from "../search-field.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
@@ -473,7 +474,8 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
       case MENU_COMMAND.TASKS:
         return router.navigate("/tasks");
       case MENU_COMMAND.SEARCH:
-        return router.navigate("/search");
+        // Note that Search is opened asking for its field's focus, since the system activates it only as its tab is tapped.
+        return router.navigate({ pathname: "/search", params: { [SEARCH_FOCUS_PARAM]: "1" } });
       case MENU_COMMAND.SIDEBAR:
         // Note that Show Sidebar over a detail standing alone brings the columns back with the sidebar, as the system's sidebar button does.
         if (detailOnly.alone) {

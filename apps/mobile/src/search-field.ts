@@ -3,6 +3,9 @@
 import { type RefObject, useState } from "react";
 import type { SearchBarCommands, SearchBarPlacement } from "react-native-screens";
 
+/** The param code opens Search with to have its field focused, such as ⌘F, since the system activates the field only when its tab is tapped. */
+export const SEARCH_FOCUS_PARAM = "focus";
+
 /** A ref that, the first time the field it is handed stands, tells it `text`, and never again, so nothing typed after is overwritten. */
 function refillingRef(text: string): RefObject<SearchBarCommands | null> {
   let held = text;
