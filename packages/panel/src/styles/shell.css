@@ -93,6 +93,27 @@
   padding-bottom: calc(var(--title-bar-middle) - var(--ui-control-height) / 2);
 }
 
+/* The head stands on the lines of the column under it and the buttons over
+   it. Its tile, a face a step wider than a row's glyph, is centered where
+   the rows' glyphs are: the row's start and the gap after the tile each give
+   up half of what the tile is wider by, so its name starts where theirs do.
+   It meets New task edge to edge, as Back meets Forward over it, and its
+   chevron is centered in a control's square at its end, as Back's arrow is
+   in its button, so the chevron stands under Back and New task under
+   Forward. */
+.sidebar-workspace {
+  --sidebar-workspace-overhang: calc((var(--spacing-avatar-row) - var(--ui-control-icon)) / 2);
+}
+
+.sidebar-workspace .workspace-ref[data-size="head"] {
+  gap: calc(var(--ui-icon-gap) - var(--sidebar-workspace-overhang));
+}
+
+.sidebar-workspace > .ui-nav-item {
+  padding-inline: calc(var(--ui-row-inset) - var(--sidebar-workspace-overhang))
+    calc((var(--ui-control-height) - var(--ui-control-icon)) / 2);
+}
+
 /* Note that the strip over it keeps a top row's hairline the work's own row
    beside it leaves out (`.desktop-main`'s `--desktop-bar-height`), so the
    head rises by it to stand level. A drawer keeps no strip. */

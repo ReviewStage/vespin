@@ -1255,6 +1255,8 @@ type MarkdownProps = {
   readonly suggestion?:
     | ((link: ReplyButtonLink, words: string) => SuggestionLook | undefined)
     | undefined;
+  /** The widest the words stand where the caller knows it before they are laid out, as a transcript's row does, which holds a chip until they are measured; the window's width less a page's margins where none is given. */
+  readonly width?: number | undefined;
 };
 
 /** A video or a sound clip the words name as a picture, played in its place: the file it plays from, none while it is on its way and `null` where it could not be read, its name, whether it is a sound clip, where a video opens where the player cannot read it, and what reads it again. */
@@ -1307,7 +1309,8 @@ function noFile(): undefined {
  * own, so a screen stands it in its own. Note that a chip is held to the
  * width the words stand in, measured once they are laid out, since an open
  * iPhone Duo's or an iPad's detail column is far narrower than the window;
- * until then, to the window's width less a page's margins.
+ * until then, to the width its caller knows they stand in, else the window's
+ * width less a page's margins.
  */
 export function Markdown({
   words,
@@ -1322,6 +1325,7 @@ export function Markdown({
   headings = false,
   linkStanding = noStanding,
   suggestion = noSuggestion,
+  width: known,
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
@@ -1344,7 +1348,7 @@ export function Markdown({
   const drawing: Drawing = {
     colors,
     fontScale,
-    lineWidth: measured ?? width - SPACE.PAGE * 2,
+    lineWidth: measured ?? known ?? width - SPACE.PAGE * 2,
     openLink: onOpenLink,
     pictureSource,
     onRetryPicture,

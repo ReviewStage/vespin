@@ -17,6 +17,11 @@ export {
 
 export {
   ConfirmAsk,
+  QUIET_ROW_QUESTION,
+  type RowAsker,
+  RowAsking,
+  type RowQuestion,
+  useRowAsker,
   WORDS_ASK_KIND,
   WordsAsk,
   type WordsAskAct,
@@ -52,6 +57,7 @@ export {
   CallAccessory,
   CallCardRow,
   type CallPresses,
+  CallSidebarFoot,
   COMPOSER_CALL,
   type ComposerCall,
   type StandingCallCard,
@@ -114,6 +120,7 @@ export {
   type LucideSymbol,
   type MarkLook,
   runsOnGlyph,
+  sectionEmoji,
   sectionGlyph,
 } from "./glyph.js";
 

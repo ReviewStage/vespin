@@ -64,10 +64,10 @@ import { dataUrlBytes, dataUrlMediaType, useBlobUrl } from "../video-player/vide
  * tall across the place, Play centered under it with the time right after
  * it and the speed after the time, and no Expand; and it plays at once, unless motion is held still
  * (`motionHeld`: reduced motion or a capture run), where it waits for Play.
- * A clip keeps its place wherever it is drawn, as a recording does
- * (`useMediaPlace`): the viewer an Expand opens goes on from where the card
- * left it, and the card, played again once the viewer closes, from where
- * the viewer did.
+ * A clip keeps its place and its speed wherever it is drawn, as a
+ * recording does (`useMediaPlace`): the viewer an Expand opens goes on from
+ * where the card left it, at the speed it played at, and the card, played
+ * again once the viewer closes, from where the viewer did.
  *
  * The bytes arrive as a picture's do, as a `data:` URL, and play from a
  * `blob:` address made of them (`useBlobUrl`), since neither window's
@@ -353,7 +353,7 @@ export function AudioPlayer({
   const [starts] = useState(() => viewer && !motionHeld());
   const kept = useMediaPlace(dataUrl);
 
-  // Note that a read keeps the place unless `moved` says it moved nothing, as a change of speed, which must not claim another player's place.
+  // Note that a read keeps the place unless `moved` says it moved nothing, as a change of speed, which keeps the speed alone so it claims no other player's place.
   const read = (shown: HTMLAudioElement, moved = true) => {
     const duration = Number.isFinite(shown.duration) ? shown.duration : 0;
 
@@ -365,6 +365,7 @@ export function AudioPlayer({
     });
 
     if (moved) kept.keep(shown);
+    else kept.keepSpeed(shown);
   };
 
   // Once its length is known, the clip goes to where it was left, or its start.

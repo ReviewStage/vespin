@@ -22,6 +22,7 @@
       "type": "string",
       "minLength": 40,
       "maxLength": 40,
+      "pattern": "^[0-9a-f]{40}$",
       "description": "The commit to read the file at, by its full SHA, such as the head a pull request stands on; the default branch's head where left out."
     }
   },

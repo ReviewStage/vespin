@@ -726,7 +726,7 @@ test("an account trying Cursor gets Cursor's card, its Add opening a key's paste
   const header = () => credential(page, "Cursor");
   await press(header(), "Add key to Cursor");
   assert.deepEqual(menuItems(), [], "no plan to choose");
-  assert.ok(header().querySelector('a[href="https://cursor.com/dashboard?tab=integrations"]'));
+  assert.ok(header().querySelector('a[href="https://cursor.com/dashboard/api"]'));
 
   await paste(labeled(header(), "Paste the key"), CURSOR_KEY);
   assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_SAVE), [

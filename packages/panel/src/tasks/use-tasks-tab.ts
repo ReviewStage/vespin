@@ -193,7 +193,7 @@ import { sayRestored } from "./version-view.js";
  * use-tasks-tab.ts -- the panel's Tasks tab as one control: which page shows, the presses each page makes, and the host's read of the tasks as the tab shows.
  *
  * The tab draws the tasks view main holds, and every press is an act. It
- * saves nothing and decides nothing about a task: the task's notetaker writes
+ * saves nothing and decides nothing about a task: the task's agents write
  * the document, and the tab redraws it in
  * place as the host brings its drafts and its reads. A rename, a pin, and an
  * archive are the presses drawn before the host answers them: each shows at
@@ -2217,8 +2217,9 @@ export function useTasksTab(input: {
     });
   };
 
-  // One the developer goes back to work on, from a sidebar row, ⌘K, or Recent, lands on its
-  // agent (`resumingAgentOf`); one with none, on the tab its column falls to, a new agent's draft
+  // One the developer goes back to work on, from a sidebar row, ⌘K, or Recent, opens as they
+  // left it, on the tab they last viewed there; one never viewed here lands on its agent
+  // (`resumingAgentOf`), or one with none on the tab its column falls to, a new agent's draft
   // where no agent's stands. In a narrow room the panel shuts over it, and the agent stands as a
   // screen over the task's details, which its header's Back, named for the task, returns to, a
   // task with no agent opening on its details.
@@ -2227,6 +2228,8 @@ export function useTasksTab(input: {
     const narrow = input.room === SHELL_ROOM.NARROW;
 
     if (narrow) sidePanel.onSetOpen(false);
+
+    if (mainTabs.remembers(taskId)) return;
     const agentId = resumingAgentOf(taskId, liveAgents, inboxWaiting);
 
     if (agentId !== undefined) mainTabs.onShow(taskId, agentTab(agentId));

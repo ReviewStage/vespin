@@ -209,10 +209,7 @@ export function dailyCountRows(since: Date, until?: Date) {
       .from(descriptionRevision)
       .where(
         and(
-          inArray(descriptionRevision.actor, [
-            DESCRIPTION_ACTOR.DEVELOPER,
-            DESCRIPTION_ACTOR.NOTETAKER,
-          ]),
+          eq(descriptionRevision.actor, DESCRIPTION_ACTOR.DEVELOPER),
           isNotNull(descriptionRevision.userId),
           within(descriptionRevision.at, since, until),
         ),

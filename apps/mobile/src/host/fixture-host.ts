@@ -15,7 +15,7 @@
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
-import { markedAs, type ReadMark } from "@repo/features/read-mark";
+import { markedAs, type ReadMark, type ReadMarked } from "@repo/features/read-mark";
 import {
   FOLLOWER_CALL_FAILURE,
   type ListedApart,
@@ -70,18 +70,33 @@ type KeptReadMark = { readonly mark: ReadMark; readonly at: number };
 /** The read marks each run's screens set on the fixture's tasks, by task, each map replaced whole as one is set. */
 type KeptReadMarks = ReadonlyMap<string, KeptReadMark>;
 
-/** The tasks of a list with the read marks a run set laid on them, as the host draws a mark: the list itself where no task's mark moved. */
+/** A task with a kept read mark laid on it: the very task where it stands so already. */
+function markedTask<Task extends ReadMarked>(task: Task, kept: KeptReadMark): Task {
+  const marked = markedAs(kept.mark, task, kept.at);
+  // SAFETY: the keys of a mark are the fields of `ReadMarked` it sets.
+  const keys = Object.keys(marked) as (keyof ReadMarked)[];
+
+  return keys.every((key) => task[key] === marked[key]) ? task : { ...task, ...marked };
+}
+
+/**
+ * The tasks of a list with the read marks a run set laid on them, as the
+ * host draws a mark: the list itself where no task's mark moved. Note that a
+ * task already standing as its mark says is kept, and a list none of whose
+ * tasks moved is kept whole, because the store tells the lists apart by
+ * identity, and each change it announces stages the fixture again: a fresh
+ * list on every stage never settled, and starved the JS thread.
+ */
 function markedTasksView(list: ListedTasksView, marks: KeptReadMarks): ListedTasksView {
   if (marks.size === 0) return list;
 
-  return {
-    ...list,
-    tasks: list.tasks.map((task) => {
-      const kept = marks.get(task.id);
+  const tasks = list.tasks.map((task) => {
+    const kept = marks.get(task.id);
 
-      return kept === undefined ? task : { ...task, ...markedAs(kept.mark, task, kept.at) };
-    }),
-  };
+    return kept === undefined ? task : markedTask(task, kept);
+  });
+
+  return tasks.every((task, place) => task === list.tasks[place]) ? list : { ...list, tasks };
 }
 
 /** The fixture's tasks laid over the list held beside the document, or the list held where it is staged already, its agents on the choices the run made and its rows on the read marks it set: the tasks slice, and the lists beside it. */
@@ -330,12 +345,12 @@ function keepMove(
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
-  if (kind !== ACT_KIND.AGENTS_PULL_REQUEST_ACTION) return;
+  if (kind !== ACT_KIND.PULL_REQUESTS_ACTION) return;
   // SAFETY: the payload is the kind's, which the guard above names.
-  const { number, request } = payload as PortActPayload<typeof ACT_KIND.AGENTS_PULL_REQUEST_ACTION>;
+  const { number, request } = payload as PortActPayload<typeof ACT_KIND.PULL_REQUESTS_ACTION>;
   const move = pullRequestMoveOf(request);
 
-  if (number === undefined || move === undefined) return;
+  if (move === undefined) return;
   MOVES.set(state, new Map(MOVES.get(state) ?? NO_MOVES).set(number, move));
   stageFixture(state);
 }
@@ -413,7 +428,7 @@ const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>>
   [ACT_KIND.FEEDBACK_SEND, () => ({ delivered: false })],
   // Note that a change to a pull request is refused as GitHub refuses one, its words beside, so the pull request page shows its write note.
   [
-    ACT_KIND.AGENTS_PULL_REQUEST_ACTION,
+    ACT_KIND.PULL_REQUESTS_ACTION,
     () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.REFUSED, words: PULL_REQUEST_REFUSED_WORDS }),
   ],
 ]);

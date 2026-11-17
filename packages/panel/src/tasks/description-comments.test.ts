@@ -1153,6 +1153,34 @@ test("a finger's arrival on a block shows no button, so iOS spends no tap on one
   assert.ok(button() !== null, "the tap shows it");
 });
 
+test("the pointer in a gutter beside the column shows the button of the block level with it, as Notion's does", () => {
+  const { container } = wide(() => drawn("page", []));
+
+  const paragraph =
+    [...container.querySelectorAll("p")].find((p) =>
+      p.textContent?.startsWith("Admins can withdraw"),
+    ) ?? assert.fail("the paragraph");
+
+  const body = container.querySelector(".description-body") ?? assert.fail("the column");
+  const gutter = body.parentElement ?? assert.fail("the room around the column");
+  // Note that jsdom lays nothing out, so the column stands at a box of its own and the paragraph is what it draws at every height.
+  vi.spyOn(body, "getBoundingClientRect").mockReturnValue(new DOMRect(200, 0, 720, 1000));
+  Object.defineProperty(document, "elementsFromPoint", {
+    configurable: true,
+    value: () => [paragraph, body],
+  });
+
+  try {
+    act(() => {
+      gutter.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientY: 300 }));
+    });
+    assert.ok(container.querySelector(".comment-block-button button"), "the gutter shows it");
+  } finally {
+    Reflect.deleteProperty(document, "elementsFromPoint");
+    vi.restoreAllMocks();
+  }
+});
+
 test("a thread being started goes on a press away and on Esc, and its words come back as it is started on the same words again", () => {
   const { container } = wide(() => drawn("page", []));
 
@@ -1414,7 +1442,7 @@ test("the line a thread's ask leaves is not drawn, since the mention in its word
           actor: DESCRIPTION_COMMENT_ACTOR.MEMBER,
           by: { userId: "u-dean", name: "Dean Stratakos" },
         },
-        asked: { actor: DESCRIPTION_COMMENT_ACTOR.APP },
+        asked: { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: AGENT.id },
         at: 2,
       },
     ],

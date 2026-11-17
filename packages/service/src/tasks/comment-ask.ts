@@ -9,7 +9,6 @@ import {
   type DescriptionCommentAsked,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_CHANNEL } from "@repo/wire";
 import { Effect, Option } from "effect";
@@ -64,11 +63,9 @@ export interface CommentAsk {
   readonly page?: { readonly title: string; readonly newestVersion: number };
 }
 
-/** Who wrote an entry, as the words handed over name them: the app's own name among them only in a thread written before the task's own assistant was gone. */
+/** Who wrote an entry, as the words handed over name them. */
 function writerName(entry: DescriptionCommentThread["entries"][number]): string {
   switch (entry.writer.actor) {
-    case DESCRIPTION_COMMENT_ACTOR.APP:
-      return PRODUCT_NAME;
     case DESCRIPTION_COMMENT_ACTOR.AGENT:
       return "An agent";
     case DESCRIPTION_COMMENT_ACTOR.MEMBER:

@@ -49,14 +49,14 @@ import { logStoreFailure } from "../http/store-failure.js";
  * developer having rewritten it meanwhile among the reasons, answers as a
  * conflict with the text as it stands and nothing saved, so a restructure
  * never lands half; a text past the description's bound is refused before anything
- * is written. Every save names its writer, the
- * notetaker on its call, a coding agent, or the developer, and a save that
+ * is written. Every save names its writer, a
+ * coding agent or the developer, and a save that
  * changed the text is kept as a revision under that writer
  * (`description-revisions.ts`), in the same transaction, so the description and its history
  * never disagree. A coding agent's save that took any note is also written
  * into the task's journal with the notes as taken, which is what the brain
  * is told of what each agent changed. Who last changed each section,
- * which tells the brain and the notetaker the sections the developer
+ * which tells the agents the sections the developer
  * wrote, is read back off those revisions. The developer's edit is the
  * same save with their text in place of notes, laid over what the text holds
  * now where we wrote meanwhile, or answered as a conflict with nothing
@@ -75,9 +75,8 @@ import { logStoreFailure } from "../http/store-failure.js";
  * save is `saveDescriptionText`'s single update over the row that stands, so a task
  * deleted meanwhile answers as gone and is not written back into being, and
  * a save that fails answers as not saved with the prior text standing. Every
- * outcome is a result, never a failure: an unsaved change leaves the
- * notetaker's lines for its next run, over the text as it then stands, and a
- * coding agent retries from the text its conflict answered.
+ * outcome is a result, never a failure: a coding agent retries an unsaved
+ * change from the text its conflict answered.
  */
 
 /** The account and task a task call writes, as the service bound them. */
@@ -276,17 +275,14 @@ function reachedStore<A>(
   );
 }
 
-/** The notetaker off any call: a writer a test, or a run with no call to name, saves as. */
-const NOTETAKER: DescriptionWriter = { actor: DESCRIPTION_ACTOR.NOTETAKER };
-
 /** The developer, as the writer of every edit the window sends. */
 const DEVELOPER: DescriptionWriter = { actor: DESCRIPTION_ACTOR.DEVELOPER };
 
-/** Notes already read under the notes' schema, taken into the description the service bound, kept as a revision under their writer, the notetaker where none is named. */
+/** Notes already read under the notes' schema, taken into the description the service bound, kept as a revision under their writer. */
 export function saveNotes(
   binding: DescriptionBinding,
   notes: readonly DescriptionNote[],
-  writer: DescriptionWriter = NOTETAKER,
+  writer: DescriptionWriter,
 ): Effect.Effect<DescriptionSaveResult, never, DatabaseServices> {
   const take = (stored: StoredTask, now: number) =>
     Effect.sync((): Result.Result<TextTaken, NotesConflict> => {

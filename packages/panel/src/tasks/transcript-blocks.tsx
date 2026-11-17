@@ -2162,7 +2162,7 @@ const SUBAGENT_HINT = "Open the subagent";
 /**
  * A subagent's row on a coding agent's tab, running
  * or finished: one line drawn as a call's row is, in its muted ink, wearing
- * the mark of the harness its model runs in (the worker's robot where the
+ * the mark of the harness its model runs in (the worker's hard hat where the
  * model is unknown), the job in the full ink as a call's verb is, fading
  * where the line cuts it, the model and effort it runs on as every pair is
  * drawn (`model-label.tsx`), and the mark a call's

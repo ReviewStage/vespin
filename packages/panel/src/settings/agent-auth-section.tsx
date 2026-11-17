@@ -244,7 +244,7 @@ const HARNESS = {
     ),
     keyName: "Cursor",
     keyNoun: "a Cursor key",
-    keyUrl: "https://cursor.com/dashboard?tab=integrations",
+    keyUrl: "https://cursor.com/dashboard/api",
     keySite: "Cursor's dashboard",
     keyExample: "crsr_…",
     keyLoss: "Cursor agents won't start without a Cursor API key.",

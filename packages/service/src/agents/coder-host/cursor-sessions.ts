@@ -110,10 +110,16 @@ function apiKeyCredential(key: Redacted.Redacted<string>): RunnerCredential {
   };
 }
 
-/** The agent's model as Cursor's SDK takes it, read against the Cursor models its starter is offered; refused where it is none of them. */
+/** The agent's model, on its window, as Cursor's SDK takes it, read against the Cursor models its starter is offered; refused where it is none of them. */
 const selectionOf = Effect.fnUntraced(function* (agent: Agent) {
   const cursorModels = yield* (yield* CursorModelCatalog).forAccount(agent.userId);
-  const selection = cursorModelSelectionOf(cursorModels, agent.model, agent.effort);
+
+  const selection = cursorModelSelectionOf(
+    cursorModels,
+    agent.model,
+    agent.effort,
+    agent.contextWindow,
+  );
 
   if (selection === undefined) return yield* new LaunchRefused({ reason: "model" });
 

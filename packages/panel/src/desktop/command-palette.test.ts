@@ -1747,7 +1747,7 @@ test("Search lists the pinned tasks first, the newest pinned first whenever each
   ]);
 });
 
-test("a task Vespin or a coding agent made says who in its detail and is found by it, but wears who is on it rather than its maker", () => {
+test("a task a coding agent made says who in its detail and is found by it, but wears who is on it rather than its maker", () => {
   const dean = { userId: "user-dean", name: "Dean Stratakos" };
 
   // Note that each is started after the next, as the list the host hands lists them newest started first.
@@ -1769,7 +1769,6 @@ test("a task Vespin or a coding agent made says who in its detail and is found b
       me: dean.userId,
       tasks: [
         task("Invite emails", 3, { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" }),
-        task("Audit log export", 2, { actor: DESCRIPTION_ACTOR.NOTETAKER }),
         task("Rate limits", 1),
       ],
     }),
@@ -1783,12 +1782,8 @@ test("a task Vespin or a coding agent made says who in its detail and is found b
         null,
     );
 
-  assert.deepEqual(rows(), [
-    "Invite emails · relay · by Agent",
-    "Audit log export · relay · by Vespin",
-    "Rate limits · relay",
-  ]);
-  assert.deepEqual(marks(), [null, null, null]);
+  assert.deepEqual(rows(), ["Invite emails · relay · by Agent", "Rate limits · relay"]);
+  assert.deepEqual(marks(), [null, null]);
   type("agent");
   assert.deepEqual(rows(), ["Invite emails · relay · by Agent"]);
 });

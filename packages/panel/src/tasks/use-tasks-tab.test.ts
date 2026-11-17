@@ -302,7 +302,7 @@ const SENT_ON_MUTATIONS: readonly PortActKind[] = [
   ACT_KIND.AGENTS_RENAME,
   ACT_KIND.AGENTS_ARCHIVE,
   ACT_KIND.AGENTS_DELETE,
-  ACT_KIND.CHAPTERS_GENERATE,
+  ACT_KIND.CHAPTERS_REPOSITORY_GENERATE,
   ACT_KIND.AGENTS_INBOX_ANSWER,
   ACT_KIND.AGENTS_INBOX_MESSAGE,
   ACT_KIND.AGENTS_INBOX_START,
@@ -710,11 +710,16 @@ function _undoButton(): HTMLButtonElement {
   return undo;
 }
 
-/** One revision as the history lists it, written by the app on a call. */
+/** One revision as the history lists it, written by a teammate. */
 function revisionLine(seq: number) {
   return {
     seq,
-    lastEdit: { actor: DESCRIPTION_ACTOR.NOTETAKER, at: 10 * seq, duringCall: false },
+    lastEdit: {
+      actor: DESCRIPTION_ACTOR.DEVELOPER,
+      by: { userId: "user-charles", name: "Charles Pan" },
+      at: 10 * seq,
+      duringCall: false,
+    },
     startedAt: 10 * seq,
     changes: 2,
   };
@@ -1138,7 +1143,7 @@ test("⇧⌘T asks first while a page stands unsaved work, and reopens once the 
   assert.deepEqual(panel().strip, [PULLS]);
 });
 
-test("a task none of whose tabs was viewed shows its agents' last tab, opens on its agents again across a launch though left on its details, and shows the tab viewed before its last agent's once that closes", async () => {
+test("a task none of whose tabs was viewed shows its agents' last tab, opens across a launch on its details where it was left on them, and shows the tab viewed before its last agent's once that closes", async () => {
   const listed = withAgents([RUNNING_AGENT]);
   const tab = mount({ shown: true, tasks: listed });
   await settle();
@@ -1158,7 +1163,11 @@ test("a task none of whose tabs was viewed shows its agents' last tab, opens on 
   const launched = mount({ shown: true, tasks: listed });
   await settle();
   const again = () => launched.control().mainTabs;
-  assert.deepEqual(again().tab, agent, "a launch opens the task on its agents, its details let go");
+  assert.equal(
+    again().tab,
+    MAIN_TAB.OVERVIEW,
+    "a launch opens the task as it was left, on its details",
+  );
 
   act(() => again().onChoose(agent));
   act(() => again().onClose(agent));
@@ -1304,7 +1313,7 @@ it.effect(
     }),
 );
 
-test("in a narrow room a task opened from a list lands on its plan, its Overview with the side panel shut over it whichever tab it last showed, and on the desktop's width it stands shut once a plan with no tab was passed through", () => {
+test("in a narrow room a task opened from a list lands on its plan, its Overview with the side panel shut over it whichever tab it last showed, and on the desktop's width it opens with the panel as it was left there", () => {
   for (const room of [SHELL_ROOM.NARROW, SHELL_ROOM.WIDE]) {
     window.localStorage.clear();
 
@@ -1323,16 +1332,12 @@ test("in a narrow room a task opened from a list lands on its plan, its Overview
       assert.equal(tab.control().sidePanel.open, false, "narrow shuts the panel");
       assert.equal(tab.control().mainTabs.tab, MAIN_TAB.OVERVIEW, "over the task's Overview");
     } else {
-      assert.equal(
-        tab.control().sidePanel.open,
-        false,
-        "a plan with no tab passed through shuts it",
-      );
+      assert.equal(tab.control().sidePanel.open, true, "the panel stands as it was left there");
     }
   }
 });
 
-test("a task opened from a list, gone back to from the sidebar, or named by a chip opens on the agent waiting on the developer, past the one at work", () => {
+test("a task opened from a list, gone back to from the sidebar, or named by a chip opens on the agent waiting on the developer, past the one at work, until a tab viewed on it is opened again as it was left", () => {
   const WAITING = "1b2c3d4e-5f60-4718-8293-a4b5c6d7e8f9";
   // One agent at work and one resting, the resting one's thread waiting on the developer, as the list followed live holds them.
   const waitingRow = { ...row(TASK.id, 1), agents: { total: 2, working: 1, pullRequestTotal: 0 } };
@@ -1389,6 +1394,26 @@ test("a task opened from a list, gone back to from the sidebar, or named by a ch
     tab.control().mainTabs.tab,
     agentTab(WAITING),
     "from the sidebar, the agent waiting",
+  );
+
+  act(() => tab.control().mainTabs.onChoose(agentTab(AGENT_ID)));
+  tab.stand({ tasks: elsewhere([waitingRow]) });
+  act(() => tab.control().onResume(TASK.id));
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
+  assert.deepEqual(
+    tab.control().mainTabs.tab,
+    agentTab(AGENT_ID),
+    "gone back to, the tab last viewed there, though an agent waits",
+  );
+
+  act(() => tab.control().mainTabs.onChoose(MAIN_TAB.OVERVIEW));
+  tab.stand({ tasks: elsewhere([waitingRow]) });
+  act(() => tab.control().onResume(TASK.id));
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
+  assert.equal(
+    tab.control().mainTabs.tab,
+    MAIN_TAB.OVERVIEW,
+    "its details too, where it was left on them",
   );
 });
 
@@ -4396,7 +4421,7 @@ test("a task started, with an agent or without, leaves a hidden side panel hidde
   assert.equal(tab.control().sidePanel.open, false, "the plan does not open beside the agent");
 });
 
-test("New task's agent opens alone, no plan beside it, and the task left draws no panel until asked, since a tab standing opens none", async () => {
+test("New task's agent opens alone, no plan beside it, and the task left opens again with its panel as it was left", async () => {
   const started = { ...RUNNING_AGENT, taskId: OTHER_TASK_ID };
 
   const tab = mount(
@@ -4416,7 +4441,7 @@ test("New task's agent opens alone, no plan beside it, and the task left draws n
 
   tab.stand({ tasks: OPEN });
   await settle();
-  assert.deepEqual(panelOf(tab), { open: false, tab: FILE }, "the task left keeps its tab, shut");
+  assert.deepEqual(panelOf(tab), { open: true, tab: FILE }, "the task left opens on its tab again");
 });
 
 test("New task's agent stands on its task before the task's agents or its transcript are read", async () => {
@@ -4738,7 +4763,7 @@ test("a task with no agent opens on a new agent's draft, which closes once left 
   assert.equal(tab.control().agents.draft, undefined, "the empty draft left is let go");
   assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW]);
 
-  // Left for another task, the task opens on a new agent's draft again on coming back, its details let go.
+  // Left for another task on its draft, the task opens on a new agent's draft again on coming back, as it was left.
   openDraft(tab);
   tab.stand({ tasks: { ...OPEN, activeTaskId: OTHER_TASK_ID } });
   await settle();
@@ -4752,12 +4777,14 @@ test("a task with no agent opens on a new agent's draft, which closes once left 
   // And one left for another place, as Settings hides the tasks, from the details it was opened over.
   act(() => column().onChoose(MAIN_TAB.OVERVIEW));
   await settle();
-  openDraft(tab);
+  const left = openDraft(tab);
   tab.stand({ shown: false });
   await settle();
   tab.stand({ shown: true });
   await settle();
-  assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW], "the draft left for Settings is let go");
+  const fresh = tab.control().agents.draft;
+  assert.ok(fresh !== undefined && fresh.id !== left.id, "the draft left for Settings is let go");
+  assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, draftTab(fresh.id)], "and a new one stands");
 
   const written = openDraft(tab);
   act(() => tab.control().agents.onDraftHeld((now) => ({ ...now, text: "Fix login." })));

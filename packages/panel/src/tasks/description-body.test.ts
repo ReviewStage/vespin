@@ -419,9 +419,9 @@ test("the time opens the version history, on the description as it stands or on 
 });
 
 test("a section's byline shows only the writer's face and a few letters of time, so it keeps to its heading's end, and its card says the rest", async () => {
-  const byApp = { actor: DESCRIPTION_ACTOR.NOTETAKER, duringCall: false, by: CHARLES };
+  const byCharles = { actor: DESCRIPTION_ACTOR.DEVELOPER, duringCall: false, by: CHARLES };
   const lastYear = new Date(new Date().getFullYear() - 1, 9, 1).getTime();
-  const old = await draw(editedAs(byApp, lastYear));
+  const old = await draw(editedAs(byCharles, lastYear));
   assert.equal(
     shownWords(old.querySelector(".description-unit-byline")),
     " Oct 1",
@@ -429,13 +429,13 @@ test("a section's byline shows only the writer's face and a few letters of time,
   );
   act(() => roots.at(-1)?.unmount());
 
-  const view = await draw(editedAs(byApp), { readerId: DEAN.userId });
+  const view = await draw(editedAs(byCharles), { readerId: DEAN.userId });
   const byline = view.querySelector(".description-unit-byline");
   assert.equal(shownWords(byline), " now");
   assert.equal(byline?.querySelectorAll(".actor-mark").length, 1);
   assert.match(
     cardOf(view, "[data-actor-ref]", ".description-unit-byline").textContent ?? "",
-    /^Vespinnow/u,
+    /Charles Pan.*Edited Goal · now$/u,
   );
 });
 
@@ -447,7 +447,7 @@ test("a teammate's card says who they are and what they last changed in the desc
     lastEdit: { actor: DESCRIPTION_ACTOR.DEVELOPER, by: CHARLES, at, duringCall: false },
     sectionEdits: [
       { section: "Goal", actor: DESCRIPTION_ACTOR.DEVELOPER, by: CHARLES, at, duringCall: false },
-      { section: "Rollout", actor: DESCRIPTION_ACTOR.NOTETAKER, by: DEAN, at, duringCall: false },
+      { section: "Rollout", actor: DESCRIPTION_ACTOR.DEVELOPER, by: DEAN, at, duringCall: false },
       { section: "Risks", actor: DESCRIPTION_ACTOR.DEVELOPER, by: CHARLES, at, duringCall: false },
     ],
   };
@@ -459,25 +459,6 @@ test("a teammate's card says who they are and what they last changed in the desc
     assert.match(card.textContent ?? "", /Charles Pancharles@example\.com · Member/u),
   );
   assert.match(card.textContent ?? "", /Edited Goal and Risks · now$/u);
-});
-
-test("Vespin's card says when it wrote, and what it wrote", async () => {
-  const at = Date.now();
-  const byApp = { actor: DESCRIPTION_ACTOR.NOTETAKER, by: CHARLES, at, duringCall: false };
-
-  const task: Task = {
-    ...TASK,
-    lastEdit: byApp,
-    sectionEdits: [
-      { section: "Goal", ...byApp },
-      { section: "Risks", ...byApp },
-    ],
-  };
-
-  const card = cardOf(await draw(task, { readerId: DEAN.userId }));
-
-  assert.ok(card.querySelector('[data-actor-card="app"]'), "Vespin's card hangs");
-  assert.match(card.textContent ?? "", /^VespinnowEdited Goal and Risks$/u);
 });
 
 test("an agent the plan's list holds wears its harness, hangs its tab's card, and opens its tab; one it does not hold is named alone", async () => {
@@ -527,8 +508,9 @@ test("the sections changed since the last look are counted beside a face for eac
       { section: "Goal", actor: DESCRIPTION_ACTOR.DEVELOPER, by: CHARLES, at, duringCall: false },
       {
         section: "Rollout",
-        actor: DESCRIPTION_ACTOR.NOTETAKER,
-        by: CHARLES,
+        actor: DESCRIPTION_ACTOR.AGENT,
+        label: "Fix auth flow",
+        agentId: AGENT.id,
         at,
         duringCall: false,
       },
@@ -551,9 +533,12 @@ test("the sections changed since the last look are counted beside a face for eac
     [...line.querySelectorAll(".actor-stack .actor-mark")].map((mark) =>
       mark.getAttribute("data-kind"),
     ),
-    ["person", "app"],
+    ["person", "agent"],
   );
-  assert.equal(line.querySelector(".ui-visually-hidden")?.textContent, "Charles Pan, Vespin");
+  assert.equal(
+    line.querySelector(".ui-visually-hidden")?.textContent,
+    "Charles Pan, Fix auth flow",
+  );
   act(() => line.querySelector("button")?.click());
   assert.equal(dismissed, 1);
 });

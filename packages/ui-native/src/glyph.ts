@@ -75,7 +75,7 @@ export const GLYPH = {
   WORKSPACE: lucide(LUCIDE_SYMBOL.BUILDING_COMPLEX),
   MAKE_OWNER: lucide(LUCIDE_SYMBOL.CROWN),
   // Things.
-  AGENT: lucide(LUCIDE_SYMBOL.BOT),
+  AGENT: lucide(LUCIDE_SYMBOL.HARD_HAT),
   PAGE: lucide(LUCIDE_SYMBOL.APP_WINDOW),
   COMMENT: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE),
   THREAD: lucide(LUCIDE_SYMBOL.MESSAGES_SQUARE),
@@ -284,14 +284,19 @@ const catalogLucide = (key: string): Glyph => key as Glyph;
 /**
  * The glyph a section leads with, as the panel's sidebar draws its icon: the
  * Lucide glyph its member chose, any of the picker's, or the folder, the
- * picker's first, for an emoji or no icon, since a sidebar row always leads
- * with a glyph. Note that a glyph's color is left to the panel, which alone
- * draws it.
+ * picker's first, for no icon, since a sidebar row always leads with a
+ * glyph, and for an emoji, which `sectionEmoji` draws in the glyph's place.
+ * Note that a glyph's color is left to the panel, which alone draws it.
  */
 export function sectionGlyph(icon: TaskSectionIcon | undefined): Glyph {
   if (icon === undefined || icon.kind === TASK_SECTION_ICON_KIND.EMOJI) return GLYPH.FOLDER;
 
   return catalogLucide(glyphKey(icon.glyph));
+}
+
+/** The emoji a section leads with, drawn as words in its glyph's place, as the panel's sidebar draws it; none for a glyph or no icon. */
+export function sectionEmoji(icon: TaskSectionIcon | undefined): string | undefined {
+  return icon?.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon.emoji : undefined;
 }
 
 /** A name the asset catalog holds, which begins with a capital. */

@@ -48,7 +48,7 @@ import {
   runLookAtThreadPicture,
 } from "../../tasks/picture-look.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
-import { CODER, CODER_REFUSAL } from "./bounds.js";
+import { CODER_REFUSAL } from "./bounds.js";
 import {
   DESCRIPTION_EDIT_REFUSAL,
   type DescriptionEditResult,
@@ -317,7 +317,7 @@ export function runAgentShowPage(
     const binding = {
       userId: admitted.target.userId,
       taskId,
-      sandbox: { door: sandbox, checkout: CODER.CHECKOUT_PATH },
+      sandbox,
     };
 
     return yield* runShowPage(binding, input, {
@@ -336,5 +336,5 @@ export function runAgentShowMedia(
   input: UnparsedWireValue,
   sandbox: InboxSandboxDoor,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
-  return runShowMedia({ target: admitted.target, sandbox, checkout: CODER.CHECKOUT_PATH }, input);
+  return runShowMedia({ target: admitted.target, sandbox }, input);
 }

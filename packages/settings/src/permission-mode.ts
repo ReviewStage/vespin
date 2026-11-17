@@ -5,18 +5,14 @@
  * offered most asking first and Full access last, as Codex orders them. Each
  * harness takes the modes `@repo/features`'s `modesOf` names, so the default
  * reaches a new agent only where its harness takes it; one whose harness
- * does not starts on Full access, and its menu says why
- * (`askMissingWords`). The account's, carried to every Mac and the web, and
- * read by the service as an agent starts.
+ * does not starts on Full access. The account's, carried to every Mac and
+ * the web, and read by the service as an agent starts.
  */
 
 import {
   AGENT_PERMISSION_MODE,
   type AgentPermissionMode,
 } from "@repo/features/agent-approval-wire";
-import { runtimeModelRule } from "@repo/features/agent-runtime-models";
-import { modeTakenOn, runtimeTakesMode } from "@repo/features/agent-runtime-modes";
-import type { AgentRuntime } from "@repo/features/agent-wire";
 import type { UnparsedWireValue } from "@repo/wire";
 import { Schema } from "effect";
 
@@ -52,28 +48,6 @@ export const PERMISSION_MODE_WORDS = {
   APPLIES: "Takes effect from the next turn.",
   CHANGE_FAILED: "The permission mode could not be changed.",
 } as const;
-
-/**
- * What a mode menu says where the agent's harness never asks for approval,
- * as Cursor's: why Ask for approval is not offered, or, where the member's
- * default was Ask and a new agent starts on another mode, which one it
- * starts on instead; none where the harness asks.
- */
-export function askMissingWords(
-  runtime: AgentRuntime | undefined,
-  defaultDropped = false,
-): string | undefined {
-  if (runtime === undefined || runtimeTakesMode(runtime, AGENT_PERMISSION_MODE.ASK)) {
-    return undefined;
-  }
-
-  const cannot = `${runtimeModelRule(runtime).name} agents can't ask for approval`;
-  const startsOn = PERMISSION_MODE_LABEL[modeTakenOn(runtime, AGENT_PERMISSION_MODE.ASK)];
-
-  return defaultDropped
-    ? `${cannot}, so this one starts on ${startsOn}.`
-    : `${cannot}, so ${PERMISSION_MODE_LABEL[AGENT_PERMISSION_MODE.ASK]} isn't offered.`;
-}
 
 const readsPermissionMode = Schema.is(Schema.Literals(PERMISSION_MODE_LIST));
 

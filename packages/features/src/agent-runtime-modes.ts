@@ -6,8 +6,7 @@
  * Auto-review, but never Ask, since its SDK has no one to ask. A runtime's
  * modes are one row of `RUNTIME_MODES`, so a new harness says which it takes
  * before it builds. An agent whose chosen mode its harness does not take
- * starts on Full access (`modeTakenOn`), and a menu offering its modes says
- * why Ask is not among them (`@repo/settings`'s `askMissingWords`).
+ * starts on Full access (`modeTakenOn`).
  */
 
 import { AGENT_PERMISSION_MODE, type AgentPermissionMode } from "./agent-approval-wire.js";

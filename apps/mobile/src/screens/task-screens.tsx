@@ -7,13 +7,18 @@ import type { DescriptionCommentThread } from "@repo/features/description-commen
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { INBOX_LINE, INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
-import { iosAgentRoute, iosAppRouteOf, iosPullRequestRoute } from "@repo/features/ios-app-links";
+import {
+  iosAgentRoute,
+  iosAppRouteOf,
+  iosRepositoryPullRequestRoute,
+} from "@repo/features/ios-app-links";
 import { taskActivity } from "@repo/features/ios-system-activity";
 import {
   LINK_DESTINATION,
   type LinkDestination,
   linkOf,
   linkWorkspaceStep,
+  pullRequestAddressOf,
   readLink,
   taskLinkStep,
   taskNumberOf,
@@ -37,6 +42,7 @@ import {
   TASK_RELATION_ORDER,
   TASK_RELATION_VERBS,
 } from "@repo/features/task-relation-model";
+import type { TaskSectionIcon } from "@repo/features/task-section-wire";
 import { MOVE_TO_SECTION, REMOVE_FROM_SECTION } from "@repo/features/task-sections-model";
 import {
   NO_ASSIGNEE_WORDS,
@@ -55,7 +61,6 @@ import {
   taskTreeCollections,
 } from "@repo/features/task-tree-model";
 import {
-  TASK_PRIORITY,
   TASK_PRIORITY_ORDER,
   TASK_RELATION_KIND,
   TASK_STATUS,
@@ -111,12 +116,15 @@ import {
   PATH_PART,
   PRIORITY_MARK_SYMBOL,
   PRIORITY_MARK_TONE,
+  QUIET_ROW_QUESTION,
   RelationRow,
   ROW_ACTION_TONE,
   type RowAction,
+  type RowAsker,
   RowForEach,
   RowList,
   type RowMenuGroup,
+  type RowQuestion,
   type RowSubmenu,
   type RowSwipe,
   runsOnGlyph,
@@ -124,6 +132,7 @@ import {
   SplitView,
   STATUS_MARK_SYMBOL,
   type StandingMenus,
+  sectionEmoji,
   sectionGlyph,
   type TaskFold,
   TaskHead,
@@ -132,6 +141,7 @@ import {
   UNDER_SPLIT_SCREEN,
   useColors,
   useMinute,
+  useRowAsker,
   useThreeColumns,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -181,6 +191,7 @@ import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import { useDevicePlatform } from "../tasks/use-start.js";
 import {
   type ReadListing,
+  type RowAsks,
   type StatusQuestion,
   type TaskAgentLine,
   type TaskOverview,
@@ -357,6 +368,22 @@ function settleSwipes(
 }
 
 /**
+ * How a section leads its choice in Move to section's menu, as the panel's
+ * menu leads each with its icon: its glyph, or its emoji set before its
+ * name, since a menu item's image takes a symbol alone.
+ */
+function sectionChoiceLead(
+  title: string,
+  icon: TaskSectionIcon | undefined,
+): { readonly label: string; readonly symbol?: Glyph | undefined } {
+  const emoji = sectionEmoji(icon);
+
+  return emoji === undefined
+    ? { label: title, symbol: sectionGlyph(icon) }
+    : { label: `${emoji} ${title}` };
+}
+
+/**
  * A task's Move to section as a menu, as the panel's offers it: the member's
  * sections of its workspace, the one it stands in checked, a press putting it
  * on top of another, and Remove from section under them while it stands in
@@ -371,8 +398,8 @@ function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | u
     label: MOVE_TO_SECTION,
     symbol: GLYPH.MOVE,
     choices: placing.sections.map((section) => ({
-      label: section.title,
-      symbol: sectionGlyph(section.icon),
+      ...sectionChoiceLead(section.title, section.icon),
+      id: section.id,
       on: section.id === standing,
       onPress: () => {
         if (section.id !== standing) placing.moveToSection(task.id, section.id);
@@ -504,6 +531,7 @@ type RowActsResult = {
   readonly leadingActions: readonly RowSwipe[];
   readonly menuActions: readonly RowAction[];
   readonly menuGroups: readonly RowMenuGroup[];
+  readonly question: RowQuestion;
 };
 
 /**
@@ -518,7 +546,9 @@ type RowActsResult = {
  * system's name alert, and Copy link, which raises the share sheet; then
  * More, holding its repository, its version history and Move to workspace
  * where offered, and Open in browser; and Permanently delete alone, last,
- * which asks first.
+ * which asks first. What asks first, Done or Canceled where it stops agents
+ * and Permanently delete, asks by the row pressed (`asks`), as Mail stands
+ * its question by the message.
  * Priority and assignee are set from the chips on the task's page
  * (`standingMenus`).
  */
@@ -526,12 +556,14 @@ function rowActs(
   task: TaskSummary,
   unread: boolean,
   listing: TasksListing,
+  asks: RowAsks,
   openRelation: OpenRelation,
 ): RowActsResult {
   const pinned = task.pinnedAt !== undefined;
 
   return {
-    trailingActions: settleSwipes(task, listing.setStatus),
+    question: asks.question(task.id),
+    trailingActions: settleSwipes(task, asks.setStatus),
     leadingActions: [
       {
         label: pinned ? WORDS.UNPIN : WORDS.PIN,
@@ -599,7 +631,7 @@ function rowActs(
             label: WORDS.DELETE,
             symbol: GLYPH.DELETE,
             tone: ROW_ACTION_TONE.DESTRUCTIVE,
-            onPress: () => listing.askDelete(task),
+            onPress: () => asks.askDelete(task),
           },
         ],
       },
@@ -628,7 +660,7 @@ function taskPreview(task: TaskSummary, listing: TasksListing) {
   );
 }
 
-/** The question Done or Canceled asks first while a task's agents work, as the system's alert: every list of tasks draws it, the Search tab's among them. */
+/** A task's question as a page raised it, Done or Canceled while its agents work or Permanently delete, as the system asks it: every list of tasks draws it, the Search tab's among them. One a row raised stands by that row instead (`RowAsks`). */
 export function StatusQuestionAsk({ question }: { readonly question: StatusQuestion }) {
   return (
     <ConfirmAsk
@@ -636,7 +668,7 @@ export function StatusQuestionAsk({ question }: { readonly question: StatusQuest
       message={question.words.body}
       act={question.words.verb}
       destructive
-      presented={question.presented}
+      presented={question.presented && question.asker === undefined}
       onAct={question.confirm}
       onDismiss={question.dismiss}
     />
@@ -681,13 +713,13 @@ export function TaskListRow({
 }) {
   const look = listing.lookOf(task);
   const openRelation = useOpenRelation();
+  const asker = useRowAsker();
 
   return (
     <TaskRow
       id={task.id}
       name={task.name}
       status={task.status ?? TASK_STATUS.TODO}
-      priority={task.priority ?? TASK_PRIORITY.NONE}
       unread={look.unread}
       finished={taskFinished(task)}
       needsYou={look.needsYou}
@@ -695,7 +727,7 @@ export function TaskListRow({
       blocked={task.blocked === true}
       taskKey={keyed ? keyOf(task, listing.workspace) : undefined}
       depth={depth}
-      {...rowActs(task, look.unread, listing, openRelation)}
+      {...rowActs(task, look.unread, listing, listing.rowAsks(asker), openRelation)}
       preview={taskPreview(task, listing)}
       link={
         listing.workspace === undefined
@@ -950,6 +982,7 @@ function GroupSection({
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
       glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
+      emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
       repository={headPicture(group)}
       count={group.rows.length}
       foldable
@@ -1167,6 +1200,7 @@ export function useSidebarTasks(): SidebarTasks {
         id={group.key}
         title={group.title ?? listing.tree.tasksHead}
         symbol={collectionGlyph(group)}
+        emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
         count={group.rows.length}
         onDropLink={dropOnto(group, listing)}
       />
@@ -1670,54 +1704,66 @@ function agentMenuActs(
       ];
 }
 
-type UseAgentArchiveAskResult = {
-  readonly archive: (agentId: string) => void;
-  readonly ask: ReactElement;
-};
+/** Archive on agents' rows, asked first by the row pressed. */
+export interface AgentArchiving {
+  /** Raises the question for an agent by the drawn row `asker` names. */
+  readonly archive: (agentId: string, asker: RowAsker) => void;
+  /** The question standing by the drawn row `asker` names for an agent, `QUIET_ROW_QUESTION` where it raised none about it. */
+  readonly question: (agentId: string, asker: RowAsker) => RowQuestion;
+}
+
+/** An agent's Archive question as it stands: the agent, the row that raised it, and whether it is shown. */
+interface AskedArchive {
+  readonly agentId: string;
+  readonly asker: RowAsker;
+  readonly presented: boolean;
+}
 
 /**
- * Archive on an agent's row, asked first: `archive` raises the question for
- * an agent, and `ask` is the system's alert that asks it, which the screen
- * stands beside its `<Screen>`, as every list's questions stand. Note that
- * the question reads where the agent stands now, as the agent page's menu
- * asks (`useArchiveAsk`), raised at once on where the list holds it and
- * checked afresh as its act is pressed, because one that starts working
- * while the alert is up would otherwise be stopped and archived without a
- * word of it.
+ * Archive on an agent's row, asked first by the row pressed, as Mail stands
+ * its question by the message: `archive` raises the question for an agent
+ * by its row, and `question` is what stands by that row. Note that the
+ * question reads where the agent stands now, as the agent page's menu asks
+ * (`useArchiveAsk`), raised at once on where the list holds it and checked
+ * afresh as its act is pressed, because one that starts working while the
+ * question is up would otherwise be stopped and archived without a word of
+ * it.
  */
-export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
+export function useAgentArchiveAsk(): AgentArchiving {
   const acts = useAgentRowActs();
-  const [asked, setAsked] = useState<{ readonly agentId: string; readonly presented: boolean }>();
+  const [asked, setAsked] = useState<AskedArchive>();
   const { question, ask: readAfresh, answered } = useArchiveAsk(asked?.agentId ?? "");
   const letGo = () => setAsked((was) => (was === undefined ? was : { ...was, presented: false }));
 
   return {
-    archive: (agentId) => {
+    archive: (agentId, asker) => {
       // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
       letGo();
       void readAfresh(agentId).then((stands) => {
-        if (stands) setAsked({ agentId, presented: true });
+        if (stands) setAsked({ agentId, asker, presented: true });
       });
     },
-    ask: (
-      <ConfirmAsk
-        title={question.title}
-        message={question.message}
-        act={question.act}
-        destructive
-        presented={asked?.presented === true}
-        onAct={() => {
-          if (asked === undefined || !asked.presented) return;
-          const { agentId } = asked;
+    question: (agentId, asker) => {
+      if (asked === undefined || asked.agentId !== agentId || asked.asker !== asker) {
+        return QUIET_ROW_QUESTION;
+      }
+
+      return {
+        title: question.title,
+        message: question.message,
+        act: question.act,
+        presented: asked.presented,
+        onAct: () => {
+          if (!asked.presented) return;
           letGo();
           answered(
             () => acts.archive(agentId),
-            () => setAsked({ agentId, presented: true }),
+            () => setAsked({ agentId, asker, presented: true }),
           );
-        }}
-        onDismiss={letGo}
-      />
-    ),
+        },
+        onDismiss: letGo,
+      };
+    },
   };
 }
 
@@ -1732,20 +1778,21 @@ export function TaskAgentRow({
   line,
   task,
   named = false,
-  onArchive,
+  archiving,
 }: {
   readonly line: TaskAgentLine;
   /** The task it works on, which its preview names over it; none where the list does not hold it. */
   readonly task?: TaskSummary | undefined;
   /** Whether its row names the task in its line, as a list of many tasks' agents does, such as Search's; its preview names it either way. */
   readonly named?: boolean | undefined;
-  /** Asks to archive the agent, once it rests (`useAgentArchiveAsk`); its row offers no Archive where none is given. */
-  readonly onArchive?: ((agentId: string) => void) | undefined;
+  /** Archive asked first, once it rests (`useAgentArchiveAsk`); its row offers no Archive where none is given. */
+  readonly archiving?: AgentArchiving | undefined;
 }) {
   const router = useRouter();
   const toDetail = useDetailPush();
   const onTab = useOnTab();
   const acts = useAgentRowActs();
+  const asker = useRowAsker();
   const { agent, waiting, pullRequest } = line;
   const step = useHeldAgentStep(agent.id, agent.status);
   const name = agentName(agent);
@@ -1781,18 +1828,34 @@ export function TaskAgentRow({
               state: pullRequest.state,
               queued: pullRequest.queued,
               onPress: () => {
+                const named = pullRequestAddressOf(pullRequest.url);
+
+                // Note that a line whose address names no pull request of GitHub's opens it there, as Safari reads it.
+                if (named === undefined) {
+                  openInSafari(pullRequest.url);
+
+                  return;
+                }
+
+                const key = { workspaceId: agent.workspaceId, ...named };
+
                 const opened = {
                   kind: PUSHED_PAGE.PULL_REQUEST,
+                  ...key,
                   agentId: agent.id,
-                  number: pullRequest.number,
                 } as const;
 
                 if (!toDetail(opened))
-                  router.push(onTab(iosPullRequestRoute(agent.id, pullRequest.number)));
+                  router.push(onTab(iosRepositoryPullRequestRoute(key, agent.id)));
               },
             }
       }
-      trailingActions={agentSwipes(agent, acts, onArchive)}
+      trailingActions={agentSwipes(
+        agent,
+        acts,
+        archiving === undefined ? undefined : (agentId) => archiving.archive(agentId, asker),
+      )}
+      question={archiving?.question(agent.id, asker)}
       menuActions={agentMenuActs(link, keeping.copyWords)}
       preview={
         <AgentPreview
@@ -1814,10 +1877,10 @@ export function TaskAgentRow({
 /** The task's agents as the panel's Agents group lists them, counted while it has any, its header's + New agent, which opens its sheet, and the line of its threads that need you. */
 function OverviewAgents({
   overview,
-  onArchiveAgent,
+  archiving,
 }: {
   readonly overview: TaskOverview;
-  readonly onArchiveAgent: (agentId: string) => void;
+  readonly archiving: AgentArchiving;
 }) {
   const router = useRouter();
   const { task } = overview;
@@ -1838,7 +1901,7 @@ function OverviewAgents({
       }}
     >
       {overview.agents.map((line) => (
-        <TaskAgentRow key={line.agent.id} line={line} task={task} onArchive={onArchiveAgent} />
+        <TaskAgentRow key={line.agent.id} line={line} task={task} archiving={archiving} />
       ))}
       {overview.waitingElsewhere === 0 ? null : (
         <LinkRow
@@ -1922,7 +1985,7 @@ function OverviewDescription({
   const router = useRouter();
   const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
-  const openLink = useOpenLink();
+  const openLink = useOpenLink(overview.task.workspaceId);
   const { task } = overview;
   const threads = useTaskComments(task.id);
   const blocks = useMemo(() => descriptionBlocks(body), [body]);
@@ -2156,12 +2219,12 @@ function OverviewComments({
 function OverviewPage({
   overview,
   onRefresh,
-  onArchiveAgent,
+  archiving,
 }: {
   readonly overview: TaskOverview;
   readonly onRefresh: () => Promise<void>;
-  /** Asks to archive one of its agents (`useAgentArchiveAsk`), whose question the screen stands beside its `<Screen>`. */
-  readonly onArchiveAgent: (agentId: string) => void;
+  /** Archive on its agents' rows, asked first by the row pressed (`useAgentArchiveAsk`). */
+  readonly archiving: AgentArchiving;
 }) {
   const router = useRouter();
   const toDetail = useDetailPush();
@@ -2199,7 +2262,7 @@ function OverviewPage({
         <OverviewHead overview={overview} />
       </ListSection>
       <OverviewRelations overview={overview} />
-      <OverviewAgents overview={overview} onArchiveAgent={onArchiveAgent} />
+      <OverviewAgents overview={overview} archiving={archiving} />
       <OverviewPages overview={overview} />
       {!descriptions ? null : overview.documentRetry !== undefined ? (
         <ListSection title={WORDS.DESCRIPTION}>
@@ -2314,8 +2377,8 @@ const NO_STATUS_DOORS = { setStatus: () => undefined, workingAgents: () => 0 } a
  * path, New agent and New sub-task as glyphs and its ⋯; Select a task with
  * none picked, and the reading state or Task not found for one not read.
  * Its status set and its delete ask through `doors` where a list beside it
- * asks for them, else through asks of its own, which `asks` draws with its
- * agents' Archive question, a delete going on to `onDeleted`. `place` names
+ * asks for them, else through asks of its own, which `asks` draws, a
+ * delete going on to `onDeleted`; its agents' Archive asks by their rows. `place` names
  * the detail its bar opens History over where the caller draws the bar from
  * outside that detail, as a split view's root does.
  */
@@ -2339,7 +2402,7 @@ export function useTaskDetail(
   const overview = held === undefined ? undefined : { ...held, setStatus };
   const history = useHistoryDoor(overview?.task.workspaceId, place);
   const read = useTasksRead();
-  const archiveAsk = useAgentArchiveAsk();
+  const archiving = useAgentArchiveAsk();
   const { refreshTasks } = useInboxActs();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
@@ -2350,7 +2413,7 @@ export function useTaskDetail(
         key={overview.task.id}
         overview={overview}
         onRefresh={refreshTasks}
-        onArchiveAgent={archiveAsk.archive}
+        archiving={archiving}
       />
     ) : selected === undefined ? (
       <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
@@ -2385,7 +2448,6 @@ export function useTaskDetail(
           <StatusQuestionAsk question={deletion.question} />
         </>
       ) : null}
-      {archiveAsk.ask}
     </>
   );
 
@@ -2549,7 +2611,7 @@ export function TaskScreen() {
   const openRelation = useOpenRelation();
   const moveDoor = useMoveTaskDoor();
   const { refreshTasks } = useInboxActs();
-  const archiveAsk = useAgentArchiveAsk();
+  const archiving = useAgentArchiveAsk();
   const read = useTasksRead();
   const history = useHistoryDoor(overview?.task.workspaceId);
 
@@ -2600,11 +2662,7 @@ export function TaskScreen() {
       )}
       <Screen>
         {overview !== undefined ? (
-          <OverviewPage
-            overview={overview}
-            onRefresh={refreshTasks}
-            onArchiveAgent={archiveAsk.archive}
-          />
+          <OverviewPage overview={overview} onRefresh={refreshTasks} archiving={archiving} />
         ) : read && !found.seeking ? (
           <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         ) : (
@@ -2613,7 +2671,6 @@ export function TaskScreen() {
       </Screen>
       <StatusQuestionAsk question={question} />
       <StatusQuestionAsk question={deletion.question} />
-      {archiveAsk.ask}
     </>
   );
 }

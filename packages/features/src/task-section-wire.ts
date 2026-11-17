@@ -131,7 +131,7 @@ export const taskSectionEmojiSchema = EffectSchema.Trim.check(
 /** A glyph's name, as Lucide spells it: lower-case words and numbers joined by hyphens, bounded. */
 const glyphSchema = EffectSchema.String.check(
   EffectSchema.isMaxLength(TASK_SECTION_BOUNDS.MAX_GLYPH_CHARS),
-  EffectSchema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+  EffectSchema.isPattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/u),
 );
 
 /** A glyph's color, one of `TASK_SECTION_ICON_COLOR`. */

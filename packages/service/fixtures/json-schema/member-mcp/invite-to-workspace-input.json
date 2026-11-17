@@ -10,6 +10,7 @@
     "email": {
       "type": "string",
       "maxLength": 254,
+      "pattern": "^[^\\s@]+@[^\\s@]+$",
       "description": "The address to invite, whose account alone may accept."
     },
     "role": {

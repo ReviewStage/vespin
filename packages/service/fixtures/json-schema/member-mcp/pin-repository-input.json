@@ -4,6 +4,7 @@
     "repository": {
       "type": "string",
       "maxLength": 140,
+      "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*\\/(?!\\.{1,2}$)[A-Za-z0-9_.-]+$",
       "description": "The repository, as owner/name."
     },
     "pinned": {

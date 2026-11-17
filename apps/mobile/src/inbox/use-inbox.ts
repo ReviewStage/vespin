@@ -56,7 +56,7 @@ import { BUZZ } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Settings } from "react-native";
 import { cachedFile, cachedPlayed } from "../cached-media.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
@@ -189,6 +189,80 @@ export function useInboxListing(view: {
 
     return keep({ listed, feed, counts: inboxCounts(standing, readerId, MINE), unread, readerId });
   }, [keep, groups, readerId, feed, show, search, chosen]);
+}
+
+/** The threads either side of the thread in front, by id, and how its screen opens one; none at an end. */
+export interface FrontSteps {
+  readonly previous?: string | undefined;
+  readonly next?: string | undefined;
+  readonly go: (id: string) => void;
+}
+
+/** No thread in front to step from. */
+const NO_STEPS: FrontSteps = { go: () => undefined };
+
+/** The steps in front, with the screen that stands them; none where no screen does. */
+interface StoodSteps {
+  readonly owner: symbol | undefined;
+  readonly steps: FrontSteps;
+}
+
+/**
+ * The steps the thread in front offers, which the screen drawing it stands
+ * and the iPad's K and J read. Note that it holds only what that screen draws
+ * now, kept by it and told to every reader as it moves, rather than a list's
+ * order kept for later, so a search or a scope the screen narrows narrows the
+ * steps too, and a screen covered or gone takes its steps with it.
+ */
+let frontSteps: StoodSteps = { owner: undefined, steps: NO_STEPS };
+
+/** The readers of the steps in front, told as they move. */
+const stepsHeard = new Set<() => void>();
+
+/** Stands `steps` as the front's for `owner`, or takes them down where `steps` is none and `owner` still stands them, telling every reader. */
+function standFrontSteps(owner: symbol, steps: FrontSteps | undefined): void {
+  if (steps === undefined && frontSteps.owner !== owner) return;
+  frontSteps = steps === undefined ? { owner: undefined, steps: NO_STEPS } : { owner, steps };
+
+  for (const heard of stepsHeard) heard();
+}
+
+/**
+ * Stands the threads either side of the thread a screen draws as the steps
+ * in front while it is `shown`, opening one through `go`, and takes them down
+ * as it is covered or leaves, unless another screen stood its own since.
+ */
+export function useStandFrontSteps(
+  steps: { readonly previous?: string | undefined; readonly next?: string | undefined },
+  go: (id: string) => void,
+  shown: boolean,
+): void {
+  const [owner] = useState(() => Symbol("front steps"));
+  // Note that the screen's latest way to open a thread is read at the press, so the steps stand anew only as the threads either side move.
+  const latestGo = useRef(go);
+  useEffect(() => {
+    latestGo.current = go;
+  });
+
+  const { previous, next } = steps;
+  useEffect(() => {
+    if (!shown) return;
+    standFrontSteps(owner, { previous, next, go: (id) => latestGo.current(id) });
+
+    return () => standFrontSteps(owner, undefined);
+  }, [owner, shown, previous, next]);
+}
+
+/** The steps the thread in front offers, read anew as its screen stands them. */
+export function useFrontSteps(): FrontSteps {
+  return useSyncExternalStore(
+    (heard) => {
+      stepsHeard.add(heard);
+
+      return () => stepsHeard.delete(heard);
+    },
+    () => frontSteps.steps,
+  );
 }
 
 /**

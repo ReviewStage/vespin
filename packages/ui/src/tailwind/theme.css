@@ -363,6 +363,14 @@
     var(--ui-list-row-depth, 0) *
     (var(--ui-control-icon) + var(--ui-icon-gap))
   );
+  /* A task's row nested under another (`TaskRow`'s `depth`) stands its status
+     mark and its name in by the status column and the gap after it once for
+     each level, so its mark stands under the name of the row it is nested
+     under, as a sidebar's nested row's glyph does. */
+  --spacing-task-row-nest: calc(
+    var(--ui-list-row-depth, 0) *
+    (var(--spacing-chip-compact) + var(--ui-block-gap))
+  );
   /* A nav item nested under a place (`NavItem`'s `nested`) starts where that
      place's name does: its row's inset, a glyph, and the glyph's gap. */
   --spacing-nav-item-nest: calc(var(--ui-row-inset) + var(--ui-control-icon) + var(--ui-icon-gap));
@@ -1129,6 +1137,12 @@
   --spacing-conversation-older: calc(100% - var(--ui-space-32));
   /* The way back to the newest line stands this far above the log's foot: its own room, past whatever floats over the log's end (`--conversation-over-end`, the log's own). */
   --spacing-conversation-scroll: calc(var(--ui-space-6) + var(--conversation-over-end, 0px));
+  /* And this far in from the log's right edge, so it stands over the composer's send button: the column's inset (`--conversation-column-inset`, the pane's own where it narrows the column to a measure), then the composer card's edge and its foot's inset (`composer-foot.tsx`). */
+  --spacing-conversation-scroll-end: calc(
+    var(--conversation-column-inset, var(--content-inset)) +
+    1px +
+    var(--ui-space-12)
+  );
   --shadow-floating-edge: inset 0 0 0 1px var(--ui-color-border), var(--ui-menu-shadow);
   --color-button-ground: var(--ui-button-ground);
   --color-inert-link: color-mix(in srgb, currentColor 40%, transparent);

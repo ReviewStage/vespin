@@ -326,19 +326,16 @@ export const AGENT_ACT_KIND = {
   /** A held agent's origin, which the panel reads on app state, read again at once, as Try again asks. */
   AGENTS_ORIGIN_RETRY: "agents.originRetry",
   /**
-   * One part of one agent's pull request, which its Pull request tab draws:
-   * the pull request itself, its checks, its conversation, or what the agent
-   * published, held for the window while it holds the stream open and a
-   * while after among those let go lately, and asked again as a window comes
-   * forward, as the agent ends, and as its listed pull request moves. What
-   * it holds reaches the panel on app state (`PULL_REQUEST_PART_READ`), so
-   * the stream carries nothing.
+   * What one agent published, its branch and the pull request from it, held
+   * for the window while it holds the stream open and a while after among
+   * those let go lately, and asked again as a window comes forward, as the
+   * agent ends, and as its listed pull request moves: what the agent's pull
+   * request card draws. What it holds reaches the panel on app state
+   * (`LIVE_READ.PULL_REQUEST_PUBLISHED`), so the stream carries nothing.
    */
-  AGENTS_PULL_REQUEST_PART_FOLLOW: "agents.pullRequestPartFollow",
-  /** One pull request's held part, which the panel reads on app state, asked again at once, as Try again and Refresh ask. */
-  AGENTS_PULL_REQUEST_PART_RETRY: "agents.pullRequestPartRetry",
-  /** One agent's changes, its pull request's files with their patches, which its Changes tab draws. */
-  AGENTS_CHANGES: "agents.changes",
+  AGENTS_PULL_REQUEST_FOLLOW: "agents.pullRequestFollow",
+  /** What one agent published, which the panel reads on app state, asked again at once, as Try again and a write's read-back ask. */
+  AGENTS_PULL_REQUEST_RETRY: "agents.pullRequestRetry",
   /** The files one of an agent's turns changed, read on its machine between the checkouts its runner recorded, which the turn's Changes tab draws. */
   AGENTS_TURN_CHANGES: "agents.turnChanges",
   /**
@@ -350,10 +347,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_WORKSPACE_TOOLS_FOLLOW: "agents.workspaceToolsFollow",
   /** One agent's held tools, which the panel reads on app state, asked again at once, as Try again asks. */
   AGENTS_WORKSPACE_TOOLS_RETRY: "agents.workspaceToolsRetry",
-  /** One image an agent's pull request's overview names, its bytes read by the service on the App's token. */
+  /** One image a picture in an agent's transcript names on GitHub, its bytes read by the service on the App's token. */
   AGENTS_GITHUB_IMAGE: "agents.githubImage",
-  /** One change to an agent's pull request, such as marking it ready for review, made on GitHub as the account on its own GitHub sign-in. */
-  AGENTS_PULL_REQUEST_ACTION: "agents.pullRequestAction",
 } as const;
 
 /**
@@ -400,19 +395,15 @@ export const AGENT_INBOX_ACT_KIND = {
 } as const;
 
 /**
- * A coding agent's Pull request tab's Chapters: a pull request's chapters
- * held followed as its workspace keeps them while the tab holds them, which
- * reach the panel on app state (`LIVE_READ.PULL_REQUEST_CHAPTERS`), and read
- * again as Try again asks; generated for its head on our own model key when
- * the developer presses Generate, the generation answered once it lands,
- * which may take minutes; and Settings' choice of the Claude model the
- * member's Generate runs on, written over the account's preferences, which
- * reach the panel on app state (`LIVE_READ.ACCOUNT_PREFERENCES`).
+ * A Pull request tab's Chapters: a pull request's chapters, by its
+ * repository and number, held followed as its workspace keeps them while
+ * the tab holds them, which reach the panel on app state
+ * (`LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS`), and read again as Try
+ * again asks; and generated for its head on our own model key when the
+ * developer presses Generate, the generation answered once it lands, which
+ * may take minutes.
  */
 export const CHAPTERS_ACT_KIND = {
-  CHAPTERS_FOLLOW: "chapters.follow",
-  CHAPTERS_RETRY: "chapters.retry",
-  CHAPTERS_GENERATE: "chapters.generate",
   /** A pull request's chapters named by its repository and number rather than an agent, held followed as the agent's are (`LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS`), read again, and generated. */
   CHAPTERS_REPOSITORY_FOLLOW: "chapters.repositoryFollow",
   CHAPTERS_REPOSITORY_RETRY: "chapters.repositoryRetry",
@@ -850,6 +841,7 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_SENTRY_INSTALL: "workspace.sentryInstall",
   WORKSPACE_SENTRY_DISCONNECT: "workspace.sentryDisconnect",
   WORKSPACE_SLACK_BOT_CONNECT: "workspace.slackBotConnect",
+  WORKSPACE_SLACK_BOT_INSTALL: "workspace.slackBotInstall",
   WORKSPACE_SLACK_BOT_DISCONNECT: "workspace.slackBotDisconnect",
   WORKSPACE_SLACK_BOT_NOTIFICATIONS: "workspace.slackBotNotifications",
   WORKSPACE_SLACK_BOT_REPOSITORY: "workspace.slackBotRepository",
@@ -1044,7 +1036,7 @@ export type ActUse = (typeof ACT_USE)[keyof typeof ACT_USE];
  * a Terminal tab's or a live view's stream, whose bytes never reach app
  * state; `TASKS_REFRESH` is a WRITE, the task list's Try again, because the
  * host follows the list from the account gate opening and only a press asks
- * it again; `AGENTS_CHANGES`, `PULL_REQUESTS_CHANGES`, `TASKS_TREE`,
+ * it again; `PULL_REQUESTS_CHANGES`, `TASKS_TREE`,
  * `TERMINAL_LIST`, and `MAC_SHELL_ACTIONS` are FETCHes, though each answers
  * what stands now, because each is asked again
  * whenever it is shown and nothing keeps it, as is `AGENTS_MESSAGES`, Copy
@@ -1159,14 +1151,12 @@ export const PORT_ACT_USE = {
   AGENTS_PAGE: ACT_USE.FETCH,
   AGENTS_ORIGIN_FOLLOW: ACT_USE.READ,
   AGENTS_ORIGIN_RETRY: ACT_USE.READ,
-  AGENTS_PULL_REQUEST_PART_FOLLOW: ACT_USE.READ,
-  AGENTS_PULL_REQUEST_PART_RETRY: ACT_USE.READ,
-  AGENTS_CHANGES: ACT_USE.FETCH,
+  AGENTS_PULL_REQUEST_FOLLOW: ACT_USE.READ,
+  AGENTS_PULL_REQUEST_RETRY: ACT_USE.READ,
   AGENTS_TURN_CHANGES: ACT_USE.FETCH,
   AGENTS_WORKSPACE_TOOLS_FOLLOW: ACT_USE.READ,
   AGENTS_WORKSPACE_TOOLS_RETRY: ACT_USE.READ,
   AGENTS_GITHUB_IMAGE: ACT_USE.FETCH,
-  AGENTS_PULL_REQUEST_ACTION: ACT_USE.WRITE,
 
   AGENTS_INBOX_FOLLOW: ACT_USE.READ,
   AGENTS_INBOX_RETRY: ACT_USE.READ,
@@ -1194,9 +1184,6 @@ export const PORT_ACT_USE = {
   BROWSER_LIVE_ATTACH: ACT_USE.WRITE,
   BROWSER_LIVE_DETACH: ACT_USE.WRITE,
 
-  CHAPTERS_FOLLOW: ACT_USE.READ,
-  CHAPTERS_RETRY: ACT_USE.READ,
-  CHAPTERS_GENERATE: ACT_USE.WRITE,
   CHAPTERS_REPOSITORY_FOLLOW: ACT_USE.READ,
   CHAPTERS_REPOSITORY_RETRY: ACT_USE.READ,
   CHAPTERS_REPOSITORY_GENERATE: ACT_USE.WRITE,
@@ -1363,6 +1350,7 @@ export const PORT_ACT_USE = {
   WORKSPACE_SENTRY_INSTALL: ACT_USE.WRITE,
   WORKSPACE_SENTRY_DISCONNECT: ACT_USE.WRITE,
   WORKSPACE_SLACK_BOT_CONNECT: ACT_USE.WRITE,
+  WORKSPACE_SLACK_BOT_INSTALL: ACT_USE.WRITE,
   WORKSPACE_SLACK_BOT_DISCONNECT: ACT_USE.WRITE,
   WORKSPACE_SLACK_BOT_NOTIFICATIONS: ACT_USE.WRITE,
   WORKSPACE_SLACK_BOT_REPOSITORY: ACT_USE.WRITE,

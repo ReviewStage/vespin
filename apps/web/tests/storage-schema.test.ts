@@ -123,6 +123,7 @@ const DECLARED_TABLES = [
   "reply_button",
   "runner_line",
   "sandbox_firewall",
+  "sandbox_owner",
   "sandbox_terminal_lease",
   "session",
   "slack_agent_thread",

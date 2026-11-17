@@ -34,6 +34,8 @@ export const EXPERIMENT = {
   MOVE_AGENTS: "move-agents",
   /** Cursor: Cursor as a third harness, its models in the picker and its API key in Settings › Agents, while it is being built. */
   CURSOR: "cursor",
+  /** Starter tasks: while a workspace holds few tasks, Home offers jobs under its composer that a press writes into it, those needing GitHub asking for it. */
+  STARTER_TASKS: "starter-tasks",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -105,9 +107,19 @@ export interface ExperimentEntry {
  */
 export const EXPERIMENTS = [
   {
+    key: EXPERIMENT.STARTER_TASKS,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    listed: true,
+    name: "Starter tasks",
+    detail:
+      "While a workspace has few tasks, Home offers jobs to start with one press, such as building a tiny app or racing three fixes.",
+    owner: "Dean",
+    since: "2026-11-16",
+  },
+  {
     key: EXPERIMENT.CURSOR,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
-    listed: false,
+    listed: true,
     name: "Cursor",
     detail: "Run agents on Cursor's harness and models, on your own Cursor API key.",
     owner: "Dean",

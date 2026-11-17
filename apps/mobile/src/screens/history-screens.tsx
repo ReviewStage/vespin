@@ -48,6 +48,7 @@ import {
   useTaskHistory,
   useTaskVersion,
 } from "../tasks/use-history.js";
+import { useTaskOverview } from "../tasks/use-tasks.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** The route a version is opened on: the task by its id, and the version by its number in the query. */
@@ -66,7 +67,7 @@ function versionNumber(spelled: string | undefined): number | undefined {
   return Number.isInteger(seq) && seq >= 1 ? seq : undefined;
 }
 
-/** Who wrote a version, by the mark its row leads with, as the panel's version rows lead: a person by their face, its picture looked up only for a person, since a notetaker's version names the person whose call it was written on, whose photo is not its writer's. */
+/** Who wrote a version, by the mark its row leads with, as the panel's version rows lead: a person by their face, its picture looked up only for a person. */
 function versionWriter(
   lastEdit: DescriptionLastEdit,
   pictureOf: PictureOf,
@@ -83,8 +84,6 @@ function versionWriter(
       };
     case DESCRIPTION_ACTOR.AGENT:
       return { kind: VERSION_WRITER.AGENT, name: revisionWriterName(lastEdit, undefined), harness };
-    case DESCRIPTION_ACTOR.NOTETAKER:
-      return { kind: VERSION_WRITER.PRODUCT };
     case DESCRIPTION_ACTOR.EARLIER:
       return { kind: VERSION_WRITER.EARLIER };
   }
@@ -317,7 +316,7 @@ export function Version({
   const navigation = useNavigation();
   const acts = useHostActs();
   const write = useWrite();
-  const openLink = useOpenLink();
+  const openLink = useOpenLink(useTaskOverview(taskId)?.task.workspaceId);
   const notices = useFailureNotices();
   const version = useTaskVersion(taskId, seq);
   const [restoring, setRestoring] = useState(false);

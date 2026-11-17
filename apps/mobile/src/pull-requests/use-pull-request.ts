@@ -1,36 +1,41 @@
 /**
- * use-pull-request.ts -- one agent's pull request as the app's screens read and change it: its three parts held live while a screen shows it, Try again, and the changes a member makes to it on GitHub.
+ * use-pull-request.ts -- one pull request as the app's screens read and change it, by its workspace, its repository, and its number: its three parts held live while a screen shows it, Try again, and the changes a member makes to it on GitHub.
  *
  * A pull request is read as the panel's Pull request tab reads it
  * (`@repo/panel`'s `live-reads.ts`): each part's follow
- * (`ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW`), the pull request itself, its
+ * (`ACT_KIND.PULL_REQUESTS_PART_FOLLOW`), the pull request itself, its
  * checks, and its conversation, kept open on the host while the screen is
  * in focus and opened again as it breaks (`@repo/host/follow-stream`), and
- * the host lays each part it reads on the document, under the agent and the
- * pull request's number, and asks it again as the pull request moves, so
- * the screen stays current with nothing of its own. A change is the panel's
- * act too (`ACT_KIND.AGENTS_PULL_REQUEST_ACTION`), made on GitHub as the
+ * the host lays each part it reads on the document, under the workspace, the
+ * repository, and the number, and asks it again as GitHub says the pull
+ * request moved, whoever opened it, so the screen stays current with nothing
+ * of its own. A change is the panel's act too
+ * (`ACT_KIND.PULL_REQUESTS_ACTION`), made on GitHub as the
  * member; once GitHub answered, the parts are asked again and the change
  * stays out until they land, so the screen never draws the pull request as
  * it stood before its change.
  */
 
-import {
-  type AgentOverviewChecksAnswerView,
-  type AgentOverviewConversationAnswerView,
-  type AgentOverviewPullRequestAnswerView,
-  PULL_REQUEST_PART,
-  type PullRequestPart,
-} from "@repo/features/agent-view";
+import { PULL_REQUEST_PART, type PullRequestPart } from "@repo/features/agent-view";
 import type { AgentOverviewPullRequest } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PULL_REQUEST_WRITE_WORDS, pullRequestWriteWords } from "@repo/features/pull-request-model";
+import type {
+  RepositoryOverviewChecksAnswerView,
+  RepositoryOverviewConversationAnswerView,
+  RepositoryOverviewPullRequestAnswerView,
+  RepositoryPullRequestParams,
+} from "@repo/features/pull-request-view";
 import type {
   PullRequestAction,
   PullRequestActionRequest,
 } from "@repo/features/pull-request-write-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppHostRead, AppStateSnapshot } from "@repo/host/app-state";
+import type {
+  AppHostRead,
+  AppRepositoryPullRequestHeld,
+  AppStateSnapshot,
+} from "@repo/host/app-state";
 import { BUZZ } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
@@ -46,17 +51,14 @@ const SHOWN_PARTS: readonly PullRequestPart[] = [
   PULL_REQUEST_PART.CONVERSATION,
 ];
 
-/** One agent's pull request, by the agent and its number. */
-export interface PullRequestKey {
-  readonly agentId: string;
-  readonly number: number;
-}
+/** One pull request, by the workspace whose installation reaches its repository, the repository, and its number. */
+export type PullRequestKey = RepositoryPullRequestParams;
 
 /** The parts as the host holds them now, each its read as it stands; none before the host holds it. */
 export interface PullRequestParts {
-  readonly pullRequest: AppHostRead<AgentOverviewPullRequestAnswerView> | undefined;
-  readonly checks: AppHostRead<AgentOverviewChecksAnswerView> | undefined;
-  readonly conversation: AppHostRead<AgentOverviewConversationAnswerView> | undefined;
+  readonly pullRequest: AppHostRead<RepositoryOverviewPullRequestAnswerView> | undefined;
+  readonly checks: AppHostRead<RepositoryOverviewChecksAnswerView> | undefined;
+  readonly conversation: AppHostRead<RepositoryOverviewConversationAnswerView> | undefined;
 }
 
 /** Says on the console an ask the host refused, which the screen draws without. */
@@ -64,12 +66,12 @@ function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not land.`, error);
 }
 
-/** One part's read on the document, under the agent and the number. */
+/** One part's read on the document, under the workspace, the repository, and the number. */
 function partIn<Part>(
-  slice: Readonly<Record<string, Readonly<Record<string, AppHostRead<Part>>>>>,
+  slice: AppRepositoryPullRequestHeld<Part>,
   key: PullRequestKey,
 ): AppHostRead<Part> | undefined {
-  return slice[key.agentId]?.[String(key.number)];
+  return slice[key.workspaceId]?.[key.repository]?.[String(key.number)];
 }
 
 /**
@@ -81,12 +83,12 @@ function partIn<Part>(
 export function usePullRequestParts(key: PullRequestKey): PullRequestParts {
   const acts = useHostActs();
   const follow = useHostFollow();
-  const { agentId, number } = key;
+  const { workspaceId, repository, number } = key;
   useFocusEffect(
     useCallback(() => {
       const stops = SHOWN_PARTS.map((part) =>
         follow(
-          () => acts[ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW]({ part, agentId, number }),
+          () => acts[ACT_KIND.PULL_REQUESTS_PART_FOLLOW]({ part, workspaceId, repository, number }),
           () => undefined,
         ),
       );
@@ -94,14 +96,15 @@ export function usePullRequestParts(key: PullRequestKey): PullRequestParts {
       return () => {
         for (const stop of stops) stop();
       };
-    }, [acts, follow, agentId, number]),
+    }, [acts, follow, workspaceId, repository, number]),
   );
 
   const pullRequest = useQuery({
     ...appStateQuery,
     select: useCallback(
-      (state: AppStateSnapshot) => partIn(state[LIVE_READ.PULL_REQUEST], { agentId, number }),
-      [agentId, number],
+      (state: AppStateSnapshot) =>
+        partIn(state[LIVE_READ.REPOSITORY_PULL_REQUEST], { workspaceId, repository, number }),
+      [workspaceId, repository, number],
     ),
   }).data;
 
@@ -109,8 +112,12 @@ export function usePullRequestParts(key: PullRequestKey): PullRequestParts {
     ...appStateQuery,
     select: useCallback(
       (state: AppStateSnapshot) =>
-        partIn(state[LIVE_READ.PULL_REQUEST_CHECKS], { agentId, number }),
-      [agentId, number],
+        partIn(state[LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS], {
+          workspaceId,
+          repository,
+          number,
+        }),
+      [workspaceId, repository, number],
     ),
   }).data;
 
@@ -118,8 +125,12 @@ export function usePullRequestParts(key: PullRequestKey): PullRequestParts {
     ...appStateQuery,
     select: useCallback(
       (state: AppStateSnapshot) =>
-        partIn(state[LIVE_READ.PULL_REQUEST_CONVERSATION], { agentId, number }),
-      [agentId, number],
+        partIn(state[LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION], {
+          workspaceId,
+          repository,
+          number,
+        }),
+      [workspaceId, repository, number],
     ),
   }).data;
 
@@ -132,18 +143,21 @@ export function usePullRequestParts(key: PullRequestKey): PullRequestParts {
 /** Asks every part of the pull request again at once, as Try again and a pull down ask; answers once each ask has landed. */
 export function usePullRequestRetry(key: PullRequestKey): () => Promise<void> {
   const acts = useHostActs();
-  const { agentId, number } = key;
+  const { workspaceId, repository, number } = key;
 
   return useCallback(
     () =>
       Promise.all(
         SHOWN_PARTS.map((part) =>
-          acts[ACT_KIND.AGENTS_PULL_REQUEST_PART_RETRY]({ part, agentId, number }).catch(
-            refused("A pull request's read"),
-          ),
+          acts[ACT_KIND.PULL_REQUESTS_PART_RETRY]({
+            part,
+            workspaceId,
+            repository,
+            number,
+          }).catch(refused("A pull request's read")),
         ),
       ).then(() => undefined),
-    [acts, agentId, number],
+    [acts, workspaceId, repository, number],
   );
 }
 
@@ -171,7 +185,7 @@ export interface PullRequestWrites {
 export function usePullRequestWrites(key: PullRequestKey): PullRequestWrites {
   const acts = useHostActs();
   const retry = usePullRequestRetry(key);
-  const { agentId, number } = key;
+  const { workspaceId, repository, number } = key;
   const [pending, setPending] = useState<PullRequestAction | undefined>(undefined);
   const [note, setNote] = useState<WriteNote | undefined>(undefined);
   // Note that the change out is held in a ref as well, because two presses in one frame both read the state from before either.
@@ -191,8 +205,9 @@ export function usePullRequestWrites(key: PullRequestKey): PullRequestWrites {
 
         return await write(
           async () => {
-            const answer = await acts[ACT_KIND.AGENTS_PULL_REQUEST_ACTION]({
-              agentId,
+            const answer = await acts[ACT_KIND.PULL_REQUESTS_ACTION]({
+              workspaceId,
+              repository,
               number,
               request,
             });
@@ -215,49 +230,52 @@ export function usePullRequestWrites(key: PullRequestKey): PullRequestWrites {
         setPending(undefined);
       }
     },
-    [acts, write, retry, agentId, number],
+    [acts, write, retry, workspaceId, repository, number],
   );
 
   return { pending, note, write: change };
 }
 
-/** No pull request read, held as one map so a screen that holds none reads the same each time. */
-const NO_PULL_REQUESTS: ReadonlyMap<number, AgentOverviewPullRequest> = new Map();
-
-/** The numbers handed, as the same array while they are the same numbers, so a follow over them is not opened again as the list is drawn again. */
-function useSameNumbers(numbers: readonly number[]): readonly number[] {
-  const [held, setHeld] = useState(numbers);
+/** The pull requests handed, as the same array while they are the same ones, so a follow over them is not opened again as the list is drawn again. */
+function useSameKeys(keys: readonly PullRequestKey[]): readonly PullRequestKey[] {
+  const [held, setHeld] = useState(keys);
 
   const same =
-    held.length === numbers.length && held.every((number, index) => numbers[index] === number);
+    held.length === keys.length &&
+    held.every(
+      (key, index) =>
+        keys[index]?.workspaceId === key.workspaceId &&
+        keys[index]?.repository === key.repository &&
+        keys[index]?.number === key.number,
+    );
 
-  // Note that new numbers are taken as they are drawn, as React keeps a value from the last render, rather than through a ref read while drawing.
+  // Note that new keys are taken as they are drawn, as React keeps a value from the last render, rather than through a ref read while drawing.
   if (same) return held;
-  setHeld(numbers);
+  setHeld(keys);
 
-  return numbers;
+  return keys;
 }
 
 /**
- * Each of an agent's pull requests named, as its own read answers it, held
- * followed while the screen is in focus, as a page drawing their cards
- * offers what each may do; one not read yet, or whose read failed, is
- * absent.
+ * Each pull request named, held followed while the screen is in focus, as a
+ * page drawing their cards offers what each may do, read back by its
+ * workspace, repository, and number, so a card of another repository under
+ * the same number never reads this one's; one not read yet, or whose read
+ * failed, reads as none.
  */
 export function usePullRequestsRead(
-  agentId: string,
-  numbers: readonly number[],
-): ReadonlyMap<number, AgentOverviewPullRequest> {
+  keys: readonly PullRequestKey[],
+): (key: PullRequestKey) => AgentOverviewPullRequest | undefined {
   const acts = useHostActs();
   const follow = useHostFollow();
-  const held = useSameNumbers(numbers);
+  const held = useSameKeys(keys);
   useFocusEffect(
     useCallback(() => {
       const part = PULL_REQUEST_PART.PULL_REQUEST;
 
-      const stops = held.map((number) =>
+      const stops = held.map((key) =>
         follow(
-          () => acts[ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW]({ part, agentId, number }),
+          () => acts[ACT_KIND.PULL_REQUESTS_PART_FOLLOW]({ part, ...key }),
           () => undefined,
         ),
       );
@@ -265,29 +283,20 @@ export function usePullRequestsRead(
       return () => {
         for (const stop of stops) stop();
       };
-    }, [acts, follow, agentId, held]),
+    }, [acts, follow, held]),
   );
 
   const slice = useQuery({
     ...appStateQuery,
-    select: useCallback(
-      (state: AppStateSnapshot) => state[LIVE_READ.PULL_REQUEST][agentId],
-      [agentId],
-    ),
+    select: useCallback((state: AppStateSnapshot) => state[LIVE_READ.REPOSITORY_PULL_REQUEST], []),
   }).data;
 
-  return useMemo(() => {
-    if (slice === undefined) return NO_PULL_REQUESTS;
-    const read = new Map<number, AgentOverviewPullRequest>();
+  return useCallback(
+    (key: PullRequestKey) => {
+      const rows = slice === undefined ? undefined : partIn(slice, key)?.rows;
 
-    for (const number of held) {
-      const rows = slice[String(number)]?.rows;
-
-      if (rows !== undefined && !("failure" in rows) && rows.pullRequest !== null) {
-        read.set(number, rows.pullRequest);
-      }
-    }
-
-    return read;
-  }, [slice, held]);
+      return rows === undefined || "failure" in rows ? undefined : (rows.pullRequest ?? undefined);
+    },
+    [slice],
+  );
 }

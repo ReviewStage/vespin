@@ -16,6 +16,7 @@
     "words": {
       "type": "string",
       "maxLength": 8000,
+      "pattern": "\\S",
       "description": "The comment, in plain words, as the member's own: every member of the workspace reads it under the member's name."
     }
   },

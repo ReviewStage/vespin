@@ -50,7 +50,7 @@ import {
   saveNotes,
 } from "../../tasks/description-notes.js";
 import { placeholderLinksWords } from "../link-rule.js";
-import { CODER } from "./bounds.js";
+
 import { type InboxSandboxDoor, readSandboxBodyFile } from "./inbox-image.js";
 
 /**
@@ -310,12 +310,7 @@ function readPictureFiles(
     for (const picture of pictures) {
       const { path } = picture;
 
-      const file = yield* readSandboxBodyFile(
-        sandbox,
-        CODER.CHECKOUT_PATH,
-        path,
-        TASK_PICTURE_FILE_REFUSAL,
-      );
+      const file = yield* readSandboxBodyFile(sandbox, path, TASK_PICTURE_FILE_REFUSAL);
 
       if (Result.isFailure(file)) return Result.fail(file.failure);
       const { contentType, bytes } = file.success;

@@ -425,10 +425,11 @@ test('closing the last tab shuts the panel and leaves full screen, and the toggl
   assert.equal(panel.control().toggleAsked, false);
 });
 
-test("a new stop starts with the panel shut, whatever its strip holds, unless a tab was asked for there, as a pin or a link opens one, and a plan whose strip holds no tab draws none", () => {
+test("a task opens with the panel shown or shut, and as wide, as it was last left there, a task it was never shown on starting shut whatever its strip holds unless a tab was asked for there, as a pin or a link opens one, and a plan whose strip holds no tab draws none", () => {
   const panel = launch({ task: TASK, taskAgents: [AGENT] });
   // Note that the agent works on both tasks, so its Terminal tab stands on each.
   panel.open(CLOUD);
+  act(() => panel.control().onResize(520));
   assert.equal(panel.control().open, true);
 
   panel.render({ task: OTHER_TASK, taskAgents: [AGENT] });
@@ -436,17 +437,32 @@ test("a new stop starts with the panel shut, whatever its strip holds, unless a 
   assert.equal(
     panel.control().open,
     false,
-    "another task starts shut though its strip holds a tab",
+    "another task never shown on starts shut though its strip holds a tab",
   );
   panel.render({ task: TASK, taskAgents: [AGENT] });
-  assert.equal(panel.control().open, false, "and coming back does not open it");
+  assert.equal(panel.control().open, true, "coming back opens it as it was left there");
 
   act(() => panel.control().onShow(OTHER_TASK, CLOUD));
   panel.render({ task: OTHER_TASK, taskAgents: [AGENT] });
   assert.equal(panel.control().open, true, "a tab asked for on the stop arrived at stands");
+  act(() => panel.control().onResize(400));
+  panel.render({ task: TASK, taskAgents: [AGENT] });
+  assert.equal(panel.control().width, 520, "each task keeps how wide it stood");
+  panel.render({ task: OTHER_TASK, taskAgents: [AGENT] });
+  assert.equal(panel.control().width, 400);
+  act(() => panel.control().onSetOpen(false));
+  panel.render({ task: TASK, taskAgents: [AGENT] });
+  assert.equal(panel.control().open, true, "each task keeps whether it stood shown");
+  panel.render({ task: OTHER_TASK, taskAgents: [AGENT] });
+  assert.equal(panel.control().open, false, "one shut there stays shut");
+  act(() => panel.control().onShow(TASK, CLOUD));
   panel.render({ task: TASK, taskAgents: [AGENT] });
   panel.render({ task: OTHER_TASK, taskAgents: [AGENT] });
-  assert.equal(panel.control().open, false, "once only");
+  assert.equal(
+    panel.control().open,
+    false,
+    "a tab asked for on another task, which opens the panel there, leaves the one it was asked from as it was",
+  );
 
   panel.render({ task: BARE_TASK, taskAgents: [], bare: true });
   assert.deepEqual(panel.control().strip, []);

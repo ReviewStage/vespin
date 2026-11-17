@@ -1,17 +1,23 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { DateTime, Effect, Option } from "effect";
+import { eq } from "drizzle-orm";
+import { DateTime, Effect, Option, Redacted, Result } from "effect";
 import { Database } from "../../core/query.js";
 import { INTEGRATION_ROW_STATUS } from "../../integration-vocabulary.js";
 import { member as memberTable, organization, user } from "../../schemas/auth.js";
 import { integrationConnection } from "../../schemas/integration.js";
+import { slackInstallation } from "../../schemas/slack-installation.js";
 import { getTestDB } from "../../testing/index.js";
+import { parseKeyRing } from "../provider-key-seal.js";
 import {
+  deleteSlackBotToken,
   deleteSlackInstallation,
   linkSlackInstallation,
+  openSlackBot,
   recordSlackMemberLookup,
+  saveSlackBotToken,
   slackMemberByEmail,
   slackMemberLookup,
   slackMemberOf,
@@ -28,8 +34,12 @@ import {
  * ids, emails, and own Slack accounts, and a Disconnect forgets the ids it
  * kept.
  *
- * Synthetic accounts, workspaces, and Slack ids throughout.
+ * Synthetic accounts, workspaces, keys, tokens, and Slack ids throughout.
  */
+
+const ring = Result.getOrThrow(
+  parseKeyRing(Redacted.make(`1:${randomBytes(32).toString("base64")}`)),
+);
 
 const openAccount = Effect.gen(function* () {
   const db = yield* Database;
@@ -104,6 +114,109 @@ it.layer(getTestDB())("the Slack installation store", (it) => {
       assert.equal(Option.isNone(yield* slackMemberByEmail(theirs, email)), true);
       assert.equal(Option.isNone(yield* deleteSlackInstallation(theirs)), true);
       assert.equal(Option.isSome(yield* workspaceSlackInstallation(ours)), true);
+    }),
+  );
+
+  it.effect("a workspace opens only its own bot token, which no other workspace's row opens", () =>
+    Effect.gen(function* () {
+      const member = yield* openAccount;
+      const ours = yield* openWorkspace;
+      const theirs = yield* openWorkspace;
+      const db = yield* Database;
+
+      for (const organizationId of [ours, theirs]) {
+        yield* linkSlackInstallation({
+          organizationId,
+          teamId: "T0001",
+          teamName: "T",
+          userId: member,
+        });
+      }
+
+      const bot = {
+        teamId: "T0001",
+        botUserId: "U0BOT",
+        botId: "B0BOT",
+        appId: "A0APP",
+        scopes: ["chat:write", "users:read"],
+        enterpriseId: null,
+        isEnterpriseInstall: false,
+      };
+
+      const wrongTeam = yield* saveSlackBotToken(ring, {
+        ...bot,
+        organizationId: ours,
+        teamId: "T0002",
+        token: Redacted.make("xoxb-wrong-team"),
+      });
+
+      const saved = yield* saveSlackBotToken(ring, {
+        ...bot,
+        organizationId: ours,
+        token: Redacted.make("xoxb-ours"),
+      });
+
+      const opened = yield* openSlackBot(ring, ours);
+      const theirsBefore = yield* openSlackBot(ring, theirs);
+
+      // Copy our sealed token onto their row, which its seal must refuse.
+      const [row] = yield* db
+        .select()
+        .from(slackInstallation)
+        .where(eq(slackInstallation.organizationId, ours));
+
+      yield* db
+        .update(slackInstallation)
+        .set({
+          botKeyVersion: row?.botKeyVersion,
+          botSealedDataKey: row?.botSealedDataKey,
+          botSealedToken: row?.botSealedToken,
+          botUserId: row?.botUserId,
+          botScopes: row?.botScopes,
+          botId: row?.botId,
+          appId: row?.appId,
+        })
+        .where(eq(slackInstallation.organizationId, theirs));
+
+      assert.equal(wrongTeam, false);
+      assert.equal(saved, true);
+      assert.equal(Option.isNone(theirsBefore), true);
+      assert.deepEqual(
+        Option.map(opened, (open) => ({ ...open, token: Redacted.value(open.token) })),
+        Option.some({ ...bot, token: "xoxb-ours" }),
+      );
+      assert.equal(Option.isNone(yield* openSlackBot(ring, theirs)), true);
+    }),
+  );
+
+  it.effect("deleting the bot token forgets it and leaves the installation standing", () =>
+    Effect.gen(function* () {
+      const member = yield* openAccount;
+      const workspace = yield* openWorkspace;
+      yield* linkSlackInstallation({
+        organizationId: workspace,
+        teamId: "T0001",
+        teamName: "Team",
+        userId: member,
+      });
+      yield* saveSlackBotToken(ring, {
+        organizationId: workspace,
+        teamId: "T0001",
+        token: Redacted.make("xoxb-token"),
+        botUserId: "U0BOT",
+        botId: "B0BOT",
+        appId: "A0APP",
+        scopes: ["chat:write"],
+        enterpriseId: null,
+        isEnterpriseInstall: false,
+      });
+
+      const deleted = yield* deleteSlackBotToken(workspace);
+
+      assert.equal(deleted, true);
+      assert.equal(Option.isNone(yield* openSlackBot(ring, workspace)), true);
+      assert.equal(Option.isSome(yield* workspaceSlackInstallation(workspace)), true);
+      assert.equal(yield* deleteSlackBotToken(workspace), false);
     }),
   );
 

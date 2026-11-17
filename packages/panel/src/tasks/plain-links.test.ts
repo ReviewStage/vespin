@@ -142,7 +142,12 @@ function Version(): ReactNode {
     viewing: {
       line: {
         seq: 2,
-        lastEdit: { actor: DESCRIPTION_ACTOR.NOTETAKER, at: 2, duringCall: false },
+        lastEdit: {
+          actor: DESCRIPTION_ACTOR.DEVELOPER,
+          by: { userId: "user-charles", name: "Charles Pan" },
+          at: 2,
+          duringCall: false,
+        },
         startedAt: 1,
         changes: 1,
       },
