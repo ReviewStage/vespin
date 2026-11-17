@@ -56,6 +56,7 @@ import {
   type AutomationsProcedureSeams,
   automationsProcedures,
 } from "../automations/automations-procedures.js";
+import { billingProcedures } from "../billing/billing-procedures.js";
 import {
   type PullRequestChaptersProcedureSeams,
   pullRequestChaptersProcedures,
@@ -206,6 +207,7 @@ export function hostedRouter(seams: HostedRouterSeams): HostedRouter {
     agentPullRequests: agentPullRequestProcedures(published),
     agents: agentsProcedures(published),
     automations: automationsProcedures(seams),
+    billing: billingProcedures(seams),
     dictation: dictationProcedures(seams),
     events: eventsProcedures(seams),
     github: githubProcedures(seams),

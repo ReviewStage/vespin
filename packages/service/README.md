@@ -2861,6 +2861,21 @@ written all the same. Metronome's webhook
 `METRONOME_WEBHOOK_SECRET` and logs an invoice Metronome failed to hand to
 Stripe as an error; every other event is acknowledged unread.
 
+Billing is on only where `BILLING_LIVE` is `true` (`src/billing/billing-environment.ts`),
+and `billing.status` is the one way a client learns it. While it is off,
+usage still reaches Metronome, which keeps its invoices to itself, and
+nothing calls Stripe: `billing.setup` and `billing.portal`
+(`src/billing/billing.ts`) refuse, and Stripe's webhook acknowledges every
+event unread. While it is on, an owner or admin sets billing up on a Stripe
+Checkout page in setup mode, and manages it in Stripe's Customer Portal.
+Stripe's webhook (`apps/web/server/routes/billing/stripe-webhook.ts`,
+`src/billing/stripe-webhook-app.ts`), verified under `STRIPE_WEBHOOK_SECRET`,
+makes the saved card the customer's default, links the workspace's
+Metronome customer and contract to Stripe from the start of the current
+period, and records the Stripe customer; it keeps a default card after a
+Portal change, and sets `workspace_billing.blocked_at` while an invoice is
+marked uncollectible, clearing it once one is paid.
+
 The sweep ends what no request will. `MaintenanceSweeps`
 (`src/maintenance/maintenance-sweep.ts`) runs its sweeps in turn and
 answers what each did; one that fails is logged and answered as failed while

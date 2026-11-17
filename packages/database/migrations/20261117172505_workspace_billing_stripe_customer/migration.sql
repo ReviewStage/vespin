@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "workspace_billing_stripe_customer" ON "workspace_billing" ("stripe_customer_id");

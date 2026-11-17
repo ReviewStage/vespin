@@ -7,6 +7,11 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { recordUsageCharges, type UsageCharge } from "@repo/database/models/usage-charges";
+import {
+  recordMetronomeCustomer,
+  recordStripeCustomer,
+  setStripeCustomerBlocked,
+} from "@repo/database/models/workspace-billing";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
 import { USAGE_KIND } from "@repo/database/usage-vocabulary";
@@ -122,5 +127,35 @@ it.layer(getTestDB())("the admin's usage ledger reads", (it) => {
         [[globex, 4]],
       );
     }),
+  );
+
+  it.effect(
+    "would let a workspace past $10 start while its billing is set up and not blocked",
+    () =>
+      Effect.gen(function* () {
+        const ada = yield* openAccount;
+        const initech = yield* openWorkspace(ada);
+        const stripeCustomer = `cus_${randomUUID()}`;
+
+        yield* recordUsageCharges([sessionCharge(initech, ada, 15, "2026-11-03T00:00:00Z")]);
+        yield* recordMetronomeCustomer(initech, `customer-${initech}`);
+        yield* recordStripeCustomer(initech, stripeCustomer);
+
+        const wouldRefuse = Effect.gen(function* () {
+          const month = yield* readAdminBilling("2026-11", NOW);
+          const page = yield* readAdminWorkspaceBilling(initech, NOW);
+
+          return [
+            month.workspaces.find((row) => row.id === initech)?.wouldRefuse,
+            page.wouldRefuse,
+          ];
+        });
+
+        assert.deepEqual(yield* wouldRefuse, [false, false]);
+
+        yield* setStripeCustomerBlocked(stripeCustomer, new Date(NOW));
+
+        assert.deepEqual(yield* wouldRefuse, [true, true]);
+      }),
   );
 });

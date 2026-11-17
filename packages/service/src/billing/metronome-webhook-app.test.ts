@@ -45,6 +45,9 @@ const answer = Effect.fn(function* (request: Request) {
     Layer.succeed(BillingEnvironment, {
       metronome: undefined,
       metronomeWebhookSecret: Redacted.make(SECRET),
+      live: false,
+      stripeSecretKey: undefined,
+      stripeWebhookSecret: undefined,
     }),
   );
 
