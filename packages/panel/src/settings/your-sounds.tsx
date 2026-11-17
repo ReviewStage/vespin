@@ -197,24 +197,37 @@ function useSlot(
   const choosing = useMutation(pressMutation(ACT_KIND.SOUND_CHOOSE));
   const stored = view.settings[field] === token;
   const chosen = chosenSound(sounds, slot)?.id;
+  // Each pick of the row, its own sounds' and its schema options' alike, counted as it is made.
+  const picks = useRef(0);
 
   // Note that the row is stored as the account's own only once the service
   // took this very choice, so a refused one, or one that answers another
-  // sound because this one was removed meanwhile, leaves the sound it played.
+  // sound because this one was removed meanwhile, leaves the sound it played,
+  // as does one a newer pick of the row replaced while it was out.
   // The host draws the choice at once, and the row draws it from the press
   // while the choice and then that write are out (`standing`); a write out
   // while the token is stored already is the forget's, which changes nothing
   // drawn.
   const choose = (id: string) => {
+    picks.current += 1;
+    const pick = picks.current;
+
     choosing.mutate(
       { slot, id },
       {
         onSuccess: (answer) => {
           if ("failure" in answer || answer.id !== id) toastRefused(SOUND_WORDS.NOT_CHOSEN, answer);
-          else if (!stored) write.run(token);
+          else if (!stored && pick === picks.current) write.run(token);
         },
       },
     );
+  };
+
+  // Note that a pick of the schema's options lets go of an own pick still out, so the row draws what was picked last and the own pick stores nothing once answered.
+  const letGo = () => {
+    picks.current += 1;
+    choosing.reset();
+    write.settle();
   };
 
   return {
@@ -240,6 +253,7 @@ function useSlot(
         chosen,
         standing: choosing.isPending || write.busy,
         pick: choose,
+        letGo,
       },
       foot: [{ id: "add", label: SOUND_WORDS.ADD, icon: <PlusIcon />, onPress: () => add(slot) }],
       // Note that a refusal names the picked file; the row masks its error for session replay.

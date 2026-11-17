@@ -34,6 +34,8 @@ interface OwnOptions {
   /** Whether the own option chosen stands for the row though the setting does not store its token yet, as while a pick of one is out. */
   readonly standing: boolean;
   readonly pick: (value: string) => void;
+  /** Lets go of an own pick still out, as a pick of the schema's options replaces it. */
+  readonly letGo: () => void;
 }
 
 /**
@@ -163,6 +165,18 @@ function SchemaChoiceRow({
       })),
   ];
 
+  // Note that a pick of the schema's options lets go of an own pick still out, so the newest pick is the one that stands.
+  const picked =
+    own === undefined
+      ? write
+      : {
+          ...write,
+          run: (token: string) => {
+            own.letGo();
+            write.run(token);
+          },
+        };
+
   return (
     <SelectRow
       label={label}
@@ -187,7 +201,7 @@ function SchemaChoiceRow({
       action={action}
       foot={menu?.foot}
       error={menu?.error}
-      write={write}
+      write={picked}
     />
   );
 }
