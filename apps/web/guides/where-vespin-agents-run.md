@@ -2,7 +2,7 @@
 title: "Where Vespin agents run: cloud or your Mac"
 description: An agent runs in a cloud sandbox or on a machine of yours. Here's how the two differ and how to set up your own.
 published: 2026-11-13
-updated: 2026-11-13
+updated: 2026-11-17
 related: [how-vespin-isolates-coding-agents, how-the-vespin-inbox-works]
 faq:
   - q: Can I move an agent to my Mac after it has started in the cloud?
@@ -40,8 +40,9 @@ To keep the Mac from sleeping while agents work, set **Keep this Mac awake** in 
 
 ## Add a machine
 
-1. In **Settings › Machines**, open **Add a machine**.
-2. Run the install command on the machine.
-3. Open the link it prints and approve the code.
+1. On the machine, as the user whose agents it should run, run `curl -fsSL https://vespin.dev/install.sh | sh` without `sudo`. **Settings › Machines › Add a machine** shows the same command. It needs no Vespin app, on a Mac either.
+2. Open the link it prints and approve the code.
 
 Before you start an agent there, sign in on that machine to Claude Code or Codex, and to GitHub with `gh auth login` or SSH. A machine only runs its owner's agents.
+
+A coding agent that can reach the machine can do this for you. Ask it to follow [Your machines](https://vespin.dev/docs/machines), which has the requirements and the steps written for an agent.

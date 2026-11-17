@@ -63,7 +63,7 @@
     "groups": [
       {
         "group": "Get started",
-        "pages": ["index", "install", "quickstart"]
+        "pages": ["index", "install", "quickstart", "machines"]
       },
       {
         "group": "Concepts",

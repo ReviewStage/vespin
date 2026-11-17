@@ -1,0 +1,79 @@
+---
+title: "Your machines"
+description: "Run agents on a Linux server or a Mac of your own, set up with one command"
+---
+
+A machine is a Linux server or a Mac of yours that runs your agents in place of a cloud sandbox. Use one when the work needs something only that machine has, such as Xcode, a GPU, or a local database.
+
+## Add a machine
+
+Run this on the machine, as the user whose agents it should run, without `sudo`:
+
+```sh
+curl -fsSL https://vespin.dev/install.sh | sh
+```
+
+It prints a link and a code. Open the link, check that the code matches the one Vespin shows, and approve it. The code lasts 10 minutes. The script then waits while the machine fetches Claude Code, Codex, and GitHub's CLI, and ends once the machine can take an agent.
+
+The command is the same for every account. **Settings › Machines** shows it under **Add a machine**.
+
+A machine needs no Vespin app. Install the [Mac app](/install) only to use Vespin from that Mac.
+
+## Requirements
+
+| Machine | Needs |
+| --- | --- |
+| Linux | x64 or arm64, systemd, and `git` |
+| Windows | WSL2 with systemd turned on, then the Linux steps inside it |
+| Mac | Apple silicon, macOS 13.5 or later, and `git` |
+
+On Linux, run the command from a login of that user, over SSH or at its console, not through `su` or `sudo`. The script turns on lingering so the service keeps running after you log out. That step may ask for `sudo`, and it's the only one.
+
+A Mac runs agents only while its user is logged in. On a Mac nobody sits at, turn on automatic login for that user. If the Mac app already runs agents on that Mac, under **Run agents on this Mac** in **Settings › Machines**, the script changes nothing.
+
+## Sign in on the machine
+
+Agents on a machine use its own logins, not the plans and keys in **Settings › Agents**. As the same user, sign in to:
+
+- Claude Code, Codex, or both.
+- GitHub, with `gh auth login` or an SSH key that can push to your repositories.
+
+An agent on a machine can reach everything that user can. A machine runs only its owner's agents.
+
+## Start an agent there
+
+Choose the machine in the **Runs on** chip under the message box. It's listed by the machine's hostname, or by its Computer Name on a Mac.
+
+## Set up a machine with a coding agent {#set-up-with-a-coding-agent}
+
+You can ask a coding agent, such as Claude Code or Codex, to set up Vespin on a machine it can reach. The agent follows these steps:
+
+1. Run `curl -fsSL https://vespin.dev/install.sh | sh` on that machine, as the user who will run agents, without `sudo`. Don't install the Mac app, and don't install `vespin-host` any other way.
+2. The command waits up to 10 minutes for approval. If your shell tool shows output only once a command ends, or stops a command sooner, run it in the background with its output in a file, then read the file:
+
+   ```sh
+   # On the machine itself
+   nohup sh -c 'curl -fsSL https://vespin.dev/install.sh | sh' > /tmp/vespin-install.log 2>&1 &
+
+   # From another computer, over SSH, keeping the session open until it ends
+   nohup ssh user@host 'curl -fsSL https://vespin.dev/install.sh | sh' > /tmp/vespin-install.log 2>&1 &
+
+   cat /tmp/vespin-install.log
+   ```
+
+3. Give the person the link and the code it prints, and wait while they approve it.
+4. Wait for `Ready: this machine takes agents.` Check it any time with `~/.local/bin/vespin-host status`.
+5. Check that the same user is signed in to Claude Code or Codex, and to GitHub. Ask the person to sign in to whichever isn't.
+
+If the script stops with `✗`, its message says what is missing and how to fix it, such as a command for the person to run with `sudo`. Fix that, then run the command again.
+
+## Update and remove
+
+The machine updates itself to each release. Running the install command again also updates it in place, and keeps its connection.
+
+To remove a machine, choose **Remove** in its row in **Settings › Machines**, or run `~/.local/bin/vespin-host uninstall` on it.
+
+## Logs
+
+- Linux: `journalctl --user -u vespin-host`
+- Mac: `~/Library/Logs/Vespin Host/vespin-host.log`
