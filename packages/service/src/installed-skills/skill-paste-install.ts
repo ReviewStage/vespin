@@ -5,7 +5,7 @@
  * (`skill-source.ts`), and each skill folder there is listed by what its
  * `SKILL.md` says of it. An install reads that commit again, as the
  * preview pinned it, takes the skills chosen by name, and holds each to
- * the one check (`skill-check.ts`). A skill's text becomes a one-file
+ * the one check (`@repo/features/installed-skill-check`). A skill's text becomes a one-file
  * skill under the name and description the member gave, written into its
  * frontmatter so its `SKILL.md` says of itself what the store keeps, for
  * a harness that reads it from disk.
@@ -13,6 +13,12 @@
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import type { NewInstalledSkill } from "@repo/database/models/installed-skill-store";
+import {
+  fileText,
+  type SkillHead,
+  skillHead,
+  skillRefusal,
+} from "@repo/features/installed-skill-check";
 import {
   type InstalledSkillCandidate,
   type InstalledSkillPreview,
@@ -28,7 +34,6 @@ import { Effect } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import type { GitHubApp } from "../github/github-app.js";
 import { HOSTED_REFUSAL, type HostedRefusal, installedSkillRefused } from "../http/http-effect.js";
-import { fileText, type SkillHead, skillHead, skillRefusal } from "./skill-check.js";
 import type { SkillPaste, SkillPasteSource } from "./skill-paste.js";
 import {
   reachSkillRepository,
@@ -128,7 +133,11 @@ const NAME_OR_DESCRIPTION = /^(?:name|description):/u;
  * each written once in place of any key and lines it held, and the
  * frontmatter made where the text opens with none.
  */
-function withNameAndDescription(markdown: string, name: string, description: string): string {
+export function withNameAndDescription(
+  markdown: string,
+  name: string,
+  description: string,
+): string {
   // Note that a JSON string is a YAML double-quoted scalar, so any description reads back as written.
   const head = `name: ${JSON.stringify(name)}\ndescription: ${JSON.stringify(description)}`;
   const unmarked = markdown.replace(/^\uFEFF/u, "");

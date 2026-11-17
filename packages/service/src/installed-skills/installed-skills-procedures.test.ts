@@ -16,9 +16,11 @@ import {
   SKILL_PASTE_KIND,
 } from "@repo/features/installed-skill-route-wire";
 import {
+  INSTALLED_SKILL_BOUNDS,
   INSTALLED_SKILL_REFUSAL,
   INSTALLED_SKILL_SCOPE,
   INSTALLED_SKILL_SOURCE,
+  MAC_SKILL_APP,
 } from "@repo/features/installed-skill-wire";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
@@ -756,6 +758,102 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
         assert.equal((yield* read(teammate, own)).status, HOSTED_HTTP_STATUS.NOT_FOUND);
         assert.equal((yield* read(stranger, team)).status, HOSTED_HTTP_STATUS.NOT_FOUND);
         assert.equal((yield* read(owner, "not-a-uuid")).status, HOSTED_HTTP_STATUS.NOT_FOUND);
+      }),
+  );
+
+  it.effect(
+    "a skill's folder from a Mac installs every file with where it was read, under the name asked where its own is taken, and a folder past the bound or carrying a credential is refused",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        const workspace = yield* openWorkspace(owner);
+        const ask = yield* routes(githubReaching([]));
+        const base64 = (text: string) => Buffer.from(text).toString("base64");
+        const notes = skillFile("release-notes", "Drafts release notes.");
+
+        const importFolder = (
+          files: Readonly<Record<string, string>>,
+          more: Readonly<Record<string, WireBoundaryInput>> = {},
+        ) =>
+          ask(
+            `${SKILLS}/import`,
+            owner,
+            install({
+              workspaceId: workspace,
+              scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+              mac: { app: MAC_SKILL_APP.CLAUDE_CODE, folder: "~/.claude/skills/release-notes" },
+              files: Object.entries(files).map(([path, text]) => ({ path, base64: base64(text) })),
+              ...more,
+            }),
+          );
+
+        const folder = { "SKILL.md": notes, "scripts/tags.sh": "git tag --list" };
+
+        const [first] = readAnswer(
+          installedSkillInstallAnswerSchema,
+          201,
+          yield* importFolder(folder),
+        ).skills;
+
+        assert.ok(first);
+        assert.deepEqual(
+          { name: first.name, source: first.source },
+          {
+            name: "release-notes",
+            source: {
+              type: INSTALLED_SKILL_SOURCE.TEXT,
+              mac: { app: MAC_SKILL_APP.CLAUDE_CODE, folder: "~/.claude/skills/release-notes" },
+            },
+          },
+        );
+        assert.equal(yield* storedText(owner, first.id, "SKILL.md"), notes);
+        assert.equal(yield* storedText(owner, first.id, "scripts/tags.sh"), "git tag --list");
+
+        // The name is taken now, so the same folder comes in under the one asked, written into its frontmatter.
+        assert.deepEqual((yield* importFolder(folder)).body, {
+          error: HOSTED_API_ERROR.SKILL_NAME_TAKEN,
+          skillName: "release-notes",
+        });
+
+        const [second] = readAnswer(
+          installedSkillInstallAnswerSchema,
+          201,
+          yield* importFolder(folder, { name: "release-notes-2" }),
+        ).skills;
+
+        assert.ok(second);
+        assert.equal(second.name, "release-notes-2");
+        assert.equal(
+          yield* storedText(owner, second.id, "SKILL.md"),
+          `---\nname: "release-notes-2"\ndescription: "Drafts release notes."\n---\n\n# release-notes\n\nDo the thing.\n`,
+        );
+
+        const half = "x".repeat(INSTALLED_SKILL_BOUNDS.MAX_IMPORT_BYTES / 2);
+        assert.deepEqual(
+          (yield* importFolder({ "SKILL.md": notes, "a.txt": half, "b.txt": half })).body,
+          {
+            error: HOSTED_API_ERROR.SKILL_FILES_REFUSED,
+            skillName: "release-notes",
+            skillRefusal: INSTALLED_SKILL_REFUSAL.TOO_LARGE,
+          },
+        );
+        assert.deepEqual(
+          (yield* importFolder(
+            { "SKILL.md": notes, "env.sh": `TOKEN=${FAKE_GITHUB_TOKEN}` },
+            {
+              name: "leaky",
+            },
+          )).body,
+          {
+            error: HOSTED_API_ERROR.SKILL_FILES_REFUSED,
+            skillName: "leaky",
+            skillRefusal: INSTALLED_SKILL_REFUSAL.CREDENTIAL,
+          },
+        );
+        assert.equal(
+          (yield* importFolder({ "SKILL.md": notes, "../escape.sh": "rm" })).status,
+          HOSTED_HTTP_STATUS.BAD_REQUEST,
+        );
       }),
   );
 });

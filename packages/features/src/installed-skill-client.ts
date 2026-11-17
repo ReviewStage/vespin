@@ -3,6 +3,7 @@ import type { HostedServiceOptions } from "./account-call.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { HOSTED_DEADLINE, type HostedClient, hostedClient } from "./hosted-link.js";
 import type {
+  InstalledSkillImportRequest,
   installedSkillInstallRequestSchema,
   installedSkillRefusedDataSchema,
 } from "./installed-skill-route-wire.js";
@@ -110,6 +111,18 @@ export class HostedInstalledSkillClient {
   install(params: InstalledSkillInstallParams) {
     return Effect.map(
       hostedCall(this.#hosted.installedSkills.install, params, {
+        as: INSTALLED_SKILL_RENAMES,
+        deadline: HOSTED_DEADLINE.START,
+      }),
+      spelledBySkill,
+    );
+  }
+
+  /** One skill's folder read from a Mac, installed in the scope asked under the name asked, else its own. */
+  importFolder(params: InstalledSkillImportRequest) {
+    return Effect.map(
+      // Note that a folder's files run to megabytes, so its upload waits as long as a Start does.
+      hostedCall(this.#hosted.installedSkills.importFolder, params, {
         as: INSTALLED_SKILL_RENAMES,
         deadline: HOSTED_DEADLINE.START,
       }),

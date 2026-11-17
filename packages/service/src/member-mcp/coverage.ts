@@ -447,6 +447,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   // Billing is an owner's or admin's, read on the Billing page and set up and managed on Stripe's own pages.
   billing: { status: SCREEN_ONLY, setup: NEEDS_BROWSER, portal: NEEDS_BROWSER },
+  // Note that a skill's folder is sent as the desktop's Settings › Skills read it from the Mac; an agent installs one through `install_skill`.
+  installedSkills: { importFolder: SCREEN_ONLY },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
   workspaceMergeQueue: { read: NOT_YET_BUILT },

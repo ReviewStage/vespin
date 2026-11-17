@@ -1,5 +1,5 @@
 /**
- * skill-check.ts -- what a skill's `SKILL.md` says of it, and the one check an install holds a skill to before anything is written.
+ * installed-skill-check.ts -- what a skill's `SKILL.md` says of it, and the one check an install holds a skill to before anything is written.
  *
  * A skill is named by its `SKILL.md`'s frontmatter, or by its folder where
  * it declares no name, as the `skills` tool names one. An install refuses
@@ -12,6 +12,10 @@
  * instructions and scripts handed to every agent that loads it, so one
  * carrying a credential would hand it on; it is refused rather than
  * redacted, since the skill is the member's to mend.
+ *
+ * The service holds every install to it (`packages/service/src/installed-skills/`),
+ * and the desktop holds a skill folder read from the Mac to it before it
+ * offers one, so a skill the service would refuse is left out with why.
  */
 
 import {
@@ -19,14 +23,8 @@ import {
   INSTALLED_SKILL_MAIN_FILE,
   INSTALLED_SKILL_REFUSAL,
   type InstalledSkillRefusal,
-} from "@repo/features/installed-skill-wire";
-import {
-  readSkillFile,
-  SKILL_FILE_BOUNDS,
-  SKILL_KEY,
-  SKILL_NAME_RULE,
-} from "@repo/features/skill-file";
-import type { SkillFile } from "./skill-source.js";
+} from "./installed-skill-wire.js";
+import { readSkillFile, SKILL_FILE_BOUNDS, SKILL_KEY, SKILL_NAME_RULE } from "./skill-file.js";
 
 /** The repository check's provider-credential shapes, kept in step with `scripts/repository-checks.sh`. */
 const CREDENTIAL_PATTERNS: readonly RegExp[] = [
@@ -37,6 +35,12 @@ const CREDENTIAL_PATTERNS: readonly RegExp[] = [
   /AKIA[0-9A-Z]{16}/u,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----/u,
 ];
+
+/** One file of a skill: its path from the skill's folder and its bytes. */
+export interface SkillFile {
+  readonly path: string;
+  readonly bytes: Uint8Array;
+}
 
 /** What a skill's `SKILL.md` says of it, as the store keeps it. */
 export interface SkillHead {

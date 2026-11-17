@@ -1,5 +1,5 @@
 /**
- * installed-skills.ts -- the skills members install into the app (`installed-skill-route-wire.ts`), as procedures: list them, read one, preview a paste, install from it, and remove one.
+ * installed-skills.ts -- the skills members install into the app (`installed-skill-route-wire.ts`), as procedures: list them, read one, preview a paste, install from it, bring one in from a Mac, and remove one.
  *
  * Every output is its wire schema flipped, so oRPC's output check encodes
  * the handler's value into the bytes the wire carries. A body refuses a key
@@ -14,6 +14,8 @@
  * not permitted; a paste's GitHub source out of reach, or GitHub silent,
  * is refused as such; a skill's files the store refuses, and a name already
  * taken, carry the skill by name (`installedSkillRefusedDataSchema`). A
+ * skill's folder brought in from a Mac answers 201 for the one skill it
+ * made, refused as an install's are but for GitHub, which it never reads. A
  * paste with nothing to install, or a workspace skill in a personal
  * workspace, is an invalid request, as any procedure may answer.
  */
@@ -25,6 +27,7 @@ import {
   INSTALLED_SKILL_LIST_QUERY,
   INSTALLED_SKILL_PASTE_MAX_CHARS,
   installedSkillContentSchema,
+  installedSkillImportRequestSchema,
   installedSkillInstallAnswerSchema,
   installedSkillInstallRequestSchema,
   installedSkillListAnswerSchema,
@@ -32,6 +35,7 @@ import {
   installedSkillPreviewSchema,
   installedSkillRemovedAnswerSchema,
 } from "../installed-skill-route-wire.js";
+import { INSTALLED_SKILL_BOUNDS } from "../installed-skill-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
 import { bodyCap, declaredProcedure, exactInput, refuses } from "./base.js";
@@ -42,6 +46,16 @@ import { bodyCap, declaredProcedure, exactInput, refuses } from "./base.js";
  * with room for the names and description an install carries.
  */
 const PASTE_BODY_BYTES = INSTALLED_SKILL_PASTE_MAX_CHARS * 6 + 16_384;
+
+/**
+ * A body past this is no skill's folder: its files' bound in base64, which
+ * spends four characters on three bytes, and room for every file's path and
+ * the rest of the frame; under a function's 4.5 MB body.
+ */
+const IMPORT_BODY_BYTES =
+  Math.ceil(INSTALLED_SKILL_BOUNDS.MAX_IMPORT_BYTES / 3) * 4 +
+  INSTALLED_SKILL_BOUNDS.MAX_IMPORT_FILES * (INSTALLED_SKILL_BOUNDS.MAX_IMPORT_PATH_CHARS + 64) +
+  16_384;
 
 /** A removal carries nothing, so a body past this is none. */
 const SMALL_BODY_BYTES = 1_024;
@@ -108,6 +122,25 @@ export const installedSkillsContract = {
       }),
     )
     .input(exactInput(installedSkillInstallRequestSchema))
+    .output(EffectSchema.flip(installedSkillInstallAnswerSchema)),
+  importFolder: declaredProcedure
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.SKILL_FILES_REFUSED,
+        HOSTED_API_ERROR.SKILL_NAME_TAKEN,
+      ),
+    )
+    .meta(bodyCap(IMPORT_BODY_BYTES))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: `${HOSTED_SERVICE_PATH.INSTALLED_SKILLS}/import` as const,
+        successStatus: CREATED_STATUS,
+      }),
+    )
+    .input(exactInput(installedSkillImportRequestSchema))
     .output(EffectSchema.flip(installedSkillInstallAnswerSchema)),
   remove: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))

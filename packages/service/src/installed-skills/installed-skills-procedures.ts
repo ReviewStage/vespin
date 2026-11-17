@@ -1,5 +1,5 @@
 /**
- * installed-skills-procedures.ts -- the skills members install into the app, as hosted procedures: list the ones a workspace offers the account, read one, preview a paste, install from it, and remove one.
+ * installed-skills-procedures.ts -- the skills members install into the app, as hosted procedures: list the ones a workspace offers the account, read one, preview a paste, install from it, bring one in from a Mac, and remove one.
  *
  * Every procedure resolves the caller (`accountMiddleware`, on the
  * resource so it runs before an input is read) and runs the one operation
@@ -11,6 +11,7 @@
 import type { UserIdResolver } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
 import {
+  importSkill,
   installSkills,
   listSkills,
   previewSkillPaste,
@@ -45,6 +46,11 @@ export function installedSkillsProcedures(seams: InstalledSkillsProcedureSeams) 
     /** The skills a paste makes, installed in the scope asked, all or none. */
     install: skills.install.effect(function* ({ input, context: { userId } }) {
       return yield* installSkills(userId, input);
+    }),
+
+    /** One skill's folder read from the member's Mac, installed under the name asked, else its own. */
+    importFolder: skills.importFolder.effect(function* ({ input, context: { userId } }) {
+      return yield* importSkill(userId, input);
     }),
 
     /** One skill removed with its files. */
