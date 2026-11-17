@@ -3,9 +3,10 @@
  *
  * The surface holding a rename holds the act's `useMutation` itself, built
  * from the options its family hands (a task's, an agent's, a shell's), and
- * reads it here: the newest name asked is the mutation's `variables`, and a
- * refusal its error or, for an act whose answer says it, that answer. A
- * refusal said in a toast is said through the call's own `onSettled`, which
+ * reads it here: the newest name asked is the mutation's `variables`, drawn
+ * while it is out (`isPending`) as the docs' Optimistic Updates guide draws
+ * one through the UI, and a refusal its error or, for an act whose answer
+ * says it, that answer. A refusal said in a toast is said through the call's own `onSettled`, which
  * hears the newest call alone, so a rename a later one replaced says nothing.
  */
 
@@ -49,6 +50,7 @@ export function renameWrite<Answer, Variables>(
       });
     },
     asked: variables === undefined ? undefined : terms.asked(variables),
+    pending: isPending,
     refused: !isPending && refusedBy(data, error),
     reset,
   };
