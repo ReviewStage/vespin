@@ -55,6 +55,7 @@ import {
 } from "../links-at-hand.js";
 import {
   adminRouteStands,
+  inboxRouteStands,
   mergeQueueRouteStands,
   type RouteAccess,
   settingsPageRouteStands,
@@ -644,7 +645,9 @@ export const ROUTED_PLACE = {
   INBOX: {
     routes: ["/places/$workspace/inbox"],
     claims: everyAddress,
-    gate: workspaceGate,
+    // Note that it stands only while the account keeps an Inbox, so Back and Forward pass over it once it is off.
+    gate: (params, access) =>
+      params.workspace === undefined ? access.inbox : inboxRouteStands(params.workspace, access),
     // Note that an Inbox narrowed to a task is passed over once the task is deleted, as the task's own step is.
     stillThere: (params, search, there) => {
       const narrowed = params.taskId ?? search.get("task") ?? undefined;

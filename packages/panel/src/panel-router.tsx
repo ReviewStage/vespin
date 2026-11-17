@@ -346,6 +346,11 @@ const inboxRoute = createRoute({
   beforeLoad: ({ context, params, location }) => {
     const { listed } = context.access;
 
+    // Note that an account that turned its Inbox off lands on its workspace's Home instead.
+    if (!context.access.inbox) {
+      throw redirect({ to: "/$workspace", params: { workspace: params.workspace }, replace: true });
+    }
+
     if (workspaceRouteStands(params.workspace, context.access) || listed === undefined) return;
     throw redirect({
       href: `${pathUnder(location.pathname, listed)}${location.searchStr}`,

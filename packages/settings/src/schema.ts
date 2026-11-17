@@ -682,8 +682,7 @@ export const APP_SETTING_SCHEMA = {
     order: 306,
     // Nothing to run per write: an agent's session reads it as it starts.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
-    // Note that no row draws it until every window hides the Inbox it turns off.
-    visible: () => false,
+    visible: accountDrawn,
   }),
   lineNumbers: toggleSetting({
     field: "lineNumbers",

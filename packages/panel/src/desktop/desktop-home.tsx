@@ -18,6 +18,7 @@ import { useRef, useState } from "react";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
 import { unreadShown } from "../failure-report.js";
+import { useInboxOn } from "../inbox-on.js";
 import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
@@ -309,6 +310,8 @@ export function DesktopHome({
   const waiting = read.items.filter(({ item }) => waitsOnReaderNow(item, tasks.me, now));
   const arriving = useArriving(tasks, read, waiting.length);
   const fresh = welcomed(tasks, useListsTask(undefined));
+  // Note that an account that turned its Inbox off is shown no Inbox section, its agents asking in their replies.
+  const inboxOn = useInboxOn();
 
   return (
     // Note that the rows' links are written under the listed workspace, so their menus offer Copy link.
@@ -324,7 +327,7 @@ export function DesktopHome({
               {/* The Inbox's rows name who started each agent, and Recent's who is on each task, read against the listed workspace's members. */}
               <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
                 <PersonBody reading={false}>
-                  <HomeInbox tasks={tasks} read={read} waiting={waiting} />
+                  {inboxOn ? <HomeInbox tasks={tasks} read={read} waiting={waiting} /> : null}
                   <HomeRecent tasks={tasks} room={room} staged={staged} />
                 </PersonBody>
               </MemberDirectory>
