@@ -149,7 +149,7 @@ import {
   useMenu,
   useMinute,
 } from "@repo/ui";
-import { ACTOR_KIND, ACTOR_STATE, type Actor, actorName } from "@repo/ui/actor-model";
+import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { confirmAsked, neverBusyAct } from "@repo/ui/confirm-state";
 import { GLYPH } from "@repo/ui/icons";
 import { inputProblem, UNREPORTED } from "@repo/ui/reported-failure";
@@ -589,12 +589,14 @@ function OwnerRow({
 }): React.JSX.Element {
   const parse = optionValue(owners);
 
-  // Note that a teammate's maker the members do not name yet is said as its creator, never as the reader.
-  const changers = mine
-    ? "You"
-    : maker.kind === ACTOR_KIND.SOMEONE
-      ? "Its creator"
-      : actorName(maker);
+  // Note that a teammate's maker the members do not name yet is said as its creator, never as the reader, and one they name is drawn as their chip.
+  const changers = mine ? (
+    "You"
+  ) : maker.kind === ACTOR_KIND.SOMEONE ? (
+    "Its creator"
+  ) : (
+    <ActorRef actor={maker} />
+  );
 
   return (
     <PickerRow
@@ -651,14 +653,15 @@ function MakerRow({ maker, at }: { maker: Actor; at: number }): React.JSX.Elemen
   const now = useMinute();
 
   if (maker.kind === ACTOR_KIND.SOMEONE) return null;
-  const name = actorName(maker, { sentence: true });
+  // Note that the row's value already draws their chip, so the words name them no second time.
+  const who = maker.kind === ACTOR_KIND.PERSON && maker.you ? "you" : "this member";
 
   return (
     <SettingsRow
       label={<ReplayUnmask>Created by</ReplayUnmask>}
       description={
         <ReplayUnmask>
-          Runs as <ReplayMask>{name}</ReplayMask>. Created {dateOfText(at, now)}.
+          Runs as {who}. Created {dateOfText(at, now)}.
         </ReplayUnmask>
       }
     >
@@ -705,10 +708,10 @@ function ServersRow({
   onSwitch: (disabled: readonly string[]) => void;
 }): React.JSX.Element {
   if (!mine) {
-    // Note that a maker the members do not name yet is said as its creator, as the Owner row says them.
+    // Note that a maker the members do not name yet is said as its creator, as the Owner row says them, and one they name is drawn as their chip.
     const named = maker.kind !== ACTOR_KIND.SOMEONE;
-    const name = named ? actorName(maker, { sentence: true }) : "its creator";
-    const theirs = named ? actorName(maker, { sentence: true, possessive: true }) : "its creator's";
+    const name = named ? <ActorRef actor={maker} sentence /> : "its creator";
+    const theirs = named ? <ActorRef actor={maker} sentence possessive /> : "its creator's";
 
     return (
       <SettingsRow
