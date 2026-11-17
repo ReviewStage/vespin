@@ -121,7 +121,7 @@ function nextName(pictures: readonly HeldPicture[], offset: number): string {
 }
 
 /** Deletes a JPEG the manipulator saved, once its bytes are read; one that stays only costs the cache. */
-function deleteSaved(uri: string) {
+export function deleteSaved(uri: string) {
   try {
     const file = new File(uri);
 
