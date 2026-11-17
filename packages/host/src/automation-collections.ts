@@ -39,6 +39,7 @@ import {
 } from "@repo/features/automation-wire";
 import { type EntityPool, fieldKind, type HeldRows } from "@repo/sync";
 import { Effect, type Scope } from "effect";
+import { KEPT_LIST } from "./kept-lists.js";
 import { drawnAtEdges } from "./live-collection.js";
 import { confirmWrite, type TxWait } from "./live-follow.js";
 
@@ -212,6 +213,7 @@ export function automationListCollections(
         return wait === undefined ? undefined : (txid) => confirmWrite(wait, txid);
       },
       adopts: (row) => row.organizationId === dependencies.workspaceId,
+      kept: { ...KEPT_LIST.AUTOMATIONS, workspace: dependencies.workspaceId },
     });
 
     /** Draws the list as it stands now, what every standing write drew among it, and arms its next edge. */

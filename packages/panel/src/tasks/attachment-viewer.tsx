@@ -6,9 +6,12 @@ import {
   type FileChip,
   sizeLabel,
 } from "@repo/features/attachment-model";
+import { diagramAlt } from "@repo/features/mermaid-diagram";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { SHORTCUT_KEY, type ShortcutChord } from "@repo/settings/shortcuts";
 import {
+  AUDIO_PLAYER_PLACE,
+  AudioPlayer,
   Button,
   ButtonLink,
   CloseIcon,
@@ -37,6 +40,7 @@ import {
   ZoomImage,
 } from "@repo/ui";
 import { DIAGRAM_DRAWING } from "@repo/ui/diagram-contract";
+import { GLYPH } from "@repo/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
@@ -58,7 +62,7 @@ import {
 } from "../copy-feedback.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 import { PhoneHead, PlaceMore } from "../desktop/phone-head.js";
-import { diagramAlt, useAppearance, useDrawing } from "../diagram-drawing.js";
+import { useAppearance, useDrawing } from "../diagram-drawing.js";
 import { failureShown } from "../failure-report.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { FileTypeIcon } from "./file-type-icon.js";
@@ -297,7 +301,7 @@ function viewerGroups(input: {
   readonly picture: string | undefined;
   /** Whether the window holds the file's bytes, which alone are copied and saved (`heldBytes`). */
   readonly held: boolean;
-  /** Whether the file is a picture, a video, or a PDF, which the place's action is offered for. */
+  /** Whether the file is a picture, a video, a sound clip, or a PDF, which the place's action is offered for. */
   readonly media: boolean;
   readonly zoom: ImageZoom;
   readonly action: ViewerAction | undefined;
@@ -442,6 +446,22 @@ function AttachmentBody({
           dataUrl={file.url}
           label={file.alt ?? file.name}
           place={VIDEO_PLAYER_PLACE.VIEWER}
+        />
+      </div>
+    );
+  }
+
+  if (attachmentView(file) === ATTACHMENT_VIEW.AUDIO) {
+    return (
+      // A sound clip plays across the card under its header, its waveform as wide as the card leaves it.
+      <div
+        className="attachment-viewer-body min-h-0 flex-auto flex items-center overflow-hidden bg-surface p-ui-24"
+        {...DIALOG_VEIL}
+      >
+        <AudioPlayer
+          dataUrl={file.url}
+          label={file.alt ?? file.name}
+          place={AUDIO_PLAYER_PLACE.VIEWER}
         />
       </div>
     );
@@ -608,8 +628,14 @@ export function AttachmentViewer({
   const image = picture !== undefined;
   const held = heldBytes(file);
   const video = view === ATTACHMENT_VIEW.VIDEO;
-  // The place's own action takes the file itself, so it is offered for a picture, a video, or a PDF, never a diagram's code.
-  const media = view === ATTACHMENT_VIEW.IMAGE || video || view === ATTACHMENT_VIEW.PDF;
+
+  // The place's own action takes the file itself, so it is offered for a picture, a video, a sound clip, or a PDF, never a diagram's code.
+  const media =
+    view === ATTACHMENT_VIEW.IMAGE ||
+    video ||
+    view === ATTACHMENT_VIEW.AUDIO ||
+    view === ATTACHMENT_VIEW.PDF;
+
   // A phone walks the files from its ⋯ and the arrow keys, with no room beside the card for the arrows or under it for the strip.
   const walking = !phone && files.length > 1;
   // A video takes a card of its own shape, so no ground stands beside it; a phone's fills the screen as its header does.
@@ -817,11 +843,18 @@ export function AttachmentViewer({
                 const view = attachmentView(each);
                 const drawn = view === ATTACHMENT_VIEW.IMAGE || view === ATTACHMENT_VIEW.VIDEO;
 
+                const glyph =
+                  view === ATTACHMENT_VIEW.AUDIO ? (
+                    <GLYPH.SOUND_CLIP />
+                  ) : drawn ? undefined : (
+                    <FileTypeIcon name={each.name} />
+                  );
+
                 return {
                   name: each.name,
                   image: view === ATTACHMENT_VIEW.IMAGE ? each.url : undefined,
                   video: view === ATTACHMENT_VIEW.VIDEO ? each.url : undefined,
-                  glyph: drawn ? undefined : <FileTypeIcon name={each.name} />,
+                  glyph,
                 };
               })}
               at={at}

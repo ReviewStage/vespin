@@ -68,13 +68,12 @@ export interface AutomationsRoute extends AutomationsStanding {
   readonly deletedNow: (automationId: string) => boolean;
   /** The address of the automation's setup while its runs stand alone over it, which a way back from them steps back to. */
   readonly setupAddress: string | undefined;
-  /** Opens `to` under the workspace whose address step is `workspace`. */
-  readonly onOpen: (to: AutomationsPlace, workspace: string) => void;
+  /** Opens `to` under the workspace whose address step is `workspace`, as a step of its own, or in the step's place where `inPlace`. */
+  readonly onOpen: (to: AutomationsPlace, workspace: string, inPlace?: boolean) => void;
   /** Whether the page `to` under `workspace` is the one standing, which opening it moves nothing to. */
   readonly standsAt: (to: AutomationsPlace, workspace: string) => boolean;
   /** Stands the automation's runs alone as a step of their own, or its setup again in the step's place. */
   readonly onRuns: (shown: boolean) => void;
-  readonly onClose: () => void;
   /** Stands the same page under `workspace` in the step's place, as another workspace listed under the pages does. */
   readonly onTurn: (workspace: string) => void;
 }
@@ -159,7 +158,7 @@ export function useAutomationsPlace(): AutomationsStanding {
   };
 }
 
-/** The Automations pages as the router stands them, in a room `narrow` or not, left by the window's routed exit, and kept standing by its stay where a leave was asked of them before a door asked for the page standing. */
+/** The Automations pages as the router stands them, in a room `narrow` or not, kept standing by the window's routed stay where a leave was asked of them before a door asked for the page standing. */
 export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRoute {
   const router = useRouter();
   const navigate = useNavigate();
@@ -172,7 +171,7 @@ export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRout
   const standsAt = (to: AutomationsPlace, workspace: string) =>
     router.buildLocation(navigationTo(to, workspace)).href === router.history.location.href;
 
-  const onOpen = (to: AutomationsPlace, workspace: string) => {
+  const onOpen = (to: AutomationsPlace, workspace: string, inPlace = false) => {
     const gone = to.kind === AUTOMATIONS_PAGE.LIST ? to.deleted : undefined;
 
     if (gone !== undefined) deleted.setState((held) => new Map(held).set(gone, true));
@@ -187,7 +186,7 @@ export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRout
     }
 
     // The automation a new page made takes that page's step.
-    const replace = to.kind === AUTOMATIONS_PAGE.EDIT && to.created === true;
+    const replace = inPlace || (to.kind === AUTOMATIONS_PAGE.EDIT && to.created === true);
     void navigate({ ...options, replace });
   };
 
@@ -228,7 +227,6 @@ export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRout
     onOpen,
     standsAt,
     onRuns,
-    onClose: () => exits.leave(),
     onTurn,
   };
 }

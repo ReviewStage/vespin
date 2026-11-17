@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import { revisionSummary } from "@repo/features/description-history-words";
+import {
+  changedSections,
+  VERSION_CHANGE,
+  versionDiff,
+} from "@repo/features/description-version-diff";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
   DESCRIPTION_ACTOR,
@@ -16,15 +21,12 @@ import { MARKDOWN_MARK, MarkdownMessage } from "../markdown-message.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import {
-  changedSections,
   opensSections,
   REVISION_SOURCE,
   revisionAuthorOf,
   revisionOfSave,
   revisionSource,
   sourceLabel,
-  VERSION_CHANGE,
-  versionDiff,
 } from "./description-history-model.js";
 
 const HOUR = 3_600_000;
@@ -37,7 +39,12 @@ const CHARLES = { userId: "user-charles", name: "Charles Pan" };
 function line(overrides: Partial<DescriptionRevisionLine> = {}): DescriptionRevisionLine {
   return {
     seq: 3,
-    lastEdit: { actor: DESCRIPTION_ACTOR.NOTETAKER, at: NOW - 2 * HOUR, duringCall: false },
+    lastEdit: {
+      actor: DESCRIPTION_ACTOR.DEVELOPER,
+      by: CHARLES,
+      at: NOW - 2 * HOUR,
+      duringCall: false,
+    },
     startedAt: NOW - 3 * HOUR,
     changes: 14,
     ...overrides,
@@ -121,7 +128,6 @@ test("a revision names its writer as the developer knows them, and says what it 
       ),
     );
 
-  assert.equal(named({}), "Vespin");
   assert.equal(named({ actor: DESCRIPTION_ACTOR.DEVELOPER, by: DEAN }), "You");
   assert.equal(
     named({ actor: DESCRIPTION_ACTOR.AGENT, label: "Invite emails" }, AGENT_ID),
@@ -150,9 +156,9 @@ test("a revision names its writer as the developer knows them, and says what it 
 });
 
 /**
- * A description's revisions, newest first, as the service lists them: the app's on a
- * call, moved on by saves from three hours ago to two, an agent's five hours
- * ago, and the description before its history began.
+ * A description's revisions, newest first, as the service lists them: a
+ * teammate's, moved on by saves from three hours ago to two, an agent's five
+ * hours ago, and the description before its history began.
  */
 const REVISIONS = [
   line({ seq: 3, startedAt: NOW - 3 * HOUR }),
@@ -216,6 +222,14 @@ test("a version against the one before it marks the words written in and struck 
   assert.deepEqual(marked(diff, MARKDOWN_MARK.DELETED), ["Only admins"]);
   assert.deepEqual(marked(diff, MARKDOWN_MARK.INSERTED), ["Any member"]);
   assert.equal(diff.units[0]?.words, "## Goal\n\nOnly adminsAny member can invite.");
+
+  // A line struck and written over two lines still reads, unmarked, as the version wrote it.
+  const listed = versionDiff(
+    documentOf(["## Goal\n\n- a\n- b c"]),
+    documentOf(["## Goal\n\n- d c"]),
+  );
+
+  assert.equal(listed.units[0]?.plain, "## Goal\n\n- d c");
 });
 
 test("a picture replaced in a version reads as the old one struck and the new one written in, each whole", () => {
@@ -364,7 +378,7 @@ test("only a revision of several changes opens its sections: not one change, a r
   );
 });
 
-test("a revision's Open goes to its agent's tab, and nowhere for Vespin's own saves, whose work no tab draws, or anyone else", () => {
+test("a revision's Open goes to its agent's tab, and nowhere for anyone else", () => {
   const agentEdit = {
     actor: DESCRIPTION_ACTOR.AGENT,
     label: "Invite emails",
@@ -372,7 +386,6 @@ test("a revision's Open goes to its agent's tab, and nowhere for Vespin's own sa
     duringCall: false,
   };
 
-  assert.equal(revisionSource(line()), undefined);
   assert.deepEqual(revisionSource({ lastEdit: agentEdit, agentId: AGENT_ID }), {
     kind: REVISION_SOURCE.AGENT,
     agentId: AGENT_ID,

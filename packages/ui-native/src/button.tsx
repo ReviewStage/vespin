@@ -17,6 +17,7 @@ import {
   accessibilityElement,
   accessibilityHidden,
   accessibilityHint,
+  accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
   background,
@@ -36,15 +37,15 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { labelFill } from "@repo/features/label-fill";
-import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
-import type { TaskStatus } from "@repo/features/task-wire";
+import { TASK_PRIORITY_WORDS, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
+import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactElement, type ReactNode } from "react";
 import { useColorScheme } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { choiceColor, type MenuChoice } from "./list-row.js";
-import { Avatar, type Face, TaskStatusMark, ToneGlyph } from "./marks.js";
+import { choiceContent, type MenuChoice } from "./list-row.js";
+import { Avatar, type Face, TaskPriorityMark, TaskStatusMark, ToneGlyph } from "./marks.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -219,6 +220,14 @@ function CapsuleWords({
   );
 }
 
+/** How a `Chip` stands: bordered, as an act's capsule, or quiet, its words alone in the ink, as the panel's quiet button stands the lesser of two acts. */
+export const CHIP_LOOK = {
+  BORDERED: "bordered",
+  QUIET: "quiet",
+} as const;
+
+export type ChipLook = (typeof CHIP_LOOK)[keyof typeof CHIP_LOOK];
+
 type ChipProps = {
   readonly label: string;
   readonly symbol?: Glyph | undefined;
@@ -228,6 +237,8 @@ type ChipProps = {
   readonly selected?: boolean | undefined;
   /** What a press does, heard after the chip's words where they leave it unsaid, such as a picture's × taking it off a message. */
   readonly hint?: string | undefined;
+  /** How it stands, bordered unless the lesser of two acts names it quiet. */
+  readonly look?: ChipLook | undefined;
   readonly onPress: () => void;
 };
 
@@ -239,15 +250,29 @@ type ChipProps = {
  * Contrast. VoiceOver hears the chosen one as selected, since its fill
  * alone says so on screen.
  */
-export function Chip({ label, symbol, count, selected = false, hint, onPress }: ChipProps) {
+export function Chip({
+  label,
+  symbol,
+  count,
+  selected = false,
+  hint,
+  look = CHIP_LOOK.BORDERED,
+  onPress,
+}: ChipProps) {
   const colors = useColors();
+
+  const style = selected
+    ? "borderedProminent"
+    : look === CHIP_LOOK.QUIET
+      ? "borderless"
+      : "bordered";
 
   return (
     <SwiftUIButton
       {...actContent(count === undefined ? label : `${label} ${count}`, symbol, "subheadline")}
       onPress={onPress}
       modifiers={[
-        buttonStyle(selected ? "borderedProminent" : "bordered"),
+        buttonStyle(style),
         SwiftModifiers.buttonBorderShape("capsule"),
         controlSize("small"),
         tint(colors.TEXT),
@@ -276,9 +301,11 @@ export const SCOPE_LOOK = {
 
 export type ScopeLook = (typeof SCOPE_LOOK)[keyof typeof SCOPE_LOOK];
 
-/** A scope as its segment names it: its label, and its count after it where it has one. */
+/** A scope as its segment names it: its label, and its count after it while it holds anything, as a split view's filter menu leaves out a 0. */
 function segmentWords(scope: Scope): string {
-  return scope.count === undefined ? scope.label : `${scope.label} ${scope.count}`;
+  return scope.count === undefined || scope.count === 0
+    ? scope.label
+    : `${scope.label} ${scope.count}`;
 }
 
 /** A list's scopes as a `ScopePicker` or a `RowList` stands them: what the control chooses, heard by VoiceOver, its scopes, and its look. */
@@ -350,6 +377,8 @@ type FieldChipProps = {
   readonly label: string;
   /** A task's status, whose ring leads the chip. */
   readonly status?: TaskStatus | undefined;
+  /** A task's priority, whose bars lead the chip. */
+  readonly priority?: TaskPriority | undefined;
   /** A person, whose face leads the chip, their picture where one is known. */
   readonly face?: Face | undefined;
   /** A glyph leading the chip where neither does, in the muted ink. */
@@ -358,6 +387,8 @@ type FieldChipProps = {
   readonly mark?: { readonly glyph: Glyph; readonly tone: StatusTone } | undefined;
   /** What a press offers, the field's other values, where the reader may change it; a chip with none takes no press. */
   readonly menu?: FieldMenu | undefined;
+  /** What VoiceOver hears for a chip that takes no press, where its words alone don't say what it is, such as the task an agent starts on and its status; its words otherwise. */
+  readonly heard?: string | undefined;
 };
 
 /** A field's values as its chip's menu offers them: the field's name, which VoiceOver hears before its value, and each value, the one it holds checked. */
@@ -370,6 +401,8 @@ export type FieldMenu = {
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
 function fieldMark(props: FieldChipProps, colors: BrandColors, glyphSize: number): ReactNode {
   if (props.status !== undefined) return <TaskStatusMark status={props.status} />;
+
+  if (props.priority !== undefined) return <TaskPriorityMark priority={props.priority} />;
 
   if (props.face !== undefined) {
     return (
@@ -415,7 +448,7 @@ export function FieldChip(props: FieldChipProps) {
       modifiers={[
         ...capsuleModifiers(colors, false),
         ...(menu === undefined
-          ? [accessibilityElement("ignore"), accessibilityLabel(props.label)]
+          ? [accessibilityElement("ignore"), accessibilityLabel(props.heard ?? props.label)]
           : []),
       ]}
     >
@@ -463,7 +496,7 @@ function FieldValuesMenu({
         <Toggle
           // Note that a choice is keyed by its place, since two members may share a name.
           key={at}
-          {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
+          {...choiceContent(choice, colors)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />
@@ -481,6 +514,17 @@ export function StatusChip({
   readonly menu?: FieldMenu | undefined;
 }) {
   return <FieldChip label={TASK_STATUS_WORDS[status]} status={status} menu={menu} />;
+}
+
+/** A task's priority as a field's chip, its bars leading its name, as the panel's chip draws it. */
+export function PriorityChip({
+  priority,
+  menu,
+}: {
+  readonly priority: TaskPriority;
+  readonly menu?: FieldMenu | undefined;
+}) {
+  return <FieldChip label={TASK_PRIORITY_WORDS[priority]} priority={priority} menu={menu} />;
 }
 
 /**
@@ -596,6 +640,7 @@ export function FollowingChip({ label, faces, more, hint, heard, onPress }: Foll
             accessibilityLabel(label),
             accessibilityValue(heard),
             accessibilityHint(hint),
+            accessibilityIdentifier("following-chip"),
           ]}
         >
           <CapsuleTarget>{capsule}</CapsuleTarget>

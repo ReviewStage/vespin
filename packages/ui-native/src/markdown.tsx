@@ -3,29 +3,35 @@
 import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, type EntityKind, entityWordHeard } from "@repo/features/entity-kind";
 import type { LinkStanding } from "@repo/features/link-standing-model";
+import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import { SymbolView } from "expo-symbols";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   type AccessibilityActionEvent,
   ActivityIndicator,
   Image,
-  Modal,
   ScrollView,
+  type ScrollViewInstance,
   StyleSheet,
   Text,
   type TextLayoutEvent,
   type TextStyle,
   useWindowDimensions,
   View,
+  type ViewStyle,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AudioClip } from "./audio-clip.js";
+import { ChipMarkView, ChipSymbol, useChipMarkOf } from "./chip-mark.js";
+import type { ChipMarkOf } from "./chip-mark-model.js";
+import { DiagramBlock, DiagramRenderer } from "./diagram.js";
 import { DraftCard } from "./draft-card.js";
+import { FileChip } from "./file-chip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
-import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
+import { HeldMenu, useKeptActs, useQuickLook } from "./held-menu.js";
 import { ISSUE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { KEPT_KIND } from "./keep-model.js";
+import { KEPT_KIND, type Kept } from "./keep-model.js";
 import {
   COLUMN_ALIGN,
   type ColumnAlign,
@@ -40,6 +46,9 @@ import {
   type MarkdownSuggestion,
   markdownBlocks,
 } from "./markdown-model.js";
+import { MediaBox } from "./media-box.js";
+import { MediaFailed } from "./media-failed.js";
+import { COLUMN_BOUNDS, type MediaBounds, type MediaSize, mediaFrame } from "./media-frame.js";
 import { Press } from "./press.js";
 import {
   SUGGESTION_LOOK,
@@ -48,7 +57,7 @@ import {
   suggestionHeard,
 } from "./suggestion-look.js";
 import { type BrandColors, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
-import { SPACE } from "./tokens/space.js";
+import { RADIUS, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
@@ -76,7 +85,7 @@ const ENTITY_SYMBOL: Readonly<Record<EntityKind, Glyph>> = {
   [ENTITY_KIND.HOME]: GLYPH.HOME,
   [ENTITY_KIND.BOARD]: GLYPH.TASK,
   [ENTITY_KIND.INBOX]: GLYPH.INBOX,
-  [ENTITY_KIND.INBOX_ITEM]: GLYPH.THREAD,
+  [ENTITY_KIND.INBOX_ITEM]: GLYPH.INBOX,
   [ENTITY_KIND.AUTOMATIONS]: GLYPH.AUTOMATION,
   [ENTITY_KIND.AUTOMATION]: GLYPH.AUTOMATION,
   [ENTITY_KIND.AUTOMATION_RUN]: GLYPH.AUTOMATION,
@@ -116,6 +125,17 @@ const TEXT_ALIGN: Readonly<Record<ColumnAlign, TextStyle["textAlign"]>> = {
 
 /** The bounds a table's column is laid out within, in points, before the reader's Dynamic Type scales its words. */
 const COLUMN_WIDTH = { MIN: 48, MAX: 260 } as const;
+
+/** How wide the fade at a sideways scroller's edge stands, in points, where more stands past it. */
+const EDGE_FADE = 24;
+
+/** How far, in points, a scroller must stand from its edge before that edge counts as having more past it. */
+const EDGE_SLACK = 1;
+
+/** The edge of a sideways scroller a fade stands at, as a gradient's direction names it. */
+const SCROLL_EDGE = { START: "left", END: "right" } as const;
+
+type ScrollEdge = (typeof SCROLL_EDGE)[keyof typeof SCROLL_EDGE];
 
 /** The share of a line's size an inline chip sits below the baseline by, so it centers on the words rather than standing on them. */
 const CHIP_DROP = 0.22;
@@ -159,12 +179,24 @@ type FirstLine = {
 /** Reports a list item's first line once it is laid out; none where nothing asks. */
 type OnFirstLine = ((line: FirstLine) => void) | undefined;
 
+/** A quote's rule, the line down its left. */
+const QUOTE_RULE = 3;
+
+/** How far a quote's words stand in from the column: its rule and its padding. */
+const QUOTE_INSET = QUOTE_RULE + SPACE.ROW;
+
 const styles = StyleSheet.create({
   marker: { position: "absolute", left: 0, top: 0 },
-  quote: { borderLeftWidth: 3, paddingLeft: SPACE.ROW },
-  well: { borderRadius: 8, padding: SPACE.ROW },
-  tableBox: { alignSelf: "stretch", overflow: "hidden" },
-  table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
+  quote: { borderLeftWidth: QUOTE_RULE, paddingLeft: SPACE.ROW },
+  well: { borderRadius: RADIUS.BLOCK, paddingVertical: SPACE.ROW, overflow: "hidden" },
+  wellLines: { paddingHorizontal: SPACE.ROW },
+  table: {
+    alignSelf: "stretch",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADIUS.BLOCK,
+    overflow: "hidden",
+  },
+  fade: { position: "absolute", top: 0, bottom: 0, width: EDGE_FADE, pointerEvents: "none" },
   row: { flexDirection: "row" },
   cell: { paddingHorizontal: SPACE.ROW, paddingVertical: 6 },
   chip: {
@@ -172,15 +204,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 3,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 6,
+    borderRadius: RADIUS.TAG,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
-  picture: { width: "100%", borderRadius: 8 },
+  picture: { width: "100%", borderRadius: RADIUS.BLOCK },
   pending: { alignItems: "center", justifyContent: "center" },
-  viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
-  viewerClose: { position: "absolute", padding: SPACE.ROW },
-  viewerKeep: { position: "absolute", padding: SPACE.ROW },
+  measured: { alignSelf: "stretch" },
 });
 
 /** What drawing a run needs beyond the run: the colors, the reader's text scale, and the doors a press opens. */
@@ -192,12 +222,18 @@ interface Drawing {
   readonly openLink: (address: string) => void;
   /** The address a picture is drawn from, by the address its words name it by; none while it is on its way. */
   readonly pictureSource: (written: string) => string | null | undefined;
+  /** Reads a picture that could not be read again, by the address its words name it by; none offers nothing. */
+  readonly onRetryPicture: ((written: string) => void) | undefined;
   /** The video a picture's address names, played in its place; none where the address names a picture. */
   readonly videoAt: (written: string) => MarkdownVideo | undefined;
+  /** The file a picture's address names, such as a PDF a description keeps as it keeps a picture, drawn as its chip in its place; none where the address names a picture. */
+  readonly fileAt: (written: string) => MarkdownFile | undefined;
   /** Whether a heading is heard as one, on a page of words alone, where VoiceOver's Headings rotor walks its sections. */
   readonly headings: boolean;
   /** What GitHub holds of the pull request or issue a chip's page names, as the host read it; none while unread or unanswered. */
   readonly linkStanding: (page: string) => LinkStanding | undefined;
+  /** The mark the app holds for the entity a chip names (`ChipMarkProvider`); none where it holds nothing. */
+  readonly markOf: ChipMarkOf;
   /** How a suggestion's link stands, by its button and the words it was written with; none where it is drawn as the plain link it is. */
   readonly suggestion: (link: ReplyButtonLink, words: string) => SuggestionLook | undefined;
 }
@@ -207,7 +243,6 @@ type StandingLook = {
   readonly glyph: Glyph;
   readonly tone: StatusTone;
   readonly name: string;
-  readonly state: string | undefined;
   /** What VoiceOver hears: its kind, the name it now shows, and its state. */
   readonly heard: string;
 };
@@ -223,8 +258,8 @@ function standingHeard(chip: MarkdownChip, name: string, state: string | undefin
 /**
  * How a chip of a GitHub page stands, as the panel's chip draws it: a pull
  * request by its number alone, its title fading mid-word in a chip, with
- * its state's mark and words; an issue by its number and title, with its
- * state's mark and words; none where GitHub has answered nothing of it.
+ * its state's mark, its words heard alone; an issue by its number and
+ * title, likewise; none where GitHub has answered nothing of it.
  */
 function standingLook(chip: MarkdownChip, drawing: Drawing): StandingLook | undefined {
   const standing = chip.github === undefined ? undefined : drawing.linkStanding(chip.github);
@@ -237,7 +272,6 @@ function standingLook(chip: MarkdownChip, drawing: Drawing): StandingLook | unde
       ...look,
       glyph: look.symbol,
       name,
-      state: standing.state,
       heard: standingHeard(chip, name, standing.state),
     };
   }
@@ -247,7 +281,7 @@ function standingLook(chip: MarkdownChip, drawing: Drawing): StandingLook | unde
     const name = `#${standing.issue.number} ${standing.title}`;
     const heard = standingHeard(chip, name, standing.state);
 
-    return { ...look, glyph: look.symbol, name, state: standing.state, heard };
+    return { ...look, glyph: look.symbol, name, heard };
   }
 
   return undefined;
@@ -268,31 +302,6 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   }
 }
 
-/**
- * A chip's glyph in a `size`-point square in `color`, through the system's
- * symbol view, which the app's patch (`patches/expo-symbols@58.0.4.patch`)
- * lets read Lucide's custom symbols from the asset catalog as well as SF
- * Symbols, so a chip costs no SwiftUI host of its own.
- */
-function ChipGlyph({
-  glyph,
-  size,
-  color,
-}: {
-  readonly glyph: Glyph;
-  readonly size: number;
-  readonly color: string;
-}) {
-  return (
-    <SymbolView
-      name={glyphSymbol(glyph)}
-      size={size}
-      tintColor={color}
-      accessibilityElementsHidden
-    />
-  );
-}
-
 /** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere. */
 function MentionChip({
   chip,
@@ -306,6 +315,12 @@ function MentionChip({
   const size = TEXT_SIZE.FOOTNOTE;
   const standing = standingLook(chip, drawing);
   const heard = standing?.heard ?? chip.heard;
+
+  // Note that a GitHub page's standing wins over the entity's mark, since only the provider's answer says where it stands.
+  const mark =
+    standing === undefined && chip.of !== undefined ? drawing.markOf(chip.of) : undefined;
+
+  const markSize = size * fontScale;
 
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
@@ -323,22 +338,21 @@ function MentionChip({
           },
         ]}
       >
-        <ChipGlyph
-          glyph={standing?.glyph ?? ENTITY_SYMBOL[chip.entity]}
-          size={size * fontScale}
-          color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
-        />
+        {mark === undefined ? (
+          <ChipSymbol
+            glyph={standing?.glyph ?? ENTITY_SYMBOL[chip.entity]}
+            size={markSize}
+            color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
+          />
+        ) : (
+          <ChipMarkView mark={mark} size={markSize} colors={colors} />
+        )}
         <Text
           numberOfLines={1}
           style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
         >
           {standing?.name ?? chip.name}
         </Text>
-        {standing?.state === undefined ? null : (
-          <Text numberOfLines={1} style={{ fontSize: size, color: colors.TEXT_MUTED }}>
-            {standing.state}
-          </Text>
-        )}
       </Press>
     </View>
   );
@@ -379,7 +393,7 @@ function SuggestionChip({
           },
         ]}
       >
-        <ChipGlyph
+        <ChipSymbol
           glyph={offered ? SUGGESTION_SYMBOL : ENTITY_SYMBOL[ENTITY_KIND.AGENT]}
           size={size * fontScale}
           color={colors.TEXT_MUTED}
@@ -392,7 +406,7 @@ function SuggestionChip({
         </Text>
         {offered ? null : (
           <>
-            <ChipGlyph
+            <ChipSymbol
               glyph={SUGGESTION_SYMBOL}
               size={size * fontScale}
               color={colors.TEXT_MUTED}
@@ -828,15 +842,102 @@ function ListItem({
       <View style={item.blocks.length === 0 ? { marginLeft: -indent } : styles.marker}>
         <Marker checked={item.checked} number={number} firstLine={firstLine} drawing={drawing} />
       </View>
-      <Blocks blocks={item.blocks} drawing={drawing} gap={NESTED_GAP} onFirstLine={onFirstLine} />
+      {/* Note that the item's chips are held to the width left beside its marker, so one in a list never runs past the column. */}
+      <Blocks
+        blocks={item.blocks}
+        drawing={{ ...drawing, lineWidth: drawing.lineWidth - indent }}
+        gap={NESTED_GAP}
+        onFirstLine={onFirstLine}
+      />
+    </View>
+  );
+}
+
+/** A color with none of it showing, the clear end of a fade into it. */
+function clearOf(color: string): string {
+  return /^#[\da-f]{6}$/iu.test(color) ? `${color}00` : "transparent";
+}
+
+/** A fade over a sideways scroller's edge into its card's fill, toward the edge it stands at. */
+function EdgeFade({ ground, side }: { readonly ground: string; readonly side: ScrollEdge }) {
+  return (
+    <View
+      style={[
+        styles.fade,
+        side === SCROLL_EDGE.START ? { left: 0 } : { right: 0 },
+        { backgroundImage: `linear-gradient(to ${side}, ${clearOf(ground)}, ${ground})` },
+      ]}
+    />
+  );
+}
+
+/**
+ * What stands wider than its card scrolls sideways inside it, as the
+ * desktop's card scrolls a block of code or a table: the system's scroll
+ * indicator at its foot, flashed once as it first stands wider than the
+ * card, as iOS hints at more past a scroller's edge, and, given the card's
+ * fill as `ground`, a fade at each edge more stands past, so a line cut at
+ * the card's edge reads as one that goes on rather than one the screen
+ * cut. Note that it takes a pan only once the pan moves sideways, as UIKit
+ * settles a pan between two scrollers crossing, so the page still scrolls
+ * up and down over it.
+ */
+function SidewaysScroll({
+  ground,
+  lines,
+  children,
+}: {
+  readonly ground?: string | undefined;
+  /** The inset its content stands in from its own edges, which the content scrolls through. */
+  readonly lines?: ViewStyle | undefined;
+  readonly children: ReactNode;
+}) {
+  const scroller = useRef<ScrollViewInstance>(null);
+  const [card, setCard] = useState(0);
+  const [content, setContent] = useState(0);
+  const [atStart, setAtStart] = useState(true);
+  const [atEnd, setAtEnd] = useState(false);
+  const wider = card > 0 && content > card + EDGE_SLACK;
+
+  // Note that the hint flashes once, as the block first stands wider than its card.
+  useEffect(() => {
+    if (wider) scroller.current?.flashScrollIndicators();
+  }, [wider]);
+
+  return (
+    <View>
+      <ScrollView
+        ref={scroller}
+        horizontal
+        showsHorizontalScrollIndicator
+        scrollEventThrottle={32}
+        contentContainerStyle={lines}
+        onLayout={(event) => setCard(event.nativeEvent.layout.width)}
+        onContentSizeChange={(width) => setContent(width)}
+        onScroll={(event) => {
+          const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+          setAtStart(contentOffset.x <= EDGE_SLACK);
+          setAtEnd(contentOffset.x + layoutMeasurement.width >= contentSize.width - EDGE_SLACK);
+        }}
+      >
+        {children}
+      </ScrollView>
+      {ground === undefined || !wider || atStart ? null : (
+        <EdgeFade ground={ground} side={SCROLL_EDGE.START} />
+      )}
+      {ground === undefined || !wider || atEnd ? null : (
+        <EdgeFade ground={ground} side={SCROLL_EDGE.END} />
+      )}
     </View>
   );
 }
 
 /**
- * A table, scrolling sideways inside its own box, which stands at the
- * words' width as a code block's well does, so a table wider than the page
- * scrolls within the page's inset rather than running past its edge. Note that React Native has
+ * A table, scrolling sideways inside its own bordered box, which stands
+ * still at the words' width while its columns move inside it, as a code
+ * block's well does, so a table wider than the page scrolls within the
+ * page's inset rather than running past its edge, its border showing where
+ * the box ends. Note that React Native has
  * no table layout, so every cell is first drawn at its own width, held
  * between the column's bounds, and each column then stands at its widest
  * cell's; the table is laid out afresh when the reader's text size changes.
@@ -861,9 +962,9 @@ function TableView({
     });
 
   return (
-    <View style={styles.tableBox}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={[styles.table, { borderColor: colors.CHIP_EDGE }]}>
+    <View style={[styles.table, { borderColor: colors.CHIP_EDGE }]}>
+      <SidewaysScroll>
+        <View>
           {block.rows.map((row, rowAt) => (
             <View
               key={rowAt}
@@ -901,35 +1002,36 @@ function TableView({
             </View>
           ))}
         </View>
-      </ScrollView>
+      </SidewaysScroll>
     </View>
   );
 }
 
-/** A block of code, in the monospaced face on a well, scrolling sideways rather than wrapping its lines. */
+/**
+ * A block of code, in the monospaced face on a well, scrolling sideways
+ * rather than wrapping its lines, which run under the well's edge into a
+ * fade where more of them stands past it.
+ */
 function CodeView({ text, drawing }: { readonly text: string; readonly drawing: Drawing }) {
   const { colors } = drawing;
 
   return (
     <View style={[styles.well, { backgroundColor: colors.WELL }]}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <SidewaysScroll ground={colors.WELL} lines={styles.wellLines}>
         <Text
           selectable
           style={{ fontFamily: MONOSPACE_FONT, fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT }}
         >
           {text}
         </Text>
-      </ScrollView>
+      </SidewaysScroll>
     </View>
   );
 }
 
-/** The most a full-screen picture zooms in to, as a pinch takes it. */
-const VIEWER_MAX_ZOOM = 4;
-
-/** What a picture that could not be read says in its well, its own words first, as the panel's stand-in says it. */
+/** What a picture that could not be read is heard as, its own words first, as the panel's stand-in says it. */
 function unreadWords(alt: string): string {
-  return alt.trim() === "" ? "This picture could not be read." : `${alt} · could not be read.`;
+  return `${alt.trim() === "" ? "This picture" : alt} ${MEDIA_READ_WORDS.COULD_NOT_READ}`;
 }
 
 type PictureProps = {
@@ -937,128 +1039,123 @@ type PictureProps = {
   readonly source: string | null | undefined;
   /** What the picture shows, heard in its place. */
   readonly alt: string;
-  /** A tile's fixed shape, width over height, the picture standing whole inside it; the picture's own shape where none is given. */
+  /** A tile's fixed shape, width over height, the picture standing whole inside it, as wide as its tile; the picture's own shape and size, held to `MEDIA_BOUNDS`, where none is given. */
   readonly tileAspect?: number | undefined;
+  /** Reads the picture again where it could not be read; none offers nothing. */
+  readonly onRetry?: (() => void) | undefined;
+  /** Whether it fills its tile, cropped as a set's tiles stand, rather than standing whole inside it. */
+  readonly fill?: boolean | undefined;
+  /** Its own size in points where it is known before it loads, as a diagram drawn at the screen's scale is, whose pixels would read as three times its size; the pixels it reports, one to a point, where none is given. */
+  readonly size?: MediaSize | undefined;
+  /** The most it stands at, a message's `MEDIA_BOUNDS` where none is given; a diagram's is its column's width alone (`COLUMN_BOUNDS`). */
+  readonly bounds?: MediaBounds | undefined;
 };
 
 /**
- * A picture at its message's width, which a press opens full screen over
- * everything, where a pinch zooms it and Done closes it. Done stands at the
- * leading top corner inside the safe area, as Quick Look's does, clear of
- * what the system draws at the trailing corner: the clock of the folded
- * iPhone Duo's outer display, beside its rail. Note that a picture
- * still on its way stands as its well at the shape a picture most often
- * is, the system's spinner in it as Photos stands one, so the words under
- * it do not jump twice and it never reads as an empty box.
+ * A picture at its message's width, which a press opens full screen in the
+ * system's Quick Look, as Messages and Mail open one, where a swipe down
+ * closes it, a double tap or a pinch zooms it, and
+ * its share button copies, saves or shares it. A long press offers the same
+ * acts in place. Note that a picture still on its way stands as its well at
+ * the shape a picture most often is, the system's spinner in it as Photos
+ * stands one, so the words under it do not jump twice and it never reads as
+ * an empty box.
  */
-export function Picture({ source, alt, tileAspect }: PictureProps) {
+export function Picture({
+  source,
+  alt,
+  tileAspect,
+  onRetry,
+  fill = false,
+  size,
+  bounds,
+}: PictureProps) {
   const colors = useColors();
-  const { width, height } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
-  const [aspect, setAspect] = useState<number | undefined>(undefined);
-  const [full, setFull] = useState(false);
+  const [natural, setNatural] = useState<MediaSize | undefined>(undefined);
+  const [boxWidth, setBoxWidth] = useState<number | undefined>(undefined);
   const heard = alt === "" ? "Picture" : alt;
 
-  const acts = useKeptActs(
-    source == null ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard },
-  );
+  const kept: Kept | undefined =
+    source == null ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard };
+
+  const acts = useKeptActs(kept);
+  const show = useQuickLook(kept);
+
+  // Note that a tile fills its tile at the tile's shape, and any other picture stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
+  const frame = tileAspect === undefined ? mediaFrame(size ?? natural, bounds) : undefined;
 
   const well = [
     styles.picture,
-    { aspectRatio: tileAspect ?? aspect ?? 16 / 9, backgroundColor: colors.WELL },
+    { aspectRatio: tileAspect ?? frame?.aspectRatio, backgroundColor: colors.WELL },
   ];
 
   if (source === undefined) {
     return (
-      <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
-        <ActivityIndicator color={colors.TEXT_MUTED} />
-      </View>
+      <MediaBox frame={frame}>
+        <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
+          <ActivityIndicator color={colors.TEXT_MUTED} />
+        </View>
+      </MediaBox>
     );
   }
 
   // Note that a picture that could not be read says so in its well, as the panel's stand-in does, rather than spin as one still on its way.
   if (source === null) {
-    const words = unreadWords(alt);
-
     return (
-      <View style={[well, styles.pending]} accessible accessibilityLabel={words}>
-        <Text style={{ fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "center" }}>
-          {words}
-        </Text>
-      </View>
+      <MediaBox frame={frame}>
+        <MediaFailed
+          line={MEDIA_READ_WORDS.PICTURE_FAILED}
+          heard={unreadWords(alt)}
+          onRetry={onRetry}
+          style={well}
+        />
+      </MediaBox>
     );
   }
 
+  // Note that the picture stands as its well until the width its box gives it is known, and is then held to that width from its first frame in its menu's host, since a host that measures its own width a frame later laid the picture out with none, at no height, and its message stood collapsed until the picture drew. The box keeps measuring, so a turn of the screen bounds it anew.
   return (
-    <>
-      <HeldMenu acts={acts}>
-        <Press
-          onPress={() => setFull(true)}
-          accessibilityRole="imagebutton"
-          accessibilityLabel={heard}
-          accessibilityHint="Opens full screen"
-        >
-          <Image
-            source={{ uri: source }}
-            resizeMode="contain"
-            onLoad={(event) => {
-              const loaded = event.nativeEvent.source;
-
-              if (loaded.width > 0 && loaded.height > 0) setAspect(loaded.width / loaded.height);
-            }}
-            style={well}
-          />
-        </Press>
-      </HeldMenu>
-      <Modal
-        visible={full}
-        animationType="fade"
-        presentationStyle="overFullScreen"
-        supportedOrientations={["portrait", "landscape"]}
-        onRequestClose={() => setFull(false)}
+    <MediaBox frame={frame}>
+      <View
+        style={styles.measured}
+        onLayout={(event) => setBoxWidth(event.nativeEvent.layout.width)}
       >
-        <View style={styles.viewer} accessibilityViewIsModal>
-          <ScrollView
-            maximumZoomScale={VIEWER_MAX_ZOOM}
-            minimumZoomScale={1}
-            bouncesZoom
-            centerContent
-            showsHorizontalScrollIndicator={false}
-            showsVerticalScrollIndicator={false}
-          >
-            <Image
-              source={{ uri: source }}
-              resizeMode="contain"
+        {boxWidth === undefined ? (
+          <View style={well} accessible accessibilityLabel={heard} />
+        ) : (
+          <HeldMenu acts={acts} width={boxWidth}>
+            <Press
+              onPress={show}
+              disabled={show === undefined}
+              accessibilityRole="imagebutton"
               accessibilityLabel={heard}
-              style={{ width, height }}
-            />
-          </ScrollView>
-          <Press
-            onPress={() => setFull(false)}
-            accessibilityRole="button"
-            accessibilityLabel="Done"
-            testID="markdown-picture-done"
-            style={[styles.viewerClose, { top: insets.top, left: insets.left + SPACE.ROW }]}
-          >
-            <Text style={{ fontSize: TEXT_SIZE.BODY, fontWeight: "600", color: "white" }}>
-              Done
-            </Text>
-          </Press>
-          <View
-            style={[
-              styles.viewerKeep,
-              { bottom: insets.bottom + SPACE.ROW, left: insets.left + SPACE.ROW },
-            ]}
-          >
-            <HeldActsButton acts={acts} />
-          </View>
-        </View>
-      </Modal>
-    </>
+              accessibilityHint="Opens full screen"
+              testID="markdown-picture"
+            >
+              <Image
+                source={{ uri: source }}
+                resizeMode={fill ? "cover" : "contain"}
+                onLoad={(event) => {
+                  const loaded = event.nativeEvent.source;
+
+                  if (loaded.width > 0 && loaded.height > 0) {
+                    setNatural({ width: loaded.width, height: loaded.height });
+                  }
+                }}
+                style={well}
+              />
+            </Press>
+          </HeldMenu>
+        )}
+      </View>
+    </MediaBox>
   );
 }
 
-/** A picture's block: the video its address names, played in its place, or the picture. */
+/** What a file's chip is named where its words gave it no name. */
+const UNNAMED_FILE = "Attachment";
+
+/** A picture's block: the file its address names, as its chip, the video or sound clip, played in its place, or the picture. */
 function PictureBlock({
   source,
   alt,
@@ -1068,15 +1165,46 @@ function PictureBlock({
   readonly alt: string;
   readonly drawing: Drawing;
 }) {
+  const file = drawing.fileAt(source);
+
+  // Note that a file is named by the words naming it, as the panel's chip is, since its address names no file.
+  if (file !== undefined) {
+    return (
+      <FileChip
+        name={alt.trim() === "" ? UNNAMED_FILE : alt.trim()}
+        mediaType={file.mediaType}
+        source={file.source}
+        size={file.size}
+      />
+    );
+  }
+
   const video = drawing.videoAt(source);
 
-  if (video === undefined) return <Picture source={drawing.pictureSource(source)} alt={alt} />;
+  if (video === undefined) {
+    const retry = drawing.onRetryPicture;
+
+    return (
+      <Picture
+        source={drawing.pictureSource(source)}
+        alt={alt}
+        onRetry={retry === undefined ? undefined : () => retry(source)}
+      />
+    );
+  }
+
+  const label = alt.trim() === "" ? video.label : alt;
+
+  if (video.audio === true) {
+    return <AudioClip source={video.source} label={label} onRetry={video.onRetry} />;
+  }
 
   return (
     <Video
       source={video.source}
-      label={alt.trim() === "" ? video.label : alt}
+      label={label}
       onOpenElsewhere={video.onOpenElsewhere}
+      onRetry={video.onRetry}
     />
   );
 }
@@ -1112,13 +1240,33 @@ function BlockView({
     case MARKDOWN_BLOCK.QUOTE:
       return (
         <View style={[styles.quote, { borderColor: colors.CHIP_EDGE }]}>
-          <Blocks blocks={block.blocks} drawing={drawing} gap={NESTED_GAP} />
+          {/* Note that a quote's chips are held to the width inside its rule and padding. */}
+          <Blocks
+            blocks={block.blocks}
+            drawing={{ ...drawing, lineWidth: drawing.lineWidth - QUOTE_INSET }}
+            gap={NESTED_GAP}
+          />
         </View>
       );
     case MARKDOWN_BLOCK.TABLE:
       return <TableView key={drawing.fontScale} block={block} drawing={drawing} />;
     case MARKDOWN_BLOCK.CODE:
       return <CodeView text={block.text} drawing={drawing} />;
+    case MARKDOWN_BLOCK.DIAGRAM:
+      return (
+        <DiagramBlock
+          code={block.code}
+          codeView={<CodeView text={block.code} drawing={drawing} />}
+          picture={(picture, alt) => (
+            <Picture
+              source={picture?.source}
+              alt={alt}
+              size={picture?.size}
+              bounds={COLUMN_BOUNDS}
+            />
+          )}
+        />
+      );
     case MARKDOWN_BLOCK.DRAFT:
       return <DraftCard draft={block.draft} onOpenLink={drawing.openLink} />;
     case MARKDOWN_BLOCK.RULE:
@@ -1173,10 +1321,16 @@ type MarkdownProps = {
   readonly onOpenLink: (address: string) => void;
   /** Whether a person typed the words line by line, whose line breaks are kept; an agent's join as Markdown reads them. */
   readonly typed?: boolean | undefined;
+  /** Whether raw HTML in the words stays unseen, as GitHub's page hides a pull request body's comments and tags; it is drawn as written where none is given. */
+  readonly hidesHtml?: boolean | undefined;
   /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way, and `null` where it could not be read. Each is drawn from the address it names where none is given. */
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
+  /** Reads a picture that could not be read again, by the address its words name it by; a picture that could not be read offers nothing where none is given. */
+  readonly onRetryPicture?: ((written: string) => void) | undefined;
   /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
+  /** The file a picture's address names, such as a PDF a description keeps, drawn as its chip in its place; every address names a picture where none is given. */
+  readonly fileAt?: ((written: string) => MarkdownFile | undefined) | undefined;
   /** Whether its headings are heard as headings, on a page of words alone; a message's are styled alone. */
   readonly headings?: boolean | undefined;
   /** What GitHub holds of a pull request or issue a chip names, by its page (`markdownGithubPages`), which the chip says where it stands; every chip says what its link says where none is given. */
@@ -1185,13 +1339,27 @@ type MarkdownProps = {
   readonly suggestion?:
     | ((link: ReplyButtonLink, words: string) => SuggestionLook | undefined)
     | undefined;
+  /** The widest the words stand where the caller knows it before they are laid out, as a transcript's row does, which holds a chip until they are measured; the window's width less a page's margins where none is given. */
+  readonly width?: number | undefined;
+  /** Whether a Mermaid fence is drawn as its diagram, as a description's are (`DiagramBlock`); it stands as its code where none is given, as a transcript still being written keeps it. */
+  readonly diagrams?: boolean | undefined;
 };
 
-/** A video the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, and where it opens where the player cannot read it. */
+/** A video or a sound clip the words name as a picture, played in its place: the file it plays from, none while it is on its way and `null` where it could not be read, its name, whether it is a sound clip, where a video opens where the player cannot read it, and what reads it again. */
 export interface MarkdownVideo {
-  readonly source: string | undefined;
+  readonly source: string | null | undefined;
   readonly label: string;
+  /** Whether it is a sound clip, played in its strip (`AudioClip`) rather than a film's player. */
+  readonly audio?: boolean | undefined;
   readonly onOpenElsewhere?: (() => void) | undefined;
+  readonly onRetry?: (() => void) | undefined;
+}
+
+/** A file the words name as a picture, drawn as its chip in its place: the file of the app's caches it opens from, its type, and its size in words. One that could not be read stands as a picture that could not be. */
+export interface MarkdownFile {
+  readonly source: string;
+  readonly mediaType: string;
+  readonly size: string | undefined;
 }
 
 /** Each picture drawn from the address its words name it by. */
@@ -1214,47 +1382,94 @@ function noVideo(): undefined {
   return undefined;
 }
 
+/** No address naming a file. */
+function noFile(): undefined {
+  return undefined;
+}
+
 /**
  * Words drawn as the Markdown they were written in, as the panel draws a
  * message: the panel's parse (`@repo/features/markdown-tree`), read into
  * blocks by `markdown-model.ts`, in the brand's colors for the window's
  * scheme and at the reader's Dynamic Type size. It draws no scroller of its
- * own, so a screen stands it in its own.
+ * own, so a screen stands it in its own. Note that a chip is held to the
+ * width the words stand in, measured once they are laid out, since an open
+ * iPhone Duo's or an iPad's detail column is far narrower than the window;
+ * until then, to the width its caller knows they stand in, else the window's
+ * width less a page's margins.
  */
 export function Markdown({
   words,
   repository = null,
   onOpenLink,
   typed,
+  hidesHtml,
   pictureSource = namedSource,
+  onRetryPicture,
   videoAt = noVideo,
+  fileAt = noFile,
   headings = false,
   linkStanding = noStanding,
   suggestion = noSuggestion,
+  width: known,
+  diagrams = false,
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
+  const markOf = useChipMarkOf();
+  const [measured, setMeasured] = useState<number | undefined>(undefined);
+  const [measuredAt, setMeasuredAt] = useState(width);
+
+  // Note that a change of the window's width, a fold, an unfold, or a turn, forgets the width measured, since words in a bubble that wraps its words are measured no wider than they stood and would hold their chips there for good.
+  if (measuredAt !== width) {
+    setMeasuredAt(width);
+    setMeasured(undefined);
+  }
 
   const blocks = useMemo(
-    () => markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed }),
-    [words, repository, typed],
+    () =>
+      markdownBlocks(words, {
+        repository,
+        now: Date.now(),
+        zone: readerZone(),
+        typed,
+        hidesHtml,
+        diagrams,
+      }),
+    [words, repository, typed, hidesHtml, diagrams],
   );
 
   const drawing: Drawing = {
     colors,
     fontScale,
-    lineWidth: width - SPACE.PAGE * 2,
+    lineWidth: measured ?? known ?? width - SPACE.PAGE * 2,
     openLink: onOpenLink,
     pictureSource,
+    onRetryPicture,
     videoAt,
+    fileAt,
     headings,
     linkStanding,
+    markOf,
     suggestion,
   };
 
   return (
-    <View>
-      <Blocks blocks={blocks} drawing={drawing} />
+    <View
+      onLayout={(event) => {
+        // Note that a width of none, as a view hidden behind another lays out, keeps the last, so no chip is held to nothing.
+        const laid = event.nativeEvent.layout.width;
+
+        if (laid > 0) setMeasured(laid);
+      }}
+    >
+      {diagrams ? (
+        <DiagramRenderer>
+          <Blocks blocks={blocks} drawing={drawing} />
+        </DiagramRenderer>
+      ) : (
+        <Blocks blocks={blocks} drawing={drawing} />
+      )}
     </View>
   );
 }

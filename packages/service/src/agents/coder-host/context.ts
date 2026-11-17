@@ -12,8 +12,8 @@ import { CODER } from "./bounds.js";
  * the next step reads against and what its harness compacts it against: the window
  * the catalog lists for the model, or the fallback a step is told where it
  * lists none, and the count past which its harness compacts: Claude Code's
- * window less what it holds back, or for Codex and the retired runtime the share
- * the retired runtime compacted at (`bounds.ts`). The brief's estimate is told only while the harness
+ * window less what it holds back, or for Codex, Cursor, and the retired
+ * runtime the share the retired runtime compacted at (`bounds.ts`). The brief's estimate is told only while the harness
  * has never compacted the conversation, because a compaction's summary may
  * have folded the description or task in with the rest. Nothing here reaches a harness,
  * since the routes read it.
@@ -35,14 +35,23 @@ export function contextWindowOf(
   return model?.contextWindow ?? CODER.FALLBACK_CONTEXT_WINDOW_TOKENS;
 }
 
+/** The count past which a runtime compacts on a window: Claude Code's window less what it holds back, or the share the retired runtime compacted at. */
+const COMPACTS_AT = {
+  RESERVE: (windowTokens: number) => windowTokens - CODER.CLAUDE_CODE_COMPACTION_RESERVE_TOKENS,
+  SHARE: (windowTokens: number) => Math.floor(windowTokens * CODER.COMPACTION_THRESHOLD_SHARE),
+} as const;
+
+/** How each runtime compacts, so a new harness says it before it builds: Codex and Cursor say no count of their own, so the share stands for theirs. */
+const RUNTIME_COMPACTS_AT = {
+  [CONVERSATION_RUNTIME.RETIRED]: COMPACTS_AT.SHARE,
+  [CONVERSATION_RUNTIME.CLAUDE_CODE]: COMPACTS_AT.RESERVE,
+  [CONVERSATION_RUNTIME.CODEX]: COMPACTS_AT.SHARE,
+  [CONVERSATION_RUNTIME.CURSOR]: COMPACTS_AT.SHARE,
+} as const satisfies Record<ConversationRuntime, (windowTokens: number) => number>;
+
 /** The count past which the runtime compacts a conversation on the window given, rounded as it rounds it, and never under one token. */
 function compactionThresholdOf(windowTokens: number, runtime: ConversationRuntime): number {
-  const threshold =
-    runtime === CONVERSATION_RUNTIME.CLAUDE_CODE
-      ? windowTokens - CODER.CLAUDE_CODE_COMPACTION_RESERVE_TOKENS
-      : Math.floor(windowTokens * CODER.COMPACTION_THRESHOLD_SHARE);
-
-  return Math.max(1, threshold);
+  return Math.max(1, RUNTIME_COMPACTS_AT[runtime](windowTokens));
 }
 
 /** The agent's context as the wire carries it, against the window given and the runtime it runs on; nothing before its first step. */

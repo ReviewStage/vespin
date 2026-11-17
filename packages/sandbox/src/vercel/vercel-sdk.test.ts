@@ -1,13 +1,13 @@
 /**
- * vercel-sdk.test.ts -- `Sandbox` as Vercel answers it, against a scripted fake of Vercel behind the SDK's `fetch`: what a failure says (the call, Vercel's status and error or the cause's, every token-shaped run redacted) and which of the package's failures Vercel's answer is; and what the adapter decides beside the SDK: a get-or-create hands a sandbox it created to its setup, and meets its name taken with the sandbox holding it, a create refuses it as taken, a sandbox or a snapshot already gone reads as gone, a delete wakes nothing, and a touch lengthens a running session alone, by the rule `TOUCH` sets.
+ * vercel-sdk.test.ts -- `Sandbox` as Vercel answers it, against a scripted fake of Vercel behind the SDK's `fetch`: what a failure says (the call, Vercel's status and error or the cause's, every token-shaped run redacted) and which of the package's failures Vercel's answer is; and what the adapter decides beside the SDK: a get-or-create hands a sandbox it created to its setup, resizes a stopped one alone, and meets its name taken with the sandbox holding it, a create refuses it as taken, a sandbox or a snapshot already gone reads as gone, a delete wakes nothing, a touch lengthens a running session alone, by the rule `TOUCH` sets, and the project's sessions are read back only as far as asked.
  */
 
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { Duration, Effect, Layer, Predicate } from "effect";
+import { Duration, Effect, Fiber, Layer, Predicate } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
-import { Sandbox, type SandboxService } from "../sandbox.js";
+import { EndedSessionsOnDelete, Sandbox, type SandboxService } from "../sandbox.js";
 import { SANDBOX_CALL, type SandboxCall, type SandboxError } from "../vocabulary.js";
 import {
   driveAnswered,
@@ -54,6 +54,7 @@ const CALLS: readonly {
   { call: SANDBOX_CALL.TAGS, ask: (api) => api.updateTags(NAME, { sessionId: "s" }) },
   { call: SANDBOX_CALL.GET, ask: (api) => api.get(NAME) },
   { call: SANDBOX_CALL.LIST, ask: (api) => api.listTagged("sessionId", "session_fixture") },
+  { call: SANDBOX_CALL.SESSIONS, ask: (api) => api.sessionsSince(0) },
 ];
 
 /** An error body Vercel answers a refused call with. */
@@ -75,6 +76,15 @@ function apiOver(respond: Responder, readToken?: () => Promise<string>) {
 /** The failure's line, where it is one that carries one. */
 function detailOf(failure: SandboxError): string | undefined {
   return Predicate.isTagged(failure, "SandboxUnavailable") ? failure.detail : undefined;
+}
+
+/** The figures Vercel lists of a session beside its size and place, some only once it ended. */
+interface ListedFigures {
+  readonly startedAt?: number;
+  readonly stoppedAt?: number;
+  readonly duration?: number;
+  readonly activeCpuDurationMs?: number;
+  readonly networkTransfer?: { readonly ingress: number; readonly egress: number };
 }
 
 const refusedWith = (status: number) => () => Response.json({ error: REFUSAL }, { status });
@@ -216,7 +226,8 @@ it.effect(
       );
       assert.equal(setUpOnFound, 0);
       assert.deepEqual(setUp, [SESSION, SESSION]);
-      assert.deepEqual(gets, ["true", "true", "true", "true"]);
+      // Each open first looks for a stopped sandbox to resize, which resumes nothing.
+      assert.deepEqual(gets, ["false", "true", "false", "true", "false", "true", "true"]);
       assert.equal(refused._tag, "SandboxNameTaken");
       assert.equal(refused.call, SANDBOX_CALL.CREATE);
 
@@ -249,6 +260,31 @@ it.effect("a get-or-create that resumes a sandbox closes the ports its last run 
 
     assert.deepEqual(patched, [{ ports: [] }]);
   }),
+);
+
+it.effect(
+  "a get-or-create resizes a stopped sandbox to the size asked before it resumes it, and leaves one up at its own",
+  () =>
+    Effect.gen(function* () {
+      let status = "stopped";
+      const resized: unknown[] = [];
+
+      const api = yield* apiOver((_url, init) => {
+        if (init.method === "PATCH") {
+          resized.push(JSON.parse(String(init.body)).resources);
+
+          return Response.json(sandboxDeleted({ ...RUNNING_SANDBOX, status, vcpus: 2 }));
+        }
+
+        return Response.json(sandboxFound({ ...RUNNING_SANDBOX, status, vcpus: 2 }));
+      });
+
+      yield* api.getOrCreate({ ...CREATE_ASK, vcpus: 4 });
+      status = "running";
+      yield* api.getOrCreate({ ...CREATE_ASK, vcpus: 8 });
+
+      assert.deepEqual(resized, [{ vcpus: 4, memory: 8192 }]);
+    }),
 );
 
 it.effect("a sandbox Vercel no longer holds is none", () =>
@@ -328,6 +364,71 @@ const sandboxAnswer = (method: string) =>
 /** Whether a call was one on a drive. */
 const onDrive = (url: URL) => url.pathname.includes("/drives/");
 
+/** Whether a call was a list of sessions. */
+const onSessions = (url: URL) => url.pathname.endsWith("/v2/sandboxes/sessions");
+
+/** A page of one session of the fixture's sandbox, as the list answers it, in the status given. */
+const sessionListed = (status: string) =>
+  Response.json({
+    sessions: [
+      {
+        ...sandboxFound(RUNNING_SANDBOX).session,
+        status,
+        sourceSandboxName: NAME,
+        ...(status === "stopped"
+          ? { duration: 60_000, activeCpuDurationMs: 9_000, stoppedAt: CREATED_AT + 60_000 }
+          : undefined),
+      },
+    ],
+    pagination: { count: 1, next: null },
+  });
+
+it.effect(
+  "a get-or-create that makes a stopped sandbox again on its own drive hands the ended sessions of the one it deletes on, read again where the first read saw one still stopping",
+  () =>
+    Effect.gen(function* () {
+      const handed: string[] = [];
+      let deleted = false;
+      let reads = 0;
+
+      const api = yield* apiOver((url, init) => {
+        const at = new URL(url);
+
+        if (onDrive(at))
+          return Response.json(driveAnswered({ id: "drv_own", name: `${NAME}-drive` }));
+
+        // The read beside the lookup still sees the session stopping, and the read after sees it stopped.
+        if (onSessions(at)) {
+          reads += 1;
+
+          return sessionListed(reads === 1 ? "stopping" : "stopped");
+        }
+
+        if (init.method === "DELETE") {
+          deleted = true;
+
+          return Response.json(sandboxDeleted(STOPPED_SANDBOX));
+        }
+
+        if (init.method === "POST") return Response.json(sandboxFound(RUNNING_SANDBOX));
+
+        return deleted ? refusedWith(404)() : Response.json(sandboxFound(STOPPED_SANDBOX));
+      });
+
+      const opened = yield* api
+        .getOrCreate({ ...CREATE_ASK, drive: { own: true, at: "/vercel/sandbox/work" } })
+        .pipe(
+          Effect.provideService(EndedSessionsOnDelete, (sessions) =>
+            Effect.sync(() => handed.push(...sessions.map((each) => each.id))),
+          ),
+        );
+
+      assert.equal(deleted, true);
+      assert.equal(opened.running, SESSION);
+      assert.deepEqual(handed, [SESSION]);
+    }),
+);
+
 it.effect(
   "a delete wakes no stopped sandbox, takes its orphan snapshots, counts one gone as deleted, and names Vercel's refusal",
   () =>
@@ -345,8 +446,13 @@ it.effect(
       });
 
       yield* api.delete(NAME);
-      const [lookup, deletion] = asked.filter((each) => !onDrive(each.url));
-      assert.equal(lookup?.url.searchParams.get("resume"), "false");
+      const onSandbox = asked.filter((each) => !onDrive(each.url) && !onSessions(each.url));
+      const lookups = onSandbox.filter((each) => each.method === "GET");
+      const [deletion] = onSandbox.filter((each) => each.method === "DELETE");
+      assert.deepEqual(
+        lookups.map((each) => each.url.searchParams.get("resume")),
+        lookups.map(() => "false"),
+      );
       assert.equal(deletion?.method, "DELETE");
       assert.equal(deletion?.url.searchParams.get("deleteOrphanSnapshots"), "true");
 
@@ -362,10 +468,12 @@ it.effect(
 );
 
 it.effect(
-  "a delete of a sandbox that owns a drive stops its running session, then deletes the drive it owns, then the sandbox",
+  "a delete stops a running session, waits until it stopped, hands its ended sessions on, then deletes the drive the sandbox owns, then the sandbox",
   () =>
     Effect.gen(function* () {
       const writes: string[] = [];
+      const handed: string[] = [];
+      let status = "running";
 
       const api = yield* apiOver((url, init) => {
         const method = init.method ?? "GET";
@@ -379,16 +487,41 @@ it.effect(
         }
 
         if (pathname.endsWith("/stop")) {
-          return Response.json(sessionAnswered({ id: SESSION, status: "stopped" }));
+          status = "stopping";
+
+          return Response.json(sessionAnswered({ id: SESSION, status }));
+        }
+
+        if (onSessions(new URL(url))) {
+          // The session is still stopping at the first read, and stopped by the next.
+          const listed = sessionListed(status);
+          status = "stopped";
+
+          return listed;
         }
 
         return Response.json(
-          method === "DELETE" ? sandboxDeleted(RUNNING_SANDBOX) : sandboxFound(RUNNING_SANDBOX),
+          method === "DELETE"
+            ? sandboxDeleted(RUNNING_SANDBOX)
+            : sandboxFound({ ...RUNNING_SANDBOX, status }),
         );
       });
 
-      yield* api.delete(NAME);
+      const deleted = yield* Effect.forkChild(
+        api.delete(NAME).pipe(
+          Effect.provideService(EndedSessionsOnDelete, (sessions) =>
+            // Each session is named with how many writes came before it, so it is seen handed on before either delete.
+            Effect.sync(() =>
+              handed.push(...sessions.map((each) => `${each.id} after ${writes.length}`)),
+            ),
+          ),
+        ),
+      );
 
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* Fiber.join(deleted);
+
+      assert.deepEqual(handed, [`${SESSION} after 1`]);
       assert.deepEqual(writes, [
         `POST /v2/sandboxes/sessions/${SESSION}/stop`,
         `DELETE /v2/sandboxes/drives/${NAME}-drive`,
@@ -470,5 +603,101 @@ it.effect(
       yield* touchedAt(minutes(24 * 60 + 20));
 
       assert.deepEqual(extensions, [minutes(2), minutes(24 * 60 - 7)]);
+    }),
+);
+
+it.effect(
+  "the project's sessions are read a page at a time, newest first, until a page reaches past the time asked",
+  () =>
+    Effect.gen(function* () {
+      const hours = (count: number) => Duration.toMillis(Duration.hours(count));
+      const now = CREATED_AT + hours(72);
+      const asked: (string | null)[] = [];
+
+      /** A session as Vercel lists it, created `ago` hours before now, with the figures it answers once ended. */
+      const listed = (id: string, status: string, ago: number, more: ListedFigures = {}) => ({
+        id,
+        sourceSandboxName: `agent-sandbox-${id}`,
+        status,
+        region: "iad1",
+        vcpus: 4,
+        memory: 8192,
+        timeout: hours(1),
+        requestedAt: now - hours(ago),
+        createdAt: now - hours(ago),
+        cwd: "/vercel",
+        updatedAt: now - hours(ago),
+        ...more,
+      });
+
+      const pages = new Map([
+        [
+          "first",
+          {
+            sessions: [
+              listed("sbx_up", "running", 1, { startedAt: now - hours(1) }),
+              listed("sbx_done", "stopped", 30, {
+                startedAt: now - hours(30),
+                stoppedAt: now - hours(30) + 18_277,
+                duration: 18_277,
+                activeCpuDurationMs: 21_780,
+                networkTransfer: { ingress: 41_246_989, egress: 1_288_336 },
+              }),
+            ],
+            pagination: { count: 2, next: "cursor-2" },
+          },
+        ],
+        [
+          "cursor-2",
+          {
+            sessions: [
+              listed("sbx_failed", "failed", 47),
+              listed("sbx_old", "stopped", 49, { duration: 60_000 }),
+            ],
+            pagination: { count: 2, next: "cursor-3" },
+          },
+        ],
+      ]);
+
+      const api = yield* apiOver((url) => {
+        const query = new URL(url).searchParams;
+        asked.push(query.get("cursor"));
+        const limit = Number(query.get("limit"));
+
+        if (query.get("project") !== "prj_fixture" || limit < 1 || limit > 50) {
+          return refusedWith(400)();
+        }
+
+        const page = pages.get(query.get("cursor") ?? "first");
+
+        return page === undefined ? refusedWith(500)() : Response.json(page);
+      });
+
+      const sessions = yield* api.sessionsSince(now - hours(48));
+
+      assert.deepEqual(asked, [null, "cursor-2"]);
+      assert.deepEqual(
+        sessions.map((session) => [session.id, session.ended]),
+        [
+          ["sbx_up", undefined],
+          ["sbx_done", "stopped"],
+          ["sbx_failed", "failed"],
+        ],
+      );
+      assert.deepEqual(sessions[1], {
+        id: "sbx_done",
+        sandboxName: "agent-sandbox-sbx_done",
+        ended: "stopped",
+        status: "stopped",
+        region: "iad1",
+        vcpus: 4,
+        memoryMb: 8192,
+        createdAt: now - hours(30),
+        startedAt: now - hours(30),
+        stoppedAt: now - hours(30) + 18_277,
+        durationMs: 18_277,
+        activeCpuMs: 21_780,
+        networkTransfer: { ingressBytes: 41_246_989, egressBytes: 1_288_336 },
+      });
     }),
 );

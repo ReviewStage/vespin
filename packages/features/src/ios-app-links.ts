@@ -25,7 +25,6 @@ import {
   pullRequestAddressOf,
   readLink,
   readShownLink,
-  samePullRequest,
   taskNumberOf,
 } from "./link-grammar.js";
 
@@ -67,7 +66,10 @@ const IOS_ROUTE = {
   INBOX: "/inbox",
   TASKS: "/tasks",
   AGENT: "/tasks/agent",
+  COMMENTS: "/tasks/comments",
   PULL_REQUEST: "pull",
+  /** A pull request by its workspace, its repository, and its number, under Tasks. */
+  REPOSITORY_PULL_REQUEST: "/tasks/pull",
 } as const;
 
 /** A place the app draws a screen for, which always has a route of the app's. */
@@ -82,12 +84,6 @@ type IosRoutedPlace = Extract<
       | typeof LINK_DESTINATION.AGENT;
   }
 >;
-
-/** A pull request one of the member's agents opened, by the agent and the pull request's page on GitHub. */
-export interface AgentPullRequestLink {
-  readonly agentId: string;
-  readonly pullRequest: { readonly url: string };
-}
 
 /** The path an address names, without its query, its fragment, or a trailing slash. */
 function addressPath(address: string): string {
@@ -151,9 +147,56 @@ export function iosAgentRoute(agentId: string): string {
   return `${IOS_ROUTE.AGENT}/${encodeURIComponent(agentId)}`;
 }
 
-/** The app's route for a pull request an agent opened, on its own screen under the agent's page. */
+/**
+ * The app's route for a pull request an agent opened, under the agent's
+ * page, as a link, a handoff, or a launch made before pull requests were
+ * opened by their repository names it; its screen reads the agent's
+ * repository and opens the pull request by it.
+ */
 export function iosPullRequestRoute(agentId: string, number: number): string {
   return `${iosAgentRoute(agentId)}/${IOS_ROUTE.PULL_REQUEST}/${number}`;
+}
+
+/**
+ * The pull request an agent's route names by the agent and its number
+ * (`iosPullRequestRoute`), by its workspace, repository, and number: the
+ * agent's listed pull request where it is that number, by the repository
+ * its address names, else the agent's own repository's, in the agent's
+ * workspace; none while the agent is read, or for one with no repository.
+ */
+export function iosAgentPullRequestOf(
+  agent: { readonly workspaceId: string; readonly repository: string | null } | undefined,
+  listed: { readonly number: number; readonly url: string } | undefined,
+  number: number,
+):
+  | { readonly workspaceId: string; readonly repository: string; readonly number: number }
+  | undefined {
+  if (agent === undefined) return undefined;
+  const named = listed?.number === number ? pullRequestAddressOf(listed.url) : undefined;
+  const repository = named?.repository ?? agent.repository;
+
+  return repository === null ? undefined : { workspaceId: agent.workspaceId, repository, number };
+}
+
+/** The query a pull request's route names the agent it was opened from by, which its screen offers to Handoff; the pull request is read by its repository alone. */
+const IOS_PULL_REQUEST_AGENT_PARAM = "agent";
+
+/** The app's route for a pull request by the workspace whose installation reaches its repository, the repository's owner and name, and its number, with the agent it was opened from where there is one. */
+export function iosRepositoryPullRequestRoute(
+  pullRequest: {
+    readonly workspaceId: string;
+    readonly repository: string;
+    readonly number: number;
+  },
+  agentId?: string,
+): string {
+  const [owner = "", name = ""] = pullRequest.repository.split("/");
+  const steps = [pullRequest.workspaceId, owner, name].map(encodeURIComponent);
+  const route = `${IOS_ROUTE.REPOSITORY_PULL_REQUEST}/${steps.join("/")}/${pullRequest.number}`;
+
+  return agentId === undefined
+    ? route
+    : `${route}?${new URLSearchParams({ [IOS_PULL_REQUEST_AGENT_PARAM]: agentId })}`;
 }
 
 /**
@@ -208,9 +251,10 @@ export function iosRouteOnTab(route: string, standing: IosTab | undefined): stri
 /**
  * Whether the route is a conversation, which a compact window's tab bar
  * steps aside for, as Messages hides its tabs in a chat so the composer
- * stands alone at the foot: a thread (`/inbox/<id>`), an agent's page, or
- * a pull request it opened. A list, a task, and a page the agent showed keep
- * the bar.
+ * stands alone at the foot: a thread (`/inbox/<id>`), an agent's page, a
+ * pull request it opened, or a comment's thread on a task's description or a
+ * new comment, each ending in its reply field. A list, a task, and a page the
+ * agent showed keep the bar.
  */
 export function iosRouteHidesTabs(pathname: string): boolean {
   const [tab, first, second, third] = pathname.split("/").filter((segment) => segment !== "");
@@ -218,21 +262,40 @@ export function iosRouteHidesTabs(pathname: string): boolean {
 
   if (route === IOS_ROUTE.INBOX) return first !== undefined;
 
+  if (`${route}/${first ?? ""}` === IOS_ROUTE.COMMENTS) return second !== undefined;
+
+  if (`${route}/${first ?? ""}` === IOS_ROUTE.REPOSITORY_PULL_REQUEST) return second !== undefined;
+
   if (`${route}/${first ?? ""}` !== IOS_ROUTE.AGENT || second === undefined) return false;
 
   return third === undefined || third === IOS_ROUTE.PULL_REQUEST;
 }
 
 /**
+ * The agent whose own page the route is, whose composer holds a voice
+ * call's presses while the call is into it; none on any other route,
+ * a page under the agent's included, such as a pull request it opened.
+ */
+export function iosRouteAgent(pathname: string): string | undefined {
+  const [tab, first, agentId, under] = pathname.split("/").filter((segment) => segment !== "");
+
+  if (`/${tab ?? ""}/${first ?? ""}` !== IOS_ROUTE.AGENT || under !== undefined) return undefined;
+
+  return agentId;
+}
+
+/**
  * The app's route for an address a link or a chip names: a vespin.dev
- * place the app draws, or a pull request's own page on GitHub that one of
- * `pullRequests` is, which opens on the app's pull request screen; none for
- * any other, which Safari opens. Note that a page under a pull request, its
- * Files changed or a commit, stays GitHub's, since the app draws no diff.
+ * place the app draws, or a pull request's own page on GitHub, which opens
+ * on the app's pull request screen by its repository and number where the
+ * link stands in a workspace, which reads it; none for any other, or a pull
+ * request named with no workspace at hand, which Safari opens. Note that a
+ * page under a pull request, its Files changed or a commit, stays GitHub's,
+ * since the app draws no diff.
  */
 export function iosAppRouteOfAddress(
   address: string,
-  pullRequests: readonly AgentPullRequestLink[],
+  workspaceId: string | undefined,
 ): string | undefined {
   const read = readLink(address);
 
@@ -242,8 +305,9 @@ export function iosAppRouteOfAddress(
   if (named === undefined) return undefined;
   const own = gitHubPageLink({ kind: GITHUB_PAGE.PULL_REQUEST, ...named });
 
-  if (addressPath(address).toLowerCase() !== own.toLowerCase()) return undefined;
-  const opened = pullRequests.find(({ pullRequest }) => samePullRequest(pullRequest.url, address));
+  if (workspaceId === undefined || addressPath(address).toLowerCase() !== own.toLowerCase()) {
+    return undefined;
+  }
 
-  return opened === undefined ? undefined : iosPullRequestRoute(opened.agentId, named.number);
+  return iosRepositoryPullRequestRoute({ workspaceId, ...named });
 }

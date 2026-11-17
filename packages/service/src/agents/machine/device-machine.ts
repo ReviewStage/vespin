@@ -346,6 +346,7 @@ function deviceMachineOver(
         sharedFiles: folders.sharedFiles,
         claudeExecutable: device.value.claudeExecutable,
         codexExecutable: device.value.codexExecutable ?? undefined,
+        cursorSdk: device.value.cursorSdk ?? undefined,
         // Note that a Mac's Codex keeps its threads and its login at its own default under the machine's
         // home, which its runner finds by itself, so nothing names `CODEX_HOME` for it.
         codexHome: undefined,
@@ -741,6 +742,16 @@ function deviceMachineOver(
             : undefined,
       ),
 
+    checkoutPath: (session) =>
+      Effect.gen(function* () {
+        const pin = yield* pinOfSession(session);
+
+        if (Option.isNone(pin)) return yield* unavailable();
+        const { userId, agentId, deviceId } = pin.value;
+
+        return (yield* layoutOf(userId, agentId, deviceId)).checkoutPath;
+      }),
+
     // Note that the file goes in a files line of its own, which its Mac settles once it wrote it, and the
     // write waits on that as a read waits on its answer, so the agent never reads before the file stands; a
     // line the Mac has not taken by then is withdrawn, so a Mac back later writes nothing no one waits on.
@@ -871,6 +882,8 @@ function deviceMachineOver(
 
     // Note that a Mac is asked for no MP4, because nothing says it has an H.264 encoder, so its recordings keep their WebM alone.
     phoneVideo: () => Effect.succeed(undefined),
+    // Note that a Mac is asked for no M4A of an Ogg clip either, for the same reason.
+    phoneAudio: () => Effect.succeed(undefined),
   };
 }
 

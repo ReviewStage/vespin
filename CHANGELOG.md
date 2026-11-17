@@ -13,18 +13,20 @@
      section, its first paragraph, and its first screenshot become the title,
      description, and image of the card its page shares as.
 
-     Style: say what changed for the reader and stop. A big feature gets a
-     `###` section of its own, named for the feature and described in a
-     sentence or three, with a screenshot where one helps.
+     Style: short, plain, and skimmable. Say what changed for the reader and
+     stop: what they can now do or will notice, never how it works, its
+     history, or its edge cases. A big feature gets a `###` section of its
+     own, named for the feature and described in one or two short sentences,
+     with a screenshot where one helps.
      Everything else gathers under the standing sections, in this order:
      `### Improvements` for what got better, `### Fixes` for what got repaired,
      `### Misc` for brand, packaging, documentation, and the like. A bullet is
-     one sentence with no period at the end, leading with the thing itself
-     rather than its background. Improvements and feature prose speak in the
-     present tense to "you", with Vespin as the actor; Fixes read
-     "Fixed <symptom you could see>"; Misc reads "Added/Updated …". "Now" only
-     where the old behavior is the contrast. Name features, pages, and
-     shortcuts concretely. A feature behind Settings › Experimental stays out
+     one short sentence, a dozen words or so, with no period at the end.
+     Improvements and feature prose speak in the present tense to "you";
+     "now" is welcome. Fixes read "Fixed <symptom you could see>", in the
+     words a user would use for it; Misc reads "Added/Updated …". Use
+     everyday words over the app's internal ones, name features, pages, and
+     shortcuts concretely, and fold small related changes into one bullet. A feature behind Settings › Experimental stays out
      of the changelog, its own section, bullets, and pictures alike, until it
      graduates; the release that takes it out of Experimental announces it.
 
@@ -72,14 +74,197 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.38.0 — 2026-11-16
+
+### Talk to your agents
+
+Voice is out of Experimental: press Talk where Send stands in an empty box to
+call your agent and say what you want. Talk in New task starts a new agent on
+your first words. It uses your OpenAI API key.
+
+[#9580](https://github.com/ReviewStage/vespin/pull/9580),
+[#9689](https://github.com/ReviewStage/vespin/pull/9689),
+[#9690](https://github.com/ReviewStage/vespin/pull/9690),
+[#9693](https://github.com/ReviewStage/vespin/pull/9693),
+[#9696](https://github.com/ReviewStage/vespin/pull/9696)
+
+### Improvements
+
+- A task opens as you left it, on the same tab with its side panel
+  ([#9661](https://github.com/ReviewStage/vespin/pull/9661),
+  [#9678](https://github.com/ReviewStage/vespin/pull/9678))
+- A pull request link always opens that pull request, and its tab updates live
+  ([#9543](https://github.com/ReviewStage/vespin/pull/9543),
+  [#9546](https://github.com/ReviewStage/vespin/pull/9546))
+- Admins can add Vespin to Slack from Settings › Workspace › Slack
+  ([#9663](https://github.com/ReviewStage/vespin/pull/9663),
+  [#9669](https://github.com/ReviewStage/vespin/pull/9669),
+  [#9675](https://github.com/ReviewStage/vespin/pull/9675),
+  [#9662](https://github.com/ReviewStage/vespin/pull/9662))
+- Agents can share sound clips in transcripts, threads, and descriptions
+  ([#9547](https://github.com/ReviewStage/vespin/pull/9547))
+- Sound clips get a bigger Play button, playback speed, and a fuller viewer
+  ([#9594](https://github.com/ReviewStage/vespin/pull/9594))
+- Agents now wear a hard hat instead of a robot
+  ([#9635](https://github.com/ReviewStage/vespin/pull/9635))
+- Sub-tasks indent under their parent in task lists
+  ([#9650](https://github.com/ReviewStage/vespin/pull/9650))
+- The sidebar's Pinned and Following headings show their icons
+  ([#9545](https://github.com/ReviewStage/vespin/pull/9545))
+- Inline code you type looks the same as in sent messages
+  ([#9638](https://github.com/ReviewStage/vespin/pull/9638))
+- Smoother motion when folding sections and when the Inbox changes
+  ([#9637](https://github.com/ReviewStage/vespin/pull/9637),
+  [#9643](https://github.com/ReviewStage/vespin/pull/9643),
+  [#9567](https://github.com/ReviewStage/vespin/pull/9567))
+- Agents mark their task Done once its work is finished
+  ([#9633](https://github.com/ReviewStage/vespin/pull/9633))
+- Agents on your Mac can run commands on that same Mac
+  ([#9649](https://github.com/ReviewStage/vespin/pull/9649))
+- Automations now start every run, with no daily caps or cooldowns
+  ([#9564](https://github.com/ReviewStage/vespin/pull/9564),
+  [#9565](https://github.com/ReviewStage/vespin/pull/9565))
+
+### Fixes
+
+- Fixed agents waiting on checks not waking when the checks finished
+  ([#9652](https://github.com/ReviewStage/vespin/pull/9652))
+- Fixed agents on your Mac failing to show or post their own files
+  ([#9660](https://github.com/ReviewStage/vespin/pull/9660))
+- Fixed cloud agents' scripts not finding Playwright
+  ([#9647](https://github.com/ReviewStage/vespin/pull/9647))
+- Fixed sound clips and videos losing their place or speed when expanded
+  ([#9548](https://github.com/ReviewStage/vespin/pull/9548),
+  [#9549](https://github.com/ReviewStage/vespin/pull/9549),
+  [#9676](https://github.com/ReviewStage/vespin/pull/9676),
+  [#9686](https://github.com/ReviewStage/vespin/pull/9686))
+- Fixed long words running off the edge of quotes in comments
+  ([#9606](https://github.com/ReviewStage/vespin/pull/9606))
+- Fixed the Working… line jumping as a turn starts
+  ([#9622](https://github.com/ReviewStage/vespin/pull/9622))
+- Fixed the jump-to-latest button sitting off-center over Send
+  ([#9640](https://github.com/ReviewStage/vespin/pull/9640))
+- Fixed the sidebar's divider and workspace header looking out of place
+  ([#9632](https://github.com/ReviewStage/vespin/pull/9632),
+  [#9604](https://github.com/ReviewStage/vespin/pull/9604))
+
+### Misc
+
+- Added groundwork for keeping your data in a local database on your Mac
+  ([#9671](https://github.com/ReviewStage/vespin/pull/9671),
+  [#9688](https://github.com/ReviewStage/vespin/pull/9688),
+  [#9694](https://github.com/ReviewStage/vespin/pull/9694),
+  [#9700](https://github.com/ReviewStage/vespin/pull/9700))
+- Updated the privacy policy for product-update emails and the local database
+  ([#9605](https://github.com/ReviewStage/vespin/pull/9605),
+  [#9692](https://github.com/ReviewStage/vespin/pull/9692))
+
+## 0.37.0 — 2026-11-15
+
+### A cursor for each agent
+
+Every agent using an app on your Mac now gets its own cursor. When several are
+on screen, each one is labeled with its agent's name.
+
+[#9530](https://github.com/ReviewStage/vespin/pull/9530),
+[#9533](https://github.com/ReviewStage/vespin/pull/9533)
+
+![Safari and Reminders side by side on a Mac, each with an agent's copper cursor: one labeled Test signup types a password into a Create your account form, the other labeled Launch prep checks off the first item of a Launch list](apps/web/public/changelog/0.37.0/a-cursor-for-each-agent.png)
+
+### Improvements
+
+- Cloud environment variables show who last changed them, and their values
+  stay hidden until you reveal them
+  ([#9212](https://github.com/ReviewStage/vespin/pull/9212))
+- Opening an Inbox thread starts its agent, so your reply lands right away
+  ([#9520](https://github.com/ReviewStage/vespin/pull/9520),
+  [#9526](https://github.com/ReviewStage/vespin/pull/9526))
+- Claude Code subagents can now edit files, start their own subagents, and use
+  Vespin's tools ([#9512](https://github.com/ReviewStage/vespin/pull/9512))
+- Tool searches show what was searched for, and ⌘F finds them
+  ([#9514](https://github.com/ReviewStage/vespin/pull/9514),
+  [#9524](https://github.com/ReviewStage/vespin/pull/9524))
+- The side panel now blends in with the rest of the window
+  ([#9527](https://github.com/ReviewStage/vespin/pull/9527))
+- To-do updates are grouped with the tool calls around them
+  ([#9523](https://github.com/ReviewStage/vespin/pull/9523))
+- Picking a category in the @ menu, like `@apps:`, searches inside it
+  ([#9536](https://github.com/ReviewStage/vespin/pull/9536))
+- Smoother video scrubbing
+  ([#9537](https://github.com/ReviewStage/vespin/pull/9537))
+- Task descriptions can hold up to 100 pictures and videos
+  ([#9521](https://github.com/ReviewStage/vespin/pull/9521))
+- Inbox rows show when a thread is waiting on its agent, not on you
+  ([#9513](https://github.com/ReviewStage/vespin/pull/9513))
+
+### Fixes
+
+- Fixed Mac commands showing the wrong machine name
+  ([#9529](https://github.com/ReviewStage/vespin/pull/9529))
+- Fixed broken images in PR descriptions that use `?raw=true` links
+  ([#9534](https://github.com/ReviewStage/vespin/pull/9534))
+- Fixed blank rows in the Inbox
+  ([#9515](https://github.com/ReviewStage/vespin/pull/9515))
+- Fixed sub-tasks and section tasks showing or hiding incorrectly in the
+  sidebar ([#9538](https://github.com/ReviewStage/vespin/pull/9538))
+
+## 0.36.0 — 2026-11-15
+
+### Cloud sandbox size
+
+Admins can now choose how big cloud agents' sandboxes are, up to 8 vCPUs and
+16 GB, in Settings › Cloud environment. If a command runs out of memory, Vespin
+offers a one-click upgrade.
+
+[#9481](https://github.com/ReviewStage/vespin/pull/9481),
+[#9488](https://github.com/ReviewStage/vespin/pull/9488),
+[#9489](https://github.com/ReviewStage/vespin/pull/9489)
+
+![Settings › Cloud environment in acme, its Sandbox section's Size menu open on 2 vCPUs · 4 GB marked Default, 4 vCPUs · 8 GB checked, and 8 vCPUs · 16 GB, over the Size row and the section's caption](apps/web/public/changelog/0.36.0/cloud-sandbox-size.png)
+
+### Improvements
+
+- A new Update required screen appears when your version is too old, with an
+  Open in browser fallback
+  ([#9426](https://github.com/ReviewStage/vespin/pull/9426))
+- Settings › Machines shows when local agents can't run on this Mac
+  ([#9185](https://github.com/ReviewStage/vespin/pull/9185))
+- Workspace variable changes reach running cloud agents and new Terminal tabs
+  ([#9304](https://github.com/ReviewStage/vespin/pull/9304))
+- Agents on your Mac can run commands on your other machines too
+  ([#9096](https://github.com/ReviewStage/vespin/pull/9096))
+- Agents keep working when a machine blocks a command, instead of stopping to
+  ask ([#9191](https://github.com/ReviewStage/vespin/pull/9191))
+- Machine names in the transcript are now clickable chips
+  ([#9305](https://github.com/ReviewStage/vespin/pull/9305))
+- Clearer failed states for tool calls and pull requests
+  ([#9289](https://github.com/ReviewStage/vespin/pull/9289))
+- Integration calls only show the account when it's ambiguous
+  ([#9301](https://github.com/ReviewStage/vespin/pull/9301))
+- Typing punctuation after a mention no longer leaves a stray space
+  ([#9484](https://github.com/ReviewStage/vespin/pull/9484))
+- You can now attach text files up to 3 MB (up from 100 KB)
+  ([#9486](https://github.com/ReviewStage/vespin/pull/9486))
+- Lower CPU and memory use when saving tasks locally
+  ([#9493](https://github.com/ReviewStage/vespin/pull/9493))
+
+### Fixes
+
+- Fixed teammates' messages sometimes showing under the wrong name
+  ([#9496](https://github.com/ReviewStage/vespin/pull/9496))
+- Fixed setup's team step losing sent invitations
+  ([#9501](https://github.com/ReviewStage/vespin/pull/9501))
+- Fixed "Stop agents" wording when only one agent is running
+  ([#9410](https://github.com/ReviewStage/vespin/pull/9410))
+- Fixed a gap in This Mac's row in Settings › Machines
+  ([#9509](https://github.com/ReviewStage/vespin/pull/9509))
+
 ## 0.35.0 — 2026-11-14
 
 ### Following
 
-Following is out of Settings › Experimental and works in every workspace:
-follow a task from its Following chip or its menu, and the sidebar's Following
-group keeps the tasks you follow in reach, drawn like your pinned rows with no
-repository named.
+Following is out of Experimental: follow any task from its Following chip, and
+find it in the sidebar's Following group.
 
 [#9160](https://github.com/ReviewStage/vespin/pull/9160),
 [#9184](https://github.com/ReviewStage/vespin/pull/9184)
@@ -88,59 +273,45 @@ repository named.
 
 ### Improvements
 
-- Settings › Machines lists every machine of yours once, This Mac first, each
-  opening onto its own settings, and lets you choose your default machine, the
-  one an agent's commands run on when nothing else names one
+- Settings › Machines lists all your machines and lets you pick a default
   ([#9046](https://github.com/ReviewStage/vespin/pull/9046),
   [#9236](https://github.com/ReviewStage/vespin/pull/9236))
-- A machine's chip opens it: your own in Settings › Machines, and a teammate's
-  on their person page, whose new Machines section lists each of their machines
-  with its online dot ([#9215](https://github.com/ReviewStage/vespin/pull/9215),
+- Machine chips open the machine, and person pages list a teammate's machines
+  ([#9215](https://github.com/ReviewStage/vespin/pull/9215),
   [#9198](https://github.com/ReviewStage/vespin/pull/9198),
   [#9079](https://github.com/ReviewStage/vespin/pull/9079))
-- A machine's hover card says whether it runs terminal commands, so anyone in
-  the workspace can see why a call there would be refused
+- A machine's hover card shows whether it runs terminal commands
   ([#9192](https://github.com/ReviewStage/vespin/pull/9192))
-- When an agent asks to run a command on one of your Macs, you can answer from
-  any of your devices, the web app or another Mac, and the first answer wins
+- Answer an agent's command request from any of your devices
   ([#9259](https://github.com/ReviewStage/vespin/pull/9259),
   [#9269](https://github.com/ReviewStage/vespin/pull/9269),
   [#9291](https://github.com/ReviewStage/vespin/pull/9291))
-- A machine's ask gives you five minutes of its own, shows how long it has
-  left, and lets you Deny with a note to the agent
-  ([#9207](https://github.com/ReviewStage/vespin/pull/9207))
-- A command a machine refused reads as not run rather than failed, and the
-  agent carries on ([#9194](https://github.com/ReviewStage/vespin/pull/9194))
-- Hovering the transcript's rail shows a stack of the messages around the
-  pointer, each with its sender's face and name
+- Command requests give you five minutes, show a countdown, and let you deny
+  with a note ([#9207](https://github.com/ReviewStage/vespin/pull/9207))
+- Blocked commands read as not run instead of failed, and the agent carries on
+  ([#9194](https://github.com/ReviewStage/vespin/pull/9194))
+- Hover the transcript's rail to preview nearby messages
   ([#9162](https://github.com/ReviewStage/vespin/pull/9162))
-- An integration call's row names the account it ran on for everyone who reads
-  it, not the reader's own account
+- Integration calls show the account they ran on to everyone
   ([#9300](https://github.com/ReviewStage/vespin/pull/9300))
-- A search row says what it searched for or which files it found, a read
-  thread's row names the thread by its chip, and a browser row wears a browser
-  window's icon in place of the Browser tag
+- Clearer rows for searches, thread reads, and browser calls
   ([#9294](https://github.com/ReviewStage/vespin/pull/9294),
   [#9287](https://github.com/ReviewStage/vespin/pull/9287))
-- A cloud agent's empty transcript says Preparing… while its sandbox boots, and
-  the sandbox stops as soon as its turn is over and no window shows its chat
+- Cloud agents show Preparing… while booting, and their sandbox stops once idle
   ([#9196](https://github.com/ReviewStage/vespin/pull/9196),
   [#9099](https://github.com/ReviewStage/vespin/pull/9099),
   [#9115](https://github.com/ReviewStage/vespin/pull/9115),
   [#9125](https://github.com/ReviewStage/vespin/pull/9125))
-- Settings › Cloud environment draws each repository's run actions in a card of
-  its own, with its own Add action
-  ([#9058](https://github.com/ReviewStage/vespin/pull/9058))
-- The ports popover at an agent box's foot fits its table
+- Each repository's run actions get their own card in Settings › Cloud
+  environment ([#9058](https://github.com/ReviewStage/vespin/pull/9058))
+- The ports popover now fits its table
   ([#9278](https://github.com/ReviewStage/vespin/pull/9278),
   [#9284](https://github.com/ReviewStage/vespin/pull/9284))
-- Move to workspace says why when no workspace can take a task
+- Move to workspace explains when no workspace can take a task
   ([#9266](https://github.com/ReviewStage/vespin/pull/9266))
-- A recording an agent posts plays its sound where it has one
+- Recordings agents post now play their sound
   ([#9187](https://github.com/ReviewStage/vespin/pull/9187))
-- Vespin keeps only active and recent tasks live on your Mac and reads older
-  and finished ones from the service as you open, search, or page to them,
-  spending far less of your Mac's time on a large account
+- Much faster on large accounts: older and finished tasks load on demand
   ([#9282](https://github.com/ReviewStage/vespin/pull/9282),
   [#9172](https://github.com/ReviewStage/vespin/pull/9172),
   [#9203](https://github.com/ReviewStage/vespin/pull/9203),
@@ -150,207 +321,182 @@ repository named.
 
 ### Fixes
 
-- Fixed the Mac app's terminal drawing tiny letters spread across full-size
-  cells ([#9210](https://github.com/ReviewStage/vespin/pull/9210))
-- Fixed a task marked Done landing in the sidebar drawn over another row, with
-  a gap where it belonged
+- Fixed tiny, spread-out letters in the Mac app's terminal
+  ([#9210](https://github.com/ReviewStage/vespin/pull/9210))
+- Fixed a task marked Done overlapping another sidebar row
   ([#9175](https://github.com/ReviewStage/vespin/pull/9175))
-- Fixed typing `> ` in New task's box moving the caret out of the new quote
+- Fixed typing `> ` in New task moving the caret out of the quote
   ([#9183](https://github.com/ReviewStage/vespin/pull/9183))
-- Fixed an automation run's opening Prompt card running past the transcript's
-  column ([#9290](https://github.com/ReviewStage/vespin/pull/9290))
-- Fixed the side panel's file lists and the Pull request tab's headings
-  standing on a lighter ground than the panel
+- Fixed an automation's Prompt card overflowing the transcript
+  ([#9290](https://github.com/ReviewStage/vespin/pull/9290))
+- Fixed mismatched backgrounds in the side panel
   ([#9189](https://github.com/ReviewStage/vespin/pull/9189),
   [#9118](https://github.com/ReviewStage/vespin/pull/9118))
-- Fixed the way back to a thread's newest line covering your reply on a phone,
-  and the thread losing its end as the keyboard opened
+- Fixed the keyboard covering your reply in a thread on phones
   ([#9285](https://github.com/ReviewStage/vespin/pull/9285))
-- Fixed the welcome screen and the sidebar's No tasks yet. showing to someone
-  whose tasks are all old and finished
+- Fixed the welcome screen showing when all your tasks are old and finished
   ([#9201](https://github.com/ReviewStage/vespin/pull/9201))
 
 ## 0.34.1 — 2026-11-13
 
 ### Improvements
 
-- A cloud agent's Cloud chip opens Where this agent works, with a Default
-  machine row choosing which of your machines its terminal commands run on, and
-  each command's row ends in the chip of the machine it ran on
+- Choose which machine a cloud agent's commands run on, and see where each ran
   ([#9043](https://github.com/ReviewStage/vespin/pull/9043),
   [#9157](https://github.com/ReviewStage/vespin/pull/9157))
-- A command an agent could not run on a machine says why under its row, such as
-  the machine being offline, and offers each other machine that could take it,
-  making the one you pick the agent's default and asking the agent to try again
-  there ([#9110](https://github.com/ReviewStage/vespin/pull/9110),
+- When a command can't run on a machine, Vespin says why and offers others
+  ([#9110](https://github.com/ReviewStage/vespin/pull/9110),
   [#9123](https://github.com/ReviewStage/vespin/pull/9123))
-- The @ list in a message box offers your workspace's machines under Machines,
-  or alone after @machines:, each with its online dot, and tells the agent which
-  machine you named ([#9120](https://github.com/ReviewStage/vespin/pull/9120))
-- Each pull request in the split bar docked over an agent's box hangs its card
-  on hover, as a lone pull request's row does
+- Mention a machine with @ to tell an agent where to work
+  ([#9120](https://github.com/ReviewStage/vespin/pull/9120))
+- Hover any pull request in the bar above an agent's box to see its card
   ([#9176](https://github.com/ReviewStage/vespin/pull/9176))
-- Clearing a saved setup script in Settings › Cloud environment turns its Save
-  into Delete script, which asks before it deletes
+- Clearing a saved setup script offers Delete script, with a confirmation
   ([#9074](https://github.com/ReviewStage/vespin/pull/9074),
   [#9078](https://github.com/ReviewStage/vespin/pull/9078))
-- Cards, sheets, the chosen tab, and the open row stand on Geist's card shadow,
-  edged in one solid gray that reads the same on every background
+- Cards, sheets, and tabs get softer shadows and consistent borders
   ([#9081](https://github.com/ReviewStage/vespin/pull/9081),
   [#9083](https://github.com/ReviewStage/vespin/pull/9083),
   [#9111](https://github.com/ReviewStage/vespin/pull/9111))
-- Vespin spends less of your Mac's time keeping an account with many pull
-  requests and tasks up to date
+- Less CPU use on accounts with many pull requests and tasks
   ([#9126](https://github.com/ReviewStage/vespin/pull/9126),
   [#9130](https://github.com/ReviewStage/vespin/pull/9130))
 
 ### Fixes
 
-- Fixed every Mac on 0.33.0 or 0.34.0 refusing to start a local agent, saying
-  the Mac was offline, because Vespin's host crashed each time it launched
+- Fixed local agents failing to start on 0.33.0 and 0.34.0
   ([#9177](https://github.com/ReviewStage/vespin/pull/9177))
-- Fixed a new task's page drawing a placeholder conversation while its agent
-  started, where it now says Starting…
+- Fixed new tasks showing a placeholder conversation instead of Starting…
   ([#9107](https://github.com/ReviewStage/vespin/pull/9107))
-- Fixed the working line under a message you sent appearing, vanishing, and
-  starting its count over
+- Fixed the working indicator flickering and restarting its count
   ([#9155](https://github.com/ReviewStage/vespin/pull/9155))
-- Fixed a queued message's words staying in the box after a saved edit sent it
-  at once ([#9092](https://github.com/ReviewStage/vespin/pull/9092))
-- Fixed a pasted picture's card left standing in the window's top-left corner
+- Fixed a queued message's text staying in the box after sending
+  ([#9092](https://github.com/ReviewStage/vespin/pull/9092))
+- Fixed a pasted picture's card stuck in the window's corner
   ([#9051](https://github.com/ReviewStage/vespin/pull/9051))
-- Fixed a spinner flickering over each file named in a message while it sent
+- Fixed spinners flickering over attached files while sending
   ([#9076](https://github.com/ReviewStage/vespin/pull/9076))
-- Fixed a video playing in the file viewer or a transcript drawing over its
-  frame's rounded corners
+- Fixed videos drawing over their rounded corners
   ([#9098](https://github.com/ReviewStage/vespin/pull/9098))
-- Fixed the transcript rail's bubble lighting the rail's whole height during a
-  fast scroll ([#9072](https://github.com/ReviewStage/vespin/pull/9072))
-- Fixed the open task's card in the sidebar keeping a solid square at its end
-  where the list fades out
+- Fixed the transcript rail lighting up during fast scrolls
+  ([#9072](https://github.com/ReviewStage/vespin/pull/9072))
+- Fixed a square corner on the open task's card in the sidebar
   ([#9068](https://github.com/ReviewStage/vespin/pull/9068))
 
 ### Misc
 
-- Moved moving an agent between the cloud, your Macs, and your hosts behind
-  Settings › Experimental as Move agents: until you turn it on, an agent's Move
-  to › and its place chip's menu of places are hidden, while Move to cloud stays
-  ([#9104](https://github.com/ReviewStage/vespin/pull/9104))
+- Moved moving agents between machines behind Settings › Experimental (Move to
+  cloud stays) ([#9104](https://github.com/ReviewStage/vespin/pull/9104))
 
 ## 0.34.0 — 2026-11-13
 
 ### Run actions
 
-Each repository's commands, kept in Settings › Cloud environment, run from the
-Run button over an agent's tabs, from ⌘K, or with ⌥⌘R, in a cloud agent's
-sandbox or on the Mac a local agent runs on, for every workspace.
-([#8962](https://github.com/ReviewStage/vespin/pull/8962))
+Run each repository's commands, like a dev server or tests, from the Run button,
+⌘K, or ⌥⌘R, in the cloud or on your Mac.
+
+[#8962](https://github.com/ReviewStage/vespin/pull/8962)
 
 ![The Run button over an agent's tabs reads Dev server, and its menu is open on acme/relay's run actions: Dev server, pnpm dev, marked Default with ⌥⌘R; Members tests, pnpm test src/members; Seed pending invites, pnpm db:seed --invites; Email previews, pnpm email:dev; and Edit run actions…](apps/web/public/changelog/0.34.0/run-actions.png)
 
 ### Automations once, and on merges and releases
 
-An automation can run once, at a date and time, and pauses itself after its
-run, reading Ran once. A GitHub automation can start on a pull request merged,
-filtered by its base branch, labels, and author, or on a release published,
-filtered by tag, with prereleases left out unless you include them.
-([#8855](https://github.com/ReviewStage/vespin/pull/8855),
-[#8834](https://github.com/ReviewStage/vespin/pull/8834))
+Automations can now run once at a set time, or start when a pull request merges
+or a release is published.
+
+[#8855](https://github.com/ReviewStage/vespin/pull/8855),
+[#8834](https://github.com/ReviewStage/vespin/pull/8834)
 
 ### Mention Vespin on GitHub
 
-A comment that mentions Vespin's GitHub App on an issue or a pull request starts
-an agent as the member who wrote it, or sends the comment to the agent already
-working on that pull request. Vespin reacts with 👀 and posts the agent's first
-answer back as a comment with a link to it.
-([#8898](https://github.com/ReviewStage/vespin/pull/8898))
+Mention Vespin in a GitHub comment to start an agent, or to message the one
+already on that pull request. Vespin posts the agent's first answer there.
+
+[#8898](https://github.com/ReviewStage/vespin/pull/8898)
 
 ![Two GitHub comments: danamoreno, a member, asks the vespin-agent bot to make an expired invite link read “This invite is no longer valid” and offer a new invite, her comment wearing a 👀 reaction; the vespin-agent bot answers that it opened #232 with Ask for a new invite and a passing test, ending in Open in Vespin](apps/web/public/changelog/0.34.0/mention-vespin-on-github.png)
 
 ### Copy and paste pictures and files
 
-Pictures and files copied out of a message box paste as themselves, not as
-`[Picture 1]`, into another box, a comment, or an editor that takes HTML
-pictures, and a description's picture pastes into a message box too.
-([#8797](https://github.com/ReviewStage/vespin/pull/8797))
+Pictures and files copied from a message box now paste as themselves, not as
+`[Picture 1]`.
+
+[#8797](https://github.com/ReviewStage/vespin/pull/8797)
 
 ### Improvements
 
-- A rail down an agent's transcript marks every line sent into it, and lists
-  each with its sender to jump to ([#8485](https://github.com/ReviewStage/vespin/pull/8485))
-- The first time you open Automations, the Inbox, or an agent's Browser tab, a
-  card says what the page is for, with Learn more and Got it
+- A rail down the transcript marks each message so you can jump to it
+  ([#8485](https://github.com/ReviewStage/vespin/pull/8485))
+- Automations, the Inbox, and the Browser tab explain themselves on first open
   ([#8875](https://github.com/ReviewStage/vespin/pull/8875),
   [#8881](https://github.com/ReviewStage/vespin/pull/8881),
   [#8886](https://github.com/ReviewStage/vespin/pull/8886))
-- A starting agent's line stands at the top of its transcript and names each
-  step: Building… while its workspace's repositories are prepared, then Starting
-  a cloud sandbox… or on your Mac, then Starting the agent…, and Ready while
-  its first message is held for an edit
+- Starting agents show each step, from Building… to Ready
   ([#8816](https://github.com/ReviewStage/vespin/pull/8816),
   [#8858](https://github.com/ReviewStage/vespin/pull/8858),
   [#8854](https://github.com/ReviewStage/vespin/pull/8854),
   [#8820](https://github.com/ReviewStage/vespin/pull/8820))
-- The plug's popover opens a cloud agent's port on this Mac or shares its team
-  link in one press, each port's state beside its button
+- Open or share a cloud agent's port in one click
   ([#8361](https://github.com/ReviewStage/vespin/pull/8361))
-- The Pull request tab draws GitHub's `[!NOTE]` and other alerts as GitHub
-  does, ticks a comment's task items such as a review bot's Trigger review, and
-  spaces nested blocks as a description does
+- The Pull request tab renders GitHub alerts and task lists like GitHub does
   ([#8873](https://github.com/ReviewStage/vespin/pull/8873),
   [#8833](https://github.com/ReviewStage/vespin/pull/8833),
   [#8836](https://github.com/ReviewStage/vespin/pull/8836))
-- A task's hover card lists its Parent, Sub-tasks, Blocked by, and Blocks under
-  headings of their own
+- Task hover cards group parents, sub-tasks, and blockers under headings
   ([#8880](https://github.com/ReviewStage/vespin/pull/8880),
   [#8889](https://github.com/ReviewStage/vespin/pull/8889))
-- A picture on its way up draws its progress, and why it failed with Retry, on
-  the picture itself ([#8779](https://github.com/ReviewStage/vespin/pull/8779))
-- Cards, the chosen tab, and the open row lift off the ground, in Geist's
-  colors across the app
+- Uploading pictures show progress, and a Retry if they fail
+  ([#8779](https://github.com/ReviewStage/vespin/pull/8779))
+- Updated colors and shadows across the app
   ([#8819](https://github.com/ReviewStage/vespin/pull/8819),
   [#8851](https://github.com/ReviewStage/vespin/pull/8851))
-- An agent another agent started posts its own Inbox threads and names them to
-  its starter ([#8671](https://github.com/ReviewStage/vespin/pull/8671))
-- An agent's wakeup waits up to 7 days less an hour ([#8829](https://github.com/ReviewStage/vespin/pull/8829))
-- A long transcript's older pages open faster ([#8932](https://github.com/ReviewStage/vespin/pull/8932))
-- GitHub reads no longer wait a second between queries, and background work
-  leaves members a share of the GitHub quota
+- Agents started by other agents can post their own Inbox threads
+  ([#8671](https://github.com/ReviewStage/vespin/pull/8671))
+- Agent wakeups can wait up to almost 7 days
+  ([#8829](https://github.com/ReviewStage/vespin/pull/8829))
+- Older parts of long transcripts open faster
+  ([#8932](https://github.com/ReviewStage/vespin/pull/8932))
+- Faster GitHub loading, with less risk of hitting rate limits
   ([#8771](https://github.com/ReviewStage/vespin/pull/8771),
   [#9045](https://github.com/ReviewStage/vespin/pull/9045))
 
 ### Fixes
 
-- Fixed actions drawn under an agent's turn still running ([#8805](https://github.com/ReviewStage/vespin/pull/8805))
-- Fixed a message or an Inbox reply that did not reach its agent losing its not
-  delivered mark on a reload or a new thread
+- Fixed actions under a finished turn still showing as running
+  ([#8805](https://github.com/ReviewStage/vespin/pull/8805))
+- Fixed undelivered messages losing their not delivered mark
   ([#8692](https://github.com/ReviewStage/vespin/pull/8692),
   [#8706](https://github.com/ReviewStage/vespin/pull/8706),
   [#8711](https://github.com/ReviewStage/vespin/pull/8711))
-- Fixed a queued message whose words name its picture drawing out of line ([#8792](https://github.com/ReviewStage/vespin/pull/8792))
-- Fixed an Inbox picture's viewer titled by its alt text rather than its caption ([#8890](https://github.com/ReviewStage/vespin/pull/8890))
-- Fixed a lettered line under a numbered item breaking the list or losing its
-  indent ([#8744](https://github.com/ReviewStage/vespin/pull/8744),
+- Fixed queued messages with pictures drawing out of line
+  ([#8792](https://github.com/ReviewStage/vespin/pull/8792))
+- Fixed Inbox picture viewers showing alt text instead of the caption
+  ([#8890](https://github.com/ReviewStage/vespin/pull/8890))
+- Fixed lettered sub-items breaking numbered lists
+  ([#8744](https://github.com/ReviewStage/vespin/pull/8744),
   [#8753](https://github.com/ReviewStage/vespin/pull/8753),
   [#8760](https://github.com/ReviewStage/vespin/pull/8760))
-- Fixed a code span holding a backtick losing its padding ([#8354](https://github.com/ReviewStage/vespin/pull/8354))
-- Fixed the sidebar saying offline while only a read was slow, and drawing its
-  sections empty while they load ([#8801](https://github.com/ReviewStage/vespin/pull/8801))
-- Fixed a peeked sidebar closing under a menu raised from it ([#8458](https://github.com/ReviewStage/vespin/pull/8458))
-- Fixed the side panel's toggle standing over a task's details ([#8308](https://github.com/ReviewStage/vespin/pull/8308))
-- Fixed the work sheet's left edge hiding beside the open sidebar ([#8821](https://github.com/ReviewStage/vespin/pull/8821))
-- Fixed the reaction picker leaving room for more than its eight emoji ([#8859](https://github.com/ReviewStage/vespin/pull/8859))
-- Fixed a focus ring left behind by arrow keys typed in a field ([#8865](https://github.com/ReviewStage/vespin/pull/8865))
-- Fixed a stepped-back choice card drawing a doubled edge ([#8846](https://github.com/ReviewStage/vespin/pull/8846))
-- Fixed an agent's do asks and answer forms refused past a handful of items, now
-  up to 50 ([#8300](https://github.com/ReviewStage/vespin/pull/8300))
-- Fixed Settings › Integrations failing to read an account that connected a
-  provider this build does not offer ([#8958](https://github.com/ReviewStage/vespin/pull/8958))
-- Fixed This Mac's device settings lost when a write failed ([#8884](https://github.com/ReviewStage/vespin/pull/8884))
-- Fixed setup asking for an agent pick it no longer offers, a refused team
-  workspace said only in a toast, lapsed sign-in toasts over setup, a tall
-  sign-in card hiding its way out, and a narrow credential row crowding its
-  controls ([#8591](https://github.com/ReviewStage/vespin/pull/8591),
+- Fixed missing padding on code spans that contain a backtick
+  ([#8354](https://github.com/ReviewStage/vespin/pull/8354))
+- Fixed the sidebar wrongly saying offline, and empty sections while loading
+  ([#8801](https://github.com/ReviewStage/vespin/pull/8801))
+- Fixed a peeked sidebar closing when you open a menu from it
+  ([#8458](https://github.com/ReviewStage/vespin/pull/8458))
+- Fixed small layout glitches in the side panel, work sheet, reaction picker,
+  focus rings, and choice cards
+  ([#8308](https://github.com/ReviewStage/vespin/pull/8308),
+  [#8821](https://github.com/ReviewStage/vespin/pull/8821),
+  [#8859](https://github.com/ReviewStage/vespin/pull/8859),
+  [#8865](https://github.com/ReviewStage/vespin/pull/8865),
+  [#8846](https://github.com/ReviewStage/vespin/pull/8846))
+- Fixed agents' asks and forms being refused past a handful of items (now 50)
+  ([#8300](https://github.com/ReviewStage/vespin/pull/8300))
+- Fixed Settings › Integrations failing for accounts with unsupported providers
+  ([#8958](https://github.com/ReviewStage/vespin/pull/8958))
+- Fixed This Mac's settings being lost when saving failed
+  ([#8884](https://github.com/ReviewStage/vespin/pull/8884))
+- Fixed several rough edges in setup and sign-in
+  ([#8591](https://github.com/ReviewStage/vespin/pull/8591),
   [#8592](https://github.com/ReviewStage/vespin/pull/8592),
   [#8631](https://github.com/ReviewStage/vespin/pull/8631),
   [#8632](https://github.com/ReviewStage/vespin/pull/8632),
@@ -358,25 +504,23 @@ pictures, and a description's picture pastes into a message box too.
 
 ### Misc
 
-- Added guides at vespin.dev/guides: running Claude Code and Codex in the cloud,
-  running coding agents in parallel, agent isolation, where agents run, and the
+- Added guides at vespin.dev/guides on cloud agents, parallel agents, and the
   Inbox ([#8772](https://github.com/ReviewStage/vespin/pull/8772),
   [#8773](https://github.com/ReviewStage/vespin/pull/8773),
   [#8774](https://github.com/ReviewStage/vespin/pull/8774),
   [#8777](https://github.com/ReviewStage/vespin/pull/8777),
   [#8847](https://github.com/ReviewStage/vespin/pull/8847))
-- Updated coding agents' instructions to half their length ([#8716](https://github.com/ReviewStage/vespin/pull/8716))
-- Removed archive scripts, which ran a repository's script as an agent was
-  archived ([#8764](https://github.com/ReviewStage/vespin/pull/8764))
+- Updated coding agents' instructions to half their length
+  ([#8716](https://github.com/ReviewStage/vespin/pull/8716))
+- Removed archive scripts
+  ([#8764](https://github.com/ReviewStage/vespin/pull/8764))
 
 ## 0.33.0 — 2026-11-12
 
 ### Bring your own machine
 
-Agents run on your own Macs and Linux machines as well as in Vespin's cloud,
-This Mac among them, set up in Settings › Machines. Vespin carries its host
-inside the app, and every machine says one status wherever it shows: Online,
-Offline, Setting up, or Failed.
+Agents can now run on your own Macs and Linux machines, not just in Vespin's
+cloud. Set them up in Settings › Machines.
 ([#8507](https://github.com/ReviewStage/vespin/pull/8507),
 [#8345](https://github.com/ReviewStage/vespin/pull/8345),
 [#8474](https://github.com/ReviewStage/vespin/pull/8474),
@@ -391,10 +535,8 @@ Offline, Setting up, or Failed.
 
 ### Always allowed commands
 
-Always allow on a Claude Code agent's command offers the command's first
-words, such as `pnpm test *`, and keeps them past the session. Settings ›
-Agents › Always allowed lists the commands your agents run without asking, to
-add, edit, and remove in place.
+Always allow now remembers a command pattern like `pnpm test *` across
+sessions. Manage the list in Settings › Agents › Always allowed.
 ([#8525](https://github.com/ReviewStage/vespin/pull/8525),
 [#8527](https://github.com/ReviewStage/vespin/pull/8527),
 [#8543](https://github.com/ReviewStage/vespin/pull/8543),
@@ -405,9 +547,8 @@ add, edit, and remove in place.
 
 ### PDFs and HEIC photos
 
-A PDF opens in the file viewer page by page, and a pasted PDF, or one shared
-in Slack, goes to the agent, which reads it on any machine. A HEIC photo turns
-into a JPEG on the way in.
+PDFs now open in the file viewer, and agents can read PDFs you paste or share
+in Slack. HEIC photos are converted to JPEG automatically.
 ([#8552](https://github.com/ReviewStage/vespin/pull/8552),
 [#8642](https://github.com/ReviewStage/vespin/pull/8642),
 [#8528](https://github.com/ReviewStage/vespin/pull/8528),
@@ -418,8 +559,7 @@ into a JPEG on the way in.
 
 ### Zoom a page
 
-A page an agent shows zooms in its tab with ⌘+, ⌘−, and ⌘0, a pinch, or the
-Zoom row in the tab's menu, and its bar says the size it stands at.
+Zoom pages that agents show with ⌘+, ⌘−, ⌘0, a pinch, or the tab's menu.
 ([#8471](https://github.com/ReviewStage/vespin/pull/8471),
 [#8606](https://github.com/ReviewStage/vespin/pull/8606),
 [#8595](https://github.com/ReviewStage/vespin/pull/8595))
@@ -428,87 +568,98 @@ Zoom row in the tab's menu, and its bar says the size it stands at.
 
 ### Improvements
 
-- A cloud agent's sandbox holds every repository connected to its workspace
-  beside its own, and resumes from the current image with its own files
+- Cloud sandboxes now include every repository connected to the workspace
   ([#8540](https://github.com/ReviewStage/vespin/pull/8540),
   [#8547](https://github.com/ReviewStage/vespin/pull/8547),
   [#8544](https://github.com/ReviewStage/vespin/pull/8544),
   [#8645](https://github.com/ReviewStage/vespin/pull/8645),
   [#8668](https://github.com/ReviewStage/vespin/pull/8668),
   [#8693](https://github.com/ReviewStage/vespin/pull/8693))
-- Anyone who can message an agent can change its queue, and each queued
-  message names who queued it ([#8691](https://github.com/ReviewStage/vespin/pull/8691))
-- A new agent's model menu offers its permission mode ([#8447](https://github.com/ReviewStage/vespin/pull/8447))
-- ⌘F in a transcript can leave tool calls and thinking out ([#8457](https://github.com/ReviewStage/vespin/pull/8457))
-- A task's Overview lists its pages as rows like its agents', with a menu and
-  selection ([#8455](https://github.com/ReviewStage/vespin/pull/8455))
-- A name in a Settings row renames with a press on it ([#8558](https://github.com/ReviewStage/vespin/pull/8558))
-- The Automations list groups its rows, says each automation's filters, owner,
-  and next run in words, and suggests Triage a red main and Investigate Sentry
-  alerts
+- Anyone who can message an agent can edit its queue, which shows who queued
+  each message ([#8691](https://github.com/ReviewStage/vespin/pull/8691))
+- Pick a new agent's permission mode from its model menu
+  ([#8447](https://github.com/ReviewStage/vespin/pull/8447))
+- ⌘F in a transcript can skip tool calls and thinking
+  ([#8457](https://github.com/ReviewStage/vespin/pull/8457))
+- A task's pages show as rows on its Overview, with a menu and selection
+  ([#8455](https://github.com/ReviewStage/vespin/pull/8455))
+- Click a name in Settings to rename it
+  ([#8558](https://github.com/ReviewStage/vespin/pull/8558))
+- Clearer Automations list, plus suggested automations to get started
   ([#8620](https://github.com/ReviewStage/vespin/pull/8620),
   [#8674](https://github.com/ReviewStage/vespin/pull/8674),
   [#8626](https://github.com/ReviewStage/vespin/pull/8626),
   [#8505](https://github.com/ReviewStage/vespin/pull/8505))
-- A GitHub trigger can watch the repository's default branch, whatever it is
-  named ([#8656](https://github.com/ReviewStage/vespin/pull/8656))
-- Mintlify joins the integrations ([#8690](https://github.com/ReviewStage/vespin/pull/8690))
-- An attached picture is named by its file name ([#8646](https://github.com/ReviewStage/vespin/pull/8646))
-- The setup survey takes several answers to each question ([#8644](https://github.com/ReviewStage/vespin/pull/8644))
-- The web app lists its keyboard shortcuts, with a browser chord for each one
-  the browser keeps ([#8494](https://github.com/ReviewStage/vespin/pull/8494))
-- Vespin's MCP server and CLI edit cloud setup scripts ([#8565](https://github.com/ReviewStage/vespin/pull/8565))
-- Deleting your account revokes Vespin's sign-in at Google and GitHub, and its
-  GitHub App grant
+- GitHub triggers can watch the default branch, whatever it's named
+  ([#8656](https://github.com/ReviewStage/vespin/pull/8656))
+- Added a Mintlify integration
+  ([#8690](https://github.com/ReviewStage/vespin/pull/8690))
+- Attached pictures show their file name
+  ([#8646](https://github.com/ReviewStage/vespin/pull/8646))
+- The setup survey accepts multiple answers per question
+  ([#8644](https://github.com/ReviewStage/vespin/pull/8644))
+- The web app lists its keyboard shortcuts, with browser-safe alternatives
+  ([#8494](https://github.com/ReviewStage/vespin/pull/8494))
+- Vespin's MCP server and CLI can edit cloud setup scripts
+  ([#8565](https://github.com/ReviewStage/vespin/pull/8565))
+- Deleting your account also revokes Vespin's Google and GitHub access
   ([#8517](https://github.com/ReviewStage/vespin/pull/8517),
   [#8522](https://github.com/ReviewStage/vespin/pull/8522))
 
 ### Fixes
 
-- Fixed `/` commands offering nothing in a workspace with no skills, and
-  `/model` missing from the new-task composer ([#8545](https://github.com/ReviewStage/vespin/pull/8545))
-- Fixed a pasted Vespin link staying plain text rather than becoming its chip
+- Fixed `/` commands missing in some workspaces and in the new-task composer
+  ([#8545](https://github.com/ReviewStage/vespin/pull/8545))
+- Fixed pasted Vespin links staying plain text
   ([#8542](https://github.com/ReviewStage/vespin/pull/8542))
-- Fixed a pasted picture's chip landing late or away from the caret
+- Fixed pasted pictures landing late or in the wrong spot
   ([#8508](https://github.com/ReviewStage/vespin/pull/8508),
   [#8490](https://github.com/ReviewStage/vespin/pull/8490))
-- Fixed a file named by its absolute path in the checkout drawing as plain text
+- Fixed absolute file paths not becoming links
   ([#8484](https://github.com/ReviewStage/vespin/pull/8484),
   [#8489](https://github.com/ReviewStage/vespin/pull/8489))
-- Fixed a task's page staying open after the task was marked done or canceled,
-  or its agent archived
+- Fixed a task's page staying open after it was closed or archived
   ([#8479](https://github.com/ReviewStage/vespin/pull/8479),
   [#8470](https://github.com/ReviewStage/vespin/pull/8470))
-- Fixed New task from Settings landing on Home without its composer open ([#8438](https://github.com/ReviewStage/vespin/pull/8438))
-- Fixed an inline page's height jumping as its transcript row redrew ([#8333](https://github.com/ReviewStage/vespin/pull/8333))
-- Fixed a recording losing its place when opened in the viewer ([#8539](https://github.com/ReviewStage/vespin/pull/8539))
-- Fixed a loading video or picture losing its shape
+- Fixed New task from Settings not opening the composer
+  ([#8438](https://github.com/ReviewStage/vespin/pull/8438))
+- Fixed inline pages jumping in height
+  ([#8333](https://github.com/ReviewStage/vespin/pull/8333))
+- Fixed recordings losing their place in the viewer
+  ([#8539](https://github.com/ReviewStage/vespin/pull/8539))
+- Fixed loading videos and pictures changing shape
   ([#8500](https://github.com/ReviewStage/vespin/pull/8500),
   [#8705](https://github.com/ReviewStage/vespin/pull/8705))
-- Fixed scrollbars fading away under a list's edge fade ([#8721](https://github.com/ReviewStage/vespin/pull/8721))
-- Fixed a new agent's Starting… timer counting from different moments ([#8548](https://github.com/ReviewStage/vespin/pull/8548))
-- Fixed queued messages standing shorter than the other rows over the box ([#8462](https://github.com/ReviewStage/vespin/pull/8462))
-- Fixed an Inbox row's preview leaving out a message's files, a page's row
-  missing its title, and a row's press not moving an Inbox opened at an
-  item's address
+- Fixed scrollbars fading out at a list's edge
+  ([#8721](https://github.com/ReviewStage/vespin/pull/8721))
+- Fixed a new agent's Starting… timer being inconsistent
+  ([#8548](https://github.com/ReviewStage/vespin/pull/8548))
+- Fixed queued messages looking shorter than other rows
+  ([#8462](https://github.com/ReviewStage/vespin/pull/8462))
+- Fixed several Inbox row previews and navigation glitches
   ([#8482](https://github.com/ReviewStage/vespin/pull/8482),
   [#8497](https://github.com/ReviewStage/vespin/pull/8497),
   [#8492](https://github.com/ReviewStage/vespin/pull/8492))
-- Fixed a page offered with every option of an Inbox decide drawing on one
-  option's card ([#8710](https://github.com/ReviewStage/vespin/pull/8710))
-- Fixed the status dot missing from a machine's place chip and the Cloud
-  popover's row
+- Fixed a page shared across an Inbox decide's options showing on just one
+  ([#8710](https://github.com/ReviewStage/vespin/pull/8710))
+- Fixed missing machine status dots
   ([#8526](https://github.com/ReviewStage/vespin/pull/8526),
   [#8502](https://github.com/ReviewStage/vespin/pull/8502))
-- Fixed a machine's name breaking across lines ([#8726](https://github.com/ReviewStage/vespin/pull/8726))
-- Fixed the settings search missing Cloud environment's sections ([#8440](https://github.com/ReviewStage/vespin/pull/8440))
-- Fixed a usage meter's reset time standing off its bar's center ([#8519](https://github.com/ReviewStage/vespin/pull/8519))
-- Fixed Codex agents wearing the ChatGPT mark ([#8594](https://github.com/ReviewStage/vespin/pull/8594))
-- Fixed a setup script's last run naming an agent to someone who cannot see it ([#8586](https://github.com/ReviewStage/vespin/pull/8586))
-- Fixed the Slack bot connecting for someone outside its Slack team ([#8588](https://github.com/ReviewStage/vespin/pull/8588))
-- Fixed Settings' While plugged in not saying it keeps an idle Mac awake ([#8480](https://github.com/ReviewStage/vespin/pull/8480))
-- Fixed the same act worded differently across the app, as Got it, Retry, and
-  Try again
+- Fixed long machine names wrapping
+  ([#8726](https://github.com/ReviewStage/vespin/pull/8726))
+- Fixed settings search missing Cloud environment
+  ([#8440](https://github.com/ReviewStage/vespin/pull/8440))
+- Fixed a misaligned usage meter reset time
+  ([#8519](https://github.com/ReviewStage/vespin/pull/8519))
+- Fixed Codex agents showing the ChatGPT logo
+  ([#8594](https://github.com/ReviewStage/vespin/pull/8594))
+- Fixed a setup script's last run naming an agent you can't see
+  ([#8586](https://github.com/ReviewStage/vespin/pull/8586))
+- Fixed the Slack bot connecting for people outside its Slack team
+  ([#8588](https://github.com/ReviewStage/vespin/pull/8588))
+- Fixed While plugged in not explaining it keeps your Mac awake
+  ([#8480](https://github.com/ReviewStage/vespin/pull/8480))
+- Fixed inconsistent button wording across the app
   ([#8451](https://github.com/ReviewStage/vespin/pull/8451),
   [#8452](https://github.com/ReviewStage/vespin/pull/8452),
   [#8425](https://github.com/ReviewStage/vespin/pull/8425),
@@ -516,24 +667,22 @@ Zoom row in the tab's menu, and its bar says the size it stands at.
 
 ### Misc
 
-- Updated agents to read another agent's or a task's threads, look at a
-  thread's pictures, attach a PDF to a thread message, ask before building
-  when a prompt names a goal but no spec, and leave their servers running at
-  a turn's end
+- Updated agents to read other threads, look at thread pictures, attach PDFs,
+  ask before building from a vague goal, and keep servers running
   ([#8477](https://github.com/ReviewStage/vespin/pull/8477),
   [#8521](https://github.com/ReviewStage/vespin/pull/8521),
   [#8524](https://github.com/ReviewStage/vespin/pull/8524),
   [#8534](https://github.com/ReviewStage/vespin/pull/8534),
   [#8488](https://github.com/ReviewStage/vespin/pull/8488),
   [#8536](https://github.com/ReviewStage/vespin/pull/8536))
-- Updated Codex to 0.167.1 ([#8589](https://github.com/ReviewStage/vespin/pull/8589))
-- Updated Vespin's signature to accept a later update signed by either of its
-  signing teams ([#8683](https://github.com/ReviewStage/vespin/pull/8683))
-- Updated the landing page with its copper orb and dot fields, and a line
-  saying Y Combinator backs Vespin
+- Updated Codex to 0.167.1
+  ([#8589](https://github.com/ReviewStage/vespin/pull/8589))
+- Updated app signing to accept updates from either signing team
+  ([#8683](https://github.com/ReviewStage/vespin/pull/8683))
+- Updated the landing page design
   ([#8483](https://github.com/ReviewStage/vespin/pull/8483),
   [#8523](https://github.com/ReviewStage/vespin/pull/8523))
-- Updated Electron and other dependencies to close security advisories
+- Updated Electron and other dependencies for security fixes
   ([#8619](https://github.com/ReviewStage/vespin/pull/8619),
   [#8590](https://github.com/ReviewStage/vespin/pull/8590))
 
@@ -541,11 +690,9 @@ Zoom row in the tab's menu, and its bar says the size it stands at.
 
 ### Permissions and approvals
 
-The model chip's menu sets how an agent's actions are approved: Ask for
-approval, Approve for me, or Full access, from the next turn. An agent that
-asks stops on the command or edit and waits for you to allow or deny it, with
-a note to the agent if you deny it. Settings › Agents › New agents chooses the
-mode a new agent starts on, for Claude Code and Codex agents alike.
+Choose how an agent's actions are approved from the model menu: Ask for
+approval, Approve for me, or Full access. Set the default for new agents in
+Settings › Agents.
 ([#8109](https://github.com/ReviewStage/vespin/pull/8109),
 [#8101](https://github.com/ReviewStage/vespin/pull/8101),
 [#8121](https://github.com/ReviewStage/vespin/pull/8121),
@@ -559,9 +706,8 @@ mode a new agent starts on, for Claude Code and Codex agents alike.
 
 ### /model, /compact, and /clear
 
-A `/` at the start of a message offers the box's own commands: `/model`
-switches the agent's model, `/compact` folds its session, and
-`/clear` starts it afresh, on Claude Code and Codex alike.
+Type `/model` to switch models, `/compact` to free up context, or `/clear` to
+start fresh, on Claude Code and Codex alike.
 ([#8217](https://github.com/ReviewStage/vespin/pull/8217),
 [#8225](https://github.com/ReviewStage/vespin/pull/8225))
 
@@ -569,18 +715,16 @@ switches the agent's model, `/compact` folds its session, and
 
 ### Sounds of your own
 
-Vespin plays one sound when an agent finishes and another when something needs
-you, from a fuller, louder set. Settings › Preferences adds your own clips by
-name, to rename, remove, and play for either.
+New, louder sounds for when an agent finishes or needs you. You can also add
+your own in Settings › Preferences.
 ([#8205](https://github.com/ReviewStage/vespin/pull/8205),
 [#8215](https://github.com/ReviewStage/vespin/pull/8215),
 [#8228](https://github.com/ReviewStage/vespin/pull/8228))
 
 ### Plan usage at a glance
 
-Settings and the model menu show each plan's 5-hour and weekly usage, with the
-moment each window resets on hover, and an agent says whose plan or key pays
-for it. A message the usage limit refused waits for the reset and goes then.
+See your 5-hour and weekly plan usage in Settings and the model menu. Messages
+blocked by a usage limit send automatically when it resets.
 ([#7991](https://github.com/ReviewStage/vespin/pull/7991),
 [#8099](https://github.com/ReviewStage/vespin/pull/8099),
 [#8284](https://github.com/ReviewStage/vespin/pull/8284),
@@ -590,89 +734,87 @@ for it. A message the usage limit refused waits for the reset and goes then.
 
 ### Agents carry on by themselves
 
-A turn cut off because its runner went away, or because the model provider
-could not be reached, carries on by itself once it can, with a line in the
-transcript where it stopped.
+When a turn is cut off by a lost connection, the agent picks up where it left
+off once it can.
 ([#8023](https://github.com/ReviewStage/vespin/pull/8023),
 [#8028](https://github.com/ReviewStage/vespin/pull/8028))
 
 ### Improvements
 
-- The Resources popover, beside Back and Forward, shows what each of Vespin's
-  processes spends in CPU and memory ([#8311](https://github.com/ReviewStage/vespin/pull/8311))
-- The Cloud chip shows its sandbox's state and size, and a command killed out
-  of memory says so to you and to the agent
+- New Resources popover shows Vespin's CPU and memory use
+  ([#8311](https://github.com/ReviewStage/vespin/pull/8311))
+- The Cloud chip shows sandbox state and size, and flags out-of-memory kills
   ([#8095](https://github.com/ReviewStage/vespin/pull/8095),
   [#8086](https://github.com/ReviewStage/vespin/pull/8086))
-- A cloud sandbox sleeps after five minutes with no agent or terminal activity,
-  and one unused for seven days is deleted, after its repository's archive
-  script runs
-  ([#8166](https://github.com/ReviewStage/vespin/pull/8166),
+- Idle cloud sandboxes sleep after five minutes and are deleted after seven
+  days ([#8166](https://github.com/ReviewStage/vespin/pull/8166),
   [#8125](https://github.com/ReviewStage/vespin/pull/8125),
   [#8196](https://github.com/ReviewStage/vespin/pull/8196),
   [#8091](https://github.com/ReviewStage/vespin/pull/8091))
-- A new agent shows its machine starting in its empty transcript, and every
-  message sent meanwhile waits in its queue
+- New agents show their machine starting up, and queue messages meanwhile
   ([#8296](https://github.com/ReviewStage/vespin/pull/8296),
   [#8319](https://github.com/ReviewStage/vespin/pull/8319),
   [#8289](https://github.com/ReviewStage/vespin/pull/8289),
   [#8307](https://github.com/ReviewStage/vespin/pull/8307))
-- Settings › Cloud setup shows each script's last run, numbers its lines, and
-  saves an edited script with ⌘S
+- Cloud setup shows each script's last run, line numbers, and saves with ⌘S
   ([#8208](https://github.com/ReviewStage/vespin/pull/8208),
   [#8188](https://github.com/ReviewStage/vespin/pull/8188),
   [#8178](https://github.com/ReviewStage/vespin/pull/8178))
-- An Inbox decide's options carry pictures, recordings, and pages on their
-  cards
+- Inbox decide options can include pictures, recordings, and pages
   ([#8312](https://github.com/ReviewStage/vespin/pull/8312),
   [#8313](https://github.com/ReviewStage/vespin/pull/8313))
-- A task's Agents and Sub-tasks groups add a row from their heading, and show
-  even when empty
+- Add agents and sub-tasks from their section heading on a task
   ([#8207](https://github.com/ReviewStage/vespin/pull/8207),
   [#8316](https://github.com/ReviewStage/vespin/pull/8316))
-- Home and a person's page fold their sections, as a task's Overview does
+- Collapsible sections on Home and person pages
   ([#8273](https://github.com/ReviewStage/vespin/pull/8273),
   [#8251](https://github.com/ReviewStage/vespin/pull/8251))
-- A sub-task put in a sidebar section stands there ([#8206](https://github.com/ReviewStage/vespin/pull/8206))
-- Recent page tabs keep their state when you return to them
+- Sub-tasks can be placed in sidebar sections
+  ([#8206](https://github.com/ReviewStage/vespin/pull/8206))
+- Recent page tabs keep their state
   ([#8184](https://github.com/ReviewStage/vespin/pull/8184),
   [#8199](https://github.com/ReviewStage/vespin/pull/8199))
-- The pull request title edits with a click in its words ([#8089](https://github.com/ReviewStage/vespin/pull/8089))
-- A GitHub review thread's reply and a review's summary are written in the
-  shared message box, with Pending beside your name
+- Click a pull request's title to edit it
+  ([#8089](https://github.com/ReviewStage/vespin/pull/8089))
+- GitHub review replies and summaries use the regular message box
   ([#8096](https://github.com/ReviewStage/vespin/pull/8096),
   [#8298](https://github.com/ReviewStage/vespin/pull/8298))
-- `slack`, `email`, and `draft` fences draw as they will look when sent, with a
-  Copy that keeps their formatting ([#8013](https://github.com/ReviewStage/vespin/pull/8013))
-- A pasted picture lands in the message as an inline chip ([#8026](https://github.com/ReviewStage/vespin/pull/8026))
-- A plain web link previews on hover ([#8025](https://github.com/ReviewStage/vespin/pull/8025))
-- An agent's card names everyone who started it ([#8087](https://github.com/ReviewStage/vespin/pull/8087))
-- Moving an agent still writing stops it first ([#8220](https://github.com/ReviewStage/vespin/pull/8220))
-- Vespin asks before you stop someone else's running agents ([#8267](https://github.com/ReviewStage/vespin/pull/8267))
-- Got it and Resolve can be undone ([#8092](https://github.com/ReviewStage/vespin/pull/8092),
+- `slack`, `email`, and `draft` blocks preview as sent, and copy formatted
+  ([#8013](https://github.com/ReviewStage/vespin/pull/8013))
+- Pasted pictures appear inline in your message
+  ([#8026](https://github.com/ReviewStage/vespin/pull/8026))
+- Web links preview on hover
+  ([#8025](https://github.com/ReviewStage/vespin/pull/8025))
+- An agent's card shows everyone who started it
+  ([#8087](https://github.com/ReviewStage/vespin/pull/8087))
+- Moving a running agent stops it first
+  ([#8220](https://github.com/ReviewStage/vespin/pull/8220))
+- Vespin asks before stopping someone else's agents
+  ([#8267](https://github.com/ReviewStage/vespin/pull/8267))
+- Undo for Got it and Resolve
+  ([#8092](https://github.com/ReviewStage/vespin/pull/8092),
   [#8128](https://github.com/ReviewStage/vespin/pull/8128),
   [#8129](https://github.com/ReviewStage/vespin/pull/8129))
-- Settings › Preferences stands apart from Account and holds Slack
-  notifications, and Settings' words are slimmer
+- Preferences now has its own settings page, including Slack notifications
   ([#8197](https://github.com/ReviewStage/vespin/pull/8197),
   [#8156](https://github.com/ReviewStage/vespin/pull/8156))
-- A forwarded or shared port is labeled with what serves it, and a shared
-  preview's address names its task's key
+- Shared ports show what's running on them
   ([#8176](https://github.com/ReviewStage/vespin/pull/8176),
   [#8274](https://github.com/ReviewStage/vespin/pull/8274))
-- Shared preview links and the sign-in page share as cards ([#8320](https://github.com/ReviewStage/vespin/pull/8320))
-- Every agent stands on a task, and a canceled task archives its agents
+- Shared preview links and the sign-in page show link previews
+  ([#8320](https://github.com/ReviewStage/vespin/pull/8320))
+- Every agent belongs to a task, and canceling a task archives its agents
   ([#7999](https://github.com/ReviewStage/vespin/pull/7999),
   [#8115](https://github.com/ReviewStage/vespin/pull/8115))
-- Agents keep their task's status, and leave Done to you unless they are sure
-  you are finished
+- Agents leave marking a task Done to you unless they're sure
   ([#8114](https://github.com/ReviewStage/vespin/pull/8114),
   [#8276](https://github.com/ReviewStage/vespin/pull/8276))
-- New automations archive their finished runs ([#8110](https://github.com/ReviewStage/vespin/pull/8110))
-- A pull request offers an admin bypass merge ([#7912](https://github.com/ReviewStage/vespin/pull/7912))
-- Vespin's MCP server and CLI manage workspaces, members, invitations,
-  environment variables, Slack bot settings, agents' message queues, Inbox
-  threads, and connected clients, and rewind, wake, or delete agents and tasks
+- New automations archive their finished runs
+  ([#8110](https://github.com/ReviewStage/vespin/pull/8110))
+- Admins can bypass merge requirements on a pull request
+  ([#7912](https://github.com/ReviewStage/vespin/pull/7912))
+- Vespin's MCP server and CLI cover far more: workspaces, members, agents,
+  tasks, and more
   ([#8038](https://github.com/ReviewStage/vespin/pull/8038),
   [#8040](https://github.com/ReviewStage/vespin/pull/8040),
   [#8048](https://github.com/ReviewStage/vespin/pull/8048),
@@ -688,65 +830,72 @@ transcript where it stopped.
   [#8106](https://github.com/ReviewStage/vespin/pull/8106),
   [#8108](https://github.com/ReviewStage/vespin/pull/8108),
   [#8133](https://github.com/ReviewStage/vespin/pull/8133))
-- Vespin reads a newer service's answers without failing, and asks you to
-  update a build the service no longer serves
+- Vespin asks you to update when your version is no longer supported
   ([#8330](https://github.com/ReviewStage/vespin/pull/8330),
   [#8331](https://github.com/ReviewStage/vespin/pull/8331),
   [#8335](https://github.com/ReviewStage/vespin/pull/8335))
 
 ### Fixes
 
-- Fixed ⌘W closing the window behind a dialog or the command palette, or a key
-  an input method was composing
+- Fixed ⌘W closing the window while a dialog was open or text was composing
   ([#8174](https://github.com/ReviewStage/vespin/pull/8174),
   [#8192](https://github.com/ReviewStage/vespin/pull/8192),
   [#8165](https://github.com/ReviewStage/vespin/pull/8165))
-- Fixed ⌘S in a code editor on a non-Latin keyboard layout ([#8221](https://github.com/ReviewStage/vespin/pull/8221))
-- Fixed a code editor's two-digit line numbers wrapping, and a `>` line in a
-  fenced block drawing as a quote
+- Fixed ⌘S on non-Latin keyboard layouts
+  ([#8221](https://github.com/ReviewStage/vespin/pull/8221))
+- Fixed wrapped line numbers and stray quotes in code blocks
   ([#8349](https://github.com/ReviewStage/vespin/pull/8349),
   [#8348](https://github.com/ReviewStage/vespin/pull/8348))
-- Fixed a refused send losing its words and files ([#8131](https://github.com/ReviewStage/vespin/pull/8131))
-- Fixed a typed pull request title being lost while it saved
+- Fixed a failed send losing your message and files
+  ([#8131](https://github.com/ReviewStage/vespin/pull/8131))
+- Fixed pull request title edits getting lost while saving
   ([#8042](https://github.com/ReviewStage/vespin/pull/8042),
   [#8253](https://github.com/ReviewStage/vespin/pull/8253))
-- Fixed an agent's words folding away in a finished turn ([#8072](https://github.com/ReviewStage/vespin/pull/8072))
-- Fixed Stop showing before an agent's turn had started ([#8260](https://github.com/ReviewStage/vespin/pull/8260))
-- Fixed an archived agent's page staying open rather than going Home ([#8259](https://github.com/ReviewStage/vespin/pull/8259))
-- Fixed the `@` list losing its highlight as rows arrived, Escape leaking out of
-  one of its groups, and a task's key drawing out of place
+- Fixed an agent's reply collapsing in a finished turn
+  ([#8072](https://github.com/ReviewStage/vespin/pull/8072))
+- Fixed Stop showing before a turn started
+  ([#8260](https://github.com/ReviewStage/vespin/pull/8260))
+- Fixed archived agents' pages staying open
+  ([#8259](https://github.com/ReviewStage/vespin/pull/8259))
+- Fixed several `@` list glitches
   ([#8170](https://github.com/ReviewStage/vespin/pull/8170),
   [#8098](https://github.com/ReviewStage/vespin/pull/8098),
   [#8090](https://github.com/ReviewStage/vespin/pull/8090),
   [#8143](https://github.com/ReviewStage/vespin/pull/8143))
-- Fixed ⌘K's This task filter showing with no task open ([#8428](https://github.com/ReviewStage/vespin/pull/8428))
-- Fixed a notice marked read staying in the open count ([#7947](https://github.com/ReviewStage/vespin/pull/7947))
-- Fixed a bare link hiding part of its address ([#7887](https://github.com/ReviewStage/vespin/pull/7887))
-- Fixed a Codex message sent while stopping being dropped rather than run next ([#8235](https://github.com/ReviewStage/vespin/pull/8235))
-- Fixed a lapsed Codex sign-in reading differently from Integrations ([#8200](https://github.com/ReviewStage/vespin/pull/8200))
-- Fixed a Claude Code turn failing when its resume found no session ([#7974](https://github.com/ReviewStage/vespin/pull/7974))
-- Fixed an agent titled with the title model's own reply ([#8169](https://github.com/ReviewStage/vespin/pull/8169))
-- Fixed a deleted GitHub installation coming back ([#8242](https://github.com/ReviewStage/vespin/pull/8242))
-- Fixed the web app flashing its loading frame unstyled ([#8213](https://github.com/ReviewStage/vespin/pull/8213))
+- Fixed ⌘K's This task filter showing with no task open
+  ([#8428](https://github.com/ReviewStage/vespin/pull/8428))
+- Fixed read notices still counting as unread
+  ([#7947](https://github.com/ReviewStage/vespin/pull/7947))
+- Fixed links hiding part of their address
+  ([#7887](https://github.com/ReviewStage/vespin/pull/7887))
+- Fixed Codex dropping a message sent while stopping
+  ([#8235](https://github.com/ReviewStage/vespin/pull/8235))
+- Fixed an expired Codex sign-in message not matching Integrations
+  ([#8200](https://github.com/ReviewStage/vespin/pull/8200))
+- Fixed Claude Code turns failing when a session couldn't resume
+  ([#7974](https://github.com/ReviewStage/vespin/pull/7974))
+- Fixed agents getting odd auto-generated titles
+  ([#8169](https://github.com/ReviewStage/vespin/pull/8169))
+- Fixed deleted GitHub installations coming back
+  ([#8242](https://github.com/ReviewStage/vespin/pull/8242))
+- Fixed the web app flashing unstyled while loading
+  ([#8213](https://github.com/ReviewStage/vespin/pull/8213))
 
 ### Misc
 
-- Updated agents to keep the Claude Agent SDK and Codex current, and to wait
-  with Vespin's own wakeups on every harness
+- Updated the Claude Agent SDK and Codex, and agents' wakeups
   ([#8002](https://github.com/ReviewStage/vespin/pull/8002),
   [#8277](https://github.com/ReviewStage/vespin/pull/8277),
   [#8288](https://github.com/ReviewStage/vespin/pull/8288))
-- Updated agents to stay out of `~/Music`, and explained macOS's access prompts ([#7989](https://github.com/ReviewStage/vespin/pull/7989))
+- Updated agents to stay out of `~/Music`, and explained macOS access prompts
+  ([#7989](https://github.com/ReviewStage/vespin/pull/7989))
 
 ## 0.31.0 — 2026-11-09
 
 ### Several plans and keys, used in order
 
-Settings › Agents lists each harness's plans and API keys in one order you
-drag, with each plan's usage on its row, and holds as many Anthropic or OpenAI
-keys as you add. When a plan reaches its limit, Vespin moves the agent to the
-next plan or key and says so in the conversation. When none has room left, the
-agent waits for the soonest reset and carries on by itself.
+Add multiple plans and API keys in Settings › Agents, and drag them into
+order. When one hits its limit, Vespin switches to the next automatically.
 ([#7980](https://github.com/ReviewStage/vespin/pull/7980),
 [#8007](https://github.com/ReviewStage/vespin/pull/8007),
 [#7945](https://github.com/ReviewStage/vespin/pull/7945),
@@ -759,10 +908,8 @@ agent waits for the soonest reset and carries on by itself.
 
 ### Shared previews wake their agent
 
-A shared preview link wakes its agent's stopped sandbox and starts the dev
-server again, showing Waking up the preview until it answers. A cloud agent
-can list its own ports and share one by link, and the plug menu lists ports to
-share without Forward to localhost turned on.
+Opening a shared preview link now wakes a sleeping sandbox and restarts its
+dev server. Cloud agents can also share their own ports.
 ([#8003](https://github.com/ReviewStage/vespin/pull/8003),
 [#7931](https://github.com/ReviewStage/vespin/pull/7931),
 [#7939](https://github.com/ReviewStage/vespin/pull/7939),
@@ -771,12 +918,8 @@ share without Forward to localhost turned on.
 
 ### More of Vespin from the CLI
 
-`vespin agent` gains `continue`, `forward`, `shell`, `diff`, and `pr`;
-`vespin task update` sets a task's parent, blocks, and section, and
-`vespin task cat` reads its repository's files. `vespin keys`, `vespin section`,
-`vespin automation`, and `vespin workspace` cover provider keys, sidebar
-sections, automations, and a workspace's members and slug, and Vespin's MCP
-server reads whole transcripts, a task's files, and pull request chapters.
+The `vespin` CLI can now manage agents, tasks, keys, sections, automations, and
+workspaces, and the MCP server reads full transcripts and task files.
 ([#7916](https://github.com/ReviewStage/vespin/pull/7916),
 [#7930](https://github.com/ReviewStage/vespin/pull/7930),
 [#7932](https://github.com/ReviewStage/vespin/pull/7932),
@@ -791,193 +934,193 @@ server reads whole transcripts, a task's files, and pull request chapters.
 
 ### Improvements
 
-- A bare `@` opens on the task's own agents, threads, pull requests, and pages,
-  with a row to browse each kind below them
+- A bare `@` suggests the task's own agents, threads, pull requests, and pages
   ([#7986](https://github.com/ReviewStage/vespin/pull/7986),
   [#7982](https://github.com/ReviewStage/vespin/pull/7982))
-- An automation's prompt offers the `@` and `/` lists ([#7904](https://github.com/ReviewStage/vespin/pull/7904))
-- A file path or web address an agent writes as inline code opens the file at
-  its line or the page ([#8022](https://github.com/ReviewStage/vespin/pull/8022))
-- A `mermaid` fence in an agent's reply or an Inbox thread draws as its diagram ([#8010](https://github.com/ReviewStage/vespin/pull/8010))
-- A turn the model refused offers Continue on another model in place of Try
-  again ([#8017](https://github.com/ReviewStage/vespin/pull/8017))
-- A fork at a message hands the new agent the source's own session, cut at that
-  message, rather than a replay of its steps
+- `@` and `/` work in automation prompts
+  ([#7904](https://github.com/ReviewStage/vespin/pull/7904))
+- File paths and URLs in an agent's code snippets are clickable
+  ([#8022](https://github.com/ReviewStage/vespin/pull/8022))
+- `mermaid` diagrams render in replies and Inbox threads
+  ([#8010](https://github.com/ReviewStage/vespin/pull/8010))
+- If the model refuses a turn, you can continue on another model
+  ([#8017](https://github.com/ReviewStage/vespin/pull/8017))
+- Forking at a message is faster and more faithful to the original session
   ([#7957](https://github.com/ReviewStage/vespin/pull/7957),
   [#7953](https://github.com/ReviewStage/vespin/pull/7953),
   [#7976](https://github.com/ReviewStage/vespin/pull/7976),
   [#7985](https://github.com/ReviewStage/vespin/pull/7985))
-- A task's Agents list and a person's agents choose rows together, as task
-  rows do, to archive or delete them at once ([#7959](https://github.com/ReviewStage/vespin/pull/7959))
-- The Inbox's task and agent shortcuts act on the thread shown ([#7994](https://github.com/ReviewStage/vespin/pull/7994))
-- ⌃Tab steps through the same screens as Back, Settings and an Inbox item's
-  selection included ([#7954](https://github.com/ReviewStage/vespin/pull/7954))
-- Settings › Cloud setup edits each script in place, in Bash colors, and adds a
-  repository's script from a picker ([#7891](https://github.com/ReviewStage/vespin/pull/7891))
-- On the web, a middle-click on a sidebar place or task opens it in a new tab,
-  and every Copy link has Open in new tab beneath it ([#7889](https://github.com/ReviewStage/vespin/pull/7889))
-- Sidebar rows show their icons again with no inbox dots, and My tasks is a
-  heading with New section and View options beside it ([#8065](https://github.com/ReviewStage/vespin/pull/8065))
-- The agent composer drops its branch chip, and the sidebar's New task glyph its
-  Draft pencil
+- Select several agents at once to archive or delete them
+  ([#7959](https://github.com/ReviewStage/vespin/pull/7959))
+- Inbox shortcuts act on the open thread
+  ([#7994](https://github.com/ReviewStage/vespin/pull/7994))
+- ⌃Tab steps through the same screens as Back
+  ([#7954](https://github.com/ReviewStage/vespin/pull/7954))
+- Edit cloud setup scripts in place, with syntax highlighting
+  ([#7891](https://github.com/ReviewStage/vespin/pull/7891))
+- On the web, middle-click opens sidebar items in a new tab
+  ([#7889](https://github.com/ReviewStage/vespin/pull/7889))
+- Cleaner sidebar: icons are back and My tasks has its own controls
+  ([#8065](https://github.com/ReviewStage/vespin/pull/8065))
+- A simpler agent composer and New task button
   ([#7970](https://github.com/ReviewStage/vespin/pull/7970),
   [#7987](https://github.com/ReviewStage/vespin/pull/7987))
-- An agent can read a teammate agent's whole conversation, not only its last
-  steps ([#7918](https://github.com/ReviewStage/vespin/pull/7918))
-- An agent may keep any number of Inbox threads open ([#7956](https://github.com/ReviewStage/vespin/pull/7956))
+- Agents can read a teammate agent's whole conversation
+  ([#7918](https://github.com/ReviewStage/vespin/pull/7918))
+- Agents can keep any number of Inbox threads open
+  ([#7956](https://github.com/ReviewStage/vespin/pull/7956))
 
 ### Fixes
 
-- Fixed agents sometimes opening partway up their transcript, and scrolling
-  through one jumping
+- Fixed transcripts opening partway up or jumping while scrolling
   ([#7972](https://github.com/ReviewStage/vespin/pull/7972),
   [#8030](https://github.com/ReviewStage/vespin/pull/8030))
-- Fixed an agent its plan's usage limit stopped showing a failure, or the raw
-  limit error, rather than the usage limit
+- Fixed usage limits showing as a failure or a raw error
   ([#8024](https://github.com/ReviewStage/vespin/pull/8024),
   [#8004](https://github.com/ReviewStage/vespin/pull/8004),
   [#8036](https://github.com/ReviewStage/vespin/pull/8036),
   [#8045](https://github.com/ReviewStage/vespin/pull/8045))
-- Fixed an agent moved to an API key at its plan's limit sitting idle until it
-  failed
+- Fixed agents sitting idle after switching to an API key
   ([#7979](https://github.com/ReviewStage/vespin/pull/7979),
   [#8011](https://github.com/ReviewStage/vespin/pull/8011),
   [#8015](https://github.com/ReviewStage/vespin/pull/8015))
-- Fixed a Mac agent's turn stalling on a command whose output held a NUL ([#7929](https://github.com/ReviewStage/vespin/pull/7929))
-- Fixed a Codex agent's commands missing the workspace's environment variables ([#7934](https://github.com/ReviewStage/vespin/pull/7934))
-- Fixed New task's `@` list offering no people, and the Inbox's offering
-  another workspace's ([#7900](https://github.com/ReviewStage/vespin/pull/7900))
-- Fixed a chip in running words breaking from its glyph or across lines
+- Fixed Mac agents stalling on certain command output
+  ([#7929](https://github.com/ReviewStage/vespin/pull/7929))
+- Fixed Codex commands missing workspace environment variables
+  ([#7934](https://github.com/ReviewStage/vespin/pull/7934))
+- Fixed the `@` list showing no people, or the wrong workspace's
+  ([#7900](https://github.com/ReviewStage/vespin/pull/7900))
+- Fixed chips breaking across lines
   ([#7906](https://github.com/ReviewStage/vespin/pull/7906),
   [#7952](https://github.com/ReviewStage/vespin/pull/7952))
-- Fixed the Pull request tab's separator drawing inside + Reviewer and + Label ([#7958](https://github.com/ReviewStage/vespin/pull/7958))
+- Fixed a stray separator in the Pull request tab
+  ([#7958](https://github.com/ReviewStage/vespin/pull/7958))
 
 ### Misc
 
-- Updated agents' instructions to say what marking a task Done, Codex workers,
-  memory, and `run_on_mac` do ([#7933](https://github.com/ReviewStage/vespin/pull/7933))
-- Updated `PRIVACY.md` to say a Mac agent's launch carries its model credential ([#7946](https://github.com/ReviewStage/vespin/pull/7946))
+- Updated agents' instructions on marking tasks Done, Codex workers, memory,
+  and `run_on_mac` ([#7933](https://github.com/ReviewStage/vespin/pull/7933))
+- Updated `PRIVACY.md` on what a Mac agent's launch sends
+  ([#7946](https://github.com/ReviewStage/vespin/pull/7946))
 
 ## 0.30.0 — 2026-11-09
 
 ### Open pull requests on GitHub
 
-Settings › Account › Links › Open pull requests in sends every pull request
-row, chip, and link to GitHub when set to GitHub, and their menus offer Open in
-Vespin instead. The Pull request tab's header gains Open on GitHub beside its
-merge controls at every width.
+Choose to open pull requests on GitHub instead of in Vespin, in Settings ›
+Account › Links. The Pull request tab also has an Open on GitHub button.
 ([#7913](https://github.com/ReviewStage/vespin/pull/7913),
 [#7909](https://github.com/ReviewStage/vespin/pull/7909))
 
 ### Share an agent's port from the web and the CLI
 
-The plug menu on an agent's box shares a port from the web app too, and
-`vespin agent ports` and `vespin agent share` list and share them from the
-terminal. A shared link opens at the agent's own `vespin.page` address, only for
-members signed in who can reach the agent.
+Share an agent's port from the web app or with `vespin agent share`. Shared
+links only open for signed-in members who can see the agent.
 ([#7927](https://github.com/ReviewStage/vespin/pull/7927),
 [#7921](https://github.com/ReviewStage/vespin/pull/7921),
 [#7920](https://github.com/ReviewStage/vespin/pull/7920))
 
 ### Connect agents and GitHub in place
 
-Setup's Connect an agent and Settings › Agents list each agent's plan and API
-key as rows that say how they stand, and connect, replace, or disconnect them in
-place, ChatGPT included. Setup's GitHub step and Settings › Workspace list the
-repositories Vespin reaches under one GitHub row with Add repositories, and
-every repository picker ends in a way to configure them.
+Connect, replace, or disconnect plans, API keys, and GitHub repositories right
+from setup and Settings.
 ([#7915](https://github.com/ReviewStage/vespin/pull/7915),
 [#7910](https://github.com/ReviewStage/vespin/pull/7910),
 [#7890](https://github.com/ReviewStage/vespin/pull/7890))
 
 ### Improvements
 
-- A turn whose plan has reached its limit runs on the saved API key, and is
-  refused with the limit and when it resets only where there is none
+- When a plan hits its limit, turns run on your saved API key instead
   ([#7928](https://github.com/ReviewStage/vespin/pull/7928),
   [#7926](https://github.com/ReviewStage/vespin/pull/7926),
   [#7922](https://github.com/ReviewStage/vespin/pull/7922))
-- Every agent row, the Agents list atop a task's description included, offers
-  the same menu, and History mutes its archived rows ([#7917](https://github.com/ReviewStage/vespin/pull/7917))
-- An archived agent says only that it is archived, with Unarchive ([#7886](https://github.com/ReviewStage/vespin/pull/7886))
-- Agents name an automation as a chip you can press ([#7898](https://github.com/ReviewStage/vespin/pull/7898))
-- On a phone, a held merge keeps its reason on its chip and says when a required
-  review is missing ([#7907](https://github.com/ReviewStage/vespin/pull/7907))
-- On a phone, a settings row keeps its end on its name's line and drops its
-  controls under its words ([#7824](https://github.com/ReviewStage/vespin/pull/7824))
-- On a touch screen, a group head such as the sidebar's My tasks takes a
-  finger-sized press ([#7884](https://github.com/ReviewStage/vespin/pull/7884))
-- Sign-in's Cancel waits inside the button you pressed, so the card stays still ([#7723](https://github.com/ReviewStage/vespin/pull/7723))
-- Setup's team step stands on its title alone ([#7724](https://github.com/ReviewStage/vespin/pull/7724))
-- The sidebar's view menu reads Show completed sub-tasks, as the Tasks page does ([#7883](https://github.com/ReviewStage/vespin/pull/7883))
-- The sidebar groups tasks by repository or not at all, without Group by ›
-  Progress ([#7899](https://github.com/ReviewStage/vespin/pull/7899))
+- Every agent row has the same menu, and History dims archived agents
+  ([#7917](https://github.com/ReviewStage/vespin/pull/7917))
+- Archived agents show a simple Unarchive option
+  ([#7886](https://github.com/ReviewStage/vespin/pull/7886))
+- Automations named by agents are clickable
+  ([#7898](https://github.com/ReviewStage/vespin/pull/7898))
+- On a phone, blocked merges show why, including missing reviews
+  ([#7907](https://github.com/ReviewStage/vespin/pull/7907))
+- Settings rows fit better on a phone
+  ([#7824](https://github.com/ReviewStage/vespin/pull/7824))
+- Bigger tap targets for group headings on touch screens
+  ([#7884](https://github.com/ReviewStage/vespin/pull/7884))
+- Sign-in's Cancel no longer shifts the card
+  ([#7723](https://github.com/ReviewStage/vespin/pull/7723))
+- A simpler team step in setup
+  ([#7724](https://github.com/ReviewStage/vespin/pull/7724))
+- The sidebar's view menu reads Show completed sub-tasks, matching Tasks
+  ([#7883](https://github.com/ReviewStage/vespin/pull/7883))
+- The sidebar groups tasks by repository or not at all
+  ([#7899](https://github.com/ReviewStage/vespin/pull/7899))
 
 ### Fixes
 
-- Fixed opening an agent sometimes landing its transcript short of its newest
-  line ([#7908](https://github.com/ReviewStage/vespin/pull/7908))
-- Fixed a dragged sidebar row carrying the rows below it under the pointer ([#7894](https://github.com/ReviewStage/vespin/pull/7894))
-- Fixed a menu with no icons leaving an empty column for them ([#7902](https://github.com/ReviewStage/vespin/pull/7902))
+- Fixed transcripts sometimes opening above the newest message
+  ([#7908](https://github.com/ReviewStage/vespin/pull/7908))
+- Fixed dragging a sidebar row dragging the rows below it
+  ([#7894](https://github.com/ReviewStage/vespin/pull/7894))
+- Fixed empty icon space in menus without icons
+  ([#7902](https://github.com/ReviewStage/vespin/pull/7902))
 
 ### Misc
 
-- Updated cloud agents' sandboxes to stop three minutes after their last use ([#7914](https://github.com/ReviewStage/vespin/pull/7914))
-- Updated session replay to record tabs, panes, dialogs, and Settings masked
-  rather than as blank boxes ([#7903](https://github.com/ReviewStage/vespin/pull/7903))
+- Updated cloud sandboxes to stop three minutes after last use
+  ([#7914](https://github.com/ReviewStage/vespin/pull/7914))
+- Updated session replay to mask tabs, panes, dialogs, and Settings instead of
+  blanking them ([#7903](https://github.com/ReviewStage/vespin/pull/7903))
 
 ## 0.29.0 — 2026-11-09
 
 ### The sidebar, redesigned
 
-The workspace switcher heads the sidebar with New task at the end of its row,
-and Search, Home, Inbox, Tasks, and Automations stand under it. My tasks sets
-whose tasks the sidebar lists, and its menu groups them by repository, by
-progress (Needs you, Working, In review, and Up next), or not at all. Each row
-ends in one mark and its time.
-([#7796](https://github.com/ReviewStage/vespin/pull/7796),
+The sidebar now opens with the workspace switcher and New task, with Search,
+Home, Inbox, Tasks, and Automations below. My tasks picks whose tasks show,
+grouped by repository, by progress, or not at all.
+
+[#7796](https://github.com/ReviewStage/vespin/pull/7796),
 [#7797](https://github.com/ReviewStage/vespin/pull/7797),
 [#7798](https://github.com/ReviewStage/vespin/pull/7798),
 [#7804](https://github.com/ReviewStage/vespin/pull/7804),
 [#7806](https://github.com/ReviewStage/vespin/pull/7806),
 [#7801](https://github.com/ReviewStage/vespin/pull/7801),
-[#7795](https://github.com/ReviewStage/vespin/pull/7795))
+[#7795](https://github.com/ReviewStage/vespin/pull/7795)
 
 ### Each agent keeps its own side panel
 
-A task's agents line up in one row across its page, and the open agent's sheet
-holds its conversation beside its own tabs: its pull request, Terminal,
-Browser, and the files and pages opened from it. Coming back to an agent
-returns to the tab you left it on, and links open as ordinary tabs.
-([#7441](https://github.com/ReviewStage/vespin/pull/7441),
+Each agent on a task now has its own side panel with its pull request, Terminal,
+Browser, and files. Coming back to an agent returns you to the tab you left.
+
+[#7441](https://github.com/ReviewStage/vespin/pull/7441),
 [#7445](https://github.com/ReviewStage/vespin/pull/7445),
 [#7446](https://github.com/ReviewStage/vespin/pull/7446),
 [#7451](https://github.com/ReviewStage/vespin/pull/7451),
 [#7472](https://github.com/ReviewStage/vespin/pull/7472),
 [#7688](https://github.com/ReviewStage/vespin/pull/7688),
 [#7690](https://github.com/ReviewStage/vespin/pull/7690),
-[#7698](https://github.com/ReviewStage/vespin/pull/7698))
+[#7698](https://github.com/ReviewStage/vespin/pull/7698)
 
 ### Sounds when an agent needs you
 
-Vespin plays a sound when an agent you started finishes or asks you something,
-always or only while it is in the background. Settings › Account › Sounds
-offers fourteen of them, and Show a notification posts one you can press to
-open the agent or its Inbox thread.
-([#7537](https://github.com/ReviewStage/vespin/pull/7537),
+Vespin can play a sound when an agent finishes or asks you something, and
+optionally show a notification. Pick from fourteen sounds in Settings › Account
+› Sounds.
+
+[#7537](https://github.com/ReviewStage/vespin/pull/7537),
 [#7539](https://github.com/ReviewStage/vespin/pull/7539),
 [#7541](https://github.com/ReviewStage/vespin/pull/7541),
-[#7542](https://github.com/ReviewStage/vespin/pull/7542))
+[#7542](https://github.com/ReviewStage/vespin/pull/7542)
 
 ![Settings › Account › Sounds with Play a sound set to Always, Marimba chosen as the sound, and Show a notification switched on; the Sound picker is open on its list of sounds, Chime, Ping, Marimba (checked), Pop, Bell, Glass, Droplet, and Soft, with more below.](apps/web/public/changelog/0.29.0/sounds-when-an-agent-needs-you.png)
 
 ### Share a cloud agent's port
 
-Each port in the plug menu of an agent's box opens on your Mac or shares by a
-public link you can copy and stop sharing, which lasts while the agent's
-sandbox runs. Ports forward to your Mac only once you switch on Forward to
-localhost.
-([#7473](https://github.com/ReviewStage/vespin/pull/7473),
+Open a cloud agent's ports on your Mac, or share them with a public link that
+lasts while its sandbox runs. Forwarding to localhost is off until you turn it
+on.
+
+[#7473](https://github.com/ReviewStage/vespin/pull/7473),
 [#7474](https://github.com/ReviewStage/vespin/pull/7474),
 [#7577](https://github.com/ReviewStage/vespin/pull/7577),
 [#7677](https://github.com/ReviewStage/vespin/pull/7677),
@@ -988,42 +1131,40 @@ localhost.
 [#7727](https://github.com/ReviewStage/vespin/pull/7727),
 [#7732](https://github.com/ReviewStage/vespin/pull/7732),
 [#7676](https://github.com/ReviewStage/vespin/pull/7676),
-[#7704](https://github.com/ReviewStage/vespin/pull/7704))
+[#7704](https://github.com/ReviewStage/vespin/pull/7704)
 
 ![The Add teammate invitations agent has started relay's dev server on port 3000 and the invite email's preview on port 3001; its box's plug menu shows Forward to localhost switched on with localhost:3000 and localhost:3001, and localhost:3000's own menu, shared by a public link, offers Open, Open link, Copy link, and Stop sharing.](apps/web/public/changelog/0.29.0/share-a-cloud-agents-port.png)
 
 ### Set up cloud agents' sandboxes
 
-Settings › Environment keeps the workspace's environment variables, and
-Settings › Cloud setup keeps a script that installs software and a setup
-script for each repository. A new cloud agent's sandbox runs them after its
-checkout, and the agent reads what they printed.
-([#7406](https://github.com/ReviewStage/vespin/pull/7406),
+Add workspace environment variables, an install script, and per-repository setup
+scripts in Settings. New cloud agents run them before they start working.
+
+[#7406](https://github.com/ReviewStage/vespin/pull/7406),
 [#7415](https://github.com/ReviewStage/vespin/pull/7415),
 [#7427](https://github.com/ReviewStage/vespin/pull/7427),
 [#7692](https://github.com/ReviewStage/vespin/pull/7692),
 [#7710](https://github.com/ReviewStage/vespin/pull/7710),
-[#7725](https://github.com/ReviewStage/vespin/pull/7725))
+[#7725](https://github.com/ReviewStage/vespin/pull/7725)
 
 ![Settings › Cloud setup in the acme workspace: an install script that installs the Postgres client, redis-tools, the Stripe CLI, and pnpm, and setup scripts that install each repository's dependencies and start its database, then migrate acme/ledger and load its Stripe fixtures, and migrate and seed acme/relay.](apps/web/public/changelog/0.29.0/set-up-cloud-agents-sandboxes.png)
 
 ### Delete a workspace
 
-The owner of a team workspace can delete it, and everything in it, from
-Settings › Workspace. Setup deletes a team workspace you made and then left as
-Just me, asking first where someone joined it.
-([#7438](https://github.com/ReviewStage/vespin/pull/7438),
+Owners can now delete a team workspace and everything in it from Settings ›
+Workspace.
+
+[#7438](https://github.com/ReviewStage/vespin/pull/7438),
 [#7786](https://github.com/ReviewStage/vespin/pull/7786),
 [#7788](https://github.com/ReviewStage/vespin/pull/7788),
 [#7789](https://github.com/ReviewStage/vespin/pull/7789),
 [#7803](https://github.com/ReviewStage/vespin/pull/7803),
-[#7805](https://github.com/ReviewStage/vespin/pull/7805))
+[#7805](https://github.com/ReviewStage/vespin/pull/7805)
 
 ### Improvements
 
-- Deleting your account deletes the workspaces only you are in and names them,
-  hands a shared workspace you own to its longest-standing admin or member, and
-  leaves your tasks there under a grayed-out Deleted account
+- Deleting your account deletes workspaces only you are in and hands shared ones
+  you own to another admin or member
   ([#6960](https://github.com/ReviewStage/vespin/pull/6960),
   [#6963](https://github.com/ReviewStage/vespin/pull/6963),
   [#7457](https://github.com/ReviewStage/vespin/pull/7457),
@@ -1034,10 +1175,9 @@ Just me, asking first where someone joined it.
   [#7785](https://github.com/ReviewStage/vespin/pull/7785),
   [#7802](https://github.com/ReviewStage/vespin/pull/7802),
   [#7810](https://github.com/ReviewStage/vespin/pull/7810))
-- A member who leaves a workspace stays assigned to their tasks, grayed out as a
-  former member ([#7807](https://github.com/ReviewStage/vespin/pull/7807))
-- ⌘Z and ⇧⌘Z reach every Undo a toast offers, and never undo over a change made
-  since
+- Members who leave a workspace stay on their tasks, grayed out
+  ([#7807](https://github.com/ReviewStage/vespin/pull/7807))
+- ⌘Z and ⇧⌘Z now undo anything a toast offers to undo
   ([#7745](https://github.com/ReviewStage/vespin/pull/7745),
   [#7752](https://github.com/ReviewStage/vespin/pull/7752),
   [#7753](https://github.com/ReviewStage/vespin/pull/7753),
@@ -1045,52 +1185,49 @@ Just me, asking first where someone joined it.
   [#7755](https://github.com/ReviewStage/vespin/pull/7755),
   [#7756](https://github.com/ReviewStage/vespin/pull/7756),
   [#7781](https://github.com/ReviewStage/vespin/pull/7781))
-- Every task row, on the Tasks page, a task's Sub-tasks and Relations, Home, and
-  a person's page, gathers its marks at its end and mutes a settled task, and an
-  agent's row draws the same way
+- Task and agent rows look the same everywhere, with finished tasks muted
   ([#7782](https://github.com/ReviewStage/vespin/pull/7782),
   [#7816](https://github.com/ReviewStage/vespin/pull/7816))
-- An agent that opened several pull requests shows each in the bar over its box,
-  and its task stays open while any of them is
+- Agents with several pull requests show them all, and the task stays open until
+  they close
   ([#7813](https://github.com/ReviewStage/vespin/pull/7813),
   [#7767](https://github.com/ReviewStage/vespin/pull/7767))
-- Following up on an agent's question without picking an option makes the
-  thread the agent's turn until it posts again ([#7794](https://github.com/ReviewStage/vespin/pull/7794))
-- The Pull request tab's header draws its state, merge status, branches, Stack,
-  reviewers, and labels as one set of controls
+- Replying to an agent's question without picking an option hands the turn back
+  to the agent ([#7794](https://github.com/ReviewStage/vespin/pull/7794))
+- Cleaner Pull request tab header
   ([#7740](https://github.com/ReviewStage/vespin/pull/7740),
   [#7811](https://github.com/ReviewStage/vespin/pull/7811))
-- In a narrow side panel, the Pull request tab keeps the chosen view's name while
-  the others fold to their icons ([#7694](https://github.com/ReviewStage/vespin/pull/7694))
-- GitHub comments in a transcript draw as GitHub renders them, callouts, tables,
-  and pictures included
+- The Pull request tab's view picker fits narrow side panels
+  ([#7694](https://github.com/ReviewStage/vespin/pull/7694))
+- GitHub comments in a transcript look like they do on GitHub, tables and
+  pictures included
   ([#7532](https://github.com/ReviewStage/vespin/pull/7532),
   [#7682](https://github.com/ReviewStage/vespin/pull/7682),
   [#7759](https://github.com/ReviewStage/vespin/pull/7759))
-- The Inbox stands Search inbox, Mark all read, and View options in one row over
-  its list ([#7799](https://github.com/ReviewStage/vespin/pull/7799))
-- Pressing an agent from an Inbox thread opens it in its own tab on its task ([#7681](https://github.com/ReviewStage/vespin/pull/7681))
-- An archived agent opens read-only as a tab in its task's column, and History
-  shows once an agent is closed or archived
+- Inbox search, Mark all read, and View options now sit in one row
+  ([#7799](https://github.com/ReviewStage/vespin/pull/7799))
+- Clicking an agent in an Inbox thread opens it in its own tab
+  ([#7681](https://github.com/ReviewStage/vespin/pull/7681))
+- Archived agents open read-only, and History shows closed and archived agents
   ([#7340](https://github.com/ReviewStage/vespin/pull/7340),
   [#7463](https://github.com/ReviewStage/vespin/pull/7463))
-- An automation run's agent opens on its task, under ⚡ Automations and the
-  automation's name
+- Automation runs open on their task, under ⚡ Automations
   ([#7703](https://github.com/ReviewStage/vespin/pull/7703),
   [#7678](https://github.com/ReviewStage/vespin/pull/7678))
-- Right-clicking a task's name in the topbar opens its sidebar row's menu ([#7538](https://github.com/ReviewStage/vespin/pull/7538))
-- Renaming a task, agent, or tab edits its name in place ([#7673](https://github.com/ReviewStage/vespin/pull/7673))
-- A section's menus offer Change icon, and the icon picker asks each glyph's
-  color in a popover ([#7672](https://github.com/ReviewStage/vespin/pull/7672))
-- The sidebar drops its "N more in Done, Canceled" line
+- Right-click a task's name in the topbar for its menu
+  ([#7538](https://github.com/ReviewStage/vespin/pull/7538))
+- Rename tasks, agents, and tabs in place
+  ([#7673](https://github.com/ReviewStage/vespin/pull/7673))
+- Change a section's icon and its color from its menu
+  ([#7672](https://github.com/ReviewStage/vespin/pull/7672))
+- Removed the sidebar's "N more in Done, Canceled" line
   ([#7679](https://github.com/ReviewStage/vespin/pull/7679),
   [#7686](https://github.com/ReviewStage/vespin/pull/7686))
-- A page comment you close unsent stays pinned as a draft, and hovering a pin
-  shows its whole comment
+- Unsent page comments are kept as drafts, and hovering a pin shows the full
+  comment
   ([#7791](https://github.com/ReviewStage/vespin/pull/7791),
   [#7774](https://github.com/ReviewStage/vespin/pull/7774))
-- Cloud agents start sooner, and a message to a running one is answered without
-  waiting on its runner
+- Cloud agents start and reply faster
   ([#7490](https://github.com/ReviewStage/vespin/pull/7490),
   [#7564](https://github.com/ReviewStage/vespin/pull/7564),
   [#7568](https://github.com/ReviewStage/vespin/pull/7568),
@@ -1099,18 +1236,15 @@ Just me, asking first where someone joined it.
   [#7702](https://github.com/ReviewStage/vespin/pull/7702),
   [#7705](https://github.com/ReviewStage/vespin/pull/7705),
   [#7706](https://github.com/ReviewStage/vespin/pull/7706))
-- A cloud agent stays warm while it is on screen, and its Mac mirror starts then,
-  so its Local tab is ready when you open it
+- Cloud agents stay warm while on screen, so their Local tab is ready right away
   ([#7479](https://github.com/ReviewStage/vespin/pull/7479),
   [#7484](https://github.com/ReviewStage/vespin/pull/7484),
   [#7768](https://github.com/ReviewStage/vespin/pull/7768))
-- An agent's Terminal and Browser tabs connect as soon as its sandbox opens, and a
-  connecting Local tab names its step
+- Terminal and Browser tabs connect as soon as the sandbox is up
   ([#7369](https://github.com/ReviewStage/vespin/pull/7369),
   [#7448](https://github.com/ReviewStage/vespin/pull/7448),
   [#7495](https://github.com/ReviewStage/vespin/pull/7495))
-- An agent reads Starting… until its turn opens, a stalled turn ends failed with
-  why, and a stopped one reads Stopping… until it ends
+- Clearer Starting…, Stopping…, and failed states for agents
   ([#7549](https://github.com/ReviewStage/vespin/pull/7549),
   [#7551](https://github.com/ReviewStage/vespin/pull/7551),
   [#7556](https://github.com/ReviewStage/vespin/pull/7556),
@@ -1119,129 +1253,143 @@ Just me, asking first where someone joined it.
   [#7569](https://github.com/ReviewStage/vespin/pull/7569),
   [#7574](https://github.com/ReviewStage/vespin/pull/7574),
   [#7721](https://github.com/ReviewStage/vespin/pull/7721))
-- A queued message goes as soon as its agent's turn ends, even one you stopped or
-  that failed
+- Queued messages send as soon as the agent's turn ends, even after a stop or
+  failure
   ([#7475](https://github.com/ReviewStage/vespin/pull/7475),
   [#7481](https://github.com/ReviewStage/vespin/pull/7481))
-- Cloud agents run Docker and `sudo` for what a repository's setup needs ([#7488](https://github.com/ReviewStage/vespin/pull/7488))
-- A cloud agent's Runs on card says whose Mac `run_on_mac` runs on and whether it
-  is online ([#7347](https://github.com/ReviewStage/vespin/pull/7347))
-- The Run on this Mac? ask shows the command with Copy and leads with Always
+- Cloud agents can run Docker and `sudo`
+  ([#7488](https://github.com/ReviewStage/vespin/pull/7488))
+- A cloud agent's Runs on card shows whose Mac `run_on_mac` uses and if it's
+  online ([#7347](https://github.com/ReviewStage/vespin/pull/7347))
+- The Run on this Mac? prompt shows the command with Copy and leads with Always
   allow ([#7527](https://github.com/ReviewStage/vespin/pull/7527))
-- A downloaded release says so in a toast with Restart
+- A toast with Restart tells you when an update is downloaded
   ([#7482](https://github.com/ReviewStage/vespin/pull/7482),
   [#7515](https://github.com/ReviewStage/vespin/pull/7515))
-- A call that gets no answer says to check your internet connection
+- Vespin suggests checking your connection when a request gets no answer
   ([#7518](https://github.com/ReviewStage/vespin/pull/7518),
   [#7519](https://github.com/ReviewStage/vespin/pull/7519),
   [#7522](https://github.com/ReviewStage/vespin/pull/7522))
-- Setup asks a new account three optional questions about how it came to Vespin ([#7674](https://github.com/ReviewStage/vespin/pull/7674))
-- Invite always shows the Member and Admin roles with what each allows ([#7714](https://github.com/ReviewStage/vespin/pull/7714))
-- An Inbox thread's hover card drops its answer line ([#7534](https://github.com/ReviewStage/vespin/pull/7534))
-- An expired integration's toast names the integration alone ([#7716](https://github.com/ReviewStage/vespin/pull/7716))
-- Connecting a ChatGPT plan raises no notice to acknowledge ([#7744](https://github.com/ReviewStage/vespin/pull/7744))
-- A mention chip wraps with the words around it, and one held to a single line
-  fades at its end rather than ending in an ellipsis ([#7817](https://github.com/ReviewStage/vespin/pull/7817))
+- Setup asks three optional questions about how you found Vespin
+  ([#7674](https://github.com/ReviewStage/vespin/pull/7674))
+- Invite explains what the Member and Admin roles can do
+  ([#7714](https://github.com/ReviewStage/vespin/pull/7714))
+- Simpler Inbox hover cards and expired-integration toasts
+  ([#7534](https://github.com/ReviewStage/vespin/pull/7534),
+  [#7716](https://github.com/ReviewStage/vespin/pull/7716))
+- Connecting a ChatGPT plan no longer shows a notice to dismiss
+  ([#7744](https://github.com/ReviewStage/vespin/pull/7744))
+- Mention chips wrap with the text around them and fade instead of truncating
+  ([#7817](https://github.com/ReviewStage/vespin/pull/7817))
 
 ### Fixes
 
-- Fixed one account's terminals, Browser tabs, drafts, and toasts showing to the
-  next account signed in to the window
+- Fixed terminals, tabs, drafts, and toasts from one account showing to the next
+  account to sign in
   ([#7434](https://github.com/ReviewStage/vespin/pull/7434),
   [#7444](https://github.com/ReviewStage/vespin/pull/7444),
   [#7450](https://github.com/ReviewStage/vespin/pull/7450),
   [#7453](https://github.com/ReviewStage/vespin/pull/7453))
-- Fixed a message to a cloud agent never starting a turn, leaving it working and
-  then failed with no reason
+- Fixed messages to a cloud agent sometimes never starting a turn
   ([#7544](https://github.com/ReviewStage/vespin/pull/7544),
   [#7547](https://github.com/ReviewStage/vespin/pull/7547),
   [#7587](https://github.com/ReviewStage/vespin/pull/7587),
   [#7590](https://github.com/ReviewStage/vespin/pull/7590))
-- Fixed a cloud agent's turn failing when its sandbox stopped during a long,
-  silent command, and reading "the run ended without saying why"
+- Fixed cloud agents failing during long, silent commands
   ([#7792](https://github.com/ReviewStage/vespin/pull/7792),
   [#7769](https://github.com/ReviewStage/vespin/pull/7769))
-- Fixed an agent whose CLI hung reading as working forever ([#7548](https://github.com/ReviewStage/vespin/pull/7548))
-- Fixed a cloud agent resuming its session with its earlier conversation cut short
+- Fixed agents with a hung CLI showing as working forever
+  ([#7548](https://github.com/ReviewStage/vespin/pull/7548))
+- Fixed cloud agents resuming with part of their conversation missing
   ([#7563](https://github.com/ReviewStage/vespin/pull/7563),
   [#7571](https://github.com/ReviewStage/vespin/pull/7571))
-- Fixed an agent idle for over a week failing with "the sandbox or checkout
-  failed" ([#7712](https://github.com/ReviewStage/vespin/pull/7712))
-- Fixed Try again on a failed start sending "Try again" in place of your first
-  message ([#7439](https://github.com/ReviewStage/vespin/pull/7439))
-- Fixed Stop not showing on an agent still starting or waiting for its turn ([#7543](https://github.com/ReviewStage/vespin/pull/7543))
-- Fixed a cloud agent's Mac mirror losing a file or folder that was briefly
-  unreadable or recreated
+- Fixed agents idle for over a week failing to start
+  ([#7712](https://github.com/ReviewStage/vespin/pull/7712))
+- Fixed Try again sending "Try again" instead of your first message
+  ([#7439](https://github.com/ReviewStage/vespin/pull/7439))
+- Fixed Stop missing on agents that were still starting
+  ([#7543](https://github.com/ReviewStage/vespin/pull/7543))
+- Fixed the Mac mirror of a cloud agent losing files
   ([#7507](https://github.com/ReviewStage/vespin/pull/7507),
   [#7511](https://github.com/ReviewStage/vespin/pull/7511),
   [#7512](https://github.com/ReviewStage/vespin/pull/7512),
   [#7513](https://github.com/ReviewStage/vespin/pull/7513))
-- Fixed a Local terminal going quiet after a Retry while it connected ([#7477](https://github.com/ReviewStage/vespin/pull/7477))
-- Fixed opening an agent's Browser tab or resuming its Terminal timing out while
-  the agents' image was prepared ([#7449](https://github.com/ReviewStage/vespin/pull/7449))
-- Fixed a finished parent task with open sub-tasks standing in the sidebar, and
-  sub-tasks under a finished sub-task going missing
+- Fixed a Local terminal going quiet after Retry
+  ([#7477](https://github.com/ReviewStage/vespin/pull/7477))
+- Fixed Browser and Terminal tabs timing out while the agent image was prepared
+  ([#7449](https://github.com/ReviewStage/vespin/pull/7449))
+- Fixed sub-tasks of finished tasks showing or hiding incorrectly in the sidebar
   ([#7718](https://github.com/ReviewStage/vespin/pull/7718),
   [#7777](https://github.com/ReviewStage/vespin/pull/7777),
   [#7818](https://github.com/ReviewStage/vespin/pull/7818))
-- Fixed an empty section saying No tasks match this view, and a section left out
-  of the Tasks page with Show empty groups on ([#7733](https://github.com/ReviewStage/vespin/pull/7733))
-- Fixed Choose a repository in a task's path doing nothing, and Change repository
-  on a row's menu opening the task ([#7815](https://github.com/ReviewStage/vespin/pull/7815))
-- Fixed ⇧⌘T leaving unsaved work without asking, and reopening a tab already open ([#7416](https://github.com/ReviewStage/vespin/pull/7416))
-- Fixed a related task's pull request opening in this task's agent's tab ([#7408](https://github.com/ReviewStage/vespin/pull/7408))
-- Fixed an Inbox thread's box and Send ending below the fold after you replied
+- Fixed empty sections on the Tasks page
+  ([#7733](https://github.com/ReviewStage/vespin/pull/7733))
+- Fixed Choose a repository and Change repository not working
+  ([#7815](https://github.com/ReviewStage/vespin/pull/7815))
+- Fixed ⇧⌘T discarding unsaved work and reopening tabs already open
+  ([#7416](https://github.com/ReviewStage/vespin/pull/7416))
+- Fixed a related task's pull request opening in the wrong agent's tab
+  ([#7408](https://github.com/ReviewStage/vespin/pull/7408))
+- Fixed the Inbox reply box scrolling out of view after replying
   ([#7750](https://github.com/ReviewStage/vespin/pull/7750),
   [#7739](https://github.com/ReviewStage/vespin/pull/7739))
-- Fixed Reply over selected words jumping below them as the thread scrolled ([#7730](https://github.com/ReviewStage/vespin/pull/7730))
-- Fixed a thread you resolved saying Someone resolved it once its agent posted
-  again ([#7743](https://github.com/ReviewStage/vespin/pull/7743))
-- Fixed an open Inbox thread saying "The inbox could not be read." under a thread
-  that loaded ([#7412](https://github.com/ReviewStage/vespin/pull/7412))
-- Fixed an old copy of an Inbox row drawing over the current one ([#7555](https://github.com/ReviewStage/vespin/pull/7555))
-- Fixed a start refused on Home drawing a second composer over Home's own ([#7689](https://github.com/ReviewStage/vespin/pull/7689))
-- Fixed a transcript's messages drawing as empty bubbles for a moment after a
-  reload ([#7529](https://github.com/ReviewStage/vespin/pull/7529))
-- Fixed blank lines in a pull request's description vanishing when its editor
-  closed ([#7485](https://github.com/ReviewStage/vespin/pull/7485))
-- Fixed the Pull request tab showing an error in every section when its reads
-  failed ([#7520](https://github.com/ReviewStage/vespin/pull/7520))
-- Fixed the Pull request tab's section headings drawing on a darker band ([#7814](https://github.com/ReviewStage/vespin/pull/7814))
-- Fixed a review thread's chevron sitting out of line with a file header's ([#7525](https://github.com/ReviewStage/vespin/pull/7525))
-- Fixed the highlighted row of the @ list and searchable menus sliding out of view ([#7737](https://github.com/ReviewStage/vespin/pull/7737))
-- Fixed the MCP menu's search not taking your typing when reopened as it faded ([#7466](https://github.com/ReviewStage/vespin/pull/7466))
-- Fixed the Cloud Terminal and Local Terminal rows drawing an agent's dots instead
-  of the terminal glyph ([#7429](https://github.com/ReviewStage/vespin/pull/7429))
-- Fixed a mark in a mention pill sitting low beside its name ([#7761](https://github.com/ReviewStage/vespin/pull/7761))
-- Fixed a hover card cutting a task's name at two lines ([#7809](https://github.com/ReviewStage/vespin/pull/7809))
-- Fixed the task named over a side panel tab ending in an ellipsis with room to
-  spare ([#7808](https://github.com/ReviewStage/vespin/pull/7808))
-- Fixed the title bar's icons, and other hand-drawn icons, drawing smaller than
-  those beside them
-  ([#7728](https://github.com/ReviewStage/vespin/pull/7728),
+- Fixed the Reply button jumping away from selected text while scrolling
+  ([#7730](https://github.com/ReviewStage/vespin/pull/7730))
+- Fixed threads you resolved later saying "Someone resolved"
+  ([#7743](https://github.com/ReviewStage/vespin/pull/7743))
+- Fixed a stray "The inbox could not be read." under loaded threads
+  ([#7412](https://github.com/ReviewStage/vespin/pull/7412))
+- Fixed stale Inbox rows drawing over current ones
+  ([#7555](https://github.com/ReviewStage/vespin/pull/7555))
+- Fixed a second composer appearing on Home after a refused start
+  ([#7689](https://github.com/ReviewStage/vespin/pull/7689))
+- Fixed messages flashing as empty bubbles after a reload
+  ([#7529](https://github.com/ReviewStage/vespin/pull/7529))
+- Fixed blank lines disappearing from pull request descriptions
+  ([#7485](https://github.com/ReviewStage/vespin/pull/7485))
+- Fixed the Pull request tab showing an error in every section
+  ([#7520](https://github.com/ReviewStage/vespin/pull/7520))
+- Fixed layout glitches in the Pull request tab
+  ([#7814](https://github.com/ReviewStage/vespin/pull/7814),
+  [#7525](https://github.com/ReviewStage/vespin/pull/7525))
+- Fixed highlighted rows in menus scrolling out of view
+  ([#7737](https://github.com/ReviewStage/vespin/pull/7737))
+- Fixed the MCP menu's search ignoring typing when reopened
+  ([#7466](https://github.com/ReviewStage/vespin/pull/7466))
+- Fixed icon sizes and alignment in terminal rows, mention pills, and the title
+  bar
+  ([#7429](https://github.com/ReviewStage/vespin/pull/7429),
+  [#7761](https://github.com/ReviewStage/vespin/pull/7761),
+  [#7728](https://github.com/ReviewStage/vespin/pull/7728),
   [#7736](https://github.com/ReviewStage/vespin/pull/7736))
-- Fixed a terminal tab's status bar cutting off its instruction ([#7693](https://github.com/ReviewStage/vespin/pull/7693))
-- Fixed a malformed pasted key saying "Try again" instead of that it is invalid ([#7683](https://github.com/ReviewStage/vespin/pull/7683))
-- Fixed an unsaved automation edit lost after Leave on a ⌘K pick of the same
-  automation ([#7582](https://github.com/ReviewStage/vespin/pull/7582))
-- Fixed a link that took a moment to open landing over where you had moved on to ([#7506](https://github.com/ReviewStage/vespin/pull/7506))
+- Fixed task names cut short in hover cards and side panel tabs
+  ([#7809](https://github.com/ReviewStage/vespin/pull/7809),
+  [#7808](https://github.com/ReviewStage/vespin/pull/7808))
+- Fixed a terminal tab's status bar cutting off its text
+  ([#7693](https://github.com/ReviewStage/vespin/pull/7693))
+- Fixed an invalid pasted key saying "Try again"
+  ([#7683](https://github.com/ReviewStage/vespin/pull/7683))
+- Fixed losing an unsaved automation edit when reopening it from ⌘K
+  ([#7582](https://github.com/ReviewStage/vespin/pull/7582))
+- Fixed slow links opening over the page you'd moved on to
+  ([#7506](https://github.com/ReviewStage/vespin/pull/7506))
 
 ### Misc
 
-- Updated cloud agents to boot on a daily-refreshed fork of their repository's
-  base drive, with its dependencies installed, and to remount an agent's own
-  drive when its sandbox is recreated
+- Updated cloud agents to boot from a daily-refreshed copy of their repository
+  with dependencies installed
   ([#7447](https://github.com/ReviewStage/vespin/pull/7447),
   [#7580](https://github.com/ReviewStage/vespin/pull/7580),
   [#7675](https://github.com/ReviewStage/vespin/pull/7675),
   [#7700](https://github.com/ReviewStage/vespin/pull/7700),
   [#7713](https://github.com/ReviewStage/vespin/pull/7713))
-- Updated cloud agents' sandboxes to stop five minutes after their last use
+- Updated cloud sandboxes to stop five minutes after last use
   ([#7576](https://github.com/ReviewStage/vespin/pull/7576),
   [#7578](https://github.com/ReviewStage/vespin/pull/7578),
   [#7562](https://github.com/ReviewStage/vespin/pull/7562))
-- Updated deleting a task or agent to delete its transcripts at once ([#7468](https://github.com/ReviewStage/vespin/pull/7468))
-- Updated the landing page to a near-black look that shows its screens whole
+- Updated deleting a task or agent to delete its transcripts right away
+  ([#7468](https://github.com/ReviewStage/vespin/pull/7468))
+- Updated the landing page with a darker look
   ([#7398](https://github.com/ReviewStage/vespin/pull/7398),
   [#7535](https://github.com/ReviewStage/vespin/pull/7535),
   [#7680](https://github.com/ReviewStage/vespin/pull/7680))
@@ -1250,11 +1398,10 @@ Just me, asking first where someone joined it.
 
 ### Cloud agents on your Mac
 
-A cloud agent's files mirror onto your Mac, and the Terminal's Local tabs
-open shells in that mirror. Its ports forward to your Mac's localhost on
-their own while its tab is open, starting the repository's run command, and a
-plug in the message box shows what is forwarded.
-([#7031](https://github.com/ReviewStage/vespin/pull/7031),
+A cloud agent's files now mirror to your Mac, so you can open local shells in
+them. Its ports forward to your localhost while its tab is open.
+
+[#7031](https://github.com/ReviewStage/vespin/pull/7031),
 [#7035](https://github.com/ReviewStage/vespin/pull/7035),
 [#7060](https://github.com/ReviewStage/vespin/pull/7060),
 [#7226](https://github.com/ReviewStage/vespin/pull/7226),
@@ -1263,127 +1410,126 @@ plug in the message box shows what is forwarded.
 [#7062](https://github.com/ReviewStage/vespin/pull/7062),
 [#7065](https://github.com/ReviewStage/vespin/pull/7065),
 [#7216](https://github.com/ReviewStage/vespin/pull/7216),
-[#7292](https://github.com/ReviewStage/vespin/pull/7292))
+[#7292](https://github.com/ReviewStage/vespin/pull/7292)
 
 ![Vespin's window on the Add teammate invitations agent, which ran in the cloud and says relay's dev server is up on port 3000; its box's plug menu shows Forward to localhost switched on with localhost:3000, and the side panel's Local 1 terminal is a shell on the Mac in the agent's mirror, its curl of localhost:3000/invites listing three pending invites.](apps/web/public/changelog/0.28.0/cloud-agents-on-your-mac.png)
 
 ### Review a page in one message
 
-Comments on a page can wait in a review instead of reaching the agent one at
-a time: start a review from a comment, edit or delete what is pending in
-place, and send it all from Review as one message.
-([#7030](https://github.com/ReviewStage/vespin/pull/7030),
+Batch your comments on a page into a review and send them to the agent as one
+message.
+
+[#7030](https://github.com/ReviewStage/vespin/pull/7030),
 [#7261](https://github.com/ReviewStage/vespin/pull/7261),
 [#7265](https://github.com/ReviewStage/vespin/pull/7265),
-[#7307](https://github.com/ReviewStage/vespin/pull/7307))
+[#7307](https://github.com/ReviewStage/vespin/pull/7307)
 
 ![Relay's Invite teammates page with three of Dean's comments pinned on it, and the Finish your review panel listing them as pending above a summary box, Discard, Cancel, and Send review.](apps/web/public/changelog/0.28.0/review-a-page-in-one-message.png)
 
 ### The Vespin CLI
 
-The `vespin` command works tasks, descriptions, agents, the Inbox, and your
-workspace from a terminal, and installs Vespin's MCP server into your coding
-agents. Settings › Vespin CLI installs it from the Mac app and signs it in.
-([#6959](https://github.com/ReviewStage/vespin/pull/6959),
+The `vespin` command lets you work with tasks, agents, and the Inbox from your
+terminal, and installs Vespin's MCP server into your coding agents. Install it
+from Settings › Vespin CLI.
+
+[#6959](https://github.com/ReviewStage/vespin/pull/6959),
 [#6962](https://github.com/ReviewStage/vespin/pull/6962),
 [#6965](https://github.com/ReviewStage/vespin/pull/6965),
 [#6966](https://github.com/ReviewStage/vespin/pull/6966),
 [#6983](https://github.com/ReviewStage/vespin/pull/6983),
-[#7168](https://github.com/ReviewStage/vespin/pull/7168))
+[#7168](https://github.com/ReviewStage/vespin/pull/7168)
 
 ![vespin cli in light monospace, its cli in copper, on Vespin's graphite, with the landing page's gray square dots gathering softly in the top-left and bottom-right corners.](apps/web/public/changelog/0.28.0/the-vespin-cli.png)
 
 ### Several repositories
 
-A cloud agent can work in other repositories beside its own, each checked out
-beside it and picked together in New task's repository chip.
-([#7117](https://github.com/ReviewStage/vespin/pull/7117))
+Cloud agents can now work across several repositories at once. Pick them
+together in New task's repository chip.
+
+[#7117](https://github.com/ReviewStage/vespin/pull/7117)
 
 ![New task's repository chip reading relay, web, its menu open over the composer with relay ticked as Primary and web ticked beside it.](apps/web/public/changelog/0.28.0/several-repositories.png)
 
 ### Improvements
 
-- Counts of what waits on you draw as one orange figure on the Inbox, Home, ⌘K,
-  the show-sidebar button, and the Dock badge, each matching what Open lists
+- One orange count of what needs you, matching across the Inbox, Home, ⌘K, and
+  the Dock
   ([#7276](https://github.com/ReviewStage/vespin/pull/7276),
   [#7280](https://github.com/ReviewStage/vespin/pull/7280),
   [#7281](https://github.com/ReviewStage/vespin/pull/7281),
   [#7283](https://github.com/ReviewStage/vespin/pull/7283))
-- Selecting Inbox threads takes over its head with a Gmail-style box and menu, a
-  right-click acts on every chosen thread, and Resolve comes with Undo
+- Select several Inbox threads to act on them at once, and undo Resolve
   ([#7189](https://github.com/ReviewStage/vespin/pull/7189),
   [#7243](https://github.com/ReviewStage/vespin/pull/7243),
   [#7202](https://github.com/ReviewStage/vespin/pull/7202))
-- Any Inbox thread can be snoozed, and read state stays apart from snooze
+- Snooze any Inbox thread, separately from marking it read
   ([#6990](https://github.com/ReviewStage/vespin/pull/6990),
   [#7019](https://github.com/ReviewStage/vespin/pull/7019))
-- An agent's waiting threads are counted over its message box and open inside
-  its card
+- An agent's waiting threads show above its message box
   ([#7173](https://github.com/ReviewStage/vespin/pull/7173),
   [#7272](https://github.com/ReviewStage/vespin/pull/7272),
   [#7401](https://github.com/ReviewStage/vespin/pull/7401))
-- Codex runs on a ChatGPT plan you connect with a device code, Business plans
-  included
+- Use Codex with a ChatGPT plan, Business plans included
   ([#7032](https://github.com/ReviewStage/vespin/pull/7032),
   [#7036](https://github.com/ReviewStage/vespin/pull/7036),
   [#7037](https://github.com/ReviewStage/vespin/pull/7037))
-- Each terminal is a tab of its own, named Cloud 1 and Local 1, and a cloud
-  terminal stays connected until you close it and resumes its stopped sandbox as
-  you open it
+- Each terminal gets its own tab, and cloud terminals stay connected until
+  closed
   ([#7260](https://github.com/ReviewStage/vespin/pull/7260),
   [#7245](https://github.com/ReviewStage/vespin/pull/7245),
   [#7331](https://github.com/ReviewStage/vespin/pull/7331),
   [#7287](https://github.com/ReviewStage/vespin/pull/7287))
-- A task opens on its agents, with its details behind Details, a quieter topbar,
-  and menus on right-click
+- Tasks open on their agents, with a quieter topbar and right-click menus
   ([#7116](https://github.com/ReviewStage/vespin/pull/7116),
   [#7170](https://github.com/ReviewStage/vespin/pull/7170))
-- Task plans are now Task descriptions, turned on in Settings › Experimental
+- Task plans are now Task descriptions, in Settings › Experimental
   ([#6984](https://github.com/ReviewStage/vespin/pull/6984),
   [#7096](https://github.com/ReviewStage/vespin/pull/7096),
   [#7130](https://github.com/ReviewStage/vespin/pull/7130))
-- The "+" on a task's agents opens a new agent, and History lists its closed and archived agents ([#7252](https://github.com/ReviewStage/vespin/pull/7252))
-- A failed turn ends on Try again where a message carries the agent on ([#7264](https://github.com/ReviewStage/vespin/pull/7264))
-- The Inbox's questions-only scope is named Questions, and a thread's hover card
-  drops its preview
+- "+" starts a new agent, and History lists closed and archived ones
+  ([#7252](https://github.com/ReviewStage/vespin/pull/7252))
+- Failed turns end with Try again
+  ([#7264](https://github.com/ReviewStage/vespin/pull/7264))
+- The Inbox's questions-only view is now called Questions
   ([#7269](https://github.com/ReviewStage/vespin/pull/7269),
   [#7246](https://github.com/ReviewStage/vespin/pull/7246))
-- A thread's Slack title DM carries Open in Vespin and answers its open ask
+- Answer a thread's question from Slack, or jump to it with Open in Vespin
   ([#7241](https://github.com/ReviewStage/vespin/pull/7241),
   [#7266](https://github.com/ReviewStage/vespin/pull/7266))
-- A pull request's chapters name the model they run on, and you pick it on the
-  Chapters tab when you saved both keys
+- Choose which model writes a pull request's chapters
   ([#7027](https://github.com/ReviewStage/vespin/pull/7027),
   [#7179](https://github.com/ReviewStage/vespin/pull/7179),
   [#7187](https://github.com/ReviewStage/vespin/pull/7187))
-- Every task gets a generated title, whichever plan or key you connected ([#7008](https://github.com/ReviewStage/vespin/pull/7008))
-- Connecting a pasted credential takes two steps that check off, saved on paste ([#6986](https://github.com/ReviewStage/vespin/pull/6986))
-- Setup names the accounts it connected, says what each tool gives agents, and
-  keeps your place across devices
+- Every task now gets a generated title
+  ([#7008](https://github.com/ReviewStage/vespin/pull/7008))
+- Simpler two-step flow for pasting credentials
+  ([#6986](https://github.com/ReviewStage/vespin/pull/6986))
+- Clearer setup that remembers your place across devices
   ([#7093](https://github.com/ReviewStage/vespin/pull/7093),
   [#7094](https://github.com/ReviewStage/vespin/pull/7094),
   [#7095](https://github.com/ReviewStage/vespin/pull/7095),
   [#7186](https://github.com/ReviewStage/vespin/pull/7186))
-- New workspace opens as setup's stepped cards, with GitHub, a photo, and
-  invites as email chips
+- New workspace now uses setup's step-by-step cards
   ([#6992](https://github.com/ReviewStage/vespin/pull/6992),
   [#7076](https://github.com/ReviewStage/vespin/pull/7076),
   [#7090](https://github.com/ReviewStage/vespin/pull/7090),
   [#7110](https://github.com/ReviewStage/vespin/pull/7110))
-- Home says when an agent or the workspace's repositories are missing, and hides
-  its Inbox while nothing waits
+- Home flags missing agents or repositories, and hides an empty Inbox
   ([#7188](https://github.com/ReviewStage/vespin/pull/7188),
   [#7102](https://github.com/ReviewStage/vespin/pull/7102))
-- An empty repository menu offers GitHub as a row ([#6996](https://github.com/ReviewStage/vespin/pull/6996))
-- Settings › Integrations shows MCP servers rather than their tools, with
-  Reconnect and Retry as the row's button
+- An empty repository menu offers to connect GitHub
+  ([#6996](https://github.com/ReviewStage/vespin/pull/6996))
+- Settings › Integrations lists MCP servers with Reconnect and Retry
   ([#7305](https://github.com/ReviewStage/vespin/pull/7305),
   [#7255](https://github.com/ReviewStage/vespin/pull/7255),
   [#7112](https://github.com/ReviewStage/vespin/pull/7112))
-- Settings search steers from its field, Linear-style ([#7108](https://github.com/ReviewStage/vespin/pull/7108))
-- Workspace connections fold closed by default ([#6977](https://github.com/ReviewStage/vespin/pull/6977))
-- The folded sidebar floats over the work as an inset pane of glass ([#6975](https://github.com/ReviewStage/vespin/pull/6975))
-- Long menus take a search, and long lists draw only the rows on screen
+- Navigate Settings search from the keyboard
+  ([#7108](https://github.com/ReviewStage/vespin/pull/7108))
+- Workspace connections are collapsed by default
+  ([#6977](https://github.com/ReviewStage/vespin/pull/6977))
+- The collapsed sidebar now floats over your work
+  ([#6975](https://github.com/ReviewStage/vespin/pull/6975))
+- Search in long menus, and faster long lists
   ([#7068](https://github.com/ReviewStage/vespin/pull/7068),
   [#7118](https://github.com/ReviewStage/vespin/pull/7118),
   [#7122](https://github.com/ReviewStage/vespin/pull/7122),
@@ -1391,35 +1537,50 @@ beside it and picked together in New task's repository chip.
 
 ### Fixes
 
-- Fixed a notice marked unread not coming back to the Inbox's Open ([#6968](https://github.com/ReviewStage/vespin/pull/6968))
-- Fixed a backlog of settled, unread threads landing in the Inbox's Open at once ([#6997](https://github.com/ReviewStage/vespin/pull/6997))
-- Fixed snoozed threads counting toward a task and Home ([#7284](https://github.com/ReviewStage/vespin/pull/7284))
-- Fixed the open Inbox thread's row being lost on coming back to the Inbox
+- Fixed notices marked unread not returning to the Inbox
+  ([#6968](https://github.com/ReviewStage/vespin/pull/6968))
+- Fixed a flood of old threads landing in the Inbox at once
+  ([#6997](https://github.com/ReviewStage/vespin/pull/6997))
+- Fixed snoozed threads counting toward a task and Home
+  ([#7284](https://github.com/ReviewStage/vespin/pull/7284))
+- Fixed losing your place in the Inbox when coming back
   ([#7419](https://github.com/ReviewStage/vespin/pull/7419),
   [#7018](https://github.com/ReviewStage/vespin/pull/7018))
-- Fixed a message that did not reach its agent slipping quietly back into the box ([#7001](https://github.com/ReviewStage/vespin/pull/7001))
-- Fixed a task keeping its failed mark after a newer agent started ([#7300](https://github.com/ReviewStage/vespin/pull/7300))
-- Fixed a thread jumping off its end when its lines shrank for a moment ([#7025](https://github.com/ReviewStage/vespin/pull/7025))
-- Fixed a streaming reply's code block coloring before its fence closed ([#7046](https://github.com/ReviewStage/vespin/pull/7046))
-- Fixed a picture sharing a line with words drawing on a line of its own ([#7313](https://github.com/ReviewStage/vespin/pull/7313))
-- Fixed quotes and task boxes in the editor drawing unlike the read view ([#6932](https://github.com/ReviewStage/vespin/pull/6932))
-- Fixed New task leaving the place it opened over ([#7244](https://github.com/ReviewStage/vespin/pull/7244))
-- Fixed setup's Just me keeping a team workspace made before going back ([#7192](https://github.com/ReviewStage/vespin/pull/7192))
-- Fixed Back and Forward not pressing over the floating sidebar ([#7074](https://github.com/ReviewStage/vespin/pull/7074))
-- Fixed the sidebar's material ignoring whether the window is key ([#7086](https://github.com/ReviewStage/vespin/pull/7086))
-- Fixed an automation's runs losing their agent past the newest fifty ([#7172](https://github.com/ReviewStage/vespin/pull/7172))
-- Fixed a Codex turn on a ChatGPT plan dropping OpenAI's error ([#6988](https://github.com/ReviewStage/vespin/pull/6988))
-- Fixed retired first-party clients listed as connected agents ([#6971](https://github.com/ReviewStage/vespin/pull/6971))
+- Fixed undelivered messages quietly returning to the message box
+  ([#7001](https://github.com/ReviewStage/vespin/pull/7001))
+- Fixed tasks keeping a failed mark after a new agent started
+  ([#7300](https://github.com/ReviewStage/vespin/pull/7300))
+- Fixed threads jumping when their content briefly shrank
+  ([#7025](https://github.com/ReviewStage/vespin/pull/7025))
+- Fixed code blocks coloring before they finished streaming
+  ([#7046](https://github.com/ReviewStage/vespin/pull/7046))
+- Fixed inline pictures breaking onto their own line
+  ([#7313](https://github.com/ReviewStage/vespin/pull/7313))
+- Fixed quotes and checklists looking different in the editor
+  ([#6932](https://github.com/ReviewStage/vespin/pull/6932))
+- Fixed New task navigating away from the current page
+  ([#7244](https://github.com/ReviewStage/vespin/pull/7244))
+- Fixed setup's Just me keeping a team workspace
+  ([#7192](https://github.com/ReviewStage/vespin/pull/7192))
+- Fixed Back and Forward over the floating sidebar
+  ([#7074](https://github.com/ReviewStage/vespin/pull/7074))
+- Fixed the sidebar's look when the window isn't focused
+  ([#7086](https://github.com/ReviewStage/vespin/pull/7086))
+- Fixed older automation runs losing their agent
+  ([#7172](https://github.com/ReviewStage/vespin/pull/7172))
+- Fixed Codex errors on ChatGPT plans going missing
+  ([#6988](https://github.com/ReviewStage/vespin/pull/6988))
+- Fixed retired clients showing as connected agents
+  ([#6971](https://github.com/ReviewStage/vespin/pull/6971))
 
 ### Misc
 
-- Added the docs at vespin.dev/docs ([#7069](https://github.com/ReviewStage/vespin/pull/7069))
-- Updated cloud agents to boot from a custom image and a per-repository base
-  snapshot
+- Added docs at vespin.dev/docs
+  ([#7069](https://github.com/ReviewStage/vespin/pull/7069))
+- Updated cloud agents to boot from a custom image and per-repository snapshot
   ([#7045](https://github.com/ReviewStage/vespin/pull/7045),
   [#7373](https://github.com/ReviewStage/vespin/pull/7373))
-- Updated the landing page to play the Inbox at work and show each moment on a
-  phone
+- Updated the landing page to show the Inbox in action
   ([#7209](https://github.com/ReviewStage/vespin/pull/7209),
   [#7161](https://github.com/ReviewStage/vespin/pull/7161))
 
@@ -1427,17 +1588,16 @@ beside it and picked together in New task's repository chip.
 
 ### Vespin on your phone
 
-On a phone, Vespin opens on its Inbox under a floating bar of Inbox, Tasks,
-and Search, with each screen's title and edges fitted to the phone.
+Vespin now fits your phone, opening on the Inbox with a floating bar for Inbox,
+Tasks, and Search.
 ([#6909](https://github.com/ReviewStage/vespin/pull/6909),
 [#6939](https://github.com/ReviewStage/vespin/pull/6939))
 
 ### Cloud or Mac, on every start
 
-Every new task and agent asks where it runs, in the cloud or on one of your
-Macs, and an agent already running can move to the cloud or a Mac from its
-menu. A start made while you are offline waits and goes out once Vespin
-reaches the service again.
+Choose whether each new task or agent runs in the cloud or on one of your Macs,
+and move a running agent from its menu. Starts made offline go out once you're
+back online.
 ([#6879](https://github.com/ReviewStage/vespin/pull/6879),
 [#6885](https://github.com/ReviewStage/vespin/pull/6885),
 [#6886](https://github.com/ReviewStage/vespin/pull/6886),
@@ -1445,77 +1605,94 @@ reaches the service again.
 
 ### Improvements
 
-- The Inbox gains a Needs me scope for the threads waiting on you ([#6797](https://github.com/ReviewStage/vespin/pull/6797))
-- Resolving an ask stages it in your draft, and the resolve and its note
-  reach the agent as one message
+- New Needs me filter in the Inbox for threads waiting on you
+  ([#6797](https://github.com/ReviewStage/vespin/pull/6797))
+- Resolving an ask adds it to your draft, so it reaches the agent with your note
   ([#6783](https://github.com/ReviewStage/vespin/pull/6783),
   [#6851](https://github.com/ReviewStage/vespin/pull/6851))
-- Selecting words in an inline page offers Reply ([#6866](https://github.com/ReviewStage/vespin/pull/6866))
-- A page's comments open in the plan's list, in a side pane you can resize ([#6864](https://github.com/ReviewStage/vespin/pull/6864))
-- Every task opens on its plan and marks the agent waiting on you, and the
-  sidebar, ⌘K, and Recent resume a task on its agent
+- Select text in an inline page to reply to it
+  ([#6866](https://github.com/ReviewStage/vespin/pull/6866))
+- A page's comments open in a resizable side pane
+  ([#6864](https://github.com/ReviewStage/vespin/pull/6864))
+- Tasks open on their plan, and the sidebar, ⌘K, and Recent resume on the agent
   ([#6916](https://github.com/ReviewStage/vespin/pull/6916),
   [#6924](https://github.com/ReviewStage/vespin/pull/6924))
-- You can start an agent on a task with no repository from anywhere ([#6842](https://github.com/ReviewStage/vespin/pull/6842))
-- Settings lets you choose who authors your agents' commits ([#6898](https://github.com/ReviewStage/vespin/pull/6898))
-- Settings › Vespin MCP has a page of its own, client first, and the consent
-  page reads as a connection page
+- Start an agent on a task with no repository from anywhere
+  ([#6842](https://github.com/ReviewStage/vespin/pull/6842))
+- Choose who authors your agents' commits in Settings
+  ([#6898](https://github.com/ReviewStage/vespin/pull/6898))
+- Settings › Vespin MCP has its own page, with a clearer connection page
   ([#6833](https://github.com/ReviewStage/vespin/pull/6833),
   [#6915](https://github.com/ReviewStage/vespin/pull/6915),
   [#6919](https://github.com/ReviewStage/vespin/pull/6919))
-- Resend joins the integrations ([#6893](https://github.com/ReviewStage/vespin/pull/6893))
-- Invite teammates from a dialog off the Members heading ([#6860](https://github.com/ReviewStage/vespin/pull/6860))
-- Workspace settings show each GitHub account's repositories ([#6801](https://github.com/ReviewStage/vespin/pull/6801))
-- Vespin says offline once and keeps every surface quiet until the service
-  answers again, then restarts every read at once
-  ([#6836](https://github.com/ReviewStage/vespin/pull/6836),
+- Added a Resend integration
+  ([#6893](https://github.com/ReviewStage/vespin/pull/6893))
+- Invite teammates from the Members heading
+  ([#6860](https://github.com/ReviewStage/vespin/pull/6860))
+- Workspace settings list each GitHub account's repositories
+  ([#6801](https://github.com/ReviewStage/vespin/pull/6801))
+- Vespin shows one offline notice and reconnects everything at once when back
+  online ([#6836](https://github.com/ReviewStage/vespin/pull/6836),
   [#6870](https://github.com/ReviewStage/vespin/pull/6870),
   [#6834](https://github.com/ReviewStage/vespin/pull/6834))
-- Expired MCP sign-ins show as toasts, one per server ([#6906](https://github.com/ReviewStage/vespin/pull/6906))
-- A video steps a frame at a time and changes its speed ([#6827](https://github.com/ReviewStage/vespin/pull/6827))
-- Setup asks for an agent and GitHub, and lets you sign out ([#6947](https://github.com/ReviewStage/vespin/pull/6947))
-- Agents on a Mac run in git worktrees of a shared clone ([#6786](https://github.com/ReviewStage/vespin/pull/6786))
-- Slack threads link a Slack-started agent as soon as it starts, and a
-  thread's title DM shows its open ask
+- Expired MCP sign-ins show as one toast per server
+  ([#6906](https://github.com/ReviewStage/vespin/pull/6906))
+- Step videos frame by frame and change their speed
+  ([#6827](https://github.com/ReviewStage/vespin/pull/6827))
+- Setup asks for an agent and GitHub, and lets you sign out
+  ([#6947](https://github.com/ReviewStage/vespin/pull/6947))
+- Agents on a Mac run in git worktrees of a shared clone
+  ([#6786](https://github.com/ReviewStage/vespin/pull/6786))
+- Slack threads link to their agent right away, and DMs show open asks
   ([#6758](https://github.com/ReviewStage/vespin/pull/6758),
   [#6825](https://github.com/ReviewStage/vespin/pull/6825),
   [#6951](https://github.com/ReviewStage/vespin/pull/6951))
-- Send feedback stands beside the sidebar's settings gear ([#6772](https://github.com/ReviewStage/vespin/pull/6772))
-- The menu bar dims the items nothing in the window would run ([#6934](https://github.com/ReviewStage/vespin/pull/6934))
+- Send feedback now sits beside the settings gear
+  ([#6772](https://github.com/ReviewStage/vespin/pull/6772))
+- Menu bar items that can't run right now are dimmed
+  ([#6934](https://github.com/ReviewStage/vespin/pull/6934))
 
 ### Fixes
 
-- Fixed a new account's personal workspace not being created at sign-up ([#6778](https://github.com/ReviewStage/vespin/pull/6778))
-- Fixed an archived agent staying archived when a member wrote on its thread ([#6923](https://github.com/ReviewStage/vespin/pull/6923))
-- Fixed New task defaulting to a repository the workspace cannot reach ([#6948](https://github.com/ReviewStage/vespin/pull/6948))
-- Fixed the old task's title staying on the plan after opening another ([#6799](https://github.com/ReviewStage/vespin/pull/6799))
-- Fixed a plan's task item with a nested list whose checkbox would not tick ([#6858](https://github.com/ReviewStage/vespin/pull/6858))
-- Fixed the context ring missing Claude Code's own compaction ([#6918](https://github.com/ReviewStage/vespin/pull/6918))
-- Fixed a submenu closing while the pointer moved slowly toward it ([#6794](https://github.com/ReviewStage/vespin/pull/6794))
-- Fixed a failed picture drawing as nothing, now a broken image with Retry ([#6823](https://github.com/ReviewStage/vespin/pull/6823))
-- Fixed a scroll up over an inline page being lost in the transcript ([#6843](https://github.com/ReviewStage/vespin/pull/6843))
-- Fixed a reply under an automation's Slack result missing the run's agent ([#6774](https://github.com/ReviewStage/vespin/pull/6774))
+- Fixed new accounts missing their personal workspace
+  ([#6778](https://github.com/ReviewStage/vespin/pull/6778))
+- Fixed archived agents staying archived after a new message on their thread
+  ([#6923](https://github.com/ReviewStage/vespin/pull/6923))
+- Fixed New task defaulting to a repository the workspace can't reach
+  ([#6948](https://github.com/ReviewStage/vespin/pull/6948))
+- Fixed the plan keeping the previous task's title
+  ([#6799](https://github.com/ReviewStage/vespin/pull/6799))
+- Fixed checkboxes on plan items with nested lists
+  ([#6858](https://github.com/ReviewStage/vespin/pull/6858))
+- Fixed the context ring missing Claude Code's own compaction
+  ([#6918](https://github.com/ReviewStage/vespin/pull/6918))
+- Fixed submenus closing when you moved toward them slowly
+  ([#6794](https://github.com/ReviewStage/vespin/pull/6794))
+- Fixed failed pictures showing nothing; they now offer Retry
+  ([#6823](https://github.com/ReviewStage/vespin/pull/6823))
+- Fixed scrolling up over an inline page in the transcript
+  ([#6843](https://github.com/ReviewStage/vespin/pull/6843))
+- Fixed replies to an automation's Slack result not reaching its agent
+  ([#6774](https://github.com/ReviewStage/vespin/pull/6774))
 
 ### Misc
 
-- Updated cloud sandboxes to hold agents' credentials at the firewall
+- Updated cloud sandboxes to keep agents' credentials at the firewall
   ([#6812](https://github.com/ReviewStage/vespin/pull/6812),
   [#6816](https://github.com/ReviewStage/vespin/pull/6816),
   [#6817](https://github.com/ReviewStage/vespin/pull/6817),
   [#6818](https://github.com/ReviewStage/vespin/pull/6818))
-- Updated the desktop to accept host 0.9.0 alone ([#6795](https://github.com/ReviewStage/vespin/pull/6795))
+- Updated the desktop app to require host 0.9.0
+  ([#6795](https://github.com/ReviewStage/vespin/pull/6795))
 
 ## 0.26.0 — 2026-11-04
 
 ### Your agents can work Vespin
 
-Claude Code, Codex, Claude.ai, and ChatGPT can now work Vespin for you
-through its MCP server at vespin.dev/api/mcp: reading and starting tasks and
-agents, editing plans, messaging agents, answering the Inbox, commenting,
-running automations, and acting on an agent's pull request, all as you.
-Vespin asks first, on a page that names the agent and what it may do.
-Settings › Integrations lists every agent you let in, each with Revoke, and
-Connect an agent gives the server's address and each agent's steps.
+Claude Code, Codex, Claude.ai, and ChatGPT can now use Vespin for you through
+its MCP server at vespin.dev/api/mcp: start tasks and agents, edit plans, answer
+the Inbox, and more. You approve each one, and can revoke it in Settings ›
+Integrations.
 ([#6596](https://github.com/ReviewStage/vespin/pull/6596),
 [#6601](https://github.com/ReviewStage/vespin/pull/6601),
 [#6613](https://github.com/ReviewStage/vespin/pull/6613),
@@ -1531,12 +1708,9 @@ Connect an agent gives the server's address and each agent's steps.
 
 ### Places and things
 
-Places stand in the middle of the window, and things open on the right. A
-task is one frame, its Overview first and then a tab for each agent, and it
-opens on the agent waiting on you, otherwise the most recent. A page, file,
-or pull request from any task opens beside you, under a line naming its task
-with Open task, and Back and Forward put the panel back exactly as it was.
-Threads open in the Inbox, which can be narrowed to one task.
+Places now open in the middle of the window and things open on the right. A task
+opens on its Overview with a tab for each agent, and pages, files, and pull
+requests open beside you with Back and Forward.
 ([#6584](https://github.com/ReviewStage/vespin/pull/6584),
 [#6612](https://github.com/ReviewStage/vespin/pull/6612))
 
@@ -1544,10 +1718,8 @@ Threads open in the Inbox, which can be narrowed to one task.
 
 ### Pages in the conversation
 
-A page an agent shows draws in the transcript, and under its link in an
-Inbox thread, at its whole height with no frame, in Vespin's own colors and
-type, light or dark. Full screen and Open in panel wait in its corner, and a
-page may now hold up to 1 MB.
+Pages agents show now appear right in the transcript and Inbox threads, in
+Vespin's own look, with Full screen and Open in panel. Pages can be up to 1 MB.
 ([#6572](https://github.com/ReviewStage/vespin/pull/6572),
 [#6670](https://github.com/ReviewStage/vespin/pull/6670),
 [#6675](https://github.com/ReviewStage/vespin/pull/6675),
@@ -1558,23 +1730,17 @@ page may now hold up to 1 MB.
 
 ### Snooze
 
-Press H on an Inbox thread, or choose Snooze from its menu, to put it away
-until In 1 hour, Tomorrow, Next week, or a date and time you pick. It comes
-back to the top of the Inbox, unread, when its time comes, or sooner when
-someone writes on it. View options gain Snoozed, and the sidebar's Inbox
-count leaves snoozed threads out.
+Press H on an Inbox thread to snooze it for an hour, a day, a week, or until a
+time you pick. It comes back unread, or sooner if someone replies.
 ([#6686](https://github.com/ReviewStage/vespin/pull/6686))
 
 ![The Inbox with the Teammate invitations question chosen and its Snooze menu open over the list: In 1 hour, Tomorrow, and Next week, each with its time, then Pick a date and time….](apps/web/public/changelog/0.26.0/snooze.png)
 
 ### Every agent works on a task
 
-Every automation run, every Slack message to Vespin, and every agent another
-agent starts now works on a task of its own, so its helpers, pull requests,
-and transcript stay together. A run's task is named for its automation and
-when it fired, as in "Nightly triage · Nov 4, 9:00", and each marks itself
-Done once its agents finish well with nothing waiting on you. A finished
-run's task leaves your sidebar.
+Automation runs, Slack requests, and agents started by other agents now each get
+their own task, keeping their work together. Run tasks mark themselves Done when
+they finish cleanly.
 ([#6673](https://github.com/ReviewStage/vespin/pull/6673),
 [#6676](https://github.com/ReviewStage/vespin/pull/6676),
 [#6678](https://github.com/ReviewStage/vespin/pull/6678),
@@ -1585,13 +1751,8 @@ run's task leaves your sidebar.
 
 ### Instant, even offline
 
-What you change draws the moment you press: a new task or automation, a
-task's status, pin, block, or move, a comment, a member's role, an
-invitation, a workspace's name, an integration, and your default models. A
-change Vespin refuses comes back with a toast saying so. ⌘Z takes back your
-last change to a task or agent and ⇧⌘Z puts it back. On the Mac your lists
-draw from disk as Vespin opens, and a change made offline stays drawn and
-lands once you're back online.
+Changes now show the moment you make them, even offline, and sync once you're
+back online. ⌘Z undoes your last change to a task or agent, and ⇧⌘Z redoes it.
 ([#6642](https://github.com/ReviewStage/vespin/pull/6642),
 [#6698](https://github.com/ReviewStage/vespin/pull/6698),
 [#6700](https://github.com/ReviewStage/vespin/pull/6700),
@@ -1611,245 +1772,197 @@ lands once you're back online.
 
 ### Improvements
 
-- Settings › Agents names the credential Claude and Codex each run on, and
-  a row in trouble offers its fix, such as Sign in again or Manage usage
-  ([#6609](https://github.com/ReviewStage/vespin/pull/6609),
+- Settings › Agents shows which credential Claude and Codex use, with fixes for
+  problems ([#6609](https://github.com/ReviewStage/vespin/pull/6609),
   [#6614](https://github.com/ReviewStage/vespin/pull/6614))
-- Connecting Claude or Codex draws its plan and API key as settings rows,
-  with a switch for which one new agents use, and setup and Home's Finish
-  setting up connect either in place
+- Connect a Claude or Codex plan or API key and choose which one new agents use
   ([#6618](https://github.com/ReviewStage/vespin/pull/6618),
   [#6625](https://github.com/ReviewStage/vespin/pull/6625),
   [#6672](https://github.com/ReviewStage/vespin/pull/6672))
-- The model menu ends on one line saying who pays, your plan or an API key
-  with what it has cost so far
+- The model menu shows who pays, and what an API key has cost so far
   ([#6605](https://github.com/ReviewStage/vespin/pull/6605))
-- Codex agents run GPT models on Fast, on an OpenAI API key or your ChatGPT
-  plan, and GPT-6 Astra and GPT-6.1 Sol add Ultrafast on an API key
+- Codex agents can run GPT models on Fast, and some on Ultrafast with an API key
   ([#6573](https://github.com/ReviewStage/vespin/pull/6573),
   [#6577](https://github.com/ReviewStage/vespin/pull/6577),
   [#6587](https://github.com/ReviewStage/vespin/pull/6587))
-- Where an agent runs reads as one Runs on chip in New task and an agent's
-  message box, whose card says where it runs and whether that's online
+- New Runs on chip shows where an agent runs and whether it's online
   ([#6734](https://github.com/ReviewStage/vespin/pull/6734))
-- Slack DMs let you answer an ask that takes several options with a checkbox
-  for each, and a to-do with Mark done or Couldn't do it
+- Answer multi-choice asks and to-dos right from Slack DMs
   ([#6724](https://github.com/ReviewStage/vespin/pull/6724),
   [#6735](https://github.com/ReviewStage/vespin/pull/6735),
   [#6738](https://github.com/ReviewStage/vespin/pull/6738))
-- An agent started from Slack offers Open in Slack on its menu
+- Agents started from Slack offer Open in Slack
   ([#6732](https://github.com/ReviewStage/vespin/pull/6732))
-- An agent hears when the merge queue takes its pull request out, with
-  GitHub's reason, and queues it again or tells you why it can't
-  ([#6568](https://github.com/ReviewStage/vespin/pull/6568))
-- An agent's pointer is an amber arrow that ripples on a click, and its
-  recordings show the keys it presses as key caps
+- Agents re-queue pull requests the merge queue drops, or tell you why they
+  can't ([#6568](https://github.com/ReviewStage/vespin/pull/6568))
+- Agents' pointers are amber and show their keypresses in recordings
   ([#6542](https://github.com/ReviewStage/vespin/pull/6542),
   [#6549](https://github.com/ReviewStage/vespin/pull/6549))
-- @ offers your workspace's automations, and an automation's chip wears what
-  fires it and how its last run went
+- @ now suggests automations, and their chips show their last run
   ([#6636](https://github.com/ReviewStage/vespin/pull/6636),
   [#6688](https://github.com/ReviewStage/vespin/pull/6688))
-- An agent you ask to make an automation links it in its reply
+- Agents link automations they create
   ([#6635](https://github.com/ReviewStage/vespin/pull/6635))
-- An @ row hangs the same card as the chip it writes, and an agent's chip
-  names its model and shows it working
+- @ suggestions show the same hover card as their chips
   ([#6671](https://github.com/ReviewStage/vespin/pull/6671))
-- The Tasks page stays drawn between visits and draws only the rows and
-  cards near the view, so it opens at once however many tasks it holds
+- The Tasks page opens instantly, however many tasks you have
   ([#6599](https://github.com/ReviewStage/vespin/pull/6599),
   [#6622](https://github.com/ReviewStage/vespin/pull/6622),
   [#6680](https://github.com/ReviewStage/vespin/pull/6680),
   [#6683](https://github.com/ReviewStage/vespin/pull/6683),
   [#6697](https://github.com/ReviewStage/vespin/pull/6697))
-- Home's Recent and a person's tasks draw as the Tasks page's rows
+- Home's Recent and a person's tasks use the Tasks page's rows
   ([#6729](https://github.com/ReviewStage/vespin/pull/6729))
-- Every repository is drawn the same way, its owner's picture then its name,
-  with owner/name only where two share a name
+- Repositories show consistently, with the owner's picture and name
   ([#6733](https://github.com/ReviewStage/vespin/pull/6733))
-- Hover cards for agents and pull requests draw at once from what Vespin
-  already holds ([#6595](https://github.com/ReviewStage/vespin/pull/6595))
-- A pull request's Chapters arrive on their own once a teammate's
-  generation finishes
+- Agent and pull request hover cards open instantly
+  ([#6595](https://github.com/ReviewStage/vespin/pull/6595))
+- Pull request Chapters appear on their own once generated
   ([#6603](https://github.com/ReviewStage/vespin/pull/6603),
   [#6627](https://github.com/ReviewStage/vespin/pull/6627))
-- Files changed scrolls smoothly through a long pull request
+- Smoother scrolling through long pull requests
   ([#6589](https://github.com/ReviewStage/vespin/pull/6589))
-- Vespin draws a working agent in its own blue again, apart from the copper
-  of one that needs you
+- Working agents are blue again, apart from copper for ones that need you
   ([#6600](https://github.com/ReviewStage/vespin/pull/6600))
-- Recommended and Needs you read as quiet words rather than badges
+- Recommended and Needs you are now quiet labels instead of badges
   ([#6674](https://github.com/ReviewStage/vespin/pull/6674))
-- A name cut short in a chip or badge ends in an ellipsis, and pills draw
-  their words in full ink
+- Long names in chips end in an ellipsis
   ([#6723](https://github.com/ReviewStage/vespin/pull/6723))
-- Setup's Back and Skip line up with its card's edges, and its step count
-  holds still ([#6574](https://github.com/ReviewStage/vespin/pull/6574))
+- Setup's buttons line up and its step count holds still
+  ([#6574](https://github.com/ReviewStage/vespin/pull/6574))
 
 ### Fixes
 
-- Fixed a new account getting no workspace, which left Start disabled and
-  GitHub unconnectable
+- Fixed new accounts getting no workspace, which blocked Start and GitHub
   ([#6753](https://github.com/ReviewStage/vespin/pull/6753))
-- Fixed the same Inbox thread being listed more than once
+- Fixed duplicate Inbox threads
   ([#6762](https://github.com/ReviewStage/vespin/pull/6762))
-- Fixed an archived agent that wouldn't open when pressed; it opens on its
-  own page from anywhere
+- Fixed archived agents not opening
   ([#6761](https://github.com/ReviewStage/vespin/pull/6761))
-- Fixed a failed turn offering Continue in new agent when the agent could
-  still take your next message
+- Fixed failed turns offering Continue in new agent when not needed
   ([#6757](https://github.com/ReviewStage/vespin/pull/6757))
-- Fixed an agent started from Slack missing an image sent as HEIC, such as a
-  Mac screenshot ([#6759](https://github.com/ReviewStage/vespin/pull/6759))
-- Fixed a hover card on a phone opening off screen
+- Fixed HEIC images from Slack not reaching agents
+  ([#6759](https://github.com/ReviewStage/vespin/pull/6759))
+- Fixed hover cards opening off screen on phones
   ([#6760](https://github.com/ReviewStage/vespin/pull/6760))
-- Fixed the web app's pages failing to load after a dropped connection, and
-  its toast then saying a new version was ready
+- Fixed the web app failing to load after a dropped connection
   ([#6754](https://github.com/ReviewStage/vespin/pull/6754),
   [#6756](https://github.com/ReviewStage/vespin/pull/6756))
-- Fixed an update failing with only "Couldn't install" while Vespin ran from
-  its disk image, which now offers to move itself to Applications
-  ([#6593](https://github.com/ReviewStage/vespin/pull/6593))
-- Fixed setup greeting an account that had already finished it on another
-  device ([#6557](https://github.com/ReviewStage/vespin/pull/6557),
+- Fixed updates failing when run from the disk image; Vespin now offers to move
+  to Applications ([#6593](https://github.com/ReviewStage/vespin/pull/6593))
+- Fixed setup showing again on a new device
+  ([#6557](https://github.com/ReviewStage/vespin/pull/6557),
   [#6580](https://github.com/ReviewStage/vespin/pull/6580))
-- Fixed a scheduled or triggered automation run sometimes failing as "the
-  agent never started"
+- Fixed some automation runs failing to start
   ([#6565](https://github.com/ReviewStage/vespin/pull/6565))
-- Fixed a Claude setup-token pasted from a wrapped terminal line being
-  refused ([#6564](https://github.com/ReviewStage/vespin/pull/6564))
-- Fixed the model menus offering a model's batch version, which no agent
-  could run on ([#6575](https://github.com/ReviewStage/vespin/pull/6575))
-- Fixed Merge when ready and the Pull request tab's other controls flicking
-  back to their old state after a press
+- Fixed wrapped Claude setup-tokens being rejected
+  ([#6564](https://github.com/ReviewStage/vespin/pull/6564))
+- Fixed model menus offering batch models no agent can run
+  ([#6575](https://github.com/ReviewStage/vespin/pull/6575))
+- Fixed Pull request tab controls flicking back after a press
   ([#6567](https://github.com/ReviewStage/vespin/pull/6567))
-- Fixed a plan's sections jumping as you clicked into it to edit
+- Fixed plan sections jumping when you start editing
   ([#6556](https://github.com/ReviewStage/vespin/pull/6556))
-- Fixed dragging a Tasks card while a quick add stood open snapping back
+- Fixed Tasks cards snapping back while a quick add was open
   ([#6653](https://github.com/ReviewStage/vespin/pull/6653))
-- Fixed a lone small picture in an Inbox thread drawing enlarged and blurry
+- Fixed small Inbox pictures looking blurry
   ([#6594](https://github.com/ReviewStage/vespin/pull/6594))
-- Fixed Reply not appearing after a triple-click on an Inbox message's last
-  paragraph ([#6579](https://github.com/ReviewStage/vespin/pull/6579))
-- Fixed a hover card vanishing while you held ⌃⇧⌘ to screenshot it
+- Fixed Reply missing after triple-clicking an Inbox message
+  ([#6579](https://github.com/ReviewStage/vespin/pull/6579))
+- Fixed hover cards vanishing while taking a screenshot
   ([#6585](https://github.com/ReviewStage/vespin/pull/6585))
-- Fixed a name's hover drawing square corners in Inbox threads and comments
+- Fixed square hover corners in Inbox threads and comments
   ([#6561](https://github.com/ReviewStage/vespin/pull/6561))
-- Fixed an automation's zap standing off center at a sidebar row's end
+- Fixed the automation icon sitting off center in the sidebar
   ([#6640](https://github.com/ReviewStage/vespin/pull/6640))
-- Fixed a phone zooming on a double tap, bouncing on a drag, and keeping a
-  button lit after a tap
+- Fixed phones zooming on double tap, bouncing, and keeping buttons lit
   ([#6681](https://github.com/ReviewStage/vespin/pull/6681),
   [#6689](https://github.com/ReviewStage/vespin/pull/6689))
-- Fixed controls on a phone too small or too close together to tap
+- Fixed controls too small or close together to tap on phones
   ([#6684](https://github.com/ReviewStage/vespin/pull/6684),
   [#6714](https://github.com/ReviewStage/vespin/pull/6714),
   [#6722](https://github.com/ReviewStage/vespin/pull/6722))
-- Fixed dialogs and ⌘K drawing under a phone's notch and home indicator
+- Fixed dialogs and ⌘K under the notch and home indicator
   ([#6691](https://github.com/ReviewStage/vespin/pull/6691))
-- Fixed a message box on an iPhone hiding under the keyboard
+- Fixed the iPhone keyboard covering the message box
   ([#6727](https://github.com/ReviewStage/vespin/pull/6727))
-- Fixed a phone correcting what you typed into search and name fields
+- Fixed phones autocorrecting search and name fields
   ([#6687](https://github.com/ReviewStage/vespin/pull/6687))
-- Fixed New task's box on a phone wrapping onto two rows
+- Fixed New task's box wrapping on phones
   ([#6693](https://github.com/ReviewStage/vespin/pull/6693))
-- Fixed the web app's loading mark standing off center on a phone
+- Fixed the web app's loading mark sitting off center on phones
   ([#6736](https://github.com/ReviewStage/vespin/pull/6736))
 
 ### Misc
 
-- Updated vespin.dev's top bar to float as one pill, its devices section,
-  and its Bring your own keys section
+- Updated vespin.dev's top bar, devices, and Bring your own keys sections
   ([#6555](https://github.com/ReviewStage/vespin/pull/6555),
   [#6571](https://github.com/ReviewStage/vespin/pull/6571),
   [#6611](https://github.com/ReviewStage/vespin/pull/6611),
   [#6641](https://github.com/ReviewStage/vespin/pull/6641),
   [#6664](https://github.com/ReviewStage/vespin/pull/6664))
-- Updated `PRIVACY.md` to say what Vespin keeps sealed on your Mac and what
-  leaves it when you leave a workspace
+- Updated `PRIVACY.md` on what stays on your Mac when you leave a workspace
   ([#6749](https://github.com/ReviewStage/vespin/pull/6749))
 
 ## 0.25.1 — 2026-11-03
 
 ### Setting up a new account
 
-Vespin sets a new account up after sign-in, before its first task: whether
-it's for you or your team, a team workspace with its picture and
-invitations, an agent to connect, GitHub through Vespin's GitHub App or a
-personal access token, and your tools, Linear, Slack, Sentry, and Notion.
-The team, agent, and GitHub steps can each be skipped, and setup picks up
-where you left it after a reload. Whatever you skipped waits on Home as
-Finish setting up, over New task, until it's done.
+New accounts now get a guided setup: your team, an agent, GitHub, and tools like
+Linear and Slack. Anything you skip waits on Home as Finish setting up.
 ([#6394](https://github.com/ReviewStage/vespin/pull/6394))
 
 ### Improvements
 
-- A personal access token stands on its own: Vespin keeps a classic token
-  with the `repo` scope as the GitHub user it names, with no GitHub account
-  linked first ([#6394](https://github.com/ReviewStage/vespin/pull/6394))
-- New task on Home puts the caret in Home's own message box rather than
-  opening its dialog over it
+- GitHub personal access tokens work without linking a GitHub account
+  ([#6394](https://github.com/ReviewStage/vespin/pull/6394))
+- New task on Home focuses Home's own message box
   ([#6498](https://github.com/ReviewStage/vespin/pull/6498))
-- Vespin reacts with 👀 to a Slack message it acts on, in place of an "On it"
-  reply, and its Slack messages leave out link previews
-  ([#6483](https://github.com/ReviewStage/vespin/pull/6483),
+- Vespin reacts with 👀 in Slack instead of replying "On it", and skips link
+  previews ([#6483](https://github.com/ReviewStage/vespin/pull/6483),
   [#6493](https://github.com/ReviewStage/vespin/pull/6493))
-- An agent started from Slack is named from your message and wears Slack's
-  mark in the sidebar and its page's bar, and its transcript draws your Slack
-  message as a line of its own, linked to it in Slack
+- Slack-started agents are named from your message and show Slack's mark
   ([#6503](https://github.com/ReviewStage/vespin/pull/6503),
   [#6506](https://github.com/ReviewStage/vespin/pull/6506),
   [#6508](https://github.com/ReviewStage/vespin/pull/6508))
-- A message in a Slack thread brings its archived agent back, or continues
-  its work in a new agent once it has stopped, and an agent whose Slack turn
-  finished archives itself as a finished automation run does
+- Replying in a Slack thread revives or continues its agent
   ([#6518](https://github.com/ReviewStage/vespin/pull/6518))
-- Pictures travel both ways through Vespin's Slack bot: the ones you send
-  an agent from Slack reach it, and the pictures an agent shows or a thread
-  carries come back under its Slack message
+- Pictures now go both ways between Slack and agents
   ([#6511](https://github.com/ReviewStage/vespin/pull/6511))
-- An agent started from Slack stops offering to run commands on your Mac
-  once anyone else's words in the Slack thread reach it
+- Slack agents stop offering Mac commands once others join the thread
   ([#6512](https://github.com/ReviewStage/vespin/pull/6512))
-- Settings › Workspace draws the Slack bot as it draws GitHub: Add channel
-  beside its ⋯, its default repository and each channel on a row of its own,
-  and a line saying how to add it when it's in no channel
+- Slack settings now match GitHub's, with Add channel and per-channel rows
   ([#6505](https://github.com/ReviewStage/vespin/pull/6505))
-- A GitHub line in a transcript wears its sender's GitHub avatar
+- GitHub lines in transcripts show the sender's avatar
   ([#6482](https://github.com/ReviewStage/vespin/pull/6482))
-- A window or page that fails to draw shows the Vespin mark, what failed,
-  and Reload, and nothing else
+- Windows that fail to load show a clean error with Reload
   ([#6496](https://github.com/ReviewStage/vespin/pull/6496))
-- An agent's recordings show the same pointer the live view draws over its
-  browser ([#6532](https://github.com/ReviewStage/vespin/pull/6532))
+- Recordings show the same pointer as the live browser view
+  ([#6532](https://github.com/ReviewStage/vespin/pull/6532))
 
 ### Fixes
 
-- Fixed a menu item's printed shortcut doing nothing while its menu was open
+- Fixed menu shortcuts not working while the menu was open
   ([#6480](https://github.com/ReviewStage/vespin/pull/6480))
-- Fixed an Inbox thread with many pictures and videos crashing a phone's
-  browser ([#6440](https://github.com/ReviewStage/vespin/pull/6440))
-- Fixed an agent failing to start on a repository with no commits yet
+- Fixed Inbox threads with many pictures crashing phone browsers
+  ([#6440](https://github.com/ReviewStage/vespin/pull/6440))
+- Fixed agents failing to start on empty repositories
   ([#6504](https://github.com/ReviewStage/vespin/pull/6504))
-- Fixed a Slack thread's reply saying only "The agent finished." when the
-  agent had answered, and an agent not knowing its answer to a Slack
-  follow-up goes back to the thread
+- Fixed Slack replies saying only "The agent finished."
   ([#6507](https://github.com/ReviewStage/vespin/pull/6507),
   [#6510](https://github.com/ReviewStage/vespin/pull/6510))
-- Fixed a Settings page or version history that failed to draw standing off
-  center ([#6491](https://github.com/ReviewStage/vespin/pull/6491))
-- Fixed a reply under one of Vespin's Slack DMs starting a stray agent rather
-  than answering that Inbox thread
+- Fixed failed Settings pages sitting off center
+  ([#6491](https://github.com/ReviewStage/vespin/pull/6491))
+- Fixed replies to Slack DMs starting stray agents
   ([#6550](https://github.com/ReviewStage/vespin/pull/6550))
-- Fixed another task's sub-tasks staying on a plan's head after you switched
-  tasks ([#6548](https://github.com/ReviewStage/vespin/pull/6548))
+- Fixed old sub-tasks lingering after switching tasks
+  ([#6548](https://github.com/ReviewStage/vespin/pull/6548))
 
 ### Misc
 
-- Updated vespin.dev's Download and the README to download Vespin.dmg
+- Updated vespin.dev and the README to download Vespin.dmg
   ([#6481](https://github.com/ReviewStage/vespin/pull/6481))
-- Updated vespin.dev to hold its content to a standard width on a wide
-  window, and to list Vespin as an organization in search results
+- Updated vespin.dev's layout on wide windows and its search listing
   ([#6486](https://github.com/ReviewStage/vespin/pull/6486),
   [#6495](https://github.com/ReviewStage/vespin/pull/6495))
 
@@ -1857,12 +1970,9 @@ Finish setting up, over New task, until it's done.
 
 ### Luke is now Vespin
 
-Luke has a new name: Vespin, at vespin.dev. The app wears the Copper look,
-warm graphite with one copper accent in light and dark alike, and the Keel
-mark in place of the face, from the Dock icon to the avatars. Vespin installs
-as a new app beside Luke rather than updating it, so sign in once and delete
-Luke when you're ready. Links to tryluke.dev and `tryluke://` written before
-the rename still open in Vespin, and agents' pages now come from vespin.page.
+Luke is now Vespin, with a new Copper look and Keel mark. Vespin installs as a
+new app beside Luke, so sign in once and delete Luke when you're ready. Old
+links still work.
 ([#6233](https://github.com/ReviewStage/vespin/pull/6233),
 [#6252](https://github.com/ReviewStage/vespin/pull/6252),
 [#6255](https://github.com/ReviewStage/vespin/pull/6255),
@@ -1881,10 +1991,8 @@ the rename still open in Vespin, and agents' pages now come from vespin.page.
 
 ### Home is back
 
-With no task open, Vespin rests on Home again: "Welcome back" over New task's
-message box, then what waits on you in the Inbox and your workspace's most
-recent tasks, one press from any of them. Every window and browser tab opens
-on Home, which the sidebar's Home row, ⇧⌘H, and ⌘K reach from anywhere.
+With no task open, Vespin shows Home again: New task, what's waiting on you, and
+your recent tasks. Get there from the sidebar, ⇧⌘H, or ⌘K.
 ([#6424](https://github.com/ReviewStage/vespin/pull/6424),
 [#6439](https://github.com/ReviewStage/vespin/pull/6439))
 
@@ -1892,13 +2000,8 @@ on Home, which the sidebar's Home row, ⇧⌘H, and ⌘K reach from anywhere.
 
 ### Cleaner links
 
-Vespin's links read as addresses you could type: vespin.dev/acme opens acme's
-Home and vespin.dev/acme/tasks its Tasks page, a task's link names its number,
-as in vespin.dev/acme/task/54, and an Inbox thread's link stands on its own,
-as vespin.dev/acme/inbox/… with no task in the way. Every link written before
-still opens where it did. A workspace's owner can change its address in
-Settings › Workspace without breaking a saved link, and a new account's own
-workspace is named for its owner. The sign-in pages lose their `.html` too.
+Links are now short and readable, like vespin.dev/acme/task/54, and old links
+still work. Owners can change a workspace's address in Settings › Workspace.
 ([#6416](https://github.com/ReviewStage/vespin/pull/6416),
 [#6418](https://github.com/ReviewStage/vespin/pull/6418),
 [#6419](https://github.com/ReviewStage/vespin/pull/6419),
@@ -1913,11 +2016,8 @@ workspace is named for its owner. The sign-in pages lose their `.html` too.
 
 ### Comments on pages
 
-Comment on a page an agent showed, pinned to the element you pick or to the
-whole page, and the agent that showed it hears your comment, revises the page,
-and answers in the thread; mention another agent to bring it in. A thread
-reaches every agent in it, on a plan's comments too, and a comment that
-reached an agent shows in its transcript as the comment it was.
+Comment on any part of a page an agent showed, and the agent revises it and
+replies. Mention another agent to bring it in.
 ([#6321](https://github.com/ReviewStage/vespin/pull/6321),
 [#6372](https://github.com/ReviewStage/vespin/pull/6372),
 [#6373](https://github.com/ReviewStage/vespin/pull/6373),
@@ -1928,15 +2028,9 @@ reached an agent shows in its transcript as the comment it was.
 
 ### Vespin in Slack
 
-An owner or admin connects Vespin's Slack bot once for the workspace in
-Settings › Workspace. Then a thread that waits on you arrives as a Slack DM,
-which updates once it is answered, carries a button for each of a
-decision's options, and gathers the agent's later posts on that thread as
-replies, and @Vespin in a channel, or a DM to the bot, starts an
-agent on what you wrote, in the repository you name, the channel's, or the
-workspace's default, posting each finished turn back in the Slack thread. An
-automation can send each run's result to you on Slack, and Slack
-notifications in Settings › Workspace turns your DMs off.
+Connect Vespin's Slack bot to get threads that need you as Slack DMs, with
+buttons to answer. @Vespin in a channel or DM to start an agent, and it posts
+back in the thread.
 ([#6406](https://github.com/ReviewStage/vespin/pull/6406),
 [#6414](https://github.com/ReviewStage/vespin/pull/6414),
 [#6420](https://github.com/ReviewStage/vespin/pull/6420),
@@ -1954,220 +2048,178 @@ notifications in Settings › Workspace turns your DMs off.
 
 ### Improvements
 
-- Every task menu, from the sidebar, the Tasks page, a Board card, or Recent,
-  has Task relation, which relates the task to another in place, and each row
-  of a task's Relations reads its relation first, such as "Blocked by"
+- Relate tasks from any task menu, and Relations lead with the type
   ([#6303](https://github.com/ReviewStage/vespin/pull/6303),
   [#6403](https://github.com/ReviewStage/vespin/pull/6403))
-- New task carries a Relation pill beside its repository, and its + menu,
-  like an agent's message box, offers Attachment, Integrations, and Task
-  relation, so a new task can start related to several others
+- New task can start related to other tasks
   ([#6200](https://github.com/ReviewStage/vespin/pull/6200),
   [#6299](https://github.com/ReviewStage/vespin/pull/6299),
   [#6305](https://github.com/ReviewStage/vespin/pull/6305),
   [#6311](https://github.com/ReviewStage/vespin/pull/6311),
   [#6313](https://github.com/ReviewStage/vespin/pull/6313))
-- A Board card, a Tasks list row, and a plan's sub-tasks count a task's
-  finished sub-tasks with a ring, and sub-tasks wear the list-tree glyph
-  everywhere ([#6182](https://github.com/ReviewStage/vespin/pull/6182),
+- Cards and rows show sub-task progress as a ring
+  ([#6182](https://github.com/ReviewStage/vespin/pull/6182),
   [#6183](https://github.com/ReviewStage/vespin/pull/6183),
   [#6194](https://github.com/ReviewStage/vespin/pull/6194))
-- The sidebar's list of tasks is headed for whose tasks it holds, My tasks,
-  Everyone's tasks, or a teammate's, in place of a second "Tasks"
+- The sidebar's task list is labeled My tasks, Everyone's tasks, or a teammate's
   ([#6249](https://github.com/ReviewStage/vespin/pull/6249))
-- Inviting a teammate emails them the invitation, a quiet card with your
-  workspace's picture, and the invitation page opens on that picture and says
-  when you're already a member
+- Invitations now arrive by email
   ([#6262](https://github.com/ReviewStage/vespin/pull/6262),
   [#6288](https://github.com/ReviewStage/vespin/pull/6288),
   [#6349](https://github.com/ReviewStage/vespin/pull/6349))
-- Installing Vespin's GitHub App links your GitHub account in the same trip
+- Installing the GitHub App links your GitHub account too
   ([#6391](https://github.com/ReviewStage/vespin/pull/6391))
-- Settings › Integrations names each connected account by the provider's own
-  name for it, such as an email, a workspace, or an organization, in a muted
-  line beside the provider, as an agent's Integrations menu does
+- Settings › Integrations shows which account each integration uses
   ([#6323](https://github.com/ReviewStage/vespin/pull/6323),
   [#6368](https://github.com/ReviewStage/vespin/pull/6368),
   [#6388](https://github.com/ReviewStage/vespin/pull/6388),
   [#6390](https://github.com/ReviewStage/vespin/pull/6390),
   [#6395](https://github.com/ReviewStage/vespin/pull/6395))
-- An agent's message box calls its servers Integrations, as Settings does
+- The message box calls servers Integrations, matching Settings
   ([#6344](https://github.com/ReviewStage/vespin/pull/6344))
-- An automation can run with no repository, for work that touches no code,
-  and Same agent needs no agent picked: its first run starts one, and a run
-  whose agent was archived starts another
+- Automations can run without a repository and start their own agent
   ([#6271](https://github.com/ReviewStage/vespin/pull/6271),
   [#6334](https://github.com/ReviewStage/vespin/pull/6334),
   [#6382](https://github.com/ReviewStage/vespin/pull/6382))
-- Every automation run opens something when pressed
+- Every automation run opens when clicked
   ([#6274](https://github.com/ReviewStage/vespin/pull/6274))
-- An agent's page opens in the web app too, a phone included, offers Open in
-  browser, and opens its links in your browser and its email addresses in
-  your mail app
+- Agent pages open in the web app and on phones, with Open in browser
   ([#6230](https://github.com/ReviewStage/vespin/pull/6230),
   [#6232](https://github.com/ReviewStage/vespin/pull/6232),
   [#6241](https://github.com/ReviewStage/vespin/pull/6241),
   [#6244](https://github.com/ReviewStage/vespin/pull/6244),
   [#6259](https://github.com/ReviewStage/vespin/pull/6259),
   [#6285](https://github.com/ReviewStage/vespin/pull/6285))
-- The Pull request tab's Files changed counts files and how many you viewed,
-  its lines moving to the header, and its Chapters tab says how far the
-  chapters stand before you open it
+- Files changed counts viewed files, and Chapters shows its progress
   ([#6276](https://github.com/ReviewStage/vespin/pull/6276),
   [#6278](https://github.com/ReviewStage/vespin/pull/6278),
   [#6330](https://github.com/ReviewStage/vespin/pull/6330))
-- @ leads with agents and tasks and lists files last, offers the workspace's
-  Inbox threads, and in an Inbox reply box offers the thread's task's plan,
-  pages, agents, and pull requests
+- @ lists agents and tasks first and suggests Inbox threads
   ([#6192](https://github.com/ReviewStage/vespin/pull/6192),
   [#6195](https://github.com/ReviewStage/vespin/pull/6195),
   [#6229](https://github.com/ReviewStage/vespin/pull/6229))
-- A to-do step's command draws as a code card with its own Copy, its lines
-  kept as written, and copying it leaves the step unticked
+- To-do commands show as code blocks with Copy
   ([#6472](https://github.com/ReviewStage/vespin/pull/6472))
-- A withdrawn or replaced ask reads as a line of its thread, as a resolved one
-  does ([#6283](https://github.com/ReviewStage/vespin/pull/6283))
-- An agent that marks its task Done settles the task's open asks as your Done
-  does, and every ask you answer reaches the agent that asked
+- Withdrawn or replaced asks show in their thread
+  ([#6283](https://github.com/ReviewStage/vespin/pull/6283))
+- Agents that mark a task Done settle its open asks
   ([#6310](https://github.com/ReviewStage/vespin/pull/6310),
   [#6312](https://github.com/ReviewStage/vespin/pull/6312))
-- A started agent's final message reaches the agent that started it as its
-  turn ends ([#6213](https://github.com/ReviewStage/vespin/pull/6213))
-- A failed turn on your own API key says the key was refused and offers to
-  fix it ([#6176](https://github.com/ReviewStage/vespin/pull/6176),
+- Agents hear the final message of agents they started
+  ([#6213](https://github.com/ReviewStage/vespin/pull/6213))
+- Failed turns on your API key say so and offer a fix
+  ([#6176](https://github.com/ReviewStage/vespin/pull/6176),
   [#6301](https://github.com/ReviewStage/vespin/pull/6301))
-- Tasks, agents, and automations follow a GitHub repository through a rename
-  or a transfer ([#6279](https://github.com/ReviewStage/vespin/pull/6279))
-- Every to-do list in a transcript starts folded, and the two sides of a
-  conversation stand further apart
+- Tasks and automations follow renamed or transferred repositories
+  ([#6279](https://github.com/ReviewStage/vespin/pull/6279))
+- To-do lists start folded, and conversations have more breathing room
   ([#6202](https://github.com/ReviewStage/vespin/pull/6202),
   [#6258](https://github.com/ReviewStage/vespin/pull/6258))
-- ⌘0 brings back the window you closed
+- ⌘0 reopens the window you closed
   ([#6369](https://github.com/ReviewStage/vespin/pull/6369))
-- The sidebar and side panel glide open and shut without redrawing the
-  window, and a task started without opening shows in the sidebar at once
+- The sidebar and side panel open and close smoothly
   ([#6208](https://github.com/ReviewStage/vespin/pull/6208),
   [#6384](https://github.com/ReviewStage/vespin/pull/6384))
-- New task's card goes away on the first Escape, its draft kept for next time
+- Escape closes New task and keeps your draft
   ([#6243](https://github.com/ReviewStage/vespin/pull/6243))
-- A fold closes as smoothly as it opens and holds its words still when
-  pressed, and what fades in fades out
+- Smoother folding and fading animations
   ([#6217](https://github.com/ReviewStage/vespin/pull/6217),
   [#6220](https://github.com/ReviewStage/vespin/pull/6220),
   [#6224](https://github.com/ReviewStage/vespin/pull/6224),
   [#6314](https://github.com/ReviewStage/vespin/pull/6314))
-- Every Inbox count, in the sidebar, a task's Inbox tab, and a phone's tab
-  bar, wears one needs-you color
+- All Inbox counts use one needs-you color
   ([#6191](https://github.com/ReviewStage/vespin/pull/6191))
-- The media viewer shows a video's first frame in its strip, a picture at its
-  own shape in a chip, and a row of pictures wraps rather than squeezing
+- Better video and picture previews in the media viewer
   ([#6209](https://github.com/ReviewStage/vespin/pull/6209),
   [#6364](https://github.com/ReviewStage/vespin/pull/6364),
   [#6396](https://github.com/ReviewStage/vespin/pull/6396))
-- On a phone, rows that open on a press leave out their ⋯, their menu a long
-  press away, a swipe steps between files in the media viewer, and Find is in
-  the ⋯ menus
+- On phones, long-press for menus and swipe between files
   ([#6205](https://github.com/ReviewStage/vespin/pull/6205),
   [#6246](https://github.com/ReviewStage/vespin/pull/6246),
   [#6250](https://github.com/ReviewStage/vespin/pull/6250),
   [#6251](https://github.com/ReviewStage/vespin/pull/6251),
   [#6256](https://github.com/ReviewStage/vespin/pull/6256),
   [#6275](https://github.com/ReviewStage/vespin/pull/6275))
-- On a phone, the Pull request tab's header folds away with the scroll and
-  snaps open or shut, rather than vanishing in one frame
+- The Pull request header folds smoothly as you scroll on phones
   ([#6459](https://github.com/ReviewStage/vespin/pull/6459))
-- The workspace's Sentry row in Settings › Workspace says it carries alerts to
-  automations, with Disconnect in its ⋯
+- Sentry in Settings › Workspace explains alerts and offers Disconnect
   ([#6335](https://github.com/ReviewStage/vespin/pull/6335),
   [#6414](https://github.com/ReviewStage/vespin/pull/6414))
 
 ### Fixes
 
-- Fixed an Inbox read or answer failing from a window still on tryluke.dev
+- Fixed Inbox actions failing from a window still on tryluke.dev
   ([#6413](https://github.com/ReviewStage/vespin/pull/6413))
-- Fixed an agent's wakeup showing in its transcript as a message from the app
+- Fixed agent wakeups showing as messages from the app
   ([#6371](https://github.com/ReviewStage/vespin/pull/6371))
-- Fixed an agent's video opening on seconds of its page loading
+- Fixed agent videos opening on a loading page
   ([#6219](https://github.com/ReviewStage/vespin/pull/6219))
-- Fixed an agent failing every relaunch of its sandbox after one was cut short
+- Fixed sandboxes failing to relaunch after an interrupted start
   ([#6150](https://github.com/ReviewStage/vespin/pull/6150))
-- Fixed a form, such as Settings › Workspace's invitation, saying its errors
-  in the browser's bubble rather than its own error line
+- Fixed form errors showing in browser bubbles
   ([#6343](https://github.com/ReviewStage/vespin/pull/6343))
-- Fixed moving a task into or out of a section offering no Undo, and a
-  section of finished tasks looking empty
-  ([#6239](https://github.com/ReviewStage/vespin/pull/6239),
+- Fixed missing Undo when moving tasks between sections, and sections looking
+  empty ([#6239](https://github.com/ReviewStage/vespin/pull/6239),
   [#6245](https://github.com/ReviewStage/vespin/pull/6245))
-- Fixed the sidebar's icons shifting with the time beside them, its names
-  fading too early, a sub-task count running into the time, and a failed
-  agent's mark standing off the others
+- Fixed sidebar icons shifting and names fading too early
   ([#6184](https://github.com/ReviewStage/vespin/pull/6184),
   [#6207](https://github.com/ReviewStage/vespin/pull/6207),
   [#6216](https://github.com/ReviewStage/vespin/pull/6216),
   [#6300](https://github.com/ReviewStage/vespin/pull/6300))
-- Fixed a Tasks list row shifting on hover to make room for its ⋯
+- Fixed Tasks rows shifting on hover
   ([#6181](https://github.com/ReviewStage/vespin/pull/6181))
-- Fixed an Inbox picture's viewer closing when a new thread arrived, and
-  triple-clicking a thread's last paragraph offering no Reply
+- Fixed the Inbox picture viewer closing on new threads, and missing Reply
   ([#6227](https://github.com/ReviewStage/vespin/pull/6227),
   [#6374](https://github.com/ReviewStage/vespin/pull/6374))
-- Fixed a link in a plan looking different while you edit it
+- Fixed plan links looking different while editing
   ([#6298](https://github.com/ReviewStage/vespin/pull/6298))
-- Fixed a zoomed picture clipped to its card, and a full-screen video running
-  off the screen ([#6280](https://github.com/ReviewStage/vespin/pull/6280),
+- Fixed clipped zoomed pictures and oversized full-screen videos
+  ([#6280](https://github.com/ReviewStage/vespin/pull/6280),
   [#6292](https://github.com/ReviewStage/vespin/pull/6292))
-- Fixed a GitHub card in a narrow transcript drawing its words over each other
+- Fixed overlapping text on GitHub cards in narrow transcripts
   ([#6367](https://github.com/ReviewStage/vespin/pull/6367))
-- Fixed a path in a title bar staying folded to "…" once its bar widened
+- Fixed title bar paths staying truncated after widening
   ([#6263](https://github.com/ReviewStage/vespin/pull/6263))
-- Fixed Settings › Integrations shifting as its rows loaded
+- Fixed Settings › Integrations shifting while loading
   ([#6253](https://github.com/ReviewStage/vespin/pull/6253))
-- Fixed a card list's focus ring cutting square across its rounded corners,
-  and a short label or description fading or ending in "…" where it fit
+- Fixed square focus rings and needlessly truncated labels
   ([#6171](https://github.com/ReviewStage/vespin/pull/6171),
   [#6187](https://github.com/ReviewStage/vespin/pull/6187),
   [#6223](https://github.com/ReviewStage/vespin/pull/6223))
-- Fixed the gaps between a diff's hunks losing their expand arrows, and a
-  comment in a diff standing on a different ground from its lines
+- Fixed missing expand arrows and mismatched comment backgrounds in diffs
   ([#6325](https://github.com/ReviewStage/vespin/pull/6325))
-- Fixed a loading page showing a white ground in the dark appearance
+- Fixed loading pages flashing white in dark mode
   ([#6444](https://github.com/ReviewStage/vespin/pull/6444))
-- Fixed a banner on a phone putting its button on a line of its own
+- Fixed banner buttons wrapping on phones
   ([#6449](https://github.com/ReviewStage/vespin/pull/6449))
-- Fixed the dictation waveform staying flat on an iPhone
+- Fixed the dictation waveform staying flat on iPhone
   ([#6417](https://github.com/ReviewStage/vespin/pull/6417))
-- Fixed a phone's sheet running off the screen, its drawer's workspace head
-  covering Back and Forward, and its message box's ⋯ leaving out the context
-  ring ([#6180](https://github.com/ReviewStage/vespin/pull/6180),
+- Fixed phone sheets running off screen and other layout issues
+  ([#6180](https://github.com/ReviewStage/vespin/pull/6180),
   [#6206](https://github.com/ReviewStage/vespin/pull/6206),
   [#6381](https://github.com/ReviewStage/vespin/pull/6381),
   [#6412](https://github.com/ReviewStage/vespin/pull/6412))
-- Fixed a link in an automation run's Inbox item taking you away from the item
+- Fixed links in automation Inbox items navigating away
   ([#6379](https://github.com/ReviewStage/vespin/pull/6379))
-- Fixed an agent's words reaching Slack with their Markdown showing raw, and
-  a press on a Slack button sometimes answered as failed
+- Fixed raw Markdown in Slack and Slack buttons sometimes failing
   ([#6463](https://github.com/ReviewStage/vespin/pull/6463))
-- Fixed disconnecting an integration's only account not saying what goes
+- Fixed disconnecting an integration's only account not saying what's removed
   ([#6179](https://github.com/ReviewStage/vespin/pull/6179))
 
 ### Misc
 
-- Removed Run on this Mac from the Pull request tab's ⋯ and Settings ›
-  Workspace › Repositories on this Mac
+- Removed Run on this Mac and Repositories on this Mac
   ([#6338](https://github.com/ReviewStage/vespin/pull/6338))
-- Removed eve as a runtime for agents: agents run on Claude Code and Codex,
-  and agents left on eve are archived
+- Removed eve as an agent runtime; agents left on it are archived
   ([#6289](https://github.com/ReviewStage/vespin/pull/6289),
   [#6290](https://github.com/ReviewStage/vespin/pull/6290),
   [#6293](https://github.com/ReviewStage/vespin/pull/6293))
-- Updated vespin.dev with a new landing page drawn from the app's own
-  screens, and About, the changelog, Privacy, and the 404 page in its frame
+- Updated vespin.dev with a new landing page and matching pages
   ([#6407](https://github.com/ReviewStage/vespin/pull/6407),
   [#6421](https://github.com/ReviewStage/vespin/pull/6421),
   [#6423](https://github.com/ReviewStage/vespin/pull/6423),
   [#6452](https://github.com/ReviewStage/vespin/pull/6452))
-- Updated session replay to leave out every attribute that could carry words
-  and the page's own comments
+- Updated session replay to leave out anything that could carry words
   ([#6302](https://github.com/ReviewStage/vespin/pull/6302),
   [#6322](https://github.com/ReviewStage/vespin/pull/6322))
 - Updated the repository's links to ReviewStage/vespin

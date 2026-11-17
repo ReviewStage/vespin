@@ -34,12 +34,7 @@ import {
   QUIET_COMPOSER,
   typeInComposer,
 } from "../testing/composer.js";
-import {
-  settleQueries,
-  testQueryClientNow,
-  withQueryClient,
-  writeAppState,
-} from "../testing/copy-feedback.js";
+import { testQueryClientNow, withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
@@ -229,6 +224,7 @@ test("a paste past the box's cap and too large for a file is cut to the room lef
   const note = () => box.container.querySelector(".ui-composer-foot-note")?.textContent;
   assert.equal(note(), undefined);
 
+  // Note that this runs a few seconds, because only words past a text file's 3 MB bound stay words to be cut.
   pasteInComposer(box.container, "x".repeat(AGENT_BOUNDS.MAX_TEXT_BYTES + 1));
   assert.equal(box.shown().length, cap, "the box holds what fits");
   assert.equal(note()?.includes(pasteCutWords(cap)), true, "and says the rest was cut");
@@ -629,6 +625,26 @@ test("a box starting an agent, with no session yet, lists /goal beside /model bu
   typeInComposer(box.container, "/");
   await settle();
   assert.deepEqual(names(), ["/model", "/goal"]);
+});
+
+test("a box whose model runs on Cursor, which keeps no goal, lists no /goal", async () => {
+  // The Goals experiment offers /goal.
+  writeAppState(stateWith({ [EXPERIMENT.GOALS]: true }, {}));
+
+  const box = await mounted(undefined, {
+    model: { ...MODEL, choice: { model: "cursor/composer-2.5", effort: "default" } },
+    startsGoal: true,
+    skills: () => Promise.resolve({ skills: [] }),
+  });
+
+  const names = () =>
+    [...box.container.querySelectorAll('[role="listbox"] [role="option"]')].map(
+      (row) => row.querySelector(".ui-combobox-option-label")?.textContent,
+    );
+
+  typeInComposer(box.container, "/");
+  await settle();
+  assert.deepEqual(names(), ["/model"]);
 });
 
 test("a row of the skills' list leads with a book, says what it is for and where it comes from, and hangs the skill's card beside it", async () => {
@@ -1171,16 +1187,10 @@ test("while the agent's turn runs, a touch held on Send sends the other way: a b
   assert.deepEqual(done, ["queued"]);
 });
 
-test("Talk stands beside Dictate only in a box that calls its agent, and only while the Voice experiment is on", async () => {
-  writeAppState(stateWith({ [EXPERIMENT.VOICE]: true }, {}));
+test("Talk stands beside Dictate only in a box that calls its agent", async () => {
   const tab = await mounted(undefined, { talksIn: "plan-1" });
   const other = await mounted();
   assert.ok(tab.button("Dictate"));
   assert.ok(tab.button("Talk"), "an agent's tab's box offers a call");
   assert.equal(other.button("Talk")?.ariaLabel, undefined, "a box that calls no agent offers none");
-
-  writeAppState(stateWith({ [EXPERIMENT.VOICE]: false }, {}));
-  await settleQueries();
-  assert.equal(tab.button("Talk")?.ariaLabel, undefined, "nor does any box once Voice is off");
-  assert.ok(tab.button("Dictate"));
 });

@@ -1,7 +1,7 @@
 /**
  * slack-agent-starts.ts -- a member's @mention of our Slack bot, or a direct message to it, starts a coding agent as them or reaches the agent its thread speaks for, and every settled turn bound for Slack is posted there.
  *
- * Our Slack route hands each event Connect forwarded here
+ * Our Slack route hands each event Slack sent here
  * (`slack-events-app.ts`): an `app_mention` in a channel, or a `message.im`
  * a member wrote to the bot directly. A bot's message, a message's edit or
  * any subtype but a file share, and Slack's own retry of an event
@@ -11,17 +11,20 @@
  *
  * The writer is found as a member of a workspace connected to the event's
  * team, oldest connection first: by the Slack id the bot kept for them, or
- * through a Slack account a member connected themselves (`SlackBot.memberOf`),
+ * through a Slack account a member connected themselves (`SlackWorkspaceBot.memberOf`),
  * or else by the email Slack holds for them (`users.info`), which is then kept.
- * Where no workspace is connected, or none holds them as a member, the bot
- * says so in the thread and starts nothing.
+ * Where none holds them as a member, the bot says so in the thread and
+ * starts nothing. Every call to Slack is made on the token of the workspace
+ * it acts for (`SlackBot.forWorkspace`), and one made before a workspace is
+ * found on the first connected to the team that holds one; where none
+ * does, nothing can answer, and the event is dropped with a fixed line.
  *
  * A reply in the Slack thread of a DM the bot wrote a member about an inbox
  * thread (`threadDmAt`) is posted on that thread as the member's own reply,
  * as one in the app is (`messageAsMember`), keyed by Slack's event id, and
  * the agent, brought back first where it stands archived, hears it as a
  * thread message; the bot reacts with 👀. Only the
- * member the DM went to, found as a press finds them (`SlackBot.memberOf`),
+ * member the DM went to, found as a press finds them (`SlackWorkspaceBot.memberOf`),
  * may reply there; anyone else is told so and nothing is posted.
  *
  * A message in a thread that speaks for an agent (`slack_agent_thread`), one
@@ -44,7 +47,7 @@
  * or admin named them in Settings, else in the repository of the writer's
  * latest agent in the workspace, else in none. The images and PDFs the
  * message shared are read from Slack on the bot's token once the writer is
- * found (`SlackBot.download`), sniffed by their bytes and held to the bounds
+ * found (`SlackWorkspaceBot.download`), sniffed by their bytes and held to the bounds
  * a Start holds a message's files to: a PNG, JPEG, or WebP within them read
  * whole, and a larger one, or one of a type no model reads (a Mac's HEIC
  * screenshot), read as the largest thumbnail Slack made of it that fits; a
@@ -72,9 +75,9 @@
  * (`claimSlackThreadTurn`), never in every thread it was ever kept for. A
  * thread's post is its final message in a `markdown` block, which
  * Slack draws as standard Markdown, or that it failed
- * or was stopped, each with the agent's link, and after either the pictures and
- * recordings the agent showed with `show_image` in that turn, shared as
- * files under the thread (`SlackBot.upload`). A turn of an agent started
+ * or was stopped, each with the agent's link, and after either the pictures,
+ * recordings, and sound clips the agent showed with `show_media` in that turn, shared as
+ * files under the thread (`SlackWorkspaceBot.upload`). A turn of an agent started
  * from Slack that finished well then
  * archives the agent under the rule an automation's "Archive finished runs"
  * archives by (`archiveFinishedAgents`), so one with a pull request or an
@@ -123,7 +126,7 @@ import { type SettledAgentTurn, storeWriter } from "@repo/database/models/writer
 import { MESSAGE_SENDER, SLACK_THREAD_ORIGIN } from "@repo/database/storage-vocabulary";
 import { LIMIT_REACHED_WORDS } from "@repo/features/agent-failure-words";
 import { shownPicturesOf } from "@repo/features/agent-pictures-model";
-import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { isShowMediaTool } from "@repo/features/agent-tools";
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
@@ -179,9 +182,9 @@ import { HOSTED_API_ERROR } from "../http/http.js";
 import { messageAsMember } from "../inbox/inbox-procedures.js";
 import {
   SlackBot,
-  type SlackBotService,
   type SlackMessageContent,
   type SlackUpload,
+  type SlackWorkspaceBot,
 } from "./slack-bot.js";
 import { slackClipped, slackEscaped, slackMarkdownBlock } from "./slack-markdown.js";
 import { threadDmAt } from "./thread-dms.js";
@@ -241,6 +244,11 @@ const MEDIA_EXTENSION = {
   [CONVERSATION_MEDIA_TYPE.WEBP]: "webp",
   [CONVERSATION_MEDIA_TYPE.WEBM]: "webm",
   [CONVERSATION_MEDIA_TYPE.MP4]: "mp4",
+  [CONVERSATION_MEDIA_TYPE.WAV]: "wav",
+  [CONVERSATION_MEDIA_TYPE.MP3]: "mp3",
+  [CONVERSATION_MEDIA_TYPE.M4A]: "m4a",
+  [CONVERSATION_MEDIA_TYPE.AAC]: "aac",
+  [CONVERSATION_MEDIA_TYPE.OGG]: "ogg",
 } as const satisfies Record<ConversationMediaType, string>;
 
 /** The emoji the bot reacts with to a message it acted on: 👀, as Slack names it. */
@@ -248,7 +256,6 @@ const HEARD_EMOJI = "eyes";
 
 /** What the bot says in a thread where it starts nothing. */
 const SLACK_REPLY = {
-  NOT_CONNECTED: `This Slack workspace isn't connected to ${PRODUCT_NAME}. A workspace owner or admin can connect the Slack bot in ${PRODUCT_NAME}'s workspace settings.`,
   NO_MEMBER: `I couldn't find you in a ${PRODUCT_NAME} workspace connected to this Slack. Connect your Slack account in ${PRODUCT_NAME}'s Settings › Integrations, then write to me again.`,
   NOT_RECIPIENT: `This thread was sent to another ${PRODUCT_NAME} member, so I didn't post your reply.`,
 } as const;
@@ -458,7 +465,7 @@ function sharedFileName(file: SharedFile, unnamed: string): string {
  * where none did.
  */
 const readSharedImage = Effect.fnUntraced(function* (
-  bot: SlackBotService,
+  bot: SlackWorkspaceBot,
   file: SharedFile,
   room: number,
 ) {
@@ -486,7 +493,7 @@ interface SharedRead {
  * something else.
  */
 const readSharedPdf = Effect.fnUntraced(function* (
-  bot: SlackBotService,
+  bot: SlackWorkspaceBot,
   url: string,
   room: number,
 ) {
@@ -505,7 +512,7 @@ const readSharedPdf = Effect.fnUntraced(function* (
  * left out, and so takes none of those places.
  */
 const sharedFiles = Effect.fnUntraced(function* (
-  bot: SlackBotService,
+  bot: SlackWorkspaceBot,
   files: readonly SharedFile[],
 ) {
   const attachments: AgentAttachment[] = [];
@@ -558,12 +565,12 @@ function refusalReply(what: string, cause: unknown): SlackMessageContent {
  * nothing where none is.
  */
 const memberIn = Effect.fnUntraced(function* (
-  bot: SlackBotService,
+  bot: SlackWorkspaceBot,
   email: Effect.Effect<Option.Option<string>>,
   organizationId: string,
   addressed: SlackAddressed,
 ) {
-  const kept = yield* bot.memberOf(organizationId, addressed.teamId, addressed.slackUserId);
+  const kept = yield* bot.memberOf(addressed.teamId, addressed.slackUserId);
 
   if (Option.isSome(kept)) return kept;
   const held = yield* email;
@@ -730,7 +737,7 @@ function continuedReply(link: string): SlackMessageContent {
  * thread links it; a refusal is said instead.
  */
 const continueFromSlack = Effect.fnUntraced(function* (
-  bot: SlackBotService,
+  bot: SlackWorkspaceBot,
   addressed: SlackAddressed,
   organizationId: string,
   userId: string,
@@ -799,7 +806,7 @@ const continueFromSlack = Effect.fnUntraced(function* (
  * other refusal is said in the thread.
  */
 const sendToAgent = Effect.fnUntraced(function* (
-  bot: SlackBotService,
+  bot: SlackWorkspaceBot,
   addressed: SlackAddressed,
   organizationId: string,
   userId: string,
@@ -903,7 +910,7 @@ const slackTaskOf = Effect.fnUntraced(function* (
 
 /** An agent started as the member from the message on a task made for it, the thread kept as its own, the message marked heard, and the agent's link said in the thread; a refusal is said instead. */
 const startFromSlack = Effect.fnUntraced(function* (
-  bot: SlackBotService,
+  bot: SlackWorkspaceBot,
   addressed: SlackAddressed,
   organizationId: string,
   userId: string,
@@ -979,12 +986,12 @@ const startFromSlack = Effect.fnUntraced(function* (
  * DM went to, or a refusal, it is said in the thread instead.
  */
 const replyToThreadDm = Effect.fnUntraced(function* (
-  bot: SlackBotService,
+  bot: SlackWorkspaceBot,
   addressed: SlackAddressed,
   dm: { readonly itemId: string; readonly organizationId: string; readonly to: string | undefined },
 ) {
   const thread = threadOf(addressed);
-  const member = yield* bot.memberOf(dm.organizationId, addressed.teamId, addressed.slackUserId);
+  const member = yield* bot.memberOf(addressed.teamId, addressed.slackUserId);
 
   if (Option.isNone(member)) {
     yield* bot.reply(addressed.channel, thread, plainReply(SLACK_REPLY.NO_MEMBER));
@@ -1022,14 +1029,24 @@ const replyToThreadDm = Effect.fnUntraced(function* (
  * says in the thread why it did neither.
  */
 const actOnAddressed = Effect.fnUntraced(function* (addressed: SlackAddressed) {
-  const bot = yield* SlackBot;
+  const slack = yield* SlackBot;
 
-  if (!bot.configured) return;
+  if (!slack.configured) return;
   const thread = threadOf(addressed);
-  const workspaces = yield* slackTeamWorkspaces(addressed.teamId);
 
-  if (workspaces.length === 0) {
-    yield* bot.reply(addressed.channel, thread, plainReply(SLACK_REPLY.NOT_CONNECTED));
+  const bots = yield* Effect.forEach(
+    yield* slackTeamWorkspaces(addressed.teamId),
+    (organizationId) =>
+      Effect.map(slack.forWorkspace(organizationId), (bot) => ({ organizationId, bot })),
+  );
+
+  // Note that a reply made before a workspace is found is made on the first token the team's workspaces hold.
+  const answering = bots.find(({ bot }) => bot.connected)?.bot;
+
+  if (answering === undefined) {
+    yield* Effect.logWarning(
+      "a Slack message came from a team no workspace holds the bot's token for",
+    );
 
     return;
   }
@@ -1039,20 +1056,26 @@ const actOnAddressed = Effect.fnUntraced(function* (addressed: SlackAddressed) {
     const dm = yield* threadDmAt(addressed.channel, addressed.threadTs);
 
     if (Option.isSome(dm)) {
-      yield* replyToThreadDm(bot, addressed, dm.value);
+      const bot = yield* slack.forWorkspace(dm.value.organizationId);
+
+      // Note that a reply under a DM of a workspace holding no token is left alone, because its files could not be read and it would post without them.
+      if (bot.connected) yield* replyToThreadDm(bot, addressed, dm.value);
 
       return;
     }
   }
 
-  const email = yield* Effect.cached(bot.userEmail(addressed.slackUserId));
+  const email = yield* Effect.cached(answering.userEmail(addressed.slackUserId));
 
   // A message in a thread an agent was started from goes to that agent, in that agent's workspace.
   if (addressed.threadTs !== undefined) {
-    for (const organizationId of workspaces) {
+    for (const { organizationId, bot } of bots) {
       const kept = yield* slackAgentThreadAt(organizationId, addressed.channel, thread);
 
       if (Option.isNone(kept)) continue;
+
+      // Note that a thread kept in a workspace holding no token is left alone, because its agent's turns could not be posted back and an ended one must not be continued unseen.
+      if (!bot.connected) return;
       const member = yield* memberIn(bot, email, organizationId, addressed);
 
       if (Option.isNone(member)) {
@@ -1067,7 +1090,9 @@ const actOnAddressed = Effect.fnUntraced(function* (addressed: SlackAddressed) {
     }
   }
 
-  for (const organizationId of workspaces) {
+  // Note that a workspace holding no token starts nothing, because its bot could neither read the message's thread and files nor answer.
+  for (const { organizationId, bot } of bots) {
+    if (!bot.connected) continue;
     const member = yield* memberIn(bot, email, organizationId, addressed);
 
     if (Option.isNone(member)) continue;
@@ -1076,7 +1101,7 @@ const actOnAddressed = Effect.fnUntraced(function* (addressed: SlackAddressed) {
     return;
   }
 
-  yield* bot.reply(addressed.channel, thread, plainReply(SLACK_REPLY.NO_MEMBER));
+  yield* answering.reply(addressed.channel, thread, plainReply(SLACK_REPLY.NO_MEMBER));
 });
 
 /**
@@ -1131,7 +1156,7 @@ function turnOutcome(turn: SettledAgentTurn, words: string | undefined): SlackMe
   return { text: slackClipped(words, NOTIFICATION_CHARS), blocks: [slackMarkdownBlock(words)] };
 }
 
-/** The pictures and recordings the turn's `show_image` calls kept beside the transcript, in the order shown, each under its caption; one not kept is left out. */
+/** The pictures, recordings, and sound clips the turn's `show_media` and `show_image` calls kept beside the transcript, in the order shown, each under its caption; one not kept is left out. */
 const shownUploads = Effect.fnUntraced(function* (
   conversationId: string,
   journal: StoredUIMessage,
@@ -1139,7 +1164,7 @@ const shownUploads = Effect.fnUntraced(function* (
   // SAFETY: a stored part's input and output are the JSON the row carried, which `shownPicturesOf` parses.
   const shown = journal.parts.flatMap((part) =>
     isStoredToolPart(part) &&
-    storedToolName(part) === AGENT_TOOL.SHOW_IMAGE &&
+    isShowMediaTool(storedToolName(part)) &&
     part.state === TOOL_PART_STATE.OUTPUT_AVAILABLE
       ? shownPicturesOf(part.input as UnparsedWireValue, part.output as UnparsedWireValue)
       : [],
@@ -1224,12 +1249,16 @@ export function postTurnToSlack(
   turn: SettledAgentTurn,
 ): Effect.Effect<void, never, DatabaseServices | SlackBot> {
   return Effect.gen(function* () {
-    const bot = yield* SlackBot;
+    const slack = yield* SlackBot;
 
-    if (!bot.configured) return;
+    if (!slack.configured) return;
     const agent = yield* readAgentOfConversation(turn.userId, turn.conversationId);
 
     if (Option.isNone(agent)) return;
+    const bot = yield* slack.forWorkspace(agent.value.organizationId);
+
+    // Note that a workspace holding no token claims nothing, so its turn is neither marked posted nor its agent archived unseen.
+    if (!bot.connected) return;
     const place = yield* turnPlace(agent.value, turn.turnId);
 
     if (Option.isNone(place)) return;
@@ -1251,11 +1280,7 @@ export function postTurnToSlack(
     if ("run" in place.value) {
       const { userId, organizationId, automationName } = place.value.run;
 
-      const dm = yield* bot.dm(
-        organizationId,
-        userId,
-        runResultContent(automationName, link, turn, words),
-      );
+      const dm = yield* bot.dm(userId, runResultContent(automationName, link, turn, words));
 
       if (Option.isNone(dm)) return;
       yield* recordSlackAgentThread({

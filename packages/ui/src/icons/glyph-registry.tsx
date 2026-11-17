@@ -1,10 +1,11 @@
 import {
   Activity,
   AppWindow,
+  AudioWaveform,
   BookBookmark,
   BookOpen,
-  Bot,
   BrainCircuit,
+  Broom,
   Building2,
   Calendar,
   CircleArrowOutUpLeft,
@@ -16,6 +17,7 @@ import {
   Cloud,
   CornerDownRight,
   Cpu,
+  DollarSign,
   Eraser,
   Eye,
   EyeOff,
@@ -31,6 +33,7 @@ import {
   GitPullRequest,
   Globe,
   GripVertical,
+  HardHat,
   Hash,
   Heading,
   History,
@@ -42,6 +45,7 @@ import {
   ListTodo,
   ListTree,
   Lock,
+  LockKeyhole,
   MemoryStick,
   MessageSquareHeart,
   MessagesSquare,
@@ -56,6 +60,7 @@ import {
   Target,
   Unplug,
   Users,
+  Video,
   Zap,
 } from "lucide-react";
 import React from "react";
@@ -126,7 +131,7 @@ export const GLYPH = {
   TASK: lucideGlyph(ListTodo),
   // A task under another, its parent, wherever sub-tasks are named, counted, or added.
   SUB_TASK: lucideGlyph(ListTree),
-  AGENT: lucideGlyph(Bot),
+  AGENT: lucideGlyph(HardHat),
   PULL_REQUEST: lucideGlyph(GitPullRequest),
   BRANCH: lucideGlyph(GitBranch),
   PULL_REQUEST_STACK: lucideGlyph(Layers),
@@ -162,12 +167,22 @@ export const GLYPH = {
   PRIVATE_CHANNEL: lucideGlyph(Lock),
   // A provider's API key, pasted from its console, beside a plan that signs in.
   API_KEY: lucideGlyph(KeyRound),
+  // An environment variable, as a shell names one by its `$`.
+  VARIABLE: lucideGlyph(DollarSign),
+  // A value no one can read back once it is saved, as a secret variable's.
+  SECRET: lucideGlyph(LockKeyhole),
   // A thread, the Inbox's item, where no ask of its own says more.
   THREAD: lucideGlyph(MessagesSquare),
   TERMINAL: TerminalIcon,
   MEMORY: MemoryIcon,
   MCP_SERVER: McpIcon,
   CALL: WaveformIcon,
+  // A sound clip an agent made, where a thumb has no frame of it to draw.
+  SOUND_CLIP: lucideGlyph(AudioWaveform),
+  // A video an agent recorded, of its browser or of an app on a Mac.
+  RECORDING: lucideGlyph(Video),
+  // Tidying up: work left lying about, such as old threads, gone through and put away.
+  CLEAN_UP: lucideGlyph(Broom),
   SETTINGS: GearIcon,
   TIME: lucideGlyph(Clock),
   // A day, as a date's chip and its picker name it; a time of day is TIME's.

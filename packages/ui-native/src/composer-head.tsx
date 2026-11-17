@@ -1,177 +1,75 @@
-// composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures attached to the message, each taken off on a press, and the skills a `/` offers.
+// composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as tiles, each taken off by its ×, and the skills a `/` offers.
 
-import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, ScrollView, Text, VStack, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
-  accessibilityHidden,
   accessibilityLabel,
   buttonStyle,
   font,
   foregroundStyle,
   frame,
   lineLimit,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
-import { Chip } from "./button.js";
-import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { GLYPH, glyphImage } from "./glyph.js";
+import { AvatarPhoto } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
-/** The panel's words for a queued message's acts. */
-const WORDS = {
-  STEER: "Steer",
-  DELETE: "Delete",
-} as const;
+/** A picture's thumbnail over a composer's field, as Messages draws one: a square cropped from it, its corners rounded as a card's; a pasted text file stands as a tile of the same size. */
+const THUMBNAIL = { SIZE: 56, CORNER: 10 } as const;
 
-/** One message waiting behind the turn, which its starter may steer or delete. */
-export type QueuedLine = {
-  readonly id: string;
-  readonly words: string;
-};
+/** How large the × in a thumbnail's corner stands, the system's mini control, its mark small inside it. */
+const DETACH_MARK = 9;
 
-type QueuedLinesProps = {
-  readonly lines: readonly QueuedLine[];
-  /** Why the queue stands paused, said over its lines; nothing while it hands its messages on. */
-  readonly paused?: string | undefined;
-  /** Sends a queued message now, steering the turn; Steer is not offered where none is given, as for a reader who did not start the agent. */
-  readonly onSteer?: ((id: string) => void) | undefined;
-  /** Takes a queued message out of the queue; Delete is not offered where none is given. */
-  readonly onDelete?: ((id: string) => void) | undefined;
-};
+/** How far the × stands in from the thumbnail's corner. */
+const DETACH_INSET = SPACE.TIGHT;
 
-/** A queued line's small act at its end: its words in the muted ink, or its glyph alone, pressed anywhere in a frame of a press's size. */
-function LineAct({
-  label,
-  symbol,
-  onPress,
-}: {
-  readonly label: string;
-  readonly symbol?: Glyph | undefined;
-  readonly onPress: () => void;
-}) {
-  const colors = useColors();
-  const glyph = useScaledSize(MARK_SIZE.GLYPH);
-
-  return (
-    <Button
-      onPress={onPress}
-      modifiers={[
-        buttonStyle("plain"),
-        frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
-        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-        accessibilityLabel(label),
-      ]}
-    >
-      {symbol === undefined ? (
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
-            foregroundStyle(colors.TEXT_BODY),
-          ]}
-        >
-          {label}
-        </Text>
-      ) : (
-        <Image {...glyphImage(symbol)} size={glyph} color={colors.TEXT_MUTED} />
-      )}
-    </Button>
-  );
+/** What a file's × is heard as, by the name it goes under ("Remove Picture 1", "Remove Pasted text 1.txt"). */
+function detachWords(name: string): string {
+  return `Remove ${name}`;
 }
 
-/** How many lines a queued message keeps at an accessibility size before it is cut. */
-const QUEUED_LINES_LARGE = 3;
-
-/** A queued message's Steer and Delete, where each is offered. */
-function QueuedActs({
-  id,
-  onSteer,
-  onDelete,
-}: {
+/** One file attached to the message, by the name the message carries it under ("Picture 1", "Pasted text 1.txt"): a picture with the address its thumbnail draws from, such as a `data:` address of its bytes, or a long paste taken as a text file, which has none. */
+export type AttachedPicture = {
   readonly id: string;
-  readonly onSteer: QueuedLinesProps["onSteer"];
-  readonly onDelete: QueuedLinesProps["onDelete"];
-}) {
+  readonly name: string;
+  readonly address?: string | undefined;
+};
+
+/** Does nothing, for a thumbnail's load and failure, which the composer has no use for: its own bytes are drawn, and the × stands either way. */
+function ignore() {}
+
+/** A pasted text file's tile, a thumbnail's size: the document glyph on the well. */
+function TextFileTile() {
+  const colors = useColors();
+
   return (
-    <>
-      {onSteer === undefined ? null : <LineAct label={WORDS.STEER} onPress={() => onSteer(id)} />}
-      {onDelete === undefined ? null : (
-        <LineAct label={WORDS.DELETE} symbol={GLYPH.DELETE} onPress={() => onDelete(id)} />
-      )}
-    </>
+    <ZStack
+      modifiers={[
+        frame({ width: THUMBNAIL.SIZE, height: THUMBNAIL.SIZE }),
+        SwiftModifiers.background(
+          colors.WELL,
+          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: THUMBNAIL.CORNER }),
+        ),
+      ]}
+    >
+      <Image {...glyphImage(GLYPH.FILE_TEXT)} size={MARK_SIZE.LEAD} color={colors.TEXT_MUTED} />
+    </ZStack>
   );
 }
 
 /**
- * The messages queued behind the agent's turn, oldest first, as the panel's
- * queue dock lists them over its box: each on one line led by the panel's queued glyph, with
- * Steer, which sends it into the turn now, and Delete; a message on its way
- * reads Sending in their place. Why the queue stands paused heads them.
+ * The files attached to the message as a row of thumbnails, a pasted text
+ * file as a tile of the same size, scrolling sideways where they outrun the
+ * bar, as Messages and the panel show what a message carries before it
+ * goes. Note that only the × in a thumbnail's corner takes the file off, so
+ * a press meant to look at a picture never removes it; VoiceOver hears each
+ * as its × alone, "Remove Picture 1", since the thumbnail says nothing a
+ * reader could act on.
  */
-export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesProps) {
-  const colors = useColors();
-  const large = useAccessibilitySize();
-  const glyph = useScaledSize(MARK_SIZE.GLYPH);
-
-  if (lines.length === 0 && paused === undefined) return null;
-
-  return (
-    <VStack alignment="leading" spacing={0}>
-      {paused === undefined ? null : (
-        <Text
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
-        >
-          {paused}
-        </Text>
-      )}
-      {lines.map((line) => {
-        const words = (
-          <HStack spacing={SPACE.ROW} modifiers={[frame({ minHeight: PRESS_SIZE })]}>
-            <Image
-              {...glyphImage(GLYPH.QUEUED)}
-              size={glyph}
-              color={colors.TEXT_MUTED}
-              modifiers={[accessibilityHidden()]}
-            />
-            <Text
-              modifiers={[
-                font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-                foregroundStyle(colors.TEXT_BODY),
-                lineLimit(large ? QUEUED_LINES_LARGE : 1),
-                frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-              ]}
-            >
-              {line.words}
-            </Text>
-            {large ? null : <QueuedActs id={line.id} onSteer={onSteer} onDelete={onDelete} />}
-          </HStack>
-        );
-
-        // Note that at an accessibility size a queued message keeps a few lines and its acts stand under it, since on one line beside Steer and Delete it read as a few letters on the folded Duo's 466 pt.
-        return large ? (
-          <VStack key={line.id} alignment="trailing" spacing={0}>
-            {words}
-            <HStack spacing={SPACE.ROW}>
-              <QueuedActs id={line.id} onSteer={onSteer} onDelete={onDelete} />
-            </HStack>
-          </VStack>
-        ) : (
-          <VStack key={line.id} spacing={0}>
-            {words}
-          </VStack>
-        );
-      })}
-    </VStack>
-  );
-}
-
-/** What a press on an attached picture is heard to do, since its × alone says so on screen. */
-const DETACH_HINT = "Removes it from the message";
-
-/** One picture attached to the message, by the name the message carries it under ("Picture 1"). */
-export type AttachedPicture = { readonly id: string; readonly name: string };
-
-/** The pictures attached to the message as a row of capsules, each taken off the message on a press, scrolling sideways where they outrun the bar. */
 export function AttachedPictures({
   pictures,
   onDetach,
@@ -179,19 +77,45 @@ export function AttachedPictures({
   readonly pictures: readonly AttachedPicture[];
   readonly onDetach: (id: string) => void;
 }) {
+  const colors = useColors();
+
   if (pictures.length === 0) return null;
 
   return (
     <ScrollView axes="horizontal" showsIndicators={false}>
       <HStack spacing={SPACE.TIGHT * 2}>
         {pictures.map((picture) => (
-          <Chip
+          <ZStack
             key={picture.id}
-            label={picture.name}
-            symbol={GLYPH.REMOVE}
-            hint={DETACH_HINT}
-            onPress={() => onDetach(picture.id)}
-          />
+            alignment="topTrailing"
+            modifiers={[frame({ width: THUMBNAIL.SIZE, height: THUMBNAIL.SIZE })]}
+          >
+            {picture.address === undefined ? (
+              <TextFileTile />
+            ) : (
+              <AvatarPhoto
+                address={picture.address}
+                size={THUMBNAIL.SIZE}
+                corner={THUMBNAIL.CORNER}
+                onLoad={ignore}
+                onFail={ignore}
+              />
+            )}
+            <Button
+              onPress={() => onDetach(picture.id)}
+              modifiers={[
+                buttonStyle("borderedProminent"),
+                SwiftModifiers.buttonBorderShape("circle"),
+                SwiftModifiers.controlSize("mini"),
+                tint(colors.TEXT),
+                foregroundStyle(colors.GROUND),
+                SwiftModifiers.padding({ top: DETACH_INSET, trailing: DETACH_INSET }),
+                accessibilityLabel(detachWords(picture.name)),
+              ]}
+            >
+              <Image {...glyphImage(GLYPH.REMOVE)} size={DETACH_MARK} />
+            </Button>
+          </ZStack>
         ))}
       </HStack>
     </ScrollView>
@@ -253,12 +177,9 @@ export function SkillSuggestions({
         <Button
           key={skill.name}
           onPress={() => onPick(skill.name)}
-          modifiers={[
-            buttonStyle("plain"),
-            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-            accessibilityLabel(skill.word),
-          ]}
+          modifiers={[buttonStyle("plain"), accessibilityLabel(skill.word)]}
         >
+          {/* Note that the shape stands on the row's full-width frame, not on the button, so a press past the skill's words still picks it. */}
           <HStack
             spacing={SPACE.ROW}
             modifiers={[
@@ -267,6 +188,7 @@ export function SkillSuggestions({
                 maxWidth: Number.POSITIVE_INFINITY,
                 alignment: "leading",
               }),
+              SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
             ]}
           >
             <Image {...glyphImage(GLYPH.SKILL)} size={glyph} color={colors.TEXT_MUTED} />

@@ -24,6 +24,20 @@ export type ProviderKeyProvider =
   (typeof PROVIDER_KEY_PROVIDER)[keyof typeof PROVIDER_KEY_PROVIDER];
 
 /**
+ * The providers whose API key buys model calls of its own beside the
+ * account's agents: a pull request's chapters, a replay's summary, a voice
+ * call. Cursor's key runs Cursor's agents and buys no such call.
+ */
+export const MODEL_API_PROVIDERS = [
+  PROVIDER_KEY_PROVIDER.ANTHROPIC,
+  PROVIDER_KEY_PROVIDER.OPENAI,
+] as const;
+
+export type ModelApiProvider = (typeof MODEL_API_PROVIDERS)[number];
+
+export const modelApiProviderSchema = EffectSchema.Literals(MODEL_API_PROVIDERS);
+
+/**
  * What a stored credential is: a provider's API key, which is billed by the
  * token, or a subscription credential, which runs on the plan the account
  * pays its provider for. Every kind is sealed, braked, and rewrapped alike.
@@ -199,6 +213,13 @@ const providerKeySummarySchema = EffectSchema.Struct({
 });
 
 export type ProviderKeySummary = typeof providerKeySummarySchema.Type;
+
+/** Whether the keys hold an OpenAI API key the service can open, which dictation and voice run on. */
+export function savesOpenAiKey(keys: readonly ProviderKeySummary[]): boolean {
+  const key = keys.find((one) => one.provider === PROVIDER_KEY_PROVIDER.OPENAI);
+
+  return key !== undefined && key.status !== PROVIDER_KEY_STATUS.UNREADABLE;
+}
 
 /** How much of its usage window a plan has used, as a turn on it last heard its harness report. */
 const planUsageSchema = EffectSchema.Struct({
@@ -492,6 +513,7 @@ export type ChatGptDevicePollAnswer = typeof chatGptDevicePollAnswerSchema.Type;
 export const PLAN_NAME = {
   [PROVIDER_KEY_PROVIDER.ANTHROPIC]: "Claude plan",
   [PROVIDER_KEY_PROVIDER.OPENAI]: "Codex plan",
+  [PROVIDER_KEY_PROVIDER.CURSOR]: "Cursor plan",
 } as const satisfies Record<ProviderKeyProvider, string>;
 
 /** What a plan is named by: the name the account gave it, the ChatGPT account it signed in as, and when it was added. */

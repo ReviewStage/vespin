@@ -26,7 +26,6 @@ import {
   TERM,
 } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
-import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   ANNOUNCE,
   AVATAR_SIZE,
@@ -126,12 +125,10 @@ import { useCreateStore, useSelector } from "@tanstack/react-store";
 import { SquareKanbanIcon } from "lucide-react";
 import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef } from "react";
 import { ACTOR_SIZE, ActorMark, UnassignedMark } from "../actor-ref.js";
-import { useAppCommand } from "../app-commands.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { useMemberDirectory } from "../member-directory.js";
-import { useBoardDoor } from "../places/routed-doors.js";
 import { renameWrite } from "../rename-write.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
@@ -217,8 +214,7 @@ import { useTaskDrag } from "./use-row-drag.js";
  * Canceled once asked for. A task archived is off the board, as it is off
  * the sidebar's list. A task from a service before statuses stands under
  * Todo, where a task starts, and is sent nothing until it is dragged.
- * Escape closes the board, as it closes the Automations page, but for
- * while cards are chosen, when it chooses none.
+ * While cards are chosen, Escape chooses none.
  *
  * Cards are chosen together (`SelectionRegion`): by the box that takes the
  * key's place at a card's start under the pointer and stays on every card
@@ -975,7 +971,6 @@ export function TasksBoard({
   /** The Tasks page's toolbar, filter chips, filter, and the Board's display. */
   frame: TasksViewFrame;
 }): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_BOARD, useBoardDoor(tasks).close);
   const now = useMinute();
   const waitingOn = useTasksWaiting(tasks);
   const ids = useId();

@@ -211,6 +211,7 @@ async function drawnFor(
   messages: readonly AgentTranscriptMessage[] = MESSAGES,
   automations?: { readonly rows: readonly AutomationSummary[]; readonly opened: string[] },
   hosted: Partial<AppStateSnapshot> = {},
+  before?: string,
 ): Promise<readonly Element[]> {
   fakeActs({
     act: (): Promise<FakeActAnswer> =>
@@ -231,6 +232,7 @@ async function drawnFor(
   pushedTranscripts(() => [
     {
       messages: [...messages],
+      ...(before === undefined ? undefined : { before }),
       cursor: "7:0",
       status: AGENT_STATUS.COMPLETED,
       title: null,
@@ -288,8 +290,9 @@ async function sendersFor(
   reader: string,
   agent: AgentSummary = AGENT,
   messages: readonly AgentTranscriptMessage[] = MESSAGES,
+  before?: string,
 ): Promise<readonly Seen[]> {
-  const drawn = await drawnFor(reader, [], agent, messages);
+  const drawn = await drawnFor(reader, [], agent, messages, undefined, {}, before);
 
   return drawn.flatMap((message, index): Seen[] => {
     const sender = message.querySelector<HTMLElement>(`${SENDER} [data-actor-ref]`);
@@ -347,6 +350,20 @@ test("each member sees a teammate's face and name under the teammate's messages 
     ["dean", ACTOR_KIND.PERSON, "Dean Stratakos"],
     ...others,
   ]);
+});
+
+test("a window of the newest messages opening on a teammate's line names its sender, never the starter whose task stands on an older page", async () => {
+  const newest = [
+    { ...line("charles", "Not five.", { ...CHARLES, kind: MEMBER }), sentAt: CHARLES_SENT_AT },
+  ];
+
+  const charlesSees = await sendersFor(CHARLES.userId, AGENT, newest, "3");
+  act(() => root?.unmount());
+  const deanSees = await sendersFor(DEAN.userId, AGENT, newest, "3");
+  fakeAppBridge({});
+
+  assert.deepEqual(charlesSees, []);
+  assert.deepEqual(deanSees, [["charles", ACTOR_KIND.PERSON, "Charles Pan", CHARLES_PICTURE]]);
 });
 
 test("another agent's message wears the mark of the harness its model runs in, and the mark of no known harness where the service names no model", async () => {
@@ -491,7 +508,7 @@ test("a teammate's message names them over its bubble, with when and its Copy on
   fakeAppBridge({});
 });
 
-test("an agent started blank draws its first line as a line, no description's card and no task under its starter's name, a line spoken on a call naming no one and a teammate's typed line naming them", async () => {
+test("an agent started blank draws its first line as a line, no description's card and no task under its starter's name, a line spoken on a call naming no one and a teammate's typed line naming them, and waits on its first words before any", async () => {
   const blank: AgentSummary = { ...AGENT, brief: AGENT_BRIEF.BLANK };
 
   const spoken: AgentTranscriptMessage = {
@@ -506,4 +523,9 @@ test("an agent started blank draws its first line as a line, no description's ca
     ["typed", ACTOR_KIND.PERSON, "Dean Stratakos"],
   ]);
   assert.equal(document.querySelector("[data-origin-description]"), null);
+  act(() => root?.unmount());
+
+  // Before its first words, it waits on them rather than saying it is starting, since nothing starts until it is told.
+  await sendersFor(CHARLES.userId, blank, []);
+  assert.match(document.body.textContent ?? "", /Waiting for your first message\./u);
 });

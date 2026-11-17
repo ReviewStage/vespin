@@ -10,9 +10,9 @@
  * pressed, the way a ref handed down would be, and any surface may call a
  * route hook with no input threaded to it.
  *
- * The narrow rooms' ways back read the window's history the same way
- * (`narrow-backs.ts`): whether a list is the step behind is its answer, so
- * the window fills in `behind` beside the two once its history stands.
+ * The window's ‹ ways back read its history the same way
+ * (`narrow-backs.ts`): whether a step stands behind is its answer, so the
+ * window fills in `behind` beside the two once its history stands.
  *
  * Four routes remember something no address holds, for as long as the
  * window lives: the Inbox's items as a door chose them, the automations seen

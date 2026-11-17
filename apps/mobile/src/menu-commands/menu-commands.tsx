@@ -2,6 +2,7 @@
 
 import { isUnread } from "@repo/features/inbox-list-model";
 import { REMIND_TIMES } from "@repo/features/inbox-remind-times";
+import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import {
   MENU_COMMAND,
   MENU_SUBJECT,
@@ -10,6 +11,8 @@ import {
   menuFocusOf,
 } from "@repo/features/ios-menu-commands";
 import {
+  GITHUB_PAGE,
+  gitHubPageLink,
   LINK_DESTINATION,
   type LinkDestination,
   linkOf,
@@ -29,9 +32,15 @@ import {
 } from "@repo/features/tasks-model";
 import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
-import { selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectAgentPinned, selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
-import { BUZZ, ConfirmAsk } from "@repo/ui-native";
+import {
+  BUZZ,
+  ConfirmAsk,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
+} from "@repo/ui-native";
 import { and, eq, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
@@ -42,8 +51,9 @@ import {
   useRootNavigationState,
   useRouter,
 } from "expo-router";
-import { useEffect, useRef, useState } from "react";
-import { useAgentPullRequests } from "../agents/use-agent.js";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useAgentRowActs } from "../agents/use-agent.js";
+import { useDetailOnly } from "../detail-only.js";
 import {
   DETAIL_FRONT,
   PUSHED_PAGE,
@@ -59,15 +69,13 @@ import {
   useTaskListCollections,
   useTaskListRow,
 } from "../host/host-provider.js";
-import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
+import { useFrontSteps, useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
 import { placeOfRoute, type SidebarPlace } from "../screens/app-sidebar.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { menuCommandsModule } from "./menu-commands-module.js";
 import { type NavigatorState, tabStackBacks, tabsInFront } from "./window-back.js";
@@ -124,6 +132,12 @@ interface Subject {
   readonly toggled: readonly MenuCommand[];
   /** The thread in front, by its id, which Mark as Read and Remind Me act on. */
   readonly threadId: string | undefined;
+  /** The thread in front, which Resolve settles against the revision it drew. */
+  readonly thread: InboxItem | undefined;
+  /** The agent in front, which Stop stops and Pin pins. */
+  readonly agentId: string | undefined;
+  /** Whether the agent in front is pinned, which Pin then unpins. */
+  readonly agentPinned: boolean;
   readonly threadUnread: boolean;
 }
 
@@ -141,15 +155,18 @@ function rootPlaceOf(pathname: string): SidebarPlace | undefined {
 
 /**
  * What a page pushed over a split view's detail puts in front of the menu:
- * an agent for its own page, its pull request, or a page it showed, so Stop
+ * an agent for its own page, a pull request opened from it, or a page it showed, so Stop
  * and Pin follow it; a task for its page, comments, history, or versions.
  */
 function pushedFocus(page: PushedPage): MenuFocus {
   switch (page.kind) {
     case PUSHED_PAGE.AGENT:
-    case PUSHED_PAGE.PULL_REQUEST:
     case PUSHED_PAGE.AGENT_PAGE:
       return { kind: MENU_SUBJECT.AGENT, id: page.agentId };
+    case PUSHED_PAGE.PULL_REQUEST:
+      return page.agentId === undefined
+        ? { kind: MENU_SUBJECT.NONE }
+        : { kind: MENU_SUBJECT.AGENT, id: page.agentId };
     case PUSHED_PAGE.TASK:
     case PUSHED_PAGE.TASK_PAGE:
     case PUSHED_PAGE.COMMENTS:
@@ -173,10 +190,6 @@ function useSubject(signedIn: boolean): Subject {
       ? menuFocusOf(pathname, selected)
       : pushedFocus(pushed);
 
-  const pulled = useAgentPullRequests(
-    pushed?.kind === PUSHED_PAGE.PULL_REQUEST ? pushed.agentId : "",
-  );
-
   const thread = useInboxThread(focus.kind === MENU_SUBJECT.THREAD ? focus.id : undefined).listed;
   const collections = useTaskListCollections();
   const tasks = useListedTasks();
@@ -186,6 +199,9 @@ function useSubject(signedIn: boolean): Subject {
     collections.agents,
     focus.kind === MENU_SUBJECT.AGENT ? focus.id : undefined,
   );
+
+  const pinnedOf = useMemo(() => selectAgentPinned(agent?.id ?? ""), [agent?.id]);
+  const agentPinned = useQuery({ ...appStateQuery, select: pinnedOf }).data ?? false;
 
   const taskNamed =
     focus.kind === MENU_SUBJECT.TASK ? tasks.find((each) => namesTask(each, focus.id)) : undefined;
@@ -214,6 +230,8 @@ function useSubject(signedIn: boolean): Subject {
     if (thread.item.remindAt !== undefined) enabled.push(MENU_COMMAND.REMIND_CLEAR);
 
     if (isUnread(thread.item)) toggled.push(MENU_COMMAND.TOGGLE_READ);
+
+    if (thread.item.status === INBOX_STATUS.OPEN) enabled.push(MENU_COMMAND.RESOLVE);
   } else if (agent !== undefined) {
     address = linked(
       task === undefined
@@ -222,6 +240,13 @@ function useSubject(signedIn: boolean): Subject {
     );
 
     if (task !== undefined) enabled.push(MENU_COMMAND.NEW_AGENT);
+
+    if (agentStillWriting(agent.status)) enabled.push(MENU_COMMAND.STOP_AGENT);
+
+    // Note that Pin acts on the agent in front, not its task, as the agent page's bar pins it.
+    enabled.push(MENU_COMMAND.PIN);
+
+    if (agentPinned) toggled.push(MENU_COMMAND.PIN);
   } else if (task !== undefined) {
     address = linked({ kind: LINK_DESTINATION.TASK, taskId: task.id });
     enabled.push(MENU_COMMAND.NEW_AGENT, MENU_COMMAND.TOGGLE_READ, MENU_COMMAND.PIN);
@@ -235,7 +260,11 @@ function useSubject(signedIn: boolean): Subject {
 
   // Note that a pushed pull request or page opens itself in the browser, not the agent or task it stands over.
   if (pushed?.kind === PUSHED_PAGE.PULL_REQUEST) {
-    address = pulled.find(({ number }) => number === pushed.number)?.url;
+    address = gitHubPageLink({
+      kind: GITHUB_PAGE.PULL_REQUEST,
+      repository: pushed.repository,
+      number: pushed.number,
+    });
   } else if (pushed?.kind === PUSHED_PAGE.AGENT_PAGE && agent !== undefined) {
     address = linked({ kind: LINK_DESTINATION.PAGE, taskId: agent.taskId, pageId: pushed.pageId });
   } else if (pushed?.kind === PUSHED_PAGE.TASK_PAGE) {
@@ -260,6 +289,9 @@ function useSubject(signedIn: boolean): Subject {
     enabled,
     toggled,
     threadId: thread?.item.id,
+    thread: thread?.item,
+    agentId: agent?.id,
+    agentPinned: agent !== undefined && agentPinned,
     threadUnread: thread !== undefined && isUnread(thread.item),
   };
 }
@@ -305,6 +337,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const acts = useHostActs();
   const write = useWrite();
   const inbox = useInboxActs();
+  const agentActs = useAgentRowActs();
   const signOut = useSignOut();
   const openSettings = useOpenSettings();
   const subject = useSubject(signedIn);
@@ -316,6 +349,10 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   // Note that Show or Hide Sidebar acts in any regular window, on the app sidebar where three columns stand and on the list beside its detail where two do.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const sidebarStands = signedIn && regular;
+  const detailOnly = useDetailOnly();
+  // Note that Expand Page acts only where the detail can stand alone, a window wide enough for three columns.
+  const threeColumns = useThreeColumns();
+  const detailStands = signedIn && threeColumns;
 
   // Note that Back pops a page pushed over the detail in front, else a page the tab pushed over the window, as a stack's own Back does; never a sheet, which closes with its own Done or Cancel.
   const detailFront = useDetailFront();
@@ -328,15 +365,25 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     tabs !== undefined &&
     (detailFront === DETAIL_FRONT.NONE ? tabStackBacks(tabs) : detailFront === DETAIL_FRONT.PUSHED);
 
+  // Note that K and J step from the thread in front through what its screen draws, which stands its own steps (`useStandFrontSteps`), so the menu keeps no list or scope of its own.
+  const steps = useFrontSteps();
+
   const enabled = [
     ...subject.enabled,
     ...(workspaces.length > 0 ? [MENU_COMMAND.SWITCH_WORKSPACE] : []),
     ...(sidebarStands ? [MENU_COMMAND.SIDEBAR] : []),
+    ...(detailStands ? [MENU_COMMAND.DETAIL_ONLY] : []),
     ...(backs ? [MENU_COMMAND.BACK] : []),
+    ...(signedIn && steps.previous !== undefined ? [MENU_COMMAND.PREVIOUS_ITEM] : []),
+    ...(signedIn && steps.next !== undefined ? [MENU_COMMAND.NEXT_ITEM] : []),
   ];
 
-  const toggled =
-    sidebarStands && !sidebar.shown ? [...subject.toggled, MENU_COMMAND.SIDEBAR] : subject.toggled;
+  const toggled = [
+    ...subject.toggled,
+    // Note that a detail standing alone hides the sidebar whatever its own choice, so the menu offers Show Sidebar then.
+    ...(sidebarStands && (!sidebar.shown || detailOnly.alone) ? [MENU_COMMAND.SIDEBAR] : []),
+    ...(detailStands && detailOnly.alone ? [MENU_COMMAND.DETAIL_ONLY] : []),
+  ];
 
   const working = useWorkingAgents(subject.task?.id);
   const [asking, setAsking] = useState<Ask>(ASK.NONE);
@@ -428,7 +475,16 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
       case MENU_COMMAND.SEARCH:
         return router.navigate("/search");
       case MENU_COMMAND.SIDEBAR:
+        // Note that Show Sidebar over a detail standing alone brings the columns back with the sidebar, as the system's sidebar button does.
+        if (detailOnly.alone) {
+          detailOnly.setAlone(false);
+
+          return sidebar.setShown(true);
+        }
+
         return sidebar.toggle();
+      case MENU_COMMAND.DETAIL_ONLY:
+        return detailOnly.toggle();
       case MENU_COMMAND.BACK: {
         if (detailFront === DETAIL_FRONT.PUSHED) return popDetailFront();
 
@@ -441,6 +497,14 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         return;
       }
 
+      case MENU_COMMAND.PREVIOUS_ITEM:
+        if (steps.previous !== undefined) steps.go(steps.previous);
+
+        return;
+      case MENU_COMMAND.NEXT_ITEM:
+        if (steps.next !== undefined) steps.go(steps.next);
+
+        return;
       case MENU_COMMAND.MARK_DONE:
         if (working > 0) setAsking(ASK.MARK_DONE);
         else markDone();
@@ -459,6 +523,12 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
 
         return;
       case MENU_COMMAND.PIN:
+        if (subject.agentId !== undefined) {
+          agentActs.pin(subject.agentId, !subject.agentPinned);
+
+          return;
+        }
+
         if (task === undefined) return;
         {
           const pinned = task.pinnedAt === undefined;
@@ -470,6 +540,14 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
             went: BUZZ.SELECTION,
           });
         }
+
+        return;
+      case MENU_COMMAND.RESOLVE:
+        if (subject.thread !== undefined) inbox.resolve(subject.thread);
+
+        return;
+      case MENU_COMMAND.STOP_AGENT:
+        if (subject.agentId !== undefined) agentActs.stop(subject.agentId);
 
         return;
       case MENU_COMMAND.REMIND_CLEAR:

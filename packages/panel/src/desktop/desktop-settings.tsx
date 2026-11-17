@@ -44,7 +44,7 @@ import { CallCardDock } from "../call/standing-call.js";
 import { useListEdge, useScreenRef, useScreenSplit } from "../column-split.js";
 import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { SettingsPageLink } from "../open-settings.js";
-import type { NavigationHistory } from "../places/window-history.js";
+import type { NavigationHistory, WindowHistory } from "../places/window-history.js";
 import { revealWithin, scrollerOf } from "../scroll-within.js";
 import {
   settingsGroupHeadingOf,
@@ -69,7 +69,7 @@ import {
 import { hiddenColumns, SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { appStateQuery, selectStoredExperimentChoices } from "../use-app-state.js";
 import { ActionMenu } from "./action-menu.js";
-import { backPlaceOf } from "./back-place.js";
+import { awayPlaceOf } from "./back-place.js";
 import { HistoryButtons } from "./desktop-sidebar.js";
 import { useNarrowFocus } from "./narrow-focus.js";
 import { PhoneHead } from "./phone-head.js";
@@ -168,6 +168,9 @@ function SettingsPageRow({
   );
 }
 
+/** The window's history as Settings reads it: Back and Forward, and the step its way out goes back to, past all of its pages. */
+type SettingsHistory = NavigationHistory & Pick<WindowHistory, "away">;
+
 /** The way back to the page list, which leads a page's bar in a narrow room. */
 function ListBack({ onList }: { onList: () => void }): React.JSX.Element {
   return <BackButton label={SETTINGS_LIST} place={SETTINGS_PLACE} onBack={onList} />;
@@ -185,14 +188,14 @@ function ListHead({
   onExit,
 }: {
   room: ShellRoom;
-  history: NavigationHistory;
+  history: SettingsHistory;
   onExit: () => void;
 }): React.JSX.Element {
   const exit = (
     <BackButton
       look={room === SHELL_ROOM.NARROW ? BACK_BUTTON_LOOK.HEADER : BACK_BUTTON_LOOK.COLUMN}
       label="Back"
-      place={backPlaceOf(history, SETTINGS_EXIT_PLACE)}
+      place={awayPlaceOf(history.away, SETTINGS_EXIT_PLACE)}
       command={APP_COMMAND.EXIT_SETTINGS}
       onBack={onExit}
     />
@@ -329,7 +332,7 @@ export function DesktopSettings({
   sidebar: SidebarCollapse;
   room: ShellRoom;
   step: SettingsStep;
-  history: NavigationHistory;
+  history: SettingsHistory;
   settings: SettingsPanelProps;
   /** Leaves Settings for wherever it was opened from. */
   onExit: () => void;

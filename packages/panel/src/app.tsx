@@ -1,7 +1,12 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
 import { FEEDBACK_KIND, type FeedbackKind } from "@repo/features/feedback";
-import { type AccountLink, LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
+import {
+  type AccountLink,
+  LINK_DESTINATION,
+  type NumberedAddress,
+  type ReadLink,
+} from "@repo/features/link-grammar";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
@@ -16,9 +21,9 @@ import {
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { Announcer, cssCustomProperties, RetryOffered, TimeTicks } from "@repo/ui";
 import { playCompletionSound } from "@repo/ui/completion-sound";
-import { isComposingKey } from "@repo/ui/composing-key";
 import { useLinkOpener } from "@repo/ui/held-link";
 import { LINK_ROUTE, linkRoute } from "@repo/ui/link-route";
+import { changesTab } from "@repo/ui/tab-strip-model";
 import { eq, useLiveQuery } from "@tanstack/react-db";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
@@ -28,13 +33,7 @@ import { useAdminRoute } from "./admin/admin-route.js";
 import { adminViewOfLink } from "./admin/routing.js";
 import { useAgentRoute } from "./agent-route.js";
 import { appBridge } from "./app-bridge.js";
-import {
-  runAppCommand,
-  useAppCommand,
-  useAppKeymap,
-  useMenuCommands,
-  useMenuOffers,
-} from "./app-commands.js";
+import { useAppCommand, useAppKeymap, useMenuCommands, useMenuOffers } from "./app-commands.js";
 import { appPlatform } from "./app-platform.js";
 import { type SettingsDoors, useSettingsPanel, useShownUpdate } from "./app-settings.js";
 import { useAutomationsRoute } from "./automations-route.js";
@@ -127,6 +126,7 @@ import { useVisualViewport } from "./use-visual-viewport.js";
 import { useVersionHistoryRoute } from "./version-history-route.js";
 import { ViewingAs } from "./viewing-as.js";
 import { VoiceCallProvider } from "./voice-call.js";
+import { useWindowEscape } from "./window-escape.js";
 import { useWindowFullScreen } from "./window-full-screen.js";
 import { useWindowZoom } from "./window-zoom.js";
 import { useExperimentsIn } from "./workspace-experiments.js";
@@ -544,7 +544,6 @@ function AppWindow(): React.JSX.Element {
   const settingsPlace = useSettingsRoute({
     workspaces: tasks.workspaces,
     listedId: tasks.workspace?.id,
-    narrow: room === SHELL_ROOM.NARROW,
   });
 
   settingsRoute.current = settingsPlace;
@@ -601,7 +600,7 @@ function AppWindow(): React.JSX.Element {
   }, [launched, goSettings, adminView, listedForLaunch, openAutomations]);
 
   // An app link, handed by the system or pressed in the window, opens where its place stands (`@repo/ui/link-route`).
-  // A pull request a listed task's agent opened opens in that agent's Pull request tab wherever it is pressed (`use-open-link.ts`).
+  // A pull request a listed task's lines name opens in its Pull request tab on that task wherever it is pressed (`use-open-link.ts`).
   // Note that only the pull requests of a task the list holds are, joined on the task's id.
   const { data: listedTasks } = useLiveQuery((q) =>
     q
@@ -612,6 +611,11 @@ function AppWindow(): React.JSX.Element {
         "inner",
       )
       .select(({ listed }) => ({ taskId: listed.taskId, pullRequests: listed.pullRequests })),
+  );
+
+  // A pull request a listed task's lines name opens in its Pull request tab on that task, on its conversation.
+  const openListedPullRequest = useSteadyDoor((taskId: string, pullRequest: NumberedAddress) =>
+    tasks.onShowPanelTab(taskId, changesTab(pullRequest)),
   );
 
   // An Admin link opens while the account's access is still being read, the
@@ -716,9 +720,6 @@ function AppWindow(): React.JSX.Element {
     onToBound: () => placeLeave.pass(tasks.onLeaveRouted),
     onToUnbound: homeView.onOpen,
   });
-  // Escape reads the latest of the tab's doors as it lands, so its listener stays the same across renders.
-  const shellDoors = useRef(tasks);
-  shellDoors.current = tasks;
   // The sidebar folds only where it is drawn: Settings keeps its page list,
   // and the sign-in gate draws no sidebar at all. It folds by the room the
   // stage has, which on the desktop is the window's.
@@ -743,63 +744,8 @@ function AppWindow(): React.JSX.Element {
     appBridge().notifyReady();
   }, [settingsHeld]);
 
-  useEffect(() => {
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || isComposingKey(event)) return;
-
-      // A field or dialog that took the press for itself is the nearest layer
-      // of all, ahead of the sign-in wait and every page: an Escape
-      // that clears a search or withdraws a question has been answered, and
-      // an input method's own is never the window's.
-      if (event.defaultPrevented) return;
-
-      // Escape on a gate waiting for the browser withdraws the sign-in, as
-      // its Cancel does: the wait is the only thing on screen.
-      if (signIn.signInWait) {
-        signIn.cancelSignIn();
-
-        return;
-      }
-
-      // Otherwise it closes the nearest thing that is open, one layer at a
-      // time: Settings, a description's version history, an agent's or a person's page, the Automations page, or the Board, back to wherever it was
-      // opened from, then an agent's threads back to its transcript, then a side panel filling the window back beside its
-      // task, then an open task back to the page it was opened from. A menu and the
-      // settings search answer their own Escapes and keep them — the search
-      // clearing, then letting go of the caret — so neither is a layer here,
-      // bar the caret Settings opens with, whose untouched Escape leaves it.
-      // The Inbox is the one page Escape never leaves: a narrow one's item
-      // steps back to its list, and there the press stops, rather than
-      // reaching the plan the Inbox stands over.
-      if (runAppCommand(APP_COMMAND.EXIT_SETTINGS)) return;
-
-      if (runAppCommand(APP_COMMAND.EXIT_VERSION_HISTORY)) return;
-
-      if (runAppCommand(APP_COMMAND.INBOX_LIST) || inboxView.open) return;
-
-      if (runAppCommand(APP_COMMAND.EXIT_AGENT_PAGE)) return;
-
-      if (runAppCommand(APP_COMMAND.EXIT_PERSON_PAGE)) return;
-
-      if (runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS)) return;
-
-      if (runAppCommand(APP_COMMAND.EXIT_BOARD)) return;
-
-      if (runAppCommand(APP_COMMAND.EXIT_ADMIN)) return;
-
-      // An agent's card showing its threads goes back to its transcript before the task is left.
-      if (runAppCommand(APP_COMMAND.EXIT_AGENT_THREADS)) return;
-      // An open task steps back through the history, as the toolbar's Back
-      // does, to the page it was opened from, which leaves it; a task with no step behind it is left for Home
-      // (`desktop-home.tsx`), where a press does nothing. A side panel
-      // standing only full screen shuts through the history, as its Close does.
-      shellDoors.current.back();
-    };
-
-    window.addEventListener("keydown", handleKey);
-
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [signIn.cancelSignIn, signIn.signInWait, inboxView.open]);
+  // Escape closes the nearest thing open, a sign-in waiting on the browser first (`window-escape.ts`).
+  useWindowEscape(signIn.signInWait === undefined ? undefined : signIn.cancelSignIn);
 
   // The window's shortcuts, from the keys and from the menu bar alike.
   useAppKeymap(true);
@@ -934,7 +880,7 @@ function AppWindow(): React.JSX.Element {
       {/* The window's one voice call, which outlives switching tabs and tasks. */}
       <VoiceCallProvider>
         <OpenLinkProvider value={openAppLink}>
-          <ListedPullRequests tasks={listedTasks}>
+          <ListedPullRequests tasks={listedTasks} onOpen={openListedPullRequest}>
             <OpenPersonProvider value={openPerson}>
               <PreloadPersonProvider value={preloadPerson}>
                 <OpenFeedbackProvider value={openFeedbackAbout}>

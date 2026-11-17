@@ -28,12 +28,14 @@ export const EXPERIMENT = {
   MERGE_QUEUE: "merge-queue",
   /** Reply buttons: a button an agent puts in its reply, beside the line it is about, that starts a new agent on a brief it wrote, or sends one to a running agent, once a member presses it. */
   REPLY_BUTTONS: "reply-buttons",
-  /** Voice: talk to an agent out loud through GPT-Live on your own OpenAI API key: Talk in an agent's box, the call card, and Settings › Voice. */
-  VOICE: "voice",
   /** Goals: `/goal` in a box written to an agent, which runs its harness's own goal (Claude Code's `/goal`, Codex's thread goal), the goal's row over the box, and its moves in the transcript. */
   GOALS: "goals",
   /** Move agents: an agent's Move to ›, its place chip's menu of places, and Move to cloud, each continuing the agent in the cloud or on another of the member's devices. */
   MOVE_AGENTS: "move-agents",
+  /** Cursor: Cursor as a third harness, its models in the picker and its API key in Settings › Agents, while it is being built. */
+  CURSOR: "cursor",
+  /** Starter tasks: while a workspace holds few tasks, Home offers jobs under its composer that a press writes into it, those needing GitHub asking for it. */
+  STARTER_TASKS: "starter-tasks",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -105,6 +107,25 @@ export interface ExperimentEntry {
  */
 export const EXPERIMENTS = [
   {
+    key: EXPERIMENT.STARTER_TASKS,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    listed: true,
+    name: "Starter tasks",
+    detail:
+      "While a workspace has few tasks, Home offers jobs to start with one press, such as building a tiny app or racing three fixes.",
+    owner: "Dean",
+    since: "2026-11-16",
+  },
+  {
+    key: EXPERIMENT.CURSOR,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    listed: true,
+    name: "Cursor",
+    detail: "Run agents on Cursor's harness and models, on your own Cursor API key.",
+    owner: "Dean",
+    since: "2026-11-16",
+  },
+  {
     key: EXPERIMENT.MOVE_AGENTS,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
     listed: true,
@@ -132,16 +153,6 @@ export const EXPERIMENTS = [
     detail:
       "See every pull request waiting in GitHub's merge queues across your workspace's repositories, how its checks stand, and when it should merge.",
     owner: "Charles",
-    since: "2026-11-12",
-  },
-  {
-    key: EXPERIMENT.VOICE,
-    scope: EXPERIMENT_SCOPE.ACCOUNT,
-    listed: true,
-    name: "Voice",
-    detail:
-      "Talk to an agent out loud through GPT-Live on your own OpenAI API key, from Talk in an agent's box.",
-    owner: "Dean",
     since: "2026-11-12",
   },
   {

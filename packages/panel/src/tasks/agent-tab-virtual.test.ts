@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import {
   type AgentMessagesAnswerView,
   type AgentTranscriptKey,
-  PULL_REQUEST_PART,
   TRANSCRIPT_KIND,
 } from "@repo/features/agent-view";
 import {
@@ -22,7 +21,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
 import { FindScope } from "../find-in-tab.js";
 import { FAKE_ANSWER, fakeActs } from "../testing/app-bridge.js";
-import { handHostReads, holdPullRequestParts } from "../testing/app-state.js";
+import { handHostReads, holdAgentPullRequests } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { agentsControl, tellingTranscripts } from "../testing/tasks-control.js";
@@ -531,6 +530,18 @@ test("⌘F finds a phrase across a far call's verb and subject, as its line read
   assert.equal(await farTally(farReply([shown]), "page: Pricing"), "1 of 1");
 });
 
+test("⌘F finds a far tool search's words as its row reads them, the server's name before them", async () => {
+  const searched = {
+    type: "tool-connection_search",
+    toolCallId: "m-7-search",
+    state: "output-available",
+    input: { connection: "slack", query: "send message" },
+    output: { tools: [] },
+  };
+
+  assert.equal(await farTally(farReply([searched]), "Searched Slack tools for"), "1 of 1");
+});
+
 test("⌘F counts nothing in a far integration call's connection_execute, which its row never draws", async () => {
   const wrapper = {
     type: "tool-connection_execute",
@@ -675,9 +686,7 @@ test("the log draws while the agent's pull request is still read, and its dock l
   }>();
 
   // The host holds what the agent published, its answer landing once the test hands it.
-  holdPullRequestParts(handHostReads({}).deliverParts, {
-    [PULL_REQUEST_PART.PUBLISHED]: published.read,
-  });
+  holdAgentPullRequests(handHostReads({}).deliverParts, published.read);
   const { container } = await drawTab(agentsControl({ agents: [AGENT] }));
   assert.ok(drawnRows(container).length > 0, "the lines are drawn while the pull request is read");
   assert.equal(container.querySelector(".agent-published-dock"), null, "with no dock yet");

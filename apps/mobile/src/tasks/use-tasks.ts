@@ -74,7 +74,7 @@ import {
   selectTaskListListed,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
-import { BUZZ } from "@repo/ui-native";
+import { BUZZ, QUIET_ROW_QUESTION, type RowAsker, type RowQuestion } from "@repo/ui-native";
 import { caseWhen, coalesce, gt, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
@@ -385,6 +385,8 @@ export interface TasksListing {
   readonly tree: TaskTree;
   /** The workspace's tasks the search finds, whatever their status; none while nothing is typed. */
   readonly found: readonly TaskSummary[];
+  /** Whether the service is still being asked for the tasks the search finds past the list held, which may add to what it found. */
+  readonly searching: boolean;
   readonly workspace: Workspace | undefined;
   readonly lookOf: (task: TaskSummary) => TaskRowLook;
   readonly setStatus: SetStatus;
@@ -400,12 +402,26 @@ export interface TasksListing {
   readonly rename: TaskWrites["rename"];
   /** Asks first whether to delete a task for good, as the panel's Permanently delete does. */
   readonly askDelete: (task: TaskSummary) => void;
+  /** The asking acts of the drawn row `asker` names, whose questions stand by that row. */
+  readonly rowAsks: (asker: RowAsker) => RowAsks;
   /** A task at a glance, as its row's preview draws it: how many of its threads wait on the reader, and its agents not archived, as its Overview lists them. */
   readonly glanceOf: (taskId: string) => TaskGlance;
   /** The workspace's sections and repositories, and the writes that move a task among them. */
   readonly placing: TaskPlacing;
   /** The writes that relate a task to another, change how it stands, or take it out from under its parent. */
   readonly relations: TaskRelationWrites;
+  /** The doors a row's long press opens past the list, which the screen holding the list opens once for every row. */
+  readonly doors: TaskRowDoors;
+}
+
+/**
+ * The doors a task row's long press opens past the list, as the panel's row
+ * menu offers them: Version history where the workspace's descriptions stand
+ * on, and Move to workspace where the reader may move the task.
+ */
+export interface TaskRowDoors {
+  readonly history: ((task: TaskSummary) => void) | undefined;
+  readonly moveDoor: (task: TaskSummary) => (() => void) | undefined;
 }
 
 /** A task at a glance: how many of its threads wait on the reader, and its agents not archived, in its Overview's order. */
@@ -431,17 +447,12 @@ function agentsByTask(
   return byTask;
 }
 
-/** A task's agents not archived, in the order its Overview lists them: those waiting on the reader first. */
+/** A task's agents not archived, in the order its Overview lists them: the oldest started first. */
 function taskAgentsInOrder(
   byTask: ReadonlyMap<string, readonly ListedAgent[]>,
   taskId: string,
-  waitingByAgent: ReadonlyMap<string, number>,
 ): readonly ListedAgent[] {
-  return inAgentListOrder(
-    byTask.get(taskId) ?? [],
-    (agent) => agent,
-    (agent) => (waitingByAgent.get(agent.id) ?? 0) > 0,
-  );
+  return inAgentListOrder(byTask.get(taskId) ?? [], (agent) => agent);
 }
 
 /**
@@ -450,26 +461,46 @@ function taskAgentsInOrder(
  * The host keeps only some of the account's tasks live, and draws each task
  * the service finds that the list holds not into it as a cold task, where
  * the listing's own search then finds it beside the rest, one row each.
- * Nothing is read back here: the answer arrives as the list's.
+ * Nothing is read back here: the answer arrives as the list's. Answers
+ * whether the search of what is typed now is still out, from the key that
+ * typed it through the pause and its answer or refusal, so a screen never
+ * says it found nothing before the service has looked.
  */
-function useServiceTaskSearch(search: string, listRead: boolean): void {
+function useServiceTaskSearch(search: string, listRead: boolean): boolean {
   const acts = useHostActs();
   const words = serviceTaskSearchQuery(search);
+  // Note that the words a search last came back for are kept, so the search of other words stands out until its own comes back.
+  const [answered, setAnswered] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    // Note that each search starts by forgetting the last answer, so words typed again, or a search tried again after one failed, wait on their own search rather than an earlier one's answer.
+    setAnswered(undefined);
+
     if (!listRead || words === undefined) return;
+    // Note that only the search of the words standing now records its answer, so an older one that answers late never marks newer words answered.
+    let standing = true;
 
     const pause = setTimeout(
-      () => void acts[ACT_KIND.TASKS_SEARCH]({ query: words }).catch(refused("The task search")),
+      () =>
+        void acts[ACT_KIND.TASKS_SEARCH]({ query: words })
+          .catch(refused("The task search"))
+          .finally(() => {
+            if (standing) setAnswered(words);
+          }),
       TASK_SEARCH_PAUSE_MILLIS,
     );
 
-    return () => clearTimeout(pause);
+    return () => {
+      standing = false;
+      clearTimeout(pause);
+    };
   }, [acts, listRead, words]);
+
+  return listRead && words !== undefined && answered !== words;
 }
 
 /** The listing as it is read, before the screen that draws it holds the questions its acts ask first. */
-export type ReadListing = Omit<TasksListing, "askDelete">;
+export type ReadListing = Omit<TasksListing, "askDelete" | "rowAsks" | "doors">;
 
 /** The task list's parts the listing reads off the document rather than its collections: how its read stands, its sections, its pinned repositories, and whether it carries its agents, which an empty collection cannot tell from none read. */
 function selectListingParts(state: AppStateSnapshot) {
@@ -532,13 +563,24 @@ export function useTasksListing(search: string): ReadListing {
   const { rename } = useTaskWrites();
   const placing = useTaskPlacing(workspace?.id);
   const relations = useTaskRelationWrites();
-  useServiceTaskSearch(search, view?.listStatus === TASKS_READ.READY);
+  const searching = useServiceTaskSearch(search, view?.listStatus === TASKS_READ.READY);
   // Note that the last tree is kept where the new one draws the same rows, because a group's new array resets every row it holds (`RowForEach`), and every delivery to the task list built the tree anew.
   const [keepTree] = useState(answerKeeper<TaskTree>);
+  const tasks = useMemo(() => withHeld(listed, held), [listed, held]);
 
-  return useMemo(() => {
-    const tasks = withHeld(listed, held);
+  // Note that what a search finds is worked out apart from the rest, because a key typed would otherwise build the whole tree and every row's act anew.
+  const found = useMemo(
+    () =>
+      searchedTasks({
+        tasks,
+        workspaceId: workspace?.id,
+        workspaceName: workspace?.name,
+        tokens: searchTokens(search),
+      }),
+    [tasks, workspace, search],
+  );
 
+  const rest = useMemo(() => {
     const tree = keepTree(
       taskTree({
         view: { tasks, taskSections: view?.taskSections, repositoryPins: view?.repositoryPins },
@@ -548,13 +590,6 @@ export function useTasksListing(search: string): ReadListing {
         tasksHead: TASKS_HEAD_WORDS[ASSIGNED_TO.ME],
       }),
     );
-
-    const found = searchedTasks({
-      tasks,
-      workspaceId: workspace?.id,
-      workspaceName: workspace?.name,
-      tokens: searchTokens(search),
-    });
 
     const lookOf = (task: TaskSummary) =>
       taskRowLook(task, waiting.byTask.get(task.id) ?? 0, taskPullRequests);
@@ -600,12 +635,11 @@ export function useTasksListing(search: string): ReadListing {
 
     const glanceOf = (taskId: string): TaskGlance => ({
       waiting: waiting.byTask.get(taskId) ?? 0,
-      agents: taskAgentsInOrder(byTask, taskId, waiting.byAgent),
+      agents: taskAgentsInOrder(byTask, taskId),
     });
 
     return {
       tree,
-      found,
       workspace,
       lookOf,
       setStatus,
@@ -623,19 +657,19 @@ export function useTasksListing(search: string): ReadListing {
     keepTree,
     acts,
     write,
-    listed,
+    tasks,
     listedAgents,
     taskPullRequests,
-    held,
     view,
     workspace,
     readerId,
     waiting,
-    search,
     rename,
     placing,
     relations,
   ]);
+
+  return useMemo(() => ({ ...rest, found, searching }), [rest, found, searching]);
 }
 
 /** One agent on a task as its row draws it: the agent, how many of its threads wait on the reader, and the pull request it opened. */
@@ -780,8 +814,8 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   return useMemo(() => {
     if (task === undefined) return undefined;
 
-    const agents = taskAgentsInOrder(agentsByTask(listedAgents), task.id, waiting.byAgent).map(
-      (agent) => agentLine(agent, waiting.byAgent, pullRequests),
+    const agents = taskAgentsInOrder(agentsByTask(listedAgents), task.id).map((agent) =>
+      agentLine(agent, waiting.byAgent, pullRequests),
     );
 
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);
@@ -830,14 +864,19 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   ]);
 }
 
-/** Whether the host has read the task list once, so a task it does not hold is one that is not there rather than one still on its way. */
-export function useTasksRead(): boolean {
-  const { data: status } = useQuery({
+/** Where the host's read of the task list stands: not yet asked, reading, read, or failed. */
+export function useTasksReadStatus() {
+  const { data: status = TASKS_READ.IDLE } = useQuery({
     ...appStateQuery,
     select: (state) => state.tasks.listStatus,
   });
 
-  return status === TASKS_READ.READY;
+  return status;
+}
+
+/** Whether the host has read the task list once, so a task it does not hold is one that is not there rather than one still on its way. */
+export function useTasksRead(): boolean {
+  return useTasksReadStatus() === TASKS_READ.READY;
 }
 
 /**
@@ -867,6 +906,8 @@ interface HeldStatus {
   readonly status: TaskStatus;
   readonly words: StopAgentsWords;
   readonly presented: boolean;
+  /** The drawn row that raised it, by which it stands; none where a page raised it. */
+  readonly asker: RowAsker | undefined;
 }
 
 /** What a question asks before it is asked, which no reader sees. */
@@ -876,13 +917,23 @@ const NO_WORDS: StopAgentsWords = { title: "", body: "", verb: "" };
 export interface StatusQuestion {
   readonly words: StopAgentsWords;
   readonly presented: boolean;
+  /** The task it asks about; none before anything was asked. */
+  readonly taskId: string | undefined;
+  /** The drawn row that raised it, which stands it (`rowQuestion`); none where a page raised it, which stands it as the screen's own (`StatusQuestionAsk`). */
+  readonly asker: RowAsker | undefined;
   /** Sets the status and stops the task's agents with it. */
   readonly confirm: () => void;
   readonly dismiss: () => void;
 }
 
+/** A status set that asks first where it stops agents. */
+type AskingSetStatus = (taskId: string, status: TaskStatus) => void;
+
 type UseStatusAskResult = {
-  readonly setStatus: (taskId: string, status: TaskStatus) => void;
+  /** Sets a status from a page, its question the screen's own. */
+  readonly setStatus: AskingSetStatus;
+  /** Sets a status from the drawn row `asker` names, its question standing by that row. */
+  readonly setStatusBy: (asker: RowAsker) => AskingSetStatus;
   readonly question: StatusQuestion;
 };
 
@@ -891,30 +942,36 @@ type UseStatusAskResult = {
  * Canceled on a task whose agents are working asks first, since it stops
  * them and the work they are in the middle of, and goes out confirmed as a
  * settle that stops them; anything else goes out at once. Answers the
- * asking `setStatus` and its question, which the screen draws.
+ * asking `setStatus` and its question, which the screen draws, and
+ * `setStatusBy`, whose question stands by the row that raised it.
  */
 export function useStatusAsk(
-  doors: Pick<TasksListing, "setStatus" | "workingAgents">,
+  doors: Pick<ReadListing, "setStatus" | "workingAgents">,
 ): UseStatusAskResult {
   const [held, setHeld] = useState<HeldStatus>();
 
-  const setStatus = (taskId: string, status: TaskStatus) => {
-    const working = doors.workingAgents(taskId);
+  const setStatusBy =
+    (asker: RowAsker | undefined): AskingSetStatus =>
+    (taskId, status) => {
+      const working = doors.workingAgents(taskId);
 
-    if (isTaskSettled(status) && working > 0) {
-      setHeld({ taskId, status, words: settleStopWords(status, working), presented: true });
+      if (isTaskSettled(status) && working > 0) {
+        const words = settleStopWords(status, working);
+        setHeld({ taskId, status, words, presented: true, asker });
 
-      return;
-    }
+        return;
+      }
 
-    doors.setStatus(taskId, status);
-  };
+      doors.setStatus(taskId, status);
+    };
 
   const letGo = () => setHeld((was) => (was === undefined ? was : { ...was, presented: false }));
 
   const question: StatusQuestion = {
     words: held?.words ?? NO_WORDS,
     presented: held?.presented === true,
+    taskId: held?.taskId,
+    asker: held?.asker,
     confirm: () => {
       if (held === undefined || !held.presented) return;
       letGo();
@@ -923,7 +980,7 @@ export function useStatusAsk(
     dismiss: letGo,
   };
 
-  return { setStatus, question };
+  return { setStatus: setStatusBy(undefined), setStatusBy, question };
 }
 
 /** A delete held for its question, kept past its answer so the alert keeps its words as it goes. */
@@ -931,18 +988,28 @@ interface HeldDelete {
   readonly taskId: string;
   readonly words: StopAgentsWords;
   readonly presented: boolean;
+  /** The drawn row that raised it, by which it stands; none where a page raised it. */
+  readonly asker: RowAsker | undefined;
 }
 
+/** A delete that asks first. */
+type AskDelete = (task: TaskSummary) => void;
+
 type UseDeleteAskResult = {
-  readonly askDelete: (task: TaskSummary) => void;
+  /** Asks from a page, its question the screen's own. */
+  readonly askDelete: AskDelete;
+  /** Asks from the drawn row `asker` names, its question standing by that row. */
+  readonly askDeleteBy: (asker: RowAsker) => AskDelete;
   readonly question: StatusQuestion;
 };
 
 /**
  * Deletes a task for good as the panel does, asking first in the panel's
  * words (`deleteTaskWords`), since nothing brings it back. Answers the
- * asking `askDelete` and its question, which the screen draws; `onDeleted`
- * runs as the delete goes, such as the task's own page giving way.
+ * asking `askDelete` and its question, which the screen draws, and
+ * `askDeleteBy`, whose question stands by the row that raised it;
+ * `onDeleted` runs as the delete goes, such as the task's own page giving
+ * way.
  */
 export function useDeleteAsk(
   remove: TaskWrites["remove"],
@@ -954,6 +1021,8 @@ export function useDeleteAsk(
   const question: StatusQuestion = {
     words: held?.words ?? NO_WORDS,
     presented: held?.presented === true,
+    taskId: held?.taskId,
+    asker: held?.asker,
     confirm: () => {
       if (held === undefined || !held.presented) return;
       letGo();
@@ -963,10 +1032,50 @@ export function useDeleteAsk(
     dismiss: letGo,
   };
 
+  const askDeleteBy =
+    (asker: RowAsker | undefined): AskDelete =>
+    (task) =>
+      setHeld({
+        taskId: task.id,
+        words: deleteTaskWords(task.name, task),
+        presented: true,
+        asker,
+      });
+
+  return { askDelete: askDeleteBy(undefined), askDeleteBy, question };
+}
+
+/** A drawn row's asking acts, and the question standing by it. */
+export interface RowAsks {
+  readonly setStatus: AskingSetStatus;
+  readonly askDelete: AskDelete;
+  /** The question standing by the row for the task `taskId` names, `QUIET_ROW_QUESTION` where the row raised none about it. */
+  readonly question: (taskId: string) => RowQuestion;
+}
+
+/**
+ * The question standing by the drawn row `asker` names for a task: one it
+ * raised about that task, the one shown first, else the one it raised
+ * last, which keeps its words as it goes; none where it raised none, or
+ * where the row now draws another task.
+ */
+function rowQuestion(
+  questions: readonly StatusQuestion[],
+  taskId: string,
+  asker: RowAsker,
+): RowQuestion {
+  const raised = questions.filter((each) => each.asker === asker && each.taskId === taskId);
+  const standing = raised.find((each) => each.presented) ?? raised[0];
+
+  if (standing === undefined) return QUIET_ROW_QUESTION;
+
   return {
-    askDelete: (task) =>
-      setHeld({ taskId: task.id, words: deleteTaskWords(task.name, task), presented: true }),
-    question,
+    title: standing.words.title,
+    message: standing.words.body,
+    act: standing.words.verb,
+    presented: standing.presented,
+    onAct: standing.confirm,
+    onDismiss: standing.dismiss,
   };
 }
 
@@ -978,18 +1087,32 @@ type UseListingAsksResult = {
 
 /**
  * A list's acts that ask first, as every list of tasks offers them: its
- * status set, asking where it stops agents, and its delete, asking always.
- * Answers the listing its rows act through and the two questions, which the
- * screen draws.
+ * status set, asking where it stops agents, and its delete, asking always,
+ * with the doors its rows open. Answers the listing its rows act through
+ * and the two questions, which the screen draws where a page raised them;
+ * one a row raised stands by that row (`rowAsks`).
  */
-export function useListingAsks(read: ReadListing): UseListingAsksResult {
-  const { setStatus, question } = useStatusAsk(read);
+export function useListingAsks(read: ReadListing, doors: TaskRowDoors): UseListingAsksResult {
+  const status = useStatusAsk(read);
   const { remove } = useTaskWrites();
   const deletion = useDeleteAsk(remove);
+  const questions = [status.question, deletion.question];
+
+  const rowAsks = (asker: RowAsker): RowAsks => ({
+    setStatus: status.setStatusBy(asker),
+    askDelete: deletion.askDeleteBy(asker),
+    question: (taskId) => rowQuestion(questions, taskId, asker),
+  });
 
   return {
-    listing: { ...read, setStatus, askDelete: deletion.askDelete },
-    status: question,
+    listing: {
+      ...read,
+      setStatus: status.setStatus,
+      askDelete: deletion.askDelete,
+      rowAsks,
+      doors,
+    },
+    status: status.question,
     deletion: deletion.question,
   };
 }

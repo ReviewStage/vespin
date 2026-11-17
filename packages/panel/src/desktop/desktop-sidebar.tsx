@@ -29,18 +29,19 @@ import {
   TASK_ORDER,
   type TaskSections,
   type TasksById,
-  taskInView,
+  taskListed,
   taskSections,
   tasksAssignedTo,
   taskTime,
+  withSubTasks,
 } from "@repo/features/task-list-model";
 import type { TaskSectionWrite } from "@repo/features/task-section-wire";
 import {
   type DrawnSection,
   placeWrites,
   sectionedTasks,
-  sectionInView,
   sectionOfTask,
+  sectionWithoutSettled,
   unplaceAllWrites,
 } from "@repo/features/task-sections-model";
 import { FOLLOWING_HEAD } from "@repo/features/task-tree-model";
@@ -203,7 +204,7 @@ import {
 import { NewTaskButton, NewTaskInButton } from "./new-task-button.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead } from "./phone-head.js";
-import { useInboxWaiting } from "./places-waiting.js";
+import { useInboxViewCount } from "./places-waiting.js";
 import { ProductIdentity } from "./product-identity.js";
 import { RowPlaced, useRowMoveKeys } from "./row-moves.js";
 import { SIDEBAR_WIDTH, type SidebarCollapse, sidebarInSight } from "./sidebar-collapse.js";
@@ -1189,7 +1190,7 @@ function PinnedRows({
  * to. A row's hover Pin and its ⋯ menu still make the first pin. A pinned
  * plan's child tasks stand under it, folded until it opens them, as in any
  * list, and are not counted as pins. Its head is headed as every sidebar
- * group's is (`sidebarHead`), with no glyph of its own, and offers, from its
+ * group's is (`sidebarHead`), led by the pin Pin draws, and offers, from its
  * ⋯ and a right-click alike, Mark all as read while a pinned task is unread;
  * it offers no menu while none is, and no Move up or down, since Pinned is
  * the one of its kind.
@@ -1253,6 +1254,7 @@ function PinnedSection({
                 noun: PIN_NOUN,
               },
         )}
+        glyph={<GLYPH.PIN />}
         label="Pinned"
         menuOpen={menu.open !== undefined}
         contextMenu={actionGroups.length === 0 ? undefined : menu.contextMenu(ellipsis)}
@@ -1311,7 +1313,8 @@ function PinnedSection({
  * they keep up with, newest active first, its rows naming no repository, as
  * Pinned's and a section's do not. It stands only
  * while it holds a task, so a task followed lands in it at once and one
- * unfollowed leaves it, as the live list moves. Its head folds it as
+ * unfollowed leaves it, as the live list moves. Its head is led by the eye
+ * Follow draws, and folds it as
  * Pinned's does, kept across launches, the open task still standing under
  * the fold, and offers Mark all as read while a task in it is unread. It is
  * no drop zone, since letting a row go in it would follow nothing, but a
@@ -1342,6 +1345,7 @@ function FollowingSection({
           count: tasks.length,
           noun: TASK_NOUN,
         })}
+        glyph={<GLYPH.SHOW />}
         label={FOLLOWING_HEAD}
         menuOpen={menu.open !== undefined}
         contextMenu={actionGroups.length === 0 ? undefined : menu.contextMenu(ellipsis)}
@@ -2143,7 +2147,7 @@ function SidebarColumn({
     inAdmin ||
     (onTasks && tasks.agentView.agentId !== undefined);
 
-  const waiting = useInboxWaiting(tasks);
+  const inboxCount = useInboxViewCount(tasks);
 
   // A press in the list is always about tasks, so it brings the Tasks tab
   // forward from Settings as well as choosing; a task's row goes back to work
@@ -2229,10 +2233,8 @@ function SidebarColumn({
     listedTasks.unpinned,
   );
 
-  // The view's filters thin the sections' tasks as they thin the list's, a row dropped among them landing among those drawn.
-  const shownSections = sectioned.sections.map((drawn) =>
-    sectionInView(drawn, { ...taskView.view, assignedTo }, tasks.me),
-  );
+  // A section is the reader's own choice, which the view's filters never thin, as they never thin a pin: it draws every task put in it but the settled ones.
+  const shownSections = sectioned.sections.map(sectionWithoutSettled);
 
   // Note that a child task is walked to the ancestor it stands under through every listed task, the finished ones the view hides among them.
   const everyTask = listedTasks.every;
@@ -2394,10 +2396,13 @@ function SidebarColumn({
 
   const assigned = tasksAssignedTo(unpinnedTasks, assignedTo, tasks.me);
 
-  // The list holds the tasks to do and in progress, and the finished sub-tasks where the view asks, newest active first; the Tasks page holds the rest.
-  const statusTasks = inActivityOrder(
-    assigned.filter((task) => taskInView(task, taskView.view)),
-    activityOrder,
+  // The list holds the tasks to do and in progress, newest active first; the Tasks page holds the rest.
+  const statusTasks = inActivityOrder(assigned.filter(taskListed), activityOrder);
+
+  // Every unpinned task, newest active first, from which a parent's child tasks the lists leave out are stood under it (`withSubTasks`).
+  const subTaskPool = useMemo(
+    () => inActivityOrder(listedTasks.unpinned, activityOrder),
+    [listedTasks.unpinned, activityOrder],
   );
 
   const orderView: TaskOrderView = {
@@ -2426,21 +2431,26 @@ function SidebarColumn({
     placesOf: (_drawn, held) => taskPlaces(statusTasks, held, placing),
   });
 
-  // A child task stands under its parent, wherever a list draws it, unless pinned or put in a section of its own, and nowhere where none does (`homedTaskRows`).
+  // A child task stands under its parent, wherever a list draws it, unless pinned or put in a section of its own, and at the top where no list draws an ancestor of it (`homedTaskRows`).
   const pinnedOwn = pinnedHeld(pinnedSection);
 
   // The tasks the reader follows that no list above holds stand under Following, a task drawn in one place (`followingTasks`).
-  const followed = followingTasks(unpinnedTasks, statusTasks, taskView.view, tasks.me);
+  const followed = followingTasks(unpinnedTasks, statusTasks, tasks.me);
 
-  const homed = homedTaskRows(
-    [
-      pinnedOwn,
-      ...shownSections.map((drawn) => drawn.tasks),
-      followed,
-      ...taskSectionLists(sections),
-    ],
-    everyTask,
-    1 + shownSections.length,
+  // Then every child task the lists leave out stands under its parent where a list draws it: an open one whoever is on it, and a settled one where the view asks (`withSubTasks`).
+  const homed = withSubTasks(
+    homedTaskRows(
+      [
+        pinnedOwn,
+        ...shownSections.map((drawn) => drawn.tasks),
+        followed,
+        ...taskSectionLists(sections),
+      ],
+      everyTask,
+      1 + shownSections.length,
+    ),
+    subTaskPool,
+    taskView.view.finishedSubTasks,
   );
 
   const pinnedAdopted = (homed[0] ?? []).slice(pinnedOwn.length);
@@ -2549,7 +2559,7 @@ function SidebarColumn({
               onOpenInTab={inTab({ kind: LINK_DESTINATION.HOME })}
             />
             <SidebarInboxRow
-              waiting={waiting}
+              count={inboxCount}
               current={inInbox}
               disabled={!tasks.signedIn}
               onOpen={chosen(openInbox)}

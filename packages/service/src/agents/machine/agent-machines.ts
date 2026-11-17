@@ -52,6 +52,7 @@ function routedLifecycle(cloud: MachineLifecycle, mac: DeviceMachineService): Ma
     kill: (handle) => of(handle.machine).kill(handle),
     readFile: (session, path, bound) =>
       bySession(session, (machine) => machine.readFile(session, path, bound)),
+    checkoutPath: (session) => bySession(session, (machine) => machine.checkoutPath(session)),
     writeFile: (session, file) => bySession(session, (machine) => machine.writeFile(session, file)),
     restoreCheckout: (session, snapshot) =>
       bySession(session, (machine) => machine.restoreCheckout(session, snapshot)),
@@ -59,6 +60,8 @@ function routedLifecycle(cloud: MachineLifecycle, mac: DeviceMachineService): Ma
       bySession(session, (machine) => machine.diffCheckout(session, range)),
     phoneVideo: (session, path) =>
       bySession(session, (machine) => machine.phoneVideo(session, path)),
+    phoneAudio: (session, path) =>
+      bySession(session, (machine) => machine.phoneAudio(session, path)),
   };
 }
 

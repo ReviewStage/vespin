@@ -6,8 +6,8 @@
  * answers exactly as one that names nothing, and so does an id that is no
  * UUID, so nothing is learned about tasks the caller does not hold. The
  * developer writes a document in two ways here, each through the plan's one
- * write (`packages/service/src/tasks/description-notes.ts`) that the notetaker and
- * the coding agents save their notes through: `POST /api/tasks/{id}/description` is
+ * write (`packages/service/src/tasks/description-notes.ts`) that the coding
+ * agents save their notes through: `POST /api/tasks/{id}/description` is
  * their edit of the document, saved, or answered as a conflict with the text
  * as it stands now where we wrote it meanwhile and the edit no longer
  * lands, with nothing saved; and a restore puts back an earlier revision.

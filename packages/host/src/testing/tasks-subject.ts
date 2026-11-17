@@ -858,6 +858,7 @@ export function fakeService(tasks: Task[]): FakeService {
       setTokenRepository: () => Effect.succeed(service.tokenRepositorySet ?? UNANSWERED_WORKSPACE),
       environment: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putVariable: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      saveVariables: () => Effect.succeed(UNANSWERED_WORKSPACE),
       deleteVariable: () => Effect.succeed(UNANSWERED_WORKSPACE),
       sandboxSetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       mergeQueue: () => Effect.succeed(UNANSWERED_WORKSPACE),
@@ -865,6 +866,8 @@ export function fakeService(tasks: Task[]): FakeService {
       putInstallScript: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRepositorySetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRunActions: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      sandboxSize: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      putSandboxSize: () => Effect.succeed(UNANSWERED_WORKSPACE),
       // Each workspace read as the service answers it; a poll is not counted among the reads.
       // SAFETY: each declared read answers its own script's rows, as its declaration's answer.
       liveRead: ((
@@ -1038,6 +1041,7 @@ export function fakeService(tasks: Task[]): FakeService {
           return service.slackBotAnswer;
         }),
       slackBotConnect: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      slackBotInstall: () => Effect.succeed(UNANSWERED_WORKSPACE),
       slackBotDisconnect: (workspaceId) =>
         Effect.suspend(() => {
           service.reads.push(`slack-bot-disconnect:${workspaceId}`);

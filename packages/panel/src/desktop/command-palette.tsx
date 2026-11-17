@@ -88,6 +88,7 @@ import {
   TASK_RELATION_KIND,
   TASK_TREE_BOUNDS,
   TASK_TREE_ENTRY,
+  type TaskPullRequestLine,
   type TaskSummary,
 } from "@repo/features/task-wire";
 import {
@@ -155,7 +156,7 @@ import {
   type CommandItem,
 } from "@repo/ui/command";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
-import { fileTab, inTaskOrder } from "@repo/ui/tab-strip-model";
+import { changesTab, fileTab, inTaskOrder, tabKey } from "@repo/ui/tab-strip-model";
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import {
@@ -245,6 +246,7 @@ import {
   type TaskRelationWrites,
   useTaskRelationWrites,
 } from "../tasks/use-task-relation-writes.js";
+import { useTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useOpenTerminalTab, useShowShellTab } from "../tasks/use-terminal-session.js";
 import { useWindowAccount } from "../tasks/window-account.js";
@@ -254,7 +256,13 @@ import { actingCommand } from "./action-menu.js";
 import { agentEntries } from "./agent-entries.js";
 import { READING_AUTOMATIONS } from "./automation-words.js";
 import { inboxEntries } from "./main-tabs.js";
-import { ADD_SECTION, offeredPanelKinds, panelOffers, SIDE_PANEL_HOLDER } from "./side-panel.js";
+import {
+  ADD_SECTION,
+  changesOffers,
+  offeredPanelKinds,
+  panelOffers,
+  SIDE_PANEL_HOLDER,
+} from "./side-panel.js";
 import type { AddEntry } from "./strip-tabs.js";
 import { taskOf } from "./task-actions.js";
 import { homeTaskCardOf, TaskRowStatus } from "./task-card.js";
@@ -1017,7 +1025,12 @@ function agentRows(
   inboxStanding: InboxStanding,
   doors: PanelOfferDoors,
   show: (pick: () => void) => void,
-  people: ReadonlyMap<string, HeldPeople>,
+  changes: {
+    /** Who each pull request names, as its tab last read them, by its tab's key. */
+    readonly people: ReadonlyMap<string, HeldPeople>;
+    /** The open task's pull requests as its lines name them. */
+    readonly pullRequests: readonly TaskPullRequestLine[];
+  },
   directory: EditReader,
 ): readonly PaletteRow[] {
   const taskId = tasks.activeTaskId;
@@ -1054,6 +1067,7 @@ function agentRows(
         onNewTerminal: doors.onNewTerminal,
         onNewLocal: doors.onNewLocal,
         viewedAgent: undefined,
+        pullRequests: changes.pullRequests,
         plan: openPlanStanding(tasks, rows),
         cards: {
           agents: tasks.agents,
@@ -1061,7 +1075,7 @@ function agentRows(
           pagePlace: { taskId },
           shownAgent: undefined,
           onOpenAgent: (agentId) => show(() => tasks.onShowAgent(taskId, agentId)),
-          people,
+          people: changes.people,
         },
       })
         .filter((entry) => entry.row.section !== undefined)
@@ -2142,8 +2156,8 @@ export function CommandPalette({
   }, [open, sought, query]);
 
   // Note that no key pressed in the palette goes on to the window, which the
-  // dialog sees to, because the window's Escape would stop an agent mid-reply and
-  // a window chord would change what stands behind the palette. Escape itself
+  // dialog sees to, because the window's Escape would step back from the page
+  // behind the palette and a window chord would change it. Escape itself
   // is the dialog's, which closes the palette alone.
   const keyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -2229,12 +2243,21 @@ export function CommandPalette({
   // The task's terminals and Browser tabs are offered as the panel's "+" offers them, through its own doors.
   const openTerminal = useOpenTerminal(tasks.sidePanel, noFocusMove);
   const openLocal = useOpenTerminalTab(TERMINAL_KIND.LOCAL, tasks.sidePanel, noFocusMove);
-  // Note that the task's Changes rows hang their pull request's people, as their Changes tabs read them.
-  const offeredChanges = tasks.sidePanel.changes;
+  // Note that the task's Pull request rows hang their pull request's people, as their tabs read them.
+  const taskPullRequests = useTaskPullRequests(tasks.activeTaskId ?? "");
+  const { agents: taskAgents } = tasks;
 
   const changesPeople = useChangesPeopleOf(
-    useMemo(() => offeredChanges.map((tab) => tab.changes), [offeredChanges]),
+    useMemo(
+      () =>
+        changesOffers(taskPullRequests, taskAgents).map(
+          ({ address }) => [tabKey(changesTab(address)), address] as const,
+        ),
+      [taskPullRequests, taskAgents],
+    ),
   );
+
+  const changes = { people: changesPeople, pullRequests: taskPullRequests };
 
   // The run actions of the agent the open task's column shows, each a row of its own, Run or Stop as it stands (`run-actions-button.tsx`).
   const showShell = useShowShellTab(tasks.sidePanel, noFocusMove);
@@ -2364,7 +2387,7 @@ export function CommandPalette({
           inboxStanding,
           offerDoors,
           onTasks,
-          changesPeople,
+          changes,
           directory,
         ),
         ...runRows(runOffer, tasks, rows, onTasks),

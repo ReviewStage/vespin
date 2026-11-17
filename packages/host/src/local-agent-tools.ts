@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { AgentToolPin } from "@repo/agent-runner/pins";
+import type { AgentToolPart, AgentToolPin } from "@repo/agent-runner/pins";
 import { Duration, Effect, Option, Path, Schema, Stream } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import type * as HttpClient from "effect/http/HttpClient";
@@ -20,9 +20,10 @@ import { stagedFolder, streamedArchive, unpackedArchive } from "./staged-fetch.j
  * arrives (`staged-fetch.ts`), never held whole: an answer past the size is
  * refused as it arrives, and one whose digest differs is never extracted,
  * its folder removed with it. Only the pinned members are extracted, into
- * that same folder, and moved into place whole. Where the pin names the Developer ID
+ * that same folder, with each further archive the pin names (`PARTS`), each
+ * checked alike, kept whole inside it, and moved into place whole. Where the pin names the Developer ID
  * team its binary is signed by, macOS's own `codesign` must verify the
- * binary strictly and name that team, and where it names the digests of the
+ * binary, or each file it names as signed, strictly and name that team, and where it names the digests of the
  * files that run, each must match them, before the build is marked. The
  * mark is written last, so a fetch cut off, or a build refused, leaves
  * nothing that is ever run, and the next ask fetches again. Once a build is
@@ -54,7 +55,7 @@ const StampSchema = Schema.Struct({
   inode: Schema.Number,
 });
 
-/** What the mark records: the archive's digest the build was checked against, and each pinned file's stamp, by its path under the kept folder. */
+/** What the mark records: the archives' digests the build was checked against (`pinDigest`), and each pinned file's stamp, by its path under the kept folder. */
 const MarkSchema = Schema.Struct({
   sha256: Schema.String,
   files: Schema.Record(Schema.String, StampSchema),
@@ -64,6 +65,11 @@ type Stamps = typeof MarkSchema.Type.files;
 
 const decodeMark = Schema.decodeUnknownOption(Schema.fromJsonString(MarkSchema));
 const encodeMark = Schema.encodeSync(Schema.fromJsonString(MarkSchema));
+
+/** The digests a build was checked against, as its mark records them: its archive's, then each part's, so a part moved fetches the build again. */
+function pinDigest(pin: AgentToolPin): string {
+  return [pin.SHA256, ...(pin.PARTS ?? []).map((part) => part.SHA256)].join(",");
+}
 
 /** A file's SHA-256, in hex, read a chunk at a time, so a binary of hundreds of megabytes is never held whole. */
 const fileDigest = (file: string) =>
@@ -136,8 +142,20 @@ const markWritten = (pin: AgentToolPin, folder: string) =>
     const files = yield* stampsOf(pin, folder);
     yield* fileSystem.writeFileString(
       path.join(folder, TOOL_FETCH.MARK),
-      encodeMark({ sha256: pin.SHA256, files }),
+      encodeMark({ sha256: pinDigest(pin), files }),
     );
+  });
+
+/** Whether every file the pin signs under `folder` (`SIGNED`, or its binary) is verified strictly by `codesign`, and by the pin's team. */
+const signedFilesAsPinned = (pin: AgentToolPin, folder: string, team: string) =>
+  Effect.gen(function* () {
+    const path = yield* Path.Path;
+
+    for (const file of pin.SIGNED ?? [pin.BINARY]) {
+      if (!(yield* signedAsPinned(path.join(folder, file), team))) return false;
+    }
+
+    return true;
   });
 
 /** Whether `binary` is signed as its pin says: verified strictly by `codesign`, and by the pin's team. */
@@ -167,6 +185,35 @@ const signedAsPinned = (binary: string, team: string) =>
       return TEAM_LINE.exec(printed)?.[1] === team;
     }),
   );
+
+/** One part of a build fetched into the staging folder, checked against its size and digest, and kept whole at its place under `built`; fails where any step does. */
+const fetchedPart = Effect.fnUntraced(function* (
+  part: AgentToolPart,
+  index: number,
+  staging: string,
+  built: string,
+) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const saved = path.join(staging, `part-${index}`);
+  const unpacked = path.join(staging, `part-${index}-unpacked`);
+
+  const archive = yield* streamedArchive(part.ARCHIVE, saved, {
+    maxBytes: part.BYTES,
+    stall: TOOL_FETCH.STALL,
+    timeout: TOOL_FETCH.TIMEOUT,
+  });
+
+  // Note that a part is held to its own size and digest before anything of it is extracted, as the build's own archive is.
+  if (archive.bytes !== part.BYTES) return yield* Effect.fail("short");
+
+  if (archive.sha256 !== part.SHA256) return yield* Effect.fail("checksum");
+  yield* fileSystem.makeDirectory(unpacked);
+  yield* unpackedArchive(saved, unpacked, [part.ROOT]);
+  const into = path.join(built, part.INTO);
+  yield* fileSystem.makeDirectory(path.dirname(into), { recursive: true });
+  yield* fileSystem.rename(path.join(unpacked, part.ROOT), into);
+});
 
 /**
  * The pin's archive fetched, checked against its size and digest, and its
@@ -198,12 +245,17 @@ const fetchTool = Effect.fnUntraced(function* (pin: AgentToolPin, folder: string
           staging,
           pin.MEMBERS.map((member) => `${pin.ROOT}/${member}`),
         );
+        const built = path.join(staging, pin.ROOT);
 
-        return path.join(staging, pin.ROOT);
+        for (const [index, part] of (pin.PARTS ?? []).entries()) {
+          yield* fetchedPart(part, index, staging, built);
+        }
+
+        return built;
       }),
   );
 
-  if (pin.TEAM !== undefined && !(yield* signedAsPinned(path.join(folder, pin.BINARY), pin.TEAM))) {
+  if (pin.TEAM !== undefined && !(yield* signedFilesAsPinned(pin, folder, pin.TEAM))) {
     yield* fileSystem.remove(folder, { recursive: true, force: true });
 
     return yield* Effect.fail("signature");
@@ -241,7 +293,10 @@ const keptAsChecked = (pin: AgentToolPin, folder: string) =>
     const stamps = yield* stampsOf(pin, folder);
 
     if (
-      Option.exists(mark, (each) => each.sha256 === pin.SHA256 && sameStamps(each.files, stamps))
+      Option.exists(
+        mark,
+        (each) => each.sha256 === pinDigest(pin) && sameStamps(each.files, stamps),
+      )
     ) {
       return true;
     }

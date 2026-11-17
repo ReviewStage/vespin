@@ -22,6 +22,7 @@ import { workspaceDriveBuildsFromEnvironment } from "./agents/workspace-drive-bu
 import { bearerCallersLayer } from "./auth/bearer-callers.js";
 import { signInRevocationFromEnvironment } from "./auth/sign-in-revocation.js";
 import { automationCadenceFromEnvironment } from "./automations/automation-cadence.js";
+import { endedSessionsChargedOnDelete } from "./billing/sandbox-session-charges.js";
 import { webSqlClient } from "./db/sql-client.js";
 import { hostedEnvironment } from "./environment.js";
 import { productAnalyticsFromEnvironment } from "./events/server-events.js";
@@ -32,9 +33,11 @@ import { pullRequestLinksLayer } from "./github/pull-request-links.js";
 import { integrationConnectFromEnvironment } from "./integrations/integration-connect.js";
 import { sentryLogger } from "./observability/sentry.js";
 import { pageLinksFromEnvironment } from "./pages/page-links.js";
+import { cursorModelCatalogLayer } from "./providers/cursor-models.js";
 import { modelCatalogLayer } from "./providers/model-catalog.js";
 import { apnsSenderFromEnvironment } from "./push/apns.js";
 import { apnsHttp2Transport } from "./push/apns-http2.js";
+import { slackAppFromEnvironment } from "./slack/slack-app.js";
 import { slackBotFromEnvironment } from "./slack/slack-bot.js";
 import { syncFromEnvironment } from "./sync/hub.js";
 import { sentryAppFromEnvironment } from "./triggers/sentry/sentry-app-config.js";
@@ -102,8 +105,9 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
  *
  * `IntegrationConnect` is the one place each integration's connector UID and
  * allowlist are read, for the account routes that connect and disconnect an account and
- * the agents that read its tokens alike. `SlackBot` is the one place the
- * bot's own connector is read (`slack/slack-bot.ts`).
+ * the agents that read its tokens alike. `SlackBot` opens each workspace's
+ * own bot token (`slack/slack-bot.ts`), and `SlackApp` is the one place our
+ * own Slack app's client and signing secrets are (`slack/slack-app.ts`).
  *
  * `SettledTurnListener` is here because the store writer tells it of every
  * coding agent turn it settles, on whichever function the settle ran: it
@@ -175,6 +179,8 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
 export const webServices = Layer.mergeAll(
   // The sandboxes are the edge's to pick, which provides its provider's adapter beneath these.
   Layer.effect(Sandbox, Effect.service(Sandbox)),
+  // A deleted sandbox's ended sessions, read by the adapter just before its delete, are charged to the ledger.
+  endedSessionsChargedOnDelete.pipe(Layer.provide(webSqlClient)),
   FetchHttpClient.layer,
   webSqlClient,
   hostedEnvironment,
@@ -188,6 +194,7 @@ export const webServices = Layer.mergeAll(
   sentryAppFromEnvironment,
   integrationConnectFromEnvironment,
   slackBot,
+  slackAppFromEnvironment,
   webLogger,
   syncFromEnvironment,
   bearerCallersLayer,
@@ -202,6 +209,9 @@ export const webServices = Layer.mergeAll(
   githubDeliveryReadsFromEnvironment,
   voiceCallLeasesFromEnvironment,
   modelCatalogLayer.pipe(Layer.provide(Layer.merge(FetchHttpClient.layer, hostedEnvironment))),
+  cursorModelCatalogLayer.pipe(
+    Layer.provide(Layer.merge(FetchHttpClient.layer, hostedEnvironment)),
+  ),
   pullRequestLinksLayer,
   productAnalyticsFromEnvironment.pipe(
     Layer.provide(Layer.mergeAll(FetchHttpClient.layer, hostedEnvironment, webSqlClient)),

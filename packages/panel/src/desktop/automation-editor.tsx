@@ -39,7 +39,6 @@ import {
   type AutomationView,
 } from "@repo/features/automation-view";
 import {
-  AUTOMATION_BOUNDS,
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
@@ -140,9 +139,7 @@ import {
   Switch,
   TEXT_ELEMENT,
   TEXT_FIELD_FONT,
-  TEXT_FIELD_INPUT_MODE,
   TEXT_FIELD_SIZE,
-  TEXT_FIELD_TYPE,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
@@ -237,8 +234,7 @@ import { type RunChoices, useRunChoices } from "./use-run-choices.js";
  * said under it. What
  * stops a draft saving is said at its field once a save is pressed. A
  * Sentry trigger picks its event, keeps to the projects, environments, and
- * levels named, and waits so many hours before the same issue runs again;
- * where the workspace has no Sentry installed, an Install Sentry prompt
+ * levels named; where the workspace has no Sentry installed, an Install Sentry prompt
  * stands in its rows' place. A
  * save the service refuses says why in one line under the name. A save
  * sends only what moved (`automation-draft-model.ts`), so the model and the
@@ -1302,16 +1298,9 @@ interface RunsControl {
 /** Where a phone's way back from an automation's page leads, as its hint names it. */
 const AUTOMATIONS_PLACE_NAME = "automations";
 
-/** A phone's way back from an automation's page to the list, the glyph alone in its corner, with the key that leaves Automations. */
+/** A phone's way back from an automation's page to the list, the glyph alone in its corner, which is the window's Back. */
 function AutomationsBack({ onBack }: { onBack: () => void }): React.JSX.Element {
-  return (
-    <BackButton
-      label={AUTOMATIONS_PLACE}
-      place={AUTOMATIONS_PLACE_NAME}
-      command={APP_COMMAND.EXIT_AUTOMATIONS}
-      onBack={onBack}
-    />
-  );
+  return <BackButton label={AUTOMATIONS_PLACE} place={AUTOMATIONS_PLACE_NAME} onBack={onBack} />;
 }
 
 /** What the toolbar's way to a narrow room's runs says. */
@@ -1652,8 +1641,7 @@ const sentryEventOf = optionValue(SENTRY_EVENTS);
 
 /**
  * A Sentry trigger's rows, in the Trigger card: its event, the projects,
- * environments, and levels it keeps to, and the hours before the same
- * issue may start another run. Where the workspace has no Sentry installed
+ * environments, and levels it keeps to. Where the workspace has no Sentry installed
  * a row saying so stands in their place, its button going to where it is
  * installed.
  */
@@ -1673,9 +1661,6 @@ function SentryRows({
   problems: DraftProblems;
   onDraft: (patch: Partial<AutomationDraft>) => void;
 }): React.JSX.Element {
-  // The cooldown's Escape lets go of the caret and keeps the press, as every field's here does.
-  const hours = useRef<HTMLInputElement>(null);
-
   if (withheld) {
     return (
       <SettingsRow
@@ -1787,29 +1772,6 @@ function SentryRows({
           </ReplayUnmask>
         )}
       />
-      <SettingsRow
-        label={<ReplayUnmask>Same issue again after</ReplayUnmask>}
-        description={
-          <ReplayUnmask>{`Hours, from 1 to ${AUTOMATION_BOUNDS.MAX_SUBJECT_COOLDOWN_HOURS}.`}</ReplayUnmask>
-        }
-        error={inputProblem(problems[DRAFT_FIELD.COOLDOWN])}
-      >
-        {(control) => (
-          <span className={AUTOMATION_FIELD}>
-            <TextField
-              ref={hours}
-              type={TEXT_FIELD_TYPE.NUMBER}
-              inputMode={TEXT_FIELD_INPUT_MODE.NUMERIC}
-              label="Hours before the same issue runs again"
-              describedBy={control["aria-describedby"]}
-              invalid={control["aria-invalid"]}
-              value={draft.subjectCooldownHours}
-              onEscape={() => hours.current?.blur()}
-              onChange={(subjectCooldownHours) => onDraft({ subjectCooldownHours })}
-            />
-          </span>
-        )}
-      </SettingsRow>
     </>
   );
 }
@@ -2932,7 +2894,7 @@ export function AutomationEditor({
   const savedAgentId =
     saved !== undefined && saved.repository === draft.repository ? saved.agentId : null;
 
-  // Note that a new draft nothing was changed in is no work to lose, so Escape may leave it.
+  // Note that a new draft nothing was changed in is no work to lose, so a way out leaves it unasked.
   const written =
     automation === undefined ? unreadable !== undefined || !sameDraft(draft, start) : dirty;
 
@@ -2944,9 +2906,6 @@ export function AutomationEditor({
   const hidden = hiddenColumns(split.columns, !runsAlone);
   const screen = useScreenRef(useNarrowFocus(split.columns, !runsAlone, EDITOR_SCREENS), split.ref);
   const runsScreen = useId();
-  // Escape goes back to the list, asking first, as every way out does, where something written would be lost;
-  // from the runs standing alone, it goes back to the setup first.
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, runsAlone ? () => onRuns(false) : onBack);
   const runsPanel = useRunsPanel();
   const toggleRuns = single ? () => onRuns(!runsShown) : runsPanel.onToggle;
   // The form glides to its new middle as the Runs panel comes and goes (pane-motion.tsx).
@@ -3028,7 +2987,7 @@ export function AutomationEditor({
     );
   };
 
-  // Note that any way out of the page, a crumb, Escape, a run's agent, the sidebar, ⌘K, history,
+  // Note that any way out of the page, a crumb, a run's agent, the sidebar, ⌘K, history,
   // or Settings, asks first while something written would be lost, and goes once Leave is pressed.
   // Note that the dialog's stage alone says whether a leave is asked; the move it holds is kept beside it only for its answer to reach.
   const leavingBy = useRef<{ readonly leave: () => void; readonly stay: () => void } | undefined>(

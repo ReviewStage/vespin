@@ -9,6 +9,7 @@ import {
   List,
   ListMotion,
   ListRow,
+  motionRows,
   PAGE_FRAME,
   SKELETON_KIND,
   Skeleton,
@@ -103,7 +104,10 @@ export function PersonTop({ children }: { children?: ReactNode }): React.JSX.Ele
 
 /**
  * What stands under the page's header: its top and its sections, the root
- * their lists move under (`ListMotion`). While what the page lists is still
+ * their lists move under (`ListMotion`). Each block in it moves too,
+ * carrying its rows, so a section folded or a list grown glides every
+ * section under it, its head and its rows as one, rather than its rows
+ * gliding past a head that jumped. While what the page lists is still
  * being read (`reading`), a row arriving fades in where it stands rather
  * than slides in after the last.
  */
@@ -117,7 +121,7 @@ export function PersonBody({
   const root = useRef<HTMLDivElement | null>(null);
 
   return (
-    <div ref={root}>
+    <div ref={root} {...motionRows()}>
       <ListMotion root={root} reading={reading}>
         {children}
       </ListMotion>

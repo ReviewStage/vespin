@@ -7,11 +7,14 @@ import {
   Button,
   ButtonLink,
   GAP,
+  ICON_BUTTON_SIZE,
   IconButton,
   IconButtonLink,
   Inline,
   MoreButton,
+  PauseIcon,
   PinIcon,
+  PlayIcon,
   PlusIcon,
   RetryIcon,
   SidebarIcon,
@@ -31,7 +34,8 @@ import { CatalogSection } from "../section";
  * unavailable but focusable, and busy; a busy Save and Upload that land on a
  * check when Succeed ends them and just stop when Fail does; a Retry and a
  * Reload whose arrows turn once at each press; the IconButton's looks and toggle;
- * ButtonLink's looks and an IconButtonLink; the compact marks a row reveals
+ * ButtonLink's looks and an IconButtonLink; a player's large round Play and
+ * Pause; the compact marks a row reveals
  * at its end, and a compact labeled button among words; a yes or no whose
  * recommended press wears its badge, offered and recorded; a message's submit in each of its states, and unavailable; and
  * a long label in a narrow column.
@@ -154,6 +158,24 @@ function Buttons(): React.JSX.Element {
           >
             compact
           </ButtonLink>
+        </Inline>
+      </CatalogSection>
+      <CatalogSection id="buttons-large" title="Large, a player's Play">
+        <Inline gap={GAP.TIGHT}>
+          <IconButton
+            icon={<PlayIcon />}
+            label="Play"
+            variant={BUTTON_VARIANT.INK}
+            corners={BUTTON_CORNERS.ROUND}
+            size={ICON_BUTTON_SIZE.LARGE}
+          />
+          <IconButton
+            icon={<PauseIcon />}
+            label="Pause"
+            variant={BUTTON_VARIANT.INK}
+            corners={BUTTON_CORNERS.ROUND}
+            size={ICON_BUTTON_SIZE.LARGE}
+          />
         </Inline>
       </CatalogSection>
       <CatalogSection id="buttons-compact" title="Compact, a row's marks">

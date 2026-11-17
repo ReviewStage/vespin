@@ -149,7 +149,7 @@ function PreviewMessageRow({
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
       <HStack spacing={SPACE.TIGHT + 2} alignment="center">
         {message.agent ? (
-          <AgentTile name={message.writer} harness={message.harness} size={MARK_SIZE.WRITER} />
+          <AgentTile harness={message.harness} size={MARK_SIZE.WRITER} />
         ) : (
           <Avatar name={message.writer} picture={message.picture} size={MARK_SIZE.WRITER} />
         )}
@@ -215,7 +215,7 @@ export function ThreadPreview({
 export type PreviewAgent = {
   readonly id: string;
   readonly name: string;
-  /** The provider whose harness it runs in, whose mark its tile wears; the sparkles where it is not known. */
+  /** The provider whose harness it runs in, whose mark its tile wears; the hard hat where it is not known. */
   readonly harness?: ModelProvider | undefined;
   readonly status: AgentStatus;
 };
@@ -238,7 +238,7 @@ function PreviewAgentRow({ agent }: { readonly agent: PreviewAgent }) {
 
   return (
     <HStack spacing={SPACE.TIGHT + 2} alignment="center">
-      <AgentTile name={agent.name} harness={agent.harness} size={MARK_SIZE.WRITER} />
+      <AgentTile harness={agent.harness} size={MARK_SIZE.WRITER} />
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
@@ -330,7 +330,7 @@ export function AgentPreview({
   pullRequest,
 }: {
   readonly name: string;
-  /** The provider whose harness it runs in, whose mark its tile wears; the sparkles where it is not known. */
+  /** The provider whose harness it runs in, whose mark its tile wears; the hard hat where it is not known. */
   readonly harness?: ModelProvider | undefined;
   readonly status: AgentStatus;
   readonly task?: { readonly name: string; readonly status?: TaskStatus | undefined } | undefined;
@@ -363,7 +363,7 @@ export function AgentPreview({
         />
       )}
       <HStack spacing={SPACE.ROW} alignment="center">
-        <AgentTile name={name} harness={harness} size={MARK_SIZE.AVATAR} />
+        <AgentTile harness={harness} size={MARK_SIZE.AVATAR} />
         <PreviewHeading words={name} />
       </HStack>
       <HStack spacing={SPACE.TIGHT + 2} alignment="center">

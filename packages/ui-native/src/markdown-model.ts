@@ -3,6 +3,7 @@
 import { dateChipText } from "@repo/features/date-mention";
 import { type Draft, draftKindOf, readDraft } from "@repo/features/draft-text";
 import {
+  type Entity,
   type EntityKind,
   entityOfDestination,
   entityOfMention,
@@ -19,7 +20,14 @@ import {
 import { githubPageAsked } from "@repo/features/link-standing-model";
 import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import { markdownTree } from "@repo/features/markdown-tree";
-import { LINK_CHIP, linkChipOf, MENTION_KIND, type Mention } from "@repo/features/mention-link";
+import {
+  LINK_CHIP,
+  linkChipOf,
+  MENTION_KIND,
+  type Mention,
+  mentionChipLabel,
+} from "@repo/features/mention-link";
+import { DIAGRAM_LANGUAGE } from "@repo/features/mermaid-diagram";
 import { placeChipLook } from "@repo/features/place-chip-model";
 import { type ReplyButtonLink, readReplyButtonLink } from "@repo/features/reply-button-wire";
 import { Match } from "effect";
@@ -58,6 +66,7 @@ export const MARKDOWN_BLOCK = {
   TABLE: "table",
   CODE: "code",
   DRAFT: "draft",
+  DIAGRAM: "diagram",
   RULE: "rule",
   PICTURE: "picture",
 } as const;
@@ -118,6 +127,8 @@ export interface MarkdownChip {
   readonly target: LinkTarget;
   /** The GitHub pull request's or issue's page it names, by which its standing is read; none for any other chip. */
   readonly github?: string | undefined;
+  /** The entity it names, by its ids, by which the app finds its mark (`ChipMarkOf`); none for a date. */
+  readonly of?: Entity | undefined;
 }
 
 /**
@@ -173,6 +184,8 @@ export type MarkdownBlock =
   | { readonly kind: typeof MARKDOWN_BLOCK.CODE; readonly text: string }
   /** Words an agent wrote to be sent elsewhere, fenced ```slack, ```email, or ```draft, read as the panel's draft card reads them. */
   | { readonly kind: typeof MARKDOWN_BLOCK.DRAFT; readonly draft: Draft }
+  /** A Mermaid fence, drawn as its diagram where the words are read for diagrams (`MarkdownReading`'s `diagrams`). */
+  | { readonly kind: typeof MARKDOWN_BLOCK.DIAGRAM; readonly code: string }
   | { readonly kind: typeof MARKDOWN_BLOCK.RULE }
   | { readonly kind: typeof MARKDOWN_BLOCK.PICTURE; readonly source: string; readonly alt: string };
 
@@ -189,6 +202,18 @@ export interface MarkdownReading {
    * join a paragraph's lines with a space, as Markdown reads them.
    */
   readonly typed?: boolean | undefined;
+  /**
+   * Whether raw HTML in the words stays unseen, as GitHub's own page hides a
+   * pull request body's comments, templates and tags; elsewhere it is drawn
+   * as the words it was written with.
+   */
+  readonly hidesHtml?: boolean | undefined;
+  /**
+   * Whether a Mermaid fence is drawn as its diagram, as a description's are;
+   * elsewhere, such as a transcript still being written, it stays its code,
+   * since a fence redrawn at each word would draw a picture each time.
+   */
+  readonly diagrams?: boolean | undefined;
 }
 
 /** A line break inside a paragraph's words, which Markdown reads as a space. */
@@ -252,10 +277,17 @@ function linkTarget(href: string): LinkTarget {
     : { kind: LINK_TARGET.WEB, href };
 }
 
-function chipOf(entity: EntityKind, name: string, target: LinkTarget): MarkdownChip {
+function chipOf(
+  entity: EntityKind,
+  name: string,
+  target: LinkTarget,
+  of?: Entity | undefined,
+): MarkdownChip {
   const word = entityWordHeard(entity, name);
 
-  return { entity, name, heard: word === undefined ? name : `${word} ${name}`, target };
+  const chip = { entity, name, heard: word === undefined ? name : `${word} ${name}`, target };
+
+  return of === undefined ? chip : { ...chip, of };
 }
 
 /** No names held: the app reads none for a chip yet, so a place is called by its label, or by its kind where it has none. */
@@ -278,8 +310,9 @@ function linkChip(href: string, label: string, reading: MarkdownReading): Markdo
 
   if (chip.kind === LINK_CHIP.PLACE) {
     const look = placeChipLook(chip.link.place, chip.name, NO_NAMES);
+    const entity = entityOfDestination(chip.link.place);
 
-    return chipOf(entityOfDestination(chip.link.place).kind, look.name, linkTarget(href));
+    return chipOf(entity.kind, look.name, linkTarget(href), entity);
   }
 
   if (chip.mention.kind === MENTION_KIND.DATE) {
@@ -288,7 +321,9 @@ function linkChip(href: string, label: string, reading: MarkdownReading): Markdo
     return chipOf(MENTION_KIND.DATE, name, { kind: LINK_TARGET.NONE });
   }
 
-  const drawn = chipOf(entityOfMention(chip.mention).kind, chip.name, linkTarget(href));
+  const entity = entityOfMention(chip.mention);
+  const shown = mentionChipLabel(chip.mention, chip.name);
+  const drawn = chipOf(entity.kind, shown, linkTarget(href), entity);
   const github = githubAddressOf(chip.mention);
 
   return github === undefined ? drawn : { ...drawn, github };
@@ -423,6 +458,8 @@ function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): Markdo
   switch (node.type) {
     case "text":
     case "html":
+      if (node.type === "html" && reader.reading.hidesHtml === true) return [];
+
       return wordsRun(
         reader.reading.typed === true ? node.value : node.value.replace(SOFT_BREAK, " "),
         marks,
@@ -536,8 +573,12 @@ function tableBlock(node: Table, reader: Reader): MarkdownBlock {
   };
 }
 
-/** A fence: a draft where it is named for where its words go, as the panel draws every rendered text's (`DraftFence`), and code otherwise. */
-function codeBlock(node: Code): MarkdownBlock {
+/** A fence: a diagram where it names Mermaid and the words are read for diagrams, a draft where it is named for where its words go, as the panel draws every rendered text's (`DraftFence`), and code otherwise. */
+function codeBlock(node: Code, reading: MarkdownReading): MarkdownBlock {
+  if (reading.diagrams === true && node.lang === DIAGRAM_LANGUAGE) {
+    return { kind: MARKDOWN_BLOCK.DIAGRAM, code: node.value };
+  }
+
   const kind = draftKindOf(node.lang ?? "");
 
   if (kind === undefined) return { kind: MARKDOWN_BLOCK.CODE, text: node.value };
@@ -564,11 +605,13 @@ function blockOf(node: RootContent, reader: Reader): MarkdownBlock[] {
     case "table":
       return [tableBlock(node, reader)];
     case "code":
-      return [codeBlock(node)];
+      return [codeBlock(node, reader.reading)];
     case "thematicBreak":
       return [{ kind: MARKDOWN_BLOCK.RULE }];
     case "html":
-      return [{ kind: MARKDOWN_BLOCK.PARAGRAPH, runs: wordsRun(node.value, PLAIN) }];
+      return reader.reading.hidesHtml === true
+        ? []
+        : [{ kind: MARKDOWN_BLOCK.PARAGRAPH, runs: wordsRun(node.value, PLAIN) }];
     case "footnoteDefinition":
       return blocksOf(node.children, reader);
     // Note that a definition is read through by its references, and front matter is no message's.
@@ -654,6 +697,19 @@ export function heardLine(
   const hearing = { chip: chipHeard, suggestion: suggestionHeard };
 
   return runs.some(holdsChip) ? runs.map((run) => heardRun(run, hearing)).join("") : undefined;
+}
+
+/**
+ * Whether Markdown draws anything at all once read, such as a pull request
+ * body that holds only a template's HTML comments. Note that the reader's
+ * repository, clock and zone only name chips and dates, never whether a
+ * block stands, so none is asked for.
+ */
+export function markdownShows(
+  words: string,
+  { hidesHtml }: Pick<MarkdownReading, "hidesHtml">,
+): boolean {
+  return markdownBlocks(words, { repository: null, now: 0, zone: "UTC", hidesHtml }).length > 0;
 }
 
 /** Markdown as the blocks the app draws, read as the panel reads it; words nested too deep to parse safely are one block of plain text. */

@@ -1,4 +1,4 @@
-# description-comment.yaml -- a task's description drawn block by block, a block's count of the open comment threads on it, and a long press on a block offering Comment, which opens a new thread on that block with its words quoted and the comment field taking the keyboard.
+# description-comment.yaml -- a task's description drawn block by block, a block's count of the open comment threads on it, and a long press on a block offering Comment, which opens a new thread on that block with its words quoted and the comment field taking the keyboard; Send opens the thread at once with the words as its first comment.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -6,21 +6,34 @@ appId: dev.vespin.ios
 ---
 # Launched on the host's Inbox fixture, as `tasks.yaml` is, so Teammate
 # invitations holds its description and its comment threads and no server is
-# reached. Nothing is sent, since the fixture stages no comment start.
+# reached. The fixture answers a comment start on it with the new thread.
 - launchApp:
     clearState: true
     arguments:
       fixture: inbox
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - scrollUntilVisible:
     element: "Teammate invitations"
     direction: DOWN
 - waitForAnimationToEnd
 - tapOn: "Teammate invitations"
 - assertVisible: "Created by .*"
-- scrollUntilVisible:
-    element: "Goal"
-    direction: DOWN
+# Note that the task's page is swiped at its right side rather than scrolled
+# from the screen's center, since a landscape iPad's center falls in the list
+# column beside the task, which never holds its description.
+- repeat:
+    while:
+      notVisible: "Goal"
+    times: 8
+    commands:
+      - swipe:
+          start: 85%, 70%
+          end: 85%, 35%
+      - waitForAnimationToEnd
+- assertVisible: "Goal"
 - waitForAnimationToEnd
 - takeScreenshot: description-blocks
 # A long press on a block lifts it over the system's menu, which offers
@@ -34,6 +47,52 @@ appId: dev.vespin.ios
 - inputText: "Should this name the expiry?"
 - waitForAnimationToEnd
 - takeScreenshot: description-new-comment
+# Send opens the thread in the field's place as it goes, the words its first
+# comment, and the field is the thread's reply box.
+- tapOn: "Send"
+- assertVisible: "Should this name the expiry?"
+- assertNotVisible: "Add a comment"
+- waitForAnimationToEnd
+- takeScreenshot: description-comment-sent
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
+# The Comments section lists the open thread, then a last row that swaps in
+# the resolved ones, as the panel's Resolved toggle does; a thread's bar
+# offers Resolve while it stands open and Reopen once resolved.
+- scrollUntilVisible:
+    element: "Show resolved comments"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: comments-open
+- tapOn: "Show resolved comments"
+- assertVisible: "Show open comments"
+- assertVisible: "Done in the email template."
+- waitForAnimationToEnd
+- takeScreenshot: comments-resolved
+- tapOn: "Done in the email template."
+- assertVisible: "Reopen"
+- waitForAnimationToEnd
+- takeScreenshot: comment-resolved-thread
+- tapOn:
+    id: "BackButton"
+- tapOn: "Show open comments"
+- tapOn: "Should an owner be able to resend an expired invite from this page?"
+- assertVisible: "Resolve"
+- waitForAnimationToEnd
+- takeScreenshot: comment-open-thread
+# A comment's row resolves from its own acts, the trailing swipe's Resolve
+# standing again in its long press menu, as an Inbox thread's does. Note that
+# the flow presses it from that menu rather than swiping, because a swipe
+# from a row the task's page stands at no fixed height either reveals Resolve
+# or, run full, presses it, so neither leaves a state the flow can assert;
+# the swipe's own reveal is held by `inbox.yaml`, whose rows `RowFrame`
+# draws as it draws this one.
+- tapOn:
+    id: "BackButton"
+- waitForAnimationToEnd
+- longPressOn: "Should an owner be able to resend an expired invite from this page?"
+- tapOn: "Resolve"
+- waitForAnimationToEnd
+- assertNotVisible: "Should an owner be able to resend an expired invite from this page?"
+- takeScreenshot: comment-row-resolved

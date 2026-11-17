@@ -29,6 +29,7 @@ import {
   workspaceEnvironmentAnswerSchema,
   workspaceVariableDeleteRequestSchema,
   workspaceVariablePutRequestSchema,
+  workspaceVariablesSaveRequestSchema,
 } from "@repo/features/workspace-environment-wire";
 import { workspaceInvitationSchema } from "@repo/features/workspace-invitation-wire";
 import {
@@ -37,6 +38,10 @@ import {
   workspaceRunActionsPutRequestSchema,
   workspaceSandboxSetupAnswerSchema,
 } from "@repo/features/workspace-sandbox-setup-wire";
+import {
+  workspaceSandboxSizeAnswerSchema,
+  workspaceSandboxSizePutRequestSchema,
+} from "@repo/features/workspace-sandbox-size-wire";
 import {
   workspaceMachinesAnswerSchema,
   workspaceMachinesRequestSchema,
@@ -145,6 +150,15 @@ export const WORKSPACE_ACTS = declaredActs({
     panelOnly: true,
     door: ACT.REMOTE_WORK,
   }),
+  WORKSPACE_SLACK_BOT_INSTALL: hostAct({
+    input: tasksWorkspaceParamsSchema,
+    output: EffectSchema.String,
+    portOutput: EffectSchema.Void,
+    refusal: "Could not open Slack to connect that workspace on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    byHand: true,
+  }),
   WORKSPACE_SLACK_BOT_DISCONNECT: hostAct({
     input: tasksWorkspaceParamsSchema,
     output: workspaceSlackBotAnswerSchema,
@@ -243,6 +257,13 @@ export const WORKSPACE_ACTS = declaredActs({
     panelOnly: true,
     door: ACT.REMOTE_WORK,
   }),
+  WORKSPACE_ENVIRONMENT_SAVE: hostAct({
+    input: workspaceVariablesSaveRequestSchema,
+    output: workspaceEnvironmentAnswerSchema,
+    refusal: "Could not save those variables on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+  }),
   WORKSPACE_ENVIRONMENT_DELETE: hostAct({
     input: workspaceVariableDeleteRequestSchema,
     output: workspaceEnvironmentAnswerSchema,
@@ -275,6 +296,20 @@ export const WORKSPACE_ACTS = declaredActs({
     input: workspaceRunActionsPutRequestSchema,
     output: workspaceSandboxSetupAnswerSchema,
     refusal: "Could not save those run actions on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+  }),
+  WORKSPACE_SANDBOX_SIZE_READ: hostAct({
+    input: tasksWorkspaceParamsSchema,
+    output: workspaceSandboxSizeAnswerSchema,
+    refusal: "Could not read that workspace's sandbox size on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+  }),
+  WORKSPACE_SANDBOX_SIZE_PUT: hostAct({
+    input: workspaceSandboxSizePutRequestSchema,
+    output: workspaceSandboxSizeAnswerSchema,
+    refusal: "Could not save that sandbox size on this system.",
     panelOnly: true,
     door: ACT.REMOTE_WORK,
   }),

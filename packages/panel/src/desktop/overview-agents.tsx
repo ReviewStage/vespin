@@ -1,7 +1,13 @@
 import type { AgentPullRequest } from "@repo/features/agent-wire";
 import { NEEDS_YOU, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { agentLastMovedAt, inAgentListOrder } from "@repo/features/task-agents-model";
+import { type NumberedAddress, pullRequestAddressOf } from "@repo/features/link-grammar";
+import {
+  agentLastMovedAt,
+  agentTree,
+  inAgentListOrder,
+  type StartedAgentsCount,
+} from "@repo/features/task-agents-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BUTTON_SIZE,
@@ -14,6 +20,8 @@ import {
   LIST_DENSITY,
   List,
   ListRow,
+  type ListRowFold,
+  type ListRowNest,
   TaskRows,
   Tooltip,
 } from "@repo/ui";
@@ -21,6 +29,7 @@ import { GLYPH, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
 import { Predicate, Schema } from "effect";
+import { useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
@@ -31,6 +40,7 @@ import type { MenuAction } from "./action-menu.js";
 import { agentEntries } from "./agent-entries.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { useAgentsSelection } from "./agents-selection.js";
+import { nestsOf } from "./nested-rows.js";
 import { type CountNoun, foldedCount } from "./sidebar-fold.js";
 import type { AddEntry, HeldTranscripts } from "./strip-tabs.js";
 import type { ChosenRows } from "./tasks-selection.js";
@@ -69,7 +79,13 @@ import type { ChosenRows } from "./tasks-selection.js";
  * in a row's gutter, ⌘-click, ⇧-click, and ⌘A, and a row chosen among
  * several offers Archive, or Unarchive, and Permanently delete on every one
  * chosen (`agents-selection.tsx`).
- * Those agents come first, then those at work, then the newest started; an
+ * An agent another agent started stands nested under it, an orchestrator's
+ * workers under the orchestrator, as a task's sub-tasks nest, folded until
+ * opened, the row it stands under counting how many of them finished
+ * (`agentTree`); a worker an orchestrator started before it was continued
+ * stands under the agent that continued it.
+ * The agents list oldest started first, as Sub-tasks do, each row at the
+ * top standing where the first agent under it does; an
  * archived agent is not listed. New agent stands on the group's head at
  * every width, a + at rest as Sub-tasks' is, the strip's "+" by another
  * place (`newAgentStarts`), so it stands while the group is folded too. A
@@ -100,6 +116,9 @@ interface PlanAgentsPhone {
 
 /** What the group is called, and its list for a reader moving between lists. */
 const AGENTS_LIST = "Agents";
+
+/** The words an agent's fold is named by, before its name: the agents it started. */
+const STARTED_BY = "Agents started by";
 
 /** What the group's count counts, said to a reader beside the figure. */
 const AGENTS_NOUN = { one: "agent", many: "agents" } as const;
@@ -144,6 +163,10 @@ function PlanAgentRow({
   shown,
   more,
   chosen,
+  depth,
+  nest,
+  fold,
+  started,
   onOpenPullRequest,
 }: {
   entry: AddEntry;
@@ -159,6 +182,14 @@ function PlanAgentRow({
   more: boolean;
   /** The selection it stands in, where it is one of several chosen. */
   chosen: ChosenRows | undefined;
+  /** How deep it stands nested under the agent that started it. */
+  depth: number;
+  /** Where it stands among the agents nested beside it. */
+  nest: ListRowNest | undefined;
+  /** The agents it started, which it folds; none where it started none. */
+  fold: ListRowFold | undefined;
+  /** How many of the agents it started have finished, of all of them. */
+  started: StartedAgentsCount | undefined;
   onOpenPullRequest: () => void;
 }): React.JSX.Element | null {
   const { row, agent, card } = entry;
@@ -178,10 +209,24 @@ function PlanAgentRow({
       waits={waits}
       more={more}
       chosen={chosen}
+      depth={depth}
+      nest={nest}
+      fold={fold}
+      started={started}
       onPress={entry.onPick}
       onOpenPullRequest={onOpenPullRequest}
     />
   );
+}
+
+/** Opens the pull request an agent's row names, by the repository and number its page names; nothing where it names none. */
+function openListed(
+  pullRequest: Pick<AgentPullRequest, "url"> | undefined,
+  open: (pullRequest: NumberedAddress) => void,
+): void {
+  const address = pullRequest === undefined ? undefined : pullRequestAddressOf(pullRequest.url);
+
+  if (address !== undefined) open(address);
 }
 
 /** The task's archived agents, folded under Archived at the foot of a phone's agents, each a listed agent's row, settled; nothing while none is archived. */
@@ -198,7 +243,7 @@ function PlanArchivedAgents({
   /** Whether its rows draw their ⋯. */
   more: boolean;
   onOpen: (agentId: string) => void;
-  onOpenPullRequest: (agentId: string) => void;
+  onOpenPullRequest: (pullRequest: NumberedAddress) => void;
 }): React.JSX.Element | null {
   const [unfolded, setUnfolded] = useKept(KEPT.UNFOLDED, false);
   const archived = agents.archived ?? [];
@@ -240,7 +285,9 @@ function PlanArchivedAgents({
                 chosen={selection.chosenOf(agent.id)}
                 settled
                 onPress={() => onOpen(agent.id)}
-                onOpenPullRequest={() => onOpenPullRequest(agent.id)}
+                onOpenPullRequest={() =>
+                  openListed(agents.pullRequests.get(agent.id), onOpenPullRequest)
+                }
               />
             );
           })}
@@ -253,11 +300,11 @@ function PlanArchivedAgents({
 
 /**
  * The task's agents at the head of its description, under their group's head,
- * those waiting on the developer first, then those at work, then the
- * newest, or its head alone where it lists none and offers New agent;
+ * oldest started first, or its head alone where it lists none and offers New agent;
  * nothing where it offers neither.
  * A row's press is handed to `onOpenAgent` by its agent's id, and
- * `onOpenPullRequest` opens an agent's pull request as its own chip does.
+ * `onOpenPullRequest` opens an agent's pull request as its own chip does, by
+ * its repository and number.
  */
 export function OverviewAgents({
   agents,
@@ -283,7 +330,7 @@ export function OverviewAgents({
   /** Whether the task's page is on screen, which each row's menu asks on. */
   shown: boolean;
   onOpenAgent: (agentId: string) => void;
-  onOpenPullRequest: (agentId: string) => void;
+  onOpenPullRequest: (pullRequest: NumberedAddress) => void;
   /** New agent, the + standing at rest on the group's head as the strip's "+" offers it (`newAgentStarts`); none on a task that starts no agent. */
   newAgent: MenuAction | undefined;
   /** A phone's additions; none elsewhere. */
@@ -321,11 +368,40 @@ export function OverviewAgents({
   const inboxRow = phone !== undefined && unmarked > 0 ? phone : undefined;
   const more = !useCoarsePointer();
 
-  const ordered = inAgentListOrder(
-    entries,
+  const ordered = inAgentListOrder(entries, (entry) => entry.agent);
+
+  // Note that the agents an agent started stand folded under it until opened, as a sub-task's own sub-tasks do.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
+
+  const tree = agentTree(
+    ordered,
     (entry) => entry.agent,
-    (entry) => waiting.has(entry.row.id),
+    (agentId) => opened.has(agentId),
   );
+
+  const nests = nestsOf(tree);
+
+  const foldOf = (entry: AddEntry, open: boolean): ListRowFold => ({
+    open,
+    label: `${STARTED_BY} ${entry.agent?.title ?? AGENTS_NOUN.one}`,
+    onOpenChange: (asked) =>
+      setOpened((held) => {
+        if (asked === held.has(entry.row.id)) return held;
+        const next = new Set(held);
+
+        if (asked) next.add(entry.row.id);
+        else next.delete(entry.row.id);
+
+        return next;
+      }),
+  });
+
+  // Note that a row standing folded counts what waits on the developer under it too, so no thread waits unsaid.
+  const waitsUnder = (entry: AddEntry, folded: readonly AddEntry[] | undefined) =>
+    [entry, ...(folded ?? [])].reduce(
+      (count, each) => count + (waiting.get(each.row.id)?.length ?? 0),
+      0,
+    );
 
   const selection = useAgentsSelection(
     agents,
@@ -368,11 +444,17 @@ export function OverviewAgents({
                 selection={{ selected: selection.selected, onChange: selection.onChange }}
                 moves
               >
-                {ordered.map((entry) => (
+                {tree.map(({ entry, depth, started, folded }, at) => (
                   <PlanAgentRow
                     key={entry.row.id}
                     entry={entry}
-                    waits={waiting.get(entry.row.id)?.length ?? 0}
+                    depth={depth}
+                    nest={nests[at]}
+                    fold={
+                      started === undefined ? undefined : foldOf(entry, opened.has(entry.row.id))
+                    }
+                    started={started}
+                    waits={waitsUnder(entry, folded)}
                     pullRequest={agents.pullRequests.get(entry.row.id)}
                     agents={agents}
                     held={held}
@@ -380,7 +462,9 @@ export function OverviewAgents({
                     shown={shown}
                     more={more}
                     chosen={selection.chosenOf(entry.row.id)}
-                    onOpenPullRequest={() => onOpenPullRequest(entry.row.id)}
+                    onOpenPullRequest={() =>
+                      openListed(agents.pullRequests.get(entry.row.id), onOpenPullRequest)
+                    }
                   />
                 ))}
               </TaskRows>

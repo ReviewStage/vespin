@@ -1,5 +1,6 @@
 // glyph.ts -- every glyph the app draws, by what it marks: the panel's own Lucide glyph for each place and its own task status marks from the app's asset catalog, and the few iOS draws its own way as SF Symbols.
 
+import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
 import {
   TASK_SECTION_GLYPH,
   TASK_SECTION_ICON_KIND,
@@ -9,7 +10,11 @@ import {
 import type { SfSymbol } from "./sf-symbol.js";
 import type { StatusTone } from "./tokens/colors.js";
 import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
-import { TASK_STATUS_SYMBOL } from "./tokens/task-status-symbols.js";
+import {
+  TASK_PRIORITY_BARS_SYMBOL,
+  TASK_PRIORITY_SYMBOL,
+  TASK_STATUS_SYMBOL,
+} from "./tokens/task-status-symbols.js";
 
 declare const GLYPH_NAME: unique symbol;
 
@@ -34,6 +39,14 @@ const lucide = (name: LucideSymbol): Glyph => name as Glyph;
 const statusMark = (name: (typeof TASK_STATUS_SYMBOL)[keyof typeof TASK_STATUS_SYMBOL]): Glyph =>
   name as Glyph;
 
+/** A task's priority as the panel marks it, cut from the same table: its lit parts, and every bar it can light, which its unlit bars are drawn from. */
+// SAFETY: a symbol set's name is a glyph's name; this table is where glyphs are minted.
+const priorityMark = (
+  name:
+    | (typeof TASK_PRIORITY_SYMBOL)[keyof typeof TASK_PRIORITY_SYMBOL]
+    | typeof TASK_PRIORITY_BARS_SYMBOL,
+): Glyph => name as Glyph;
+
 /** An SF Symbol, kept where iOS draws the thing its own way, or where the panel draws a mark of its own rather than a Lucide glyph. */
 // SAFETY: an SF Symbol's name is a glyph's name; this table is where glyphs are minted.
 const system = (name: SfSymbol): Glyph => name as Glyph;
@@ -44,7 +57,7 @@ const system = (name: SfSymbol): Glyph => name as Glyph;
  * icons are the desktop's), written into the asset catalog as a custom
  * symbol by `@repo/brand`, so it sizes with Dynamic Type and weighs with its
  * words as an SF Symbol does. An SF Symbol stays only where iOS draws the
- * thing its own way (Share) or where the panel draws a mark of its own rather
+ * thing its own way (Share, and a sheet's close) or where the panel draws a mark of its own rather
  * than a Lucide glyph (a check box, a face, an MCP server, and the panel's
  * product mark), whose drawings are SF Symbols' nearest. A task's status
  * ring is the panel's own mark, written into the asset catalog from the
@@ -63,7 +76,7 @@ export const GLYPH = {
   WORKSPACE: lucide(LUCIDE_SYMBOL.BUILDING_COMPLEX),
   MAKE_OWNER: lucide(LUCIDE_SYMBOL.CROWN),
   // Things.
-  AGENT: lucide(LUCIDE_SYMBOL.BOT),
+  AGENT: lucide(LUCIDE_SYMBOL.HARD_HAT),
   PAGE: lucide(LUCIDE_SYMBOL.APP_WINDOW),
   COMMENT: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE),
   THREAD: lucide(LUCIDE_SYMBOL.MESSAGES_SQUARE),
@@ -82,6 +95,7 @@ export const GLYPH = {
   NO_REPOSITORY: lucide(LUCIDE_SYMBOL.FOLDER_X),
   SKILL: lucide(LUCIDE_SYMBOL.BOOK_OPEN),
   MEMORY: lucide(LUCIDE_SYMBOL.LIGHTBULB),
+  CLOUD: lucide(LUCIDE_SYMBOL.CLOUD),
   HOST: lucide(LUCIDE_SYMBOL.SERVER),
   MAC: lucide(LUCIDE_SYMBOL.LAPTOP),
   ISSUE_OPEN: lucide(LUCIDE_SYMBOL.CIRCLE_DOT),
@@ -154,15 +168,23 @@ export const GLYPH = {
   UNPIN: lucide(LUCIDE_SYMBOL.PIN_OFF),
   MARK_READ: lucide(LUCIDE_SYMBOL.MAIL_OPEN),
   MARK_UNREAD: lucide(LUCIDE_SYMBOL.MAIL),
+  /** A draft's header, by where it goes: an email, and one with no place named. */
+  DRAFT_EMAIL: lucide(LUCIDE_SYMBOL.MAIL),
+  DRAFT_WRITTEN: lucide(LUCIDE_SYMBOL.PEN_LINE),
+  /** A Slack draft's header, where the panel draws Slack's own mark, which no glyph set holds: a message's bubble, the nearest. */
+  DRAFT_SLACK: system("bubble.left"),
   MARK_ALL_READ: lucide(LUCIDE_SYMBOL.CHECK_CHECK),
   SELECT: lucide(LUCIDE_SYMBOL.LIST_CHECKS),
   ARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE),
   UNARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE_RESTORE),
   MOVE: lucide(LUCIDE_SYMBOL.FOLDER_INPUT),
   SUGGEST: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
+  // A queued message's acts, as the panel's queue dock draws Steer; Move Up and Move Down are its drag's reorder as a long press offers it.
+  STEER: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
+  MOVE_UP: lucide(LUCIDE_SYMBOL.ARROW_UP),
+  MOVE_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
   ADD_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_PLUS),
   REMOVE_FROM_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_MINUS),
-  FILE_FOR_LATER: lucide(LUCIDE_SYMBOL.BOOKMARK),
   NEW_THREAD: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE_PLUS),
   NEW_FILE: lucide(LUCIDE_SYMBOL.FILE_PLUS),
   NEW_ISSUE: lucide(LUCIDE_SYMBOL.CIRCLE_PLUS),
@@ -173,6 +195,9 @@ export const GLYPH = {
   HISTORY: lucide(LUCIDE_SYMBOL.ROTATE_CCW_CLOCK),
   UPDATE: lucide(LUCIDE_SYMBOL.CIRCLE_ARROW_UP),
   RUN: lucide(LUCIDE_SYMBOL.PLAY),
+  // A sound clip's play and pause, as the panel's audio player draws them.
+  PLAY: lucide(LUCIDE_SYMBOL.PLAY),
+  PAUSE: lucide(LUCIDE_SYMBOL.PAUSE),
   STOP: lucide(LUCIDE_SYMBOL.CIRCLE_STOP),
   WAIT: lucide(LUCIDE_SYMBOL.HOURGLASS),
   SLEEP: lucide(LUCIDE_SYMBOL.TIMER),
@@ -194,8 +219,12 @@ export const GLYPH = {
   JUMP_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
   FOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_RIGHT),
   UNFOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
-  // iOS's own: Share is the system's act, a Settings row's chevron is the one iOS draws at a row that goes on, and the composer's Stop is the panel's filled square.
+  // The Inbox's pager in an open thread's bar, as the panel's K and J and Mail's message arrows.
+  PREVIOUS_ITEM: lucide(LUCIDE_SYMBOL.CHEVRON_UP),
+  NEXT_ITEM: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
+  // iOS's own: Share is the system's act, a sheet closes with the system's round ✕ (its close role, as Calendar and Reminders close one), a Settings row's chevron is the one iOS draws at a row that goes on, and the composer's Stop is the panel's filled square.
   SHARE: system("square.and.arrow.up"),
+  CLOSE: system("xmark"),
   // A split view's expand, which stands the page alone across the window and back, is the system's own, as Mail draws it.
   EXPAND: system("arrow.up.left.and.arrow.down.right"),
   COLLAPSE: system("arrow.down.right.and.arrow.up.left"),
@@ -203,16 +232,26 @@ export const GLYPH = {
   FILTER: system("line.3.horizontal.decrease.circle"),
   FILTERED: system("line.3.horizontal.decrease.circle.fill"),
   DISCLOSURE: system("chevron.forward"),
+  // A sheet's step back to the step before it, the back chevron iOS draws in a navigation bar.
+  BACK: system("chevron.backward"),
   // A Settings row that leaves the app ends in iOS's own small arrow out, and a row that opens a menu in its up-and-down chevron, as a menu picker's value does.
   GOES_OUT: system("arrow.up.forward"),
   MENU_OPENS: system("chevron.up.chevron.down"),
   STOP_TURN: system("stop.fill"),
+  // A sheet's confirm, the system's checkmark in its prominent bar button, as iOS 26's own sheets close on it.
+  CONFIRM: system("checkmark"),
   // A task's status ring, the panel's own mark.
   STATUS_BACKLOG: statusMark(TASK_STATUS_SYMBOL.BACKLOG),
   STATUS_TODO: statusMark(TASK_STATUS_SYMBOL.TODO),
   STATUS_IN_PROGRESS: statusMark(TASK_STATUS_SYMBOL.IN_PROGRESS),
   STATUS_DONE: statusMark(TASK_STATUS_SYMBOL.DONE),
   STATUS_CANCELED: statusMark(TASK_STATUS_SYMBOL.CANCELED),
+  PRIORITY_NONE: priorityMark(TASK_PRIORITY_SYMBOL.NONE),
+  PRIORITY_URGENT: priorityMark(TASK_PRIORITY_SYMBOL.URGENT),
+  PRIORITY_HIGH: priorityMark(TASK_PRIORITY_SYMBOL.HIGH),
+  PRIORITY_MEDIUM: priorityMark(TASK_PRIORITY_SYMBOL.MEDIUM),
+  PRIORITY_LOW: priorityMark(TASK_PRIORITY_SYMBOL.LOW),
+  PRIORITY_BARS: priorityMark(TASK_PRIORITY_BARS_SYMBOL),
   // The panel's own marks, which no Lucide glyph draws: a check box and a round one, a check still running, a face and the app's,
   // an MCP server and its tool, the apps that reach the service over MCP (the
   // panel's product mark), and an unassigned task.
@@ -251,11 +290,26 @@ function isSectionGlyph(name: string): name is TaskSectionGlyph {
 }
 
 /**
+ * Where an agent runs, as the panel's runs-on mark draws it (`runs-on.tsx`):
+ * the cloud's glyph, a Linux server's, or the laptop for a Mac and for a
+ * device whose platform isn't known, as the panel draws a teammate's.
+ */
+export function runsOnGlyph(place: {
+  readonly cloud: boolean;
+  readonly platform?: DevicePlatform | undefined;
+}): Glyph {
+  if (place.cloud) return GLYPH.CLOUD;
+
+  return place.platform === DEVICE_PLATFORM.LINUX ? GLYPH.HOST : GLYPH.MAC;
+}
+
+/**
  * The glyph a section leads with, as the panel's sidebar draws its icon: the
  * glyph its member chose from the picker's suggestions; the folder, the
- * picker's first, for an emoji, a glyph the app's catalog doesn't hold, or
- * no icon, since a sidebar row always leads with a glyph. Note that a
- * glyph's color is left to the panel, which alone draws it.
+ * picker's first, for a glyph the app's catalog doesn't hold or no icon,
+ * since a sidebar row always leads with a glyph, and for an emoji, which
+ * `sectionEmoji` draws in the glyph's place. Note that a glyph's color is
+ * left to the panel, which alone draws it.
  */
 export function sectionGlyph(icon: TaskSectionIcon | undefined): Glyph {
   if (icon === undefined || icon.kind === TASK_SECTION_ICON_KIND.EMOJI) return GLYPH.FOLDER;
@@ -263,10 +317,17 @@ export function sectionGlyph(icon: TaskSectionIcon | undefined): Glyph {
   return isSectionGlyph(icon.glyph) ? SECTION_GLYPH[icon.glyph] : GLYPH.FOLDER;
 }
 
-/** The glyphs the asset catalog holds, Lucide's and the task status marks, rather than the system's symbols. */
+/** The emoji a section leads with, drawn as words in its glyph's place, as the panel's sidebar draws it; none for a glyph or no icon. */
+export function sectionEmoji(icon: TaskSectionIcon | undefined): string | undefined {
+  return icon?.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon.emoji : undefined;
+}
+
+/** The glyphs the asset catalog holds, Lucide's and the task status and priority marks, rather than the system's symbols. */
 const CATALOG_SYMBOLS: ReadonlySet<string> = new Set([
   ...Object.values(LUCIDE_SYMBOL),
   ...Object.values(TASK_STATUS_SYMBOL),
+  ...Object.values(TASK_PRIORITY_SYMBOL),
+  TASK_PRIORITY_BARS_SYMBOL,
 ]);
 
 /** A glyph as `@expo/ui`'s `Image` draws it: a custom symbol by its asset's name, an SF Symbol by its own. */

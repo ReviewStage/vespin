@@ -333,9 +333,12 @@ export const PRODUCT_EXPERIMENT = {
   /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   FOLLOWING: "following",
   COMPUTER_USE: "computer-use",
+  /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   VOICE: "voice",
   GOALS: "goals",
   MOVE_AGENTS: "move-agents",
+  CURSOR: "cursor",
+  STARTER_TASKS: "starter-tasks",
 } as const;
 
 export type ProductExperiment = (typeof PRODUCT_EXPERIMENT)[keyof typeof PRODUCT_EXPERIMENT];

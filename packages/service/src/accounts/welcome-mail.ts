@@ -70,9 +70,14 @@ export class WelcomeMail extends Context.Service<WelcomeMail, WelcomeMailValues>
  * name; the onboarding emails greet by it too (`onboarding-events.ts`).
  */
 export function greetingOf(name: string): string {
-  const first = name.trim().split(/\s+/)[0] ?? "";
+  const first = firstNameOf(name);
 
   return first === "" ? "Hey," : `Hey ${first},`;
+}
+
+/** An account's first name, the first word of its name, or nothing for one with no name. */
+export function firstNameOf(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? "";
 }
 
 /**

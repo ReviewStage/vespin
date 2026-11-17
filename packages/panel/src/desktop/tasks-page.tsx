@@ -22,6 +22,7 @@ import {
   TASK_PROPERTY_ORDER,
   TASKS_GROUPING,
   TASKS_ORDER,
+  type TaskMaker,
   type TaskProperty,
   type TasksDisplay,
   type TasksFilter,
@@ -52,9 +53,8 @@ import { useSettledPages } from "./use-settled-pages.js";
 /**
  * tasks-page.tsx -- the window's Tasks page: the listed workspace's tasks as a List or as the Board, chosen by a switch beside its title, narrowed by its Filter and laid out by its View options.
  *
- * It stands in the plan's place, opened by the sidebar's Tasks row, and its
- * way out is `EXIT_BOARD`, so Back, Escape, and the window's history treat it
- * as the place the Board alone once was.
+ * It stands in the plan's place, opened by the sidebar's Tasks row, and the
+ * window's history treats it as the place the Board alone once was.
  *
  * Its toolbar ends in Filter and View options (`tasks-page-options.tsx`).
  * The filter is the page's, one for both views and one for each workspace,
@@ -82,6 +82,25 @@ export type TasksView = (typeof TASKS_VIEW)[keyof typeof TASKS_VIEW];
 
 const storedView = Schema.fromJsonString(Schema.Literals(Object.values(TASKS_VIEW)));
 
+/** The maker Made by once offered for the app's own tasks, which a filter kept before it went may still name. */
+const RETIRED_APP_MAKER = "app";
+
+/**
+ * The makers a filter kept, the retired app maker among them dropped as it
+ * reads. Note that it reads rather than refuses, because a value no longer
+ * read refuses the whole record, every workspace's filters with it.
+ */
+const storedMakers = Schema.Array(Schema.Literals([...TASK_MAKER_ORDER, RETIRED_APP_MAKER])).pipe(
+  Schema.decodeTo(
+    Schema.Array(Schema.Literals(TASK_MAKER_ORDER)),
+    SchemaTransformation.transform({
+      decode: (makers): readonly TaskMaker[] =>
+        makers.filter((maker): maker is TaskMaker => maker !== RETIRED_APP_MAKER),
+      encode: (makers) => makers,
+    }),
+  ),
+);
+
 /** The filters as kept: each workspace's by its id. */
 const storedFilters = Schema.fromJsonString(
   Schema.Record(
@@ -91,7 +110,7 @@ const storedFilters = Schema.fromJsonString(
       priority: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_PRIORITY_ORDER))),
       assignee: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
       creator: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
-      madeBy: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_MAKER_ORDER))),
+      madeBy: Schema.optionalKey(storedMakers),
       repository: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
     }),
   ),

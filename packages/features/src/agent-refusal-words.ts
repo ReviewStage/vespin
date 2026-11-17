@@ -64,6 +64,12 @@ export const STOP_FAILED = "The agent could not be stopped. Try again.";
 /** What an agent's archive the service refused says, wherever it was pressed. */
 export const ARCHIVE_FAILED = "The agent could not be archived.";
 
+/** What an agent's pin or unpin the service refused says, wherever it was pressed. */
+export const PIN_FAILED = {
+  PIN: "The agent could not be pinned.",
+  UNPIN: "The agent could not be unpinned.",
+} as const;
+
 /** What a refused archive or delete says of an agent still starting, or with a message awaiting its turn, which has no turn to stop yet. */
 export const ARCHIVE_NOT_READY = "The agent is still starting its turn. Try again in a moment.";
 
@@ -122,6 +128,8 @@ export function localAgentRefusalWords(
       return `${name} is offline, so this agent can't start there. ${DEVICE_WAKE[devicePlatformOf(device ?? {})]}, ${RUN_IN_CLOUD}.`;
     case LOCAL_AGENT_REFUSAL.CODEX:
       return `${name} can't run Codex agents yet. Wait for its Codex download to finish, choose a Claude model, ${RUN_IN_CLOUD}.`;
+    case LOCAL_AGENT_REFUSAL.CURSOR:
+      return `${name} can't run Cursor agents. Update its host if it's a Mac, choose a Claude or Codex model, ${RUN_IN_CLOUD}.`;
     case LOCAL_AGENT_REFUSAL.NO_HARNESS:
       return `${name} can't run this model's agents. Choose a Claude or Codex model, ${RUN_IN_CLOUD}.`;
     case LOCAL_AGENT_REFUSAL.PREPARING:

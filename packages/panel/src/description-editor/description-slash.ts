@@ -1,3 +1,4 @@
+import { DIAGRAM_LANGUAGE } from "@repo/features/mermaid-diagram";
 import { WRITING_BLOCK, WRITING_INSERT } from "@repo/settings/shortcuts";
 import type { Editor, JSONContent } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
@@ -11,7 +12,6 @@ import {
   type SlashChoice,
   sameTrigger,
 } from "./contract.js";
-import { DIAGRAM_LANGUAGE } from "./diagram-card.js";
 import { turnInto } from "./writing-format.js";
 import { inTableCell } from "./writing-keys.js";
 

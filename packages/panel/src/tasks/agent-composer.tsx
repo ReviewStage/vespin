@@ -1,4 +1,6 @@
 import { DENIES_WAITING } from "@repo/features/agent-approval-model";
+import { runsGoal } from "@repo/features/agent-goal-model";
+import { runtimeOfProvider } from "@repo/features/agent-runtime-models";
 import { SERVER_HANDED } from "@repo/features/agent-servers-model";
 import {
   AGENT_BOUNDS,
@@ -54,7 +56,7 @@ import {
 import { AgentModelChip } from "./agent-model-chip.js";
 import { PayerValue, usePayerPlan } from "./agent-payer.js";
 import { type AgentServersControl, serversMenuPanel } from "./agent-servers.js";
-import { useAgentTalk } from "./agent-talk.js";
+import { type NewAgentTalk, useAgentTalk } from "./agent-talk.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide } from "./mention-picker.js";
 import { FOLD_WIDTH, MessageBox, OVERFLOW_PRESS, useMessageBox } from "./message-box.js";
 import type { MoveCarry } from "./move-agent.js";
@@ -86,7 +88,7 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * (`agent-approvals.tsx`),
  * the ring that shows, once a step has ended, how full the agent's model's
  * context is and opens what fills it (`agent-context.tsx`), the
- * microphone, Talk or a call's controls where the box calls its agent
+ * microphone, a call's controls on a call into its agent
  * (`agent-talk.tsx`), and the round button. The box takes a message to the agent:
  * Enter sends it, Shift+Enter is a new line (on a coarse pointer Enter is,
  * and the round Send sends: `composer-editor.ts`), and Escape leaves the box; the
@@ -101,9 +103,10 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * conversation opens on its description or task, because the tab's glyph and the transcript's "Working…"
  * line already say where the agent stands. The one thing that follows the agent's state is
  * the button at the card's right, the way every chat draws it: Send while
- * there are words or files, disabled while there are neither and the agent
- * is idle, and Stop while there are neither and a turn runs, which is the
- * one Stop the tab has. A message that did not go stays in the box with why under the foot's
+ * there are words or files, Stop while there are neither and a turn runs,
+ * which is the one Stop the tab has, and while there are neither and the
+ * agent is idle, Talk where the box calls its agent, as ChatGPT's composer
+ * offers voice, and Send disabled where it does not. A message that did not go stays in the box with why under the foot's
  * bar and what mends it (`@repo/ui`'s `ErrorState`): Retry, which sends it again
  * under the same key, so a send whose answer was lost reaches the agent
  * once, or, for a repository out of reach, the press its reason names
@@ -314,6 +317,7 @@ function continuedInCloud(
 export function AgentComposer({
   agentId,
   talksIn,
+  startsTalk,
   status,
   stoppable = status === AGENT_STATUS.RUNNING,
   steers = stoppable,
@@ -360,6 +364,8 @@ export function AgentComposer({
   agentId?: string | undefined;
   /** The task the agent works on, which a call into it names; none where the box offers no Talk, as every box but an agent's own tab's (`agent-talk.tsx`). */
   talksIn?: string | undefined;
+  /** Talk in a box that starts a new agent: the agent's blank start the call opens on; none where the box offers no Talk. */
+  startsTalk?: NewAgentTalk | undefined;
   status: AgentStatus;
   /** Whether Stop stands in Send's place while the box is empty: while the agent runs where unsaid, and while a turn runs that a Stop can cancel where the tab knows (`offersStop`). */
   stoppable?: boolean;
@@ -441,6 +447,12 @@ export function AgentComposer({
   onContinueInCloud?: ((carry: MoveCarry) => void) | undefined;
 }): React.JSX.Element {
   const connected = useConnected();
+  // Note that a Start's box has no runtime yet, so the harness its chosen model runs on stands for it.
+  const provider = model === undefined ? undefined : providerOf(model.choice.model);
+
+  const runtime =
+    model?.runtime ?? (provider === undefined ? undefined : runtimeOfProvider(provider));
+
   // Who pays, as the chip's menu names it, is the context popover's last line too.
   const paying = model === undefined ? payer : paidByOf(payer, usage, model.runtime);
 
@@ -452,7 +464,7 @@ export function AgentComposer({
     paying === undefined ? undefined : (
       <PayerValue
         payer={paying}
-        provider={model === undefined ? undefined : providerOf(model.choice.model)}
+        provider={provider}
         usage={usage}
         owner={owner}
         planName={planName}
@@ -482,11 +494,11 @@ export function AgentComposer({
   const goalsOn =
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.GOALS) }).data === true;
 
-  // Note that `/model` needs only the model chip, so New task's box and a draft's run it, while `/compact` and `/clear` need a session, and `/goal` a session or a first message, while the Goals experiment is on.
+  // Note that `/model` needs only the model chip, so New task's box and a draft's run it, while `/compact` and `/clear` need a session, and `/goal` a session or a first message, on a harness that runs a goal, while the Goals experiment is on.
   const reach = {
     model: model !== undefined,
     session: onClear !== undefined,
-    goal: goalsOn && (onClear !== undefined || startsGoal),
+    goal: goalsOn && runsGoal(runtime) && (onClear !== undefined || startsGoal),
   };
 
   const statuses = useIntegrationStatuses();
@@ -507,7 +519,6 @@ export function AgentComposer({
       update: (next) =>
         composer.updateHeld((now) => ({ ...now, attachments: next(now.attachments) })),
     },
-    pastesTextAsFile: true,
     self: agentId,
     skills,
     // Note that an edit of a queued message runs no command, chosen as typed, since it saves back into its place.
@@ -538,7 +549,7 @@ export function AgentComposer({
   });
 
   const talk = useAgentTalk(
-    agentId === undefined || talksIn === undefined ? undefined : { agentId, taskId: talksIn },
+    agentId === undefined || talksIn === undefined ? startsTalk : { agentId, taskId: talksIn },
     box.dictation,
   );
 
@@ -833,6 +844,7 @@ export function AgentComposer({
         plus={plusRows}
         tools={tools?.(box.folds(FOLD_WIDTH.TOOLS))}
         call={talk?.press}
+        talk={talk?.talk}
         dictates={talk?.onCall !== true}
         actions={
           <>
@@ -876,7 +888,6 @@ export function AgentComposer({
                   ],
                 },
               ]),
-          ...(talk?.offer === undefined ? [] : [talk.offer]),
         ]}
         beforeSend={beforeSend?.(box.folds(FOLD_WIDTH.ACTIONS))}
         send={{

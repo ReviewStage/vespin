@@ -6,7 +6,8 @@
  * `tasks/use-side-panel.ts`). A tab is either a word
  * its column names it by, such as the plan's own or the side panel's Board,
  * or an object naming what it shows: one coding agent, a draft agent not yet
- * started, one subagent, one file, one agent's changes, one terminal of
+ * started, one subagent, one file, one pull request, one agent turn's
+ * changes, one terminal of
  * an agent's, one page, or one Browser tab in an agent's cloud browser,
  * tagged with its kind (`STRIP_TAB_KIND`) and built by its kind's
  * constructor (`agentTab`, …). Two tabs are the same where they name the
@@ -26,13 +27,14 @@
  * enough closes itself (`idleTabs`, the panel's `tasks/use-idle-tabs.ts`).
  */
 
+import type { NumberedAddress } from "@repo/features/link-grammar";
 import { Predicate, Schema } from "effect";
 
 /**
  * What each kind of tab whose name is not its subject's is called, wherever
  * it is named (the desktop's `tasks/tab-look.tsx`): the task's Inbox, the
  * thread the side panel holds beside the window's Inbox, the task's Overview, a draft agent's tab and the "+" row that opens one, an agent the window holds
- * nothing of, and an agent's Pull request before its pull request is read. The side panel's fixed kinds
+ * nothing of, and a Pull request tab before its pull request is read. The side panel's fixed kinds
  * are named beside their glyphs (`SIDE_PANEL_TAB_KIND`).
  */
 export const TAB_WORDS = {
@@ -68,6 +70,7 @@ export const STRIP_TAB_KIND = {
   SUBAGENT: "subagent",
   FILE: "file",
   CHANGES: "changes",
+  TURN_CHANGES: "turnChanges",
   TERMINAL: "terminal",
   LOCAL: "local",
   PAGE: "page",
@@ -117,20 +120,24 @@ export interface FileStripTab {
 }
 
 /**
- * One agent's Pull request tab, named by the agent whose pull request it
- * shows: its overview and its changed files. It is spelled `changes`, as
- * the tab that showed the files alone was, so what an earlier version kept
- * and pinned of it still reads. A tab naming a `number` shows that pull
- * request of the agent's repository rather than the one from the branch
- * the agent stands on, such as one it opened before moving to another
- * branch, or one no agent opened.
+ * One pull request's tab, named by the pull request it shows, its
+ * repository and its number, as a link to it on GitHub names it: its
+ * overview and its changed files. It names no agent, so any link to a pull
+ * request opens exactly that one, whichever agent opened it or none did.
+ * It is spelled `changes`, as the tab that showed an agent's files alone
+ * was, though what an earlier version kept of it, named by an agent, no
+ * longer reads.
  */
 export interface ChangesStripTab {
   readonly kind: typeof STRIP_TAB_KIND.CHANGES;
-  readonly changes: string;
-  readonly number?: number;
-  /** The developer's line that opened the turn whose changes the tab shows, where it shows one turn's rather than the pull request's. */
-  readonly turn?: string;
+  readonly changes: NumberedAddress;
+}
+
+/** The changes of one of an agent's turns, named by the agent and the developer's line that opened the turn: a tab of its own beside the pull request's. */
+export interface TurnChangesStripTab {
+  readonly kind: typeof STRIP_TAB_KIND.TURN_CHANGES;
+  readonly turnChanges: string;
+  readonly turn: string;
 }
 
 /**
@@ -183,6 +190,7 @@ type ObjectStripTab =
   | SubagentStripTab
   | FileStripTab
   | ChangesStripTab
+  | TurnChangesStripTab
   | TerminalStripTab
   | LocalStripTab
   | PageStripTab
@@ -228,16 +236,22 @@ export function fileTab(file: string): FileStripTab {
   return { kind: STRIP_TAB_KIND.FILE, file };
 }
 
-/** One agent's Pull request tab, naming a pull request by its number where it shows one other than the agent's own. */
-export function changesTab(changes: string, number?: number): ChangesStripTab {
-  return number === undefined
-    ? { kind: STRIP_TAB_KIND.CHANGES, changes }
-    : { kind: STRIP_TAB_KIND.CHANGES, changes, number };
+/** Whether two pull requests are one: the same number in the same repository, whatever the case its owner and name are spelled in, as GitHub reads them (`samePullRequest`). */
+export function samePullRequestAddress(a: NumberedAddress, b: NumberedAddress): boolean {
+  return a.number === b.number && a.repository.toLowerCase() === b.repository.toLowerCase();
 }
 
-/** The changes of one of an agent's turns, the one the developer's line given opened, a tab of its own beside the agent's Pull request tab. */
-export function turnChangesTab(changes: string, turn: string): ChangesStripTab {
-  return { kind: STRIP_TAB_KIND.CHANGES, changes, turn };
+/** One pull request's tab, by its repository, `owner/name`, and its number. */
+export function changesTab(pullRequest: NumberedAddress): ChangesStripTab {
+  return {
+    kind: STRIP_TAB_KIND.CHANGES,
+    changes: { repository: pullRequest.repository, number: pullRequest.number },
+  };
+}
+
+/** The changes of one of an agent's turns, the one the developer's line given opened, a tab of its own beside the pull request's. */
+export function turnChangesTab(turnChanges: string, turn: string): TurnChangesStripTab {
+  return { kind: STRIP_TAB_KIND.TURN_CHANGES, turnChanges, turn };
 }
 
 /** One terminal in an agent's cloud sandbox, by the agent, the id its terminal was minted under, and its name. */
@@ -318,7 +332,7 @@ export function followedAgent(
     : undefined;
 }
 
-/** The key each agent's transcript tab in the side panel is drawn under, by agent, made the first time it is asked for, apart from its Changes tab's. */
+/** The key each agent's transcript tab in the side panel is drawn under, by agent, made the first time it is asked for, apart from its agent tab's. */
 const transcriptKeys = new Map<string, string>();
 
 function transcriptKey(agentId: string): string {
@@ -332,26 +346,26 @@ function transcriptKey(agentId: string): string {
 }
 
 /**
- * The key each Pull request tab naming a pull request by its number is
- * drawn under, by agent and then by number, made the first time it is asked
- * for. Note that it is not the agent's id, which the agent's own Pull
- * request tab is keyed by in the same strip.
+ * The key each Pull request tab is drawn under, by its repository, spelled
+ * as GitHub reads it whatever its case, and then by its number, made the
+ * first time it is asked for.
  */
-const numberedKeys = new Map<string, Map<number, string>>();
+const pullRequestKeys = new Map<string, Map<number, string>>();
 
-function numberedKey(agentId: string, number: number): string {
-  const ofAgent = numberedKeys.get(agentId) ?? new Map<number, string>();
-  numberedKeys.set(agentId, ofAgent);
-  const held = ofAgent.get(number);
+function pullRequestKey(pullRequest: NumberedAddress): string {
+  const repository = pullRequest.repository.toLowerCase();
+  const ofRepository = pullRequestKeys.get(repository) ?? new Map<number, string>();
+  pullRequestKeys.set(repository, ofRepository);
+  const held = ofRepository.get(pullRequest.number);
 
   if (held !== undefined) return held;
   const made = crypto.randomUUID();
-  ofAgent.set(number, made);
+  ofRepository.set(pullRequest.number, made);
 
   return made;
 }
 
-/** The key each turn's Changes tab is drawn under, by agent and then by the line that opened the turn, made the first time it is asked for, as a numbered tab's is. */
+/** The key each turn's Changes tab is drawn under, by agent and then by the line that opened the turn, made the first time it is asked for, as a pull request's is. */
 const turnKeys = new Map<string, Map<string, string>>();
 
 function turnKey(agentId: string, turn: string): string {
@@ -381,14 +395,15 @@ const NO_AGENT = (): undefined => undefined;
  * worker's call names it within its agent, as the service names its
  * conversation, so its tab is the pair. A word is keyed by itself, an
  * agent's, call's, or draft's tab by its own id, which no word spells, and
- * a file's by its path. A Changes tab is keyed by its agent's id, which no
- * other tab of the side panel, the one strip it stands in, is keyed by, one
- * naming a pull request by its number by a key made for the two
- * (`numberedKey`); a Terminal or Local tab by the id its terminal was minted
- * under, a page's by the page's own id, and a cloud Browser tab's by the id
- * the service keeps it under. An agent's tab, its Changes tab, its Terminal
- * tab, and its Local tab are the agent's own, which is where a terminal
- * command means that agent (`terminal-entry.ts`).
+ * a file's by its path. A Pull request tab is one per pull request, its
+ * repository matched whatever its case, keyed by a key made for the pair
+ * (`pullRequestKey`), and a turn's Changes tab by one made for its agent and
+ * its turn (`turnKey`); a Terminal or Local tab by the id its terminal was
+ * minted under, a page's by the page's own id, and a cloud Browser tab's by
+ * the id the service keeps it under. An agent's tab, a turn's Changes tab,
+ * its Terminal tab, and its Local tab are the agent's own, which is where a
+ * terminal command means that agent (`terminal-entry.ts`); a Pull request
+ * tab is no agent's.
  */
 const TAB_IDENTITY = {
   [STRIP_TAB_KIND.WORD]: { same: (a, b) => a === b, key: (tab) => tab, agent: NO_AGENT },
@@ -418,14 +433,14 @@ const TAB_IDENTITY = {
     agent: NO_AGENT,
   },
   [STRIP_TAB_KIND.CHANGES]: {
-    same: (a, b) => a.changes === b.changes && a.number === b.number && a.turn === b.turn,
-    key: (tab) =>
-      tab.turn !== undefined
-        ? turnKey(tab.changes, tab.turn)
-        : tab.number === undefined
-          ? tab.changes
-          : numberedKey(tab.changes, tab.number),
-    agent: (tab) => tab.changes,
+    same: (a, b) => samePullRequestAddress(a.changes, b.changes),
+    key: (tab) => pullRequestKey(tab.changes),
+    agent: NO_AGENT,
+  },
+  [STRIP_TAB_KIND.TURN_CHANGES]: {
+    same: (a, b) => a.turnChanges === b.turnChanges && a.turn === b.turn,
+    key: (tab) => turnKey(tab.turnChanges, tab.turn),
+    agent: (tab) => tab.turnChanges,
   },
   [STRIP_TAB_KIND.TERMINAL]: {
     same: (a, b) => a.terminal === b.terminal && a.shell === b.shell,

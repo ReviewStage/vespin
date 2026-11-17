@@ -62,7 +62,7 @@ const BUILD_NUMBER_TAG = "build_number";
 const MECHANISM = {
   /** A screen whose drawing threw, caught by its route's `ErrorBoundary`. */
   SCREEN: { type: "auto.expo_router.error_boundary", handled: false },
-  /** A host that could not stand, so the app drew Retry in every screen's place. */
+  /** A host that could not stand, so the app drew Try again in every screen's place. */
   HOST: { type: "auto.ios.host_start", handled: false },
 } as const;
 
@@ -138,7 +138,7 @@ export function useScreenFailureReport(error: Error): void {
   }, [error]);
 }
 
-/** Reports a host that could not stand, so the app drew Retry in every screen's place. */
+/** Reports a host that could not stand, so the app drew Try again in every screen's place. */
 export function reportHostFailure(cause: unknown): void {
   captureException(cause, { mechanism: MECHANISM.HOST });
 }

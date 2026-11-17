@@ -42,7 +42,7 @@ import type { EditorPictures } from "./editor-pictures.js";
 import { type MentionDoors, MentionNodeChip, pastedMentionNode } from "./mention-chip.js";
 import { MENTION_MENU_SIDE, type MentionSource, useMentionPicker } from "./mention-picker.js";
 import { useSelectionToolbar } from "./selection-toolbar.js";
-import { useKnownNames } from "./use-known-names.js";
+import { useKnownNames, useWordTargets } from "./use-known-names.js";
 import { useNumberedTaskIdOf } from "./use-link-standing.js";
 
 /**
@@ -74,6 +74,9 @@ import { useNumberedTaskIdOf } from "./use-link-standing.js";
  * finish or a leaving waits for a picture still being kept, since only the
  * open editor can lay in its address; it goes once none is.
  */
+
+/** The keys an editor opens as chips where it is handed none. */
+const NO_KEY_TARGETS: ReadonlyMap<string, string> = new Map();
 
 /** A dialog standing over the window, which focus moving into does not leave the text. */
 const MODAL_SELECTOR = '[aria-modal="true"]';
@@ -203,6 +206,9 @@ function MountedEditor({
               retarget: (target, renamed) => latest.current.mentions?.retarget(target, renamed),
               pasted: (words) => latest.current.mentions?.pasted(words),
               namesChip: (target) => latest.current.mentions?.namesChip(target) ?? false,
+              get keyTargets() {
+                return latest.current.mentions?.keyTargets ?? NO_KEY_TARGETS;
+              },
             },
       drawTaskBox:
         latest.current.drawTaskBox === undefined
@@ -297,6 +303,7 @@ export function MarkdownEditor({
   const text = () => handle.current?.markdown() ?? markdown;
   // An app address pasted whole is called by the name the window holds for what it names.
   const known = useKnownNames();
+  const keyTargets = useWordTargets();
   const taskIdOf = useNumberedTaskIdOf();
 
   const picker = useMentionPicker({
@@ -304,6 +311,7 @@ export function MarkdownEditor({
     room,
     side: MENTION_MENU_SIDE.BELOW,
     onChoose: (mention) => handle.current?.chooseMention(mention),
+    onRetype: (words) => handle.current?.retypeMention(words),
   });
 
   const mentioning = picker.aria["aria-expanded"] === "true";
@@ -376,6 +384,7 @@ export function MarkdownEditor({
               }),
             namesChip: (target) =>
               linkChipOf(target, target, mentions.doors.place.repository) !== undefined,
+            keyTargets,
           },
     drawDiagram: diagrams ? diagramCards.keep : undefined,
     drawTaskBox: taskBoxes.draw,

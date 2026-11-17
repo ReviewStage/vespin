@@ -192,7 +192,7 @@ export function markersAsNames(text: string): string {
 }
 
 /** The next picture's name: one past the highest picture's number among the names, so a picture taken off frees no number a later one reuses beside its neighbor's marker. */
-function nextPictureName(names: Iterable<string>): string {
+export function nextPictureName(names: Iterable<string>): string {
   let highest = 0;
 
   for (const name of names) {

@@ -368,6 +368,7 @@ import type { IntegrationConnect } from "../integrations/integration-connect.js"
 import { hostedKeyRing } from "../orpc/base.js";
 import type { PageLinks } from "../pages/page-links.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
+import type { SlackApp } from "../slack/slack-app.js";
 import type { SlackBot } from "../slack/slack-bot.js";
 import {
   changeSlackChannel,
@@ -458,6 +459,7 @@ export type MemberMcpServices =
   | SentryApp
   | IntegrationConnect
   | SlackBot
+  | SlackApp
   | AdmittedMember;
 
 /** A tool's input declaration: a wire schema the emitter can show and the reader can read. */
@@ -1530,7 +1532,7 @@ const LIST_DESCRIPTION_REVISIONS_TOOL = memberMcpTool({
     "List the history of a task's description, by its taskId, as its History tab does: every save " +
     "is kept, and saves one writer makes one after another are one revision. Answers the newest " +
     `${DESCRIPTION_HISTORY_BOUNDS.PAGE} revisions first, each with its number (seq), its writer ` +
-    "(developer for a member, notetaker, agent, or earlier for the text from before history began), " +
+    "(developer for a member, agent, or earlier for the text from before history began), " +
     "by whom (the member's or the agent's name, null for none), the agentId of an agent's, when it " +
     "began and last moved, how many changes its saves made, and restoredFrom, the revision a " +
     "member's restore brought back; and earlier, which before takes to read the next older page, " +
@@ -4435,7 +4437,7 @@ const MEMBER_LIST_AUTOMATIONS_TOOL = memberMcpTool({
     "List the automations of a workspace the member belongs to that the member may read, " +
     "newest first: each with its id, name, whether it is on, its trigger, the start of its " +
     "prompt, the model and effort its runs take, its repositories, where its runs land, its " +
-    "guards, scope, when it is next due, its newest run, and whether the member made it " +
+    "scope, when it is next due, its newest run, and whether the member made it " +
     "(madeByYourDeveloper). Name an automationId to read that one whole, in whichever of the " +
     "member's workspaces it stands, its prompt in full and its newest runs, each with why it " +
     "was skipped or failed and the agent it started. An automation fires on a schedule, a " +
@@ -4516,8 +4518,8 @@ const MEMBER_RUN_AUTOMATION_TOOL = memberMcpTool({
   description:
     `Run an automation the member may run now, by its id as ${MEMBER_MCP_TOOL.LIST_AUTOMATIONS} ` +
     "answered it, in whichever of the member's workspaces it stands, as its Run now on the " +
-    "automations page would: one run, whatever its trigger, through the same guards a firing " +
-    "takes, starting its agent on its prompt as its creator, as a scheduled run would, or " +
+    "automations page would: one run, whatever its trigger, " +
+    "starting its agent on its prompt as its creator, as a scheduled run would, or " +
     "handing it to the one agent it names. A personal automation is its creator's to run, and " +
     "a workspace's every member's. Run one when the member asks for it, such as to try an " +
     "automation just made. Each call is a run of its own, so call it once for each. Answers " +
@@ -5643,7 +5645,13 @@ const environmentAsMember = <R>(
     const workspaceId = callerWorkspaceId(caller);
 
     return run(callerUserId(caller), workspaceId).pipe(
-      Effect.map((answer): WireRecord => ({ workspaceId, variables: answer.variables })),
+      // Note that a config's value is left out of every answer, a write's too, so none reaches the model through a tool.
+      Effect.map(
+        (answer): WireRecord => ({
+          workspaceId,
+          variables: answer.variables.map(({ value: _value, ...variable }) => variable),
+        }),
+      ),
       Effect.catch((refusal) =>
         Effect.succeed(agentToolRejected(environmentRefusalWords(refusal, verb))),
       ),
@@ -5682,7 +5690,8 @@ const LIST_ENVIRONMENT_VARIABLES_TOOL = memberMcpTool({
   annotations: READ_ONLY,
   run: ({ workspace }) =>
     environmentAsMember(workspace, "run", (userId, workspaceId) =>
-      listWorkspaceEnvironment(userId, workspaceId),
+      // Note that no ring is handed, so a config's value never reaches the model through a tool.
+      listWorkspaceEnvironment(undefined, userId, workspaceId),
     ),
 });
 
@@ -5736,7 +5745,7 @@ const DELETE_ENVIRONMENT_VARIABLE_TOOL = memberMcpTool({
   annotations: DESTRUCTIVE,
   run: ({ workspace, name }) =>
     environmentAsMember(workspace, "deleted", (userId, workspaceId) =>
-      deleteWorkspaceVariable(userId, { workspaceId, name }),
+      deleteWorkspaceVariable(undefined, userId, { workspaceId, name }),
     ),
 });
 

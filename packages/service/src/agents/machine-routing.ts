@@ -23,12 +23,10 @@
  * the transcript, which says why in its own words and offers each to make
  * the agent's pick.
  *
- * Third, a local agent runs no terminal command on its own machine through
- * a call, since its own shell runs there already; such a call is refused
- * however it got there. A Mac from before machines claimed commands listens
- * as its account alone, so where the owner's default is out of reach and
- * none of the owner's machines listens as a device but the account does,
- * the call is queued for the account, as it was before.
+ * Third, a Mac from before machines claimed commands listens as its
+ * account alone, so where the owner's default is out of reach and none of
+ * the owner's machines listens as a device but the account does, the call
+ * is queued for the account, as it was before.
  */
 
 import {
@@ -47,6 +45,7 @@ import {
   type MachineCommandKind,
   type MachineUnreached,
 } from "@repo/features/machine-command-wire";
+import { MACHINE_REFUSAL_NEXT } from "@repo/features/machine-refusal-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { Clock, Duration, Effect, Option } from "effect";
 
@@ -205,37 +204,29 @@ function refusal(
   };
 }
 
-/** Why the machine given cannot take a call of the kind given from an agent running on the machine of the id given, none where it runs on none, as data and in the model's words; none where it can. */
+/** Why the machine given cannot take a call of the kind given, as data and in the model's words; none where it can. */
 function whyNot(
   machine: Candidate,
   kind: MachineCommandKind,
-  ownId: string | null,
 ): { readonly code: MachineUnreached; readonly words: string } | undefined {
-  if (kind === MACHINE_COMMAND_KIND.SHELL && machine.id === ownId) {
-    return {
-      code: MACHINE_UNREACHED.OWN_SHELL,
-      words: `Not run: you run on ${machine.name} yourself, so run the command from your own shell.`,
-    };
-  }
-
   if (!machine.lets) {
     return {
       code: MACHINE_UNREACHED.NOT_LET,
-      words: `Not run: ${machine.ownerName} doesn't let this task's agents use their machines.`,
+      words: `Not run: ${machine.ownerName} doesn't let this task's agents use their machines. ${MACHINE_REFUSAL_NEXT.SETTING}`,
     };
   }
 
   if (!machine.online) {
     return {
       code: MACHINE_UNREACHED.OFFLINE,
-      words: `Not run: ${machine.name} is offline, or ${PRODUCT_NAME} isn't running on it.`,
+      words: `Not run: ${machine.name} is offline, or ${PRODUCT_NAME} isn't running on it. ${MACHINE_REFUSAL_NEXT.LATER}`,
     };
   }
 
   if (kind === MACHINE_COMMAND_KIND.SHELL && machine.commandMode === MACHINE_COMMAND_MODE.NEVER) {
     return {
       code: MACHINE_UNREACHED.COMMANDS_NEVER,
-      words: `Not run: ${machine.name} doesn't let agents run commands (its Settings › This Mac is set to Never).`,
+      words: `Not run: ${machine.name} doesn't let agents run commands (its Settings › This Mac is set to Never). ${MACHINE_REFUSAL_NEXT.SETTING}`,
     };
   }
 
@@ -243,7 +234,7 @@ function whyNot(
   if (kind === MACHINE_COMMAND_KIND.COMPUTER && machine.computerUse === false) {
     return {
       code: MACHINE_UNREACHED.APPS_OFF,
-      words: `Not run: ${machine.name} doesn't let agents use its apps (Let agents use its apps is off for it in Settings › Machines).`,
+      words: `Not run: ${machine.name} doesn't let agents use its apps (Let agents use its apps is off for it in Settings › Machines). ${MACHINE_REFUSAL_NEXT.SETTING}`,
     };
   }
 
@@ -270,7 +261,7 @@ export function routeOf(
   return Effect.gen(function* () {
     const routing = yield* machineRoutingOf(target);
     const candidates = yield* candidatesOf(routing);
-    const whyNotHere = (machine: Candidate) => whyNot(machine, kind, routing.deviceId);
+    const whyNotHere = (machine: Candidate) => whyNot(machine, kind);
     const reachable = candidates.filter((machine) => whyNotHere(machine) === undefined);
     const byId = (id: string | null) => candidates.find((machine) => machine.id === id);
 
@@ -290,7 +281,7 @@ export function routeOf(
       return refusal(
         {
           code: MACHINE_UNREACHED.UNKNOWN_MACHINE,
-          words: `Not run: no machine this task's agents may use has the id ${JSON.stringify(machineId)}.`,
+          words: `Not run: no machine this task's agents may use has the id ${JSON.stringify(machineId)}. Leave \`machine\` out to send it where your calls go by default.`,
         },
         reachable,
       );
@@ -305,8 +296,7 @@ export function routeOf(
       return refusal(
         {
           code: MACHINE_UNREACHED.DEFAULT_GONE,
-          words:
-            "Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it.",
+          words: `Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it. ${MACHINE_REFUSAL_NEXT.WITHOUT}`,
         },
         reachable,
       );
@@ -320,13 +310,7 @@ export function routeOf(
       (machine) => machine.userId === routing.userId && machine.isDefault,
     );
 
-    const defaultWhy = ownersDefault === undefined ? undefined : whyNotHere(ownersDefault);
-
-    // Note that a local agent's own machine never takes its terminal command, so no older Mac listening as the account takes it in its place.
-    if (
-      ownersDefault !== undefined &&
-      (defaultWhy === undefined || defaultWhy.code === MACHINE_UNREACHED.OWN_SHELL)
-    ) {
+    if (ownersDefault !== undefined && whyNotHere(ownersDefault) === undefined) {
       return to(ownersDefault);
     }
 

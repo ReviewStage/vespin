@@ -37,6 +37,7 @@ import {
   fakeWorkspaceSeams,
   getTestDB,
   joinWorkspace,
+  openTaskAgent,
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
@@ -72,6 +73,7 @@ import {
   heldTaskListAnswerSchema,
   TASK_STATUS,
   taskStartAnswerSchema,
+  UNTITLED_TASK_NAME,
 } from "@repo/features/task-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
@@ -157,12 +159,13 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, agentSessions, ask } = yield* openTask();
+        const agentId = yield* openTaskAgent(owner, task.workspaceId, task.id);
 
         const shown = yield* writePage(
           owner,
           taskPageOwner(task.id),
           { title: "Chart", html: "<h1>Chart</h1>" },
-          { kind: PAGE_SHOWER.APP },
+          { kind: PAGE_SHOWER.AGENT, agentId },
         );
 
         assert.ok(Option.isSome(shown));
@@ -578,6 +581,33 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           listed.tasks.filter((each) => each.name === body.name).map((each) => each.id),
           [first.task.id],
         );
+      }),
+  );
+
+  it.effect(
+    "a task's start with a blank agent, as Talk on Home starts one, makes the untitled task and an agent handed nothing, which opens no session and leaves the task to do",
+    () =>
+      Effect.gen(function* () {
+        const { owner, task, agentSessions, ask } = yield* openTask();
+
+        const started = readAnswer(
+          taskStartAnswerSchema,
+          HOSTED_HTTP_STATUS.CREATED,
+          yield* ask(
+            request(TASKS, owner, {
+              method: "POST",
+              body: {
+                workspaceId: task.workspaceId,
+                agent: { idempotencyKey: randomUUID(), blank: true },
+              },
+            }),
+          ),
+        );
+
+        assert.equal(started.task.name, UNTITLED_TASK_NAME);
+        assert.equal(started.task.status, TASK_STATUS.TODO);
+        assert.equal(started.agent?.brief, AGENT_BRIEF.BLANK);
+        assert.equal(agentSessions.opened.length, 0);
       }),
   );
 

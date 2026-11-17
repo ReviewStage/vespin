@@ -63,7 +63,8 @@
             },
             "headSha": {
               "type": "string",
-              "maxLength": 64
+              "maxLength": 64,
+              "pattern": "^[0-9a-f]+$"
             }
           },
           "required": [
@@ -92,7 +93,8 @@
             },
             "headSha": {
               "type": "string",
-              "maxLength": 64
+              "maxLength": 64,
+              "pattern": "^[0-9a-f]+$"
             }
           },
           "required": [
@@ -370,7 +372,8 @@
             },
             "body": {
               "type": "string",
-              "maxLength": 65536
+              "maxLength": 65536,
+              "pattern": "\\S"
             }
           },
           "required": [
@@ -433,7 +436,8 @@
             },
             "body": {
               "type": "string",
-              "maxLength": 65536
+              "maxLength": 65536,
+              "pattern": "\\S"
             }
           },
           "required": [
@@ -523,11 +527,13 @@
             },
             "body": {
               "type": "string",
-              "maxLength": 65536
+              "maxLength": 65536,
+              "pattern": "\\S"
             },
             "headSha": {
               "type": "string",
-              "maxLength": 64
+              "maxLength": 64,
+              "pattern": "^[0-9a-f]+$"
             }
           },
           "required": [
@@ -572,7 +578,8 @@
             },
             "body": {
               "type": "string",
-              "maxLength": 65536
+              "maxLength": 65536,
+              "pattern": "\\S"
             }
           },
           "required": [
@@ -661,7 +668,8 @@
             },
             "index": {
               "type": "integer",
-              "minimum": 0
+              "minimum": 0,
+              "exclusiveMaximum": 10000
             },
             "count": {
               "type": "integer",

@@ -13,8 +13,14 @@ import {
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentStateWords } from "@repo/features/glyph-state";
+import { iosAppRouteOf, iosRepositoryPullRequestRoute } from "@repo/features/ios-app-links";
 import { agentActivity } from "@repo/features/ios-system-activity";
-import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
+import {
+  LINK_DESTINATION,
+  linkOf,
+  linkWorkspaceStep,
+  pullRequestAddressOf,
+} from "@repo/features/link-grammar";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
@@ -29,7 +35,7 @@ import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions
 import { MESSAGE_SUGGESTION_REFUSAL, sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TRANSCRIPT_COPY, type TranscriptCopy } from "@repo/features/transcript-copy";
-import { MCP_SERVER_LABEL, VERB } from "@repo/features/words";
+import { MCP_SERVER_LABEL, PATH_OPENS, VERB } from "@repo/features/words";
 import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
 import { PERMISSION_MODE_WORDS } from "@repo/settings";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
@@ -42,6 +48,7 @@ import {
   type BarAction,
   type BarMenu,
   type BarSubtitle,
+  BUTTON_LOOK,
   CallCardRow,
   type ColumnBar,
   Composer,
@@ -52,8 +59,10 @@ import {
   DeniesWaiting,
   DetailPage,
   drawnCallIds,
+  FOOTER_TONE,
+  FORM_SPACING,
+  footerToneOf,
   GLYPH,
-  GlassDock,
   type Glyph,
   glyphSymbol,
   HeldCallBanner,
@@ -62,6 +71,7 @@ import {
   MenuPickRow,
   MenuRow,
   type MenuRowAct,
+  NO_GROUND,
   NO_TOGGLES,
   openCuts,
   PickRows,
@@ -71,6 +81,7 @@ import {
   SkillSuggestions,
   StackBarTitle,
   SwitchRow,
+  shownFiles,
   shownMediaIds,
   type TRANSCRIPT_ITEM,
   type TranscriptItem,
@@ -81,18 +92,21 @@ import {
   transcriptOriginOf,
   useAnnounced,
   useColors,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
   withSending,
   withWaitingLine,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   useAgentMedia,
   useAgentPullRequests,
   useAgentTranscript,
   useFollowedAgent,
   useOlderPages,
+  useSentFiles,
   useShownAgent,
   useTranscriptRetry,
   useWholeParts,
@@ -126,15 +140,20 @@ import {
   useDetailPush,
   useHandToDetail,
 } from "../detail-stack.js";
+import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
-import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
+import { useInFront } from "../place-columns.js";
+import {
+  type PullRequestKey,
+  usePullRequestsRead,
+  usePullRequestWrites,
+} from "../pull-requests/use-pull-request.js";
+import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useOnOwnTab } from "../tab-route.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { PageScreen } from "./page-screens.js";
 
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
@@ -197,9 +216,8 @@ const MODE_SYMBOL = {
   [AGENT_PERMISSION_MODE.FULL_ACCESS]: GLYPH.FULL_ACCESS,
 } as const satisfies Record<AgentPermissionMode, Glyph>;
 
-/** What a pull request's card offers beside Review where it may merge now, and what that asks first. */
+/** What a pull request's card offers beside Review where it may merge now. */
 const MERGE_WORD = "Merge";
-const MERGE_QUESTION = "Merge this pull request?";
 
 /** The agent's address on vespin.dev, under its workspace and its task, once the agent is read; none before its workspace is known. */
 function useAgentAddress(
@@ -256,22 +274,22 @@ function cardMergeOf(pullRequest: AgentOverviewPullRequest | undefined) {
  * card then draws as GitHub took it; it goes as it is answered.
  */
 function CardMergeAsk({
-  agentId,
+  pullRequestKey,
   pullRequest,
   onDone,
 }: {
-  readonly agentId: string;
+  readonly pullRequestKey: PullRequestKey;
   readonly pullRequest: AgentOverviewPullRequest;
   readonly onDone: () => void;
 }) {
-  const writes = usePullRequestWrites({ agentId, number: pullRequest.number });
+  const writes = usePullRequestWrites(pullRequestKey);
   const merge = cardMergeOf(pullRequest);
 
   if (merge === undefined) return null;
 
   return (
     <ConfirmAsk
-      title={MERGE_QUESTION}
+      title={MERGE_WORDS.MERGE_QUESTION}
       message={`#${pullRequest.number} ${pullRequest.title}`}
       act={merge.words}
       presented
@@ -294,6 +312,7 @@ function AgentComposerBar({
   inColumn = false,
   call,
   otherCall,
+  shown,
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
@@ -308,6 +327,8 @@ function AgentComposerBar({
   readonly call: ComposerCall | undefined;
   /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
+  /** Whether its column stands in front, which the composer at a column's foot tells the app's notice; the docked composer's dock is told by its screen. */
+  readonly shown: boolean;
 }) {
   const said = composer.note ?? note;
   const { banner, waiting } = approvals;
@@ -319,8 +340,6 @@ function AgentComposerBar({
   const head =
     !denies &&
     banner === undefined &&
-    composer.queued.length === 0 &&
-    composer.paused === undefined &&
     composer.attached.length === 0 &&
     composer.skills === undefined &&
     otherCall === undefined &&
@@ -338,12 +357,6 @@ function AgentComposerBar({
         )}
         {banner === undefined ? null : <HeldCallBanner {...banner} />}
         {denies ? <DeniesWaiting onShow={onShowWaiting} /> : null}
-        <QueuedLines
-          lines={composer.queued}
-          paused={composer.paused}
-          onSteer={composer.steer}
-          onDelete={composer.remove}
-        />
         <AttachedPictures pictures={composer.attached} onDetach={composer.detach} />
         {said === undefined ? null : <AskNote words={said} />}
       </>
@@ -357,13 +370,28 @@ function AgentComposerBar({
     onSend: composer.send,
     addMenu,
     onDropPictures: composer.dropPictures,
+    onLongPaste: composer.pasteText,
     onStop: composer.stop,
     stopping: composer.stopping,
     call,
     head,
+    above:
+      composer.queued.length === 0 && composer.paused === undefined ? undefined : (
+        <QueuedLines
+          lines={composer.queued}
+          paused={composer.paused}
+          onSteer={composer.steer}
+          onDelete={composer.remove}
+          onMove={composer.move}
+          onResume={composer.resume}
+          onEdit={composer.edit}
+          onCancelEdit={composer.cancelEdit}
+        />
+      ),
+    saving: composer.saving,
   };
 
-  return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
+  return inColumn ? <ComposerFoot {...props} shown={shown} /> : <Composer {...props} />;
 }
 
 /**
@@ -583,13 +611,17 @@ function columnBarOf(doors: AgentBarDoors): ColumnBar {
         ...optionActs,
       ],
       submenus: [copy, ...run],
-      last: listed
+      groups: listed
         ? [
             {
-              label: MENU_WORDS.DELETE,
-              symbol: GLYPH.DELETE,
-              destructive: true,
-              onPress: doors.onDelete,
+              actions: [
+                {
+                  label: MENU_WORDS.DELETE,
+                  symbol: GLYPH.DELETE,
+                  destructive: true,
+                  onPress: doors.onDelete,
+                },
+              ],
             },
           ]
         : [],
@@ -639,13 +671,26 @@ export function AgentScreen() {
     id = "",
     suggestedBy,
     button,
-  } = useLocalSearchParams<{ id: string; suggestedBy?: string; button?: string }>();
+    brief,
+  } = useLocalSearchParams<{
+    id: string;
+    suggestedBy?: string;
+    button?: string;
+    /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
+    brief?: string;
+  }>();
 
-  const handed = useHandToDetail({ kind: PUSHED_PAGE.AGENT, agentId: id, suggestedBy, button });
+  const handed = useHandToDetail({
+    kind: PUSHED_PAGE.AGENT,
+    agentId: id,
+    suggestedBy,
+    button,
+    brief,
+  });
 
   if (handed) return null;
 
-  return <AgentConversation id={id} suggestedBy={suggestedBy} button={button} />;
+  return <AgentConversation id={id} suggestedBy={suggestedBy} button={button} brief={brief} />;
 }
 
 /**
@@ -661,42 +706,64 @@ export function AgentConversation({
   id,
   suggestedBy,
   button,
+  brief,
   inColumn = false,
   onLeave,
 }: {
   readonly id: string;
   readonly suggestedBy?: string | undefined;
   readonly button?: string | undefined;
+  /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
+  readonly brief?: string | undefined;
   /** Where the page goes once its agent is archived or deleted, where it stands as a detail's root, such as Search's pick; a pushed page leaves its stack, and a stack's screen goes back. */
   readonly onLeave?: (() => void) | undefined;
   /** Whether it stands pushed over a split view's detail rather than on a stack over the window. */
   readonly inColumn?: boolean | undefined;
 }) {
   useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
+  // Whether the page stands in front in a split view's detail, its tab shown and no page pushed over it, which its composer at the column's foot tells the notice.
+  const inFront = useInFront();
   const toDetail = useDetailPush();
   const detailLeave = useDetailLeave();
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
+  const onTab = useOnTab();
   const navigation = useNavigation();
-  const openLink = useOpenLink();
   const colors = useColors();
   const agent = useFollowedAgent(id);
   // Note that an agent the list doesn't hold is named and placed from its own read, while what acts on it reads the list alone.
   const shown = useShownAgent(id);
+  const openLink = useOpenLink(shown?.workspaceId);
   const pullRequests = useAgentPullRequests(id);
+
+  const workspaceId = shown?.workspaceId;
+
+  /** A pull request of the agent's by its page on GitHub, as its repository and number name it in the agent's workspace; none while the agent is read. */
+  const keyOf = useCallback(
+    (url: string): PullRequestKey | undefined => {
+      const named = pullRequestAddressOf(url);
+
+      return workspaceId === undefined || named === undefined
+        ? undefined
+        : { workspaceId, ...named };
+    },
+    [workspaceId],
+  );
 
   const open = useMemo(
     () =>
-      pullRequests
-        .filter(({ state }) => state === PULL_REQUEST_STATE.OPEN)
-        .map(({ number }) => number),
-    [pullRequests],
+      pullRequests.flatMap(({ state, url }) => {
+        const key = state === PULL_REQUEST_STATE.OPEN ? keyOf(url) : undefined;
+
+        return key === undefined ? [] : [key];
+      }),
+    [pullRequests, keyOf],
   );
 
-  const offers = usePullRequestsRead(id, open);
+  const offers = usePullRequestsRead(open);
   // The pull request whose card's Merge is being asked about.
-  const [merging, setMerging] = useState<number | undefined>(undefined);
-  const asked = merging === undefined ? undefined : offers.get(merging);
+  const [merging, setMerging] = useState<PullRequestKey | undefined>(undefined);
+  const asked = merging === undefined ? undefined : offers(merging);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId);
@@ -764,6 +831,7 @@ export function AgentConversation({
   useEffect(() => whole.ask(cuts), [whole, cuts]);
 
   const mediaIds = useMemo(() => shownMediaIds(items), [items]);
+  const sentFiles = useSentFiles(useMemo(() => shownFiles(items), [items]));
   const drawn = useMemo(() => drawnCallIds(items), [items]);
   const approvals = useAgentApprovals(agent, id, drawn);
   const waitingWords = approvals.waiting?.words;
@@ -796,9 +864,10 @@ export function AgentConversation({
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
 
-  const title = cardTitle(
-    shown === undefined ? (transcript?.word?.title ?? UNLISTED_AGENT) : agentName(shown),
-  );
+  // Note that a title with no words left once read, such as a brief of code alone, falls back to "Agent" rather than a blank bar.
+  const title =
+    cardTitle(shown === undefined ? (transcript?.word?.title ?? brief ?? "") : agentName(shown)) ||
+    UNLISTED_AGENT;
 
   useScreenActivity((workspaces) =>
     shown === undefined
@@ -888,6 +957,22 @@ export function AgentConversation({
   };
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
+  // Note that ⋯ stands only once it holds something to do, so a page still reading its agent never offers a copy of nothing.
+  // Note that Copy transcript waits only for the transcript's first answer, failed or not, since the copy reads the whole transcript itself.
+  const copiable = held !== undefined;
+  const taskId = shown?.taskId;
+
+  // Note that the agent's task opens as a page pushed over it, as a thread's path opens its task and the panel's crumbs do: beside the list in a split view's detail, else on the stack the reader stands in. A compact stack's title holds no menu, so Open task leads the ⋯ menu.
+  const openTask =
+    taskId === undefined
+      ? undefined
+      : () => {
+          if (toDetail({ kind: PUSHED_PAGE.TASK, taskId })) return;
+          router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId })));
+        };
+
+  const copyable = address !== undefined || copiable;
+  const openable = address !== undefined || openOptions !== undefined;
   const talk = useAgentTalk(id, shown?.taskId);
   const otherCall = useStandingCallCard(id);
 
@@ -918,12 +1003,18 @@ export function AgentConversation({
     });
   };
 
-  const openPullRequest = (number: number) => {
-    if (toDetail({ kind: PUSHED_PAGE.PULL_REQUEST, agentId: id, number })) return;
-    router.push({
-      pathname: onOwnTab("/tasks/agent/[id]/pull/[number]"),
-      params: { id, number: String(number) },
-    });
+  // Note that a pull request the agent's workspace is not read for yet opens on GitHub, which reads it whoever opened it.
+  const openPullRequest = (url: string) => {
+    const key = keyOf(url);
+
+    if (key === undefined) {
+      openInSafari(url);
+
+      return;
+    }
+
+    if (toDetail({ kind: PUSHED_PAGE.PULL_REQUEST, ...key, agentId: id })) return;
+    router.push(onOwnTab(iosRepositoryPullRequestRoute(key, id)));
   };
 
   const composerBar = (
@@ -936,6 +1027,7 @@ export function AgentConversation({
       call={talk.call}
       otherCall={otherCall}
       inColumn={inColumn}
+      shown={inFront && !covered}
     />
   );
 
@@ -948,7 +1040,9 @@ export function AgentConversation({
         title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
         symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
         loading: !failed,
-        action: failed ? { label: TRANSCRIPT_WORDS.RETRY, onPress: retry } : undefined,
+        action: failed
+          ? { label: TRANSCRIPT_WORDS.RETRY, look: BUTTON_LOOK.BORDERED, onPress: retry }
+          : undefined,
       }}
       older={older}
       heldCall={approvals.heldCall}
@@ -957,24 +1051,34 @@ export function AgentConversation({
       onOpenLink={openLink}
       onToggle={(item) => setToggles((held) => toggledAt(held, item))}
       onOpenPage={openPage}
-      mediaSource={(pictureId) => media.get(pictureId)}
+      mediaSource={(pictureId) => media.sources.get(pictureId)}
+      fileSource={sentFiles.source}
+      onRetryFile={sentFiles.retry}
+      onRetryMedia={media.retry}
       onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
       onOpenAddress={openInSafari}
-      onOpenPullRequest={(item) => openPullRequest(item.number)}
-      pullRequestActs={(item) =>
-        cardMergeOf(offers.get(item.number)) === undefined
+      onOpenPullRequest={(item) => openPullRequest(item.url)}
+      pullRequestActs={(item) => {
+        const key = keyOf(item.url);
+
+        return key === undefined || cardMergeOf(offers(key)) === undefined
           ? []
-          : [{ label: MERGE_WORD, onPress: () => setMerging(item.number) }]
-      }
+          : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
+      }}
     />
   );
 
   const asks = (
     <>
-      {asked === undefined ? null : (
-        <CardMergeAsk agentId={id} pullRequest={asked} onDone={() => setMerging(undefined)} />
+      {merging === undefined || asked === undefined ? null : (
+        <CardMergeAsk
+          pullRequestKey={merging}
+          pullRequest={asked}
+          onDone={() => setMerging(undefined)}
+        />
       )}
       <ConfirmAsk destructive {...talk.switching} />
+      <ConfirmAsk destructive {...composer.removing} />
       <ConfirmAsk
         title={actions.archiveAsk.question.title}
         message={actions.archiveAsk.question.message}
@@ -1042,96 +1146,123 @@ export function AgentConversation({
     <>
       <Stack.Screen options={screenOptions} />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
-          {address === undefined ? null : (
-            <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.LINK)} onPress={actions.copyLink}>
-                {MENU_WORDS.COPY_LINK}
-              </Stack.Toolbar.MenuAction>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
-                onPress={() => openInSafari(address)}
-              >
-                {VERB.OPEN_IN_BROWSER}
-              </Stack.Toolbar.MenuAction>
-            </Stack.Toolbar.Menu>
-          )}
-          <Stack.Toolbar.Menu inline>
-            <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.COPY)} title={COPY_TRANSCRIPT_WORDS.COPY}>
-              <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.CONCISE)}>
-                {COPY_TRANSCRIPT_WORDS.CONCISE}
-              </Stack.Toolbar.MenuAction>
-              <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.FULL)}>
-                {COPY_TRANSCRIPT_WORDS.FULL}
-              </Stack.Toolbar.MenuAction>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(GLYPH.SHARE)}
-                onPress={() => shareTranscript(TRANSCRIPT_COPY.FULL)}
-              >
-                {COPY_TRANSCRIPT_WORDS.SHARE}
-              </Stack.Toolbar.MenuAction>
-            </Stack.Toolbar.Menu>
-          </Stack.Toolbar.Menu>
-          {agent === undefined ? null : (
-            <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RENAME)} onPress={askRename}>
-                {MENU_WORDS.RENAME}
-              </Stack.Toolbar.MenuAction>
-              {barActs ? null : (
-                <Stack.Toolbar.MenuAction
-                  icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
-                  onPress={actions.pin}
-                >
-                  {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
+        {copyable || openable || openTask !== undefined ? (
+          <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
+            {openTask === undefined ? null : (
+              <Stack.Toolbar.Menu inline>
+                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.TASK)} onPress={openTask}>
+                  {PATH_OPENS.TASK}
                 </Stack.Toolbar.MenuAction>
-              )}
-            </Stack.Toolbar.Menu>
-          )}
-          {openOptions === undefined ? null : (
-            <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.OPTIONS)} onPress={openOptions}>
-                {ADD_WORDS.OPTIONS}
-              </Stack.Toolbar.MenuAction>
-              {hasPorts ? (
-                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.PLUG)} onPress={openPorts}>
-                  {AGENT_PORTS_WORDS.PORTS}
-                </Stack.Toolbar.MenuAction>
-              ) : null}
-              {runActions.length === 0 ? null : (
-                <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.RUN)} title={RUN_ACTION_WORDS.SUBMENU}>
-                  {runActions.map((offered) => (
+              </Stack.Toolbar.Menu>
+            )}
+            {/* Note that the groups keep the panel's order (`agentMenuGroups`): the copies, then the name, then where it opens, then archiving, and Permanently delete last and alone. */}
+            {copyable ? (
+              <Stack.Toolbar.Menu inline>
+                {address === undefined ? null : (
+                  <Stack.Toolbar.MenuAction
+                    icon={glyphSymbol(GLYPH.LINK)}
+                    onPress={actions.copyLink}
+                  >
+                    {MENU_WORDS.COPY_LINK}
+                  </Stack.Toolbar.MenuAction>
+                )}
+                {copiable ? (
+                  <Stack.Toolbar.Menu
+                    icon={glyphSymbol(GLYPH.COPY)}
+                    title={COPY_TRANSCRIPT_WORDS.COPY}
+                  >
                     <Stack.Toolbar.MenuAction
-                      key={offered.action.id}
-                      icon={glyphSymbol(offered.runs ? GLYPH.STOP : GLYPH.RUN)}
-                      subtitle={offered.runs ? RUN_ACTION_WORDS.RUNNING : offered.action.command}
-                      onPress={offered.onPress}
+                      onPress={() => copyTranscript(TRANSCRIPT_COPY.CONCISE)}
                     >
-                      {runActionMenuLabel(offered.action, offered.runs)}
+                      {COPY_TRANSCRIPT_WORDS.CONCISE}
                     </Stack.Toolbar.MenuAction>
-                  ))}
-                </Stack.Toolbar.Menu>
-              )}
-            </Stack.Toolbar.Menu>
-          )}
-          {agent === undefined || barActs ? null : (
-            <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.ARCHIVE)} onPress={askArchive}>
-                {MENU_WORDS.ARCHIVE}
-              </Stack.Toolbar.MenuAction>
-            </Stack.Toolbar.Menu>
-          )}
-          {agent === undefined ? null : (
-            <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(GLYPH.DELETE)}
-                destructive
-                onPress={() => setDeleting(true)}
-              >
-                {MENU_WORDS.DELETE}
-              </Stack.Toolbar.MenuAction>
-            </Stack.Toolbar.Menu>
-          )}
-        </Stack.Toolbar.Menu>
+                    <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.FULL)}>
+                      {COPY_TRANSCRIPT_WORDS.FULL}
+                    </Stack.Toolbar.MenuAction>
+                    <Stack.Toolbar.MenuAction
+                      icon={glyphSymbol(GLYPH.SHARE)}
+                      onPress={() => shareTranscript(TRANSCRIPT_COPY.FULL)}
+                    >
+                      {COPY_TRANSCRIPT_WORDS.SHARE}
+                    </Stack.Toolbar.MenuAction>
+                  </Stack.Toolbar.Menu>
+                ) : null}
+              </Stack.Toolbar.Menu>
+            ) : null}
+            {agent === undefined ? null : (
+              <Stack.Toolbar.Menu inline>
+                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RENAME)} onPress={askRename}>
+                  {MENU_WORDS.RENAME}
+                </Stack.Toolbar.MenuAction>
+                {barActs ? null : (
+                  <Stack.Toolbar.MenuAction
+                    icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
+                    onPress={actions.pin}
+                  >
+                    {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
+                  </Stack.Toolbar.MenuAction>
+                )}
+              </Stack.Toolbar.Menu>
+            )}
+            {openable ? (
+              <Stack.Toolbar.Menu inline>
+                {address === undefined ? null : (
+                  <Stack.Toolbar.MenuAction
+                    icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
+                    onPress={() => openInSafari(address)}
+                  >
+                    {VERB.OPEN_IN_BROWSER}
+                  </Stack.Toolbar.MenuAction>
+                )}
+                {openOptions === undefined ? null : (
+                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.OPTIONS)} onPress={openOptions}>
+                    {ADD_WORDS.OPTIONS}
+                  </Stack.Toolbar.MenuAction>
+                )}
+                {openOptions !== undefined && hasPorts ? (
+                  <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.PLUG)} onPress={openPorts}>
+                    {AGENT_PORTS_WORDS.PORTS}
+                  </Stack.Toolbar.MenuAction>
+                ) : null}
+                {openOptions === undefined || runActions.length === 0 ? null : (
+                  <Stack.Toolbar.Menu
+                    icon={glyphSymbol(GLYPH.RUN)}
+                    title={RUN_ACTION_WORDS.SUBMENU}
+                  >
+                    {runActions.map((offered) => (
+                      <Stack.Toolbar.MenuAction
+                        key={offered.action.id}
+                        icon={glyphSymbol(offered.runs ? GLYPH.STOP : GLYPH.RUN)}
+                        subtitle={offered.runs ? RUN_ACTION_WORDS.RUNNING : offered.action.command}
+                        onPress={offered.onPress}
+                      >
+                        {runActionMenuLabel(offered.action, offered.runs)}
+                      </Stack.Toolbar.MenuAction>
+                    ))}
+                  </Stack.Toolbar.Menu>
+                )}
+              </Stack.Toolbar.Menu>
+            ) : null}
+            {agent === undefined || barActs ? null : (
+              <Stack.Toolbar.Menu inline>
+                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.ARCHIVE)} onPress={askArchive}>
+                  {MENU_WORDS.ARCHIVE}
+                </Stack.Toolbar.MenuAction>
+              </Stack.Toolbar.Menu>
+            )}
+            {agent === undefined ? null : (
+              <Stack.Toolbar.Menu inline>
+                <Stack.Toolbar.MenuAction
+                  icon={glyphSymbol(GLYPH.DELETE)}
+                  destructive
+                  onPress={() => setDeleting(true)}
+                >
+                  {MENU_WORDS.DELETE}
+                </Stack.Toolbar.MenuAction>
+              </Stack.Toolbar.Menu>
+            )}
+          </Stack.Toolbar.Menu>
+        ) : null}
         {/* Note that a right bar's first item stands at its edge, so the ⋯ leads the list and Archive then Pin stand before it, as Mail stands its acts before More. Each glyph is named as the ⋯'s is, since a top bar loads an `xcasset` icon through React Native's image loader, which reads no symbol set, and drew an empty capsule. */}
         {barActs ? (
           <Stack.Toolbar.Button
@@ -1149,7 +1280,7 @@ export function AgentConversation({
         ) : null}
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
-      <GlassDock bar={composerBar}>{transcriptView}</GlassDock>
+      <FocusedDock bar={composerBar}>{transcriptView}</FocusedDock>
       {asks}
     </>
   );
@@ -1219,7 +1350,7 @@ export function AgentPage({
  * the model lists, Fast only where the model has a fast version; its
  * permission mode, each with what it does, where its harness takes one,
  * which takes effect from its next turn; and the connected MCP servers it is
- * handed, each with its switch, a server connected in Settings. Done closes
+ * handed, each with its switch, a server connected in Settings. Its checkmark closes
  * it.
  */
 export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
@@ -1250,13 +1381,17 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button onPress={() => router.back()}>
-          {OPTIONS_WORDS.DONE}
-        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CONFIRM)}
+          variant="done"
+          tintColor={colors.ACCENT}
+          accessibilityLabel={OPTIONS_WORDS.DONE}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
       <Screen>
-        <SettingsForm>
-          <ListSection footer={pick.note}>
+        <SettingsForm spacing={FORM_SPACING.COMPACT}>
+          <ListSection footer={pick.note} footerTone={FOOTER_TONE.FAILURE}>
             <MenuPickRow
               label={OPTIONS_WORDS.MODEL}
               options={pick.models}
@@ -1284,6 +1419,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
             <ListSection
               title={PERMISSION_MODE_WORDS.GROUP}
               footer={mode.note ?? PERMISSION_MODE_WORDS.APPLIES}
+              footerTone={footerToneOf(mode.note)}
             >
               <PickRows
                 options={mode.modes}
@@ -1296,7 +1432,11 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
               />
             </ListSection>
           )}
-          <ListSection title={MCP_SERVER_LABEL.many} footer={serversFooter}>
+          <ListSection
+            title={MCP_SERVER_LABEL.many}
+            footer={serversFooter}
+            footerTone={footerToneOf(servers.note)}
+          >
             {servers.servers.map((server) => (
               <SwitchRow
                 key={server.connection}
@@ -1328,7 +1468,7 @@ const PORT_ACT_WORDS = {
   [PORT_ACT.STOP_SHARING]: AGENT_PORTS_WORDS.STOP_SHARING,
 } as const satisfies Record<PortAct, string>;
 
-/** The Ports sheet's own words: its close. */
+/** The Ports sheet's own words: what VoiceOver hears its checkmark as. */
 const PORTS_WORDS = { DONE: "Done" } as const;
 
 /**
@@ -1339,10 +1479,11 @@ const PORTS_WORDS = { DONE: "Done" } as const;
  * and Sharing, and offers Open link, which opens it in Safari, Copy link,
  * and Stop sharing; while one is shared, another offers nothing, and where
  * none is listed, the panel's line says why. A share that did not go says
- * why under the list. Done closes it.
+ * why under the list. Its checkmark closes it.
  */
 export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
   const colors = useColors();
+  const half = useSheetAtHalf();
   const router = useRouter();
   const ports = useAgentPorts(agentId);
 
@@ -1372,18 +1513,23 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.GROUPED },
+          contentStyle: { backgroundColor: half ? NO_GROUND : colors.GROUPED },
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button onPress={() => router.back()}>
-          {PORTS_WORDS.DONE}
-        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CONFIRM)}
+          variant="done"
+          tintColor={colors.ACCENT}
+          accessibilityLabel={PORTS_WORDS.DONE}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
-      <Screen>
-        <SettingsForm>
+      <Screen clear={half}>
+        <SettingsForm clear={half} spacing={FORM_SPACING.COMPACT}>
           <ListSection
             footer={ports.note ?? (ports.rows.length === 0 ? ports.none : ports.linkNote)}
+            footerTone={footerToneOf(ports.note)}
           >
             {ports.rows.map((row) => (
               <MenuRow

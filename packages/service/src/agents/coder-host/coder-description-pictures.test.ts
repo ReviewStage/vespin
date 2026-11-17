@@ -63,6 +63,7 @@ function sandboxWith(files: Readonly<Record<string, Uint8Array>>): InboxSandboxD
 
   return () =>
     Promise.resolve({
+      checkout: CODER.CHECKOUT_PATH,
       readFile: ({ path }: { path: string }) => {
         const bytes = byPath.get(path);
 
@@ -323,11 +324,10 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
   );
 
   it.effect(
-    "a recording lands as its line, kept as it was recorded up to a video's bound, and one past that bound, one that states no size, or one past the plan's videos is refused",
+    "a recording lands as its line, kept as it was recorded up to a video's bound, and one past that bound, or one that states no size is refused",
     () =>
       Effect.gen(function* () {
         const { owner, teammate, taskId, agentId } = yield* openAgentTask;
-        const full = yield* openAgentTask;
         const recording = paddedTo(webmBytes(1280, 800), PICTURE_BOUNDS.MAX_VIDEO_BYTES);
 
         const sandbox = sandboxWith({
@@ -336,38 +336,24 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
           "videos/sizeless.webm": paddedTo(webmBytes(1280, 800).subarray(0, 24), 64),
         });
 
-        for (
-          let kept = 0;
-          kept < DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION;
-          kept += 1
-        ) {
-          const video = { contentType: PICTURE_MEDIA_TYPE.WEBM, bytes: webmBytes(640, 400) };
-          const answer = yield* keepDescriptionAttachment(full.owner, full.taskId, video);
-          assert.equal(answer.status, DESCRIPTION_ATTACHMENT_KEEP.KEPT);
-        }
-
-        const edit = (at: { owner: string; taskId: string; agentId: string }, path: string) =>
+        const edit = (path: string) =>
           recordDescriptionEdit(
-            { userId: at.owner, taskId: at.taskId },
-            { agentId: at.agentId },
+            { userId: owner, taskId },
+            { agentId },
             unparsedWire(pictureCall(path)),
             0,
             sandbox,
           );
 
-        const own = { owner, taskId, agentId };
-
         const answers = [
-          yield* edit(own, "videos/long.webm"),
-          yield* edit(own, "videos/sizeless.webm"),
-          yield* edit(full, "videos/invite.webm"),
-          yield* edit(own, "videos/invite.webm"),
+          yield* edit("videos/long.webm"),
+          yield* edit("videos/sizeless.webm"),
+          yield* edit("videos/invite.webm"),
         ];
 
         assert.deepEqual(answers, [
           descriptionEditRejected(`${TASK_PICTURE_FILE_REFUSAL.TOO_LARGE} videos/long.webm`),
           descriptionEditRejected(`${TASK_PICTURE_FILE_REFUSAL.NOT_IMAGE} videos/sizeless.webm`),
-          descriptionEditRejected(DESCRIPTION_EDIT_REFUSAL.TOO_MANY_VIDEOS),
           { status: ACTION_RESULT_STATUS.ACCEPTED, taken: 1 },
         ]);
         const stored = Option.getOrThrow(yield* readTask(owner, taskId));

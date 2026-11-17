@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { PULL_REQUEST_PART } from "@repo/features/agent-view";
 import {
   type AgentPullRequestAnswer,
   CHECK_SUMMARY,
@@ -10,7 +9,7 @@ import {
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
-import { handHostReads, holdPullRequestParts } from "../testing/app-state.js";
+import { handHostReads, holdAgentPullRequests } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { useAgentPullRequest, useListedPullRequests } from "./use-agent-pull-request.js";
 
@@ -49,9 +48,9 @@ afterEach(() => {
 test("a tab draws the pull request the task list carries over a held read that found none yet, with the branch that read found", async () => {
   const opened = PUBLISHED.pullRequest ?? assert.fail("a pull request");
   // The host read the agent's branch before it opened its pull request, which the list now carries.
-  holdPullRequestParts(handHostReads({}).deliverParts, {
-    [PULL_REQUEST_PART.PUBLISHED]: () => Promise.resolve({ ...PUBLISHED, pullRequest: null }),
-  });
+  holdAgentPullRequests(handHostReads({}).deliverParts, () =>
+    Promise.resolve({ ...PUBLISHED, pullRequest: null }),
+  );
   let held: AgentPullRequestAnswer | undefined;
 
   function Probe(): null {

@@ -63,7 +63,6 @@ import {
   useBoardDoor,
   useInboxDoor,
   useMergeQueueDoor,
-  usePersonDoor,
   useVersionHistoryDoor,
 } from "../places/routed-doors.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
@@ -87,19 +86,20 @@ import {
   AutomationsToolbar,
 } from "./automation-list-frame.js";
 import { READING_AUTOMATIONS } from "./automation-words.js";
-import { backPlaceOf } from "./back-place.js";
+import { awayPlaceOf, backPlaceOf } from "./back-place.js";
 import { AgentRoutePage } from "./desktop-agent-page.js";
 import { DesktopInbox } from "./desktop-inbox.js";
 import type { SettingsStep } from "./desktop-settings.js";
 import { DesktopSidebar } from "./desktop-sidebar.js";
 import { DesktopHomePage, DesktopTasks } from "./desktop-tasks.js";
 import { KEY_LAYERS, useFloatDismiss } from "./hover-pane.js";
+import { MergeQueueSkeleton } from "./merge-queue-frame.js";
 import { MobileBar, mobileBarShown, useBarStanding } from "./mobile-bar.js";
 import { NewTaskButton } from "./new-task-button.js";
 import { NewWorkspaceOpener, useNewWorkspace } from "./new-workspace.js";
 import { OfflineMark } from "./offline-mark.js";
 import { PaneGlide } from "./pane-motion.js";
-import { PersonPageSkeleton, RowsSkeleton } from "./person-frame.js";
+import { PersonPageSkeleton } from "./person-frame.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead, phoneBar } from "./phone-head.js";
 import { PLACE_LIST, PLACE_PAGE, PLACE_SPLIT } from "./place-columns.js";
@@ -108,12 +108,11 @@ import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
 import { homeTaskCardOf } from "./task-card.js";
 import { awayBack } from "./task-pane-switcher.js";
 import { TasksPagesHeld } from "./tasks-page-held.js";
+import { UpdateNeeded, useUpdateNeeded } from "./update-needed.js";
 import { useWindowTitle } from "./window-title.js";
 
-/** What stands while the Tasks page's chunk loads: its frame and title over quiet blocks, and its own way out, so Escape closes the page rather than reaching the plan behind it. */
-function TasksLoading({ onExit }: { onExit: () => void }): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_BOARD, onExit);
-
+/** What stands while the Tasks page's chunk loads: its frame and title over quiet blocks. */
+function TasksLoading(): React.JSX.Element {
   return (
     <ReplayUnmask>
       <CollectionPage
@@ -130,24 +129,21 @@ function TasksLoading({ onExit }: { onExit: () => void }): React.JSX.Element {
 /**
  * What stands while the Admin place's chunk loads, or while the account's
  * access is read: the place's toolbar and its bar of sections, as it will
- * stand, over rows of blocks, and its own way out, so Escape pressed in that
- * frame closes Admin as the place would.
+ * stand, over rows of blocks.
  */
 function AdminLoading({
   room,
   view,
   onOpen,
-  onExit,
+  onBack,
 }: {
   room: ShellRoom;
   view: AdminView;
   onOpen: (view: AdminView) => void;
-  onExit: () => void;
+  onBack: (view: AdminView) => void;
 }): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_ADMIN, onExit);
-
   return (
-    <AdminPlaceFrameProvider value={adminFrame(room, view, onOpen)}>
+    <AdminPlaceFrameProvider value={adminFrame(room, view, onOpen, onBack)}>
       <AdminCollectionPage
         title={ADMIN_TITLE}
         controls={null}
@@ -158,22 +154,6 @@ function AdminLoading({
     </AdminPlaceFrameProvider>
   );
 }
-
-/** What stands while a person's page's chunk loads: the page as it stands until the members are read (`PersonPageSkeleton`), and its own way out. */
-function PersonLoading({
-  name,
-  onExit,
-}: {
-  name: string | undefined;
-  onExit: () => void;
-}): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_PERSON_PAGE, onExit);
-
-  return <PersonPageSkeleton name={name} />;
-}
-
-/** What the Merge queue page's frame says it is reading while its chunk loads, as the page says it while its first read does. */
-const READING_MERGE_QUEUES = "Reading the merge queues…";
 
 /** Where Settings' way out leads where no step stands behind it, as a hint names it. */
 const TASKS_EXIT_PLACE = "tasks";
@@ -261,19 +241,9 @@ function VersionHistoryLoading({
 /**
  * What stands while the Automations pages' chunk loads: the list's own
  * toolbar and card as quiet blocks (`AutomationListSkeleton`), as the list
- * stands while it is first read, and their own way out, so Escape pressed in
- * that frame closes Automations as the list would rather than falling
- * through to the task behind it.
+ * stands while it is first read.
  */
-function AutomationsLoading({
-  onExit,
-  room,
-}: {
-  onExit: () => void;
-  room: ShellRoom;
-}): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, onExit);
-
+function AutomationsLoading({ room }: { room: ShellRoom }): React.JSX.Element {
   return (
     <CollectionPage
       frame={PAGE_FRAME.TOOLBAR}
@@ -854,7 +824,13 @@ export function DesktopShell({
 }): React.JSX.Element {
   const { account } = settings;
   const shell = useRef<HTMLDivElement>(null);
-  const gated = gates.accountRequired && account.status !== ACCOUNT_STATUS.SIGNED_IN;
+  // While the service refuses this build, the update screen takes the whole window, the sign-in, setup, and New workspace
+  // among what it stands over, since every call any of them would make is refused until the build is updated.
+  const updateNeeded = useUpdateNeeded();
+
+  const gated =
+    !updateNeeded && gates.accountRequired && account.status !== ACCOUNT_STATUS.SIGNED_IN;
+
   // A new account is set up once, in the window before the app, until it finishes on any machine.
   const signedInId = account.status === ACCOUNT_STATUS.SIGNED_IN ? account.id : undefined;
   const [finishedHere, setFinishedHere] = useState<string>();
@@ -886,9 +862,10 @@ export function DesktopShell({
   const setToggleRoom = usePanelToggleRoom();
   // Note that setup standing before the app holds the places' chords too, so none lands behind it, as New workspace's cards do.
   const newWorkspace = useNewWorkspace(tasks.placeLeave);
-  const founding = !gated && newWorkspace.open;
+  const founding = !gated && !updateNeeded && newWorkspace.open;
+  // Note that setup the update screen stands in place of holds no chords, so Settings stays a key away.
   usePlaceCommands(
-    !gated && setup === SETUP_GATE.NONE && !founding,
+    !gated && (updateNeeded || setup === SETUP_GATE.NONE) && !founding,
     tab,
     onTabChange,
     tasks,
@@ -950,11 +927,11 @@ export function DesktopShell({
   useWindowTitle(titleSubject(tab, tasks, namedTask, place, inAutomations));
 
   // The plan is looked at the moment it is on screen, whichever of its column's tabs is chosen,
-  // from the mark and the agents' activity its row in the list carries.
+  // from the mark and the agents' activity its row in the list carries; not while the update screen stands over the window.
   const listedShown = useNamedTask(shownTask?.id, tasks.typedNames);
 
   const looks = useTaskLooks(
-    shownTask,
+    updateNeeded ? undefined : shownTask,
     tasks.me,
     shownTask === undefined ? undefined : (listedShown ?? shownTask),
   );
@@ -1008,15 +985,17 @@ export function DesktopShell({
   // filling the window over them hides them too, and its toggle is the way out.
   const detailsShown = isOverviewTab(tasks.mainTabs.tab) && !tasks.sidePanel.fullScreen;
   const descriptionToggle = tasks.page === TASKS_PAGE.TASK && !standingIn && !detailsShown;
-  // A phone's task leads its own row with the way back to the page it was opened from, named for it (`task-pane-switcher.tsx`).
-  const awayLabel = awayBack(history.away, history.onLeave).label;
-  const { onLeave } = history;
-  const away = useMemo(() => ({ label: awayLabel, onPress: onLeave }), [awayLabel, onLeave]);
+  // A phone's page leads its own row with its way back, the window's Back, named for the step it goes back to, and Home
+  // where none stands behind (`task-pane-switcher.tsx`).
+  const behind = history.canGoBack ? history.steps.back[0] : undefined;
+  const awayLabel = awayBack(behind).label;
+  const awayPress = history.canGoBack ? history.onBack : tasks.onGoHome;
+  const away = useMemo(() => ({ label: awayLabel, onPress: awayPress }), [awayLabel, awayPress]);
 
   // Note that the onboarding column's drag strip stands over its top rather
   // than in flow, because the AuthPage beneath is already a whole window tall
   // and a strip above it would overflow the window by the strip's height.
-  if (setup !== SETUP_GATE.NONE && signedInId !== undefined) {
+  if (!updateNeeded && setup !== SETUP_GATE.NONE && signedInId !== undefined) {
     // While a new account's agent is still read, the window waits on setup's own ground rather than glimpsing the app.
     return (
       <ScrollArea>
@@ -1066,6 +1045,10 @@ export function DesktopShell({
       </ScrollArea>
     );
   }
+
+  // The update screen takes the whole window but for Settings, which stays to reach the account and the build.
+  if (updateNeeded && tab !== PANEL_TAB.SETTINGS)
+    return <UpdateNeeded updates={settings.updates} />;
 
   // New workspace takes the whole window on setup's own ground, its cards being setup's.
   if (founding) {
@@ -1378,37 +1361,33 @@ export function HomePlace(): React.JSX.Element {
 export function BoardRouteLoading(): React.JSX.Element | null {
   const { tasks, room } = useShellPlaces();
   const bar = useBarStanding(tasks);
-  const board = useBoardDoor(tasks);
 
   if (mobileBarShown(room, tasks, bar)) return null;
 
-  return <TasksLoading onExit={board.close} />;
+  return <TasksLoading />;
 }
 
 /** The Automations pages' frame while their chunk loads. */
 export function AutomationsRouteLoading(): React.JSX.Element {
-  const { tasks, room } = useShellPlaces();
-  const automations = useAutomationsDoor(tasks);
+  const { room } = useShellPlaces();
 
-  return <AutomationsLoading onExit={automations.close} room={room} />;
+  return <AutomationsLoading room={room} />;
 }
 
 /** The Merge queue page's frame while its chunk loads. */
 export function MergeQueueRouteLoading(): React.JSX.Element {
   return (
     <DetailPage frame={PAGE_FRAME.PAGE} title={MERGE_QUEUE_WORDS}>
-      <RowsSkeleton label={READING_MERGE_QUEUES} />
+      <MergeQueueSkeleton />
     </DetailPage>
   );
 }
 
 /** A person's page's frame while its chunk loads. */
 export function PersonRouteLoading(): React.JSX.Element {
-  const { tasks } = useShellPlaces();
   const { name } = usePersonRoute();
-  const person = usePersonDoor(tasks);
 
-  return <PersonLoading name={name} onExit={person.close} />;
+  return <PersonPageSkeleton name={name} />;
 }
 
 /** Admin's frame, which stands while its chunk loads and while the account's access is still read. */
@@ -1417,7 +1396,7 @@ export function AdminRouteLoading(): React.JSX.Element {
   const admin = useAdminDoor(tasks);
   const view = useAdminView();
 
-  return <AdminLoading room={room} view={view} onOpen={admin.open} onExit={admin.close} />;
+  return <AdminLoading room={room} view={view} onOpen={admin.open} onBack={admin.back} />;
 }
 
 /**
@@ -1432,7 +1411,11 @@ export function SettingsFrame({
   children: (exit: () => void) => React.ReactNode;
 }): React.JSX.Element {
   const { tasks, history, room, onTabChange } = useShellPlaces();
-  const exitSettings = history.canGoBack ? history.onBack : () => onTabChange(PANEL_TAB.TASKS);
+
+  // Note that its way out goes back past all of its pages to where it was opened from, as one step out of Settings.
+  const exitSettings =
+    history.away === undefined ? () => onTabChange(PANEL_TAB.TASKS) : history.onLeave;
+
   const settingsBar = room === SHELL_ROOM.NARROW && tasks.signedIn;
 
   return (
@@ -1448,17 +1431,16 @@ export function SettingsFrame({
  * (`version-history-route.lazy.tsx`), its versions listed where the sidebar
  * was: a chip in a version's words hangs the cards the description's own
  * words do, and New task's dialog stands over it as it does over the tasks.
- * Its way out goes back a step, or leaves it for its task where none stands
- * behind it.
+ * Its way out goes back a step, or leaves it for its task in its step where
+ * none stands behind it.
  */
 export function VersionHistoryFrame({
   children,
 }: {
   children: (exit: () => void) => React.ReactNode;
 }): React.JSX.Element {
-  const { tasks, history, room, mentionedAgents, chipCards, newTaskDialog } = useShellPlaces();
-  const historyDoor = useVersionHistoryDoor(tasks);
-  const exitHistory = history.canGoBack ? history.onBack : historyDoor.close;
+  const { tasks, room, mentionedAgents, chipCards, newTaskDialog } = useShellPlaces();
+  const exitHistory = useVersionHistoryDoor(tasks).back;
 
   return (
     <div className="desktop-shell" data-room={room}>
@@ -1497,7 +1479,7 @@ export function SettingsRouteLoading(): React.JSX.Element {
       {(exit) => (
         <SettingsLoading
           onExit={exit}
-          place={backPlaceOf(history, TASKS_EXIT_PLACE)}
+          place={awayPlaceOf(history.away, TASKS_EXIT_PLACE)}
           onList={settingsStep.onList}
           hidden={hiddenColumns(room, settingsStep.listed)}
         />

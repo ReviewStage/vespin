@@ -1,20 +1,28 @@
 // search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, scoped as ⌘K's filters scope them, each row drawn by its own list's row, its results beside the app sidebar in a window wide enough for three columns.
 
+import { READING_INBOX } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import {
-  noResultsWords,
-  SEARCH_FINDS,
   SEARCH_FOUND_KIND,
   SEARCH_FOUND_TITLE,
   SEARCH_SCOPE,
   SEARCH_SCOPE_TITLE,
+  type SearchFoundKind,
   type SearchScope,
+  SHOW_ALL,
   scopedFound,
   searchPlaceholder,
+  showAllHeard,
+  shownOfWords,
 } from "@repo/features/search-found-model";
-import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
+import {
+  CHOOSE_AN_ITEM_WORDS,
+  NO_RESULTS_HINT,
+  noResultsForWords,
+  readingWords,
+} from "@repo/features/words";
 import {
   type BarMenu,
   type ColumnBar,
@@ -27,11 +35,13 @@ import {
   NoSelection,
   RowList,
   type RowSubmenu,
-  ScopePicker,
   Screen,
   UNDER_SPLIT_SCREEN,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
-import { Stack, useFocusEffect, useIsFocused, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
 import {
   type Dispatch,
   type ReactNode,
@@ -44,29 +54,33 @@ import {
 import { useDetailStack, useStackRoot } from "../detail-stack.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
+import { lowerKeyboard } from "../native-interactions-module.js";
 import { useHandColumns } from "../place-columns.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
-import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { AgentConversation } from "./agent-screens.js";
-import { SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
+import { PLUS_TAB, SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
 import { useRemind } from "./inbox-remind.js";
 import { InboxItemRows, ThreadColumn } from "./inbox-screens.js";
 import {
+  type AgentArchiving,
   StatusQuestionAsk,
   TaskAgentRow,
   TaskRows,
   useAgentArchiveAsk,
   useTaskDetail,
+  useTaskRowDoors,
 } from "./task-screens.js";
 
 /** The Search tab's name, at its head. */
 const SEARCH_TITLE = "Search";
+
+/** What a search under Tasks or Agents says while the task list is still being read. */
+const READING_TASKS = `${readingWords("your tasks")}…`;
 
 /** What the scopes choose, heard by VoiceOver before the scope chosen. */
 const SCOPE_LABEL = "Show";
@@ -93,6 +107,21 @@ function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined
     ),
     ...found.agents.map(({ agent }) => [agent.id, iosAgentRoute(agent.id)] as const),
   ]);
+}
+
+/**
+ * What a scope's rows are still being read from, as the words its wait
+ * says, so it never says it found nothing before the lists it searches have
+ * answered: Inbox waits on the Inbox's first read, Tasks and Agents on the
+ * task list, which holds both, and All on either; none once they answered.
+ */
+function scopeReading(found: SearchFound, scope: SearchScope): string | undefined {
+  const inbox = scope !== SEARCH_SCOPE.TASKS && scope !== SEARCH_SCOPE.AGENTS;
+  const tasks = scope !== SEARCH_SCOPE.INBOX;
+
+  if (inbox && found.inboxReading) return READING_INBOX;
+
+  return tasks && found.tasksReading ? READING_TASKS : undefined;
 }
 
 /** What kind of row a wide window's Search picked, whose page stands beside the results. */
@@ -152,17 +181,21 @@ function FoundList({
   found,
   query,
   scope,
+  setScope,
   listing,
   selected,
   onOpen,
   remindMenu,
-  onArchiveAgent,
+  archiving,
   scopes,
+  empty,
 }: {
   readonly found: SearchFound;
   /** What was typed, whose words each row's title sets in bold. */
   readonly query: string;
   readonly scope: SearchScope;
+  /** Narrows the search to one kind, as a section's Show all does. */
+  readonly setScope: (scope: SearchScope) => void;
   /** The Tasks listing a task's row acts through, its status asking first where it stops agents. */
   readonly listing: TasksListing;
   /** The row drawn selected, whose page stands beside the results; none in a compact window. */
@@ -170,16 +203,34 @@ function FoundList({
   readonly onOpen: (id: string) => void;
   /** Remind me's times on a thread found, as the Inbox's row offers them. */
   readonly remindMenu: (item: InboxItem) => RowSubmenu;
-  /** Asks to archive an agent found, once it rests, as a task's Agents do. */
-  readonly onArchiveAgent: (agentId: string) => void;
+  /** Archive on an agent found, once it rests, asked first by its row, as a task's Agents ask. */
+  readonly archiving: AgentArchiving;
   /** The scopes the results list under, standing as the list's first row. */
   readonly scopes: ListScopes;
+  /** What stands over the list while the scope found nothing. */
+  readonly empty?: ReactNode | undefined;
 }) {
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   const pictureOf = useMemberPictures();
   const shown = scopedFound(found, scope);
   // Note that a heading names a kind only among the others, so a kind's own scope lists its rows under none.
   const titled = scope === SEARCH_SCOPE.ALL;
+
+  // Note that a kind cut short under All ends its header in Show all, which narrows to the kind, and one cut short under its own scope says so under its rows, so no cut is silent.
+  const cut = (kind: SearchFoundKind) => {
+    const total = found[kind].length;
+    const listed = shown[kind].length;
+
+    if (listed >= total) return {};
+
+    if (titled) {
+      return {
+        more: { label: SHOW_ALL, heard: showAllHeard(kind, total), onPress: () => setScope(kind) },
+      };
+    }
+
+    return { footer: shownOfWords(listed, total) };
+  };
 
   return (
     <RowList
@@ -191,11 +242,13 @@ function FoundList({
       onRefresh={async () => {
         await Promise.all([refresh(), refreshTasks()]);
       }}
+      empty={empty}
     >
       {shown.tasks.length === 0 ? null : (
         <ListSection
           title={titled ? SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.TASKS] : undefined}
           count={found.tasks.length}
+          {...cut(SEARCH_FOUND_KIND.TASKS)}
         >
           <TaskRows tasks={shown.tasks} listing={listing} />
         </ListSection>
@@ -204,6 +257,7 @@ function FoundList({
         <ListSection
           title={titled ? SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.INBOX] : undefined}
           count={found.inbox.length}
+          {...cut(SEARCH_FOUND_KIND.INBOX)}
         >
           <InboxItemRows
             listed={shown.inbox}
@@ -219,9 +273,16 @@ function FoundList({
         <ListSection
           title={titled ? SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.AGENTS] : undefined}
           count={found.agents.length}
+          {...cut(SEARCH_FOUND_KIND.AGENTS)}
         >
           {shown.agents.map((line) => (
-            <TaskAgentRow key={line.agent.id} line={line} onArchive={onArchiveAgent} />
+            <TaskAgentRow
+              key={line.agent.id}
+              line={line}
+              task={found.tasksById.get(line.agent.taskId)}
+              named
+              archiving={archiving}
+            />
           ))}
         </ListSection>
       )}
@@ -229,10 +290,8 @@ function FoundList({
   );
 }
 
-/** What Search draws before anything is typed, in either window. */
-const SEARCH_IDLE = (
-  <EmptyState title={SEARCH_TITLE} symbol={GLYPH.SEARCH} description={SEARCH_FINDS} />
-);
+/** What Search draws before anything is typed, in either window: nothing, as Apple's own search screens wait on the field. */
+const SEARCH_IDLE = null;
 
 /**
  * What the Search tab reads and draws once something is typed, in either
@@ -252,17 +311,22 @@ function useSearchScreen(
   const router = useRouter();
   const found = useSearchFound(query);
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
-  const { listing, status, deletion } = useListingAsks(found.listing);
+  const doors = useTaskRowDoors(found.listing.workspace?.id);
+  const { listing, status, deletion } = useListingAsks(found.listing, doors);
   const remind = useRemind();
-  const archiveAsk = useAgentArchiveAsk();
+  const archiving = useAgentArchiveAsk();
   const routes = foundRoutes(found);
   const onTab = useOnTab();
 
   const open = (id: string) => {
+    // Note that a pick lowers the keyboard the query raised, as Mail and Notes do, since a split view's field keeps its focus while the pick opens beside it.
+    lowerKeyboard();
     const picked = pick === undefined ? undefined : foundPick(found, id);
 
     if (pick !== undefined && picked !== undefined) {
       pick.choose(picked);
+      // Note that the keyboard is lowered again once the pick has drawn beside the results, since the column's field may take its focus back as its column draws anew.
+      requestAnimationFrame(lowerKeyboard);
 
       return;
     }
@@ -278,6 +342,7 @@ function useSearchScreen(
 
   const shown = scopedFound(found, scope);
   const none = shown.tasks.length + shown.inbox.length + shown.agents.length === 0;
+  const reading = scopeReading(found, scope);
 
   const scopes = SCOPES.map((each) => ({
     label: SEARCH_SCOPE_TITLE[each],
@@ -285,26 +350,37 @@ function useSearchScreen(
     onPress: () => setScope(each),
   }));
 
-  // Note that the scopes stand as the results' first row, so they scroll away with them, and over a scope that found nothing, so another is one tap away.
-  const results = none ? (
-    <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-      <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
-    </ScopePicker>
-  ) : (
+  // Note that a scope that found nothing says so only once the lists it searches have answered and the finding has caught up with what is typed; until then it says what it reads, or keeps the last query's rows, as the panel's ⌘K does.
+  const empty = none && (reading !== undefined || found.current);
+
+  // Note that the scopes stand as the results' first row, so they scroll away with them, and over a scope that found nothing, so another is one tap away, a miss saying it in Apple's own words under the query. The list stands even where the scope found nothing, its words its one row, so a pull still reads the workspace again.
+  const results = (
     <FoundList
       scopes={{ label: SCOPE_LABEL, scopes }}
       found={found}
       query={query}
       scope={scope}
+      setScope={setScope}
       listing={listing}
       selected={pick?.picked?.id}
       onOpen={open}
-      remindMenu={(item) => remind.menu([item])}
-      onArchiveAgent={archiveAsk.archive}
+      remindMenu={remind.itemMenu}
+      archiving={archiving}
+      empty={
+        !empty ? undefined : reading !== undefined ? (
+          <EmptyState title={reading} symbol={GLYPH.SEARCH} loading />
+        ) : (
+          <EmptyState
+            title={noResultsForWords(query)}
+            symbol={GLYPH.SEARCH}
+            description={NO_RESULTS_HINT}
+          />
+        )
+      }
     />
   );
 
-  return { listing, results, status, deletion, remind, archiveAsk };
+  return { listing, results, status, deletion, remind };
 }
 
 /** What a typed query finds under the Stack's bar, with the questions and sheets its rows' acts raise beside it. */
@@ -312,18 +388,13 @@ function SearchStackFound({
   leave,
   ...words
 }: SearchWords & { readonly leave: (() => void) | undefined }) {
-  const { results, status, deletion, remind, archiveAsk } = useSearchScreen(
-    words,
-    undefined,
-    leave,
-  );
+  const { results, status, deletion, remind } = useSearchScreen(words, undefined, leave);
 
   return (
     <>
       <Screen>{results}</Screen>
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
-      {archiveAsk.ask}
       {remind.sheet}
     </>
   );
@@ -344,7 +415,6 @@ function SearchStackScreen(words: SearchWords) {
   const field = useRefilledSearchField(query);
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
-  // Note that a regular window's tab bar has no round +, so its Search offers New task in its bar, as the other tabs' lists do.
   const regular = useWindowSizeClass() !== WINDOW_SIZE_CLASS.COMPACT;
   // Note that what is typed is read through a ref the commit writes, so the focus effect runs only as the tab opens, never on a key or on Cancel clearing the field.
   const typed = useRef(query);
@@ -369,7 +439,8 @@ function SearchStackScreen(words: SearchWords) {
         />
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
-      {regular ? (
+      {/* Note that an iPad's tab bar has no round +, so its Search offers New task in its bar, as its lists do. */}
+      {PLUS_TAB ? null : (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button
             icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
@@ -377,7 +448,7 @@ function SearchStackScreen(words: SearchWords) {
             onPress={compose.onPress}
           />
         </Stack.Toolbar>
-      ) : null}
+      )}
       {query.trim() === "" ? (
         <Screen>{SEARCH_IDLE}</Screen>
       ) : (
@@ -519,15 +590,12 @@ function SearchSplitFound({
   picking,
   ...words
 }: SearchWords & { readonly picking: SearchPicking }) {
-  const { listing, results, status, deletion, remind, archiveAsk } = useSearchScreen(
-    words,
-    picking,
-  );
+  const { listing, results, status, deletion, remind } = useSearchScreen(words, picking);
 
   const { detail, detailBar, asks } = useSearchDetail(
     picking.picked,
     listing,
-    (item) => remind.menu([item]),
+    remind.itemMenu,
     picking.choose,
   );
 
@@ -542,7 +610,6 @@ function SearchSplitFound({
       />
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
-      {archiveAsk.ask}
       {remind.sheet}
       {asks}
     </>
@@ -560,7 +627,6 @@ function usePickToRoute(threeColumns: boolean, { picked, choose }: SearchPicking
   const router = useRouter();
   const onTab = useOnTab();
   const stack = useDetailStack(SIDEBAR_PLACE.SEARCH);
-  const focused = useIsFocused();
   const was = useRef(threeColumns);
   // Note that the pick and its stack are read through a ref the commit writes, before the layout lets the stack go.
   const held = useRef({ picked, stacked: false });
@@ -568,17 +634,18 @@ function usePickToRoute(threeColumns: boolean, { picked, choose }: SearchPicking
     held.current = { picked, stacked: stack.pages.length > 0 };
   }, [picked, stack]);
 
-  // Note that only a focused Search hands its pick on, so a rotation while another tab shows leaves the pick for Search's return.
-  useEffect(() => {
-    if (!focused) return;
-    const before = was.current;
-    was.current = threeColumns;
-    const { picked: shown, stacked } = held.current;
+  // Note that only a focused Search hands its pick on, so a rotation while another tab shows leaves the pick for Search's return; focus is heard through an effect, because a read would draw Search's root again on every tab switch.
+  useFocusEffect(
+    useCallback(() => {
+      const before = was.current;
+      was.current = threeColumns;
+      const { picked: shown, stacked } = held.current;
 
-    if (!before || threeColumns || stacked || shown?.route === undefined) return;
-    router.push(onTab(shown.route));
-    choose(undefined);
-  }, [focused, threeColumns, router, onTab, choose]);
+      if (!before || threeColumns || stacked || shown?.route === undefined) return;
+      router.push(onTab(shown.route));
+      choose(undefined);
+    }, [threeColumns, router, onTab, choose]),
+  );
 }
 
 /** The Search tab's root screen: beside the app sidebar in a window wide enough for three columns, under the Stack's bar otherwise, the query and its scope held here so a rotation across the line keeps them. */

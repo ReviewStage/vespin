@@ -86,7 +86,7 @@ function PromptField({
     servers: { statuses, place: { disabled: disabledServers, handed: SERVER_HANDED.OPENS } },
     // Note that the field stands in a form under the page's toolbar, so a list opens under the caret's line.
     side: MENTION_MENU_SIDE.BELOW,
-    // Escape lets go of the caret and reaches the window marked taken, as every field's here does, so a live call it stops stops and the page stays; a list standing takes it first.
+    // Escape lets go of the caret and reaches the window marked taken, as every field's here does, so the page stays; a list standing takes it first.
     escapeClimbs: true,
     aria: { "aria-invalid": invalid ? "true" : undefined },
   });

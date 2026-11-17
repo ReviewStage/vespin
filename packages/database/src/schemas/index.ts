@@ -58,6 +58,8 @@ export * from "./github-mention.js";
 
 export * from "./github-personal-token.js";
 
+export * from "./github-pull-request-move.js";
+
 export * from "./github-rate-hold.js";
 
 export * from "./github-repository.js";
@@ -108,6 +110,8 @@ export * from "./runner-line.js";
 
 export * from "./sandbox-firewall.js";
 
+export * from "./sandbox-owner.js";
+
 export * from "./sandbox-terminal-lease.js";
 
 export * from "./slack-installation.js";
@@ -132,6 +136,8 @@ export * from "./task-section.js";
 
 export * from "./usage.js";
 
+export * from "./usage-charge.js";
+
 export * from "./voice-call.js";
 
 export * from "./workspace-drive-repository.js";
@@ -145,6 +151,8 @@ export * from "./workspace-former-slug.js";
 export * from "./workspace-sandbox-script.js";
 
 export * from "./workspace-sandbox-script-run.js";
+
+export * from "./workspace-sandbox-size.js";
 
 export * from "./workspace-token-repository.js";
 

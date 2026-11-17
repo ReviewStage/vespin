@@ -22,10 +22,6 @@ import type {
   ModelChoice,
   ModelProvider,
 } from "@repo/features/models-wire";
-import {
-  PULL_REQUEST_CHAPTERS_CALL_FAILURE,
-  type PullRequestChaptersAnswerView,
-} from "@repo/features/pull-request-chapters-view";
 import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type DraftSuggestion, sentOf } from "@repo/features/suggestion-model";
@@ -33,7 +29,6 @@ import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { ListedPullRequest } from "@repo/features/task-wire";
 import type { TranscriptReader } from "@repo/features/transcript-copy";
 import { ACT_KIND } from "@repo/host/acts";
-import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import type { PortActPayload } from "@repo/host/contract";
 import type { TaskListCollections } from "@repo/host/task-list-following";
 import { EXPERIMENT } from "@repo/settings";
@@ -87,12 +82,8 @@ import {
   toastOnlyUndo,
   withdrawUndo,
 } from "../undo-stack.js";
-import {
-  appStateQuery,
-  memoizedSelect,
-  selectExperiment,
-  selectPullRequestPublished,
-} from "../use-app-state.js";
+import { appStateQuery, selectExperiment } from "../use-app-state.js";
+import type { CallWhenStarted } from "../voice-call.js";
 import type { ApprovalAnswerWriter, PermissionModeWriter } from "./agent-approvals.js";
 import {
   archivedManyWords,
@@ -112,7 +103,6 @@ import {
   repositorySkillsQueryOptions,
 } from "./agent-reads.js";
 import { type AgentFork, continueFork, forkStart } from "./fork-model.js";
-import { type ByPullRequestTab, pullRequestAsked } from "./pull-request-number.js";
 import { type HeldUpdate, heldUpdateOver } from "./refused-send.js";
 import { keptSkills } from "./repository-skills.js";
 import type { SkillSource } from "./skill-picker.js";
@@ -127,11 +117,6 @@ import type {
   InboxMessenger,
   InboxThreadStarter,
 } from "./use-task-inbox.js";
-
-/** A pull request's chapters the port refused to answer, as the tab hears any answer that never came. */
-const CHAPTERS_UNANSWERED: PullRequestChaptersAnswerView = {
-  failure: PULL_REQUEST_CHAPTERS_CALL_FAILURE.UNANSWERED,
-};
 
 /** Why a Start did not start, with the answer that said so, which a shown failure reports. */
 type StartFailure = Failure & { readonly cause?: unknown };
@@ -195,38 +180,6 @@ export const AGENT_RENAME_TERMS = {
 
 /** No words to listen for, one array so a render that has none hands down the same one. */
 const NO_KEYWORDS: readonly string[] = [];
-
-/** No pull request a tab names by its number, one map so a draw that holds none hands down the same one. */
-const NO_NUMBERED_PULL_REQUESTS: ByPullRequestTab<AgentPullRequest> = new Map();
-
-/**
- * Each pull request a Pull request tab names by its number, by agent and
- * then number, as the host holds what was published of it
- * (`LIVE_READ.PULL_REQUEST_PUBLISHED`) while a surface holds it: the side
- * panel each numbered tab it draws, and the tab shown its own. A read that
- * failed, or named no pull request, holds none, and the agents' own stand
- * apart (`pullRequests`).
- */
-const selectNumberedPullRequests = memoizedSelect(
-  (state) => [selectPullRequestPublished(state)],
-  (held): ByPullRequestTab<AgentPullRequest> => {
-    const numbered = new Map<string, Map<number | undefined, AgentPullRequest>>();
-
-    for (const [agentId, ofAgent] of Object.entries(held ?? {})) {
-      for (const [number, read] of Object.entries(ofAgent)) {
-        const rows = read.rows;
-
-        if (number === OWN_PULL_REQUEST || rows === undefined || "failure" in rows) continue;
-
-        if (rows.pullRequest === null) continue;
-        const kept = numbered.get(agentId) ?? new Map<number | undefined, AgentPullRequest>();
-        numbered.set(agentId, kept.set(Number(number), rows.pullRequest));
-      }
-    }
-
-    return numbered.size === 0 ? NO_NUMBERED_PULL_REQUESTS : numbered;
-  },
-);
 
 /** What the task list's collections carry of one task: its agents in the order started, the archived among them, none where they are not followed, and its agents' pull requests. */
 interface TaskRows {
@@ -481,6 +434,21 @@ export interface AgentsControl {
     permissionMode?: AgentPermissionMode,
   ) => Promise<StartFailure | undefined>;
   /**
+   * Starts the draft's agent blank, handed nothing, for Talk: under a key
+   * of its own, on the draft's choice, servers, place, and mode as `startPrompt`
+   * takes them, its tab opening as a Start's does, then `call` called on
+   * it, or with nothing where it did not start. Answers why it did not
+   * start, or nothing once it did.
+   */
+  startBlank: (
+    draftId: string,
+    choice: ModelChoice | undefined,
+    disabledServers: readonly string[],
+    runsOn: AgentRunsOnRequest | undefined,
+    permissionMode: AgentPermissionMode | undefined,
+    call: CallWhenStarted,
+  ) => Promise<StartFailure | undefined>;
+  /**
    * Starts the draft's fork: from its source at its message, under the
    * draft's key, with the box's words and files as a note where it holds
    * any, the MCP servers the draft switched off, the choice
@@ -581,16 +549,6 @@ export interface AgentsControl {
   readTranscript: TranscriptReader;
   /** Each of the task's agents' pull requests, by agent, of those that have one, as the task list carries them (`useListedPullRequests`). */
   pullRequests: ReadonlyMap<string, AgentPullRequest>;
-  /** Each pull request a Pull request tab names by its number, by agent and then by number (`pull-request-number.ts`), as the host holds what was published of it while a surface holds it. */
-  numberedPullRequests: ByPullRequestTab<AgentPullRequest>;
-  /**
-   * One pull request's chapters generated for its head now, or the
-   * generation already under way; answers once the generation lands, which
-   * may take minutes, with whether chapters can be generated and the
-   * workspace's newest chapters, whatever head they were made for; or why
-   * there are none, a port that refused included.
-   */
-  generateChapters: (agentId: string, number?: number) => Promise<PullRequestChaptersAnswerView>;
   /** The words a dictation into an agent's box is likely to say, read off the open task. */
   keywords: readonly string[];
   /** The skills of the open plan's repository a `/` in an agent's box offers, read once for the plan (`repository-skills.ts`), or of the agent's own where no plan is open; nothing while neither names a workspace, or while the Skills experiment is off. */
@@ -959,7 +917,6 @@ export function useAgents(input: {
   );
 
   const { mutateAsync: sendArchive } = useMutation(actMutation(ROW_WRITE.AGENT_ARCHIVE.kind));
-  const { mutateAsync: sendChapters } = useMutation(actMutation(ACT_KIND.CHAPTERS_GENERATE));
   const { mutateAsync: sendInboxAnswer } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_ANSWER));
   const { mutateAsync: sendInboxMessage } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_MESSAGE));
   const { mutateAsync: sendInboxStart } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_START));
@@ -1609,6 +1566,45 @@ export function useAgents(input: {
     return undefined;
   };
 
+  const startBlank = async (
+    draftId: string,
+    choice: ModelChoice | undefined,
+    disabledServers: readonly string[],
+    runsOn: AgentRunsOnRequest | undefined,
+    permissionMode: AgentPermissionMode | undefined,
+    call: CallWhenStarted,
+  ): Promise<StartFailure | undefined> => {
+    if (taskId === undefined) {
+      call(undefined);
+
+      return { reason: FAILURE_REASON.OTHER, text: START_NEEDS_TASK };
+    }
+
+    // Note that a blank start mints a key of its own, never the draft's, so a Talk whose answer was lost
+    // never hands its blank agent to the words the draft sends later under the draft's key.
+    const answer = await askStart(taskId, {
+      idempotencyKey: crypto.randomUUID(),
+      blank: true,
+      ...(disabledServers.length === 0 ? undefined : { disabledServers }),
+      ...(choice === undefined ? undefined : choiceRequest(choice)),
+      ...runsOnOf(runsOn),
+      ...pickedModeOf(permissionMode),
+    });
+
+    if ("failure" in answer) {
+      call(undefined);
+
+      return { ...startFailureNote(answer, taskId), cause: answer };
+    }
+
+    dropHeld(taskId, draftId);
+    writer.drop((place) => place.kind === DRAFT_PLACE.NEW_AGENT && place.draftId === draftId);
+    landed(taskId, answer.agent);
+    call({ agentId: answer.agent.id, taskId });
+
+    return undefined;
+  };
+
   // Note that a fork is sent under the draft's key as a prompt is, for the same reason.
   const startFork = async (
     draftId: string,
@@ -1980,20 +1976,6 @@ export function useAgents(input: {
   // choosing a task reads none of them.
   const pullRequests = useListedPullRequests(listedPullRequests, taskId);
 
-  // A pull request a tab names by its number is kept by agent and number,
-  // apart from the agents' own, so it never stands for what an agent published.
-  const numberedPullRequests =
-    useQuery({ ...appStateQuery, select: selectNumberedPullRequests }).data ??
-    NO_NUMBERED_PULL_REQUESTS;
-
-  const generateChapters = useCallback<AgentsControl["generateChapters"]>(
-    (agentId, number) =>
-      sendChapters(pullRequestAsked(agentId, number)).catch(
-        (): PullRequestChaptersAnswerView => CHAPTERS_UNANSWERED,
-      ),
-    [sendChapters],
-  );
-
   const answerInbox = useCallback<InboxAnswerer>(
     (params) => sendInboxAnswer(params),
     [sendInboxAnswer],
@@ -2030,6 +2012,7 @@ export function useAgents(input: {
   // A start reads the agents as they stand when it is pressed, so the doors to it stand across draws.
   const steadyStartPrompt = useSteadyDoor(startPrompt);
   const steadyStartFork = useSteadyDoor(startFork);
+  const steadyStartBlank = useSteadyDoor(startBlank);
   const steadyStartSuggestion = useSteadyDoor(startSuggestion);
   const steadyContinueAgent = useSteadyDoor(continueAgent);
 
@@ -2057,6 +2040,7 @@ export function useAgents(input: {
     onDiscardDraft,
     startPrompt: steadyStartPrompt,
     startFork: steadyStartFork,
+    startBlank: steadyStartBlank,
     startSuggestion: steadyStartSuggestion,
     onRetryList,
     models: offered.data?.models,
@@ -2094,8 +2078,6 @@ export function useAgents(input: {
     readAgent,
     readTranscript,
     pullRequests,
-    numberedPullRequests,
-    generateChapters,
     keywords: input.keywords ?? NO_KEYWORDS,
     readSkills,
     answerInbox,

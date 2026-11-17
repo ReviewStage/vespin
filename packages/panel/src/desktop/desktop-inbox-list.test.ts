@@ -473,7 +473,7 @@ function toDoRows(page: HTMLElement): number {
   return listed(page).length;
 }
 
-test("the sidebar's Inbox counts the questions and the update waiting on you, never a settled thread however unread, which Open lists until it is read, nor a teammate's question", async () => {
+test("the sidebar's Inbox counts what the view the Inbox shows lists, Open and Questions and All alike, following the view as it changes", async () => {
   window.localStorage.setItem(SHOW_KEY, JSON.stringify("to-do"));
   window.localStorage.removeItem(WHOSE_KEY);
 
@@ -498,10 +498,15 @@ test("the sidebar's Inbox counts the questions and the update waiting on you, ne
   };
 
   const followed: InboxItem = { ...RETRY, updatedAt: 2_500, unread: true };
-  world.inboxes.set(BILLING.id, [{ ...THRESHOLD, unread: true }, followed, SEEN]);
-  world.inboxes.set(INVITES.id, [{ ...EXPIRY, unread: true }, NOTE, THEIRS]);
+  // Note that the two questions wait on the reader, whose agents asked them, as Questions lists them.
+  world.inboxes.set(BILLING.id, [
+    { ...THRESHOLD, unread: true, startedBy: READER },
+    followed,
+    SEEN,
+  ]);
+  world.inboxes.set(INVITES.id, [{ ...EXPIRY, unread: true, startedBy: READER }, NOTE, THEIRS]);
 
-  // Note that main counts each task's one open ask, never the notice, which the sidebar counts from main's open items.
+  // Note that main counts each task's one open ask, never the notice.
   const holding: readonly AppInboxTaskHolding[] = [
     { taskId: BILLING.id, items: 3, toDo: 1, updatedAt: 4_500 },
     { taskId: INVITES.id, items: 3, toDo: 1, updatedAt: 4_000 },
@@ -516,18 +521,12 @@ test("the sidebar's Inbox counts the questions and the update waiting on you, ne
   const { page } = mount({ holding, waiting, withSidebar: true });
   await settle();
   assert.equal(toDoRows(page), 4, "the two questions, the update, and the settled thread unread");
-  assert.equal(sidebarInboxCount(page), 3, "the sidebar counts what waits on you");
-});
-
-test("the sidebar's Inbox counts the open items alone, as before, where main carries no To do count from an older service", async () => {
-  world.inboxes.set(BILLING.id, [THRESHOLD, { ...RETRY, updatedAt: 6_000, unread: true }]);
-  const { page } = mount({ withSidebar: true });
-  await settle();
-  assert.equal(
-    sidebarInboxCount(page),
-    2,
-    "the threshold and expiry questions, which main lists open",
-  );
+  assert.equal(sidebarInboxCount(page), 4, "Open's count, the settled thread unread among it");
+  showScope(page, "Questions");
+  assert.equal(toDoRows(page), 2, "the two questions, the update asking nothing");
+  assert.equal(sidebarInboxCount(page), 2, "Questions' count");
+  showScope(page, "All");
+  assert.equal(sidebarInboxCount(page), toDoRows(page), "All's count, the teammate's among it");
 });
 
 test("a fresh profile opens the Inbox on Open addressed to Me, its head naming the Inbox alone, a settled item left out until All is chosen, the head naming the Inbox still", async () => {
@@ -1041,6 +1040,44 @@ test("on Needs you, an item answered on another Mac slides out from where its ro
   act(() => {
     for (const fade of fades) fade.finish();
   });
+  assert.deepEqual(listed(page), ["▸ *Alert at 80%?"]);
+  assert.equal(page.querySelector("[data-leaving]"), null);
+});
+
+test("on Open, the last pinned task's item answered on another Mac takes Pinned with it: the section slides out with its row, out of reach while it goes, and the rows under Everything else stay drawn where they stand, under no heading once it has gone", async () => {
+  window.localStorage.removeItem(WHOSE_KEY);
+  const played = playListMotions();
+  const { page } = mount({ chosen: ON_THRESHOLD });
+  await settle();
+  showScope(page, "Open");
+  act(() => world.setTasks([BILLING, { ...INVITES, pinnedAt: 5 }]));
+  await settle();
+
+  const heads = () =>
+    [...page.querySelectorAll(".inbox-tasks .ui-group-header-head")].map(
+      (head) => head.textContent,
+    );
+
+  assert.ok(heads()[0]?.startsWith("Pinned"), "the pinned task's item stands under Pinned");
+  const staying = rowNamed(page, "Alert at 80%?");
+  await answerExpiryElsewhere();
+
+  const pinned = [...page.querySelectorAll<HTMLElement>("[data-leaving]")].find(
+    (each) =>
+      each.querySelector(".ui-group-header-head")?.textContent?.startsWith("Pinned") === true,
+  );
+
+  assert.ok(pinned, "Pinned is drawn on while it goes");
+  assert.equal(pinned.querySelector(ROW_TITLE)?.textContent, "Expire after 7 days?");
+  assert.ok(pinned.hasAttribute("inert"), "out of reach");
+  const exit = played.find((each) => each.element === pinned);
+  assert.deepEqual(exit?.keyframes.at(-1), { opacity: 0, transform: "translateX(-16px)" });
+  assert.ok(rowNamed(page, "Alert at 80%?") === staying, "the row staying is never drawn anew");
+
+  act(() => {
+    for (const each of played.splice(0)) each.finish();
+  });
+  assert.deepEqual(heads(), [], "one run stands under no heading");
   assert.deepEqual(listed(page), ["▸ *Alert at 80%?"]);
   assert.equal(page.querySelector("[data-leaving]"), null);
 });

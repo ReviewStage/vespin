@@ -19,18 +19,21 @@
  * Whatever stops a call short says why in the app's failure notice, the
  * error buzz with it, and lets the microphone go. While a call stands the
  * agent's transcript is held followed, so the way back to it says what the
- * agent does from any screen. Nothing here starts while the Voice
- * experiment is off, signed out, or behind the update screen, and any of
- * them ends a call under way, since no End call stands then. No audio
+ * agent does from any screen, and the call stands in a Live Activity of its
+ * own (`live-activity/call-activity.ts`), whose mutes and End call act on it
+ * from the Lock Screen and the Dynamic Island. Nothing here starts while
+ * signed out or behind the update screen, and either ends a call under way, since no End call stands then. No audio
  * leaves the phone but to the session, and none is stored or counted.
  */
 
-import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import { type CallAgentLine, callAgentLine } from "@repo/features/call-agent-line";
+import { LIVE_READ } from "@repo/features/live-wire";
 import { agentName, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { savesOpenAiKey } from "@repo/features/provider-key-wire";
 import {
   VOICE_CALL_FAILURE,
   VOICE_EVENTS_CHANNEL,
@@ -46,12 +49,8 @@ import {
 import { callLineWords } from "@repo/features/voice-call-words";
 import { DEFAULT_LIVE_VOICE } from "@repo/features/voices";
 import { ACT_KIND } from "@repo/host/acts";
-import {
-  selectAppSettingsView,
-  selectExperiment,
-  selectTranscript,
-} from "@repo/host/app-state-reads";
-import { EXPERIMENT } from "@repo/settings";
+import type { AppStateSnapshot } from "@repo/host/app-state";
+import { selectAccount, selectAppSettingsView, selectTranscript } from "@repo/host/app-state-reads";
 import {
   BUZZ,
   buzz,
@@ -63,7 +62,15 @@ import {
 } from "@repo/ui-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { type MediaStream, mediaDevices, RTCPeerConnection } from "react-native-webrtc";
 import { appStateQuery } from "./host/app-state-query.js";
 import {
@@ -72,6 +79,8 @@ import {
   useTaskListCollections,
   useTaskListRow,
 } from "./host/host-provider.js";
+import { useLiveFollow } from "./host/live-follow.js";
+import { useCallLiveActivity } from "./live-activity/call-activity.js";
 import { voiceAudioModule } from "./voice-audio-module.js";
 
 /** Why a call stopped short, in the words the notice says, as the panel's toast says them but where the phone's settings differ. */
@@ -101,12 +110,14 @@ interface StandingVoiceCall extends VoiceCallState {
 
 /** The phone's call and what a screen may do with it. */
 interface PhoneVoiceCall {
-  /** Whether calls are offered at all: the Voice experiment is on. */
+  /** Whether calls are offered at all: signed in, with no update screen in front of every other. */
   readonly offered: boolean;
   /** The call standing; nothing when none does. */
   readonly call: StandingVoiceCall | undefined;
   /** Calls the agent, ending a call already standing first. */
   readonly start: (into: VoiceCallInto) => void;
+  /** Takes a press now for a call into an agent still starting, readying the microphone at once and answering what calls it once it lands; a press made since wins, so a late one calls no one. */
+  readonly startWhenStarted: () => (into: VoiceCallInto | undefined) => void;
   readonly end: () => void;
   readonly setMicrophoneMuted: (muted: boolean) => void;
   readonly setSpeakerMuted: (muted: boolean) => void;
@@ -116,6 +127,7 @@ const NO_CALL: PhoneVoiceCall = {
   offered: false,
   call: undefined,
   start: () => undefined,
+  startWhenStarted: () => () => undefined,
   end: () => undefined,
   setMicrophoneMuted: () => undefined,
   setSpeakerMuted: () => undefined,
@@ -241,19 +253,12 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
   const notices = useFailureNotices();
   const queryClient = useQueryClient();
 
-  const { data: offered = false } = useQuery({
-    ...appStateQuery,
-    select: selectExperiment(EXPERIMENT.VOICE),
-  });
-
   // Note that a call is offered only where its presses can stand: signed in, and with no update screen in front of every other.
-  const { data: screensStand = false } = useQuery({
+  const { data: callable = false } = useQuery({
     ...appStateQuery,
     select: (state) =>
       state.account.status === ACCOUNT_STATUS.SIGNED_IN && state.network.updateNeeded !== true,
   });
-
-  const callable = offered && screensStand;
 
   const [call, setCall] = useState<VoiceCallState | undefined>(undefined);
 
@@ -288,7 +293,7 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
     }),
   );
 
-  // Note that the Voice experiment turned off, a sign-out, or the update screen ends a call under way, because no screen draws its End call then; the provider going away hangs up too.
+  // Note that a sign-out or the update screen ends a call under way, because no screen draws its End call then; the provider going away hangs up too.
   useEffect(() => {
     if (!callable) session.hangUp();
   }, [callable, session]);
@@ -308,11 +313,27 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
 
   const facts = useStandingFacts(call);
 
+  const standing = call === undefined ? undefined : { ...call, ...facts };
+  useCallLiveActivity(standing, session);
+
   const value: PhoneVoiceCall = {
     offered: callable,
-    call: call === undefined ? undefined : { ...call, ...facts },
+    call: standing,
     start: (into) => {
       if (callable) session.start(into);
+    },
+    // Note that the microphone and the peer's offer are readied in the press, while the agent starts, so the call opens the moment it lands; a press made since asks for the newer call, and the session lets this one go.
+    startWhenStarted: () => {
+      let land: (into: VoiceCallInto | undefined) => void = () => undefined;
+
+      if (!callable) return land;
+      session.startLanding(
+        new Promise((resolve) => {
+          land = resolve;
+        }),
+      );
+
+      return land;
     },
     end: session.end,
     setMicrophoneMuted: session.setMicrophoneMuted,
@@ -431,5 +452,80 @@ export function useAgentTalk(agentId: string, taskId: string | undefined): Agent
       onTalk: () => (call === undefined ? start() : setAsking(true)),
     },
     switching,
+  };
+}
+
+/** The host's read of the account's saved keys, as a `select`: unread, failed, or its rows. */
+function heldKeys(accountId: string) {
+  return (state: AppStateSnapshot) => state[LIVE_READ.PROVIDER_KEYS][accountId];
+}
+
+/** Talk in a sheet that starts a new agent: its press, whether it may be pressed yet, and the question it asks first while another call stands. */
+export interface NewAgentTalk {
+  readonly onTalk: () => void;
+  /** False while the account's keys are read, so a press never goes unanswered. */
+  readonly ready: boolean;
+  readonly switching: AgentTalk["switching"];
+}
+
+/**
+ * Talk in a sheet that starts a new agent, as the panel's New task and
+ * draft offer it: `start` starts the agent blank, handed nothing, and
+ * answers it once it lands, or nothing where it was refused, and the call
+ * opens on it, so the caller's first words are its first message. Note that
+ * the account's keys are followed so that Talk with no OpenAI key starts
+ * nothing and says to add one, rather than leaving an agent no call can
+ * open on, and Talk stands disabled until they are read; a press while
+ * another call stands asks first, as an agent's own Talk does. None while
+ * calls are not offered.
+ */
+export function useNewAgentTalk(
+  start: () => Promise<VoiceCallInto | undefined>,
+): NewAgentTalk | undefined {
+  const voice = useVoiceCall();
+  const acts = useHostActs();
+  const notices = useFailureNotices();
+  const [asking, setAsking] = useState(false);
+  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const key = accountId ?? "";
+  useLiveFollow(accountId, () => acts[ACT_KIND.PROVIDER_KEYS_FOLLOW]());
+  const read = useQuery({ ...appStateQuery, select: useCallback(heldKeys(key), [key]) }).data;
+  const keys = read?.rows?.keys;
+
+  const go = () => {
+    setAsking(false);
+    // Note that the press is taken now, so a call pressed for while the agent starts stands over this one.
+    void start().then(voice.startWhenStarted());
+  };
+
+  if (!voice.offered) return undefined;
+
+  // Note that Talk waits on the keys' read, standing disabled meanwhile, since an agent started with no key could take no call; a read that failed leaves the key to the service, which refuses a call with none.
+  const onTalk = () => {
+    if (keys !== undefined && !savesOpenAiKey(keys)) {
+      buzz(BUZZ.ERROR);
+      notices.say({
+        kind: NOTICE_KIND.REFUSED,
+        words: VOICE_CALL_NOTE[VOICE_CALL_FAILURE.OPENAI_KEY_MISSING],
+      });
+
+      return;
+    }
+
+    if (voice.call === undefined) return go();
+    setAsking(true);
+  };
+
+  return {
+    onTalk,
+    ready: keys !== undefined || read?.failed === true,
+    switching: {
+      title: SWITCH_QUESTION.TITLE,
+      message: SWITCH_QUESTION.MESSAGE,
+      act: SWITCH_QUESTION.ACT,
+      presented: asking,
+      onAct: go,
+      onDismiss: () => setAsking(false),
+    },
   };
 }
