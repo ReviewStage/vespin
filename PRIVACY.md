@@ -137,9 +137,14 @@ out, goes to the agent's model and into its transcript. Where you connect more
 than one account at a service, a call your agent makes keeps the display name
 of the account it ran on (which can be an email address), and anyone who can
 open the task sees it beside the call. If your workspace
-connects Vespin's Slack bot, we store your Slack user id, and messages you send
-the bot, with the earlier messages of that Slack thread, are handed to an
-agent. If you allow an app such as Claude Code or Cursor to connect to our MCP
+adds Vespin's Slack bot to its Slack, we store the bot token Slack grants that
+install, encrypted the same way as the credentials you save (see Credentials
+you save above), with the Slack team's id and name, the bot's own Slack ids,
+and the scopes it was granted; we delete them when the workspace disconnects
+the bot, when the app is uninstalled from that Slack or its token revoked
+there, and with the workspace. The bot also keeps your Slack user id, and
+messages you send the bot, with the earlier messages of that Slack thread, are
+handed to an agent. If you allow an app such as Claude Code or Cursor to connect to our MCP
 server, we store a record of the app, your consent, and hashed tokens.
 
 ### Commands on your Mac
