@@ -11,6 +11,7 @@ import {
 import { DisplayIcon, KeyboardIcon, LaptopIcon, PlugIcon, ProductMark } from "@repo/ui";
 import {
   CloudCogIcon,
+  CreditCardIcon,
   FlaskConicalIcon,
   GLYPH,
   InfoIcon,
@@ -37,6 +38,7 @@ const SETTINGS_PAGE_ICON = {
   [SETTINGS_VIEW.ACCOUNT]: <GLYPH.PERSON />,
   [SETTINGS_VIEW.PREFERENCES]: <SlidersHorizontalIcon />,
   [SETTINGS_VIEW.WORKSPACE]: <GLYPH.PEOPLE />,
+  [SETTINGS_VIEW.BILLING]: <CreditCardIcon />,
   [SETTINGS_VIEW.ENVIRONMENT]: <CloudCogIcon />,
   [SETTINGS_VIEW.AGENTS]: <GLYPH.AGENT />,
   [SETTINGS_VIEW.HOSTS]: <GLYPH.HOST />,
@@ -72,10 +74,11 @@ export function settingsPageOf(view: SettingsView): SettingsPage {
 export function shownSettingsPageGroups(
   capabilities: readonly HostCapability[],
   experiments: ExperimentChoices,
+  billing: boolean,
 ): readonly { readonly group: SettingsPageGroup; readonly pages: readonly SettingsView[] }[] {
   return SETTINGS_PAGE_GROUPS.map(({ group, pages }) => ({
     group,
-    pages: pages.filter((page) => settingsPageShown(page, capabilities, experiments)),
+    pages: pages.filter((page) => settingsPageShown(page, capabilities, experiments, billing)),
   })).filter(({ pages }) => pages.length > 0);
 }
 

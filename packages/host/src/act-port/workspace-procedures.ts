@@ -43,10 +43,25 @@ function isSlackAddress(url: string): boolean {
   return URL.canParse(url) && new URL(url).origin === SLACK_ORIGIN;
 }
 
+/** Stripe's own origins, the ones its Checkout and its Customer Portal are opened on (https://docs.stripe.com/payments/checkout, https://docs.stripe.com/customer-management). */
+const STRIPE_ORIGINS: readonly string[] = [
+  "https://checkout.stripe.com",
+  "https://billing.stripe.com",
+];
+
+/** Whether an address the host answered parses and stands on one of Stripe's own origins. */
+function isStripeAddress(url: string): boolean {
+  return URL.canParse(url) && STRIPE_ORIGINS.includes(new URL(url).origin);
+}
+
 /** The handlers of the connections, whose procedures open what they answer. */
 type ConnectActs = Pick<
   HostActTable,
-  "WORKSPACE_GITHUB_CONNECT" | "WORKSPACE_SENTRY_INSTALL" | "WORKSPACE_SLACK_BOT_INSTALL"
+  | "WORKSPACE_GITHUB_CONNECT"
+  | "WORKSPACE_SENTRY_INSTALL"
+  | "WORKSPACE_SLACK_BOT_INSTALL"
+  | "WORKSPACE_BILLING_SETUP"
+  | "WORKSPACE_BILLING_PORTAL"
 >;
 
 export function workspaceProcedures(
@@ -82,6 +97,32 @@ export function workspaceProcedures(
       );
 
       if (!isSentryAddress(url)) return yield* Effect.fail(errors.REFUSED());
+      yield* Effect.promise(() => openExternal(url));
+    }),
+    // Note that the address the service answered opens only where it is
+    // Stripe's own, because it is the one address here the panel did not name.
+    [WORKSPACE_ACT_KIND.WORKSPACE_BILLING_SETUP]: actPort[
+      WORKSPACE_ACT_KIND.WORKSPACE_BILLING_SETUP
+    ].effect(function* ({ input, errors }) {
+      const url = yield* declaredAnswer(
+        WORKSPACE_ACTS.WORKSPACE_BILLING_SETUP,
+        acts.WORKSPACE_BILLING_SETUP,
+        input,
+      );
+
+      if (!isStripeAddress(url)) return yield* Effect.fail(errors.REFUSED());
+      yield* Effect.promise(() => openExternal(url));
+    }),
+    [WORKSPACE_ACT_KIND.WORKSPACE_BILLING_PORTAL]: actPort[
+      WORKSPACE_ACT_KIND.WORKSPACE_BILLING_PORTAL
+    ].effect(function* ({ input, errors }) {
+      const url = yield* declaredAnswer(
+        WORKSPACE_ACTS.WORKSPACE_BILLING_PORTAL,
+        acts.WORKSPACE_BILLING_PORTAL,
+        input,
+      );
+
+      if (!isStripeAddress(url)) return yield* Effect.fail(errors.REFUSED());
       yield* Effect.promise(() => openExternal(url));
     }),
     // Note that the address the service answered opens only where it is

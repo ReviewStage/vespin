@@ -13,6 +13,9 @@
 import { Schema as EffectSchema } from "effect";
 import { workspaceIdSchema } from "./task-wire.js";
 
+/** The kinds of usage a status answers a total for, as the service names them; a kind a newer service adds has no words here and is read by its own name. */
+export const BILLING_USAGE_KIND = { SANDBOX_SESSION: "sandbox_session" } as const;
+
 export const BILLING_QUERY = { WORKSPACE_ID: "workspaceId" } as const;
 
 /** A workspace's billing as its owners and admins read it. */
@@ -23,6 +26,14 @@ export const billingStatusAnswerSchema = EffectSchema.Struct({
   setUp: EffectSchema.Boolean,
   /** Whether an invoice the workspace owes was given up on, which holds new cloud agents until it is paid. */
   blocked: EffectSchema.Boolean,
+  /** What the workspace's usage has cost so far this UTC month, one total per kind of usage, in micro-dollars; a kind with none is left out. */
+  usage: EffectSchema.Array(
+    EffectSchema.Struct({ kind: EffectSchema.String, amountMicroUsd: EffectSchema.Number }),
+  ),
+  /** The usage each workspace is given free each month, in micro-dollars. */
+  includedMicroUsd: EffectSchema.Number,
+  /** What this month's usage is owed past the included allowance, in micro-dollars, never below zero. */
+  owedMicroUsd: EffectSchema.Number,
 });
 
 export type BillingStatusAnswer = typeof billingStatusAnswerSchema.Type;

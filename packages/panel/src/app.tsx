@@ -37,6 +37,7 @@ import { useAppCommand, useAppKeymap, useMenuCommands, useMenuOffers } from "./a
 import { appPlatform } from "./app-platform.js";
 import { type SettingsDoors, useSettingsPanel, useShownUpdate } from "./app-settings.js";
 import { useAutomationsRoute } from "./automations-route.js";
+import { useBillingShown } from "./billing.js";
 import { StandingCallProvider } from "./call/standing-call.js";
 import { useDraftsOwner } from "./composer-drafts.js";
 import { useConnected } from "./connection.js";
@@ -550,10 +551,15 @@ function AppWindow(): React.JSX.Element {
   // The page Settings shows, which a link to one the platform does not offer leaves on Profile.
   const experiments = useExperimentsIn(settingsPlace.workspaceId);
 
+  const billing = useBillingShown(
+    tasks.workspaces.find((each) => each.id === settingsPlace.workspaceId),
+  );
+
   const shownView = shownSettingsView(
     settingsPlace.view,
     run?.capabilities ?? NO_CAPABILITIES,
     experiments,
+    billing,
   );
 
   // A page chosen from outside Settings, as ⌘K chooses one, is a move the router's blocker holds while a page holds unsaved
