@@ -1,0 +1,7 @@
+TAP-MARK thread-send-photo host_epoch_ms=1794915499295 host_time=06:38:19
+An error was encountered processing the command (domain=NSPOSIXErrorDomain, code=2):
+The operation couldn’t be completed. No such file or directory
+No such file or directory
+TAP-DONE-MARK thread-send-photo detected host_epoch_ms=1794915514683; maestro COMPLETED stamp 06:38:34.626 = host_epoch_ms 1794915514626
+06:38:33.011 [ INFO] maestro.cli.runner.MaestroCommandRunner.runCommands$lambda$0: Tap on 
+06:38:34.626 [ INFO] maestro.cli.runner.MaestroCommandRunner.runCommands$lambda$2: Tap on 

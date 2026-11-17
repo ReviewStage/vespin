@@ -1,0 +1,125 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "composedMessage CONTAINS "[anchor-probe]""
+Timestamp               Ty Process[PID:TID]
+2026-11-17 06:31:33.005 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915093005
+2026-11-17 06:31:33.008 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915093008
+2026-11-17 06:31:33.008 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915093008
+2026-11-17 06:31:33.108 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915093108
+2026-11-17 06:31:33.209 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript room 72 foot 106 at 1794915093209
+2026-11-17 06:31:33.209 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript rows 22 at 1794915093209
+2026-11-17 06:31:33.293 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915093293
+2026-11-17 06:31:35.276 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript content 126 anchored true at 1794915095276
+2026-11-17 06:31:35.277 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -116 gap -632 at 1794915095277
+2026-11-17 06:31:35.433 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript room 191.6666717529297 foot 225.6666717529297 at 1794915095433
+2026-11-17 06:31:35.433 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript content 1572 anchored true at 1794915095433
+2026-11-17 06:31:36.095 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 0 gap -748 at 1794915096095
+2026-11-17 06:31:36.095 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript content 2100 anchored true at 1794915096095
+2026-11-17 06:31:36.095 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 698 gap 0 at 1794915096095
+2026-11-17 06:31:36.096 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] picture loaded at 1794915096096
+2026-11-17 06:31:36.096 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] picture load start at 1794915096096
+2026-11-17 06:31:36.096 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] picture loaded at 1794915096096
+2026-11-17 06:31:36.096 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] picture load start at 1794915096096
+2026-11-17 06:31:36.096 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 1088 gap 0 at 1794915096096
+2026-11-17 06:31:36.132 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 1226 gap 0 at 1794915096132
+2026-11-17 06:31:36.282 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript content 2050 anchored true at 1794915096282
+2026-11-17 06:31:36.284 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 1210 gap -34 at 1794915096284
+2026-11-17 06:31:36.285 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 1176 gap 0 at 1794915096285
+2026-11-17 06:31:40.688 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 1169 gap 7 at 1794915100688
+2026-11-17 06:31:40.748 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 1136 gap 40 at 1794915100748
+2026-11-17 06:31:40.814 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 1100 gap 76 at 1794915100814
+2026-11-17 06:31:40.882 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 1063 gap 113 at 1794915100882
+2026-11-17 06:31:40.948 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 1025 gap 151 at 1794915100948
+2026-11-17 06:31:41.015 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 987 gap 189 at 1794915101015
+2026-11-17 06:31:41.081 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 950 gap 226 at 1794915101081
+2026-11-17 06:31:41.148 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 915 gap 261 at 1794915101148
+2026-11-17 06:31:41.215 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 883 gap 293 at 1794915101215
+2026-11-17 06:31:41.281 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 857 gap 320 at 1794915101281
+2026-11-17 06:31:41.316 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 846 gap 331 at 1794915101316
+2026-11-17 06:31:41.381 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 823 gap 353 at 1794915101381
+2026-11-17 06:31:41.448 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 804 gap 372 at 1794915101448
+2026-11-17 06:31:41.514 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 787 gap 389 at 1794915101514
+2026-11-17 06:31:41.581 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 772 gap 404 at 1794915101581
+2026-11-17 06:31:41.647 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 759 gap 417 at 1794915101647
+2026-11-17 06:31:41.714 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 748 gap 429 at 1794915101714
+2026-11-17 06:31:41.781 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 738 gap 439 at 1794915101781
+2026-11-17 06:31:41.849 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 729 gap 448 at 1794915101849
+2026-11-17 06:31:41.914 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 721 gap 455 at 1794915101914
+2026-11-17 06:31:41.981 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 714 gap 462 at 1794915101981
+2026-11-17 06:31:42.048 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 709 gap 468 at 1794915102048
+2026-11-17 06:31:42.114 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 703 gap 473 at 1794915102114
+2026-11-17 06:31:42.180 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 699 gap 477 at 1794915102180
+2026-11-17 06:31:42.249 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 695 gap 481 at 1794915102249
+2026-11-17 06:31:42.314 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 692 gap 485 at 1794915102314
+2026-11-17 06:31:42.381 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 689 gap 488 at 1794915102381
+2026-11-17 06:31:42.447 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 686 gap 490 at 1794915102447
+2026-11-17 06:31:42.514 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 684 gap 493 at 1794915102514
+2026-11-17 06:31:42.581 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 682 gap 495 at 1794915102581
+2026-11-17 06:31:42.647 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 680 gap 496 at 1794915102647
+2026-11-17 06:31:42.714 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 678 gap 498 at 1794915102714
+2026-11-17 06:31:42.781 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 677 gap 499 at 1794915102781
+2026-11-17 06:31:42.847 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 676 gap 501 at 1794915102847
+2026-11-17 06:31:42.914 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 675 gap 502 at 1794915102914
+2026-11-17 06:31:42.997 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 674 gap 503 at 1794915102997
+2026-11-17 06:31:43.081 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 673 gap 504 at 1794915103081
+2026-11-17 06:31:44.850 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 665 gap 511 at 1794915104850
+2026-11-17 06:31:44.915 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 632 gap 544 at 1794915104915
+2026-11-17 06:31:44.981 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 596 gap 580 at 1794915104981
+2026-11-17 06:31:45.048 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 559 gap 617 at 1794915105048
+2026-11-17 06:31:45.115 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 521 gap 655 at 1794915105115
+2026-11-17 06:31:45.182 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 483 gap 693 at 1794915105182
+2026-11-17 06:31:45.248 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 446 gap 730 at 1794915105248
+2026-11-17 06:31:45.315 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 411 gap 765 at 1794915105315
+2026-11-17 06:31:45.381 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 379 gap 797 at 1794915105381
+2026-11-17 06:31:45.516 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript content 2128 anchored false at 1794915105516
+2026-11-17 06:31:45.516 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 416 gap 804 at 1794915105516
+2026-11-17 06:31:45.519 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 426 gap 829 at 1794915105519
+2026-11-17 06:31:45.597 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 395 gap 860 at 1794915105597
+2026-11-17 06:31:45.664 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 374 gap 881 at 1794915105664
+2026-11-17 06:31:45.731 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 355 gap 899 at 1794915105731
+2026-11-17 06:31:45.798 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 339 gap 916 at 1794915105798
+2026-11-17 06:31:45.864 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 325 gap 930 at 1794915105864
+2026-11-17 06:31:45.931 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 312 gap 942 at 1794915105931
+2026-11-17 06:31:45.998 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 301 gap 953 at 1794915105998
+2026-11-17 06:31:46.064 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 292 gap 963 at 1794915106064
+2026-11-17 06:31:46.131 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 283 gap 971 at 1794915106131
+2026-11-17 06:31:46.198 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 276 gap 978 at 1794915106198
+2026-11-17 06:31:46.264 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 270 gap 985 at 1794915106264
+2026-11-17 06:31:46.331 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 264 gap 990 at 1794915106331
+2026-11-17 06:31:46.398 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 259 gap 995 at 1794915106398
+2026-11-17 06:31:46.464 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 255 gap 999 at 1794915106464
+2026-11-17 06:31:46.531 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 251 gap 1003 at 1794915106531
+2026-11-17 06:31:46.598 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 248 gap 1006 at 1794915106598
+2026-11-17 06:31:46.692 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 245 gap 1009 at 1794915106692
+2026-11-17 06:31:46.731 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 242 gap 1012 at 1794915106731
+2026-11-17 06:31:46.798 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 240 gap 1014 at 1794915106798
+2026-11-17 06:31:46.864 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 238 gap 1016 at 1794915106864
+2026-11-17 06:31:46.932 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 237 gap 1018 at 1794915106932
+2026-11-17 06:31:47.015 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 235 gap 1019 at 1794915107015
+2026-11-17 06:31:47.085 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 234 gap 1021 at 1794915107085
+2026-11-17 06:31:47.165 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 232 gap 1022 at 1794915107165
+2026-11-17 06:31:47.232 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 231 gap 1023 at 1794915107232
+2026-11-17 06:31:47.314 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 230 gap 1024 at 1794915107314
+2026-11-17 06:31:48.317 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 223 gap 1032 at 1794915108317
+2026-11-17 06:31:48.381 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 190 gap 1065 at 1794915108381
+2026-11-17 06:31:48.449 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 154 gap 1100 at 1794915108449
+2026-11-17 06:31:48.515 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 117 gap 1138 at 1794915108515
+2026-11-17 06:31:48.598 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 69 gap 1185 at 1794915108598
+2026-11-17 06:31:48.664 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset 32 gap 1223 at 1794915108664
+2026-11-17 06:31:48.730 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -5 gap 1259 at 1794915108730
+2026-11-17 06:31:48.799 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -40 gap 1294 at 1794915108799
+2026-11-17 06:31:48.866 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -70 gap 1325 at 1794915108866
+2026-11-17 06:31:48.931 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -95 gap 1349 at 1794915108931
+2026-11-17 06:31:48.949 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -101 gap 1355 at 1794915108949
+2026-11-17 06:31:49.014 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -122 gap 1376 at 1794915109014
+2026-11-17 06:31:49.082 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -127 gap 1381 at 1794915109082
+2026-11-17 06:31:49.148 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -125 gap 1380 at 1794915109148
+2026-11-17 06:31:49.214 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -122 gap 1377 at 1794915109214
+2026-11-17 06:31:49.281 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -120 gap 1374 at 1794915109281
+2026-11-17 06:31:49.347 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -118 gap 1373 at 1794915109347
+2026-11-17 06:31:49.414 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -117 gap 1372 at 1794915109414
+2026-11-17 06:31:49.481 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript scroll offset -117 gap 1371 at 1794915109481
+2026-11-17 06:31:51.987 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript content 2129 anchored false at 1794915111987
+2026-11-17 06:31:51.990 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript content 2128 anchored false at 1794915111990
+2026-11-17 06:31:52.645 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript content 2129 anchored false at 1794915112645
+2026-11-17 06:31:52.653 I  Vespin[8274:c7100d0] [com.facebook.react.log:javascript] [anchor-probe] transcript content 2128 anchored false at 1794915112653
+Child process terminated with signal 15: Terminated

@@ -1,0 +1,15 @@
+== bundle PANC2 base e1e73d3fed
+  built e1e73d3fed base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+agent-send part1: fails 1 shots 4 Assert that "The invite dialog" is visible... FAILED
+agent-send part2: fails 1 shots 1 Tap on "Send"... FAILED
+agent-send: 122 probe lines; marker TAP-MARK agent-send host_epoch_ms=1794915141290 host_time=06:32:21
+thread-send-text part1: fails 0 shots 1 
+thread-send-text part2: fails 0 shots 2 
+thread-send-text: 145 probe lines; marker TAP-MARK thread-send-text host_epoch_ms=1794915412390 host_time=06:36:52
+thread-send-photo part1: fails 0 shots 4 
+thread-send-photo part2: fails 0 shots 2 
+thread-send-photo: 66 probe lines; marker TAP-MARK thread-send-photo host_epoch_ms=1794915499295 host_time=06:38:19

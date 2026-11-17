@@ -1,0 +1,7 @@
+TAP-MARK thread-send-text host_epoch_ms=1794915412390 host_time=06:36:52
+An error was encountered processing the command (domain=NSPOSIXErrorDomain, code=2):
+The operation couldn’t be completed. No such file or directory
+No such file or directory
+TAP-DONE-MARK thread-send-text detected host_epoch_ms=1794915427589; maestro COMPLETED stamp 06:37:07.545 = host_epoch_ms 1794915427545
+06:37:04.682 [ INFO] maestro.cli.runner.MaestroCommandRunner.runCommands$lambda$0: Tap on 
+06:37:07.545 [ INFO] maestro.cli.runner.MaestroCommandRunner.runCommands$lambda$2: Tap on 

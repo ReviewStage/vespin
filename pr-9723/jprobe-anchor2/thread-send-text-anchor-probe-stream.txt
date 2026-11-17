@@ -1,0 +1,148 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "composedMessage CONTAINS "[anchor-probe]""
+Timestamp               Ty Process[PID:TID]
+2026-11-17 06:36:32.109 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915392109
+2026-11-17 06:36:32.111 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915392111
+2026-11-17 06:36:32.112 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915392112
+2026-11-17 06:36:32.245 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915392245
+2026-11-17 06:36:32.249 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915392249
+2026-11-17 06:36:39.685 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915399685
+2026-11-17 06:36:39.685 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915399685
+2026-11-17 06:36:39.686 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915399686
+2026-11-17 06:36:39.709 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915399709
+2026-11-17 06:36:39.752 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] room 72 at 1794915399752
+2026-11-17 06:36:39.752 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] messages 1 at 1794915399752
+2026-11-17 06:36:39.756 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915399756
+2026-11-17 06:36:39.757 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915399757
+2026-11-17 06:36:39.758 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915399758
+2026-11-17 06:36:39.760 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915399760
+2026-11-17 06:36:39.761 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915399761
+2026-11-17 06:36:39.780 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915399780
+2026-11-17 06:36:39.795 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] host layout 81e2a425 height 170 at 1794915399795
+2026-11-17 06:36:39.796 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915399796
+2026-11-17 06:36:39.797 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] room 14 at 1794915399797
+2026-11-17 06:36:39.798 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915399798
+2026-11-17 06:36:40.534 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] geometry offset 0 content 322 container 724 at 1794915400534
+2026-11-17 06:36:40.534 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] geometry offset -116 content 322 container 724 at 1794915400534
+2026-11-17 06:36:40.534 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] host layout 81e2a425 height 224 at 1794915400534
+2026-11-17 06:36:40.535 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] geometry offset -116 content 376 container 724 at 1794915400535
+2026-11-17 06:36:40.536 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915400536
+2026-11-17 06:36:40.539 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] room 58 at 1794915400539
+2026-11-17 06:36:40.569 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] geometry offset -116 content 420 container 724 at 1794915400569
+2026-11-17 06:36:44.995 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] geometry offset -116 content 420 container 430 at 1794915404994
+2026-11-17 06:36:44.995 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915404995
+2026-11-17 06:36:44.996 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915404996
+2026-11-17 06:36:44.996 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915404996
+2026-11-17 06:36:44.999 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915404999
+2026-11-17 06:36:45.002 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405002
+2026-11-17 06:36:45.012 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405012
+2026-11-17 06:36:45.012 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405012
+2026-11-17 06:36:45.012 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405012
+2026-11-17 06:36:45.029 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915405029
+2026-11-17 06:36:45.145 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] geometry offset -116 content 386 container 430 at 1794915405145
+2026-11-17 06:36:45.654 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405654
+2026-11-17 06:36:45.655 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405655
+2026-11-17 06:36:45.655 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405655
+2026-11-17 06:36:45.656 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405656
+2026-11-17 06:36:45.657 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405657
+2026-11-17 06:36:45.667 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405667
+2026-11-17 06:36:45.667 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405667
+2026-11-17 06:36:45.667 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405667
+2026-11-17 06:36:45.688 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915405688
+2026-11-17 06:36:45.697 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405697
+2026-11-17 06:36:45.698 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405698
+2026-11-17 06:36:45.698 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405698
+2026-11-17 06:36:45.699 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405699
+2026-11-17 06:36:45.700 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405700
+2026-11-17 06:36:45.711 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405711
+2026-11-17 06:36:45.711 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405711
+2026-11-17 06:36:45.711 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405711
+2026-11-17 06:36:45.729 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915405729
+2026-11-17 06:36:45.738 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405737
+2026-11-17 06:36:45.738 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405738
+2026-11-17 06:36:45.738 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405738
+2026-11-17 06:36:45.741 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405741
+2026-11-17 06:36:45.742 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405742
+2026-11-17 06:36:45.751 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405751
+2026-11-17 06:36:45.752 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405752
+2026-11-17 06:36:45.752 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405752
+2026-11-17 06:36:45.769 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915405769
+2026-11-17 06:36:45.779 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405779
+2026-11-17 06:36:45.780 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405780
+2026-11-17 06:36:45.780 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405780
+2026-11-17 06:36:45.781 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405781
+2026-11-17 06:36:45.782 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405782
+2026-11-17 06:36:45.792 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405792
+2026-11-17 06:36:45.792 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405792
+2026-11-17 06:36:45.792 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405792
+2026-11-17 06:36:45.811 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915405811
+2026-11-17 06:36:45.819 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405819
+2026-11-17 06:36:45.820 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405820
+2026-11-17 06:36:45.820 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405820
+2026-11-17 06:36:45.821 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405821
+2026-11-17 06:36:45.822 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405822
+2026-11-17 06:36:45.831 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405831
+2026-11-17 06:36:45.833 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405833
+2026-11-17 06:36:45.833 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405833
+2026-11-17 06:36:45.851 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915405851
+2026-11-17 06:36:45.859 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405859
+2026-11-17 06:36:45.860 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405860
+2026-11-17 06:36:45.860 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405860
+2026-11-17 06:36:45.861 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405861
+2026-11-17 06:36:45.862 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405862
+2026-11-17 06:36:45.872 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405872
+2026-11-17 06:36:45.872 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405872
+2026-11-17 06:36:45.872 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405872
+2026-11-17 06:36:45.890 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915405890
+2026-11-17 06:36:45.898 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405898
+2026-11-17 06:36:45.898 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405898
+2026-11-17 06:36:45.900 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405900
+2026-11-17 06:36:45.901 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405901
+2026-11-17 06:36:45.902 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405902
+2026-11-17 06:36:45.911 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405911
+2026-11-17 06:36:45.911 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405911
+2026-11-17 06:36:45.911 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405911
+2026-11-17 06:36:45.929 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915405929
+2026-11-17 06:36:45.939 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405939
+2026-11-17 06:36:45.940 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405940
+2026-11-17 06:36:45.940 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405940
+2026-11-17 06:36:45.941 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405941
+2026-11-17 06:36:45.942 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405942
+2026-11-17 06:36:45.951 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405951
+2026-11-17 06:36:45.951 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405951
+2026-11-17 06:36:45.951 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405951
+2026-11-17 06:36:45.972 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915405972
+2026-11-17 06:36:45.987 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405987
+2026-11-17 06:36:45.987 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405987
+2026-11-17 06:36:45.987 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405987
+2026-11-17 06:36:45.989 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405989
+2026-11-17 06:36:45.989 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915405989
+2026-11-17 06:36:46.003 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915406003
+2026-11-17 06:36:46.003 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915406003
+2026-11-17 06:36:46.003 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915406003
+2026-11-17 06:36:46.021 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915406021
+2026-11-17 06:36:46.029 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915406029
+2026-11-17 06:36:46.029 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915406029
+2026-11-17 06:36:46.030 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915406030
+2026-11-17 06:36:46.031 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915406031
+2026-11-17 06:36:46.032 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915406032
+2026-11-17 06:36:46.043 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915406043
+2026-11-17 06:36:46.043 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915406043
+2026-11-17 06:36:46.043 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915406043
+2026-11-17 06:36:46.060 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 1 at 1794915406060
+2026-11-17 06:37:06.016 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] send pressed at 1794915426016
+2026-11-17 06:37:06.016 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] send held at 1794915426016
+2026-11-17 06:37:06.017 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915426017
+2026-11-17 06:37:06.018 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915426018
+2026-11-17 06:37:06.018 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915426018
+2026-11-17 06:37:06.022 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915426022
+2026-11-17 06:37:06.023 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915426023
+2026-11-17 06:37:06.055 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915426055
+2026-11-17 06:37:06.055 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915426055
+2026-11-17 06:37:06.055 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] sends drawn at 1794915426055
+2026-11-17 06:37:06.079 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] page render messages 2 at 1794915426079
+2026-11-17 06:37:06.091 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] messages 2 at 1794915426091
+2026-11-17 06:37:06.097 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] host layout 515497ef height 18 at 1794915426097
+2026-11-17 06:37:06.307 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] geometry offset -116 content 478 container 430 at 1794915426307
+2026-11-17 06:37:06.307 I  Vespin[84050:c737f71] [com.facebook.react.log:javascript] [anchor-probe] host layout 515497ef height 18 at 1794915426307
+Child process terminated with signal 15: Terminated
