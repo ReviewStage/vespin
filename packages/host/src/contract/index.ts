@@ -137,9 +137,7 @@ export type { MacRunActionShell } from "./mac-shells.js";
 
 export {
   MAC_SKILL_FOLDER,
-  MAC_SKILL_LEFT,
   type MacSkill,
-  type MacSkillLeft,
   type MacSkillLeftOut,
   type MacSkills,
   type MacSkillsRead,

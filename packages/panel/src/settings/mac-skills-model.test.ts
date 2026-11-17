@@ -1,8 +1,5 @@
 import assert from "node:assert/strict";
-import type {
-  InstalledSkillContent,
-  InstalledSkillSummary,
-} from "@repo/features/installed-skill-route-wire";
+import type { InstalledSkillSummary } from "@repo/features/installed-skill-route-wire";
 import {
   INSTALLED_SKILL_REFUSAL,
   INSTALLED_SKILL_SCOPE,
@@ -10,32 +7,26 @@ import {
   MAC_SKILL_APP,
   type MacSkillApp,
 } from "@repo/features/installed-skill-wire";
-import { MAC_SKILL_LEFT, type MacSkill, type MacSkills } from "@repo/host/contract";
+import type { MacSkill, MacSkills } from "@repo/host/contract";
 import { test } from "vitest";
 import { macSkillsReview, summaryLine } from "./mac-skills-model.js";
 
 /**
- * Bring in from your Mac judged without drawing: a skill the reader already
- * has with the same files left out, one whose name is taken coming in under
- * the first free number, each folder grouped with what it offers, and every
- * skill left out listed apart, by its folder and why. Synthetic skills and folders throughout.
+ * Bring in from your Mac judged without drawing: a skill whose name the
+ * reader already has left out, never renamed; a second skill of a name
+ * found earlier left out too; each folder grouped with what it offers; and
+ * every skill left out listed apart, by its folder and why. Synthetic skills
+ * and folders throughout.
  */
 
-const base64 = (text: string) => Buffer.from(text).toString("base64");
-
-const skillText = (name: string, body = "Do the thing.") =>
-  `---\nname: ${name}\ndescription: ${name} described\n---\n\n${body}\n`;
-
-function onMac(app: MacSkillApp, name: string, body?: string): MacSkill {
-  const text = skillText(name, body);
-
+function onMac(app: MacSkillApp, name: string): MacSkill {
   return {
     app,
     folder: `~/.${app}/skills/${name}`,
     name,
     description: `${name} described`,
-    bytes: text.length,
-    files: [{ path: "SKILL.md", base64: base64(text) }],
+    bytes: 1,
+    files: [{ path: "SKILL.md", base64: "LQ==" }],
   };
 }
 
@@ -55,31 +46,19 @@ function personal(name: string): InstalledSkillSummary {
   };
 }
 
-function content(name: string, body?: string): InstalledSkillContent {
-  const text = skillText(name, body);
-
-  return { id: `id-${name}`, skillFile: text, files: [{ path: "SKILL.md", bytes: text.length }] };
-}
-
 const READ: MacSkills = {
   sources: [
+    { app: MAC_SKILL_APP.AGENTS, folder: "~/.agents/skills", present: true },
     { app: MAC_SKILL_APP.CLAUDE_CODE, folder: "~/.claude/skills", present: true },
     { app: MAC_SKILL_APP.CODEX, folder: "~/.codex/skills", present: true },
-    { app: MAC_SKILL_APP.AGENTS, folder: "~/.agents/skills", present: true },
   ],
   skills: [
     onMac(MAC_SKILL_APP.CLAUDE_CODE, "pr-review"),
-    onMac(MAC_SKILL_APP.CLAUDE_CODE, "release-notes", "Drafts from merged PRs."),
-    onMac(MAC_SKILL_APP.CODEX, "release-notes", "Another take."),
+    onMac(MAC_SKILL_APP.CLAUDE_CODE, "flaky-tests"),
     onMac(MAC_SKILL_APP.CODEX, "flaky-tests"),
+    onMac(MAC_SKILL_APP.CODEX, "db-migrations"),
   ],
   left: [
-    {
-      app: MAC_SKILL_APP.CODEX,
-      folder: "~/.codex/skills/.system/plan",
-      name: "plan",
-      reason: MAC_SKILL_LEFT.APP_OWN,
-    },
     {
       app: MAC_SKILL_APP.AGENTS,
       folder: "~/.agents/skills/leaky",
@@ -89,41 +68,23 @@ const READ: MacSkills = {
   ],
 };
 
-test("a skill already installed with the same files is left out, and a taken name comes in under the first free number", () => {
-  const review = macSkillsReview(
-    READ,
-    [personal("pr-review"), personal("release-notes"), personal("release-notes-2")],
-    new Map([
-      ["pr-review", content("pr-review")],
-      ["release-notes", content("release-notes", "Writes notes in the changelog's voice.")],
-    ]),
-  );
+test("a name the reader already has, or one found earlier, is left out rather than renamed, and each folder offers the rest", () => {
+  const review = macSkillsReview(READ, [personal("pr-review")]);
 
   assert.deepEqual(
-    review.offered.map(({ skill, name, renamedFrom }) => [skill.folder, name, renamedFrom]),
+    review.groups.map((group) => [group.title, group.offered.map((skill) => skill.name)]),
     [
-      ["~/.claude-code/skills/release-notes", "release-notes-3", "release-notes"],
-      ["~/.codex/skills/release-notes", "release-notes-4", "release-notes"],
-      ["~/.codex/skills/flaky-tests", "flaky-tests", undefined],
-    ],
-  );
-  assert.deepEqual(
-    review.groups.map((group) => ({
-      title: group.title,
-      offered: group.offered.map((each) => each.name),
-    })),
-    [
-      { title: "Claude Code", offered: ["release-notes-3"] },
-      { title: "Codex", offered: ["release-notes-4", "flaky-tests"] },
+      ["Claude Code", ["flaky-tests"]],
+      ["Codex", ["db-migrations"]],
     ],
   );
   assert.deepEqual(
     review.skipped.map(({ name, from, why }) => [name, from, why]),
     [
-      ["pr-review", "Claude Code", "Already installed"],
-      ["plan", "Codex", "Built into Codex"],
+      ["pr-review", "Claude Code", "Already have one"],
+      ["flaky-tests", "Codex", "Already have one"],
       ["leaky", "Agents folder", "Holds a credential"],
     ],
   );
-  assert.equal(summaryLine(review), "Found 3 skills to bring in, and left out 3.");
+  assert.equal(summaryLine(review), "Found 2 skills to bring in, and left out 3.");
 });

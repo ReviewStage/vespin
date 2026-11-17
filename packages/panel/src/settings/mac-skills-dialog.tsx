@@ -1,7 +1,4 @@
-import type {
-  InstalledSkillContent,
-  InstalledSkillSummary,
-} from "@repo/features/installed-skill-route-wire";
+import type { InstalledSkillSummary } from "@repo/features/installed-skill-route-wire";
 import {
   INSTALLED_SKILL_CALL_FAILURE,
   type InstalledSkillFailedView,
@@ -15,6 +12,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { failureLine } from "@repo/features/skills-settings-words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import type { MacSkill } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
 import {
   Badge,
@@ -26,14 +24,11 @@ import {
   ErrorState,
   GAP,
   SETTINGS_ROW_CONTROLS,
-  SETTINGS_ROW_STATE,
   SettingsLine,
   SettingsRow,
   SettingsRowMark,
-  SettingsRowStateLine,
   SettingsSection,
   SpinnerRegion,
-  STATUS_TONE,
   Stack,
   TEXT_ELEMENT,
   TEXT_TONE,
@@ -41,7 +36,7 @@ import {
   Text,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { queryOptions, useQueries, useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { askAct } from "../act.js";
 import { unreadShown } from "../failure-report.js";
@@ -50,11 +45,9 @@ import { SkillMark } from "../tasks/skill-ref.js";
 import { pressTakeBack, type TakeBackWrite } from "../undo-stack.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import {
-  clashingNames,
   MAC_SKILLS_LINE,
   type MacSkillsReview,
   macSkillsReview,
-  type OfferedSkill,
   type SkippedSkill,
   skillCount,
   summaryLine,
@@ -64,10 +57,8 @@ import {
  * mac-skills-dialog.tsx -- Settings › Skills' Bring in from your Mac: the skills this Mac's own coding agents keep, grouped by the agent whose folder holds them, each to tick, every one left out with why, and Bring in.
  *
  * The card reads the Mac's skills folders as it opens (`MAC_SKILLS_READ`,
- * the desktop's alone) and the reader's own skills that share a name with
- * one found, so it can say which are already installed and which come in
- * under a new name (`mac-skills-model.ts`). Every skill offered starts
- * ticked. Bring in sends each one ticked as its own folder
+ * the desktop's alone), and leaves out a skill whose name the reader
+ * already has (`mac-skills-model.ts`). Every skill offered starts ticked. Bring in sends each one ticked as its own folder
  * (`INSTALLED_SKILLS_IMPORT`) into the reader's own skills and closes the
  * card at once; the undo stack says so on a toast whose Undo, as ⌘Z, waits
  * for them and deletes each that came in (`pressTakeBack`), and a skill the
@@ -160,27 +151,16 @@ function macSkillsQuery(apps: readonly MacSkillApp[]) {
   });
 }
 
-/** One of the reader's skills read whole, to say whether one on the Mac is the same; shared with the page's View. */
-function installedSkillQuery(skillId: string) {
-  return queryOptions({
-    queryKey: [QUERY_ROOT.INSTALLED_SKILL, skillId],
-    queryFn: () => askAct(ACT_KIND.INSTALLED_SKILLS_READ, { skillId }),
-    retry: false,
-  });
-}
-
-/** One skill to tick: its name, marked where it comes in under a new one, and what it does. */
+/** One skill to tick: its name and what it does. */
 function OfferedRow({
-  offered,
+  skill,
   ticked,
   onTick,
 }: {
-  offered: OfferedSkill;
+  skill: MacSkill;
   ticked: boolean;
   onTick: (on: boolean) => void;
 }): React.JSX.Element {
-  const { skill, name, renamedFrom } = offered;
-
   return (
     <SettingsRow
       leading={
@@ -188,25 +168,11 @@ function OfferedRow({
           <SkillMark />
         </SettingsRowMark>
       }
-      label={<ReplayMask>{name}</ReplayMask>}
-      adornment={
-        renamedFrom === undefined ? undefined : (
-          <Badge tone={STATUS_TONE.ATTENTION}>{MAC_SKILLS_LINE.RENAMED}</Badge>
-        )
-      }
+      label={<ReplayMask>{skill.name}</ReplayMask>}
       controls={SETTINGS_ROW_CONTROLS.BESIDE}
-      description={
-        <>
-          <ReplayMask>{skill.description}</ReplayMask>
-          {renamedFrom === undefined ? null : (
-            <SettingsRowStateLine block state={SETTINGS_ROW_STATE.ATTENTION}>
-              <ReplayMask>{`You already have a ${renamedFrom}`}</ReplayMask>
-            </SettingsRowStateLine>
-          )}
-        </>
-      }
+      description={<ReplayMask>{skill.description}</ReplayMask>}
     >
-      {() => <Checkbox label={`Bring in ${name}`} checked={ticked} onChange={onTick} />}
+      {() => <Checkbox label={`Bring in ${skill.name}`} checked={ticked} onChange={onTick} />}
     </SettingsRow>
   );
 }
@@ -278,12 +244,12 @@ function ReviewBody({
       <Text>{summaryLine(review)}</Text>
       {review.groups.map((group) => (
         <GroupHead key={group.app} title={group.title} caption={group.folder}>
-          {group.offered.map((offered) => (
+          {group.offered.map((skill) => (
             <OfferedRow
-              key={offered.skill.folder}
-              offered={offered}
-              ticked={!unticked.has(offered.skill.folder)}
-              onTick={(on) => onTick(offered.skill.folder, on)}
+              key={skill.folder}
+              skill={skill}
+              ticked={!unticked.has(skill.folder)}
+              onTick={(on) => onTick(skill.folder, on)}
             />
           ))}
         </GroupHead>
@@ -299,34 +265,17 @@ function ReviewBody({
   );
 }
 
-/** The review once the Mac's folders and the reader's clashing skills are read; none while any read is out. */
+/** The review once the Mac's folders are read; none while the read is out. */
 function useReview(personal: readonly InstalledSkillSummary[]) {
   // Note that Cursor's folder is read only while its experiment is on, as its harness is offered only then.
   const cursor = useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.CURSOR) });
   const apps = cursor.data === true ? READ_APPS_WITH_CURSOR : READ_APPS;
   const read = useQuery(macSkillsQuery(apps));
-  const clashing = read.data === undefined ? [] : clashingNames(read.data, personal);
 
-  const contents = useQueries({
-    queries: clashing.map((skill) => installedSkillQuery(skill.id)),
-  });
-
-  if (read.data === undefined || contents.some((content) => content.isPending)) {
-    return { read, review: undefined };
-  }
-
-  // Note that a skill of the reader's that could not be read is taken as different, so the one on the Mac comes in under a new name rather than not at all.
-  const installed = new Map<string, InstalledSkillContent>();
-
-  for (const [at, content] of contents.entries()) {
-    const skill = clashing[at];
-
-    if (skill !== undefined && content.data !== undefined && !("failure" in content.data)) {
-      installed.set(skill.name, content.data);
-    }
-  }
-
-  return { read, review: macSkillsReview(read.data, personal, installed) };
+  return {
+    read,
+    review: read.data === undefined ? undefined : macSkillsReview(read.data, personal),
+  };
 }
 
 /** Bring in from your Mac's card, open while `open` stands; it tells the page each skill as it lands. */
@@ -358,16 +307,15 @@ export function MacSkillsDialog({
     setUnticked(next);
   };
 
-  const picked = review?.offered.filter((offered) => !unticked.has(offered.skill.folder)) ?? [];
+  const picked = review?.offered.filter((skill) => !unticked.has(skill.folder)) ?? [];
 
   const bringIn = () => {
     const answered = Promise.all(
-      picked.map(({ skill, name, renamedFrom }) =>
+      picked.map((skill) =>
         askAct(ACT_KIND.INSTALLED_SKILLS_IMPORT, {
           workspaceId: workspace.id,
           scope: INSTALLED_SKILL_SCOPE.PERSONAL,
           mac: { app: skill.app, folder: skill.folder },
-          ...(renamedFrom === undefined ? undefined : { name }),
           files: skill.files,
         })
           .catch((): ImportAnswer => UNANSWERED)

@@ -5,22 +5,21 @@ import { INSTALLED_SKILL_REFUSAL, MAC_SKILL_APP } from "@repo/features/installed
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { Effect, Layer, Path } from "effect";
 import * as FileSystem from "effect/FileSystem";
-import { MAC_SKILL_LEFT } from "./contract/mac-skills.js";
 import { readMacSkills } from "./mac-skills.js";
 
 /**
  * The Mac's skills read from a home folder the test lays out in a temporary
  * directory: a skill offered with its own files, a folder linked from a
  * second agent's skills folder offered once, from where it really is, an
- * agent's own and an invalid skill left out with why, and only the folders
- * asked read. Synthetic skills throughout.
+ * agent's own skill passed over, an invalid one left out with why, and only
+ * the folders asked read. Synthetic skills throughout.
  */
 
 const skillFile = (name: string, description: string) =>
   `---\nname: ${name}\ndescription: ${description}\n---\n\nDo the thing.\n`;
 
 it.effect(
-  "a home's skills are offered with their files, a linked folder once, and every folder left out says why",
+  "a home's skills are offered with their files, a linked folder once and an agent's own never, and an invalid one is left out with why",
   () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -89,25 +88,13 @@ it.effect(
           },
         ],
       );
+      // Note that the link from Claude Code's folder and Codex's own skill are passed over, unlisted.
       assert.deepEqual(read.left, [
         {
           app: MAC_SKILL_APP.CLAUDE_CODE,
           folder: "~/.claude/skills/no-description",
           name: "no-description",
           reason: INSTALLED_SKILL_REFUSAL.SKILL_FILE_INVALID,
-        },
-        {
-          app: MAC_SKILL_APP.CLAUDE_CODE,
-          folder: "~/.claude/skills/release-notes",
-          name: "release-notes",
-          reason: MAC_SKILL_LEFT.SAME_FOLDER,
-          sameAs: "~/.agents/skills/release-notes",
-        },
-        {
-          app: MAC_SKILL_APP.CODEX,
-          folder: "~/.codex/skills/.system/plan",
-          name: "plan",
-          reason: MAC_SKILL_LEFT.APP_OWN,
         },
       ]);
     }).pipe(Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer))),

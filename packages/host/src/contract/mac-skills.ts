@@ -6,8 +6,10 @@
  * with the read in `../mac-skills.ts`, and a browser tab and the iOS app
  * refuse it, since neither runs on the Mac. A skill offered comes with
  * every file of its folder, in base64, for the service to install as it
- * stands (`installedSkills.importFolder`); a folder left out says why, so
- * the member sees what was not offered as well as what was. Every folder
+ * stands (`installedSkills.importFolder`); a folder an install would refuse
+ * is left out with why, so the member sees what was not offered as well as
+ * what was, while a link to a folder already offered, and an agent's own
+ * skills, are passed over unsaid. Every folder
  * is named from the home folder (`~/.claude/skills`), so no account's name
  * on the Mac crosses the port.
  */
@@ -43,20 +45,6 @@ export const MAC_SKILL_READ_ORDER = [
   MAC_SKILL_APP.CURSOR,
 ] as const satisfies readonly MacSkillApp[];
 
-/**
- * Why a skill's folder on the Mac is left out before it is offered: the
- * check an install would refuse it for, or one of the Mac's own reasons.
- */
-export const MAC_SKILL_LEFT = {
-  ...INSTALLED_SKILL_REFUSAL,
-  /** A folder the agent keeps itself, its name led by a dot, such as Codex's `.system`. */
-  APP_OWN: "app-own",
-  /** The same folder already offered from another agent's skills folder, which a link reaches. */
-  SAME_FOLDER: "same-folder",
-} as const;
-
-export type MacSkillLeft = (typeof MAC_SKILL_LEFT)[keyof typeof MAC_SKILL_LEFT];
-
 const appSchema = EffectSchema.Literals(Object.values(MAC_SKILL_APP));
 
 /** A folder from the home folder. */
@@ -90,13 +78,12 @@ const macSkillSchema = EffectSchema.Struct({
 
 export type MacSkill = typeof macSkillSchema.Type;
 
-/** One skill's folder left out, and why; for one reached twice, the folder it was offered from. */
+/** One skill's folder left out, and the check an install would refuse it for. */
 const macSkillLeftOutSchema = EffectSchema.Struct({
   app: appSchema,
   folder: tildeFolder,
   name: EffectSchema.String,
-  reason: EffectSchema.Literals(Object.values(MAC_SKILL_LEFT)),
-  sameAs: EffectSchema.optionalKey(tildeFolder),
+  reason: EffectSchema.Literals(Object.values(INSTALLED_SKILL_REFUSAL)),
 });
 
 export type MacSkillLeftOut = typeof macSkillLeftOutSchema.Type;

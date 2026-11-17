@@ -5,16 +5,13 @@
  * in it that holds a `SKILL.md` is a skill, read whole: every file under it
  * but the version control's and the package manager's own, named from the
  * skill's folder. A skill is offered with its files in base64, or left out
- * with why, so the member sees both:
- *
- * - a folder whose name a dot leads is one the agent keeps itself, such as
- *   Codex's `.system`, and each skill under it is left out as the agent's own;
- * - a folder already offered from another agent's skills folder, which a
- *   link reaches (`npx skills add` keeps a skill in `~/.agents/skills` and
- *   links it into each agent's), is left out as the same folder, once;
- * - a skill past the bounds one request carries (`INSTALLED_SKILL_BOUNDS`),
- *   or one the install's check would refuse
- *   (`@repo/features/installed-skill-check`), is left out for that reason.
+ * with why where it is past the bounds one request carries
+ * (`INSTALLED_SKILL_BOUNDS`) or the install's check would refuse it
+ * (`@repo/features/installed-skill-check`). Two kinds of folder are passed
+ * over unsaid, as no skill of the member's own: one whose name a dot leads,
+ * which the agent keeps itself, such as Codex's `.system`; and one already
+ * offered from another skills folder, which a link reaches (`npx skills add`
+ * keeps a skill in `~/.agents/skills` and links it into each agent's).
  *
  * A folder the Mac does not hold, or will not let the app read, is told as
  * absent, and a file it will not read leaves its skill out as too large to
@@ -31,6 +28,8 @@ import {
 import {
   INSTALLED_SKILL_BOUNDS,
   INSTALLED_SKILL_MAIN_FILE,
+  INSTALLED_SKILL_REFUSAL,
+  type InstalledSkillRefusal,
   type MacSkillApp,
 } from "@repo/features/installed-skill-wire";
 import { Effect, Option, Path } from "effect";
@@ -38,10 +37,8 @@ import { Base64 } from "effect/encoding";
 import * as FileSystem from "effect/FileSystem";
 import {
   MAC_SKILL_FOLDER,
-  MAC_SKILL_LEFT,
   MAC_SKILL_READ_ORDER,
   type MacSkill,
-  type MacSkillLeft,
   type MacSkillLeftOut,
   type MacSkills,
 } from "./contract/mac-skills.js";
@@ -62,14 +59,12 @@ interface FoundFolder {
   readonly folder: string;
   readonly real: string;
   readonly name: string;
-  /** Whether the agent keeps it itself, under a folder a dot leads. */
-  readonly appOwn: boolean;
 }
 
 /** A skill's folder read: its files, or why it is left out. */
 type FolderRead =
   | { readonly files: readonly SkillFile[]; readonly bytes: number }
-  | { readonly left: MacSkillLeft };
+  | { readonly left: InstalledSkillRefusal };
 
 type Services = FileSystem.FileSystem | Path.Path;
 
@@ -108,7 +103,7 @@ const foldersIn = (folder: string) =>
     return yield* Effect.filter(sorted, (name) => isFolder(path.join(folder, name)));
   });
 
-/** Every skill folder in one agent's skills folder, a dot-led folder's skills marked as the agent's own. */
+/** Every skill folder in one agent's skills folder, passing over a dot-led folder, which the agent keeps itself. */
 const foldersOf = (home: string, app: MacSkillApp) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -117,26 +112,13 @@ const foldersOf = (home: string, app: MacSkillApp) =>
     const tilde = `~/${MAC_SKILL_FOLDER[app]}`;
     const found: FoundFolder[] = [];
 
-    const add = (name: string, at: string, folder: string, appOwn: boolean) =>
-      Effect.gen(function* () {
-        if (!(yield* holdsFile(at, INSTALLED_SKILL_MAIN_FILE))) return;
-        const real = Option.getOrElse(yield* quietly(fs.realPath(at)), () => at);
-
-        found.push({ app, path: at, folder, real, name, appOwn });
-      });
-
     for (const name of yield* foldersIn(root)) {
       const at = path.join(root, name);
 
-      if (!name.startsWith(".")) {
-        yield* add(name, at, `${tilde}/${name}`, false);
-        continue;
-      }
+      if (name.startsWith(".") || !(yield* holdsFile(at, INSTALLED_SKILL_MAIN_FILE))) continue;
+      const real = Option.getOrElse(yield* quietly(fs.realPath(at)), () => at);
 
-      // Note that a dot-led folder holds the agent's own skills one level down, as Codex's `.system` does.
-      for (const inner of yield* foldersIn(at)) {
-        yield* add(inner, path.join(at, inner), `${tilde}/${name}/${inner}`, true);
-      }
+      found.push({ app, path: at, folder: `${tilde}/${name}`, real, name });
     }
 
     return { app, present: yield* isFolder(root), folder: tilde, found };
@@ -177,7 +159,7 @@ const readFolder = (found: FoundFolder) =>
     const paths = yield* filesUnder(found.path);
 
     if (paths.length > INSTALLED_SKILL_BOUNDS.MAX_IMPORT_FILES) {
-      return { left: MAC_SKILL_LEFT.TOO_LARGE };
+      return { left: INSTALLED_SKILL_REFUSAL.TOO_LARGE };
     }
 
     const sizes = yield* Effect.forEach(paths, (each) =>
@@ -190,14 +172,15 @@ const readFolder = (found: FoundFolder) =>
     );
 
     // Note that the sizes are read before any file is, so a folder past the bound is never read whole.
-    if (bytes > INSTALLED_SKILL_BOUNDS.MAX_IMPORT_BYTES) return { left: MAC_SKILL_LEFT.TOO_LARGE };
+    if (bytes > INSTALLED_SKILL_BOUNDS.MAX_IMPORT_BYTES)
+      return { left: INSTALLED_SKILL_REFUSAL.TOO_LARGE };
 
     const files: SkillFile[] = [];
 
     for (const each of paths) {
       const read = yield* quietly(fs.readFile(path.join(found.path, each)));
 
-      if (Option.isNone(read)) return { left: MAC_SKILL_LEFT.TOO_LARGE };
+      if (Option.isNone(read)) return { left: INSTALLED_SKILL_REFUSAL.TOO_LARGE };
       files.push({ path: each, bytes: read.value });
     }
 
@@ -228,22 +211,6 @@ function offered(found: FoundFolder, read: FolderRead): MacSkill | MacSkillLeftO
   };
 }
 
-/** Why a folder found is left out before it is read: the agent's own, or a folder already offered from another agent's, by a link. */
-function leftUnread(
-  found: FoundFolder,
-  offeredFrom: string | undefined,
-): MacSkillLeftOut | undefined {
-  const named = { app: found.app, folder: found.folder, name: found.name };
-
-  if (found.appOwn) return { ...named, reason: MAC_SKILL_LEFT.APP_OWN };
-
-  if (offeredFrom !== undefined) {
-    return { ...named, reason: MAC_SKILL_LEFT.SAME_FOLDER, sameAs: offeredFrom };
-  }
-
-  return undefined;
-}
-
 /** The skills the folders asked hold under the home folder given: each folder, the skills offered, and those left out, in the folders' order. */
 export const readMacSkills = (home: string, asked: readonly MacSkillApp[]) =>
   Effect.gen(function* (): Effect.fn.Return<MacSkills, never, Services> {
@@ -252,19 +219,13 @@ export const readMacSkills = (home: string, asked: readonly MacSkillApp[]) =>
     const sources = yield* Effect.forEach(apps, (app) => foldersOf(home, app));
     const skills: MacSkill[] = [];
     const left: MacSkillLeftOut[] = [];
-    // The folder each real folder was first offered from, so a link to it is told as the same.
-    const offeredAt = new Map<string, string>();
+    // The folders already read, by where they really are, so a link to one is passed over.
+    const read = new Set<string>();
     let budget = READ_BUDGET_BYTES;
 
     for (const found of sources.flatMap((source) => source.found)) {
-      const unread = leftUnread(found, offeredAt.get(found.real));
-
-      if (unread !== undefined) {
-        left.push(unread);
-        continue;
-      }
-
-      offeredAt.set(found.real, found.folder);
+      if (read.has(found.real)) continue;
+      read.add(found.real);
       const made = offered(found, yield* readFolder(found));
 
       // Note that a read past its budget leaves the rest out as too large, so the port never carries more than it holds.
@@ -273,7 +234,7 @@ export const readMacSkills = (home: string, asked: readonly MacSkillApp[]) =>
           app: found.app,
           folder: found.folder,
           name: made.name,
-          reason: MAC_SKILL_LEFT.TOO_LARGE,
+          reason: INSTALLED_SKILL_REFUSAL.TOO_LARGE,
         });
       } else if ("reason" in made) {
         left.push(made);
