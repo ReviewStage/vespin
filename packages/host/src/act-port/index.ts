@@ -14,6 +14,11 @@ import {
   refusedBy,
 } from "./base.js";
 import { declaredActProcedures } from "./declared-acts.js";
+import {
+  ACT_PORT_CROSSING,
+  type ActPortCrossing,
+  sameProcessHandling,
+} from "./in-process-channel.js";
 import { liveFollowProcedures } from "./live-follows.js";
 import { pushProcedures, type WindowPushes } from "./push-procedures.js";
 import { type SettingsProceduresDependencies, settingsProcedures } from "./settings-procedures.js";
@@ -46,6 +51,14 @@ export { browserLiveProcedures } from "./browser-live-procedures.js";
 export { declaredActProcedures } from "./declared-acts.js";
 
 export { feedbackProcedures } from "./feedback-procedures.js";
+
+export {
+  ACT_PORT_CROSSING,
+  type ActPortCrossing,
+  type InProcessChannel,
+  inProcessChannel,
+  sameProcessLink,
+} from "./in-process-channel.js";
 
 export {
   type MacShell,
@@ -123,6 +136,7 @@ export interface ActPortDependencies {
 export function createActPortHandler<Sender>(
   dependencies: ActPortDependencies,
   platformProcedures: PlatformActProcedures<Sender>,
+  crossing: ActPortCrossing = ACT_PORT_CROSSING.TEXT,
 ): ActPortHandler<Sender> {
   const router = {
     ...platformProcedures,
@@ -135,14 +149,18 @@ export function createActPortHandler<Sender>(
     ...workspaceProcedures(dependencies.workspaces, dependencies.acts),
   } satisfies ContractedRouter<typeof actContract, ActPortContext<Sender>>;
 
-  return actPortHandlerOf({ ...router, ...pushProcedures(dependencies.pushes) });
+  return actPortHandlerOf({ ...router, ...pushProcedures(dependencies.pushes) }, crossing);
 }
 
-/** The act port's handler over the procedures given, every failure but a refusal answered as `createActPortHandler` says. */
+/** The act port's handler over the procedures given, every failure but a refusal answered as `createActPortHandler` says, each answer crossing as `crossing` says. */
 export function actPortHandlerOf<Sender>(
   router: Router<ActPortContext<Sender>>,
+  crossing: ActPortCrossing = ACT_PORT_CROSSING.TEXT,
 ): ActPortHandler<Sender> {
   return new RPCHandler<ActPortContext<Sender>>(router, {
+    ...(crossing === ACT_PORT_CROSSING.SAME_PROCESS
+      ? sameProcessHandling<ActPortContext<Sender>>()
+      : undefined),
     interceptors: [
       ({ next, request, context, ...options }) => {
         const trace = sendTraceOf(request.headers);
