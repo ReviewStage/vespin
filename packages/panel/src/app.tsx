@@ -82,7 +82,7 @@ import {
 } from "./places/window-history.js";
 import { forgetAccountReads } from "./query-keys.js";
 import { useOpenHostConnect } from "./settings/host-connect-dialog.js";
-import { settingsRowsInput, shownSettingsView } from "./settings/settings-rows.js";
+import { settingsRowsInput, shownSettingsView, shownWorkspace } from "./settings/settings-rows.js";
 import { type SettingsRoute, useSettingsRoute } from "./settings-link.js";
 import { landOnSettingsRow } from "./settings-search.js";
 import { SHELL_ROOM } from "./shell-room.js";
@@ -192,11 +192,16 @@ function SettingsPalette({
 }): React.JSX.Element {
   const settings = useSettingsPanel(doors);
 
+  // Whether Billing stands for the workspace Settings shows, so the search finds its page and sections as the sidebar lists them.
+  const billing = useBillingShown(
+    settings?.workspace ? shownWorkspace(settings.workspace) : undefined,
+  );
+
   return (
     <CommandPalette
       {...palette}
       settings={{
-        rows: settings === undefined ? undefined : settingsRowsInput(settings),
+        rows: settings === undefined ? undefined : settingsRowsInput({ ...settings, billing }),
         capabilities: settings?.capabilities ?? NO_CAPABILITIES,
         onViewChange: doors.onViewChange,
       }}
