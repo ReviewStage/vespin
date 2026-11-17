@@ -219,14 +219,19 @@ function endPayload(state: LiveActivityContentState, now: number, dismissAt: num
 
 /**
  * Whether an activity stands on the phone as the refresh reads it: one
- * started before its rotation that the phone confirmed, by its update token
- * or by Apple taking the start, or a claimed start still inside its hold.
+ * started before its rotation, or inside iOS's lifetime where its update
+ * token is not known, that the phone confirmed, by its update token or by
+ * Apple taking the start, or a claimed start still inside its hold.
  */
 function standsOn(phone: LiveActivityPhone, now: number): boolean {
   if (phone.startedAt === null) return false;
   const age = now - phone.startedAt.getTime();
 
-  if (age >= Duration.toMillis(LIVE_ACTIVITY_PUSH.ROTATE_AFTER)) return false;
+  // Note that only an activity whose update token is known is rotated early, since only it can be ended first; one with none stands for iOS's whole lifetime, as before.
+  const limit =
+    phone.activityToken === null ? LIVE_ACTIVITY_PUSH.LIFETIME : LIVE_ACTIVITY_PUSH.ROTATE_AFTER;
+
+  if (age >= Duration.toMillis(limit)) return false;
 
   const confirmed =
     phone.activityToken !== null ||

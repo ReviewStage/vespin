@@ -472,6 +472,28 @@ it.layer(getTestDB())("a member's live activity", (it) => {
     },
   );
 
+  it.effect(
+    "an activity whose update token never came is not rotated early, since no end could reach it",
+    () => {
+      const sender = recordingApnsSender();
+
+      return Effect.gen(function* () {
+        const member = yield* openUser;
+        yield* phoneOf(member);
+        yield* runningAgent(member, "Fix the refresh");
+        yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+
+        yield* TestClock.adjust("465 minutes");
+        yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+        assert.deepEqual(events(sender.sent), ["start"]);
+
+        yield* TestClock.adjust("15 minutes");
+        yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+        assert.deepEqual(events(sender.sent), ["start", "start"]);
+      }).pipe(Effect.provide(sender.layer));
+    },
+  );
+
   it.effect("a phone set to never take a push has its standing activity ended", () => {
     const sender = recordingApnsSender();
 
