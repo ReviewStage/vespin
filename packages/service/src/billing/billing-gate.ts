@@ -13,7 +13,8 @@
  * billing is off (`BILLING_LIVE`) a Start it would refuse goes ahead and is
  * logged as `billing.gate.would_refuse`, by its workspace and month total,
  * so who would be refused is known before it is turned on. A read that fails
- * refuses nothing: it is logged and the Start goes ahead. The billing
+ * refuses nothing, nor does one past `GATE_READ_TIMEOUT`: it is logged and
+ * the Start goes ahead. The billing
  * environment is read where the runtime provides it, as the service's
  * always does (`runtime.ts`); a Start run without it, as a test of Starts
  * is, meets no gate.
@@ -26,12 +27,20 @@ import { withinIncludedUsage } from "@repo/database/usage-vocabulary";
 import { BILLING_REFUSAL } from "@repo/features/billing-refusal-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { causeKind, unlessInterrupted } from "@repo/runtime/effect";
-import { Clock, Effect, Option } from "effect";
+import { Clock, Duration, Effect, Option } from "effect";
 import { billingRequired, type HostedRefusal } from "../http/http-effect.js";
 import { BillingEnvironment } from "./billing-environment.js";
 
 /** The line logged for each Start the gate would refuse while billing is off. */
 const WOULD_REFUSE = "billing.gate.would_refuse";
+
+/**
+ * How long the gate's reads may take before the Start goes ahead without
+ * them. Note that this is short, because every cloud Start waits on it, and
+ * the reads are two indexed lookups (`workspace_billing`'s key, and
+ * `usage_charge_organization_month` for the month's sum).
+ */
+const GATE_READ_TIMEOUT = Duration.millis(300);
 
 /** The roles offered Set up billing and Manage billing beside a refusal. */
 const BILLING_ROLES: ReadonlySet<string> = new Set([WORKSPACE_ROLE.OWNER, WORKSPACE_ROLE.ADMIN]);
@@ -120,7 +129,8 @@ export const cloudStartGate = Effect.fn("web/cloudStartGate")(function* (
 
     return yield* refusalOf(userId, workspaceId, standing.blocked);
   }).pipe(
-    // Note that a read that failed lets the Start go ahead, because the gate guards a bill, not the service.
+    Effect.timeout(GATE_READ_TIMEOUT),
+    // Note that a read that failed or ran past its time lets the Start go ahead, because the gate guards a bill, not the service.
     Effect.catchCause((cause) =>
       unlessInterrupted(cause, (other) =>
         Effect.as(
