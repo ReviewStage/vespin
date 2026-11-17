@@ -7,7 +7,7 @@
  * `queueMicrotask`, `WeakRef`, and `FinalizationRegistry` are all there.
  * What a Release build on the simulator found missing is filled in below,
  * each with why the host needs it, and nothing else: `MessageChannel` is
- * missing too, and the act port runs over `in-process-channel.ts` instead.
+ * missing too, and the act port runs over `@repo/host/act-port`'s `inProcessChannel` instead.
  * The last two, a streaming `Response` and `fetch`, only a signed-in run
  * finds, since a fixture run reaches no service.
  */

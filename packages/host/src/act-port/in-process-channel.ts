@@ -13,7 +13,24 @@
  * end so.
  */
 
+import { RPCLink } from "@orpc/client/message-port";
+import type { RPCHandlerOptions } from "@orpc/server/message-port";
 import type { WireBoundaryInput } from "@repo/wire";
+import { Predicate } from "effect";
+
+/**
+ * How a message crosses the act port: as text, as oRPC encodes a peer
+ * message by default, or handed across as the object itself, where both
+ * ends stand in one process (`inProcessChannel`) and the text would only be
+ * written and read back on the same thread, every photo's or file's base64
+ * with it.
+ */
+export const ACT_PORT_CROSSING = {
+  TEXT: "text",
+  SAME_PROCESS: "same-process",
+} as const;
+
+export type ActPortCrossing = (typeof ACT_PORT_CROSSING)[keyof typeof ACT_PORT_CROSSING];
 
 /** A listener on one end: a message's, handed the message as an event's data, or the close's. */
 type Listener = (event: { readonly data: WireBoundaryInput }) => void;
@@ -94,4 +111,58 @@ export function inProcessChannel(): InProcessChannel {
     port1: portOf(0) as MessagePort,
     port2: portOf(1) as MessagePort,
   };
+}
+
+/**
+ * The transfer list oRPC asks of each message on a port crossed in one
+ * process: an empty one, since nothing moves between threads, which oRPC
+ * takes as leave to post the message itself rather than its text. Note that
+ * both ends then hold the same objects, which is safe because oRPC's
+ * serializer builds a new body for each message and its deserializer copies
+ * whatever it writes into, so neither end changes what the other was handed.
+ */
+function sameProcessTransfer(): object[] {
+  return [];
+}
+
+/**
+ * `value` with every object in it a plain one, as reading it back from text
+ * made it, where oRPC hands its own null-prototype objects across. Note that
+ * only objects and arrays are walked, so a string, however long, is shared
+ * rather than copied, and anything of a class of its own stands as it is.
+ */
+function plainOf(value: WireBoundaryInput): WireBoundaryInput {
+  if (Array.isArray(value)) return value.map(plainOf);
+
+  if (value === null || !Predicate.isObject(value)) return value;
+  const prototype: object | null = Object.getPrototypeOf(value);
+
+  if (prototype !== null && Object.getPrototypeOf(prototype) !== null) return value;
+
+  return Object.fromEntries(Object.entries(value).map(([key, each]) => [key, plainOf(each)]));
+}
+
+/** The handler's side of a port crossed in one process: each answer posted as the object itself, and each call's input made plain before a procedure reads it. */
+export function sameProcessHandling<Context extends object>(): Pick<
+  RPCHandlerOptions<Context>,
+  "experimental_transfer" | "clientInterceptors"
+> {
+  return {
+    experimental_transfer: sameProcessTransfer,
+    clientInterceptors: [
+      // SAFETY: a call's input is the contract's wire value, which its schema checks once the procedure reads it.
+      ({ next, ...options }) =>
+        next({ ...options, input: plainOf(options.input as WireBoundaryInput) }),
+    ],
+  };
+}
+
+/** The screens' link to a handler on `port` in this process: each call posted as the object itself, and each answer made plain before the screens read it. */
+export function sameProcessLink(port: MessagePort): RPCLink<Record<never, never>> {
+  return new RPCLink({
+    port,
+    experimental_transfer: sameProcessTransfer,
+    // SAFETY: an answer is the contract's wire value, as its procedure's schema encoded it on the host's side.
+    interceptors: [async ({ next }) => plainOf((await next()) as WireBoundaryInput)],
+  });
 }

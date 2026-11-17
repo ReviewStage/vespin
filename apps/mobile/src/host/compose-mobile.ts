@@ -13,7 +13,7 @@
  * authentication session and its cipher the Keychain's.
  *
  * The screens' acts reach the host's own procedures on the act port in this
- * process, over a channel of two ends (`in-process-channel.ts`); of the
+ * process, over a channel of two ends (`@repo/host/act-port`'s `inProcessChannel`); of the
  * platform kinds the app answers a note's send to the feedback endpoint,
  * and an agent's shells listed and its sandbox resumed, which its run
  * actions ask (`shellReadProcedures`), and every other, a copy, a download,
@@ -26,7 +26,6 @@
  */
 
 import { createORPCClient } from "@orpc/client";
-import { RPCLink } from "@orpc/client/message-port";
 import { type AuthSession, authSessionConsent } from "@repo/credentials";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
 import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
@@ -35,13 +34,16 @@ import type { OpenTerminalSocket } from "@repo/features/relay-socket";
 import type { SecretCipher as SecretCipherSeam } from "@repo/host";
 import { runModeFor } from "@repo/host";
 import {
+  ACT_PORT_CROSSING,
   type ActPortDependencies,
   type AgentProceduresDependencies,
   clientSettingSideEffects,
   createActPortHandler,
   feedbackProcedures,
+  inProcessChannel,
   type PlatformActProcedures,
   refusedPlatformProcedures,
+  sameProcessLink,
   shellReadProcedures,
   WindowPushes,
 } from "@repo/host/act-port";
@@ -94,7 +96,6 @@ import { Cause, ConfigProvider, Context, Effect, Layer, Path, Queue, Stream } fr
 import type * as FileSystem from "effect/FileSystem";
 import * as HttpClient from "effect/http/HttpClient";
 import { fixtureActs, stageFixture } from "./fixture-host.js";
-import { inProcessChannel } from "./in-process-channel.js";
 
 /**
  * How long the share sheet sends a token after it is issued: ten minutes
@@ -321,7 +322,12 @@ const servedActPort = (
   Effect.acquireRelease(
     Effect.sync(() => {
       const channel = inProcessChannel();
-      createActPortHandler(dependencies, platformProcedures(http, shells)).upgrade(channel.port2, {
+      // Note that both ends hand each message across as the object itself, since they stand in one process, so a photo's base64 is never written out as text and parsed back on the screens' thread.
+      createActPortHandler(
+        dependencies,
+        platformProcedures(http, shells),
+        ACT_PORT_CROSSING.SAME_PROCESS,
+      ).upgrade(channel.port2, {
         context: () => ({
           actor: { sender: APP_SCREENS, panel: true },
           trusted: true,
@@ -329,7 +335,7 @@ const servedActPort = (
         }),
       });
       channel.port2.start();
-      const link = new RPCLink({ port: channel.port1 });
+      const link = sameProcessLink(channel.port1);
       channel.port1.start();
 
       return { channel, acts: createORPCClient<ActPortClient>(link) };
