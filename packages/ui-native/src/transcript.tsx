@@ -3,6 +3,7 @@
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
+import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SymbolView } from "expo-symbols";
 import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
@@ -10,7 +11,6 @@ import {
   type AccessibilityActionEvent,
   AccessibilityInfo,
   ActivityIndicator,
-  FlatList,
   type HostInstance,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -65,9 +65,6 @@ import {
 } from "./transcript-model.js";
 import { Video } from "./video.js";
 
-/** No rows, which the list draws until it knows its width. */
-const NO_ITEMS: readonly TranscriptItem[] = [];
-
 /** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart. */
 const RUN_GAP = 1;
 
@@ -80,14 +77,8 @@ const BUBBLE_SHARE = 0.82;
 /** How far a bubble's words stand in from its sides. */
 const BUBBLE_PADDING = SPACE.ROW + 4;
 
-/** How long the list's rows stand still at its end, as it opens, before it shows, in milliseconds: long enough for the next batch of rows the list draws to land. */
-const OPEN_SETTLE_MS = 100;
-
-/** The longest the list stands hidden as it opens, in milliseconds, however its rows go on landing. */
-const OPEN_CAP_MS = 400;
-
-/** How near its end a scroll must report the list, in points, for it to count as standing at its newest row as it opens. */
-const OPEN_END_SLACK = 1;
+/** How near its newest row, as a share of the list's height, the reader stands for a row that lands to be scrolled into view, as FlashList's chat lists keep their end. */
+const AUTOSCROLL_SHARE = 0.1;
 
 /** How far the list stands from its newest row before Jump to latest is offered, in points. */
 const LATEST_REACH = 240;
@@ -190,7 +181,6 @@ const styles = StyleSheet.create({
   headLine: { flexDirection: "row", alignItems: "center", gap: 6 },
   older: { alignItems: "center", gap: SPACE.TIGHT * 2, paddingVertical: SPACE.ROW },
   jump: { position: "absolute" },
-  opening: { opacity: 0 },
   jumpFace: {
     width: JUMP_SIZE,
     height: JUMP_SIZE,
@@ -1074,11 +1064,12 @@ const REVEAL_POSITION = 0.35;
 
 /**
  * An agent's transcript as one lazy list, the app's one React Native list,
- * since SwiftUI has no piece for its rows: it opens at its newest row and
- * stays anchored there, so a row that lands while the reader stands at the
- * newest comes into view, and one that lands while they read back holds
- * their place; a reader scrolled back is offered Jump to latest. Only the rows near the
- * screen are drawn, however long the transcript runs.
+ * since SwiftUI has no piece for its rows: FlashList's own chat list, which
+ * opens at its newest row (`startRenderingFromBottom`) and keeps it in view
+ * as rows land while the reader stands near it (`autoscrollToBottomThreshold`),
+ * while one that lands as they read back holds their place; a reader scrolled
+ * back is offered Jump to latest. Only the rows near the screen are drawn,
+ * however long the transcript runs.
  */
 export function AgentTranscript({
   items,
@@ -1092,26 +1083,14 @@ export function AgentTranscript({
   const colors = useColors();
   const reduceMotion = useReduceMotion();
   const { bottom, left, right } = useSafeAreaInsets();
-  const list = useRef<FlatList<TranscriptItem>>(null);
-  // Whether the reader stands at the newest row, which the list keeps in view as rows land; it opens there.
+  const list = useRef<FlashListRef<TranscriptItem>>(null);
+  // Whether the reader stands at the newest row, which the keyboard's rise keeps in view; it opens there.
   const anchored = useRef(true);
   const [away, setAway] = useState(false);
   // The list's own width, so a wide window's rows stand centered within the reading width rather than across it.
   const [width, setWidth] = useState(0);
   const sides = Math.max(0, (width - left - right - READING_WIDTH) / 2);
   const column = width - left - right - sides * 2;
-  // Whether the list has settled at its newest row as it opened, before which it stands hidden, so the reader never sees it draw its rows in and chase its end.
-  const [opened, setOpened] = useState(false);
-  const settling = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  // The content's height as the list last reported it, where the last scroll found the list, and whether the open waits on a scroll to land at the end, so the list shows only once it stands there.
-  const contentHeight = useRef(0);
-
-  const lastScroll = useRef<{ readonly height: number; readonly gap: number } | undefined>(
-    undefined,
-  );
-
-  const seeking = useRef(false);
 
   // The calls' rows as they stand, and the call a reader was sent to whose row has not yet taken VoiceOver's focus.
   const calls = useRef(new Map<string, HostInstance>());
@@ -1148,9 +1127,8 @@ export function AgentTranscript({
   );
 
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now(), column, placeCall };
-  // Note that the rows wait for the list's own width, so none is ever laid out unbounded and laid out again a frame later.
+  // Note that the list waits for its own width, so no row is ever laid out unbounded, and its first render, which starts from its newest row, has the rows to start from.
   const measured = width > 0;
-  const rows = measured ? items : NO_ITEMS;
   const hasRows = items.length > 0;
   const keyboard = useDockKeyboard();
   const dock = useDockRoom();
@@ -1160,7 +1138,7 @@ export function AgentTranscript({
   // Note that Jump to latest stands just over the composer, on the keyboard while it stands past the safe area.
   const jumpFoot = Math.max(bottom, keyboard) + dock + SPACE.ROW;
 
-  // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
+  // Note that only the reader's own scroll moves the anchor, never the list's own: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
     anchored.current = false;
   }, []);
@@ -1171,37 +1149,15 @@ export function AgentTranscript({
     olderNow.current = older;
   }, [older]);
 
-  // Note that the list shows once, and stays shown.
-  const show = useCallback(() => {
-    clearTimeout(settling.current);
-    seeking.current = false;
-    setOpened(true);
+  // Note that only the reader's own scroll up reads an older page, never the list's as it opens at its newest row, and a read that failed waits for Try again.
+  const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setAway(fromEnd(event.nativeEvent) > LATEST_REACH);
+    const pages = olderNow.current;
+
+    if (anchored.current || pages === undefined || pages.reading || pages.failed) return;
+
+    if (event.nativeEvent.contentOffset.y < OLDER_REACH) pages.onRead();
   }, []);
-
-  // Note that only the reader's own scroll up reads an older page, never the list's scroll as it opens, and a read that failed waits for Try again.
-  const onScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const gap = fromEnd(event.nativeEvent);
-      setAway(gap > LATEST_REACH);
-      lastScroll.current = { height: event.nativeEvent.contentSize.height, gap };
-
-      // Note that an open waiting on its scroll shows once the scroll reports the list at its end, at the content's latest height, since a scroll to an end estimated before the rows there were measured stood mid-list for a frame.
-      if (
-        seeking.current &&
-        gap <= OPEN_END_SLACK &&
-        lastScroll.current.height === contentHeight.current
-      ) {
-        show();
-      }
-
-      const pages = olderNow.current;
-
-      if (anchored.current || pages === undefined || pages.reading || pages.failed) return;
-
-      if (event.nativeEvent.contentOffset.y < OLDER_REACH) pages.onRead();
-    },
-    [show],
-  );
 
   const onScrollSettled = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     anchored.current = fromEnd(event.nativeEvent) < ANCHOR_REACH;
@@ -1225,7 +1181,11 @@ export function AgentTranscript({
     anchored.current = false;
     sentTo.current = reveal.callId;
     settled.current = false;
-    list.current?.scrollToIndex({ index, viewPosition: REVEAL_POSITION, animated: !reduceMotion });
+    void list.current?.scrollToIndex({
+      index,
+      viewPosition: REVEAL_POSITION,
+      animated: !reduceMotion,
+    });
 
     // Note that a scroll that moves the list ends in its momentum's end, which sends the focus, while one that has nowhere to go, the row already in view, ends at once, so the focus is also sent once the scroll would have settled.
     const settling = setTimeout(focusSentTo, reduceMotion ? 0 : REVEAL_SETTLE_MS);
@@ -1233,144 +1193,76 @@ export function AgentTranscript({
     return () => clearTimeout(settling);
   }, [reveal, reduceMotion, focusSentTo]);
 
-  // Note that a row not yet measured cannot be scrolled to by its index, so the list goes to where the rows' average height puts it, then to the row once it is drawn.
-  const onScrollToIndexFailed = useCallback(
-    (info: { readonly index: number; readonly averageItemLength: number }) => {
-      list.current?.scrollToOffset({
-        offset: info.averageItemLength * info.index,
-        animated: false,
-      });
-      requestAnimationFrame(() => {
-        list.current?.scrollToIndex({
-          index: info.index,
-          viewPosition: REVEAL_POSITION,
-          animated: false,
-        });
-        requestAnimationFrame(focusSentTo);
-      });
-    },
-    [focusSentTo],
-  );
-
   // Note that the keyboard rising under a reader at the newest row brings the row up with it, as Messages' does, rather than leaving it behind the keyboard; the list's inset has already grown for it, so its end is the row clear of the bar.
   useEffect(() => {
-    if (keyboard > 0 && anchored.current)
-      list.current?.getScrollResponder()?.scrollToEnd({ animated: !reduceMotion });
+    if (keyboard > 0 && anchored.current) list.current?.scrollToEnd({ animated: !reduceMotion });
   }, [keyboard, reduceMotion]);
-
-  // Note that the list shows at its newest row: where the last scroll already found it there, at once, and else once the scroll to its end reports landing (`onScroll`); a list a reveal sent elsewhere shows where it stands.
-  const open = useCallback(() => {
-    clearTimeout(settling.current);
-
-    if (!anchored.current) {
-      show();
-
-      return;
-    }
-
-    const last = lastScroll.current;
-
-    if (last !== undefined && last.gap <= OPEN_END_SLACK && last.height === contentHeight.current) {
-      show();
-
-      return;
-    }
-
-    seeking.current = true;
-    list.current?.getScrollResponder()?.scrollToEnd({ animated: false });
-  }, [show]);
-
-  // Note that the list shows at the cap however its rows go on landing, so a long transcript never stands blank: scrolled to its end once more, then shown the frame after.
-  useEffect(() => {
-    if (opened || !measured || !hasRows) return;
-
-    const cap = setTimeout(() => {
-      if (anchored.current) list.current?.getScrollResponder()?.scrollToEnd({ animated: false });
-      requestAnimationFrame(show);
-    }, OPEN_CAP_MS);
-
-    return () => clearTimeout(cap);
-  }, [opened, measured, hasRows, show]);
-
-  useEffect(() => () => clearTimeout(settling.current), []);
-
-  // Note that a row landing, or a fold opened, at the newest row keeps it in view, while one landing as the reader reads back leaves their place.
-  const onContentSizeChange = useCallback(
-    (_width: number, height: number) => {
-      contentHeight.current = height;
-
-      // Note that the scroller itself is asked, since the list's own end is an estimate until every row has been measured.
-      if (anchored.current) list.current?.getScrollResponder()?.scrollToEnd({ animated: false });
-
-      if (opened || !hasRows) return;
-      clearTimeout(settling.current);
-      settling.current = setTimeout(open, OPEN_SETTLE_MS);
-    },
-    [opened, hasRows, open],
-  );
 
   return (
     <View
       style={[styles.list, { backgroundColor: colors.GROUND }]}
       onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
     >
-      <FlatList
-        ref={list}
-        // Note that the list stands hidden while it opens, but for one with no rows, whose head and empty state show at once.
-        style={opened || !hasRows ? undefined : styles.opening}
-        data={rows}
-        keyExtractor={itemKey}
-        renderItem={({ item }) => <TranscriptRow item={item} drawing={rowDrawing} />}
-        ListHeaderComponent={
-          <>
-            {head}
-            {older === undefined ? null : <OlderRow older={older} />}
-          </>
-        }
-        // Note that the empty state is SwiftUI's, so it stands in a host of its own: mounted bare in the list's React Native view, it raises a native exception that crashes the app. The host fills the room the list leaves rather than matching its content, since the state asks for all the height it is offered, so a host sized to its content stood at no height and a brand-new agent's page was blank.
-        ListEmptyComponent={
-          empty === undefined || hasRows ? undefined : (
-            <InlineHost style={styles.emptyHost}>
-              <EmptyState {...empty} />
-            </InlineHost>
-          )
-        }
-        ListFooterComponent={<View style={{ height: foot }} />}
-        // Note that the rows stand inside the window's safe area at its sides too, clear of a rail the system draws there, as the folded iPhone Duo's.
-        contentContainerStyle={[
-          styles.content,
-          hasRows ? undefined : styles.emptyContent,
-          { paddingLeft: left + sides, paddingRight: right + sides },
-        ]}
-        contentInsetAdjustmentBehavior="automatic"
-        // Note that rows laid before the oldest, as an older page lands, leave the row the reader reads where it stood.
-        maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-        // Note that the list stands its end clear of the keyboard with the system's own inset, moved on the keyboard's own curve, so the newest rows never sit behind it.
-        automaticallyAdjustKeyboardInsets
-        // Note that a drag lowers the keyboard, since the composer docked over the list holds no key that does: under the finger, as Messages' does, where the dock follows the keyboard frame by frame, and at once where it follows only the keyboard's announced moves, since its composer would stand still through the drag, then jump.
-        keyboardDismissMode={DOCK_FOLLOWS_KEYBOARD ? "interactive" : "on-drag"}
-        onContentSizeChange={onContentSizeChange}
-        onScrollToIndexFailed={onScrollToIndexFailed}
-        onScroll={onScroll}
-        onScrollBeginDrag={onScrollBegin}
-        onScrollEndDrag={onScrollSettled}
-        onMomentumScrollEnd={(event) => {
-          onScrollSettled(event);
-          focusSentTo();
-        }}
-        scrollEventThrottle={64}
-        initialNumToRender={16}
-        windowSize={9}
-        accessibilityLabel="Transcript"
-      />
-      {away && opened ? (
+      {measured ? (
+        <FlashList
+          ref={list}
+          data={items}
+          keyExtractor={itemKey}
+          // Note that each row is keyed by its item, so a cell FlashList recycles for another item mounts that item's row afresh rather than keeping the last one's state, such as a fold left open or a picture's measured size.
+          renderItem={({ item }) => (
+            <TranscriptRow key={itemKey(item)} item={item} drawing={rowDrawing} />
+          )}
+          ListHeaderComponent={
+            <>
+              {head}
+              {older === undefined ? null : <OlderRow older={older} />}
+            </>
+          }
+          // Note that the empty state is SwiftUI's, so it stands in a host of its own: mounted bare in the list's React Native view, it raises a native exception that crashes the app. The host fills the room the list leaves rather than matching its content, since the state asks for all the height it is offered, so a host sized to its content stood at no height and a brand-new agent's page was blank.
+          ListEmptyComponent={
+            empty === undefined || hasRows ? undefined : (
+              <InlineHost style={styles.emptyHost}>
+                <EmptyState {...empty} />
+              </InlineHost>
+            )
+          }
+          ListFooterComponent={<View style={{ height: foot }} />}
+          // Note that the rows stand inside the window's safe area at its sides too, clear of a rail the system draws there, as the folded iPhone Duo's.
+          contentContainerStyle={[
+            styles.content,
+            hasRows ? undefined : styles.emptyContent,
+            { paddingLeft: left + sides, paddingRight: right + sides },
+          ]}
+          contentInsetAdjustmentBehavior="automatic"
+          // Note that the list opens at its newest row, keeps it in view as rows land while the reader stands near it, and, as an older page lands before the oldest row, leaves the row the reader reads where it stood, as FlashList's chat lists do.
+          maintainVisibleContentPosition={{
+            startRenderingFromBottom: true,
+            autoscrollToBottomThreshold: AUTOSCROLL_SHARE,
+            animateAutoScrollToBottom: false,
+          }}
+          // Note that the list stands its end clear of the keyboard with the system's own inset, moved on the keyboard's own curve, so the newest rows never sit behind it.
+          automaticallyAdjustKeyboardInsets
+          // Note that a drag lowers the keyboard, since the composer docked over the list holds no key that does: under the finger, as Messages' does, where the dock follows the keyboard frame by frame, and at once where it follows only the keyboard's announced moves, since its composer would stand still through the drag, then jump.
+          keyboardDismissMode={DOCK_FOLLOWS_KEYBOARD ? "interactive" : "on-drag"}
+          onScroll={onScroll}
+          onScrollBeginDrag={onScrollBegin}
+          onScrollEndDrag={onScrollSettled}
+          onMomentumScrollEnd={(event) => {
+            onScrollSettled(event);
+            focusSentTo();
+          }}
+          scrollEventThrottle={64}
+          accessibilityLabel="Transcript"
+        />
+      ) : null}
+      {away ? (
         <JumpToLatest
           bottom={jumpFoot}
           end={right + sides + BAR_MARGIN + BAR_EDGE}
           onPress={() => {
             anchored.current = true;
             // Note that the jump scrolls at once where the reader asked for less motion.
-            list.current?.getScrollResponder()?.scrollToEnd({ animated: !reduceMotion });
+            list.current?.scrollToEnd({ animated: !reduceMotion });
           }}
         />
       ) : null}
