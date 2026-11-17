@@ -163,8 +163,10 @@ const archiveRunAsRead = Effect.fnUntraced(function* (
 
   if (!settled) return;
 
+  // Note that an agent that failed or was stopped and was archived by hand still leaves the task standing.
   const finishedWell = outcomes.every(
-    ({ agent, archived }) => archived || agent.archivedAt !== null,
+    ({ agent, status, archived }) =>
+      !ENDED_UNWELL.has(status) && (archived || agent.archivedAt !== null),
   );
 
   if (finishedWell && first.runTaskId !== null) yield* finishRunTask(first.userId, first.runTaskId);
