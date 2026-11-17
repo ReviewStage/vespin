@@ -1,0 +1,3 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-17 09:45:15.832 Df Vespin[79758:cdb7950] [com.apple.xpc:connection] [0x11daeaf80] Re-initialization successful; calling out to event handler with XPC_ERROR_CONNECTION_INTERRUPTED
+2026-11-17 09:45:53.452 Df Vespin[94529:0] [com.apple.libsystem.libdispatch:] BUG in libdispatch: 26A428 24B8117 - 653 - 0x4

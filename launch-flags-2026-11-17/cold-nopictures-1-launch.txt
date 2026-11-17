@@ -1,0 +1,6 @@
+An error was encountered processing the command (domain=FBSOpenApplicationServiceErrorDomain, code=1):
+Simulator device failed to launch dev.vespin.ios.
+The request was denied by service delegate (SBMainWorkspace) for reason: NotFound ("Application "dev.vespin.ios" is unknown to FrontBoard").
+Underlying error (domain=FBSOpenApplicationServiceErrorDomain, code=1):
+	The request to open "dev.vespin.ios" failed.
+	The request was denied by service delegate (SBMainWorkspace) for reason: NotFound ("Application "dev.vespin.ios" is unknown to FrontBoard").

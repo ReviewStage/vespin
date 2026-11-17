@@ -1,0 +1,3 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-17 09:41:32.364 Df Vespin[37814:cd9f5ef] [com.apple.xpc:connection] [0x11db49400] Re-initialization successful; calling out to event handler with XPC_ERROR_CONNECTION_INTERRUPTED
+2026-11-17 09:41:32.427 Df Vespin[37814:cd9f5ef] [com.apple.xpc:connection] [0x11db49400] invalidated because the current process cancelled the connection by calling xpc_connection_cancel()

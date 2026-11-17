@@ -1,0 +1,21 @@
+== bundle PLAUNCH5 base 0226063450
+  built 0226063450 base app Vmain3.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+cold-nowidget-1: T=1794925856645; 1 [launch] lines; cold-nowidget-1: video aligned at 0.977s; splash gone +None ms; inbox drawn (settled) +800 ms; 134 frames
+cold-nowidget-2: T=1794925923819; 21 [launch] lines; cold-nowidget-2: video aligned at -10.269s; splash gone +5833 ms; inbox drawn (settled) +6067 ms; 189 frames
+cold-nowidget-3: T=1794925987027; 1 [launch] lines; cold-nowidget-3: video aligned at -18.259s; splash gone +None ms; inbox drawn (settled) +800 ms; 241 frames
+cold-nobadge-1: T=1794926056174; 23 [launch] lines; cold-nobadge-1: video aligned at -11.698s; splash gone +4700 ms; inbox drawn (settled) +5067 ms; 362 frames
+cold-nobadge-2: T=1794926120879; 1 [launch] lines; cold-nobadge-2: video aligned at -6.795s; splash gone +None ms; inbox drawn (settled) +800 ms; 700 frames
+cold-nobadge-3: T=1794926190518; 1 [launch] lines; cold-nobadge-3: video aligned at 0.836s; splash gone +None ms; inbox drawn (settled) +800 ms; 918 frames
+cold-nopictures-1: T=1794926264274; 1 [launch] lines; cold-nopictures-1: video aligned at -3.676s; splash gone +None ms; inbox drawn (settled) +800 ms; 410 frames
+cold-nopictures-2: T=1794926332616; 23 [launch] lines; cold-nopictures-2: video aligned at -10.312s; splash gone +1800 ms; inbox drawn (settled) +8400 ms; 259 frames
+cold-nopictures-3: T=1794926402621; 23 [launch] lines; cold-nopictures-3: video aligned at -5.658s; splash gone +2933 ms; inbox drawn (settled) +9967 ms; 305 frames
+cold-noactivity-1: T=1794926465336; 24 [launch] lines; cold-noactivity-1: video aligned at -0.122s; splash gone +1500 ms; inbox drawn (settled) +9867 ms; 303 frames
+cold-noactivity-2: T=1794926525437; 24 [launch] lines; cold-noactivity-2: video aligned at -0.098s; splash gone +833 ms; inbox drawn (settled) +5967 ms; 224 frames
+cold-noactivity-3: T=1794926584234; 1 [launch] lines; cold-noactivity-3: only 2 frames
+cold-full-1: T=1794926666790; 25 [launch] lines; cold-full-1: video aligned at 0.535s; splash gone +9233 ms; inbox drawn (settled) +9467 ms; 291 frames
+cold-full-2: T=1794926749667; 25 [launch] lines; cold-full-2: video aligned at -2.735s; splash gone +6667 ms; inbox drawn (settled) +6900 ms; 273 frames
+cold-full-3: T=1794926827248; 23 [launch] lines; cold-full-3: video aligned at 0.696s; splash gone +8700 ms; inbox drawn (settled) +8933 ms; 275 frames

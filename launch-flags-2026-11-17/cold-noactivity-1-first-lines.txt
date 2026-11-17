@@ -1,0 +1,3 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-17 09:40:28.373 Df Vespin[28417:cd9c1fe] [dev.vespin.ios:spotlight] Spotlight's delete-all was answered
+2026-11-17 09:41:10.010 Df Vespin[37814:0] [com.apple.libsystem.libdispatch:] BUG in libdispatch: 26A428 24B8117 - 653 - 0x4

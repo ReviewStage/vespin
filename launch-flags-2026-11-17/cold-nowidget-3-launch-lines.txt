@@ -1,0 +1,2 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-17 09:33:41.902 Df log[52265:0] [com.apple.log:] log run noninteractively, parent: 38504 (launchd_sim), args: 'log' 'show' '--last' '1m' '--style' 'compact' '--predicate' 'eventMessage CONTAINS "[launch]"'
