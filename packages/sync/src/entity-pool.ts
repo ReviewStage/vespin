@@ -833,6 +833,51 @@ function written<Row extends object, Change, Input, Answer>(
     const keys = [...new Set(declaration.keys(input))];
     const write: Standing<Change> = { keys, change: declaration.change(input) };
 
+    const plan = declaration.queue;
+    // Note that the account is read as the write is asked, or laid back from the store its account opened, so a later send can tell another.
+    const askedAs = queue.options?.holder?.();
+    const mintKey = queue.options?.mintKey;
+    const key = plan === undefined || mintKey === undefined ? undefined : (restored ?? mintKey());
+
+    // Note that the input is kept as its declaration keeps it as it is asked, so one that will not keep never waits.
+    const entry =
+      plan === undefined || key === undefined
+        ? undefined
+        : Result.getOrUndefined(
+            Result.map(Schema.encodeResult(plan.input)(input), (kept) => ({
+              name: plan.name,
+              key,
+              input: kept,
+            })),
+          );
+
+    const outbox = queue.options?.store?.outbox;
+    const out = { kept: false };
+
+    /** The write kept in the outbox before it takes its turn, unless it was laid back from there. */
+    const keep = Effect.suspend(() => {
+      if (outbox === undefined || entry === undefined) return Effect.void;
+      out.kept = true;
+
+      return restored === undefined ? outbox.added(entry) : Effect.void;
+    });
+
+    /** The write out of the outbox, once, as it stands down from waiting. */
+    const unkeep = Effect.suspend(() => {
+      if (outbox === undefined || entry === undefined || !out.kept) return Effect.void;
+
+      // Note that the write is told kept until its removal is done, so one interrupted is removed on its next step down.
+      return Effect.andThen(
+        outbox.removed(entry),
+        Effect.sync(() => {
+          out.kept = false;
+        }),
+      );
+    });
+
+    // Note that the write is kept before it takes its turn on its keys, so a store that waits never lets a later write take the turn ahead of it.
+    yield* keep;
+
     const turn: Turn = {
       answered: yield* Deferred.make<void>(),
       dropped: yield* Deferred.make<void>(),
@@ -855,43 +900,6 @@ function written<Row extends object, Change, Input, Answer>(
         unadopted(rows, keys);
       });
     }).pipe(Effect.ensuring(Deferred.succeed(turn.dropped, undefined)));
-
-    const plan = declaration.queue;
-    // Note that the account is read as the write is asked, or laid back from the store its account opened, so a later send can tell another.
-    const askedAs = queue.options?.holder?.();
-    const mintKey = queue.options?.mintKey;
-    const key = plan === undefined || mintKey === undefined ? undefined : (restored ?? mintKey());
-
-    // Note that the input is kept as its declaration keeps it as it is asked, so one that will not keep never waits.
-    const entry =
-      plan === undefined || key === undefined
-        ? undefined
-        : Result.getOrUndefined(
-            Result.map(Schema.encodeResult(plan.input)(input), (kept) => ({
-              name: plan.name,
-              key,
-              input: kept,
-            })),
-          );
-
-    const outbox = queue.options?.store?.outbox;
-    const out = { kept: false };
-
-    /** The write kept in the outbox before its first send, unless it was laid back from there. */
-    const keep = Effect.suspend(() => {
-      if (outbox === undefined || entry === undefined) return Effect.void;
-      out.kept = true;
-
-      return restored === undefined ? outbox.added(entry) : Effect.void;
-    });
-
-    /** The write out of the outbox, once, as it stands down from waiting. */
-    const unkeep = Effect.suspend(() => {
-      if (outbox === undefined || entry === undefined || !out.kept) return Effect.void;
-      out.kept = false;
-
-      return outbox.removed(entry);
-    });
 
     // Note that each attempt asks the declaration anew, so one sent again reads the host as it stands then.
     const attempt = (waited: boolean) =>
@@ -999,8 +1007,6 @@ function written<Row extends object, Change, Input, Answer>(
           waiting.holds?.(input) === true && restored === undefined
             ? restore(Deferred.await(heard))
             : Effect.succeed(waiting.queued(input));
-
-        yield* keep;
 
         if (plan !== undefined && entry !== undefined && room()) {
           if (restored !== undefined || queue.waiting.length > 0) {
