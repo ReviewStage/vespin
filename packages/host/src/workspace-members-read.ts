@@ -45,6 +45,7 @@ import {
 import { Effect, Equal, MutableHashMap, Option, type Scope } from "effect";
 import { type AppWorkspaceMembers, NO_KEYS_HELD } from "./app-state.js";
 import { type EntityStore, KEPT_READ } from "./entity-store.js";
+import { KEPT_LIST } from "./kept-lists.js";
 import {
   type CarriedWaits,
   carriedWaits,
@@ -179,6 +180,7 @@ function followPeople(
         redraw: () => drawn,
         // Note that no member write answers a transaction, so the read hands no wait and each write waits on its rows (`carried`).
         confirmation: () => undefined,
+        kept: { ...KEPT_LIST.MEMBERS, workspace: workspaceId },
       });
 
       const waits = yield* carriedWaits(() => people.synced());

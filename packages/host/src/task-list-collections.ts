@@ -79,6 +79,7 @@ import {
 } from "@tanstack/db";
 import { Effect, FiberSet, type Scope } from "effect";
 import { drawnRows } from "./drawn-rows.js";
+import { KEPT_LIST } from "./kept-lists.js";
 import { drawnAtEdges, drawnPerTick } from "./live-collection.js";
 import { confirmWrite, type SyncStanding, syncIdOf, type TxWait } from "./live-follow.js";
 import { taskListContinuations } from "./task-list-continuations.js";
@@ -259,6 +260,7 @@ export function taskListCollections(
       redraw: plansRedraw,
       confirmation,
       adopts: () => true,
+      kept: KEPT_LIST.TASK_LIST_PLANS,
     });
 
     // Note that an agent the follow does not hold is drawn as its cold read left it, where one did.
@@ -295,6 +297,7 @@ export function taskListCollections(
     const agents: HeldRows<AgentRow> = yield* pool.stand(AGENT, {
       redraw: agentsRedraw,
       confirmation,
+      kept: KEPT_LIST.TASK_LIST_AGENTS,
     });
 
     /** The tasks read outside the list and their agents, by id, which the list's follow does not hold. */
