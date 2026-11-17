@@ -150,7 +150,7 @@ it.effect.each([
 );
 
 it.effect(
-  "a build that changed one shape costs only the rows that no longer read: the other reads stand, and the Inbox drops the item and its sync id",
+  "a build that changed one shape costs only the rows that no longer read: the other reads stand, a row with a retired field or without an added optional one still reads, and the Inbox drops the item that doesn't and its sync id",
   () =>
     Effect.gen(function* () {
       const directory = yield* temporaryDirectoryScoped("entity-store-");
@@ -172,6 +172,8 @@ it.effect(
 
       kept.hash = "another build's";
       kept.reads[KEPT_READ.INBOX].items.push(stale);
+      // The kept thread also holds a field this build retired, and lacks the optional ones it added (a reminder), as most shape changes leave a row: it still reads.
+      kept.reads[KEPT_READ.INBOX].items[0].item.retiredField = "an older build's";
       const sealed = Base64.encode(testCipher().encrypt(JSON.stringify(kept)));
       yield* fileSystem.writeFileString(yield* fileOf(directory), sealed);
 
