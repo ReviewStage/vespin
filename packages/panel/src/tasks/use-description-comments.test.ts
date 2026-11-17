@@ -16,8 +16,8 @@ import { createRoot } from "react-dom/client";
 import { test } from "vitest";
 import { DRAFT_PLACE, useDraft } from "../composer-drafts.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
-import { handHostReads } from "../testing/app-state.js";
-import { withQueryClient } from "../testing/copy-feedback.js";
+import { handHostReads, signedInAs } from "../testing/app-state.js";
+import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { useDescriptionComments } from "./use-description-comments.js";
 
 /**
@@ -147,9 +147,9 @@ test("a thread started on the description is drawn as it is asked, until the hos
   }
 
   const root = createRoot(document.body.appendChild(document.createElement("div")));
-  // The window's document lands first, which names the member signed in.
-  await act(async () => root.render(withQueryClient(createElement(Probe))));
-  await act(async () => undefined);
+  // The window's document names the member signed in from the first frame.
+  writeAppState(signedInAs({ id: "u-dev", email: "dev@example.com", name: "Dev" }));
+  act(() => root.render(withQueryClient(createElement(Probe))));
 
   const text = "## Testing\n\nWe add a retry to the send.";
   let started: Promise<unknown> | undefined;
