@@ -1,0 +1,19 @@
+flows: /Users/deanstratakos/vespin-ipad-agent/flows/n9745-notification-ask-pt.yaml:1 /Users/deanstratakos/vespin-ipad-agent/flows/n9745-notification-ask.yaml:1 /Users/deanstratakos/vespin-ipad-agent/flows/n9745-sign-in-pt.yaml:1 /Users/deanstratakos/vespin-ipad-agent/flows/n9745-sign-in.yaml:1 ; point taps: /Users/deanstratakos/vespin-ipad-agent/flows/n9745-notification-ask-pt.yaml:1 /Users/deanstratakos/vespin-ipad-agent/flows/n9745-sign-in-pt.yaml:1 
+== bundle P9745 base dae5f6b976
+  built dae5f6b976 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-notification-ask: fails 1 shots 2 Tap on "Allow"... FAILED
+iphone-light-notification-ask-pt: fails 0 shots 2 
+iphone-light-sign-in: fails 1 shots 3 Tap on "Don.t Allow"... FAILED
+iphone-light-sign-in-pt: fails 1 shots 3 Assert that "Notifications are off" is visible... FAILED
+iphone-dark-notification-ask: fails 1 shots 2 Tap on "Allow"... FAILED
+iphone-dark-notification-ask-pt: fails 0 shots 2 
+iphone-dark-sign-in: fails 1 shots 3 Tap on "Don.t Allow"... FAILED
+iphone-dark-sign-in-pt: fails 1 shots 3 Assert that "Notifications are off" is visible... FAILED
+ipad26-light-notification-ask: fails 0 shots 2 
+ipad26-light-sign-in: fails 1 shots 1 Assert that "Sign in to Vespin" is visible... FAILED
+ipad26-dark-notification-ask: fails 1 shots 1 Assert that "Sign in to Vespin" is visible... FAILED
+ipad26-dark-sign-in: fails 1 shots 1 Assert that "Sign in to Vespin" is visible... FAILED
