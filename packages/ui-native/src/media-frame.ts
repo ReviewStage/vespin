@@ -9,6 +9,23 @@
  */
 export const MEDIA_BOUNDS = { WIDTH: 280, HEIGHT: 360 } as const;
 
+/** The most a piece of media stands at, in points, its width and its height. */
+export interface MediaBounds {
+  readonly WIDTH: number;
+  readonly HEIGHT: number;
+}
+
+/**
+ * No bound but the media's own size and its column's width, which its box
+ * narrows it to (`MediaBox`): a description's diagram, which the panel
+ * holds to the column, since a diagram held to a message's picture drew
+ * its labels too small to read.
+ */
+export const COLUMN_BOUNDS: MediaBounds = {
+  WIDTH: Number.POSITIVE_INFINITY,
+  HEIGHT: Number.POSITIVE_INFINITY,
+};
+
 /** The aspect a picture or a recording stands at while its own is unknown: a film's, as a screen recording most often stands. */
 export const UNSIZED_ASPECT = 16 / 9;
 
@@ -26,7 +43,7 @@ export interface MediaFrame {
 
 /**
  * Where a piece of media stands: at its own shape, scaled down only, to fit
- * `MEDIA_BOUNDS`, so a small icon stands at its own size rather than blown
+ * `bounds`, a message's `MEDIA_BOUNDS` where none is given, so a small icon stands at its own size rather than blown
  * up and blurred, and a tall screenshot stands no taller than the bound.
  * Note that the width is the most it stands at, so a narrower column, such
  * as an ask card's, narrows it again with the shape kept (`MediaBox`); that
@@ -34,14 +51,17 @@ export interface MediaFrame {
  * allows; and that a size is taken in the pixels a picture or a player
  * reports, one pixel to a point, as the panel takes one to a CSS pixel.
  */
-export function mediaFrame(natural: MediaSize | null | undefined): MediaFrame {
+export function mediaFrame(
+  natural: MediaSize | null | undefined,
+  bounds: MediaBounds = MEDIA_BOUNDS,
+): MediaFrame {
   // Note that a player that could not read its track's size answers none as `null`, which stands as a size unknown.
   if (natural == null || natural.width <= 0 || natural.height <= 0) {
-    return { width: MEDIA_BOUNDS.WIDTH, aspectRatio: UNSIZED_ASPECT };
+    return { width: Math.min(bounds.WIDTH, MEDIA_BOUNDS.WIDTH), aspectRatio: UNSIZED_ASPECT };
   }
 
   const aspectRatio = natural.width / natural.height;
-  const width = Math.min(natural.width, MEDIA_BOUNDS.WIDTH, MEDIA_BOUNDS.HEIGHT * aspectRatio);
+  const width = Math.min(natural.width, bounds.WIDTH, bounds.HEIGHT * aspectRatio);
 
   return { width, aspectRatio };
 }
