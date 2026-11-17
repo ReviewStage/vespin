@@ -50,7 +50,7 @@ import {
 } from "./markdown-model.js";
 import { MediaBox } from "./media-box.js";
 import { MediaFailed } from "./media-failed.js";
-import { type MediaSize, mediaFrame } from "./media-frame.js";
+import { COLUMN_BOUNDS, type MediaBounds, type MediaSize, mediaFrame } from "./media-frame.js";
 import { Press } from "./press.js";
 import {
   SUGGESTION_LOOK,
@@ -1054,6 +1054,8 @@ type PictureProps = {
   readonly fill?: boolean | undefined;
   /** Its own size in points where it is known before it loads, as a diagram drawn at the screen's scale is, whose pixels would read as three times its size; the pixels it reports, one to a point, where none is given. */
   readonly size?: MediaSize | undefined;
+  /** The most it stands at, a message's `MEDIA_BOUNDS` where none is given; a diagram's is its column's width alone (`COLUMN_BOUNDS`). */
+  readonly bounds?: MediaBounds | undefined;
 };
 
 /**
@@ -1066,7 +1068,15 @@ type PictureProps = {
  * is, the system's spinner in it as Photos stands one, so the words under
  * it do not jump twice and it never reads as an empty box.
  */
-export function Picture({ source, alt, tileAspect, onRetry, fill = false, size }: PictureProps) {
+export function Picture({
+  source,
+  alt,
+  tileAspect,
+  onRetry,
+  fill = false,
+  size,
+  bounds,
+}: PictureProps) {
   const colors = useColors();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -1079,7 +1089,7 @@ export function Picture({ source, alt, tileAspect, onRetry, fill = false, size }
   );
 
   // Note that a tile fills its tile at the tile's shape, and any other picture stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
-  const frame = tileAspect === undefined ? mediaFrame(size ?? natural) : undefined;
+  const frame = tileAspect === undefined ? mediaFrame(size ?? natural, bounds) : undefined;
 
   const well = [
     styles.picture,
@@ -1289,7 +1299,12 @@ function BlockView({
           code={block.code}
           codeView={<CodeView text={block.code} drawing={drawing} />}
           picture={(picture, alt) => (
-            <Picture source={picture?.source} alt={alt} size={picture?.size} />
+            <Picture
+              source={picture?.source}
+              alt={alt}
+              size={picture?.size}
+              bounds={COLUMN_BOUNDS}
+            />
           )}
         />
       );
