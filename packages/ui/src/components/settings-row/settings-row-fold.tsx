@@ -127,7 +127,8 @@ export function SettingsFoldRow({
  * pressed: `head` draws the row, handed the chevron (named `label`) to
  * stand last in the row's `end`, or, where there are no `rows` to fold, the
  * chevron's room alone, so the controls of every row in the card end in one
- * column whether it folds or not. A head that stands its chevron among its
+ * column whether it folds or not; where no row of the section draws a glyph
+ * there, that room stands nowhere (`SettingsRowActSlot`). A head that stands its chevron among its
  * controls, before its ⋯, rather than last asks for no room (`room` false),
  * since its ⋯ already ends the row's column, and is handed nothing where it
  * folds nothing. Each new `opened` opens it, as a link landing on what it

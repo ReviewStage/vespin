@@ -48,6 +48,14 @@
     margin-block-end: calc(-1 * var(--ui-settings-row-meter-block));
   }
 
+  /* Note that the end's display stays here rather than in a utility,
+     because its section takes it away where it holds only the room of a
+     glyph no row of the section draws (settings-section.css), and a rule in
+     this layer cannot undo a utility. */
+  .ui-settings-row-end {
+    display: flex;
+  }
+
   /* Note that the gaps, the subject's share of the line, and the title's
      wrap stay here rather than in utilities, because the rules below undo
      them, and a rule in this layer cannot undo a utility. The line holds the
