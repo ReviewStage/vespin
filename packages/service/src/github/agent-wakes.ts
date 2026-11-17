@@ -4,7 +4,6 @@ import { readAccountPreferences } from "@repo/database/models/account-store";
 import {
   type Agent,
   type AgentLatestTurn,
-  agentTaskId,
   hasRepository,
   latestTurnsOfReached,
   listAgentsOnBranches,
@@ -1216,11 +1215,13 @@ function checksOfWake(
   }
 }
 
-/** Whether the agent's task stands open, neither Done nor Canceled, so a turn starting on it reopens nothing; one its owner no longer reaches is not. */
+/** Whether the agent's task stands open, neither Done nor Canceled, so a turn starting on it reopens nothing; one its owner no longer reaches, or an agent on no task, is not. */
 const onOpenTask = ({ userId, agent }: OwnedAgent) =>
-  Effect.map(readTaskHeader(userId, agentTaskId(agent)), (header) =>
-    Option.exists(header, ({ status }) => !isTaskSettled(status)),
-  );
+  agent.taskId === null
+    ? Effect.succeed(false)
+    : Effect.map(readTaskHeader(userId, agent.taskId), (header) =>
+        Option.exists(header, ({ status }) => !isTaskSettled(status)),
+      );
 
 /** Whether the agent's starter leaves this kind of wake on, as every account does until it turns one off in Preferences › Agents. */
 const starterTakes = (wake: AgentWake, { agent }: OwnedAgent) =>
