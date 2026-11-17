@@ -2354,7 +2354,7 @@ export function useSidePanel(
 
   // How the panel stands on the task is kept on it as it changes, so it is there to come back to;
   // not while a tab asked for on another stop is carried there, which is that stop's to keep.
-  const elsewhere = carrying || (asked !== undefined && asked.task !== taskId);
+  const elsewhere = carrying || (asked?.carry === true && asked.task !== taskId);
 
   useEffect(() => {
     if (keptOn !== undefined && !elsewhere) update((held) => withPanelKept(held, keptOn));
