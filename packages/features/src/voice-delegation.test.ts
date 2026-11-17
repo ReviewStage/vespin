@@ -167,6 +167,15 @@ it.effect("a delegation while the agent is mid-turn is queued, and sent once it 
           lines: ["line_1"],
         },
         {
+          kind: VOICE_OUTPUT.TELL,
+          event: {
+            type: LIVE_CLIENT_EVENT.THINKING_APPEND,
+            delegation_id: "item_1",
+            content:
+              "The agent is still working on the earlier request. Your request is queued for when it finishes.",
+          },
+        },
+        {
           kind: VOICE_OUTPUT.SEND,
           text: "And the changelog.",
           delegationId: "item_2",
@@ -175,6 +184,47 @@ it.effect("a delegation while the agent is mid-turn is queued, and sent once it 
       ],
     );
   }),
+);
+
+it.effect(
+  "the agent's steps tell the voice nothing by themselves, a request made while it works is told its newest step, and only its reply is spoken",
+  () =>
+    Effect.gen(function* () {
+      const outputs = yield* wordsOutOf([
+        said("List the tasks."),
+        delegation("item_1"),
+        agent({ kind: AGENT_TURN.STARTED, delegationId: "item_1" }),
+        agent({ kind: AGENT_TURN.PROGRESS, step: "Listed the tasks" }),
+        agent({ kind: AGENT_TURN.PROGRESS, step: "Read the task Drop old answers" }),
+        said("How's it going?"),
+        delegation("item_2"),
+        agent({ kind: AGENT_TURN.REPLY, text: "Two cleanup tasks are ready." }),
+        agent({ kind: AGENT_TURN.ENDED }),
+      ]);
+
+      assert.deepEqual(
+        outputs.filter((output) => output.kind === VOICE_OUTPUT.TELL),
+        [
+          {
+            kind: VOICE_OUTPUT.TELL,
+            event: {
+              type: LIVE_CLIENT_EVENT.THINKING_APPEND,
+              delegation_id: "item_2",
+              content:
+                "The agent is still working on the earlier request; its latest step: Read the task Drop old answers. Your request is queued for when it finishes.",
+            },
+          },
+          {
+            kind: VOICE_OUTPUT.TELL,
+            event: {
+              type: LIVE_CLIENT_EVENT.COMMENTARY_APPEND,
+              delegation_id: "item_1",
+              content: "Two cleanup tasks are ready.",
+            },
+          },
+        ],
+      );
+    }),
 );
 
 it.effect(
