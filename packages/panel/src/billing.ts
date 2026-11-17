@@ -21,6 +21,8 @@ export function billingStatusQuery(workspaceId: string) {
     queryKey: [QUERY_ROOT.WORKSPACE_BILLING, workspaceId],
     queryFn: () => askAct(ACT_KIND.WORKSPACE_BILLING_STATUS, { workspaceId }),
     retry: false,
+    // Note that the shared client turns focus refetches off, but a member returns from Stripe's page to this window, so it reads the status again as it regains focus.
+    refetchOnWindowFocus: true,
   });
 }
 

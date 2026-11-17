@@ -17,7 +17,7 @@ import {
 } from "@repo/ui";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { billingStatusQuery } from "../billing.js";
 import { refusedShown } from "../failure-report.js";
@@ -60,6 +60,9 @@ const WORDS = {
 const USAGE_KIND_WORDS = new Map<string, string>([
   [BILLING_USAGE_KIND.SANDBOX_SESSION, "Sandbox usage"],
 ]);
+
+/** How often the status is read while setup is awaited, in milliseconds. */
+const SETUP_POLL_MS = 5_000;
 
 const MICRO_USD_PER_USD = 1_000_000;
 
@@ -118,9 +121,12 @@ function UsageSection({ status }: { status: BillingStatusAnswer }): React.JSX.El
 function StatusSection({
   workspace,
   status,
+  onSetupOpened,
 }: {
   workspace: Workspace;
   status: BillingStatusAnswer;
+  /** Called once Stripe's Checkout has opened, so the page reads the status until setup is recorded. */
+  onSetupOpened: () => void;
 }): React.JSX.Element {
   const { mutateAsync: sendSetup } = useMutation(actMutation(ACT_KIND.WORKSPACE_BILLING_SETUP));
   const { mutateAsync: sendPortal } = useMutation(actMutation(ACT_KIND.WORKSPACE_BILLING_PORTAL));
@@ -135,11 +141,15 @@ function StatusSection({
       : { tone: SETTINGS_ROW_STATE.PLAIN, name: WORDS.NOT_SET_UP, line: WORDS.NOT_SET_UP_LINE };
 
   const press = () =>
-    void opening.run(() =>
-      (status.setUp ? sendPortal({ workspaceId }) : sendSetup({ workspaceId })).then(
-        () => undefined,
-      ),
-    );
+    void opening
+      .run(() =>
+        (status.setUp ? sendPortal({ workspaceId }) : sendSetup({ workspaceId })).then(
+          () => undefined,
+        ),
+      )
+      .then((opened) => {
+        if (opened && !status.setUp) onSetupOpened();
+      });
 
   return (
     <SettingsSection {...settingsSectionHead(SECTION.BILLING_STATUS)}>
@@ -169,7 +179,15 @@ function StatusSection({
 
 /** Settings › Billing over one workspace, read as the page opens; keyed to the workspace so another reads its own. */
 export function BillingPage({ workspace }: { workspace: Workspace }): React.JSX.Element {
-  const billing = useQuery(billingStatusQuery(workspace.id));
+  // Note that setup is recorded by Stripe's webhook, which may land after the member returns, so once Checkout has opened the page reads the status every few seconds until it shows setup.
+  const [waiting, setWaiting] = useState(false);
+
+  const billing = useQuery({
+    ...billingStatusQuery(workspace.id),
+    refetchInterval: (query) =>
+      waiting && query.state.data?.setUp !== true ? SETUP_POLL_MS : false,
+  });
+
   const status = billing.data;
 
   if (billing.isError) {
@@ -191,7 +209,7 @@ export function BillingPage({ workspace }: { workspace: Workspace }): React.JSX.
   return (
     <Fragment key={workspace.id}>
       <UsageSection status={status} />
-      <StatusSection workspace={workspace} status={status} />
+      <StatusSection workspace={workspace} status={status} onSetupOpened={() => setWaiting(true)} />
     </Fragment>
   );
 }
