@@ -65,6 +65,7 @@ import { FACTS_EXAMPLE } from "./examples/facts";
 import { FAILURE_NOTES_EXAMPLE } from "./examples/failure-notes";
 import { FILE_PICKERS_EXAMPLE } from "./examples/file-picker";
 import { FILE_TEXT_EXAMPLE } from "./examples/file-text";
+import { FOLD_MOTION_EXAMPLE } from "./examples/fold-motion";
 import { FOLDING_BUTTONS_EXAMPLE } from "./examples/folding-buttons";
 import { FORM_FIELD_EXAMPLE } from "./examples/form-field";
 import { FORMAT_TOOLBAR_EXAMPLE } from "./examples/format-toolbar";
@@ -338,6 +339,7 @@ export const EXAMPLES: readonly Example[] = [
   COUNT_FIGURES_EXAMPLE,
   RESIZE_EDGES_EXAMPLE,
   REVEALS_EXAMPLE,
+  FOLD_MOTION_EXAMPLE,
   ZOOM_IMAGES_EXAMPLE,
   MESSAGES_EXAMPLE,
   VOICE_CALLS_EXAMPLE,

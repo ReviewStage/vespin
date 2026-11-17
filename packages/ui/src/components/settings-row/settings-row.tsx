@@ -383,8 +383,8 @@ export function SettingsRow({
           <div
             className={
               led
-                ? "ui-settings-row-below mt-ui-8 min-w-0 ps-settings-row-words-inset"
-                : "ui-settings-row-below mt-ui-8 min-w-0"
+                ? "ui-settings-row-below min-w-0 ps-settings-row-words-inset"
+                : "ui-settings-row-below min-w-0"
             }
             data-led={led}
           >

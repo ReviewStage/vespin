@@ -1257,8 +1257,14 @@ test("a refused write flips the switch back and is said in a toast, and the swit
   held[0]?.("Could not save that setting.");
   await vi.waitFor(() => assert.equal(newestToastSays(), "Could not save that setting."));
 
+  // Note that the toast and the switch's rollback land on separate renders, so the switch is waited on as the toast is.
+  await vi.waitFor(() =>
+    assert.equal(
+      settingControl(popover, '[role="switch"]', "Ligatures").getAttribute("aria-checked"),
+      "false",
+    ),
+  );
   const ligatures = settingControl(popover, '[role="switch"]', "Ligatures");
-  assert.equal(ligatures.getAttribute("aria-checked"), "false");
   assert.equal(ligatures.disabled, false);
   assert.equal(lastDrawn().look.ligatures, false);
 });
