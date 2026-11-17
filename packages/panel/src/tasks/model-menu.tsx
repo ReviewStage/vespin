@@ -16,6 +16,7 @@ import {
   MODEL_SPEED,
   type ModelChoice,
   type ModelSpeed,
+  NO_EFFORT,
 } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
@@ -39,7 +40,6 @@ import {
   MODE_GLYPH,
   MODE_GROUP,
   MODE_QUESTION,
-  MODES,
   modeMenuRows,
 } from "./agent-approvals.js";
 import {
@@ -75,7 +75,8 @@ import { useRepositoryRemedy } from "./repository-remedy.js";
  * speed chosen where the model has one, and the standard window where the
  * model offers two, and closes the menu. Pinned under the list stand up to
  * three rows: Effort, naming the effort chosen now and opening a submenu
- * of the ones the chosen model lists; Context, only for a model that
+ * of the ones the chosen model lists, only for a model that lists an effort
+ * of its own; Context, only for a model that
  * offers two windows, naming the window chosen now and opening a submenu
  * of the two with what the whole one costs under them; each closes the menu
  * on a pick; and Fast, a switch to the model's fast version, muted where
@@ -143,7 +144,7 @@ function modelRows(models: readonly CatalogModel[], chosen: ModelChoice | undefi
     terms: [model.name, model.provider],
     detail:
       chosen !== undefined && model.id === read?.base
-        ? choiceWords(chosen, models).detail
+        ? choiceWords(chosen, models).detail || undefined
         : undefined,
     searchOnly: !unsearched.has(model.id),
     end: modelConnectWords(model),
@@ -234,6 +235,28 @@ export function ModelMenu(props: {
     return next === undefined
       ? undefined
       : choiceOn(models, { model: modelId, effort: next }, chosen?.contextWindow);
+  };
+
+  /** The Effort row, where the model lists an effort of its own: one that lists none (`NO_EFFORT`) has nothing to choose. */
+  const effortRow = (choice: ModelChoice): FootRow[] => {
+    if (efforts.every((each) => each === NO_EFFORT)) return [];
+
+    return [
+      {
+        id: FOOT_ROW.EFFORT,
+        label: "Effort",
+        detail: effortLabel(choice.effort),
+        submenu: {
+          label: "Effort",
+          rows: efforts.map((each) => ({ id: each, label: effortLabel(each) })),
+          value: choice.effort,
+          onPick: (picked) => {
+            onClose();
+            onChoose({ ...choice, effort: picked });
+          },
+        },
+      },
+    ];
   };
 
   const contextRow = (choice: ModelChoice, offered: readonly CatalogModel[]): FootRow[] => {
@@ -340,11 +363,11 @@ export function ModelMenu(props: {
         submenu: {
           label: MODE_GROUP,
           heading: MODE_QUESTION,
-          rows: modeMenuRows(),
+          rows: modeMenuRows(control),
           value: control.mode,
           note: control.applies,
           onPick: (picked) => {
-            const mode = MODES.find((each) => each === picked);
+            const mode = control.modes.find((each) => each === picked);
 
             if (mode === undefined) return;
             onClose();
@@ -388,20 +411,7 @@ export function ModelMenu(props: {
         : permissionsRow()
       : [
           ...connectRow(),
-          {
-            id: FOOT_ROW.EFFORT,
-            label: "Effort",
-            detail: effortLabel(chosen.effort),
-            submenu: {
-              label: "Effort",
-              rows: efforts.map((each) => ({ id: each, label: effortLabel(each) })),
-              value: chosen.effort,
-              onPick: (picked) => {
-                onClose();
-                onChoose({ ...chosen, effort: picked });
-              },
-            },
-          },
+          ...effortRow(chosen),
           ...contextRow(chosen, models),
           ...speedRow(read, chosen),
           ...permissionsRow(),

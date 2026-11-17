@@ -44,6 +44,8 @@ export const LANDING_OUTCOME = {
   EXPIRED: "expired",
   /** The provider's account already stands for another workspace. */
   ALREADY_CONNECTED: "already-connected",
+  /** Someone other than the member who started the connect finished it at the provider. */
+  NOT_PERMITTED: "not-permitted",
   /** The page was opened with no connect to carry out. */
   NOTHING_TO_CONNECT: "nothing-to-connect",
   /** Our own service gave no answer. */
@@ -140,6 +142,11 @@ const LANDING_WORDS = {
         : `That ${name} account is connected to another workspace`,
     line: undefined,
   }),
+  [LANDING_OUTCOME.NOT_PERMITTED]: (name) => ({
+    tone: LANDING_TONE.DANGER,
+    title: name === undefined ? "Nothing was connected" : `${name} was not connected`,
+    line: `Connect ${name ?? "it"} from ${PRODUCT_NAME} while signed in as yourself in both.`,
+  }),
   [LANDING_OUTCOME.NOTHING_TO_CONNECT]: (name) => ({
     tone: LANDING_TONE.DANGER,
     title: name === undefined ? "Nothing to connect" : `No ${name} connection to finish`,
@@ -176,4 +183,5 @@ export const INTEGRATION_LANDING_OUTCOME = {
   [INTEGRATION_LANDING_STATUS.EXPIRED]: LANDING_OUTCOME.EXPIRED,
   [INTEGRATION_LANDING_STATUS.UNAVAILABLE]: LANDING_OUTCOME.UNAVAILABLE,
   [INTEGRATION_LANDING_STATUS.ALREADY_CONNECTED]: LANDING_OUTCOME.ALREADY_CONNECTED,
+  [INTEGRATION_LANDING_STATUS.NOT_PERMITTED]: LANDING_OUTCOME.NOT_PERMITTED,
 } as const satisfies Record<IntegrationLandingStatus, LandingOutcome>;

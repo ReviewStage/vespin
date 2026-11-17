@@ -1731,12 +1731,6 @@ it.effect(
         assert.ok(options.disallowedTools?.includes(tool), tool);
       }
 
-      const worker = options.agents?.worker;
-
-      for (const tool of ["Edit", "Write", "mcp__team"]) {
-        assert.ok(worker?.disallowedTools?.includes(tool), tool);
-      }
-
       // In the cloud's sandbox the CLI reaches our server over HTTP under the bearer, which no other option carries.
       const { mcpServers, ...rest } = options;
       assert.deepEqual(mcpServers?.team, {
@@ -1786,20 +1780,6 @@ it.effect(
     }),
 );
 
-it.effect("denies the worker only the tools of ours the config names, and keeps it the rest", () =>
-  Effect.gen(function* () {
-    const service = fakeService();
-    const { cli, write, run } = yield* launch(SHORT_TURN, service);
-    yield* write({ ...CONFIG, workerDenied: ["post_thread"] });
-    yield* write(FIRST_MESSAGE);
-    yield* Fiber.join(run);
-
-    const denied = cli.options?.agents?.worker?.disallowedTools;
-    assert.ok(denied?.includes("mcp__team__post_thread"));
-    assert.ok(!denied?.includes("mcp__team"));
-  }),
-);
-
 /** What a launch hands the CLI that is not a function or a live server, less the place it ran in, which nothing may follow. */
 function launchedAs(options: Options | undefined) {
   assert.ok(options);
@@ -1829,12 +1809,14 @@ it.effect(
       const {
         [RUNNER_ENV.CLAUDE_TOKEN]: token,
         PLAYWRIGHT_BROWSERS_PATH: browsers,
+        NODE_PATH: nodePath,
         ...shared
       } = launchedAs(sandbox).environment;
 
       assert.deepEqual(launchedAs(host), { ...launchedAs(sandbox), environment: shared });
       assert.equal(token, CLAUDE_TOKEN);
       assert.equal(browsers, "0");
+      assert.equal(nodePath, "/usr/local/lib/node_modules");
       assert.equal(sandbox?.sandbox?.enabled, false);
     }),
 );

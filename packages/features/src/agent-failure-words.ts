@@ -37,7 +37,7 @@ const AGENT_FAILURE_WORDS = {
   [AGENT_FAILURE.ABANDONED]: "it ran out of time",
   [AGENT_FAILURE.PROVIDER_KEY]: "your API key was refused or cannot be read",
   [AGENT_FAILURE.MACHINE_SIGN_IN]:
-    "the machine isn't signed in to Claude Code or Codex; sign in to it on that machine, then send a message",
+    "the machine isn't signed in to the agent's harness; sign in to Claude Code or Codex on that machine, or to Cursor with vespin-host cursor-login there, then send a message",
   [AGENT_FAILURE.NOT_STARTED]: "the agent never started",
   [AGENT_FAILURE.FAST_ON_OWN_KEY]:
     "Fast isn't available on your own API key; choose the model with Fast off",
@@ -90,6 +90,7 @@ const LAUNCH_STOPPED_WORDS = {
 const HARNESS_NAMES = {
   [AGENT_RUNTIME.CLAUDE_CODE]: "Claude Code",
   [AGENT_RUNTIME.CODEX]: "Codex",
+  [AGENT_RUNTIME.CURSOR]: "Cursor",
 } as const satisfies Record<NativeAgentRuntime, string>;
 
 /** Why a host's launch never started, by the reason the host said, as the sentence that says it and how to mend it. */

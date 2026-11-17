@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { AGENT_BOUNDS } from "@repo/features/agent-wire";
 import {
   DESCRIPTION_COMMENT_ACTION,
   DESCRIPTION_COMMENT_ACTOR,
@@ -967,7 +968,41 @@ test("on a plan's page a reply is written in the agent box's editor, its words p
   );
 });
 
-test("a reply pasted past the comment's cap is cut to the room left and the card says so, until the words change, and the counter stands from four fifths of the cap", () => {
+test("a long paste into a reply lands as a text file's chip where it was pasted, and the reply keeps none of its words", async () => {
+  installEditorLayout();
+
+  const { container } = drawn(
+    "page",
+    [THREADS[0] ?? assert.fail("no thread")],
+    () => true,
+    PLAN,
+    undefined,
+    PAGE_MENTIONS,
+  );
+
+  act(() =>
+    container
+      .querySelector<HTMLElement>(`mark.description-comment-mark[data-threads~="${ID.OPEN}"]`)
+      ?.click(),
+  );
+  const card = container.querySelector<HTMLElement>(`.comment-card[data-thread="${ID.OPEN}"]`);
+  assert.ok(card);
+  const log = Array.from({ length: 40 }, (_, line) => `error ${String(line)}`).join("\n");
+
+  pasteInComposer(card, log);
+  await act(async () => undefined);
+
+  const editor = composerEditor(card);
+  assert.equal(editor.textContent?.includes("error"), false, "the words stay out of the reply");
+
+  const chip =
+    card.querySelector('[aria-label="Open Pasted text 1.txt"]') ??
+    assert.fail("the paste stands as a chip");
+
+  assert.ok(editor.contains(chip), "the chip stands in the words");
+});
+
+test("a reply pasted past the comment's cap and too large for a file is cut to the room left and the card says so, until the words change, and the counter stands from four fifths of the cap", () => {
   installEditorLayout();
 
   const { container } = drawn(
@@ -990,7 +1025,8 @@ test("a reply pasted past the comment's cap is cut to the room left and the card
   const note = () => card.querySelector(".ui-composer-foot-note")?.textContent;
   assert.equal(card.querySelector(".ui-length-counter"), null);
 
-  pasteInComposer(card, "x".repeat(cap + 100));
+  // Note that this runs longer than most, because only words past a text file's bound stay words to be cut.
+  pasteInComposer(card, "x".repeat(AGENT_BOUNDS.MAX_TEXT_BYTES + 1));
   assert.equal(note(), pasteCutWords(cap));
   assert.equal(
     card.querySelector(".ui-length-counter")?.textContent,
@@ -1378,7 +1414,7 @@ test("the line a thread's ask leaves is not drawn, since the mention in its word
           actor: DESCRIPTION_COMMENT_ACTOR.MEMBER,
           by: { userId: "u-dean", name: "Dean Stratakos" },
         },
-        asked: { actor: DESCRIPTION_COMMENT_ACTOR.APP },
+        asked: { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: AGENT.id },
         at: 2,
       },
     ],

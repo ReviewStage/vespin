@@ -67,6 +67,7 @@ import {
   type TabSends,
   tabTurnOf,
   transcriptRowKey,
+  unsearchedModels,
   workingLineWords,
 } from "./agent-model.js";
 import { inboxNoteReading } from "./inbox-model.js";
@@ -429,6 +430,32 @@ test("the row says where the pull request stands only once it is a draft, merged
   );
 });
 
+test("before a search, each lead family shows its newest model alone, and Cursor's list shows whole", () => {
+  const model = (id: string, provider: (typeof MODEL_PROVIDER)[keyof typeof MODEL_PROVIDER]) => ({
+    id,
+    name: id,
+    provider,
+    efforts: ["high"],
+  });
+
+  const models = [
+    model("anthropic/claude-opus-5.5", MODEL_PROVIDER.ANTHROPIC),
+    model("anthropic/claude-opus-5", MODEL_PROVIDER.ANTHROPIC),
+    model("cursor/composer-2.5", MODEL_PROVIDER.CURSOR),
+    model("cursor/claude-opus-5.5", MODEL_PROVIDER.CURSOR),
+    model("cursor/gemini-3-pro", MODEL_PROVIDER.CURSOR),
+    model("cursor/grok-4.7-max", MODEL_PROVIDER.CURSOR),
+  ];
+
+  assert.deepEqual([...unsearchedModels(models, undefined)].sort(), [
+    "anthropic/claude-opus-5.5",
+    "cursor/claude-opus-5.5",
+    "cursor/composer-2.5",
+    "cursor/gemini-3-pro",
+    "cursor/grok-4.7-max",
+  ]);
+});
+
 test("a fast or Ultrafast version is folded into its base model by its id, read back as the base at that speed, and named in the choice line", () => {
   const model = (id: string, name: string) => ({
     id,
@@ -503,6 +530,22 @@ test("a fast or Ultrafast version is folded into its base model by its id, read 
   assert.equal(
     choiceLabel({ model: "anthropic/claude-fable-5", effort: "xhigh" }, models),
     "Fable 5 Extra high",
+  );
+
+  // A model with no effort of its own says none.
+  const composer = {
+    id: "cursor/composer-2.5",
+    name: "Composer 2.5",
+    provider: MODEL_PROVIDER.CURSOR,
+    efforts: ["default"],
+  };
+
+  assert.equal(
+    choiceLabel({ model: "cursor/composer-2.5-fast", effort: "default" }, [
+      composer,
+      { ...composer, id: "cursor/composer-2.5-fast" },
+    ]),
+    "Composer 2.5 Fast",
   );
 });
 

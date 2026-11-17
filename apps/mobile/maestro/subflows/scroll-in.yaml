@@ -1,0 +1,58 @@
+# scroll-in.yaml -- scrolls the page until `ELEMENT` shows, down unless `DIRECTION` is UP, as `scrollUntilVisible` does; with `BESIDE` true, by swipes well inside the window's trailing side.
+#
+# Note that `scrollUntilVisible` swipes at the window's middle, which on a
+# landscape iPad is the list column beside the page, so a page in the
+# detail column never moved and the scroll ran out its time. A flow scrolling
+# such a page says so (`BESIDE`, which `agent.yaml` sets on an iPad), and the
+# page is drawn along in slow steps at 85% across the window, inside the
+# detail column in either orientation, until the element shows. Note too
+# that each swipe's points are written out whole, because Maestro reads a
+# swipe's percentages as numbers when it loads the flow, before any `${}`
+# in them is filled in.
+appId: dev.vespin.ios
+env:
+  DIRECTION: ${DIRECTION || 'DOWN'}
+  BESIDE: ${BESIDE || 'false'}
+---
+- runFlow:
+    when:
+      true: ${BESIDE != 'true' && DIRECTION == 'UP'}
+    commands:
+      - scrollUntilVisible:
+          element: "${ELEMENT}"
+          direction: UP
+- runFlow:
+    when:
+      true: ${BESIDE != 'true' && DIRECTION != 'UP'}
+    commands:
+      - scrollUntilVisible:
+          element: "${ELEMENT}"
+          direction: DOWN
+- runFlow:
+    when:
+      true: ${BESIDE == 'true' && DIRECTION == 'UP'}
+    commands:
+      - repeat:
+          times: 40
+          while:
+            notVisible: "${ELEMENT}"
+          commands:
+            - swipe:
+                start: "85%, 40%"
+                end: "85%, 65%"
+                duration: 1200
+      - assertVisible: "${ELEMENT}"
+- runFlow:
+    when:
+      true: ${BESIDE == 'true' && DIRECTION != 'UP'}
+    commands:
+      - repeat:
+          times: 40
+          while:
+            notVisible: "${ELEMENT}"
+          commands:
+            - swipe:
+                start: "85%, 65%"
+                end: "85%, 40%"
+                duration: 1200
+      - assertVisible: "${ELEMENT}"

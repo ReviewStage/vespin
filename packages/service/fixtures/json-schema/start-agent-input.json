@@ -27,7 +27,7 @@
         "maxLength": 36
       },
       "maxItems": 10,
-      "description": "Pictures handed to the agent with its first message, which it sees as images: at most 10 attachment ids, each a picture of your own conversation, such as one show_image kept; each at most 1.5 MB and all of them 3 MB together, since a larger one is refused, never made smaller. Leave it out to hand none."
+      "description": "Pictures handed to the agent with its first message: at most 10 attachment ids of pictures in your own conversation, such as one show_media kept, each at most 1.5 MB and all of them 3 MB together; a larger one is refused."
     },
     "title": {
       "type": "string",
@@ -39,6 +39,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 255,
+      "pattern": "^[^\\s~^:?*[\\\\]+$",
       "description": "The branch of the task's repository to clone the agent's checkout at and cut its own branch from, such as the head branch of a pull request it builds on; it must already be on GitHub. Leave it out for the repository's default branch."
     },
     "model": {
@@ -113,7 +114,7 @@
           "additionalProperties": false
         }
       ],
-      "description": "Where the agent runs: {\"machine\":\"vercel\"} for the cloud, or {\"machine\":\"device\",\"device\":\"<name>\"} for one of the member's own devices (a Mac or a host) by its name, in any case, or {\"machine\":\"device\",\"deviceId\":\"<id>\"} by its id, which must be registered and online; a name that matches none of the member's devices, or more than one, is refused with their devices listed by name, id, and whether each is online. With from, another place than that agent's moves it there. Leave it out for where the agent it starts from runs, with from; else where the member's newest agent on the task runs; else where the member last chose to run one; else the cloud."
+      "description": "Where the agent runs: {\"machine\":\"vercel\"} for the cloud, or {\"machine\":\"device\",\"device\":\"<name>\"} for one of the member's own devices (a Mac or a host) by its name, or {\"machine\":\"device\",\"deviceId\":\"<id>\"} by its id; it must be online, and a name matching none of their devices, or several, is refused with the devices listed. Left out: where the agent it starts from runs, with from; else where the member's newest agent on the task runs; else where the member last chose to run one; else the cloud. With from, another place than that agent's moves it there."
     },
     "from": {
       "type": "object",
@@ -135,7 +136,7 @@
         "agentId"
       ],
       "additionalProperties": false,
-      "description": "Another agent of your workspace to take over from, on its own task: the new agent is handed its brief and its transcript (with Vespin's summary of the steps that do not fit) and a copy of its work, runs on its model unless you name one, and hears the note after them; it takes no prompt and no branch. Without messageId it continues the agent, which is stopped; with one it forks the agent at that message, which goes on."
+      "description": "Another agent of your workspace to take over from, on its own task: the new agent is handed its brief, its transcript (with Vespin's summary of the steps that do not fit), and a copy of its work, runs on its model unless you name one, and hears the note after them; it takes no prompt and no branch. Without messageId it continues the agent, which is stopped; with one it forks the agent at that message, which goes on."
     }
   },
   "required": [],

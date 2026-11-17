@@ -14,9 +14,10 @@ import * as FileSystem from "effect/FileSystem";
  * member's own and stays. Nothing else is touched, the account install's
  * releases, its plist, its state, and its agents' folders among them.
  *
- * Run from inside the app, the host program answers `run` and `version`
- * alone (`appRefusesCommand`), since every other command would change the
- * host behind the app, which owns its registration and its record.
+ * Run from inside the app, the host program answers `run`, `version`,
+ * `status`, and `cursor-login` alone (`appRefusesCommand`), since every
+ * other command would change the host behind the app, which owns its
+ * registration and its record.
  */
 
 /** Where the command stands under the home, and where the account install keeps the releases its link names (`vespin-host.sh`'s `ACCOUNT_RELEASES`). */
@@ -26,8 +27,13 @@ const ACCOUNT_RELEASES = [".local", "share", "vespin-host"] as const;
 /** The host program's folder inside an app bundle (`BUNDLED_HOST.libPath`'s parent), by the real path it runs from. */
 const APP_HOST_FOLDER = /\.app\/Contents\/Resources\/host\/?$/u;
 
-/** The commands the host program answers from inside the app: the one its LaunchAgent runs, and two that read and change nothing. */
-const APP_COMMANDS: ReadonlySet<string | undefined> = new Set(["run", "version", "status"]);
+/** The commands the host program answers from inside the app: the one its LaunchAgent runs, two that read and change nothing, and the Mac's Cursor sign-in, which changes nothing of the host's (`cursor-login.ts`). */
+const APP_COMMANDS: ReadonlySet<string | undefined> = new Set([
+  "run",
+  "version",
+  "status",
+  "cursor-login",
+]);
 
 /** What became of the command's link: moved to the launcher, already naming it, or left as the member's own. */
 export const COMMAND_LINK_OUTCOME = {
@@ -41,7 +47,7 @@ export type CommandLinkOutcome = (typeof COMMAND_LINK_OUTCOME)[keyof typeof COMM
 /** The line a refused command prints. */
 export const APP_RUNS_HOST_WORDS = `This Mac's host is run by the ${PRODUCT_NAME} app. Manage it in ${PRODUCT_NAME} › Settings › Machines.`;
 
-/** Whether the host program, from the real path of its folder given, refuses the command given, since the app runs it: anything but `run` and `version` from inside an app bundle. */
+/** Whether the host program, from the real path of its folder given, refuses the command given, since the app runs it: anything but the commands it answers there (`APP_COMMANDS`) from inside an app bundle. */
 export function appRefusesCommand(hostFolder: string, command: string | undefined): boolean {
   return APP_HOST_FOLDER.test(hostFolder) && !APP_COMMANDS.has(command);
 }

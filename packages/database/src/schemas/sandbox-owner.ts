@@ -9,7 +9,7 @@ import { organization } from "./auth.js";
  * (`../models/sandbox-owners.ts`): an agent's by its launch (`@repo/service`'s
  * `agents/machine/sandbox-machine.ts`), naming the agent and its starter, and
  * a workspace drive's fill (`@repo/service`'s `agents/workspace-drive.ts`),
- * naming the member whose firewall it fills under and no agent. A Mac
+ * naming no agent and no member, since a fill is the workspace's work. A Mac
  * agent opens no sandbox and writes none. `agent_id` and `user_id` hold no
  * foreign key, so the row outlives the agent and the account; it goes with
  * its workspace alone. It holds ids, a name, and an instant alone.
@@ -24,7 +24,7 @@ export const sandboxOwnerTable = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     /** The agent the sandbox was opened for; null for a drive fill's. */
     agentId: uuid("agent_id"),
-    /** The member it was opened for: the agent's starter, or the fill's member. */
+    /** The member whose agent the sandbox runs, for per-member usage; null for a drive fill's. */
     userId: text("user_id"),
     createdAt: timestamptz("created_at").notNull(),
   },

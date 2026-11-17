@@ -115,9 +115,7 @@ function said(activity: ActorActivity | undefined): string | undefined {
   return activity === undefined ? undefined : activityWords(activity);
 }
 
-test("a description's edit is named by who wrote it: a member as the members read them, Vespin, an agent by its name, and nobody before history", () => {
-  const byApp = { actor: DESCRIPTION_ACTOR.NOTETAKER, by: DANA_REF, at: 0, duringCall: false };
-
+test("a description's edit is named by who wrote it: a member as the members read them, an agent by its name, and nobody before history", () => {
   const byAgent = {
     actor: DESCRIPTION_ACTOR.AGENT,
     label: "Fix auth flow",
@@ -129,7 +127,6 @@ test("a description's edit is named by who wrote it: a member as the members rea
 
   assert.equal(editActor(byDana, SAM_READS)?.kind, ACTOR_KIND.PERSON);
   assert.equal(called(editActor(byDana, { ...SAM_READS, readerId: DANA.userId })), "You");
-  assert.deepEqual(editActor(byApp, SAM_READS), APP_ACTOR);
   assert.deepEqual(
     editActor(byAgent, SAM_READS, { provider: "anthropic", state: ACTOR_STATE.WORKING }),
     {
@@ -157,7 +154,14 @@ test("what someone last did in a description is the sections whose last change i
   const edits = [
     edit("", 1),
     edit("Goal", 5),
-    { section: "Approach", actor: DESCRIPTION_ACTOR.NOTETAKER, at: 9, duringCall: false },
+    {
+      section: "Approach",
+      actor: DESCRIPTION_ACTOR.AGENT,
+      agentId: "agent-1",
+      label: "Fix auth flow",
+      at: 9,
+      duringCall: false,
+    },
     edit("Rollout", 3, { userId: SAM.userId, name: SAM.name }),
   ];
 
@@ -166,7 +170,18 @@ test("what someone last did in a description is the sections whose last change i
 
   assert.deepEqual(danas, { sections: ["Opening", "Goal"], at: 5 });
   assert.equal(said(danas), "Edited Opening and Goal");
-  assert.equal(said(latestActivity(edits, APP_ACTOR)), "Edited Approach");
+  assert.equal(
+    said(
+      latestActivity(edits, {
+        kind: ACTOR_KIND.AGENT,
+        agentId: "agent-1",
+        name: "Fix auth flow",
+        provider: undefined,
+        state: ACTOR_STATE.REST,
+      }),
+    ),
+    "Edited Approach",
+  );
   assert.equal(
     activityWords({ sections: ["Goal", "Approach", "Rollout", "Risks", "Open questions"], at: 0 }),
     "Edited Goal, Approach, Rollout, Risks, and Open questions",
@@ -383,9 +398,8 @@ test("a linked GitHub login who left keeps their picture and their account's nam
   );
 });
 
-test("a task Vespin or an agent made names them, the automation whose run started the agent in its place, and an agent the window does not hold as an agent; a task made by hand names nobody", () => {
+test("a task an agent made names it, the automation whose run started the agent in its place, and an agent the window does not hold as an agent; a task made by hand names nobody", () => {
   assert.equal(originActor(undefined, undefined), undefined);
-  assert.equal(originActor({ actor: DESCRIPTION_ACTOR.NOTETAKER }, undefined), APP_ACTOR);
 
   const held = {
     name: "Teammate invitations",

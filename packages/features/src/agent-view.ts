@@ -25,6 +25,7 @@ import {
   localAgentRefusalSchema,
   refusedDeviceSchema,
 } from "./agent-wire.js";
+import { AUDIO_TYPE } from "./audio-signature.js";
 import { accountContract } from "./contract/account.js";
 import { agentPullRequestsContract } from "./contract/agent-pull-requests.js";
 import { agentsContract } from "./contract/agents.js";
@@ -41,7 +42,6 @@ import { CONVERSATION_MEDIA_TYPE } from "./conversation-picture-wire.js";
 import { dictationRequestSchema } from "./dictation-wire.js";
 import { failureFactsSchema } from "./failure-facts.js";
 import { GITHUB_IMAGE_BOUNDS, GITHUB_IMAGE_TYPE } from "./github-image.js";
-import { githubPullRequestNumberSchema } from "./github-repositories-wire.js";
 import { githubTokenSaveRequestSchema } from "./github-token-wire.js";
 import { hostIdRequestSchema, machineChangeRequestSchema } from "./host-wire.js";
 import { answerView, failureSetOf, HOSTED_CALL_FAILURE } from "./hosted-failure.js";
@@ -64,6 +64,7 @@ import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
 import {
   chatGptDeviceLoginRequestSchema,
   chatGptDeviceStartRequestSchema,
+  modelApiProviderSchema,
   PROVIDER_KEY_PROVIDER,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
@@ -73,7 +74,6 @@ import {
   subscriptionLabelRequestSchema,
   subscriptionOrderRequestSchema,
 } from "./provider-key-wire.js";
-import { pullRequestActionRequestSchema } from "./pull-request-write-wire.js";
 import {
   pushDeviceNotifyRequestSchema,
   pushDeviceRegisterRequestSchema,
@@ -673,9 +673,9 @@ export type AllowedCommandsWriteAnswerView = typeof allowedCommandsWriteAnswerVi
 /** Writing the default, as the window asks it: the choice to keep. */
 export const agentDefaultWriteParamsSchema = modelChoiceSchema;
 
-/** Writing whose API key chapters run on, as the window asks it: the provider to keep. */
+/** Writing whose API key chapters run on, as the window asks it: the provider to keep, one whose key buys a model call. */
 export const chaptersProviderWriteParamsSchema = EffectSchema.Struct({
-  provider: modelProviderSchema,
+  provider: modelApiProviderSchema,
 });
 
 export type ChaptersProviderWriteParams = typeof chaptersProviderWriteParamsSchema.Type;
@@ -1059,25 +1059,13 @@ export const agentPullRequestParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
 });
 
-/**
- * One agent's Pull request tab, as the window reads its pull request: the
- * agent, and the pull request of its repository by number where the tab
- * shows one other than the one from the agent's branch.
- */
-export const agentPullRequestReadParamsSchema = EffectSchema.Struct({
-  agentId: EffectSchema.NonEmptyString,
-  number: EffectSchema.optionalKey(githubPullRequestNumberSchema),
-});
-
-export type AgentPullRequestReadParams = typeof agentPullRequestReadParamsSchema.Type;
-
 /** What a read of one turn's changes names: the agent, and the developer's line that opened the turn. */
 export const agentTurnChangesParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   messageId: EffectSchema.NonEmptyString,
 });
 
-/** The parts of a pull request its Pull request tab holds, each a read of its own: the pull request itself, its checks, its conversation, what the agent published, what its reviewer and label pickers offer, and which of its files the member marked viewed. */
+/** The parts of a pull request its Pull request tab holds, each a read of its own: the pull request itself, its checks, its conversation, the pull request as GitHub holds it with its branch, what its reviewer and label pickers offer, and which of its files the member marked viewed. */
 export const PULL_REQUEST_PART = {
   PULL_REQUEST: "pullRequest",
   CHECKS: "checks",
@@ -1088,14 +1076,6 @@ export const PULL_REQUEST_PART = {
 } as const;
 
 export type PullRequestPart = (typeof PULL_REQUEST_PART)[keyof typeof PULL_REQUEST_PART];
-
-/** One part of one agent's pull request, as a Pull request tab holds it: the part, and the pull request as the tab reads it. */
-export const pullRequestPartParamsSchema = EffectSchema.Struct({
-  part: EffectSchema.Literals(Object.values(PULL_REQUEST_PART)),
-  ...agentPullRequestReadParamsSchema.fields,
-});
-
-export type PullRequestPartParams = typeof pullRequestPartParamsSchema.Type;
 
 /** What the agent published, as the window hears it: its branch and pull request as GitHub holds them, or why there is no answer. */
 const agentPullRequestAnswerViewSchema = answerView(agentPullRequestsContract.pullRequest, {
@@ -1167,13 +1147,6 @@ const agentReviewOptionsAnswerViewSchema = answerView(agentsContract.reviewOptio
 });
 
 export type AgentReviewOptionsAnswerView = typeof agentReviewOptionsAnswerViewSchema.Type;
-
-/** One change to an agent's pull request, as the window asks it made: the agent, and the change (`pull-request-write-wire.ts`). */
-export const agentPullRequestActionParamsSchema = EffectSchema.Struct({
-  agentId: EffectSchema.NonEmptyString,
-  number: EffectSchema.optionalKey(githubPullRequestNumberSchema),
-  request: pullRequestActionRequestSchema,
-});
 
 /** How GitHub took a change to an agent's pull request, as the window hears it: made, the member to sign in with GitHub again, GitHub's refusal in its words, or why there is no answer. */
 export const agentPullRequestWriteAnswerViewSchema = answerView(agentPullRequestsContract.action, {
@@ -1446,11 +1419,12 @@ export type AgentPartView = typeof agentPartViewSchema.Type;
  */
 export const agentInboxAttachmentViewSchema = EffectSchema.Union([
   EffectSchema.Struct({
-    // A transcript's picture may be a WebM an agent recorded, read through this same view, or its MP4 copy to a window that plays MP4.
+    // A transcript's picture may be a WebM an agent recorded, read through this same view, its MP4 copy to a window that plays MP4, or a sound clip.
     contentType: EffectSchema.Literals([
       ...Object.values(AGENT_ATTACHMENT_TYPE),
       CONVERSATION_MEDIA_TYPE.WEBM,
       MP4_TYPE,
+      ...Object.values(AUDIO_TYPE),
     ]),
     base64: EffectSchema.String,
   }),

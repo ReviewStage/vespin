@@ -11,6 +11,7 @@
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { accountExperimentOn } from "@repo/database/models/account-store";
 import {
   type Agent,
   readNativeHanded,
@@ -36,6 +37,7 @@ import { experimentOnIn, experimentOnSinceIn } from "../workspace-experiment-on.
 import {
   handedAfterCompaction,
   memoriesWithLead,
+  resizedWords,
   savedByAnotherSince,
   type TurnHanded,
   TurnHandedSchema,
@@ -209,7 +211,8 @@ const memoriesOf = (agent: Agent, words: string) =>
  * The message the agent's turn opens with after the history, and what the
  * session has handed once it is: on a spoken turn, the words for a reply
  * read aloud, and after one, the line saying they no longer hold
- * (`turnKindWords`); the developer's time on
+ * (`turnKindWords`); once, the size its sandbox was stopped for since its
+ * last turn (`resizedWords`); the developer's time on
  * every turn; the task where `taskOf` hands it; and on the agent's first
  * turn alone, the memories its task's name, brief, and description and the
  * line's words find (`memoriesOf`). Note that a later turn is handed none,
@@ -230,7 +233,17 @@ export function coderTurnMessage(
     const memories = task?.opening === true ? yield* memoriesOf(agent, task.words) : undefined;
     const clock = { now, timeZone: admitted.timeZone };
     const standing = task?.text ?? timeWithLead(standingContext(undefined, clock));
-    const kind = turnKindWords(handed, turn.spoken === true);
+
+    // Note that only a spoken turn reads whether the agent ends its turns with `end_turn`, the one turn its words change on.
+    const endsTurns =
+      turn.spoken === true &&
+      (yield* accountExperimentOn(agent.userId, EXPERIMENT.TURN_END).pipe(
+        Effect.tapError(logStoreFailure),
+        Effect.orElseSucceed(() => false),
+      ));
+
+    const kind = turnKindWords(handed, turn.spoken === true, endsTurns);
+    const resized = handed.resized === undefined ? undefined : resizedWords(handed.resized);
     const taskHanded = task === undefined ? handed.task : task.key;
 
     const next: TurnHanded = {
@@ -238,7 +251,7 @@ export function coderTurnMessage(
       ...(turn.spoken === true ? { spoken: true } : undefined),
     };
 
-    const parts = [kind, standing, memories].filter((part) => part !== undefined);
+    const parts = [kind, resized, standing, memories].filter((part) => part !== undefined);
 
     return { text: parts.join("\n\n"), handed: next };
   });

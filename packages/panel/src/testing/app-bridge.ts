@@ -3,7 +3,10 @@
  */
 
 import { ORPCError } from "@orpc/client";
-import type { AgentChangesAnswerView } from "@repo/features/agent-view";
+import type {
+  RepositoryChangesAnswerView,
+  RepositoryPullRequestParams,
+} from "@repo/features/pull-request-view";
 import type { TaskFileRequest } from "@repo/features/task-wire";
 import {
   type ListedApart,
@@ -28,6 +31,7 @@ import {
   type PortActKind,
   type PortActPayload,
   type PortActResult,
+  PULL_REQUEST_ACT_KIND,
   TASKS_ACT_KIND,
   WORKSPACE_ACT_KIND,
 } from "@repo/host/contract";
@@ -110,13 +114,14 @@ type HoldKind =
   | typeof INTEGRATION_ACT_KIND.INTEGRATIONS_FOLLOW
   | typeof TASKS_ACT_KIND.TASKS_PAGES_FOLLOW
   | typeof TASKS_ACT_KIND.TASKS_BROWSER_TABS_FOLLOW
-  | typeof CHAPTERS_ACT_KIND.CHAPTERS_FOLLOW
+  | typeof CHAPTERS_ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW
   | typeof AGENT_ACT_KIND.HOSTS_PRESENCE_FOLLOW
   | typeof AGENT_ACT_KIND.HOSTS_FOLLOW
   | typeof AGENT_ACT_KIND.MACHINES_FOLLOW
   | typeof AGENT_ACT_KIND.AGENTS_MODELS_FOLLOW
   | typeof AGENT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW
-  | typeof AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW
+  | typeof AGENT_ACT_KIND.AGENTS_PULL_REQUEST_FOLLOW
+  | typeof PULL_REQUEST_ACT_KIND.PULL_REQUESTS_PART_FOLLOW
   | typeof INTEGRATION_ACT_KIND.INTEGRATIONS_TOOLS_FOLLOW
   | typeof INTEGRATION_ACT_KIND.MCP_CLIENTS_FOLLOW
   | typeof ACCOUNT_ASK_ACT_KIND.PROVIDER_KEYS_FOLLOW
@@ -144,13 +149,14 @@ const QUIET_HOLDS: ReadonlySet<PortActKind> = new Set<HoldKind>([
   INTEGRATION_ACT_KIND.INTEGRATIONS_FOLLOW,
   TASKS_ACT_KIND.TASKS_PAGES_FOLLOW,
   TASKS_ACT_KIND.TASKS_BROWSER_TABS_FOLLOW,
-  CHAPTERS_ACT_KIND.CHAPTERS_FOLLOW,
+  CHAPTERS_ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW,
   AGENT_ACT_KIND.HOSTS_PRESENCE_FOLLOW,
   AGENT_ACT_KIND.HOSTS_FOLLOW,
   AGENT_ACT_KIND.MACHINES_FOLLOW,
   AGENT_ACT_KIND.AGENTS_MODELS_FOLLOW,
   AGENT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW,
-  AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW,
+  AGENT_ACT_KIND.AGENTS_PULL_REQUEST_FOLLOW,
+  PULL_REQUEST_ACT_KIND.PULL_REQUESTS_PART_FOLLOW,
   INTEGRATION_ACT_KIND.INTEGRATIONS_TOOLS_FOLLOW,
   INTEGRATION_ACT_KIND.MCP_CLIENTS_FOLLOW,
   ACCOUNT_ASK_ACT_KIND.PROVIDER_KEYS_FOLLOW,
@@ -228,7 +234,7 @@ export function fakeActPort(procedures: Partial<FakeActPort>): void {
     [TASKS_ACT_KIND.TASKS_REPOSITORIES_RETRY]: () => Promise.resolve(),
     [ACCOUNT_ASK_ACT_KIND.MEMORIES_RETRY]: () => Promise.resolve(),
     [INSTALLED_SKILL_ACT_KIND.INSTALLED_SKILLS_RETRY]: () => Promise.resolve(),
-    [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_PART_RETRY]: () => Promise.resolve(),
+    [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_RETRY]: () => Promise.resolve(),
     [WORKSPACE_ACT_KIND.WORKSPACE_INTEGRATIONS_RETRY]: () => Promise.resolve(),
     [WORKSPACE_ACT_KIND.WORKSPACE_SLACK_CHANNELS_RETRY]: () => Promise.resolve(),
     [AGENT_ACT_KIND.AGENTS_MODELS_RETRY]: () => Promise.resolve(),
@@ -300,19 +306,14 @@ export function readingFiles(
 }
 
 /**
- * The act port's read of an agent's changes answered through `read`, which
- * hears the agent and the pull request's number where a tab names one, for a
- * test to spread into its `fakeActPort`.
+ * The act port's read of a pull request's changes answered through `read`,
+ * which hears the pull request by its workspace, repository, and number, for
+ * a test to spread into its `fakeActPort`.
  */
 export function answeringChanges(
-  read: (agentId: string, number?: number) => Promise<AgentChangesAnswerView>,
-): Pick<FakeActPort, typeof AGENT_ACT_KIND.AGENTS_CHANGES> {
-  return {
-    [AGENT_ACT_KIND.AGENTS_CHANGES]: (payload) =>
-      "number" in payload && payload.number !== undefined
-        ? read(payload.agentId, payload.number)
-        : read(payload.agentId),
-  };
+  read: (pullRequest: RepositoryPullRequestParams) => Promise<RepositoryChangesAnswerView>,
+): Pick<FakeActPort, typeof PULL_REQUEST_ACT_KIND.PULL_REQUESTS_CHANGES> {
+  return { [PULL_REQUEST_ACT_KIND.PULL_REQUESTS_CHANGES]: (payload) => read(payload) };
 }
 
 /** Each port kind's procedure as a test answers it: its payload in, its answer or a rejection out. */

@@ -1,8 +1,9 @@
 import type { CheckoutSnapshot } from "@repo/agent-runner/protocol";
 import { nativeTurnId, reasoningItemId } from "@repo/database/models/ids";
+import { connectionLostProviderOf, usageLimitAgentOf } from "@repo/features/agent-runtime-models";
 import { CLAUDE_CODE_UNRECORDED_TOOL, UNKNOWN_TOOL } from "@repo/features/agent-tools";
 import { integrationOfRemoteTool } from "@repo/features/integration-wire";
-import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import type { ModelProvider } from "@repo/features/models-wire";
 import {
   isRecord,
   isWireString,
@@ -10,12 +11,7 @@ import {
   type WireValue,
   WireValueSchema,
 } from "@repo/wire";
-import {
-  CONNECTION_LOST_PROVIDER,
-  type ConnectionLostNotice,
-  USAGE_LIMIT_AGENT,
-  type UsageLimitMove,
-} from "@repo/wire/ui-messages";
+import type { ConnectionLostNotice, UsageLimitMove } from "@repo/wire/ui-messages";
 import { Option, Schema } from "effect";
 import {
   addModelUsage,
@@ -95,6 +91,8 @@ const StepSchema = Schema.Struct({
   draft: DraftSchema,
   /** How many reasoning summaries the step told, which numbers the next one's id. */
   reasoning: Schema.Number,
+  /** The step's reasoning still forming, for a harness that streams it in pieces (`NATIVE_MOMENT.REASONING_DELTA`), told whole as the step goes on; absent where none forms. */
+  thinking: Schema.optionalKey(Schema.String),
 });
 
 type Step = typeof StepSchema.Type;
@@ -139,6 +137,8 @@ const TurnSchema = Schema.Struct({
   reconnecting: Schema.optionalKey(Schema.Number),
   /** The calls whose subagents run on in the background, by the key their end is named by (`NATIVE_MOMENT.SUBAGENT_RUNNING`). */
   subagents: Schema.optionalKey(Schema.Record(Schema.String, SubagentSchema)),
+  /** The calls it holds whose command the kernel killed for want of memory, by id, each with the sandbox's memory in GB, until it settles marked (`NATIVE_MOMENT.OUT_OF_MEMORY`). */
+  outOfMemory: Schema.optionalKey(Schema.Record(Schema.String, Schema.Number)),
   usage: Schema.optionalKey(UsageSchema),
   /** Why the newest model turn failed, where it did. */
   failure: Schema.optionalKey(Schema.String),
@@ -427,14 +427,17 @@ function withSettledSubagents(turn: Turn, callId: string): Turn {
   return { ...turn, subagents };
 }
 
-/** The turn with the call answered: no longer running, and any background subagent under it settled. */
+/** The turn with the call answered: no longer running, any background subagent under it settled, and its out-of-memory mark let go. */
 function withSettledCall(turn: Turn, callId: string): Turn {
-  const settled = withSettledSubagents(turn, callId);
+  const subagentsSettled = withSettledSubagents(turn, callId);
+  const { outOfMemory, ...settled } = subagentsSettled;
+  const { [callId]: _marked, ...stillKilled } = outOfMemory ?? {};
+  const kept = outOfMemory === undefined ? settled : { ...settled, outOfMemory: stillKilled };
 
-  if (settled.running === undefined) return settled;
-  const { [callId]: _answered, ...running } = settled.running;
+  if (kept.running === undefined) return kept;
+  const { [callId]: _answered, ...running } = kept.running;
 
-  return { ...settled, running };
+  return { ...kept, running };
 }
 
 type UnknownCallResult = { readonly name: string; readonly input: WireValue };
@@ -534,7 +537,8 @@ class Fold {
   }
 
   /** The step's words told whole, and the step closed. */
-  #closed(turn: Turn): Turn {
+  #closed(held: Turn): Turn {
+    const turn = this.#thought(held);
     const step = turn.step;
 
     if (step === undefined) return turn;
@@ -569,7 +573,7 @@ class Fold {
 
   /** The step's words grown, and told where another sentence finished. */
   #words(grow: (draft: Draft) => Draft): void {
-    const turn = this.#step(undefined);
+    const turn = this.#thought(this.#step(undefined));
     const step = turn.step;
 
     if (step === undefined) return;
@@ -578,9 +582,13 @@ class Fold {
 
   #reasoning(text: string): void {
     const turn = this.#step(undefined);
-    const step = turn.step;
 
-    if (step === undefined) return;
+    if (turn.step === undefined) return;
+    this.#setTurn(this.#toldReasoning(turn, turn.step, text));
+  }
+
+  /** One reasoning summary of the step told the writer, under the id its place in the step mints. */
+  #toldReasoning(turn: Turn, step: Step, text: string): Turn {
     const id = reasoningItemId(this.#context.conversationId, turn.id, turn.steps, step.reasoning);
 
     const told = this.#tell(turn, {
@@ -589,7 +597,45 @@ class Fold {
       item: { id, summary: text },
     });
 
-    this.#setTurn({ ...told, step: { ...step, reasoning: step.reasoning + 1 } });
+    return { ...told, step: { ...step, reasoning: step.reasoning + 1 } };
+  }
+
+  /** A piece of the step's reasoning kept with what formed before it, until the step goes on (`#thought`). */
+  #thinking(text: string): void {
+    const turn = this.#step(undefined);
+    const step = turn.step;
+
+    if (step === undefined) return;
+    this.#setTurn({ ...turn, step: { ...step, thinking: (step.thinking ?? "") + text } });
+  }
+
+  /** The turn with the step's reasoning that formed in pieces told whole as one summary; as it is where none formed. */
+  #thought(turn: Turn): Turn {
+    const step = turn.step;
+
+    if (step?.thinking === undefined) return turn;
+    const { thinking, ...rest } = step;
+    const text = thinking.trim();
+
+    const told =
+      text.length === 0 ? { ...turn, step: rest } : this.#toldReasoning(turn, rest, text);
+
+    this.#setTurn(told);
+
+    return told;
+  }
+
+  /** Every call the turn still holds unanswered settled as given. */
+  #openCallsSettled(
+    moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.OPEN_CALLS_SETTLED }>,
+  ): void {
+    for (const callId of Object.keys(this.state.turn?.running ?? {})) {
+      this.#toolSettled({
+        kind: NATIVE_MOMENT.TOOL_SETTLED,
+        callId,
+        settlement: moment.settlement,
+      });
+    }
   }
 
   /**
@@ -606,7 +652,7 @@ class Fold {
     const { name, input }: { readonly name: string; readonly input: UnparsedWireValue } =
       this.#context.registered(moment.name) ? moment : unknownCall(moment.name, moment.input);
 
-    const turn = this.#step(undefined);
+    const turn = this.#thought(this.#step(undefined));
 
     if (turn.calls[moment.callId] !== undefined) return;
 
@@ -626,17 +672,33 @@ class Fold {
     );
   }
 
+  /** A held call's command killed out of memory, kept until its answer settles it marked; nothing for a call the turn does not hold. */
+  #outOfMemory(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.OUT_OF_MEMORY }>): void {
+    const turn = this.state.turn;
+
+    if (turn?.calls[moment.callId] === undefined) return;
+    this.#setTurn({
+      ...turn,
+      outOfMemory: { ...turn.outOfMemory, [moment.callId]: moment.memoryGb },
+    });
+  }
+
   #toolSettled(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.TOOL_SETTLED }>): void {
     const turn = this.state.turn;
     const name = turn?.calls[moment.callId];
 
     if (turn === undefined || name === undefined) return;
+    const memoryGb = turn.outOfMemory?.[moment.callId];
+
     this.#setTurn(
       this.#tell(withSettledCall(turn, moment.callId), {
         kind: RUN_EVENT.TOOL_CALL_SETTLED,
         callId: moment.callId,
         name,
-        settlement: moment.settlement,
+        settlement:
+          memoryGb === undefined
+            ? moment.settlement
+            : { ...moment.settlement, outOfMemory: { memoryGb } },
         // Note that an unknown tool's call keeps the input it started with, which names the tool it called.
         ...(moment.input !== undefined && name !== UNKNOWN_TOOL
           ? { input: moment.input }
@@ -799,26 +861,23 @@ class Fold {
     this.#setTurn(undefined);
   }
 
-  /** The provider the turn's model is of, as a notice names it: OpenAI's, or Anthropic's for every other. */
-  #provider(): ConnectionLostNotice["provider"] {
-    const provider =
-      this.#context.model === undefined
-        ? undefined
-        : providerModelOf(this.#context.model)?.provider;
+  /** The provider the turn's model is of; none where the model is not known. */
+  #modelProvider(): ModelProvider | undefined {
+    return this.#context.model === undefined
+      ? undefined
+      : providerModelOf(this.#context.model)?.provider;
+  }
 
-    return provider === MODEL_PROVIDER.OPENAI
-      ? CONNECTION_LOST_PROVIDER.OPENAI
-      : CONNECTION_LOST_PROVIDER.ANTHROPIC;
+  /** The provider the turn's model is of, as a notice names it: Anthropic's where the model is not known. */
+  #provider(): ConnectionLostNotice["provider"] {
+    return connectionLostProviderOf(this.#modelProvider());
   }
 
   #limitNotice(turn: Turn, resetsAt: number | null, moved?: UsageLimitMove): Turn {
     return this.#tell(turn, {
       kind: RUN_EVENT.USAGE_LIMIT_REACHED,
       notice: {
-        agent:
-          this.#provider() === CONNECTION_LOST_PROVIDER.OPENAI
-            ? USAGE_LIMIT_AGENT.CODEX
-            : USAGE_LIMIT_AGENT.CLAUDE,
+        agent: usageLimitAgentOf(this.#modelProvider()),
         resetsAt,
         ...(moved === undefined ? undefined : { moved }),
       },
@@ -993,12 +1052,24 @@ class Fold {
         this.#reasoning(moment.text);
 
         return;
+      case NATIVE_MOMENT.REASONING_DELTA:
+        this.#thinking(moment.text);
+
+        return;
+      case NATIVE_MOMENT.OPEN_CALLS_SETTLED:
+        this.#openCallsSettled(moment);
+
+        return;
       case NATIVE_MOMENT.TOOL_STARTED:
         this.#toolStarted(moment);
 
         return;
       case NATIVE_MOMENT.TOOL_SETTLED:
         this.#toolSettled(moment);
+
+        return;
+      case NATIVE_MOMENT.OUT_OF_MEMORY:
+        this.#outOfMemory(moment);
 
         return;
       case NATIVE_MOMENT.SUBAGENT_RUNNING:

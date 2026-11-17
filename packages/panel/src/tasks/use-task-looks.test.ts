@@ -109,7 +109,7 @@ function changedFor(
 const EDITS = [
   { section: "Goal", actor: DESCRIPTION_ACTOR.DEVELOPER, by: DEAN },
   { section: "Approach", actor: DESCRIPTION_ACTOR.DEVELOPER, by: CHARLES },
-  { section: "Context", actor: DESCRIPTION_ACTOR.NOTETAKER },
+  { section: "Context", actor: DESCRIPTION_ACTOR.AGENT, label: "Invite emails" },
 ];
 
 test("a teammate's saves are shown as changed, and the reader's own are not", () => {
@@ -154,7 +154,8 @@ test("a reader's id arriving mid-stay lights neither a save that landed during t
       { ...charles, at: LOOKED_AT + 1, duringCall: false },
       {
         section: "Context",
-        actor: DESCRIPTION_ACTOR.NOTETAKER,
+        actor: DESCRIPTION_ACTOR.AGENT,
+        label: "Invite emails",
         at: LOOKED_AT + 2,
         duringCall: false,
       },

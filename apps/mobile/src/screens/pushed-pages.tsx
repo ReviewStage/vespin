@@ -19,11 +19,22 @@ export function PushedPageView({ page }: { readonly page: PushedPage }) {
           id={page.agentId}
           suggestedBy={page.suggestedBy}
           button={page.button}
+          brief={page.brief}
           inColumn
         />
       );
     case PUSHED_PAGE.PULL_REQUEST:
-      return <PullRequestPage agentId={page.agentId} number={page.number} inColumn />;
+      return (
+        <PullRequestPage
+          pullRequest={{
+            workspaceId: page.workspaceId,
+            repository: page.repository,
+            number: page.number,
+          }}
+          agentId={page.agentId}
+          inColumn
+        />
+      );
     case PUSHED_PAGE.AGENT_PAGE:
       return (
         <AgentPage
@@ -54,6 +65,7 @@ export function PushedPageView({ page }: { readonly page: PushedPage }) {
           from={page.from}
           to={page.to}
           quote={page.quote}
+          again={page.again}
           inColumn
         />
       );

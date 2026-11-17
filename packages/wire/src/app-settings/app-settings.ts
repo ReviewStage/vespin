@@ -8,7 +8,7 @@ import { Schema } from "effect";
  * longer offers stay, so a count an older build still sends under one validates.
  */
 export const APP_SETTING_ID = {
-  /** The voice a call speaks with, chosen in Settings › Agents while the Voice experiment is on. */
+  /** The voice a call speaks with, chosen in Settings › Agents. */
   VOICE: "voice",
   /** Offered by no build: a call's captions, removed before calls were. */
   VOICE_CAPTIONS: "voice_captions",

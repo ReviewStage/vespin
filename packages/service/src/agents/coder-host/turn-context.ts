@@ -46,15 +46,23 @@ const TURN_MESSAGE_LEAD = {
 /**
  * What a session has handed its agent in its turns' messages, as content
  * addresses: the task, by the parts of it no save of the description changes
- * (`taskKey`), and whether its last turn was spoken. Kept on the
+ * (`taskKey`), and whether its last turn was spoken; and a change of the
+ * sandbox's size it is still to be told of. Kept on the
  * conversation's row (`native_handed`, which `runner-sessions.ts` reads and
  * writes around each message). Nothing yet for a session whose turns handed
  * none, or whose history was compacted since.
  */
+/** A change of the workspace's sandbox size the agent's sandbox was stopped for, its next turn told of it: the memory it resumes with and the memory it ran with, in GB. */
+const SandboxResizedSchema = Schema.Struct({ memoryGb: Schema.Number, fromGb: Schema.Number });
+
+export type SandboxResized = typeof SandboxResizedSchema.Type;
+
 export const TurnHandedSchema = Schema.Struct({
   task: Schema.optionalKey(Schema.String),
   /** Whether the session's last turn was spoken, which a compaction leaves standing, so the next turn says the spoken words no longer hold. */
   spoken: Schema.optionalKey(Schema.Boolean),
+  /** A change of the workspace's sandbox size its sandbox was stopped for since its last turn, which its next turn's message tells it of once (`sandboxStoppedForSize`). */
+  resized: Schema.optionalKey(SandboxResizedSchema),
   /** The workspace's experiments the session's instructions and tools were composed on as it opened, which a message arriving after they changed opens a fresh session for (`runner-sessions.ts`); none for a session opened before they were kept, which takes up the ones standing. */
   experiments: Schema.optionalKey(
     Schema.Struct({
@@ -72,10 +80,16 @@ export const TurnHandedSchema = Schema.Struct({
 
 export type TurnHanded = typeof TurnHandedSchema.Type;
 
-/** What a session has handed once its history was compacted: only the last turn's kind, since a summary may have dropped the rest, and the experiments it opened on, which a compaction leaves its instructions on. */
+/** What a session opened afresh has handed: nothing, but a change of its sandbox's size the agent is still to be told of, which outlives the session it was kept for. */
+export function handedToFreshSession(handed: TurnHanded): TurnHanded {
+  return handed.resized === undefined ? {} : { resized: handed.resized };
+}
+
+/** What a session has handed once its history was compacted: only the last turn's kind, since a summary may have dropped the rest, the experiments it opened on, which a compaction leaves its instructions on, and a change of its sandbox's size it is still to be told of. */
 export function handedAfterCompaction(handed: TurnHanded): TurnHanded {
   return {
     ...(handed.spoken === true ? { spoken: true } : undefined),
+    ...(handed.resized === undefined ? undefined : { resized: handed.resized }),
     ...(handed.experiments === undefined ? undefined : { experiments: handed.experiments }),
   };
 }
@@ -117,18 +131,26 @@ const SPOKEN_WORDS = `## This turn is spoken
 
 The developer is speaking to you through a voice that reads your replies aloud, so this turn's message is what they said, and your final reply is what they hear. Answer short, in plain facts: no Markdown, code blocks, or tables, and no file paths or links read out. Lead with the result and any decision waiting on the developer, a sentence or two at a time, and leave the detail to what you write to the task.`;
 
+/** What a spoken turn is told beside them where the agent ends its turns with `end_turn`, whose summary the voice reads aloud. */
+const SPOKEN_END_TURN = `On a call, write \`${AGENT_TOOL.END_TURN}\`'s summary as plain sentences, not bullets or links.`;
+
 /** The line a turn opens with after a spoken one, whose call's words still stand in the history. */
 const TYPED_AFTER_CALL =
   'This turn is typed (nothing you write is heard), so "This turn is spoken" above no longer holds: your words are read, and a question for the developer goes in a thread.';
 
 /**
  * What a turn opens with of its kind: on a spoken turn the words for a reply
- * read aloud, handed every time since they are short; on a typed turn after
- * a spoken one, a line saying those words in its history no longer hold; and
- * nothing for a typed turn otherwise.
+ * read aloud, with how to write `end_turn`'s summary where the agent ends its
+ * turns with it, handed every time since they are short; on a typed turn
+ * after a spoken one, a line saying those words in its history no longer
+ * hold; and nothing for a typed turn otherwise.
  */
-export function turnKindWords(handed: TurnHanded, spoken: boolean): string | undefined {
-  if (spoken) return SPOKEN_WORDS;
+export function turnKindWords(
+  handed: TurnHanded,
+  spoken: boolean,
+  endsTurns: boolean,
+): string | undefined {
+  if (spoken) return endsTurns ? `${SPOKEN_WORDS} ${SPOKEN_END_TURN}` : SPOKEN_WORDS;
 
   return handed.spoken === true ? TYPED_AFTER_CALL : undefined;
 }
@@ -167,4 +189,21 @@ export function memoriesWithLead(memories: readonly StoredMemory[]): string {
   const lines = memories.map((memory) => `- ${memory.id}: ${JSON.stringify(memory.text)}`);
 
   return [TURN_MESSAGE_LEAD.MEMORIES, ...lines].join("\n");
+}
+
+/**
+ * What the agent's turn is told of a change of its workspace's sandbox size
+ * its sandbox was stopped for since its last turn: the memory it now has
+ * and had, and, where it grew, to run again a command killed for want of
+ * memory, which the kernel's kill told it of then.
+ */
+export function resizedWords(resized: SandboxResized): string {
+  const said =
+    `The sandbox now has ${resized.memoryGb} GB of memory, ` +
+    `${resized.memoryGb > resized.fromGb ? "up" : "down"} from ${resized.fromGb} GB, ` +
+    "as its workspace's sandbox size changed since your last turn.";
+
+  return resized.memoryGb > resized.fromGb
+    ? `${said} Run again any command that was killed for running out of memory.`
+    : said;
 }

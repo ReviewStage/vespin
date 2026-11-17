@@ -40,6 +40,24 @@ private enum Words {
 /// How big a picture's thumbnail stands in the sheet, in points.
 private let thumbnailSide: CGFloat = 72
 
+/// The brand's grouped form, as the app's `SettingsForm` stands one: its rows on the panel's raised fill, on the chip's hover gray in light and the sidebar's black in dark, never the system's grouped grays.
+private struct BrandForm: ViewModifier {
+  @Environment(\.colorScheme) private var scheme
+
+  func body(content: Content) -> some View {
+    content
+      .scrollContentBackground(.hidden)
+      .background(Color(scheme == .dark ? "Sidebar" : "ChipHover"))
+  }
+}
+
+/// A form's section on the panel's raised fill, as the app's grouped cards stand.
+private struct RaisedRows: ViewModifier {
+  func body(content: Content) -> some View {
+    content.listRowBackground(Color("Raised"))
+  }
+}
+
 /// What the sheet holds while it stands: the snapshot it offers, and the words and picks being made.
 @MainActor
 final class ShareSheetModel: ObservableObject {
@@ -131,16 +149,19 @@ struct ShareSheet: View {
     NavigationStack {
       Form {
         if let snapshot = model.snapshot {
-          draft(snapshot)
+          draft(snapshot).modifier(RaisedRows())
         } else {
           Section { Text(Words.signedOut).foregroundStyle(.secondary) }
+            .modifier(RaisedRows())
         }
       }
+      .modifier(BrandForm())
       .navigationTitle(Words.title)
       .navigationBarTitleDisplayMode(.inline)
       .toolbar { toolbar }
     }
-    .tint(Color("AccentColor"))
+    // Note that the sheet stands in the ink, as the app's screens do, so Cancel and the pickers' values read as the app's bar buttons and values; only Start and Done, its one filled act, take the copper.
+    .tint(Color("Text"))
     .task {
       model.prompt = await SharedItems.words(of: items)
       let pictures = await SharedItems.pictures(of: items)
@@ -181,7 +202,7 @@ struct ShareSheet: View {
         case .drafting, .started, .agentRefused: EmptyView()
         case .starting: Text(Words.starting)
         case .kept: Text(Words.kept)
-        case .notKept: Text(Words.notKept).foregroundStyle(.red)
+        case .notKept: Text(Words.notKept).foregroundStyle(Color("DangerText"))
         }
       }
     }
@@ -254,6 +275,7 @@ struct ShareSheet: View {
       }
       ToolbarItem(placement: .confirmationAction) {
         Button(Words.start) { Task { await model.start() } }
+          .tint(Color("AccentColor"))
           .disabled(
             model.snapshot == nil || model.reading || model.standing == .starting
               || !model.drafted)
@@ -261,6 +283,7 @@ struct ShareSheet: View {
     } else {
       ToolbarItem(placement: .confirmationAction) {
         Button(Words.done, action: finish)
+          .tint(Color("AccentColor"))
       }
     }
   }

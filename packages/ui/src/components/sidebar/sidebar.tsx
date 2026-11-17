@@ -85,9 +85,16 @@ export function SidebarPlaces({
   );
 }
 
-/** The hairline under the places that parts them from the list, at the rows' inset. */
+/**
+ * The hairline under the places that parts them from the list, at the rows' inset.
+ * Note that it draws in the translucent border, because the sidebar stands on the
+ * window's vibrancy: the opaque one matches its gray where the wallpaper is light
+ * and fades out there.
+ */
 export function SidebarRule(): React.JSX.Element {
-  return <hr className="sidebar-rule mx-row-inset my-ui-8 h-px flex-none border-0 bg-border" />;
+  return (
+    <hr className="sidebar-rule mx-row-inset my-ui-8 h-px flex-none border-0 bg-border-strong" />
+  );
 }
 
 /** The foot of the column: what docks above the account's row, and the row. */

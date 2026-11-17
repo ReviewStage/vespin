@@ -5,6 +5,7 @@ import {
   CLAUDE_CODE_MAC_PIN,
   CODEX_LINUX_PINS,
   CODEX_MAC_PIN,
+  CURSOR_SDK_MAC_PIN,
   GH_LINUX_PINS,
   GH_MAC_PIN,
 } from "@repo/agent-runner/pins";
@@ -45,7 +46,7 @@ export interface HostOs {
   readonly stateRoot: (home: string) => string;
 }
 
-/** A Linux box: its state and its agents' folders under the daemon's user's home, that user's alone, its host name, and the glibc builds of the agent CLIs for its architecture. */
+/** A Linux box: its state and its agents' folders under the daemon's user's home, that user's alone, its host name, and the glibc builds of the agent CLIs for its architecture, and no Cursor SDK, whose agents run on a Mac or in the cloud. */
 export const LINUX_HOST: HostOs = {
   name: "Linux",
   platform: DEVICE_PLATFORM.LINUX,
@@ -62,7 +63,7 @@ export const LINUX_HOST: HostOs = {
 
 /**
  * A Mac: Apple silicon alone, its Computer Name, and the macOS arm64
- * builds of the agent CLIs, each install keeping its own copy. Its
+ * builds of the agent CLIs and of Cursor's SDK, each install keeping its own copy. Its
  * `vespin-host` is the account install or the one the desktop app ships,
  * either run as the member, so its state is the account install's own,
  * under the member's home (`ACCOUNT_STATE` in
@@ -76,7 +77,12 @@ export const DARWIN_HOST: HostOs = {
   deviceName: machineDeviceName,
   machine: macMachine,
   // Note that the arch is not read, since a Mac host is built for Apple silicon alone (`arches`).
-  agentClis: () => ({ claude: CLAUDE_CODE_MAC_PIN, codex: CODEX_MAC_PIN, gh: GH_MAC_PIN }),
+  agentClis: () => ({
+    claude: CLAUDE_CODE_MAC_PIN,
+    codex: CODEX_MAC_PIN,
+    gh: GH_MAC_PIN,
+    cursor: CURSOR_SDK_MAC_PIN,
+  }),
   stateRoot: (home) => path.join(home, ".local", "state", "vespin-host"),
 };
 

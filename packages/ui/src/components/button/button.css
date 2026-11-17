@@ -46,6 +46,14 @@
     --ui-button-ink: var(--ui-color-text-muted);
   }
 
+  /* A large disc, a player's Play, wears a larger glyph in its larger box,
+     filled, as a voice message's Play and Pause stand solid on their disc. */
+  .ui-button[data-size="large"] svg {
+    width: var(--ui-icon-20);
+    height: var(--ui-icon-20);
+    fill: currentcolor;
+  }
+
   /* A finger's target: on a coarse pointer a button takes a press
      `--ui-touch-target` across at least, centered on it, while it draws at
      its own size, so a row's 24px mark keeps its glyph and its place. */

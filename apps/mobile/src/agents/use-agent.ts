@@ -21,7 +21,7 @@ import {
   type ListedAgent,
   listedAgentOfPage,
 } from "@repo/features/agent-wire";
-import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { isPlayedType } from "@repo/features/conversation-picture-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -35,12 +35,13 @@ import {
   mediaReads,
   NO_TOGGLES,
   type OlderPages,
+  type ShownFile,
   transcriptItems,
 } from "@repo/ui-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cachedVideo } from "../cached-media.js";
+import { cachedFile, cachedPlayed } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useHostActs,
@@ -54,7 +55,19 @@ import { useWrite } from "../use-write.js";
 const AGENT_MEDIA_PREFIX = "agent";
 
 /** No media read yet, held as one value so a page that holds none reads the same each time. */
-const NO_SOURCES: ReadonlyMap<string, string> = new Map();
+const NO_SOURCES: ReadonlyMap<string, string | null> = new Map();
+
+/** What a file a member sent an agent is written under in the app's caches, beside its line's message. */
+const SENT_FILE_PREFIX = "sent";
+
+/** Where each file the agent's sent lines carried was written, by the line's message, then the file's place on it; `null` where it could not be. */
+type SentFiles = ReadonlyMap<string, ReadonlyMap<string, string | null>>;
+
+/** Where a sent line's file was written, by the line's message and the file's place on it, and what writes one again that could not be. */
+interface SentFileSources {
+  readonly source: (message: string, key: string) => string | null | undefined;
+  readonly retry: (message: string, key: string) => void;
+}
 
 /** Says on the console a read the host refused, which the page draws without. */
 function refused(what: string): (cause: unknown) => void {
@@ -261,29 +274,36 @@ function mediaReadFailed(agentId: string, pictureId: string, cause: unknown, aga
   );
 }
 
-/** One picture or recording the agent showed, read through the host into what it is drawn from. */
+/** One picture, recording, or sound clip the agent showed, read through the host into what it is drawn from. */
 async function agentMediaSource(
   acts: ReturnType<typeof useHostActs>,
   agentId: string,
   pictureId: string,
 ): Promise<string> {
-  // Note that a recording is asked for as its MP4 copy, which the system's player plays, where the service kept one.
+  // Note that a recording, or an Ogg clip, is asked for as its MP4 copy, which the system's player plays, where the service kept one; anything else is answered as it is.
   const read = await acts[ACT_KIND.AGENTS_PICTURE]({ agentId, pictureId, playable: MP4_TYPE });
 
   if (!("base64" in read)) throw new Error(`The picture was not read: ${read.failure}.`);
 
-  return isVideoType(read.contentType)
-    ? cachedVideo(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64)
+  return isPlayedType(read.contentType)
+    ? cachedPlayed(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64)
     : `data:${read.contentType};base64,${read.base64}`;
 }
 
+/** What an agent's pictures and recordings are drawn from, by id, and what reads one that failed again. */
+export interface AgentMedia {
+  readonly sources: ReadonlyMap<string, string | null>;
+  readonly retry: (pictureId: string) => void;
+}
+
 /**
- * What each picture and recording the agent showed is drawn from, by its
- * id, read once through the host as the panel reads one
+ * What each picture, recording, and sound clip the agent showed is drawn
+ * from, by its id, read once through the host as the panel reads one
  * (`ACT_KIND.AGENTS_PICTURE`): a picture as a `data:` address, and a
- * recording, its MP4 copy where the service kept one, as a file of the
- * app's caches, written whole before it is drawn, since the system's player
- * reads a file; one on its way, or that could not be read, is absent. Note
+ * recording or a clip, its MP4 copy where the service kept one, as a file of
+ * the app's caches, written whole before it is drawn, since the system's
+ * player reads a file; one on its way is absent, and one whose every try
+ * failed is `null`, which its Try again (`retry`) reads again. Note
  * that each is asked for once while the agent's page stands, however often
  * the transcript moves; that one whose read failed is tried again on its
  * own a few times after a pause (`mediaReads`), since a transcript that
@@ -291,16 +311,24 @@ async function agentMediaSource(
  * transcript's next change; and that each failure is written to the
  * device's log.
  */
-export function useAgentMedia(
-  agentId: string,
-  ids: readonly string[],
-): ReadonlyMap<string, string> {
+export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMedia {
   const acts = useHostActs();
 
   const [shown, setShown] = useState<{
     readonly agentId: string;
-    readonly sources: ReadonlyMap<string, string>;
+    readonly sources: ReadonlyMap<string, string | null>;
   }>({ agentId, sources: new Map() });
+
+  // Each source standing for the agent, `source` for an id, or none to stand it on its way again.
+  const stand = (pictureId: string, source: string | null | undefined) =>
+    setShown((held) => {
+      const sources = new Map(held.agentId === agentId ? held.sources : undefined);
+
+      if (source === undefined) sources.delete(pictureId);
+      else sources.set(pictureId, source);
+
+      return { agentId, sources };
+    });
 
   const [reads, setReads] = useState<MediaReads | undefined>(undefined);
 
@@ -308,15 +336,13 @@ export function useAgentMedia(
   useEffect(() => {
     const standing = mediaReads({
       read: (pictureId) => agentMediaSource(acts, agentId, pictureId),
-      landed: (pictureId, source) =>
-        setShown((held) => ({
-          agentId,
-          sources: new Map(held.agentId === agentId ? held.sources : undefined).set(
-            pictureId,
-            source,
-          ),
-        })),
-      failed: (pictureId, cause, again) => mediaReadFailed(agentId, pictureId, cause, again),
+      landed: (pictureId, source) => stand(pictureId, source),
+      // Note that a read whose every try failed stands failed, so it says so with Try again rather than spinning on.
+      failed: (pictureId, cause, again) => {
+        mediaReadFailed(agentId, pictureId, cause, again);
+
+        if (!again) stand(pictureId, null);
+      },
       pause: paused,
     });
 
@@ -327,7 +353,84 @@ export function useAgentMedia(
 
   useEffect(() => reads?.ask(ids), [reads, ids]);
 
-  return shown.agentId === agentId ? shown.sources : NO_SOURCES;
+  const retry = (pictureId: string) => {
+    stand(pictureId, undefined);
+    // Note that a read whose every try failed is let go (`mediaReads`), so asking for it again reads it afresh.
+    reads?.ask([pictureId]);
+  };
+
+  return { sources: shown.agentId === agentId ? shown.sources : NO_SOURCES, retry };
+}
+
+/**
+ * Where each file the agent's sent lines carried was written for its chip,
+ * by the line's message and the file's place on it: the line's own bytes,
+ * written once under the app's caches (`cachedFile`), each in a folder of
+ * its own place, since two files of one line may share a name, and the PDF
+ * viewer and the share sheet open a file on the device. One being written
+ * is absent, and one that could not be written is `null`, which its chip
+ * says, offering `retry`. Note that each is written once while the page
+ * stands, however often the transcript moves, and that a write that lands
+ * after the page left is dropped.
+ */
+export function useSentFiles(files: readonly ShownFile[]): SentFileSources {
+  const [written, setWritten] = useState<SentFiles>(new Map());
+  const [round, setRound] = useState(0);
+  const asked = useRef(new Map<string, Set<string>>());
+  const standing = useRef(true);
+
+  useEffect(() => {
+    standing.current = true;
+
+    return () => {
+      standing.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const land = (message: string, key: string, source: string | null) => {
+      if (!standing.current) return;
+
+      setWritten((held) => {
+        const next = new Map(held);
+        next.set(message, new Map(held.get(message)).set(key, source));
+
+        return next;
+      });
+    };
+
+    for (const { message, file } of files) {
+      const keys = asked.current.get(message) ?? new Set<string>();
+
+      if (keys.has(file.key) || file.base64 === undefined) continue;
+      keys.add(file.key);
+      asked.current.set(message, keys);
+
+      cachedFile(SENT_FILE_PREFIX, message, file.name, file.mediaType, file.base64, file.key).then(
+        (source) => land(message, file.key, source),
+        (cause: unknown) => {
+          console.error(`A file sent to the agent was not written (message ${message}). ${cause}`);
+          land(message, file.key, null);
+        },
+      );
+    }
+    // Note that `round` is read so a retry, which forgets the file's ask, writes it again.
+  }, [files, round]);
+
+  const retry = (message: string, key: string) => {
+    asked.current.get(message)?.delete(key);
+    setWritten((held) => {
+      const next = new Map(held);
+      const kept = new Map(held.get(message));
+      kept.delete(key);
+      next.set(message, kept);
+
+      return next;
+    });
+    setRound((at) => at + 1);
+  };
+
+  return { source: (message, key) => written.get(message)?.get(key), retry };
 }
 
 /** A cut part's whole read as held: the size it was asked at, and how it stands. */
