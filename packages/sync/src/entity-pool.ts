@@ -707,39 +707,34 @@ function cut<Row>(kept: KeptRead<Row>, rows: readonly Row[]): readonly Row[] {
 }
 
 /**
- * A kept read's answer handed `store`: the synced rows of its cut that moved
- * since it last answered, the keys the cut holds, and its cursor where the
- * cut holds every row.
+ * A kept read's answer as the store is handed it, read the moment the answer
+ * is taken: the synced rows of its cut that moved since it last answered, the
+ * keys the cut holds, and its cursor where the cut holds every row.
  */
 function reported<Row extends object, Change>(
   rows: KindRows<Row, Change>,
   holding: Holding<Row, Change>,
-  store: RowsStore,
+  kept: KeptRead<Row>,
   { cursor }: Answered,
-): Effect.Effect<void> {
-  return Effect.suspend(() => {
-    const kept = holding.read.kept;
+): KeptAnswer {
+  const synced = rows.synced.held();
+  const all = [...holding.held].flatMap((key) => synced.get(key) ?? []);
+  const keptRows = cut(kept, all);
+  const next = new Map(keptRows.map((row) => [rows.kind.key(row), row]));
+  const changes = rowChanges(holding.reported, next);
+  holding.reported = next;
 
-    if (kept === undefined) return Effect.void;
-    const synced = rows.synced.held();
-    const all = [...holding.held].flatMap((key) => synced.get(key) ?? []);
-    const keptRows = cut(kept, all);
-    const next = new Map(keptRows.map((row) => [rows.kind.key(row), row]));
-    const changes = rowChanges(holding.reported, next);
-    holding.reported = next;
-
-    return store.answered({
-      read: kept.name,
-      kind: kept.kind,
-      workspace: kept.workspace,
-      upserted: changes.flatMap((change) =>
-        change.type === "delete" ? [] : [{ key: rows.kind.key(change.value), row: change.value }],
-      ),
-      deleted: changes.flatMap((change) => (change.type === "delete" ? [change.key] : [])),
-      held: [...next.keys()],
-      cursor: keptRows.length === all.length ? cursor : undefined,
-    });
-  });
+  return {
+    read: kept.name,
+    kind: kept.kind,
+    workspace: kept.workspace,
+    upserted: changes.flatMap((change) =>
+      change.type === "delete" ? [] : [{ key: rows.kind.key(change.value), row: change.value }],
+    ),
+    deleted: changes.flatMap((change) => (change.type === "delete" ? [change.key] : [])),
+    held: [...next.keys()],
+    cursor: keptRows.length === all.length ? cursor : undefined,
+  };
 }
 
 /** `read` stood on `rows` for the caller's scope, its keys let go as the scope closes and any row no other read holds with them. */
@@ -782,7 +777,8 @@ function stood<Row extends object, Change>(
       answer: (answered, how = {}) => {
         const { held, gone, at } = how;
 
-        const taken = Effect.suspend(() => {
+        // Note that each branch commits at once and answers the draws it owes, so a kept answer is read before any other read is drawn and another answer can land.
+        const committed = (): Effect.Effect<readonly string[]> => {
           const keyed = new Map(answered.map((row) => [rows.kind.key(row), row]));
 
           if (gone !== undefined) return movedOnly(rows, holding, keyed, gone, at);
@@ -804,14 +800,23 @@ function stood<Row extends object, Change>(
             ...[...was].filter((key) => !keys.has(key)),
           ];
 
-          return Effect.map(takenAndDrawn(rows, next, holding), (written) => [
+          const written = rows.synced.take(next);
+
+          return Effect.as(redrawn(holdersOf(rows.reads, written, holding), written), [
             ...new Set([...written, ...placed]),
           ]);
-        });
+        };
 
-        return store === undefined || read.kept === undefined
-          ? taken
-          : Effect.tap(taken, () => reported(rows, holding, store, how));
+        return Effect.suspend(() => {
+          const drawn = committed();
+          const { kept } = read;
+
+          if (store === undefined || kept === undefined) return drawn;
+          const answer = reported(rows, holding, kept, how);
+
+          // Note that the store is told before any read is drawn, so it hears answers in the order they were taken, and uninterruptibly, so its baseline never runs ahead of it.
+          return Effect.andThen(Effect.uninterruptible(store.answered(answer)), drawn);
+        });
       },
       holds: (key) => shows(holding, key),
       rows: () => shown(holding).flatMap((key) => drawnRow(rows, key) ?? []),
