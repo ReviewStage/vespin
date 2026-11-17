@@ -1303,7 +1303,7 @@ test("a reply's field empties as it is sent and takes the next at once, each sen
   assert.notEqual(keys[2], keys[1]);
 });
 
-test("a thread being started keeps its words marked and its card in place, taking nothing, until the thread it was sent as is drawn, which takes over open, and words refused come back into its field", async () => {
+test("a thread being started keeps its words marked and its card in place, taking nothing, until the thread it was sent as is drawn, which takes over open, and words refused come back into its field, or stand as not sent where it moved on to other words", async () => {
   const answers: PromiseWithResolvers<{ note: string }>[] = [];
 
   const { container, started, rethread } = wide(() =>
@@ -1383,6 +1383,24 @@ test("a thread being started keeps its words marked and its card in place, takin
   });
   await act(async () => answers[1]?.resolve({ note: "not posted" }));
   assert.equal(wordsIn(field()), "Or a code?", "words refused come back into the field");
+
+  // A thread started on other words while the words are out keeps its own, and the words refused stand as not sent on theirs.
+  act(() => {
+    field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+
+  const goal = [...container.querySelectorAll("p")].find((p) =>
+    p.textContent?.startsWith("An admin invites"),
+  );
+
+  act(() => goal?.dispatchEvent(new Event("pointerover", { bubbles: true })));
+  act(() => container.querySelector<HTMLButtonElement>(".comment-block-button button")?.click());
+  typeInto(field(), "Other words");
+  await act(async () => answers[2]?.resolve({ note: "not posted" }));
+  assert.equal(wordsIn(field()), "Other words");
+
+  comment();
+  assert.equal(pending()?.querySelector("[data-unsent] .comment-words")?.textContent, "Or a code?");
 });
 
 test("a thread's resolve reads as its writer's own line, drawn as a comment's head, an agent of another task named as the workspace's list names it, and an empty tab says how a thread starts", async () => {

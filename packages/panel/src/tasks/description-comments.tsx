@@ -1257,6 +1257,9 @@ function ReplyField({
   // The words the field holds this moment, for a send's answer that lands after the render it was made in.
   const wordsNow = useRef(words);
   wordsNow.current = words;
+  // Where the field keeps its words this moment, since a thread being started on other words draws in the same field.
+  const placeNow = useRef(place);
+  placeNow.current = place;
   // Whether the field still stands, since sends refused after their thread closed have no field to come back into.
   const standing = useRef(true);
   useEffect(() => {
@@ -1272,7 +1275,10 @@ function ReplyField({
     const [first] = sends;
 
     if (first === undefined) return;
-    attempt.current = first;
+    // Note that a send refused after the field moved on to other words stands apart under its own place, its key with it, so neither draft takes the other's.
+    const moved = !Equal.equals(placeNow.current, place);
+
+    if (!moved) attempt.current = first;
     const typed = wordsNow.current;
 
     const back = {
@@ -1280,7 +1286,7 @@ function ReplyField({
       attachments: [...first.attachments, ...files.now()],
     };
 
-    if (sends.length > 1 || !standing.current || !carried(back)) {
+    if (sends.length > 1 || !standing.current || moved || !carried(back)) {
       addUnsent(sends);
 
       return;
