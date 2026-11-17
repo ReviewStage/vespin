@@ -770,7 +770,7 @@ export function NewAgentScreen({
         talk={
           talk === undefined || drafted || opened !== undefined
             ? undefined
-            : { talk, ready: !starting }
+            : { talk, ready: talk.ready && !starting }
         }
       />
       <FocusedComposeSheet
@@ -1126,7 +1126,7 @@ export function NewTaskScreen({
         talk={
           talk === undefined || drafted || pictures.opening
             ? undefined
-            : { talk, ready: placed && !starting }
+            : { talk, ready: talk.ready && placed && !starting }
         }
       />
       <FocusedComposeSheet

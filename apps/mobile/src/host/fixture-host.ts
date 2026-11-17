@@ -13,7 +13,9 @@
  * the host wrote it, and a document already staged is handed nothing new.
  */
 
+import { signedInAccountId } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { LIVE_READ } from "@repo/features/live-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { markedAs, type ReadMark, type ReadMarked } from "@repo/features/read-mark";
 import {
@@ -198,6 +200,20 @@ function stagedNetwork(held: AppStateSnapshot, updateNeeded: boolean): AppStateS
 }
 
 /**
+ * The account's saved keys as the fixture holds them: read, with none saved,
+ * so Talk in a new agent's sheet answers a press as an account with no
+ * OpenAI key does; the slice held where no account is signed in.
+ */
+function stagedKeys(held: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ.PROVIDER_KEYS] {
+  const accountId = signedInAccountId(held.account);
+  const keys = held[LIVE_READ.PROVIDER_KEYS];
+
+  if (accountId === undefined || keys[accountId]?.rows !== undefined) return keys;
+
+  return { ...keys, [accountId]: { rows: { keys: [], subscriptions: [] } } };
+}
+
+/**
  * Lays the fixture profile's data over the host's document; nothing in a
  * live run. Where `updateNeeded`, as `-updateNeeded true` asks, the network
  * stands as the service's refusal of an old build leaves it, so a flow
@@ -251,6 +267,7 @@ export function stageFixture(
     ...reminded,
     tasks: listed.tasks,
     network: stagedNetwork(held, updateNeeded),
+    [LIVE_READ.PROVIDER_KEYS]: stagedKeys(held),
   };
 
   state.update(stagedPatch(held, staged), listed.lists);
