@@ -31,6 +31,8 @@ export const QUERY_ROOT = {
   WORKSPACE_SANDBOX_SETUP: "workspace-sandbox-setup",
   /** A workspace's cloud sandbox size and the most it may choose (`workspace-sandbox-size.ts`). */
   WORKSPACE_SANDBOX_SIZE: "workspace-sandbox-size",
+  /** A workspace's billing as its owners and admins read it (`billing.ts`). */
+  WORKSPACE_BILLING: "workspace-billing",
   /** The Merge queue page: every pull request a workspace's merge queues hold (`desktop/merge-queue-page.tsx`). */
   MERGE_QUEUE: "merge-queue",
   /** The machines of a workspace's members, as the `@` list offers them and a machine's chip names its owner (`tasks/workspace-machines.tsx`). */
@@ -113,6 +115,7 @@ const ACCOUNT_SCOPED_ROOTS: ReadonlySet<unknown> = new Set<string>([
   QUERY_ROOT.WORKSPACE_ENVIRONMENT,
   QUERY_ROOT.WORKSPACE_SANDBOX_SETUP,
   QUERY_ROOT.WORKSPACE_SANDBOX_SIZE,
+  QUERY_ROOT.WORKSPACE_BILLING,
   QUERY_ROOT.MERGE_QUEUE,
   QUERY_ROOT.MACHINE_ALLOWED_APPS,
   QUERY_ROOT.WORKSPACE_MACHINES,

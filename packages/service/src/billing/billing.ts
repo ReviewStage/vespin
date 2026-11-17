@@ -16,9 +16,11 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
+import { workspaceMonthTotals } from "@repo/database/models/usage-charges";
 import { workspaceBilling } from "@repo/database/models/workspace-billing";
+import { billableMicroUsd, INCLUDED_USAGE_MICRO_USD } from "@repo/database/usage-vocabulary";
 import type { BillingSessionAnswer, BillingStatusAnswer } from "@repo/features/billing-wire";
-import { Effect, Option } from "effect";
+import { Clock, Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { managedWorkspace } from "../accounts/workspace-access.js";
 import { deploymentOrigin } from "../deployment-origin.js";
@@ -55,7 +57,7 @@ const liveStripe = Effect.fn("web/liveStripe")(function* () {
   return { key: stripeSecretKey, returnUrl: `${origin}${RETURN_PATH}` };
 });
 
-/** Whether billing is on, and whether the workspace has set it up and is blocked. */
+/** Whether billing is on, whether the workspace has set it up and is blocked, and what this month's usage stands at against the included allowance. */
 export const billingStatus = Effect.fn("web/billingStatus")(function* (
   userId: string,
   workspaceId: string,
@@ -67,10 +69,17 @@ export const billingStatus = Effect.fn("web/billingStatus")(function* (
     yield* hostedStoreOrUnavailable(workspaceBilling(workspace.id)),
   );
 
+  const now = yield* Clock.currentTimeMillis;
+  const usage = yield* hostedStoreOrUnavailable(workspaceMonthTotals(workspace.id, new Date(now)));
+  const totalMicroUsd = usage.reduce((sum, each) => sum + each.amountMicroUsd, 0);
+
   return {
     live,
     setUp: billing?.stripeCustomerId != null,
     blocked: billing?.blockedAt != null,
+    usage,
+    includedMicroUsd: INCLUDED_USAGE_MICRO_USD,
+    owedMicroUsd: billableMicroUsd(totalMicroUsd),
   };
 });
 

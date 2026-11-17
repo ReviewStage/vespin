@@ -203,6 +203,9 @@ export interface WorkspacesClient {
     | "putRunActions"
     | "sandboxSize"
     | "putSandboxSize"
+    | "billingStatus"
+    | "billingSetup"
+    | "billingPortal"
     | "changeRole"
     | "transfer"
     | "leave"
@@ -1592,6 +1595,26 @@ function workspaceSandboxSizeActs(
   };
 }
 
+/** A workspace's billing's acts: read as Settings opens it, and the Stripe pages that set it up and manage it, whose addresses are answered to the procedures that open them. */
+function workspaceBillingActs(
+  reach: WorkspacesReach,
+): Pick<
+  HostActTable<typeof WORKSPACE_ACTS>,
+  "WORKSPACE_BILLING_STATUS" | "WORKSPACE_BILLING_SETUP" | "WORKSPACE_BILLING_PORTAL"
+> {
+  const { client } = reach.dependencies;
+
+  // Note that nothing of billing is held here, because the status is asked on each open and an address opens once.
+  return {
+    WORKSPACE_BILLING_STATUS: ({ workspaceId }) =>
+      workspaceAsked(reach, client.workspaces.billingStatus(workspaceId)),
+    WORKSPACE_BILLING_SETUP: ({ workspaceId }) =>
+      workspaceAsked(reach, client.workspaces.billingSetup(workspaceId)),
+    WORKSPACE_BILLING_PORTAL: ({ workspaceId }) =>
+      workspaceAsked(reach, client.workspaces.billingPortal(workspaceId)),
+  };
+}
+
 /** The per-workspace reads the windows hold (`WORKSPACE_FOLLOWS`), each by the workspace its key names. */
 function workspaceFollowActs({
   people,
@@ -1683,6 +1706,7 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
       ...workspaceEnvironmentActs(reach),
       ...workspaceSandboxSetupActs(reach),
       ...workspaceSandboxSizeActs(reach),
+      ...workspaceBillingActs(reach),
       ...workspaceMergeQueueActs(reach),
       ...workspaceMachinesActs(reach),
       ...github.acts,

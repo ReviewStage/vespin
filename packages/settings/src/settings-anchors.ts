@@ -63,6 +63,10 @@ export const SETTINGS_SEARCH_ROW = {
   EXPERIMENTS_WORKSPACE: "experiments-workspace",
   /** Settings › Experimental's group of the experiments the account chooses for itself alone. */
   EXPERIMENTS_ACCOUNT: "experiments-account",
+  /** Billing's Usage: this month's usage against the included allowance, and what is owed past it. */
+  BILLING_USAGE: "billing-usage",
+  /** Billing's own section: where billing stands, and where it is set up and managed. */
+  BILLING_STATUS: "billing-status",
   /** Cloud environment's Sandbox, the size every cloud agent's sandbox in the workspace opens with. */
   ENVIRONMENT_SANDBOX: "environment-sandbox",
   /** Cloud environment's Variables, the workspace's variables its cloud agents start with. */

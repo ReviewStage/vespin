@@ -12,6 +12,7 @@ import {
 } from "@repo/database/models/workspace-billing";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
+import { INCLUDED_USAGE_MICRO_USD } from "@repo/database/usage-vocabulary";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { Effect, Layer, Redacted } from "effect";
 import { afterEach, vi } from "vitest";
@@ -80,6 +81,9 @@ it.layer(getTestDB())("a workspace's billing", (it) => {
           live: false,
           setUp: false,
           blocked: false,
+          usage: [],
+          includedMicroUsd: INCLUDED_USAGE_MICRO_USD,
+          owedMicroUsd: 0,
         });
         assert.deepEqual(
           yield* billingSetup(owner, acme).pipe(Effect.provide(services), Effect.flip),

@@ -913,6 +913,12 @@ export const WORKSPACE_ACT_KIND = {
   /** A workspace's cloud sandbox size, read once as Settings › Cloud environment opens; a choice by an owner or admin answers the size as it then stands. */
   WORKSPACE_SANDBOX_SIZE_READ: "workspace.sandboxSizeRead",
   WORKSPACE_SANDBOX_SIZE_PUT: "workspace.sandboxSizePut",
+  /** A workspace's billing as its owners and admins read it, read as Settings › Billing opens: whether billing is on, set up, or blocked, and this month's usage. */
+  WORKSPACE_BILLING_STATUS: "workspace.billingStatus",
+  /** Stripe's Checkout page where a workspace's billing is set up, opened in the browser. */
+  WORKSPACE_BILLING_SETUP: "workspace.billingSetup",
+  /** Stripe's Customer Portal page where a workspace's card is changed and its invoices read, opened in the browser. */
+  WORKSPACE_BILLING_PORTAL: "workspace.billingPortal",
   /** Every pull request GitHub's merge queues hold across a workspace's repositories, read as the Merge queue page opens and again while it stands; refused while the account's Merge queue experiment is off. */
   WORKSPACE_MERGE_QUEUE_READ: "workspace.mergeQueueRead",
   /** The machines of a workspace's members, as the @ list offers them and a machine's chip names its owner, read as a place drawing them opens. */
@@ -1383,6 +1389,9 @@ export const PORT_ACT_USE = {
   WORKSPACE_RUN_ACTIONS_PUT: ACT_USE.WRITE,
   WORKSPACE_SANDBOX_SIZE_READ: ACT_USE.FETCH,
   WORKSPACE_SANDBOX_SIZE_PUT: ACT_USE.WRITE,
+  WORKSPACE_BILLING_STATUS: ACT_USE.FETCH,
+  WORKSPACE_BILLING_SETUP: ACT_USE.WRITE,
+  WORKSPACE_BILLING_PORTAL: ACT_USE.WRITE,
   WORKSPACE_MERGE_QUEUE_READ: ACT_USE.FETCH,
   WORKSPACE_MACHINES_READ: ACT_USE.FETCH,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;
