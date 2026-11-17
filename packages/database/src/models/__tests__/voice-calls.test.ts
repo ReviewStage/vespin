@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { TASK_PRIORITY } from "@repo/features/task-wire";
 import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE } from "@repo/wire";
 import { eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
@@ -150,6 +151,15 @@ it.layer(getTestDB())("the row a voice call keeps", (it) => {
         assert.deepEqual(yield* standing(fromHome.agent.id, untitled.id), {
           agent: false,
           task: false,
+        });
+
+        // A task the member weighed while the call stood is theirs, so it stands.
+        const weighed = yield* startTask(callerId, { priority: TASK_PRIORITY.HIGH });
+        const onWeighed = yield* callOnNewAgent(callerId, weighed.id, HANDED.BLANK);
+        yield* endVoiceCall(callerId, onWeighed.call.id);
+        assert.deepEqual(yield* standing(onWeighed.agent.id, weighed.id), {
+          agent: false,
+          task: true,
         });
 
         // Talk on a task of the member's own: the agent goes and the task stands.
