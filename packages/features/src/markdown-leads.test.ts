@@ -15,6 +15,11 @@ describe("markdownLeads", () => {
       "A **bold\nclaim** here.\n\n```ts\nconst a = 1;\n```",
       ["A **bold\nclaim** here.", "A **bold\nclaim** here.\n\n```ts\nconst a = 1;\n```"],
     ],
+    [
+      "a leading indented code block keeps its indent, so it stays code",
+      "\n    **literal**\n\nAfter.",
+      ["    **literal**", "    **literal**\n\nAfter."],
+    ],
   ])("%s", (_, markdown, leads) => {
     expect(markdownLeads(markdown)).toEqual(leads);
   });

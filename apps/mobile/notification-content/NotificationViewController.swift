@@ -8,7 +8,8 @@
 // renderer stands them (headings in semibold, list items led by their bullet
 // or number, a quote beside its rule, code in the well in monospace, a
 // table's cells on one line), its links in the ink. A push with no
-// `markdown`, as an older service's, draws the alert's body.
+// `markdown`, as an older service's or one whose first block passed Apple's
+// bound, draws the alert's body as it stands, read as plain words.
 //
 // A decide's options become this notification's own buttons
 // (`notificationActions`), named by each option's place, 0 first, which the
@@ -198,8 +199,7 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
 
   func didReceive(_ notification: UNNotification) {
     let content = notification.request.content
-    let markdown = content.userInfo["markdown"] as? String ?? content.body
-    shown = PostView(title: content.title, blocks: PostMarkdown.blocks(markdown))
+    shown = PostView(title: content.title, blocks: Self.blocks(of: content))
     host.rootView = PostView(title: shown.title, blocks: shown.blocks, fills: true)
     if content.categoryIdentifier == Self.decideCategory,
       let options = content.userInfo["options"] as? [String], !options.isEmpty
@@ -209,6 +209,15 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
       }
     }
     fit()
+  }
+
+  /// The post's blocks: its Markdown where the push carries it, else the alert's body as one paragraph, its words as said.
+  private static func blocks(of content: UNNotificationContent) -> [PostBlock] {
+    if let markdown = content.userInfo["markdown"] as? String {
+      return PostMarkdown.blocks(markdown)
+    }
+    // Note that the body is plain text, never read as Markdown, since a bracket or star in it is a word the post said.
+    return [PostBlock(id: 0, kind: .paragraph, depth: 0, quoted: false, words: AttributedString(content.body))]
   }
 
   override func viewDidLayoutSubviews() {
