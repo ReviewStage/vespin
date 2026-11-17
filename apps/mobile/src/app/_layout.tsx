@@ -18,10 +18,11 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
-import { type ReactElement, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactElement, type ReactNode, useMemo } from "react";
 import { useColorScheme } from "react-native";
 import { MachineAsks } from "../agents/machine-asks.js";
 import { useCrashReportAccount } from "../crash-reports.js";
+import { useFocusShown } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
 import { useHostConnectLink } from "../host-connect-link.js";
@@ -89,38 +90,9 @@ const LIFTED_SHEETS: ReadonlySet<string> = new Set(Object.values(SHEET_ROUTE));
 /** The presentations that stand a screen in a sheet over the root, which would hide a notice drawn there. */
 const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set(["modal", "formSheet"]);
 
-/** What a root screen's layout is told of its screen's place in the stack: whether it is the one in front, and when that changes. */
-interface ScreenFocus {
-  readonly isFocused: () => boolean;
-  readonly addListener: (event: "focus" | "blur", listener: () => void) => () => void;
-}
-
-/** Whether the screen `navigation` names is the one in front, followed as it comes forward and goes behind. */
-function useScreenInFront(navigation: ScreenFocus): boolean {
-  const [inFront, setInFront] = useState(() => navigation.isFocused());
-
-  useEffect(() => {
-    const comes = navigation.addListener("focus", () => setInFront(true));
-    const goes = navigation.addListener("blur", () => setInFront(false));
-
-    return () => {
-      comes();
-      goes();
-    };
-  }, [navigation]);
-
-  return inFront;
-}
-
-/** A sheet's place for the failure notice, which holds the notice only while the sheet is in front, so a page opened over it, as a notification opens one, shows its own refusals. */
-function SheetNoticeLayer({
-  navigation,
-  children,
-}: {
-  readonly navigation: ScreenFocus;
-  readonly children: ReactNode;
-}) {
-  return <FailureNoticeLayer inFront={useScreenInFront(navigation)}>{children}</FailureNoticeLayer>;
+/** A sheet's place for the failure notice, which holds the notice only while the sheet is in front, so a page opened over it, as a notification opens one, shows its own refusals. Note that a screen's layout draws inside its screen's navigation, so `useFocusShown` hears the sheet's own focus. */
+function SheetNoticeLayer({ children }: { readonly children: ReactNode }) {
+  return <FailureNoticeLayer inFront={useFocusShown()}>{children}</FailureNoticeLayer>;
 }
 
 /**
@@ -136,7 +108,6 @@ function SheetNoticeLayer({
 function screenLayout({
   route,
   options,
-  navigation,
   children,
 }: {
   readonly route: { readonly name: string };
@@ -144,11 +115,10 @@ function screenLayout({
     readonly presentation?: string | undefined;
     readonly sheetAllowedDetents?: unknown;
   };
-  readonly navigation: ScreenFocus;
   readonly children: ReactElement;
 }): ReactElement {
   const placed = SHEET_PRESENTATIONS.has(options.presentation) ? (
-    <SheetNoticeLayer navigation={navigation}>{children}</SheetNoticeLayer>
+    <SheetNoticeLayer>{children}</SheetNoticeLayer>
   ) : (
     children
   );
