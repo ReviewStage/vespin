@@ -12,7 +12,6 @@ import {
   type AccessibilityActionEvent,
   ActivityIndicator,
   Image,
-  Modal,
   ScrollView,
   type ScrollViewInstance,
   StyleSheet,
@@ -23,7 +22,6 @@ import {
   View,
   type ViewStyle,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AudioClip } from "./audio-clip.js";
 import { ChipMarkView, ChipSymbol, useChipMarkOf } from "./chip-mark.js";
 import type { ChipMarkOf } from "./chip-mark-model.js";
@@ -31,9 +29,9 @@ import { DiagramBlock, DiagramRenderer } from "./diagram.js";
 import { DraftCard } from "./draft-card.js";
 import { FileChip } from "./file-chip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
-import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
+import { HeldMenu, useKeptActs, useQuickLook } from "./held-menu.js";
 import { ISSUE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { KEPT_KIND } from "./keep-model.js";
+import { KEPT_KIND, type Kept } from "./keep-model.js";
 import {
   COLUMN_ALIGN,
   type ColumnAlign,
@@ -212,9 +210,6 @@ const styles = StyleSheet.create({
   },
   picture: { width: "100%", borderRadius: RADIUS.BLOCK },
   pending: { alignItems: "center", justifyContent: "center" },
-  viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
-  viewerClose: { position: "absolute", padding: SPACE.ROW },
-  viewerKeep: { position: "absolute", padding: SPACE.ROW },
 });
 
 /** What drawing a run needs beyond the run: the colors, the reader's text scale, and the doors a press opens. */
@@ -1033,9 +1028,6 @@ function CodeView({ text, drawing }: { readonly text: string; readonly drawing: 
   );
 }
 
-/** The most a full-screen picture zooms in to, as a pinch takes it. */
-const VIEWER_MAX_ZOOM = 4;
-
 /** What a picture that could not be read is heard as, its own words first, as the panel's stand-in says it. */
 function unreadWords(alt: string): string {
   return `${alt.trim() === "" ? "This picture" : alt} ${MEDIA_READ_WORDS.COULD_NOT_READ}`;
@@ -1059,14 +1051,14 @@ type PictureProps = {
 };
 
 /**
- * A picture at its message's width, which a press opens full screen over
- * everything, where a pinch zooms it and Done closes it. Done stands at the
- * leading top corner inside the safe area, as Quick Look's does, clear of
- * what the system draws at the trailing corner: the clock of the folded
- * iPhone Duo's outer display, beside its rail. Note that a picture
- * still on its way stands as its well at the shape a picture most often
- * is, the system's spinner in it as Photos stands one, so the words under
- * it do not jump twice and it never reads as an empty box.
+ * A picture at its message's width, which a press opens full screen in the
+ * system's Quick Look, as Messages and Mail open one, where a swipe down
+ * closes it, a double tap or a pinch zooms it, and
+ * its share button copies, saves or shares it. A long press offers the same
+ * acts in place. Note that a picture still on its way stands as its well at
+ * the shape a picture most often is, the system's spinner in it as Photos
+ * stands one, so the words under it do not jump twice and it never reads as
+ * an empty box.
  */
 export function Picture({
   source,
@@ -1078,15 +1070,14 @@ export function Picture({
   bounds,
 }: PictureProps) {
   const colors = useColors();
-  const { width, height } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
   const [natural, setNatural] = useState<MediaSize | undefined>(undefined);
-  const [full, setFull] = useState(false);
   const heard = alt === "" ? "Picture" : alt;
 
-  const acts = useKeptActs(
-    source == null ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard },
-  );
+  const kept: Kept | undefined =
+    source == null ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard };
+
+  const acts = useKeptActs(kept);
+  const show = useQuickLook(kept);
 
   // Note that a tile fills its tile at the tile's shape, and any other picture stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
   const frame = tileAspect === undefined ? mediaFrame(size ?? natural, bounds) : undefined;
@@ -1121,75 +1112,31 @@ export function Picture({
   }
 
   return (
-    <>
-      <MediaBox frame={frame}>
-        <HeldMenu acts={acts}>
-          <Press
-            onPress={() => setFull(true)}
-            accessibilityRole="imagebutton"
-            accessibilityLabel={heard}
-            accessibilityHint="Opens full screen"
-          >
-            <Image
-              source={{ uri: source }}
-              resizeMode={fill ? "cover" : "contain"}
-              onLoad={(event) => {
-                const loaded = event.nativeEvent.source;
+    <MediaBox frame={frame}>
+      <HeldMenu acts={acts}>
+        <Press
+          onPress={show}
+          disabled={show === undefined}
+          accessibilityRole="imagebutton"
+          accessibilityLabel={heard}
+          accessibilityHint="Opens full screen"
+          testID="markdown-picture"
+        >
+          <Image
+            source={{ uri: source }}
+            resizeMode={fill ? "cover" : "contain"}
+            onLoad={(event) => {
+              const loaded = event.nativeEvent.source;
 
-                if (loaded.width > 0 && loaded.height > 0) {
-                  setNatural({ width: loaded.width, height: loaded.height });
-                }
-              }}
-              style={well}
-            />
-          </Press>
-        </HeldMenu>
-      </MediaBox>
-      <Modal
-        visible={full}
-        animationType="fade"
-        presentationStyle="overFullScreen"
-        supportedOrientations={["portrait", "landscape"]}
-        onRequestClose={() => setFull(false)}
-      >
-        <View style={styles.viewer} accessibilityViewIsModal>
-          <ScrollView
-            maximumZoomScale={VIEWER_MAX_ZOOM}
-            minimumZoomScale={1}
-            bouncesZoom
-            centerContent
-            showsHorizontalScrollIndicator={false}
-            showsVerticalScrollIndicator={false}
-          >
-            <Image
-              source={{ uri: source }}
-              resizeMode="contain"
-              accessibilityLabel={heard}
-              style={{ width, height }}
-            />
-          </ScrollView>
-          <Press
-            onPress={() => setFull(false)}
-            accessibilityRole="button"
-            accessibilityLabel="Done"
-            testID="markdown-picture-done"
-            style={[styles.viewerClose, { top: insets.top, left: insets.left + SPACE.ROW }]}
-          >
-            <Text style={{ fontSize: TEXT_SIZE.BODY, fontWeight: "600", color: "white" }}>
-              Done
-            </Text>
-          </Press>
-          <View
-            style={[
-              styles.viewerKeep,
-              { bottom: insets.bottom + SPACE.ROW, left: insets.left + SPACE.ROW },
-            ]}
-          >
-            <HeldActsButton acts={acts} />
-          </View>
-        </View>
-      </Modal>
-    </>
+              if (loaded.width > 0 && loaded.height > 0) {
+                setNatural({ width: loaded.width, height: loaded.height });
+              }
+            }}
+            style={well}
+          />
+        </Press>
+      </HeldMenu>
+    </MediaBox>
   );
 }
 

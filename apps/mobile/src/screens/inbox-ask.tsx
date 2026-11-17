@@ -53,7 +53,12 @@ import { Predicate } from "effect";
 import { type ReactNode, useMemo, useState } from "react";
 import { useFocusShown } from "../focus-shown.js";
 import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
-import { attachedFiles, pickPictures, takePictures } from "../use-attached-pictures.js";
+import {
+  attachedFiles,
+  PICKER_FAILED,
+  pickPictures,
+  takePictures,
+} from "../use-attached-pictures.js";
 import { REMIND_ME } from "./inbox-remind.js";
 
 /** The ⋯ menu a thread's bar holds. */
@@ -338,7 +343,11 @@ export function ThreadComposer({
         });
         setPictureNote(note);
       })
-      .catch((cause: unknown) => console.error("The photo picker did not open.", cause));
+      // Note that a picker that did not open says so in the box's head, as a refusal does, rather than leaving the press unanswered.
+      .catch((cause: unknown) => {
+        console.error("The photo picker did not open.", cause);
+        setPictureNote(PICKER_FAILED);
+      });
   };
 
   const detach = (name: string) => {

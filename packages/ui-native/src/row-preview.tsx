@@ -149,7 +149,7 @@ function PreviewMessageRow({
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
       <HStack spacing={SPACE.TIGHT + 2} alignment="center">
         {message.agent ? (
-          <AgentTile name={message.writer} harness={message.harness} size={MARK_SIZE.WRITER} />
+          <AgentTile harness={message.harness} size={MARK_SIZE.WRITER} />
         ) : (
           <Avatar name={message.writer} picture={message.picture} size={MARK_SIZE.WRITER} />
         )}
@@ -238,7 +238,7 @@ function PreviewAgentRow({ agent }: { readonly agent: PreviewAgent }) {
 
   return (
     <HStack spacing={SPACE.TIGHT + 2} alignment="center">
-      <AgentTile name={agent.name} harness={agent.harness} size={MARK_SIZE.WRITER} />
+      <AgentTile harness={agent.harness} size={MARK_SIZE.WRITER} />
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
@@ -363,7 +363,7 @@ export function AgentPreview({
         />
       )}
       <HStack spacing={SPACE.ROW} alignment="center">
-        <AgentTile name={name} harness={harness} size={MARK_SIZE.AVATAR} />
+        <AgentTile harness={harness} size={MARK_SIZE.AVATAR} />
         <PreviewHeading words={name} />
       </HStack>
       <HStack spacing={SPACE.TIGHT + 2} alignment="center">

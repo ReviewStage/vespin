@@ -7,18 +7,22 @@
  */
 
 import { randomUUID } from "expo-crypto";
+import { Directory, File, Paths } from "expo-file-system";
 import { openURL } from "expo-linking";
 import { openDatabaseSync } from "expo-sqlite";
 import { AppState } from "react-native";
 import { openSignInSheet, webAuthSession } from "./auth-session.js";
 import type { DeviceSeams } from "./compose-mobile.js";
-import { expoFileSystem } from "./expo-file-system.js";
+import { expoFileSystem, hostStateRootIn } from "./expo-file-system.js";
 import { expoSqliteDriver } from "./expo-sqlite-driver.js";
 import { keychainCipher } from "./keychain-cipher.js";
 import { openRelaySocket } from "./relay-socket.js";
 import { keepShareToken } from "./share-token-module.js";
 
-export { hostStateRoot } from "./expo-file-system.js";
+/** The folder the host's files stand in: `host` under the app's Documents. */
+export function hostStateRoot(): string {
+  return hostStateRootIn(Paths.document.uri);
+}
 
 /**
  * Whether the app is in the foreground, as React Native's `AppState` says
@@ -35,7 +39,7 @@ function onAppActiveChanged(listener: (active: boolean) => void): () => void {
 /** The device as the host reads it. */
 export function deviceSeams(): DeviceSeams {
   return {
-    fileSystem: expoFileSystem(),
+    fileSystem: expoFileSystem({ File, Directory }),
     createId: () => randomUUID(),
     // An address outside the app opens in the system's own handler for it, and a sign-in in the authentication sheet (`openSignInSheet`).
     openExternal: async (url, landing) => {

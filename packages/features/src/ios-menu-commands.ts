@@ -26,6 +26,8 @@ export const MENU_COMMAND = {
   PREVIOUS_ITEM: "previousItem",
   NEXT_ITEM: "nextItem",
   MARK_DONE: "markDone",
+  RESOLVE: "resolve",
+  STOP_AGENT: "stopAgent",
   TOGGLE_READ: "toggleRead",
   PIN: "pin",
   REMIND_HOUR: "remindHour",
