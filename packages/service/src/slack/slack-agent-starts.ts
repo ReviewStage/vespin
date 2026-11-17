@@ -1056,11 +1056,10 @@ const actOnAddressed = Effect.fnUntraced(function* (addressed: SlackAddressed) {
     const dm = yield* threadDmAt(addressed.channel, addressed.threadTs);
 
     if (Option.isSome(dm)) {
-      yield* replyToThreadDm(
-        yield* slack.forWorkspace(dm.value.organizationId),
-        addressed,
-        dm.value,
-      );
+      const bot = yield* slack.forWorkspace(dm.value.organizationId);
+
+      // Note that a reply under a DM of a workspace holding no token is left alone, because its files could not be read and it would post without them.
+      if (bot.connected) yield* replyToThreadDm(bot, addressed, dm.value);
 
       return;
     }
