@@ -733,6 +733,19 @@ body,
   --sheet-top-left-radius: 0px;
 }
 
+/* A task's banner (`task-banner.tsx`) heads the column's sheet over the bar
+   it would otherwise start with, so it rounds the sheet's top corners as
+   that bar does (shell.css), or its tint paints square over them. */
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  .desktop-task
+  > .desktop-task-main
+  > .ui-banner:nth-child(1 of :not([hidden])) {
+  border-top-left-radius: var(--sheet-top-left-radius, var(--sheet-radius));
+  border-top-right-radius: var(--sheet-top-right-radius, var(--sheet-radius));
+}
+
 /* The agent's tabs are parted from its conversation by a hairline, which
    its edge is dragged on to resize them. */
 :where(:root):not([data-ui-room="narrow"])
