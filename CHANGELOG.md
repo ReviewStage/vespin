@@ -74,6 +74,91 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.38.0 — 2026-11-16
+
+### Talk to your agents
+
+Voice is out of Experimental: press Talk where Send stands in an empty box to
+call your agent and say what you want. Talk in New task starts a new agent on
+your first words. It uses your OpenAI API key.
+
+[#9580](https://github.com/ReviewStage/vespin/pull/9580),
+[#9689](https://github.com/ReviewStage/vespin/pull/9689),
+[#9690](https://github.com/ReviewStage/vespin/pull/9690),
+[#9693](https://github.com/ReviewStage/vespin/pull/9693),
+[#9696](https://github.com/ReviewStage/vespin/pull/9696)
+
+### Improvements
+
+- A task opens as you left it, on the same tab with its side panel
+  ([#9661](https://github.com/ReviewStage/vespin/pull/9661),
+  [#9678](https://github.com/ReviewStage/vespin/pull/9678))
+- A pull request link always opens that pull request, and its tab updates live
+  ([#9543](https://github.com/ReviewStage/vespin/pull/9543),
+  [#9546](https://github.com/ReviewStage/vespin/pull/9546))
+- Admins can add Vespin to Slack from Settings › Workspace › Slack
+  ([#9663](https://github.com/ReviewStage/vespin/pull/9663),
+  [#9669](https://github.com/ReviewStage/vespin/pull/9669),
+  [#9675](https://github.com/ReviewStage/vespin/pull/9675),
+  [#9662](https://github.com/ReviewStage/vespin/pull/9662))
+- Agents can share sound clips in transcripts, threads, and descriptions
+  ([#9547](https://github.com/ReviewStage/vespin/pull/9547))
+- Sound clips get a bigger Play button, playback speed, and a fuller viewer
+  ([#9594](https://github.com/ReviewStage/vespin/pull/9594))
+- Agents now wear a hard hat instead of a robot
+  ([#9635](https://github.com/ReviewStage/vespin/pull/9635))
+- Sub-tasks indent under their parent in task lists
+  ([#9650](https://github.com/ReviewStage/vespin/pull/9650))
+- The sidebar's Pinned and Following headings show their icons
+  ([#9545](https://github.com/ReviewStage/vespin/pull/9545))
+- Inline code you type looks the same as in sent messages
+  ([#9638](https://github.com/ReviewStage/vespin/pull/9638))
+- Smoother motion when folding sections and when the Inbox changes
+  ([#9637](https://github.com/ReviewStage/vespin/pull/9637),
+  [#9643](https://github.com/ReviewStage/vespin/pull/9643),
+  [#9567](https://github.com/ReviewStage/vespin/pull/9567))
+- Agents mark their task Done once its work is finished
+  ([#9633](https://github.com/ReviewStage/vespin/pull/9633))
+- Agents on your Mac can run commands on that same Mac
+  ([#9649](https://github.com/ReviewStage/vespin/pull/9649))
+- Automations now start every run, with no daily caps or cooldowns
+  ([#9564](https://github.com/ReviewStage/vespin/pull/9564),
+  [#9565](https://github.com/ReviewStage/vespin/pull/9565))
+
+### Fixes
+
+- Fixed agents waiting on checks not waking when the checks finished
+  ([#9652](https://github.com/ReviewStage/vespin/pull/9652))
+- Fixed agents on your Mac failing to show or post their own files
+  ([#9660](https://github.com/ReviewStage/vespin/pull/9660))
+- Fixed cloud agents' scripts not finding Playwright
+  ([#9647](https://github.com/ReviewStage/vespin/pull/9647))
+- Fixed sound clips and videos losing their place or speed when expanded
+  ([#9548](https://github.com/ReviewStage/vespin/pull/9548),
+  [#9549](https://github.com/ReviewStage/vespin/pull/9549),
+  [#9676](https://github.com/ReviewStage/vespin/pull/9676),
+  [#9686](https://github.com/ReviewStage/vespin/pull/9686))
+- Fixed long words running off the edge of quotes in comments
+  ([#9606](https://github.com/ReviewStage/vespin/pull/9606))
+- Fixed the Working… line jumping as a turn starts
+  ([#9622](https://github.com/ReviewStage/vespin/pull/9622))
+- Fixed the jump-to-latest button sitting off-center over Send
+  ([#9640](https://github.com/ReviewStage/vespin/pull/9640))
+- Fixed the sidebar's divider and workspace header looking out of place
+  ([#9632](https://github.com/ReviewStage/vespin/pull/9632),
+  [#9604](https://github.com/ReviewStage/vespin/pull/9604))
+
+### Misc
+
+- Added groundwork for keeping your data in a local database on your Mac
+  ([#9671](https://github.com/ReviewStage/vespin/pull/9671),
+  [#9688](https://github.com/ReviewStage/vespin/pull/9688),
+  [#9694](https://github.com/ReviewStage/vespin/pull/9694),
+  [#9700](https://github.com/ReviewStage/vespin/pull/9700))
+- Updated the privacy policy for product-update emails and the local database
+  ([#9605](https://github.com/ReviewStage/vespin/pull/9605),
+  [#9692](https://github.com/ReviewStage/vespin/pull/9692))
+
 ## 0.37.0 — 2026-11-15
 
 ### A cursor for each agent
