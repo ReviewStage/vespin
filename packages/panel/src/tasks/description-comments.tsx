@@ -1587,6 +1587,8 @@ function CommentCard({
   lit?: boolean | undefined;
   "data-thread"?: string | undefined;
   "data-pointed"?: boolean | undefined;
+  /** Whether it takes no input, as a thread being started does once its words are sent. */
+  inert?: boolean | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   return (
@@ -1845,6 +1847,7 @@ function PendingCard({
   onStarted,
   onCancel,
   review,
+  sent = false,
 }: {
   /** What the thread is started on, which its unsent words are kept under. */
   on: { readonly quote: string; readonly scope: DescriptionCommentThread["scope"] };
@@ -1858,9 +1861,11 @@ function PendingCard({
   onCancel: () => void;
   /** Where its first comment may be held in the writer's review rather than posted; the card closes once it is. */
   review?: CommentReview | undefined;
+  /** Whether its words were sent and it stands in for their thread until the thread is drawn, taking nothing meanwhile, since what it took would be left behind as the thread takes over. */
+  sent?: boolean;
 }): React.JSX.Element {
   return (
-    <CommentCard place={place} open data-thread={PENDING_THREAD}>
+    <CommentCard place={place} open data-thread={PENDING_THREAD} inert={sent}>
       {head}
       <ReplyField
         label={COMMENT_WORDS.ADD}
@@ -2789,6 +2794,7 @@ export function DescriptionCommentLayer({
         begin={descriptionBegin(pending, text)}
         onCancel={close}
         onStarted={startedFromPending}
+        sent={handing !== undefined}
       />
     );
 
@@ -2901,6 +2907,7 @@ export function DescriptionCommentLayer({
                   begin={descriptionBegin(card.pending, text)}
                   onCancel={close}
                   onStarted={startedFromPending}
+                  sent={handing !== undefined}
                 />
               ) : null}
             </MarginSlot>

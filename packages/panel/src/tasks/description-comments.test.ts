@@ -1303,7 +1303,7 @@ test("a reply's field empties as it is sent and takes the next at once, each sen
   assert.notEqual(keys[2], keys[1]);
 });
 
-test("a thread being started keeps its words marked and its card in place until the thread it was sent as is drawn, which takes over open, and words refused come back into its field", async () => {
+test("a thread being started keeps its words marked and its card in place, taking nothing, until the thread it was sent as is drawn, which takes over open, and words refused come back into its field", async () => {
   const answers: PromiseWithResolvers<{ note: string }>[] = [];
 
   const { container, started, rethread } = wide(() =>
@@ -1354,6 +1354,10 @@ test("a thread being started keeps its words marked and its card in place until 
   assert.equal(start.id, start.clientKey);
   assert.ok(pending(), "the card stands until the thread is drawn");
   assert.ok(marked("pending"), "its words stay marked meanwhile");
+  assert.ok(
+    pending()?.hasAttribute("inert"),
+    "it takes nothing meanwhile, which the thread would leave behind",
+  );
 
   // The host draws the thread under the id its first comment's key names.
   rethread([
