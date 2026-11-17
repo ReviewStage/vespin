@@ -1,4 +1,5 @@
 import type { AdminMetricsWindow } from "@repo/features/admin-wire";
+import type { AdminFixture } from "@repo/panel/admin/admin-fixture";
 import { useAdminSignOut } from "@repo/panel/admin/admin-queries";
 import { AdminShell } from "@repo/panel/admin/chrome/admin-shell";
 import type { ViewerAccount } from "@repo/panel/admin/chrome/page-header";
@@ -34,16 +35,28 @@ import { SignInCard } from "./admin/chrome/gate-cards";
 import { WebAdminDoors } from "./admin/web-admin-doors";
 import { authClient } from "./auth-client";
 
-/** The standalone page: the dashboard under this page's own doors (`web-admin-doors.tsx`). */
-export function AdminDashboard(): React.JSX.Element {
+/**
+ * The standalone page: the dashboard under this page's own doors
+ * (`web-admin-doors.tsx`), or, under a development tab's fixture, on its
+ * staged reads with its admin signed in (`admin-fixture.ts`).
+ */
+export function AdminDashboard({
+  fixture,
+}: {
+  fixture?: AdminFixture | undefined;
+}): React.JSX.Element {
   return (
-    <WebAdminDoors>
-      <AdminDashboardPage />
+    <WebAdminDoors fixtureReads={fixture?.reads}>
+      <AdminDashboardPage fixtureViewer={fixture?.viewer} />
     </WebAdminDoors>
   );
 }
 
-function AdminDashboardPage(): React.JSX.Element {
+function AdminDashboardPage({
+  fixtureViewer,
+}: {
+  fixtureViewer: ViewerAccount | undefined;
+}): React.JSX.Element {
   // Admin accounts are the maintainers' own; their traffic reads as noise in
   // every count, so admins start hidden and the toggle is the explicit ask to
   // include them, remembered across visits. The scope is the server's filter —
@@ -138,9 +151,11 @@ function AdminDashboardPage(): React.JSX.Element {
     setLoggedOut(true);
   }, [withdrawSession]);
 
-  const viewer: ViewerAccount | undefined = account
-    ? { name: account.name, email: account.email, image: account.image ?? undefined }
-    : undefined;
+  const viewer: ViewerAccount | undefined =
+    fixtureViewer ??
+    (account
+      ? { name: account.name, email: account.email, image: account.image ?? undefined }
+      : undefined);
 
   // The gate's cards — sign-in and the non-admin refusal — stand alone on
   // every view: navigation drawn beside a consent card would pose as

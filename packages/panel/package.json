@@ -7,6 +7,7 @@
   "exports": {
     "./act": "./src/act.js",
     "./admin/admin-doors": "./src/admin/admin-doors.js",
+    "./admin/admin-fixture": "./src/admin/admin-fixture.js",
     "./admin/charts/activity-chart": "./src/admin/charts/activity-chart.js",
     "./admin/charts/signups-chart": "./src/admin/charts/signups-chart.js",
     "./admin/charts/stat-card": "./src/admin/charts/stat-card.js",
