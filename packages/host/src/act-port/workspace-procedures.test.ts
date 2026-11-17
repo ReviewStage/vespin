@@ -249,8 +249,9 @@ function connectPort(
       opened.push(url);
       landings.push(landing);
     },
-    ...(githubLanding === undefined ? {} : { githubLanding }),
   };
+
+  if (githubLanding !== undefined) dependencies.githubLanding = githubLanding;
 
   const port = testActPort(
     workspaceProcedures(dependencies, {

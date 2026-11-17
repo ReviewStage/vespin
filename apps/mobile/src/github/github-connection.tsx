@@ -43,9 +43,9 @@ export interface GitHubConnection {
 
 /**
  * The workspace's repositories, followed while the screen stands, and its
- * install. Note that the host reads the repositories again as the
- * workspace's installations move, so a sheet closed on GitHub's landing
- * draws them with nothing asked here.
+ * install. Note that the install answers once its sheet closes, and the
+ * repositories are read again then, because repositories given to an
+ * installation that already stood move nothing else the host reads.
  */
 export function useGitHubConnection(workspaceId: string): GitHubConnection {
   const acts = useHostActs();
@@ -60,7 +60,11 @@ export function useGitHubConnection(workspaceId: string): GitHubConnection {
     setRefusal(undefined);
     void write(() => acts[ACT_KIND.WORKSPACE_GITHUB_CONNECT]({ workspaceId }), {
       inPlace: setRefusal,
-    }).finally(() => setOpening(false));
+    })
+      .then((went) => {
+        if (went) repositories.retry();
+      })
+      .finally(() => setOpening(false));
   };
 
   return { repositories, install, opening, refusal };

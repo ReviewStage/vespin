@@ -56,3 +56,17 @@ export function openSignInSheet(url: string, landing: string): Promise<void> {
     new Promise<void>((shown) => setTimeout(shown, SHEET_SHOWN_MS)),
   ]);
 }
+
+/**
+ * A connection's install in the authentication sheet, answering only once the
+ * sheet closes, whether it landed on `landing` or the person closed it, so
+ * the screen that opened it reads again what the install changed, such as
+ * the repositories GitHub's App was given on an installation that already
+ * stood, which no other read moves. A sheet that refuses to open rejects.
+ */
+export function openSheetUntilClosed(url: string, landing: string): Promise<void> {
+  return openAuthSessionAsync(url, landing, {
+    preferEphemeralSession: false,
+    preferUniversalLinks: true,
+  }).then(() => undefined);
+}
