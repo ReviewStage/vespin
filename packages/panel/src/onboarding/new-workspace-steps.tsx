@@ -1,9 +1,10 @@
+import { GITHUB_PURPOSE } from "@repo/settings";
 import { AuthPage, AuthStepFoot, ProductMark } from "@repo/ui";
 import { isComposingKey } from "@repo/ui/composing-key";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { GITHUB_PURPOSE, GitHubSetup } from "./setup-github.js";
+import { GitHubSetup } from "./setup-github.js";
 import { TeamForm, useTeamForm } from "./setup-team.js";
 
 /**

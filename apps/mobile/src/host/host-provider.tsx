@@ -28,6 +28,7 @@ import {
   launchFixtureProfile,
   launchMachineAsk,
   launchRefusesWrites,
+  launchSetupOwed,
   launchStubsAuthServer,
   launchUpdateNeeded,
 } from "./launch-arguments.js";
@@ -184,6 +185,7 @@ function launchOptions(): MobileHostStartOptions {
     fixture: launchFixtureProfile(),
     fixtureUpdateNeeded: launchUpdateNeeded(),
     fixtureMachineAsk: launchMachineAsk(),
+    fixtureSetupOwed: launchSetupOwed(),
     fixtureRefusesWrites: launchRefusesWrites(),
     appVersion: APP_VERSION,
     stateRoot: hostStateRoot(),

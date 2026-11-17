@@ -1,9 +1,9 @@
-// menu-photos.ts -- each member's sign-in picture as a file in the app's caches, which a system menu draws round in a choice's glyph place.
+// menu-photos.ts -- a picture as a file in the app's caches, which a system menu draws round in a choice's glyph place: each member's sign-in picture, and a workspace's photo.
 
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { MARK_SIZE } from "@repo/ui-native";
 import { File, Paths } from "expo-file-system";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppState, PixelRatio } from "react-native";
 import type { PictureOf } from "./member-pictures.js";
 
@@ -17,6 +17,9 @@ const PHOTO_PREFIX = "menu-photo";
  * the old face until iOS cleared the app's caches.
  */
 const PHOTO_LIFETIME = 24 * 60 * 60 * 1000;
+
+/** A `data:` address holding its bytes in base64, as the host holds a workspace's photo, its base64 captured. */
+const DATA_ADDRESS = /^data:[^,]*;base64,(.+)$/su;
 
 /** FNV-1a's offset basis and prime, for a short, steady name from a picture's address. */
 const FNV_OFFSET = 0x81_1c_9d_c5;
@@ -57,6 +60,20 @@ function freshSince(at: number | undefined): at is number {
   return at !== undefined && Date.now() - at < PHOTO_LIFETIME;
 }
 
+/** A `data:` address's bytes as the base64 it carries; none for any other address, or one not in base64. */
+function dataBase64(address: string): string | undefined {
+  return DATA_ADDRESS.exec(address)?.[1];
+}
+
+/** Writes or fetches the picture into its file: a `data:` address's bytes written as they are, any other address downloaded. */
+function fetched(address: string, file: File): Promise<string> {
+  const base64 = dataBase64(address);
+
+  return base64 === undefined
+    ? File.downloadFileAsync(address, file, { idempotent: true }).then((saved) => saved.uri)
+    : file.write(base64, { encoding: "base64" }).then(() => file.uri);
+}
+
 /**
  * The picture's file: the one already written while it's fresh, the
  * download under way, or one begun now, which writes over a stale file. A
@@ -74,8 +91,8 @@ function downloaded(address: string): Promise<HeldPhoto | undefined> {
   if (under !== undefined) return under;
   const kept = file.exists ? file.uri : undefined;
 
-  const download = File.downloadFileAsync(address, file, { idempotent: true })
-    .then((saved) => ({ uri: saved.uri, at: Date.now() }))
+  const download = fetched(address, file)
+    .then((uri) => ({ uri, at: Date.now() }))
     .catch(() => (kept === undefined ? undefined : { uri: kept, at: Date.now() }))
     .finally(() => downloading.delete(file.uri));
 
@@ -84,8 +101,8 @@ function downloaded(address: string): Promise<HeldPhoto | undefined> {
   return download;
 }
 
-/** A member's picture, asked for at a menu photo's size in device pixels; none for someone with no picture the app may draw. */
-function menuAddress(picture: string | undefined): string | undefined {
+/** A sign-in picture, asked for at a menu photo's size in device pixels; none for someone with no picture the app may draw. */
+export function menuAddress(picture: string | undefined): string | undefined {
   const pinned = pinnedPictureUrl(picture);
 
   return pinned === undefined
@@ -94,18 +111,17 @@ function menuAddress(picture: string | undefined): string | undefined {
 }
 
 /**
- * Each of `userIds`' pictures as a file on this device, for a menu that
- * draws them; none for a member with no picture, or while theirs is still
- * downloading, whose choice keeps its glyph meanwhile. Note that a system
- * menu reads its images once, as it opens, so a photo still downloading
- * shows the next time the menu opens. A photo held past its lifetime is
- * read again as the app comes back to the front, since a member's picture
- * can change under the same address while a screen stays mounted.
+ * Each picture address's file on this device, for a menu that draws them;
+ * none while one is still downloading or being written, whose choice keeps
+ * its glyph meanwhile. Note that a system menu reads its images once, as it
+ * opens, so a photo still on its way shows the next time the menu opens. A
+ * photo held past its lifetime is read again as the app comes back to the
+ * front, since a picture can change under the same address while a screen
+ * stays mounted.
  */
-export function useMenuPhotos(
-  pictureOf: PictureOf,
-  userIds: readonly string[],
-): (userId: string) => string | undefined {
+export function useMenuPictureFiles(
+  addresses: readonly string[],
+): (address: string) => string | undefined {
   const [files, setFiles] = useState<ReadonlyMap<string, HeldPhoto>>(new Map());
   const [resumes, setResumes] = useState(0);
 
@@ -117,25 +133,13 @@ export function useMenuPhotos(
     return () => subscription.remove();
   }, []);
 
-  const addresses = useMemo(() => {
-    const byUser = new Map<string, string>();
-
-    for (const userId of userIds) {
-      const address = menuAddress(pictureOf(userId));
-
-      if (address !== undefined) byUser.set(userId, address);
-    }
-
-    return byUser;
-  }, [pictureOf, userIds]);
-
   useEffect(() => {
     let live = true;
 
     // Note that a resume runs this again, so a photo past its lifetime is read again while the screen stays mounted.
     void resumes;
 
-    for (const address of new Set(addresses.values())) {
+    for (const address of new Set(addresses)) {
       if (freshSince(files.get(address)?.at)) continue;
 
       void downloaded(address).then((photo) => {
@@ -148,9 +152,33 @@ export function useMenuPhotos(
     };
   }, [addresses, files, resumes]);
 
-  return (userId) => {
-    const address = addresses.get(userId);
+  // Note that it's the same reader while no file landed, so a memo drawn from it stands still.
+  return useCallback((address: string) => files.get(address)?.uri, [files]);
+}
 
-    return address === undefined ? undefined : files.get(address)?.uri;
+/** Each of `userIds`' pictures as a file on this device, for a menu that draws them, as `useMenuPictureFiles` holds them; none for a member with no picture. */
+export function useMenuPhotos(
+  pictureOf: PictureOf,
+  userIds: readonly string[],
+): (userId: string) => string | undefined {
+  const byUser = useMemo(() => {
+    const addresses = new Map<string, string>();
+
+    for (const userId of userIds) {
+      const address = menuAddress(pictureOf(userId));
+
+      if (address !== undefined) addresses.set(userId, address);
+    }
+
+    return addresses;
+  }, [pictureOf, userIds]);
+
+  const addresses = useMemo(() => [...byUser.values()], [byUser]);
+  const fileOf = useMenuPictureFiles(addresses);
+
+  return (userId) => {
+    const address = byUser.get(userId);
+
+    return address === undefined ? undefined : fileOf(address);
   };
 }

@@ -1,0 +1,24 @@
+# settings-workspace-github.yaml -- Settings › Workspace's GitHub on the Inbox fixture: the workspace's owner sees GitHub's row, connected and counting the repositories agents reach, with Add repositories at its end.
+#
+# Launched on the host's Inbox fixture, whose account owns its own
+# workspace, which reaches two repositories (`@repo/host/fixture-inbox`'s
+# `REPOSITORIES`), so the row stands connected and no server is reached.
+# Add repositories opens GitHub's install page in the authentication sheet,
+# which a fixture run has no address for, so the flow shoots the row alone.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: "Workspace settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Add repositories"
+- assertVisible: "Connected · 2 repositories"
+- takeScreenshot: settings-workspace-github

@@ -2,9 +2,8 @@
  * system-activity-module.ts -- the app's native Handoff and Spotlight module (`modules/system-activity/`) as JavaScript reads it: the activity a screen advertises, the Spotlight index, and each continued activity or tapped item.
  *
  * The module is the app's own, autolinked from `modules/`, so it stands in
- * every build of the app. It is optional here all the same, so a build
- * without it, such as Expo Go, runs with no Handoff or Spotlight rather than
- * failing to start. Its Spotlight calls reach the system in the order they
+ * every build of the app, and is required here as Expo's local modules are.
+ * Its Spotlight calls reach the system in the order they
  * are made, each answered alone (`@repo/features/ios-system-activity`'s
  * `SpotlightIndexPort`).
  */
@@ -14,7 +13,7 @@ import type {
   IosActivity,
   SpotlightItem,
 } from "@repo/features/ios-system-activity";
-import { type NativeModule, requireOptionalNativeModule } from "expo";
+import { type NativeModule, requireNativeModule } from "expo";
 
 /** What the module hands on, each as an event. */
 type SystemActivityEvents = {
@@ -37,6 +36,5 @@ declare class SystemActivityModule extends NativeModule<SystemActivityEvents> {
   removeAll(): Promise<void>;
 }
 
-/** The module, or none in a build that lacks it. */
-export const systemActivityModule =
-  requireOptionalNativeModule<SystemActivityModule>("SystemActivity");
+/** The module. */
+export const systemActivityModule = requireNativeModule<SystemActivityModule>("SystemActivity");

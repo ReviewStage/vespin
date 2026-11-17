@@ -105,6 +105,7 @@ export {
   onboardingSurveyStored,
   SURVEY_INTENT,
   SURVEY_INTENT_LABEL,
+  SURVEY_OPTIONS,
   SURVEY_OTHER,
   SURVEY_OTHER_MAX_CHARS,
   SURVEY_QUESTION,
@@ -112,9 +113,15 @@ export {
   SURVEY_REFERRAL_LABEL,
   SURVEY_ROLE,
   SURVEY_ROLE_LABEL,
+  type SurveyDraft,
   type SurveyIntent,
+  type SurveyOption,
   type SurveyReferral,
   type SurveyRole,
+  sameSurveyAnswers,
+  surveyDraftAnswered,
+  surveyInOfferedOrder,
+  surveyKept,
 } from "./onboarding-survey.js";
 
 export {
@@ -180,6 +187,16 @@ export {
   settingVisible,
   snapshotAccountPreferences,
 } from "./schema-access.js";
+
+export {
+  GITHUB_PURPOSE,
+  SETUP_GATE,
+  SETUP_STEP,
+  type SetupGate,
+  type SetupStep,
+  setupGate,
+  setupSteps,
+} from "./setup-model.js";
 
 export {
   isSetupPlaceJson,

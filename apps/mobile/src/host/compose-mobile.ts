@@ -27,6 +27,7 @@
 
 import { createORPCClient } from "@orpc/client";
 import { type AuthSession, authSessionConsent } from "@repo/credentials";
+import { GITHUB_INSTALL_LANDING } from "@repo/features";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
 import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
 import { LINK_ORIGIN } from "@repo/features/link-home";
@@ -134,6 +135,8 @@ export interface DeviceSeams {
   readonly createId: () => string;
   /** Opens an address outside the app; a sign-in's in the system's authentication sheet, which closes on the page it names as its landing. */
   readonly openExternal: (url: string, landing?: string) => Promise<void>;
+  /** Opens a connection's install in the system's authentication sheet, closed on the page it names as its landing, answering only once the sheet closes. */
+  readonly openSheet: (url: string, landing: string) => Promise<void>;
   /** Opens a relay socket, which the terminals and the live reads ride. */
   readonly openSocket: OpenTerminalSocket;
   /** Whether the app is in the foreground, at each change, for as long as the subscription stands. */
@@ -160,6 +163,8 @@ export interface MobileHostOptions {
   readonly fixtureUpdateNeeded?: boolean | undefined;
   /** Whether a fixture run holds an ask of Ada's MacBook for an agent's command, which `-machineAsk true` asks; never in a live run. */
   readonly fixtureMachineAsk?: boolean | undefined;
+  /** Whether a fixture run's account stands as one that started setup and hasn't finished it, which `-setupOwed true` asks; never in a live run. */
+  readonly fixtureSetupOwed?: boolean | undefined;
   /** Whether a fixture run's act port refuses the writes a flow presses, which `-refuseWrites true` asks; never in a live run. */
   readonly fixtureRefusesWrites?: boolean | undefined;
   /** This build's version, as the app's config names it. */
@@ -266,7 +271,12 @@ function portDependencies(
       openExternal,
       serviceBaseUrl: SERVICE_ORIGIN,
     },
-    workspaces: { openExternal },
+    // GitHub's install opens in the authentication sheet, closed as it lands on the service's page, and answers once the sheet closes, so the screen reads again the repositories it reached.
+    workspaces: {
+      openExternal: (url, landing) =>
+        landing === undefined ? openExternal(url) : device.openSheet(url, landing),
+      githubLanding: `${SERVICE_ORIGIN}${GITHUB_INSTALL_LANDING.PATH}`,
+    },
   };
 }
 
@@ -339,10 +349,15 @@ const servedActPort = (
  * otherwise. The store drops a patch that says nothing new, so laying the
  * same data twice settles rather than loops.
  */
-const stagedFixture = (state: AppStateStore, updateNeeded: boolean, machineAsk: boolean) =>
+const stagedFixture = (
+  state: AppStateStore,
+  updateNeeded: boolean,
+  machineAsk: boolean,
+  setupOwed: boolean,
+) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
-      stageFixture(state, updateNeeded, machineAsk);
+      stageFixture(state, updateNeeded, machineAsk, setupOwed);
       yield* publishAppStateChanges(
         state,
         () => Effect.sync(() => stageFixture(state, updateNeeded)),
@@ -497,6 +512,7 @@ export function composeMobile(
               mobile.state,
               options.fixtureUpdateNeeded === true,
               options.fixtureMachineAsk === true,
+              options.fixtureSetupOwed === true,
             );
 
       return Layer.provideMerge(staged, standing);

@@ -33,7 +33,7 @@ import {
   NOTICE_KIND,
   useFailureNotices,
 } from "@repo/ui-native";
-import { StringFormat, setImageAsync, setStringAsync } from "expo-clipboard";
+import { setImageAsync, setStringAsync } from "expo-clipboard";
 import { CryptoDigestAlgorithm, digestStringAsync, randomUUID } from "expo-crypto";
 import { Directory, File, Paths } from "expo-file-system";
 import { Asset, requestPermissionsAsync } from "expo-media-library";
@@ -127,20 +127,11 @@ async function copied(kept: Kept): Promise<void> {
  * face, since HTML read with no face of its own pastes into Mail in Times;
  * and that the HTML names its encoding, since the system reads HTML that
  * names none as Latin-1, which garbles a curly quote, a dash, or an emoji.
- * A build without the module copies through expo-clipboard's HTML input,
- * whose plain words are the system's reading of the HTML, each link by its
- * label alone.
  */
 async function copiedRich(copy: DraftCopy): Promise<void> {
   const html = `${RICH_HEAD}<span style="${RICH_FACE}">${copy.html}</span>`;
 
-  if (richPasteboardModule !== null) {
-    await richPasteboardModule.copy(html, copy.text);
-
-    return;
-  }
-
-  await setStringAsync(html, { inputFormat: StringFormat.HTML });
+  await richPasteboardModule.copy(html, copy.text);
 }
 
 /** Saves a picture or a recording to Photos, asking for add-only access the first time. */
@@ -176,12 +167,11 @@ function previewFile(kept: Kept): Promise<string> {
 /**
  * Opens a picture or a file full screen in the system's Quick Look
  * (`modules/quick-look/`). Note that a file Quick Look can't read, one UIKit
- * would not present it over, and every file in a build without the module,
- * opens the share sheet instead, which offers an app that reads it.
+ * would not present it over, opens the share sheet instead, which offers an app that reads it.
  */
 async function opened(kept: Kept): Promise<void> {
   const file = await previewFile(kept);
-  const shown = quickLookModule !== null && (await quickLookModule.preview(file, kept.name));
+  const shown = await quickLookModule.preview(file, kept.name);
 
   if (!shown) await Share.share({ url: file, title: kept.name });
 }

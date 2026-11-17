@@ -1,4 +1,4 @@
-// system-asks.ts -- the system's own sheets a screen raises from a press: the alert that asks for a name, as Files and Notes rename, and the share sheet a link or words are copied or sent from.
+// system-asks.ts -- the system's own sheets a screen raises from a press: the alert that asks for words, such as a name as Files and Notes rename or an address, and the share sheet a link or words are copied or sent from.
 
 import { Alert, Share } from "react-native";
 
@@ -17,33 +17,84 @@ export interface NameAsk {
   readonly onName: (name: string) => void;
 }
 
+/** What a typed answer is, which picks the keyboard its field raises. */
+export const WORDS_KIND = {
+  /** A name, such as a rename's. */
+  NAME: "name",
+  /** An email address, on the address keyboard. */
+  EMAIL: "email",
+} as const;
+
+export type WordsKind = (typeof WORDS_KIND)[keyof typeof WORDS_KIND];
+
+/** Each kind's keyboard, as UIKit's alert names it. */
+const KEYBOARD = {
+  [WORDS_KIND.NAME]: "default",
+  [WORDS_KIND.EMAIL]: "email-address",
+} as const satisfies Record<WordsKind, string>;
+
+/** One act beside Cancel, handed the words typed, trimmed and never blank. */
+export interface WordsAct {
+  readonly label: string;
+  readonly onWords: (words: string) => void;
+}
+
+/** What the words alert asks: its question, what it explains, the words its field opens on, what they are, and its acts. */
+export interface WordsAsk {
+  readonly title: string;
+  readonly message?: string | undefined;
+  readonly initial?: string | undefined;
+  readonly kind: WordsKind;
+  /** Its acts, the last the one Return presses. */
+  readonly acts: readonly WordsAct[];
+}
+
 /**
- * Asks for a name in the system's alert with a text field, Cancel and the
- * act beside it, as iOS renames a file or a folder. Note that it is
+ * Asks for words in the system's alert with a text field, Cancel and its
+ * acts, as iOS renames a file or asks for an address. An act pressed with
+ * nothing typed does nothing, as the alert can't dim it. Note that it is
  * UIKit's alert rather than SwiftUI's, because SwiftUI's alert takes a
  * field only as a direct child of its actions, which `@expo/ui`'s slot
  * cannot promise; UIKit's stands centered over whatever raised it, a menu
  * dismissed among it.
  */
-export function askForName({ title, act, name, onName }: NameAsk): void {
+export function askForWords({ title, message, initial = "", kind, acts }: WordsAsk): void {
   Alert.prompt(
     title,
-    undefined,
+    message,
     [
       { text: CANCEL.LABEL, style: CANCEL.STYLE },
-      {
-        text: act,
-        isPreferred: true,
-        onPress: (typed) => {
+      ...acts.map((act, at) => ({
+        text: act.label,
+        isPreferred: at === acts.length - 1,
+        onPress: (typed?: string) => {
           const kept = typed?.trim() ?? "";
 
-          if (kept !== "" && kept !== name.trim()) onName(kept);
+          if (kept !== "") act.onWords(kept);
+        },
+      })),
+    ],
+    "plain-text",
+    initial,
+    KEYBOARD[kind],
+  );
+}
+
+/** Asks for a name as `askForWords` does, opened on the name it has, and renames only to a name that differs from it. */
+export function askForName({ title, act, name, onName }: NameAsk): void {
+  askForWords({
+    title,
+    initial: name,
+    kind: WORDS_KIND.NAME,
+    acts: [
+      {
+        label: act,
+        onWords: (typed) => {
+          if (typed !== name.trim()) onName(typed);
         },
       },
     ],
-    "plain-text",
-    name,
-  );
+  });
 }
 
 /**

@@ -330,6 +330,22 @@ const CATALOG_SYMBOLS: ReadonlySet<string> = new Set([
   TASK_PRIORITY_BARS_SYMBOL,
 ]);
 
+/** The letters and digits iOS draws as a filled square of its own (`a.square.fill`), as a workspace's tile reads in a system menu. */
+const TILE_LETTER = /^[A-Z0-9]$/u;
+
+/**
+ * A workspace's letter as a system menu draws its tile: the system's filled
+ * square around the letter, which its menu tints in the tile's hue; the
+ * workspace glyph for a first character the system draws no square for,
+ * such as an emoji or a letter outside A to Z.
+ */
+export function letterTileGlyph(letter: string): Glyph {
+  // SAFETY: the system draws `<letter>.square.fill` for every letter and digit `TILE_LETTER` takes.
+  return TILE_LETTER.test(letter)
+    ? system(`${letter.toLowerCase()}.square.fill` as SfSymbol)
+    : GLYPH.WORKSPACE;
+}
+
 /** A glyph as `@expo/ui`'s `Image` draws it: a custom symbol by its asset's name, an SF Symbol by its own. */
 export function glyphImage(
   glyph: Glyph,

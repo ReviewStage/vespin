@@ -2,13 +2,11 @@
  * menu-commands-module.ts -- the app's native menu bar module (`modules/menu-commands/`) as JavaScript reads it: each command pressed, and what stands in front, told to it.
  *
  * The module is the app's own, autolinked from `modules/`, so it stands in
- * every build of the app. It is optional here all the same, so a build
- * without it, such as Expo Go, runs with no menu bar rather than failing to
- * start.
+ * every build of the app, and is required here as Expo's local modules are.
  */
 
 import type { MenuCommand, MenuSubject } from "@repo/features/ios-menu-commands";
-import { type NativeModule, requireOptionalNativeModule } from "expo";
+import { type NativeModule, requireNativeModule } from "expo";
 
 /** What the module hands on, as an event. */
 type MenuCommandsEvents = {
@@ -27,5 +25,5 @@ declare class MenuCommandsModule extends NativeModule<MenuCommandsEvents> {
   ): void;
 }
 
-/** The module, or none in a build that lacks it. */
-export const menuCommandsModule = requireOptionalNativeModule<MenuCommandsModule>("MenuCommands");
+/** The module. */
+export const menuCommandsModule = requireNativeModule<MenuCommandsModule>("MenuCommands");

@@ -53,11 +53,11 @@ import {
   selectTaskListStatus,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
-import { BUZZ } from "@repo/ui-native";
+import { BUZZ, heldValue, useHeldValue } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
 import { cachedFile, cachedPlayed } from "../cached-media.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
@@ -219,17 +219,12 @@ interface StoodSteps {
  * order kept for later, so a search or a scope the screen narrows narrows the
  * steps too, and a screen covered or gone takes its steps with it.
  */
-let frontSteps: StoodSteps = { owner: undefined, steps: NO_STEPS };
-
-/** The readers of the steps in front, told as they move. */
-const stepsHeard = new Set<() => void>();
+const frontSteps = heldValue<StoodSteps>({ owner: undefined, steps: NO_STEPS });
 
 /** Stands `steps` as the front's for `owner`, or takes them down where `steps` is none and `owner` still stands them, telling every reader. */
 function standFrontSteps(owner: symbol, steps: FrontSteps | undefined): void {
-  if (steps === undefined && frontSteps.owner !== owner) return;
-  frontSteps = steps === undefined ? { owner: undefined, steps: NO_STEPS } : { owner, steps };
-
-  for (const heard of stepsHeard) heard();
+  if (steps === undefined && frontSteps.read().owner !== owner) return;
+  frontSteps.set(steps === undefined ? { owner: undefined, steps: NO_STEPS } : { owner, steps });
 }
 
 /**
@@ -260,14 +255,7 @@ export function useStandFrontSteps(
 
 /** The steps the thread in front offers, read anew as its screen stands them. */
 export function useFrontSteps(): FrontSteps {
-  return useSyncExternalStore(
-    (heard) => {
-      stepsHeard.add(heard);
-
-      return () => stepsHeard.delete(heard);
-    },
-    () => frontSteps.steps,
-  );
+  return useHeldValue(frontSteps, (stood) => stood.steps);
 }
 
 /**

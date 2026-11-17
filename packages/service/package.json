@@ -158,6 +158,8 @@
     "./maintenance/maintenance-bounds": "./src/maintenance/maintenance-bounds.js",
     "./maintenance/maintenance-sweep": "./src/maintenance/maintenance-sweep.js",
     "./maintenance/usage-ledger-app": "./src/maintenance/usage-ledger-app.js",
+    "./billing/metronome-webhook-app": "./src/billing/metronome-webhook-app.js",
+    "./billing/stripe-webhook-app": "./src/billing/stripe-webhook-app.js",
     "./maintenance/workspace-drive-cleanup-app": "./src/maintenance/workspace-drive-cleanup-app.js",
     "./observability/caller-trace": "./src/observability/caller-trace.js",
     "./observability/sentry": "./src/observability/sentry.js",

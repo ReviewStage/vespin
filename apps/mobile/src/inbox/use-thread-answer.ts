@@ -72,11 +72,18 @@ import {
 } from "@repo/features/inbox-writes";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAccount } from "@repo/host/app-state-reads";
-import { BUZZ, buzz, NOTICE_KIND, useFailureNotices } from "@repo/ui-native";
+import {
+  BUZZ,
+  buzz,
+  heldValue,
+  NOTICE_KIND,
+  useFailureNotices,
+  useHeldValue,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { replyLetGo, replyPressed } from "../reply-drawn.js";
@@ -166,18 +173,7 @@ function pressedDraft(
 /* ----- The store ----- */
 
 /** Every thread the app holds something of, by its item's id. */
-let held: ReadonlyMap<string, ThreadHeld> = new Map();
-const listeners = new Set<() => void>();
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-
-  return () => listeners.delete(listener);
-}
-
-function heldNow(): ReadonlyMap<string, ThreadHeld> {
-  return held;
-}
+const threads = heldValue<ReadonlyMap<string, ThreadHeld>>(new Map());
 
 /** A file a reply sent from the phone on `itemId` carries, by its attachment, as the thread draws it from the reply's own bytes, before a read carries the reply and after, under the attachment `thread` names it by; none for any other. */
 export function pendingThreadFile(
@@ -185,7 +181,7 @@ export function pendingThreadFile(
   attachmentId: string,
   thread: readonly InboxMessage[] | undefined,
 ): { readonly contentType: string; readonly base64: string } | undefined {
-  const held = heldNow().get(itemId);
+  const held = threads.read().get(itemId);
 
   return held === undefined
     ? undefined
@@ -194,9 +190,8 @@ export function pendingThreadFile(
 
 /** The store with the thread's holding changed as `change` says. */
 function hold(itemId: string, change: (was: ThreadHeld) => ThreadHeld): void {
-  held = new Map(held).set(itemId, change(held.get(itemId) ?? NOTHING_HELD));
-
-  for (const listener of listeners) listener();
+  const held = threads.read();
+  threads.set(new Map(held).set(itemId, change(held.get(itemId) ?? NOTHING_HELD)));
 }
 
 /**
@@ -210,7 +205,7 @@ function letGoCarriedCloses(items: readonly InboxItem[]): void {
   const carried = items.filter(
     (item) =>
       item.status !== INBOX_STATUS.OPEN &&
-      [...(held.get(item.id)?.sending.values() ?? [])].some(
+      [...(threads.read().get(item.id)?.sending.values() ?? [])].some(
         (sending) => sending.kind === INBOX_SENDING.CLOSE,
       ),
   );
@@ -227,7 +222,7 @@ function letGoCarriedCloses(items: readonly InboxItem[]): void {
 
 /** The store with the thread's closes let go, as its Undo asks, so the thread is drawn as the host draws the take-back rather than closed by a send taken back. */
 function letGoCloses(itemId: string): void {
-  if (!held.has(itemId)) return;
+  if (!threads.read().has(itemId)) return;
   hold(itemId, (was) => ({
     ...was,
     sending: new Map(
@@ -264,7 +259,7 @@ function useReader(): InboxReader | undefined {
 export function useSendsDrawn<Group extends { readonly items: readonly InboxItem[] }>(
   groups: readonly Group[],
 ): readonly Group[] {
-  const store = useSyncExternalStore(subscribe, heldNow);
+  const store = useHeldValue(threads);
   const reader = useReader();
   useEffect(() => letGoCarriedCloses(groups.flatMap((group) => group.items)), [groups]);
 
@@ -406,7 +401,7 @@ export function useThreadAnswer(
   const settled = useSettleUndo();
   const { item } = listed;
   const itemId = item.id;
-  const store = useSyncExternalStore(subscribe, heldNow);
+  const store = useHeldValue(threads);
   const { draft, note, asNew = false, nodding } = store.get(itemId) ?? NOTHING_HELD;
   const thread = item.thread ?? [];
 
@@ -525,11 +520,11 @@ export function useThreadAnswer(
 
   // Got it nods at the revision drawn, so an agent's change since is never settled unseen; one settled first by someone else is passed over quietly, with no Undo, since what was asked already stands.
   const acknowledge = () => {
-    if (held.get(itemId)?.nodding !== undefined) return;
+    if (threads.read().get(itemId)?.nodding !== undefined) return;
     const key = randomUUID();
     let taken = false;
     // Note that a Got it's refusal and its letting go touch the box only while the Got it out is still this one.
-    const ours = () => held.get(itemId)?.nodding === key;
+    const ours = () => threads.read().get(itemId)?.nodding === key;
     hold(itemId, (was) => ({ ...was, note: undefined, nodding: key }));
     void write(
       () =>
@@ -576,7 +571,7 @@ export function useThreadAnswer(
     starting.add(itemId);
     // The pictures the box holds go as the new thread's first message's, as the panel's start carries its files.
     const { attachments } = draft;
-    const before = held.get(itemId)?.started;
+    const before = threads.read().get(itemId)?.started;
 
     const key =
       before?.words === text && samePictures(before.attachments, attachments)
@@ -622,7 +617,8 @@ export function useThreadAnswer(
     ).then((went) => {
       starting.delete(itemId);
 
-      if (!went || startedId === undefined || held.get(itemId)?.started?.key !== key) return;
+      if (!went || startedId === undefined || threads.read().get(itemId)?.started?.key !== key)
+        return;
       hold(itemId, ({ started: _sent, ...was }) => ({ ...was, asNew: false }));
       onStarted?.(startedId);
     });

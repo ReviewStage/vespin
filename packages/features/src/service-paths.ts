@@ -509,6 +509,12 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACE_SANDBOX_SETUP_RUN_ACTIONS: "/api/workspaces/sandbox-setup/run-actions",
   /** One of a repository's run actions added, changed, moved, or removed, to an owner or admin (PATCH). */
   WORKSPACE_SANDBOX_SETUP_RUN_ACTION: "/api/workspaces/sandbox-setup/run-action",
+  /** A workspace's billing, whether it is on, set up, and blocked, to an owner or admin (GET, `BILLING_QUERY`) (`billing-wire.ts`). */
+  BILLING_STATUS: "/api/workspaces/billing",
+  /** Where an owner or admin sets a workspace's billing up (POST): a Stripe Checkout page in setup mode. */
+  BILLING_SETUP: "/api/workspaces/billing/setup",
+  /** Where an owner or admin manages a workspace's billing, its card and invoices (POST): a Stripe Customer Portal page. */
+  BILLING_PORTAL: "/api/workspaces/billing/portal",
   /** A workspace's cloud sandbox size, its vCPUs, to a member (GET, `WORKSPACE_SANDBOX_SIZE_QUERY`), or its vCPUs chosen by an owner or admin (PUT), answering the size as it then stands (`workspace-sandbox-size-wire.ts`). */
   WORKSPACE_SANDBOX_SIZE: "/api/workspaces/sandbox-size",
   /** Whether the deployment holds our Slack bot, and the Slack team a workspace's bot is connected to, to a member (GET, `WORKSPACE_SLACK_BOT_QUERY`). */
