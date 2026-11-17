@@ -496,8 +496,11 @@ export function useNewAgentTalk(
 
   if (!voice.offered) return undefined;
 
+  // Note that Talk starts nothing until the keys are read, since an agent started with no key could take no call.
   const onTalk = () => {
-    if (keys !== undefined && !savesOpenAiKey(keys)) {
+    if (keys === undefined) return;
+
+    if (!savesOpenAiKey(keys)) {
       buzz(BUZZ.ERROR);
       notices.say({
         kind: NOTICE_KIND.REFUSED,

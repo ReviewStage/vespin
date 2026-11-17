@@ -1095,6 +1095,7 @@ export function NewTaskScreen({
     () =>
       new Promise<VoiceCallInto | undefined>((called) =>
         go(
+          // Note that a task made whose agent was refused is said as a refusal, with Try again, since Talk has no agent to call without one.
           () =>
             startTask({
               prompt: undefined,
@@ -1102,7 +1103,11 @@ export function NewTaskScreen({
               picked: pick.picked,
               runsOn,
               ...place,
-            }),
+            }).then((answer) =>
+              "taskId" in answer && answer.agentId === undefined && answer.note !== undefined
+                ? { refused: answer.note }
+                : answer,
+            ),
           undefined,
           undefined,
           called,
@@ -1118,7 +1123,11 @@ export function NewTaskScreen({
         onStart={start}
         file={{ ready: filed !== undefined && placed && !starting, onFile: file }}
         kept={kept}
-        talk={talk === undefined || drafted ? undefined : { talk, ready: placed && !starting }}
+        talk={
+          talk === undefined || drafted || pictures.opening
+            ? undefined
+            : { talk, ready: placed && !starting }
+        }
       />
       <FocusedComposeSheet
         head={head}
