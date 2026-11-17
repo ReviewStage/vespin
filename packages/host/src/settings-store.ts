@@ -629,6 +629,8 @@ export class SettingsStore {
    * after a sign-out cleared the vault, or over the next account's.
    */
   readonly #accounts = Semaphore.makeUnsafe(1);
+  /** Whether this run has cleared the vault of tokens no record names; see `#clearStrayTokens`. */
+  #strayCleared = false;
   /**
    * The account whose preferences the service has answered, or failed to,
    * since it signed in to this host: until then the preferences this store
@@ -874,7 +876,12 @@ export class SettingsStore {
     return Effect.gen({ self: this }, function* () {
       const { account } = yield* this.#load();
 
-      if (!account) return undefined;
+      if (!account) {
+        yield* this.#clearStrayTokens();
+
+        return undefined;
+      }
+
       const tokens = yield* this.#tokensOf(account);
 
       if (tokens === undefined) return undefined;
@@ -914,6 +921,27 @@ export class SettingsStore {
 
       return tokens;
     });
+  }
+
+  /**
+   * Clears tokens the vault holds while no record names them, once a run: a
+   * sign-out whose vault delete failed after the record went, or an app
+   * deleted and installed again, since the iPhone's Keychain outlives the
+   * app. It's checked again inside the account gate, so a sign-in whose
+   * vault write is ahead of its record never loses its tokens.
+   */
+  #clearStrayTokens(): Effect.Effect<void, PlatformError> {
+    const vault = this.#vault;
+
+    if (vault === undefined || this.#strayCleared) return Effect.void;
+
+    return this.#accounts.withPermits(1)(
+      Effect.gen({ self: this }, function* () {
+        if ((yield* this.#load()).account !== undefined) return;
+        yield* vault.clear;
+        this.#strayCleared = true;
+      }),
+    );
   }
 
   /**

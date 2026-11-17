@@ -22,7 +22,7 @@ const KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
   keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
 };
 
-/** The account's tokens in the app's Keychain; a read the Keychain refuses reads as none, and a write it refuses fails. */
+/** The account's tokens in the app's Keychain; a read the Keychain refuses reads as none, a write it refuses fails, and a delete it refuses is tried again by the settings store's next read while no one is signed in. */
 export const keychainTokens: TokenVault = {
   read: Effect.orElseSucceed(
     Effect.tryPromise(() => SecureStore.getItemAsync(TOKENS_ITEM, KEYCHAIN_OPTIONS)),

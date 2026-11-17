@@ -681,6 +681,15 @@ it.effect(
     }).pipe(Effect.provide(NodeFileSystem.layer)),
 );
 
+test("tokens a failed sign-out or an uninstall left in the vault are cleared by the next read that finds no one signed in", async (t) => {
+  const directory = await temporaryDirectory(t, "settings-");
+  const vault = memoryVault();
+  await Effect.runPromise(vault.write("left behind"));
+
+  assert.equal(await storeIn(directory, { tokenVault: vault }).readAccount(), undefined);
+  assert.equal(vault.held(), undefined);
+});
+
 it.effect("a sign-out while an older build's tokens are moving leaves no tokens in the vault", () =>
   Effect.gen(function* () {
     const directory = yield* temporaryDirectoryScoped("settings-");
