@@ -1,0 +1,13 @@
+== bundle PLAUNCH4 base e8466f2101
+  built e8466f2101 base app Vmain3.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+cold-one-1: T=1794921634698; 14 [launch] lines; cold-one-1: video aligned at -0.892s; splash gone +1267 ms; inbox drawn (settled) +6300 ms; 260 frames
+cold-one-2: T=1794921692697; 15 [launch] lines; cold-one-2: video aligned at 1.024s; splash gone +5833 ms; inbox drawn (settled) +6033 ms; 188 frames
+cold-one-3: T=1794921744003; 15 [launch] lines; cold-one-3: video aligned at -3.638s; splash gone +3633 ms; inbox drawn (settled) +3767 ms; 151 frames
+cold-textrow-1: T=1794921809885; 21 [launch] lines; cold-textrow-1: video aligned at -4.259s; splash gone +5700 ms; inbox drawn (settled) +5933 ms; 215 frames
+cold-textrow-2: T=1794921867457; 22 [launch] lines; cold-textrow-2: video aligned at 0.983s; splash gone +5167 ms; inbox drawn (settled) +5433 ms; 170 frames
+cold-textrow-3: T=1794921927030; 21 [launch] lines; cold-textrow-3: video aligned at -7.248s; splash gone +3767 ms; inbox drawn (settled) +10767 ms; 330 frames
+trace-full: xctrace exit 0, 5 MB, 22 [launch] lines

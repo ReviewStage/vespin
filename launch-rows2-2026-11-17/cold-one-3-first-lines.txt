@@ -1,0 +1,3 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-17 08:21:48.224 Df Vespin[86655:ca6600f] [com.apple.UIIntelligenceSupport:xpc] Received agent launch notification with agent PID: 87623
+2026-11-17 08:21:48.236 Df Vespin[86655:ca6600f] [com.apple.UIIntelligenceSupport:xpc] Connection established with agent PID: 87623

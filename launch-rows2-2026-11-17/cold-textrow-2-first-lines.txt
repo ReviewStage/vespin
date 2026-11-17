@@ -1,0 +1,3 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-17 08:23:54.896 Df Vespin[7413:ca72508] [com.apple.CFNetwork:Default] Connection 1: cleaning up
+2026-11-17 08:23:54.896 Df Vespin[7413:ca72508] [com.apple.network:connection] [C1 934A0FC4-5F3E-4237-9489-97D2B9CCA9BA Hostname#28ef43a9:443 quic-connection, url: https://github.com/ada.png, definite, attribution: developer] cancel

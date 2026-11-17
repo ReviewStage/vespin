@@ -1,0 +1,15 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-17 08:20:40.527 E  Vespin[76266:ca5f941] [com.facebook.react.log:javascript] [launch] bundle-start +0 ms js wall=1794921640527 perf=395114525
+2026-11-17 08:20:40.531 E  Vespin[76266:ca5f941] [com.facebook.react.log:javascript] [launch] rows-variant-one +4 ms js wall=1794921640531 perf=395114529
+2026-11-17 08:20:41.047 E  Vespin[76266:ca5f941] [com.facebook.react.log:javascript] [launch] entry-modules-loaded +520 ms js wall=1794921641047 perf=395115045
+2026-11-17 08:20:41.210 E  Vespin[76266:ca5f941] [com.facebook.react.log:javascript] [launch] root-layout-loaded +683 ms js wall=1794921641210 perf=395115207
+2026-11-17 08:20:41.248 E  Vespin[76266:ca5f941] [com.facebook.react.log:javascript] [launch] host-start +722 ms js wall=1794921641249 perf=395115246
+2026-11-17 08:20:41.289 E  Vespin[76266:ca5f941] [com.facebook.react.log:javascript] [launch] host-standing +762 ms js wall=1794921641289 perf=395115287
+2026-11-17 08:20:41.292 E  Vespin[76266:ca5f941] [com.facebook.react.log:javascript] [launch] document-written +765 ms js wall=1794921641292 perf=395115289
+2026-11-17 08:20:41.446 E  Vespin[76266:ca5f941] [com.facebook.react.log:javascript] [launch] inbox-rows-render +919 ms js wall=1794921641446 perf=395115443
+2026-11-17 08:20:41.451 E  Vespin[76266:ca5f941] [com.facebook.react.log:javascript] [launch] inbox-row-render#1 +925 ms js wall=1794921641452 perf=395115449
+2026-11-17 08:20:41.661 E  Vespin[76266:ca5f941] [com.facebook.react.log:javascript] [launch] splash-hide +1134 ms js wall=1794921641661 perf=395115659
+2026-11-17 08:20:41.662 E  Vespin[76266:ca5f941] [com.facebook.react.log:javascript] [launch] rnStartupTiming {} perfNow=395115659
+2026-11-17 08:20:43.151 E  Vespin[76266:ca5f941] [com.facebook.react.log:javascript] [launch] first-row-appear +2624 ms js wall=1794921643151 perf=395117148
+2026-11-17 08:20:43.151 E  Vespin[76266:ca5f941] [com.facebook.react.log:javascript] [launch] row-appear#1 +2625 ms js wall=1794921643152 perf=395117149
+2026-11-17 08:20:54.303 Df log[78765:0] [com.apple.log:] log run noninteractively, parent: 73603 (launchd_sim), args: 'log' 'show' '--last' '1m' '--style' 'compact' '--predicate' 'eventMessage CONTAINS "[launch]"'
