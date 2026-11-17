@@ -16,8 +16,15 @@ import { declaredAnswer } from "./declared-acts.js";
  * (`act-port/live-follows.ts`).
  */
 export interface WorkspaceProceduresDependencies {
-  /** Opens an address in the browser: a connection's install or sign-in page the service named. */
-  openExternal: (url: string) => Promise<void>;
+  /**
+   * Opens an address in the browser: a connection's install or sign-in page
+   * the service named, with the page it lands on once settled where one is
+   * named, which a client showing it in a sheet of its own closes the sheet
+   * on (the iOS app's authentication sheet).
+   */
+  openExternal: (url: string, landing?: string) => Promise<void>;
+  /** The page GitHub's install lands on once settled (`GITHUB_INSTALL_LANDING`), named by a client that opens it in a sheet of its own; none where it opens in a browser. */
+  githubLanding?: string;
 }
 
 /** Sentry's own origin, the one a Sentry install is opened on. */
@@ -46,7 +53,7 @@ export function workspaceProcedures(
   dependencies: WorkspaceProceduresDependencies,
   acts: ConnectActs,
 ) {
-  const { openExternal } = dependencies;
+  const { openExternal, githubLanding } = dependencies;
 
   return {
     // Note that the address the service answered opens only where it is
@@ -61,7 +68,7 @@ export function workspaceProcedures(
       );
 
       if (!isGitHubAddress(url)) return yield* Effect.fail(errors.REFUSED());
-      yield* Effect.promise(() => openExternal(url));
+      yield* Effect.promise(() => openExternal(url, githubLanding));
     }),
     // Note that the address the service answered opens only where it is
     // Sentry's own, because it is the one address here the panel did not name.

@@ -230,19 +230,26 @@ afterEach(() => {
 /**
  * A panel's port over the connections' procedures alone, each handler
  * answering the address `answers` names for it or the refusal it fails
- * with, every address opened kept in `opened`.
+ * with, every address opened kept in `opened` and the page each was to
+ * land on in `landings`, a client naming GitHub's as `githubLanding`.
  */
-function connectPort(answers: {
-  readonly github: Effect.Effect<string, ActRefused>;
-  readonly sentry: Effect.Effect<string, ActRefused>;
-  readonly slack: Effect.Effect<string, ActRefused>;
-}) {
+function connectPort(
+  answers: {
+    readonly github: Effect.Effect<string, ActRefused>;
+    readonly sentry: Effect.Effect<string, ActRefused>;
+    readonly slack: Effect.Effect<string, ActRefused>;
+  },
+  githubLanding?: string,
+) {
   const opened: string[] = [];
+  const landings: (string | undefined)[] = [];
 
   const dependencies: WorkspaceProceduresDependencies = {
-    openExternal: async (url) => {
+    openExternal: async (url, landing) => {
       opened.push(url);
+      landings.push(landing);
     },
+    ...(githubLanding === undefined ? {} : { githubLanding }),
   };
 
   const port = testActPort(
@@ -255,7 +262,7 @@ function connectPort(answers: {
 
   ports.push(port);
 
-  return { port, opened };
+  return { port, opened, landings };
 }
 
 it.effect.each(ACTS)(
@@ -386,5 +393,30 @@ it.effect(
         { refused: WORKSPACE_ACTS.WORKSPACE_SLACK_BOT_INSTALL.refusal },
       ]);
       assert.deepEqual([...elsewhere.opened, ...refused.opened], []);
+    }),
+);
+
+it.effect(
+  "GitHub's install opens toward the landing a client names, where its sheet closes, and toward none where it names none",
+  () =>
+    Effect.gen(function* () {
+      const github = { kind: WORKSPACE_ACT_KIND.WORKSPACE_GITHUB_CONNECT, payload: WORKSPACE };
+      const sentry = { kind: WORKSPACE_ACT_KIND.WORKSPACE_SENTRY_INSTALL, payload: WORKSPACE };
+      const landing = "https://vespin.test/github-installed";
+
+      const answers = {
+        github: Effect.succeed(INSTALL_URL),
+        sentry: Effect.succeed(SENTRY_INSTALL_URL),
+        slack: Effect.succeed(SLACK_INSTALL_URL),
+      };
+
+      const sheet = connectPort(answers, landing);
+      const browser = connectPort(answers);
+      yield* sheet.port.perform(github, PANEL);
+      yield* sheet.port.perform(sentry, PANEL);
+      yield* browser.port.perform(github, PANEL);
+
+      assert.deepEqual(sheet.landings, [landing, undefined]);
+      assert.deepEqual(browser.landings, [undefined]);
     }),
 );

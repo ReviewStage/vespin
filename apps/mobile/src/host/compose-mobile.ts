@@ -27,6 +27,7 @@
 
 import { createORPCClient } from "@orpc/client";
 import { type AuthSession, authSessionConsent } from "@repo/credentials";
+import { GITHUB_INSTALL_LANDING } from "@repo/features";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
 import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
 import { LINK_ORIGIN } from "@repo/features/link-home";
@@ -282,7 +283,8 @@ function portDependencies(
       openExternal,
       serviceBaseUrl: SERVICE_ORIGIN,
     },
-    workspaces: { openExternal },
+    // GitHub's install opens in the authentication sheet, closed as it lands on the service's page.
+    workspaces: { openExternal, githubLanding: `${SERVICE_ORIGIN}${GITHUB_INSTALL_LANDING.PATH}` },
   };
 }
 

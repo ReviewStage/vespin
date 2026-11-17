@@ -23,6 +23,9 @@ export const SETUP_STEP = {
 
 export type SetupStep = (typeof SETUP_STEP)[keyof typeof SETUP_STEP];
 
+/** What setup says over GitHub's step, which may be skipped, and every client's GitHub connection beside it: agents work in the account's repositories. */
+export const GITHUB_PURPOSE = "Agents work in your repositories and open pull requests.";
+
 /**
  * The steps an account set up for `audience` walks, in order. Note that a
  * team's workspace is made before GitHub, because the App is installed on

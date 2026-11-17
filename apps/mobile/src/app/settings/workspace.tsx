@@ -54,6 +54,7 @@ import { setStringAsync } from "expo-clipboard";
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
+import { GitHubSection } from "../../github/github-connection.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
@@ -288,6 +289,8 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
               />
             ) : null}
           </ListSection>
+          {/* Note that GitHub is the managers', as the panel's Settings › Workspace offers it to an owner or an admin alone. */}
+          {manages ? <GitHubSection workspaceId={workspaceId} /> : null}
           <ListSection
             title="Members"
             count={members?.length}

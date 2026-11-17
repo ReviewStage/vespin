@@ -189,6 +189,7 @@ export {
 } from "./schema-access.js";
 
 export {
+  GITHUB_PURPOSE,
   SETUP_GATE,
   SETUP_STEP,
   type SetupGate,
