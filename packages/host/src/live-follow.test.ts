@@ -5,6 +5,7 @@ import { LIVE_POLL_URL, LIVE_SIGNED_OUT, type SealedLiveQueryWire } from "@repo/
 import { entityPool, type FieldChange, fieldKind, type WriteDeclaration } from "@repo/sync";
 import {
   Clock,
+  Deferred,
   Duration,
   Effect,
   Exit,
@@ -560,6 +561,58 @@ it.effect(
         `the row stood in every draw since it was made: ${JSON.stringify(drawn)}`,
       );
       yield* Fiber.interrupt(write);
+      yield* Fiber.interrupt(following);
+    }),
+);
+
+it.effect(
+  "a write carried by an answer the caller holds the rows of already waits until the caller has taken those rows",
+  () =>
+    Effect.gen(function* () {
+      const live = polledLive<Part>(["left", "right"]);
+      let wait: TxWait | undefined;
+      const gate = yield* Deferred.make<void>();
+      let answers = 0;
+
+      live.set({ left: [{ id: "a" }], right: [] }, ["40"]);
+
+      const following = yield* Effect.forkChild(
+        Stream.runForEach(
+          liveRows<Part>(
+            {
+              poll: live.poll,
+              onTxWait: (handed) => {
+                wait = handed;
+              },
+            },
+            live.first(),
+          ),
+          // The caller takes its first answer at once, and every later one only once the gate opens.
+          () =>
+            Effect.suspend(() => {
+              answers += 1;
+
+              return answers === 1 ? Effect.void : Deferred.await(gate);
+            }),
+        ),
+      );
+
+      yield* settled;
+      live.set({ left: [{ id: "a" }, { id: "made" }], right: [] }, ["41"]);
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* settled;
+      // The same rows again, the write's own transaction carried on them.
+      live.set({ left: [{ id: "a" }, { id: "made" }], right: [] }, ["42"]);
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* settled;
+
+      const committed = yield* Effect.forkChild(confirmWrite(wait, "42"));
+      yield* settled;
+      assert.equal(committed.pollUnsafe(), undefined, "the rows carrying it are not taken yet");
+
+      yield* Deferred.succeed(gate, undefined);
+      yield* settled;
+      assert.ok(succeeded(committed), "confirmed once the caller took them");
       yield* Fiber.interrupt(following);
     }),
 );

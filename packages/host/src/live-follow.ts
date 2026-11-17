@@ -469,17 +469,19 @@ function liveAnswers<Part extends string>(
   const handed = Stream.callback<HandedAnswer<Part>, LiveBroken>((queue) =>
     Effect.gen(function* () {
       let last: string | undefined;
+      /** What settles once the caller has taken the last answer handed on, and with it every one before; none before the first. */
+      let lastTaken: Deferred.Deferred<void> | undefined;
+      /** What settles once every answer's snapshots and txids so far are carried, so each answer's are carried after those before it. */
+      let carriedSoFar: Deferred.Deferred<void> | undefined;
 
-      /** Hands the answer on, answering what settles once the caller has taken it; none for one the caller already holds. */
+      /** Hands the answer on, unless the caller already holds it. */
       const emit = (answer: LiveAnswer<Part>) => {
         const said = JSON.stringify(answer);
 
-        if (said === last) return undefined;
+        if (said === last) return;
         last = said;
-        const taken = Deferred.makeUnsafe<void>();
-        Queue.offerUnsafe(queue, { answer, taken });
-
-        return taken;
+        lastTaken = Deferred.makeUnsafe<void>();
+        Queue.offerUnsafe(queue, { answer, taken: lastTaken });
       };
 
       const confirmations = txConfirmations();
@@ -490,11 +492,12 @@ function liveAnswers<Part extends string>(
         }),
       );
 
-      /** Hands the answer's rows on, then, once the caller has taken them, its snapshots and its txids, answering whether a write woke it. */
+      /** Hands the answer's rows on, then, once the caller has taken every answer handed on so far, its snapshots and its txids, answering whether a write woke it. */
       const answered = (read: SealedRead<Part>) =>
         Effect.gen(function* () {
           const rows = rowsOf(parts, read);
-          const taken = rows === undefined ? undefined : emit({ rows, past: pastOf(read) });
+
+          if (rows !== undefined) emit({ rows, past: pastOf(read) });
           const snapshots = snapshotsOf(parts, read);
           const txids = txidsOf(read);
 
@@ -510,8 +513,24 @@ function liveAnswers<Part extends string>(
             if (txids.length > 0) confirmations.carry(txids, yield* Clock.currentTimeMillis);
           });
 
-          if (taken === undefined) yield* confirmed;
-          else yield* Effect.forkScoped(Effect.andThen(Deferred.await(taken), confirmed));
+          // Note that an answer carrying no rows, or rows the caller holds, waits on those still on their way to it too, since its transactions may be theirs.
+          const taken = lastTaken;
+          const before = carriedSoFar;
+
+          if (taken === undefined && before === undefined) {
+            yield* confirmed;
+          } else {
+            const carried = Deferred.makeUnsafe<void>();
+            carriedSoFar = carried;
+            yield* Effect.forkScoped(
+              Effect.gen(function* () {
+                if (before !== undefined) yield* Deferred.await(before);
+
+                if (taken !== undefined) yield* Deferred.await(taken);
+                yield* confirmed;
+              }).pipe(Effect.ensuring(Deferred.succeed(carried, undefined))),
+            );
+          }
 
           return txids.length > 0;
         });
