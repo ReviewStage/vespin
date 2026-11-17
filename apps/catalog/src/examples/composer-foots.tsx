@@ -36,6 +36,8 @@ import { CatalogSection } from "../section";
  * saying what is missing; holding files, which stand over its words; near its limit, the counter showing;
  * sending; Stop in the send's place, and stopping; with a cut paste's note,
  * a refused send's Retry, and a closed box's mend under its note; dictating;
+ * an agent's Talk in Send's place while the box is empty, Send once it holds
+ * words or files, Stop while a turn runs, and Talk with no OpenAI API key;
  * in a call, wide and narrow; then at a
  * field's and a bare frame's inset, and still loading.
  */
@@ -226,6 +228,39 @@ function ComposerFoots(): React.JSX.Element {
                   Listening · 0:04
                 </Text>
               }
+            />
+          </Stack>
+        </div>
+      </CatalogSection>
+      <CatalogSection id="composer-foot-talk" title="Talk in Send's place">
+        <div className="catalog-column">
+          <Stack gap={GAP.FIELD}>
+            <Box
+              words="Ask for a follow up"
+              send={{ label: "Send", empty: true }}
+              talk={{ onPress: ignore }}
+            />
+            <Box
+              words="Run the tests again"
+              send={{ label: "Send", empty: false }}
+              talk={{ onPress: ignore }}
+            />
+            <Box
+              words="Ask for a follow up"
+              files={<AttachmentChip name="plan.pdf" icon={<GLYPH.FILE />} onRemove={ignore} />}
+              send={{ label: "Send", empty: false }}
+              talk={{ onPress: ignore }}
+            />
+            <Box
+              words="Ask for a follow up"
+              send={{ label: "Send", empty: true }}
+              stop={{ label: "Stop", onStop: ignore }}
+              talk={{ onPress: ignore }}
+            />
+            <Box
+              words="Ask for a follow up"
+              send={{ label: "Send", empty: true }}
+              talk={{ keyMissing: true, onPress: ignore }}
             />
           </Stack>
         </div>
