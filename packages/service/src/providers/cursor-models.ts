@@ -380,7 +380,7 @@ function offeredOf(item: CursorListItem): readonly CursorModel[] {
   ];
 }
 
-/** Cursor's list as the models we offer, in Cursor's order, each model read on its own and one it cannot read left out, the first of any two that would take one id kept. */
+/** Cursor's list turned into the models we offer, in Cursor's order: each item is read on its own, unreadable ones are dropped, and the first wins when two would share one catalog id. */
 export function cursorModelsOf(items: readonly unknown[]): readonly CursorModel[] {
   const taken = new Set<string>();
 
