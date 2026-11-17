@@ -11,6 +11,7 @@ import { PRESS_LISTENER_BASELINE } from "../shared/press-listener-guard.ts";
 import { RETIRED } from "../shared/retired.ts";
 import { ROW_DRAWERS } from "../shared/row-behavior-guard.ts";
 import { SANDBOX_DELETERS } from "../shared/sandbox-delete-guard.ts";
+import { WRITE_MUTATION_BASELINE } from "../shared/write-mutation-guard.ts";
 import type { RepositoryGuard } from "./guard.ts";
 
 /**
@@ -61,6 +62,7 @@ async function antiSlopListProblems(root: string): Promise<readonly string[]> {
     keptAllowed,
     { name: "busy-baseline.json", paths: Object.keys(BUSY_BASELINE) },
     { name: "press-listener-baseline.json", paths: Object.keys(PRESS_LISTENER_BASELINE) },
+    { name: "write-mutation-baseline.json", paths: Object.keys(WRITE_MUTATION_BASELINE) },
     { name: "arrow-keys.json's baseline", paths: Object.keys(ARROW_KEY_BASELINE) },
     { name: "arrow-keys.json's exemptions", paths: ARROW_KEY_EXEMPTIONS },
     { name: "row-behavior.json's drawers", paths: Object.keys(ROW_DRAWERS) },
