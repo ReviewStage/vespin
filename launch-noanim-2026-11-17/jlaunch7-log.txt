@@ -1,0 +1,26 @@
+== bundle PLAUNCH7 base 7bf0239824
+  built 7bf0239824 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+cold-noanim-1: app alive after 12 s; last line: ; crash report: none
+cold-noanim-1: T=1794932835365; launch try 1 (dev.vespin.ios: 61930); 23 [launch] lines; splash-hide->first-row-appear 1559 ms; cold-noanim-1: video aligned at 0.232s; splash gone +6533 ms; inbox drawn (settled) +6600 ms; 201 frames
+cold-full-1: app alive after 12 s; last line: ; crash report: none
+cold-full-1: T=1794932888446; launch try 1 (dev.vespin.ios: 71881); 23 [launch] lines; splash-hide->first-row-appear 1537 ms; cold-full-1: video aligned at 0.646s; splash gone +6633 ms; inbox drawn (settled) +6867 ms; 213 frames
+cold-noanim-2: app alive after 12 s; last line: ; crash report: none
+cold-noanim-2: T=1794932943336; launch try 1 (dev.vespin.ios: 81579); 23 [launch] lines; splash-hide->first-row-appear 1517 ms; cold-noanim-2: video aligned at 1.671s; splash gone +6200 ms; inbox drawn (settled) +6233 ms; 191 frames
+cold-full-2: app alive after 12 s; last line: ; crash report: none
+cold-full-2: T=1794932995502; launch try 1 (dev.vespin.ios: 92858); 23 [launch] lines; splash-hide->first-row-appear 1857 ms; cold-full-2: video aligned at 0.246s; splash gone +6567 ms; inbox drawn (settled) +6833 ms; 212 frames
+cold-noanim-3: app alive after 12 s; last line: ; crash report: none
+cold-noanim-3: T=1794933050191; launch try 1 (dev.vespin.ios: 4627); 25 [launch] lines; splash-hide->first-row-appear 1426 ms; cold-noanim-3: video aligned at 2.952s; splash gone +6200 ms; inbox drawn (settled) +6267 ms; 196 frames
+cold-full-3: app alive after 12 s; last line: ; crash report: none
+cold-full-3: T=1794933103544; launch try 1 (dev.vespin.ios: 17058); 25 [launch] lines; splash-hide->first-row-appear 1658 ms; cold-full-3: video aligned at 0.946s; splash gone +6900 ms; inbox drawn (settled) +7133 ms; 343 frames
+cold-large-noanim-1: app alive after 30 s; last line: ; crash report: none
+cold-large-noanim-1: T=1794933159002; launch try 1 (dev.vespin.ios: 27885); 26 [launch] lines; splash-hide->first-row-appear 1285 ms; cold-large-noanim-1: video aligned at 0.966s; splash gone +6400 ms; inbox drawn (settled) +6433 ms; 616 frames
+cold-large-full-1: app alive after 30 s; last line: ; crash report: none
+cold-large-full-1: T=1794933227120; launch try 1 (dev.vespin.ios: 43562); 26 [launch] lines; splash-hide->first-row-appear 1124 ms; cold-large-full-1: video aligned at 0.621s; splash gone +6100 ms; inbox drawn (settled) +6367 ms; 363 frames
+cold-large-noanim-2: app alive after 30 s; last line: ; crash report: none
+cold-large-noanim-2: T=1794933295261; launch try 1 (dev.vespin.ios: 60890); 25 [launch] lines; splash-hide->first-row-appear 1779 ms; cold-large-noanim-2: video aligned at -1.151s; splash gone +7533 ms; inbox drawn (settled) +7600 ms; 246 frames
+cold-large-full-2: app alive after 30 s; last line: ; crash report: none
+cold-large-full-2: T=1794933366758; launch try 1 (dev.vespin.ios: 80546); 25 [launch] lines; splash-hide->first-row-appear 1753 ms; cold-large-full-2: video aligned at -6.142s; splash gone +5633 ms; inbox drawn (settled) +5900 ms; 185 frames
