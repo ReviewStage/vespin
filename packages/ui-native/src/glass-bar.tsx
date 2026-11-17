@@ -3,15 +3,12 @@
 import { GlassEffectContainer, Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
-  background,
   frame,
   glassEffect,
   type ModifierConfig,
   onGeometryChange,
   padding,
-  strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
-import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
   Keyboard,
@@ -23,7 +20,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useReduceTransparency } from "./accessibility.js";
 import { KeyboardDockArea } from "./keyboard-dock.js";
 import { useColors } from "./tokens/colors.js";
 import { PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
@@ -87,11 +83,8 @@ const styles = StyleSheet.create({
   row: { marginHorizontal: BAR_MARGIN },
   // What stands over a bar in a glass of its own, as far in as the bar and apart from it.
   above: { marginHorizontal: BAR_MARGIN, marginBottom: SPACE.TIGHT * 2 },
-  bar: {
-    marginHorizontal: BAR_MARGIN,
-    padding: BAR_EDGE,
-    borderRadius: BAR_RADIUS,
-  },
+  // The bar stands in from the screen's edges, its glass drawn by its SwiftUI.
+  bar: { marginHorizontal: BAR_MARGIN },
 });
 
 /**
@@ -142,29 +135,6 @@ export function useKeyboardHeight(moves = true): number {
   return height;
 }
 
-/**
- * A bar's solid stand-in for glass: the surface's ground inside the strong
- * edge, which holds the field's bounds apart from the screen behind it.
- */
-function SolidBar({ children }: { readonly children: ReactNode }) {
-  const colors = useColors();
-
-  return (
-    <View
-      style={[
-        styles.bar,
-        {
-          backgroundColor: colors.SURFACE,
-          borderColor: colors.TEXT_MUTED,
-          borderWidth: StyleSheet.hairlineWidth,
-        },
-      ]}
-    >
-      {children}
-    </View>
-  );
-}
-
 /** The filled ground a field's row and what heads it stand on inside the glass, so their words read over a bright picture scrolling under the bar. */
 function useFieldGround(radius: number): readonly ModifierConfig[] {
   const colors = useColors();
@@ -179,39 +149,18 @@ function useFieldGround(radius: number): readonly ModifierConfig[] {
 
 /**
  * The glass a SwiftUI piece floating over the screen stands in, rounded as a
- * bar is, such as the failure notice and a split view's composer: the
- * system's glass, or, where Liquid Glass is unavailable or the reader turned
- * on Reduce Transparency, the same solid stand-in a `GlassBar` draws, the
- * surface's ground inside the quiet ink's hairline, rather than whatever the
- * system makes of glass the reader asked not to see through.
+ * bar is, such as a composer's bar, the failure notice and a split view's
+ * composer: the system's own glass, which iOS draws solid where the reader
+ * turned on Reduce Transparency.
  */
-export function useBarGlass(): readonly ModifierConfig[] {
-  const colors = useColors();
-  const solid = useReduceTransparency() || !isLiquidGlassAvailable();
-
-  return solid
-    ? [
-        background(
-          colors.SURFACE,
-          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: BAR_RADIUS }),
-        ),
-        strokeBorder({
-          content: colors.TEXT_MUTED,
-          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-          shape: "roundedRectangle",
-          cornerRadius: BAR_RADIUS,
-          style: { lineWidth: StyleSheet.hairlineWidth },
-        }),
-      ]
-    : [
-        glassEffect({
-          glass: { variant: "regular" },
-          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-          shape: "roundedRectangle",
-          cornerRadius: BAR_RADIUS,
-        }),
-      ];
-}
+export const BAR_GLASS: readonly ModifierConfig[] = [
+  glassEffect({
+    glass: { variant: "regular" },
+    // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+    shape: "roundedRectangle",
+    cornerRadius: BAR_RADIUS,
+  }),
+];
 
 /**
  * What heads a bar inside its glass, such as a composer's held call and
@@ -297,11 +246,9 @@ function DockedFoot({ children }: { readonly children: ReactNode }) {
  * where it has one, along the row's foot, so a field grown past one line
  * keeps its buttons beside its last line, as Messages' do. It stands inside
  * the screen's bottom safe area, which the tab bar's height is part of, so
- * the bar sits above the tab bar rather than under it. Note that where
- * Liquid Glass is unavailable, before iOS 26, or the reader turned on Reduce
- * Transparency, the bar is drawn solid on the surface's ground inside the
- * quiet ink rather than a hand-drawn copy of glass, so nothing scrolls
- * through behind its words.
+ * the bar sits above the tab bar rather than under it. Its glass is the
+ * system's own (`BAR_GLASS`) on its SwiftUI, which iOS draws solid where
+ * the reader turned on Reduce Transparency.
  */
 export function GlassBar({
   children,
@@ -320,42 +267,37 @@ export function GlassBar({
   /** What the bar's SwiftUI takes over its whole glass, such as a drop of pictures. */
   readonly modifiers?: readonly ModifierConfig[];
 }) {
-  const solid = useReduceTransparency() || !isLiquidGlassAvailable();
   const ground = useFieldGround(PRESS_SIZE / 2);
+  const pill = field ? ground : [];
 
-  // Note that a solid bar already stands on that fill, so only the glass takes the pill, and its head the same ground.
-  const filled = field && !solid;
-  const pill = filled ? ground : [];
+  // Note that the glass spans the bar's width whatever its row holds, as the bar always has.
+  const glass = [
+    frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+    padding({ all: BAR_EDGE }),
+    ...BAR_GLASS,
+  ];
 
   const row = (
     <HStack
       alignment="bottom"
       spacing={BAR_ROW_SPACING}
-      modifiers={head === undefined ? [...modifiers, ...pill] : [...pill]}
+      modifiers={head === undefined ? [...modifiers, ...pill, ...glass] : [...pill]}
     >
       {children}
     </HStack>
   );
 
-  const content = (
-    <Host matchContents={{ vertical: true }} style={styles.content}>
+  const bar = (
+    <Host matchContents={{ vertical: true }} style={[styles.content, styles.bar]}>
       {head === undefined ? (
         row
       ) : (
-        <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers]}>
-          <BarHead filled={filled}>{head}</BarHead>
+        <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers, ...glass]}>
+          <BarHead filled={field}>{head}</BarHead>
           {row}
         </VStack>
       )}
     </Host>
-  );
-
-  const bar = solid ? (
-    <SolidBar>{content}</SolidBar>
-  ) : (
-    <GlassView glassEffectStyle="regular" style={styles.bar}>
-      {content}
-    </GlassView>
   );
 
   return (
