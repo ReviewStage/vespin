@@ -15,10 +15,12 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { accountExperimentOn, readAccountPreferences } from "@repo/database/models/account-store";
 import { machineOwnerOf } from "@repo/database/models/machine-command-store";
+import { readTaskHeader } from "@repo/database/models/task-store";
 import {
   workspaceExperimentOn,
   workspaceExperimentsOf,
 } from "@repo/database/models/workspace-experiment-store";
+import { isWorkspaceMember } from "@repo/database/models/workspace-store";
 import { EXPERIMENT, experimentOn, type WorkspaceExperiment } from "@repo/settings";
 import { Effect, Option } from "effect";
 import { logStoreFailure } from "../http/store-failure.js";
@@ -72,7 +74,7 @@ export interface ExperimentsOn {
   readonly turnEndOn: boolean;
   readonly replyButtonsOn: boolean;
   readonly computerUseOn: boolean;
-  /** Whether the agent's starter keeps an Inbox (`@repo/settings`'s `inbox`), which offers it the threads it posts there; no experiment, but read and gated as Done and follow-ups is. */
+  /** Whether the member its threads would land with keeps an Inbox (`@repo/settings`'s `inbox`): its task's assignee, else its starter (`inboxKeeperOf`), which offers it the threads it posts there; no experiment, but read and gated as Done and follow-ups is. */
   readonly inboxOn: boolean;
 }
 
@@ -96,11 +98,31 @@ export const NO_EXPERIMENT_ON: ExperimentsOn = {
   inboxOn: false,
 };
 
-/** The agent an agent's experiments are read for: its workspace, the account that started it, and the conversation whose Mac owner's own Computer use is read. */
+/** The agent an agent's experiments are read for: its workspace, the account that started it, its task, whose assignee's Inbox is read, and the conversation whose Mac owner's own Computer use is read. */
 export interface ExperimentsOf {
   readonly organizationId: string;
   readonly userId: string;
+  readonly taskId: string;
   readonly conversationId: string;
+}
+
+/**
+ * Whose Inbox an agent's threads would land in, and so whose choice of
+ * keeping one decides whether it posts any: its task's assignee while they
+ * stand in the agent's workspace, else the agent's starter, the order a
+ * thread picks who it waits on by (`inboxItemWaitsOn`). Note that it is read
+ * again as each session opens and each tool is called, so a task
+ * reassigned moves its agents to the new assignee's choice.
+ */
+function inboxKeeperOf(agent: ExperimentsOf) {
+  return Effect.gen(function* () {
+    const header = yield* readTaskHeader(agent.userId, agent.taskId);
+    const assignee = Option.getOrUndefined(header)?.assigneeId ?? null;
+
+    if (assignee === null || assignee === agent.userId) return agent.userId;
+
+    return (yield* isWorkspaceMember(assignee, agent.organizationId)) ? assignee : agent.userId;
+  });
 }
 
 /**
@@ -121,10 +143,13 @@ export function experimentsReadIn(
       Effect.flatMap(machineOwnerOf(target), (owner) =>
         accountExperimentOn(owner, EXPERIMENT.COMPUTER_USE),
       ),
+      Effect.flatMap(inboxKeeperOf(agent), (keeper) =>
+        keeper === agent.userId ? Effect.succeed(undefined) : readAccountPreferences(keeper),
+      ),
     ],
     { concurrency: "unbounded" },
   ).pipe(
-    Effect.map(([standings, starter, computerUseOn]) => {
+    Effect.map(([standings, starter, computerUseOn, assignee]) => {
       const on = (experiment: WorkspaceExperiment) =>
         standings.some((standing) => standing.experiment === experiment && standing.on);
 
@@ -134,8 +159,8 @@ export function experimentsReadIn(
         turnEndOn: starter !== undefined && experimentOn(starter.experiments, EXPERIMENT.TURN_END),
         replyButtonsOn: on(EXPERIMENT.REPLY_BUTTONS),
         computerUseOn,
-        // Note that nothing stored reads as on, as the setting's default is.
-        inboxOn: starter?.preferences.inbox ?? true,
+        // Note that the assignee's choice stands where they keep the threads, the starter's otherwise, and nothing stored reads as on, as the setting's default is.
+        inboxOn: (assignee ?? starter)?.preferences.inbox ?? true,
       });
     }),
     Effect.tapError(logStoreFailure),

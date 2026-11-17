@@ -47,7 +47,7 @@ export const TOOL_GATE = {
   TURN_END: "turn-end",
   /** The member whose Mac the agent reaches has Computer use on, as their own experiment. */
   COMPUTER_USE: "computer-use",
-  /** The agent's starter keeps an Inbox, which its threads are posted to. */
+  /** The member the agent's threads would land with, its task's assignee else its starter, keeps an Inbox. */
   INBOX: "inbox",
 } as const;
 
