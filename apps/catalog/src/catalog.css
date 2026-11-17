@@ -1229,5 +1229,7 @@ body {
 /* The import-from-a-Mac design mockup: a Settings page tall enough to hold
    the import's banner and its landed rows. Throwaway. */
 .catalog-import-frame {
+  position: relative;
   height: 720px;
+  transform: translateZ(0);
 }

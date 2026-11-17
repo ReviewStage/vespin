@@ -1,9 +1,8 @@
 import {
-  BANNER_LOOK,
-  Banner,
   BUTTON_VARIANT,
   Button,
   Checkbox,
+  createToastManager,
   DIALOG_SIZE,
   DIALOG_TONE,
   Dialog,
@@ -19,77 +18,117 @@ import {
   SpinnerRegion,
   STATUS_TONE,
   Stack,
+  type StandingToast,
+  TEXT_ELEMENT,
+  TEXT_TONE,
+  TEXT_VARIANT,
   Text,
+  Toast,
+  ToastActions,
+  ToastStack,
+  type ToastStackManager,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**
  * import-from-mac.tsx -- a throwaway design mockup, not a shipped component:
- * bringing the skills a member's Mac already has into Settings › Skills.
+ * bringing the skills a member's Mac already has into Settings › Skills, as
+ * the real card in `packages/panel/src/settings/mac-skills-dialog.tsx` draws it.
  *
- * Three steps. A row on Skills offers Bring in from your Mac. Its card reads
- * the Mac's skills folders and lists what it found, each one ticked; a skill
- * the member already has with the same files is left out, and one sharing a
- * name with a different skill comes in under a new name. Bring in lands the
- * skills lit, with a banner carrying Undo. Every name and path is made up.
+ * Look for skills opens a card that reads the Mac's agents' skills folders
+ * and breaks down where each skill came from: a group per agent, its folder
+ * and how many it found and left out, each skill ticked; then every skill
+ * left out, with why; then the agents whose folders hold nothing. Bring in
+ * closes the card, lights the skills as they land, and says so on a toast
+ * carrying Undo, as every undoable write's toast does. Every name and path is
+ * made up.
  */
 
-const MAC = "Ada's MacBook Pro";
-
-/** Where the import stands. */
 const STEP = {
   IDLE: "idle",
   READING: "reading",
   CHOOSING: "choosing",
   DONE: "done",
-  UNDO_ASK: "undo-ask",
-  UNDONE: "undone",
 } as const;
 
 type Step = (typeof STEP)[keyof typeof STEP];
 
 /** One skill found on the Mac. */
 interface Found {
+  readonly folder: string;
   readonly name: string;
   readonly description: string;
-  readonly path: string;
-  /** The name it comes in under, where one the member has already takes its own. */
-  readonly renamed?: string;
+  readonly renamedFrom?: string;
 }
 
-const FOUND: readonly Found[] = [
+/** One agent's skills folder, with what it offers. */
+interface Group {
+  readonly title: string;
+  readonly folder: string;
+  readonly offered: readonly Found[];
+  readonly left: number;
+}
+
+const GROUPS: readonly Group[] = [
   {
-    name: "flaky-test-hunter",
-    description: "Reruns a failing test in isolation to tell a flaky one from a broken one.",
-    path: "~/.claude/skills",
+    title: "Claude Code",
+    folder: "~/.claude/skills",
+    left: 2,
+    offered: [
+      {
+        folder: "~/.claude/skills/flaky-test-hunter",
+        name: "flaky-test-hunter",
+        description: "Reruns a failing test in isolation to tell a flaky one from a broken one.",
+      },
+      {
+        folder: "~/.claude/skills/release-notes",
+        name: "release-notes-2",
+        renamedFrom: "release-notes",
+        description: "Drafts release notes from the pull requests merged since the last tag.",
+      },
+    ],
   },
   {
-    name: "db-migrations",
-    description: "Writes reversible Postgres migrations and checks them against a scratch copy.",
-    path: "~/.claude/skills",
+    title: "Codex",
+    folder: "~/.codex/skills",
+    left: 1,
+    offered: [
+      {
+        folder: "~/.codex/skills/db-migrations",
+        name: "db-migrations",
+        description:
+          "Writes reversible Postgres migrations and checks them against a scratch copy.",
+      },
+    ],
   },
+];
+
+/** Every skill left out, with the agent whose folder held it and why. */
+const LEFT_OUT = [
   {
-    name: "release-notes",
-    description: "Drafts release notes from the pull requests merged since the last tag.",
-    path: "~/.claude/skills",
-    renamed: "release-notes-2",
+    name: "pr-review",
+    why: "Already installed, with the same files",
+    where: "Claude Code · ~/.claude/skills/pr-review",
   },
   {
     name: "storybook-snapshots",
-    description: "Updates Storybook snapshots and explains each visual change.",
-    path: "~/.agents/skills",
+    why: "The same folder as ~/.agents/skills/storybook-snapshots",
+    where: "Claude Code · ~/.claude/skills/storybook-snapshots",
   },
-];
+  { name: "plan", why: "Codex keeps it itself", where: "Codex · ~/.codex/skills/.system/plan" },
+] as const;
+
+const OFFERED = GROUPS.flatMap((group) => group.offered);
 
 /** Skills the member already has. */
 const INSTALLED = [
   {
     name: "pr-review",
     description: "Reviews a diff for correctness and missing tests before a PR opens.",
-    line: "From acme/agent-skills",
+    line: "acme/agent-skills @ 3f9c2e1",
   },
   {
     name: "release-notes",
@@ -134,97 +173,144 @@ function SkillRow({
   );
 }
 
-/** One found skill in the card, ticked to bring it in. */
-function FoundRow({
-  skill,
-  picked,
-  onPick,
+/** A group of the card's rows under its heading and the line under that. */
+function GroupHead({
+  title,
+  caption,
+  children,
 }: {
-  skill: Found;
-  picked: boolean;
-  onPick: (picked: boolean) => void;
+  title: string;
+  caption?: string;
+  children: ReactNode;
 }): React.JSX.Element {
   return (
-    <SettingsRow
-      label={skill.renamed ?? skill.name}
-      controls={SETTINGS_ROW_CONTROLS.BESIDE}
-      description={
-        <>
-          {skill.description}
-          <SettingsRowStateLine block>
-            {skill.renamed === undefined
-              ? skill.path
-              : `You already have a different ${skill.name}, so this one comes in as ${skill.renamed}`}
-          </SettingsRowStateLine>
-        </>
-      }
-    >
-      {() => <Checkbox label={`Bring in ${skill.name}`} checked={picked} onChange={onPick} />}
-    </SettingsRow>
+    <Stack gap={GAP.ITEM}>
+      <Stack gap={GAP.NONE}>
+        <Text variant={TEXT_VARIANT.SECTION} as={TEXT_ELEMENT.H3}>
+          {title}
+        </Text>
+        {caption === undefined ? null : (
+          <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+            {caption}
+          </Text>
+        )}
+      </Stack>
+      <SettingsSection>{children}</SettingsSection>
+    </Stack>
   );
 }
 
-/** The card: reading the Mac, then the skills found. */
-function ImportDialog({
-  step,
-  picks,
-  onPick,
-  onBring,
-  onClose,
+/** The card's review: what was found, each agent's group, what was left out, and who held nothing. */
+function Review({
+  unticked,
+  onTick,
 }: {
-  step: Step;
-  picks: ReadonlySet<string>;
-  onPick: (name: string, picked: boolean) => void;
-  onBring: () => void;
-  onClose: () => void;
+  unticked: ReadonlySet<string>;
+  onTick: (folder: string, on: boolean) => void;
 }): React.JSX.Element {
   return (
-    <Dialog
-      open={step === STEP.READING || step === STEP.CHOOSING}
-      title={`Skills on ${MAC}`}
-      size={DIALOG_SIZE.WIDE}
-      onDismiss={onClose}
+    <Stack gap={GAP.SECTION}>
+      <Text>{`Found ${skillCount(OFFERED.length)} to bring in, and left out ${LEFT_OUT.length}.`}</Text>
+      {GROUPS.map((group) => (
+        <GroupHead
+          key={group.title}
+          title={group.title}
+          caption={`${group.folder} · ${group.offered.length} found · ${group.left} left out`}
+        >
+          {group.offered.map((skill) => (
+            <SettingsRow
+              key={skill.folder}
+              leading={
+                <SettingsRowMark>
+                  <GLYPH.SKILL />
+                </SettingsRowMark>
+              }
+              label={skill.name}
+              controls={SETTINGS_ROW_CONTROLS.BESIDE}
+              description={
+                <>
+                  {skill.description}
+                  <SettingsRowStateLine block>
+                    {skill.renamedFrom === undefined
+                      ? skill.folder
+                      : `You already have a different ${skill.renamedFrom}, so this one comes in as ${skill.name}`}
+                  </SettingsRowStateLine>
+                </>
+              }
+            >
+              {() => (
+                <Checkbox
+                  label={`Bring in ${skill.name}`}
+                  checked={!unticked.has(skill.folder)}
+                  onChange={(on) => onTick(skill.folder, on)}
+                />
+              )}
+            </SettingsRow>
+          ))}
+        </GroupHead>
+      ))}
+      <GroupHead title="Left out">
+        {LEFT_OUT.map((row) => (
+          <SettingsRow
+            key={row.where}
+            label={row.name}
+            description={
+              <>
+                {row.why}
+                <SettingsRowStateLine block>{row.where}</SettingsRowStateLine>
+              </>
+            }
+          />
+        ))}
+      </GroupHead>
+      <Text>Nothing in Cursor, Gemini CLI, or Factory.</Text>
+    </Stack>
+  );
+}
+
+/** The toast the window says a write with, its Undo running the write's undo. */
+interface Notice {
+  readonly words: string;
+  readonly onUndo: () => void;
+}
+
+function NoticeToast({
+  toast,
+  manager,
+}: {
+  toast: StandingToast<Notice>;
+  manager: ToastStackManager<Notice>;
+}): ReactNode {
+  const notice = toast.data;
+
+  if (notice === undefined) return null;
+
+  return (
+    <Toast
+      toast={toast}
+      tone={STATUS_TONE.COMPLETE}
+      words={notice.words}
       actions={
-        <DialogActions
-          onCancel={onClose}
-          act={{
-            verb: `Bring in ${skillCount(picks.size)}`,
-            tone: DIALOG_TONE.PRIMARY,
-            running: "Bringing in",
-            disabled: step !== STEP.CHOOSING || picks.size === 0,
-            onPress: onBring,
+        <ToastActions
+          label="Undo"
+          onPress={() => {
+            notice.onUndo();
+            manager.close(toast.id);
           }}
+          dismissLabel="Dismiss"
+          onDismiss={() => manager.close(toast.id)}
         />
       }
-    >
-      {step === STEP.READING ? (
-        <SpinnerRegion label={`Reading the skills folders on ${MAC}`} />
-      ) : (
-        <Stack gap={GAP.FIELD}>
-          <Text>
-            Found in the skills folders of Claude Code, Cursor, and Codex. 1 you already have is
-            left out.
-          </Text>
-          <SettingsSection>
-            {FOUND.map((skill) => (
-              <FoundRow
-                key={skill.name}
-                skill={skill}
-                picked={picks.has(skill.name)}
-                onPick={(picked) => onPick(skill.name, picked)}
-              />
-            ))}
-          </SettingsSection>
-        </Stack>
-      )}
-    </Dialog>
+    />
   );
 }
 
 /** The whole flow on Settings › Skills. */
 function ImportMockup(): React.JSX.Element {
   const [step, setStep] = useState<Step>(STEP.IDLE);
-  const [picks, setPicks] = useState<ReadonlySet<string>>(new Set());
+  const [unticked, setUnticked] = useState<ReadonlySet<string>>(new Set());
+  const [manager] = useState(() => createToastManager<Notice>());
+  const [frame, setFrame] = useState<HTMLDivElement | null>(null);
 
   // Reading the Mac takes a moment, then the card lists what it found.
   useEffect(() => {
@@ -234,45 +320,33 @@ function ImportMockup(): React.JSX.Element {
     return () => clearTimeout(timer);
   }, [step]);
 
-  const start = () => {
-    setPicks(new Set(FOUND.map((skill) => skill.name)));
-    setStep(STEP.READING);
+  const tick = (folder: string, on: boolean) => {
+    const next = new Set(unticked);
+
+    if (on) next.delete(folder);
+    else next.add(folder);
+    setUnticked(next);
   };
 
-  const pick = (name: string, on: boolean) => {
-    const next = new Set(picks);
+  const picked = OFFERED.filter((skill) => !unticked.has(skill.folder));
+  const landed = step === STEP.DONE;
 
-    if (on) next.add(name);
-    else next.delete(name);
-    setPicks(next);
+  const bringIn = () => {
+    setStep(STEP.DONE);
+    manager.add({
+      title: `Brought in ${skillCount(picked.length)} from your Mac`,
+      timeout: 0,
+      data: {
+        words: `Brought in ${skillCount(picked.length)} from your Mac`,
+        onUndo: () => setStep(STEP.IDLE),
+      },
+    });
   };
-
-  const landed = step === STEP.DONE || step === STEP.UNDO_ASK;
-  const brought = FOUND.filter((skill) => picks.has(skill.name));
 
   return (
-    <div className="catalog-settings-frame catalog-import-frame">
+    <div className="catalog-settings-frame catalog-import-frame" ref={setFrame}>
       <SettingsPage title="Skills">
         <Stack gap={GAP.SECTION}>
-          {landed ? (
-            <Banner
-              look={BANNER_LOOK.CARD}
-              tone={STATUS_TONE.COMPLETE}
-              glyph={<GLYPH.DONE />}
-              actions={
-                <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => setStep(STEP.UNDO_ASK)}>
-                  Undo
-                </Button>
-              }
-            >
-              Brought in {skillCount(brought.length)} from {MAC}.
-            </Banner>
-          ) : null}
-          {step === STEP.UNDONE ? (
-            <Banner look={BANNER_LOOK.CARD} glyph={<GLYPH.HISTORY />}>
-              Undone. The skills from {MAC} are gone.
-            </Banner>
-          ) : null}
           <SettingsSection
             title="Personal"
             action={
@@ -285,12 +359,12 @@ function ImportMockup(): React.JSX.Element {
               <SkillRow key={skill.name} {...skill} />
             ))}
             {landed
-              ? brought.map((skill) => (
+              ? picked.map((skill) => (
                   <SkillRow
-                    key={skill.name}
-                    name={skill.renamed ?? skill.name}
+                    key={skill.folder}
+                    name={skill.name}
                     description={skill.description}
-                    line={`From ${MAC}`}
+                    line={`From your Mac · ${skill.folder}`}
                     landed
                   />
                 ))
@@ -304,10 +378,16 @@ function ImportMockup(): React.JSX.Element {
                 </SettingsRowMark>
               }
               label="Bring in from your Mac"
-              description="Copy the skills your Mac's Claude Code, Cursor, and Codex already have, so every agent can use them."
+              description="Copy the skills your Mac's Claude Code, Codex, and Cursor already have, so every agent can use them."
             >
               {() => (
-                <Button variant={BUTTON_VARIANT.OUTLINE} onClick={start}>
+                <Button
+                  variant={BUTTON_VARIANT.OUTLINE}
+                  onClick={() => {
+                    setUnticked(new Set());
+                    setStep(STEP.READING);
+                  }}
+                >
                   Look for skills
                 </Button>
               )}
@@ -315,31 +395,35 @@ function ImportMockup(): React.JSX.Element {
           </SettingsSection>
         </Stack>
       </SettingsPage>
-      <ImportDialog
-        step={step}
-        picks={picks}
-        onPick={pick}
-        onBring={() => setStep(STEP.DONE)}
-        onClose={() => setStep(STEP.IDLE)}
-      />
       <Dialog
-        open={step === STEP.UNDO_ASK}
-        title={`Undo the skills from ${MAC}?`}
-        onDismiss={() => setStep(STEP.DONE)}
+        open={step === STEP.READING || step === STEP.CHOOSING}
+        title="Skills on your Mac"
+        size={DIALOG_SIZE.WIDE}
+        onDismiss={() => setStep(STEP.IDLE)}
         actions={
           <DialogActions
-            onCancel={() => setStep(STEP.DONE)}
+            onCancel={() => setStep(STEP.IDLE)}
             act={{
-              verb: "Undo",
-              tone: DIALOG_TONE.DANGER,
-              running: "Undoing",
-              onPress: () => setStep(STEP.UNDONE),
+              verb: picked.length === 0 ? "Bring in" : `Bring in ${skillCount(picked.length)}`,
+              tone: DIALOG_TONE.PRIMARY,
+              running: "Bringing in",
+              disabled: step !== STEP.CHOOSING || picked.length === 0,
+              onPress: bringIn,
             }}
           />
         }
       >
-        <Text>Removes the {skillCount(brought.length)} it brought in. Your Mac keeps its own.</Text>
+        {step === STEP.READING ? (
+          <SpinnerRegion label="Reading your agents' skills folders" />
+        ) : (
+          <Review unticked={unticked} onTick={tick} />
+        )}
       </Dialog>
+      {frame === null ? null : (
+        <ToastStack manager={manager} label="Notifications" container={frame}>
+          {(toast) => <NoticeToast key={toast.id} toast={toast} manager={manager} />}
+        </ToastStack>
+      )}
     </div>
   );
 }
