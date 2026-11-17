@@ -1,0 +1,3 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-17 07:30:16.302 Df Vespin[34919:c8c7ac4] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <UIWindowScene: 0x109215180> (DF265903-8BF4-4297-98D0-06436F42CAA3)
+2026-11-17 07:30:16.303 Df Vespin[34919:c8c7ac4] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:dev.vespin.ios-default  persistentID: DF265903-8BF4-4297-98D0-06436F42CAA3

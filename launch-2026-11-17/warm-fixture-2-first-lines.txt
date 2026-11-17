@@ -1,0 +1,3 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-17 07:27:29.206 Df Vespin[98528:c8b3f86] [com.apple.KeyboardArbiter:Client] RX sceneBecameFocused:(null)
+2026-11-17 07:27:34.767 Df Vespin[98528:c8b4468] [com.apple.UIIntelligenceSupport:xpc] Received agent launch notification with agent PID: 1986

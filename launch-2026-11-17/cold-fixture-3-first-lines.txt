@@ -1,0 +1,3 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-17 07:26:38.055 Df Vespin[90523:c8af2ab] [com.apple.xpc:connection] [0x120fdf700] Re-initialization successful; calling out to event handler with XPC_ERROR_CONNECTION_INTERRUPTED
+2026-11-17 07:26:38.120 Df Vespin[90523:c8af8d4] [com.apple.FrontBoard:Common] <FBSWorkspaceScenesClient:0x10a97b200 com.apple.UIKit.KeyboardManagement.hosted> was interrupted

@@ -1,0 +1,18 @@
+== bundle PLAUNCH base 6462e1b6bc
+  built 6462e1b6bc base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+cold-fixture-1: T=1794918310727; 10 [launch] lines; cold-fixture-1: video aligned at -0.557s; splash gone +1500 ms; inbox drawn (settled) +8467 ms; 262 frames
+cold-fixture-2: T=1794918369422; 10 [launch] lines; cold-fixture-2: video aligned at 0.231s; splash gone +6967 ms; inbox drawn (settled) +7233 ms; 224 frames
+cold-fixture-3: T=1794918430291; 11 [launch] lines; cold-fixture-3: video aligned at 1.142s; splash gone +5033 ms; inbox drawn (settled) +5267 ms; 163 frames
+warm-fixture-1: T=1794918466912; 20 [launch] lines; warm-fixture-1: video aligned at 1.237s; splash gone +6500 ms; inbox drawn (settled) +6733 ms; 209 frames
+warm-fixture-2: T=1794918491032; 21 [launch] lines; warm-fixture-2: video aligned at 1.439s; splash gone +4400 ms; inbox drawn (settled) +4633 ms; 145 frames
+warm-fixture-3: T=1794918514418; 23 [launch] lines; warm-fixture-3: video aligned at 1.455s; splash gone +5067 ms; inbox drawn (settled) +5300 ms; 164 frames
+sign-in: fails 0 shots 4 
+cold-signedin-1: T=1794918656558; 9 [launch] lines; cold-signedin-1: video aligned at -2.059s; splash gone +2167 ms; inbox drawn (settled) +7433 ms; 227 frames
+cold-signedin-2: T=1794918713589; 10 [launch] lines; cold-signedin-2: video aligned at 2.030s; splash gone +5133 ms; inbox drawn (settled) +5167 ms; 161 frames
+warm-signedin-1: T=1794918740626; 18 [launch] lines; warm-signedin-1: video aligned at 1.375s; splash gone +3633 ms; inbox drawn (settled) +3667 ms; 113 frames
+warm-signedin-2: T=1794918763929; 19 [launch] lines; warm-signedin-2: video aligned at 1.441s; splash gone +3533 ms; inbox drawn (settled) +3533 ms; 110 frames
+ipad26-cold-fixture-1: T=1794918822865; 1 [launch] lines; ipad26-cold-fixture-1: only 38 frames
