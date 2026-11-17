@@ -1000,15 +1000,13 @@ function PlanRow({
   const working = useWorkingToast();
 
   // Note that a refresh the service answered still fails where it holds no newer reading, since the service keeps what it held when the provider answers nothing.
+  // Note that the toast settles on the promise, not on `mutate`'s own callbacks, which are dropped once the row unmounts, as it does when Settings closes mid-refresh.
   const refreshUsage = () => {
     const settle = working(WORDS.REFRESHING_USAGE);
 
-    refresh.mutate(
-      { subscriptionId: plan.id },
-      {
-        onSuccess: (answer) => settle(refreshOutcome(refreshedIn(answer, plan), answer)),
-        onError: (cause) => settle(refreshOutcome(false, cause)),
-      },
+    void refresh.mutateAsync({ subscriptionId: plan.id }).then(
+      (answer) => settle(refreshOutcome(refreshedIn(answer, plan), answer)),
+      (cause: unknown) => settle(refreshOutcome(false, cause)),
     );
   };
 
