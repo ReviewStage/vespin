@@ -493,7 +493,7 @@ function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
     : actionButton(swipe, colors);
 }
 
-/** How long the system's long press menu takes to go once one of its acts is pressed, its preview settling back into the row. */
+/** The longest a question a long press menu's act raised waits for the menu to go: its whole wait on a row with no preview, whose going nothing tells, and a deadline where the preview's going is never told. */
 const MENU_GOES_MS = 450;
 
 /** A row's content with the question its acts ask standing by it, where its acts ask any, held back while its menu is still going. */
@@ -545,11 +545,15 @@ function swipeInMenu(swipe: RowSwipe, going: () => void): RowSwipe {
 
 /**
  * Whether a question an act of the row's long press menu raised waits for
- * the menu to go, and what tells it an act was pressed there. Note that the
- * question waits, because SwiftUI stands it from the row while the menu's
- * preview still settles back into that row, and a dialog asked for then was
- * let go unseen, the menu closing on nothing (j9729, on main, Nov 17); a
- * row that raises no question never waits.
+ * the menu to go, what tells it an act was pressed there, and what tells it
+ * the menu's preview has gone, which ends the wait. Note that the question
+ * waits, because SwiftUI stands it from the row while the menu's preview
+ * still settles back into that row, and a dialog asked for then was let go
+ * unseen, the menu closing on nothing (j9729, on main, Nov 17). The
+ * preview's going is the one sign of the menu's end that reaches us, since
+ * neither SwiftUI's menu nor `@expo/ui`'s tells its close, so a row with no
+ * preview waits out `MENU_GOES_MS`, as one whose preview's going is never
+ * told does; a row that raises no question never waits.
  */
 function useMenuGoing(question: RowQuestion | undefined) {
   const [going, setGoing] = useState(false);
@@ -565,7 +569,7 @@ function useMenuGoing(question: RowQuestion | undefined) {
     if (question !== undefined) setGoing(true);
   };
 
-  return { going, pressed };
+  return { going, pressed, gone: () => setGoing(false) };
 }
 
 /**
@@ -674,7 +678,11 @@ export function RowFrame({
         ))}
       </ContextMenu.Items>
       <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
-      {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
+      {preview === undefined ? null : (
+        <ContextMenu.Preview>
+          <VStack modifiers={[SwiftModifiers.onDisappear(menuGoing.gone)]}>{preview}</VStack>
+        </ContextMenu.Preview>
+      )}
     </ContextMenu>,
     question,
     menuGoing.going,
