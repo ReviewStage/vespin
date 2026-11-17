@@ -75,12 +75,15 @@ export function useInboxNotifications(signedIn: boolean): void {
   const onTab = useOnTab();
   const response = useLastNotificationResponse();
   useEffect(() => {
-    setNotificationCategoryAsync(PUSH_CATEGORY.REPLY, REPLY_ACTIONS).catch((cause: unknown) =>
-      console.error("The reply's notification category was not registered.", cause),
-    );
-    setNotificationCategoryAsync(PUSH_CATEGORY.DECIDE, []).catch((cause: unknown) =>
-      console.error("The decide's notification category was not registered.", cause),
-    );
+    // Note that the two go one after the other, since each registration reads the set and writes it back, so two at once leave only the later.
+    setNotificationCategoryAsync(PUSH_CATEGORY.REPLY, REPLY_ACTIONS)
+      .catch((cause: unknown) =>
+        console.error("The reply's notification category was not registered.", cause),
+      )
+      .then(() => setNotificationCategoryAsync(PUSH_CATEGORY.DECIDE, []))
+      .catch((cause: unknown) =>
+        console.error("The decide's notification category was not registered.", cause),
+      );
   }, []);
   useEffect(() => {
     if (!signedIn || response === undefined || response === null) return;
