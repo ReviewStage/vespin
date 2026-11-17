@@ -64,6 +64,16 @@
  * past them a write unanswered is taken back. They are handed out to be
  * kept (`queued`) and laid back over the rows (`requeue`) in a form of the
  * declaration's own, which names nothing of how they are kept.
+ *
+ * A pool handed a store (`PoolOptions.store`) reports its outbox to it as
+ * Linear's sync engine keeps `__transactions`: a write that may wait is
+ * added (`OutboxStore.added`) before it is first sent, and removed
+ * (`OutboxStore.removed`) in the same step it stands down from waiting,
+ * once the service took it, refused it, it was let go, it was taken back
+ * unanswered past `QUEUE_BOUND`, or its caller gave up on its first send, so
+ * the store holds what the pool holds. One laid back (`requeue`) came from the
+ * store, so it is not added again. A write still waiting as the pool's scope
+ * closes is never removed, so a quit leaves it to be laid back.
  */
 
 import {
@@ -296,6 +306,25 @@ export function anyWrite<Row extends object, Change, Input, Answer>(
   return (use) => use(declaration);
 }
 
+/**
+ * Where a pool's waiting writes are kept as they move, oldest added first.
+ * Each call is an Effect the write path waits on in the asking fiber, so a
+ * write is kept before it is sent and the calls arrive in the order asked;
+ * a store keeps its own failures, since the pool runs on without it.
+ */
+export interface OutboxStore {
+  /** A write that may wait, before its first send. */
+  readonly added: (entry: QueuedEntry) => Effect.Effect<void>;
+  /** A write added before, as it stands down from waiting. */
+  readonly removed: (entry: QueuedEntry) => Effect.Effect<void>;
+}
+
+/** What a pool reports of what it keeps, each half its own; none where it keeps nothing past memory. */
+export interface PoolStore {
+  /** The writes that may wait, as they are added and removed. */
+  readonly outbox?: OutboxStore | undefined;
+}
+
 /** What a pool that keeps writes waiting is handed. */
 export interface PoolOptions {
   /** Mints a write's idempotency key. */
@@ -308,6 +337,8 @@ export interface PoolOptions {
    * none where every write is sent under one account.
    */
   readonly holder?: (() => string | undefined) | undefined;
+  /** Where what the pool keeps is reported; none keeps it in memory alone. */
+  readonly store?: PoolStore | undefined;
 }
 
 /** Every row the reads hold, and the writes drawn over them. */
@@ -802,6 +833,51 @@ function written<Row extends object, Change, Input, Answer>(
     const keys = [...new Set(declaration.keys(input))];
     const write: Standing<Change> = { keys, change: declaration.change(input) };
 
+    const plan = declaration.queue;
+    // Note that the account is read as the write is asked, or laid back from the store its account opened, so a later send can tell another.
+    const askedAs = queue.options?.holder?.();
+    const mintKey = queue.options?.mintKey;
+    const key = plan === undefined || mintKey === undefined ? undefined : (restored ?? mintKey());
+
+    // Note that the input is kept as its declaration keeps it as it is asked, so one that will not keep never waits.
+    const entry =
+      plan === undefined || key === undefined
+        ? undefined
+        : Result.getOrUndefined(
+            Result.map(Schema.encodeResult(plan.input)(input), (kept) => ({
+              name: plan.name,
+              key,
+              input: kept,
+            })),
+          );
+
+    const outbox = queue.options?.store?.outbox;
+    const out = { kept: false };
+
+    /** The write kept in the outbox before it takes its turn, unless it was laid back from there. */
+    const keep = Effect.suspend(() => {
+      if (outbox === undefined || entry === undefined) return Effect.void;
+      out.kept = true;
+
+      return restored === undefined ? outbox.added(entry) : Effect.void;
+    });
+
+    /** The write out of the outbox, once, as it stands down from waiting. */
+    const unkeep = Effect.suspend(() => {
+      if (outbox === undefined || entry === undefined || !out.kept) return Effect.void;
+
+      // Note that the write is told kept until its removal is done, so one interrupted is removed on its next step down.
+      return Effect.andThen(
+        outbox.removed(entry),
+        Effect.sync(() => {
+          out.kept = false;
+        }),
+      );
+    });
+
+    // Note that the write is kept before it takes its turn on its keys, so a store that waits never lets a later write take the turn ahead of it.
+    yield* keep;
+
     const turn: Turn = {
       answered: yield* Deferred.make<void>(),
       dropped: yield* Deferred.make<void>(),
@@ -824,24 +900,6 @@ function written<Row extends object, Change, Input, Answer>(
         unadopted(rows, keys);
       });
     }).pipe(Effect.ensuring(Deferred.succeed(turn.dropped, undefined)));
-
-    const plan = declaration.queue;
-    // Note that the account is read as the write is asked, or laid back from the store its account opened, so a later send can tell another.
-    const askedAs = queue.options?.holder?.();
-    const mintKey = queue.options?.mintKey;
-    const key = plan === undefined || mintKey === undefined ? undefined : (restored ?? mintKey());
-
-    // Note that the input is kept as its declaration keeps it as it is asked, so one that will not keep never waits.
-    const entry =
-      plan === undefined || key === undefined
-        ? undefined
-        : Result.getOrUndefined(
-            Result.map(Schema.encodeResult(plan.input)(input), (kept) => ({
-              name: plan.name,
-              key,
-              input: kept,
-            })),
-          );
 
     // Note that each attempt asks the declaration anew, so one sent again reads the host as it stands then.
     const attempt = (waited: boolean) =>
@@ -901,7 +959,10 @@ function written<Row extends object, Change, Input, Answer>(
     /** The write laid behind those waiting, still standing, sent again as they are; let go, its caller hears `meanwhile`. */
     const waits = (kept: QueuedEntry, meanwhile: Answer) =>
       Effect.suspend(() => {
-        const letGo = Effect.andThen(drop, Deferred.succeed(heard, meanwhile));
+        const letGo = Effect.andThen(
+          Effect.andThen(drop, unkeep),
+          Deferred.succeed(heard, meanwhile),
+        );
 
         const waiting: Waiting = {
           entry: kept,
@@ -918,11 +979,13 @@ function written<Row extends object, Change, Input, Answer>(
             if ("refused" in answered) {
               if (answered.unanswered === true) return RETRIED.UNANSWERED;
               yield* takenBack(answered);
+              yield* unkeep;
               yield* Deferred.succeed(heard, answered.refused);
 
               return RETRIED.REFUSED;
             }
 
+            yield* unkeep;
             yield* FiberSet.run(queue.confirming, settled(answered));
             yield* Deferred.succeed(heard, answered.answer);
 
@@ -958,7 +1021,7 @@ function written<Row extends object, Change, Input, Answer>(
         }
 
         const answered = yield* Effect.onExit(restore(sent), (exit) =>
-          Exit.isSuccess(exit) ? Effect.void : drop,
+          Exit.isSuccess(exit) ? Effect.void : Effect.andThen(drop, unkeep),
         );
 
         if ("refused" in answered) {
@@ -969,10 +1032,12 @@ function written<Row extends object, Change, Input, Answer>(
           }
 
           yield* takenBack(answered);
+          yield* unkeep;
 
           return answered.refused;
         }
 
+        yield* unkeep;
         yield* FiberSet.run(queue.confirming, settled(answered));
 
         return answered.answer;

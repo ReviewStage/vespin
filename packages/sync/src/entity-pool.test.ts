@@ -8,6 +8,7 @@ import {
   type FieldChange,
   fieldKind,
   type HeldRows,
+  type PoolStore,
   type WriteDeclaration,
 } from "./entity-pool.js";
 
@@ -312,5 +313,66 @@ it.effect(
       assert.deepEqual(pool.queued(), []);
       assert.deepEqual(list.rows.rows(), [{ id: "1", name: "Triage issues", runs: 0 }]);
       assert.equal(refusedCount.now, 0, "a write let go is not told as one the service refused");
+    }).pipe(Effect.scoped),
+);
+
+/** How the service answers each send in turn, and what the pool is asked after the first. */
+const OUTBOX_CASES = [
+  { stands: "settles as the service takes it at once", answers: ["took"], after: "nothing" },
+  { stands: "settles once sent again", answers: ["silent", "took"], after: "resend" },
+  { stands: "is refused once sent again", answers: ["silent", "refused"], after: "resend" },
+  { stands: "is let go", answers: ["silent"], after: "letGoQueued" },
+] as const;
+
+it.effect.each(OUTBOX_CASES)(
+  "a write that may wait reaches the store before it is sent, and leaves it as it $stands",
+  ({ answers, after }) =>
+    Effect.gen(function* () {
+      const told: string[] = [];
+      const left = [...answers];
+
+      const rename: WriteDeclaration<Row, FieldChange<Row>, string, string> = {
+        kind: ROW,
+        keys: () => ["1"],
+        change: (name) => () => ({ name }),
+        send: () =>
+          Effect.sync(() => {
+            const answer = left.shift();
+
+            told.push(`sent ${answer}`);
+
+            if (answer === "took") return { answer: "renamed", txid: undefined };
+
+            if (answer === "refused") return { refused: "not renamed" };
+
+            return { refused: "not renamed", unanswered: true as const };
+          }),
+        queue: { name: "rename", input: Schema.String, queued: () => "waits" },
+      };
+
+      const store: PoolStore = {
+        outbox: {
+          added: (entry) =>
+            Effect.sync(() => told.push(`added ${entry.key} ${String(entry.input)}`)),
+          removed: (entry) => Effect.sync(() => told.push(`removed ${entry.key}`)),
+        },
+      };
+
+      const pool = yield* entityPool({ mintKey: () => "key-1", replayRefused: Effect.void, store });
+      const list = yield* standing(pool);
+      yield* list.rows.answer([{ id: "1", name: "Triage", runs: 0 }]);
+      yield* pool.write(rename, "Triage issues");
+
+      if (after === "resend") yield* pool.resend;
+
+      if (after === "letGoQueued") yield* pool.letGoQueued;
+
+      yield* settled;
+
+      assert.deepEqual(told, [
+        "added key-1 Triage issues",
+        ...answers.map((answer) => `sent ${answer}`),
+        "removed key-1",
+      ]);
     }).pipe(Effect.scoped),
 );
