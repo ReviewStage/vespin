@@ -700,17 +700,22 @@ type UseCredentialOrderResult = {
 /**
  * The harness's credentials in the order the account keeps, a reorder drawn
  * at once and sent as the whole order, its key's place among it; the list
- * rests on the order sent until the service answers, and says why under the
- * list where it was refused.
+ * rests on the order the newest reorder asks for while it is out, as the
+ * docs' Optimistic Updates guide draws a mutation's `variables`, and says
+ * why under the list where that reorder was refused.
  */
 function useCredentialOrder(
   provider: SettingsProvider,
   credentials: readonly Credential[],
 ): UseCredentialOrderResult {
-  const { mutateAsync: sendReorder } = useMutation(actMutation(ACT_KIND.SUBSCRIPTIONS_REORDER));
-  const [sentOrder, setSentOrder] = useState<readonly string[] | undefined>(undefined);
-  const [refused, setRefused] = useState<string | undefined>(undefined);
+  const reordering = useMutation(actMutation(ACT_KIND.SUBSCRIPTIONS_REORDER));
+  const sentOrder = reordering.isPending ? reordering.variables.subscriptionIds : undefined;
   const byId = new Map(credentials.map((credential) => [credential.id, credential]));
+
+  const refused =
+    reordering.isError || (reordering.data !== undefined && "failure" in reordering.data)
+      ? WORDS.REORDER_FAILED
+      : undefined;
 
   // Note that a credential added or removed meanwhile is drawn where the service says, after those sent.
   const ordered =
@@ -730,15 +735,7 @@ function useCredentialOrder(
 
     if (moved === undefined || from === to) return;
     ids.splice(to, 0, moved);
-    setSentOrder(ids);
-    setRefused(undefined);
-    void sendReorder({ provider, kind, subscriptionIds: ids })
-      .catch(() => undefined)
-      .then((answer) => {
-        setSentOrder(undefined);
-
-        if (answer === undefined || "failure" in answer) setRefused(WORDS.REORDER_FAILED);
-      });
+    reordering.mutate({ provider, kind, subscriptionIds: ids });
   };
 
   return { ordered, move, refused };
