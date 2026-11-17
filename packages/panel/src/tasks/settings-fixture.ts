@@ -161,6 +161,7 @@ const SETTINGS_LINKS: ReadonlyMap<string, SettingsLink> = new Map<string, Settin
   [RUN_PROFILE.SETTINGS_ACCOUNT, { page: SETTINGS_VIEW.ACCOUNT }],
   [RUN_PROFILE.SETTINGS_PREFERENCES, { page: SETTINGS_VIEW.PREFERENCES }],
   [RUN_PROFILE.SETTINGS_WORKSPACE, { page: SETTINGS_VIEW.WORKSPACE, workspaceId: WORKSPACE.ACME }],
+  [RUN_PROFILE.SETTINGS_BILLING, { page: SETTINGS_VIEW.BILLING, workspaceId: WORKSPACE.ACME }],
   [RUN_PROFILE.SETTINGS_AGENTS, { page: SETTINGS_VIEW.AGENTS }],
   [RUN_PROFILE.SETTINGS_HOSTS, { page: SETTINGS_VIEW.HOSTS }],
   [RUN_PROFILE.SETTINGS_THIS_MAC, { page: SETTINGS_VIEW.THIS_MAC }],
@@ -909,6 +910,15 @@ const ANSWERS: StagedAnswers = {
     ),
   }),
   [ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: () => acmeSandboxSetup,
+  // Billing on, not set up, $12.40 of sandbox usage against the $10 included.
+  [ACT_KIND.WORKSPACE_BILLING_STATUS]: () => ({
+    live: true,
+    setUp: false,
+    blocked: false,
+    usage: [{ kind: "sandbox_session", amountMicroUsd: 12_400_000 }],
+    includedMicroUsd: 10_000_000,
+    owedMicroUsd: 2_400_000,
+  }),
   [ACT_KIND.WORKSPACE_SANDBOX_SIZE_READ]: () => acmeSandboxSize,
   [ACT_KIND.WORKSPACE_SANDBOX_SIZE_PUT]: ({ vcpus }) => {
     acmeSandboxSize = { ...acmeSandboxSize, vcpus };

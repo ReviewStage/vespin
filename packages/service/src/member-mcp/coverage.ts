@@ -282,6 +282,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     saveProviderKey: SECRET,
     setProviderKeyForAgents: SECRET,
     useResetCredit: SECRET,
+    refreshPlanUsage: SECRET,
     renameSubscription: SECRET,
     reorderSubscriptions: SECRET,
     removeProviderKey: SECRET,
@@ -447,6 +448,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     // Note that a follower's card reads their machines; an agent's own calls are refused naming the machines they could reach.
     machines: SCREEN_ONLY,
   },
+  // Billing is an owner's or admin's, read on the Billing page and set up and managed on Stripe's own pages.
+  billing: { status: SCREEN_ONLY, setup: NEEDS_BROWSER, portal: NEEDS_BROWSER },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
   workspaceMergeQueue: { read: NOT_YET_BUILT },

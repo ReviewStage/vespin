@@ -2096,6 +2096,7 @@ test("a change refused for a repository out of the workspace's reach says where 
         openWorkspaceGitHub: (taskId) => opened.push(taskId),
         openGitHub: () => undefined,
         chooseRepository: () => undefined,
+        openBilling: () => undefined,
         moveTask: () => Promise.resolve(false),
       },
       children: createElement(Switching, {

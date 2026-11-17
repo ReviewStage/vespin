@@ -149,7 +149,6 @@ function slackApi() {
       return Response.json({ ok: true, team_id: TEAM.id, user_id: "U0BOT", bot_id: "B0BOT" });
     }
 
-
     return Response.json({ ok: false, error: "unknown_method" });
   });
 

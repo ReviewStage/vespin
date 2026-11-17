@@ -145,6 +145,7 @@ const DECLARED_TABLES = [
   "user",
   "verification",
   "voice_call",
+  "workspace_billing",
   "workspace_drive_repository",
   "workspace_environment_variable",
   "workspace_experiment",

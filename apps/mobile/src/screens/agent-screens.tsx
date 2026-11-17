@@ -63,6 +63,7 @@ import {
   FORM_SPACING,
   footerToneOf,
   GLYPH,
+  GlassDock,
   type Glyph,
   glyphSymbol,
   HeldCallBanner,
@@ -79,7 +80,7 @@ import {
   Screen,
   SettingsForm,
   SkillSuggestions,
-  StackBarTitle,
+  StackSubtitle,
   SwitchRow,
   shownFiles,
   shownMediaIds,
@@ -140,10 +141,8 @@ import {
   useDetailPush,
   useHandToDetail,
 } from "../detail-stack.js";
-import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
-import { useInFront } from "../place-columns.js";
 import {
   type PullRequestKey,
   usePullRequestsRead,
@@ -312,7 +311,6 @@ function AgentComposerBar({
   inColumn = false,
   call,
   otherCall,
-  shown,
 }: {
   readonly composer: AgentComposer;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
@@ -327,8 +325,6 @@ function AgentComposerBar({
   readonly call: ComposerCall | undefined;
   /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
-  /** Whether its column stands in front, which the composer at a column's foot tells the app's notice; the docked composer's dock is told by its screen. */
-  readonly shown: boolean;
 }) {
   const said = composer.note ?? note;
   const { banner, waiting } = approvals;
@@ -391,7 +387,7 @@ function AgentComposerBar({
     saving: composer.saving,
   };
 
-  return inColumn ? <ComposerFoot {...props} shown={shown} /> : <Composer {...props} />;
+  return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
 }
 
 /**
@@ -721,8 +717,6 @@ export function AgentConversation({
   readonly inColumn?: boolean | undefined;
 }) {
   useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
-  // Whether the page stands in front in a split view's detail, its tab shown and no page pushed over it, which its composer at the column's foot tells the notice.
-  const inFront = useInFront();
   const toDetail = useDetailPush();
   const detailLeave = useDetailLeave();
   const router = useRouter();
@@ -1027,7 +1021,6 @@ export function AgentConversation({
       call={talk.call}
       otherCall={otherCall}
       inColumn={inColumn}
-      shown={inFront && !covered}
     />
   );
 
@@ -1136,15 +1129,11 @@ export function AgentConversation({
 
   const barOptions = { title, headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT } };
 
-  // Note that the agent's state and model stand under its name in the bar, as the panel's tab says them, since the line over the transcript scrolled out of sight as the page opened at its newest row.
-  const screenOptions =
-    subtitle === undefined
-      ? barOptions
-      : { ...barOptions, headerTitle: () => <StackBarTitle title={title} subtitle={subtitle} /> };
-
   return (
     <>
-      <Stack.Screen options={screenOptions} />
+      <Stack.Screen options={barOptions} />
+      {/* Note that the agent's state and model stand under its name as the bar's own subtitle, as the panel's tab says them, since the line over the transcript scrolled out of sight as the page opened at its newest row; Options stays in ⋯. */}
+      <StackSubtitle words={subtitle?.words ?? ""} />
       <Stack.Toolbar placement="right">
         {copyable || openable || openTask !== undefined ? (
           <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
@@ -1280,7 +1269,7 @@ export function AgentConversation({
         ) : null}
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
-      <FocusedDock bar={composerBar}>{transcriptView}</FocusedDock>
+      <GlassDock bar={composerBar}>{transcriptView}</GlassDock>
       {asks}
     </>
   );

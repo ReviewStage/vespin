@@ -2,6 +2,7 @@ import { ACCOUNT_STATUS, type AccountProvider } from "@repo/credentials/snapshot
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { readingWords, type SignInFailure } from "@repo/features/words";
+import { SETUP_GATE } from "@repo/settings";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -54,7 +55,6 @@ import { useCoarsePointer } from "../coarse-pointer.js";
 import { MERGE_QUEUE_WORDS } from "../history-titles.js";
 import { useMergeQueueOn } from "../merge-queue-route.js";
 import { NewWorkspaceSteps } from "../onboarding/new-workspace-steps.js";
-import { SETUP_GATE } from "../onboarding/setup-model.js";
 import { SetupSteps, useSetupGate } from "../onboarding/setup-steps.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import {

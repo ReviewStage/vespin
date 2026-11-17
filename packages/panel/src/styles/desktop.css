@@ -643,8 +643,11 @@ body,
   .desktop-task:has(> .desktop-task-main)
   > .side-panel
   > .side-panel-bar {
+  /* Note that the row is a pane bar's height, padded as `PaneBar` is, because
+     it stands level with the bar heading the column beside it (an automation
+     run's, a tab's), and a row inset over and under its tabs stood it taller. */
   min-height: var(--ui-pane-bar-height);
-  padding: var(--ui-row-inset) var(--column-inset);
+  padding: var(--ui-tight-gap) var(--column-inset);
   border-bottom: 1px solid var(--ui-color-border);
   -webkit-app-region: no-drag;
 }
@@ -731,6 +734,19 @@ body,
   .desktop-task[data-panel-open="true"]:has(> .desktop-task-main)
   > .side-panel:not([data-full-screen="true"]) {
   --sheet-top-left-radius: 0px;
+}
+
+/* A task's banner (`task-banner.tsx`) heads the column's sheet over the bar
+   it would otherwise start with, so it rounds the sheet's top corners as
+   that bar does (shell.css), or its tint paints square over them. */
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  .desktop-task
+  > .desktop-task-main
+  > .ui-banner:nth-child(1 of :not([hidden])) {
+  border-top-left-radius: var(--sheet-top-left-radius, var(--sheet-radius));
+  border-top-right-radius: var(--sheet-top-right-radius, var(--sheet-radius));
 }
 
 /* The agent's tabs are parted from its conversation by a hairline, which

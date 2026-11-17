@@ -1,8 +1,7 @@
 // focus-shown.tsx -- whether a screen stands in front of its stack, heard through focus events and kept by the small piece that reads it, so a change of focus never draws the whole screen again.
 
-import { ComposeSheet, GlassDock } from "@repo/ui-native";
 import { useFocusEffect, useNavigation } from "expo-router";
-import { type ComponentProps, useCallback, useState } from "react";
+import { useCallback, useState } from "react";
 
 /**
  * Whether the screen the caller stands in is the one in front of its stack.
@@ -25,14 +24,4 @@ export function useFocusShown(): boolean {
   );
 
   return shown;
-}
-
-/** `GlassDock`, telling the app's notice it stands in front while its screen is the one in front of its stack. */
-export function FocusedDock(props: Omit<ComponentProps<typeof GlassDock>, "shown">) {
-  return <GlassDock {...props} shown={useFocusShown()} />;
-}
-
-/** `ComposeSheet`, telling the app's notice it stands in front while its sheet is the screen in front. */
-export function FocusedComposeSheet(props: Omit<ComponentProps<typeof ComposeSheet>, "shown">) {
-  return <ComposeSheet {...props} shown={useFocusShown()} />;
 }

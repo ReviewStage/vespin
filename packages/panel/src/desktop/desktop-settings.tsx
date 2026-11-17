@@ -40,6 +40,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
+import { useBillingShown } from "../billing.js";
 import { CallCardDock } from "../call/standing-call.js";
 import { useListEdge, useScreenRef, useScreenSplit } from "../column-split.js";
 import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
@@ -363,7 +364,9 @@ export function DesktopSettings({
   const named = settings.view === SETTINGS_VIEW.WORKSPACE && listed !== undefined;
   const title = named ? listed.name : shown.title;
   const writes = useSettingsWrites();
-  const rows = settingsRowsInput(settings);
+  // Whether Billing stands for the listed workspace: billing on, and the reader an owner or admin.
+  const billing = useBillingShown(listed);
+  const rows = settingsRowsInput({ ...settings, billing });
 
   // The experiments on where Settings shows: the account's own, and the listed workspace's.
   const experiments = experimentsShown(
@@ -517,7 +520,7 @@ export function DesktopSettings({
                       onOpen={choose}
                     />
                   ) : (
-                    shownSettingsPageGroups(settings.capabilities, experiments).map(
+                    shownSettingsPageGroups(settings.capabilities, experiments, billing).map(
                       ({ group, pages }) => (
                         <PageGroup
                           key={group}

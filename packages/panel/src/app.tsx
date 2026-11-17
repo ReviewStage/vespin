@@ -37,6 +37,7 @@ import { useAppCommand, useAppKeymap, useMenuCommands, useMenuOffers } from "./a
 import { appPlatform } from "./app-platform.js";
 import { type SettingsDoors, useSettingsPanel, useShownUpdate } from "./app-settings.js";
 import { useAutomationsRoute } from "./automations-route.js";
+import { useBillingShown, useOpenTaskBilling } from "./billing.js";
 import { StandingCallProvider } from "./call/standing-call.js";
 import { useDraftsOwner } from "./composer-drafts.js";
 import { useConnected } from "./connection.js";
@@ -45,6 +46,7 @@ import { DesktopShell } from "./desktop/desktop-shell.js";
 import { ListedAutomations } from "./desktop/listed-automations.js";
 import { useSidebarCollapse } from "./desktop/sidebar-collapse.js";
 import { TabSwitcher } from "./desktop/tab-switcher.js";
+import { useWorkspaceKeys } from "./desktop/workspace-keys.js";
 import { useExpiredServerToasts } from "./expired-server-toasts.js";
 import { FeedbackDialog } from "./feedback-dialog.js";
 import { GitHubConnectProvider } from "./github-connect.js";
@@ -81,7 +83,7 @@ import {
 } from "./places/window-history.js";
 import { forgetAccountReads } from "./query-keys.js";
 import { useOpenHostConnect } from "./settings/host-connect-dialog.js";
-import { settingsRowsInput, shownSettingsView } from "./settings/settings-rows.js";
+import { settingsRowsInput, shownSettingsView, shownWorkspace } from "./settings/settings-rows.js";
 import { type SettingsRoute, useSettingsRoute } from "./settings-link.js";
 import { landOnSettingsRow } from "./settings-search.js";
 import { SHELL_ROOM } from "./shell-room.js";
@@ -191,11 +193,16 @@ function SettingsPalette({
 }): React.JSX.Element {
   const settings = useSettingsPanel(doors);
 
+  // Whether Billing stands for the workspace Settings shows, so the search finds its page and sections as the sidebar lists them.
+  const billing = useBillingShown(
+    settings?.workspace ? shownWorkspace(settings.workspace) : undefined,
+  );
+
   return (
     <CommandPalette
       {...palette}
       settings={{
-        rows: settings === undefined ? undefined : settingsRowsInput(settings),
+        rows: settings === undefined ? undefined : settingsRowsInput({ ...settings, billing }),
         capabilities: settings?.capabilities ?? NO_CAPABILITIES,
         onViewChange: doors.onViewChange,
       }}
@@ -550,10 +557,15 @@ function AppWindow(): React.JSX.Element {
   // The page Settings shows, which a link to one the platform does not offer leaves on Profile.
   const experiments = useExperimentsIn(settingsPlace.workspaceId);
 
+  const billing = useBillingShown(
+    tasks.workspaces.find((each) => each.id === settingsPlace.workspaceId),
+  );
+
   const shownView = shownSettingsView(
     settingsPlace.view,
     run?.capabilities ?? NO_CAPABILITIES,
     experiments,
+    billing,
   );
 
   // A page chosen from outside Settings, as ⌘K chooses one, is a move the router's blocker holds while a page holds unsaved
@@ -751,6 +763,8 @@ function AppWindow(): React.JSX.Element {
   useAppKeymap(true);
   useMenuCommands(true);
   useMenuOffers();
+  // ⌃1 through ⌃9 switch to the workspaces the workspace menu lists, past the sign-in, on a desktop app.
+  useWorkspaceKeys(tasks, !accountGated);
   useHistoryMouseButtons(history, true);
 
   // The doors the window hands every page are held across draws, each part that reads one holding while it does.
@@ -804,6 +818,7 @@ function AppWindow(): React.JSX.Element {
   );
 
   const openWorkspaceGitHub = useOpenWorkspaceGitHub(openSettings);
+  const openBilling = useOpenTaskBilling(openSettings);
 
   // A remedy under a refused start or message mends the task's repository through the Tasks tab's doors.
   const repositoryRemedies = useMemo<RepositoryRemedyDoors>(
@@ -812,8 +827,9 @@ function AppWindow(): React.JSX.Element {
       openGitHub: openRepositoryOnGitHub,
       chooseRepository: tasks.onChangeRepository,
       moveTask: tasks.onMoveTask,
+      openBilling,
     }),
-    [openWorkspaceGitHub, tasks.onChangeRepository, tasks.onMoveTask],
+    [openWorkspaceGitHub, tasks.onChangeRepository, tasks.onMoveTask, openBilling],
   );
 
   const gitHubConnect = useAccountGitHub();

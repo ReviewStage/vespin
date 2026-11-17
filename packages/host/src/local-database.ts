@@ -11,8 +11,7 @@
  * The tables are the sync engine's replica (`row`, `held`, `cursor`, as
  * `local-rows.ts` writes them), its
  * waiting writes (`outbox`), the agent messages the service refused
- * (`refused`), and `meta`, which holds one hash over every kept row shape
- * and the mark that `entities.sealed`'s queue was imported.
+ * (`refused`), and `meta`, which holds one hash over every kept row shape.
  * A build whose hash differs clears the replica, which the service redraws
  * at once, and keeps the two queues, as Linear keeps one schema hash and
  * re-reads from the server.
@@ -53,8 +52,6 @@ const FILE_MODE = 0o600;
 /** The keys `meta` holds. */
 export const META_KEY = {
   SCHEMA_HASH: "schemaHash",
-  /** Set once the waiting writes an older build kept in `entities.sealed` were imported into `outbox` (`local-queues.ts`), so they are never imported twice. */
-  OUTBOX_IMPORTED: "outboxImported",
 } as const;
 
 /** The tables, created where they stand not. */

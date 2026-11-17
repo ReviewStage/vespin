@@ -1,4 +1,9 @@
-import { APP_SHORTCUTS, type KeyedCommand, shortcutMatches } from "@repo/settings/shortcuts";
+import {
+  APP_SHORTCUTS,
+  type KeyedCommand,
+  type ShortcutChord,
+  shortcutMatches,
+} from "@repo/settings/shortcuts";
 import {
   type DrawnMenu,
   type ListRowMenu,
@@ -36,6 +41,8 @@ export interface MenuAction extends Omit<SharedMenuAction, "hint" | "pressedBy">
   command?: KeyedCommand;
   /** What the item acts on, which the shortcut must act on now for the item to print it; none where it always does. */
   subject?: ShortcutSubject | undefined;
+  /** A key no command holds that takes the same action wherever it is pressed, as ⌃1 lists the first workspace (`workspace-keys.ts`), printed and heard as a command's is; given only where the window answers it. */
+  chord?: ShortcutChord | undefined;
 }
 
 /** An item that opens a menu of the window's own items beside it rather than acting. */
@@ -60,10 +67,8 @@ export interface MenuEnds {
 
 type KeyedByResult = { hint: React.ReactNode; pressedBy: MenuKeyMatch };
 
-/** A command's chord as a shared item prints it and hears it: muted at its end, and choosing it while the menu stands. */
-function keyedBy(command: KeyedCommand): KeyedByResult {
-  const { chord } = APP_SHORTCUTS[command];
-
+/** A chord as a shared item prints it and hears it: muted at its end, and choosing it while the menu stands. */
+function keyedBy(chord: ShortcutChord): KeyedByResult {
   return { hint: <Shortcut chord={chord} />, pressedBy: (event) => shortcutMatches(chord, event) };
 }
 
@@ -79,13 +84,14 @@ export function actingCommand(entry: {
   return subject === undefined || shortcutActsOn(command, subject) ? command : undefined;
 }
 
-/** The shared item for one of the window's, its command's chord as its hint. */
-function sharedAction({ command, subject, ...action }: MenuAction): SharedMenuAction {
+/** The shared item for one of the window's, its command's chord, or its own, as its hint. */
+function sharedAction({ command, subject, chord, ...action }: MenuAction): SharedMenuAction {
   const acting = actingCommand({ command, subject });
+  const printed = acting === undefined ? chord : APP_SHORTCUTS[acting].chord;
 
-  if (acting === undefined) return action;
+  if (printed === undefined) return action;
 
-  return { ...action, ...keyedBy(acting) };
+  return { ...action, ...keyedBy(printed) };
 }
 
 function sharedEntry(entry: MenuEntry): SharedMenuEntry {
@@ -96,7 +102,9 @@ function sharedEntry(entry: MenuEntry): SharedMenuEntry {
   const items = submenu.items.map(sharedAction);
   const acting = actingCommand({ command, subject });
 
-  return acting === undefined ? { ...submenu, items } : { ...submenu, items, ...keyedBy(acting) };
+  return acting === undefined
+    ? { ...submenu, items }
+    : { ...submenu, items, ...keyedBy(APP_SHORTCUTS[acting].chord) };
 }
 
 /** A row's menu (`ListRow`'s `menu`) of the window's items, each item's chord at its end; `thing` is what the row is, which names its ⋯ and the menu, `shown` whether the surface the row stands on is, which the menu does not outlive, and `replayUnmasked` whether its items' words are the app's own, which a screen recording shows as they read. */

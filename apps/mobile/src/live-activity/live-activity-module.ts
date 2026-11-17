@@ -2,12 +2,10 @@
  * live-activity-module.ts -- the app's native Live Activity module (`modules/live-activity/`) as JavaScript reads it: the tokens it hands on, an activity's end, the Stop button's requests, the phone it sends a background token beside, a fixture's activity, a voice call's activity and its presses, and the Inbox widget drawn again.
  *
  * The module is the app's own, autolinked from `modules/`, so it stands in
- * every build of the app. It is optional here all the same, so a build
- * without it, such as Expo Go, runs with no Live Activity rather than
- * failing to start.
+ * every build of the app, and is required here as Expo's local modules are.
  */
 
-import { type NativeModule, requireOptionalNativeModule } from "expo";
+import { type NativeModule, requireNativeModule } from "expo";
 
 /** The phone as the module keeps it: the service to reach, the phone as the service names it, and the headers the app names itself by. */
 export interface KeptPhone {
@@ -50,5 +48,5 @@ declare class LiveActivityModule extends NativeModule<LiveActivityEvents> {
   reloadInboxWidget(): void;
 }
 
-/** The module, or none in a build that lacks it. */
-export const liveActivityModule = requireOptionalNativeModule<LiveActivityModule>("LiveActivity");
+/** The module. */
+export const liveActivityModule = requireNativeModule<LiveActivityModule>("LiveActivity");

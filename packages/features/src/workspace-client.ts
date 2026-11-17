@@ -9,6 +9,7 @@ import {
   callAnswered,
   jsonOf,
 } from "./account-call.js";
+import type { BillingStatusAnswer } from "./billing-wire.js";
 import type { WorkspaceTokenRepository } from "./github-repositories-wire.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { spelledFailure } from "./hosted-failure.js";
@@ -633,6 +634,33 @@ export class HostedWorkspaceClient {
     return resultOf(
       hostedCall(this.#hosted.workspaceSandboxSetup.putRunActions, admitted),
       (answer) => answer,
+    );
+  }
+
+  /** The workspace's billing as its owners and admins read it: whether billing is on, whether it is set up or blocked, and this month's usage against the included allowance. */
+  billingStatus(
+    workspaceId: string,
+  ): Effect.Effect<WorkspaceCallResult<BillingStatusAnswer>, never, HttpClient.HttpClient> {
+    return resultOf(hostedCall(this.#hosted.billing.status, { workspaceId }), (answer) => answer);
+  }
+
+  /** The address of Stripe's Checkout page where the workspace's billing is set up. */
+  billingSetup(
+    workspaceId: string,
+  ): Effect.Effect<WorkspaceCallResult<string>, never, HttpClient.HttpClient> {
+    return resultOf(
+      hostedCall(this.#hosted.billing.setup, { workspaceId }),
+      (answer) => answer.url,
+    );
+  }
+
+  /** The address of Stripe's Customer Portal page where the workspace's card is changed and its invoices read. */
+  billingPortal(
+    workspaceId: string,
+  ): Effect.Effect<WorkspaceCallResult<string>, never, HttpClient.HttpClient> {
+    return resultOf(
+      hostedCall(this.#hosted.billing.portal, { workspaceId }),
+      (answer) => answer.url,
     );
   }
 

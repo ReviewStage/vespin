@@ -80,13 +80,13 @@ import type { HeldTranscript } from "./transcript-follow.js";
  * only while that account is signed in, because a host one member signs out
  * of may next be signed in to by another, who may reach the same agent but
  * never another member's words that did not go. The signed-in account's are
- * also kept on disk, sealed, beside the writes waiting for the service
- * (`entity-store.ts`), so a relaunch draws them where they went: all of each
+ * also kept on disk, in its local database beside the writes waiting for
+ * the service (`local-queues.ts`), so a relaunch draws them where they went: all of each
  * but its files' bytes, which stay with the window that attached them, and
  * the facts of its failure, which no window draws. A message read back so
  * whose row the transcript holds went after all, so it is let go; one refused
  * since the host started is not, because its row may still be on its way out.
- * A sign-out lets every refusal go with the file.
+ * A sign-out lets every refusal go with the database.
  */
 
 /** Where an agent's messages on their way stand: its queue and the messages sending. */

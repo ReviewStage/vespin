@@ -93,7 +93,7 @@ import {
   TURN_ROW,
   type TurnRow,
 } from "@repo/features/turn-rows";
-import { toldTurnsOf } from "@repo/features/voice-call-lines";
+import { delegatedTurnsOf, isAgentTurn } from "@repo/features/voice-call-lines";
 import { isRecord, isWireNumber, isWireString, MESSAGE_ROLE } from "@repo/wire";
 
 /** The kinds of item the transcript's list draws. */
@@ -998,8 +998,8 @@ export function transcriptItems(
   reading: TranscriptReading,
 ): readonly TranscriptItem[] {
   const placed = placedMessages(messages);
-  // A turn whose reply the voice told on a call folds its written words with its work, as the panel's does.
-  const told = toldTurnsOf(placed);
+  // A turn a call's delegation opened folds its written words with its work, as the panel's does.
+  const delegated = delegatedTurnsOf(placed);
   const { origin } = reading;
 
   // Note that an automation's prompt is the first line anyone sent, which the run's card stands in place of.
@@ -1008,7 +1008,14 @@ export function transcriptItems(
       ? undefined
       : placed.find(({ message }) => message.role === MESSAGE_ROLE.USER)?.message.id;
 
-  const items = placed.flatMap(({ message, arrived }, at): readonly TranscriptItem[] => {
+  // Note that the turn the agent still writes is its newest one while unfinished, wherever it stands, as the panel reads it, because a call's lines said while it runs stand after it.
+  const newest = reading.writing
+    ? placed.findLast(({ message }) => isAgentTurn(message))?.message
+    : undefined;
+
+  const writing = newest?.finishedAt === undefined ? newest?.id : undefined;
+
+  const items = placed.flatMap(({ message, arrived }): readonly TranscriptItem[] => {
     if (message.role === MESSAGE_ROLE.USER) {
       const base = { place: linePlace(message.id, message.id), depth: 0 };
 
@@ -1019,8 +1026,8 @@ export function transcriptItems(
       ];
     }
 
-    const moving = reading.writing && at === placed.length - 1;
-    const rows = agentRows(message, moving, { arrived, told: told.has(message.id) });
+    const moving = message.id === writing;
+    const rows = agentRows(message, moving, { arrived, delegated: delegated.has(message.id) });
 
     const turn = turnStretches(rows).flatMap((stretch) =>
       stretch.line === undefined

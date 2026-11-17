@@ -116,7 +116,6 @@ export const PRODUCT_EVENT_PROPERTY = {
   DRAWN_MS: "drawn_ms",
   REPLY_KIND: "reply_kind",
   STANDING_SECONDS: "standing_seconds",
-  KEPT_STORE: "kept_store",
   APP_BUILD: "app_build",
   FIRST_ROWS: "first_rows",
 } as const;
@@ -202,6 +201,7 @@ export const PRODUCT_SETTINGS_VIEW = {
   PLAN_TEMPLATE: "plan_template",
   WORKSPACE: "workspace",
   ENVIRONMENT: "environment",
+  BILLING: "billing",
   /** No page since Settings › Cloud setup was folded into the Environment page; an older build still counts a visit to it. */
   CLOUD_SETUP: "cloud_setup",
   ACCOUNT: "account",
@@ -453,20 +453,6 @@ const PRODUCT_LAUNCH_SECONDS = {
 export type ProductLaunchSeconds =
   (typeof PRODUCT_LAUNCH_SECONDS)[keyof typeof PRODUCT_LAUNCH_SECONDS];
 
-/**
- * What a launch found of the lists kept on the phone (`entities.sealed`): a
- * file it opened and drew from, one it dropped as it opened, because it was
- * kept at row shapes the build no longer reads or for another account, or
- * none at all, as a fresh install or a launch after a sign-out finds.
- */
-export const PRODUCT_KEPT_STORE = {
-  KEPT: "kept",
-  DROPPED: "dropped",
-  NONE: "none",
-} as const;
-
-export type ProductKeptStore = (typeof PRODUCT_KEPT_STORE)[keyof typeof PRODUCT_KEPT_STORE];
-
 /** Which rows a launch's Inbox first showed: the ones kept on the phone, or the service's answer. */
 export const PRODUCT_FIRST_ROWS = {
   KEPT: "kept",
@@ -552,7 +538,6 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: ProductDrawnMilliseconds;
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: ProductReplyKind;
   [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: ProductLaunchSeconds;
-  [PRODUCT_EVENT_PROPERTY.KEPT_STORE]: ProductKeptStore;
   [PRODUCT_EVENT_PROPERTY.APP_BUILD]: string;
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: ProductFirstRows;
 }
@@ -593,7 +578,6 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.MIRROR_STEP]: Object.values(MIRROR_STEP),
   [PRODUCT_EVENT_PROPERTY.MIRROR_FAILURE]: Object.values(MIRROR_FAILURE),
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
-  [PRODUCT_EVENT_PROPERTY.KEPT_STORE]: Object.values(PRODUCT_KEPT_STORE),
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
 } as const satisfies Record<EnumeratedProductEventProperty, readonly string[]>;
 
@@ -653,7 +637,6 @@ const PRODUCT_EVENT_PROPERTIES = {
 const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
   [PRODUCT_EVENT.APP_READY]: [
     PRODUCT_EVENT_PROPERTY.STANDING_SECONDS,
-    PRODUCT_EVENT_PROPERTY.KEPT_STORE,
     PRODUCT_EVENT_PROPERTY.APP_BUILD,
     PRODUCT_EVENT_PROPERTY.FIRST_ROWS,
   ],

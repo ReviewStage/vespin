@@ -22,6 +22,7 @@ import { workspaceDriveBuildsFromEnvironment } from "./agents/workspace-drive-bu
 import { bearerCallersLayer } from "./auth/bearer-callers.js";
 import { signInRevocationFromEnvironment } from "./auth/sign-in-revocation.js";
 import { automationCadenceFromEnvironment } from "./automations/automation-cadence.js";
+import { billingEnvironment } from "./billing/billing-environment.js";
 import { endedSessionsChargedOnDelete } from "./billing/sandbox-session-charges.js";
 import { webSqlClient } from "./db/sql-client.js";
 import { hostedEnvironment } from "./environment.js";
@@ -149,6 +150,9 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
  * `InvitationMail` is the one place the Resend key and the sender a
  * workspace invitation is emailed from are read (`accounts/invitation-mail.ts`).
  *
+ * `BillingEnvironment` is the one place the Metronome account usage is sent
+ * to, and its webhook's secret, are read (`billing/billing-environment.ts`).
+ *
  * `ApnsSender` is the one place the deployment's APNs key is read
  * (`push/apns.ts`), over one HTTP/2 connection per Apple gateway that the
  * instance keeps for its life (`push/apns-http2.ts`), so every push an
@@ -184,6 +188,7 @@ export const webServices = Layer.mergeAll(
   FetchHttpClient.layer,
   webSqlClient,
   hostedEnvironment,
+  billingEnvironment,
   githubApp,
   signInRevocationFromEnvironment.pipe(Layer.provide(githubApp)),
   settledTurnListener.pipe(

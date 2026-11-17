@@ -1,3 +1,4 @@
+import { billingStatusAnswerSchema } from "@repo/features/billing-wire";
 import { workspaceTokenRepositorySchema } from "@repo/features/github-repositories-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { mergeQueueAnswerSchema } from "@repo/features/merge-queue-wire";
@@ -312,6 +313,31 @@ export const WORKSPACE_ACTS = declaredActs({
     refusal: "Could not save that sandbox size on this system.",
     panelOnly: true,
     door: ACT.REMOTE_WORK,
+  }),
+  WORKSPACE_BILLING_STATUS: hostAct({
+    input: tasksWorkspaceParamsSchema,
+    output: billingStatusAnswerSchema,
+    refusal: "Could not read that workspace's billing on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+  }),
+  WORKSPACE_BILLING_SETUP: hostAct({
+    input: tasksWorkspaceParamsSchema,
+    output: EffectSchema.String,
+    portOutput: EffectSchema.Void,
+    refusal: "Could not set up billing for that workspace on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    byHand: true,
+  }),
+  WORKSPACE_BILLING_PORTAL: hostAct({
+    input: tasksWorkspaceParamsSchema,
+    output: EffectSchema.String,
+    portOutput: EffectSchema.Void,
+    refusal: "Could not open that workspace's billing on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    byHand: true,
   }),
   WORKSPACE_MERGE_QUEUE_READ: hostAct({
     input: tasksWorkspaceParamsSchema,

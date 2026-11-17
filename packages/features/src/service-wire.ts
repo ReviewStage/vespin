@@ -159,6 +159,8 @@ export const HOSTED_API_ERROR = {
   WORKSPACE_SLUG_TAKEN: "workspace-slug-taken",
   /** A Start on This Mac was refused, for the reason it names (`LOCAL_AGENT_REFUSAL`). Nothing was written. */
   LOCAL_AGENT_REFUSED: "local-agent-refused",
+  /** A cloud agent's Start was refused because its workspace is past the month's included usage with no billing set up, or blocked by an invoice given up on (`billing-wire.ts`). Nothing was written. */
+  BILLING_REQUIRED: "billing-required",
   /** A host called with a daemon below the service's floor, or with no version at all (`host-wire.ts`); nothing was read or written, and the box's install script upgrades it in place. */
   HOST_UPGRADE_NEEDED: "host-upgrade-needed",
   /** The agent ran on a host its starter removed, so no message reaches it again; Continue starts a new agent elsewhere. Nothing was sent. */

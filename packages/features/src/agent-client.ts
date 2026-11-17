@@ -78,6 +78,7 @@ import {
   type MemoryForgetParams,
   type MemorySaveAnswerView,
   type MemorySaveParams,
+  type PlanUsageRefreshParams,
   type ProviderKeyForAgentsParams,
   type ProviderKeyRemoveParams,
   type ProviderKeyResetCreditParams,
@@ -134,6 +135,7 @@ import {
   allowedCommandAddRequestSchema,
   allowedCommandEditRequestSchema,
 } from "./allowed-command-wire.js";
+import type { BillingRefusal } from "./billing-refusal-wire.js";
 import {
   CHAPTERS_MODEL,
   CHAPTERS_PICK_LIST,
@@ -193,6 +195,7 @@ import {
   chatGptDeviceLoginRequestSchema,
   type ModelApiProvider,
   PROVIDER_KEY_QUERY,
+  planUsageRefreshRequestSchema,
   providerKeyForAgentsRequestSchema,
   providerKeyResetCreditRequestSchema,
   providerKeySaveRequestSchema,
@@ -249,6 +252,8 @@ type Failed = {
   readonly provider?: ModelProvider;
   readonly localAgentRefusal?: LocalAgentRefusal;
   readonly refusedDevice?: RefusedDevice;
+  readonly billingRefusal?: BillingRefusal;
+  readonly billingManager?: boolean;
 };
 
 /** The refusals a Start's contract declares, which are the ones a refusal beside a task it made may be read as. */
@@ -724,6 +729,17 @@ export class HostedAgentClient {
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
 
     return hostedCall(this.#hosted.account.useResetCredit, admitted);
+  }
+
+  /** A plan's usage checked again now, from its ⋯'s Refresh usage, answering the keys as they then stand. */
+  refreshPlanUsage(
+    params: PlanUsageRefreshParams,
+  ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(planUsageRefreshRequestSchema)(params));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(this.#hosted.account.refreshPlanUsage, admitted);
   }
 
   /** One of the account's subscriptions named, or its name cleared, answering the keys as they then stand; a request the service would refuse by shape never travels. */

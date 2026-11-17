@@ -10,6 +10,7 @@ import { LIMIT_REACHED_WORDS } from "./agent-failure-words.js";
 import { harnessNameOf } from "./agent-runtime-models.js";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "./agent-view.js";
 import { LOCAL_AGENT_REFUSAL, type LocalAgentRefusal, type RefusedDevice } from "./agent-wire.js";
+import { BILLING_REFUSAL, type BillingRefusal } from "./billing-refusal-wire.js";
 import { DEVICE_PLATFORM, type DevicePlatform } from "./device-agent-wire.js";
 import { devicePlatformOf } from "./device-platform.js";
 import type { ModelProvider } from "./models-wire.js";
@@ -90,6 +91,8 @@ export interface RefusedCall {
   readonly provider?: ModelProvider | undefined;
   readonly localAgentRefusal?: LocalAgentRefusal | undefined;
   readonly refusedDevice?: RefusedDevice | undefined;
+  readonly billingRefusal?: BillingRefusal | undefined;
+  readonly billingManager?: boolean | undefined;
 }
 
 /** The device a Start would run its agent on, as a refusal names it: its name, its platform where the service said, and its owner where it is another member's and the service said. */
@@ -176,6 +179,37 @@ export function keyUnreadableWords(action: (typeof ACTION)[keyof typeof ACTION])
   return `Your saved API key can't be read. Save it again in Settings to ${action}.`;
 }
 
+/** What a cloud agent's Start refused for billing says, by why and whether the reader manages billing, who is offered the press beside it. */
+const BILLING_REQUIRED_WORDS = {
+  [BILLING_REFUSAL.SET_UP]: {
+    manager:
+      "This workspace has used its free cloud usage for the month, so set up billing to start more cloud agents.",
+    member:
+      "This workspace has used its free cloud usage for the month, so an owner or admin needs to set up billing to start more cloud agents.",
+  },
+  [BILLING_REFUSAL.BLOCKED]: {
+    manager:
+      "This workspace's last payment failed, so update its card in Manage billing to start cloud agents again.",
+    member:
+      "This workspace's last payment failed, so an owner or admin needs to update its card to start cloud agents again.",
+  },
+} as const satisfies Record<BillingRefusal, { manager: string; member: string }>;
+
+/**
+ * Why billing refused a cloud agent's Start, in one sentence: past the
+ * month's included usage with none set up where the service named no
+ * reason, and in a member's words where it did not say the reader manages
+ * billing.
+ */
+export function billingRequiredWords(
+  refusal: BillingRefusal | undefined,
+  manager: boolean | undefined,
+): string {
+  const words = BILLING_REQUIRED_WORDS[refusal ?? BILLING_REFUSAL.SET_UP];
+
+  return manager === true ? words.manager : words.member;
+}
+
 /** What a Start that did not start says, by why. */
 export function startFailureWords(failure: AgentCallFailure): string {
   switch (failure) {
@@ -215,6 +249,8 @@ export function startFailureWords(failure: AgentCallFailure): string {
       return keyUnreadableWords(ACTION.START);
     case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:
       return localAgentRefusalWords(undefined, undefined);
+    case AGENT_CALL_FAILURE.BILLING_REQUIRED:
+      return billingRequiredWords(undefined, undefined);
   }
 }
 
@@ -249,6 +285,7 @@ export function chooseFailureNote(failure: AgentCallFailure): string {
     case AGENT_CALL_FAILURE.AGENT_API_KEY_UNREADABLE:
     case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:
     case AGENT_CALL_FAILURE.PERMISSION_MODE_REFUSED:
+    case AGENT_CALL_FAILURE.BILLING_REQUIRED:
     // Note that a model change asks no files back, so never meets a rewind's refusal.
     case AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING:
       return MODEL_CHANGE_FAILED;
@@ -270,6 +307,8 @@ export function messageFailureWords(failure: AgentCallFailure): string {
     case AGENT_CALL_FAILURE.OPENAI_KEY_MISSING:
     case AGENT_CALL_FAILURE.QUOTA_EXHAUSTED:
     case AGENT_CALL_FAILURE.UPSTREAM_ERROR:
+    // Note that only a Start asks the billing gate, so a message never meets its refusal.
+    case AGENT_CALL_FAILURE.BILLING_REQUIRED:
       return `${MESSAGE_NOT_SENT} Try again.`;
     // A message is refused by a device only while it is away, in the words a Start on it is.
     case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:

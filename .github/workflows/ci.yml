@@ -19,6 +19,10 @@ concurrency:
 # its longest job: the tests, which are the bulk of `check.sh`, are spread
 # across runners rather than run behind the lint and typecheck.
 #
+# Every job runs on smol machines (`runs-on: smol`), whose GitHub App the
+# ReviewStage organization linked at https://smolmachines.com/console/ci, and
+# whose machine time bills to that account rather than to GitHub's minutes.
+#
 # The TypeScript checks and the tests run through Turborepo (`turbo.json`),
 # which replays a task whose inputs it has already seen pass. Its cache is
 # Vercel's Remote Cache, given the TURBO_TOKEN and TURBO_TEAM secrets and
@@ -32,7 +36,7 @@ concurrency:
 jobs:
   portable:
     name: TypeScript checks
-    runs-on: ubuntu-24.04
+    runs-on: smol
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -55,7 +59,7 @@ jobs:
   # set, so no test file can fall outside every job or run twice.
   tests:
     name: Tests (${{ matrix.slice }})
-    runs-on: ubuntu-24.04
+    runs-on: smol
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -117,7 +121,7 @@ jobs:
   # rate-limits anonymous pulls.
   postgres:
     name: Postgres migrations and store
-    runs-on: ubuntu-24.04
+    runs-on: smol
     timeout-minutes: 15
     env:
       DATABASE_URL_UNPOOLED: postgresql://vespin:vespin@localhost:5432/vespin
@@ -180,7 +184,7 @@ jobs:
   # OIDC token, which the team's VCR policy trusts, so no secret is kept.
   agent-image:
     name: Agent image
-    runs-on: ubuntu-24.04
+    runs-on: smol
     timeout-minutes: 45
     permissions:
       contents: read
@@ -238,7 +242,7 @@ jobs:
     name: CI
     if: ${{ always() }}
     needs: [portable, tests, postgres, agent-image]
-    runs-on: ubuntu-24.04
+    runs-on: smol
     timeout-minutes: 5
     steps:
       - run: for result in $RESULTS; do test "$result" = success || test "$result" = skipped; done

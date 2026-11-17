@@ -30,6 +30,8 @@ export const SETTINGS_PAGE = {
   SKILLS: "skills",
   /** A workspace the account is in: its name and the account's role, its members, and its GitHub repositories, each the service's rather than a stored setting. */
   WORKSPACE: "workspace",
+  /** A workspace's billing, for its owners and admins: this month's usage against the included allowance, and where billing is set up and managed; listed only while billing is on. */
+  BILLING: "billing",
   /** What the workspace's cloud agents start with: the environment variables it hands them, their values never shown, its install script, and each repository's setup script, the service's rather than a stored setting. */
   ENVIRONMENT: "environment",
   /** What this Mac lets agents do on it, the stored switch for running commands here, and whether the app opens as it starts. */

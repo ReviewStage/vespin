@@ -13,8 +13,10 @@
  * A request may name a kind (`provider-key-wire.ts`'s `PROVIDER_KEY_KIND`);
  * one that names none is an API key's, as every desktop before kinds sends.
  * A subscription credential, a Claude setup-token, is braked and sealed as
- * a key is but never sent to its provider: it is kept unverified, and a
- * credential spelled as no credential of its kind is refused as invalid.
+ * a key is but not sent to its provider on save: it is kept unverified, and a
+ * credential spelled as no credential of its kind is refused as invalid. It
+ * reaches Anthropic from here only when the account refreshes the plan's
+ * usage by hand (`claude-usage.ts`).
  * An account may keep several API keys of a provider: a save adds one at
  * the bottom of its order, or replaces the one its id names. The answer's
  * `keys` are API keys alone, and the subscriptions stand apart beside them.
@@ -111,7 +113,8 @@ import {
 } from "./chatgpt-credentials.js";
 import { pollChatGptDeviceLogin, startChatGptDeviceLogin } from "./chatgpt-device-login.js";
 import { spentResetCredit } from "./chatgpt-reset-credits.js";
-import { readChatGptUsage } from "./chatgpt-usage.js";
+import { readChatGptUsage, rereadPlanUsage } from "./chatgpt-usage.js";
+import { rereadClaudeUsage } from "./claude-usage.js";
 
 const SAVE_BRAKE = {
   windowMs: Duration.toMillis(Duration.hours(1)),
@@ -450,6 +453,28 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       const keys = yield* keysAnswer(context);
 
       return Option.isNone(outcome) ? keys : { ...keys, resetCredit: outcome.value };
+    }),
+
+    /** One of the account's plans' usage checked again now, however fresh its reading: a Codex plan's asked of its usage endpoint, a Claude plan's read from the headers of a one-token quota check (`claude-usage.ts`). Answers the keys as they then stand; a plan it does not hold, or one whose provider answered nothing keeps what it held. */
+    refreshPlanUsage: keyed.refreshPlanUsage.effect(function* ({ context, input }) {
+      const { userId, ring } = context;
+
+      const [codex, claude] = yield* hostedStoreOrUnavailable(
+        Effect.all([
+          listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH),
+          listProviderKeyRows(userId, PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN),
+        ]),
+      );
+
+      const mine = (row: ProviderKeyRow) => row.id === input.subscriptionId;
+      const codexPlan = codex.find(mine);
+      const claudePlan = claude.find(mine);
+
+      if (codexPlan !== undefined) yield* rereadPlanUsage(userId, ring, codexPlan);
+
+      if (claudePlan !== undefined) yield* rereadClaudeUsage(userId, ring, claudePlan);
+
+      return yield* keysAnswer(context);
     }),
 
     /** One of the account's subscriptions or API keys named, or its name cleared; one it does not hold changes nothing. */

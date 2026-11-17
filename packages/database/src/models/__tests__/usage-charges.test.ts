@@ -1,5 +1,5 @@
 /**
- * usage-charges.test.ts -- the usage ledger over a real dialect: an item is charged once however often it is recorded, and a month's totals hold only that workspace's charges in that UTC month. Synthetic accounts, workspaces, and sessions throughout.
+ * usage-charges.test.ts -- the usage ledger over a real dialect: an item is charged once however often it is recorded, a month's totals hold only that workspace's charges in that UTC month, and the charges not yet sent are read page by page until each is stamped sent. Synthetic accounts, workspaces, and sessions throughout.
  */
 
 import assert from "node:assert/strict";
@@ -11,8 +11,11 @@ import { user } from "../../schemas/auth.js";
 import { getTestDB, openWorkspace } from "../../testing/index.js";
 import { USAGE_KIND } from "../../usage-vocabulary.js";
 import {
+  markUsageChargesSent,
   recordUsageCharges,
+  type UnsentUsageCharge,
   type UsageCharge,
+  unsentUsageCharges,
   workspaceMonthMemberTotals,
   workspaceMonthTotals,
 } from "../usage-charges.js";
@@ -122,6 +125,57 @@ it.layer(getTestDB())("the usage ledger", (it) => {
           [null, 70],
         ]),
       );
+    }),
+  );
+
+  it.effect("reads the charges not yet sent page by page, and none once stamped sent", () =>
+    Effect.gen(function* () {
+      const owner = yield* openAccount;
+      const acme = yield* openWorkspace(owner);
+
+      const charges = [
+        sessionCharge(acme, owner, 100, "2026-11-10T00:00:00Z"),
+        sessionCharge(acme, owner, 200, "2026-11-11T00:00:00Z"),
+        sessionCharge(acme, owner, 300, "2026-11-12T00:00:00Z"),
+        sessionCharge(acme, owner, 400, "2026-09-01T00:00:00Z"),
+      ];
+
+      yield* recordUsageCharges(charges);
+      const since = new Date("2026-10-15T00:00:00Z");
+
+      // Other tests' charges share the database, so only this workspace's are read.
+      const acmeUnsent = Effect.gen(function* () {
+        const read: number[] = [];
+        let after: string | null = null;
+
+        for (;;) {
+          const page: readonly UnsentUsageCharge[] = yield* unsentUsageCharges({
+            since,
+            after,
+            limit: 2,
+          });
+
+          const last = page.at(-1);
+
+          if (last === undefined) return read;
+          read.push(
+            ...page.flatMap((charge) =>
+              charge.organizationId === acme ? [charge.amountMicroUsd] : [],
+            ),
+          );
+          after = last.id;
+        }
+      });
+
+      assert.deepEqual((yield* acmeUnsent).toSorted(), [100, 200, 300]);
+
+      const firstPage = yield* unsentUsageCharges({ since, after: null, limit: 10_000 });
+      yield* markUsageChargesSent(
+        firstPage.filter((charge) => charge.organizationId === acme).map((charge) => charge.id),
+        NOVEMBER,
+      );
+
+      assert.deepEqual(yield* acmeUnsent, []);
     }),
   );
 });

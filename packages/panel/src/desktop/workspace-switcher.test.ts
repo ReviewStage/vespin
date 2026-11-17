@@ -9,17 +9,27 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
 import { OpenSettingsProvider } from "../open-settings.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import { DESKTOP_CAPABILITIES, handCapabilities } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { NewWorkspaceOpener } from "./new-workspace.js";
+import { useWorkspaceKeys } from "./workspace-keys.js";
 import { WorkspaceSwitcher } from "./workspace-switcher.js";
 
 /**
  * The sidebar's head as the developer meets it: the workspace listed, by its
  * tile and name and who shares it, and the menu of every workspace, New
- * workspace, and Workspace settings, whoever the account is in the workspace. Each press is written
- * down where the sidebar would hand it on.
+ * workspace, and Workspace settings, whoever the account is in the workspace,
+ * under the window's ⌃1 through ⌃9 as the window answers them. Each press is
+ * written down where the sidebar would hand it on.
  */
+
+/** The switcher under the window's workspace keys, which the window answers wherever the switcher stands. */
+function KeyedSwitcher(props: React.ComponentProps<typeof WorkspaceSwitcher>): React.JSX.Element {
+  useWorkspaceKeys(props.tasks, true);
+
+  return createElement(WorkspaceSwitcher, props);
+}
 
 const PERSONAL: Workspace = {
   id: "workspace-personal",
@@ -75,7 +85,7 @@ function mount(
             createElement(
               NewWorkspaceOpener,
               { value: doors.onNewWorkspace },
-              createElement(WorkspaceSwitcher, {
+              createElement(KeyedSwitcher, {
                 tasks: { ...tasksControl(), ...tasks },
                 inSight,
                 newTask: { shown: false, onOpen: () => undefined },
@@ -92,6 +102,7 @@ function mount(
   return {
     switcher: () => container.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]'),
     fold: () => render(false),
+    redraw: () => render(true),
   };
 }
 
@@ -122,7 +133,7 @@ function choose(label: string): void {
   act(() => item.click());
 }
 
-test("the menu offers the workspaces, the listed one checked, New workspace, and Workspace settings, which opens Settings on the listed workspace's page, and nothing else", () => {
+test("the menu offers the workspaces, the listed one checked and choosing it moving nothing, New workspace, and Workspace settings, which opens Settings on the listed workspace's page, and nothing else", () => {
   const pressed: unknown[] = [];
 
   const page = mount(
@@ -139,6 +150,8 @@ test("the menu offers the workspaces, the listed one checked, New workspace, and
 
   open(page.switcher());
   const offered = menuItems().map((item) => [labelOf(item), item.getAttribute("aria-checked")]);
+  choose("acme");
+  open(page.switcher());
   choose("Personal");
   open(page.switcher());
   choose("New workspace");
@@ -156,6 +169,61 @@ test("the menu offers the workspaces, the listed one checked, New workspace, and
     `choose:${PERSONAL.id}`,
     "new",
     { page: SETTINGS_VIEW.WORKSPACE, workspaceId: CONNECTED.id },
+  ]);
+});
+
+test("on a desktop app, ⌃ and a workspace's number lists it, and the menu prints each workspace's chord at its row's end", async () => {
+  handCapabilities(DESKTOP_CAPABILITIES);
+  const chosen: string[] = [];
+  const third: Workspace = { ...ACME, id: "workspace-third", name: "third", slug: "third" };
+
+  const page = mount({
+    workspaces: [PERSONAL, ACME, third],
+    workspace: PERSONAL,
+    onChooseWorkspace: (workspaceId) => chosen.push(workspaceId),
+  });
+
+  // Note that the window's state lands on a later render, as main delivers it, so the switcher is drawn again, as a window settles.
+  await act(async () => {
+    for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+  });
+  page.redraw();
+
+  const press = (key: string, code: string, held: KeyboardEventInit = { ctrlKey: true }) => {
+    const event = new KeyboardEvent("keydown", {
+      key,
+      code,
+      bubbles: true,
+      cancelable: true,
+      ...held,
+    });
+
+    act(() => document.body.dispatchEvent(event));
+
+    return event.defaultPrevented;
+  };
+
+  // ⌃2 lists the second workspace, read by the key's place, so a French keyboard's ⌃2, which types é, is it too; ⌃1 on the one listed and ⌃4 past the last move nothing, and ⌘2 is no workspace's.
+  const second = press("é", "Digit2");
+  const listed = press("1", "Digit1");
+  const past = press("4", "Digit4");
+  const command = press("2", "Digit2", { metaKey: true });
+
+  open(page.switcher());
+
+  const printed = menuItems().map((item) => [
+    labelOf(item),
+    item.querySelector(".ui-menu-item-hint")?.textContent ?? null,
+  ]);
+
+  assert.deepEqual(chosen, [ACME.id]);
+  assert.deepEqual([second, listed, past, command], [true, true, false, false]);
+  assert.deepEqual(printed, [
+    ["Personal", "⌃1"],
+    ["acme", "⌃2"],
+    ["third", "⌃3"],
+    ["New workspace", null],
+    ["Workspace settings", null],
   ]);
 });
 
