@@ -21,7 +21,8 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * a place that lists what waits as the window's Inbox does follows each plan
  * holding an item whole, as the Inbox follows them. Every open item is listed, whoever
  * it waits on, since a person's page lists what waits on them; Home keeps only the reader's own
- * (`needsReader`).
+ * (`needsReader`). The sidebar's Inbox row counts the same groups under the
+ * Inbox's view (`places-waiting.ts`).
  */
 
 /** What waits, the latest changed first; whether a read is still out or did not answer; and Retry. */
@@ -46,7 +47,7 @@ type UseListedInboxGroupsResult = {
  * agent's items among them, as every member's Inbox lists them; and the
  * read they come from.
  */
-function useListedInboxGroups(tasks: TasksControl): UseListedInboxGroupsResult {
+export function useListedInboxGroups(tasks: TasksControl): UseListedInboxGroupsResult {
   const { inboxTasks } = useListedInbox(tasks);
   const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
 
@@ -59,7 +60,12 @@ function useListedInboxGroups(tasks: TasksControl): UseListedInboxGroupsResult {
   }, [inboxTasks, listed]);
 
   const read = useHolderInboxItems(useMemo(() => taskHoldings(holdings), [holdings]));
-  const groups = inboxGroups(read.items, { tasks: holdings, listed });
+
+  // Note that the groups stand while their reads do, so a place counting them counts again only as they move.
+  const groups = useMemo(
+    () => inboxGroups(read.items, { tasks: holdings, listed }),
+    [read.items, holdings, listed],
+  );
 
   return { groups, read };
 }

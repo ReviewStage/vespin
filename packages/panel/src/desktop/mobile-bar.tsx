@@ -1,4 +1,3 @@
-import { NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { BarAction, BarItem, BarItems, MENU_KEEPS_CLEAR, PlusIcon, SearchIcon } from "@repo/ui";
 import { raiseKeyboard } from "@repo/ui/command";
@@ -14,8 +13,7 @@ import { ROUTED_PLACE, type RoutedPlace, useWindowPlace } from "../places/routed
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { type AutomationsPlace, automationsTab } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { useInboxWaiting } from "./places-waiting.js";
-import { groupCount } from "./sidebar-fold.js";
+import { useInboxViewCount } from "./places-waiting.js";
 
 /**
  * mobile-bar.tsx -- a phone's way between the window's places: a bar
@@ -40,7 +38,7 @@ import { groupCount } from "./sidebar-fold.js";
  * bar on a phone too, its list and its pages alike: no place is the current
  * one there, and a press leaves Settings for the place pressed (`leave`).
  *
- * The Inbox counts what waits on the developer there, the count the
+ * The Inbox counts what its chosen view lists there, the count the
  * drawer's row shows, read from the one reading they draw from
  * (`places-waiting.ts`), so the two never disagree, and said in the
  * sidebar's words.
@@ -112,7 +110,7 @@ export function MobileBar({
   const among = leave === undefined;
   const inInbox = among && place === ROUTED_PLACE.INBOX;
   const inTasks = among && !inInbox && boardOpen;
-  const waiting = useInboxWaiting(tasks);
+  const inboxCount = useInboxViewCount(tasks);
 
   // Note that a press leaves what stands over the places first, so the place it opens is the one on screen.
   const go = (open: () => void) => () => {
@@ -131,7 +129,7 @@ export function MobileBar({
           <BarItem
             icon={<InboxIcon />}
             current={inInbox}
-            count={groupCount(waiting, NEEDS_YOU.COUNT)}
+            count={inboxCount}
             onPress={go(inbox.open)}
           >
             Inbox

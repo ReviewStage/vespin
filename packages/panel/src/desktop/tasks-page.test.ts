@@ -45,7 +45,6 @@ import { layScrollerOut } from "../testing/scroller.js";
 import { handInbox, tasksControl } from "../testing/tasks-control.js";
 import { leavingBy, windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
-import { useInboxWaiting } from "./places-waiting.js";
 import { TasksPage } from "./tasks-page.js";
 
 /**
@@ -363,21 +362,8 @@ test("a refresh that failed after the tasks were read keeps the rows drawn under
   assert.match(first.querySelector('[role="alert"]')?.textContent ?? "", /could not be read/u);
 });
 
-test("a row and a card count the threads waiting on the reader, as the sidebar counts them: a notice counts, and a teammate's question and one reminded for later count nowhere", async () => {
+test("a row and a card count the threads waiting on the reader: a notice counts, and a teammate's question and one reminded for later count nowhere", async () => {
   const page = await mountPage();
-  const sidebar = { count: -1 };
-
-  function Sidebar() {
-    sidebar.count = useInboxWaiting(control);
-
-    return null;
-  }
-
-  const control = tasksControl({ tasks: [...TASKS], me: DEAN });
-
-  const sidebarRoot = createRoot(document.createElement("div"));
-  roots.push(sidebarRoot);
-  act(() => sidebarRoot.render(withQueryClient(overListedTasks(control, createElement(Sidebar)))));
 
   // Note that the count's words are read as an element's own, since a row's key runs into them.
   const says = (holder: Element | undefined) => {
@@ -393,7 +379,6 @@ test("a row and a card count the threads waiting on the reader, as the sidebar c
   const listSays = (key: string) => says(rowOf(page, key));
 
   assert.deepEqual(["ACME-44", "ACME-42", "ACME-40"].map(listSays), [2, 1, 0]);
-  assert.equal(sidebar.count, 3);
 
   act(() => buttonNamed(page, "Columns").click());
 

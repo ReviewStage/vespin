@@ -1013,7 +1013,11 @@ export function rowNamed(page: HTMLElement, title: string): HTMLButtonElement {
 
 /** Opens the list's View options. */
 export function openViewOptions(page: HTMLElement): void {
-  const options = page.querySelector<HTMLButtonElement>('button[aria-label="View options"]');
+  // Note that the list's own head is asked, since the sidebar beside it offers View options of its own.
+  const options = page.querySelector<HTMLButtonElement>(
+    '.inbox-tasks button[aria-label="View options"]',
+  );
+
   assert.ok(options, "the head offers the view's menu");
   act(() => options.click());
 }
