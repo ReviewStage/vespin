@@ -50,7 +50,7 @@
  * the file at a sign-out. The messages the service refused are kept in the
  * account's local database (`local-copy.ts`); a file an older build wrote
  * may still hold them, which the store hands out unread until the database
- * takes them (`refused.imported`), and then writes the file without them.
+ * takes them (`legacy.imported`), and then writes the file without them.
  */
 
 import { AUTOMATIONS_READ } from "@repo/features/automation-live";
@@ -221,11 +221,13 @@ export interface EntityStore {
   ) => Effect.Effect<void>;
   /** The row writes waiting for the service as the file held them when the store opened, oldest first. */
   readonly queue: readonly QueuedEntry[];
-  /** The messages the service refused that an older build kept in the file, until the local database takes them. */
-  readonly refused: {
-    /** As the file held them when the store opened, each in the form its reader kept it in. */
-    readonly entries: readonly unknown[];
-    /** Has the store write the file without them, since the local database holds them now. */
+  /** What an older build kept in the file that the local database takes once (`local-copy.ts`'s `SealedQueues`). */
+  readonly legacy: {
+    /** The row writes waiting, oldest first, as the file held them when the store opened. */
+    readonly queue: readonly QueuedEntry[];
+    /** The messages the service refused as the file held them when the store opened, each in the form its reader kept it in. */
+    readonly refused: readonly unknown[];
+    /** Has the store write the file without the messages refused, since the local database holds them now. */
     readonly imported: Effect.Effect<void>;
   };
   /** Deletes the file and keeps nothing more, as a sign-out does. */
@@ -470,8 +472,9 @@ export function openEntityStore(
     return {
       stored: (read) => stored[read],
       queue,
-      refused: {
-        entries: refusedKept,
+      legacy: {
+        queue,
+        refused: refusedKept,
         imported: Effect.suspend(() => {
           if (refusedCarried.length === 0) return Effect.void;
           refusedCarried = [];

@@ -48,7 +48,7 @@ import { TestClock } from "effect/testing";
 import { KEPT_CHARACTERS } from "./account-items-follow.js";
 import type { AppTranscript } from "./app-state.js";
 import { KEPT_READ, openEntityStore } from "./entity-store.js";
-import { localCopy, type SealedRefusals } from "./local-copy.js";
+import { localCopy, NO_SEALED_QUEUES, type SealedQueues } from "./local-copy.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
 import { taskListCollections } from "./task-list-collections.js";
 import {
@@ -976,7 +976,7 @@ const localPlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, nodeS
 function signedInLocal(
   stateRoot: string,
   harness: Effect.Success<ReturnType<typeof queueFollowed>>,
-  sealed?: SealedRefusals,
+  sealed: SealedQueues = NO_SEALED_QUEUES,
 ) {
   return Effect.gen(function* () {
     const scope = yield* Scope.make();
@@ -1041,8 +1041,9 @@ it.effect(
       let imported = false;
 
       // Note that what the file kept went through JSON, as the sealed file does.
-      const sealed: SealedRefusals = {
-        entries: JSON.parse(JSON.stringify(before.refused.kept())),
+      const sealed: SealedQueues = {
+        queue: [],
+        refused: JSON.parse(JSON.stringify(before.refused.kept())),
         imported: Effect.sync(() => {
           imported = true;
         }),

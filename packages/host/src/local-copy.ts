@@ -10,7 +10,7 @@
  *
  * The refused messages are kept here alone: an open lays back what the
  * `refused` table holds, and the first open whose table holds none takes
- * the ones `entities.sealed` kept for this account (`SealedRefusals`)
+ * the ones `entities.sealed` kept for this account (`SealedQueues`)
  * once, then tells that file to drop them, so a later open never brings
  * back one let go since. The lists still draw first from
  * `entities.sealed`, since the store's `loaded` answers none, and the
@@ -53,16 +53,18 @@ export interface RefusedMessages {
   readonly restored: (account: string, kept: readonly unknown[]) => Effect.Effect<void>;
 }
 
-/** The refused messages an older build kept in `entities.sealed` for this account, which an open takes once. */
-export interface SealedRefusals {
-  /** As the file held them. */
-  readonly entries: readonly unknown[];
+/** What an older build kept in `entities.sealed` for this account that the database takes once: its waiting writes and its refused messages. */
+export interface SealedQueues {
+  /** The writes waiting, oldest first, as the file held them. */
+  readonly queue: readonly QueuedEntry[];
+  /** The refused messages as the file held them. */
+  readonly refused: readonly unknown[];
   /** Has the file drop them, since the database holds them now. */
   readonly imported: Effect.Effect<void>;
 }
 
-/** No file, so no refusals to take. */
-const NO_SEALED_REFUSALS: SealedRefusals = { entries: [], imported: Effect.void };
+/** No file, so nothing to take. */
+export const NO_SEALED_QUEUES: SealedQueues = { queue: [], refused: [], imported: Effect.void };
 
 /** The account's database, from its sign-in until its sign-out. */
 export interface LocalCopy {
@@ -72,7 +74,7 @@ export interface LocalCopy {
   readonly open: (
     accountId: string,
     refused: RefusedMessages,
-    sealed?: SealedRefusals,
+    sealed: SealedQueues,
   ) => Effect.Effect<void>;
   /** Closes the database and deletes the folder of the account it was last opened for, as a sign-out does. */
   readonly forget: Effect.Effect<void>;
@@ -124,11 +126,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
     },
   };
 
-  const open = (
-    accountId: string,
-    refused: RefusedMessages,
-    sealed: SealedRefusals = NO_SEALED_REFUSALS,
-  ) =>
+  const open = (accountId: string, refused: RefusedMessages, sealed: SealedQueues) =>
     Effect.gen(function* () {
       if (opened !== undefined) return;
       account = accountId;
@@ -142,7 +140,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
         yield* Scope.close(scope, Exit.void);
         yield* reported(LOCAL_DATABASE_REPORT.OPEN_FAILED, connection.failure);
 
-        return yield* refused.restored(accountId, sealed.entries);
+        return yield* refused.restored(accountId, sealed.refused);
       }
 
       const kept = localRefused(connection.success);
@@ -153,13 +151,13 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
         yield* Scope.close(scope, Exit.void);
         yield* reported(LOCAL_DATABASE_REPORT.REFUSED_READ_FAILED, stored.failure);
 
-        return yield* refused.restored(accountId, sealed.entries);
+        return yield* refused.restored(accountId, sealed.refused);
       }
 
       // Note that an empty table takes the file's refusals, which a database opened before this build mirrored, so a table that holds any is the newer word.
       yield* refused.restored(
         accountId,
-        stored.success.length === 0 ? sealed.entries : stored.success,
+        stored.success.length === 0 ? sealed.refused : stored.success,
       );
       const keep = Effect.suspend(() => kept.keep(refused.kept()));
       // Note that the file drops its refusals only once they were written to the table.

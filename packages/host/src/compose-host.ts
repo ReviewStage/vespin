@@ -95,7 +95,7 @@ import {
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "./kept-content.js";
 import { shutdownStepsFlushingEvents } from "./lifecycle.js";
 import { liveSocketClient } from "./live-socket.js";
-import { localCopy } from "./local-copy.js";
+import { localCopy, NO_SEALED_QUEUES } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
 import { HOST_NODE_CAPABILITY } from "./node-capabilities.js";
 import { offlineRefusedCount } from "./queued-writes.js";
@@ -796,11 +796,9 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       const signedInId = account.signedIn() ? accountId() : undefined;
 
       if (signedInId === undefined) return;
-      const sealed = entities?.store.refused;
+      const sealed = entities?.store.legacy ?? NO_SEALED_QUEUES;
 
-      if (local === undefined) {
-        return yield* agents.refused.restored(signedInId, sealed?.entries ?? []);
-      }
+      if (local === undefined) return yield* agents.refused.restored(signedInId, sealed.refused);
 
       yield* local.open(signedInId, agents.refused, sealed);
     });

@@ -273,8 +273,8 @@ it.effect(
       yield* keptAgainWith(directory, { refused });
 
       const upgraded = yield* opened(directory, DANA);
-      assert.deepEqual(upgraded.store.refused.entries, refused);
-      yield* upgraded.store.refused.imported;
+      assert.deepEqual(upgraded.store.legacy.refused, refused);
+      yield* upgraded.store.legacy.imported;
       yield* upgraded.closed;
 
       assert.equal("refused" in JSON.parse(yield* openedText(directory)), false);
