@@ -1,4 +1,5 @@
 import type { WorkspaceMember } from "@repo/features/workspace-wire";
+import { agentOfTab } from "@repo/ui/tab-strip-model";
 import type { HistoryRows } from "./places/history-rows.js";
 import type { RoutedPlace } from "./places/routed-places.js";
 import type { StepTitle } from "./places/window-steps.js";
@@ -20,7 +21,10 @@ import type { RoutedViews } from "./workspace-routes.js";
  * A step is named as the window stands on it, since a tab's name is known
  * only while its task is open: the page by what the window's title calls it
  * (`window-title.ts`), and a task's step by the task, with the tabs its
- * column and side panel showed under it, "Fix token refresh · Code". An
+ * column and side panel showed under it, "Fix token refresh · Code": the
+ * column's Overview as the task's description, "Fix token refresh ·
+ * Description", and an agent's threads over its transcript under the
+ * agent's name, "Fix token refresh · Token renewal · Threads". An
  * Inbox item's step names the item's thread and the task it is of, so the
  * items of one task are told apart. A Settings page is named by its page
  * alone.
@@ -47,6 +51,12 @@ export const MERGE_QUEUE_WORDS = "Merge queue";
 
 /** What Home is called, as its step and its page name it. */
 export const HOME_WORDS = "Home";
+
+/** What a task's step says of its column's Overview, the task's description. */
+export const DESCRIPTION_WORDS = "Description";
+
+/** What a task's step says after an agent's name where its card showed its threads. */
+export const THREADS_WORDS = "Threads";
 
 /** What a step's name is read again from: the task list's rows by id, the names being typed for tasks, the open task's agents and pages, and the thread an Inbox item's id names, where the account's items are read. */
 type StepNameTasks = Pick<TasksControl, "typedNames" | "activeTaskId" | "agents" | "pages"> & {
@@ -84,9 +94,14 @@ function stepNames(tasks: StepNameTasks, taskId: string): TabNames {
   };
 }
 
-/** What a column tab of a task is called now; none for an agent named nowhere the window reads. */
+/** What a column tab of a task is called now, the description for its Overview; none for an agent named nowhere the window reads. */
 function columnTabLabel(tab: MainTab, taskId: string, tasks: StepNameTasks): string | undefined {
-  return stripTabTitle(tab, stepNames(tasks, taskId));
+  return isOverviewTab(tab) ? DESCRIPTION_WORDS : stripTabTitle(tab, stepNames(tasks, taskId));
+}
+
+/** What a step's column is called, its agent's threads after its name where its card showed them. */
+function withThreads(column: string, threads: boolean): string {
+  return threads ? `${column} · ${THREADS_WORDS}` : column;
 }
 
 /** What a side panel tab of a task is called under its task's name now; none for an agent named nowhere the window reads, or a page of a task not open, whose pages are not read. */
@@ -112,6 +127,7 @@ type TitleTasksControl = Pick<
   | "workspace"
   | "agentView"
   | "history"
+  | "agentThreads"
 >;
 
 /** What a step's name reads: the parts of the Tasks tab it reads, and the task list's rows by id. */
@@ -148,13 +164,14 @@ function stateStepTitle(tasks: StepTitleTasks): StepTitle | undefined {
   // Note that the strips are named only once they are the task's, as the history reads them.
   if (tasks.activeTaskId !== tasks.boundFor) return { label: name };
   const { boundFor } = tasks;
-  // Note that the column's Overview is the task itself, which the step's name already says.
   const columnTab = tasks.mainTabs.tab;
+  const columnAgent = agentOfTab(columnTab);
+  const label = columnTab === undefined ? undefined : columnTabLabel(columnTab, boundFor, tasks);
 
-  const column =
-    columnTab === undefined || isOverviewTab(columnTab)
-      ? undefined
-      : columnTabLabel(columnTab, boundFor, tasks);
+  const threads =
+    columnAgent !== undefined && tasks.agentThreads.shown(boundFor, columnAgent) !== undefined;
+
+  const column = label === undefined ? undefined : withThreads(label, threads);
 
   const side =
     tasks.sidePanel.open && tasks.sidePanel.tab !== undefined
@@ -183,6 +200,8 @@ export type NamedStep =
       readonly taskId: string;
       readonly column: MainTab | undefined;
       readonly side: SidePanelTab | undefined;
+      /** Whether the column's agent's card showed its threads. */
+      readonly threads: boolean;
     }
   | { readonly kind: typeof NAMED_STEP.VERSION_HISTORY; readonly taskId: string }
   | {
@@ -209,13 +228,16 @@ function liveTaskTitle(
   const label = taskName(tasks, step.taskId) ?? kept?.label;
 
   if (label === undefined) return undefined;
-  const { taskId, column, side } = step;
+  const { taskId, column, side, threads } = step;
+  const named = column === undefined ? undefined : columnTabLabel(column, taskId, tasks);
 
-  // Note that `null` is a pane that showed no tab, or the column's Overview, which is the task itself, and `undefined` a tab named neither now nor as kept, which leaves the words kept whole.
+  // Note that `null` is a pane that showed no tab, and `undefined` a tab named neither now nor as kept, which leaves the words kept whole.
   const columnName =
-    column === undefined || isOverviewTab(column)
+    column === undefined
       ? null
-      : (columnTabLabel(column, taskId, tasks) ?? kept?.panes?.column);
+      : named === undefined
+        ? kept?.panes?.column
+        : withThreads(named, threads);
 
   const sideName =
     side === undefined ? null : (sideTabLabel(side, taskId, tasks) ?? kept?.panes?.side);

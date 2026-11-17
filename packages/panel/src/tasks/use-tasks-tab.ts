@@ -117,6 +117,7 @@ import {
   usePersonRoute,
 } from "../workspace-routes.js";
 import { inboxItemHomeQueryOptions, taskByNumberQueryOptions } from "./agent-reads.js";
+import { type AgentThreadViews, useAgentThreadViews } from "./agent-thread-views.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./automations-place.js";
 import { type ByPullRequest, NO_PULL_REQUESTS_KEPT, withPullRequest } from "./by-pull-request.js";
 import {
@@ -463,6 +464,8 @@ export interface TasksControl {
   inboxView: InboxViewControl;
   /** Says which agent's card in the column shows its threads in its transcript's place (`agent-threads.tsx`), none while it shows its transcript, so main is not told that transcript is on screen. */
   onThreadsShown: (agentId: string | undefined) => void;
+  /** Which agents' cards show their threads, by task and agent, which the window's history stands as it lands on a task's step (`agent-thread-views.ts`). */
+  agentThreads: AgentThreadViews;
   /** One agent's own address: which agent's stands in the task's place, if any, and its presses. */
   agentView: AgentViewControl;
   /**
@@ -1401,6 +1404,7 @@ export function useTasksTab(input: {
   }, [draftInView, blankDraft, columnSettled]);
   // The agent whose card in the column shows its threads rather than its transcript, as the task's page says.
   const [threadsShown, setThreadsShown] = useState<string | undefined>(undefined);
+  const agentThreads = useAgentThreadViews();
 
   // An agent's transcript beside the Inbox shows its agent as its tab would, while the panel stands open on it.
   const inboxTranscript =
@@ -3541,6 +3545,7 @@ export function useTasksTab(input: {
     onTabKeysTaken: onKeysTaken,
     inboxShown: shownInbox,
     onThreadsShown: setThreadsShown,
+    agentThreads,
     // The window's Inbox is the router's (`places/routed-doors.ts`'s `useInboxDoor`); what stays here is the tab's own.
     inboxView: {
       // Note that an item is a step after the list it was chosen in, which its way back steps back to (`places/narrow-backs.ts`).

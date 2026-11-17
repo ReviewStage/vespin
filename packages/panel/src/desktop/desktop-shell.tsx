@@ -985,10 +985,12 @@ export function DesktopShell({
   // filling the window over them hides them too, and its toggle is the way out.
   const detailsShown = isOverviewTab(tasks.mainTabs.tab) && !tasks.sidePanel.fullScreen;
   const descriptionToggle = tasks.page === TASKS_PAGE.TASK && !standingIn && !detailsShown;
-  // A phone's task leads its own row with the way back to the page it was opened from, named for it (`task-pane-switcher.tsx`).
-  const awayLabel = awayBack(history.away, history.onLeave).label;
-  const { onLeave } = history;
-  const away = useMemo(() => ({ label: awayLabel, onPress: onLeave }), [awayLabel, onLeave]);
+  // A phone's page leads its own row with its way back, the window's Back, named for the step it goes back to, and Home
+  // where none stands behind (`task-pane-switcher.tsx`).
+  const behind = history.canGoBack ? history.steps.back[0] : undefined;
+  const awayLabel = awayBack(behind).label;
+  const awayPress = history.canGoBack ? history.onBack : tasks.onGoHome;
+  const away = useMemo(() => ({ label: awayLabel, onPress: awayPress }), [awayLabel, awayPress]);
 
   // Note that the onboarding column's drag strip stands over its top rather
   // than in flow, because the AuthPage beneath is already a whole window tall
