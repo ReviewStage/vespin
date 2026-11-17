@@ -80,6 +80,9 @@ const BUBBLE_PADDING = SPACE.ROW + 4;
 /** How near its newest row, as a share of the list's height, the reader stands for a row that lands to be scrolled into view, as FlashList's chat lists keep their end. */
 const AUTOSCROLL_SHARE = 0.1;
 
+/** How far past its newest row's top the list opens, which the scroll view clamps to its end: as far as any row could stand, so a newest row taller than the screen opens at its end rather than its top. */
+const OPEN_PAST_NEWEST = Number.MAX_SAFE_INTEGER;
+
 /** How far the list stands from its newest row before Jump to latest is offered, in points. */
 const LATEST_REACH = 240;
 
@@ -1234,6 +1237,9 @@ export function AgentTranscript({
             { paddingLeft: left + sides, paddingRight: right + sides },
           ]}
           contentInsetAdjustmentBehavior="automatic"
+          // Note that FlashList opens at its newest row's top, so the list asks it for an offset past that row which the scroll view clamps to the content's end, and a newest row taller than the screen opens at its end, clear of the composer, as the rest do.
+          initialScrollIndex={hasRows ? items.length - 1 : undefined}
+          initialScrollIndexParams={{ viewOffset: OPEN_PAST_NEWEST }}
           // Note that the list opens at its newest row, keeps it in view as rows land while the reader stands near it, and, as an older page lands before the oldest row, leaves the row the reader reads where it stood, as FlashList's chat lists do.
           maintainVisibleContentPosition={{
             startRenderingFromBottom: true,
