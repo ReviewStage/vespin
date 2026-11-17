@@ -83,6 +83,7 @@ export type AccountAsksClient = Pick<
   | "removeProviderKey"
   | "setProviderKeyForAgents"
   | "useResetCredit"
+  | "refreshPlanUsage"
   | "renameSubscription"
   | "reorderSubscriptions"
   | "startChatGptDeviceLogin"
@@ -547,6 +548,8 @@ function actsOf(
       Effect.flatMap(asked(client.setProviderKeyForAgents(change)), keysWritten),
     PROVIDER_KEYS_USE_RESET_CREDIT: (spend) =>
       Effect.flatMap(asked(client.useResetCredit(spend)), keysWritten),
+    PROVIDER_KEYS_REFRESH_USAGE: (refresh) =>
+      Effect.flatMap(asked(client.refreshPlanUsage(refresh)), keysWritten),
     SUBSCRIPTION_RENAME: (rename) =>
       Effect.flatMap(asked(client.renameSubscription(rename)), keysWritten),
     SUBSCRIPTIONS_REORDER: (order) =>

@@ -1266,6 +1266,39 @@ it.layer(getTestDB())("the provider keys route", (it) => {
   );
 
   it.effect(
+    "a refresh asks for a Codex plan's usage however fresh its reading, and asks nothing for a plan another account holds",
+    () =>
+      Effect.gen(function* () {
+        const device = fakeDeviceAuth();
+        device.state.codePollStatus = HTTP_STATUS.OK;
+
+        const { owner, other, ask, checks } = yield* openAccounts({
+          ring: KEK.ONE,
+          auth: device.auth,
+        });
+
+        yield* connectPlan(ask, owner);
+        const asked = () => checks.filter((check) => check.url === CHATGPT_USAGE_URL).length;
+        const planId = keysOf(yield* ask(request(owner))).subscriptions?.[0]?.id ?? "";
+
+        const refresh = (userId: string) =>
+          ask(
+            request(userId, {
+              method: "POST",
+              path: "/api/account/provider-keys/usage",
+              body: { subscriptionId: planId },
+            }),
+          );
+
+        yield* refresh(owner);
+        const byOwner = asked();
+        yield* refresh(other);
+
+        assert.deepEqual([byOwner, asked()], [2, 2]);
+      }),
+  );
+
+  it.effect(
     "removing the ChatGPT plan revokes its refresh token at OpenAI first and answers whether OpenAI confirmed it",
     () =>
       Effect.gen(function* () {

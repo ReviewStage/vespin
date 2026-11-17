@@ -513,7 +513,7 @@ test("each card opens on its harness and its Add; each credential says how it st
   assert.ok(button(credential(attention, "ana@work.test"), "Reconnect"));
   leave();
 
-  // A plan at its limit says until when, its bar full in the attention ink; only Codex's ⋯ offers Manage usage in ChatGPT, which opens ChatGPT's usage settings.
+  // A plan at its limit says no words, its bar full in the attention ink; only Codex's ⋯ offers Manage usage in ChatGPT, which opens ChatGPT's usage settings.
   held = {
     keys: [],
     subscriptions: [
@@ -526,14 +526,9 @@ test("each card opens on its harness and its Add; each credential says how it st
     ],
   };
   const limited = await mount();
-  await vi.waitFor(() =>
-    assert.deepEqual(lineOf(credential(limited, "Claude plan")), needsHand("At its limit")),
-  );
-  assert.equal(meterOf(credential(limited, "Claude plan")), "attention");
-  assert.match(
-    lineOf(credential(limited, "ana@work.test"))?.words ?? "",
-    /^At its limit, back at /u,
-  );
+  await vi.waitFor(() => assert.equal(meterOf(credential(limited, "Claude plan")), "attention"));
+  assert.equal(lineOf(credential(limited, "Claude plan")), undefined);
+  assert.equal(lineOf(credential(limited, "ana@work.test")), undefined);
 
   await choose(credential(limited, "ana@work.test"), "ana@work.test", "Manage usage in ChatGPT");
   assert.deepEqual(sentOf(ACT_KIND.WEB_OPEN), [{ url: "https://chatgpt.com/settings/usage" }]);
@@ -569,6 +564,25 @@ test("a Codex plan with room offers its resets as one press, whose question list
     JSON.stringify(sentOf(ACT_KIND.PROVIDER_KEYS_USE_RESET_CREDIT)),
     /^\[\{"subscriptionId":"chatgpt-1"/u,
   );
+});
+
+test("each plan's ⋯ offers Refresh usage, which asks the service for that plan's usage", async () => {
+  held = {
+    keys: [],
+    subscriptions: [
+      { ...CLAUDE_PLAN, status: PROVIDER_KEY_STATUS.VERIFIED },
+      { ...CHATGPT_PLAN, status: PROVIDER_KEY_STATUS.VERIFIED },
+    ],
+  };
+  const page = await mount();
+  await vi.waitFor(() => credential(page, "ana@work.test"));
+
+  await choose(credential(page, "Claude plan"), "Claude plan", "Refresh usage");
+  await choose(credential(page, "ana@work.test"), "ana@work.test", "Refresh usage");
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE), [
+    { subscriptionId: CLAUDE_PLAN.id },
+    { subscriptionId: "chatgpt-1" },
+  ]);
 });
 
 test("each harness's card stands where a link to its section lands", async () => {

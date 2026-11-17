@@ -20,7 +20,6 @@ import {
   type SubscriptionKeySummary,
 } from "@repo/features/provider-key-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { dueText } from "@repo/features/time-format";
 import { readingWords, SIGNED_OUT_WORDS, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActPayload } from "@repo/host/contract";
@@ -83,7 +82,7 @@ import { type InlineRename, type RenameWrite, useInlineRename } from "@repo/ui/u
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { actMutation } from "../act-mutations.js";
+import { actMutation, pressMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
@@ -295,9 +294,8 @@ const WORDS = {
   READ_FAILED: "Your keys could not be read.",
   SIGNED_OUT: SIGNED_OUT_WORDS,
   ADD: "Add plan or key",
+  REFRESH_USAGE: "Refresh usage",
   ADD_KEY: "Add key",
-  AT_LIMIT: "At its limit",
-  BACK_AT: "back at",
   RENAME: "Rename",
   PLAN_NAME: "Plan name",
   KEY_NAME: "Key name",
@@ -428,13 +426,6 @@ function harnessReady(answer: ProviderKeysAnswer, provider: SettingsProvider): b
 
 /* ----- What a credential says ----- */
 
-/** A reached limit's words, with when it resets where the provider named it: "At its limit · back at 3:40 PM". */
-function limitWords(plan: SubscriptionKeySummary, now: number): string {
-  return plan.limitResetsAt === undefined
-    ? WORDS.AT_LIMIT
-    : `${WORDS.AT_LIMIT}, ${WORDS.BACK_AT} ${dueText(plan.limitResetsAt, now)}`;
-}
-
 /** What a Claude token that does not stand says. */
 function tokenWords(plan: SubscriptionKeySummary): string {
   switch (plan.status) {
@@ -483,7 +474,6 @@ function planLine(provider: PlanProvider, plan: SubscriptionKeySummary, now: num
 
   if (plan.status === PROVIDER_KEY_STATUS.LIMIT_REACHED) {
     return {
-      words: limitWords(plan, now),
       ok: false,
       ...(usage === undefined
         ? { meter: { value: 100, tone: PROGRESS_TONE.ATTENTION } }
@@ -1234,8 +1224,14 @@ function PlanRow({
   const offer = useResetCreditOffer(claude ? undefined : plan);
   const rename = useInlineRename(plan.id, renames);
   const openLink = useOpenLink();
+  const refresh = useMutation(pressMutation(ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE));
 
   const own = [
+    {
+      label: WORDS.REFRESH_USAGE,
+      disabled: refresh.isPending,
+      onSelect: () => refresh.mutate({ subscriptionId: plan.id }),
+    },
     ...(claude ? [{ label: WORDS.RENAME, onSelect: () => renameIn(rename, onClose) }] : []),
     ...moveActions(at, count, onMove),
     ...(claude ? [{ label: WORDS.REPLACE_TOKEN, onSelect: () => onOpen(STEPS.REPLACE) }] : []),

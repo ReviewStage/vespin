@@ -111,7 +111,7 @@ import {
 } from "./chatgpt-credentials.js";
 import { pollChatGptDeviceLogin, startChatGptDeviceLogin } from "./chatgpt-device-login.js";
 import { spentResetCredit } from "./chatgpt-reset-credits.js";
-import { readChatGptUsage } from "./chatgpt-usage.js";
+import { readChatGptUsage, rereadPlanUsage } from "./chatgpt-usage.js";
 
 const SAVE_BRAKE = {
   windowMs: Duration.toMillis(Duration.hours(1)),
@@ -128,6 +128,18 @@ const SAVE_BRAKE = {
 const DEVICE_POLL_BRAKE = {
   windowMs: Duration.toMillis(Duration.minutes(1)),
   maxRequestsPerWindow: 30,
+  maxTrackedUsers: 10_000,
+} as const;
+
+/**
+ * A plan's usage checked by hand, per account: each press of a Codex
+ * plan's is a call to its usage endpoint on the plan's token, so they are
+ * braked well past what a developer pressing Refresh usage reaches, and
+ * short of hammering the endpoint.
+ */
+const USAGE_REFRESH_BRAKE = {
+  windowMs: Duration.toMillis(Duration.minutes(1)),
+  maxRequestsPerWindow: 10,
   maxTrackedUsers: 10_000,
 } as const;
 
@@ -300,6 +312,7 @@ function subscriptionRefusalOf(
 export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
   const brake = createRateBrake(SAVE_BRAKE);
   const pollBrake = createRateBrake(DEVICE_POLL_BRAKE);
+  const refreshBrake = createRateBrake(USAGE_REFRESH_BRAKE);
   const signingKeys = chatGptSigningKeys();
   const keyed = hosted.account.use(accountMiddleware(seams.resolveUserId)).use(keyRingMiddleware);
 
@@ -450,6 +463,23 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       const keys = yield* keysAnswer(context);
 
       return Option.isNone(outcome) ? keys : { ...keys, resetCredit: outcome.value };
+    }),
+
+    /** One of the account's plans' usage checked again now, however fresh its reading: a Codex plan's asked of its usage endpoint, a Claude plan's answered as stored, since a setup-token cannot read Claude's usage endpoint. Answers the keys as they then stand; a plan it does not hold, a press past the brake, or one the endpoint answered nothing for keeps what it held. */
+    refreshPlanUsage: keyed.refreshPlanUsage.effect(function* ({ context, input }) {
+      const { userId, ring } = context;
+
+      if (yield* refreshBrake.check(userId)) {
+        const plans = yield* hostedStoreOrUnavailable(
+          listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH),
+        );
+
+        const plan = plans.find((row) => row.id === input.subscriptionId);
+
+        if (plan !== undefined) yield* rereadPlanUsage(userId, ring, plan);
+      }
+
+      return yield* keysAnswer(context);
     }),
 
     /** One of the account's subscriptions or API keys named, or its name cleared; one it does not hold changes nothing. */
