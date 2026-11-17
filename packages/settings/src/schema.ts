@@ -675,7 +675,6 @@ export const APP_SETTING_SCHEMA = {
     field: "inbox",
     id: APP_SETTING_ID.INBOX,
     label: "Use the Inbox",
-    detail: "Agents post what they need from you there. Turned off, they ask in their replies.",
     default: true,
     page: SETTINGS_PAGE.PREFERENCES,
     section: SETTING_SECTION.GENERAL,

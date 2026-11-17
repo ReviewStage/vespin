@@ -94,10 +94,11 @@ export const NARROW_BACK = {
 
 type NarrowBack = (typeof NARROW_BACK)[keyof typeof NARROW_BACK];
 
-/** What a place a narrow room stands another in the place of opens it with: the listed workspace's address step, and the Inbox's door, which stands it in the step's place where told to. */
+/** What a place a narrow room stands another in the place of opens it with: the listed workspace's address step, the Inbox's door, which stands it in the step's place where told to, and whether the account keeps an Inbox for it to open. */
 interface NarrowInsteadDoors {
   readonly workspace: string;
   readonly openInbox: (at: InboxAt, replace?: boolean) => void;
+  readonly inbox: boolean;
 }
 
 /** A route of the panel's tree, by its id. */
@@ -615,8 +616,10 @@ export const ROUTED_PLACE = {
     links: ({ listed }) => [stepLink({ kind: LINK_DESTINATION.HOME }, LINK_THING.HOME, listed)],
     narrowBack: undefined,
     // A phone has no Home: wherever the window would stand on it, the Inbox's list takes its step in place (`mobile-bar.tsx`), so Back never lands on a Home that would only leave again.
-    narrowInstead: ({ workspace, openInbox }) =>
-      openInbox({ workspace, narrowed: undefined }, true),
+    // Note that an account keeping no Inbox stands on Home instead, since the Inbox's route would only send it back.
+    narrowInstead: ({ workspace, openInbox, inbox }) => {
+      if (inbox) openInbox({ workspace, narrowed: undefined }, true);
+    },
     surfaces: () => [{ surface: PRODUCT_SURFACE.HOME }],
     draft: noDraft,
   },

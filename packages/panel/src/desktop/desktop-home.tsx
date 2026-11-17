@@ -134,11 +134,19 @@ function recentTasks(tasks: readonly TaskSummary[], room: ShellRoom): TaskSummar
  * Inbox landing over Recent. Note that a later read of a holder newly listed
  * leaves what stands in place, because only the first read holds the page.
  */
-function useArriving(tasks: TasksControl, read: WaitingItems, waiting: number): boolean {
+function useArriving(
+  tasks: TasksControl,
+  read: WaitingItems,
+  waiting: number,
+  inboxOn: boolean,
+): boolean {
   const reading = !tasks.listRead && !tasks.listFailed;
   const [opened] = useState(reading);
   const [heard, setHeard] = useState(false);
-  const inboxOut = opened && !heard && waiting === 0 && read.reading && !tasks.listFailed;
+
+  // Note that an account keeping no Inbox waits on no Inbox read, since no section of it lands.
+  const inboxOut =
+    inboxOn && opened && !heard && waiting === 0 && read.reading && !tasks.listFailed;
 
   if (tasks.listRead && !inboxOut && !heard) setHeard(true);
 
@@ -308,10 +316,10 @@ export function DesktopHome({
   // Note that the clock moves with the minute, so an item whose reminder comes due joins the section without a read.
   const now = useMinute();
   const waiting = read.items.filter(({ item }) => waitsOnReaderNow(item, tasks.me, now));
-  const arriving = useArriving(tasks, read, waiting.length);
-  const fresh = welcomed(tasks, useListsTask(undefined));
   // Note that an account that turned its Inbox off is shown no Inbox section, its agents asking in their replies.
   const inboxOn = useInboxOn();
+  const arriving = useArriving(tasks, read, waiting.length, inboxOn);
+  const fresh = welcomed(tasks, useListsTask(undefined));
 
   return (
     // Note that the rows' links are written under the listed workspace, so their menus offer Copy link.
