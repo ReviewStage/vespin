@@ -40,16 +40,14 @@ const BRIEF_JOB = {
   [AGENT_BRIEF.BLANK]: "do what the developer asks of you in this conversation",
 } as const satisfies Record<AgentBrief, string>;
 
-/** What the agent does with a request it cannot read, whatever it was handed: ask in a thread, or in its reply where its starter keeps no Inbox. */
-const UNCLEAR_LINE = {
-  THREAD: "If something doesn't make sense, or you can't tell what to build, ask in a thread.",
-  REPLY:
-    "If something doesn't make sense, or you can't tell what to build, ask in your reply and stop there.",
-} as const;
-
-/** How the agent brings the developer what needs them where its starter keeps no Inbox (`@repo/settings`'s `inbox`), so it is offered no thread to post. */
-const NO_INBOX_LINE =
-  "The developer keeps no Inbox, so you post no threads: when you need something from them, or have something ready for them to look at, say so at the end of your reply and stop, and they answer you in this conversation.";
+/**
+ * What the agent does with a request it cannot read, whatever it was
+ * handed: ask in a thread. Note that an agent whose starter keeps no Inbox
+ * (`@repo/settings`'s `inbox`) is told nothing in its place, nor of threads
+ * anywhere, so it asks in its reply as its harness would on its own.
+ */
+const UNCLEAR_LINE =
+  "If something doesn't make sense, or you can't tell what to build, ask in a thread.";
 
 export const CODER_HARNESS = {
   CLAUDE_CODE: CONVERSATION_RUNTIME.CLAUDE_CODE,
@@ -173,7 +171,7 @@ function publishLines(
   return [
     `Work on a branch named \`${CODER.BRANCH_PREFIX}<slug>\` cut from ${from}, never on ${from} itself, unless your first message names an open pull request's branch to push to.`,
     authorshipLine(authorship),
-    `Open a pull request with \`${AGENT_TOOL.OPEN_PULL_REQUEST}\`${base}, never \`gh pr create\`, and ${posts ? "post it in a thread" : "name it in your reply"} once it is ready for review.`,
+    `Open a pull request with \`${AGENT_TOOL.OPEN_PULL_REQUEST}\`${base}, never \`gh pr create\`${posts ? ", and post it in a thread once it is ready for review" : ""}.`,
     `After you push, wait on the checks with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` rather than a command that watches CI.`,
     memberToken
       ? "You work on the developer's own GitHub token, so `gh pr` does not work: use `gh api repos/{owner}/{repo}/…`, and read your pull request's reviews yourself, since nothing on it reaches you."
@@ -296,15 +294,17 @@ export function coderInstructions(
       ? `You work in no repository. Your folder is \`${machine.checkoutPath}\`; ${shell} starts there.`
       : `The GitHub repository \`${repository}\` is checked out at \`${machine.checkoutPath}\`${branch}; ${shell} starts there.`,
     ...machineLines(machine, repository !== null),
-    posts ? UNCLEAR_LINE.THREAD : UNCLEAR_LINE.REPLY,
+    ...(posts ? [UNCLEAR_LINE] : []),
     ...(publishes ? publishLines(authorship, startBranch, memberToken, wakesOff, posts) : []),
-    `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\` and ${posts ? "post it in a thread" : "name it in your reply"}.`,
+    `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\`${posts ? " and post it in a thread" : ""}.`,
     endsTurns
       ? `End every turn by calling \`${AGENT_TOOL.END_TURN}\` last: its summary is what the developer reads as your reply.`
       : "The developer reads your last message before you stop as your reply, so put everything essential in it.",
-    posts
-      ? `When you need something from the developer, or have something ready for them to look at, post it in a thread with \`${INBOX_TOOLS.POST.name}\`. If someone asks you something on a thread, answer on that thread, not just in your reply. Every post reaches the developer as a notification, so never post one that needs nothing of them: no thanks or acknowledgment, no confirmation that you did what they just told you, such as arming auto-merge or queueing a merge, no news that a pull request merged or its checks passed, and no correction of a link or a number, even where they wrote to you on a thread: say it in your reply instead.`
-      : NO_INBOX_LINE,
+    ...(posts
+      ? [
+          `When you need something from the developer, or have something ready for them to look at, post it in a thread with \`${INBOX_TOOLS.POST.name}\`. If someone asks you something on a thread, answer on that thread, not just in your reply. Every post reaches the developer as a notification, so never post one that needs nothing of them: no thanks or acknowledgment, no confirmation that you did what they just told you, such as arming auto-merge or queueing a merge, no news that a pull request merged or its checks passed, and no correction of a link or a number, even where they wrote to you on a thread: say it in your reply instead.`,
+        ]
+      : []),
     ...(describes
       ? [
           `Record a decision you made, or a question left open with the assumption you go on, in the task's description with \`${EDIT_DESCRIPTION_TOOL.name}\`${read}.`,
