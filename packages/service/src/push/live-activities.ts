@@ -46,11 +46,18 @@
  * still follows the hold. A phone set to never take a push takes no start
  * or update, and an activity standing on it when it is set so is ended.
  *
- * A token Apple says is gone is forgotten (`forgetLiveActivityToken`), and
- * an activity's update token is forgotten once the service ends it or iOS
- * would have (`LIVE_ACTIVITY_PUSH.LIFETIME`), so the next turn starts a
- * fresh one; either is forgotten only where the phone still holds the one
- * that was sent to. Every push is the caller's best effort: a runtime with no
+ * The phone must never stand two activities, and only an end pushed to an
+ * activity's update token takes one off it, so the service lets go of an
+ * activity only once it could end it. One whose update token the app has
+ * not registered yet stands until it has, even once no agent runs, and the
+ * next turn shows on it rather than starting a second; the sweep ends it
+ * once its token comes. One near iOS's own end
+ * (`LIVE_ACTIVITY_PUSH.ROTATE_AFTER`, inside `LIFETIME`) is ended and
+ * dismissed at once before a fresh one starts. A token Apple says is gone
+ * is forgotten (`forgetLiveActivityToken`), and an activity's update token
+ * is forgotten once the service ends it, so the next turn starts a fresh
+ * one; either is forgotten only where the phone still holds the one that
+ * was sent to. Every push is the caller's best effort: a runtime with no
  * `ApnsSender`, or a member with no phone registered for an activity, pushes
  * nothing and reads nothing more.
  */
@@ -112,6 +119,8 @@ const LIVE_ACTIVITY_PUSH = {
   DISMISS_AFTER: Duration.minutes(10),
   /** How long iOS lets an activity stand before it ends it itself, and so how long Apple keeps an end for a phone that is off. */
   LIFETIME: Duration.hours(8),
+  /** How long an activity stands before the service ends it and starts a fresh one: inside `LIFETIME`, so its end still reaches it and iOS never leaves it ended beside the new one. */
+  ROTATE_AFTER: Duration.minutes(7 * 60 + 45),
   /** How long a claimed push-to-start stands unconfirmed before a refresh takes it again: well past APNs' own timeout on the send (`APNS_REQUEST_TIMEOUT`). */
   START_HOLD: Duration.minutes(1),
   /** The most phones one sweep takes, and how many members at once; the rest wait for the next minute's. */
@@ -201,13 +210,14 @@ function updatePayload(state: LiveActivityContentState, now: number): ApnsPayloa
   };
 }
 
-function endPayload(state: LiveActivityContentState, now: number): ApnsPayload {
+/** The end, which stays on the lock screen until `dismissAt`. */
+function endPayload(state: LiveActivityContentState, now: number, dismissAt: number): ApnsPayload {
   return {
     aps: {
       timestamp: epochSeconds(now),
       event: APNS_LIVE_ACTIVITY_EVENT.END,
       "content-state": state,
-      "dismissal-date": epochSeconds(now + Duration.toMillis(LIVE_ACTIVITY_PUSH.DISMISS_AFTER)),
+      "dismissal-date": epochSeconds(dismissAt),
     },
   };
 }
@@ -221,7 +231,7 @@ function standsOn(phone: LiveActivityPhone, now: number): boolean {
   if (phone.startedAt === null) return false;
   const age = now - phone.startedAt.getTime();
 
-  if (age >= Duration.toMillis(LIVE_ACTIVITY_PUSH.LIFETIME)) return false;
+  if (age >= Duration.toMillis(LIVE_ACTIVITY_PUSH.ROTATE_AFTER)) return false;
 
   const confirmed =
     phone.activityToken !== null ||
@@ -311,7 +321,8 @@ function startOn(
 
 /**
  * The phone's standing activity ended, as the header says: not while an
- * agent runs, unless the phone is set to never take a push; forgotten once
+ * agent runs, unless the phone is set to never take a push, nor before the
+ * app has registered its update token; forgotten once
  * Apple took the end or no retry would help, and left standing for the
  * sweep to try again where Apple did not take it this time; and started
  * again where a turn began while it ended.
@@ -329,18 +340,23 @@ function endOn(
     // Note that whether an agent runs is read again here, as a turn may have begun since the state was read.
     if (!never && (yield* listRunningAgentTurns(userId)).length > 0) return;
 
-    if (phone.activityToken !== null) {
-      const delivery = yield* sendTo(
-        phone,
-        phone.activityToken,
-        endPayload(never ? NOTHING_SHOWN : state, now),
-        APNS_PRIORITY.IMMEDIATE,
-        LIVE_ACTIVITY_PUSH.LIFETIME,
-        now,
-      );
+    // Note that an activity whose update token the app has not registered yet stands until it has, since nothing could end it on the phone, and a start would stand a second beside it.
+    if (phone.activityToken === null) return;
 
-      if (delivery === APNS_DELIVERY.FAILED) return;
-    }
+    const delivery = yield* sendTo(
+      phone,
+      phone.activityToken,
+      endPayload(
+        never ? NOTHING_SHOWN : state,
+        now,
+        now + Duration.toMillis(LIVE_ACTIVITY_PUSH.DISMISS_AFTER),
+      ),
+      APNS_PRIORITY.IMMEDIATE,
+      LIVE_ACTIVITY_PUSH.LIFETIME,
+      now,
+    );
+
+    if (delivery === APNS_DELIVERY.FAILED) return;
 
     const ended = yield* recordLiveActivityEnded(userId, phone.pushDeviceId, read);
 
@@ -352,6 +368,48 @@ function endOn(
     if (restart.running === 0) return;
     const cleared = { startedAt: null, activityToken: null };
     yield* startOn(userId, { ...phone, ...cleared, sentState: null }, cleared, restart, restartAt);
+  });
+}
+
+/**
+ * An aged activity whose update token the service holds, ended on the phone
+ * and dismissed at once before a fresh one starts, so the phone never stands
+ * two; answers the activity as the refresh goes on reading it, none where
+ * Apple says the token is gone, or nothing where Apple did not take the end
+ * this time, which leaves it for the sweep to try again.
+ */
+function dismissAgedOn(
+  userId: string,
+  phone: LiveActivityPhone,
+  read: LiveActivityRead,
+  state: LiveActivityContentState,
+  now: number,
+): Effect.Effect<LiveActivityRead | null, StoreFailure, DatabaseServices | ApnsSender> {
+  return Effect.gen(function* () {
+    if (phone.activityToken === null) return read;
+    const shown = phone.notify === PUSH_NOTIFY.NEVER ? NOTHING_SHOWN : state;
+
+    const delivery = yield* sendTo(
+      phone,
+      phone.activityToken,
+      endPayload(shown, now, now),
+      APNS_PRIORITY.IMMEDIATE,
+      LIVE_ACTIVITY_PUSH.LIFETIME,
+      now,
+    );
+
+    if (delivery === APNS_DELIVERY.FAILED) return null;
+
+    if (delivery !== APNS_DELIVERY.TOKEN_GONE) return read;
+
+    yield* forgetLiveActivityToken(
+      userId,
+      phone.pushDeviceId,
+      LIVE_ACTIVITY_TOKEN.ACTIVITY,
+      phone.activityToken,
+    );
+
+    return { startedAt: null, activityToken: null };
   });
 }
 
@@ -369,10 +427,14 @@ function refreshPhone(
     const wanted = state.running > 0 && phone.notify !== PUSH_NOTIFY.NEVER;
 
     if (!standsOn(phone, now)) {
-      if (wanted) return yield* startOn(userId, phone, read, state, now);
+      const left = yield* dismissAgedOn(userId, phone, read, state, now);
+
+      if (left === null) return;
+
+      if (wanted) return yield* startOn(userId, phone, left, state, now);
 
       // An activity aged out, or a start no refresh confirmed, is let go once none is wanted.
-      if (phone.startedAt !== null) yield* recordLiveActivityEnded(userId, pushDeviceId, read);
+      if (left.startedAt !== null) yield* recordLiveActivityEnded(userId, pushDeviceId, left);
 
       return;
     }
