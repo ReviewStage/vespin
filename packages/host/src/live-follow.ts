@@ -7,6 +7,7 @@ import {
 } from "@repo/features/live-wire";
 import { cappedExponential } from "@repo/wire/effect";
 import {
+  Array as Arr,
   Cause,
   Clock,
   Data,
@@ -420,12 +421,44 @@ interface LiveAnswer<Part extends string> {
   readonly past: boolean;
 }
 
+/** An answer handed to the caller, and what settles once the caller has taken it. */
+interface HandedAnswer<Part extends string> {
+  readonly answer: LiveAnswer<Part>;
+  readonly taken: Deferred.Deferred<void>;
+}
+
+/**
+ * The answers as the caller pulls them, each one's `taken` settled as the
+ * caller pulls again, which it does only once it is done with the last.
+ */
+function takenOnNextPull<Part extends string>(
+  handed: Stream.Stream<HandedAnswer<Part>, LiveBroken>,
+): Stream.Stream<LiveAnswer<Part>, LiveBroken> {
+  return Stream.transformPull(handed, (pull) =>
+    Effect.sync(() => {
+      let pulled: readonly HandedAnswer<Part>[] = [];
+
+      return Effect.suspend(() => {
+        for (const each of pulled) Deferred.doneUnsafe(each.taken, Effect.void);
+        pulled = [];
+
+        return Effect.map(pull, (answers) => {
+          pulled = answers;
+
+          return Arr.map(answers, (each) => each.answer);
+        });
+      });
+    }),
+  );
+}
+
 /**
  * Every answer's rows, undecoded, each time they change, for as long as the
  * caller reads: the first answer's, then each poll's that moved (see the
- * module's note). A write's wait settles once the rows of the answer
- * carrying its txid, or read at snapshots that all show it, are handed on.
- * It fails only where the read is gone.
+ * module's note). A write's wait settles once the caller has taken the rows
+ * of the answer carrying its txid, or read at snapshots that all show it,
+ * since a write that stood down before its rows were taken would leave a row
+ * it made drawn by neither for a moment. It fails only where the read is gone.
  */
 function liveAnswers<Part extends string>(
   dependencies: LiveFollowDependencies<Part>,
@@ -433,16 +466,20 @@ function liveAnswers<Part extends string>(
 ): Stream.Stream<LiveAnswer<Part>, LiveBroken> {
   const parts = Object.keys(first.queries).filter((part): part is Part => part in first.queries);
 
-  return Stream.callback<LiveAnswer<Part>, LiveBroken>((queue) =>
+  const handed = Stream.callback<HandedAnswer<Part>, LiveBroken>((queue) =>
     Effect.gen(function* () {
       let last: string | undefined;
 
+      /** Hands the answer on, answering what settles once the caller has taken it; none for one the caller already holds. */
       const emit = (answer: LiveAnswer<Part>) => {
         const said = JSON.stringify(answer);
 
-        if (said === last) return;
+        if (said === last) return undefined;
         last = said;
-        Queue.offerUnsafe(queue, answer);
+        const taken = Deferred.makeUnsafe<void>();
+        Queue.offerUnsafe(queue, { answer, taken });
+
+        return taken;
       };
 
       const confirmations = txConfirmations();
@@ -453,23 +490,28 @@ function liveAnswers<Part extends string>(
         }),
       );
 
-      /** Hands the answer's rows on, then its snapshots and its txids, answering whether a write woke it. */
+      /** Hands the answer's rows on, then, once the caller has taken them, its snapshots and its txids, answering whether a write woke it. */
       const answered = (read: SealedRead<Part>) =>
         Effect.gen(function* () {
           const rows = rowsOf(parts, read);
-
-          if (rows !== undefined) emit({ rows, past: pastOf(read) });
+          const taken = rows === undefined ? undefined : emit({ rows, past: pastOf(read) });
           const snapshots = snapshotsOf(parts, read);
-
-          if (snapshots !== undefined) confirmations.see(snapshots);
           const txids = txidsOf(read);
 
-          if (txids.length > 0) confirmations.carry(txids, yield* Clock.currentTimeMillis);
-
+          // Note that the wait is handed at once, so a write asked meanwhile waits on it rather than standing down unconfirmed.
           if (!handed && (snapshots !== undefined || txids.length > 0)) {
             handed = true;
             dependencies.onTxWait?.(confirmations.wait);
           }
+
+          const confirmed = Effect.gen(function* () {
+            if (snapshots !== undefined) confirmations.see(snapshots);
+
+            if (txids.length > 0) confirmations.carry(txids, yield* Clock.currentTimeMillis);
+          });
+
+          if (taken === undefined) yield* confirmed;
+          else yield* Effect.forkScoped(Effect.andThen(Deferred.await(taken), confirmed));
 
           return txids.length > 0;
         });
@@ -534,6 +576,8 @@ function liveAnswers<Part extends string>(
       );
     }),
   );
+
+  return takenOnNextPull(handed);
 }
 
 /**

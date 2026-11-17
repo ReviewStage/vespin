@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { ServiceReach } from "@repo/features";
 import { LIVE_POLL_URL, LIVE_SIGNED_OUT, type SealedLiveQueryWire } from "@repo/features/live-wire";
+import { entityPool, type FieldChange, fieldKind, type WriteDeclaration } from "@repo/sync";
 import {
   Clock,
   Duration,
@@ -29,7 +30,8 @@ import { polledLive } from "./testing/polled-live.js";
  * a poll that fails is asked again on a jittered backoff and says the rows
  * may be behind; a read refused as signed out ends. Once an answer carries
  * the snapshots its parts were read at, or the txids of the writes that
- * woke it, the read hands a wait a write is confirmed on.
+ * woke it, the read hands a wait a write is confirmed on, which settles only
+ * once the rows carrying the write are taken. Synthetic rows.
  */
 
 /** Every step the read has to take, taken. */
@@ -487,6 +489,77 @@ it.effect(
       const earlier = yield* Effect.forkChild(confirmWrite(handed, "997"));
       yield* settled;
       assert.ok(succeeded(earlier), "an answer already showed it");
+      yield* Fiber.interrupt(following);
+    }),
+);
+
+/** A row the pool holds, keyed by its id. */
+const ROW = fieldKind((row: { readonly id: string }) => row.id);
+
+/** A write that makes a row, which the service takes in the transaction `42`. */
+const MAKES: WriteDeclaration<
+  { readonly id: string },
+  FieldChange<{ readonly id: string }>,
+  { readonly id: string },
+  string
+> = {
+  kind: ROW,
+  keys: (row) => [row.id],
+  change: (row) => ({ made: row }),
+  send: () => Effect.succeed({ answer: "made", txid: "42" }),
+};
+
+it.effect(
+  "a row a write made stays drawn until the rows of the answer carrying its txid are taken, so the read never draws it neither made nor answered",
+  () =>
+    Effect.gen(function* () {
+      const pool = yield* entityPool();
+      const live = polledLive<Part>(["left", "right"]);
+      let wait: TxWait | undefined;
+      /** The ids the read drew, each time it drew. */
+      const drawn: string[][] = [];
+
+      const rows = yield* pool.stand(ROW, {
+        redraw: () => Effect.sync(() => void drawn.push(rows.rows().map((row) => row.id))),
+        confirmation: () => (wait === undefined ? undefined : (txid) => confirmWrite(wait, txid)),
+        adopts: () => true,
+      });
+
+      live.set({ left: [{ id: "a" }], right: [] }, ["41"]);
+
+      const following = yield* Effect.forkChild(
+        Stream.runForEach(
+          liveRows<Part>(
+            {
+              poll: live.poll,
+              onTxWait: (handed) => {
+                wait = handed;
+              },
+            },
+            live.first(),
+          ),
+          (answer) =>
+            Effect.andThen(
+              rows.answer(Schema.decodeUnknownSync(IdRows)(answer.left)),
+              Effect.sync(() => void drawn.push(rows.rows().map((row) => row.id))),
+            ),
+        ),
+      );
+
+      yield* settled;
+      const write = yield* Effect.forkChild(pool.write(MAKES, { id: "made" }));
+      yield* settled;
+      live.set({ left: [{ id: "a" }, { id: "made" }], right: [] }, ["42"]);
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* settled;
+
+      const since = drawn.slice(drawn.findIndex((ids) => ids.includes("made")));
+      assert.ok(since.length > 1, "the row was drawn made, then answered");
+      assert.ok(
+        since.every((ids) => ids.includes("made")),
+        `the row stood in every draw since it was made: ${JSON.stringify(drawn)}`,
+      );
+      yield* Fiber.interrupt(write);
       yield* Fiber.interrupt(following);
     }),
 );
