@@ -182,6 +182,7 @@ test("on a desktop app, ⌃ and a workspace's number lists it, and the menu prin
     workspace: PERSONAL,
     onChooseWorkspace: (workspaceId) => chosen.push(workspaceId),
   });
+
   // Note that the window's state lands on a later render, as main delivers it, so the switcher is drawn again, as a window settles.
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
@@ -196,6 +197,7 @@ test("on a desktop app, ⌃ and a workspace's number lists it, and the menu prin
       cancelable: true,
       ...held,
     });
+
     act(() => document.body.dispatchEvent(event));
 
     return event.defaultPrevented;
@@ -206,7 +208,9 @@ test("on a desktop app, ⌃ and a workspace's number lists it, and the menu prin
   const listed = press("1", "Digit1");
   const past = press("4", "Digit4");
   const command = press("2", "Digit2", { metaKey: true });
+
   open(page.switcher());
+
   const printed = menuItems().map((item) => [
     labelOf(item),
     item.querySelector(".ui-menu-item-hint")?.textContent ?? null,
