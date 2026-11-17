@@ -1303,7 +1303,7 @@ test("a reply's field empties as it is sent and takes the next at once, each sen
   assert.notEqual(keys[2], keys[1]);
 });
 
-test("a thread being started keeps its words marked and its card in place, its words in its field and taking nothing more, until the thread it was sent as is drawn, which takes over open, its draft let go as the words land, and words refused stay as its draft", async () => {
+test("a thread being started keeps its words marked and its card in place, its words in its field and taking nothing more, until the thread it was sent as is drawn, which takes over open, its draft let go as the words land, and words refused stay as its draft, sent again under their key", async () => {
   type StartAnswer = Awaited<ReturnType<DescriptionCommentsControl["start"]>>;
 
   const answers: PromiseWithResolvers<StartAnswer>[] = [];
@@ -1406,6 +1406,13 @@ test("a thread being started keeps its words marked and its card in place, its w
 
   comment();
   assert.equal(wordsIn(field()), "Or a code?");
+  act(() => {
+    field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+
+  const keys = started.map((each) => each.clientKey);
+  assert.equal(keys[2], keys[1], "words refused go again under their key");
+  assert.equal(keys[3], keys[2], "so do words refused once the field moved on");
 });
 
 test("a thread's resolve reads as its writer's own line, drawn as a comment's head, an agent of another task named as the workspace's list names it, and an empty tab says how a thread starts", async () => {

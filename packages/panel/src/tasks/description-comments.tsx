@@ -1244,8 +1244,17 @@ function ReplyField({
   });
 
   const { files } = box;
-  // The last send refused, whose key the same words and files sent again go under, so a send whose answer was lost is taken once.
-  const attempt = useRef<CommentSend | undefined>(undefined);
+  // The last send refused at each place the field was drawn for, whose key the same words and files sent again there go under, so a send whose answer was lost is taken once; a thread being started's field moves on to other words, and each keeps its own.
+  const attempts = useRef<readonly { place: DescriptionCommentPlace; send: CommentSend }[]>([]);
+
+  const attemptAt = (at: DescriptionCommentPlace) =>
+    attempts.current.find((each) => Equal.equals(each.place, at))?.send;
+
+  const keepAttempt = (at: DescriptionCommentPlace, send: CommentSend | undefined) => {
+    const others = attempts.current.filter((each) => !Equal.equals(each.place, at));
+    attempts.current = send === undefined ? others : [...others, { place: at, send }];
+  };
+
   // Sends refused that the field could not take back beside what was typed or added since, kept apart in the order written, marked as not sent, with Retry under their keys.
   const lines = useSelector(unsentLines.store);
   const unsent = lines.filter((each) => Equal.equals(each.place, place)).map(({ send }) => send);
@@ -1280,8 +1289,7 @@ function ReplyField({
     if (first === undefined) return;
     // Note that a send refused after the field moved on to other words stands apart under its own place, its key with it, so neither draft takes the other's.
     const moved = !Equal.equals(placeNow.current, place);
-
-    if (!moved) attempt.current = first;
+    keepAttempt(place, first);
     const typed = wordsNow.current;
 
     const back = {
@@ -1312,10 +1320,10 @@ function ReplyField({
     // Note that sends not sent go first, so comments land in the order they were written.
     if (trimmed === "" || files.reading || unsent.length > 0) return;
     const { attachments } = files;
-    const was = attempt.current;
+    const was = attemptAt(place);
     const same = was?.words === trimmed && sameFiles(was.attachments, attachments);
     // Note that the key is let go as the words go, since the same words sent again while they are out, or once they land, are a new comment.
-    attempt.current = undefined;
+    keepAttempt(place, undefined);
     const out = { words: trimmed, attachments, key: same ? was.key : crypto.randomUUID() };
 
     if (holdsSent) {
@@ -1330,15 +1338,17 @@ function ReplyField({
     go(out);
   };
 
-  // Note that words kept in the field as they are sent leave its draft once they land, its card gone with its thread drawn by then; refused, they are still there, sent again under their key.
+  // Note that words kept in the field as they are sent leave its draft once they land, its card gone with its thread drawn by then, unless the draft was written anew meanwhile; refused, they are still there, sent again under their key.
   const keepSent = (out: CommentSend) => {
     void onSend(out.words, out.key, out.attachments).then((sent) => {
-      if (sent) {
-        setWords("");
-        files.set([]);
-      } else if (Equal.equals(placeNow.current, place)) {
-        attempt.current = out;
+      if (!sent) {
+        keepAttempt(place, out);
+
+        return;
       }
+
+      update((now) => (now.text.trim() === out.words ? { ...now, text: "" } : now));
+      files.set([]);
     });
   };
 
@@ -1348,7 +1358,7 @@ function ReplyField({
 
     if (review === undefined || trimmed === "" || files.reading || unsent.length > 0) return;
     const { attachments } = files;
-    attempt.current = undefined;
+    keepAttempt(place, undefined);
     setWords("");
     files.set([]);
     review.onHold(trimmed, attachments);
@@ -1382,7 +1392,7 @@ function ReplyField({
     neverBusyAct(() => {
       dropUnsent();
       // Note that words written again after a discard are a new comment, so they go under a new key.
-      attempt.current = undefined;
+      keepAttempt(place, undefined);
     }),
     confirmFailure(FAILURE_SURFACE.DESCRIPTION_COMMENT_DISCARD),
   );
