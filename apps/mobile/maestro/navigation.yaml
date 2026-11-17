@@ -68,7 +68,10 @@ onFlowComplete:
             TAB: Inbox
       - tapOn:
           id: "workspace-switcher"
-      - assertVisible: "Settings, .*"
+      # Note that the account's item is matched with or without its address,
+      # because iPadOS 26 names a menu item by its title alone and 27 by its
+      # title and subtitle.
+      - assertVisible: "Settings(, .*)?"
       - assertVisible: "Workspace settings|Settings…"
       - takeScreenshot: ipad-switcher-settings
       - tapOn:
