@@ -194,9 +194,10 @@ function namingLines(repository: string | null, ownTask: OwnTask, workspace: str
   ];
 }
 
-/** Which ends of a queued pull request reach the agent as no message: its merge, or the merge queue taking it out. */
+/** Which ends of a pull request reach the agent as no message: its merge, its close too where its starter turned both off, or the merge queue taking it out. */
 interface QueueUntold {
   readonly merged: boolean;
+  readonly closed: boolean;
   readonly dequeued: boolean;
 }
 
@@ -219,7 +220,9 @@ interface QueueUntold {
  */
 function statusLines(publishes: boolean, untold: QueueUntold): string[] {
   const missed = [
-    ...(untold.merged ? ["a pull request merged"] : []),
+    ...(untold.merged
+      ? [untold.closed ? "a pull request merged or closed" : "a pull request merged"]
+      : []),
     ...(untold.dequeued ? ["the merge queue took one out"] : []),
   ];
 
@@ -293,6 +296,7 @@ export function coderInstructions(
     ...statusLines(publishes, {
       merged: memberToken || wakesOff.includes(GITHUB_WAKE.CLOSED),
       // Note that an agent on its starter's own token keeps the line it was told before, which names the merge alone.
+      closed: !memberToken && wakesOff.includes(GITHUB_WAKE.CLOSED),
       dequeued: !memberToken && wakesOff.includes(GITHUB_WAKE.DEQUEUED),
     }),
     ...namingLines(repository, ownTask, workspace),
