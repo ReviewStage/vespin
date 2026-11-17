@@ -29,6 +29,31 @@ Add a Linux server, or a Mac without the app:
 
 The machine reads **Setting up…** while it downloads its own Claude Code, Codex, and GitHub CLI, then **Online**. It needs `git`, and Linux on x64 or arm64 with systemd, WSL2, or an Apple silicon Mac on macOS 13.5 or later. A Linux server keeps running agents after you log out. A Mac runs them only while its user is logged in. Run the install command again to update the machine in place.
 
+A machine needs no Vespin app. Install the [Mac app](/install) only to use Vespin from that Mac.
+
+## Set up a machine with a coding agent {#set-up-with-a-coding-agent}
+
+You can ask a coding agent, such as Claude Code or Codex, to set up Vespin on a machine it can reach. The agent follows these steps:
+
+1. Run `curl -fsSL https://vespin.dev/install.sh | sh` on that machine, as the user who will run agents, without `sudo`. Don't install the Mac app, and don't install `vespin-host` any other way.
+2. The command waits up to 10 minutes for approval. If your shell tool shows output only once a command ends, or stops a command sooner, run it in the background with its output in a file, then read the file:
+
+   ```sh
+   # On the machine itself
+   nohup sh -c 'curl -fsSL https://vespin.dev/install.sh | sh' > /tmp/vespin-install.log 2>&1 &
+
+   # From another computer, over SSH, keeping the session open until it ends
+   nohup ssh user@host 'curl -fsSL https://vespin.dev/install.sh | sh' > /tmp/vespin-install.log 2>&1 &
+
+   cat /tmp/vespin-install.log
+   ```
+
+3. Give the person the link and the code it prints, and wait while they approve it.
+4. Wait for `Ready: this machine takes agents.` Check it any time with `~/.local/bin/vespin-host status`.
+5. Check that the same user is signed in to Claude Code or Codex, and to GitHub. Ask the person to sign in to whichever isn't.
+
+If the script stops with `✗`, its message says what is missing and how to fix it, such as a command for the person to run with `sudo`. Fix that, then run the command again.
+
 ## How agents work on a machine
 
 Each agent gets its own folder in `~/.vespin/agents`, holding a worktree of the machine's clone of the repository. It runs as the machine's user, with full access to whatever that user reaches. Claude Code and Codex use the logins signed in on the machine. `git` and `gh` use that user's own GitHub sign-in and SSH keys. Agents on a machine follow their [permission mode](/permissions) as cloud agents do.
@@ -42,3 +67,8 @@ An agent in the cloud or on another machine can run a shell command on your Mac 
 ## Remove a machine
 
 **Remove**, in a machine's **⋯** menu, stops it taking agents and uninstalls Vespin from it. Its agents' folders stay in `~/.vespin/agents`, and their tasks and transcripts stay in Vespin. An offline machine uninstalls itself the next time it's online. To remove one by hand, run `~/.local/bin/vespin-host uninstall` on it, which also deletes its agents' folders unless you add `--keep-agents`.
+
+## Logs
+
+- Linux: `journalctl --user -u vespin-host`
+- Mac: `~/Library/Logs/Vespin Host/vespin-host.log`
