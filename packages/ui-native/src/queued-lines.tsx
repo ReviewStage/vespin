@@ -52,6 +52,9 @@ const LARGE_ROW_PRESSES = 2.5;
 /** The most of the window's height the queue takes, so the composer and the keyboard always keep the rest. */
 const MOST_OF_WINDOW = 0.25;
 
+/** The most of the window's height one row past that share stands whole in, as a message of a few lines at the largest text sizes stands, before it too is cut and scrolls. */
+const MOST_FOR_ONE_ROW = 0.5;
+
 /** One message waiting behind the turn, which its starter may steer, move, or delete. */
 export type QueuedLine = {
   readonly id: string;
@@ -210,11 +213,16 @@ function heldActs(
 }
 
 /**
- * How tall the list of messages stands: the first few rows whole, as tall as
- * each was measured, and no more of them than the window's share holds, but
- * always the first, so a row is never cut through its words; the rest scroll.
+ * How tall the list of messages stands, in a window `windowHeight` tall: the first
+ * few rows whole, as tall as each was measured, and no more of them than the
+ * window's share holds, but always the first, so a row is never cut through
+ * its words, unless it alone stands past half the window; the rest scroll.
  */
-function sightHeight(rows: readonly number[], most: number): number {
+function sightHeight(rows: readonly number[], windowHeight: number): number {
+  const most = windowHeight * MOST_OF_WINDOW;
+  const first = rows[0] ?? 0;
+
+  if (first > most) return Math.min(first, windowHeight * MOST_FOR_ONE_ROW);
   let height = 0;
 
   for (const row of rows.slice(0, LINES_IN_SIGHT)) {
@@ -331,7 +339,7 @@ export function QueuedLines({
   // Note that a row not yet laid out counts as tall as a row of its size stands, so the list never opens short of it.
   const unmeasured = large ? press * LARGE_ROW_PRESSES : press;
   const rows = lines.map((line) => measured.get(line.id) ?? unmeasured);
-  const height = sightHeight(rows, screen.height * MOST_OF_WINDOW);
+  const height = sightHeight(rows, screen.height);
 
   const measure = (id: string) =>
     onGeometryChange(({ height: next }) =>
