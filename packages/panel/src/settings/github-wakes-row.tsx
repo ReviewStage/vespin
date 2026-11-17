@@ -1,5 +1,5 @@
 /**
- * github-wakes-row.tsx -- Preferences › Agents' GitHub activity row: which kinds of activity on an agent's pull request wake it.
+ * github-wakes-row.tsx -- Preferences › Agents' Wake agents on GitHub activity row: which kinds of activity on an agent's pull request wake it.
  *
  * Every kind is on until the account turns one off, and most never do, so
  * the kinds fold under one row that says nothing while all are on and how
@@ -28,7 +28,7 @@ import { useSettingRowWrite } from "./row-write.js";
 import { SwitchRow } from "./switch-row.js";
 
 /** The row's name, and its chevron's. */
-const ROW_LABEL = "GitHub activity";
+const ROW_LABEL = "Wake agents on GitHub activity";
 
 /** Each kind's switch, by the kind alone. */
 const WAKE_LABEL = {
@@ -50,7 +50,7 @@ function offWords(off: number): string | undefined {
   return off === 0 ? undefined : `${off} off`;
 }
 
-/** The GitHub activity row and the switches it folds, over the settings as the window holds them. */
+/** The Wake agents on GitHub activity row and the switches it folds, over the settings as the window holds them. */
 export function GitHubWakesRow({ view }: { view: SettingsRowsInput }): React.JSX.Element {
   const stored = storedList(view.settings.githubWakesOff);
 

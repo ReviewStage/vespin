@@ -651,7 +651,7 @@ export const APP_SETTING_SCHEMA = {
    * wake the account's agents, as the JSON list of their ids
    * (`github-wakes.ts`); nothing stored reads as every kind on. An account
    * preference riding a part of the snapshot of its own, since the service
-   * reads it as a delivery arrives; drawn by Preferences › Agents' GitHub
+   * reads it as a delivery arrives; drawn by Preferences › Agents' Wake agents on GitHub
    * activity row (`github-wakes-row.tsx`), a switch to each kind.
    */
   githubWakesOff: hiddenSetting({
