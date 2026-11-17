@@ -834,6 +834,35 @@ it.layer(getTestDB())("the coding-agent store's agents read by id", (it) => {
   );
 
   it.effect(
+    "an agent started on no task stands in the workspace for its member, and an account outside the workspace starts none there",
+    () =>
+      Effect.gen(function* () {
+        const starter = yield* openAccount;
+        const workspace = yield* openWorkspace(starter);
+        const outsider = yield* openAccount;
+        yield* openWorkspace(outsider);
+
+        const start = (userId: string) =>
+          createAgent(userId, {
+            taskId: null,
+            workspaceId: workspace,
+            descriptionSnapshot: null,
+            prompt: "Watch the billing queue.",
+            idempotencyKey: randomUUID(),
+            model: "anthropic/claude-opus-5.5",
+            effort: "high",
+            repository: null,
+            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+          }).pipe(Effect.map(Option.map((started) => started.agent)));
+
+        const made = Option.getOrThrow(yield* start(starter));
+
+        assert.deepEqual([made.taskId, made.organizationId], [null, workspace]);
+        assert.ok(Option.isNone(yield* start(outsider)));
+      }),
+  );
+
+  it.effect(
     "an agent started as a manager is stored as one, and one started with no kind as a coder",
     () =>
       Effect.gen(function* () {

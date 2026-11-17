@@ -15,7 +15,6 @@ import { accountExperimentOn } from "@repo/database/models/account-store";
 import { readAccountTimeZone } from "@repo/database/models/account-time-zone";
 import {
   type Agent,
-  agentTaskId,
   readNativeHanded,
   recordNativeHanded,
 } from "@repo/database/models/agent-store";
@@ -102,7 +101,8 @@ const previousTurnStart = (target: ConversationTarget, turnId: string | undefine
  * (`standingContext`). Beside it, whether this is the agent's first turn,
  * and the words its memories are found by (`memoriesOf`): the task's name,
  * the line's words, the brief, and the description where it is handed. A read
- * that fails is logged and hands nothing.
+ * that fails is logged and hands nothing. An agent on no task is handed no
+ * task (`tasklessOf`).
  */
 /**
  * The zone the developer's day is read in on this turn: the one its own
@@ -129,7 +129,8 @@ const taskOf = (
   now: number,
 ) =>
   Effect.gen(function* () {
-    const taskId = agentTaskId(agent);
+    if (agent.taskId === null) return yield* tasklessOf(admitted, turn);
+    const taskId = agent.taskId;
 
     const descriptionsSince = yield* experimentOnSinceIn(
       agent.organizationId,
@@ -198,6 +199,18 @@ const taskOf = (
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(undefined)),
   );
+
+/**
+ * What an agent on no task is handed in its task's place: nothing, and on
+ * its first turn the line's words alone to find its memories by.
+ */
+const tasklessOf = (admitted: AdmittedConversation, turn: CoderTurn) =>
+  Effect.map(previousTurnStart(admitted.target, turn.turnId), (since) => ({
+    key: undefined,
+    text: undefined,
+    opening: since === undefined,
+    words: turn.words ?? "",
+  }));
 
 /**
  * The memories of the agent's workspace that the words given find

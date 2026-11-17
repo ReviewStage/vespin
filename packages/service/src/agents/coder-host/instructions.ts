@@ -1,5 +1,5 @@
 import { SHARED_FILES_DIRECTORY } from "@repo/agent-runner/pins";
-import { type Agent, agentBriefOf, agentTaskId } from "@repo/database/models/agent-store";
+import { type Agent, agentBriefOf } from "@repo/database/models/agent-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
@@ -109,7 +109,7 @@ function machineLines(machine: CoderMachine, repository: boolean): string[] {
 
 /**
  * The agent's own values, as a tool input that asks for them takes them:
- * its id, its task's id, where it runs as `start_agent`'s `runsOn` names
+ * its id, its task's id where it stands on one, where it runs as `start_agent`'s `runsOn` names
  * it, its repository, and the branch it was cloned at; then the developer it
  * works for, by their id and mention link, as `list_agents`' `startedBy`,
  * `post_thread`'s `to`, and a task's `assignee` take them, so it names them
@@ -118,15 +118,16 @@ function machineLines(machine: CoderMachine, repository: boolean): string[] {
  * holds them; the branch it pushes to is its own to read with git.
  */
 function ownLine(
-  ownTask: OwnTask,
+  ownTask: OwnTask | undefined,
   own: OwnAgent,
   repository: string | null,
   startBranch: string | null,
   workspace: string,
 ): string {
+  // Note that an agent on no task has no taskId of its own to name.
   const values = [
     `agentId \`${own.id}\``,
-    `taskId \`${ownTask.id}\``,
+    ...(ownTask === undefined ? [] : [`taskId \`${ownTask.id}\``]),
     ...(own.runsOn === null ? [] : [`runsOn \`${JSON.stringify(own.runsOn)}\``]),
     ...(repository === null ? [] : [`repository \`${repository}\``]),
     ...(repository === null || startBranch === null ? [] : [`branch \`${startBranch}\``]),
@@ -230,13 +231,14 @@ function publishLines(
  * draws as a chip (`@repo/features/mention-link`): a file of its
  * repository, a pull request by its own address, never a bare `#42`, its
  * task, and a thing of ours by its kind and id under the workspace's
- * address (`../link-rule.ts` says the same to other authors at length).
- * A person is tagged by their mention link, which a teammate's words
- * arrive behind (`../attached-files.ts`'s `senderLabel`).
+ * address (`../link-rule.ts` says the same to other authors at length);
+ * its task only where it stands on one. A person is tagged by their
+ * mention link, which a teammate's words arrive behind
+ * (`../attached-files.ts`'s `senderLabel`).
  */
 function namingLines(
   repository: string | null,
-  ownTask: OwnTask,
+  ownTask: OwnTask | undefined,
   workspace: string,
   posts: boolean,
 ): string[] {
@@ -248,8 +250,15 @@ function namingLines(
       ? ""
       : ` a file \`[@store.ts](https://github.com/${repository}/blob/HEAD/<path>)\`,`;
 
+  const pullRequest = `a pull request \`[@#42 Fix the refresh](https://github.com/${repository ?? EXAMPLE_REPOSITORY}/pull/42)\` (never a bare \`#42\`)`;
+
+  const things =
+    ownTask === undefined
+      ? `${file === "" ? "" : `${file.slice(0, -1)} or`} ${pullRequest}`
+      : `${file} ${pullRequest}, or your task \`[@<its name>](${ownTask.link})\``;
+
   return [
-    `Name what the developer can open as a mention, \`[@name](target)\`, which ${PRODUCT_NAME} draws as a chip:${file} a pull request \`[@#42 Fix the refresh](https://github.com/${repository ?? EXAMPLE_REPOSITORY}/pull/42)\` (never a bare \`#42\`), or your task \`[@<its name>](${ownTask.link})\`.`,
+    `Name what the developer can open as a mention, \`[@name](target)\`, which ${PRODUCT_NAME} draws as a chip:${things}.`,
     `Name a thing of ours by the id a tool answered, under \`${home}\`: \`/agent/<agent-id>\`, \`/task/<task-id>\`, \`/automation/<automation-id>\`, \`/person/<user-id>\`,${item} or \`/task/<task-id>/page/<page-id>\`.`,
     "Tag a person by their mention link, never a bare `@Name`.",
   ];
@@ -318,7 +327,7 @@ function statusLines(publishes: boolean, untold: QueueUntold): string[] {
 export function coderInstructions(
   repository: string | null,
   brief: AgentBrief,
-  ownTask: OwnTask,
+  ownTask: OwnTask | undefined,
   own: OwnAgent,
   standing: AgentStanding,
   authorship: CommitAuthorship | undefined = undefined,
@@ -329,7 +338,8 @@ export function coderInstructions(
   workspace: string = EXAMPLE_WORKSPACE,
   wakesOff: readonly GitHubWake[] = [],
 ): string {
-  const describes = offers(standing, EDIT_DESCRIPTION_TOOL.name);
+  // An agent on no task has no description to record in and no status to keep.
+  const describes = ownTask !== undefined && offers(standing, EDIT_DESCRIPTION_TOOL.name);
   const publishes = repository !== null && offers(standing, AGENT_TOOL.OPEN_PULL_REQUEST);
   const endsTurns = offers(standing, AGENT_TOOL.END_TURN);
   const posts = offers(standing, INBOX_TOOLS.POST.name);
@@ -363,12 +373,14 @@ export function coderInstructions(
         ]
       : []),
     `Save screenshots under \`${machine.sharedFiles}/\` and show them with \`${AGENT_TOOL.SHOW_MEDIA}\`.`,
-    ...statusLines(publishes, {
-      merged: memberToken || wakesOff.includes(GITHUB_WAKE.CLOSED),
-      // Note that an agent on its starter's own token keeps the line it was told before, which names the merge alone.
-      closed: !memberToken && wakesOff.includes(GITHUB_WAKE.CLOSED),
-      dequeued: !memberToken && wakesOff.includes(GITHUB_WAKE.DEQUEUED),
-    }),
+    ...(ownTask === undefined
+      ? []
+      : statusLines(publishes, {
+          merged: memberToken || wakesOff.includes(GITHUB_WAKE.CLOSED),
+          // Note that an agent on its starter's own token keeps the line it was told before, which names the merge alone.
+          closed: !memberToken && wakesOff.includes(GITHUB_WAKE.CLOSED),
+          dequeued: !memberToken && wakesOff.includes(GITHUB_WAKE.DEQUEUED),
+        })),
     ...namingLines(repository, ownTask, workspace, posts),
   ];
 
@@ -428,23 +440,26 @@ export interface AgentInstructionsContext {
 
 /**
  * The instructions for the agent its row names, on any harness: its brief
- * (`agentBriefOf`), its task's link, its start branch, and its credential
+ * (`agentBriefOf`), its task's link where it stands on one, its start branch, and its credential
  * read from the row, so every session of the agent is worded
  * alike.
  */
 export function agentCoderInstructions(agent: Agent, context: AgentInstructionsContext): string {
-  const taskId = agentTaskId(agent);
+  const { taskId } = agent;
 
-  const ownTask = {
-    id: taskId,
-    link: linkOf(
-      {
-        kind: LINK_DESTINATION.TASK,
-        taskId: taskLinkStep({ id: taskId, number: context.taskNumber }),
-      },
-      context.workspace,
-    ),
-  };
+  const ownTask =
+    taskId === null
+      ? undefined
+      : {
+          id: taskId,
+          link: linkOf(
+            {
+              kind: LINK_DESTINATION.TASK,
+              taskId: taskLinkStep({ id: taskId, number: context.taskNumber }),
+            },
+            context.workspace,
+          ),
+        };
 
   return coderInstructions(
     agent.repository,
