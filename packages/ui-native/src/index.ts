@@ -130,6 +130,8 @@ export {
 
 export { type Keeping, KeepingProvider } from "./held-menu.js";
 
+export { changeSignal, heldValue, useHeldValue } from "./held-value.js";
+
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 
 export { INTEGRATION_MARK_ASSET, type IntegrationMarkAsset } from "./integration-marks.js";
