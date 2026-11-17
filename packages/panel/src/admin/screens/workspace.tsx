@@ -52,13 +52,13 @@ import { AdminSection, STAT_LAYOUT, StatCards, type StatSpec } from "../charts/s
 import { ExternalLink } from "../chrome/external-links.js";
 import { AdminPage, type AdminWayBack } from "../chrome/page-header.js";
 import { PageSkeleton } from "../chrome/page-skeleton.js";
-import { ADMIN_TAB, workspaceReadQuery } from "../routing.js";
+import { ADMIN_PAGE, ADMIN_PAGE_WORDS, ADMIN_TAB, workspaceReadQuery } from "../routing.js";
 import { INSTALLATION_LABEL, installationMark } from "../status-words.js";
 
 const WORKSPACE_ERROR = readFailedWords("this workspace");
 
 /** What the page is called until its workspace is read, or where it cannot be. */
-const WORKSPACE_TITLE = "Workspace";
+const WORKSPACE_TITLE = ADMIN_PAGE_WORDS[ADMIN_PAGE.WORKSPACE];
 
 /** The masthead's line bone, about the created line's width. */
 const SKELETON_CREATED_WIDTH = "192px";

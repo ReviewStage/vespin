@@ -26,8 +26,9 @@ import type { RoutedViews } from "./workspace-routes.js";
  * Description", and an agent's threads over its transcript under the
  * agent's name, "Fix token refresh · Token renewal · Threads". An
  * Inbox item's step names the item's thread and the task it is of, so the
- * items of one task are told apart. A Settings page is named by its page
- * alone.
+ * items of one task are told apart. A page of Settings, Admin, or the
+ * Automations is named under its place, "Admin · Limits", so its steps read
+ * apart.
  *
  * A step listed later is named again as what it names stands now
  * (`liveStepTitle`), by the ids it stood on: a task by the name the task
@@ -48,6 +49,21 @@ export const INBOX_WORDS = "Inbox";
 
 /** What the Merge queue page is called, its step's name and its row's. */
 export const MERGE_QUEUE_WORDS = "Merge queue";
+
+/** What Settings is called, its step's name over the page it stands on. */
+export const SETTINGS_WORDS = "Settings";
+
+/** What Admin is called, its step's name over the view it stands on. */
+export const ADMIN_WORDS = "Admin";
+
+/** What the Automations pages are called, their step's name over the page that stands. */
+export const AUTOMATIONS_WORDS = "Automations";
+
+/** What the Automations runs tab's step says under its name. */
+export const AUTOMATION_RUNS_WORDS = "Runs";
+
+/** What a new automation's step says under its name. */
+export const NEW_AUTOMATION_WORDS = "New automation";
 
 /** What Home is called, as its step and its page name it. */
 export const HOME_WORDS = "Home";

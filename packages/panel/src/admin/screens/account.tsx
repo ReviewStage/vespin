@@ -54,14 +54,14 @@ import {
   type ViewerAccount,
 } from "../chrome/page-header.js";
 import { PageSkeleton } from "../chrome/page-skeleton.js";
-import { ADMIN_TAB, accountReadQuery } from "../routing.js";
+import { ADMIN_PAGE, ADMIN_PAGE_WORDS, ADMIN_TAB, accountReadQuery } from "../routing.js";
 import { AccountSandboxUsageSection } from "./account-sandbox-usage.js";
 import { AccountSupportSections } from "./account-support.js";
 
 const ACCOUNT_ERROR = readFailedWords("this account");
 
 /** What the page is called until its account is read, or where it cannot be. */
-const ACCOUNT_TITLE = "Account";
+const ACCOUNT_TITLE = ADMIN_PAGE_WORDS[ADMIN_PAGE.ACCOUNT];
 
 /** The masthead avatar's bone, the masthead avatar's size (`AVATAR_SIZE.MASTHEAD`). */
 const SKELETON_AVATAR_WIDTH = "56px";
