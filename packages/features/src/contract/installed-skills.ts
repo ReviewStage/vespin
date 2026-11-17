@@ -35,7 +35,6 @@ import {
   installedSkillPreviewSchema,
   installedSkillRemovedAnswerSchema,
 } from "../installed-skill-route-wire.js";
-import { INSTALLED_SKILL_BOUNDS } from "../installed-skill-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
 import { bodyCap, declaredProcedure, exactInput, refuses } from "./base.js";
@@ -46,18 +45,6 @@ import { bodyCap, declaredProcedure, exactInput, refuses } from "./base.js";
  * with room for the names and description an install carries.
  */
 const PASTE_BODY_BYTES = INSTALLED_SKILL_PASTE_MAX_CHARS * 6 + 16_384;
-
-/**
- * A body past this is no skill's folder: its files' bound in base64, which
- * spends four characters on three bytes, every file's path at six bytes a
- * character, the most JSON spends on one (`\u0000`), and the rest of the
- * frame; under a function's 4.5 MB body.
- */
-const IMPORT_BODY_BYTES =
-  Math.ceil(INSTALLED_SKILL_BOUNDS.MAX_IMPORT_BYTES / 3) * 4 +
-  INSTALLED_SKILL_BOUNDS.MAX_IMPORT_FILES *
-    (INSTALLED_SKILL_BOUNDS.MAX_IMPORT_PATH_CHARS * 6 + 64) +
-  16_384;
 
 /** A removal carries nothing, so a body past this is none. */
 const SMALL_BODY_BYTES = 1_024;
@@ -134,7 +121,7 @@ export const installedSkillsContract = {
         HOSTED_API_ERROR.SKILL_NAME_TAKEN,
       ),
     )
-    .meta(bodyCap(IMPORT_BODY_BYTES))
+    // Note that a folder names no cap of its own, so it is held to the function's whole body, which its 3 MB in base64 and its paths fit under.
     .meta(
       openapi({
         method: HTTP_METHOD.POST,

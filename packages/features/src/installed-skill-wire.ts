@@ -107,10 +107,13 @@ export const INSTALLED_SKILL_MAIN_FILE = "SKILL.md";
 export const INSTALLED_SKILL_BOUNDS = {
   /** The most bytes one file holds: 3 MB, which a Mac takes whole in one queued message once base64 swells it to 4 MB. */
   MAX_FILE_BYTES: 3_000_000,
-  /** The most bytes a skill's folder brought in from a Mac holds together, which one request carries whole once base64 swells it to 4 MB, under a function's 4.5 MB body. */
+  /**
+   * The most bytes a skill's folder brought in from a Mac holds together:
+   * the folder is sent whole in one request, which base64 swells to 4 MB,
+   * under a function's 4.5 MB body. A skill installed from GitHub is read by
+   * the service itself and holds no such bound, and neither bound counts files.
+   */
   MAX_IMPORT_BYTES: 3_000_000,
-  /** The most files a skill's folder brought in from a Mac holds. */
-  MAX_IMPORT_FILES: 100,
   /** The longest path a file of a skill brought in from a Mac has, from its folder. */
   MAX_IMPORT_PATH_CHARS: 256,
 } as const;

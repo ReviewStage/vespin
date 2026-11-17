@@ -228,10 +228,7 @@ export const installedSkillImportRequestSchema = EffectSchema.Struct({
   workspaceId: EffectSchema.NonEmptyString,
   scope: installedSkillScopeSchema,
   mac: macSkillOriginSchema,
-  files: EffectSchema.Array(importedFileSchema).check(
-    EffectSchema.isMinLength(1),
-    EffectSchema.isMaxLength(INSTALLED_SKILL_BOUNDS.MAX_IMPORT_FILES),
-  ),
+  files: EffectSchema.Array(importedFileSchema).check(EffectSchema.isMinLength(1)),
 });
 
 export type InstalledSkillImportRequest = typeof installedSkillImportRequestSchema.Type;
