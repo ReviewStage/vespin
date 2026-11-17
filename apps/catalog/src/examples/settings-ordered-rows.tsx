@@ -46,8 +46,6 @@ interface Plan {
   readonly usage?: readonly UsageMeterRow[];
   /** When its usage was heard, where that is not fresh. */
   readonly heard?: string;
-  /** What it says while its usage is refreshed, shimmering in the heard line's place. */
-  readonly checking?: string;
   /** The press it offers under its meters, a plan at its limit's Use reset. */
   readonly offer?: string;
 }
@@ -81,15 +79,6 @@ const PLANS: readonly Plan[] = [
     ],
     heard: "Updated 4h ago",
   },
-  {
-    id: "team",
-    name: "ana@team.example",
-    usage: [
-      { label: "5-hour", usedPercent: 67, resetsAt: NOW + 3 * HOUR },
-      { label: "Weekly", usedPercent: 31, resetsAt: NOW + 5 * DAY },
-    ],
-    checking: "Refreshing usage",
-  },
   { id: "side", name: "ana@sideproject.example", state: "Ready" },
   { id: "key", name: "API key · sk-proj-…a91F", state: "Ready" },
 ];
@@ -102,7 +91,6 @@ function PlanRow({
   meter,
   usage,
   heard,
-  checking,
   offer,
 }: Plan): React.JSX.Element {
   return (
@@ -118,9 +106,7 @@ function PlanRow({
               {state}
             </SettingsRowStateLine>
           )}
-          {usage === undefined ? null : (
-            <SettingsRowUsage rows={usage} heard={heard} checking={checking} />
-          )}
+          {usage === undefined ? null : <SettingsRowUsage rows={usage} heard={heard} />}
           {meter === undefined ? null : <SettingsRowMeter value={meter.value} tone={meter.tone} />}
           {offer === undefined ? null : (
             <SettingsRowAction>

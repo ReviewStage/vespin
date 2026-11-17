@@ -7,7 +7,6 @@ import {
   Progress,
   type ProgressTone,
 } from "../progress/progress.js";
-import { Shimmer } from "../shimmer/shimmer.js";
 import { TIME_LOOK, Time } from "../time/time.js";
 import { useMinute } from "../time/time-clock.js";
 
@@ -116,15 +115,12 @@ function columnWords(rows: readonly UsageMeterRow[], now: number) {
 export function UsageMeters({
   rows,
   heard,
-  checking,
   width = USAGE_METERS_WIDTH.METER,
   alignWith = rows,
 }: {
   rows: readonly UsageMeterRow[];
   /** When the reading was heard, where it is not fresh: "Updated 1h ago". */
   heard?: string | undefined;
-  /** What it says while its reading is asked again ("Refreshing usage"), shimmering in the heard line's place. */
-  checking?: string | undefined;
   /** How wide the meters run; their bars a meter's length where none is named. */
   width?: UsageMetersWidth | undefined;
   /** Every row of the meters these line up with, theirs among them; their own rows where none is named. */
@@ -170,11 +166,7 @@ export function UsageMeters({
           </div>
         ))}
       </div>
-      {checking !== undefined ? (
-        <Shimmer>{checking}</Shimmer>
-      ) : heard === undefined ? null : (
-        <span className="text-muted-foreground">{heard}</span>
-      )}
+      {heard === undefined ? null : <span className="text-muted-foreground">{heard}</span>}
     </div>
   );
 }

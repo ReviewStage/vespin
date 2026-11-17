@@ -85,7 +85,6 @@ import {
   SettingsRowUsage,
   SettingsSection,
   SettingsSectionsSkeleton,
-  Shimmer,
   STATUS_TONE,
   Stack,
   TEXT_TONE,
@@ -116,7 +115,7 @@ import { type PlanUsageMeters, planUsageMeters } from "../plan-usage.js";
 import { renameWrite } from "../rename-write.js";
 import { ResetCreditCard, useResetCreditOffer } from "../reset-credit.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
-import { showToast } from "../toast.js";
+import { useWorkingToast } from "../toast.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectAccount, selectExperiment } from "../use-app-state.js";
 import { ChatGptDeviceLogin } from "./chatgpt-device-login.js";
@@ -314,18 +313,20 @@ function refreshedIn(
   return heardAt !== undefined && heardAt > (plan.usageHeardAt ?? Number.NEGATIVE_INFINITY);
 }
 
-/** Says a refresh brought back no newer reading, whatever kept it: the service, the provider, or the way there. */
-function toastRefreshFailed(cause: unknown): void {
-  showToast({
-    words: WORDS.REFRESH_USAGE_FAILED,
-    replayUnmasked: true,
-    tone: STATUS_TONE.DANGER,
-    failure: {
-      surface: FAILURE_SURFACE.ACT,
-      act: ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE,
-      cause,
-    },
-  });
+/** What a refresh's toast settles into: refreshed, or that it brought back no newer reading, whatever kept it: the service, the provider, or the way there. */
+function refreshOutcome(refreshed: boolean, cause: unknown) {
+  return refreshed
+    ? { words: WORDS.USAGE_REFRESHED, replayUnmasked: true, tone: STATUS_TONE.COMPLETE }
+    : {
+        words: WORDS.REFRESH_USAGE_FAILED,
+        replayUnmasked: true,
+        tone: STATUS_TONE.DANGER,
+        failure: {
+          surface: FAILURE_SURFACE.ACT,
+          act: ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE,
+          cause,
+        },
+      };
 }
 
 /** What removing a provider's key asks. */
@@ -996,19 +997,20 @@ function PlanRow({
   const rename = useInlineRename(plan.id, renames);
   const openLink = useOpenLink();
   const refresh = useMutation(actMutation(ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE));
-  const checking = refresh.isPending ? WORDS.REFRESHING_USAGE : undefined;
+  const working = useWorkingToast();
 
   // Note that a refresh the service answered still fails where it holds no newer reading, since the service keeps what it held when the provider answers nothing.
-  const refreshUsage = () =>
+  const refreshUsage = () => {
+    const settle = working(WORDS.REFRESHING_USAGE);
+
     refresh.mutate(
       { subscriptionId: plan.id },
       {
-        onSuccess: (answer) => {
-          if (!refreshedIn(answer, plan)) toastRefreshFailed(answer);
-        },
-        onError: toastRefreshFailed,
+        onSuccess: (answer) => settle(refreshOutcome(refreshedIn(answer, plan), answer)),
+        onError: (cause) => settle(refreshOutcome(false, cause)),
       },
     );
+  };
 
   const own = [
     {
@@ -1041,21 +1043,11 @@ function PlanRow({
             {line.usage !== undefined ? (
               <SettingsRowUsage
                 rows={line.usage.rows}
-                heard={line.usage.heard}
-                checking={checking}
+                heard={line.usage.updated}
                 alignWith={alignWith}
               />
-            ) : (
-              <>
-                {checking === undefined ? null : (
-                  <SettingsRowStateLine block>
-                    <Shimmer>{checking}</Shimmer>
-                  </SettingsRowStateLine>
-                )}
-                {line.meter === undefined ? null : (
-                  <SettingsRowMeter value={line.meter.value} tone={line.meter.tone} />
-                )}
-              </>
+            ) : line.meter === undefined ? null : (
+              <SettingsRowMeter value={line.meter.value} tone={line.meter.tone} />
             )}
             {offer === undefined ? null : (
               <SettingsRowAction>

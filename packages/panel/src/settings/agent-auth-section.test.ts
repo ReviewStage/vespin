@@ -594,7 +594,7 @@ test("a Codex plan with room offers its resets as one press, whose question list
   );
 });
 
-test("each plan's ⋯ offers Refresh usage, which asks the service for that plan's usage and says so where it brought back no newer reading", async () => {
+test("each plan's ⋯ offers Refresh usage, which asks the service for that plan's usage and says whether it brought back a newer reading", async () => {
   held = {
     keys: [],
     subscriptions: [
@@ -608,15 +608,13 @@ test("each plan's ⋯ offers Refresh usage, which asks the service for that plan
   const toasts = mountToasts();
 
   await choose(credential(page, "Claude plan"), "Claude plan", "Refresh usage");
-  await settle();
-  const afterClaude = toasts();
+  await vi.waitFor(() => assert.match(toasts(), /Usage refreshed/u));
   await choose(credential(page, "ana@work.test"), "ana@work.test", "Refresh usage");
   assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE), [
     { subscriptionId: CLAUDE_PLAN.id },
     { subscriptionId: "chatgpt-1" },
   ]);
   await vi.waitFor(() => assert.match(toasts(), /Couldn't refresh usage/u));
-  assert.equal(afterClaude, "");
 });
 
 test("each harness's card stands where a link to its section lands", async () => {
