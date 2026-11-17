@@ -2059,8 +2059,13 @@ function messageChanged(
 /** The messages of `queue` as `change` leaves them, as the service takes a change, though a steered message goes nowhere and an edit's files are left as they were. */
 function changedMessages(queue: AgentQueue, change: AgentQueueChange): readonly QueuedMessage[] {
   switch (change.change) {
-    case QUEUE_CHANGE.ADD:
-      return [...queue.messages, { id: change.id, text: change.text, queuedBy: ADA.userId }];
+    case QUEUE_CHANGE.ADD: {
+      const files = (change.attachments ?? []).map(({ name, mediaType }) => ({ name, mediaType }));
+      const added = { id: change.id, text: change.text, queuedBy: ADA.userId };
+
+      return [...queue.messages, files.length === 0 ? added : { ...added, files }];
+    }
+
     case QUEUE_CHANGE.EDIT:
       return messageChanged(queue, change.messageId, (message) => ({
         ...unheld(message),

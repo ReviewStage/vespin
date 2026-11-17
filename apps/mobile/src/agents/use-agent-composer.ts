@@ -157,9 +157,10 @@ export interface QueuedDeleteAsk {
   readonly onDismiss: () => void;
 }
 
-/** The field's own words and pictures kept aside while it holds the words of the queued message `id` names. */
+/** The field's own words and pictures kept aside while it holds the words of the queued message `id` names, in the edit `session` counts. */
 interface EditStash {
   readonly id: string;
+  readonly session: number;
   readonly words: string;
   readonly pictures: readonly HeldPicture[];
 }
@@ -207,11 +208,16 @@ export function useAgentComposer(
   // The suggestion whose words the box last laid in, so each is laid in once.
   const [laidFor, setLaidFor] = useState(() => unsentWords.get(agentId)?.laidFor);
 
+  // The queued message whose words the field holds, and the field's own words and pictures kept aside meanwhile; none while it holds its own.
+  const [editing, setEditing] = useState<EditStash | undefined>(undefined);
+  // Note that the field's own words are kept while it holds a queued message's, so a page drawn anew opens on the member's draft, not the message.
+  const ownWords = editing === undefined ? words : editing.words;
+
   // Note that the words and the suggestion laid in are kept beside the agent as they change, so a page drawn anew for it opens on them.
   useEffect(() => {
-    if (words === "" && laidFor === undefined) unsentWords.delete(agentId);
-    else unsentWords.set(agentId, { words, laidFor });
-  }, [agentId, words, laidFor]);
+    if (ownWords === "" && laidFor === undefined) unsentWords.delete(agentId);
+    else unsentWords.set(agentId, { words: ownWords, laidFor });
+  }, [agentId, ownWords, laidFor]);
 
   if (suggested !== undefined && suggested.key !== laidFor) {
     setLaidFor(suggested.key);
@@ -223,17 +229,17 @@ export function useAgentComposer(
   const [note, setNote] = useState<string | undefined>(undefined);
   // The queued message whose Delete asks, by its id; none while none asks.
   const [deleting, setDeleting] = useState<string | undefined>(undefined);
-  // The queued message whose words the field holds, and the field's own words and pictures kept aside meanwhile; none while it holds its own.
-  const [editing, setEditing] = useState<EditStash | undefined>(undefined);
-  // The edited message's id as an answer that lands later reads it.
-  const editingNow = useRef<string | undefined>(undefined);
+  // The edit standing, as an answer that lands later reads it.
+  const editingNow = useRef<EditStash | undefined>(undefined);
+  // How many edits this composer has opened, which numbers each edit's session.
+  const sessions = useRef(0);
   // The edit whose Save or Steer is on its way, by its message's id, which the queue may send on before it answers.
   const [settling, setSettling] = useState<string | undefined>(undefined);
   // Whether the queue has listed the edited message since its edit opened, which its leaving the queue is read against.
   const [seenEdited, setSeenEdited] = useState(false);
 
   useEffect(() => {
-    editingNow.current = editing?.id;
+    editingNow.current = editing;
   }, [editing]);
   const pictures = useAttachedPictures(setNote);
   const [stopping, setStopping] = useState(false);
@@ -264,11 +270,24 @@ export function useAgentComposer(
     if (!writing) setStopping(false);
   }, [writing]);
 
-  // A send refused: its words and pictures back in the field, ahead of anything typed since, and the refusal said.
+  // A send refused: its words and pictures back in the field, ahead of anything typed since, and the refusal said; while the field holds a queued message's words, they go to the draft kept aside, which the edit's end gives back.
   const handBack = (sent: Sent, refusal: string) => {
+    setNote(refusal);
+
+    if (editingNow.current !== undefined) {
+      return setEditing((stash) =>
+        stash === undefined
+          ? stash
+          : {
+              ...stash,
+              words: stash.words.trim() === "" ? sent.words : `${sent.words}\n${stash.words}`,
+              pictures: [...sent.pictures, ...stash.pictures],
+            },
+      );
+    }
+
     setWords((typed) => (typed.trim() === "" ? sent.words : `${sent.words}\n${typed}`));
     pictures.putBack(sent.pictures);
-    setNote(refusal);
   };
 
   // The lines this screen sent, whose refusal its own send hands back.
@@ -477,14 +496,21 @@ export function useAgentComposer(
     if (editing !== undefined)
       void change({ change: QUEUE_CHANGE.HOLD, messageId: editing.id, held: false });
 
+    sessions.current += 1;
+    const session = sessions.current;
+
     const stash: EditStash =
-      editing === undefined ? { id, words, pictures: pictures.take() } : { ...editing, id };
+      editing === undefined
+        ? { id, session, words, pictures: pictures.take() }
+        : { ...editing, id, session };
 
     setEditing(stash);
     setWords(message.text);
     // A message the queue would not mark, already on its way, is no longer the field's to edit.
     void change({ change: QUEUE_CHANGE.HOLD, messageId: id, held: true }).then((went) => {
-      if (!went && editingNow.current === id) giveBack(stash);
+      const now = editingNow.current;
+
+      if (!went && now?.session === session) giveBack(now);
     });
   };
 
@@ -499,7 +525,10 @@ export function useAgentComposer(
     void change(next).then((went) => {
       setSettling((was) => (was === stash.id ? undefined : was));
 
-      if (went && editingNow.current === stash.id) giveBack(stash);
+      // Note that only the edit that sent it closes, so a Save landing after its edit was given up and the message opened again leaves the new edit standing.
+      const now = editingNow.current;
+
+      if (went && now?.session === stash.session) giveBack(now);
     });
   };
 
