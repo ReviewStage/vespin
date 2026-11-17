@@ -51,9 +51,11 @@ appId: dev.vespin.ios
 - assertVisible: "Pinned"
 # A swipe up puts the notice away well before its six seconds are up.
 # Note that a swipe Maestro starts from an element ends at 10% of the
-# screen's height, which a regular window's notice, standing under the top
-# bar of a shorter screen, already stands near; so there it is swiped from
-# its own place, 12% down, to the screen's top.
+# screen's height, which an iPad's notice, standing under its 50 pt bar,
+# reaches past, so it would swipe down; so on an iPad it is swiped from 10%
+# down, inside the banner's band in both orientations (about 78 to 124 pt
+# from the top: 7% to 10.5% of a portrait iPad, 9% to 15% of a landscape
+# one), to 1%, some 70 pt up, well past the 24 pt that lets it go.
 - runFlow:
     when:
       notVisible: "Select a task"
@@ -67,8 +69,8 @@ appId: dev.vespin.ios
       visible: "Select a task"
     commands:
       - swipe:
-          start: "50%, 12%"
-          end: "50%, 2%"
+          start: "50%, 10%"
+          end: "50%, 1%"
 - extendedWaitUntil:
     notVisible: "The task could not be unpinned\\..*"
     timeout: 3000
