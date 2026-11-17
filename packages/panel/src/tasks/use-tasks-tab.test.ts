@@ -21,6 +21,9 @@ import { APP_HOME_LINK, LINK_ORIGIN } from "@repo/features/link-home";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import { PAGE_OWNER } from "@repo/features/page-wire";
+import { type TaskSections, taskSectionWriteSchema } from "@repo/features/task-section-wire";
+import { applySectionWrite } from "@repo/features/task-section-writes";
+import { sectionTaskIds } from "@repo/features/task-sections-model";
 import {
   DESCRIPTION_ACTOR,
   TASK_CREATE_RELATION_KIND,
@@ -127,6 +130,7 @@ import {
   stateWith,
   type WrittenTasksView,
   writeExperiments,
+  writeListedTasks,
 } from "../testing/app-state.js";
 import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
 import { standingTaskList } from "../testing/history-rows.js";
@@ -779,6 +783,11 @@ const readWorkspaceNamed = Schema.decodeUnknownOption(
   Schema.Struct({ workspaceId: Schema.optionalKey(Schema.String) }),
 );
 
+/** A section write's payload, read back for the writes it sent. */
+const readSectionWrites = Schema.decodeUnknownOption(
+  Schema.Struct({ writes: Schema.Array(taskSectionWriteSchema) }),
+);
+
 /** The workspace each act of `kind` the tab asked named, none where it named none. */
 function namedIn(
   payloads: readonly { readonly kind: PortActKind; readonly payload: unknown }[],
@@ -855,6 +864,48 @@ test("New plan opens its dialog over the open plan, which stays open; a second p
   tab.stand({ shown: false });
   tab.stand({ shown: true });
   assert.equal(tab.control().newTask.open, false, "Settings taking the window put the dialog away");
+});
+
+test("a task started from a section's New task is filed on top of that section", async () => {
+  const launch = "0a1b2c3d-0000-4000-8000-000000000001";
+
+  const sections: TaskSections = {
+    sections: [{ id: launch, workspaceId: TASK.workspaceId, title: "Launch", createdAt: 1 }],
+    entries: [{ taskId: TASK.id, sectionId: launch, addedAt: 2 }],
+    agentEntries: [],
+  };
+
+  // Note that the sections are read off main's document, as the sidebar reads them.
+  writeListedTasks({ taskSections: sections });
+
+  const tab = mount(
+    { shown: true, tasks: listRead([listed()]) },
+    {
+      [ACT_KIND.TASKS_START]: () => Promise.resolve({ taskId: OTHER_TASK_ID }),
+      [ACT_KIND.TASKS_WRITE_SECTION]: () => Promise.resolve(true),
+    },
+  );
+
+  act(() => tab.control().newTask.onOpenInSection(launch));
+  const { sectionId } = tab.control().newTask.preset ?? {};
+  await act(async () => {
+    await tab.control().newTask.start("Launch email", null, TASK.workspaceId, { sectionId });
+  });
+  await settle();
+
+  const written = tab.payloads.flatMap((asked) =>
+    asked.kind === ACT_KIND.TASKS_WRITE_SECTION
+      ? Option.getOrThrow(readSectionWrites(asked.payload)).writes
+      : [],
+  );
+
+  assert.deepEqual(
+    sectionTaskIds(
+      written.reduce((state, write) => applySectionWrite(state, write, 3), sections),
+      launch,
+    ),
+    [OTHER_TASK_ID, TASK.id],
+  );
 });
 
 test("New task on Home opens no dialog over Home's own composer, asking it for the caret instead, and opens the dialog over a page standing in Home's place", () => {

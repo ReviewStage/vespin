@@ -53,6 +53,7 @@ import { useRepositoriesIn } from "./task-repository-menus.js";
 import type { ComposerNote } from "./use-agent-composer.js";
 import type { AgentsControl, ModelsRead } from "./use-agents.js";
 import type { MainTab } from "./use-main-tabs.js";
+import { usePlaceInSection } from "./use-pin-writes.js";
 
 /** What the toast says once New task started a task it did not open. */
 const TASK_STARTED_NOTE = "Task started";
@@ -137,9 +138,11 @@ function startingStanding(standing: TaskStanding | undefined) {
   return assigneeId === undefined || assigneeId === null ? rest : { ...rest, assigneeId };
 }
 
-/** What the press that opened New task chose: a repository (a repository group's +), the card's purpose (the Automations page's Create with an agent), the relation it starts its task in (a relation's New task, or New sub-task), or the card a start refused after it closed opens again on. */
+/** What the press that opened New task chose: a repository (a repository group's +), a section (a section's + or its menu's New task), the card's purpose (the Automations page's Create with an agent), the relation it starts its task in (a relation's New task, or New sub-task), or the card a start refused after it closed opens again on. */
 export interface NewTaskPreset {
   readonly repository?: string;
+  /** The account's section the task is filed in once it starts, by its id; none for a task filed in none. */
+  readonly sectionId?: string;
   /** The relation the card starts its task in, from the new task's side; none for a task related to none. */
   readonly relation?: NewTaskRelation;
   /** What the card starts; a task's agent where none is named. */
@@ -190,6 +193,8 @@ interface NewTaskCardKept {
   /** The relations the card started its task in, which it opens again on. */
   readonly relations: readonly NewTaskRelation[];
   readonly repository: string | null;
+  /** The section the card files its task in, which it opens again on; none for none. */
+  readonly sectionId?: string | undefined;
   readonly choice: ModelChoice | undefined;
   readonly press: NewTaskPress;
   /** The words as the box held them, which the card opens again on. */
@@ -243,6 +248,8 @@ export interface NewTaskStart {
   readonly device?: MacOffer;
   /** The relations the start makes its task in, from the new task's side, written with it in one transaction; none for a task related to none. */
   readonly relations?: readonly TaskCreateRelation[];
+  /** The account's section the task is filed in on top once it starts, by its id; none for none. */
+  readonly sectionId?: string | undefined;
   readonly handed?: NewTaskAgent;
   /** What the card held as it pressed Start, which it opens again on where an agent's start is refused after the card closed. */
   readonly card?: NewTaskCardKept;
@@ -263,6 +270,8 @@ export interface NewTask {
   onOpen: () => void;
   /** New task with a repository already chosen in the dialog: what a repository group's + asks. */
   onOpenIn: (repository: string) => void;
+  /** New task with a section already chosen in the dialog, which files the task in it once it starts: what a section's + and its menu's New task ask. */
+  onOpenInSection: (sectionId: string) => void;
   /** New task related to the task given as `kind`, read from the new task's side, in that task's workspace: what the add menu's New task, and the task's menu and ⌘K's New sub-task, ask. */
   onOpenRelated: (taskId: string, kind: TaskCreateRelationKind) => void;
   /** New task's card for the agent that makes an automation: what the Automations page's Create with an agent asks. */
@@ -403,6 +412,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
   const { shown, place, agents, showTab } = doors;
   const sendTaskStart = useTaskStartMutation();
   const toast = useToast();
+  const placeInSection = usePlaceInSection();
 
   const opensNewTask =
     useQuery({ ...appStateQuery, select: selectOpensNewTask }).data ??
@@ -575,6 +585,9 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
           });
         }
 
+        // A task started from a section is filed on top of it, whichever page the start opens.
+        if (from.sectionId !== undefined) placeInSection(answer.taskId, from.sectionId);
+
         // Note that an agent's start put the card and whatever stood away as it was pressed, so
         // what stands now is the developer's since, a New task opened again among it, and stays.
         if (stays) {
@@ -714,6 +727,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     starting,
     onOpen: newTask,
     onOpenIn: (repository) => newTaskWith({ repository }),
+    onOpenInSection: (sectionId) => newTaskWith({ sectionId }),
     onOpenRelated: (taskId, kind) => {
       const task = doors.taskOf(taskId);
 

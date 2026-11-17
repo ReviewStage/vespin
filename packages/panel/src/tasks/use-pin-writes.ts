@@ -12,7 +12,12 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskSections, TaskSectionWrite } from "@repo/features/task-section-wire";
-import { NO_TASK_SECTIONS, SECTION_WRITE_FAILED_NOTE } from "@repo/features/task-sections-model";
+import {
+  NO_TASK_SECTIONS,
+  placeWrites,
+  SECTION_WRITE_FAILED_NOTE,
+  sectionOrder,
+} from "@repo/features/task-sections-model";
 import type { RepositoryPin, TaskAgentPin } from "@repo/features/task-wire";
 import {
   AGENT_PIN_FAILED_NOTES,
@@ -197,6 +202,26 @@ export function useSectionWrites(): PinWrites["onWriteSections"] {
         failure: { surface: FAILURE_SURFACE.SECTION_WRITE, cause: changed.cause },
       });
     });
+  };
+}
+
+/**
+ * Files a task on top of a section, as a drop on the section's head does,
+ * asking nothing and offering no Undo: what New task's start does with the
+ * section its card was opened from. The sections are read as they stand at
+ * the call, since a start answers after the press, and a section deleted
+ * since takes nothing.
+ */
+export function usePlaceInSection(): (taskId: string, sectionId: string) => void {
+  const client = useQueryClient();
+  const write = useSectionWrites();
+
+  return (taskId, sectionId) => {
+    const state = appStateIn(client);
+    const sections = state === undefined ? NO_TASK_SECTIONS : selectTaskSections(state);
+
+    if (!sections.sections.some((section) => section.id === sectionId)) return;
+    write(placeWrites(sectionOrder(sections, sectionId), taskId, sectionId, 0, Date.now()));
   };
 }
 

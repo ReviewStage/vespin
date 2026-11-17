@@ -28,6 +28,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import {
   BUTTON_SIZE,
   BUTTON_VARIANT,
+  ComposeIcon,
   DIALOG_TONE,
   Dialog,
   DialogActions,
@@ -73,6 +74,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { pressWrite, type RowDoors, type UndoWrite } from "../undo-stack.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { listedSlot, movedBeside, nestsOf, siblingsAt, useNestedRows } from "./nested-rows.js";
+import { NewTaskInButton } from "./new-task-button.js";
 import { type RowPlace, RowPlaced, useRowMoveKeys, withRowMoves } from "./row-moves.js";
 import { SectionIconWell, sectionGlyph } from "./section-icon-picker.js";
 import { SIDEBAR_SECTION_SLOT, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
@@ -694,6 +696,8 @@ interface SectionContext {
   readonly onDropRow: (task: TaskSummary, zone: string, at: number) => void;
   /** Hears a row lifted into a drag and that drag ended, while which an empty Pinned stands to take it. */
   readonly onCarried: (carried: boolean) => void;
+  /** Opens New task on a section, which files the task in it once it starts: its head's + and its menu's New task. */
+  readonly onNewTaskIn: (sectionId: string) => void;
 }
 
 /** What a section's actions on all its tasks run through beyond the section's writes: each asks or reaches past the sections. */
@@ -704,7 +708,8 @@ interface SectionDoors {
 }
 
 /**
- * A section's menu: Rename and Change icon (Add icon where it wears none),
+ * A section's menu: New task, which opens New task's card on the section
+ * as its head's + does; Rename and Change icon (Add icon where it wears none),
  * which name it in place, its head turning into its editor, the icon's
  * picker open for Change icon, and Mark all as read; then
  * Delete section, which leaves every row where it stands and offers Undo.
@@ -729,6 +734,10 @@ function sectionActionGroups(
     },
   ];
 
+  const start: MenuEntry[] = [
+    { label: "New task", icon: <ComposeIcon />, onSelect: () => context.onNewTaskIn(section.id) },
+  ];
+
   const remove: MenuEntry[] = [
     {
       label: "Delete section",
@@ -741,7 +750,7 @@ function sectionActionGroups(
     ? [{ label: "Mark all as read", icon: <MailOpenIcon />, onSelect: doors.onMarkRead }]
     : [];
 
-  return [[...edit, ...read], remove];
+  return [start, [...edit, ...read], remove];
 }
 
 /**
@@ -980,12 +989,18 @@ function SidebarSection({
           )
         }
         actions={
-          <MoreButton
-            ref={ellipsis}
-            thing={section.title}
-            size={BUTTON_SIZE.COMPACT}
-            {...menu.trigger()}
-          />
+          <>
+            <MoreButton
+              ref={ellipsis}
+              thing={section.title}
+              size={BUTTON_SIZE.COMPACT}
+              {...menu.trigger()}
+            />
+            <NewTaskInButton
+              label={`New task in ${section.title}`}
+              onPress={() => context.onNewTaskIn(section.id)}
+            />
+          </>
         }
       >
         {drawn.tasks.length === 0 ? null : (
