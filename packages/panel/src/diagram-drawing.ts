@@ -12,7 +12,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { useSideBundles } from "./bundle-loader.js";
 
 /**
- * diagram-drawing.ts -- a Mermaid code drawn as its picture in the window's appearance: the diagram bundle loaded the first time one is drawn, each picture kept by its appearance and code, and what the picture is named for.
+ * diagram-drawing.ts -- a Mermaid code drawn as its picture in the window's appearance: the diagram bundle loaded the first time one is drawn, and each picture kept by its appearance and code.
  *
  * A description's fence (`description-diagram.tsx`) and a Mermaid file opened in the file
  * viewer (`tasks/attachment-viewer.tsx`) draw through this one cache, so a
@@ -21,24 +21,6 @@ import { useSideBundles } from "./bundle-loader.js";
 
 /** How many pictures the window keeps in each appearance, the oldest let go first; enough for every diagram in a description, and the drafts the editor's preview drew. */
 const HELD_PICTURES = 64;
-
-/** What a diagram's picture is called where its code names nothing: the kind of thing it is. */
-const DIAGRAM_ALT = "Diagram";
-
-/** How much of a title or first line an alt text keeps, so a long one does not read out whole. */
-const ALT_LIMIT = 80;
-
-/** The front matter a Mermaid code may open with: its settings between two `---` fences, which name nothing of the diagram but a `title`. */
-const FRONT_MATTER = /^\s*---[ \t]*\n([\s\S]*?)\n---[ \t]*(?:\n|$)/u;
-
-/** The title a front matter names (`title: Order flow`), a top-level key. */
-const FRONT_TITLE = /^title:[ \t]*(.+?)[ \t]*$/mu;
-
-/** A title a diagram's own lines name, as a line of its own or after the diagram's kind (`title Votes`, `pie title Votes`). */
-const BODY_TITLE = /^[ \t]*(?:\w+[ \t]+)?title[ \t]+(.+?)[ \t]*$/mu;
-
-/** A line of Mermaid code that names nothing of the diagram: blank or a comment. */
-const SILENT_LINE = /^\s*(?:%%.*)?\s*$/u;
 
 /**
  * Each drawing the window holds, by appearance and then by code, oldest
@@ -145,22 +127,4 @@ export function useDrawing(
   return bundle.isError
     ? { drawing: { kind: DIAGRAM_DRAWING.REFUSED }, retry: retryBundle }
     : { drawing: undefined, retry: undefined };
-}
-
-/** The words kept of a title or first line, cut at the limit with an ellipsis. */
-function altWords(line: string): string {
-  const words = line.replace(/^["']|["']$/gu, "").trim();
-
-  return words.length > ALT_LIMIT ? `${words.slice(0, ALT_LIMIT).trimEnd()}…` : words;
-}
-
-/** What a diagram's picture says it is, and what its press is named for after "Enlarge": its title, or its first line, after "Diagram". */
-export function diagramAlt(code: string): string {
-  const front = FRONT_MATTER.exec(code);
-  const body = front === null ? code : code.slice(front[0].length);
-  const title = FRONT_TITLE.exec(front?.[1] ?? "")?.[1] ?? BODY_TITLE.exec(body)?.[1];
-  const first = body.split("\n").find((line) => !SILENT_LINE.test(line));
-  const words = altWords(title ?? first ?? "");
-
-  return words === "" ? DIAGRAM_ALT : `${DIAGRAM_ALT}: ${words}`;
 }
