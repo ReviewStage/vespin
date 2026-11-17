@@ -5,7 +5,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { leavingPlace } from "../../testing/leaving-place.js";
 import { useDisclosureFold } from "../disclosure/disclosure.js";
-import { LIST_MOTION_WAY, ListMotion, motionKey, motionRows, useLeaving } from "./list-motion.js";
+import {
+  LIST_MOTION_WAY,
+  ListMotion,
+  type ListMotionWay,
+  motionKey,
+  motionRows,
+  useLeaving,
+} from "./list-motion.js";
 
 /**
  * list-motion.test.ts -- a row arriving in a list slides in as it fades in,
@@ -172,19 +179,21 @@ function Rows({
   );
 }
 
-/** Lists side by side, each by its rows' keys, under one motion where `moving`, still being read where `reading`, as the scene `scene`, their rows placed by the lists where `placed`. */
+/** Lists side by side, each by its rows' keys, under one motion where `moving`, still being read where `reading`, as the scene `scene`, their rows placed by the lists where `placed`, arriving and leaving `way`. */
 function Lists({
   lists,
   moving,
   reading,
   scene,
   placed,
+  way,
 }: {
   lists: readonly (readonly string[])[];
   moving: boolean;
   reading: boolean;
   scene?: string | undefined;
   placed: boolean;
+  way: ListMotionWay;
 }): React.JSX.Element {
   const box = useRef<HTMLDivElement>(null);
 
@@ -194,7 +203,9 @@ function Lists({
     lists.map((keys, at) => createElement(Rows, { key: String(at), keys, placed })),
   );
 
-  return moving ? createElement(ListMotion, { root: box, reading, scene, children: drawn }) : drawn;
+  return moving
+    ? createElement(ListMotion, { root: box, reading, scene, way, children: drawn })
+    : drawn;
 }
 
 /** Draws `lists`, the motion's tokens set where `tokens`, their rows placed by the lists where `placed`, and hands back a way to draw others, still being read where it says, as the scene it names. */
@@ -206,12 +217,14 @@ function draw(
     reading = false,
     scene,
     placed = false,
+    way = LIST_MOTION_WAY.SLIDE,
   }: {
     moving?: boolean;
     tokens?: boolean;
     reading?: boolean;
     scene?: string;
     placed?: boolean;
+    way?: ListMotionWay;
   } = {},
 ): (next: readonly (readonly string[])[], stillReading?: boolean, nextScene?: string) => void {
   if (tokens) {
@@ -222,7 +235,7 @@ function draw(
 
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  act(() => root?.render(createElement(Lists, { lists, moving, reading, scene, placed })));
+  act(() => root?.render(createElement(Lists, { lists, moving, reading, scene, placed, way })));
 
   return (next, stillReading = false, nextScene = scene) =>
     act(() =>
@@ -233,6 +246,7 @@ function draw(
           reading: stillReading,
           scene: nextScene,
           placed,
+          way,
         }),
       ),
     );
@@ -640,4 +654,24 @@ test("the rows under a fold glide down as a press opens it, and up once its body
   expect(motionsOf(rowOf("Under"))).toEqual([
     [{ transform: `translate(0px, ${ROW}px)` }, { transform: "none" }],
   ]);
+});
+
+test("rows that unroll in together arrive at once, one edge across them, as a fold's body does", () => {
+  // Note that each row stands a row tall, as the rows' rects say, so the edge travels from the top of B to the foot of C.
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(ROW);
+  const show = draw([["A", "D"]], { way: LIST_MOTION_WAY.UNROLL });
+
+  show([["A", "B", "C", "D"]]);
+
+  expect(motionsOf(rowOf("B"))[1]).toEqual([
+    { clipPath: `inset(0px 0px ${ROW}px 0px)` },
+    { clipPath: `inset(0px 0px ${-ROW}px 0px)` },
+  ]);
+  expect(motionsOf(rowOf("C"))[1]).toEqual([
+    { clipPath: `inset(0px 0px ${2 * ROW}px 0px)` },
+    { clipPath: "inset(0px 0px 0px 0px)" },
+  ]);
+  expect(
+    ["B", "C"].map((key) => played.find((each) => each.element === rowOf(key))?.timing.delay),
+  ).toEqual([0, 0]);
 });

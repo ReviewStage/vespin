@@ -18,18 +18,21 @@ import {
   GroupHeader,
   IconButton,
   LIST_DENSITY,
+  LIST_MOTION_REPLAY,
   List,
   ListRow,
   type ListRowFold,
   type ListRowNest,
+  NestedRowsMotion,
   TaskRows,
   Tooltip,
+  useListMotionReplay,
 } from "@repo/ui";
 import { GLYPH, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
 import { Predicate, Schema } from "effect";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
@@ -379,12 +382,18 @@ export function OverviewAgents({
     (agentId) => opened.has(agentId),
   );
 
-  const nests = nestsOf(tree);
+  // Note that the rows nest in a motion of their own, so the motion around the group hears each fold's press and moves what stands under the list with it.
+  const nested = useRef<HTMLDivElement>(null);
+  const replay = useListMotionReplay();
 
   const foldOf = (entry: AddEntry, open: boolean): ListRowFold => ({
     open,
     label: `${STARTED_BY} ${entry.agent?.title ?? AGENTS_NOUN.one}`,
-    onOpenChange: (asked) =>
+    onOpenChange: (asked) => {
+      if (asked !== opened.has(entry.row.id)) {
+        replay?.(asked ? LIST_MOTION_REPLAY.MOVE : LIST_MOTION_REPLAY.CLOSE);
+      }
+
       setOpened((held) => {
         if (asked === held.has(entry.row.id)) return held;
         const next = new Set(held);
@@ -393,7 +402,8 @@ export function OverviewAgents({
         else next.delete(entry.row.id);
 
         return next;
-      }),
+      });
+    },
   });
 
   // Note that a row standing folded counts what waits on the developer under it too, so no thread waits unsaid.
@@ -436,38 +446,55 @@ export function OverviewAgents({
             fold={holds ? { defaultOpen: !folded } : undefined}
           >
             {entries.length === 0 ? null : (
-              <TaskRows
-                id={selection.regionId}
-                label={AGENTS_LIST}
-                cells={AGENT_ROW_CELLS}
-                more={more}
-                selection={{ selected: selection.selected, onChange: selection.onChange }}
-                moves
-              >
-                {tree.map(({ entry, depth, started, folded }, at) => (
-                  <PlanAgentRow
-                    key={entry.row.id}
-                    entry={entry}
-                    depth={depth}
-                    nest={nests[at]}
-                    fold={
-                      started === undefined ? undefined : foldOf(entry, opened.has(entry.row.id))
-                    }
-                    started={started}
-                    waits={waitsUnder(entry, folded)}
-                    pullRequest={agents.pullRequests.get(entry.row.id)}
-                    agents={agents}
-                    held={held}
-                    tab={tab}
-                    shown={shown}
-                    more={more}
-                    chosen={selection.chosenOf(entry.row.id)}
-                    onOpenPullRequest={() =>
-                      openListed(agents.pullRequests.get(entry.row.id), onOpenPullRequest)
-                    }
-                  />
-                ))}
-              </TaskRows>
+              <div ref={nested} className="min-w-0">
+                <NestedRowsMotion
+                  root={nested}
+                  folds={opened}
+                  rows={tree}
+                  keyOf={(node) => node.entry.row.id}
+                >
+                  {(drawn) => {
+                    const nests = nestsOf(drawn.map(({ value }) => value));
+
+                    return (
+                      <TaskRows
+                        id={selection.regionId}
+                        label={AGENTS_LIST}
+                        cells={AGENT_ROW_CELLS}
+                        more={more}
+                        selection={{ selected: selection.selected, onChange: selection.onChange }}
+                        moves
+                      >
+                        {drawn.map(({ key, value: { entry, depth, started, folded } }, at) => (
+                          <PlanAgentRow
+                            key={key}
+                            entry={entry}
+                            depth={depth}
+                            nest={nests[at]}
+                            fold={
+                              started === undefined
+                                ? undefined
+                                : foldOf(entry, opened.has(entry.row.id))
+                            }
+                            started={started}
+                            waits={waitsUnder(entry, folded)}
+                            pullRequest={agents.pullRequests.get(entry.row.id)}
+                            agents={agents}
+                            held={held}
+                            tab={tab}
+                            shown={shown}
+                            more={more}
+                            chosen={selection.chosenOf(entry.row.id)}
+                            onOpenPullRequest={() =>
+                              openListed(agents.pullRequests.get(entry.row.id), onOpenPullRequest)
+                            }
+                          />
+                        ))}
+                      </TaskRows>
+                    );
+                  }}
+                </NestedRowsMotion>
+              </div>
             )}
             {phone === undefined ? null : (
               <PlanArchivedAgents
