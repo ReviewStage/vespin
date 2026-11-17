@@ -121,6 +121,7 @@ import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pic
 import { NotificationAsk } from "../notification-ask.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns, useInFront } from "../place-columns.js";
+import { useReplyDrawnCount } from "../reply-drawn.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
@@ -756,6 +757,7 @@ function ThreadDetail({
   );
 
   const { sources, sizes, pictureSizes, retry } = useThreadMedia(item.id, media, pending);
+  useReplyDrawnCount(item.thread);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
   const router = useRouter();

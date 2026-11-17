@@ -79,6 +79,7 @@ import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { replyLetGo, replyPressed } from "../reply-drawn.js";
 import { useWrite } from "../use-write.js";
 
 /** What the app holds of one thread: the draft on its box, the sends not yet carried by a read, by key, what its last refused send said, and a notification's action not yet sent. */
@@ -421,6 +422,7 @@ export function useThreadAnswer(
 
   // A send let go once refused: its words and picks back on the box, ahead of nothing typed since, and the refusal said.
   const refuse = (key: string, sent: InboxDraft, words: string) => {
+    replyLetGo(key);
     hold(itemId, (was) => {
       const sending = new Map(was.sending);
       sending.delete(key);
@@ -458,6 +460,7 @@ export function useThreadAnswer(
     }
 
     const key = randomUUID();
+    replyPressed(key, sent.attachments.length > 0);
     const revision = awaitsNod(item) ? item.revision : undefined;
     hold(itemId, (was) => ({
       ...was,
