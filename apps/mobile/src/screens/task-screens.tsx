@@ -155,7 +155,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { type ReactElement, type ReactNode, useMemo, useState } from "react";
+import { type ReactElement, type ReactNode, useDeferredValue, useMemo, useState } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import {
@@ -2273,6 +2273,18 @@ function OverviewComments({
  * read-only and the comment threads that stand open on it. A pull reads the
  * task list again.
  */
+/**
+ * Whether a task's page draws the sections under its head yet: not on the
+ * render that opens it, and on the next, which React renders after the
+ * first is committed and drops if another task opens first. Note that the
+ * first render is the head alone, from what the task's row already holds,
+ * so a push or a column's swap starts at once, and the sections, which
+ * cost most of the page, follow behind it.
+ */
+function useSectionsShown(taskId: string): boolean {
+  return useDeferredValue(taskId, undefined) === taskId;
+}
+
 function OverviewPage({
   overview,
   onRefresh,
@@ -2289,6 +2301,7 @@ function OverviewPage({
   const onOwnTab = useOnOwnTab();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
+  const sections = useSectionsShown(task.id);
 
   const { data: descriptions = false } = useQuery({
     ...appStateQuery,
@@ -2318,10 +2331,10 @@ function OverviewPage({
       <ListSection>
         <OverviewHead overview={overview} />
       </ListSection>
-      <OverviewRelations overview={overview} />
-      <OverviewAgents overview={overview} archiving={archiving} />
-      <OverviewPages overview={overview} />
-      {!descriptions ? null : overview.documentRetry !== undefined ? (
+      {sections ? <OverviewRelations overview={overview} /> : null}
+      {sections ? <OverviewAgents overview={overview} archiving={archiving} /> : null}
+      {sections ? <OverviewPages overview={overview} /> : null}
+      {!sections || !descriptions ? null : overview.documentRetry !== undefined ? (
         <ListSection title={WORDS.DESCRIPTION}>
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
@@ -2332,7 +2345,7 @@ function OverviewPage({
       ) : (
         <OverviewDescription overview={overview} body={document.description.body} />
       )}
-      {descriptions ? <OverviewComments taskId={task.id} threads={threads} /> : null}
+      {sections && descriptions ? <OverviewComments taskId={task.id} threads={threads} /> : null}
     </RowList>
   );
 }
