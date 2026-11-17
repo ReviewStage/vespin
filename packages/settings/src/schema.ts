@@ -674,8 +674,8 @@ export const APP_SETTING_SCHEMA = {
   inbox: accountToggleSetting({
     field: "inbox",
     id: APP_SETTING_ID.INBOX,
-    label: "Inbox",
-    detail: "Agents post what they need from you here. Turned off, they ask in their replies.",
+    label: "Use the Inbox",
+    detail: "Agents post what they need from you there. Turned off, they ask in their replies.",
     default: true,
     page: SETTINGS_PAGE.PREFERENCES,
     section: SETTING_SECTION.GENERAL,

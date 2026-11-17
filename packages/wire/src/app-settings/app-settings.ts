@@ -69,7 +69,8 @@ export const APP_SETTING_ID = {
   TURN_NOTIFICATIONS: "turn_notifications",
   PULL_REQUEST_OPEN: "pull_request_open",
   GITHUB_WAKES_OFF: "github_wakes_off",
-  INBOX: "inbox",
+  // Note that it is no plain `inbox`, which the Inbox command already names in the settings search.
+  INBOX: "inbox_on",
 } as const;
 
 export type AppSettingId = (typeof APP_SETTING_ID)[keyof typeof APP_SETTING_ID];
