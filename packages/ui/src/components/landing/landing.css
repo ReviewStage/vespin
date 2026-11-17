@@ -2074,16 +2074,24 @@
     vertical-align: text-bottom;
     background: var(--ui-color-text);
   }
+}
 
-  /* A scene's sheets fade out over the last moments of its loop and back
-     in as it starts over (`landing-story.ts`), so a story never cuts from
-     its end back to its start. */
-  :is(.ui-hero-main, .ui-hero-sidebar-body, .ui-landing-card-sheet, .ui-landing-rows) {
-    transition: opacity var(--ui-duration-pane) var(--ui-motion-pane);
+@layer components {
+  /* The team log turning over (`LogTurn`): its finished turn and the
+     opening under it, scrolled up by the finished turn's height, so the
+     opening stops where the log starts. */
+  .ui-landing-log-turn {
+    height: 100%;
+    overflow: hidden;
   }
 
-  [data-loop="out"]
-    :is(.ui-hero-main, .ui-hero-sidebar-body, .ui-landing-card-sheet, .ui-landing-rows) {
-    opacity: 0;
+  .ui-landing-log-reel[data-turning] {
+    animation: ui-landing-turn var(--ui-duration-showcase) var(--ui-motion-pane) forwards;
+  }
+
+  @keyframes ui-landing-turn {
+    to {
+      transform: translateY(calc(-1 * var(--ui-landing-turn-by)));
+    }
   }
 }

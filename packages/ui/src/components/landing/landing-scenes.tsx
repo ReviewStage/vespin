@@ -2,7 +2,14 @@ import { AUTOMATION_TRIGGER } from "@repo/features/automation-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
-import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { cssCustomProperties } from "../../css.js";
 import {
   CheckIcon,
@@ -86,6 +93,7 @@ import {
   useLandingTeammate,
 } from "./landing-desktop.js";
 import { LandingPhone, LandingWindow } from "./landing-devices.js";
+import { heldStill } from "./landing-paint.js";
 import { MINUTE, STORY_NOW, still, useStory, useTimeline, useTyping } from "./landing-story.js";
 
 /**
@@ -109,22 +117,11 @@ import { MINUTE, STORY_NOW, still, useStory, useTimeline, useTyping } from "./la
 const BEAT = { AGENTS: 1800, RUNS: 1700 } as const;
 
 /**
- * A window's story: how many steps it plays, the last it draws (held for the
- * rest), and the step it opens on, its telling moment, since the window is
- * cut to the panel that moment happens in.
+ * The team scene's story: how many steps it plays, the last its log draws
+ * (held a beat), and the step the log turns over on, scrolling its finished
+ * turn away to the opening it starts from, so the loop has no cut.
  */
-const STORY = {
-  AGENTS: { STEPS: 9, LAST: 6, FROM: 0 },
-} as const;
-
-/** The step a window's `story` draws, from its telling moment on. */
-function useWindowStory(
-  ref: RefObject<HTMLDivElement | null>,
-  story: (typeof STORY)[keyof typeof STORY],
-  beat: number,
-): number {
-  return Math.min(useStory(ref, story.STEPS - story.FROM, beat) + story.FROM, story.LAST);
-}
+const AGENTS_STORY = { STEPS: 9, LAST: 6, TURN: 8 } as const;
 
 /** The scenes the landing plays, by the feature each shows. */
 export const LANDING_SCENE = {
@@ -619,8 +616,8 @@ function ColumnCard({
  * The Inbox demo's beats, in order: the list, the question arriving, the
  * pointer going to it and pressing, the thread opening, the pointer picking
  * an option, pressing into the note and typing it, pressing send, the
- * answer standing in the thread, and the list again with the question
- * settled, held before the loop starts over.
+ * answer standing in the thread, the list again with the question
+ * settled, and the question resolved out of it, the list as it opened.
  */
 const INBOX_BEAT = {
   LIST: 0,
@@ -637,11 +634,12 @@ const INBOX_BEAT = {
   SENT: 11,
   BACK: 12,
   HOLD: 13,
+  RESOLVE: 14,
 } as const;
 
 /** How long each beat holds, in milliseconds, by its place in `INBOX_BEAT`: long enough for the pointer's move or the typing it holds. */
 const INBOX_DURATIONS: readonly number[] = [
-  900, 1000, 700, 350, 650, 700, 450, 700, 1100, 700, 350, 800, 1000, 1400,
+  900, 1000, 700, 350, 650, 700, 450, 700, 1100, 700, 350, 800, 1000, 1400, 900,
 ];
 
 /** What the pointer rests on at each beat: the row, the picked option, the note, the send, or nothing. */
@@ -695,7 +693,10 @@ function listStep(beat: number): number {
 
   if (beat < INBOX_BEAT.BACK) return 2;
 
-  return 5;
+  // Note that the settled question resolves and leaves the list, which then stands as the demo opened, so the loop starts over without a cut.
+  if (beat < INBOX_BEAT.RESOLVE) return 5;
+
+  return 0;
 }
 
 /** The thread's step (`QuestionThread`) at a beat of the demo. */
@@ -1042,22 +1043,51 @@ export function PullRequestCard({
   );
 }
 
-/** The agent's log at `step` under its tabs: its words, its calls, and the other agent's answers. */
-function LogCard({ step }: { step: number }): React.JSX.Element {
+/**
+ * The log turning over: its finished turn scrolling up and away and the
+ * opening the story starts from arriving under it, stopping where the log
+ * starts. Note that it measures the opening's place before it draws,
+ * because the turn's height comes from its words.
+ */
+function LogTurn(): React.JSX.Element {
+  const reel = useRef<HTMLDivElement>(null);
+  const [by, setBy] = useState(0);
+
+  useLayoutEffect(() => {
+    const next = reel.current?.children[1];
+
+    if (next instanceof HTMLElement) setBy(next.offsetTop);
+  }, []);
+
+  return (
+    <div className="ui-landing-log-turn">
+      <div
+        ref={reel}
+        className="ui-landing-log-reel"
+        data-turning={by > 0 || undefined}
+        style={cssCustomProperties({ "--ui-landing-turn-by": `${String(by)}px` })}
+      >
+        <AgentLog step={AGENTS_STORY.LAST} />
+        <AgentLog step={0} />
+      </div>
+    </div>
+  );
+}
+
+/** The agent's log at `step` under its tabs, or `turning` over to its opening: its words, its calls, and the other agent's answers. */
+function LogCard({ step, turning }: { step: number; turning: boolean }): React.JSX.Element {
   return (
     <ColumnCard
       bar={
         <Toolbar
           start={TOOLBAR_INSET.COLUMN}
           look={TOOLBAR_LOOK.TABS}
-          title={<TaskTabs step={step} />}
+          title={<TaskTabs step={turning ? 0 : step} />}
           actions={<MoreButton thing="agent" onClick={still} />}
         />
       }
     >
-      <div className="ui-landing-log-sheet">
-        <AgentLog step={step} />
-      </div>
+      <div className="ui-landing-log-sheet">{turning ? <LogTurn /> : <AgentLog step={step} />}</div>
     </ColumnCard>
   );
 }
@@ -1065,12 +1095,15 @@ function LogCard({ step }: { step: number }): React.JSX.Element {
 /**
  * A task close up: the agent's log, where it starts another agent and the
  * two trade messages, then the member tags a teammate to review and the
- * teammate answers in the same log, the plan's sub-tasks over its corner
- * stepping to done.
+ * teammate answers in the same log, and the log turns over to the opening
+ * it starts from, so the story loops without a cut.
  */
 function AgentsScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
-  const step = useWindowStory(ref, STORY.AGENTS, BEAT.AGENTS);
+  const played = useStory(ref, AGENTS_STORY.STEPS, BEAT.AGENTS);
+  const step = Math.min(played, AGENTS_STORY.LAST);
+  // Note that where motion is held the story stands on its last full step, never mid-turn.
+  const turning = played === AGENTS_STORY.TURN && !heldStill();
 
   return (
     <div
@@ -1081,7 +1114,7 @@ function AgentsScene(): React.JSX.Element {
       {...DESKTOP_SURFACE}
     >
       <div className="ui-landing-closeup-cards" inert>
-        <LogCard step={step} />
+        <LogCard step={step} turning={turning} />
       </div>
     </div>
   );
