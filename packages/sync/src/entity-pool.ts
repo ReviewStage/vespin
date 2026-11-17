@@ -840,8 +840,8 @@ function stood<Row extends object, Change>(
           if (store === undefined || kept === undefined) return drawn;
           const answer = reported(rows, holding, kept, how);
 
-          // Note that the store is told before any read is drawn, so it hears answers in the order they were taken, and uninterruptibly, so its baseline never runs ahead of it.
-          return Effect.andThen(Effect.uninterruptible(store.answered(answer)), drawn);
+          // Note that the store is told before any read is drawn, so it hears answers in the order they were taken, and uninterruptibly with the draws, so neither its baseline nor the reads fall behind the commit.
+          return Effect.uninterruptible(Effect.andThen(store.answered(answer), drawn));
         });
       },
       holds: (key) => shows(holding, key),
