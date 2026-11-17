@@ -18,6 +18,9 @@ import { launchLeftFront } from "./launch-state.js";
 /** Whether this launch has counted, or let go of, its first Inbox, which it does once. */
 let counted = false;
 
+/** Whether the rows the Inbox first showed this launch were the phone's kept ones, read at the first commit that showed any; none before. */
+let firstShownKept: boolean | undefined;
+
 /** The build number this build was released as (`CFBundleVersion`), which a rung of the launch is read beside; none where the build names none. */
 const BUILD_NUMBER = Constants.expoConfig?.ios?.buildNumber;
 
@@ -55,6 +58,8 @@ export function useAppReadyCount(shown: boolean): void {
   }, []);
   useEffect(() => {
     if (counted || !shown) return;
+    // Note that the rows' source is read at the first commit that shows them, since the service's answer can take the kept rows' place before the app comes active and counts.
+    firstShownKept ??= keptRows;
 
     if (launchLeftFront()) {
       counted = true;
@@ -77,7 +82,7 @@ export function useAppReadyCount(shown: boolean): void {
         : { standing_seconds: productLaunchSeconds(stood.ms) }),
       ...(stood === undefined ? undefined : { kept_store: stood.keptStore }),
       ...(BUILD_NUMBER === undefined ? undefined : { app_build: BUILD_NUMBER }),
-      first_rows: keptRows ? PRODUCT_FIRST_ROWS.KEPT : PRODUCT_FIRST_ROWS.FEED,
+      first_rows: firstShownKept ? PRODUCT_FIRST_ROWS.KEPT : PRODUCT_FIRST_ROWS.FEED,
     });
   }, [count, shown, active, keptRows]);
 }
