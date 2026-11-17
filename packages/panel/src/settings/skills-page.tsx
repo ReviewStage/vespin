@@ -38,6 +38,7 @@ import {
   SETTINGS_ROW_MARK_WIDTH,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
+  SettingsRow,
   SettingsRowMark,
   type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
@@ -69,11 +70,14 @@ import {
   installedSkillsRetryMutation,
   workspaceMembersQuery,
 } from "../live-reads.js";
+import { useThisMac } from "../machine-name.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { SkillCard, SkillMark } from "../tasks/skill-ref.js";
 import { useDrawnThroughExit } from "../use-held-through-exit.js";
 import { AddSkillDialog } from "./add-skill-dialog.js";
+import { MacSkillsDialog } from "./mac-skills-dialog.js";
+import { MAC_SKILLS_LINE } from "./mac-skills-model.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { shownWorkspace } from "./settings-rows.js";
@@ -400,6 +404,16 @@ function ShownSkills({
     setLanded(new Set(made.map((each) => each.id)));
   }, []);
 
+  // Note that the skills brought in from the Mac land one send at a time, so each lights beside those before it.
+  const brought = useCallback((made: readonly InstalledSkillSummary[]) => {
+    setLanded((before) => new Set([...before, ...made.map((each) => each.id)]));
+  }, []);
+
+  // Note that Bring in from your Mac reads this Mac's own folders, so it stands only where the window runs on one.
+  const onAMac = useThisMac() !== undefined;
+  const [bringing, setBringing] = useState(false);
+  const broughtIn = useDrawnThroughExit(bringing);
+
   const groups = skills === undefined ? undefined : skillGroups(skills, readerId, members);
 
   // A group still being read stands its placeholder row in the card the rows will.
@@ -470,6 +484,37 @@ function ShownSkills({
           </SettingsSection>
         </>
       )}
+      {onAMac ? (
+        <SettingsSection>
+          <SettingsRow
+            leading={
+              <SettingsRowMark>
+                <GLYPH.DESKTOP />
+              </SettingsRowMark>
+            }
+            label={MAC_SKILLS_LINE.ROW_LABEL}
+            description={MAC_SKILLS_LINE.ROW_DESCRIPTION}
+          >
+            {() => (
+              <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => setBringing(true)}>
+                {MAC_SKILLS_LINE.LOOK}
+              </Button>
+            )}
+          </SettingsRow>
+        </SettingsSection>
+      ) : null}
+      {broughtIn.drawn ? (
+        <MacSkillsDialog
+          open={bringing}
+          workspace={workspace}
+          personal={(skills ?? []).filter(
+            (skill) => skill.scope === INSTALLED_SKILL_SCOPE.PERSONAL,
+          )}
+          onLanded={brought}
+          onClose={() => setBringing(false)}
+          onExited={broughtIn.onExited}
+        />
+      ) : null}
       {added.drawn ? (
         <AddSkillDialog
           open={adding}

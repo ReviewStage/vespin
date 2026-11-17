@@ -1,0 +1,106 @@
+/**
+ * mac-skills.ts -- the skills this Mac's own coding agents keep, read from their skills folders under the home folder, as a procedure.
+ *
+ * Settings › Skills asks it as its Bring in from your Mac opens
+ * (`packages/panel/src/settings/mac-skills-dialog.tsx`); main answers it
+ * with the read in `../mac-skills.ts`, and a browser tab and the iOS app
+ * refuse it, since neither runs on the Mac. A skill offered comes with
+ * every file of its folder, in base64, for the service to install as it
+ * stands (`installedSkills.importFolder`); a folder left out says why, so
+ * the member sees what was not offered as well as what was. Every folder
+ * is named from the home folder (`~/.claude/skills`), so no account's name
+ * on the Mac crosses the port.
+ */
+
+import {
+  INSTALLED_SKILL_BOUNDS,
+  INSTALLED_SKILL_REFUSAL,
+  MAC_SKILL_APP,
+  type MacSkillApp,
+} from "@repo/features/installed-skill-wire";
+import { Schema as EffectSchema } from "effect";
+import { actProcedure, exactInput } from "./base.js";
+import { MAC_SKILLS_ACT_KIND } from "./kinds.js";
+
+/** Each agent's skills folder, from the home folder, in the order they are read and listed. */
+export const MAC_SKILL_FOLDER = {
+  [MAC_SKILL_APP.CLAUDE_CODE]: ".claude/skills",
+  [MAC_SKILL_APP.CODEX]: ".codex/skills",
+  [MAC_SKILL_APP.CURSOR]: ".cursor/skills",
+  [MAC_SKILL_APP.GEMINI]: ".gemini/skills",
+  [MAC_SKILL_APP.FACTORY]: ".factory/skills",
+  [MAC_SKILL_APP.AGENTS]: ".agents/skills",
+} as const satisfies Record<MacSkillApp, string>;
+
+/**
+ * Why a skill's folder on the Mac is left out before it is offered: the
+ * check an install would refuse it for, or one of the Mac's own reasons.
+ */
+export const MAC_SKILL_LEFT = {
+  ...INSTALLED_SKILL_REFUSAL,
+  /** A folder the agent keeps itself, its name led by a dot, such as Codex's `.system`. */
+  APP_OWN: "app-own",
+  /** The same folder already offered from another agent's skills folder, which a link reaches. */
+  SAME_FOLDER: "same-folder",
+} as const;
+
+export type MacSkillLeft = (typeof MAC_SKILL_LEFT)[keyof typeof MAC_SKILL_LEFT];
+
+const appSchema = EffectSchema.Literals(Object.values(MAC_SKILL_APP));
+
+/** A folder from the home folder. */
+const tildeFolder = EffectSchema.String.check(EffectSchema.isPattern(/^~\//u));
+
+/** One agent's skills folder: where it is, and whether the Mac holds it at all. */
+const macSkillSourceSchema = EffectSchema.Struct({
+  app: appSchema,
+  folder: tildeFolder,
+  present: EffectSchema.Boolean,
+});
+
+/** One file of a skill offered: its path from the skill's folder, and its bytes in base64. */
+const macSkillFileSchema = EffectSchema.Struct({
+  path: EffectSchema.String,
+  base64: EffectSchema.String,
+});
+
+/** One skill offered: the agent whose folder held it, its folder, what its `SKILL.md` says of it, and every file. */
+const macSkillSchema = EffectSchema.Struct({
+  app: appSchema,
+  folder: tildeFolder,
+  name: EffectSchema.String,
+  description: EffectSchema.String,
+  /** Its files' bytes together. */
+  bytes: EffectSchema.Number,
+  files: EffectSchema.Array(macSkillFileSchema).check(
+    EffectSchema.isMaxLength(INSTALLED_SKILL_BOUNDS.MAX_IMPORT_FILES),
+  ),
+});
+
+export type MacSkill = typeof macSkillSchema.Type;
+
+/** One skill's folder left out, and why; for one reached twice, the folder it was offered from. */
+const macSkillLeftOutSchema = EffectSchema.Struct({
+  app: appSchema,
+  folder: tildeFolder,
+  name: EffectSchema.String,
+  reason: EffectSchema.Literals(Object.values(MAC_SKILL_LEFT)),
+  sameAs: EffectSchema.optionalKey(tildeFolder),
+});
+
+export type MacSkillLeftOut = typeof macSkillLeftOutSchema.Type;
+
+/** What the Mac's skills folders hold: each folder looked in, the skills offered, and those left out. */
+const macSkillsSchema = EffectSchema.Struct({
+  sources: EffectSchema.Array(macSkillSourceSchema),
+  skills: EffectSchema.Array(macSkillSchema),
+  left: EffectSchema.Array(macSkillLeftOutSchema),
+});
+
+export type MacSkills = typeof macSkillsSchema.Type;
+
+export const macSkillsActsContract = {
+  [MAC_SKILLS_ACT_KIND.MAC_SKILLS_READ]: actProcedure("Could not read the skills on this Mac.")
+    .input(exactInput(EffectSchema.Undefined))
+    .output(macSkillsSchema),
+};

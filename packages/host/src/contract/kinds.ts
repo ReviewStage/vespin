@@ -437,6 +437,7 @@ export const INSTALLED_SKILL_ACT_KIND = {
   INSTALLED_SKILLS_READ: "installedSkills.read",
   INSTALLED_SKILLS_PREVIEW: "installedSkills.preview",
   INSTALLED_SKILLS_INSTALL: "installedSkills.install",
+  INSTALLED_SKILLS_IMPORT: "installedSkills.import",
   INSTALLED_SKILLS_REMOVE: "installedSkills.remove",
 } as const;
 
@@ -712,6 +713,15 @@ export const MAC_RESOURCES_ACT_KIND = {
  */
 export const MAC_PHOTO_ACT_KIND = {
   MAC_PHOTO_TO_JPEG: "macPhoto.toJpeg",
+} as const;
+
+/**
+ * The skills this Mac's own coding agents keep (`mac-skills.ts`), read from
+ * their skills folders by the desktop's main, which Settings › Skills asks
+ * as its Bring in from your Mac opens.
+ */
+export const MAC_SKILLS_ACT_KIND = {
+  MAC_SKILLS_READ: "macSkills.read",
 } as const;
 
 /**
@@ -1005,6 +1015,7 @@ export const PORT_ACT_KIND = {
   ...MACHINE_COMMAND_ACT_KIND,
   ...MAC_PHOTO_ACT_KIND,
   ...MAC_RESOURCES_ACT_KIND,
+  ...MAC_SKILLS_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
   ...PORT_FORWARD_ACT_KIND,
@@ -1204,6 +1215,7 @@ export const PORT_ACT_USE = {
   INSTALLED_SKILLS_READ: ACT_USE.FETCH,
   INSTALLED_SKILLS_PREVIEW: ACT_USE.FETCH,
   INSTALLED_SKILLS_INSTALL: ACT_USE.WRITE,
+  INSTALLED_SKILLS_IMPORT: ACT_USE.WRITE,
   INSTALLED_SKILLS_REMOVE: ACT_USE.WRITE,
 
   INTEGRATIONS_FOLLOW: ACT_USE.READ,
@@ -1227,6 +1239,8 @@ export const PORT_ACT_USE = {
   MAC_PHOTO_TO_JPEG: ACT_USE.FETCH,
 
   MAC_RESOURCES_READ: ACT_USE.FETCH,
+
+  MAC_SKILLS_READ: ACT_USE.FETCH,
 
   MAC_SHELL_MIRROR: ACT_USE.WRITE,
   MAC_SHELL_OPEN: ACT_USE.WRITE,
@@ -1410,6 +1424,7 @@ export const PLATFORM_PORT_ACT_KIND = {
   ...MAC_APP_ACT_KIND,
   ...MAC_PHOTO_ACT_KIND,
   ...MAC_RESOURCES_ACT_KIND,
+  ...MAC_SKILLS_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
   ...TERMINAL_ACT_KIND,

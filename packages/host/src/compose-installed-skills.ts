@@ -1,5 +1,6 @@
 import type { HostedInstalledSkillClient } from "@repo/features/installed-skill-client";
 import { INSTALLED_SKILLS_READ } from "@repo/features/installed-skill-live";
+import type { installedSkillInstallAnswerSchema } from "@repo/features/installed-skill-route-wire";
 import { INSTALLED_SKILL_CALL_FAILURE } from "@repo/features/installed-skill-view";
 import { declaredWrite, type EntityPool } from "@repo/sync";
 import { Effect, type Scope } from "effect";
@@ -19,7 +20,7 @@ import type { HeldSlice } from "./live-collection.js";
 import type { RunMode } from "./run-mode.js";
 
 /**
- * compose-installed-skills.ts -- the skills the account installs, held for the windows that draw them and asked of the service on the window's behalf: one read, a paste previewed and installed, or one removed.
+ * compose-installed-skills.ts -- the skills the account installs, held for the windows that draw them and asked of the service on the window's behalf: one read, a paste previewed and installed, a skill's folder brought in from a Mac, or one removed.
  *
  * What Settings › Skills draws, a workspace's skills beside the account's
  * own, it holds (`heldSlice`): the host follows them on the service's live
@@ -41,7 +42,7 @@ import type { RunMode } from "./run-mode.js";
 /** The service's side of installed skills, as this concern asks it. */
 export type InstalledSkillsClient = Pick<
   HostedInstalledSkillClient,
-  "liveRead" | "read" | "preview" | "install" | "remove"
+  "liveRead" | "read" | "preview" | "install" | "importFolder" | "remove"
 >;
 
 export interface InstalledSkillsDependencies {
@@ -65,6 +66,19 @@ export interface InstalledSkillsComposer extends Composer {
 }
 
 const UNANSWERED = { failure: INSTALLED_SKILL_CALL_FAILURE.UNANSWERED } as const;
+
+/** The skills an install or a folder brought in made, and the transaction they were written in. */
+type InstalledSkillsMade = typeof installedSkillInstallAnswerSchema.Type;
+
+/** Why a write made no skills, as every failure the window hears says it. */
+interface Unmade {
+  readonly failure: string;
+}
+
+/** Whether a write's answer is the skills it made, rather than why it made none. */
+function madeSkills(view: InstalledSkillsMade | Unmade): view is InstalledSkillsMade {
+  return "skills" in view;
+}
 
 export function composeInstalledSkills(
   dependencies: InstalledSkillsDependencies,
@@ -112,25 +126,33 @@ function composed(
   ): Effect.Effect<Answer | typeof UNANSWERED> =>
     gate() ? Effect.provideService(call, HttpClient.HttpClient, http) : Effect.succeed(UNANSWERED);
 
+  /**
+   * The skills a write made, an install's or a folder's brought in from a
+   * Mac, drawn on every held read whose scope they are in the moment it
+   * answers, each standing until those reads carry its transaction; its
+   * answer handed on as it stands.
+   */
+  const drawnMade = <View extends Unmade>(write: Effect.Effect<View | InstalledSkillsMade>) =>
+    Effect.gen(function* () {
+      const view = yield* write;
+
+      if (madeSkills(view)) {
+        yield* Effect.forEach(
+          view.skills,
+          (skill) => pool.write(SKILL_MADE, { row: skillRowOf(skill), txid: view.txid }),
+          { concurrency: "unbounded", discard: true },
+        );
+      }
+
+      return view;
+    });
+
   /** The installed skills' plain asks and live follow, answered as the panel's port asks them (`INSTALLED_SKILL_ACTS`, `INSTALLED_SKILL_FOLLOWS`). */
   const acts: InstalledSkillsComposer["acts"] = {
     INSTALLED_SKILLS_READ: ({ skillId }) => asked(client.read(skillId)),
     INSTALLED_SKILLS_PREVIEW: ({ workspaceId, text }) => asked(client.preview(workspaceId, text)),
-    // An install's skills are drawn on every held read whose scope they are in the moment it answers, each standing until those reads carry its transaction.
-    INSTALLED_SKILLS_INSTALL: (install) =>
-      Effect.gen(function* () {
-        const view = yield* asked(client.install(install));
-
-        if ("skills" in view) {
-          yield* Effect.forEach(
-            view.skills,
-            (skill) => pool.write(SKILL_MADE, { row: skillRowOf(skill), txid: view.txid }),
-            { concurrency: "unbounded", discard: true },
-          );
-        }
-
-        return view;
-      }),
+    INSTALLED_SKILLS_INSTALL: (install) => drawnMade(asked(client.install(install))),
+    INSTALLED_SKILLS_IMPORT: (folder) => drawnMade(asked(client.importFolder(folder))),
     INSTALLED_SKILLS_REMOVE: declaredWrite(
       pool,
       skillRemoved((removal) => asked(client.remove(removal.skillId))),
