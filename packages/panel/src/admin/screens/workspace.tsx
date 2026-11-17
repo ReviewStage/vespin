@@ -8,10 +8,15 @@
  * opens their account, so a maintainer walks either way without searching.
  */
 
-import type { AdminWorkspaceDetail, AdminWorkspaceMember } from "@repo/features/admin-answer-wire";
-import { formatCount } from "@repo/features/number-format";
+import type {
+  AdminBillingMemberUsage,
+  AdminWorkspaceBillingMonth,
+  AdminWorkspaceDetail,
+  AdminWorkspaceMember,
+} from "@repo/features/admin-answer-wire";
+import { formatCount, formatUsd } from "@repo/features/number-format";
 import { githubAccountPageUrl } from "@repo/features/tasks-model";
-import { formatDate } from "@repo/features/time-format";
+import { formatDate, formatMonth } from "@repo/features/time-format";
 import { readFailedWords } from "@repo/features/words";
 import {
   Badge,
@@ -30,6 +35,7 @@ import {
 } from "@repo/ui";
 import {
   createDataTableColumnHelper,
+  DATA_TABLE_COLUMN_KIND,
   DATA_TABLE_MIN_WIDTH,
   DataTable,
   type DataTableColumns,
@@ -91,6 +97,102 @@ const WORKSPACE_STATS: readonly StatSpec<AdminWorkspaceDetail>[] = [
     title: () => "Distinct pull requests from the workspace's agents that merged",
   },
 ];
+
+/** How many months and members the usage tables' skeletons stand a row for. */
+const USAGE_SKELETON_ROWS = 2;
+
+const USAGE_MONTHS_LABEL = "Sandbox usage by month";
+
+const USAGE_MEMBERS_LABEL = "This month's sandbox usage by member";
+
+/** The usage tables' columns by key. */
+const USAGE_COLUMN = {
+  MONTH: "month",
+  MEMBER: "member",
+  USAGE: "usage",
+  INCLUDED: "included",
+  BILLABLE: "billable",
+} as const;
+
+/** The current month's figures from the usage ledger, and whether the start gate would refuse the workspace now. */
+const USAGE_STATS: readonly StatSpec<AdminWorkspaceDetail>[] = [
+  {
+    key: "usage",
+    label: ({ billing }) => `Sandbox usage · ${formatMonth(billing.currentMonth)}`,
+    value: ({ billing }) => formatUsd(billing.months[0]?.usageUsd ?? 0),
+    hint: ({ billing }) => `${formatUsd(billing.months[0]?.includedUsd ?? 0)} included`,
+  },
+  {
+    key: "billable",
+    label: () => "Would bill",
+    value: ({ billing }) => formatUsd(billing.months[0]?.billableUsd ?? 0),
+    hint: ({ billing }) =>
+      billing.wouldRefuse ? "New cloud agents would be refused" : "New cloud agents start",
+  },
+];
+
+const monthColumn = createDataTableColumnHelper<AdminWorkspaceBillingMonth>();
+
+const MONTH_COLUMNS = monthColumn.columns([
+  monthColumn.display({
+    id: USAGE_COLUMN.MONTH,
+    header: "Month",
+    cell: ({ row: { original: row } }) => formatMonth(row.month),
+  }),
+  monthColumn.display({
+    id: USAGE_COLUMN.USAGE,
+    header: "Usage",
+    meta: { kind: DATA_TABLE_COLUMN_KIND.NUMERIC },
+    cell: ({ row: { original: row } }) => formatUsd(row.usageUsd),
+  }),
+  monthColumn.display({
+    id: USAGE_COLUMN.INCLUDED,
+    header: "Included",
+    meta: { kind: DATA_TABLE_COLUMN_KIND.NUMERIC },
+    cell: ({ row: { original: row } }) => formatUsd(row.includedUsd),
+  }),
+  monthColumn.display({
+    id: USAGE_COLUMN.BILLABLE,
+    header: "Would bill",
+    meta: { kind: DATA_TABLE_COLUMN_KIND.NUMERIC },
+    cell: ({ row: { original: row } }) => formatUsd(row.billableUsd),
+  }),
+]);
+
+const usageMemberColumn = createDataTableColumnHelper<AdminBillingMemberUsage>();
+
+/** A usage row's member: their account, the usage that was no member's, or an account since deleted. */
+function UsageMemberCell({
+  row,
+  onOpenAccount,
+}: {
+  row: AdminBillingMemberUsage;
+  onOpenAccount: (id: string) => void;
+}): React.JSX.Element {
+  if (row.account !== null) return <AccountCell account={row.account} onOpen={onOpenAccount} />;
+
+  return <QuietWords>{row.userId === null ? "No member" : "Deleted account"}</QuietWords>;
+}
+
+function usageMemberColumns(
+  onOpenAccount: (id: string) => void,
+): DataTableColumns<AdminBillingMemberUsage> {
+  return usageMemberColumn.columns([
+    usageMemberColumn.display({
+      id: USAGE_COLUMN.MEMBER,
+      header: "Member",
+      cell: ({ row: { original: row } }) => (
+        <UsageMemberCell row={row} onOpenAccount={onOpenAccount} />
+      ),
+    }),
+    usageMemberColumn.display({
+      id: USAGE_COLUMN.USAGE,
+      header: "Usage",
+      meta: { kind: DATA_TABLE_COLUMN_KIND.NUMERIC },
+      cell: ({ row: { original: row } }) => formatUsd(row.usageUsd),
+    }),
+  ]);
+}
 
 const memberColumn = createDataTableColumnHelper<AdminWorkspaceMember>();
 
@@ -196,6 +298,7 @@ function WorkspaceSections({
   onOpenAccount: (id: string) => void;
 }): React.JSX.Element {
   const memberTableColumns = useMemo(() => memberColumns(onOpenAccount), [onOpenAccount]);
+  const usageMemberTableColumns = useMemo(() => usageMemberColumns(onOpenAccount), [onOpenAccount]);
 
   return (
     <>
@@ -219,6 +322,47 @@ function WorkspaceSections({
             empty="No members"
             minWidth={DATA_TABLE_MIN_WIDTH.MEDIUM}
             onRowPress={(member) => onOpenAccount(member.account.id)}
+          />
+        )}
+      </AdminSection>
+      <AdminSection title="Sandbox usage">
+        <StatCards layout={STAT_LAYOUT.PAIRS} stats={USAGE_STATS} data={detail} />
+        {detail === undefined ? (
+          <DataTableSkeleton
+            label={USAGE_MONTHS_LABEL}
+            columns={MONTH_COLUMNS}
+            rows={USAGE_SKELETON_ROWS}
+            minWidth={DATA_TABLE_MIN_WIDTH.NARROW}
+          />
+        ) : (
+          <DataTable
+            label={USAGE_MONTHS_LABEL}
+            columns={MONTH_COLUMNS}
+            rows={detail.billing.months}
+            getRowId={(row) => row.month}
+            empty="No sandbox usage recorded"
+            minWidth={DATA_TABLE_MIN_WIDTH.NARROW}
+          />
+        )}
+        {detail === undefined ? (
+          <DataTableSkeleton
+            label={USAGE_MEMBERS_LABEL}
+            columns={usageMemberTableColumns}
+            rows={USAGE_SKELETON_ROWS}
+            minWidth={DATA_TABLE_MIN_WIDTH.NARROW}
+            cells={{ [USAGE_COLUMN.MEMBER]: <AccountCellSkeleton /> }}
+          />
+        ) : (
+          <DataTable
+            label={USAGE_MEMBERS_LABEL}
+            columns={usageMemberTableColumns}
+            rows={detail.billing.members}
+            getRowId={(row) => row.userId ?? ""}
+            empty="No sandbox usage this month"
+            minWidth={DATA_TABLE_MIN_WIDTH.NARROW}
+            onRowPress={(row) => {
+              if (row.account !== null) onOpenAccount(row.account.id);
+            }}
           />
         )}
       </AdminSection>

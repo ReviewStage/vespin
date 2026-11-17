@@ -49,3 +49,21 @@ export type SandboxSessionFigures = typeof SandboxSessionFiguresSchema.Type;
 export const UsageFiguresSchema = SandboxSessionFiguresSchema;
 
 export type UsageFigures = typeof UsageFiguresSchema.Type;
+
+/**
+ * The usage each workspace is given free each UTC calendar month, in
+ * micro-dollars: $10 (Charles, Nov 15, 2026). The one statement of it, which
+ * the admin Billing screen, the start gate, and the workspace's Billing page
+ * all read, so no copy can drift.
+ */
+export const INCLUDED_USAGE_MICRO_USD = 10_000_000;
+
+/** What a month's usage would be billed: whatever passes the included allowance, never below zero. */
+export function billableMicroUsd(usageMicroUsd: number): number {
+  return Math.max(0, usageMicroUsd - INCLUDED_USAGE_MICRO_USD);
+}
+
+/** Whether a month's usage is still under the included allowance, which a workspace with no billing set up needs to start a cloud agent. */
+export function withinIncludedUsage(usageMicroUsd: number): boolean {
+  return usageMicroUsd < INCLUDED_USAGE_MICRO_USD;
+}

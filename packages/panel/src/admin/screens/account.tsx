@@ -55,6 +55,7 @@ import {
 } from "../chrome/page-header.js";
 import { PageSkeleton } from "../chrome/page-skeleton.js";
 import { ADMIN_TAB, accountReadQuery } from "../routing.js";
+import { AccountSandboxUsageSection } from "./account-sandbox-usage.js";
 import { AccountSupportSections } from "./account-support.js";
 
 const ACCOUNT_ERROR = readFailedWords("this account");
@@ -439,6 +440,8 @@ function AccountSections({
         windowDays={detail?.windowDays ?? windowDays}
         onOpenWorkspace={onOpenWorkspace}
       />
+
+      <AccountSandboxUsageSection usage={detail?.sandboxUsage} onOpenWorkspace={onOpenWorkspace} />
 
       {/* Note that the hosted tier stands last, under everything the account
       does today, because only dictation still writes its rows. */}

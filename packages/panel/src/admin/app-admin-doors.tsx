@@ -65,6 +65,7 @@ const APP_ADMIN_READS: AdminReads = {
   catalog: () => readThroughHost("catalog", {}),
   metrics: (query) => readThroughHost("metrics", query),
   cost: (query) => readThroughHost("cost", query),
+  billing: (query) => readThroughHost("billing", query),
   reliability: (query) => readThroughHost("reliability", query),
   users: (query) => readThroughHost("users", query),
   user: (query) => readThroughHost("user", query),

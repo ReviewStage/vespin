@@ -18,6 +18,7 @@ import { ADMINS_HIDDEN } from "./prefs.js";
 import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "./routing.js";
 import { AccountScreen } from "./screens/account.js";
 import { AgentsScreen } from "./screens/agents.js";
+import { BillingScreen } from "./screens/billing.js";
 import { CostScreen } from "./screens/cost.js";
 import { DashboardScreen } from "./screens/dashboard.js";
 import { DayScreen } from "./screens/day.js";
@@ -113,6 +114,8 @@ function AdminViews({ view, onOpen }: AdminPlaceProps): React.JSX.Element {
           onOpenAccount={openAccount}
         />
       );
+    case ADMIN_TAB.BILLING:
+      return <BillingScreen {...shared} onOpenWorkspace={openWorkspace} />;
     case ADMIN_TAB.RELIABILITY:
       return (
         <ReliabilityScreen
