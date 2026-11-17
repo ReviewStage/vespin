@@ -384,11 +384,12 @@ const sessionListed = (status: string) =>
   });
 
 it.effect(
-  "a get-or-create that makes a stopped sandbox again on its own drive hands the ended sessions of the one it deletes on",
+  "a get-or-create that makes a stopped sandbox again on its own drive hands the ended sessions of the one it deletes on, read again where the first read saw one still stopping",
   () =>
     Effect.gen(function* () {
       const handed: string[] = [];
       let deleted = false;
+      let reads = 0;
 
       const api = yield* apiOver((url, init) => {
         const at = new URL(url);
@@ -396,7 +397,12 @@ it.effect(
         if (onDrive(at))
           return Response.json(driveAnswered({ id: "drv_own", name: `${NAME}-drive` }));
 
-        if (onSessions(at)) return sessionListed("stopped");
+        // The read beside the lookup still sees the session stopping, and the read after sees it stopped.
+        if (onSessions(at)) {
+          reads += 1;
+
+          return sessionListed(reads === 1 ? "stopping" : "stopped");
+        }
 
         if (init.method === "DELETE") {
           deleted = true;

@@ -369,18 +369,22 @@ function settleSwipes(
 
 /**
  * How a section leads its choice in Move to section's menu, as the panel's
- * menu leads each with its icon: its glyph, or its emoji set before its
- * name, since a menu item's image takes a symbol alone.
+ * menu leads each with its icon: its glyph, or its emoji in the glyph's
+ * place, so every section's name starts at one edge.
  */
 function sectionChoiceLead(
   title: string,
   icon: TaskSectionIcon | undefined,
-): { readonly label: string; readonly symbol?: Glyph | undefined } {
+): {
+  readonly label: string;
+  readonly symbol?: Glyph | undefined;
+  readonly emoji?: string | undefined;
+} {
   const emoji = sectionEmoji(icon);
 
   return emoji === undefined
     ? { label: title, symbol: sectionGlyph(icon) }
-    : { label: `${emoji} ${title}` };
+    : { label: title, emoji };
 }
 
 /**

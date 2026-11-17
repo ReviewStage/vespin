@@ -35,6 +35,8 @@
     "./task-code-worker": "./src/task-code-worker.js",
     "./follow-stream": "./src/follow-stream.js",
     "./local-database": "./src/local-database.js",
+    "./local-queues": "./src/local-queues.js",
+    "./local-rows": "./src/local-rows.js",
     "./task-list-following": "./src/task-list-following.js",
     "./xchacha-cipher": "./src/xchacha-cipher.js"
   },

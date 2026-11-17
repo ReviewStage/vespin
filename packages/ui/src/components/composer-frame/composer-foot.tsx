@@ -11,6 +11,7 @@ import {
   IconButton,
   SUBMIT_STATE,
 } from "../button/button.js";
+import { TalkButton } from "../call/call-controls.js";
 import { ErrorLine } from "../error-line/error-line.js";
 import { ErrorState, type ErrorStateRemedy } from "../error-state/error-state.js";
 import { HoldPress } from "../hold-press/hold-press.js";
@@ -52,7 +53,10 @@ import { Tooltip } from "../tooltip/hint.js";
  * keyboard. Where the owner hands a `stop`, as an agent's box
  * does while a turn runs and the box holds nothing, Stop stands in the
  * send's place, the same round button wearing Stop's glyph, busy while the
- * stop it asked for is out.
+ * stop it asked for is out. Where the owner hands `talk`, as an agent's box
+ * does, the send's place holds Talk while the box holds nothing to send and
+ * no Stop stands, as ChatGPT's composer offers voice: the first word or file
+ * turns it into Send, so one round button stands where two would.
  *
  * Under the bar stands at most one note, the box's one line for what went
  * wrong or what it did to the words: why a post did not go, with Retry
@@ -127,6 +131,13 @@ export type ComposerStop = {
   label: string;
   onStop: () => void;
 } & BusyProps;
+
+/** Talk in the send's place while the box holds nothing to send: whether an OpenAI API key is missing, which it says, whether it takes no press at all, and its press. */
+export type ComposerTalk = {
+  readonly keyMissing?: boolean | undefined;
+  readonly disabled?: boolean | undefined;
+  readonly onPress: () => void;
+};
 
 /** The one line under the bar: what it says, and Retry where trying again can mend it. */
 export interface ComposerNote {
@@ -313,10 +324,37 @@ export function ComposerFootNote({ note }: { note: ComposerNote }): React.JSX.El
   );
 }
 
-/** A message box's foot: a bar of `tools`, the counter, `actions` and the send or `stop`, or `strip` in the bar's place, and `note` under it. */
+/**
+ * What stands in the send's place: Stop while it is handed, then Talk while
+ * the box holds nothing to send and no send of its is out, and else Send.
+ */
+function SendPlace({
+  send,
+  stop,
+  talk,
+  refusalId,
+}: {
+  send: ComposerSend;
+  stop: ComposerStop | undefined;
+  talk: ComposerTalk | undefined;
+  refusalId: string;
+}): React.JSX.Element {
+  if (stop !== undefined) return <StopButton stop={stop} />;
+
+  if (talk !== undefined && send.empty && send.busy !== true) {
+    return (
+      <TalkButton keyMissing={talk.keyMissing} disabled={talk.disabled} onPress={talk.onPress} />
+    );
+  }
+
+  return <SendButton send={send} refusalId={refusalId} />;
+}
+
+/** A message box's foot: a bar of `tools`, the counter, `actions` and the send, `stop`, or `talk`, or `strip` in the bar's place, and `note` under it. */
 export function ComposerFoot({
   send,
   stop,
+  talk,
   tools,
   actions,
   counter,
@@ -326,6 +364,8 @@ export function ComposerFoot({
   send: ComposerSend;
   /** Stop, which stands in the send's place while it is handed. */
   stop?: ComposerStop | undefined;
+  /** Talk, which stands in the send's place while the box holds nothing to send and no Stop is handed. */
+  talk?: ComposerTalk | undefined;
   /** The presses at the bar's start: attach, mention, skill. */
   tools?: ReactNode;
   /** The owner's own presses at the bar's end, before the send: the microphone, a model. */
@@ -350,11 +390,7 @@ export function ComposerFoot({
                 <LengthCounter length={counter.length} limit={counter.limit} />
               )}
               {actions}
-              {stop === undefined ? (
-                <SendButton send={send} refusalId={refusalId} />
-              ) : (
-                <StopButton stop={stop} />
-              )}
+              <SendPlace send={send} stop={stop} talk={talk} refusalId={refusalId} />
             </FootEnd>
           </>
         ) : (

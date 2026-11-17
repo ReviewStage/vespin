@@ -8,7 +8,8 @@
  * encryption of its own, as Linear's local copy carries none: the
  * device's disk encryption covers it.
  *
- * The tables are the sync engine's replica (`row`, `held`, `cursor`), its
+ * The tables are the sync engine's replica (`row`, `held`, `cursor`, as
+ * `local-rows.ts` writes them), its
  * waiting writes (`outbox`), the agent messages the service refused
  * (`refused`), and `meta`, which holds one hash over every kept row shape.
  * A build whose hash differs clears the replica, which the service redraws
@@ -64,14 +65,16 @@ CREATE TABLE IF NOT EXISTS row (
 CREATE TABLE IF NOT EXISTS held (
   read TEXT NOT NULL,
   workspace TEXT NOT NULL,
+  kind TEXT NOT NULL,
   key TEXT NOT NULL,
+  position INTEGER NOT NULL,
   PRIMARY KEY (read, workspace, key)
 ) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS held_row ON held (kind, key);
 CREATE TABLE IF NOT EXISTS cursor (
   read TEXT NOT NULL,
   workspace TEXT NOT NULL,
   cursor TEXT,
-  fields TEXT NOT NULL,
   PRIMARY KEY (read, workspace)
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS outbox (

@@ -446,6 +446,45 @@ test("a draft asks nothing of the service, one per plan, until its first message
   assert.equal(tab.control().draft?.id, other, "another plan's draft stands");
 });
 
+test("Talk on a draft starts its agent blank under a key of its own on its chips, opening its tab and calling the agent it started, and calls nothing where it was refused", async () => {
+  const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [] });
+  tab.answer(
+    ACT_KIND.AGENTS_START,
+    { failure: AGENT_CALL_FAILURE.UNANSWERED },
+    { agent: { ...STARTED, brief: AGENT_BRIEF.BLANK } },
+  );
+  await tab.mount();
+
+  let draft = "";
+  act(() => {
+    draft = tab.control().onNewDraft();
+  });
+  const choice = { model: "openai/gpt-6.1-sol", effort: "xhigh" };
+  const disabledServers = [INTEGRATION_PROVIDER.LINEAR];
+  const called: unknown[] = [];
+
+  const talk = () =>
+    act(async () => {
+      await tab
+        .control()
+        .startBlank(draft, choice, disabledServers, undefined, undefined, (into) =>
+          called.push(into),
+        );
+    });
+
+  await talk();
+  assert.deepEqual(called, [undefined], "a refused start calls nothing");
+  assert.equal(tab.control().draft?.id, draft, "and keeps the draft");
+
+  await talk();
+  const { idempotencyKey, ...blank } = startPayloads(tab.asked).at(-1) ?? {};
+  assert.deepEqual(blank, { taskId: TASK, blank: true, disabledServers, ...choice });
+  assert.notEqual(idempotencyKey, draft, "the draft's key stays its words'");
+  assert.deepEqual(tab.started, [AGENT]);
+  assert.deepEqual(called, [undefined, { agentId: AGENT, taskId: TASK }]);
+  assert.equal(tab.control().draft, undefined, "the started draft is let go");
+});
+
 test("a plan's Start stands its agent's tab at once under the press's key, which gives way to the agent the list carries once made, or to nothing where it was refused", async () => {
   const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [] });
   let land: (answer: WireBoundaryInput) => void = () => undefined;

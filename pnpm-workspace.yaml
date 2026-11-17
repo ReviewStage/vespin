@@ -69,6 +69,10 @@ catalogs:
   mobile:
     react: 19.3.0
     "@types/react": 19.3.0
+    # The iPhone's SQLite, which the account's local database opens on
+    # (`apps/mobile/src/host/expo-sqlite-driver.ts`), at the patch line Expo
+    # SDK 58 pins (`expo/bundledNativeModules.json`).
+    expo-sqlite: 58.0.17
 
 # Every dependency here builds nothing this repository needs: esbuild runs from
 # its platform package, @sentry/cli is only reached with an auth token no check

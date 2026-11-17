@@ -42,9 +42,13 @@ function keepPlace(dataUrl: string, place: Place): void {
   if (places.size > PLACES_KEPT && oldest !== undefined) places.delete(oldest);
 }
 
-/** Moves `shown` to where `place` left it, or to its start where that is its end or past it, at the speed it was left at. */
-function goTo(shown: HTMLMediaElement, place: Place): void {
+/** Plays `shown` at the speed `place` was left at. */
+function speedTo(shown: HTMLMediaElement, place: Place): void {
   if (shown.playbackRate !== place.speed) setSpeed(shown, place.speed);
+}
+
+/** Moves `shown` to where `place` left it, or to its start where that is its end or past it. */
+function seekTo(shown: HTMLMediaElement, place: Place): void {
   shown.currentTime = place.at < shown.duration ? place.at : 0;
 }
 
@@ -56,7 +60,7 @@ export interface MediaPlace {
   readonly keepSpeed: (shown: HTMLMediaElement) => void;
   /** On metadata and a length read: once the length is known, goes to where the medium was left, or its start. */
   readonly resume: (shown: HTMLMediaElement) => void;
-  /** On play: goes on from where another player left the same medium since this one last moved it. */
+  /** On play: goes on at the speed the medium was last set to, from where another player left it since this one last moved it. */
   readonly rejoin: (shown: HTMLMediaElement) => void;
   /** On a new address: the medium it held is let go, its successor's place taken up afresh. */
   readonly forget: () => void;
@@ -90,12 +94,23 @@ export function useMediaPlace(dataUrl: string): MediaPlace {
     resume: (shown) => {
       if (keeps.current !== undefined || !Number.isFinite(shown.duration)) return;
       keeps.current = dataUrl;
-      goTo(shown, places.get(dataUrl) ?? { at: 0, by: self, speed: shown.playbackRate });
+      const left = places.get(dataUrl);
+
+      if (left === undefined) {
+        shown.currentTime = 0;
+      } else {
+        speedTo(shown, left);
+        seekTo(shown, left);
+      }
     },
     rejoin: (shown) => {
       const left = keeps.current === undefined ? undefined : places.get(keeps.current);
 
-      if (left !== undefined && left.by !== self) goTo(shown, left);
+      if (left === undefined) return;
+      // Note that the speed is taken up whoever set it, because a change of speed alone leaves the time's owner standing.
+      speedTo(shown, left);
+
+      if (left.by !== self) seekTo(shown, left);
     },
     forget: () => {
       keeps.current = undefined;
