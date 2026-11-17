@@ -41,7 +41,7 @@ import {
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
-import { Stack, useFocusEffect, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import {
   type Dispatch,
   type ReactNode,
@@ -57,7 +57,7 @@ import { useMemberPictures } from "../member-pictures.js";
 import { lowerKeyboard } from "../native-interactions-module.js";
 import { useHandColumns } from "../place-columns.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
-import { useRefilledSearchField } from "../search-field.js";
+import { SEARCH_FOCUS_PARAM, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
@@ -403,11 +403,12 @@ function SearchStackFound({
 /**
  * Search under the Stack's bar, as ⌘K finds things for a phone: the system's
  * field in the Stack's bar over what it finds, or what it finds before
- * anything is typed, and that nothing matches where nothing does. The field
- * is focused each time the tab opens on nothing typed, as the system's
- * Search tab does, so a query is typed at once; one left typed stands with
- * its results instead. The keyboard's Search key lowers the keyboard, as
- * Mail's does, so the results stand whole under the field.
+ * anything is typed, and that nothing matches where nothing does. The
+ * system focuses the field as the tab is tapped (`role="search"`), so a query
+ * is typed at once; where code opens Search instead, such as ⌘F, which the
+ * system never activates for, it asks for the focus by a param, taken once.
+ * The keyboard's Search key lowers the keyboard, as Mail's does, so the
+ * results stand whole under the field.
  */
 function SearchStackScreen(words: SearchWords) {
   const { query, setQuery, scope } = words;
@@ -416,16 +417,19 @@ function SearchStackScreen(words: SearchWords) {
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
   const regular = useWindowSizeClass() !== WINDOW_SIZE_CLASS.COMPACT;
-  // Note that what is typed is read through a ref the commit writes, so the focus effect runs only as the tab opens, never on a key or on Cancel clearing the field.
-  const typed = useRef(query);
+  const router = useRouter();
+
+  // Note that the field is focused here only where code opened Search, since the system focuses it as the tab is tapped.
+  const { [SEARCH_FOCUS_PARAM]: focusAsked } = useLocalSearchParams<{
+    [SEARCH_FOCUS_PARAM]?: string;
+  }>();
+
   useEffect(() => {
-    typed.current = query;
-  }, [query]);
-  useFocusEffect(
-    useCallback(() => {
-      if (typed.current === "") field.current?.focus();
-    }, []),
-  );
+    if (focusAsked === undefined) return;
+
+    field.current?.focus();
+    router.setParams({ [SEARCH_FOCUS_PARAM]: undefined });
+  }, [focusAsked, field, router]);
 
   return (
     <>

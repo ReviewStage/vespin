@@ -4,12 +4,18 @@ import {
   type OnboardingSurvey,
   onboardingSurveyFrom,
   onboardingSurveyStored,
-  SURVEY_INTENT_LABEL,
+  SURVEY_OPTIONS,
   SURVEY_OTHER,
   SURVEY_OTHER_MAX_CHARS,
   SURVEY_QUESTION,
-  SURVEY_REFERRAL_LABEL,
-  SURVEY_ROLE_LABEL,
+  type SurveyDraft,
+  type SurveyIntent,
+  type SurveyReferral,
+  type SurveyRole,
+  sameSurveyAnswers,
+  surveyDraftAnswered,
+  surveyInOfferedOrder,
+  surveyKept,
 } from "@repo/settings";
 import {
   CHOICE_LOOK,
@@ -42,27 +48,10 @@ import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
  * either way.
  */
 
-/* Each question's answers, as the account keeps them. */
-type Referral = NonNullable<OnboardingSurvey["referral"]>[number];
-
-type Role = NonNullable<OnboardingSurvey["role"]>[number];
-
-type Intent = NonNullable<OnboardingSurvey["intent"]>[number];
-
-/** A question's options, in the order its words are declared. */
-function optionsOf<Value extends string>(
-  labels: Readonly<Record<Value, string>>,
-): readonly ChoiceOption<Value>[] {
-  // SAFETY: the keys are exactly the answers the words are declared for.
-  return (Object.keys(labels) as Value[]).map((value) => ({ value, label: labels[value] }));
-}
-
-const REFERRALS = optionsOf<Referral>(SURVEY_REFERRAL_LABEL);
-const ROLES = optionsOf<Role>(SURVEY_ROLE_LABEL);
-const INTENTS = optionsOf<Intent>(SURVEY_INTENT_LABEL);
-
-/** The answers as setup holds them before they are kept, where a question whose picks were all taken back holds none. */
-type SurveyDraft = { readonly [Key in keyof OnboardingSurvey]?: OnboardingSurvey[Key] | undefined };
+/** Each question's options, as `@repo/ui`'s choices. */
+const REFERRALS: readonly ChoiceOption<SurveyReferral>[] = SURVEY_OPTIONS.REFERRAL;
+const ROLES: readonly ChoiceOption<SurveyRole>[] = SURVEY_OPTIONS.ROLE;
+const INTENTS: readonly ChoiceOption<SurveyIntent>[] = SURVEY_OPTIONS.INTENT;
 
 /** The survey as setup holds it across its steps. */
 export interface Survey {
@@ -72,45 +61,6 @@ export interface Survey {
   readonly answer: (change: SurveyDraft) => void;
   /** Keeps the answers on the account, none among them where every pick was taken back, unless they stand there already. */
   readonly keep: () => void;
-}
-
-/** A question's answers as picked, in the order the survey offers them, so the same picks made in another order are kept alike; none where every pick was taken back. */
-function inOfferedOrder<Value extends string>(
-  options: readonly ChoiceOption<Value>[],
-  picked: readonly Value[],
-): readonly [Value, ...Value[]] | undefined {
-  const [first, ...rest] = options.flatMap((option) =>
-    picked.includes(option.value) ? [option.value] : [],
-  );
-
-  return first === undefined ? undefined : [first, ...rest];
-}
-
-/** The answers as they are kept: words only beside an Other picked, trimmed, and none where none were written. */
-function kept(answers: SurveyDraft): OnboardingSurvey {
-  const words = (picked: readonly string[] | undefined, other: string | undefined) => {
-    const trimmed = other?.trim();
-
-    return picked?.includes(SURVEY_OTHER) === true && trimmed ? trimmed : undefined;
-  };
-
-  const referralOther = words(answers.referral, answers.referralOther);
-  const roleOther = words(answers.role, answers.roleOther);
-  const intentOther = words(answers.intent, answers.intentOther);
-
-  return {
-    ...(answers.referral === undefined ? undefined : { referral: answers.referral }),
-    ...(referralOther === undefined ? undefined : { referralOther }),
-    ...(answers.role === undefined ? undefined : { role: answers.role }),
-    ...(roleOther === undefined ? undefined : { roleOther }),
-    ...(answers.intent === undefined ? undefined : { intent: answers.intent }),
-    ...(intentOther === undefined ? undefined : { intentOther }),
-  };
-}
-
-/** Whether two sets of answers answer every question alike, in the same words. */
-function sameAnswers(one: OnboardingSurvey | undefined, other: OnboardingSurvey): boolean {
-  return one !== undefined && onboardingSurveyStored(one) === onboardingSurveyStored(other);
 }
 
 /** One question: its words over its pills to pick any that apply from, and a line for the person's own words under Other once picked. */
@@ -173,15 +123,14 @@ export function useSurvey(): Survey {
   // Note that the account's answers stand until a pick here, so setup on another machine opens on them.
   const answers = draft ?? stored ?? {};
 
-  const answered =
-    answers.referral !== undefined || answers.role !== undefined || answers.intent !== undefined;
+  const answered = surveyDraftAnswered(answers);
 
   // Note that answers all taken back are kept too, as none, so the account's earlier answers do not come back; a survey never answered keeps nothing.
   const keep = () => {
     if (!answered && (saving.current ?? stored) === undefined) return;
-    const keeping = kept(answers);
+    const keeping = surveyKept(answers);
 
-    if (sameAnswers(saving.current ?? stored, keeping)) return;
+    if (sameSurveyAnswers(saving.current ?? stored, keeping)) return;
     saving.current = keeping;
     updateSetting(
       {
@@ -216,7 +165,7 @@ export function SurveyQuestions({ survey }: { survey: Survey }): React.JSX.Eleme
         options={REFERRALS}
         value={answers.referral ?? []}
         other={answers.referralOther}
-        onPick={(picked) => answer({ referral: inOfferedOrder(REFERRALS, picked) })}
+        onPick={(picked) => answer({ referral: surveyInOfferedOrder(REFERRALS, picked) })}
         onOther={(referralOther) => answer({ referralOther })}
       />
       <Question
@@ -224,7 +173,7 @@ export function SurveyQuestions({ survey }: { survey: Survey }): React.JSX.Eleme
         options={ROLES}
         value={answers.role ?? []}
         other={answers.roleOther}
-        onPick={(picked) => answer({ role: inOfferedOrder(ROLES, picked) })}
+        onPick={(picked) => answer({ role: surveyInOfferedOrder(ROLES, picked) })}
         onOther={(roleOther) => answer({ roleOther })}
       />
       <Question
@@ -232,7 +181,7 @@ export function SurveyQuestions({ survey }: { survey: Survey }): React.JSX.Eleme
         options={INTENTS}
         value={answers.intent ?? []}
         other={answers.intentOther}
-        onPick={(picked) => answer({ intent: inOfferedOrder(INTENTS, picked) })}
+        onPick={(picked) => answer({ intent: surveyInOfferedOrder(INTENTS, picked) })}
         onOther={(intentOther) => answer({ intentOther })}
       />
     </Stack>

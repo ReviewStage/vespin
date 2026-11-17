@@ -5,11 +5,13 @@
  * (`../schemas/usage-charge.ts`); one already recorded is left as it stood,
  * so a source read again over the same items records nothing new. A month is
  * the UTC calendar month, from its first instant to the next month's, and a
- * charge falls in the month its usage happened in. Every read names its
- * workspace, so none answers another workspace's charges.
+ * charge falls in the month its usage happened in. Every month read names
+ * its workspace, so none answers another workspace's charges; the charges
+ * not yet sent on to be invoiced are read across workspaces, by the one job
+ * that sends them, and stamped as sent once they are.
  */
 
-import { and, eq, gte, lt, sql, sum } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, lt, min, sql, sum } from "drizzle-orm";
 import { Array as Arr, Effect, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
@@ -67,6 +69,84 @@ const insertCharges = SqlSchema.findAll({
         // An item already charged stands as it was first charged.
         .onConflictDoNothing({ target: [usageChargeTable.kind, usageChargeTable.sourceId] })
         .returning({ id: usageChargeTable.id }),
+    ),
+});
+
+const UnsentRequestSchema = Schema.Struct({
+  since: Schema.Date,
+  after: Schema.NullOr(Schema.String),
+  limit: Schema.Int,
+});
+
+const UnsentSchema = Schema.Struct({
+  id: Schema.String,
+  organizationId: Schema.String,
+  kind: usageKindSchema,
+  amountMicroUsd: Schema.Int,
+  occurredAt: Schema.Date,
+});
+
+/** A charge not yet sent on to be invoiced: its row's id, whose it is, what kind, what it cost, and when it happened. */
+export type UnsentUsageCharge = typeof UnsentSchema.Type;
+
+const findUnsent = SqlSchema.findAll({
+  Request: UnsentRequestSchema,
+  Result: UnsentSchema,
+  execute: ({ since, after, limit }) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: usageChargeTable.id,
+          organizationId: usageChargeTable.organizationId,
+          kind: usageChargeTable.kind,
+          amountMicroUsd: usageChargeTable.amountMicroUsd,
+          occurredAt: usageChargeTable.occurredAt,
+        })
+        .from(usageChargeTable)
+        .where(
+          and(
+            isNull(usageChargeTable.sentAt),
+            gte(usageChargeTable.occurredAt, since),
+            after === null ? undefined : gt(usageChargeTable.id, after),
+          ),
+        )
+        .orderBy(asc(usageChargeTable.id))
+        .limit(limit),
+    ),
+});
+
+const findEarliestUnsent = SqlSchema.findAll({
+  Request: Schema.Struct({ organizationIds: Schema.Array(Schema.String), since: Schema.Date }),
+  Result: Schema.Struct({ organizationId: Schema.String, occurredAt: Schema.Date }),
+  execute: ({ organizationIds, since }) =>
+    Database.use((db) =>
+      db
+        .select({
+          organizationId: usageChargeTable.organizationId,
+          occurredAt: sql<Date>`${min(usageChargeTable.occurredAt)}`.mapWith(
+            usageChargeTable.occurredAt,
+          ),
+        })
+        .from(usageChargeTable)
+        .where(
+          and(
+            inArray(usageChargeTable.organizationId, [...organizationIds]),
+            isNull(usageChargeTable.sentAt),
+            gte(usageChargeTable.occurredAt, since),
+          ),
+        )
+        .groupBy(usageChargeTable.organizationId),
+    ),
+});
+
+const stampSent = SqlSchema.void({
+  Request: Schema.Struct({ ids: Schema.Array(Schema.String), sentAt: Schema.Date }),
+  execute: ({ ids, sentAt }) =>
+    Database.use((db) =>
+      db
+        .update(usageChargeTable)
+        .set({ sentAt })
+        .where(and(inArray(usageChargeTable.id, [...ids]), isNull(usageChargeTable.sentAt))),
     ),
 });
 
@@ -139,4 +219,35 @@ export function workspaceMonthMemberTotals(
   instant: Date,
 ): AgentStoreEffect<readonly UsageMemberTotal[]> {
   return findMemberTotals({ organizationId, ...utcMonthOf(instant) });
+}
+
+/**
+ * Up to `limit` charges not yet sent on, whose usage happened at or after
+ * `since`, in the order of their ids and past the id `after` where one is
+ * named, so a caller pages through them however many it leaves unsent.
+ */
+export function unsentUsageCharges(page: {
+  readonly since: Date;
+  readonly after: string | null;
+  readonly limit: number;
+}): AgentStoreEffect<readonly UnsentUsageCharge[]> {
+  return findUnsent(page);
+}
+
+/** When each of the workspaces' earliest charge not yet sent on happened, at or after `since`; a workspace with none is left out. */
+export function earliestUnsentUsage(
+  organizationIds: readonly string[],
+  since: Date,
+): AgentStoreEffect<ReadonlyMap<string, Date>> {
+  if (organizationIds.length === 0) return Effect.succeed(new Map());
+
+  return Effect.map(
+    findEarliestUnsent({ organizationIds, since }),
+    (rows) => new Map(rows.map((row) => [row.organizationId, row.occurredAt])),
+  );
+}
+
+/** Stamps the charges as sent on at the instant; one already stamped keeps its first stamp. */
+export function markUsageChargesSent(ids: readonly string[], sentAt: Date): AgentStoreEffect<void> {
+  return ids.length === 0 ? Effect.void : stampSent({ ids, sentAt });
 }

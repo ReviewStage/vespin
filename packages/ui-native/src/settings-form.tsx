@@ -42,7 +42,6 @@ import {
   scrollContentBackground,
   scrollDismissesKeyboard,
   tint,
-  useScrollGeometryChange,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
@@ -235,7 +234,6 @@ function PressedRow({
  * half-height sheet's own glass.
  */
 export function SettingsForm({
-  onContentHeight,
   clear = false,
   spacing = FORM_SPACING.REGULAR,
   children,
@@ -244,22 +242,13 @@ export function SettingsForm({
   readonly clear?: boolean | undefined;
   /** How far apart its sections stand; a short sheet's stand close, so its first section doesn't sit under an empty band. */
   readonly spacing?: FormSpacing;
-  /** Told the height its rows stand in, as they lay out, for a popover that fits it; none where the form fills its place. */
-  readonly onContentHeight?: ((height: number) => void) | undefined;
   readonly children: ReactNode;
 }) {
   const colors = useColors();
 
-  const measured = useScrollGeometryChange(
-    onContentHeight === undefined
-      ? undefined
-      : (geometry) => onContentHeight(geometry.contentHeight),
-  );
-
   return (
     <Form
       modifiers={[
-        ...(measured === null ? [] : [measured]),
         ...(spacing === FORM_SPACING.COMPACT ? [listSectionSpacing("compact")] : []),
         scrollContentBackground("hidden"),
         scrollDismissesKeyboard("immediately"),
@@ -668,7 +657,9 @@ export type PickOption = {
 
 type PickRowsProps = {
   readonly options: readonly PickOption[];
-  readonly picked: string | undefined;
+  /** The one option picked, or, for a choice that takes any that apply, each one picked. */
+  readonly picked: string | readonly string[] | undefined;
+  /** Called with the option pressed; a choice that takes several hands its holder the press, which adds or takes back the pick. */
   readonly onPick: (id: string) => void;
 };
 
@@ -702,10 +693,13 @@ export function PickedCheck() {
  * the form's tint, which stands in the ink, and neither a tint on the picker
  * nor one on a group around it reached the check. VoiceOver hears each row
  * as a button by its words, the picked one selected, under the section's
- * title.
+ * title. Handed several picks, such as setup's survey questions, which take
+ * any answers that apply, it checks each, as Settings checks a list's
+ * several choices.
  */
 export function PickRows({ options, picked, onPick }: PickRowsProps) {
   const colors = useColors();
+  const pickedIds: readonly (string | undefined)[] = [picked].flat();
 
   // Note that the rows stand in a fragment, each its own row of the form, because a group around them made one element of them all, which neither VoiceOver nor a flow could pick from.
   return (
@@ -717,7 +711,7 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
           modifiers={[
             accessibilityLabel(option.label),
             ...(option.hint === undefined ? [] : [accessibilityValue(option.hint)]),
-            ...(option.id === picked ? [accessibilityAddTraits(["isSelected"])] : []),
+            ...(pickedIds.includes(option.id) ? [accessibilityAddTraits(["isSelected"])] : []),
             listRowBackground(colors.RAISED),
           ]}
         >
@@ -736,7 +730,7 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
               )}
             </VStack>
             <Spacer />
-            {option.id === picked ? <PickedCheck /> : null}
+            {pickedIds.includes(option.id) ? <PickedCheck /> : null}
           </HStack>
         </SwiftUIButton>
       ))}

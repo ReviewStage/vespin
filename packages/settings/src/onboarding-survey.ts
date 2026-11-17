@@ -190,3 +190,80 @@ export function onboardingSurveyHasAnswer(survey: OnboardingSurvey): boolean {
 export function onboardingSurveyStored(survey: OnboardingSurvey): string {
   return encodeSurvey(survey);
 }
+
+/* ----- Answering the survey ----- */
+
+/** One answer a question offers, with its words. */
+export interface SurveyOption<Value extends string> {
+  readonly value: Value;
+  readonly label: string;
+}
+
+/** A question's options, in the order its words are declared. */
+function optionsOf<Value extends string>(
+  labels: Readonly<Record<Value, string>>,
+): readonly SurveyOption<Value>[] {
+  // SAFETY: the keys are exactly the answers the words are declared for.
+  return (Object.keys(labels) as Value[]).map((value) => ({ value, label: labels[value] }));
+}
+
+/** Each question's options, in the order every client offers them. */
+export const SURVEY_OPTIONS = {
+  REFERRAL: optionsOf<SurveyReferral>(SURVEY_REFERRAL_LABEL),
+  ROLE: optionsOf<SurveyRole>(SURVEY_ROLE_LABEL),
+  INTENT: optionsOf<SurveyIntent>(SURVEY_INTENT_LABEL),
+} as const;
+
+/** The answers as setup holds them before they are kept, where a question whose picks were all taken back holds none. */
+export type SurveyDraft = {
+  readonly [Key in keyof OnboardingSurvey]?: OnboardingSurvey[Key] | undefined;
+};
+
+/** A question's answers as picked, in the order the survey offers them, so the same picks made in another order are kept alike; none where every pick was taken back. */
+export function surveyInOfferedOrder<Value extends string>(
+  options: readonly SurveyOption<Value>[],
+  picked: readonly Value[],
+): readonly [Value, ...Value[]] | undefined {
+  const [first, ...rest] = options.flatMap((option) =>
+    picked.includes(option.value) ? [option.value] : [],
+  );
+
+  return first === undefined ? undefined : [first, ...rest];
+}
+
+/** Whether any question of a draft is answered. */
+export function surveyDraftAnswered(answers: SurveyDraft): boolean {
+  return (
+    answers.referral !== undefined || answers.role !== undefined || answers.intent !== undefined
+  );
+}
+
+/** The answers as they are kept: words only beside an Other picked, trimmed, and none where none were written. */
+export function surveyKept(answers: SurveyDraft): OnboardingSurvey {
+  const words = (picked: readonly string[] | undefined, other: string | undefined) => {
+    const trimmed = other?.trim();
+
+    return picked?.includes(SURVEY_OTHER) === true && trimmed ? trimmed : undefined;
+  };
+
+  const referralOther = words(answers.referral, answers.referralOther);
+  const roleOther = words(answers.role, answers.roleOther);
+  const intentOther = words(answers.intent, answers.intentOther);
+
+  return {
+    ...(answers.referral === undefined ? undefined : { referral: answers.referral }),
+    ...(referralOther === undefined ? undefined : { referralOther }),
+    ...(answers.role === undefined ? undefined : { role: answers.role }),
+    ...(roleOther === undefined ? undefined : { roleOther }),
+    ...(answers.intent === undefined ? undefined : { intent: answers.intent }),
+    ...(intentOther === undefined ? undefined : { intentOther }),
+  };
+}
+
+/** Whether two sets of answers answer every question alike, in the same words. */
+export function sameSurveyAnswers(
+  one: OnboardingSurvey | undefined,
+  other: OnboardingSurvey,
+): boolean {
+  return one !== undefined && onboardingSurveyStored(one) === onboardingSurveyStored(other);
+}

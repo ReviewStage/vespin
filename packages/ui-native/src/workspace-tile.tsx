@@ -24,6 +24,8 @@ export type SwitcherWorkspace = {
   readonly photo?: string | undefined;
   /** Its owner's sign-in picture, which a personal workspace with no photo stands. */
   readonly picture?: string | undefined;
+  /** What it stands as in a system menu, its photo or its owner's picture as a file on this device; its letter in its hue while it has none. */
+  readonly menuPhoto?: string | undefined;
 };
 
 /** The picture a tile draws over its letter: the photo as held, else the owner's picture asked for at the tile's size; none while the letter stands alone. */

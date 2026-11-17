@@ -42,6 +42,7 @@ const testDevice: DeviceSeams = {
   fileSystem: NodeFileSystem.layer,
   createId: () => crypto.randomUUID(),
   openExternal: () => Promise.resolve(),
+  openSheet: () => Promise.resolve(),
   openSocket: () => Effect.succeed({ unreachable: true }),
   onAppActiveChanged: () => () => undefined,
   cipher: {

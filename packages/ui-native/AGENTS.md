@@ -50,7 +50,8 @@ builds a control of its own.
   compact window, its act first, and its alert in a regular one or where
   words must be typed), `WordsAsk` (the system's alert words are typed in,
   such as an invitation's address), `AuthPage` and `ProviderButton`, `SettingsForm` and its
-  rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a form's words,
+  rows, with `WordsField` (its `SECRET` look the system's secure field, for a key or
+  a token pasted), `AttachRow`, and `MenuPickRow` for a form's words,
   pictures and choices, `ComposeSheet` for a sheet that starts work (its
   words filling the page, and the + and `MenuChip` capsule menus over the
   keyboard, each the system's own glass button in a `DockRow` with no bar
@@ -62,18 +63,18 @@ builds a control of its own.
   `lead`, that asks in place for what the app lacks, as Apple asks: why in
   one line, the act that raises the system's own prompt or, once refused,
   opens Settings, never worded "Allow", and Not Now), `FailureNoticeProvider` (the app's one notice that a
-  write did not go: a banner of Liquid Glass rising at the window's foot,
-  over the composer or the compact tab bar there (`useNoticeLift`), as Mail
-  and Messages stand Undo, so it never covers the heading or search field it
-  speaks of, with the refusal's words and Try again, said aloud by VoiceOver, faded rather
-  than slid where the reader reduces motion, standing over the app's root
-  view (not a `FullWindowOverlay`, whose window never drew on iOS 27.2), and
-  said once for a stretch offline, `failure-notice-model.ts`),
+  write did not go: a banner of Liquid Glass in one fixed place, dropping in
+  under the top bar inside the safe area as the system's banners drop in,
+  swiped up to let go, with the refusal's words and Try again, said aloud by
+  VoiceOver, faded rather than slid where the reader reduces motion, standing
+  over the app's root view or the sheet on top (`FailureNoticeLayer`; not a
+  `FullWindowOverlay`, whose window never drew on iOS 27.2), and said once
+  for a stretch offline, `failure-notice-model.ts`),
   and the marks (`UnreadDot`, `NeedsYouDot`,
   `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
-  asset catalog holds). `GlassBar` is a bar of Liquid
-  Glass through `expo-glass-effect`, `GlassDock` the screen that pins one
+  asset catalog holds). `GlassBar` is a bar of the
+  system's Liquid Glass (`BAR_GLASS`, SwiftUI's `glassEffect`), `GlassDock` the screen that pins one
   over its foot above the keyboard, and `Composer` the rounded field a
   thread or a transcript ends with, in one, or `ComposerFoot`, the same
   field at a SwiftUI column's foot in the system's own glass, where no React
@@ -121,8 +122,7 @@ builds a control of its own.
   `markdown-model.ts`, which reads each link as the panel's chip does
   (`linkMention`, `readLink`): a `vespin.dev` place goes to the screen's
   `onOpenPlace`, any other web address to Safari.
-- **This is the one workspace that imports `@expo/ui` or `expo-glass-effect`,
-  or builds a control from React Native's pieces.** Everywhere else
+- **This is the one workspace that imports `@expo/ui`, or builds a control from React Native's pieces.** Everywhere else
   `vespin/no-raw-press-outside-ui-native` refuses them, and a press prop
   on a React Native primitive, with no disable comment allowed (root
   `AGENTS.md`'s Layout). When a screen needs a piece this package lacks, add
@@ -219,9 +219,10 @@ navigation, tab bar, swipes, menus, sheets and glass.
   heading the page, as Mail's message stands. An
   agent's page names the agent in the bar in the ink instead, as Messages
   names a conversation, since its transcript opens at its newest row, with
-  where it stands and its model muted under the name ("Working · Opus 5.5"),
-  a press on them opening Options: `StackBarTitle` as a compact stack's title
-  view, and `ColumnBar`'s `subtitle` in a split view's detail.
+  where it stands and its model muted under the name ("Working · Opus 5.5"):
+  in a compact stack, the stack's own title over UIKit's own subtitle
+  (`StackSubtitle`), with Options in its ⋯, and in a split view's detail,
+  `ColumnBar`'s `subtitle`, a press on it opening Options.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
@@ -229,14 +230,12 @@ navigation, tab bar, swipes, menus, sheets and glass.
   (`BarMenuItem`), never a menu's own button inside the bar's glass. One button leads every tab's root bar, as
   Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile alone
   at the photo's size in the bar's round glass, `SWITCHER_LOOK.TILE`, so the
-  screen's title keeps its place beside it, as the App Store's photo does), whose list, as
-  Notion's, holds each workspace by its own tile or photo with the chosen one
-  checked in copper, then New workspace and Workspace settings, in the panel's
-  groups and words (`workspaceMenuGroups`), and last the account by its photo
-  and name opening Settings, in every window, in
-  a popover over the button in a regular window and a sheet with the medium
-  and large detents in a compact one (`SWITCHER_PRESENTATION`), never the
-  system's menu, which draws a row's image as a one-ink template; the account's
+  screen's title keeps its place beside it, as the App Store's photo does), whose menu, the
+  system's own (`Menu` in `Section`s, as Notion's), holds each workspace by
+  its photo, read from a file (`MenuPhoto`), or its letter tile in its hue,
+  the chosen one checked as a `Toggle`, then New workspace and Workspace
+  settings, in the panel's groups and words (`workspaceMenuGroups`), and last
+  the account by its photo and name opening Settings, in every window; the account's
   photo (`AccountButton`) only before the workspaces are read, opening
   Settings, which the system stands in the same round glass, the photo
   clipped to a circle inside. A landscape iPad's sidebar heads its
@@ -375,9 +374,9 @@ here once, so a screen gets them by composing these pieces.
 
 - **Settings** come from `accessibility.ts`, one store per setting shared by
   every component: `useReduceMotion` (a custom motion is left out, as Jump to
-  latest's scroll), `useReduceTransparency` (`GlassBar` and Jump to latest
-  stand solid on `SURFACE` inside a `TEXT_MUTED` edge, which holds 3:1 where
-  the brand's strong edge does not), `useIncreaseContrast` (`useColors`
+  latest's scroll), `useReduceTransparency` (a short sheet's
+  ground; the system's glass on every bar and glass button goes solid on its
+  own), `useIncreaseContrast` (`useColors`
   gives the quiet inks the body's, the hairline the quiet ink,
   and danger the words' ink). Bold Text and Button Shapes need nothing of
   ours: SwiftUI's text styles and React Native's system face take Bold Text,

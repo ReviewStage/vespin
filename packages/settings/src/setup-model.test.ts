@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { SETUP_AUDIENCE } from "@repo/settings";
 import { test } from "vitest";
 import { SETUP_GATE, SETUP_STEP, setupGate, setupSteps } from "./setup-model.js";
+import { SETUP_AUDIENCE } from "./setup-place.js";
 
 const NEW = {
   id: "user-ada",

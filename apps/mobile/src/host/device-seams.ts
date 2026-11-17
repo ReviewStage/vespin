@@ -11,7 +11,7 @@ import { Directory, File, Paths } from "expo-file-system";
 import { openURL } from "expo-linking";
 import { openDatabaseSync } from "expo-sqlite";
 import { AppState } from "react-native";
-import { openSignInSheet, webAuthSession } from "./auth-session.js";
+import { openSheetUntilClosed, openSignInSheet, webAuthSession } from "./auth-session.js";
 import type { DeviceSeams } from "./compose-mobile.js";
 import { expoFileSystem, hostStateRootIn } from "./expo-file-system.js";
 import { expoSqliteDriver } from "./expo-sqlite-driver.js";
@@ -51,6 +51,7 @@ export function deviceSeams(): DeviceSeams {
 
       await openSignInSheet(url, landing);
     },
+    openSheet: openSheetUntilClosed,
     openSocket: openRelaySocket,
     onAppActiveChanged,
     cipher: keychainCipher,

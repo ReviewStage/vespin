@@ -135,6 +135,10 @@
     "dest": "/api/default.js?route=agents/runner-transcripts"
   },
   {
+    "src": "/api/billing/metronome-webhook",
+    "dest": "/api/default.js?route=billing/metronome-webhook"
+  },
+  {
     "src": "/api/envelopes/forward",
     "dest": "/api/default.js?route=envelopes/forward"
   },

@@ -3,8 +3,8 @@
  *
  * The picker reads only what the member picks, so no permission is asked
  * for first. The module is the app's own, autolinked from `modules/`, so it
- * stands in every build of the app; a build without it, such as Expo Go,
- * says the photo could not be read rather than sending one at full size.
+ * stands in every build of the app, and is required here as Expo's local
+ * modules are.
  */
 
 import { PHOTO_REFUSAL, WORKSPACE_PHOTO_EDGE } from "@repo/features/workspace-settings-words";
@@ -13,7 +13,7 @@ import {
   WORKSPACE_PHOTO_TYPE,
   workspacePhotoOfDataUrl,
 } from "@repo/features/workspace-wire";
-import { type NativeModule, requireOptionalNativeModule } from "expo";
+import { type NativeModule, requireNativeModule } from "expo";
 import { launchImageLibraryAsync } from "expo-image-picker";
 
 declare class PhotoScaleModule extends NativeModule {
@@ -21,7 +21,7 @@ declare class PhotoScaleModule extends NativeModule {
   squareJpeg(uri: string, edge: number, maxBytes: number): Promise<string | null>;
 }
 
-const photoScaleModule = requireOptionalNativeModule<PhotoScaleModule>("PhotoScale");
+const photoScaleModule = requireNativeModule<PhotoScaleModule>("PhotoScale");
 
 /** What a photo the member picked is called where it said no name of its own. */
 const UNNAMED_PHOTO = "The photo";
@@ -47,10 +47,10 @@ export async function pickWorkspacePhoto(): Promise<PhotoPicked> {
   const name = asset.fileName ?? UNNAMED_PHOTO;
 
   const base64 = await photoScaleModule
-    ?.squareJpeg(asset.uri, WORKSPACE_PHOTO_EDGE, WORKSPACE_PHOTO_BOUNDS.MAX_BYTES)
+    .squareJpeg(asset.uri, WORKSPACE_PHOTO_EDGE, WORKSPACE_PHOTO_BOUNDS.MAX_BYTES)
     .catch(() => null);
 
-  if (base64 === undefined || base64 === null) return { refusal: PHOTO_REFUSAL.UNREADABLE(name) };
+  if (base64 === null) return { refusal: PHOTO_REFUSAL.UNREADABLE(name) };
   const photo = `data:${WORKSPACE_PHOTO_TYPE.JPEG};base64,${base64}`;
   const bytes = workspacePhotoOfDataUrl(photo)?.bytes.length;
 

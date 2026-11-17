@@ -67,9 +67,6 @@ import { appStateQuery, selectAccount } from "../use-app-state.js";
  * reaches them, its checked picker, so a repository is taken back there too.
  */
 
-/** What setup says over GitHub's cards, which setup lets be skipped: agents work in the account's repositories. */
-export const GITHUB_PURPOSE = "Agents work in your repositories and open pull requests.";
-
 /** The words of GitHub's row once a repository is reached. */
 const WORDS = {
   ADD: "Add repositories",

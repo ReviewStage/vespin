@@ -1,9 +1,11 @@
 // transcript.tsx -- an agent's transcript as the iPhone draws it: the app's one React Native list, lazy, anchored at its newest row, its rows the panel's anatomy in the brand's inks.
 
+import { Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
+import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
-import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SymbolView } from "expo-symbols";
 import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -20,24 +22,13 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  useAccessibilitySize,
-  useReduceMotion,
-  useReduceTransparency,
-  useScaledSize,
-} from "./accessibility.js";
+import { useAccessibilitySize, useReduceMotion, useScaledSize } from "./accessibility.js";
 import { AudioClip } from "./audio-clip.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { FileChip } from "./file-chip.js";
-import {
-  BAR_EDGE,
-  BAR_MARGIN,
-  DOCK_FOLLOWS_KEYBOARD,
-  useDockKeyboard,
-  useDockRoom,
-} from "./glass-bar.js";
-import { GLYPH, glyphSymbol } from "./glyph.js";
+import { BAR_EDGE, BAR_MARGIN, useDockKeyboard, useDockRoom } from "./glass-bar.js";
+import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
@@ -97,6 +88,9 @@ const ANCHOR_REACH = 48;
 
 /** How wide the round control that brings the newest row into view stands, in points: the system's least target, as wide as Send's press frame, so it stands centered over Send. */
 const JUMP_SIZE = PRESS_SIZE;
+
+/** How far the round control's circle stands past the arrow inside it, on each axis, in points, as the composer's round button stands past its mark. */
+const JUMP_EDGE = 12;
 
 /** What the control that brings the newest row into view says. */
 const JUMP_TO_LATEST = "Jump to latest";
@@ -191,13 +185,6 @@ const styles = StyleSheet.create({
   older: { alignItems: "center", gap: SPACE.TIGHT * 2, paddingVertical: SPACE.ROW },
   jump: { position: "absolute" },
   opening: { opacity: 0 },
-  jumpFace: {
-    width: JUMP_SIZE,
-    height: JUMP_SIZE,
-    borderRadius: JUMP_SIZE / 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
 });
 
 /** How far the list stands from its newest row's end, in points. */
@@ -942,14 +929,13 @@ function TranscriptRow({
 }
 
 /**
- * The control that brings the newest row into view: a round button of
- * Liquid Glass holding a down arrow, standing only once the reader has
- * scrolled back, over the list's foot at the end of the rows' words, as the
- * panel's way back stands in its log's corner, so it covers at most a
- * line's end rather than the middle of the words, and centered over the
- * composer's Send, the bar's last press. Note that where Liquid Glass is unavailable, before iOS 26, or the
- * reader turned on Reduce Transparency, it is drawn solid on the surface's
- * ground inside the quiet ink rather than a hand-drawn copy of glass.
+ * The control that brings the newest row into view: the system's round glass
+ * button holding a down arrow, standing only once the reader has scrolled
+ * back, over the list's foot at the end of the rows' words, as the panel's
+ * way back stands in its log's corner, so it covers at most a line's end
+ * rather than the middle of the words, and centered over the composer's
+ * Send, the bar's last press, at its size. iOS draws its glass solid where
+ * the reader turned on Reduce Transparency.
  */
 function JumpToLatest({
   bottom,
@@ -962,45 +948,25 @@ function JumpToLatest({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
-  const solid = useReduceTransparency() || !isLiquidGlassAvailable();
-
-  const arrow = (
-    <SymbolView
-      name={glyphSymbol(GLYPH.JUMP_DOWN)}
-      size={MARK_SIZE.GLYPH + 2}
-      weight="semibold"
-      tintColor={colors.TEXT}
-      accessibilityElementsHidden
-    />
-  );
 
   return (
-    <Press
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={JUMP_TO_LATEST}
-      hitSlop={SPACE.TIGHT}
-      style={[styles.jump, { bottom, right: end }]}
-    >
-      {solid ? (
-        <View
-          style={[
-            styles.jumpFace,
-            {
-              backgroundColor: colors.SURFACE,
-              borderColor: colors.TEXT_MUTED,
-              borderWidth: StyleSheet.hairlineWidth,
-            },
-          ]}
-        >
-          {arrow}
-        </View>
-      ) : (
-        <GlassView glassEffectStyle="regular" isInteractive style={styles.jumpFace}>
-          {arrow}
-        </GlassView>
-      )}
-    </Press>
+    <InlineHost matchContents style={[styles.jump, { bottom, right: end }]}>
+      <SwiftUIButton
+        onPress={onPress}
+        modifiers={[
+          buttonStyle("glass"),
+          SwiftModifiers.buttonBorderShape("circle"),
+          tint(colors.TEXT),
+          accessibilityLabel(JUMP_TO_LATEST),
+        ]}
+      >
+        <Image
+          {...glyphImage(GLYPH.JUMP_DOWN)}
+          size={MARK_SIZE.GLYPH + 2}
+          modifiers={[frame({ width: JUMP_SIZE - JUMP_EDGE, height: JUMP_SIZE - JUMP_EDGE })]}
+        />
+      </SwiftUIButton>
+    </InlineHost>
   );
 }
 
@@ -1347,8 +1313,8 @@ export function AgentTranscript({
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
         // Note that the list stands its end clear of the keyboard with the system's own inset, moved on the keyboard's own curve, so the newest rows never sit behind it.
         automaticallyAdjustKeyboardInsets
-        // Note that a drag lowers the keyboard, since the composer docked over the list holds no key that does: under the finger, as Messages' does, where the dock follows the keyboard frame by frame, and at once where it follows only the keyboard's announced moves, since its composer would stand still through the drag, then jump.
-        keyboardDismissMode={DOCK_FOLLOWS_KEYBOARD ? "interactive" : "on-drag"}
+        // Note that a drag lowers the keyboard under the finger, as Messages' does, since the composer docked over the list holds no key that does and the dock follows the keyboard frame by frame.
+        keyboardDismissMode="interactive"
         onContentSizeChange={onContentSizeChange}
         onScrollToIndexFailed={onScrollToIndexFailed}
         onScroll={onScroll}

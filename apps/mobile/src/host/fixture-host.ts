@@ -65,6 +65,7 @@ import {
   savedMemoriesAppState,
 } from "@repo/host/fixture-inbox";
 import { FIXTURE_IDS } from "@repo/host/fixture-stage";
+import { SETUP_AUDIENCE, setupPlaceStored } from "@repo/settings";
 import { Predicate } from "effect";
 
 /** The one workspace a fixture run's account is in. */
@@ -156,6 +157,12 @@ const NO_INBOX_READ_MARKS: InboxReadMarks = new Map();
 /** The runs that hold a machine's ask, as `-machineAsk true` asks, by the store each stages, since a stage after a press is asked with none of the launch's own. */
 const MACHINE_ASKED = new WeakSet<object>();
 
+/** The runs whose account stands owed setup, as `-setupOwed true` asks, by the store each stages, since a stage after a press is asked with none of the launch's own. */
+const SETUP_OWED = new WeakSet<object>();
+
+/** Where an account owed setup stands until it moves: its first step, set up for itself. */
+const SETUP_START = setupPlaceStored({ audience: SETUP_AUDIENCE.ME, at: 0 });
+
 /** The machines' asks each run answered, by the store the run stages, each set replaced whole as one is answered. */
 const ANSWERED_ASKS = new WeakMap<object, ReadonlySet<string>>();
 
@@ -203,6 +210,26 @@ function stagedPatch(held: AppStateSnapshot, staged: AppStateSnapshot): StorePat
 }
 
 /** The network as held, or with the service refusing this build as older than it serves where the launch asks for that; the slice held where it says so already. */
+/**
+ * The document as held, or, where the launch stands the account owed setup,
+ * its settings read and holding setup's first place, as an account that
+ * started setup on another device and never finished it holds; as held once
+ * the run moved or finished setup itself, so its own moves stand.
+ */
+function withSetupOwed(held: AppStateSnapshot, setupOwed: boolean): AppStateSnapshot {
+  const { settings } = held;
+
+  if (!setupOwed || settings === undefined) return held;
+  const { stored } = settings;
+
+  if (stored.setupPlace !== undefined || stored.setupFinished === true) return held;
+
+  return {
+    ...held,
+    settings: { ...settings, accountRead: true, stored: { ...stored, setupPlace: SETUP_START } },
+  };
+}
+
 function stagedNetwork(held: AppStateSnapshot, updateNeeded: boolean): AppStateSnapshot["network"] {
   if (!updateNeeded || held.network.updateNeeded === true) return held.network;
 
@@ -235,8 +262,11 @@ export function stageFixture(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   updateNeeded = false,
   machineAsk = false,
+  setupOwed = false,
 ): void {
   if (machineAsk) MACHINE_ASKED.add(state);
+
+  if (setupOwed) SETUP_OWED.add(state);
 
   const snapshot = state.snapshot();
 
@@ -277,7 +307,7 @@ export function stageFixture(
   );
 
   const staged = {
-    ...reminded,
+    ...withSetupOwed(reminded, SETUP_OWED.has(state)),
     tasks: listed.tasks,
     network: stagedNetwork(held, updateNeeded),
     [LIVE_READ.PROVIDER_KEYS]: stagedKeys(inbox),

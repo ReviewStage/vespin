@@ -9,9 +9,8 @@
  * is sealed, and the sealing is XChaCha20-Poly1305 under it
  * (`@repo/host/xchacha-cipher`). A kept file is sealed and opened by the
  * app's own native module (`sealer-module.ts`) in CryptoKit, since Hermes
- * took about 0.8 s a megabyte for the cipher and the base64 together; a
- * build without the module, such as Expo Go, seals in JavaScript, to the
- * same bytes. A launch's seal check (`-sealCheck true`) logs how long each
+ * took about 0.8 s a megabyte for the cipher and the base64 together, to
+ * the bytes the JavaScript cipher writes. A launch's seal check (`-sealCheck true`) logs how long each
  * seal and open of the kept file took.
  *
  * A sign-out needs nothing of the key: the host deletes what it sealed, the

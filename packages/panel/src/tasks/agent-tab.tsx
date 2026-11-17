@@ -127,10 +127,10 @@ import {
 } from "@repo/features/turn-rows";
 import {
   callMarksOf,
+  delegatedTurnsOf,
   isAgentTurn,
   isVoiceLine,
   spokenLineOf,
-  toldTurnsOf,
 } from "@repo/features/voice-call-lines";
 import { VOICE_CALL_STAGE, type VoiceCallStage } from "@repo/features/voice-wire";
 import { replyFromWords } from "@repo/features/words";
@@ -1855,15 +1855,15 @@ function TurnFoot({
 interface StretchPlace {
   readonly standings: ReadonlyMap<string, AgentSubagentStanding> | undefined;
   readonly arrived: readonly ArrivedLine[];
-  /** Whether the voice told the turn's reply on a call (`toldTurnsOf`), which folds its words with its work. */
-  readonly told: boolean;
+  /** Whether a call's delegation opened the turn (`delegatedTurnsOf`), which folds its words with its work. */
+  readonly delegated: boolean;
 }
 
 /** A turn's rows as its message draws them, cut at every line that reached it (`turnStretches`). */
 function turnStretchesOf(
   message: AgentTranscriptMessage,
   moving: boolean,
-  { standings, arrived, told }: StretchPlace,
+  { standings, arrived, delegated }: StretchPlace,
 ): readonly TurnStretch[] {
   const workers = new Map(
     [...(standings?.values() ?? [])].map(
@@ -1875,7 +1875,7 @@ function turnStretchesOf(
     agentRows(message, moving, {
       workers,
       arrived: arrived.map((line) => line.message),
-      told,
+      delegated,
     }),
   );
 }
@@ -1894,12 +1894,12 @@ export function AgentMessage({
   wakeupDelay,
   taskId,
   forkable = true,
-  told = false,
+  delegated = false,
   piece,
 }: {
   message: AgentTranscriptMessage;
-  /** Whether the voice told this turn's reply on a call (`toldTurnsOf`), which folds its words with its work once it has finished. */
-  told?: boolean;
+  /** Whether a call's delegation opened this turn (`delegatedTurnsOf`), which folds its words with its work once it has finished. */
+  delegated?: boolean;
   /** The piece of a long turn this draws (`turn-pieces.ts`), its stretches read for it; the whole message where none. */
   piece?: TurnPiece | undefined;
   /** Whether its tab may offer to fork at it. */
@@ -2105,7 +2105,7 @@ export function AgentMessage({
 
   const stretches =
     piece?.stretches ??
-    turnStretchesOf(message, moving, { standings: delegation?.standings, arrived, told });
+    turnStretchesOf(message, moving, { standings: delegation?.standings, arrived, delegated });
 
   const first = piece?.first ?? true;
 
@@ -2564,7 +2564,7 @@ function sameRead(
     read.moving === moving &&
     read.place.standings === place.standings &&
     read.place.arrived === place.arrived &&
-    read.place.told === place.told
+    read.place.delegated === place.delegated
   );
 }
 
@@ -2584,7 +2584,7 @@ function useLogEntries(
   return useMemo(() => {
     const held = reads.current;
     const next = new Map<string, PiecesRead>();
-    const { placed, writing, told } = placing;
+    const { placed, writing, delegated } = placing;
 
     const entries = placed.flatMap((row, index): LogEntry[] => {
       const { message } = row;
@@ -2600,7 +2600,7 @@ function useLogEntries(
       }
 
       const moving = message.id === writing;
-      const place: StretchPlace = { standings, arrived, told: told.has(message.id) };
+      const place: StretchPlace = { standings, arrived, delegated: delegated.has(message.id) };
       const was = held.get(message.id);
 
       const read =
@@ -2763,10 +2763,10 @@ function transcriptPlacing(
 
   const writing = newest?.finishedAt === undefined ? newest?.id : undefined;
   const calls = callMarksOf(placed, standingCalls);
-  // A turn whose reply the voice told on a call folds its written words with its work.
-  const told = toldTurnsOf(placed);
+  // A turn a call's delegation opened folds its written words with its work.
+  const delegated = delegatedTurnsOf(placed);
 
-  return { todos, first, opening, placed, writing, calls, told };
+  return { todos, first, opening, placed, writing, calls, delegated };
 }
 
 /** The transcript as the tab draws it: the messages, or what stands in their place. */
@@ -3073,7 +3073,7 @@ function AgentTranscriptView({
   ]);
 
   if (!holding && messages.length > 0) {
-    const { todos, first, opening, placed, writing, calls, told } = placing;
+    const { todos, first, opening, placed, writing, calls, delegated } = placing;
 
     // Whose call each call was, by its caller: a teammate's, or none for the reader's own.
     const callerOf = (caller: AgentSender) => lineSender(caller, readerId, members, former);
@@ -3229,7 +3229,7 @@ function AgentTranscriptView({
                               : undefined
                           }
                           arrived={arrivals.get(message.id) ?? NO_ARRIVED}
-                          told={told.has(message.id)}
+                          delegated={delegated.has(message.id)}
                           piece={piece}
                         />
                         {!tails ? null : message === first &&
