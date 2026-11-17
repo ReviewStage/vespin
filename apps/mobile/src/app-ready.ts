@@ -1,9 +1,16 @@
 // app-ready.ts -- counts how long a launch in front took to show the Inbox, once a launch, on a rung, as `app:ready`.
 
-import { PRODUCT_SURFACE_EVENT, productLaunchSeconds } from "@repo/features/analytics";
+import {
+  PRODUCT_FIRST_ROWS,
+  PRODUCT_SURFACE_EVENT,
+  productLaunchSeconds,
+} from "@repo/features/analytics";
+import { LIVE_READ } from "@repo/features/live-wire";
+import { useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { useEffect, useState } from "react";
 import { AppState } from "react-native";
+import { appStateQuery } from "./host/app-state-query.js";
 import { useHostCount } from "./host/host-provider.js";
 import { launchStood, sinceLaunch } from "./launch-phases.js";
 import { launchLeftFront } from "./launch-state.js";
@@ -27,6 +34,13 @@ const BUILD_NUMBER = Constants.expoConfig?.ios?.buildNumber;
  */
 export function useAppReadyCount(shown: boolean): void {
   const count = useHostCount();
+
+  // Note that the Inbox's rows are read as the phone's kept ones while the host marks them so, until the service's first answer takes their place.
+  const { data: keptRows = false } = useQuery({
+    ...appStateQuery,
+    select: (state) => state[LIVE_READ.INBOX_ITEMS].kept === true,
+  });
+
   // Note that a launch from a tap can read `inactive` while iOS finishes launching it, as kept rows draw, so the count waits for the app to come active rather than letting the launch go.
   const [active, setActive] = useState(AppState.currentState === "active");
   useEffect(() => {
@@ -63,6 +77,7 @@ export function useAppReadyCount(shown: boolean): void {
         : { standing_seconds: productLaunchSeconds(stood.ms) }),
       ...(stood === undefined ? undefined : { kept_store: stood.keptStore }),
       ...(BUILD_NUMBER === undefined ? undefined : { app_build: BUILD_NUMBER }),
+      first_rows: keptRows ? PRODUCT_FIRST_ROWS.KEPT : PRODUCT_FIRST_ROWS.FEED,
     });
-  }, [count, shown, active]);
+  }, [count, shown, active, keptRows]);
 }

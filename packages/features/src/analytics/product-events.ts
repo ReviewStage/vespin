@@ -118,6 +118,7 @@ export const PRODUCT_EVENT_PROPERTY = {
   STANDING_SECONDS: "standing_seconds",
   KEPT_STORE: "kept_store",
   APP_BUILD: "app_build",
+  FIRST_ROWS: "first_rows",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -465,6 +466,14 @@ export const PRODUCT_KEPT_STORE = {
 
 export type ProductKeptStore = (typeof PRODUCT_KEPT_STORE)[keyof typeof PRODUCT_KEPT_STORE];
 
+/** Which rows a launch's Inbox first showed: the ones kept on the phone, or the service's answer. */
+export const PRODUCT_FIRST_ROWS = {
+  KEPT: "kept",
+  FEED: "feed",
+} as const;
+
+export type ProductFirstRows = (typeof PRODUCT_FIRST_ROWS)[keyof typeof PRODUCT_FIRST_ROWS];
+
 const PRODUCT_LAUNCH_LADDER: readonly ProductLaunchSeconds[] = Object.values(
   PRODUCT_LAUNCH_SECONDS,
 ).sort((left, right) => right - left);
@@ -544,6 +553,7 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.KEPT_STORE]: ProductKeptStore;
   [PRODUCT_EVENT_PROPERTY.APP_BUILD]: string;
+  [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: ProductFirstRows;
 }
 
 /**
@@ -583,6 +593,7 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.MIRROR_FAILURE]: Object.values(MIRROR_FAILURE),
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
   [PRODUCT_EVENT_PROPERTY.KEPT_STORE]: Object.values(PRODUCT_KEPT_STORE),
+  [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
 } as const satisfies Record<EnumeratedProductEventProperty, readonly string[]>;
 
 /**
@@ -643,6 +654,7 @@ const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.STANDING_SECONDS,
     PRODUCT_EVENT_PROPERTY.KEPT_STORE,
     PRODUCT_EVENT_PROPERTY.APP_BUILD,
+    PRODUCT_EVENT_PROPERTY.FIRST_ROWS,
   ],
 } as const satisfies { readonly [Name in ProductEventName]?: readonly ProductEventProperty[] };
 

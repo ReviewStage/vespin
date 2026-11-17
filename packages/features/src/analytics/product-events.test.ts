@@ -170,12 +170,13 @@ test("a launch travels its time to the first rows on a rung, never as the raw ti
   );
 });
 
-test("a launch may add when its host stood, what it found kept and its build number, each read strictly", () => {
+test("a launch may add when its host stood, what it found kept, which rows it first showed and its build number, each read strictly", () => {
   const phases = {
     [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: 8,
     [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: 1,
     [PRODUCT_EVENT_PROPERTY.KEPT_STORE]: "dropped",
     [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "52",
+    [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: "feed",
   };
 
   assert.deepEqual(
