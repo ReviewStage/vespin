@@ -205,9 +205,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   agent's page names the agent in the bar in the ink instead, as Messages
   names a conversation, since its transcript opens at its newest row, with
   where it stands and its model muted under the name ("Working · Opus 5.5"):
-  in a compact stack, the stack's own title over UIKit's own subtitle
-  (`StackSubtitle`), with Options in its ⋯, and in a split view's detail,
-  `ColumnBar`'s `subtitle`, a press on it opening Options.
+  the stack's own title over UIKit's own subtitle (`StackSubtitle`), with
+  Options in its ⋯. A page opened from a split view's detail, such as a
+  task's agent, its pull request, or a thread's task, is pushed on the
+  tab's own stack over the whole window, as a compact window pushes it,
+  never inside the detail's column.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
