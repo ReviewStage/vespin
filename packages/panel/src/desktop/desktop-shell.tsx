@@ -94,12 +94,13 @@ import type { SettingsStep } from "./desktop-settings.js";
 import { DesktopSidebar } from "./desktop-sidebar.js";
 import { DesktopHomePage, DesktopTasks } from "./desktop-tasks.js";
 import { KEY_LAYERS, useFloatDismiss } from "./hover-pane.js";
+import { MergeQueueSkeleton } from "./merge-queue-frame.js";
 import { MobileBar, mobileBarShown, useBarStanding } from "./mobile-bar.js";
 import { NewTaskButton } from "./new-task-button.js";
 import { NewWorkspaceOpener, useNewWorkspace } from "./new-workspace.js";
 import { OfflineMark } from "./offline-mark.js";
 import { PaneGlide } from "./pane-motion.js";
-import { PersonPageSkeleton, RowsSkeleton } from "./person-frame.js";
+import { PersonPageSkeleton } from "./person-frame.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead, phoneBar } from "./phone-head.js";
 import { PLACE_LIST, PLACE_PAGE, PLACE_SPLIT } from "./place-columns.js";
@@ -172,9 +173,6 @@ function PersonLoading({
 
   return <PersonPageSkeleton name={name} />;
 }
-
-/** What the Merge queue page's frame says it is reading while its chunk loads, as the page says it while its first read does. */
-const READING_MERGE_QUEUES = "Reading the merge queues…";
 
 /** Where Settings' way out leads where no step stands behind it, as a hint names it. */
 const TASKS_EXIT_PLACE = "tasks";
@@ -1409,7 +1407,7 @@ export function AutomationsRouteLoading(): React.JSX.Element {
 export function MergeQueueRouteLoading(): React.JSX.Element {
   return (
     <DetailPage frame={PAGE_FRAME.PAGE} title={MERGE_QUEUE_WORDS}>
-      <RowsSkeleton label={READING_MERGE_QUEUES} />
+      <MergeQueueSkeleton />
     </DetailPage>
   );
 }
