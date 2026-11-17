@@ -39,13 +39,11 @@ export const INSTALLED_SKILL_SOURCE = {
   TEXT: "text",
 } as const;
 
-/** The coding agents whose skills folder on a Mac a skill may be brought in from, each by the folder it keeps its skills in under the home folder. */
+/** Where on a Mac a skill may be brought in from: the skills folder of a coding agent the app runs, or the folder agents share. */
 export const MAC_SKILL_APP = {
   CLAUDE_CODE: "claude-code",
   CODEX: "codex",
   CURSOR: "cursor",
-  GEMINI: "gemini",
-  FACTORY: "factory",
   /** The folder agents share, which `npx skills add` writes to. */
   AGENTS: "agents",
 } as const;
