@@ -1,0 +1,12 @@
+== bundle PLAUNCH3 base fa134f0c6d
+  built fa134f0c6d base app Vmain3.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+cold-fixture-1: T=1794921120395; 10 [launch] lines; cold-fixture-1: video aligned at 2.321s; splash gone +7233 ms; inbox drawn (settled) +7433 ms; 230 frames
+cold-fixture-2: T=1794921178055; 10 [launch] lines; cold-fixture-2: video aligned at 1.111s; splash gone +5867 ms; inbox drawn (settled) +6100 ms; 191 frames
+cold-fixture-3: T=1794921241043; 10 [launch] lines; cold-fixture-3: video aligned at -0.662s; splash gone +867 ms; inbox drawn (settled) +8233 ms; 255 frames
+sign-in: fails 0 shots 4 
+cold-signedin-1: T=1794921386629; 9 [launch] lines; cold-signedin-1: video aligned at 0.283s; splash gone +4833 ms; inbox drawn (settled) +4833 ms; 149 frames
+inbox-smoke: fails 1 shots 5 Assert that "Done" is visible... FAILED
