@@ -6,11 +6,11 @@ import {
   HStack,
   Image,
   Menu,
+  Picker,
   ScrollView,
   Section,
   Button as SwiftUIButton,
   Text,
-  Toggle,
   VStack,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -25,10 +25,12 @@ import {
   font,
   foregroundStyle,
   frame,
+  labelsHidden,
   lineLimit,
   type ModifierConfig,
   menuIndicator,
   padding,
+  pickerStyle,
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -45,9 +47,9 @@ import {
 import { WORDS_LOOK, WordsField } from "./form-rows.js";
 import { DockRow, GlassDock, useDockRoom } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent } from "./glyph-label.js";
+import { actContent, PickOption } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
-import { choiceContent, type MenuChoice } from "./list-row.js";
+import { choiceColor, type MenuChoice } from "./list-row.js";
 import { HarnessMark } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
@@ -180,14 +182,7 @@ export function MenuChip(props: MenuChipProps) {
       {menu.groups.map((group, at) => (
         // Note that a group is keyed by its place, since a group may have no heading.
         <Section key={at} {...(group.title === undefined ? {} : { title: group.title })}>
-          {group.choices.map((choice) => (
-            <Toggle
-              key={choice.id ?? choice.label}
-              {...choiceContent(choice, colors)}
-              isOn={choice.on}
-              onIsOnChange={() => choice.onPress()}
-            />
-          ))}
+          <GroupPicker group={group} />
         </Section>
       ))}
       {actions.length === 0 ? null : <Divider />}
@@ -204,6 +199,45 @@ export function MenuChip(props: MenuChipProps) {
         <BarMenuButton key={submenu.label} menu={submenu} />
       ))}
     </Menu>
+  );
+}
+
+/** What picking a choice chooses, as its option is tagged: its id, or its label where it has none. */
+function choiceValue(choice: MenuChoice): string {
+  return choice.id ?? choice.label;
+}
+
+/**
+ * A capsule menu's group as SwiftUI's own single choice: an inline picker,
+ * its options standing in the menu with the one chosen checked, as the
+ * system checks it, its label left to the group's section. Note that a
+ * pick of the option already chosen sends nothing, as the system's picker
+ * answers only a change.
+ */
+function GroupPicker({ group }: { readonly group: ChipMenuGroup }) {
+  const colors = useColors();
+  const chosen = group.choices.find((choice) => choice.on);
+
+  return (
+    <Picker
+      label={group.title ?? ""}
+      {...(chosen === undefined ? {} : { selection: choiceValue(chosen) })}
+      onSelectionChange={(value: string) =>
+        group.choices.find((choice) => choiceValue(choice) === value)?.onPress()
+      }
+      modifiers={[pickerStyle("inline"), labelsHidden()]}
+    >
+      {group.choices.map((choice) => (
+        <PickOption
+          key={choiceValue(choice)}
+          label={choice.label}
+          value={choiceValue(choice)}
+          glyph={choice.symbol}
+          color={choiceColor(choice, colors)}
+          photo={choice.photo}
+        />
+      ))}
+    </Picker>
   );
 }
 
