@@ -200,6 +200,16 @@ function drawingQueue() {
   };
 }
 
+/** The sealed page, built from Mermaid's 3.5 MB of source once the app first draws a diagram (`diagramDocument`), and kept for every later one. */
+let sealedDocument: string | undefined;
+
+/** The sealed page, built on its first ask, since reading Mermaid's whole source into it took a task's page some 300 ms on every open. */
+function sealedPage(): string {
+  sealedDocument ??= diagramDocument(mermaidSource);
+
+  return sealedDocument;
+}
+
 /**
  * The renderer a page of words draws its diagrams through, around those
  * words: Mermaid in one sealed web view, hidden and the size of nothing,
@@ -213,7 +223,6 @@ export function DiagramRenderer({ children }: { readonly children: ReactNode }) 
   const palette = useColors();
   const [queue] = useState(drawingQueue);
   const [needed, setNeeded] = useState(false);
-  const [document] = useState(() => diagramDocument(mermaidSource));
   const dark = useColorScheme() === "dark";
 
   const ask = (code: string) => {
@@ -228,7 +237,7 @@ export function DiagramRenderer({ children }: { readonly children: ReactNode }) 
       {needed ? (
         <WebView
           ref={(view) => queue.hold(view)}
-          source={{ html: document }}
+          source={{ html: sealedPage() }}
           originWhitelist={EVERY_ADDRESS}
           onShouldStartLoadWithRequest={staysHandedIn}
           onMessage={(event: WebViewMessageEvent): void => {
