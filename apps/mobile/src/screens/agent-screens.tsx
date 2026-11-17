@@ -80,7 +80,7 @@ import {
   Screen,
   SettingsForm,
   SkillSuggestions,
-  StackBarTitle,
+  StackSubtitle,
   SwitchRow,
   shownFiles,
   shownMediaIds,
@@ -1129,15 +1129,11 @@ export function AgentConversation({
 
   const barOptions = { title, headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT } };
 
-  // Note that the agent's state and model stand under its name in the bar, as the panel's tab says them, since the line over the transcript scrolled out of sight as the page opened at its newest row.
-  const screenOptions =
-    subtitle === undefined
-      ? barOptions
-      : { ...barOptions, headerTitle: () => <StackBarTitle title={title} subtitle={subtitle} /> };
-
   return (
     <>
-      <Stack.Screen options={screenOptions} />
+      <Stack.Screen options={barOptions} />
+      {/* Note that the agent's state and model stand under its name as the bar's own subtitle, as the panel's tab says them, since the line over the transcript scrolled out of sight as the page opened at its newest row; Options stays in ⋯. */}
+      <StackSubtitle words={subtitle?.words ?? ""} />
       <Stack.Toolbar placement="right">
         {copyable || openable || openTask !== undefined ? (
           <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>

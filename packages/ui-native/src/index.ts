@@ -26,7 +26,7 @@ export {
 
 export { AuthPage } from "./auth-page.js";
 
-export { type BarSubtitle, StackBarTitle } from "./bar-title.js";
+export { type BarSubtitle, StackSubtitle } from "./bar-title.js";
 
 export { BRAND_MARK_ASSET, BrandMark } from "./brand-mark.js";
 

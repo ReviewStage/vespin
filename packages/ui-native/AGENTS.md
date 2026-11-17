@@ -220,9 +220,10 @@ navigation, tab bar, swipes, menus, sheets and glass.
   heading the page, as Mail's message stands. An
   agent's page names the agent in the bar in the ink instead, as Messages
   names a conversation, since its transcript opens at its newest row, with
-  where it stands and its model muted under the name ("Working · Opus 5.5"),
-  a press on them opening Options: `StackBarTitle` as a compact stack's title
-  view, and `ColumnBar`'s `subtitle` in a split view's detail.
+  where it stands and its model muted under the name ("Working · Opus 5.5"):
+  in a compact stack, the stack's own title over UIKit's own subtitle
+  (`StackSubtitle`), with Options in its ⋯, and in a split view's detail,
+  `ColumnBar`'s `subtitle`, a press on it opening Options.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
