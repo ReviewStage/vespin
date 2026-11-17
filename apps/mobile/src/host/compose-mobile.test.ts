@@ -2,7 +2,7 @@ import { NodeFileSystem } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { AUTH_SESSION_END } from "@repo/credentials";
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { QUEUE_CHANGE } from "@repo/features/agent-wire";
+import { AGENT_ATTACHMENT_TYPE, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { READ_MARK } from "@repo/features/read-mark";
 import { ACT_KIND } from "@repo/host/acts";
@@ -30,6 +30,12 @@ import { STUB_ACCOUNT, stubAuthFetch, stubAuthSession } from "./stub-auth-server
 
 /** A thread the Inbox profile stages, by its title (`@repo/host/fixture-inbox`). */
 const STAGED_THREAD = "Who can withdraw an invite?";
+
+/** A notice the Inbox profile stages, which asks nothing, so a reply to it answers no ask. */
+const NOTICE = "acceptInvite can add a member twice";
+
+/** A picture's bytes as a reply carries them: a PNG's signature alone, which no reader here draws. */
+const PICTURE = "iVBORw0KGgo=";
 
 /** The device as a test answers it: Node's files, no address opened, no socket reached, the app always in front, a cipher that seals in the clear, a sign-in sheet closed at once, and no share token kept. */
 const testDevice: DeviceSeams = {
@@ -219,6 +225,54 @@ it.effect(
 
         expect(moved?.ids).toEqual([secondId, firstId]);
         expect(second).toBe(first);
+      }),
+    ),
+);
+
+it.effect(
+  "a fixture run's thread carries back a reply's picture, which reads back by its attachment",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const root = yield* ownFolder;
+        const { acts, bridge } = yield* standingHost(root, RUN_PROFILE.INBOX);
+        const groups = yield* inboxGroupsOver(bridge);
+        const notice = groups.flatMap(({ items }) => items).find(({ title }) => title === NOTICE);
+
+        expect(notice).toBeDefined();
+        const itemId = notice?.id ?? "";
+        const clientKey = crypto.randomUUID();
+
+        yield* Effect.promise(() =>
+          acts[ACT_KIND.AGENTS_INBOX_MESSAGE]({
+            itemId,
+            text: "",
+            attachments: [
+              { name: "Picture 1", mediaType: AGENT_ATTACHMENT_TYPE.PNG, data: PICTURE },
+            ],
+            clientKey,
+          }),
+        );
+
+        yield* settledVersion(bridge);
+
+        const read = (yield* inboxGroupsOver(bridge))
+          .flatMap(({ items }) => items)
+          .find(({ id }) => id === itemId);
+
+        const reply = read?.thread?.find((message) => message.clientKey === clientKey);
+        const [file] = reply?.files ?? [];
+
+        expect(file?.name).toBe("Picture 1");
+
+        const bytes = yield* Effect.promise(() =>
+          acts[ACT_KIND.AGENTS_INBOX_ATTACHMENT]({
+            itemId,
+            attachmentId: file?.attachmentId ?? "",
+          }),
+        );
+
+        expect(bytes).toEqual({ contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: PICTURE });
       }),
     ),
 );
