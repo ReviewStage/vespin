@@ -2413,6 +2413,114 @@ export function inboxRemindersAppState(
   };
 }
 
+/** A reply with pictures a fixture run sent, as a read carries it, and each picture's bytes by the attachment it is read by. */
+export interface InboxSentReply {
+  readonly itemId: string;
+  readonly message: InboxMessage;
+  readonly files: ReadonlyMap<string, PortActResult<typeof ACT_KIND.AGENTS_INBOX_ATTACHMENT>>;
+}
+
+/** The replies with pictures a fixture run sent, by the item each was sent on, oldest first. */
+export type InboxSentReplies = ReadonlyMap<string, readonly InboxSentReply[]>;
+
+/**
+ * A reply a fixture run sent as a read would carry it back: the account's
+ * message under the send's key, its pictures named and kept so they read
+ * back by their attachments, written `at`. None for a reply carrying no
+ * pictures, or one answering an ask, which the window draws as its own
+ * until a read moves the ask, as nothing here does. Note that each
+ * picture's attachment is the send's key with its place in the last
+ * group, so a reply's pictures never share one.
+ */
+export function inboxSentReply(
+  payload: PortActPayload<typeof ACT_KIND.AGENTS_INBOX_MESSAGE>,
+  at: number,
+): InboxSentReply | undefined {
+  const { itemId, clientKey, text, attachments = [], answers } = payload;
+
+  if (clientKey === undefined || attachments.length === 0 || answers !== undefined)
+    return undefined;
+
+  const kept = attachments.map((attachment, place) => ({
+    attachmentId: `${clientKey.slice(0, 24)}${place.toString(16).padStart(12, "0")}`,
+    attachment,
+  }));
+
+  return {
+    itemId,
+    message: {
+      id: clientKey,
+      author: INBOX_MESSAGE_AUTHOR.MEMBER,
+      member: ADA,
+      text,
+      files: kept.map(({ attachmentId, attachment }) => ({
+        attachmentId,
+        name: attachment.name,
+        mediaType: attachment.mediaType,
+      })),
+      clientKey,
+      createdAt: at,
+    },
+    files: new Map(
+      kept.map(({ attachmentId, attachment }) => [
+        attachmentId,
+        { contentType: attachment.mediaType, base64: attachment.data },
+      ]),
+    ),
+  };
+}
+
+/**
+ * The document with the replies a fixture run sent laid at the foot of
+ * their items' threads, as the service's next read carries a reply, so the
+ * window lets its own drawing of the send go and draws the read's, its
+ * pictures with it. The very document where none was sent.
+ */
+export function inboxSentRepliesAppState(
+  state: AppStateSnapshot,
+  sent: InboxSentReplies,
+): AppStateSnapshot {
+  const fed = state[LIVE_READ.INBOX_ITEMS]?.rows?.[INBOX_SCOPE_KIND.TASK];
+
+  if (sent.size === 0 || fed === undefined) return state;
+
+  const replied = Object.fromEntries(
+    Object.entries(fed).map(([taskId, items]) => [
+      taskId,
+      items.map((item) => {
+        const replies = sent.get(item.id);
+
+        if (replies === undefined) return item;
+
+        const thread = [...(item.thread ?? []), ...replies.map(({ message }) => message)];
+
+        return { ...item, thread, updatedAt: replies.at(-1)?.message.createdAt ?? item.updatedAt };
+      }),
+    ]),
+  );
+
+  return {
+    ...state,
+    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.TASK]: replied } },
+  };
+}
+
+/** A picture a fixture run's reply carried, as the service answers its read; none for any other attachment. */
+export function inboxSentFile(
+  sent: InboxSentReplies,
+  attachmentId: string,
+): PortActResult<typeof ACT_KIND.AGENTS_INBOX_ATTACHMENT> | undefined {
+  for (const replies of sent.values()) {
+    for (const reply of replies) {
+      const file = reply.files.get(attachmentId);
+
+      if (file !== undefined) return file;
+    }
+  }
+
+  return undefined;
+}
+
 /** The read marks a fixture run made, by the item's id: whether each stands unread. */
 export type InboxReadMarks = ReadonlyMap<string, boolean>;
 

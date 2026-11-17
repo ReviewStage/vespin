@@ -41,10 +41,14 @@ import {
   chosenTasksView,
   type InboxReadMarks,
   type InboxReminders,
+  type InboxSentReplies,
   inboxActAnswer,
   inboxAppState,
   inboxReadMarksAppState,
   inboxRemindersAppState,
+  inboxSentFile,
+  inboxSentRepliesAppState,
+  inboxSentReply,
   inboxTasksView,
   type KeptQueues,
   MEMORY_SAVE_REFUSED,
@@ -136,6 +140,12 @@ const NO_REMINDERS: InboxReminders = new Map();
 
 /** The Inbox read marks each fixture run made, by its store. */
 const INBOX_READ_MARKS = new WeakMap<object, InboxReadMarks>();
+
+/** The replies with pictures each fixture run sent, by its store, each map replaced whole as one is sent. */
+const SENT_REPLIES = new WeakMap<object, InboxSentReplies>();
+
+/** No reply with pictures sent yet. */
+const NO_SENT_REPLIES: InboxSentReplies = new Map();
 
 /** The tasks whose first start the fixture refused, by their id, kept for the run whose document it is. */
 const STARTS_REFUSED = new WeakMap<object, ReadonlySet<string>>();
@@ -246,7 +256,10 @@ export function stageFixture(
 
   const saved = savedMemoriesAppState(
     inboxReadMarksAppState(
-      inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS),
+      inboxRemindersAppState(
+        inboxSentRepliesAppState(parts, SENT_REPLIES.get(state) ?? NO_SENT_REPLIES),
+        REMINDERS.get(state) ?? NO_REMINDERS,
+      ),
       INBOX_READ_MARKS.get(state) ?? NO_INBOX_READ_MARKS,
     ),
     MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
@@ -271,6 +284,48 @@ export function stageFixture(
   };
 
   state.update(stagedPatch(held, staged), listed.lists);
+}
+
+/**
+ * Keeps a reply with pictures the fixture took and lays it over the
+ * document at once, as the service's next read carries one, so the thread
+ * draws the reply's pictures as a live run does; nothing for any other act,
+ * one the fixture refused, or a reply with no pictures.
+ */
+function keepSentReply(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+  answer: PortActResult<PortActKind>,
+): void {
+  if (kind !== ACT_KIND.AGENTS_INBOX_MESSAGE) return;
+
+  if (Predicate.isObject(answer) && "failure" in answer) return;
+
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const reply = inboxSentReply(
+    payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_MESSAGE>,
+    Date.now(),
+  );
+
+  if (reply === undefined) return;
+  const sent = SENT_REPLIES.get(state) ?? NO_SENT_REPLIES;
+  const replies = [...(sent.get(reply.itemId) ?? []), reply];
+  SENT_REPLIES.set(state, new Map(sent).set(reply.itemId, replies));
+  stageFixture(state);
+}
+
+/** A picture a reply of this run carried, read back as the service answers one; none for any other act or attachment. */
+function sentFileRead(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): PortActResult<typeof ACT_KIND.AGENTS_INBOX_ATTACHMENT> | undefined {
+  if (kind !== ACT_KIND.AGENTS_INBOX_ATTACHMENT) return undefined;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const { attachmentId } = payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_ATTACHMENT>;
+
+  return inboxSentFile(SENT_REPLIES.get(state) ?? NO_SENT_REPLIES, attachmentId);
 }
 
 /** Keeps a reminder the fixture took, set or cleared, and lays it over the document at once, as the host draws one; nothing for any other act. */
@@ -450,9 +505,10 @@ function startRefusedOnce(
  * of a live refusal (a task's start is refused on its first send alone,
  * `startRefusedOnce`), an agent's start unanswered, so a flow sees New
  * agent's notice with Try again once its sheet has closed, and a follower
- * added, a memory deleted or a thread's reminder unanswered, so a flow sees
- * the notice over Add a follower's sheet, Settings', and a thread's composer,
- * the keyboard up or down.
+ * added, a memory deleted or a thread's reminder or reply unanswered, so a
+ * flow sees the notice over Add a follower's sheet, Settings', and a
+ * thread's composer, the keyboard up or down, and a refused reply's words
+ * and pictures put back on its box.
  */
 const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>> = new Map<
   PortActKind,
@@ -467,6 +523,8 @@ const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>>
   [ACT_KIND.TASKS_ADD_FOLLOWER, () => ({ failure: FOLLOWER_CALL_FAILURE.UNANSWERED })],
   [ACT_KIND.MEMORIES_FORGET, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
   [ACT_KIND.AGENTS_INBOX_REMIND, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
+  // Note that a thread's reply is unanswered too, so a flow sees its words and pictures put back on the box with the refusal's note.
+  [ACT_KIND.AGENTS_INBOX_MESSAGE, () => ({ failure: AGENT_CALL_FAILURE.UNANSWERED })],
   // Note that a note to the people who make the app is refused too, so its footer's failure tone shows.
   [ACT_KIND.FEEDBACK_SEND, () => ({ delivered: false })],
   // Note that a change to a pull request is refused as GitHub refuses one, its words beside, so the pull request page shows its write note.
@@ -538,6 +596,11 @@ export function fixtureActs(
         // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
         if (keepReadMark(state, kind as PortActKind, payload)) return Promise.resolve(true);
 
+        // SAFETY: as above.
+        const sentFile = sentFileRead(state, kind as PortActKind, payload);
+
+        if (sentFile !== undefined) return Promise.resolve(sentFile);
+
         // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
         const staged = inboxActAnswer(profile, kind as PortActKind, payload);
 
@@ -556,6 +619,8 @@ export function fixtureActs(
         keepMemory(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepMachineAnswer(state, kind as PortActKind, payload);
+        // SAFETY: as above.
+        keepSentReply(state, kind as PortActKind, payload, staged.answer);
 
         return Promise.resolve(staged.answer);
       };
