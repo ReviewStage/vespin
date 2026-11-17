@@ -43,12 +43,10 @@ import { ComposerFrame } from "../composer-frame/composer-frame.js";
 import { Disclosure, DisclosureBody, DisclosureSummary } from "../disclosure/disclosure.js";
 import { FoldingButton } from "../folding-button/folding-button.js";
 import { GlyphSlot } from "../glyph-slot/glyph-slot.js";
-import { GROUP_HEADING, GroupHeader } from "../group-header/group-header.js";
 import { INLINE_REF_LOOK, InlineRef } from "../inline-ref/inline-ref.js";
 import { INLINE_REF_FIT, type InlineRefFit } from "../inline-ref/inline-ref-fit.js";
 import { LineRow } from "../line-button/line-button.js";
 import {
-  LIST_DENSITY,
   LIST_ROW_CURRENT,
   LIST_ROW_CURRENT_LOOK,
   LIST_ROW_INK,
@@ -62,7 +60,6 @@ import { MessageFrame } from "../message/message.js";
 import { MessageHead } from "../message/message-head.js";
 import { MoreButton } from "../more-button/more-button.js";
 import { NOTE_LINE_LOOK, NoteLine } from "../note-line/note-line.js";
-import { PROGRESS_COUNT_LOOK, ProgressCount } from "../progress-ring/progress-ring.js";
 import { SearchField } from "../search-field/search-field.js";
 import { SettingsRow } from "../settings-row/settings-row.js";
 import { SETTINGS_SECTION_FRAME, SettingsSection } from "../settings-section/settings-section.js";
@@ -77,6 +74,7 @@ import { Toolbar } from "../toolbar/toolbar.js";
 import { TOOLBAR_INSET, TOOLBAR_LOOK } from "../toolbar/toolbar-frame.js";
 import { UnreadMark } from "../unread-mark/unread-mark.js";
 import { WorkingMark } from "../working-mark/working-mark.js";
+import { TypingCaret } from "./landing-caret.js";
 import {
   agentFace,
   DESKTOP_PLACE,
@@ -384,22 +382,27 @@ function ComposerField({
   label,
   placeholder,
   words = "",
+  typing = false,
 }: {
   label: string;
   placeholder: string;
   words?: string | undefined;
+  /** Whether the story is typing `words`, which a caret follows. */
+  typing?: boolean | undefined;
 }): React.JSX.Element {
   return (
     <ComposerBody>
       <div className="ui-landing-composer-field">
-        <TextArea
-          label={label}
-          value={words}
-          placeholder={placeholder}
-          look={TEXT_AREA_LOOK.BARE}
-          rows={1}
-          onChange={still}
-        />
+        <TypingCaret words={words} typing={typing}>
+          <TextArea
+            label={label}
+            value={words}
+            placeholder={placeholder}
+            look={TEXT_AREA_LOOK.BARE}
+            rows={1}
+            onChange={still}
+          />
+        </TypingCaret>
       </div>
     </ComposerBody>
   );
@@ -410,17 +413,20 @@ function ReplyComposer({
   placeholder,
   words,
   sendable,
+  typing,
   children,
 }: {
   placeholder: string;
   words?: string | undefined;
   sendable: boolean;
+  /** Whether the story is typing `words`, which a caret follows. */
+  typing?: boolean | undefined;
   children?: ReactNode;
 }): React.JSX.Element {
   return (
     <ComposerFrame>
       {children}
-      <ComposerField label={placeholder} placeholder={placeholder} words={words} />
+      <ComposerField label={placeholder} placeholder={placeholder} words={words} typing={typing} />
       <ComposerFoot
         send={{ label: "Send", empty: !sendable }}
         tools={<IconButton icon={<PlusIcon />} label="Attach files" onClick={still} />}
@@ -431,10 +437,19 @@ function ReplyComposer({
 }
 
 /** The reader's draft under the question: its options in the composer, a note, and the new thread's choice. */
-function DraftAnswer({ picked, note }: { picked: boolean; note: string }): React.JSX.Element {
+function DraftAnswer({
+  picked,
+  note,
+  typing,
+}: {
+  picked: boolean;
+  note: string;
+  /** Whether the story is typing `note`. */
+  typing: boolean;
+}): React.JSX.Element {
   return (
     <>
-      <ReplyComposer placeholder="Add a note" words={note} sendable={picked}>
+      <ReplyComposer placeholder="Add a note" words={note} sendable={picked} typing={typing}>
         <div className="ui-landing-draft-ask">
           <div className="ui-landing-draft-ask-options">
             <AskChoices picked={picked} readOnly={false} />
@@ -465,9 +480,12 @@ function DraftAnswer({ picked, note }: { picked: boolean; note: string }): React
 function QuestionThread({
   step,
   note,
+  typing = false,
 }: {
   step: number;
   note?: string | undefined;
+  /** Whether the story is typing `note`. */
+  typing?: boolean | undefined;
 }): React.JSX.Element {
   const member = useLandingMember();
   const sent = step >= 5;
@@ -502,7 +520,11 @@ function QuestionThread({
             {sent ? (
               <ReplyComposer placeholder="Reply" sendable={false} />
             ) : (
-              <DraftAnswer picked={step >= 3} note={note ?? (step >= 4 ? QUESTION.NOTE : "")} />
+              <DraftAnswer
+                picked={step >= 3}
+                note={note ?? (step >= 4 ? QUESTION.NOTE : "")}
+                typing={typing}
+              />
             )}
           </Comment>
         </li>
@@ -803,7 +825,11 @@ function InboxScene(): React.JSX.Element {
               </List>
             </div>
             <div className="ui-landing-demo-thread">
-              <QuestionThread step={threadStep(beat)} note={note} />
+              <QuestionThread
+                step={threadStep(beat)}
+                note={note}
+                typing={beat === INBOX_BEAT.TYPE}
+              />
             </div>
           </div>
         </ColumnCard>
@@ -902,32 +928,6 @@ function TeammateMessage({
 
 const ACCEPT_PAGE = "Accept page";
 const INVITE_EMAILS = "Invite emails";
-
-/** A sub-task of the plan beside the log. */
-type SubTask = {
-  readonly id: string;
-  readonly name: string;
-  readonly status: TaskStatus;
-  readonly key: string;
-};
-
-/** The sub-tasks at `step`, each stepping toward done as the story goes. */
-function subTasks(step: number): readonly SubTask[] {
-  const at = (from: number, to: number): TaskStatus =>
-    step >= to ? TASK_STATUS.DONE : step >= from ? TASK_STATUS.IN_PROGRESS : TASK_STATUS.TODO;
-
-  return [
-    { id: "schema", name: "Pending memberships schema", status: TASK_STATUS.DONE, key: "VES-54" },
-    {
-      id: "endpoints",
-      name: "Invite and accept endpoints",
-      status: TASK_STATUS.DONE,
-      key: "VES-55",
-    },
-    { id: "accept", name: ACCEPT_PAGE, status: at(1, 6), key: "VES-56" },
-    { id: "emails", name: "Invite emails through Postmark", status: at(0, 9), key: "VES-57" },
-  ];
-}
 
 /** The task's tab strip: the agent on show, the one it started once it has, and the way to open another. */
 function TaskTabs({ step }: { step: number }): React.JSX.Element {
@@ -1042,48 +1042,6 @@ export function PullRequestCard({
   );
 }
 
-/**
- * The plan's sub-tasks at `step`, as the side panel lists them, on a sheet of
- * their own beside the log, each stepping toward done as the agents work.
- */
-function SubTasksCard({ step }: { step: number }): React.JSX.Element {
-  const tasks = subTasks(step);
-  const done = tasks.filter((task) => task.status === TASK_STATUS.DONE).length;
-
-  return (
-    <div className="ui-landing-card-sheet ui-landing-satellite">
-      <div className="ui-landing-side-sheet">
-        <GroupHeader
-          heading={GROUP_HEADING.NONE}
-          glyph={<GLYPH.SUB_TASK />}
-          label="Sub-tasks"
-          mark={
-            <ProgressCount
-              done={done}
-              total={tasks.length}
-              label="sub-tasks done"
-              look={PROGRESS_COUNT_LOOK.BADGE}
-            />
-          }
-        />
-        <List label="Sub-tasks" density={LIST_DENSITY.DENSE}>
-          {tasks.map((task) => (
-            <ListRow
-              key={task.id}
-              motionKey={task.id}
-              density={LIST_DENSITY.DENSE}
-              leading={<TaskStatusMark status={task.status} />}
-              title={task.name}
-              meta={task.key}
-              onPress={still}
-            />
-          ))}
-        </List>
-      </div>
-    </div>
-  );
-}
-
 /** The agent's log at `step` under its tabs: its words, its calls, and the other agent's answers. */
 function LogCard({ step }: { step: number }): React.JSX.Element {
   return (
@@ -1124,7 +1082,6 @@ function AgentsScene(): React.JSX.Element {
     >
       <div className="ui-landing-closeup-cards" inert>
         <LogCard step={step} />
-        <SubTasksCard step={step} />
       </div>
     </div>
   );

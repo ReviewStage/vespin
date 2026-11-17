@@ -17,6 +17,23 @@ export const STORY_NOW = Date.UTC(2026, 10, 2, 21, 52);
 
 export const MINUTE = 60_000;
 
+/** How long before a loop's end a scene starts fading out, in milliseconds, so it starts over from a blank rather than cutting back to its start. */
+const LOOP_FADE = 450;
+
+/**
+ * Marks `scene` as leaving its loop while `left`, the milliseconds before
+ * the loop ends, is within `LOOP_FADE`, which the scene's sheets read to
+ * fade out and, once the loop starts over, back in (`landing.css`).
+ */
+function markLoopEnd(scene: HTMLElement, left: number): void {
+  const ending = left <= LOOP_FADE;
+
+  if (ending === (scene.dataset.loop === "out")) return;
+
+  if (ending) scene.dataset.loop = "out";
+  else delete scene.dataset.loop;
+}
+
 /** Nothing: no part of a scene is ever pressed. */
 export function still(): void {}
 
@@ -57,7 +74,10 @@ export function useStory(
     const tick = (ms: number): void => {
       if (shown && previous !== undefined) played += ms - previous;
       previous = ms;
+      const total = count * beat;
+
       setStep(Math.floor(played / beat) % count);
+      markLoopEnd(scene, total - (played % total));
       frame = requestAnimationFrame(tick);
     };
 
@@ -119,6 +139,7 @@ export function useTimeline(
       }
 
       setBeat(at);
+      markLoopEnd(scene, total - (played % total));
       frame = requestAnimationFrame(tick);
     };
 

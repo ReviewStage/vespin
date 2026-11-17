@@ -75,6 +75,7 @@ import { Toolbar } from "../toolbar/toolbar.js";
 import { TOOLBAR_INSET } from "../toolbar/toolbar-frame.js";
 import { UnreadMark } from "../unread-mark/unread-mark.js";
 import { WorkingMark } from "../working-mark/working-mark.js";
+import { TypingCaret } from "./landing-caret.js";
 import {
   DESKTOP_PLACE,
   DesktopPlaces,
@@ -527,25 +528,30 @@ function ComposerField({
   onWords,
   onSend,
   rows = 1,
+  typing = false,
 }: {
   label: string;
   words: string;
   onWords: (words: string) => void;
   onSend?: (() => void) | undefined;
   rows?: number | undefined;
+  /** Whether the story is typing `words`, which a caret follows. */
+  typing?: boolean | undefined;
 }): React.JSX.Element {
   return (
     <ComposerBody>
       <div className="ui-hero-composer-field">
-        <TextArea
-          label={label}
-          value={words}
-          placeholder={label}
-          look={TEXT_AREA_LOOK.BARE}
-          rows={rows}
-          onChange={onWords}
-          onSubmit={onSend}
-        />
+        <TypingCaret words={words} typing={typing}>
+          <TextArea
+            label={label}
+            value={words}
+            placeholder={label}
+            look={TEXT_AREA_LOOK.BARE}
+            rows={rows}
+            onChange={onWords}
+            onSubmit={onSend}
+          />
+        </TypingCaret>
       </div>
     </ComposerBody>
   );
@@ -561,6 +567,7 @@ function AgentComposer({
   working = false,
   rows,
   head,
+  typing,
 }: {
   label: string;
   words: string;
@@ -570,13 +577,22 @@ function AgentComposer({
   working?: boolean | undefined;
   rows?: number | undefined;
   head?: ReactNode;
+  /** Whether the story is typing `words`, which a caret follows. */
+  typing?: boolean | undefined;
 }): React.JSX.Element {
   const send = sendable ? onSend : undefined;
 
   return (
     <ComposerFrame>
       {head}
-      <ComposerField label={label} words={words} onWords={onWords} onSend={send} rows={rows} />
+      <ComposerField
+        label={label}
+        words={words}
+        onWords={onWords}
+        onSend={send}
+        rows={rows}
+        typing={typing}
+      />
       <ComposerFoot
         send={{ label: "Send", empty: send === undefined, onSend: send }}
         stop={working && send === undefined ? { label: "Stop", onStop: still } : undefined}
@@ -1035,7 +1051,16 @@ function TranscriptLine({ line }: { line: Line }): React.JSX.Element {
 }
 
 /** A task's page: its name on the frame, its agent's tab and the task's checks beside it, the transcript, the dock of its pull request and Inbox, and the follow-up box holding `followUp`. */
-function TaskPage({ task, followUp }: { task: Task; followUp: string }): React.JSX.Element {
+function TaskPage({
+  task,
+  followUp,
+  typing,
+}: {
+  task: Task;
+  followUp: string;
+  /** Whether the story is typing `followUp`. */
+  typing: boolean;
+}): React.JSX.Element {
   const started = task.lines.length > 0;
   const checks = useMenu(false);
 
@@ -1118,6 +1143,7 @@ function TaskPage({ task, followUp }: { task: Task; followUp: string }): React.J
             onSend={still}
             sendable={followUp.trim() !== ""}
             working={task.working}
+            typing={typing}
           />
         </div>
       </section>
@@ -1396,7 +1422,13 @@ export function LandingHeroApp(): React.JSX.Element {
 
     if (task === undefined) return null;
 
-    return <TaskPage task={task} followUp={beat === BEAT.TYPE ? typed : ""} />;
+    return (
+      <TaskPage
+        task={task}
+        followUp={beat === BEAT.TYPE ? typed : ""}
+        typing={beat === BEAT.TYPE}
+      />
+    );
   };
 
   return (
