@@ -12,16 +12,28 @@
  * 5-hour and 7-day windows are read from the headers whatever the status,
  * since a plan at its limit answers 429 with them, and each replaces the
  * window of its length the plan held, the per-model windows a turn heard
- * kept. A request that fails, times out, or carries no such header
- * changes nothing. The token goes to Anthropic alone and is never logged;
- * nothing of the answer is read but the headers.
+ * kept. An answer that went through also says the plan has room now, so
+ * a limit a turn wrote earlier is lifted at once (`setPlanStatus`) rather
+ * than standing until the reset it named, which a plan upgraded since, or
+ * one whose limit lifted early, never reaches; a launch then chooses it
+ * again (`turnPayerOf`). A request that fails, times out, or carries no
+ * such header changes nothing. The token goes to Anthropic alone and is
+ * never logged; nothing of the answer is read but its status and headers.
  */
 
 import type { KeyRing } from "@repo/database/models/provider-key-seal";
 import { openProviderKey } from "@repo/database/models/provider-key-seal";
-import { type ProviderKeyRow, setPlanUsage } from "@repo/database/models/provider-key-store";
+import {
+  type ProviderKeyRow,
+  setPlanStatus,
+  setPlanUsage,
+} from "@repo/database/models/provider-key-store";
 import type { StoredUsageWindow } from "@repo/database/schemas/account-provider-key";
-import { PROVIDER_KEY_KIND, PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
+import {
+  PROVIDER_KEY_KIND,
+  PROVIDER_KEY_PROVIDER,
+  PROVIDER_KEY_STATUS,
+} from "@repo/features/provider-key-wire";
 import { DateTime, Duration, Effect, Option, Redacted, Result } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
@@ -38,6 +50,9 @@ const CLAUDE_QUOTA_CHECK = {
     messages: [{ role: "user", content: "quota" }],
   },
 } as const;
+
+/** The statuses of an answer that went through, which only a plan with room is given. */
+const ANSWERED = { FROM: 200, TO: 299 } as const;
 
 /** How long Anthropic is given to answer before the plan keeps what it held. */
 const CHECK_TIMEOUT = Duration.seconds(10);
@@ -84,8 +99,14 @@ function claudeUsageWindows(
   });
 }
 
-/** The quota check on the token, its answer's headers; none where it failed or timed out. */
-const askHeaders = /* @__PURE__ */ Effect.fnUntraced(function* (token: Redacted.Redacted<string>) {
+/** What of the quota check's answer is read: its status and its headers. */
+interface QuotaAnswer {
+  readonly status: number;
+  readonly headers: Readonly<Record<string, string>>;
+}
+
+/** The quota check on the token, its answer's status and headers; none where it failed or timed out. */
+const askQuota = /* @__PURE__ */ Effect.fnUntraced(function* (token: Redacted.Redacted<string>) {
   const client = yield* HttpClient.HttpClient;
 
   const request = HttpClientRequest.post(CLAUDE_QUOTA_CHECK.URL).pipe(
@@ -100,10 +121,12 @@ const askHeaders = /* @__PURE__ */ Effect.fnUntraced(function* (token: Redacted.
 
   // Note that a failure's cause is dropped unread, since it may quote the token, and the body is never read.
   return yield* client.execute(request).pipe(
-    Effect.map((response) => Option.some(response.headers)),
+    Effect.map((response) =>
+      Option.some<QuotaAnswer>({ status: response.status, headers: response.headers }),
+    ),
     Effect.scoped,
     Effect.timeout(CHECK_TIMEOUT),
-    Effect.orElseSucceed(() => Option.none<Readonly<Record<string, string>>>()),
+    Effect.orElseSucceed(() => Option.none<QuotaAnswer>()),
   );
 });
 
@@ -115,15 +138,29 @@ export function rereadClaudeUsage(userId: string, ring: KeyRing, row: ProviderKe
 
       if (Result.isFailure(token)) return;
       const asked = yield* DateTime.nowAsDate;
-      const headers = yield* askHeaders(token.success);
+      const answer = yield* askQuota(token.success);
 
-      if (Option.isNone(headers)) return;
+      if (Option.isNone(answer)) return;
+      const { status, headers } = answer.value;
       const heard = yield* DateTime.nowAsDate;
       yield* Effect.forEach(
-        claudeUsageWindows(headers.value),
+        claudeUsageWindows(headers),
         (window) =>
           setPlanUsage(userId, OWNER_KIND.provider, OWNER_KIND.kind, window, heard, asked, row.id),
         { discard: true },
+      );
+
+      // Note that only an answer that went through lifts a limit; a 429 or any refusal leaves the status a turn wrote.
+      if (status < ANSWERED.FROM || status > ANSWERED.TO) return;
+      yield* setPlanStatus(
+        userId,
+        OWNER_KIND.provider,
+        OWNER_KIND.kind,
+        PROVIDER_KEY_STATUS.VERIFIED,
+        undefined,
+        asked,
+        heard,
+        row.id,
       );
     }),
   );

@@ -1299,6 +1299,59 @@ it.layer(getTestDB())("the provider keys route", (it) => {
   );
 
   it.effect(
+    "a Claude plan's refresh that goes through lifts the limit a turn wrote before its named reset, and one Anthropic answers 429 keeps it",
+    () =>
+      Effect.gen(function* () {
+        const standingAfter = (status: number) =>
+          Effect.gen(function* () {
+            const { owner, ask } = yield* openAccounts({
+              ring: KEK.ONE,
+              fast: new Map([[SETUP_TOKEN, new Response("{}", { status })]]),
+            });
+
+            yield* ask(saveToken(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, SETUP_TOKEN));
+            const planId = keysOf(yield* ask(request(owner))).subscriptions?.[0]?.id ?? "";
+            const now = new Date(yield* Clock.currentTimeMillis);
+            const resetsAt = new Date(now.getTime() + 3 * 24 * 60 * 60_000);
+            yield* setPlanStatus(
+              owner,
+              PROVIDER_KEY_PROVIDER.ANTHROPIC,
+              PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+              PROVIDER_KEY_STATUS.LIMIT_REACHED,
+              resetsAt,
+              now,
+              now,
+              planId,
+            );
+
+            const refreshed = keysOf(
+              yield* ask(
+                request(owner, {
+                  method: "POST",
+                  path: "/api/account/provider-keys/usage",
+                  body: { subscriptionId: planId },
+                }),
+              ),
+            ).subscriptions?.[0];
+
+            return {
+              status: refreshed?.status,
+              lifted: refreshed?.limitResetsAt === undefined,
+            };
+          });
+
+        assert.deepEqual(yield* standingAfter(200), {
+          status: PROVIDER_KEY_STATUS.VERIFIED,
+          lifted: true,
+        });
+        assert.deepEqual(yield* standingAfter(429), {
+          status: PROVIDER_KEY_STATUS.LIMIT_REACHED,
+          lifted: false,
+        });
+      }),
+  );
+
+  it.effect(
     "a Claude plan's refresh reads its 5-hour and weekly windows from the headers Anthropic answers a one-token quota check with, a 429 at its limit included",
     () =>
       Effect.gen(function* () {
