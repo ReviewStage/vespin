@@ -78,6 +78,24 @@ export interface SecretCipher {
   openText?(sealedText: string): string;
 }
 
+/**
+ * The account's tokens kept by the platform itself, as the iPhone's Keychain
+ * keeps them through `expo-secure-store`, rather than sealed by the host
+ * into the settings file. The settings file then keeps only who is signed in,
+ * with `TOKENS_IN_VAULT` in its tokens' place.
+ */
+export interface TokenVault {
+  /** The tokens' text the platform keeps, or none where it keeps none or won't read. */
+  readonly read: Effect.Effect<string | undefined>;
+  /** Keeps `tokens`' text in place of any kept before; fails where the platform refuses it. */
+  readonly write: (tokens: string) => Effect.Effect<void, EncryptedStorageUnavailable>;
+  /** Forgets the tokens' text, as a sign-out does. */
+  readonly clear: Effect.Effect<void>;
+}
+
+/** What the settings file keeps in an account's tokens' place where a `TokenVault` keeps them. */
+export const TOKENS_IN_VAULT = "token-vault";
+
 export interface SettingsStoreOptions {
   directory: () => string;
   /**
@@ -86,6 +104,13 @@ export interface SettingsStoreOptions {
    * cipher is unavailable.
    */
   cipher: SecretCipher | undefined;
+  /**
+   * Where the platform keeps the account's tokens itself. Where it's handed,
+   * the store keeps an account with no cipher, and a record whose tokens an
+   * older build sealed is opened once with `cipher` and moved into it, so an
+   * update signs no one out.
+   */
+  tokenVault?: TokenVault;
   /**
    * Whether this run is a packaged build, which decides what a setting whose
    * default is the build's reads as while nothing is stored. True by default.
@@ -441,6 +466,34 @@ type AccountTokens = typeof AccountTokensSchema.Type;
 const decodeAccountTokens = Schema.decodeUnknownResult(Schema.fromJsonString(AccountTokensSchema));
 
 /**
+ * The tokens' text a `TokenVault` keeps: the tokens and whose they are, so a
+ * record naming another account (a sign-in whose record write failed after
+ * its vault write) reads as no account rather than as one person's identity
+ * over another's tokens.
+ */
+const VaultTokensSchema = Schema.Struct({
+  ...AccountTokensSchema.fields,
+  accountEmail: Schema.String,
+});
+
+const decodeVaultTokens = Schema.decodeUnknownResult(Schema.fromJsonString(VaultTokensSchema));
+
+/** `tokens` as the vault keeps them, for `accountEmail`. */
+function vaultText(tokens: AccountTokens, accountEmail: string): string {
+  return JSON.stringify({ ...tokens, accountEmail });
+}
+
+/** The tokens a vault's text holds for `accountEmail`, and none for anyone else. */
+function vaultTokensFor(text: string, accountEmail: string): AccountTokens | undefined {
+  const decoded = Result.getOrUndefined(decodeVaultTokens(text));
+
+  if (decoded === undefined || decoded.accountEmail !== accountEmail) return undefined;
+  const { accountEmail: _accountEmail, ...tokens } = decoded;
+
+  return tokens;
+}
+
+/**
  * The record as the store keeps it: a section its reader could not read is
  * not a key holding `undefined` but no key at all, and a sync baseline and
  * the experiments are kept only for the account signed in, since one left by
@@ -547,6 +600,7 @@ function parsePersistedSettings(
 export class SettingsStore {
   readonly #directory: () => string;
   readonly #cipher: SecretCipher | undefined;
+  readonly #vault: TokenVault | undefined;
   readonly #packaged: boolean;
   readonly #sessionAccountEmail: (() => Effect.Effect<string | undefined>) | undefined;
   readonly #fileSystem: FileSystem.FileSystem;
@@ -568,6 +622,13 @@ export class SettingsStore {
    * either wrote, so the later write would drop the other's change.
    */
   readonly #writes = Semaphore.makeUnsafe(1);
+  /**
+   * Runs one change of who is signed in at a time, across the vault and the
+   * record: a sign-in, a sign-out, or an older build's tokens moving into the
+   * vault. Without it a move begun for one account could write its tokens
+   * after a sign-out cleared the vault, or over the next account's.
+   */
+  readonly #accounts = Semaphore.makeUnsafe(1);
   /**
    * The account whose preferences the service has answered, or failed to,
    * since it signed in to this host: until then the preferences this store
@@ -778,6 +839,7 @@ export class SettingsStore {
   constructor(options: SettingsStoreOptions) {
     this.#directory = options.directory;
     this.#cipher = options.cipher;
+    this.#vault = options.tokenVault;
     this.#packaged = options.packaged ?? true;
     this.#sessionAccountEmail = options.sessionAccountEmail;
     this.#fileSystem = options.fileSystem;
@@ -809,9 +871,11 @@ export class SettingsStore {
 
   /** Returns account credentials only to the main process. */
   readAccount(): Effect.Effect<StoredAccount | undefined, PlatformError> {
-    return Effect.map(this.#load(), ({ account }) => {
+    return Effect.gen({ self: this }, function* () {
+      const { account } = yield* this.#load();
+
       if (!account) return undefined;
-      const tokens = this.#decryptTokens(account.tokenCipher);
+      const tokens = yield* this.#tokensOf(account);
 
       if (tokens === undefined) return undefined;
 
@@ -824,6 +888,64 @@ export class SettingsStore {
         provider: account.provider,
       };
     });
+  }
+
+  /**
+   * The account's tokens: the vault's where the record says the vault keeps
+   * them, and otherwise the sealed text's, which, where a vault is handed, is
+   * an older build's and is moved into the vault once read, its record then
+   * naming the vault. Note that a move the vault refuses leaves the sealed
+   * text as it was, so the next launch moves it again rather than signing out.
+   */
+  #tokensOf(account: PersistedAccount): Effect.Effect<AccountTokens | undefined, PlatformError> {
+    return Effect.gen({ self: this }, function* () {
+      const vault = this.#vault;
+
+      if (account.tokenCipher === TOKENS_IN_VAULT) {
+        const text = vault === undefined ? undefined : yield* vault.read;
+
+        return text === undefined ? undefined : vaultTokensFor(text, account.email);
+      }
+
+      const tokens = this.#decryptTokens(account.tokenCipher);
+
+      if (tokens !== undefined && vault !== undefined)
+        yield* this.#moveIntoVault(vault, account, tokens);
+
+      return tokens;
+    });
+  }
+
+  /**
+   * Moves an older build's sealed tokens into the vault, the record then
+   * naming it. It runs only while the record still holds those sealed tokens,
+   * checked inside the account gate, so a sign-out or another sign-in since
+   * the read is never undone. Note that the move is best-effort: a vault that
+   * refuses, or a record that won't write, leaves the sealed text as it was,
+   * and the next read moves it again.
+   */
+  #moveIntoVault(
+    vault: TokenVault,
+    account: PersistedAccount,
+    tokens: AccountTokens,
+  ): Effect.Effect<void> {
+    const stillHeld = (persisted: PersistedSettings) =>
+      persisted.account?.tokenCipher === account.tokenCipher;
+
+    return this.#accounts.withPermits(1)(
+      Effect.gen({ self: this }, function* () {
+        if (!stillHeld(yield* this.#load())) return;
+        const moved = yield* Effect.result(vault.write(vaultText(tokens, account.email)));
+
+        if (Result.isFailure(moved)) return;
+
+        yield* this.#mutate((persisted) =>
+          stillHeld(persisted) && persisted.account !== undefined
+            ? { ...persisted, account: { ...persisted.account, tokenCipher: TOKENS_IN_VAULT } }
+            : undefined,
+        );
+      }).pipe(Effect.ignore),
+    );
   }
 
   accountSnapshot(): Effect.Effect<AccountSnapshot, PlatformError> {
@@ -847,45 +969,70 @@ export class SettingsStore {
   ): Effect.Effect<AccountSnapshot, PlatformError | EncryptedStorageUnavailable> {
     return Effect.gen({ self: this }, function* () {
       const cipher = this.#cipher;
+      const vault = this.#vault;
 
-      if (!cipher || !this.#secretStorageUsable()) {
+      const held: AccountTokens = {
+        accessToken: account.accessToken,
+        refreshToken: account.refreshToken,
+        ...(account.sessionToken ? { sessionToken: account.sessionToken } : undefined),
+      };
+
+      if (vault === undefined && (!cipher || !this.#secretStorageUsable())) {
         return yield* new EncryptedStorageUnavailable();
       }
 
-      yield* this.#mutate((persisted) => {
-        const tokenCipher = Base64.encode(
-          cipher.encrypt(
-            JSON.stringify({
-              accessToken: account.accessToken,
-              refreshToken: account.refreshToken,
-              ...(account.sessionToken ? { sessionToken: account.sessionToken } : undefined),
-            }),
-          ),
-        );
-
-        const next: PersistedSettings = {
-          ...persisted,
-          account: {
-            tokenCipher,
-            ...(account.id ? { id: account.id } : undefined),
-            email: account.email,
-            ...(account.name ? { name: account.name } : undefined),
-            ...(account.pictureUrl ? { pictureUrl: account.pictureUrl } : undefined),
-            provider: account.provider,
-          },
-        };
-
-        if (persisted.account?.email && persisted.account.email !== account.email) {
-          for (const field of ACCOUNT_PREFERENCE_FIELDS) next[field] = undefined;
-          delete next.accountPreferencesSync;
-          delete next.experiments;
-        }
-
-        return next;
-      });
+      yield* this.#commitAccount(account, held);
 
       return yield* this.accountSnapshot();
     });
+  }
+
+  /**
+   * Keeps `account` with its tokens `held`, inside the account gate: the
+   * vault keeps the tokens before the record names it, so a record never
+   * names tokens nobody keeps, and a record a failed write left naming the
+   * account before reads none of them (`vaultTokensFor`). Another account's
+   * preferences, sync baseline and experiments go with it.
+   */
+  #commitAccount(
+    account: StoredAccount,
+    held: AccountTokens,
+  ): Effect.Effect<void, PlatformError | EncryptedStorageUnavailable> {
+    const cipher = this.#cipher;
+    const vault = this.#vault;
+
+    const tokenCipher =
+      vault !== undefined || cipher === undefined
+        ? TOKENS_IN_VAULT
+        : Base64.encode(cipher.encrypt(JSON.stringify(held)));
+
+    const kept = this.#mutate((persisted) => {
+      const next: PersistedSettings = {
+        ...persisted,
+        account: {
+          tokenCipher,
+          ...(account.id ? { id: account.id } : undefined),
+          email: account.email,
+          ...(account.name ? { name: account.name } : undefined),
+          ...(account.pictureUrl ? { pictureUrl: account.pictureUrl } : undefined),
+          provider: account.provider,
+        },
+      };
+
+      if (persisted.account?.email && persisted.account.email !== account.email) {
+        for (const field of ACCOUNT_PREFERENCE_FIELDS) next[field] = undefined;
+        delete next.accountPreferencesSync;
+        delete next.experiments;
+      }
+
+      return next;
+    });
+
+    return this.#accounts.withPermits(1)(
+      vault === undefined
+        ? kept
+        : Effect.andThen(vault.write(vaultText(held, account.email)), kept),
+    );
   }
 
   /**
@@ -894,25 +1041,35 @@ export class SettingsStore {
    * session's account, since that account is the one leaving.
    */
   clearAccount(): Effect.Effect<AccountSnapshot, PlatformError> {
-    const keepsOwnAccount = this.#cipher !== undefined;
+    const keepsOwnAccount = this.#keepsOwnAccount();
 
     return Effect.as(
-      this.#mutate((persisted) => {
-        // Note that the account's preferences go below, so a sign-in again reads them again before they stand.
-        this.forgetAccountRead();
+      this.#accounts.withPermits(1)(
+        Effect.andThen(
+          this.#vault?.clear ?? Effect.void,
+          this.#mutate((persisted) => {
+            // Note that the account's preferences go below, so a sign-in again reads them again before they stand.
+            this.forgetAccountRead();
 
-        if (keepsOwnAccount && !persisted.account) return undefined;
-        const { account: _account, ...withoutAccount } = persisted;
-        const next: PersistedSettings = { ...withoutAccount };
+            if (keepsOwnAccount && !persisted.account) return undefined;
+            const { account: _account, ...withoutAccount } = persisted;
+            const next: PersistedSettings = { ...withoutAccount };
 
-        for (const field of ACCOUNT_PREFERENCE_FIELDS) next[field] = undefined;
-        delete next.accountPreferencesSync;
-        delete next.experiments;
+            for (const field of ACCOUNT_PREFERENCE_FIELDS) next[field] = undefined;
+            delete next.accountPreferencesSync;
+            delete next.experiments;
 
-        return next;
-      }),
+            return next;
+          }),
+        ),
+      ),
       { status: ACCOUNT_STATUS.SIGNED_OUT },
     );
+  }
+
+  /** Whether this store keeps the account itself, its tokens sealed or in a vault, rather than reading it off a session it keeps none for. */
+  #keepsOwnAccount(): boolean {
+    return this.#cipher !== undefined || this.#vault !== undefined;
   }
 
   /**
@@ -925,7 +1082,7 @@ export class SettingsStore {
    * store that keeps its own account settles this in `setAccount`.
    */
   settleSessionAccount(accountEmail: string): Effect.Effect<void, PlatformError> {
-    if (this.#cipher !== undefined) return Effect.void;
+    if (this.#keepsOwnAccount()) return Effect.void;
 
     return this.#mutate((persisted) => {
       const keptFor =
@@ -1007,8 +1164,7 @@ export class SettingsStore {
   #accountEmailOf(): Effect.Effect<AccountEmailOf> {
     const read = this.#sessionAccountEmail;
 
-    if (this.#cipher !== undefined || read === undefined)
-      return Effect.succeed(STORED_ACCOUNT_EMAIL);
+    if (this.#keepsOwnAccount() || read === undefined) return Effect.succeed(STORED_ACCOUNT_EMAIL);
 
     return Effect.map(read(), (email) => () => email);
   }
@@ -1144,7 +1300,7 @@ export class SettingsStore {
       // A corrupt settings file is replaced by the next write rather than
       // failing app start, so it falls back to defaults exactly as an absent
       // file does, and carries nothing.
-      const parsed = parsePersistedSettings(source, this.#cipher !== undefined);
+      const parsed = parsePersistedSettings(source, this.#keepsOwnAccount());
 
       if (parsed === undefined) return defaultPersistedSettings();
       this.#carried = carriedSettingsFields(source);
