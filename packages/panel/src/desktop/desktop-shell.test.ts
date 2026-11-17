@@ -2,6 +2,14 @@
 
 import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import {
+  INBOX_ASK,
+  INBOX_ASK_STATUS,
+  INBOX_MESSAGE_AUTHOR,
+  INBOX_STATUS,
+  INBOX_WIRE_VERSION,
+  type InboxItem,
+} from "@repo/features/inbox-wire";
 import { DESCRIPTION_ACTOR, type Task } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
@@ -58,6 +66,7 @@ import {
   newTaskControl,
   type TasksControlOverrides,
   tasksControl,
+  waitingOf,
 } from "../testing/tasks-control.js";
 import { holdingInboxChoice, leavingBy } from "../testing/window-router.js";
 import { DesktopShell } from "./desktop-shell.js";
@@ -1027,20 +1036,46 @@ function spokenName(item: HTMLElement): string {
   return heard.textContent ?? "";
 }
 
-test("on a phone the bar's Inbox wears the count of what needs the reader, named in the sidebar's words, and none at zero", async () => {
-  // Note that main lists the three questions it counts, as its read of the account does.
-  const asks = ["q-1", "q-2", "q-3"].map((id) => ({ id, agentId: "a-1", title: id, postedAt: 0 }));
-  handInbox({
-    waiting: [{ taskId: DOCUMENT_TASK.id, items: asks }],
-    tasks: [{ taskId: DOCUMENT_TASK.id, items: 3, toDo: 3, updatedAt: 0 }],
-  });
+test("on a phone the bar's Inbox wears the count of what the Inbox's view lists, named in the sidebar's words, and none at zero", async () => {
+  // Note that the account's feed holds the three open questions, which Open, the view a fresh profile shows, lists.
+  window.localStorage.clear();
+
+  const asks: readonly InboxItem[] = ["q-1", "q-2", "q-3"].map((id) => ({
+    id,
+    agentId: "a-1",
+    key: id,
+    revision: 1,
+    version: INBOX_WIRE_VERSION,
+    title: id,
+    needsReply: true,
+    status: INBOX_STATUS.OPEN,
+    thread: [
+      {
+        id: `m-${id}`,
+        author: INBOX_MESSAGE_AUTHOR.AGENT,
+        text: id,
+        ask: { type: INBOX_ASK.ANSWER, status: INBOX_ASK_STATUS.OPEN },
+        createdAt: 0,
+      },
+    ],
+    postedAt: 0,
+    updatedAt: 0,
+  }));
+
+  handInbox(
+    {
+      waiting: [{ taskId: DOCUMENT_TASK.id, items: asks.map(waitingOf) }],
+      tasks: [{ taskId: DOCUMENT_TASK.id, items: 3, toDo: 3, updatedAt: 0 }],
+    },
+    { [DOCUMENT_TASK.id]: asks },
+  );
 
   const page = await mountNarrow(
     { at: SHELL_AT.BOARD, tasks: [DOCUMENT_TASK] },
     { overlay: SIDEBAR_OVERLAY.OPEN },
   );
 
-  const inbox = barItems(page).find((item) => spokenName(item) === "Inbox, 3 need you");
+  const inbox = barItems(page).find((item) => spokenName(item) === "Inbox, 3 open");
   assert.ok(inbox, "the bar's Inbox is named with its count");
   assert.match(inbox.textContent ?? "", /3/u, "the Inbox's count is drawn");
   act(() => root?.unmount());

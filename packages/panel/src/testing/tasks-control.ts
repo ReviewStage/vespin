@@ -3,6 +3,7 @@ import {
   type AgentMessagesAnswerView,
   type AgentTranscriptKey,
   type AgentTranscriptPage,
+  INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
 import {
   type AgentOlderAnswer,
@@ -10,6 +11,7 @@ import {
   type ListedAgent,
 } from "@repo/features/agent-wire";
 import type { InboxItem } from "@repo/features/inbox-wire";
+import { LIVE_READ } from "@repo/features/live-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import type {
@@ -381,11 +383,19 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
 
 /**
  * Hands the window main's document with its inbox read holding the slices
- * given, nothing in the rest; written into the test's Query client too, so
- * a case that draws synchronously finds them in its first frame.
+ * given, nothing in the rest, and the account's feed holding each task's
+ * items given, none where none are; written into the test's Query client
+ * too, so a case that draws synchronously finds them in its first frame.
  */
-export function handInbox(inbox: Partial<AppInboxSlice>): void {
-  const patch = { inbox: { ...stateWith({}, {}).inbox, ...inbox } };
+export function handInbox(
+  inbox: Partial<AppInboxSlice>,
+  fed: Readonly<Record<string, readonly InboxItem[]>> = {},
+): void {
+  const patch = {
+    inbox: { ...stateWith({}, {}).inbox, ...inbox },
+    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.TASK]: fed } },
+  };
+
   handState({}, patch);
   writeAppState(stateWith({}, patch));
 }
