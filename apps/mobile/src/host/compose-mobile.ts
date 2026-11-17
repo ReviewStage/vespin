@@ -27,6 +27,7 @@
 
 import { createORPCClient } from "@orpc/client";
 import { type AuthSession, authSessionConsent } from "@repo/credentials";
+import { GITHUB_INSTALL_LANDING } from "@repo/features";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
 import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
 import { LINK_ORIGIN } from "@repo/features/link-home";
@@ -135,6 +136,8 @@ export interface DeviceSeams {
   readonly createId: () => string;
   /** Opens an address outside the app; a sign-in's in the system's authentication sheet, which closes on the page it names as its landing. */
   readonly openExternal: (url: string, landing?: string) => Promise<void>;
+  /** Opens a connection's install in the system's authentication sheet, closed on the page it names as its landing, answering only once the sheet closes. */
+  readonly openSheet: (url: string, landing: string) => Promise<void>;
   /** Opens a relay socket, which the terminals and the live reads ride. */
   readonly openSocket: OpenTerminalSocket;
   /** Whether the app is in the foreground, at each change, for as long as the subscription stands. */
@@ -282,7 +285,12 @@ function portDependencies(
       openExternal,
       serviceBaseUrl: SERVICE_ORIGIN,
     },
-    workspaces: { openExternal },
+    // GitHub's install opens in the authentication sheet, closed as it lands on the service's page, and answers once the sheet closes, so the screen reads again the repositories it reached.
+    workspaces: {
+      openExternal: (url, landing) =>
+        landing === undefined ? openExternal(url) : device.openSheet(url, landing),
+      githubLanding: `${SERVICE_ORIGIN}${GITHUB_INSTALL_LANDING.PATH}`,
+    },
   };
 }
 
