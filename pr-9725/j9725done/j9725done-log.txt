@@ -1,0 +1,18 @@
+== bundle P25head base d3c6edb942
+  built d3c6edb942 base app Vmain3.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+head bounds: 22 199 48 199 menu 0 177 44 221 44 190 180 208
+head-iphone-light-q9725done: fails 0 shots 4 
+head-iphone-light-q9725done: tap 'Done' COMPLETED 09:26:04.857000; 'Mark as Done?' first seen by Maestro +167 ms (upper bound: Maestro polls); sheet head-iphone-light-q9725done-after-tap.png, tiles every 100 ms from the tap
+== bundle P25control base 02ea7b309c
+  built 02ea7b309c base app Vmain3.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+control bounds: 22 199 48 199 menu 0 177 44 221 44 190 180 208
+control-iphone-light-q9725done: fails 0 shots 4 
+control-iphone-light-q9725done: tap 'Done' COMPLETED 09:28:25.283000; 'Mark as Done?' first seen by Maestro +155 ms (upper bound: Maestro polls); sheet control-iphone-light-q9725done-after-tap.png, tiles every 100 ms from the tap
