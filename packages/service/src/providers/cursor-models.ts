@@ -380,18 +380,27 @@ function offeredOf(item: CursorListItem): readonly CursorModel[] {
   ];
 }
 
-/** Cursor's list as the models we offer, in Cursor's order, each model read on its own and one it cannot read left out, the first of any two that would take one id kept. */
+/**
+ * Cursor's list as the models we offer, in Cursor's order, each model read on
+ * its own and one it cannot read left out, the first of any two that would
+ * take one id kept. Note that Cursor names two models alike at times (two
+ * "Auto"s), so one whose name an earlier model took carries its id beside it.
+ */
 export function cursorModelsOf(items: readonly unknown[]): readonly CursorModel[] {
   const taken = new Set<string>();
+  const named = new Set<string>();
 
   return items
     .flatMap((item) => Option.toArray(readListItem(item)))
     .flatMap(offeredOf)
-    .filter((model) => {
-      if (taken.has(model.catalogId)) return false;
+    .flatMap((model) => {
+      if (taken.has(model.catalogId)) return [];
       taken.add(model.catalogId);
 
-      return true;
+      const name = named.has(model.name) ? `${model.name} (${model.cursorId})` : model.name;
+      named.add(model.name);
+
+      return [{ ...model, name }];
     });
 }
 

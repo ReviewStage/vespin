@@ -8,6 +8,10 @@ import {
   type FieldChange,
   fieldKind,
   type HeldRows,
+  type KeptAnswer,
+  type KeptLoad,
+  type KeptRead,
+  type PoolStore,
   type WriteDeclaration,
 } from "./entity-pool.js";
 
@@ -313,4 +317,230 @@ it.effect(
       assert.deepEqual(list.rows.rows(), [{ id: "1", name: "Triage issues", runs: 0 }]);
       assert.equal(refusedCount.now, 0, "a write let go is not told as one the service refused");
     }).pipe(Effect.scoped),
+);
+
+/**
+ * A pool whose store holds `load` for every kept read and records each kept
+ * answer, after `before` runs on it, and a kept read stood on it in a scope
+ * the test closes.
+ */
+function keptStanding(
+  kept: KeptRead<Row>,
+  load?: KeptLoad,
+  before: (pool: EntityPool) => Effect.Effect<unknown> = () => Effect.void,
+) {
+  return Effect.gen(function* () {
+    const told: KeptAnswer[] = [];
+
+    const pool = yield* entityPool({
+      mintKey: () => "key",
+      replayRefused: Effect.void,
+      store: {
+        rows: {
+          answered: (answer) => Effect.sync(() => void told.push(answer)),
+          loaded: () => Effect.succeed(load),
+        },
+      },
+    });
+
+    yield* before(pool);
+    const scope = yield* Scope.make();
+
+    const rows = yield* Scope.provide(scope)(
+      pool.stand(ROW, { redraw: () => Effect.void, confirmation: () => undefined, kept }),
+    );
+
+    return { pool, rows, told, letGo: Scope.close(scope, Exit.void) };
+  });
+}
+
+it.effect(
+  "a kept read hands the store the synced rows that moved and the keys it holds, and nothing as it closes",
+  () =>
+    Effect.gen(function* () {
+      const { pool, rows, told, letGo } = yield* keptStanding({
+        name: "feed",
+        kind: "row",
+        workspace: "w",
+      });
+
+      const triage = { id: "1", name: "Triage", runs: 0 };
+      const deploy = { id: "2", name: "Deploy", runs: 0 };
+      yield* rows.answer([triage, deploy], { cursor: { syncId: 1 } });
+
+      // Note that a write standing over a row never reaches the store; only the service's next answer does.
+      const rename = yield* Effect.forkChild(
+        pool.write({ ...MAKES, change: () => () => ({ name: "Renamed" }) }, deploy),
+      );
+
+      yield* settled;
+      const ship = { id: "3", name: "Ship", runs: 0 };
+      yield* rows.answer([{ ...deploy, runs: 1 }, ship], { cursor: { syncId: 2 } });
+      yield* Fiber.interrupt(rename);
+      yield* letGo;
+
+      assert.deepEqual(told, [
+        {
+          read: "feed",
+          kind: "row",
+          workspace: "w",
+          upserted: [
+            { key: "1", row: triage },
+            { key: "2", row: deploy },
+          ],
+          deleted: [],
+          held: ["1", "2"],
+          cursor: { syncId: 1 },
+        },
+        {
+          read: "feed",
+          kind: "row",
+          workspace: "w",
+          upserted: [
+            { key: "2", row: { ...deploy, runs: 1 } },
+            { key: "3", row: ship },
+          ],
+          deleted: ["1"],
+          held: ["2", "3"],
+          cursor: { syncId: 2 },
+        },
+      ]);
+    }),
+);
+
+it.effect(
+  "a bounded kept read hands the store only its first rows that fit, and no cursor once it leaves one out",
+  () =>
+    Effect.gen(function* () {
+      const { rows, told } = yield* keptStanding({
+        name: "inbox",
+        kind: "row",
+        bound: { size: (row) => row.name.length, within: 10 },
+      });
+
+      const triage = { id: "1", name: "Triage", runs: 0 };
+      const ship = { id: "2", name: "Ship", runs: 0 };
+      yield* rows.answer([triage, ship], { cursor: "c1" });
+      yield* rows.answer([triage, ship, { id: "3", name: "Deploy", runs: 0 }], { cursor: "c2" });
+
+      assert.deepEqual(
+        told.map(({ upserted, held, cursor }) => ({ upserted, held, cursor })),
+        [
+          {
+            upserted: [
+              { key: "1", row: triage },
+              { key: "2", row: ship },
+            ],
+            held: ["1", "2"],
+            cursor: "c1",
+          },
+          { upserted: [], held: ["1", "2"], cursor: undefined },
+        ],
+      );
+    }),
+);
+
+/** How the service answers each send in turn, and what the pool is asked after the first. */
+const OUTBOX_CASES = [
+  { stands: "settles as the service takes it at once", answers: ["took"], after: "nothing" },
+  { stands: "settles once sent again", answers: ["silent", "took"], after: "resend" },
+  { stands: "is refused once sent again", answers: ["silent", "refused"], after: "resend" },
+  { stands: "is let go", answers: ["silent"], after: "letGoQueued" },
+] as const;
+
+it.effect.each(OUTBOX_CASES)(
+  "a write that may wait reaches the store before it is sent, and leaves it as it $stands",
+  ({ answers, after }) =>
+    Effect.gen(function* () {
+      const told: string[] = [];
+      const left = [...answers];
+
+      const rename: WriteDeclaration<Row, FieldChange<Row>, string, string> = {
+        kind: ROW,
+        keys: () => ["1"],
+        change: (name) => () => ({ name }),
+        send: () =>
+          Effect.sync(() => {
+            const answer = left.shift();
+
+            told.push(`sent ${answer}`);
+
+            if (answer === "took") return { answer: "renamed", txid: undefined };
+
+            if (answer === "refused") return { refused: "not renamed" };
+
+            return { refused: "not renamed", unanswered: true as const };
+          }),
+        queue: { name: "rename", input: Schema.String, queued: () => "waits" },
+      };
+
+      const store: PoolStore = {
+        outbox: {
+          added: (entry) =>
+            Effect.sync(() => told.push(`added ${entry.key} ${String(entry.input)}`)),
+          removed: (entry) => Effect.sync(() => told.push(`removed ${entry.key}`)),
+        },
+      };
+
+      const pool = yield* entityPool({ mintKey: () => "key-1", replayRefused: Effect.void, store });
+      const list = yield* standing(pool);
+      yield* list.rows.answer([{ id: "1", name: "Triage", runs: 0 }]);
+      yield* pool.write(rename, "Triage issues");
+
+      if (after === "resend") yield* pool.resend;
+
+      if (after === "letGoQueued") yield* pool.letGoQueued;
+
+      yield* settled;
+
+      assert.deepEqual(told, [
+        "added key-1 Triage issues",
+        ...answers.map((answer) => `sent ${answer}`),
+        "removed key-1",
+      ]);
+    }).pipe(Effect.scoped),
+);
+
+it.effect(
+  "a kept read draws what the store held at once, under the writes standing, until the service's first answer replaces it",
+  () =>
+    Effect.gen(function* () {
+      const triage = { id: "1", name: "Triage", runs: 0 };
+      const deploy = { id: "2", name: "Deploy", runs: 0 };
+
+      const { rows, told } = yield* keptStanding(
+        { name: "feed", kind: "row" },
+        { rows: [triage, deploy], cursor: { syncId: 7 } },
+        (pool) =>
+          Effect.gen(function* () {
+            yield* Effect.forkChild(
+              pool.write({ ...MAKES, change: () => () => ({ name: "Renamed" }) }, deploy),
+            );
+            yield* settled;
+          }),
+      );
+
+      assert.deepEqual(rows.rows(), [triage, { ...deploy, name: "Renamed" }]);
+      assert.deepEqual(rows.stored, { syncId: 7 });
+      assert.deepEqual(told, [], "what the store held is not handed back to it");
+
+      const ship = { id: "3", name: "Ship", runs: 0 };
+      yield* rows.answer([deploy, ship], { cursor: { syncId: 8 } });
+
+      assert.deepEqual(rows.rows(), [{ ...deploy, name: "Renamed" }, ship]);
+      assert.deepEqual(
+        told.map(({ upserted, deleted }) => ({ upserted, deleted })),
+        [{ upserted: [{ key: "3", row: ship }], deleted: ["1"] }],
+        "the store is told only what moved since what it held",
+      );
+    }).pipe(Effect.scoped),
+);
+
+it.effect("a kept read the store holds nothing of stands empty, with no cursor", () =>
+  Effect.gen(function* () {
+    const { rows } = yield* keptStanding({ name: "feed", kind: "row" });
+
+    assert.deepEqual(rows.rows(), []);
+    assert.equal(rows.stored, undefined);
+  }),
 );

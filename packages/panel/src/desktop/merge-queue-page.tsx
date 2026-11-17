@@ -59,9 +59,6 @@ import {
   EmptyState,
   ErrorState,
   GAP,
-  GROUP_ACTIONS,
-  GROUP_LOOK,
-  GroupHeader,
   ListMotion,
   PAGE_FRAME,
   RepositoryPicture,
@@ -69,7 +66,6 @@ import {
   TASK_ROW_CELL,
   TASK_ROW_EDGES,
   TaskRow,
-  type TaskRowCell,
   TaskRowGlyph,
   TaskRows,
   TEXT_ELEMENT,
@@ -102,10 +98,9 @@ import { useRepositoryPictures } from "../repository-pictures.js";
 import { OpenOnGitHubButton } from "../tasks/open-on-github-button.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
-import { RowsSkeleton } from "./person-frame.js";
+import { MergeQueueSection, MergeQueueSkeleton, QUEUE_ROW_CELLS } from "./merge-queue-frame.js";
 
 const WORDS = {
-  READING: "Reading the merge queues…",
   EMPTY: "Nothing is queued.",
   UNREAD: "The merge queues could not be read.",
 } as const;
@@ -240,23 +235,6 @@ function MergeEstimate({ entry }: { entry: MergeQueueEntry }): React.JSX.Element
   return at === null || at === undefined ? null : <Time at={at} look={TIME_LOOK.UNTIL} />;
 }
 
-/**
- * The cells a pull request's row draws, in a task's row's order: its number
- * where a task's key stands, its queued mark where a task's status does,
- * how its merge group's checks stand, counted as its Checks tab counts them,
- * in the trailing run's count, where a task counts its sub-tasks, who opened
- * it where a task's creator stands, and when it should merge where a task's
- * time does, so its columns line up as the rows of a task's Overview, Home,
- * and a person's page do.
- */
-const QUEUE_ROW_CELLS = [
-  TASK_ROW_CELL.KEY,
-  TASK_ROW_CELL.STATUS,
-  TASK_ROW_CELL.SUB_TASKS,
-  TASK_ROW_CELL.CREATOR,
-  TASK_ROW_CELL.UPDATED,
-] as const satisfies readonly TaskRowCell[];
-
 /** One repository's line: its section's head over its pull requests, front first. */
 function RepositoryQueue({
   queue,
@@ -279,61 +257,56 @@ function RepositoryQueue({
   const count = queue.entries.length;
 
   return (
-    // Note that the section is pulled out by a row's inset on each side, as a task's Overview's are, so its marks stand on the title's edge.
-    <div className="merge-queue-repository -mx-row-inset">
-      <GroupHeader
-        look={GROUP_LOOK.SECTION}
-        glyph={
-          <RepositoryPicture
-            repository={queue.repository}
-            pictures={pictures}
-            size={AVATAR_SIZE.GLYPH}
-          />
-        }
-        label={<ReplayMask>{label}</ReplayMask>}
-        tooltip={label === queue.repository ? undefined : queue.repository}
-        count={{
-          value: count,
-          noun: count === 1 ? TERM.PULL_REQUEST.one : TERM.PULL_REQUEST.many,
-        }}
-        actionsShown={GROUP_ACTIONS.AT_REST}
-        actions={<OpenOnGitHubButton url={queue.url} />}
+    <MergeQueueSection
+      glyph={
+        <RepositoryPicture
+          repository={queue.repository}
+          pictures={pictures}
+          size={AVATAR_SIZE.GLYPH}
+        />
+      }
+      label={<ReplayMask>{label}</ReplayMask>}
+      tooltip={label === queue.repository ? undefined : queue.repository}
+      count={{
+        value: count,
+        noun: count === 1 ? TERM.PULL_REQUEST.one : TERM.PULL_REQUEST.many,
+      }}
+      actions={<OpenOnGitHubButton url={queue.url} />}
+    >
+      <TaskRows
+        label={queue.repository}
+        cells={QUEUE_ROW_CELLS}
+        more={false}
+        edges={TASK_ROW_EDGES.UNCHOSEN}
+        moves
+        fit={fit}
       >
-        <TaskRows
-          label={queue.repository}
-          cells={QUEUE_ROW_CELLS}
-          more={false}
-          edges={TASK_ROW_EDGES.UNCHOSEN}
-          moves
-          fit={fit}
-        >
-          {queue.entries.map((entry) => {
-            const author = authorActor(entry);
+        {queue.entries.map((entry) => {
+          const author = authorActor(entry);
 
-            return (
-              <TaskRow
-                key={entry.pullRequest.url}
-                taskId={entry.pullRequest.url}
-                name={entry.pullRequest.title}
-                said={<RowSaid entry={entry} author={author} />}
-                cells={QUEUE_ROW_CELLS}
-                content={{
-                  [TASK_ROW_CELL.KEY]: <PullRequestKey number={entry.pullRequest.number} />,
-                  [TASK_ROW_CELL.STATUS]: <QueuedMark number={entry.pullRequest.number} />,
-                  [TASK_ROW_CELL.SUB_TASKS]: <ChecksCount entry={entry} />,
-                  [TASK_ROW_CELL.CREATOR]: <ActorMark actor={author} size={ACTOR_SIZE.INLINE} />,
-                  [TASK_ROW_CELL.UPDATED]: <MergeEstimate entry={entry} />,
-                }}
-                more={false}
-                edges={TASK_ROW_EDGES.UNCHOSEN}
-                current={entry.pullRequest.url === marked}
-                onOpen={() => onOpen(entry.pullRequest.url)}
-              />
-            );
-          })}
-        </TaskRows>
-      </GroupHeader>
-    </div>
+          return (
+            <TaskRow
+              key={entry.pullRequest.url}
+              taskId={entry.pullRequest.url}
+              name={entry.pullRequest.title}
+              said={<RowSaid entry={entry} author={author} />}
+              cells={QUEUE_ROW_CELLS}
+              content={{
+                [TASK_ROW_CELL.KEY]: <PullRequestKey number={entry.pullRequest.number} />,
+                [TASK_ROW_CELL.STATUS]: <QueuedMark number={entry.pullRequest.number} />,
+                [TASK_ROW_CELL.SUB_TASKS]: <ChecksCount entry={entry} />,
+                [TASK_ROW_CELL.CREATOR]: <ActorMark actor={author} size={ACTOR_SIZE.INLINE} />,
+                [TASK_ROW_CELL.UPDATED]: <MergeEstimate entry={entry} />,
+              }}
+              more={false}
+              edges={TASK_ROW_EDGES.UNCHOSEN}
+              current={entry.pullRequest.url === marked}
+              onOpen={() => onOpen(entry.pullRequest.url)}
+            />
+          );
+        })}
+      </TaskRows>
+    </MergeQueueSection>
   );
 }
 
@@ -360,7 +333,7 @@ function QueuesRead({
     );
   }
 
-  if (repositories === undefined) return <RowsSkeleton label={WORDS.READING} />;
+  if (repositories === undefined) return <MergeQueueSkeleton />;
 
   if (repositories.length === 0) {
     return <EmptyState icon={<GLYPH.QUEUED />}>{WORDS.EMPTY}</EmptyState>;

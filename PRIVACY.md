@@ -425,12 +425,22 @@ delivered, with the names of their files, and **your Inbox's newest threads**,
 up to about 150 KB of them: each thread's title, who it waits on, and its
 messages' words and the names of their files (never a file itself), as the
 Inbox last showed them, so it can draw your Inbox at once when it opens. All
-of it is in one file, `entities.sealed`, encrypted under a key in the macOS
-Keychain and deleted when you sign out. Your sign-in tokens are kept
-encrypted the same way. The Vespin iOS app keeps the same file on your
-iPhone, encrypted under a key it keeps in the iPhone's Keychain, which never
-leaves that iPhone, and deletes it when you sign out. Transcripts and
-pictures you open are held in memory only.
+of it is in a local database kept for each account you sign in with,
+`local.sqlite`, which only your user account on the Mac can read. It is not
+encrypted under a key of Vespin's own: like the rest of your files, it is
+protected by your Mac's disk encryption (FileVault) where you turn it on. The
+app deletes it when you sign out. The Vespin iOS app keeps the same database
+on your iPhone, in its own storage, protected by the iPhone's Data
+Protection, and deletes it when you sign out. Your sign-in tokens are still
+kept encrypted under a key in the macOS Keychain, or in the iPhone's
+Keychain, which never leaves that iPhone.
+
+Until a coming release switches over to reading the database, the app also
+keeps the older copy of the same lists in one file, `entities.sealed`,
+encrypted under a key in the Keychain, and deletes it when you sign out.
+When that release switches over, it moves your waiting changes and
+undelivered messages from the file into the database and deletes the file. Transcripts
+and pictures you open are held in memory only.
 
 ### Spotlight and Handoff on your iPhone
 

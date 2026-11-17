@@ -11,7 +11,8 @@ import { ComposerFoot } from "./composer-foot.js";
  * composer-foot.test.ts -- a message box's foot takes no send while the box
  * is empty, or refuses it saying why where it can, says its one note,
  * shows its counter from four fifths of the limit, offers a remedy beside
- * its note and a mend under it, and stands Stop in the send's place.
+ * its note and a mend under it, and stands Stop, or Talk while the box is
+ * empty, in the send's place.
  */
 
 declare global {
@@ -203,6 +204,23 @@ test("Stop stands in the send's place and stops, and while its stop is out it is
   redraw({ send: { label: "Send", empty: false } });
   expect(button(container, "Send")).toBeDefined();
   expect(() => button(container, "Stop")).toThrow();
+});
+
+test("Talk stands in the send's place while the box is empty and calls, Send takes it once the box holds something, and Stop takes it while handed", () => {
+  const calls: string[] = [];
+  const talk = { onPress: () => calls.push("talk") };
+  const { container, redraw } = draw({ send: { label: "Send", empty: true }, talk });
+  expect(() => button(container, "Send")).toThrow();
+  act(() => button(container, "Talk").click());
+  expect(calls).toEqual(["talk"]);
+
+  redraw({ send: { label: "Send", empty: false }, talk });
+  expect(unavailable(button(container, "Send"))).toBe(false);
+  expect(() => button(container, "Talk")).toThrow();
+
+  redraw({ send: { label: "Send", empty: true }, stop: { label: "Stop", onStop: () => {} }, talk });
+  expect(button(container, "Stop")).toBeDefined();
+  expect(() => button(container, "Talk")).toThrow();
 });
 
 test("the counter shows once the words reach four fifths of the limit", () => {
