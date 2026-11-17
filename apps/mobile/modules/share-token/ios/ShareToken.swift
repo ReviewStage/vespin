@@ -12,7 +12,8 @@
 // Info.plist (`VespinShareKeychainGroup`), never spelled here. This file is
 // built into the app's module and copied into the share extension. The app's
 // Live Activity module reads it too, to send an activity's update token
-// from Swift while the app is woken in the background (`modules/live-activity/`).
+// from Swift while the app is woken in the background, and the activity's
+// Stop from its intent (`modules/live-activity/`).
 
 import Foundation
 import Security

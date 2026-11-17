@@ -1,4 +1,4 @@
-// LiveActivityModule.swift -- the app's side of its Live Activities: the tokens the service pushes to, the agents' activity's end, the Stop button's requests, and a fixture's activity started on the phone; a voice call's activity, started, set, and ended on the phone, and its presses; and the Inbox widget drawn again once the app moves its snapshot.
+// LiveActivityModule.swift -- the app's side of its Live Activities: the tokens the service pushes to, the agents' activity's end, the Stop button's send, and a fixture's activity started on the phone; a voice call's activity, started, set, and ended on the phone, and its presses; and the Inbox widget drawn again once the app moves its snapshot.
 //
 // The service starts, updates, and ends the activity by push, so the app
 // only hands it tokens: the push-to-start token, and the update token of
@@ -19,9 +19,9 @@
 // under the access token the share sheet reads (`ShareToken`), to the phone
 // JavaScript kept here once the service held it (`keepPhone`); where that
 // send fails, as with an access token past its 50 minutes, the next launch's
-// JavaScript sends the kept token. A Stop pressed on the activity (`StopAgentIntent`, in
-// the app's target) waits in the standard defaults; each is handed on while
-// JavaScript listens for Stops, and taken away once it answers. A fixture run starts
+// JavaScript sends the kept token. A Stop pressed on the activity
+// (`StopAgentIntent`, in the app's target) is sent to the service the same
+// way (`AgentStop`). A fixture run starts
 // an activity of its own (`startFixture`), since no push reaches a
 // simulator, and ends it (`endAll`). A voice call's activity is the
 // phone's alone (`CallActivityAttributes`): JavaScript starts it as a call
@@ -50,6 +50,48 @@ private struct KeptPhone: Codable {
   let headers: [String: String]
 }
 
+/// The defaults key of the phone a send from Swift goes beside, which JavaScript keeps (`keepPhone`).
+private let keptPhoneKey = "dev.vespin.live-activity.phone"
+/// The longest a send from Swift waits on the service, inside the few seconds iOS gives a woken app or an intent.
+private let keptPhoneTimeout: TimeInterval = 10
+
+/// A POST to the service at `path`, under the phone JavaScript kept and the share sheet's access token, with the JSON `body` names; none where no phone is kept or the token has expired.
+private func keptPhoneRequest(path: String, body: ((KeptPhone) -> [String: String])? = nil)
+  -> URLRequest?
+{
+  guard let data = UserDefaults.standard.data(forKey: keptPhoneKey),
+    let phone = try? JSONDecoder().decode(KeptPhone.self, from: data),
+    let url = URL(string: phone.origin + path),
+    let access = ShareToken.read()
+  else { return nil }
+  var request = URLRequest(url: url, timeoutInterval: keptPhoneTimeout)
+  request.httpMethod = "POST"
+  if let body {
+    guard let encoded = try? JSONEncoder().encode(body(phone)) else { return nil }
+    request.httpBody = encoded
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+  }
+  request.setValue("Bearer \(access)", forHTTPHeaderField: "Authorization")
+  for (name, value) in phone.headers { request.setValue(value, forHTTPHeaderField: name) }
+  return request
+}
+
+/// The Live Activity's Stop, sent to the service from Swift (`StopAgentIntent`, in the app's target).
+public enum AgentStop {
+  /// The characters an agent's id keeps in its path, so an id can never reach another route.
+  private static let idCharacters = CharacterSet.urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))
+
+  /// Stops `agentId` (`POST /api/agents/{id}/stop`); whether the service took it, and false where it couldn't be sent, as under an access token past its 50 minutes, or the service refused it.
+  public static func send(agentId: String) async -> Bool {
+    guard let id = agentId.addingPercentEncoding(withAllowedCharacters: idCharacters),
+      let request = keptPhoneRequest(path: "/api/agents/\(id)/stop")
+    else { return false }
+    let answer = try? await URLSession.shared.data(for: request)
+    guard let status = (answer?.1 as? HTTPURLResponse)?.statusCode else { return false }
+    return (200..<300).contains(status)
+  }
+}
+
 /// How highly iOS ranks a voice call's activity among the app's, which decides the one the Dynamic Island shows: above the agents' activity, whose pushes carry no score and so rank at none, since a call standing is what the member is doing now.
 enum CallRelevance {
   static let score: Double = 100
@@ -62,20 +104,12 @@ private struct CallPress {
 }
 
 public final class LiveActivityModule: Module {
-  /// The defaults key and the ping `StopAgentIntent` names.
-  private static let stopsKey = "dev.vespin.live-activity.stops"
-  private static let stopAsked = Notification.Name("dev.vespin.live-activity.stop-asked")
-  /// How old a Stop may be and still be handed on: one left from a launch long gone is dropped.
-  private static let stopFreshness: Double = 2 * 60 * 1000
   /// The ping `CallPressIntent` names.
   private static let callPressed = Notification.Name("dev.vespin.live-activity.call-press")
-  /// The defaults keys of each activity's update token, by the activity's id, and of the phone a token is sent beside.
+  /// The defaults key of each activity's update token, by the activity's id.
   private static let tokensKey = "dev.vespin.live-activity.tokens"
-  private static let phoneKey = "dev.vespin.live-activity.phone"
   /// The service's path for an activity's update token (`HOSTED_SERVICE_PATH.ACCOUNT_LIVE_ACTIVITIES_ACTIVITY_TOKEN`).
   private static let activityTokenPath = "/api/account/live-activities/activity-token"
-  /// The longest a send from Swift waits on the service, inside the few seconds iOS gives a woken app.
-  private static let sendTimeout: TimeInterval = 10
 
   // Note that the state below is read and written on the main actor alone.
   /// Which events JavaScript listens for, each started and stopped on its own.
@@ -84,10 +118,7 @@ public final class LiveActivityModule: Module {
   private var activityTokens: [String: String] = [:]
   /// The activities ended because a newer one started, whose end the service is not told, since it would drop the newer one's token.
   private var superseded: Set<String> = []
-  /// The Stop requests handed on and not yet answered, so none is handed on twice.
-  private var handedStops: Set<String> = []
   private var watchers: [Task<Void, Never>] = []
-  private var stopObserver: NSObjectProtocol?
   private var callPressObserver: NSObjectProtocol?
   /// Where the call's presses wait their turn, taken one at a time in the order they came.
   private var callPressQueue: AsyncStream<CallPress>.Continuation?
@@ -97,7 +128,7 @@ public final class LiveActivityModule: Module {
   public func definition() -> ModuleDefinition {
     Name("LiveActivity")
 
-    Events("onStartToken", "onActivityToken", "onActivityEnded", "onStop", "onCallPress")
+    Events("onStartToken", "onActivityToken", "onActivityEnded", "onCallPress")
 
     OnCreate {
       Task { @MainActor in
@@ -106,9 +137,6 @@ public final class LiveActivityModule: Module {
         self.keepNewest(preferring: nil)
         self.watch()
       }
-      self.stopObserver = NotificationCenter.default.addObserver(
-        forName: Self.stopAsked, object: nil, queue: .main
-      ) { [weak self] _ in Task { @MainActor in self?.handOnStops() } }
       // Note that presses are taken one at a time, in the order they came, since each waits on the activity's update before it goes on, and two such waits may end in either order: a mute then an unmute must reach the call in that order, or the call ends muted.
       let (callPresses, nextCallPress) = AsyncStream.makeStream(of: CallPress.self)
       self.callPressQueue = nextCallPress
@@ -135,7 +163,6 @@ public final class LiveActivityModule: Module {
       self.callPressQueue?.finish()
       self.callPressTaker?.cancel()
       self.watchers.forEach { $0.cancel() }
-      if let stopObserver = self.stopObserver { NotificationCenter.default.removeObserver(stopObserver) }
       if let callPressObserver = self.callPressObserver {
         NotificationCenter.default.removeObserver(callPressObserver)
       }
@@ -159,31 +186,11 @@ public final class LiveActivityModule: Module {
       Task { @MainActor in self.listening.insert("onActivityEnded") }
     }
 
-    OnStartObserving("onStop") {
-      Task { @MainActor in
-        self.listening.insert("onStop")
-        self.handOnStops()
-      }
-    }
-
     OnStopObserving("onStartToken") { Task { @MainActor in self.listening.remove("onStartToken") } }
     OnStopObserving("onActivityToken") { Task { @MainActor in self.listening.remove("onActivityToken") } }
     OnStopObserving("onActivityEnded") { Task { @MainActor in self.listening.remove("onActivityEnded") } }
-    OnStopObserving("onStop") { Task { @MainActor in self.listening.remove("onStop") } }
     OnStartObserving("onCallPress") { Task { @MainActor in self.listening.insert("onCallPress") } }
     OnStopObserving("onCallPress") { Task { @MainActor in self.listening.remove("onCallPress") } }
-
-    // A Stop request answered, whether or not the stop went, taken away so the intent returns.
-    Function("answerStop") { (request: String) -> Void in
-      Task { @MainActor in
-        self.handedStops.remove(request)
-        let defaults = UserDefaults.standard
-        let left = (defaults.array(forKey: Self.stopsKey) ?? []).filter {
-          ($0 as? [String: Any])?["request"] as? String != request
-        }
-        defaults.set(left, forKey: Self.stopsKey)
-      }
-    }
 
     AsyncFunction("startFixture") { (contentState: String) throws -> Void in
       let state = try JSONDecoder().decode(
@@ -198,10 +205,10 @@ public final class LiveActivityModule: Module {
       guard let phone, let data = phone.data(using: .utf8),
         (try? JSONDecoder().decode(KeptPhone.self, from: data)) != nil
       else {
-        defaults.removeObject(forKey: Self.phoneKey)
+        defaults.removeObject(forKey: keptPhoneKey)
         return
       }
-      defaults.set(data, forKey: Self.phoneKey)
+      defaults.set(data, forKey: keptPhoneKey)
     }
 
     // The Inbox widget's kind, as `InboxWidgetSnapshot.kind` names it in the widget extension.
@@ -345,23 +352,6 @@ public final class LiveActivityModule: Module {
     }
   }
 
-  /// Hands each fresh Stop request on while JavaScript listens, dropping any too old to act on.
-  @MainActor private func handOnStops() {
-    guard listening.contains("onStop") else { return }
-    let defaults = UserDefaults.standard
-    let now = Date().timeIntervalSince1970 * 1000
-    let requests = (defaults.array(forKey: Self.stopsKey) ?? []).compactMap { $0 as? [String: Any] }
-    let fresh = requests.filter { now - ($0["askedAt"] as? Double ?? 0) < Self.stopFreshness }
-    defaults.set(fresh, forKey: Self.stopsKey)
-    for request in fresh {
-      guard let id = request["request"] as? String, let agentId = request["agentId"] as? String,
-        !handedStops.contains(id)
-      else { continue }
-      handedStops.insert(id)
-      sendEvent("onStop", ["request": id, "agentId": agentId])
-    }
-  }
-
   /// Takes back the tokens an earlier launch kept, for the activities that still stand, so JavaScript hands on any the service may lack.
   @MainActor private func restoreTokens() {
     let kept = UserDefaults.standard.dictionary(forKey: Self.tokensKey) as? [String: String] ?? [:]
@@ -377,20 +367,10 @@ public final class LiveActivityModule: Module {
   /// Sends an activity's update token to the service at once while the app is in the background, in the time iOS gives it, where JavaScript kept a phone and the share sheet's access token is still good; a send that can't go or fails is left to the next launch. In front, the host sends it.
   @MainActor private func send(activityToken token: String) {
     guard UIApplication.shared.applicationState != .active,
-      let data = UserDefaults.standard.data(forKey: Self.phoneKey),
-      let phone = try? JSONDecoder().decode(KeptPhone.self, from: data),
-      let url = URL(string: phone.origin + Self.activityTokenPath),
-      let access = ShareToken.read(),
-      let body = try? JSONEncoder().encode([
-        "deviceToken": phone.deviceToken, "environment": phone.environment, "token": token,
-      ])
+      let request = keptPhoneRequest(path: Self.activityTokenPath, body: { phone in
+        ["deviceToken": phone.deviceToken, "environment": phone.environment, "token": token]
+      })
     else { return }
-    var request = URLRequest(url: url, timeoutInterval: Self.sendTimeout)
-    request.httpMethod = "POST"
-    request.httpBody = body
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.setValue("Bearer \(access)", forHTTPHeaderField: "Authorization")
-    for (name, value) in phone.headers { request.setValue(value, forHTTPHeaderField: name) }
     // Note that the send asks for background time of its own, since the app may be suspended as soon as iOS's wake is spent.
     let application = UIApplication.shared
     var background = UIBackgroundTaskIdentifier.invalid
