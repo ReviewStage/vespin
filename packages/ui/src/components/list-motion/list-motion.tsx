@@ -88,6 +88,15 @@
  * over it on the exit's tokens, at once, as the rows under an unrolled row
  * close over it, rather than traveling the spring after it.
  *
+ * A box drawn around the rows, a settings card, opts in as a frame
+ * (`motionFrame()`), whose edge travels with them on the beat they glide on:
+ * grown, its foot is clipped back to where it was drawn and unrolled to its
+ * new one; shrunk, it holds the room it gave up below its rows, its own
+ * negative margin giving it back so nothing around it moves, and rolls up to
+ * its new foot before letting it go. So its ground never stands empty under
+ * rows still on their way down, and rows closing over a fold are never drawn
+ * outside it.
+ *
  * The one move the layout would still make above a leaving row is the
  * scroller's: a list scrolled to its end that grows shorter is scrolled back
  * by the browser as much as it shrank, which carries every row in sight
@@ -114,6 +123,9 @@ const ROWS_ATTRIBUTE = "data-motion-rows";
 
 /** What a row followed by its key wears, the key as its value. */
 const KEY_ATTRIBUTE = "data-motion-key";
+
+/** What a box drawn around rows wears, a card, so its edge travels with what it holds. */
+const FRAME_ATTRIBUTE = "data-motion-frame";
 
 /** What the root of a motion wears, so a motion around it leaves its lists to it. */
 const ROOT_ATTRIBUTE = "data-motion-root";
@@ -179,6 +191,13 @@ export function motionKey(key: string): MotionKeyResult {
   return { [KEY_ATTRIBUTE]: key };
 }
 
+type MotionFrameResult = { readonly "data-motion-frame": "" };
+
+/** The attribute a box drawn around moving rows wears, a card, spread on it, so its edge travels with them. */
+export function motionFrame(): MotionFrameResult {
+  return { [FRAME_ATTRIBUTE]: "" };
+}
+
 /** What a leaving entry is to be drawn with, so it stands where it did. */
 export const LIST_LEAVING_SELECTOR = "[data-leaving]";
 
@@ -227,6 +246,8 @@ interface Snapshot {
   readonly measured: boolean;
   readonly keyed: Map<string, Element>;
   readonly lists: Set<Element>;
+  /** How tall each frame was drawn, measured with `places`. */
+  readonly frames: Map<HTMLElement, number>;
 }
 
 /** What the motions over one root playing one commit share: where it started from, how many have still to hear it, and the exits handed them so far. */
@@ -248,6 +269,9 @@ const LeavesContext = createContext<Leaves | undefined>(undefined);
 
 /** The exits under way, by the element leaving, stopped where its entry is listed again. */
 const exits = new WeakMap<Element, Animation>();
+
+/** What ends each frame's motion under way, by the frame: its clip, and the room a shrinking one held. */
+const framings = new WeakMap<HTMLElement, () => void>();
 
 /**
  * What a leaving element wears as `data-leaving`: marked as it begins to
@@ -544,6 +568,38 @@ function moves(root: HTMLElement): boolean {
   );
 }
 
+/** Every frame under `root`, the root itself included, outside any motion of its own inside it. */
+function framesOf(root: HTMLElement): HTMLElement[] {
+  const inner = [...root.querySelectorAll(`[${FRAME_ATTRIBUTE}]`)].filter(
+    (frame): frame is HTMLElement =>
+      frame instanceof HTMLElement &&
+      (frame.parentElement?.closest(`[${ROOT_ATTRIBUTE}]`) ?? root) === root,
+  );
+
+  return root.hasAttribute(FRAME_ATTRIBUTE) ? [root, ...inner] : inner;
+}
+
+/** How far a clip's inset cuts into a box from its foot, read from the inset's own words (`inset(0px 0px 12px 0px round …)`). */
+function footCut(clip: string, height: number): number {
+  const inset = /^inset\(([^)]*)\)$/u.exec(clip);
+
+  if (inset === null) return 0;
+  const sides = (inset[1] ?? "").split(" round ")[0]?.trim().split(/\s+/u) ?? [];
+  const foot = sides[2] ?? sides[0] ?? "0";
+  const length = Number.parseFloat(foot);
+
+  if (!Number.isFinite(length)) return 0;
+
+  return foot.endsWith("%") ? (length / 100) * height : length;
+}
+
+/** How tall a frame is drawn: its box, less what a motion under way clips off its foot. */
+function drawnHeight(frame: HTMLElement): number {
+  const height = frame.offsetHeight;
+
+  return height - footCut(getComputedStyle(frame).clipPath, height);
+}
+
 /** Where every mover under `root` stands now, by element and by key, and the lists that stand; their places only where a motion can play. */
 function snapshotOf(root: HTMLElement): Snapshot {
   // Note that a row already on its way out stood nowhere, so one listed again arrives.
@@ -561,7 +617,17 @@ function snapshotOf(root: HTMLElement): Snapshot {
   if (root.hasAttribute(ROWS_ATTRIBUTE)) lists.add(root);
   const measured = moves(root);
 
-  return { places: measured ? placesOf(root, movers) : new Map(), measured, keyed, lists };
+  const frames = new Map<HTMLElement, number>();
+
+  if (measured) for (const frame of framesOf(root)) frames.set(frame, drawnHeight(frame));
+
+  return {
+    places: measured ? placesOf(root, movers) : new Map(),
+    measured,
+    keyed,
+    lists,
+    frames,
+  };
 }
 
 /** The mover that carries `element` as it glides, the group it stands in, or the root where none does. */
@@ -811,6 +877,62 @@ function followUnder(
 }
 
 /**
+ * Carries each frame's edge with the rows it holds, on the beat they glide
+ * on: a card's box lands at its new height at once, as every box does, so
+ * one that grew is clipped back to the edge it was drawn at and unrolled
+ * to its foot, and one that shrank holds the room it gave up below its rows
+ * (a padding its own negative margin gives back, so nothing around it
+ * moves) and is rolled up to its new foot, then lets the room go. Its
+ * corners are the clip's, so its foot stays rounded as it travels. A frame
+ * still traveling from an earlier change sets off from where it is drawn.
+ */
+function playFrames(before: Snapshot, glide: KeyframeAnimationOptions, wait: number): void {
+  for (const [frame, was] of before.frames) {
+    framings.get(frame)?.();
+
+    if (!frame.isConnected) continue;
+    const grew = frame.offsetHeight - was;
+
+    if (Math.abs(grew) < STILL) continue;
+    const style = getComputedStyle(frame);
+    const round = `round ${style.borderTopLeftRadius} ${style.borderTopRightRadius} ${style.borderBottomRightRadius} ${style.borderBottomLeftRadius}`;
+    const held = Math.max(0, -grew);
+
+    if (held > 0) {
+      frame.style.setProperty(
+        "padding-block-end",
+        `${Number.parseFloat(style.paddingBlockEnd) + held}px`,
+      );
+      frame.style.setProperty(
+        "margin-block-end",
+        `${Number.parseFloat(style.marginBlockEnd) - held}px`,
+      );
+    }
+
+    const travel = frame.animate(
+      [
+        { clipPath: `inset(0px 0px ${Math.max(0, grew)}px 0px ${round})` },
+        { clipPath: `inset(0px 0px ${held}px 0px ${round})` },
+      ],
+      { ...glide, delay: wait, fill: "both" },
+    );
+
+    const end = () => {
+      travel.cancel();
+      frame.style.removeProperty("padding-block-end");
+      frame.style.removeProperty("margin-block-end");
+      framings.delete(frame);
+    };
+
+    framings.set(frame, end);
+    // Note that a frame's motion replaced by the next change's is ended by it, and only its own finish ends it here.
+    travel.addEventListener("finish", () => {
+      if (framings.get(frame) === end) end();
+    });
+  }
+}
+
+/**
  * Replays from `before` what the commit moved under `root`: each mover
  * glides from where it stood, or where the row of its key stood in another
  * list, less what the group around it moved, which carries it, added onto
@@ -884,6 +1006,8 @@ function playMoves(root: HTMLElement, before: Snapshot, timing: MoveTiming): voi
       composite: "add",
     });
   }
+
+  playFrames(before, glide, timing.wait);
 
   // Note that the rows are followed once every glide has started, so the first edge read is where each is drawn.
   if (timing.way !== LIST_MOTION_WAY.SLIDE || !timing.travels) return;
