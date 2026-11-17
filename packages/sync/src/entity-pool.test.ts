@@ -74,6 +74,39 @@ function shownOver(pool: EntityPool, row: Row) {
   });
 }
 
+it.effect(
+  "a read that adopts and stands after a write laid back from the store shows what it made, and none of a write asked before it stood",
+  () =>
+    Effect.gen(function* () {
+      const make: WriteDeclaration<Row, FieldChange<Row>, Row, string> = {
+        kind: ROW,
+        keys: (row) => [row.id],
+        change: (row) => ({ made: row }),
+        send: () => Effect.succeed({ refused: "unreachable", unanswered: true as const }),
+        queue: {
+          name: "make",
+          input: Schema.Struct({ id: Schema.String, name: Schema.String, runs: Schema.Number }),
+          queued: () => "waits",
+        },
+      };
+
+      const pool = yield* entityPool({ mintKey: () => "key-1", replayRefused: Effect.void });
+      const laid = { id: "1", name: "Made offline", runs: 0 };
+      yield* pool.requeue([{ name: "make", key: "key-0", input: laid }], [anyWrite(make)]);
+
+      const asked = yield* Effect.forkChild(
+        pool.write(MAKES, { id: "2", name: "Made now", runs: 0 }),
+      );
+
+      yield* settled;
+
+      const late = yield* standing(pool, true);
+
+      assert.deepEqual(late.rows.rows(), [laid]);
+      yield* Fiber.interrupt(asked);
+    }).pipe(Effect.scoped),
+);
+
 it.effect("two reads hold one row, which leaves the pool only once the last lets it go", () =>
   Effect.gen(function* () {
     const pool = yield* entityPool();

@@ -489,6 +489,8 @@ interface Holding<Row, Change = unknown> {
 interface Standing<Change> {
   readonly keys: readonly string[];
   change: Change;
+  /** That the write was laid back from the store (`requeue`), so a read that stands after it adopts what it made. */
+  readonly laidBack: boolean;
 }
 
 /** Where one write stands: answered once the service answered it, and dropped once nothing of it stands drawn. */
@@ -897,6 +899,11 @@ function stood<Row extends object, Change>(
       };
 
       rows.reads.add(holding);
+      // Note that a read standing after a write laid back from the store adopts the row it made, as one stood before it would have, so a read stood again on the store at launch shows it; a write asked in this session is adopted only by the reads standing as it is asked, so one a sign-out cut off reaches no read of the next account.
+      adopted(
+        rows,
+        rows.standing.flatMap((write) => (write.laidBack ? write.keys : [])),
+      );
 
       return holding;
     }),
@@ -1060,7 +1067,12 @@ function written<Row extends object, Change, Input, Answer>(
 ): Effect.Effect<Answer> {
   return Effect.gen(function* () {
     const keys = [...new Set(declaration.keys(input))];
-    const write: Standing<Change> = { keys, change: declaration.change(input) };
+
+    const write: Standing<Change> = {
+      keys,
+      change: declaration.change(input),
+      laidBack: restored !== undefined,
+    };
 
     const plan = declaration.queue;
     // Note that the account is read as the write is asked, or laid back from the store its account opened, so a later send can tell another.

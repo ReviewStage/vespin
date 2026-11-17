@@ -193,9 +193,6 @@ export function openEntityStore(
             return Effect.void;
           }
 
-          listsLeft = false;
-          savedQueue = waitingText;
-
           return encodeKept({
             hash: NO_LISTS,
             accountId,
@@ -206,6 +203,13 @@ export function openEntityStore(
             Effect.map((plain) => sealedText(cipher, plain)),
             Effect.flatMap((sealed) =>
               writeSettingsFileAtomic(directory, sealed, undefined, ENTITY_STORE_FILE_NAME),
+            ),
+            // Note that what was written is marked saved only once the write lands, so one that failed is written again by the next save, or the last.
+            Effect.tap(() =>
+              Effect.sync(() => {
+                listsLeft = false;
+                savedQueue = waitingText;
+              }),
             ),
             // Note that a failure is logged by its kind alone, since a message's words may be among its message.
             Effect.catch((failure) =>

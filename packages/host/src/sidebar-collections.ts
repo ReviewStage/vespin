@@ -186,8 +186,8 @@ export function sidebarCollections(
       });
     };
 
-    // Note that what the local database held of the sidebar is drawn at once, before its follow answers.
-    if (sections.loaded || pins.loaded) drawn();
+    // Note that what the local database held of the sidebar is drawn at once, before its follow answers, with any pin a write laid back made.
+    if (sections.loaded || pins.loaded || pins.rows().length > 0) drawn();
 
     /** The sections answered, as the account's one row; none while nobody is signed in. */
     const sectionsRows = (answered: TaskSections): readonly SectionsRow[] => {

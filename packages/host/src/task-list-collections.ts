@@ -448,12 +448,20 @@ export function taskListCollections(
 
     const ticks = yield* drawnPerTick(drawn);
 
-    // Note that the rows the local database held are the list's own as it stands, drawn at once, so its follow's next answer settles them as any it held.
-    if (plans.loaded || agents.loaded) {
+    // Note that the rows the local database held are the list's own as it stands, drawn at once with any a write laid back made, so its follow's next answer settles them as any it held.
+    const shownAtStand = plans.rows().length + agents.rows().length > 0;
+
+    if (plans.loaded || agents.loaded || shownAtStand) {
       planKeys = new Set(plans.synced().map((row) => row.id));
       agentKeys = new Set(agents.synced().map((row) => row.id));
-      yield* inChunks([...planKeys], plansDrawn);
-      yield* inChunks([...agentKeys], agentsDrawn);
+      yield* inChunks(
+        plans.rows().map((row) => row.id),
+        plansDrawn,
+      );
+      yield* inChunks(
+        agents.rows().map((row) => row.id),
+        agentsDrawn,
+      );
       yield* ticks.drawn;
     }
 
