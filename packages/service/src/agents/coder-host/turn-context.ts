@@ -74,6 +74,8 @@ export const TurnHandedSchema = Schema.Struct({
       replyButtonsOn: Schema.optionalKey(Schema.Boolean),
       // Note that a session opened before Computer use was an experiment names none, having been offered no computer tool.
       computerUseOn: Schema.optionalKey(Schema.Boolean),
+      /** Absent for a session opened before the Inbox could be turned off, which opened with it on. */
+      inboxOn: Schema.optionalKey(Schema.Boolean),
     }),
   ),
 });

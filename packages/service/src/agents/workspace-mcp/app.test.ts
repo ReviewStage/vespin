@@ -722,6 +722,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
             turnEndOn: true,
             replyButtonsOn: true,
             computerUseOn: true,
+            inboxOn: true,
           },
         };
 
@@ -770,6 +771,16 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         return agent;
       }),
       withheld: ["browser", "list_ports", "share_port"],
+    },
+    {
+      why: "whose starter turned the Inbox off, the threads it posts",
+      agent: Effect.gen(function* () {
+        const agent = yield* agentWithBearer;
+        yield* writeAccountPreferences(agent.userId, { inbox: false });
+
+        return agent;
+      }),
+      withheld: ["post_thread", "list_threads", "withdraw_ask"],
     },
   ])(
     "tools/list leaves out what the catalog's gates offer no agent $why, and the memory, the description's, the turn's end, the reply buttons', and the computer tools where its starter has Memory, Task descriptions, Done and follow-ups, Reply buttons, and Computer use off",

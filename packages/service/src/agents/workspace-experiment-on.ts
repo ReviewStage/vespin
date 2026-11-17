@@ -13,13 +13,13 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import { accountExperimentOn } from "@repo/database/models/account-store";
+import { accountExperimentOn, readAccountPreferences } from "@repo/database/models/account-store";
 import { machineOwnerOf } from "@repo/database/models/machine-command-store";
 import {
   workspaceExperimentOn,
   workspaceExperimentsOf,
 } from "@repo/database/models/workspace-experiment-store";
-import { EXPERIMENT, type WorkspaceExperiment } from "@repo/settings";
+import { EXPERIMENT, experimentOn, type WorkspaceExperiment } from "@repo/settings";
 import { Effect, Option } from "effect";
 import { logStoreFailure } from "../http/store-failure.js";
 
@@ -72,6 +72,8 @@ export interface ExperimentsOn {
   readonly turnEndOn: boolean;
   readonly replyButtonsOn: boolean;
   readonly computerUseOn: boolean;
+  /** Whether the agent's starter keeps an Inbox (`@repo/settings`'s `inbox`), which offers it the threads it posts there; no experiment, but read and gated as Done and follow-ups is. */
+  readonly inboxOn: boolean;
 }
 
 /** Every experiment on: the words a tool is declared in where nothing narrows it, as the goldens hold them. */
@@ -81,6 +83,7 @@ export const EVERY_EXPERIMENT_ON: ExperimentsOn = {
   turnEndOn: true,
   replyButtonsOn: true,
   computerUseOn: true,
+  inboxOn: true,
 };
 
 /** Every experiment off. */
@@ -90,6 +93,7 @@ export const NO_EXPERIMENT_ON: ExperimentsOn = {
   turnEndOn: false,
   replyButtonsOn: false,
   computerUseOn: false,
+  inboxOn: false,
 };
 
 /** The agent an agent's experiments are read for: its workspace, the account that started it, and the conversation whose Mac owner's own Computer use is read. */
@@ -113,23 +117,25 @@ export function experimentsReadIn(
   return Effect.all(
     [
       workspaceExperimentsOf(agent.organizationId),
-      accountExperimentOn(agent.userId, EXPERIMENT.TURN_END),
+      readAccountPreferences(agent.userId),
       Effect.flatMap(machineOwnerOf(target), (owner) =>
         accountExperimentOn(owner, EXPERIMENT.COMPUTER_USE),
       ),
     ],
     { concurrency: "unbounded" },
   ).pipe(
-    Effect.map(([standings, turnEndOn, computerUseOn]) => {
+    Effect.map(([standings, starter, computerUseOn]) => {
       const on = (experiment: WorkspaceExperiment) =>
         standings.some((standing) => standing.experiment === experiment && standing.on);
 
       return Option.some({
         descriptionsOn: on(EXPERIMENT.DESCRIPTIONS),
         memoryOn: on(EXPERIMENT.MEMORY),
-        turnEndOn,
+        turnEndOn: starter !== undefined && experimentOn(starter.experiments, EXPERIMENT.TURN_END),
         replyButtonsOn: on(EXPERIMENT.REPLY_BUTTONS),
         computerUseOn,
+        // Note that nothing stored reads as on, as the setting's default is.
+        inboxOn: starter?.preferences.inbox ?? true,
       });
     }),
     Effect.tapError(logStoreFailure),

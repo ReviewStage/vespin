@@ -53,18 +53,19 @@ const PLACEHOLDER_TASK = {
 
 /**
  * A sandbox agent on a repository in a workspace with Task descriptions on,
- * the settings' default, and every other gated experiment off. Note that it
+ * the settings' default, whose starter keeps an Inbox, and every other gated experiment off. Note that it
  * names no agent's row, because the instructions read the gates it opens alone.
  */
 const PLACEHOLDER_STANDING: AgentStanding = {
   agent: Option.none(),
-  open: new Set([TOOL_GATE.REPOSITORY, TOOL_GATE.SANDBOX, TOOL_GATE.DESCRIPTIONS]),
+  open: new Set([TOOL_GATE.REPOSITORY, TOOL_GATE.SANDBOX, TOOL_GATE.DESCRIPTIONS, TOOL_GATE.INBOX]),
   experiments: {
     descriptionsOn: true,
     memoryOn: false,
     turnEndOn: false,
     replyButtonsOn: false,
     computerUseOn: false,
+    inboxOn: true,
   },
 };
 

@@ -2,13 +2,15 @@
 import { Option } from "effect";
 import { type AgentStanding, TOOL_GATE, type ToolGate } from "../agents/tool-catalog/gates.js";
 
-/** What a test names of an agent beside its repository: a local agent's machine, its workspace's Memory, Task descriptions, Done and follow-ups, and Reply buttons. */
+/** What a test names of an agent beside its repository: a local agent's machine, its workspace's Memory, Task descriptions, Done and follow-ups, and Reply buttons, and its starter's Inbox. */
 interface StandingFor {
   readonly local?: boolean;
   readonly memory?: boolean;
   readonly descriptions?: boolean;
   readonly replyButtons?: boolean;
   readonly turnEnd?: boolean;
+  /** Whether the agent's starter keeps an Inbox; on unless the test says otherwise. */
+  readonly inbox?: boolean;
 }
 
 /**
@@ -26,6 +28,7 @@ export function standingFor(
     descriptions = true,
     replyButtons = false,
     turnEnd = false,
+    inbox = true,
   }: StandingFor = {},
 ): AgentStanding {
   const opens: Readonly<Record<ToolGate, boolean>> = {
@@ -36,6 +39,7 @@ export function standingFor(
     [TOOL_GATE.REPLY_BUTTONS]: replyButtons,
     [TOOL_GATE.TURN_END]: turnEnd,
     [TOOL_GATE.COMPUTER_USE]: false,
+    [TOOL_GATE.INBOX]: inbox,
   };
 
   const open = Object.values(TOOL_GATE).filter((gate) => opens[gate]);
@@ -49,6 +53,7 @@ export function standingFor(
       turnEndOn: turnEnd,
       replyButtonsOn: replyButtons,
       computerUseOn: false,
+      inboxOn: inbox,
     },
   };
 }
