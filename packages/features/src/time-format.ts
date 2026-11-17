@@ -80,6 +80,12 @@ const UTC_DAY_TICK = new Intl.DateTimeFormat(LOCALE, {
 
 const UTC_DAY_HEADING = new Intl.DateTimeFormat(LOCALE, { dateStyle: "long", timeZone: "UTC" });
 
+const UTC_MONTH = new Intl.DateTimeFormat(LOCALE, {
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
 const UTC_INSTANT = new Intl.DateTimeFormat(LOCALE, {
   month: "short",
   day: "numeric",
@@ -383,6 +389,11 @@ export function formatDayTick(day: string): string {
 /** A day key drawn as a page's own masthead, e.g. "August 21, 2026". */
 export function formatDayHeading(day: string): string {
   return UTC_DAY_HEADING.format(new Date(`${day}T00:00:00.000Z`));
+}
+
+/** A UTC month key ("2026-11") drawn as its month and year, e.g. "November 2026". */
+export function formatMonth(month: string): string {
+  return UTC_MONTH.format(new Date(`${month}-01T00:00:00.000Z`));
 }
 
 /** Every time zone this machine knows, as a zone menu lists them. */

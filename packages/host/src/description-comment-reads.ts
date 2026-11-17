@@ -3,11 +3,17 @@ import type { DescriptionCommentThread } from "@repo/features/description-commen
 import { type LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import { COMMENT_SUBJECT, type TasksCommentsFollow } from "@repo/features/tasks-view";
 import { type EntityPool, fieldKind, type HeldRows } from "@repo/sync";
-import { Data, Effect, Option, Schema } from "effect";
+import { Data, Effect } from "effect";
 import { type AppDescriptionComments, NO_DESCRIPTION_COMMENTS } from "./app-state.js";
 import { type HeldAnswers, heldSlice } from "./live-collection.js";
-import { confirmWrite, type LiveFailure, type SealedRead, type TxWait } from "./live-follow.js";
-import { pushLive } from "./live-push.js";
+import {
+  confirmWrite,
+  followTakingRows,
+  type LiveFailure,
+  restarting,
+  type SealedRead,
+  type TxWait,
+} from "./live-follow.js";
 
 /**
  * description-comment-reads.ts -- a task's comments, its description's own threads or one page's, each thread one row of the sync engine's pool, followed for main over the service's held poll while a window shows them, and told whole on the app state as they change, every write standing drawn over them.
@@ -81,15 +87,16 @@ export interface DescriptionCommentReadsDependencies {
   readonly tell: (held: AppDescriptionComments) => void;
 }
 
-const decodeRows = Schema.decodeUnknownOption(TASK_COMMENTS_READ.rows);
-
 /**
  * The held lifetime over every subject's follow (`heldSlice`), told whole on
  * the held comments' slice: each subject's threads as its read last
  * answered them, every write standing drawn over them, kept where a later
- * read does not answer, and failed where it never answered. A subject the
- * service refuses is followed no longer (`pushLive`), until every window
- * lets it go and one holds it anew. Note that its type is the slice's as
+ * read does not answer, and failed where it never answered. Each answer's
+ * threads are taken before its transactions are carried on to a write
+ * waiting for them (`followTakingRows`), so a thread a write started stands
+ * drawn until the read draws it. A follow that stops is followed again
+ * (`restarting`), and a subject the service refuses for good is followed no
+ * longer, until every window lets it go and one holds it anew. Note that its type is the slice's as
  * `heldSlice` answers it, never spelled here, so it follows that type as it
  * moves.
  */
@@ -123,28 +130,47 @@ export function descriptionCommentReads(dependencies: DescriptionCommentReadsDep
 
         // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
         const userId = dependencies.accountId();
-        yield* pushLive({
-          seal: (poll, after) =>
-            dependencies.gate() && userId !== undefined
-              ? dependencies.seal(followOf(subject), userId, poll, after)
-              : Effect.succeed({ ...LIVE_SIGNED_OUT, gone: true }),
-          decode: (rows) => Option.map(decodeRows(rows), threadsOfLiveRows),
-          publish: (read) => {
-            if (read === undefined) return Effect.sync(() => answers.unanswered());
-            const rows = read.map((thread) => ({ ...thread, taskId: subject.taskId }));
 
-            return Effect.andThen(
-              threads.answer(rows),
-              Effect.sync(() => {
-                answered = true;
-                drawn();
-              }),
-            );
-          },
-          onTxWait: (handed) => {
-            wait = handed;
-          },
+        const seal = (poll: boolean, after?: string) =>
+          dependencies.gate() && userId !== undefined
+            ? dependencies.seal(followOf(subject), userId, poll, after)
+            : Effect.succeed({ ...LIVE_SIGNED_OUT, gone: true });
+
+        // Note that each answer's threads are taken before its transactions are carried on, so a thread started here stands drawn by its write until the read draws it.
+        const attempt = Effect.gen(function* () {
+          const first = yield* seal(false);
+
+          if ("failure" in first) {
+            answers.unanswered();
+
+            return first.gone !== true;
+          }
+
+          yield* followTakingRows(
+            {
+              poll: (after) => seal(true, after),
+              onTxWait: (handed) => {
+                wait = handed;
+              },
+            },
+            first,
+            TASK_COMMENTS_READ.rows,
+            (rows) =>
+              Effect.andThen(
+                threads.answer(
+                  threadsOfLiveRows(rows).map((thread) => ({ ...thread, taskId: subject.taskId })),
+                ),
+                Effect.sync(() => {
+                  answered = true;
+                  drawn();
+                }),
+              ),
+          ).pipe(Effect.ignore);
+
+          return true;
         });
+
+        yield* restarting(attempt);
       }),
     );
 

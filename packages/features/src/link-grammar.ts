@@ -153,6 +153,7 @@ export const LINK_DESTINATION = {
 /** The Admin place's sections a link names past its Overview, which is the place's own link. */
 export const ADMIN_LINK_SECTION = {
   COST: "cost",
+  BILLING: "billing",
   RELIABILITY: "reliability",
   AGENTS: "agents",
   TOOLS: "tools",

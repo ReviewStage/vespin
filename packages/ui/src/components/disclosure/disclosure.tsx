@@ -15,7 +15,7 @@ import { cn } from "../../cn.js";
 import { FoldChevronIcon } from "../../icons/lucide-glyphs.js";
 import { type DisclosureMotion, disclosureMotion, useDisclosure } from "../../use-disclosure.js";
 import { CARD_CORNER, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
-import { useListMotionReplay } from "../list-motion/list-motion.js";
+import { LIST_MOTION_REPLAY, useListMotionReplay } from "../list-motion/list-motion.js";
 
 /**
  * disclosure.tsx -- a fold: a `details` whose open state is React's, so a closed body is not drawn at all.
@@ -35,16 +35,20 @@ import { useListMotionReplay } from "../list-motion/list-motion.js";
  * summary's words stand still under the pointer, with no pulse. The layout
  * lands at once either way; a press that opens marks the element `data-disclosure` as
  * opening, which unrolls the body as it fades in (disclosure.css), and a
- * press that closes holds the body drawn through its fade
+ * press that closes holds the body drawn through its exit
  * (`use-disclosure.ts`). For the moment it moves, the body's height is
- * published on the element as `--disclosure-rise`, which is how a fold
- * whose line travels as it opens tells its stylesheet how far. A fold drawn
- * open from the start, or drawn again, replays nothing. Under a list's
- * motion (`ListMotion`), what stands below the fold glides to where each
- * change puts it: down as a press opens it, and up once a closed body has
- * faded and leaves the layout. Note that the fold tells the motion of both
- * commits (`useListMotionReplay`), because a fold that keeps its own state
- * draws them without the list.
+ * published on the element and the body as `--disclosure-rise`, which is how
+ * a fold whose line travels as it opens tells its stylesheet how far. A fold
+ * drawn open from the start, or drawn again, replays nothing. Under a list's
+ * motion (`ListMotion`), what stands below the fold moves with its body as
+ * one edge, whatever the body's size: down on the spring the body unrolls
+ * on as a press opens it, and, as a press closes it, up over the room the
+ * body gives up at once (`folding`), on the exit's tokens the body rolls up
+ * on (`LIST_MOTION_REPLAY.CLOSE`). Where no motion stands around it, a
+ * closing body fades where it stands and the layout lands once it has.
+ * Note that the fold tells the motion of each commit
+ * (`useListMotionReplay`), because a fold that keeps its own state draws
+ * them without the list.
  *
  * While an app's find looks through what holds the fold (`DisclosureFind`),
  * a closed body is drawn after all, still hidden inside its closed `details`
@@ -178,6 +182,8 @@ export function useDisclosurePreviewShown(inBody: boolean): boolean {
 export function useDisclosureFold(
   defaultOpen: boolean,
   control?: DisclosureControl | undefined,
+  /** Whether a close may give up the body's room at once; not where something takes the body's place once it is gone, which then moves what stands under it once, by what is left. */
+  givesUpRoom = true,
 ): DisclosureFold {
   const [kept, setKept] = useState(defaultOpen);
   const open = control === undefined ? kept : control.open;
@@ -187,8 +193,16 @@ export function useDisclosureFold(
     else control.onOpenChange(next);
   };
 
-  // Whether the open state is a press's, which alone plays the opening.
-  const [pressed, setPressed] = useState(false);
+  // The state a press last asked for, which alone plays its motion; none once the state changed otherwise.
+  const [asked, setAsked] = useState<boolean | undefined>(undefined);
+  const [seen, setSeen] = useState(open);
+
+  if (open !== seen) {
+    setSeen(open);
+
+    if (asked !== open) setAsked(undefined);
+  }
+
   const replay = useListMotionReplay();
   const shown = useDisclosure(open, replay);
   const root = useRef<HTMLDetailsElement | null>(null);
@@ -211,12 +225,22 @@ export function useDisclosureFold(
   // held open through its fade would be closed over the match a find showed
   // there, which opens only a `details` that is closed.
   const finding = useContext(FindContext);
-  const motion = finding ? undefined : disclosureMotion(open && pressed, shown.leaving);
+  // Note that only a close a press asked for, under a motion that will close over it, gives up the body's room at once, because only that commit is read by the motion.
+  const closedOver = givesUpRoom && replay !== undefined && asked === false;
+
+  const motion = finding
+    ? undefined
+    : disclosureMotion(open && asked === true, shown.leaving, closedOver);
+
   // Note that this runs before the frame the press is drawn on, so the rise
-  // is there for the first frame of any motion that reads it.
+  // is there for the first frame of any motion that reads it. The body wears
+  // it too, since a root its caller draws, a group's head, takes no ref, and
+  // a folding body gives up the room it names.
   useLayoutEffect(() => {
     if (motion === undefined || held.current === null) return;
-    root.current?.style.setProperty("--disclosure-rise", `${held.current.offsetHeight}px`);
+    const rise = `${held.current.offsetHeight}px`;
+    root.current?.style.setProperty("--disclosure-rise", rise);
+    held.current.style.setProperty("--disclosure-rise", rise);
   }, [motion]);
 
   return {
@@ -225,10 +249,9 @@ export function useDisclosureFold(
       drawn: shown.mounted,
       leaving: shown.leaving,
       toggle: () => {
-        setPressed(true);
+        setAsked(!open);
         setOpen(!open);
-
-        if (!open) replay();
+        replay?.(open ? LIST_MOTION_REPLAY.CLOSE : LIST_MOTION_REPLAY.MOVE);
       },
       body,
     },
@@ -239,7 +262,7 @@ export function useDisclosureFold(
       onToggle: (event) => {
         // Note that the element's own toggle, a find's among them, lands at once.
         if (event.currentTarget.open === shown.mounted) return;
-        setPressed(false);
+        setAsked(undefined);
         setOpen(event.currentTarget.open);
       },
     },

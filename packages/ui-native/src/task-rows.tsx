@@ -67,6 +67,7 @@ import {
   type RowSwipe,
   RowTime,
   rowPlacement,
+  StatusRing,
   useNestColumn,
 } from "./list-row.js";
 import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
@@ -76,7 +77,6 @@ import {
   type Face,
   FailedMark,
   ProgressCount,
-  TaskStatusMark,
   ToneGlyph,
   WorkingMark,
 } from "./marks.js";
@@ -486,6 +486,8 @@ type RelationRowProps = {
   readonly trailingActions?: readonly RowSwipe[] | undefined;
   /** Menus its long press menu holds, such as Change relation. */
   readonly menuSubmenus?: readonly RowSubmenu[] | undefined;
+  /** Its status as a menu its ring opens, as a task's row does (`StatusRing`); none in a picker, or where the task is unknown, where the ring is its mark alone. */
+  readonly statusMenu?: RowSubmenu | undefined;
 };
 
 /** A task related to the one shown, or one a picker offers: its status ring and name, and at the line's end how it stands to this one, led by its kind's glyph where given, its swipe and long press holding what changes that. */
@@ -498,6 +500,7 @@ export function RelationRow({
   faded = false,
   trailingActions,
   menuSubmenus,
+  statusMenu,
 }: RelationRowProps) {
   const colors = useColors();
 
@@ -509,7 +512,7 @@ export function RelationRow({
         status === undefined ? (
           <ToneGlyph glyph={GLYPH.TASK} tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} />
         ) : (
-          <TaskStatusMark status={status} />
+          <StatusRing status={status} menu={statusMenu} edge={ROW_INSET.PLAIN} />
         )
       }
       title={name}

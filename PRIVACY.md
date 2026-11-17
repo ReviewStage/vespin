@@ -246,7 +246,11 @@ screen you open (the Inbox, a thread, a task, an agent, a page, a pull
 request, or Settings) and whether the window showed one column or two, never
 which thread, task, or agent it was, and, once each time it opens, how long
 it took to show your Inbox, rounded down to a step (under a second, then 1,
-2, 3, 5, 8, 13, or 20 seconds or more), never how many threads it held, and,
+2, 3, 5, 8, 13, or 20 seconds or more), never how many threads it held,
+with how long the app took to start before it, on the same steps, whether
+the lists it keeps on the phone were there to draw from, dropped by an
+update, or missing, whether the Inbox first showed those kept threads or
+the Service's answer, and the app's build number, and,
 each time you send a reply in a thread, how long it took to show in the
 thread, rounded down to a step (under 0.1 seconds, then 0.1, 0.2, 0.3, 0.5,
 0.8, 1.3, 2, 3, or 5 seconds or more), and whether it carried pictures, never

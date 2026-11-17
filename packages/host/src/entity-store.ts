@@ -27,9 +27,11 @@
  * Keychain keeps (`xchacha-cipher.ts`), which seals straight to the file's
  * text; a host whose source hands no cipher, as a browser tab's,
  * keeps none. It names the account it was kept for and a hash of the row
- * shapes it was kept at, so a file of another account, of another build's
- * shapes, or one that will not open, is deleted and read as none, and every
- * read reads whole. A store saves lists that moved at most every
+ * shapes it was kept at: a file of another account, or one that will not
+ * open, is deleted and read as none, and every read reads whole; one kept at
+ * another build's shapes keeps each read, Inbox item and workspace's rows that
+ * still reads (`tolerantReads`), so an update that changes one shape costs
+ * only its rows, and those are read whole. A store saves lists that moved at most every
  * `SAVE_EVERY`, or only at the moments the shell names where it names any
  * (`KeptListsDue`, the phone's app going to the background), the messages
  * refused `QUEUE_SETTLE` after they move, and both once more as it closes;
@@ -71,6 +73,7 @@ import { repositoryPinSchema } from "@repo/features/task-wire";
 import { WORKSPACE_INVITATIONS_READ, WORKSPACE_MEMBERS_READ } from "@repo/features/workspace-live";
 import { workspaceSchema } from "@repo/features/workspace-wire";
 import type { QueuedEntry } from "@repo/sync";
+import { isRecord, type UnparsedWireValue } from "@repo/wire";
 import {
   Clock,
   Duration,
@@ -126,6 +129,15 @@ type KeptByWorkspace =
   | typeof KEPT_READ.INVITATIONS
   | typeof KEPT_READ.AUTOMATIONS;
 
+/** One workspace's invitations as the file keeps them, with the origin they were read from. */
+const keptInvitationsSchema = Schema.Struct({
+  origin: Schema.String,
+  invitations: WORKSPACE_INVITATIONS_READ.rows.fields.invitations,
+});
+
+/** One Inbox item as the file keeps it, with the plan it is on. */
+const keptInboxItemSchema = Schema.Struct({ item: inboxItemSchema, taskId: Schema.String });
+
 /** Each kept read's rows as the file keeps them: what its follow last answered, the task list's and the Inbox's with the sync id they were read at. */
 const keptRowsSchema = Schema.Struct({
   [KEPT_READ.TASK_LIST]: Schema.Struct({
@@ -142,17 +154,11 @@ const keptRowsSchema = Schema.Struct({
   }),
   [KEPT_READ.WORKSPACES]: Schema.Array(workspaceSchema),
   [KEPT_READ.MEMBERS]: Schema.Record(Schema.String, WORKSPACE_MEMBERS_READ.rows),
-  [KEPT_READ.INVITATIONS]: Schema.Record(
-    Schema.String,
-    Schema.Struct({
-      origin: Schema.String,
-      invitations: WORKSPACE_INVITATIONS_READ.rows.fields.invitations,
-    }),
-  ),
+  [KEPT_READ.INVITATIONS]: Schema.Record(Schema.String, keptInvitationsSchema),
   [KEPT_READ.AUTOMATIONS]: Schema.Record(Schema.String, AUTOMATIONS_READ.rows),
   [KEPT_READ.INBOX]: Schema.Struct({
     /** The first items the follow held, as it took them from the service, each with the plan it is on. */
-    items: Schema.Array(Schema.Struct({ item: inboxItemSchema, taskId: Schema.String })),
+    items: Schema.Array(keptInboxItemSchema),
     /** The sync id the items were read at, kept only where they are every item the follow held, so the next launch reads past it; absent where the follow kept only its first ones, and reads whole. */
     at: Schema.optionalKey(Schema.String),
   }),
@@ -201,6 +207,123 @@ type Envelope = typeof envelopeSchema.Type;
 
 const decodeEnvelope = Schema.decodeUnknownResult(Schema.fromJsonString(envelopeSchema));
 const decodeReads = Schema.decodeUnknownResult(keptReadsSchema);
+
+/** What of a kept read still read at these shapes, and how many of its rows didn't. */
+interface Tolerated<Rows> {
+  readonly rows: Rows;
+  readonly dropped: number;
+}
+
+/** What of a file's reads still read at these shapes, and how many reads, Inbox items or workspaces' rows didn't. */
+interface ToleratedReads {
+  readonly reads: Partial<KeptRows>;
+  readonly dropped: number;
+}
+
+/** `value` as `schema` reads it, or none where it doesn't. */
+function decodedAs<Type>(
+  schema: Schema.Codec<Type, unknown>,
+  value: UnparsedWireValue,
+): Type | undefined {
+  return Result.getOrUndefined(Schema.decodeUnknownResult(schema)(value));
+}
+
+/** A record's entries each read as `schema`, those that don't read left out; none where `value` is no record. */
+function entriesAs<Type>(
+  schema: Schema.Codec<Type, unknown>,
+  value: UnparsedWireValue,
+): Tolerated<Record<string, Type>> | undefined {
+  if (!isRecord(value)) return undefined;
+  const rows: Record<string, Type> = {};
+  let dropped = 0;
+
+  for (const [key, entry] of Object.entries(value)) {
+    const row = decodedAs(schema, entry);
+
+    if (row === undefined) dropped += 1;
+    else rows[key] = row;
+  }
+
+  return { rows, dropped };
+}
+
+/** The kept Inbox read: each item read on its own, those that don't read left out, and its sync id kept only where every item read. */
+function keptInboxOf(
+  value: UnparsedWireValue,
+): Tolerated<KeptRows[typeof KEPT_READ.INBOX]> | undefined {
+  if (!isRecord(value) || !Array.isArray(value.items)) return undefined;
+  const items = value.items.flatMap((each) => decodedAs(keptInboxItemSchema, each) ?? []);
+  const dropped = value.items.length - items.length;
+  const at = decodedAs(Schema.String, value.at);
+
+  // Note that the sync id goes with any item left out, since a read past it answers only items that moved, and one left out that never moves would never be answered again.
+  return { rows: dropped === 0 && at !== undefined ? { items, at } : { items }, dropped };
+}
+
+/**
+ * The reads a file kept at other row shapes, each read on its own, and
+ * within the Inbox each item, and within a read kept per workspace each
+ * workspace's rows, so a build that changes one shape costs only the rows of
+ * it that no longer read: the rest are drawn at once, and the reads left out
+ * are read whole from the service, as a fresh install's are. Counts how many
+ * reads, items or workspaces' rows were left out beside what read.
+ */
+function tolerantReads(value: UnparsedWireValue): ToleratedReads {
+  if (!isRecord(value)) return { reads: {}, dropped: 0 };
+  const fields = keptRowsSchema.fields;
+  let dropped = 0;
+
+  /** `read` as its own shape reads it whole, counted as left out where it was kept and doesn't read. */
+  const whole = <Read extends KeptRead>(
+    read: Read,
+    schema: Schema.Codec<KeptRows[Read], unknown>,
+  ) => {
+    const kept = value[read];
+
+    if (kept === undefined) return undefined;
+    const rows = decodedAs(schema, kept);
+
+    if (rows === undefined) dropped += 1;
+
+    return rows;
+  };
+
+  /** `read` kept per workspace, each workspace's rows read on their own. */
+  const byWorkspace = <Row>(read: KeptByWorkspace, schema: Schema.Codec<Row, unknown>) => {
+    const kept = value[read];
+
+    if (kept === undefined) return undefined;
+    const entries = entriesAs(schema, kept);
+    dropped += entries?.dropped ?? 1;
+
+    return entries?.rows;
+  };
+
+  const keptInbox = value[KEPT_READ.INBOX];
+  const inbox = keptInbox === undefined ? undefined : keptInboxOf(keptInbox);
+  dropped += keptInbox === undefined ? 0 : (inbox?.dropped ?? 1);
+
+  const taskList = whole(KEPT_READ.TASK_LIST, fields[KEPT_READ.TASK_LIST]);
+  const sidebar = whole(KEPT_READ.SIDEBAR, fields[KEPT_READ.SIDEBAR]);
+  const workspaces = whole(KEPT_READ.WORKSPACES, fields[KEPT_READ.WORKSPACES]);
+  const members = byWorkspace(KEPT_READ.MEMBERS, WORKSPACE_MEMBERS_READ.rows);
+  const invitations = byWorkspace(KEPT_READ.INVITATIONS, keptInvitationsSchema);
+  const automations = byWorkspace(KEPT_READ.AUTOMATIONS, AUTOMATIONS_READ.rows);
+
+  // Note that a read left out stands absent, as a read that never answered does.
+  const reads: Partial<KeptRows> = {
+    ...(taskList === undefined ? undefined : { [KEPT_READ.TASK_LIST]: taskList }),
+    ...(sidebar === undefined ? undefined : { [KEPT_READ.SIDEBAR]: sidebar }),
+    ...(workspaces === undefined ? undefined : { [KEPT_READ.WORKSPACES]: workspaces }),
+    ...(members === undefined ? undefined : { [KEPT_READ.MEMBERS]: members }),
+    ...(invitations === undefined ? undefined : { [KEPT_READ.INVITATIONS]: invitations }),
+    ...(automations === undefined ? undefined : { [KEPT_READ.AUTOMATIONS]: automations }),
+    ...(inbox === undefined ? undefined : { [KEPT_READ.INBOX]: inbox.rows }),
+  };
+
+  return { reads, dropped };
+}
+
 const encodeKept = Schema.encodeEffect(Schema.fromJsonString(keptSchema));
 
 /** The account's lists as they were kept, and what moved since, written within `SAVE_EVERY`. */
@@ -339,8 +462,9 @@ export function forgetEntityStore(
 
 /**
  * The account's store for as long as the caller's scope stands: the file
- * read and opened, deleted where it is another account's, of other row
- * shapes, or will not open; what moves written at most every `SAVE_EVERY`,
+ * read and opened, deleted where it is another account's or will not open,
+ * and kept as far as its rows still read where it is of other row shapes;
+ * what moves written at most every `SAVE_EVERY`,
  * and once more as the scope closes, unless it was forgotten.
  */
 export function openEntityStore(
@@ -357,10 +481,17 @@ export function openEntityStore(
     const read = text === undefined ? undefined : opened(cipher, text);
     const ours = read !== undefined && read.accountId === accountId;
 
-    const kept =
+    // Note that the shapes' hash is a hint: where it matches, the reads are read whole at once, and otherwise, or where they still don't read, each read is read on its own, keeping what of them still reads.
+    const whole =
       ours && read.hash === hash ? Result.getOrUndefined(decodeReads(read.reads)) : undefined;
 
-    // Note that a file that is not this account's at these shapes is deleted before anything reads it, so no other account's rows are ever drawn.
+    // SAFETY: the file's text was read with `fromJsonString`, so its reads are what `JSON.parse` answers, a JSON value.
+    const tolerant =
+      ours && whole === undefined ? tolerantReads(read.reads as UnparsedWireValue) : undefined;
+
+    const kept = whole ?? tolerant?.reads;
+
+    // Note that a file that is not this account's, or will not open, is deleted before anything reads it, so no other account's rows are ever drawn.
     if (text !== undefined && kept === undefined) yield* removed(directory);
     const stored: Partial<KeptRows> = kept ?? {};
     // Note that the account's own waiting writes an older build kept outlast other row shapes, for the local database to import.
@@ -373,7 +504,12 @@ export function openEntityStore(
     /** What waits on the member, the messages refused, as one text a save compares. */
     const waitingNow = () => JSON.stringify(refusedNow());
     let reads: Partial<KeptRows> = stored;
-    let dirty = kept === undefined && (legacyQueue.length > 0 || refusedKept.length > 0);
+
+    // Note that rows kept at other shapes are written again at the next save, at these shapes and under this hash, so the next launch reads them whole.
+    let dirty =
+      tolerant !== undefined ||
+      (kept === undefined && (legacyQueue.length > 0 || refusedKept.length > 0));
+
     /** Whether rows kept since the last save moved nothing but where they stand (`keepUnmoved`), which only a save of something that moved, or the last, writes. */
     let unmoved = false;
     let savedRefused = JSON.stringify(refusedKept);

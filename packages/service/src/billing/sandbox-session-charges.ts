@@ -26,7 +26,7 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { sandboxOwnersNamed } from "@repo/database/models/sandbox-owners";
 import { recordUsageCharges, type UsageCharge } from "@repo/database/models/usage-charges";
 import { USAGE_KIND } from "@repo/database/usage-vocabulary";
-import { EndedSessionsOnDelete, Sandbox, type SandboxSession } from "@repo/sandbox";
+import { EndedSessionsOnDelete, Sandbox, type SandboxSession, SESSION_END } from "@repo/sandbox";
 import { Cause, Clock, Duration, Effect, Layer } from "effect";
 import { pricedSession } from "./sandbox-session-price.js";
 
@@ -107,15 +107,31 @@ const chargedSessions = Effect.fn("web/chargedSandboxSessions")(function* (
   return run;
 });
 
+/**
+ * Whether a session stopped but Vercel has not yet answered what it used:
+ * its CPU time or its transfer, which a stopped session carries once its
+ * figures are whole. One that failed or was aborted answers neither, ever.
+ */
+function figuresAwaited(session: SandboxSession): boolean {
+  return (
+    session.ended === SESSION_END.STOPPED &&
+    (session.activeCpuMs === undefined || session.networkTransfer === undefined)
+  );
+}
+
 /** Every ended session read within `READ_BACK` charged to its sandbox's workspace, those already charged left be: the daily sweep for sandboxes never deleted. */
 export const chargeEndedSandboxSessions = Effect.fn("web/chargeEndedSandboxSessions")(function* () {
   const now = yield* Clock.currentTimeMillis;
   const read = yield* (yield* Sandbox).sessionsSince(now - Duration.toMillis(READ_BACK));
-  const run = yield* chargedSessions(read);
+  // Note that a stopped session whose figures Vercel has not yet answered is left to a later sweep, because a charge is taken once and a zero taken now would stand.
+  const awaiting = read.filter(figuresAwaited);
+  const run = yield* chargedSessions(read.filter((session) => !figuresAwaited(session)));
 
-  yield* Effect.logInfo(`sandbox sessions charged: ${run.charged} of ${run.ended} ended`);
+  yield* Effect.logInfo(
+    `sandbox sessions charged: ${run.charged} of ${run.ended} ended, ${awaiting.length} awaiting their figures`,
+  );
 
-  return run;
+  return { ...run, awaiting: awaiting.length };
 });
 
 /**

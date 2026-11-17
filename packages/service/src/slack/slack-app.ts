@@ -30,8 +30,6 @@ export const SLACK_APP_ENVIRONMENT = {
  * The bot scopes an install asks for: every one the app's manifest
  * configures, so an install grants what the app declares. No user scope is
  * asked for, since a member's own Slack is connected under Integrations.
- * `users:read.email` also lets the install's callback find the member who
- * installed it by email (`users.lookupByEmail`).
  */
 export const SLACK_BOT_SCOPES = [
   "app_mentions:read",

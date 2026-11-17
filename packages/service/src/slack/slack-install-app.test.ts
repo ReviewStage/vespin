@@ -111,11 +111,10 @@ interface SlackCall {
 
 /**
  * Slack's Web API: `oauth.v2.access` grants the bot token for our client's
- * own code, sent as HTTP Basic, and the Redirect URL the authorize address named, approved by
- * `installer`; `auth.test` and `users.lookupByEmail` answer on that token,
- * the second finding the accounts `people` names.
+ * own code, sent as HTTP Basic, and the Redirect URL the authorize address named;
+ * `auth.test` answers on that token.
  */
-function slackApi(installer: { id: string }, people: Map<string, string>) {
+function slackApi() {
   const heard: SlackCall[] = [];
 
   const layer = fakeHttpClientLayer(async (url, init) => {
@@ -139,7 +138,7 @@ function slackApi(installer: { id: string }, people: Map<string, string>) {
             team: TEAM,
             enterprise: null,
             is_enterprise_install: false,
-            authed_user: { id: installer.id },
+            authed_user: { id: "U0ADMIN" },
           })
         : Response.json({ ok: false, error: "invalid_code" });
     }
@@ -150,13 +149,6 @@ function slackApi(installer: { id: string }, people: Map<string, string>) {
       return Response.json({ ok: true, team_id: TEAM.id, user_id: "U0BOT", bot_id: "B0BOT" });
     }
 
-    if (method === "users.lookupByEmail") {
-      const found = people.get(form.email ?? "");
-
-      return found === undefined
-        ? Response.json({ ok: false, error: "users_not_found" })
-        : Response.json({ ok: true, user: { id: found } });
-    }
 
     return Response.json({ ok: false, error: "unknown_method" });
   });
@@ -167,9 +159,7 @@ function slackApi(installer: { id: string }, people: Map<string, string>) {
 /** The procedure and the route over the test's database, the app as `settings` configures it, and Slack. */
 const standing = (settings: SlackAppSettings | undefined) =>
   Effect.gen(function* () {
-    const installer = { id: "U0NOBODY" };
-    const people = new Map<string, string>();
-    const slack = slackApi(installer, people);
+    const slack = slackApi();
 
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
@@ -240,14 +230,6 @@ const standing = (settings: SlackAppSettings | undefined) =>
       slack,
       install,
       returned,
-      /** The Slack user who approves the next install. */
-      approvedBy: (slackUserId: string) => {
-        installer.id = slackUserId;
-      },
-      /** The account found in the team under this Slack user id by its email. */
-      inTeam: (userId: string, slackUserId: string) => {
-        people.set(emailOf(userId), slackUserId);
-      },
     };
   });
 
@@ -270,8 +252,6 @@ it.layer(getTestDB())("Add to Slack", (it) => {
       Effect.gen(function* () {
         const group = yield* standing(SETTINGS);
         const { admin, workspaceId } = yield* team;
-        group.inTeam(admin, "U0ADMIN");
-        group.approvedBy("U0ADMIN");
 
         const begun = yield* group.install(admin, workspaceId);
         const state = begun.state ?? assert.fail("no state");
@@ -333,8 +313,6 @@ it.layer(getTestDB())("Add to Slack", (it) => {
     Effect.gen(function* () {
       const group = yield* standing(SETTINGS);
       const { admin, workspaceId } = yield* team;
-      group.inTeam(admin, "U0ADMIN");
-      group.approvedBy("U0ADMIN");
 
       const canceled = (yield* group.install(admin, workspaceId)).state ?? assert.fail("no state");
       const cancel = yield* group.returned({ error: "access_denied", state: canceled });
@@ -351,30 +329,10 @@ it.layer(getTestDB())("Add to Slack", (it) => {
     }),
   );
 
-  it.effect(
-    "an install approved in Slack by someone other than the member who began it keeps nothing",
-    () =>
-      Effect.gen(function* () {
-        const group = yield* standing(SETTINGS);
-        const { admin, workspaceId } = yield* team;
-        group.inTeam(admin, "U0ADMIN");
-        group.approvedBy("U0SOMEONE");
-
-        const state = (yield* group.install(admin, workspaceId)).state ?? assert.fail("no state");
-        const landing = yield* group.returned({ code: CODE, state });
-
-        assert.equal(landing, landed(INTEGRATION_LANDING_STATUS.NOT_PERMITTED));
-        assert.equal(Option.isNone(yield* workspaceSlackInstallation(workspaceId)), true);
-        assert.equal(Option.isNone(yield* openSlackBot(RING, workspaceId)), true);
-      }),
-  );
-
   it.effect("an admin who lost the role while Slack was open installs nothing", () =>
     Effect.gen(function* () {
       const group = yield* standing(SETTINGS);
       const { admin, workspaceId } = yield* team;
-      group.inTeam(admin, "U0ADMIN");
-      group.approvedBy("U0ADMIN");
 
       const state = (yield* group.install(admin, workspaceId)).state ?? assert.fail("no state");
       yield* leaveWorkspace(workspaceId, admin);

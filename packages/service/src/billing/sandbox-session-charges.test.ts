@@ -26,6 +26,13 @@ import {
 const NOW = new Date("2026-11-16T12:00:00Z");
 const HOUR_MS = 3_600_000;
 
+/** The figures a stopped session answers once they are whole: a minute run, its CPU time, and its transfer. */
+const WHOLE = {
+  durationMs: 60_000,
+  activeCpuMs: 0,
+  networkTransfer: { ingressBytes: 0, egressBytes: 0 },
+} as const;
+
 const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
@@ -105,17 +112,32 @@ it.layer(getTestDB())("sandbox sessions in the usage ledger", (it) => {
           // Still running, so not yet charged.
           session(agentSandbox, undefined, { durationMs: undefined }),
           // A sandbox no workspace owns.
-          session(`agent-sandbox-${randomUUID()}`, SESSION_END.STOPPED, { durationMs: 60_000 }),
+          session(`agent-sandbox-${randomUUID()}`, SESSION_END.STOPPED, WHOLE),
           // A region with no rate.
-          session(farSandbox, SESSION_END.STOPPED, { region: "xyz1", durationMs: 60_000 }),
+          session(farSandbox, SESSION_END.STOPPED, { ...WHOLE, region: "xyz1" }),
+          // Stopped, but Vercel has not yet answered its CPU time and transfer: left to a later sweep.
+          session(agentSandbox, SESSION_END.STOPPED, { durationMs: 60_000 }),
         );
 
         const run = chargeEndedSandboxSessions().pipe(
           Effect.provideService(Sandbox, memory.service),
         );
 
-        assert.deepEqual(yield* run, { ended: 4, charged: 2, unowned: 1, unpriced: 1 });
-        assert.deepEqual(yield* run, { ended: 4, charged: 0, unowned: 1, unpriced: 1 });
+        assert.deepEqual(yield* run, {
+          ended: 4,
+          charged: 2,
+          unowned: 1,
+          unpriced: 1,
+          awaiting: 1,
+        });
+
+        assert.deepEqual(yield* run, {
+          ended: 4,
+          charged: 0,
+          unowned: 1,
+          unpriced: 1,
+          awaiting: 1,
+        });
 
         assert.deepEqual(yield* workspaceMonthTotals(acme, NOW), [
           { kind: USAGE_KIND.SANDBOX_SESSION, amountMicroUsd: 3_794 + 3_920 },

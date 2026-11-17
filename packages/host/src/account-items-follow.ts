@@ -259,13 +259,15 @@ export function followAccountItems(
       let held: Held | undefined;
       /** The items as last drawn, a standing write's among them, by the plan each is on. */
       let told = NO_ITEMS;
+      /** Whether the items drawn are still the store's, before the read's first answer took their place. */
+      let fromStore = false;
 
-      /** Tells the items as last drawn, once the read first answered or the store's were drawn. */
+      /** Tells the items as last drawn, once the read first answered or the store's were drawn, marked kept while they are still the store's. */
       const toldNow = Effect.suspend(() => {
         if (held === undefined) return Effect.void;
         answered = true;
 
-        return tell({ rows: told });
+        return tell(fromStore ? { rows: told, kept: true } : { rows: told });
       });
 
       /** Draws the items `ids` names again, a write standing over them, on the plans the read answered them on. */
@@ -312,10 +314,11 @@ export function followAccountItems(
 
       // Note that the store's items are drawn before the first read, so a launch draws the Inbox at once, and at no sync id, so the read's first answer takes their place whatever id it was read at.
       if (kept !== undefined) {
-        const fromStore = new Map(kept.items.map((each) => [each.item.id, each]));
-        withinWindow(fromStore, yield* Clock.currentTimeMillis);
-        const sent = [...fromStore.values()].map((each) => each.item);
-        yield* taken(new Map(), fromStore, sent, [], undefined);
+        const stored = new Map(kept.items.map((each) => [each.item.id, each]));
+        withinWindow(stored, yield* Clock.currentTimeMillis);
+        const sent = [...stored.values()].map((each) => each.item);
+        fromStore = true;
+        yield* taken(new Map(), stored, sent, [], undefined);
       }
 
       const first = yield* dependencies.seal(userId, kept?.at ?? "");
@@ -328,6 +331,7 @@ export function followAccountItems(
 
       const landed = (decoded: AccountInboxItemsLiveRows, standing?: SyncStanding) =>
         Effect.gen(function* () {
+          fromStore = false;
           const was = held ?? new Map<string, HeldItem>();
           const after = heldAfter(was, decoded, standing, yield* Clock.currentTimeMillis);
           yield* taken(was, after.held, after.sent, after.placed, syncIdOf(standing));

@@ -21,6 +21,7 @@ import type {
   AdminWorkspaceDetail,
   AdminWorkspaceList,
 } from "@repo/features/admin-answer-wire";
+import type { AdminBilling } from "@repo/features/admin-billing-wire";
 import type { AdminCatalog } from "@repo/features/admin-catalog-wire";
 import type { AdminCost } from "@repo/features/admin-cost-wire";
 import { ADMIN_REFUSED, ADMIN_USER_ID_PARAM, adminRefusedOf } from "@repo/features/admin-wire";
@@ -67,6 +68,7 @@ const WEB_ADMIN_READS: AdminReads = {
   catalog: (signal) => asked<AdminCatalog>(browserClient.admin.catalog({}, { signal })),
   metrics: (query, signal) => asked<AdminMetrics>(browserClient.admin.metrics(query, { signal })),
   cost: (query, signal) => asked<AdminCost>(browserClient.admin.cost(query, { signal })),
+  billing: (query, signal) => asked<AdminBilling>(browserClient.admin.billing(query, { signal })),
   reliability: (query, signal) =>
     asked<AdminReliability>(browserClient.admin.reliability(query, { signal })),
   users: (query, signal) => asked<AdminUserList>(browserClient.admin.users(query, { signal })),

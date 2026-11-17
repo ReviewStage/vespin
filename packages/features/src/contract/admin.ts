@@ -35,6 +35,7 @@ const ADMIN_ERRORS = {
   [ADMIN_ERROR.INVALID_WINDOW]: {},
   [ADMIN_ERROR.INVALID_SEARCH]: {},
   [ADMIN_ERROR.INVALID_DAY]: {},
+  [ADMIN_ERROR.INVALID_MONTH]: {},
   [ADMIN_ERROR.USER_NOT_FOUND]: {},
   [ADMIN_ERROR.MISSING_WORKSPACE_ID]: {},
   [ADMIN_ERROR.WORKSPACE_NOT_FOUND]: {},
@@ -69,6 +70,10 @@ const dayQuerySchema = EffectSchema.Struct({
   [ADMIN_QUERY.SCOPE]: parameter,
 });
 
+const billingQuerySchema = EffectSchema.Struct({
+  [ADMIN_QUERY.MONTH]: parameter,
+});
+
 const workspaceQuerySchema = EffectSchema.Struct({
   [ADMIN_QUERY.WORKSPACE_ID]: parameter,
 });
@@ -93,6 +98,7 @@ const favorite = (method: typeof HTTP_METHOD.PUT | typeof HTTP_METHOD.DELETE) =>
     .input(favoriteInputSchema);
 
 export const adminContract = {
+  billing: read(ADMIN_ROUTE_PATH.BILLING).input(billingQuerySchema),
   catalog: read(ADMIN_ROUTE_PATH.CATALOG).input(EffectSchema.Struct({})),
   cost: read(ADMIN_ROUTE_PATH.COST).input(windowedQuerySchema),
   day: read(ADMIN_ROUTE_PATH.DAY).input(dayQuerySchema),

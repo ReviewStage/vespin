@@ -74,6 +74,7 @@ function seams(viewer: AdminViewer | null, written: string[]): AdminProcedureSea
     readCatalog: unread,
     readMetrics: unread,
     readCost: unread,
+    readBilling: unread,
     readUser: unread,
     readDay: unread,
     readWorkspaces: unread,
