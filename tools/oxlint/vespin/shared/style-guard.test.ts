@@ -233,7 +233,8 @@ describe("a stylesheet", () => {
       .row .ui-disclosure-summary { transition: background-color var(--ui-duration-hover) var(--ui-motion-exit); }
       [data-dock][data-disclosure="closing"] > summary { animation: sink var(--ui-duration-pane) var(--ui-motion-pane); }
       .row .ui-disclosure-body { &:hover { transition: opacity var(--ui-duration-pane) var(--ui-motion-pane); } }
-      .row .ui-disclosure-body .spinner { animation: spin var(--ui-duration-pane) var(--ui-motion-pane); }`;
+      .row .ui-disclosure-body .spinner { animation: spin var(--ui-duration-pane) var(--ui-motion-pane); }
+      .row .ui-disclosure-body+.spinner, [data-disclosure]~.note { animation: spin var(--ui-duration-pane) var(--ui-motion-pane); }`;
     expect(sheetRules(sheet, "packages/panel/src/styles/tasks.css")).toEqual([
       STYLE_RULE.FOLD_MOTION,
       STYLE_RULE.FOLD_MOTION,

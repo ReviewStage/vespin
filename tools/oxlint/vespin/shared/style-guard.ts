@@ -690,11 +690,45 @@ function resolvedSelector(block: CssBlock): string {
  * a spinner inside a fold's body turns as it likes.
  */
 function targetsFoldPart(selector: string): boolean {
-  const compounds = splitTopLevel(selector.replace(/\s*>\s*/gu, " >"), /\s/u);
+  const { compounds, combinators } = compoundsOf(selector);
   const last = compounds.at(-1) ?? "";
   if (FOLD_PART.test(withoutNegations(last))) return true;
   const parent = compounds.at(-2) ?? "";
-  return last.startsWith(">") && FOLD_ROOT.test(withoutNegations(parent));
+  return combinators.at(-1) === ">" && FOLD_ROOT.test(withoutNegations(parent));
+}
+
+/**
+ * A complex selector's compounds, and the combinator joining each to the
+ * one before it (a space for a descendant), cut only at the top level, so a
+ * `~=` in an attribute or a `>` inside `:has()` stays in its compound.
+ */
+function compoundsOf(selector: string): {
+  readonly compounds: readonly string[];
+  readonly combinators: readonly string[];
+} {
+  const compounds: string[] = [];
+  const combinators: string[] = [];
+  let current = "";
+  let pending = "";
+  let depth = 0;
+  for (const char of selector) {
+    if (char === "(" || char === "[") depth += 1;
+    if (char === ")" || char === "]") depth -= 1;
+    const cuts = depth === 0 && (/\s/u.test(char) || char === ">" || char === "+" || char === "~");
+    if (!cuts) {
+      if (current === "" && compounds.length > 0) combinators.push(pending === "" ? " " : pending);
+      current += char;
+      continue;
+    }
+    if (current !== "") {
+      compounds.push(current);
+      current = "";
+      pending = "";
+    }
+    if (!/\s/u.test(char)) pending = char;
+  }
+  if (current !== "") compounds.push(current);
+  return { compounds, combinators };
 }
 
 /**
