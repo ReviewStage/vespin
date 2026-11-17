@@ -143,8 +143,11 @@ export function experimentsReadIn(
       Effect.flatMap(machineOwnerOf(target), (owner) =>
         accountExperimentOn(owner, EXPERIMENT.COMPUTER_USE),
       ),
+      // Note that the assignee's row is read only where they, not the starter, keep the threads.
       Effect.flatMap(inboxKeeperOf(agent), (keeper) =>
-        keeper === agent.userId ? Effect.succeed(undefined) : readAccountPreferences(keeper),
+        keeper === agent.userId
+          ? Effect.succeed(Option.none())
+          : Effect.map(readAccountPreferences(keeper), Option.some),
       ),
     ],
     { concurrency: "unbounded" },
@@ -159,8 +162,8 @@ export function experimentsReadIn(
         turnEndOn: starter !== undefined && experimentOn(starter.experiments, EXPERIMENT.TURN_END),
         replyButtonsOn: on(EXPERIMENT.REPLY_BUTTONS),
         computerUseOn,
-        // Note that the assignee's choice stands where they keep the threads, the starter's otherwise, and nothing stored reads as on, as the setting's default is.
-        inboxOn: (assignee ?? starter)?.preferences.inbox ?? true,
+        // Note that the keeper's own choice stands, an assignee who stored none reading as on, as the setting's default is, rather than as the starter's.
+        inboxOn: Option.getOrElse(assignee, () => starter)?.preferences.inbox ?? true,
       });
     }),
     Effect.tapError(logStoreFailure),
