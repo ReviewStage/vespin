@@ -84,6 +84,8 @@ on screen, each one is labeled with its agent's name.
 [#9530](https://github.com/ReviewStage/vespin/pull/9530),
 [#9533](https://github.com/ReviewStage/vespin/pull/9533)
 
+![Safari and Reminders side by side on a Mac, each with an agent's copper cursor: one labeled Test signup types a password into a Create your account form, the other labeled Launch prep checks off the first item of a Launch list](apps/web/public/changelog/0.37.0/a-cursor-for-each-agent.png)
+
 ### Improvements
 
 - Cloud environment variables show who last changed them, and their values
