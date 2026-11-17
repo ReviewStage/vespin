@@ -1,0 +1,3 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-17 08:08:29.714 Df Vespin[83955:c9f4be7] [com.apple.xpc:connection] [0x1061d2210] activating connection: mach=true listener=false peer=false name=com.apple.cfprefsd.daemon
+2026-11-17 08:08:29.715 Df Vespin[83955:c9f4be7] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Creating a user notification center

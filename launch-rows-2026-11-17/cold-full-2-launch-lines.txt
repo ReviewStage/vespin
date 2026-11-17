@@ -1,0 +1,23 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-17 07:56:38.883 Df log[56901:0] [com.apple.log:] log run noninteractively, parent: 51187 (launchd_sim), args: 'log' 'show' '--last' '1m' '--style' 'compact' '--predicate' 'eventMessage CONTAINS "[launch]"'
+2026-11-17 07:57:21.656 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] bundle-start +0 ms js wall=1794920241656 perf=393715661
+2026-11-17 07:57:21.658 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] rows-variant-full +2 ms js wall=1794920241658 perf=393715662
+2026-11-17 07:57:22.095 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] entry-modules-loaded +439 ms js wall=1794920242095 perf=393716100
+2026-11-17 07:57:22.250 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] root-layout-loaded +594 ms js wall=1794920242250 perf=393716254
+2026-11-17 07:57:22.284 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] host-start +629 ms js wall=1794920242285 perf=393716289
+2026-11-17 07:57:22.324 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] host-standing +669 ms js wall=1794920242325 perf=393716329
+2026-11-17 07:57:22.327 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] document-written +671 ms js wall=1794920242327 perf=393716332
+2026-11-17 07:57:22.446 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] inbox-rows-render +790 ms js wall=1794920242446 perf=393716451
+2026-11-17 07:57:22.452 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] inbox-row-render#1 +796 ms js wall=1794920242452 perf=393716457
+2026-11-17 07:57:22.567 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] inbox-row-render#5 +911 ms js wall=1794920242567 perf=393716572
+2026-11-17 07:57:22.685 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] inbox-row-render#10 +1029 ms js wall=1794920242685 perf=393716690
+2026-11-17 07:57:22.730 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] inbox-row-render#11 +1074 ms js wall=1794920242730 perf=393716735
+2026-11-17 07:57:22.813 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] inbox-row-render#15 +1157 ms js wall=1794920242813 perf=393716817
+2026-11-17 07:57:22.914 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] inbox-row-render#20 +1258 ms js wall=1794920242914 perf=393716919
+2026-11-17 07:57:23.089 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] splash-hide +1433 ms js wall=1794920243089 perf=393717093
+2026-11-17 07:57:23.089 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] rnStartupTiming {} perfNow=393717094
+2026-11-17 07:57:24.553 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] first-row-appear +2897 ms js wall=1794920244553 perf=393718558
+2026-11-17 07:57:24.553 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] row-appear#1 +2898 ms js wall=1794920244554 perf=393718558
+2026-11-17 07:57:24.554 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] row-appear#5 +2898 ms js wall=1794920244554 perf=393718558
+2026-11-17 07:57:24.554 E  Vespin[62651:c9ac549] [com.facebook.react.log:javascript] [launch] row-appear#10 +2898 ms js wall=1794920244554 perf=393718558
+2026-11-17 07:57:36.865 Df log[66976:0] [com.apple.log:] log run noninteractively, parent: 59801 (launchd_sim), args: 'log' 'show' '--last' '1m' '--style' 'compact' '--predicate' 'eventMessage CONTAINS "[launch]"'

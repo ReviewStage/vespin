@@ -1,0 +1,20 @@
+== bundle PLAUNCH2 base 95ee227035
+  built 95ee227035 base app Vmain3.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+cold-full-1: T=1794920179486; 21 [launch] lines; cold-full-1: video aligned at 0.278s; splash gone +7400 ms; inbox drawn (settled) +7600 ms; 234 frames
+cold-full-2: T=1794920237216; 22 [launch] lines; cold-full-2: video aligned at 1.045s; splash gone +6967 ms; inbox drawn (settled) +7167 ms; 221 frames
+cold-full-3: T=1794920297983; 21 [launch] lines; cold-full-3: video aligned at 0.985s; splash gone +5900 ms; inbox drawn (settled) +6167 ms; 191 frames
+cold-nopreview-1: T=1794920357728; 22 [launch] lines; cold-nopreview-1: video aligned at 0.222s; splash gone +6733 ms; inbox drawn (settled) +6933 ms; 215 frames
+cold-nopreview-2: T=1794920418121; 21 [launch] lines; cold-nopreview-2: video aligned at -2.340s; splash gone +4200 ms; inbox drawn (settled) +4567 ms; 338 frames
+cold-nopreview-3: T=1794920473094; 22 [launch] lines; cold-nopreview-3: video aligned at -0.134s; splash gone +1000 ms; inbox drawn (settled) +6933 ms; 273 frames
+cold-nomenu-1: T=1794920529332; 22 [launch] lines; cold-nomenu-1: video aligned at 0.712s; splash gone +6167 ms; inbox drawn (settled) +6333 ms; 196 frames
+cold-nomenu-2: T=1794920584526; 22 [launch] lines; cold-nomenu-2: video aligned at 0.532s; splash gone +6067 ms; inbox drawn (settled) +6333 ms; 196 frames
+cold-nomenu-3: T=1794920640150; 22 [launch] lines; cold-nomenu-3: video aligned at 0.556s; splash gone +4267 ms; inbox drawn (settled) +4633 ms; 340 frames
+cold-overscan2-1: T=1794920700361; 19 [launch] lines; cold-overscan2-1: video aligned at 1.860s; splash gone +7533 ms; inbox drawn (settled) +7933 ms; 241 frames
+cold-overscan2-2: T=1794920758468; 20 [launch] lines; cold-overscan2-2: video aligned at 0.580s; splash gone +6267 ms; inbox drawn (settled) +6600 ms; 202 frames
+cold-overscan2-3: T=1794920815414; 19 [launch] lines; cold-overscan2-3: video aligned at 2.270s; splash gone +2700 ms; inbox drawn (settled) +9500 ms; 291 frames
+ipad26-cold-full-1: T=1794920908592; 21 [launch] lines; ipad26-cold-full-1: video aligned at 0.608s; splash gone +3967 ms; inbox drawn (settled) +4100 ms; 254 frames
+ipad26-cold-nomenu-1: T=1794920954503; 22 [launch] lines; ipad26-cold-nomenu-1: video aligned at 0.669s; splash gone +3800 ms; inbox drawn (settled) +3933 ms; 361 frames
