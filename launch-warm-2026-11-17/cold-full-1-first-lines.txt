@@ -1,0 +1,3 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-17 12:04:12.062 Df Vespin[32316:0] [com.apple.libsystem.libdispatch:] BUG in libdispatch: 26A428 24B8117 - 653 - 0x4
+2026-11-17 12:04:12.078 Df Vespin[32316:d3c70ab] [com.apple.xpc:connection] [0x1060fff70] activating connection: mach=true listener=false peer=false name=com.apple.cfprefsd.daemon

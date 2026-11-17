@@ -1,0 +1,28 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-17 12:13:38.907 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] bundle-start +0 ms js wall=1794935618906 perf=409091925
+2026-11-17 12:13:38.909 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] rows-variant-warm +3 ms js wall=1794935618909 perf=409091927
+2026-11-17 12:13:39.405 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] entry-modules-loaded +499 ms js wall=1794935619405 perf=409092424
+2026-11-17 12:13:39.593 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] root-layout-loaded +688 ms js wall=1794935619594 perf=409092612
+2026-11-17 12:13:39.673 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] host-start +768 ms js wall=1794935619674 perf=409092692
+2026-11-17 12:13:39.719 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] host-standing +813 ms js wall=1794935619719 perf=409092737
+2026-11-17 12:13:39.720 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] document-written +814 ms js wall=1794935619720 perf=409092738
+2026-11-17 12:13:39.795 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] widget-write-start +890 ms js wall=1794935619796 perf=409092814
+2026-11-17 12:13:39.799 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] widget-write-end +893 ms js wall=1794935619799 perf=409092818
+2026-11-17 12:13:39.905 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] inbox-rows-render +1000 ms js wall=1794935619906 perf=409092924
+2026-11-17 12:13:39.909 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] inbox-row-render#1 +1003 ms js wall=1794935619909 perf=409092927
+2026-11-17 12:13:40.031 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] inbox-row-render#5 +1125 ms js wall=1794935620031 perf=409093050
+2026-11-17 12:13:40.153 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] inbox-row-render#10 +1248 ms js wall=1794935620154 perf=409093172
+2026-11-17 12:13:40.177 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] inbox-row-render#11 +1272 ms js wall=1794935620178 perf=409093196
+2026-11-17 12:13:40.311 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] inbox-row-render#15 +1405 ms js wall=1794935620311 perf=409093330
+2026-11-17 12:13:40.412 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] inbox-row-render#20 +1506 ms js wall=1794935620412 perf=409093431
+2026-11-17 12:13:40.617 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] splash-hide +1711 ms js wall=1794935620617 perf=409093636
+2026-11-17 12:13:40.617 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] rnStartupTiming {} perfNow=409093636
+2026-11-17 12:13:42.692 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] first-row-appear +3786 ms js wall=1794935622692 perf=409095711
+2026-11-17 12:13:42.693 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] row-appear#1 +3787 ms js wall=1794935622693 perf=409095712
+2026-11-17 12:13:42.697 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] row-appear#5 +3791 ms js wall=1794935622697 perf=409095716
+2026-11-17 12:13:42.698 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] row-appear#10 +3792 ms js wall=1794935622698 perf=409095716
+2026-11-17 12:13:42.698 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] row-appear#11 +3792 ms js wall=1794935622698 perf=409095717
+2026-11-17 12:13:42.765 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] inbox-row-render#25 +3860 ms js wall=1794935622766 perf=409095784
+2026-11-17 12:13:42.924 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] inbox-row-render#30 +4018 ms js wall=1794935622924 perf=409095943
+2026-11-17 12:14:00.201 E  Vespin[84290:d41de4a] [com.facebook.react.log:javascript] [launch] inbox-row-render#40 +21295 ms js wall=1794935640201 perf=409113219
+2026-11-17 12:14:10.492 Df log[96660:0] [com.apple.log:] log run noninteractively, parent: 76969 (launchd_sim), args: 'log' 'show' '--start' '2026-11-17 12:13:21' '--style' 'compact' '--predicate' 'eventMessage CONTAINS "[launch]"'
