@@ -72,6 +72,7 @@ import {
   UnreadDot,
   WorkingMark,
 } from "./marks.js";
+import { useMinute } from "./minute.js";
 import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
 import { searchedTitleMarkdown } from "./searched-title-model.js";
 import {
@@ -236,7 +237,7 @@ type ListRowProps = RowActs & {
   readonly face?: Face | undefined;
   /** When it last changed, in epoch milliseconds, said as the panel's rows say it: "now", "5m", "3h". */
   readonly at?: number | undefined;
-  /** What `at` counts from; now where none is given. */
+  /** What `at` counts from; the minute, moved on as it turns (`useMinute`), where none is given. */
   readonly now?: number | undefined;
   /** When a reminder the reader set on the thread comes back, in epoch milliseconds, said in the time's place as the panel's row says it: "3:04 PM", "Mon 9:00 AM". */
   readonly due?: number | undefined;
@@ -929,8 +930,11 @@ function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
  * between its lines.
  */
 export function ListRow(props: ListRowProps) {
-  const { id, title, task, line, unread = false, done = false, face, at, now, due } = props;
+  const { id, title, task, line, unread = false, done = false, face, at, due } = props;
   const colors = useColors();
+  // Note that the row reads the minute itself, so its time and what VoiceOver hears of it move on with no draw of the list that holds it.
+  const minute = useMinute();
+  const now = props.now ?? minute;
 
   const row: ReactElement = (
     <VStack alignment="leading" spacing={ROW_INSET.THREAD_LINE_GAP}>
@@ -963,17 +967,16 @@ export function ListRow(props: ListRowProps) {
       {...props}
       id={id}
       row={row}
-      heard={props.heard ?? threadHeard(props)}
+      heard={props.heard ?? threadHeard(props, now)}
       vertical={ROW_INSET.THREAD_VERTICAL}
     />
   );
 }
 
 /** What VoiceOver hears of an Inbox row: its title, then unread, what waits on you, its last words, its task and the task's status, whom it waits on, and when. */
-function threadHeard(props: ListRowProps): RowHeard {
-  const { title, task, line, summary, unread = false, face, at, now, due } = props;
+function threadHeard(props: ListRowProps, moment: number): RowHeard {
+  const { title, task, line, summary, unread = false, face, at, due } = props;
   const asks = line !== undefined && INBOX_LINE_LOOK[line]?.tone === STATUS_TONE.ATTENTION;
-  const moment = now ?? Date.now();
 
   return {
     label: title,

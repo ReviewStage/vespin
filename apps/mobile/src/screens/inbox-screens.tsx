@@ -85,8 +85,8 @@ import {
   ThreadPreview,
   UNDER_SPLIT_SCREEN,
   useColors,
-  useMinute,
   useThreeColumns,
+  useToday,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
@@ -324,8 +324,8 @@ function InboxRowView({
   remindMenu,
   onResolve,
 }: InboxRowActs & { readonly listed: InboxListed }) {
-  // Note that the row reads the minute itself, so a row whose thread did not move still moves its time and Remind me's times as the minute turns.
-  const now = useMinute();
+  // Note that the row is drawn again as the day turns, so Remind me's Tomorrow and Next week say their days rightly; its time moves on with the minute inside `ListRow`, so the minute draws no Inbox row again.
+  useToday();
   const { holder, item } = listed;
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
@@ -386,7 +386,6 @@ function InboxRowView({
       }
       at={item.updatedAt}
       due={item.remindAt}
-      now={now}
       trailingActions={[...resolve, remindMenu(item)]}
       leadingActions={[
         {

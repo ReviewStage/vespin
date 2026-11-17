@@ -1,4 +1,4 @@
-// minute.ts -- the minute a row's age is said from, moved on once a minute while the app stands in front, as the panel's `useMinute` moves the window's.
+// minute.ts -- the minute a row's age is said from, moved on once a minute while the app stands in front, as the panel's `useMinute` moves the window's, and the day it falls in.
 
 import { useSyncExternalStore } from "react";
 import { AppState } from "react-native";
@@ -67,4 +67,22 @@ const MINUTE = minuteStore();
 /** The time a row's age counts from, moved on once a minute and on the app's return to the front. */
 export function useMinute(): number {
   return useSyncExternalStore(MINUTE.subscribe, MINUTE.read);
+}
+
+/** The start of the minute's day in the reader's own zone, the same through the day. */
+function dayOf(at: number): number {
+  const day = new Date(at);
+  day.setHours(0, 0, 0, 0);
+
+  return day.getTime();
+}
+
+/**
+ * The reader's day, by its first instant, moved on at midnight and on the
+ * app's return to the front on a later day: for what changes only from one
+ * day to the next, such as Remind me's Tomorrow, so its reader is drawn
+ * again once a day rather than at every minute.
+ */
+export function useToday(): number {
+  return useSyncExternalStore(MINUTE.subscribe, () => dayOf(MINUTE.read()));
 }
