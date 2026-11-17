@@ -1628,7 +1628,10 @@ function heldAsChord(chord: PressedChord, event: ShortcutKeyPress): boolean {
  * modifiers, and the key. The character is read where it can be,
  * which is what the menu bar matches too, and the physical key where Option
  * has changed the character, or where a plain chord's key is read by its
- * place because Shift changes its character. A key with an unshifted character answers
+ * place because Shift changes its character, or where the chord is a
+ * switcher's, whose keys stand where the hand finds them on every layout:
+ * ⌃2 is the second workspace's on a French keyboard too, where the key types
+ * é without Shift. A key with an unshifted character answers
  * either character, Shift held or not, because which of the two needs Shift
  * is the keyboard layout's to say.
  */
@@ -1642,7 +1645,11 @@ export function shortcutMatches(shortcut: ShortcutChord, event: ShortcutKeyPress
 
   if (!shiftFree && event.shiftKey !== (chord.shift === true)) return false;
 
-  if (event.altKey || (chord.plain === true && chord.key.placed === true)) {
+  if (
+    event.altKey ||
+    chord.switching === true ||
+    (chord.plain === true && chord.key.placed === true)
+  ) {
     return event.code === chord.key.code;
   }
 

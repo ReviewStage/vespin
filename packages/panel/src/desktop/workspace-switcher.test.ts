@@ -133,7 +133,7 @@ function choose(label: string): void {
   act(() => item.click());
 }
 
-test("the menu offers the workspaces, the listed one checked, New workspace, and Workspace settings, which opens Settings on the listed workspace's page, and nothing else", () => {
+test("the menu offers the workspaces, the listed one checked and choosing it moving nothing, New workspace, and Workspace settings, which opens Settings on the listed workspace's page, and nothing else", () => {
   const pressed: unknown[] = [];
 
   const page = mount(
@@ -150,6 +150,8 @@ test("the menu offers the workspaces, the listed one checked, New workspace, and
 
   open(page.switcher());
   const offered = menuItems().map((item) => [labelOf(item), item.getAttribute("aria-checked")]);
+  choose("acme");
+  open(page.switcher());
   choose("Personal");
   open(page.switcher());
   choose("New workspace");
@@ -186,18 +188,24 @@ test("on a desktop app, ⌃ and a workspace's number lists it, and the menu prin
   });
   page.redraw();
 
-  const press = (key: string, held: KeyboardEventInit = { ctrlKey: true }) => {
-    const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...held });
+  const press = (key: string, code: string, held: KeyboardEventInit = { ctrlKey: true }) => {
+    const event = new KeyboardEvent("keydown", {
+      key,
+      code,
+      bubbles: true,
+      cancelable: true,
+      ...held,
+    });
     act(() => document.body.dispatchEvent(event));
 
     return event.defaultPrevented;
   };
 
-  // ⌃2 lists the second workspace; ⌃1 on the one listed and ⌃4 past the last move nothing, and ⌘2 is no workspace's.
-  const second = press("2");
-  const listed = press("1");
-  const past = press("4");
-  const command = press("2", { metaKey: true });
+  // ⌃2 lists the second workspace, read by the key's place, so a French keyboard's ⌃2, which types é, is it too; ⌃1 on the one listed and ⌃4 past the last move nothing, and ⌘2 is no workspace's.
+  const second = press("é", "Digit2");
+  const listed = press("1", "Digit1");
+  const past = press("4", "Digit4");
+  const command = press("2", "Digit2", { metaKey: true });
   open(page.switcher());
   const printed = menuItems().map((item) => [
     labelOf(item),

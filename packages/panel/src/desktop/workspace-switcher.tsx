@@ -97,7 +97,10 @@ export function workspaceMenuGroups(
       card: <WorkspaceCard workspace={workspace} personal={workspace.id === first} />,
       checked: workspace.id === listed.id,
       chord: doors.chords[index],
-      onSelect: () => tasks.onChooseWorkspace(workspace.id),
+      // Note that choosing the workspace listed already, by a press or its chord, does nothing, as ⌃ and its number does outside the menu, so it never asks to leave a page holding unsaved work for no move.
+      onSelect: () => {
+        if (workspace.id !== listed.id) tasks.onChooseWorkspace(workspace.id);
+      },
     }),
   );
 
