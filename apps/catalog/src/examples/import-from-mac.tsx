@@ -94,12 +94,6 @@ const GROUPS: readonly Group[] = [
         name: "flaky-test-hunter",
         description: "Reruns a failing test in isolation to tell a flaky one from a broken one.",
       },
-      {
-        folder: "~/.claude/skills/release-notes",
-        name: "release-notes-2",
-        renamedFrom: "release-notes",
-        description: "Drafts release notes from the pull requests merged since the last tag.",
-      },
     ],
   },
   {
@@ -118,9 +112,9 @@ const GROUPS: readonly Group[] = [
 
 /** Every skill left out, with the folder it came from and why. */
 const LEFT_OUT = [
-  { name: "pr-review", from: "Claude Code", why: "Already installed" },
-  { name: "storybook-snapshots", from: "Claude Code", why: "Already listed" },
-  { name: "plan", from: "Codex", why: "Built into Codex" },
+  { name: "pr-review", from: "Claude Code", why: "Already have one" },
+  { name: "release-notes", from: "Claude Code", why: "Already have one" },
+  { name: "vendor-docs", from: "Codex", why: "Too large" },
 ] as const;
 
 const OFFERED = GROUPS.flatMap((group) => group.offered);
