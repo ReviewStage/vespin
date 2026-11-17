@@ -1166,6 +1166,14 @@ export function AgentTranscript({
     anchored.current = fromEnd(event.nativeEvent) < ANCHOR_REACH;
   }, []);
 
+  // Note that a drag let go with speed carries on in its momentum, which settles it, so the anchor stays let go until then rather than taken where the finger left, and a room or a keyboard that changes meanwhile never pulls the list back under the reader.
+  const onDragEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if ((event.nativeEvent.velocity?.y ?? 0) === 0) onScrollSettled(event);
+    },
+    [onScrollSettled],
+  );
+
   // The rows as they stand now, which a reveal reads without being asked anew as each lands.
   const itemsNow = useRef(items);
   useEffect(() => {
@@ -1257,7 +1265,7 @@ export function AgentTranscript({
           keyboardDismissMode={DOCK_FOLLOWS_KEYBOARD ? "interactive" : "on-drag"}
           onScroll={onScroll}
           onScrollBeginDrag={onScrollBegin}
-          onScrollEndDrag={onScrollSettled}
+          onScrollEndDrag={onDragEnd}
           onMomentumScrollEnd={(event) => {
             onScrollSettled(event);
             focusSentTo();
