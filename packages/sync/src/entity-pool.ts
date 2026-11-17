@@ -81,7 +81,12 @@
  * holds, and its cursor (`KeptAnswer`), cut to its bound where it names one.
  * Only the service's rows reach the store, never a write drawn over them,
  * and a kept read's scope closing tells it nothing, so quitting never empties
- * it.
+ * it. As a kept read first stands, it answers from what the store holds of
+ * it (`RowsStore.loaded`), before the service answers, as Linear's local
+ * bootstrap draws from its database before it catches up: those rows count
+ * as synced, writes standing drawn over them, but are never handed back to
+ * the store, and a stored row never replaces one the pool already holds. Its
+ * stored cursor (`HeldRows.stored`) is what its follow reads past.
  */
 
 import {
@@ -199,9 +204,29 @@ export interface KeptAnswer {
   readonly cursor: unknown;
 }
 
-/** The rows half of a store: told each kept read's answer, in one call, and never failing, since it keeps its own failures. */
+/** A kept read as the store names it: the read, the kind its rows are kept under, and its workspace. */
+export interface KeptName {
+  readonly read: string;
+  readonly kind: string;
+  readonly workspace: string | undefined;
+}
+
+/** What the store holds of a kept read: its rows, in the order it held them, and the cursor it last kept; none where it kept none. */
+export interface KeptLoad {
+  /** Each the kind's row as the store was handed it (`KeptRow.row`). */
+  readonly rows: readonly unknown[];
+  readonly cursor: unknown;
+}
+
+/**
+ * The rows half of a store: told each kept read's answer, in one call, and
+ * asked what it holds of a read as the read first stands; never failing,
+ * since it keeps its own failures, and answering none for a read it cannot
+ * load.
+ */
 export interface RowsStore {
   readonly answered: (answer: KeptAnswer) => Effect.Effect<void>;
+  readonly loaded: (read: KeptName) => Effect.Effect<KeptLoad | undefined>;
 }
 
 /** A read as it stands on a kind. */
@@ -264,6 +289,8 @@ export interface HeldRows<Row extends object, Change = unknown> {
   readonly synced: () => readonly Row[];
   /** Every change standing over the kind, oldest first, which a read beside the pool draws over its own rows. */
   readonly standing: () => readonly Change[];
+  /** The cursor the store held for a kept read as it stood, which its follow reads past; none where it held none. */
+  readonly stored: unknown;
 }
 
 /**
@@ -716,6 +743,79 @@ function movedOnly<Row extends object, Change>(
   ]);
 }
 
+/**
+ * An answer naming every key `holding` holds now taken by it, committed at
+ * once: `taken` upserted, `keys` held, and any key it let go that no read
+ * holds any longer gone; answering the keys whose row moved or that it took
+ * up or let go, and every other read showing a row that moved drawn again.
+ */
+function answeredWhole<Row extends object, Change>(
+  rows: KindRows<Row, Change>,
+  holding: Holding<Row, Change>,
+  taken: ReadonlyMap<string, Row>,
+  keys: Set<string>,
+): Effect.Effect<readonly string[]> {
+  const was = holding.held;
+  holding.held = keys;
+  const next = new Map(rows.synced.held());
+
+  for (const [key, row] of taken) next.set(key, row);
+
+  for (const key of was) {
+    if (heldByAny(rows.reads, key)) continue;
+    next.delete(key);
+    rows.takenAt.delete(key);
+  }
+
+  const placed = [
+    ...[...keys].filter((key) => !was.has(key)),
+    ...[...was].filter((key) => !keys.has(key)),
+  ];
+
+  const written = rows.synced.take(next);
+
+  return Effect.as(redrawn(holdersOf(rows.reads, written, holding), written), [
+    ...new Set([...written, ...placed]),
+  ]);
+}
+
+/**
+ * What `store` holds of `holding`'s kept read taken as its answer, before the
+ * service's first: each row held and counted as already reported, but taken
+ * only where the pool holds none of its key, since one another read answered
+ * is newer; answering the stored cursor, none where it held nothing.
+ */
+function loadedFrom<Row extends object, Change>(
+  rows: KindRows<Row, Change>,
+  holding: Holding<Row, Change>,
+  store: RowsStore,
+): Effect.Effect<unknown> {
+  const kept = holding.read.kept;
+
+  if (kept === undefined) return Effect.void;
+
+  return Effect.flatMap(
+    store.loaded({ read: kept.name, kind: kept.kind, workspace: kept.workspace }),
+    (load) => {
+      if (load === undefined) return Effect.void;
+      // SAFETY: the store hands back only rows it was handed as this kind's (`KeptAnswer`), under the kind it names.
+      const keyed = new Map(load.rows.map((row) => [rows.kind.key(row as Row), row as Row]));
+      const synced = rows.synced.held();
+      holding.reported = keyed;
+
+      return Effect.as(
+        answeredWhole(
+          rows,
+          holding,
+          new Map([...keyed].filter(([key]) => !synced.has(key))),
+          new Set(keyed.keys()),
+        ),
+        load.cursor,
+      );
+    },
+  );
+}
+
 /** The first of `rows`, in order, whose sizes sum within the bound; every row where `kept` names none. */
 function cut<Row>(kept: KeptRead<Row>, rows: readonly Row[]): readonly Row[] {
   const { bound } = kept;
@@ -783,23 +883,30 @@ function stood<Row extends object, Change>(
       rows.synced.take(next);
     });
 
+  const acquired = Effect.acquireRelease(
+    Effect.sync(() => {
+      const holding: Holding<Row, Change> = {
+        read,
+        held: new Set(),
+        adopted: new Set(),
+        reported: new Map(),
+      };
+
+      rows.reads.add(holding);
+
+      return holding;
+    }),
+    release,
+  );
+
   return Effect.map(
-    Effect.acquireRelease(
-      Effect.sync(() => {
-        const holding: Holding<Row, Change> = {
-          read,
-          held: new Set(),
-          adopted: new Set(),
-          reported: new Map(),
-        };
-
-        rows.reads.add(holding);
-
-        return holding;
-      }),
-      release,
+    Effect.flatMap(acquired, (holding) =>
+      Effect.map(
+        store === undefined ? Effect.void : loadedFrom(rows, holding, store),
+        (stored) => ({ holding, stored }),
+      ),
     ),
-    (holding): HeldRows<Row, Change> => ({
+    ({ holding, stored }): HeldRows<Row, Change> => ({
       answer: (answered, how = {}) => {
         const { held, gone, at } = how;
 
@@ -808,29 +915,13 @@ function stood<Row extends object, Change>(
           const keyed = new Map(answered.map((row) => [rows.kind.key(row), row]));
 
           if (gone !== undefined) return movedOnly(rows, holding, keyed, gone, at);
-          const keys = new Set(held ?? keyed.keys());
-          const was = holding.held;
-          holding.held = keys;
-          const next = new Map(rows.synced.held());
 
-          for (const [key, row] of newer(rows, keyed, at)) next.set(key, row);
-
-          for (const key of was) {
-            if (heldByAny(rows.reads, key)) continue;
-            next.delete(key);
-            rows.takenAt.delete(key);
-          }
-
-          const placed = [
-            ...[...keys].filter((key) => !was.has(key)),
-            ...[...was].filter((key) => !keys.has(key)),
-          ];
-
-          const written = rows.synced.take(next);
-
-          return Effect.as(redrawn(holdersOf(rows.reads, written, holding), written), [
-            ...new Set([...written, ...placed]),
-          ]);
+          return answeredWhole(
+            rows,
+            holding,
+            newer(rows, keyed, at),
+            new Set(held ?? keyed.keys()),
+          );
         };
 
         return Effect.suspend(() => {
@@ -855,6 +946,7 @@ function stood<Row extends object, Change>(
         return [...holding.held].flatMap((key) => synced.get(key) ?? []);
       },
       standing: () => rows.standing.map((write) => write.change),
+      stored,
     }),
   );
 }
