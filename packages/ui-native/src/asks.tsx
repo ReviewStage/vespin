@@ -16,7 +16,14 @@ import {
   keyboardType,
   textInputAutocapitalization,
 } from "@expo/ui/swift-ui/modifiers";
-import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { ActionSheetIOS, type ActionSheetIOSOptions, Alert as SystemAlert } from "react-native";
 import { WORDS_KIND, type WordsKind } from "./system-asks.js";
 import { useWindowSizeClass } from "./use-window-size-class.js";
@@ -154,21 +161,17 @@ function SystemConfirm({
   // The question raised and still answerable, by its own token: none once `presented` turns false or the ask unmounts, so a second run of the effect never raises it twice, and an answer to an earlier question, or one landing after the ask went, acts on nothing.
   const standing = useRef<symbol | undefined>(undefined);
 
-  useEffect(
-    () => () => {
+  // Note that the token is let go during the commit that lets the question go or unmounts the ask, in a layout effect, so no native answer landing before the passive effects run can still act.
+  useLayoutEffect(() => {
+    if (!presented) standing.current = undefined;
+
+    return () => {
       standing.current = undefined;
-    },
-    [],
-  );
+    };
+  }, [presented]);
 
   useEffect(() => {
-    if (!presented) {
-      standing.current = undefined;
-
-      return;
-    }
-
-    if (standing.current !== undefined) return;
+    if (!presented || standing.current !== undefined) return;
 
     const raise = Symbol("raise");
     standing.current = raise;
