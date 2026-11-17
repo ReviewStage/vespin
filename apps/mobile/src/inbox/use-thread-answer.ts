@@ -30,6 +30,7 @@
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
+import type { AgentAttachment } from "@repo/features/agent-wire";
 import { missingWords } from "@repo/features/inbox-ask-words";
 import {
   EMPTY_INBOX_DRAFT,
@@ -66,6 +67,8 @@ import {
   type InboxReader,
   type InboxSending,
   inboxSendingDrawn,
+  inboxSendingFile,
+  inboxSendingFiles,
 } from "@repo/features/inbox-writes";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAccount } from "@repo/host/app-state-reads";
@@ -86,8 +89,12 @@ interface ThreadHeld {
   readonly pressed?: InboxPushPress;
   /** Whether the box's next send starts a new thread with the thread's agent rather than replying. */
   readonly asNew?: boolean;
-  /** The key the last thread start went under and its words, which a start of the same words goes under again, so a retry starts one thread. */
-  readonly started?: { readonly key: string; readonly words: string };
+  /** The key the last thread start went under, its words and its pictures, which a start of the same words and pictures goes under again, so a retry starts one thread. */
+  readonly started?: {
+    readonly key: string;
+    readonly words: string;
+    readonly attachments: readonly AgentAttachment[];
+  };
   /** The key of the Got it out, which takes Got it off the thread while it is out, as the host draws the thread settled once it goes, and sends nothing on a second press. */
   readonly nodding?: string | undefined;
 }
@@ -129,6 +136,14 @@ function unreadableWords(label: string): string {
   return `Write a number in ${label}.`;
 }
 
+/** Whether two starts carry the same pictures, each by its name and bytes, in the same order. */
+function samePictures(one: readonly AgentAttachment[], other: readonly AgentAttachment[]): boolean {
+  return (
+    one.length === other.length &&
+    one.every((each, at) => each.name === other[at]?.name && each.data === other[at]?.data)
+  );
+}
+
 /** The draft a notification's action sends on the thread: its option on the ask it answers, while that ask is still the open one, or its words; none otherwise. */
 function pressedDraft(
   thread: readonly InboxMessage[],
@@ -161,6 +176,19 @@ function subscribe(listener: () => void): () => void {
 
 function heldNow(): ReadonlyMap<string, ThreadHeld> {
   return held;
+}
+
+/** A file a reply sent from the phone on `itemId` carries, by its attachment, as the thread draws it from the reply's own bytes, before a read carries the reply and after, under the attachment `thread` names it by; none for any other. */
+export function pendingThreadFile(
+  itemId: string,
+  attachmentId: string,
+  thread: readonly InboxMessage[] | undefined,
+): { readonly contentType: string; readonly base64: string } | undefined {
+  const held = heldNow().get(itemId);
+
+  return held === undefined
+    ? undefined
+    : inboxSendingFile(held.sending.values(), attachmentId, thread);
 }
 
 /** The store with the thread's holding changed as `change` says. */
@@ -440,6 +468,7 @@ export function useThreadAnswer(
         key,
         text: sent.text,
         answers: sent.answers,
+        files: inboxSendingFiles(key, sent.attachments),
         at: Date.now(),
       }),
     }));
@@ -536,22 +565,27 @@ export function useThreadAnswer(
     [itemId],
   );
 
-  // Note that the same words sent again go under the key they went under, so a retry starts one thread. The box lets go of its words at once, as a reply does, and a start refused puts them back ahead of nothing typed since. One start is out at a time, as one Got it is, so a refusal never puts back words a later start sent.
+  // Note that the same words and pictures sent again go under the key they went under, so a retry starts one thread, and a start whose pictures changed goes under a new key, which the service would refuse under the old one. The box lets go of its words at once, as a reply does, and a start refused puts them back ahead of nothing typed since. One start is out at a time, as one Got it is, so a refusal never puts back words a later start sent.
   const start = () => {
     const text = draft.note.trim();
 
     if (text === "" || starting.has(itemId)) return;
     starting.add(itemId);
-    const before = held.get(itemId)?.started;
-    const key = before?.words === text ? before.key : randomUUID();
     // The pictures the box holds go as the new thread's first message's, as the panel's start carries its files.
     const { attachments } = draft;
+    const before = held.get(itemId)?.started;
+
+    const key =
+      before?.words === text && samePictures(before.attachments, attachments)
+        ? before.key
+        : randomUUID();
+
     let startedId: string | undefined;
     hold(itemId, (was) => ({
       ...was,
       draft: { ...was.draft, note: "", attachments: [] },
       note: undefined,
-      started: { key, words: text },
+      started: { key, words: text, attachments },
     }));
     void write(
       () =>

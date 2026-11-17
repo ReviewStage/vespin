@@ -92,7 +92,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
 import {
   PUSHED_PAGE,
@@ -115,7 +115,7 @@ import {
   useStandFrontSteps,
   useThreadMedia,
 } from "../inbox/use-inbox.js";
-import { useThreadAnswer } from "../inbox/use-thread-answer.js";
+import { pendingThreadFile, useThreadAnswer } from "../inbox/use-thread-answer.js";
 import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
@@ -748,7 +748,13 @@ function ThreadDetail({
     openInSafari(linkOf(place, workspaceStep));
   };
 
-  const { sources, sizes, retry } = useThreadMedia(item.id, media);
+  // Note that a reply's files sent from the phone are drawn from their own bytes until the read carries it and after, so a sent photo never waits on a read of itself.
+  const pending = useCallback(
+    (itemId: string, attachmentId: string) => pendingThreadFile(itemId, attachmentId, item.thread),
+    [item.thread],
+  );
+
+  const { sources, sizes, pictureSizes, retry } = useThreadMedia(item.id, media, pending);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
   const router = useRouter();
@@ -886,7 +892,14 @@ function ThreadDetail({
         };
       }
 
-      return { kind: THREAD_MEDIA.PICTURE, key, source, alt: each.name, onRetry };
+      return {
+        kind: THREAD_MEDIA.PICTURE,
+        key,
+        source,
+        alt: each.name,
+        size: pictureSizes.get(key),
+        onRetry,
+      };
     }),
   }));
 
