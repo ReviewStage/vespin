@@ -51,11 +51,14 @@ import * as Path from "effect/Path";
 import { systemError } from "effect/PlatformError";
 import { test } from "vitest";
 import {
+  EncryptedStorageUnavailable,
   type KeptProductEventDay,
   type SecretCipher,
   SettingsStore,
   type SettingsStoreOptions,
   type StoredAccount,
+  TOKENS_IN_VAULT,
+  type TokenVault,
 } from "./settings-store.js";
 import { TEST_CIPHER_PREFIX, testCipher } from "./testing/test-cipher.js";
 
@@ -165,6 +168,7 @@ function storeIn(
   directory: string,
   options: {
     cipher?: SecretCipher;
+    tokenVault?: TokenVault;
   } = {},
 ): PromisedSettingsStore {
   const config: SettingsStoreOptions = {
@@ -172,9 +176,29 @@ function storeIn(
     cipher: options.cipher ?? testCipher(),
     fileSystem: FILE_SYSTEM,
     path: PATH,
+    ...(options.tokenVault === undefined ? undefined : { tokenVault: options.tokenVault }),
   };
 
   return awaitedStoreOf(new SettingsStore(config), SERVICES);
+}
+
+/** A vault in memory, as the iPhone's Keychain keeps the tokens' text, and one that refuses every write where `refuses` says so. */
+function memoryVault(refuses = false): TokenVault & { readonly held: () => string | undefined } {
+  let held: string | undefined;
+
+  return {
+    held: () => held,
+    read: Effect.sync(() => held),
+    write: (tokens) =>
+      refuses
+        ? Effect.fail(new EncryptedStorageUnavailable())
+        : Effect.sync(() => {
+            held = tokens;
+          }),
+    clear: Effect.sync(() => {
+      held = undefined;
+    }),
+  };
 }
 
 async function readSettingsFile(directory: string): Promise<string> {
@@ -501,6 +525,62 @@ test("an account's ciphertext is kept as the standard base64 of the cipher's byt
 
   assert.ok(isRecord(written) && isRecord(written.account), "the file holds an account");
   assert.equal(written.account.tokenCipher, sealed(JSON.stringify(tokens)));
+});
+
+test("where the platform keeps the tokens, the settings file keeps only who is signed in, and a sign-out clears the vault", async (t) => {
+  const directory = await temporaryDirectory(t, "settings-");
+  const vault = memoryVault();
+  await storeIn(directory, { tokenVault: vault }).setAccount(TEST_ACCOUNT);
+
+  const contents = await readSettingsFile(directory);
+  const reopened = storeIn(directory, { tokenVault: vault });
+
+  assert.deepEqual(await reopened.readAccount(), TEST_ACCOUNT);
+  assert.equal(contents.includes(TEST_ACCOUNT.accessToken), false);
+  assert.equal(contents.includes(TEST_ACCOUNT.refreshToken), false);
+  assert.equal(contents.includes(TEST_ACCOUNT.email), true);
+
+  await reopened.clearAccount();
+
+  assert.equal(vault.held(), undefined);
+  assert.equal(await storeIn(directory, { tokenVault: vault }).readAccount(), undefined);
+});
+
+test("tokens an older build sealed are moved into the vault on the first read, so an update signs no one out", async (t) => {
+  const directory = await temporaryDirectory(t, "settings-");
+  await storeIn(directory).setAccount(TEST_ACCOUNT);
+  const vault = memoryVault();
+
+  assert.deepEqual(await storeIn(directory, { tokenVault: vault }).readAccount(), TEST_ACCOUNT);
+
+  const written = unparsedWire(JSON.parse(await readSettingsFile(directory)));
+  assert.ok(isRecord(written) && isRecord(written.account), "the file holds an account");
+  assert.equal(written.account.tokenCipher, TOKENS_IN_VAULT);
+
+  // Note that the next launch reads the tokens from the vault alone, under a cipher that opens nothing.
+  const opensNothing: SecretCipher = {
+    ...testCipher(),
+    decrypt: () => {
+      throw new Error("The old key is gone.");
+    },
+  };
+
+  assert.deepEqual(
+    await storeIn(directory, { tokenVault: vault, cipher: opensNothing }).readAccount(),
+    TEST_ACCOUNT,
+  );
+});
+
+test("a vault that refuses the move leaves the sealed tokens as they were, read again at the next launch", async (t) => {
+  const directory = await temporaryDirectory(t, "settings-");
+  await storeIn(directory).setAccount(TEST_ACCOUNT);
+  const before = await readSettingsFile(directory);
+
+  assert.deepEqual(
+    await storeIn(directory, { tokenVault: memoryVault(true) }).readAccount(),
+    TEST_ACCOUNT,
+  );
+  assert.equal(await readSettingsFile(directory), before);
 });
 
 test("the Mac's session rides sealed beside the OAuth tokens, and reads back with them", async (t) => {
