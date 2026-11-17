@@ -3,8 +3,12 @@
 // The service starts, updates, and ends the activity by push, so the app
 // only hands it tokens: the push-to-start token, and the update token of
 // each activity iOS starts. It also says when an activity ends or is
-// dismissed, but for one it ended itself because a newer one started, so a
-// push-to-start sent twice never stands two activities. Each goes to JavaScript as an event (`src/live-activity/`),
+// dismissed, but for one it ended itself because a newer one stands, so a
+// push-to-start sent twice never stands two activities: whenever the module
+// starts, at a launch or a wake, and whenever an activity appears, every
+// agents' activity but the newest is ended and dismissed at once. The
+// newest is the one the service pushed last, whose stale date, which every
+// push sets a fixed while after it, lies furthest ahead. Each goes to JavaScript as an event (`src/live-activity/`),
 // and the latest token is sent again when it starts listening for it, since
 // iOS hands each once. Each activity's update token is kept in the app's
 // defaults too, so one iOS handed while the app ran in the background, or
@@ -97,7 +101,9 @@ public final class LiveActivityModule: Module {
 
     OnCreate {
       Task { @MainActor in
+        // Note that the kept tokens are read first, since keeping the newest writes back what it keeps.
         self.restoreTokens()
+        self.keepNewest(preferring: nil)
         self.watch()
       }
       self.stopObserver = NotificationCenter.default.addObserver(
@@ -251,9 +257,13 @@ public final class LiveActivityModule: Module {
       })
     watchers.append(
       Task { @MainActor [weak self] in
-        for activity in Activity<AgentsActivityAttributes>.activities { self?.follow(activity) }
+        for activity in Activity<AgentsActivityAttributes>.activities
+        where self?.superseded.contains(activity.id) == false {
+          self?.follow(activity)
+        }
         for await activity in Activity<AgentsActivityAttributes>.activityUpdates {
-          self?.supersede(by: activity)
+          self?.keepNewest(preferring: activity.id)
+          guard self?.superseded.contains(activity.id) == false else { continue }
           self?.follow(activity)
         }
       })
@@ -275,13 +285,22 @@ public final class LiveActivityModule: Module {
       })
   }
 
-  /// Ends every activity older than `newest` at once, so a push-to-start the service sent twice never stands two activities on the phone.
-  @MainActor private func supersede(by newest: Activity<AgentsActivityAttributes>) {
-    for older in Activity<AgentsActivityAttributes>.activities where older.id != newest.id {
+  /// Ends every agents' activity but the newest at once, so a push-to-start the service sent twice never stands two activities on the phone. The newest is the one whose stale date lies furthest ahead, and `preferred`, the one that just appeared, where they tie.
+  @MainActor private func keepNewest(preferring preferred: String?) {
+    let activities = Activity<AgentsActivityAttributes>.activities.filter { !superseded.contains($0.id) }
+    let kept = activities.max { older, newer in
+      let olderStale = older.content.staleDate ?? .distantPast
+      let newerStale = newer.content.staleDate ?? .distantPast
+      if olderStale != newerStale { return olderStale < newerStale }
+      return newer.id == preferred
+    }
+    guard let kept else { return }
+    for older in activities where older.id != kept.id {
       superseded.insert(older.id)
       activityTokens[older.id] = nil
       Task { await older.end(nil, dismissalPolicy: .immediate) }
     }
+    keepTokens()
   }
 
   @MainActor private func took(startToken token: String) {
