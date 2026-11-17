@@ -52,6 +52,8 @@ export const PRODUCT_EVENT = {
   MIRROR_READY: "mirror:ready",
   /** A launch drew its first Inbox rows, counted once a launch by how long that took from the app's start, on a rung. */
   APP_READY: "app:ready",
+  /** A reply sent on an Inbox thread stood in its thread, counted once a send by how long that took from the press, on a rung, and whether it carried pictures. */
+  REPLY_DRAWN: "reply:drawn",
 } as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT)[keyof typeof PRODUCT_EVENT];
@@ -73,6 +75,7 @@ export const PRODUCT_SURFACE_EVENT = {
   SEARCH_OPEN: PRODUCT_EVENT.SEARCH_OPEN,
   SURFACE_OPEN: PRODUCT_EVENT.SURFACE_OPEN,
   APP_READY: PRODUCT_EVENT.APP_READY,
+  REPLY_DRAWN: PRODUCT_EVENT.REPLY_DRAWN,
 } as const;
 
 export type ProductSurfaceEventName =
@@ -110,6 +113,8 @@ export const PRODUCT_EVENT_PROPERTY = {
   ATTEMPT: "attempt",
   ELAPSED_SECONDS: "elapsed_seconds",
   LAUNCH_SECONDS: "launch_seconds",
+  DRAWN_MS: "drawn_ms",
+  REPLY_KIND: "reply_kind",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -456,6 +461,46 @@ export function productLaunchSeconds(milliseconds: number): ProductLaunchSeconds
   return PRODUCT_LAUNCH_LADDER.find((rung) => seconds >= rung) ?? PRODUCT_LAUNCH_SECONDS.UNDER_ONE;
 }
 
+/**
+ * The rungs a reply travels on, in milliseconds from its Send to its standing
+ * in its thread, each the shortest wait that reaches it: fine through the
+ * first second, where a send feels instant or slow, and coarse past it, for
+ * the reason a wait travels on rungs.
+ */
+const PRODUCT_DRAWN_MS = {
+  UNDER_100: 0,
+  MS_100: 100,
+  MS_200: 200,
+  MS_300: 300,
+  MS_500: 500,
+  MS_800: 800,
+  MS_1300: 1300,
+  MS_2000: 2000,
+  MS_3000: 3000,
+  MS_5000: 5000,
+} as const;
+
+export type ProductDrawnMilliseconds = (typeof PRODUCT_DRAWN_MS)[keyof typeof PRODUCT_DRAWN_MS];
+
+const PRODUCT_DRAWN_LADDER: readonly ProductDrawnMilliseconds[] = Object.values(
+  PRODUCT_DRAWN_MS,
+).sort((left, right) => right - left);
+
+/** The highest rung a send's wait in milliseconds reaches; anything under the first rung, or a wait that is no number, is the first. */
+export function productDrawnMilliseconds(milliseconds: number): ProductDrawnMilliseconds {
+  if (!Number.isFinite(milliseconds)) return PRODUCT_DRAWN_MS.UNDER_100;
+
+  return PRODUCT_DRAWN_LADDER.find((rung) => milliseconds >= rung) ?? PRODUCT_DRAWN_MS.UNDER_100;
+}
+
+/** What a reply carried, never what it said: words alone, or pictures, with words or without. */
+export const PRODUCT_REPLY_KIND = {
+  WORDS: "words",
+  PICTURES: "pictures",
+} as const;
+
+export type ProductReplyKind = (typeof PRODUCT_REPLY_KIND)[keyof typeof PRODUCT_REPLY_KIND];
+
 interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.APP_VERSION]: string;
   [PRODUCT_EVENT_PROPERTY.IMAGE_COUNT]: ProductSessionCountBucket;
@@ -477,6 +522,8 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.ATTEMPT]: ProductSessionCountBucket;
   [PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS]: ProductElapsedSeconds;
   [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: ProductLaunchSeconds;
+  [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: ProductDrawnMilliseconds;
+  [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: ProductReplyKind;
 }
 
 /**
@@ -493,6 +540,7 @@ type EnumeratedProductEventProperty = Exclude<
   | typeof PRODUCT_EVENT_PROPERTY.ATTEMPT
   | typeof PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS
   | typeof PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS
+  | typeof PRODUCT_EVENT_PROPERTY.DRAWN_MS
 >;
 
 /** Every value each enumerable property may ever hold. */
@@ -511,6 +559,7 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.EXPERIMENT]: Object.values(PRODUCT_EXPERIMENT),
   [PRODUCT_EVENT_PROPERTY.MIRROR_STEP]: Object.values(MIRROR_STEP),
   [PRODUCT_EVENT_PROPERTY.MIRROR_FAILURE]: Object.values(MIRROR_FAILURE),
+  [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
 } as const satisfies Record<EnumeratedProductEventProperty, readonly string[]>;
 
 /**
@@ -556,6 +605,7 @@ const PRODUCT_EVENT_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS,
   ],
   [PRODUCT_EVENT.APP_READY]: [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS],
+  [PRODUCT_EVENT.REPLY_DRAWN]: [PRODUCT_EVENT_PROPERTY.DRAWN_MS, PRODUCT_EVENT_PROPERTY.REPLY_KIND],
 } as const satisfies { [Name in ProductEventName]: readonly ProductEventProperty[] };
 
 /** Exactly the properties one event carries, each with its own value type. */
@@ -678,6 +728,12 @@ function launchReader(value: UnparsedWireValue): ProductLaunchSeconds | undefine
   return isProductLaunchSeconds(value) ? value : undefined;
 }
 
+const isProductDrawnMilliseconds = Schema.is(Schema.Literals(Object.values(PRODUCT_DRAWN_MS)));
+
+function drawnReader(value: UnparsedWireValue): ProductDrawnMilliseconds | undefined {
+  return isProductDrawnMilliseconds(value) ? value : undefined;
+}
+
 function bucketReader(value: UnparsedWireValue): ProductSessionCountBucket | undefined {
   return isProductSessionCountBucket(value) ? value : undefined;
 }
@@ -722,6 +778,7 @@ const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
   [PRODUCT_EVENT_PROPERTY.ATTEMPT]: bucketReader,
   [PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS]: elapsedReader,
   [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: launchReader,
+  [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: drawnReader,
   [PRODUCT_EVENT_PROPERTY.EXPERIMENT_SCOPE]: experimentScopeReader,
 };
 

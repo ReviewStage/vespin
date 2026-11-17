@@ -246,7 +246,11 @@ screen you open (the Inbox, a thread, a task, an agent, a page, a pull
 request, or Settings) and whether the window showed one column or two, never
 which thread, task, or agent it was, and, once each time it opens, how long
 it took to show your Inbox, rounded down to a step (under a second, then 1,
-2, 3, 5, 8, 13, or 20 seconds or more), never how many threads it held. They go through the Service, as the Mac
+2, 3, 5, 8, 13, or 20 seconds or more), never how many threads it held, and,
+each time you send a reply in a thread, how long it took to show in the
+thread, rounded down to a step (under 0.1 seconds, then 0.1, 0.2, 0.3, 0.5,
+0.8, 1.3, 2, 3, or 5 seconds or more), and whether it carried pictures, never
+what it said, its pictures, or which thread. They go through the Service, as the Mac
 app's do, and the app holds no PostHog key of its own.
 
 While you are signed in, the Mac app and the web app record how you use
