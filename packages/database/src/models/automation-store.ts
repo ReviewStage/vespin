@@ -618,6 +618,7 @@ export type ScheduledAutomation = typeof ScheduledRowSchema.Type;
 
 const ArchivableAgentSchema = Schema.Struct({
   runId: Schema.String,
+  runTaskId: Schema.NullOr(Schema.String),
   userId: Schema.String,
   agentId: Schema.String,
   conversationId: Schema.String,
@@ -627,15 +628,16 @@ const ArchivableAgentSchema = Schema.Struct({
   runAgents: Schema.Number,
 });
 
-/** An agent of a run that its automation archives once it finishes well: its run and how many agents that run has, whose it is, its id, its conversation and how far its lines had run when read, when it was made, and when it was put away where it already was. */
+/** An agent of a run that its automation archives once it finishes well: its run, the task the run made for itself, and how many agents that run has, whose it is, its id, its conversation and how far its lines had run when read, when it was made, and when it was put away where it already was. */
 export type ArchivableRunAgent = typeof ArchivableAgentSchema.Type;
 
 /** An agent of the same run, counted beside the one read. */
 const runAgent = alias(agentTable, "run_agent");
 
-/** What an archivable agent is read as: its run, the agent, how far its lines had run, and how many agents its run has. */
+/** What an archivable agent is read as: its run and the task it made, the agent, how far its lines had run, and how many agents its run has. */
 const archivableAgentColumns = {
   runId: automationRun.id,
+  runTaskId: automationRun.taskId,
   userId: agentTable.userId,
   agentId: agentTable.id,
   conversationId: agentTable.conversationId,

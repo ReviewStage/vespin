@@ -770,7 +770,7 @@ it.layer(SUITE)("an automation's runs", (it) => {
   );
 
   it.effect(
-    "an automation that archives its successful runs archives a run's agent once its turn settled well, once, and leaves standing one that failed, one brought back by hand, one whose starter left, one waiting on the inbox until its question closes, one whose pull request is open until it merges, and every agent of an automation that does not",
+    "an automation that archives its successful runs archives a run's agent once its turn settled well, once, moving its run's task to Done, and leaves standing one that failed, one brought back by hand, one whose starter left, one waiting on the inbox until its question closes, one whose pull request is open until it merges, and every agent of an automation that does not, with their tasks",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
@@ -853,6 +853,28 @@ it.layer(SUITE)("an automation's runs", (it) => {
             ))[0]?.archivedAt !== null,
           ],
           [true, false, false, false, false, false],
+        );
+
+        const taskStatus = (owner: string, id: string) =>
+          Effect.gen(function* () {
+            const taskId = Option.getOrThrow(yield* readAgent(owner, id)).taskId ?? "";
+
+            return Option.getOrThrow(yield* readTask(owner, taskId)).task.status;
+          });
+
+        assert.deepEqual(
+          [
+            yield* taskStatus(archiving.owner, succeeded),
+            yield* taskStatus(archiving.owner, failed),
+            yield* taskStatus(archiving.owner, publishing),
+            yield* taskStatus(keeping.owner, kept),
+          ],
+          [
+            TASK_STATUS.DONE,
+            TASK_STATUS.IN_PROGRESS,
+            TASK_STATUS.IN_PROGRESS,
+            TASK_STATUS.IN_PROGRESS,
+          ],
         );
 
         // Brought back by hand, the agent stays; its question closed and its pull request merged later, the asking and publishing ones go.

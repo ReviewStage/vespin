@@ -2371,6 +2371,40 @@ export function beginTaskWorkCommitted(
   );
 }
 
+/**
+ * Moves a task an automation's run made for itself to Done, as "Archive
+ * finished runs" puts the run away (`run-archive.ts`), and answers whether
+ * it moved: one still open moves, by no one by hand, and one already Done or
+ * Canceled, or one the account does not reach, stands as it was. The row is
+ * read under its lock and written in one transaction. Note that the move
+ * archives and settles nothing, as a move by hand to Done does, because the
+ * run is put away only once every agent of it is archived and holds nothing
+ * open in the inbox.
+ */
+export function finishRunTask(userId: string, taskId: string): TaskStoreEffect<boolean> {
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        const locked = yield* lockTask({ userId, taskId });
+
+        if (Option.isNone(locked) || isTaskSettled(locked.value.status)) return false;
+        const now = yield* DateTime.nowAsDate;
+
+        yield* applyChanges({
+          userId,
+          taskId,
+          ...statusColumnsOf(TASK_STATUS.DONE, now, undefined),
+        }).pipe(
+          // The row is held under this transaction's lock, so an update that missed it is the database breaking its own contract.
+          Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
+        );
+
+        return true;
+      }),
+    ),
+  );
+}
+
 /** Where the task stands and who moved it to Done by hand, its row locked until the caller commits; none where the account reaches no such task. */
 const lockDoneBy = SqlSchema.findOneOption({
   Request: TaskKeySchema,

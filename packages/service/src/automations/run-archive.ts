@@ -8,7 +8,11 @@
  * archived agent hears nothing of a review on it. A run is archived as one,
  * once all its agents are done with, and settled once: an agent archived
  * here, one that failed or was stopped, and one the developer already put
- * away are marked so and never read again, so one brought back stays.
+ * away are marked so and never read again, so one brought back stays. A run
+ * whose every agent is archived so has finished well, and the task it made
+ * for itself moves to Done with it (`finishRunTask`), so it leaves the
+ * sidebar's work under way rather than waiting there for a look; a run with
+ * an agent that failed or was stopped leaves its task where it stands.
  *
  * Nothing polls for it. A run is reconsidered (`reconsiderRunArchive`) at
  * each moment that may let it go: a turn of any of its agents settling
@@ -27,6 +31,7 @@ import {
   runArchivableAgentsOf,
   settleRunArchive,
 } from "@repo/database/models/automation-store";
+import { finishRunTask } from "@repo/database/models/task-store";
 import type { SettledAgentTurn } from "@repo/database/models/writer";
 import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { causeKind } from "@repo/runtime/effect";
@@ -128,7 +133,9 @@ const doneWith = (agent: ArchivableRunAgent, status: AgentStatus) =>
   agent.archivedAt !== null || status === AGENT_STATUS.COMPLETED || ENDED_UNWELL.has(status);
 
 /**
- * The run read archived where it finished well. Note that a run is archived
+ * The run read archived where it finished well, and its task moved to Done
+ * where every agent of it is archived, before the run is settled, so a move
+ * that failed is asked again at the next moment. Note that a run is archived
  * as one, because its agents are kept together: only once every agent it
  * has was read and is done with, so a helper still at work, or held back by
  * its inbox item or pull request, keeps the whole run standing for the next
@@ -154,7 +161,14 @@ const archiveRunAsRead = Effect.fnUntraced(function* (
       discarded && (archived || agent.archivedAt !== null || ENDED_UNWELL.has(status)),
   );
 
-  if (settled) yield* settleRunArchive(first.runId);
+  if (!settled) return;
+
+  const finishedWell = outcomes.every(
+    ({ agent, archived }) => archived || agent.archivedAt !== null,
+  );
+
+  if (finishedWell && first.runTaskId !== null) yield* finishRunTask(first.userId, first.runTaskId);
+  yield* settleRunArchive(first.runId);
 });
 
 /** The run the agent belongs to archived where it finished well and holds nothing open, as `reconsiderRunArchive` says, failing as its reads fail. */
