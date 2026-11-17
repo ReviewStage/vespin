@@ -22,15 +22,26 @@ import { Schema as EffectSchema } from "effect";
 import { actProcedure, exactInput } from "./base.js";
 import { MAC_SKILLS_ACT_KIND } from "./kinds.js";
 
-/** Each agent's skills folder, from the home folder, in the order they are read and listed. */
+/**
+ * Each skills folder, from the home folder, in the order they are read and
+ * listed: the folder agents share first, since `npx skills add` keeps a
+ * skill there and links it into each agent's, so a skill is offered from
+ * where it really is.
+ */
 export const MAC_SKILL_FOLDER = {
+  [MAC_SKILL_APP.AGENTS]: ".agents/skills",
   [MAC_SKILL_APP.CLAUDE_CODE]: ".claude/skills",
   [MAC_SKILL_APP.CODEX]: ".codex/skills",
   [MAC_SKILL_APP.CURSOR]: ".cursor/skills",
-  [MAC_SKILL_APP.GEMINI]: ".gemini/skills",
-  [MAC_SKILL_APP.FACTORY]: ".factory/skills",
-  [MAC_SKILL_APP.AGENTS]: ".agents/skills",
 } as const satisfies Record<MacSkillApp, string>;
+
+/** The order the folders are read and listed in, as `MAC_SKILL_FOLDER` says why. */
+export const MAC_SKILL_READ_ORDER = [
+  MAC_SKILL_APP.AGENTS,
+  MAC_SKILL_APP.CLAUDE_CODE,
+  MAC_SKILL_APP.CODEX,
+  MAC_SKILL_APP.CURSOR,
+] as const satisfies readonly MacSkillApp[];
 
 /**
  * Why a skill's folder on the Mac is left out before it is offered: the
@@ -99,8 +110,15 @@ const macSkillsSchema = EffectSchema.Struct({
 
 export type MacSkills = typeof macSkillsSchema.Type;
 
+/** Which folders to read: the agents the reader runs, a harness behind an experiment only while it is on, and the folder they share. */
+const macSkillsReadSchema = EffectSchema.Struct({
+  apps: EffectSchema.Array(appSchema),
+});
+
+export type MacSkillsRead = typeof macSkillsReadSchema.Type;
+
 export const macSkillsActsContract = {
   [MAC_SKILLS_ACT_KIND.MAC_SKILLS_READ]: actProcedure("Could not read the skills on this Mac.")
-    .input(exactInput(EffectSchema.Undefined))
+    .input(exactInput(macSkillsReadSchema))
     .output(macSkillsSchema),
 };

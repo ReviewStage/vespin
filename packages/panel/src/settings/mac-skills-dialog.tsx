@@ -6,12 +6,18 @@ import {
   INSTALLED_SKILL_CALL_FAILURE,
   type InstalledSkillFailedView,
 } from "@repo/features/installed-skill-view";
-import { INSTALLED_SKILL_SCOPE } from "@repo/features/installed-skill-wire";
+import {
+  INSTALLED_SKILL_SCOPE,
+  MAC_SKILL_APP,
+  type MacSkillApp,
+} from "@repo/features/installed-skill-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { failureLine } from "@repo/features/skills-settings-words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import { EXPERIMENT } from "@repo/settings";
 import {
+  Badge,
   Checkbox,
   DIALOG_SIZE,
   DIALOG_TONE,
@@ -20,12 +26,14 @@ import {
   ErrorState,
   GAP,
   SETTINGS_ROW_CONTROLS,
+  SETTINGS_ROW_STATE,
   SettingsLine,
   SettingsRow,
   SettingsRowMark,
   SettingsRowStateLine,
   SettingsSection,
   SpinnerRegion,
+  STATUS_TONE,
   Stack,
   TEXT_ELEMENT,
   TEXT_TONE,
@@ -40,14 +48,14 @@ import { unreadShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { SkillMark } from "../tasks/skill-ref.js";
 import { pressTakeBack, type TakeBackWrite } from "../undo-stack.js";
+import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import {
   clashingNames,
-  emptyLine,
   MAC_SKILLS_LINE,
-  type MacSkillGroup,
   type MacSkillsReview,
   macSkillsReview,
   type OfferedSkill,
+  type SkippedSkill,
   skillCount,
   summaryLine,
 } from "./mac-skills-model.js";
@@ -76,6 +84,12 @@ type ImportAnswer =
 type RemoveAnswer = { readonly id: string } | { readonly failure: string };
 
 const UNANSWERED = { failure: INSTALLED_SKILL_CALL_FAILURE.UNANSWERED } as const;
+
+/** The folders the card reads: the one agents share, and those of the agents every account runs. */
+const READ_APPS = [MAC_SKILL_APP.AGENTS, MAC_SKILL_APP.CLAUDE_CODE, MAC_SKILL_APP.CODEX] as const;
+
+/** The folders the card reads while the Cursor experiment is on. */
+const READ_APPS_WITH_CURSOR = [...READ_APPS, MAC_SKILL_APP.CURSOR] as const;
 
 /** The skills brought in, as the undo stack keeps them: what was sent, and what each send answers once it does. */
 interface Brought {
@@ -135,14 +149,16 @@ const BRING_IN_WRITE = {
   },
 } satisfies TakeBackWrite<Doors, Brought, readonly ImportAnswer[], readonly RemoveAnswer[]>;
 
-/** The Mac's skills folders read afresh each time the card opens, answered at once on a refusal. */
-const macSkillsQuery = queryOptions({
-  queryKey: [QUERY_ROOT.MAC_SKILLS],
-  queryFn: () => askAct(ACT_KIND.MAC_SKILLS_READ),
-  retry: false,
-  gcTime: 0,
-  staleTime: 0,
-});
+/** The skills folders asked, read afresh each time the card opens, answered at once on a refusal. */
+function macSkillsQuery(apps: readonly MacSkillApp[]) {
+  return queryOptions({
+    queryKey: [QUERY_ROOT.MAC_SKILLS, ...apps],
+    queryFn: () => askAct(ACT_KIND.MAC_SKILLS_READ, { apps }),
+    retry: false,
+    gcTime: 0,
+    staleTime: 0,
+  });
+}
 
 /** One of the reader's skills read whole, to say whether one on the Mac is the same; shared with the page's View. */
 function installedSkillQuery(skillId: string) {
@@ -153,7 +169,7 @@ function installedSkillQuery(skillId: string) {
   });
 }
 
-/** One skill to tick: its name, what it does, and where it was, or the name it comes in under. */
+/** One skill to tick: its name, marked where it comes in under a new one, and what it does. */
 function OfferedRow({
   offered,
   ticked,
@@ -173,21 +189,37 @@ function OfferedRow({
         </SettingsRowMark>
       }
       label={<ReplayMask>{name}</ReplayMask>}
+      adornment={
+        renamedFrom === undefined ? undefined : (
+          <Badge tone={STATUS_TONE.ATTENTION}>{MAC_SKILLS_LINE.RENAMED}</Badge>
+        )
+      }
       controls={SETTINGS_ROW_CONTROLS.BESIDE}
       description={
         <>
           <ReplayMask>{skill.description}</ReplayMask>
-          <SettingsRowStateLine block>
-            <ReplayMask>
-              {renamedFrom === undefined
-                ? skill.folder
-                : `You already have a different ${renamedFrom}, so this one comes in as ${name}`}
-            </ReplayMask>
-          </SettingsRowStateLine>
+          {renamedFrom === undefined ? null : (
+            <SettingsRowStateLine block state={SETTINGS_ROW_STATE.ATTENTION}>
+              <ReplayMask>{`You already have a ${renamedFrom}`}</ReplayMask>
+            </SettingsRowStateLine>
+          )}
         </>
       }
     >
       {() => <Checkbox label={`Bring in ${name}`} checked={ticked} onChange={onTick} />}
+    </SettingsRow>
+  );
+}
+
+/** One skill left out: its name, the folder it was found in, and why on a badge, with nothing to tick. */
+function SkippedRow({ skipped }: { skipped: SkippedSkill }): React.JSX.Element {
+  return (
+    <SettingsRow
+      label={<ReplayMask>{skipped.name}</ReplayMask>}
+      description={skipped.from}
+      controls={SETTINGS_ROW_CONTROLS.BESIDE}
+    >
+      {() => <Badge>{skipped.why}</Badge>}
     </SettingsRow>
   );
 }
@@ -223,67 +255,7 @@ function GroupHead({
   );
 }
 
-/** One agent's skills folder: where it is, how many it offers and left out, and each skill it offers. */
-function GroupSection({
-  group,
-  unticked,
-  onTick,
-}: {
-  group: MacSkillGroup;
-  unticked: ReadonlySet<string>;
-  onTick: (folder: string, on: boolean) => void;
-}): React.JSX.Element {
-  const caption = [
-    group.folder,
-    `${group.offered.length} found`,
-    group.skipped.length === 0 ? undefined : `${group.skipped.length} left out`,
-  ]
-    .filter((part) => part !== undefined)
-    .join(" · ");
-
-  return (
-    <GroupHead title={group.title} caption={caption}>
-      {group.offered.map((offered) => (
-        <OfferedRow
-          key={offered.skill.folder}
-          offered={offered}
-          ticked={!unticked.has(offered.skill.folder)}
-          onTick={(on) => onTick(offered.skill.folder, on)}
-        />
-      ))}
-    </GroupHead>
-  );
-}
-
-/** Every skill left out, with the agent whose folder held it and why. */
-function LeftOutSection({ review }: { review: MacSkillsReview }): React.JSX.Element | null {
-  const rows = review.groups.flatMap((group) =>
-    group.skipped.map((skipped) => ({ ...skipped, title: group.title })),
-  );
-
-  if (rows.length === 0) return null;
-
-  return (
-    <GroupHead title={MAC_SKILLS_LINE.LEFT_OUT}>
-      {rows.map((row) => (
-        <SettingsRow
-          key={row.folder}
-          label={<ReplayMask>{row.name}</ReplayMask>}
-          description={
-            <>
-              {row.why}
-              <SettingsRowStateLine block>
-                <ReplayMask>{`${row.title} · ${row.folder}`}</ReplayMask>
-              </SettingsRowStateLine>
-            </>
-          }
-        />
-      ))}
-    </GroupHead>
-  );
-}
-
-/** The review: a line of what was found, each agent's group, the agents with nothing, and what was left out. */
+/** The review: a line of what was found, each folder's skills to tick, then every skill left out. */
 function ReviewBody({
   review,
   unticked,
@@ -293,9 +265,7 @@ function ReviewBody({
   unticked: ReadonlySet<string>;
   onTick: (folder: string, on: boolean) => void;
 }): React.JSX.Element {
-  const empty = emptyLine(review.empty);
-
-  if (review.groups.length === 0) {
+  if (review.groups.length === 0 && review.skipped.length === 0) {
     return (
       <SettingsSection>
         <SettingsLine>{MAC_SKILLS_LINE.NONE_FOUND}</SettingsLine>
@@ -306,20 +276,35 @@ function ReviewBody({
   return (
     <Stack gap={GAP.SECTION}>
       <Text>{summaryLine(review)}</Text>
-      {review.groups.map((group) =>
-        group.offered.length === 0 ? null : (
-          <GroupSection key={group.app} group={group} unticked={unticked} onTick={onTick} />
-        ),
+      {review.groups.map((group) => (
+        <GroupHead key={group.app} title={group.title} caption={group.folder}>
+          {group.offered.map((offered) => (
+            <OfferedRow
+              key={offered.skill.folder}
+              offered={offered}
+              ticked={!unticked.has(offered.skill.folder)}
+              onTick={(on) => onTick(offered.skill.folder, on)}
+            />
+          ))}
+        </GroupHead>
+      ))}
+      {review.skipped.length === 0 ? null : (
+        <GroupHead title={MAC_SKILLS_LINE.LEFT_OUT}>
+          {review.skipped.map((skipped) => (
+            <SkippedRow key={skipped.folder} skipped={skipped} />
+          ))}
+        </GroupHead>
       )}
-      <LeftOutSection review={review} />
-      {empty === undefined ? null : <Text>{empty}</Text>}
     </Stack>
   );
 }
 
 /** The review once the Mac's folders and the reader's clashing skills are read; none while any read is out. */
 function useReview(personal: readonly InstalledSkillSummary[]) {
-  const read = useQuery(macSkillsQuery);
+  // Note that Cursor's folder is read only while its experiment is on, as its harness is offered only then.
+  const cursor = useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.CURSOR) });
+  const apps = cursor.data === true ? READ_APPS_WITH_CURSOR : READ_APPS;
+  const read = useQuery(macSkillsQuery(apps));
   const clashing = read.data === undefined ? [] : clashingNames(read.data, personal);
 
   const contents = useQueries({

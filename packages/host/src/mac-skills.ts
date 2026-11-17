@@ -31,7 +31,6 @@ import {
 import {
   INSTALLED_SKILL_BOUNDS,
   INSTALLED_SKILL_MAIN_FILE,
-  MAC_SKILL_APP,
   type MacSkillApp,
 } from "@repo/features/installed-skill-wire";
 import { Effect, Option, Path } from "effect";
@@ -40,6 +39,7 @@ import * as FileSystem from "effect/FileSystem";
 import {
   MAC_SKILL_FOLDER,
   MAC_SKILL_LEFT,
+  MAC_SKILL_READ_ORDER,
   type MacSkill,
   type MacSkillLeft,
   type MacSkillLeftOut,
@@ -244,10 +244,11 @@ function leftUnread(
   return undefined;
 }
 
-/** The skills the Mac's agents keep under the home folder given: each agent's folder, the skills offered, and those left out, in the folders' order. */
-export const readMacSkills = (home: string) =>
+/** The skills the folders asked hold under the home folder given: each folder, the skills offered, and those left out, in the folders' order. */
+export const readMacSkills = (home: string, asked: readonly MacSkillApp[]) =>
   Effect.gen(function* (): Effect.fn.Return<MacSkills, never, Services> {
-    const apps = Object.values(MAC_SKILL_APP);
+    // Note that the folders are read in their own order whatever order is asked, so the folder agents share comes first.
+    const apps = MAC_SKILL_READ_ORDER.filter((app) => asked.includes(app));
     const sources = yield* Effect.forEach(apps, (app) => foldersOf(home, app));
     const skills: MacSkill[] = [];
     const left: MacSkillLeftOut[] = [];

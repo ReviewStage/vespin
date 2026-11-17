@@ -11,9 +11,9 @@ import { readMacSkills } from "./mac-skills.js";
 /**
  * The Mac's skills read from a home folder the test lays out in a temporary
  * directory: a skill offered with its own files, a folder linked from a
- * second agent's skills folder told once, an agent's own and an invalid
- * skill left out with why, and an agent with no skills folder told as
- * absent. Synthetic skills throughout.
+ * second agent's skills folder offered once, from where it really is, an
+ * agent's own and an invalid skill left out with why, and only the folders
+ * asked read. Synthetic skills throughout.
  */
 
 const skillFile = (name: string, description: string) =>
@@ -42,24 +42,27 @@ it.effect(
       yield* write(".claude/skills/no-description/SKILL.md", "---\nname: no-description\n---\n");
       yield* write(".claude/skills/not-a-skill/README.md", "No SKILL.md here.");
       yield* write(".codex/skills/.system/plan/SKILL.md", skillFile("plan", "Codex's own."));
+      yield* write(".cursor/skills/unasked/SKILL.md", skillFile("unasked", "Never read."));
       // `npx skills add` keeps the folder under ~/.agents and links it into each agent's.
       yield* fs.symlink(
         path.join(home, ".agents/skills/release-notes"),
         path.join(home, ".claude/skills/release-notes"),
       );
 
-      const read = yield* readMacSkills(home);
+      const read = yield* readMacSkills(home, [
+        MAC_SKILL_APP.CODEX,
+        MAC_SKILL_APP.CLAUDE_CODE,
+        MAC_SKILL_APP.AGENTS,
+      ]);
 
       assert.deepEqual(
         read.sources.map(({ app, present }) => [app, present]),
         [
+          [MAC_SKILL_APP.AGENTS, true],
           [MAC_SKILL_APP.CLAUDE_CODE, true],
           [MAC_SKILL_APP.CODEX, true],
-          [MAC_SKILL_APP.CURSOR, false],
-          [MAC_SKILL_APP.GEMINI, false],
-          [MAC_SKILL_APP.FACTORY, false],
-          [MAC_SKILL_APP.AGENTS, true],
         ],
+        "the folders asked, the shared one first, and no Cursor folder unasked",
       );
       assert.deepEqual(
         read.skills.map(({ app, folder, name, files }) => ({
@@ -70,19 +73,19 @@ it.effect(
         })),
         [
           {
-            app: MAC_SKILL_APP.CLAUDE_CODE,
-            folder: "~/.claude/skills/flaky-tests",
-            name: "flaky-tests",
-            files: [["SKILL.md", skillFile("flaky-tests", "Reruns.")]],
-          },
-          {
-            app: MAC_SKILL_APP.CLAUDE_CODE,
-            folder: "~/.claude/skills/release-notes",
+            app: MAC_SKILL_APP.AGENTS,
+            folder: "~/.agents/skills/release-notes",
             name: "release-notes",
             files: [
               ["SKILL.md", skillFile("release-notes", "Notes.")],
               ["scripts/tags.sh", "git tag --list"],
             ],
+          },
+          {
+            app: MAC_SKILL_APP.CLAUDE_CODE,
+            folder: "~/.claude/skills/flaky-tests",
+            name: "flaky-tests",
+            files: [["SKILL.md", skillFile("flaky-tests", "Reruns.")]],
           },
         ],
       );
@@ -94,17 +97,17 @@ it.effect(
           reason: INSTALLED_SKILL_REFUSAL.SKILL_FILE_INVALID,
         },
         {
+          app: MAC_SKILL_APP.CLAUDE_CODE,
+          folder: "~/.claude/skills/release-notes",
+          name: "release-notes",
+          reason: MAC_SKILL_LEFT.SAME_FOLDER,
+          sameAs: "~/.agents/skills/release-notes",
+        },
+        {
           app: MAC_SKILL_APP.CODEX,
           folder: "~/.codex/skills/.system/plan",
           name: "plan",
           reason: MAC_SKILL_LEFT.APP_OWN,
-        },
-        {
-          app: MAC_SKILL_APP.AGENTS,
-          folder: "~/.agents/skills/release-notes",
-          name: "release-notes",
-          reason: MAC_SKILL_LEFT.SAME_FOLDER,
-          sameAs: "~/.claude/skills/release-notes",
         },
       ]);
     }).pipe(Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer))),

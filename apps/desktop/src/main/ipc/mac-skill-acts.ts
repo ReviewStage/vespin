@@ -7,15 +7,15 @@
  */
 
 import { actPortFor, type PlatformActProcedures, refuseUnlessPanel } from "@repo/host/act-port";
-import { MAC_SKILLS_ACT_KIND, type MacSkills } from "@repo/host/contract";
+import { MAC_SKILLS_ACT_KIND, type MacSkills, type MacSkillsRead } from "@repo/host/contract";
 import type { Effect } from "effect";
 import type { WebContents } from "electron";
 
 type MacSkillsActKind = (typeof MAC_SKILLS_ACT_KIND)[keyof typeof MAC_SKILLS_ACT_KIND];
 
 export interface MacSkillsActsDependencies {
-  /** The skills the Mac's agents keep now; main's read of the home folder, or a test's. */
-  read: Effect.Effect<MacSkills>;
+  /** The skills the folders asked hold now; main's read of the home folder, or a test's. */
+  read: (asked: MacSkillsRead) => Effect.Effect<MacSkills>;
 }
 
 const macSkillsPort = actPortFor<WebContents>();
@@ -28,10 +28,10 @@ export function macSkillsProcedures(
   return {
     [MAC_SKILLS_ACT_KIND.MAC_SKILLS_READ]: macSkillsPort[
       MAC_SKILLS_ACT_KIND.MAC_SKILLS_READ
-    ].effect(function* ({ context, errors }) {
+    ].effect(function* ({ context, errors, input }) {
       yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
 
-      return yield* read;
+      return yield* read(input);
     }),
   };
 }

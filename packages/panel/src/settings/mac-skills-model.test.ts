@@ -12,13 +12,13 @@ import {
 } from "@repo/features/installed-skill-wire";
 import { MAC_SKILL_LEFT, type MacSkill, type MacSkills } from "@repo/host/contract";
 import { test } from "vitest";
-import { emptyLine, macSkillsReview, summaryLine } from "./mac-skills-model.js";
+import { macSkillsReview, summaryLine } from "./mac-skills-model.js";
 
 /**
  * Bring in from your Mac judged without drawing: a skill the reader already
  * has with the same files left out, one whose name is taken coming in under
- * the first free number, and each agent's folder grouped with what it offers
- * and what it left out. Synthetic skills and folders throughout.
+ * the first free number, each folder grouped with what it offers, and every
+ * skill left out listed apart, by its folder and why. Synthetic skills and folders throughout.
  */
 
 const base64 = (text: string) => Buffer.from(text).toString("base64");
@@ -65,7 +65,6 @@ const READ: MacSkills = {
   sources: [
     { app: MAC_SKILL_APP.CLAUDE_CODE, folder: "~/.claude/skills", present: true },
     { app: MAC_SKILL_APP.CODEX, folder: "~/.codex/skills", present: true },
-    { app: MAC_SKILL_APP.CURSOR, folder: "~/.cursor/skills", present: false },
     { app: MAC_SKILL_APP.AGENTS, folder: "~/.agents/skills", present: true },
   ],
   skills: [
@@ -112,26 +111,19 @@ test("a skill already installed with the same files is left out, and a taken nam
     review.groups.map((group) => ({
       title: group.title,
       offered: group.offered.map((each) => each.name),
-      skipped: group.skipped.map(({ name, why }) => [name, why]),
     })),
     [
-      {
-        title: "Claude Code",
-        offered: ["release-notes-3"],
-        skipped: [["pr-review", "Already installed, with the same files"]],
-      },
-      {
-        title: "Codex",
-        offered: ["release-notes-4", "flaky-tests"],
-        skipped: [["plan", "Codex keeps it itself"]],
-      },
-      {
-        title: "Shared agents folder",
-        offered: [],
-        skipped: [["leaky", "Holds something shaped like a credential"]],
-      },
+      { title: "Claude Code", offered: ["release-notes-3"] },
+      { title: "Codex", offered: ["release-notes-4", "flaky-tests"] },
     ],
   );
-  assert.equal(emptyLine(review.empty), "Nothing in Cursor.");
+  assert.deepEqual(
+    review.skipped.map(({ name, from, why }) => [name, from, why]),
+    [
+      ["pr-review", "Claude Code", "Already installed"],
+      ["plan", "Codex", "Built into Codex"],
+      ["leaky", "Agents folder", "Holds a credential"],
+    ],
+  );
   assert.equal(summaryLine(review), "Found 3 skills to bring in, and left out 3.");
 });

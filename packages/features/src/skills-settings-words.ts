@@ -74,15 +74,13 @@ export const MAC_SKILL_APP_NAME = {
   [MAC_SKILL_APP.CLAUDE_CODE]: "Claude Code",
   [MAC_SKILL_APP.CODEX]: "Codex",
   [MAC_SKILL_APP.CURSOR]: "Cursor",
-  [MAC_SKILL_APP.GEMINI]: "Gemini CLI",
-  [MAC_SKILL_APP.FACTORY]: "Factory",
-  [MAC_SKILL_APP.AGENTS]: "Shared agents folder",
+  [MAC_SKILL_APP.AGENTS]: "Agents folder",
 } as const satisfies Record<MacSkillApp, string>;
 
 /** Where a skill's files came from: `owner/repo @ 3f9c2e1`, the folder on the Mac it was brought in from, or Pasted. */
 function sourceLine(source: InstalledSkillSource): string {
   if (source.type === INSTALLED_SKILL_SOURCE.TEXT) {
-    return source.mac === undefined ? SKILLS_LINE.PASTED : `From your Mac · ${source.mac.folder}`;
+    return source.mac === undefined ? SKILLS_LINE.PASTED : `From ${source.mac.folder} on your Mac`;
   }
 
   return `${source.owner}/${source.repo} @ ${source.sha.slice(0, SHORT_SHA)}`;

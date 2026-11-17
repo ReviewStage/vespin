@@ -142,6 +142,7 @@ export {
   type MacSkillLeft,
   type MacSkillLeftOut,
   type MacSkills,
+  type MacSkillsRead,
 } from "./mac-skills.js";
 
 export { type ComputerUseStatus, MACHINE_COMMAND_ACTS, type MacApp } from "./machine-commands.js";
