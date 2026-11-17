@@ -1,6 +1,9 @@
 import type { TriggerProvider } from "@repo/features/trigger-catalog";
 import { index, pgTable, primaryKey, text } from "drizzle-orm/pg-core";
-import type { IntegrationInstallationStatus } from "../integration-vocabulary.js";
+import type {
+  InstallIntentProvider,
+  IntegrationInstallationStatus,
+} from "../integration-vocabulary.js";
 import { timestamptz } from "./_helpers.js";
 import { organization, user } from "./auth.js";
 
@@ -45,7 +48,7 @@ export const integrationInstallation = pgTable(
 
 /**
  * An owner's or admin's intent to install an integration's app on a
- * workspace: made when the Mac asks where to install it, carried to the
+ * workspace, or our Slack app into the workspace's Slack for its bot: made when the Mac asks where to install it, carried to the
  * provider and back as the install address's opaque `state`, and spent the
  * one time the provider returns the browser. Only the state's SHA-256 is
  * stored, so the table holds nothing a browser could replay. An intent past
@@ -55,7 +58,7 @@ export const integrationInstallation = pgTable(
 export const integrationInstallIntent = pgTable("integration_install_intent", {
   /** The hex SHA-256 of the state the install address carried. */
   stateHash: text("state_hash").primaryKey(),
-  provider: text("provider").$type<TriggerProvider>().notNull(),
+  provider: text("provider").$type<InstallIntentProvider>().notNull(),
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),

@@ -40,7 +40,7 @@ private struct Command {
 }
 
 /// A glyph by its name: the asset catalog's symbol of that name, as the app's Lucide glyphs are, else an SF Symbol's.
-/// Note that the catalog is asked first, because every name here is a Lucide one, and a system lookup should never stand in for it.
+/// Note that the catalog is asked first, because every name here but Expand Page's pair is a Lucide one, and a system lookup should never stand in for it; that pair is iOS's own, as Mail draws it.
 private func glyph(_ name: String?) -> UIImage? {
   guard let name else { return nil }
   return UIImage(named: name) ?? UIImage(systemName: name)
@@ -66,9 +66,20 @@ private let commands: [Command] = [
   Command(id: "tasks", place: .view, title: "Tasks", symbol: "ListTodo", input: "2"),
   Command(id: "search", place: .view, title: "Search", symbol: "Search", input: "3"),
   Command(id: "back", place: .navigate, title: "Back", symbol: nil, input: "["),
+  // The panel's own pager keys, K and J, unmodified as the panel's are, so an open thread steps through the list it was opened from as it does on the desktop.
+  Command(
+    id: "previousItem", place: .navigate, title: "Previous Inbox Item", symbol: "ChevronUp",
+    input: "k", modifiers: []),
+  Command(
+    id: "nextItem", place: .navigate, title: "Next Inbox Item", symbol: "ChevronDown",
+    input: "j", modifiers: []),
   Command(
     id: "sidebar", place: .sidebar, title: "Hide Sidebar", toggledTitle: "Show Sidebar",
     symbol: "PanelLeft", input: "s", modifiers: [.command, .control]),
+  Command(
+    id: "detailOnly", place: .sidebar, title: "Expand Page", toggledTitle: "Collapse Page",
+    symbol: "arrow.up.left.and.arrow.down.right", toggledSymbol: "arrow.down.right.and.arrow.up.left",
+    input: "f", modifiers: [.command, .control]),
   Command(
     id: "markDone", place: .subject, title: "Mark Done", symbol: "Check", input: "d",
     modifiers: [.command, .shift], nonRepeatable: true),
@@ -286,7 +297,35 @@ enum MenuBar {
   }
 }
 
+/// The first responder, found by asking it to name itself, since UIKit offers no public read of it.
+private weak var foundResponder: UIResponder?
+
+extension UIResponder {
+  @objc fileprivate func vespinNameFirstResponder(_ sender: Any?) {
+    foundResponder = self
+  }
+}
+
+/// Whether what has focus takes typed text, such as a reply's box, whose letters an unmodified key command must never take.
+@MainActor
+private func typingFocused() -> Bool {
+  foundResponder = nil
+  UIApplication.shared.sendAction(
+    #selector(UIResponder.vespinNameFirstResponder(_:)), to: nil, from: nil, for: nil)
+  return foundResponder is UIKeyInput
+}
+
 extension UIApplication {
+  /// K and J, which carry no modifier, give way to a field being typed in, so the letters reach it.
+  override public func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+    if action == #selector(vespinMenuCommand(_:)), let command = sender as? UIKeyCommand,
+      command.modifierFlags.isEmpty, typingFocused()
+    {
+      return false
+    }
+    return super.canPerformAction(action, withSender: sender)
+  }
+
   /// The action of every command of Vespin's, which reaches here at the end of the responder chain whatever is focused.
   @objc func vespinMenuCommand(_ sender: UICommand) {
     guard let id = sender.propertyList as? String, MenuBar.mayAct(id) else { return }

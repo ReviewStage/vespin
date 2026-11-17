@@ -195,6 +195,8 @@ type SplitViewProps = {
   /** The app's sidebar: its places, then Pinned and the member's sections, as a `RowList` in its sidebar look. */
   readonly sidebar: ReactNode;
   readonly sidebarBar?: ColumnBar | undefined;
+  /** What stands at the app sidebar's foot under its list, such as the way back to a call (`CallSidebarFoot`); drawn only beside a list, where the sidebar is the app's own. */
+  readonly sidebarFoot?: ReactNode | undefined;
   /** The list between the sidebar and the detail, such as the Inbox's threads; two columns where none is given. */
   readonly content?: ReactNode | undefined;
   readonly contentBar?: ColumnBar | undefined;
@@ -778,6 +780,7 @@ function useColumnsBack(detailOnly: boolean, settle: (reported: ColumnVisibility
 export function SplitView({
   sidebar,
   sidebarBar,
+  sidebarFoot,
   content,
   contentBar,
   detail,
@@ -825,9 +828,19 @@ export function SplitView({
     >
       <NavigationSplitView.Sidebar>
         {/* Note that the sidebar column is drawn afresh as it changes from the app's sidebar to the list or back, so its search field starts from the list's query rather than keeping what the other held. */}
+        {/* Note that the app sidebar stands its list in a stack with its foot whether or not a foot stands, so a foot coming or going never draws the list anew, its scroll and folds lost. */}
         <Column
           key={content === undefined ? FIRST_COLUMN.LIST : FIRST_COLUMN.APP_SIDEBAR}
-          view={sidebar}
+          view={
+            content === undefined ? (
+              sidebar
+            ) : (
+              <VStack spacing={0}>
+                {sidebar}
+                {sidebarFoot}
+              </VStack>
+            )
+          }
           bar={sidebarBar}
           sidebar
           clear={content !== undefined}

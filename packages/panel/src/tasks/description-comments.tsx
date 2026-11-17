@@ -93,7 +93,7 @@ import {
   usePressAway,
   VisuallyHidden,
 } from "@repo/ui";
-import { type Actor, APP_ACTOR, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
+import { type Actor, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
 import { neverBusyAct } from "@repo/ui/confirm-state";
 import {
   type DescriptionCommentsControl,
@@ -236,11 +236,10 @@ import {
 /**
  * The words a thread is on, quoted over it in the quote's face every quote
  * wears (`@repo/ui/quote-face`), a message's and the message box's alike:
- * whole where they are words chosen, as a selection or a Reply chooses
- * them, and two lines at most where they are a whole block or element,
- * which may run on for a section; struck out where the words are gone.
+ * whole, words chosen and a whole block or element alike, so a comment
+ * always says all of what it is on; struck out where the words are gone.
  */
-const COMMENT_QUOTE_CLASS = `${QUOTE_CLASS} comment-quote data-[clipped=true]:line-clamp-2 data-[gone=true]:line-through data-[gone=true]:decoration-quote-strike`;
+const COMMENT_QUOTE_CLASS = `${QUOTE_CLASS} comment-quote data-[gone=true]:line-through data-[gone=true]:decoration-quote-strike`;
 
 /**
  * A card's place in the margin: a card already there travels to its next
@@ -392,6 +391,9 @@ const MENTION_REF = "[data-mention-ref]";
 /** The button a block under the pointer shows at the column's end. */
 const BLOCK_BUTTON_CLASS = "comment-block-button";
 
+/** The class of the box the comments draw over the body, their cards and buttons. */
+const COMMENT_LAYER_CLASS = "comment-layer";
+
 /** The `over` of the block under the pointer's comment command, which answers only where no words selected offer it. */
 const YIELDS_TO_SELECTION = (): boolean => false;
 
@@ -518,10 +520,6 @@ function useWriter(
   const person = usePerson(writer.by);
   const written = useWriterSubject(agents, writer);
 
-  if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) {
-    return { author: commentAuthor(APP_ACTOR), nameRef: <ActorRef actor={APP_ACTOR} nameOnly /> };
-  }
-
   if (written !== undefined && agents !== undefined) {
     const { agentId, subject, elsewhere } = written;
 
@@ -586,10 +584,7 @@ function WriterMark({
 }): ReactNode {
   const person = usePerson(writer.by);
   const written = useWriterSubject(agents, writer);
-  let actor: Actor = person;
-
-  if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) actor = APP_ACTOR;
-  else if (written !== undefined) actor = written.subject.tile;
+  const actor: Actor = written === undefined ? person : written.subject.tile;
 
   return <ActorMark actor={actor} />;
 }
@@ -1509,31 +1504,28 @@ function GoneQuote({
   );
 }
 
-/** A quote line over a comment: the words it is on, whole where they were chosen, or a press that shows them where they stand, labeled `label`, where one is offered. */
+/** A quote line over a comment: the words it is on, whole, or a press that shows them where they stand, labeled `label`, where one is offered. */
 function QuoteLine({
   words,
   label,
-  whole = false,
   gone = false,
   onShow,
 }: {
   words: string;
   label: string;
-  /** Whether the words were chosen, a few of a block's, so they are quoted whole rather than cut to two lines. */
-  whole?: boolean;
   gone?: boolean;
   onShow?: (() => void) | undefined;
 }): React.JSX.Element {
   if (onShow === undefined) {
     return (
-      <blockquote className={COMMENT_QUOTE_CLASS} data-clipped={!whole} data-gone={gone}>
+      <blockquote className={COMMENT_QUOTE_CLASS} data-gone={gone}>
         {words}
       </blockquote>
     );
   }
 
   return (
-    <blockquote className={COMMENT_QUOTE_CLASS} data-clipped={!whole} data-gone={gone}>
+    <blockquote className={COMMENT_QUOTE_CLASS} data-gone={gone}>
       <Tooltip label={label}>
         <LineButton look={LINE_BUTTON_LOOK.QUOTE} onClick={onShow}>
           {words}
@@ -1557,7 +1549,6 @@ function ThreadQuote({
     <QuoteLine
       words={thread.quote}
       label={thread.page === undefined ? COMMENT_WORDS.SHOW_WORDS : COMMENT_WORDS.SHOW_ELEMENT}
-      whole={thread.scope === DESCRIPTION_COMMENT_SCOPE.WORDS}
       gone={gone}
       onShow={onShowWords}
     />
@@ -2061,6 +2052,22 @@ function viewIn(scroller: HTMLElement | null, body: HTMLElement | null): MarginV
   return { top: at + VIEW_EDGE, bottom: at + scroller.clientHeight - VIEW_EDGE };
 }
 
+/**
+ * What the column draws at the middle of its width, level with a height in
+ * the window, past the comments' own boxes over it; none above or below the
+ * column. Note that a block's box spans the column's width, a short line's
+ * and a bullet's alike, so its middle stands on whichever block is there.
+ */
+function levelWith(body: HTMLElement, y: number): Element | undefined {
+  const box = body.getBoundingClientRect();
+
+  if (y < box.top || y >= box.bottom) return undefined;
+
+  return document
+    .elementsFromPoint(box.left + box.width / 2, y)
+    .find((each) => body.contains(each) && each.closest(`.${COMMENT_LAYER_CLASS}`) === null);
+}
+
 /** The block a point is over, one of a section's own: a paragraph, a list, a heading, a quote, a table, or code. */
 function blockAt(
   target: EventTarget | null,
@@ -2417,20 +2424,14 @@ export function DescriptionCommentLayer({
     setListTop((held) => (Math.abs(held - top) < 1 ? held : top));
   });
 
-  // A block under the pointer, or the one a finger last tapped, shows its button at the column's end; words selected raise the bubble over them.
+  // A block under the pointer, or level with it in a gutter, or the one a finger last tapped, shows its button at the column's end; words selected raise the bubble over them.
   useEffect(() => {
     const element = body.current;
+    const room = scroller.current;
 
     if (element === null) return;
 
-    const point = (target: EventTarget | null) => {
-      const marked =
-        target instanceof Element
-          ? target.closest<HTMLElement>(`.${COMMENT_MARK_CLASS}[data-threads]`)
-          : null;
-
-      setPointed(marked?.dataset.threads?.split(" ")[0]);
-
+    const pointBlock = (target: EventTarget | null) => {
       // A divider holds no words for a thread to stand on, so it offers no button, and the block's it came from goes.
       if (target instanceof HTMLHRElement) {
         setHovered(undefined);
@@ -2486,6 +2487,16 @@ export function DescriptionCommentLayer({
       });
     };
 
+    const point = (target: EventTarget | null) => {
+      const marked =
+        target instanceof Element
+          ? target.closest<HTMLElement>(`.${COMMENT_MARK_CLASS}[data-threads]`)
+          : null;
+
+      setPointed(marked?.dataset.threads?.split(" ")[0]);
+      pointBlock(target);
+    };
+
     // Note that a finger's arrival names no block, because iOS plays a tap's
     // arrival as a hover and spends the tap on a button that comes in with
     // it, a link's in the block among them; its tap names the block once
@@ -2498,6 +2509,32 @@ export function DescriptionCommentLayer({
         blockAt(target, unitClass) !== undefined ||
           (target instanceof Element && target.closest(`.${BLOCK_BUTTON_CLASS}`) !== null),
       );
+    };
+
+    // Note that the gutters beside the column name the block level with the pointer, as Notion's do, so its button comes without the pointer reaching the words; what the column draws there is read again only as it changes, not on every move.
+    let beside: Element | undefined;
+
+    const alongside = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+
+      if (event.target instanceof Node && element.contains(event.target)) {
+        beside = undefined;
+
+        return;
+      }
+
+      const found = levelWith(element, event.clientY);
+
+      if (found === beside) return;
+      beside = found;
+      setPointed(undefined);
+      pointBlock(found ?? null);
+      setOnBlocks(blockAt(found ?? null, unitClass) !== undefined);
+    };
+
+    const leftGutter = () => {
+      beside = undefined;
+      setOnBlocks(false);
     };
 
     const tapped = (event: MouseEvent) => {
@@ -2664,6 +2701,8 @@ export function DescriptionCommentLayer({
     };
 
     element.addEventListener("pointerover", over);
+    room?.addEventListener("pointermove", alongside);
+    room?.addEventListener("pointerleave", leftGutter);
     element.addEventListener("click", tapped);
     element.addEventListener("pointerleave", left);
     element.addEventListener("focusout", blurred);
@@ -2692,6 +2731,8 @@ export function DescriptionCommentLayer({
     return () => {
       hiding.disconnect();
       element.removeEventListener("pointerover", over);
+      room?.removeEventListener("pointermove", alongside);
+      room?.removeEventListener("pointerleave", leftGutter);
       element.removeEventListener("click", tapped);
       element.removeEventListener("pointerleave", left);
       element.removeEventListener("focusout", blurred);
@@ -2702,7 +2743,7 @@ export function DescriptionCommentLayer({
       element.removeEventListener("click", pressed);
       document.removeEventListener("selectionchange", selected);
     };
-  }, [body, editor, sections, unitClass, setPending, onActive, active]);
+  }, [body, scroller, editor, sections, unitClass, setPending, onActive, active]);
 
   // While the bubble stands, its command starts the thread as a press on it does.
   useAppCommand(APP_COMMAND.COMMENT_ON_SELECTION, bubble?.start);
@@ -2827,7 +2868,7 @@ export function DescriptionCommentLayer({
   // Listed, every thread of the kind chosen stands under the toggle in the margin's place, or over the words where it folds; no card stands beside its words meanwhile, so none is drawn twice.
   if (listing !== undefined) {
     return (
-      <div className="comment-layer" style={layerStyle}>
+      <div className={COMMENT_LAYER_CLASS} style={layerStyle}>
         {blockButton}
         {bubbleDrawn}
         <DescriptionCommentList
@@ -2845,7 +2886,7 @@ export function DescriptionCommentLayer({
 
   if (wide) {
     return (
-      <div className="comment-layer" style={layerStyle}>
+      <div className={COMMENT_LAYER_CLASS} style={layerStyle}>
         {blockButton}
         {bubbleDrawn}
         <div className="comment-margin absolute top-0 left-comment-margin w-comment-card">
@@ -2900,7 +2941,7 @@ export function DescriptionCommentLayer({
   const shownTop = shown === undefined ? undefined : anchors.get(shown.id);
 
   return (
-    <div className="comment-layer" style={layerStyle}>
+    <div className={COMMENT_LAYER_CLASS} style={layerStyle}>
       {blockButton}
       {bubbleDrawn}
       {[...counts].map(([top, threads]) => {
@@ -3821,9 +3862,7 @@ function PreviewComment({
 
   return (
     <Comment {...head}>
-      {quote === undefined ? null : (
-        <QuoteLine words={quote} label={COMMENT_WORDS.SHOW_ELEMENT} whole />
-      )}
+      {quote === undefined ? null : <QuoteLine words={quote} label={COMMENT_WORDS.SHOW_ELEMENT} />}
       <CommentWords words={words} files={shown.named} />
     </Comment>
   );
@@ -4026,7 +4065,6 @@ export function PendingPageComment({
           <QuoteLine
             words={quoted}
             label={COMMENT_WORDS.SHOW_ELEMENT}
-            whole={comment.reply === undefined && element?.words === true}
             onShow={
               shownPath === undefined || onShow === undefined ? undefined : () => onShow(shownPath)
             }

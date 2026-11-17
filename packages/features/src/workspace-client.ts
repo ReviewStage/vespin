@@ -357,6 +357,22 @@ export class HostedWorkspaceClient {
     );
   }
 
+  /** Where the browser goes to Add to Slack for the workspace: Slack's authorize address for our Slack app, carrying a single-use intent. */
+  slackBotInstall(
+    workspaceId: string,
+  ): Effect.Effect<WorkspaceCallResult<string>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(workspaceSlackBotRequestSchema)({ workspaceId }),
+    );
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return resultOf(
+      hostedCall(this.#hosted.workspaceSlackBot.install, admitted),
+      (answer) => answer.url,
+    );
+  }
+
   /** The workspace's Slack bot disconnected, answering the bot as it then stands. */
   slackBotDisconnect(
     workspaceId: string,

@@ -35,6 +35,7 @@ import {
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BUTTON_VARIANT,
   Button,
@@ -87,6 +88,7 @@ import { Predicate } from "effect";
 import { type RefObject, useId, useMemo, useRef, useState } from "react";
 import { actFailureWords, sendAct } from "../act.js";
 import { ActorLine, ActorRef } from "../actor-ref.js";
+import { useAppCommand } from "../app-commands.js";
 import { ANSWER_ACCEPTED, sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
@@ -865,6 +867,9 @@ function MemoryList({
 
   if (standing.size !== selected.size) setSelected(standing);
   const chosen = listed.filter((each) => standing.has(each.memory.id)).map((each) => each.memory);
+  const unchoose = () => setSelected(new Set());
+  // Escape chooses none wherever the keyboard stands, while any is chosen and nothing nearer takes it (`window-escape.ts`).
+  useAppCommand(APP_COMMAND.CLEAR_SELECTION, chosen.length > 0 ? unchoose : undefined);
   const forgettable = asked.filter((memory) => memory.forgettable);
 
   const forgetConfirmAct = useConfirmAct(forgettingAll, {
@@ -1008,12 +1013,7 @@ function MemoryList({
         </div>
       </Stack>
       <div className={SELECTION_FOOT}>
-        <SelectionBar
-          count={chosen.length}
-          acts={acts}
-          onClear={() => setSelected(new Set())}
-          controls={regionId}
-        />
+        <SelectionBar count={chosen.length} acts={acts} onClear={unchoose} controls={regionId} />
       </div>
       <ConfirmDialog
         open

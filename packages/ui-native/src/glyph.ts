@@ -76,7 +76,7 @@ export const GLYPH = {
   WORKSPACE: lucide(LUCIDE_SYMBOL.BUILDING_COMPLEX),
   MAKE_OWNER: lucide(LUCIDE_SYMBOL.CROWN),
   // Things.
-  AGENT: lucide(LUCIDE_SYMBOL.BOT),
+  AGENT: lucide(LUCIDE_SYMBOL.HARD_HAT),
   PAGE: lucide(LUCIDE_SYMBOL.APP_WINDOW),
   COMMENT: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE),
   THREAD: lucide(LUCIDE_SYMBOL.MESSAGES_SQUARE),
@@ -179,6 +179,10 @@ export const GLYPH = {
   UNARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE_RESTORE),
   MOVE: lucide(LUCIDE_SYMBOL.FOLDER_INPUT),
   SUGGEST: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
+  // A queued message's acts, as the panel's queue dock draws Steer; Move Up and Move Down are its drag's reorder as a long press offers it.
+  STEER: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
+  MOVE_UP: lucide(LUCIDE_SYMBOL.ARROW_UP),
+  MOVE_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
   ADD_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_PLUS),
   REMOVE_FROM_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_MINUS),
   NEW_THREAD: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE_PLUS),
@@ -302,14 +306,20 @@ export function runsOnGlyph(place: {
 /**
  * The glyph a section leads with, as the panel's sidebar draws its icon: the
  * glyph its member chose from the picker's suggestions; the folder, the
- * picker's first, for an emoji, a glyph the app's catalog doesn't hold, or
- * no icon, since a sidebar row always leads with a glyph. Note that a
- * glyph's color is left to the panel, which alone draws it.
+ * picker's first, for a glyph the app's catalog doesn't hold or no icon,
+ * since a sidebar row always leads with a glyph, and for an emoji, which
+ * `sectionEmoji` draws in the glyph's place. Note that a glyph's color is
+ * left to the panel, which alone draws it.
  */
 export function sectionGlyph(icon: TaskSectionIcon | undefined): Glyph {
   if (icon === undefined || icon.kind === TASK_SECTION_ICON_KIND.EMOJI) return GLYPH.FOLDER;
 
   return isSectionGlyph(icon.glyph) ? SECTION_GLYPH[icon.glyph] : GLYPH.FOLDER;
+}
+
+/** The emoji a section leads with, drawn as words in its glyph's place, as the panel's sidebar draws it; none for a glyph or no icon. */
+export function sectionEmoji(icon: TaskSectionIcon | undefined): string | undefined {
+  return icon?.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon.emoji : undefined;
 }
 
 /** The glyphs the asset catalog holds, Lucide's and the task status and priority marks, rather than the system's symbols. */

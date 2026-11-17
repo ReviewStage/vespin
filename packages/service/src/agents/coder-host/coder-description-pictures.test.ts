@@ -63,6 +63,7 @@ function sandboxWith(files: Readonly<Record<string, Uint8Array>>): InboxSandboxD
 
   return () =>
     Promise.resolve({
+      checkout: CODER.CHECKOUT_PATH,
       readFile: ({ path }: { path: string }) => {
         const bytes = byPath.get(path);
 

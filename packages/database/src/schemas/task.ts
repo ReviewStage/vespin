@@ -96,8 +96,8 @@ export const task = pgTable(
     /**
      * Who made the task, apart from the member it was made for (`user_id`):
      * that member by hand (`developer`, every task from before this column),
-     * the brain on their call (`notetaker`), or a coding agent acting for them
-     * (`agent`), as `create_task` names its caller.
+     * or a coding agent acting for them (`agent`), as `create_task` names its
+     * caller.
      */
     creatorActor: text("creator_actor")
       .$type<TaskCreatorActor>()

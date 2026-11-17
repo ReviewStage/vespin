@@ -238,8 +238,8 @@ export function CommentThread({
   const covered = useDetailCovered();
   const inFront = columnShown && !covered;
   const colors = useColors();
-  const openLink = useOpenLink();
   const overview = useTaskOverview(taskId);
+  const openLink = useOpenLink(overview?.task.workspaceId);
   const threads = useTaskComments(overview?.task.id);
   const thread = threads.find((each) => each.id === id);
   const reply = useCommentReply(taskId, id);
@@ -435,8 +435,8 @@ export function NewComment({
   const detail = useDetailLeave();
   const onOwnTab = useOnOwnTab();
   const colors = useColors();
-  const openLink = useOpenLink();
   const overview = useTaskOverview(taskId);
+  const openLink = useOpenLink(overview?.task.workspaceId);
   const body = overview?.document?.description.body ?? "";
 
   // Note that the block must still quote the words it was opened on, so an edit that put other words at the same offsets before this read finds nothing rather than the wrong block.

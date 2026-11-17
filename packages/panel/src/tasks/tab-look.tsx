@@ -179,7 +179,7 @@ export function openPlanStanding(
 
 /**
  * A coding agent's mark at rest: the mark of the harness its model runs
- * in, or the worker's robot in the muted ink (`AgentPlaceholderIcon`) until
+ * in, or the worker's hard hat in the muted ink (`AgentPlaceholderIcon`) until
  * the app knows the harness. A place offering the agent wears it inside
  * `AgentGlyph`; one that knows nothing of where it stands, as a revision's
  * author, wears it bare.
@@ -190,7 +190,7 @@ export function AgentMark({ provider }: { provider: ModelProvider | undefined })
 
 /**
  * A subagent's mark: the mark of the harness its model runs in, or the
- * worker's robot where its model is not known. Note that the harness is read
+ * worker's hard hat where its model is not known. Note that the harness is read
  * from the model's id, as an agent's is, so the mark stands before the
  * catalog is read. A transcript's row wears it bare, beside a working mark
  * of its own.

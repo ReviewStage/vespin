@@ -26,7 +26,8 @@ const words = (text: string) => ({
 });
 
 describe("markdownBlocks", () => {
-  it("draws a mention as its chip, a date by its day, and any other link as a link", () => {
+  // A pull request's chip named by its whole title moved to a line of its own and cut it there, where the panel's stands in the line by its key.
+  it("draws a mention as its chip, a pull request by its key alone, a date by its day, and any other link as a link", () => {
     const [paragraph] = markdownBlocks(
       "[@#42 Fix the refresh](https://github.com/acme/app/pull/42) on " +
         "[@Oct 20, 2026](mention://date/2026-10-20), see [the docs](https://example.com/docs)",
@@ -40,8 +41,8 @@ describe("markdownBlocks", () => {
           kind: MARKDOWN_RUN.CHIP,
           chip: {
             entity: "pull-request",
-            name: "#42 Fix the refresh",
-            heard: "pull request #42 Fix the refresh",
+            name: "#42",
+            heard: "pull request #42",
             target: { kind: LINK_TARGET.WEB, href: "https://github.com/acme/app/pull/42" },
             github: "https://github.com/acme/app/pull/42",
             of: { kind: "pull-request", url: "https://github.com/acme/app/pull/42" },
@@ -233,7 +234,7 @@ describe("heardLine", () => {
     );
 
     expect(chipLine?.kind === MARKDOWN_BLOCK.PARAGRAPH && heardLine(chipLine.runs)).toBe(
-      "Pull request: pull request #128 Invite a teammate by email",
+      "Pull request: pull request #128",
     );
     expect(plainLine?.kind === MARKDOWN_BLOCK.PARAGRAPH && heardLine(plainLine.runs)).toBe(
       undefined,

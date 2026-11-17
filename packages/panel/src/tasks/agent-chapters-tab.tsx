@@ -82,6 +82,7 @@ import {
   useMenu,
   VisuallyHidden,
 } from "@repo/ui";
+import { isComposingKey } from "@repo/ui/composing-key";
 import { CheckIcon, GLYPH } from "@repo/ui/icons";
 import { useMutation } from "@tanstack/react-query";
 import { type ReactNode, type RefObject, useMemo, useRef, useState } from "react";
@@ -892,7 +893,7 @@ function ChaptersReading({
     drawnIn(root, BESIDE_TOGGLE) ? setBeside((was) => !was) : setOver((was) => !was);
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === "Escape" && over && !event.nativeEvent.isComposing) {
+    if (event.key === "Escape" && over && !isComposingKey(event)) {
       // Note that the Escape is stopped here, because the window's own would leave the view.
       event.stopPropagation();
       setOver(false);

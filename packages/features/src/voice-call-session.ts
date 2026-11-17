@@ -151,6 +151,13 @@ export interface VoiceCallSession {
   readonly current: () => VoiceCallState | undefined;
   /** Calls the agent, ending a call already standing first. */
   readonly start: (into: VoiceCallInto) => void;
+  /**
+   * Calls an agent still starting, ending a call already standing first:
+   * the microphone, the peer, and its offer readied at once, and the call
+   * standing and its session opened once `landing` answers the agent; none
+   * where it answers nothing, or a later start came first.
+   */
+  readonly startLanding: (landing: Promise<VoiceCallInto | undefined>) => void;
   /** Tells the session the call ends and closes its channel; a call with no channel yet is let go at once. */
   readonly end: () => void;
   /** Tells the session the call ends and drops it at once, as a client going away does. */
@@ -176,6 +183,33 @@ function liveEventType(text: string): string | undefined {
 /** The text of one client event, as the channel carries it. */
 function liveClientEvent(type: LiveClientEvent): string {
   return JSON.stringify({ type });
+}
+
+/** The peer, whose release lets it go the first time alone. */
+function releasedOnce(peer: VoiceCallPeer): VoiceCallPeer {
+  let released = false;
+
+  return {
+    ...peer,
+    release: () => {
+      if (released) return;
+      released = true;
+      peer.release();
+    },
+  };
+}
+
+/** A call into `into` as it connects, unmuted and untimed. */
+function connectingInto(into: VoiceCallInto): VoiceCallState {
+  return {
+    stage: VOICE_CALL_STAGE.CONNECTING,
+    agentId: into.agentId,
+    taskId: into.taskId,
+    callId: undefined,
+    startedAt: undefined,
+    microphoneMuted: false,
+    speakerMuted: false,
+  };
 }
 
 /**
@@ -287,23 +321,54 @@ export function voiceCallSession(seams: VoiceCallSessionSeams): VoiceCallSession
     },
   });
 
-  /** Opens the call the start asked for: the microphone and the peer, then the session. */
-  const open = async (held: Attempt, agentId: string) => {
+  /** The microphone opened and the peer made over it with its offer, or why the microphone did not open; nothing where the call was let go meanwhile. */
+  const readied = async (held: Attempt) => {
     const connected = await seams.connect(eventsOf(held));
 
-    if ("refused" in connected) return fail(held.asked, connected.refused, connected.refused);
-    const made = connected.peer;
+    if ("refused" in connected) return connected;
+    // Note that the peer lets go once however many hands let it go, since a call let go while its agent landed is let go by both.
+    const made = releasedOnce(connected.peer);
     held.made = made;
 
-    if (generation !== held.asked) return made.release();
+    if (generation !== held.asked) return void made.release();
     // Note that a mute pressed while the microphone opened is kept on the call, and set on its peer here.
     made.silenceMicrophone(call?.microphoneMuted === true);
     made.silenceSpeaker(call?.speakerMuted === true);
-    const sdp = await made.offer();
+
+    return { made, sdp: await made.offer() };
+  };
+
+  /**
+   * Opens the call the start asked for: the microphone and the peer, and
+   * their offer, while the agent it calls lands, then the session. Note
+   * that a call into an agent still starting stands only once it lands, and
+   * none stands where it never did, so nothing draws a call into no agent.
+   */
+  const open = async (held: Attempt, landing: Promise<VoiceCallInto | undefined>) => {
+    const ready = readied(held);
+    const into = await landing;
+
+    if (into === undefined || generation !== held.asked) {
+      // Note that the peer is let go where it stands by now, and by `readied` where it stands later.
+      if (generation === held.asked) drop(held.asked);
+      void ready.then((got) =>
+        got !== undefined && "made" in got ? got.made.release() : undefined,
+      );
+
+      return;
+    }
+
+    if (call === undefined) change(connectingInto(into));
+    const got = await ready;
+
+    if (got === undefined) return;
+
+    if ("refused" in got) return fail(held.asked, got.refused, got.refused);
+    const { made, sdp } = got;
 
     // Note that a call ended while its offer was made asks the service for nothing, since no session should open for it.
     if (generation !== held.asked) return made.release();
-    const answer = await seams.open({ agentId, sdp });
+    const answer = await seams.open({ agentId: into.agentId, sdp });
 
     if ("failure" in answer) {
       releaseAbandoned(held);
@@ -326,26 +391,34 @@ export function voiceCallSession(seams: VoiceCallSessionSeams): VoiceCallSession
     if (call !== undefined) change({ ...call, stage: VOICE_CALL_STAGE.ENDING });
   };
 
-  const start = (into: VoiceCallInto) => {
+  /** A new attempt standing in place of any before it: a call standing ended, and one still waiting on its agent let go. */
+  const attemptAfresh = (): Attempt => {
     if (call !== undefined) end();
+    else if (attempt !== undefined) drop(generation);
     generation += 1;
     const held: Attempt = { asked: generation, made: undefined, abandoned: false };
     // Note that the last call's peer is let go by its own channel, so no press on the new call reaches it meanwhile.
     attempt = held;
     sessionStarted = false;
-    change({
-      stage: VOICE_CALL_STAGE.CONNECTING,
-      agentId: into.agentId,
-      taskId: into.taskId,
-      callId: undefined,
-      startedAt: undefined,
-      microphoneMuted: false,
-      speakerMuted: false,
-    });
-    open(held, into.agentId).catch((cause: unknown) => {
+
+    return held;
+  };
+
+  const opened = (held: Attempt, landing: Promise<VoiceCallInto | undefined>) => {
+    open(held, landing).catch((cause: unknown) => {
       releaseAbandoned(held);
       fail(held.asked, VOICE_CALL_FAILURE.NOT_STARTED, cause);
     });
+  };
+
+  const start = (into: VoiceCallInto) => {
+    const held = attemptAfresh();
+    change(connectingInto(into));
+    opened(held, Promise.resolve(into));
+  };
+
+  const startLanding = (landing: Promise<VoiceCallInto | undefined>) => {
+    opened(attemptAfresh(), landing);
   };
 
   const hangUp = () => {
@@ -381,6 +454,7 @@ export function voiceCallSession(seams: VoiceCallSessionSeams): VoiceCallSession
   return {
     current: () => call,
     start,
+    startLanding,
     end,
     hangUp,
     setMicrophoneMuted,

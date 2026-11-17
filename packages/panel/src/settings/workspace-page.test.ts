@@ -428,12 +428,13 @@ function answer(request: Asked): Promise<Answered> {
       return Promise.resolve(done(undefined));
     case ACT_KIND.WORKSPACE_SENTRY_INSTALL:
       return Promise.resolve(done(undefined));
-    // Note that the host draws each write over the workspace's held integrations, so the window reads it there.
-    case ACT_KIND.WORKSPACE_SLACK_BOT_CONNECT:
+    // Note that Add to Slack lands in the browser, and the held read then carries the team, as the fake lays it here.
+    case ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL:
       slackBot = { configured: true, team: SLACK_TEAM, notifications: true };
       layIntegrations(request.payload.workspaceId);
 
-      return Promise.resolve(done(slackBot));
+      return Promise.resolve(done(undefined));
+    // Note that the host draws each write over the workspace's held integrations, so the window reads it there.
     case ACT_KIND.WORKSPACE_SLACK_BOT_DISCONNECT:
       slackBot = { configured: true };
       layIntegrations(request.payload.workspaceId);
@@ -2761,7 +2762,7 @@ test("an installed workspace's Sentry says Connected, its ⋯ holds Disconnect, 
 
 const SLACK_TEAM = { id: "T0001", name: "Acme Slack" };
 
-test("an admin connects the Slack bot, which then says Connected, and disconnects it after asking; a member sees it read only", async () => {
+test("an admin connects the Slack bot with Add to Slack, which then says Connected once the install lands, and disconnects it after asking; a member sees it read only", async () => {
   slackBot = { configured: true };
   const admin = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN });
   const slackRow = () => rowNamed(githubGroup(admin.page), "Slack");
@@ -2786,6 +2787,12 @@ test("an admin connects the Slack bot, which then says Connected, and disconnect
   const memberRow = await vi.waitFor(() => rowNamed(githubGroup(member.page), "Slack"));
 
   assert.deepEqual(before, ["Slack", "Not connected."]);
+  assert.deepEqual(
+    sent.flatMap((request) =>
+      request.kind === ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL ? [request.payload] : [],
+    ),
+    [{ workspaceId: ACME.id }],
+  );
   assert.deepEqual(connected, ["Slack", "Connected"]);
   assert.deepEqual(acts, ["Disconnect"]);
   assert.deepEqual(after, before);

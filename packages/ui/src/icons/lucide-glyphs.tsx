@@ -10,7 +10,6 @@ import {
   AudioLines,
   Bell,
   Bold,
-  Bot,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -30,6 +29,7 @@ import {
   FileText,
   Folder,
   Hand,
+  HardHat,
   Heading1,
   Heading2,
   Heading3,
@@ -110,7 +110,7 @@ void React;
  * and every glyph stands at one scale. `RemoveIcon` is Lucide's X at a stroke
  * of its own. A name here goes when the last screen that
  * imports it draws the glyph through `GLYPH` instead. The one name that is
- * no copy is `AgentPlaceholderIcon`, Lucide's robot in the muted ink, which
+ * no copy is `AgentPlaceholderIcon`, Lucide's hard hat in the muted ink, which
  * stands where `glyphs.tsx` once held an agent's mark's box empty.
  */
 
@@ -169,12 +169,12 @@ export const CommentsIcon = lucideGlyph(MessageSquare, "icon-button-glyph");
 export const WaveformIcon = lucideGlyph(AudioLines, "icon-button-glyph");
 
 /**
- * The worker's robot in the muted ink: an agent whose harness is not known
+ * The worker's hard hat in the muted ink: an agent whose harness is not known
  * yet, until the harness's mark takes its place. Note that it is muted,
- * because beside the harnesses' colored marks a robot in the full ink would
+ * because beside the harnesses' colored marks a hard hat in the full ink would
  * read as the agent's own mark rather than a stand-in for one.
  */
-export const AgentPlaceholderIcon = lucideGlyph(Bot, "settings-icon text-muted-foreground");
+export const AgentPlaceholderIcon = lucideGlyph(HardHat, "settings-icon text-muted-foreground");
 
 /*
  * The writing glyphs: what the format toolbar, Turn into, and the `/` menu

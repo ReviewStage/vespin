@@ -50,20 +50,21 @@ function onTask(
   });
 }
 
-test("a task's step is named by the task, with the side panel's tab while it is open", () => {
+test("a task's step is named by the task, with its description on the column's Overview and the side panel's tab while it is open", () => {
   assert.deepEqual(titleOf(undefined, onTask(SIDE_PANEL_TAB.COMMENTS), VIEWS_AWAY), {
     label: "Auth refactor",
-    detail: "Comments",
-    panes: { column: undefined, side: "Comments" },
+    detail: "Description · Comments",
+    panes: { column: "Description", side: "Comments" },
   });
   assert.deepEqual(titleOf(undefined, onTask(fileTab("apps/web/session-store.ts")), VIEWS_AWAY), {
     label: "Auth refactor",
-    detail: "session-store.ts",
-    panes: { column: undefined, side: "session-store.ts" },
+    detail: "Description · session-store.ts",
+    panes: { column: "Description", side: "session-store.ts" },
   });
   assert.deepEqual(titleOf(undefined, onTask(undefined), VIEWS_AWAY), {
     label: "Auth refactor",
-    detail: undefined,
+    detail: "Description",
+    panes: { column: "Description", side: undefined },
   });
 });
 
@@ -72,19 +73,20 @@ test("a task on its way, its strips still another's, is named by the task alone"
   assert.deepEqual(titleOf(undefined, opening, VIEWS_AWAY), { label: "Auth refactor" });
 });
 
-test("a task's step listed later on its Overview is named by the task and its panel's tab, Overview being the task itself", () => {
+test("a task's step listed later on its Overview is named by the task, its description, and its panel's tab, so it reads apart from the agent it was opened over", () => {
   const step = {
     kind: NAMED_STEP.TASK,
     taskId: TASK.id,
     column: MAIN_TAB.OVERVIEW,
     side: SIDE_PANEL_TAB.COMMENTS,
+    threads: false,
   } as const;
 
   assert.deepEqual(
     liveStepTitle(step, undefined, { ...tasksControl(), rows: listedRows([TASK]) }, undefined),
     {
       label: "Auth refactor",
-      detail: "Comments",
+      detail: "Description · Comments",
     },
   );
 });

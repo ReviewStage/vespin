@@ -24,7 +24,17 @@ export function PushedPageView({ page }: { readonly page: PushedPage }) {
         />
       );
     case PUSHED_PAGE.PULL_REQUEST:
-      return <PullRequestPage agentId={page.agentId} number={page.number} inColumn />;
+      return (
+        <PullRequestPage
+          pullRequest={{
+            workspaceId: page.workspaceId,
+            repository: page.repository,
+            number: page.number,
+          }}
+          agentId={page.agentId}
+          inColumn
+        />
+      );
     case PUSHED_PAGE.AGENT_PAGE:
       return (
         <AgentPage

@@ -146,9 +146,11 @@ builds a control of its own.
 - **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
   panel's three lines (the task's status ring and name, then the thread's
   title and time, then the glyph and words of what it asks; an agent's own
-  thread, with no task, in two), `TaskRow` a task on one line (its priority's
-  mark and status ring, as the panel's List row leads, its name, and at its end a thread that needs you, a failed agent,
-  one at work, or its pull request, then its key), and `AgentRow` an agent
+  thread, with no task, in two), `TaskRow` a task on one line (its status
+  ring, its name, set in semibold while it has news with no unread dot, and
+  at its end a thread that needs you, a failed agent, one at work, or its
+  pull request, then its key; its priority stands on the task's own
+  Priority chip, not the row), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
 - **Every glyph is the panel's own Lucide glyph for the same place** (the
   developer, Nov 12, 2026), named once in `glyph.ts`'s `GLYPH`, by what it
@@ -248,7 +250,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
   words. An Inbox thread stands roomier, as Mail's message rows do
   (`ROW_INSET.THREAD_VERTICAL` above and below, `THREAD_LINE_GAP` between
-  its lines), while a task's row keeps the list's tighter inset. A row a
+  its lines), while a task's row keeps the list's tighter inset and draws no
+  dot, its ring standing at the list's edge (`ROW_INSET.PLAIN`) where a
+  dotted row's ring stands past the dot's margin, so the two line up. A row a
   split view's list keeps selected stands on a rounded `SELECTED` fill set in
   from the column's edges (`ROW_INSET.FILL`), its hairlines stepping aside, as
   Mail's selected message does; its words don't move.

@@ -1,16 +1,21 @@
 /**
- * media-place.ts -- where a video or a sound clip was left, kept across every player that draws it, so one drawn again goes on from there.
+ * media-place.ts -- where a video or a sound clip was left, and at what speed, kept across every player that draws it, so one drawn again goes on from there.
  *
- * Each player notes where its medium stands as it plays or is sought
- * (`places`, by the medium's `data:` URL), so the same medium drawn again,
+ * Each player notes where its medium stands as it plays or is sought, and
+ * the speed it plays at (`places`, by the medium's `data:` URL), so the
+ * same medium drawn again,
  * in the viewer an Expand opens or in a player drawn anew, starts where it
  * was left, and a player played again after another moved the same medium,
- * as the inline one after the viewer closes, goes on from there. A place is
- * taken up only once the medium's length is known, since a time past an
- * unknown length cannot be sought; a medium left at its end starts over.
+ * as the inline one after the viewer closes, goes on from there, at the
+ * speed it was left at. A change of speed alone keeps the speed but not the
+ * time, so a player that only changed speed claims no other player's place.
+ * A place is taken up only once the medium's length is known, since a time
+ * past an unknown length cannot be sought; a medium left at its end starts
+ * over.
  */
 
 import { useRef, useState } from "react";
+import { setSpeed } from "./components/media-controls/media-controls.js";
 
 /**
  * How many media's places are kept, the latest played; past it the oldest
@@ -18,10 +23,11 @@ import { useRef, useState } from "react";
  */
 const PLACES_KEPT = 16;
 
-/** Where a medium was left: the second it stood at, and the player that stood it there. */
+/** Where a medium was left: the second it stood at, the player that stood it there, and the speed it played at. */
 interface Place {
   readonly at: number;
   readonly by: symbol;
+  readonly speed: number;
 }
 
 /** Where each medium was last left, by its `data:` URL, the latest last. */
@@ -36,18 +42,25 @@ function keepPlace(dataUrl: string, place: Place): void {
   if (places.size > PLACES_KEPT && oldest !== undefined) places.delete(oldest);
 }
 
-/** Moves `shown` to `at`, or to its start where `at` is its end or past it. */
-function seekTo(shown: HTMLMediaElement, at: number): void {
-  shown.currentTime = at < shown.duration ? at : 0;
+/** Plays `shown` at the speed `place` was left at. */
+function speedTo(shown: HTMLMediaElement, place: Place): void {
+  if (shown.playbackRate !== place.speed) setSpeed(shown, place.speed);
+}
+
+/** Moves `shown` to where `place` left it, or to its start where that is its end or past it. */
+function seekTo(shown: HTMLMediaElement, place: Place): void {
+  shown.currentTime = place.at < shown.duration ? place.at : 0;
 }
 
 /** What a player calls from its media element's events to keep its medium's place. */
 export interface MediaPlace {
   /** On a time update, a seek, a pause, or an end: notes where the medium stands, once its place is taken up. */
   readonly keep: (shown: HTMLMediaElement) => void;
+  /** On a change of speed: notes the speed alone, leaving the time where the last player to move it left it. */
+  readonly keepSpeed: (shown: HTMLMediaElement) => void;
   /** On metadata and a length read: once the length is known, goes to where the medium was left, or its start. */
   readonly resume: (shown: HTMLMediaElement) => void;
-  /** On play: goes on from where another player left the same medium since this one last moved it. */
+  /** On play: goes on at the speed the medium was last set to, from where another player left it since this one last moved it. */
   readonly rejoin: (shown: HTMLMediaElement) => void;
   /** On a new address: the medium it held is let go, its successor's place taken up afresh. */
   readonly forget: () => void;
@@ -63,17 +76,41 @@ export function useMediaPlace(dataUrl: string): MediaPlace {
   return {
     keep: (shown) => {
       if (keeps.current === undefined) return;
-      keepPlace(keeps.current, { at: Math.min(shown.currentTime, shown.duration), by: self });
+      keepPlace(keeps.current, {
+        at: Math.min(shown.currentTime, shown.duration),
+        by: self,
+        speed: shown.playbackRate,
+      });
+    },
+    keepSpeed: (shown) => {
+      if (keeps.current === undefined) return;
+      const left = places.get(keeps.current);
+      keepPlace(keeps.current, {
+        at: left?.at ?? Math.min(shown.currentTime, shown.duration),
+        by: left?.by ?? self,
+        speed: shown.playbackRate,
+      });
     },
     resume: (shown) => {
       if (keeps.current !== undefined || !Number.isFinite(shown.duration)) return;
       keeps.current = dataUrl;
-      seekTo(shown, places.get(dataUrl)?.at ?? 0);
+      const left = places.get(dataUrl);
+
+      if (left === undefined) {
+        shown.currentTime = 0;
+      } else {
+        speedTo(shown, left);
+        seekTo(shown, left);
+      }
     },
     rejoin: (shown) => {
       const left = keeps.current === undefined ? undefined : places.get(keeps.current);
 
-      if (left !== undefined && left.by !== self) seekTo(shown, left.at);
+      if (left === undefined) return;
+      // Note that the speed is taken up whoever set it, because a change of speed alone leaves the time's owner standing.
+      speedTo(shown, left);
+
+      if (left.by !== self) seekTo(shown, left);
     },
     forget: () => {
       keeps.current = undefined;

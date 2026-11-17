@@ -368,7 +368,7 @@ export const HARNESS_MARK_ASSET = {
 /**
  * An agent's tile, as the panel's messages lead an agent's words with it: a
  * rounded square on the brand's well, the mark of the harness the agent runs
- * in on it (Claude Code's Clawd, Codex's picture), or the ink's sparkles where
+ * in on it (Claude Code's Clawd, Codex's picture), or the ink's hard hat where
  * the harness is not known, heard as the agent's name, so an agent never
  * reads as a person.
  */
@@ -402,6 +402,7 @@ export function AgentTile({
           modifiers={[
             resizable(),
             frame({ width: size * TILE_MARK_SCALE, height: size * TILE_MARK_SCALE }),
+            foregroundStyle(colors.TEXT),
             accessibilityHidden(),
           ]}
         />
@@ -418,10 +419,18 @@ export function HarnessMark({
   readonly provider: ModelProvider;
   readonly size?: number | undefined;
 }) {
+  const colors = useColors();
+
+  // Note that the text's ink reaches Cursor's cube alone, a template; Clawd and Codex's picture keep their own colors.
   return (
     <Image
       assetName={HARNESS_MARK_ASSET[provider]}
-      modifiers={[resizable(), frame({ width: size, height: size }), accessibilityHidden()]}
+      modifiers={[
+        resizable(),
+        frame({ width: size, height: size }),
+        foregroundStyle(colors.TEXT),
+        accessibilityHidden(),
+      ]}
     />
   );
 }

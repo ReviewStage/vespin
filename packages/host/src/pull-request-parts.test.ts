@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import {
   AGENT_CALL_FAILURE,
   type AgentOverviewPullRequestAnswerView,
+  type AgentPullRequestAnswerView,
   PULL_REQUEST_PART,
   type PullRequestPart,
 } from "@repo/features/agent-view";
@@ -21,13 +22,12 @@ import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wi
 import { listedAgentOf } from "@repo/features/task-list-live";
 import { Duration, Effect, PubSub, Stream } from "effect";
 import { TestClock } from "effect/testing";
-import { type AppPullRequestParts, OWN_PULL_REQUEST } from "./app-state.js";
+import type { AppHeldById, AppRepositoryPullRequestParts } from "./app-state.js";
 import type { ListMove } from "./list-moves.js";
 import {
+  agentPullRequests,
   type ListDrawing,
-  type PullRequestKey,
   type PullRequestListing,
-  pullRequestParts,
   type RepositoryPullRequestKey,
   repositoryPullRequestParts,
 } from "./pull-request-parts.js";
@@ -36,7 +36,7 @@ import { agentListRow } from "./testing/task-list-rows.js";
 import { windowFocus } from "./window-focus.js";
 
 /**
- * pull-request-parts.test.ts -- the parts of a pull request a Pull request tab holds through an agent are asked again together as the task list says it moved, or first names the agent's own, and keep an answer over a later failure; those it holds by its repository and number, as GitHub says the pull request moved.
+ * pull-request-parts.test.ts -- what an agent published is asked again as the task list says its pull request or the agent moved, or first names it, and keeps an answer over a later failure; the parts of a pull request a Pull request tab holds by its repository and number are asked again as GitHub says it moved, and its viewed marks hold every answer.
  */
 
 const AGENT = "3c2e1d0f-9a8b-4c7d-8e6f-5a4b3c2d1e0f";
@@ -149,62 +149,31 @@ const MOVING = [
 
 const settled = Effect.repeat(Effect.yieldNow, { times: 100 });
 
-/** The parts over a fake service, each ask written down as `part number`, the agent's own written `own`, with the list's drawings handed through `draw`. */
-function subject(failing: Set<PullRequestPart> = new Set()) {
+/** What the agent published as the service answers it: its pull request at `url`. */
+function published(url: string, number: number) {
+  return { repository: "acme/relay", branch: "agent/invite-once", pullRequest: line(url, number) };
+}
+
+/** What each agent published over a fake service, each ask written down by the agent, with the list's drawings handed through `draw`. */
+function subject(failing: { failing: boolean } = { failing: false }) {
   return Effect.gen(function* () {
     const asked: string[] = [];
-    const told: Partial<AppPullRequestParts>[] = [];
+    const told: AppHeldById<AgentPullRequestAnswerView>[] = [];
     const drawings = yield* PubSub.unbounded<PullRequestListing>();
-    const failure = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
 
-    const answering =
-      <Answer>(part: PullRequestPart, answer: (key: PullRequestKey) => Answer) =>
-      (key: PullRequestKey) =>
-        Effect.sync(() => {
-          asked.push(`${part} ${key.number ?? "own"}`);
-
-          return failing.has(part) ? failure : answer(key);
-        });
-
-    const parts = yield* pullRequestParts({
+    const parts = yield* agentPullRequests({
       gate: () => true,
       focus: yield* windowFocus,
-      ask: {
-        pullRequest: answering(PULL_REQUEST_PART.PULL_REQUEST, (key) =>
-          key.number === undefined ? overview(OWN, 42) : overview(OTHER, key.number),
-        ),
-        checks: answering(PULL_REQUEST_PART.CHECKS, () => ({ pullRequest: { checks: [] } })),
-        conversation: answering(PULL_REQUEST_PART.CONVERSATION, () => ({
-          pullRequest: { reviewers: [], conversation: [], earlier: 0 },
-        })),
-        published: answering(PULL_REQUEST_PART.PUBLISHED, (key) => ({
-          repository: "acme/relay",
-          branch: "agent/invite-once",
-          pullRequest: key.number === undefined ? line(OWN, 42) : line(OTHER, key.number),
-        })),
-        reviewOptions: answering(PULL_REQUEST_PART.REVIEW_OPTIONS, () => ({
-          labels: [],
-          users: [],
-          teams: [],
-        })),
-        viewed: answering(PULL_REQUEST_PART.VIEWED, () => ({
-          outcome: PULL_REQUEST_WRITE_OUTCOME.DONE,
-          files: [],
-        })),
-      },
+      ask: (agentId) =>
+        Effect.sync(() => {
+          asked.push(agentId);
+
+          return failing.failing
+            ? { failure: AGENT_CALL_FAILURE.UNANSWERED }
+            : published(agentId === AGENT ? OWN : OTHER, agentId === AGENT ? 42 : 7);
+        }),
       listings: Effect.map(PubSub.subscribe(drawings), Stream.fromSubscription),
-      tell: {
-        [LIVE_READ.PULL_REQUEST]: (held) => void told.push({ [LIVE_READ.PULL_REQUEST]: held }),
-        [LIVE_READ.PULL_REQUEST_CHECKS]: (held) =>
-          void told.push({ [LIVE_READ.PULL_REQUEST_CHECKS]: held }),
-        [LIVE_READ.PULL_REQUEST_CONVERSATION]: (held) =>
-          void told.push({ [LIVE_READ.PULL_REQUEST_CONVERSATION]: held }),
-        [LIVE_READ.PULL_REQUEST_PUBLISHED]: (held) =>
-          void told.push({ [LIVE_READ.PULL_REQUEST_PUBLISHED]: held }),
-        [LIVE_READ.REVIEW_OPTIONS]: (held) => void told.push({ [LIVE_READ.REVIEW_OPTIONS]: held }),
-        [LIVE_READ.PULL_REQUEST_VIEWED]: (held) =>
-          void told.push({ [LIVE_READ.PULL_REQUEST_VIEWED]: held }),
-      },
+      tell: (held) => void told.push(held),
     });
 
     let drawnBefore: ListDrawing | undefined;
@@ -215,75 +184,59 @@ function subject(failing: Set<PullRequestPart> = new Set()) {
       told,
       draw: (drawn: ListDrawing) =>
         Effect.suspend(() => {
-          const told = listingOf(drawnBefore, drawn);
+          const listed = listingOf(drawnBefore, drawn);
           drawnBefore = drawn;
 
-          return Effect.andThen(PubSub.publish(drawings, told), settled);
+          return Effect.andThen(PubSub.publish(drawings, listed), settled);
         }),
-      /** Holds every part of the agent's own pull request, and of the reviewer's that its tab names by number, for the caller's scope. */
-      holdBoth: Effect.andThen(
-        Effect.forEach(PARTS, (part) =>
-          Effect.andThen(
-            parts.hold({ part, agentId: AGENT }),
-            parts.hold({ part, agentId: AGENT, number: 7 }),
-          ),
-        ),
-        settled,
-      ),
     };
   });
 }
 
 it.effect(
-  "every part a tab holds is asked again together as the list's line for its pull request moves, a head moved by a push among it, and nothing is asked where nothing moved",
+  "what an agent published is asked again as the list's line for its pull request moves, a head moved by a push among it, and nothing is asked where nothing moved or another's line did",
   () =>
     Effect.gen(function* () {
-      const { asked, draw, holdBoth } = yield* subject();
-      yield* holdBoth;
+      const { parts, asked, draw } = yield* subject();
+      yield* parts.hold({ agentId: AGENT });
+      yield* settled;
       yield* draw(listing());
       asked.length = 0;
 
       yield* draw(listing());
+      yield* draw(listing({ other: { checks: CHECK_SUMMARY.PASSING } }));
       assert.deepEqual(asked, []);
 
-      yield* draw(listing({ own: { headSha: "e4f5a6b" } }));
-      assert.deepEqual(
-        asked.toSorted(),
-        [...MOVING, PULL_REQUEST_PART.VIEWED].map((part) => `${part} own`).toSorted(),
-      );
-
-      asked.length = 0;
       yield* draw(
         listing({ own: { headSha: "e4f5a6b" }, other: { checks: CHECK_SUMMARY.PASSING } }),
       );
-      assert.deepEqual(asked.toSorted(), MOVING.map((part) => `${part} 7`).toSorted());
+      assert.deepEqual(asked, [AGENT]);
     }),
 );
 
 it.effect(
-  "every part of an agent's pull request is asked again as the agent's status moves, its end among it",
+  "what an agent published is asked again as the agent's status moves, its end among it",
   () =>
     Effect.gen(function* () {
-      const { asked, draw, holdBoth } = yield* subject();
-      yield* holdBoth;
+      const { parts, asked, draw } = yield* subject();
+      yield* parts.hold({ agentId: AGENT });
+      yield* settled;
       yield* draw(listing());
       asked.length = 0;
 
       yield* draw(listing({}, AGENT_STATUS.COMPLETED));
 
-      assert.deepEqual(
-        asked.toSorted(),
-        MOVING.flatMap((part) => [`${part} own`, `${part} 7`]).toSorted(),
-      );
+      assert.deepEqual(asked, [AGENT]);
     }),
 );
 
 it.effect(
-  "an agent's own parts are asked again as the list first names a pull request it published, which is how a window drawing it from the list hears its branch",
+  "what an agent published is asked again as the list first names a pull request it published, which is how a window drawing it from the list hears its branch",
   () =>
     Effect.gen(function* () {
       const { parts, asked, draw } = yield* subject();
-      yield* Effect.forEach(MOVING, (part) => parts.hold({ part, agentId: AGENT }));
+      yield* parts.hold({ agentId: AGENT });
+      yield* settled;
       const listed = listing();
       yield* draw({
         ...listed,
@@ -293,63 +246,32 @@ it.effect(
 
       yield* draw(listed);
 
-      assert.deepEqual(asked.toSorted(), MOVING.map((part) => `${part} own`).toSorted());
+      assert.deepEqual(asked, [AGENT]);
     }),
 );
 
 it.effect(
-  "the viewed marks hold every answer, so a read that fails after one landed takes the marks away",
+  "a read whose ask fails holds why until one answers, and an answer stands over a later failure",
   () =>
     Effect.gen(function* () {
-      const failing = new Set<PullRequestPart>();
+      const failing = { failing: true };
       const { parts, told } = yield* subject(failing);
-      const viewedHeld = () => told.findLast((held) => LIVE_READ.PULL_REQUEST_VIEWED in held);
-      const key = { part: PULL_REQUEST_PART.VIEWED, agentId: AGENT } as const;
 
-      yield* parts.hold(key);
+      yield* parts.hold({ agentId: AGENT });
       yield* settled;
-      failing.add(PULL_REQUEST_PART.VIEWED);
-      yield* parts.retry(key);
-
-      assert.deepEqual(viewedHeld(), {
-        [LIVE_READ.PULL_REQUEST_VIEWED]: {
-          [AGENT]: { [OWN_PULL_REQUEST]: { rows: { failure: AGENT_CALL_FAILURE.UNANSWERED } } },
-        },
+      assert.deepEqual(told.at(-1), {
+        [AGENT]: { rows: { failure: AGENT_CALL_FAILURE.UNANSWERED } },
       });
+
+      failing.failing = false;
+      yield* parts.retry({ agentId: AGENT });
+      failing.failing = true;
+      yield* parts.retry({ agentId: AGENT });
+
+      assert.deepEqual(told.at(-1), { [AGENT]: { rows: published(OWN, 42) } });
     }),
 );
 
-it.effect(
-  "a part whose ask fails holds why until one answers, and an answer stands over a later failure",
-  () =>
-    Effect.gen(function* () {
-      const failing = new Set<PullRequestPart>([PULL_REQUEST_PART.CHECKS]);
-      const { parts, told } = yield* subject(failing);
-      const checksHeld = () => told.findLast((held) => LIVE_READ.PULL_REQUEST_CHECKS in held);
-      const key = { part: PULL_REQUEST_PART.CHECKS, agentId: AGENT } as const;
-
-      yield* parts.hold(key);
-      yield* settled;
-      assert.deepEqual(checksHeld(), {
-        [LIVE_READ.PULL_REQUEST_CHECKS]: {
-          [AGENT]: { [OWN_PULL_REQUEST]: { rows: { failure: AGENT_CALL_FAILURE.UNANSWERED } } },
-        },
-      });
-
-      failing.clear();
-      yield* parts.retry(key);
-      failing.add(PULL_REQUEST_PART.CHECKS);
-      yield* parts.retry(key);
-
-      assert.deepEqual(checksHeld(), {
-        [LIVE_READ.PULL_REQUEST_CHECKS]: {
-          [AGENT]: { [OWN_PULL_REQUEST]: { rows: { pullRequest: { checks: [] } } } },
-        },
-      });
-    }),
-);
-
-/** Every step a follow has to take, taken, then its next poll asked, which waits half a second after the last answered (`live-follow.ts`). */
 const nextPoll = Effect.andThen(
   settled,
   Effect.andThen(TestClock.adjust(Duration.millis(500)), settled),
@@ -362,65 +284,84 @@ const movedRow = (minute: number, headSha: string) => ({
   movedAt: Date.UTC(2026, 10, 16, 12, minute),
 });
 
+/** One part's slice as the host tells it. */
+type ToldPart = AppRepositoryPullRequestParts[keyof AppRepositoryPullRequestParts];
+
+/** The pull request a window holds by its repository, in every part below. */
+const HELD = { workspaceId: WORKSPACE, repository: "acme/relay", number: 42 } as const;
+
+/** The parts of a pull request held by its repository over a fake service, each ask written down by its part, each part's telling kept by its read, its moves as `live` answers them, and each part in `failing` failing. */
+function repositorySubject(failing: Set<PullRequestPart> = new Set()) {
+  return Effect.gen(function* () {
+    const asked: string[] = [];
+    const told = new Map<string, ToldPart>();
+    const live = polledLive(["moved"] as const);
+    live.set({ moved: [movedRow(0, "a1b2c3d")] });
+
+    const answering =
+      <Answer>(part: PullRequestPart, answer: Answer) =>
+      (_key: RepositoryPullRequestKey) =>
+        Effect.sync(() => {
+          asked.push(part);
+
+          return failing.has(part) ? { failure: AGENT_CALL_FAILURE.UNANSWERED } : answer;
+        });
+
+    const telling = (read: string) => (held: ToldPart) => void told.set(read, held);
+
+    const parts = yield* repositoryPullRequestParts({
+      gate: () => true,
+      focus: yield* windowFocus,
+      ask: {
+        pullRequest: answering(PULL_REQUEST_PART.PULL_REQUEST, overview(OWN, 42)),
+        checks: answering(PULL_REQUEST_PART.CHECKS, { pullRequest: { checks: [] } }),
+        conversation: answering(PULL_REQUEST_PART.CONVERSATION, {
+          pullRequest: { reviewers: [], conversation: [], earlier: 0 },
+        }),
+        published: answering(PULL_REQUEST_PART.PUBLISHED, published(OWN, 42)),
+        reviewOptions: answering(PULL_REQUEST_PART.REVIEW_OPTIONS, {
+          labels: [],
+          users: [],
+          teams: [],
+        }),
+        viewed: answering(PULL_REQUEST_PART.VIEWED, {
+          outcome: PULL_REQUEST_WRITE_OUTCOME.DONE,
+          files: [],
+        }),
+      },
+      moved: {
+        seal: (_key, poll, _userId, after) =>
+          poll ? live.poll(after) : Effect.succeed(live.first()),
+        accountId: () => "user-reader",
+      },
+      tell: {
+        [LIVE_READ.REPOSITORY_PULL_REQUEST]: telling(LIVE_READ.REPOSITORY_PULL_REQUEST),
+        [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: telling(
+          LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS,
+        ),
+        [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: telling(
+          LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION,
+        ),
+        [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: telling(
+          LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED,
+        ),
+        [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: telling(LIVE_READ.REPOSITORY_REVIEW_OPTIONS),
+        [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: telling(
+          LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED,
+        ),
+      },
+    });
+
+    return { parts, asked, told, live };
+  });
+}
+
 it.effect(
   "a pull request held by its repository is asked again as GitHub says it moved, its viewed marks only as its head moved with it, and nothing at the first answer",
   () =>
     Effect.gen(function* () {
-      const asked: string[] = [];
-      const live = polledLive(["moved"] as const);
-      live.set({ moved: [movedRow(0, "a1b2c3d")] });
-
-      const answering =
-        <Answer>(part: PullRequestPart, answer: Answer) =>
-        (_key: RepositoryPullRequestKey) =>
-          Effect.sync(() => {
-            asked.push(part);
-
-            return answer;
-          });
-
-      const parts = yield* repositoryPullRequestParts({
-        gate: () => true,
-        focus: yield* windowFocus,
-        ask: {
-          pullRequest: answering(PULL_REQUEST_PART.PULL_REQUEST, overview(OWN, 42)),
-          checks: answering(PULL_REQUEST_PART.CHECKS, { pullRequest: { checks: [] } }),
-          conversation: answering(PULL_REQUEST_PART.CONVERSATION, {
-            pullRequest: { reviewers: [], conversation: [], earlier: 0 },
-          }),
-          published: answering(PULL_REQUEST_PART.PUBLISHED, {
-            repository: "acme/relay",
-            branch: "agent/invite-once",
-            pullRequest: line(OWN, 42),
-          }),
-          reviewOptions: answering(PULL_REQUEST_PART.REVIEW_OPTIONS, {
-            labels: [],
-            users: [],
-            teams: [],
-          }),
-          viewed: answering(PULL_REQUEST_PART.VIEWED, {
-            outcome: PULL_REQUEST_WRITE_OUTCOME.DONE,
-            files: [],
-          }),
-        },
-        moved: {
-          seal: (_key, poll, _userId, after) =>
-            poll ? live.poll(after) : Effect.succeed(live.first()),
-          accountId: () => "user-reader",
-        },
-        tell: {
-          [LIVE_READ.REPOSITORY_PULL_REQUEST]: () => undefined,
-          [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: () => undefined,
-          [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: () => undefined,
-          [LIVE_READ.REPOSITORY_PULL_REQUEST_PUBLISHED]: () => undefined,
-          [LIVE_READ.REPOSITORY_REVIEW_OPTIONS]: () => undefined,
-          [LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED]: () => undefined,
-        },
-      });
-
-      yield* Effect.forEach(PARTS, (part) =>
-        parts.hold({ part, workspaceId: WORKSPACE, repository: "acme/relay", number: 42 }),
-      );
+      const { parts, asked, live } = yield* repositorySubject();
+      yield* Effect.forEach(PARTS, (part) => parts.hold({ part, ...HELD }));
       yield* nextPoll;
       asked.length = 0;
 
@@ -432,5 +373,26 @@ it.effect(
       live.set({ moved: [movedRow(9, "e4f5a6b")] });
       yield* nextPoll;
       assert.deepEqual(asked.toSorted(), [...MOVING, PULL_REQUEST_PART.VIEWED].toSorted());
+    }),
+);
+
+it.effect(
+  "the viewed marks hold every answer, so a read that fails after one landed takes the marks away",
+  () =>
+    Effect.gen(function* () {
+      const failing = new Set<PullRequestPart>();
+      const { parts, told } = yield* repositorySubject(failing);
+      const key = { part: PULL_REQUEST_PART.VIEWED, ...HELD } as const;
+
+      yield* parts.hold(key);
+      yield* settled;
+      failing.add(PULL_REQUEST_PART.VIEWED);
+      yield* parts.retry(key);
+
+      assert.deepEqual(told.get(LIVE_READ.REPOSITORY_PULL_REQUEST_VIEWED), {
+        [WORKSPACE]: {
+          "acme/relay": { "42": { rows: { failure: AGENT_CALL_FAILURE.UNANSWERED } } },
+        },
+      });
     }),
 );

@@ -87,6 +87,7 @@ import {
   StateRoot,
   TerminalSocket,
 } from "@repo/host/effect";
+import { LocalDatabaseDriver, type LocalDatabaseDriverSeam } from "@repo/host/local-database";
 import { effectServiceLayer } from "@repo/host/service-layer";
 import { plainCodeLines } from "@repo/host/task-code-remote";
 import { Cause, ConfigProvider, Context, Effect, Layer, Path, Queue, Stream } from "effect";
@@ -143,6 +144,8 @@ export interface DeviceSeams {
   readonly authSession: AuthSession;
   /** Keeps each access token the account is issued where the share sheet reads it, or removes it, answering whether the Keychain took it (`share-token-module.ts`). */
   readonly keepShareToken: KeepIssuedToken;
+  /** The SQLite the account's local database opens on (`expo-sqlite-driver.ts`); a device without one keeps no local database. */
+  readonly localDatabaseDriver?: LocalDatabaseDriverSeam;
 }
 
 /** What the app hands the composition. */
@@ -229,6 +232,9 @@ function seamLayers(options: MobileHostOptions) {
     Layer.succeed(ServiceOrigin, SERVICE_ORIGIN),
     Layer.succeed(TerminalSocket, device.openSocket),
     Layer.succeed(KeptListsDue, appLeaves(device)),
+    device.localDatabaseDriver === undefined
+      ? Layer.empty
+      : Layer.succeed(LocalDatabaseDriver, device.localDatabaseDriver),
   );
 }
 

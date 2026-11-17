@@ -580,13 +580,14 @@ it.layer(getTestDB())("a task's live reads", (it) => {
         const dana = yield* openUser;
         const eli = yield* openUser;
         const started = yield* startTask(dana, { name: "Teammate invitations" });
+        const agentId = yield* openTaskAgent(dana, started.workspaceId, started.id);
 
         const shown = Option.getOrThrow(
           yield* writePage(
             dana,
             taskPageOwner(started.id),
             { title: "Invite funnel", html: "<p>One</p>" },
-            { kind: PAGE_SHOWER.APP },
+            { kind: PAGE_SHOWER.AGENT, agentId },
           ),
         );
 
@@ -787,13 +788,14 @@ it.layer(getTestDB())("a task's live reads", (it) => {
         const dana = yield* openUser;
         const eli = yield* openUser;
         const started = yield* startTask(dana, { name: "Teammate invitations" });
+        const agentId = yield* openTaskAgent(dana, started.workspaceId, started.id);
 
         const shown = Option.getOrThrow(
           yield* writePage(
             dana,
             taskPageOwner(started.id),
             { title: "Invite funnel", html: "<p>12 sent</p>" },
-            { kind: PAGE_SHOWER.APP },
+            { kind: PAGE_SHOWER.AGENT, agentId },
           ),
         );
 
@@ -875,17 +877,20 @@ const rowsOfTheRead = (kept: readonly KeptRow[]) =>
 it.layer(getTestDB())("a held live read's looks", (it) => {
   const path = "/api/live/task-pages";
 
-  /** One page shown on the task, so its pages read has a row to carry. */
-  const showPage = (userId: string, taskId: string) =>
-    Effect.map(
-      writePage(
-        userId,
-        taskPageOwner(taskId),
-        { title: "Invite funnel", html: "<p>One</p>" },
-        { kind: PAGE_SHOWER.APP },
-      ),
-      Option.getOrThrow,
-    );
+  /** One page shown on the task by an agent of its own, so its pages read has a row to carry. */
+  const showPage = (userId: string, task: { readonly id: string; readonly workspaceId: string }) =>
+    Effect.gen(function* () {
+      const agentId = yield* openTaskAgent(userId, task.workspaceId, task.id);
+
+      return Option.getOrThrow(
+        yield* writePage(
+          userId,
+          taskPageOwner(task.id),
+          { title: "Invite funnel", html: "<p>One</p>" },
+          { kind: PAGE_SHOWER.AGENT, agentId },
+        ),
+      );
+    });
 
   it.effect(
     "a poll held over rows that never move carries none of them off the database: it looks at their digests alone to the hold's end, and answers unchanged",
@@ -893,7 +898,7 @@ it.layer(getTestDB())("a held live read's looks", (it) => {
       Effect.gen(function* () {
         const dana = yield* openUser;
         const started = yield* startTask(dana, { name: "Teammate invitations" });
-        yield* showPage(dana, started.id);
+        yield* showPage(dana, started);
         const kept: KeptRow[] = [];
         const sql = keepingRows(yield* SqlClient.SqlClient, kept);
 
@@ -947,7 +952,7 @@ it.layer(getTestDB())("a held live read's looks", (it) => {
 
         const moved = yield* Effect.forkChild(poll(digest));
         yield* TestClock.adjust(Duration.seconds(3));
-        const shown = yield* showPage(dana, started.id);
+        const shown = yield* showPage(dana, started);
         yield* TestClock.adjust(Duration.seconds(3));
 
         const answer = Schema.decodeUnknownSync(TASK_PAGES_READ.answer)(
@@ -1334,6 +1339,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
       Effect.gen(function* () {
         const dana = yield* openUser;
         const started = yield* startTask(dana, { name: "Teammate invitations" });
+        const agentId = yield* openTaskAgent(dana, started.workspaceId, started.id);
         const path = "/api/live/task-pages";
 
         const poll = (after: string) =>
@@ -1362,7 +1368,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
             dana,
             taskPageOwner(started.id),
             { title: "Invite funnel", html: "<p>One</p>" },
-            { kind: PAGE_SHOWER.APP },
+            { kind: PAGE_SHOWER.AGENT, agentId },
           ),
         );
 

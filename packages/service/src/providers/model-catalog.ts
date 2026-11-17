@@ -615,21 +615,6 @@ export function validateModelChoice(
   });
 }
 
-/** The choice checked against the instance's catalog as the account is offered it (`offeredToAccount`): accepted, refused, or the catalog unavailable. */
-export function acceptedModelChoice(
-  choice: ModelChoice,
-  fast: AccountFastOffer,
-): Effect.Effect<ModelChoice, ModelChoiceRefused | ModelCatalogUnavailable, ModelCatalog> {
-  return Effect.gen(function* () {
-    const catalog = yield* ModelCatalog;
-    const offered = offeredToAccount(yield* catalog.read, fast);
-
-    return yield* Effect.fromResult(validateModelChoice(offered, choice)).pipe(
-      Effect.mapError((reason) => new ModelChoiceRefused({ reason, offered })),
-    );
-  });
-}
-
 /**
  * The model as its provider's own API names it: Anthropic spells the
  * version's point as a dash (`anthropic/claude-opus-5.5` is

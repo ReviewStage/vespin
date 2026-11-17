@@ -36,7 +36,7 @@ import { TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
 import { WORKSPACE_INTEGRATIONS_READ } from "@repo/features/workspace-integrations-live";
 import { and, eq } from "drizzle-orm";
 import { Effect, Result } from "effect";
-import { SlackBot } from "../../slack/slack-bot.js";
+import { slackBotConfigured } from "../../slack/slack-bot.js";
 import { SentryApp } from "../../triggers/sentry/sentry-app-config.js";
 import { bindLiveRead, liveRowsStatement } from "../live-read-binding.js";
 import { admitWorkspaceMember } from "./workspace-member.js";
@@ -117,11 +117,10 @@ export const workspaceIntegrationsRead = bindLiveRead(WORKSPACE_INTEGRATIONS_REA
   beside: () =>
     Effect.gen(function* () {
       const sentry = yield* SentryApp;
-      const { configured: slackConfigured } = yield* SlackBot;
 
       return {
         sentryConfigured: Result.isSuccess(yield* Effect.result(sentry.settings)),
-        slackConfigured,
+        slackConfigured: yield* slackBotConfigured,
       };
     }),
 });

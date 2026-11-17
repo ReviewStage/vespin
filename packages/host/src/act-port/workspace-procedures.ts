@@ -28,8 +28,19 @@ function isSentryAddress(url: string): boolean {
   return URL.canParse(url) && new URL(url).origin === SENTRY_ORIGIN;
 }
 
+/** Slack's own origin, the one an Add to Slack is opened on (https://docs.slack.dev/authentication/installing-with-oauth/). */
+const SLACK_ORIGIN = "https://slack.com";
+
+/** Whether an address the host answered parses and stands on Slack's own origin. */
+function isSlackAddress(url: string): boolean {
+  return URL.canParse(url) && new URL(url).origin === SLACK_ORIGIN;
+}
+
 /** The handlers of the connections, whose procedures open what they answer. */
-type ConnectActs = Pick<HostActTable, "WORKSPACE_GITHUB_CONNECT" | "WORKSPACE_SENTRY_INSTALL">;
+type ConnectActs = Pick<
+  HostActTable,
+  "WORKSPACE_GITHUB_CONNECT" | "WORKSPACE_SENTRY_INSTALL" | "WORKSPACE_SLACK_BOT_INSTALL"
+>;
 
 export function workspaceProcedures(
   dependencies: WorkspaceProceduresDependencies,
@@ -64,6 +75,20 @@ export function workspaceProcedures(
       );
 
       if (!isSentryAddress(url)) return yield* Effect.fail(errors.REFUSED());
+      yield* Effect.promise(() => openExternal(url));
+    }),
+    // Note that the address the service answered opens only where it is
+    // Slack's own, because it is the one address here the panel did not name.
+    [WORKSPACE_ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL]: actPort[
+      WORKSPACE_ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL
+    ].effect(function* ({ input, errors }) {
+      const url = yield* declaredAnswer(
+        WORKSPACE_ACTS.WORKSPACE_SLACK_BOT_INSTALL,
+        acts.WORKSPACE_SLACK_BOT_INSTALL,
+        input,
+      );
+
+      if (!isSlackAddress(url)) return yield* Effect.fail(errors.REFUSED());
       yield* Effect.promise(() => openExternal(url));
     }),
   };

@@ -40,7 +40,10 @@ env:
 - assertVisible: "Merge this pull request?"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-card-merge
-- tapOn: "Cancel"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Merge this pull request?"
 - waitForAnimationToEnd
 # The card opens the pull request's own screen: green, approved, ready.
 - tapOn: "#128 Invite a teammate by email.*"

@@ -245,7 +245,8 @@ const LIVE_ACTIVITY_INTENTS = [STOP_AGENT_INTENT, CALL_PRESS_INTENT] as const;
 // to the widget's by the type's name. Its glyphs are the panel's own Lucide
 // ones, as the app's are: the Inbox's, the asks' Split, SquareCheck and
 // PenLine, as the app's Inbox row leads them, and a call's waveform, mutes,
-// and hang-up, as its card draws them, End call in the danger red.
+// and hang-up, as its card draws them, End call in the danger red; and the
+// agents' working and done marks are the panel's own status marks.
 const LIVE_ACTIVITY: AppExtension = {
   TARGET: "AgentsLiveActivity",
   BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.AgentsLiveActivity`,
@@ -270,6 +271,8 @@ const LIVE_ACTIVITY: AppExtension = {
   },
   SYMBOLS: [
     "Inbox",
+    "TaskStatusInProgress",
+    "TaskStatusDone",
     "Split",
     "SquareCheck",
     "PenLine",
@@ -310,7 +313,14 @@ const SHARE_EXTENSION: AppExtension = {
       NSExtensionActivationSupportsImageWithMaxCount: 4,
     },
   },
-  COLORS: { AccentColor: "ACCENT" },
+  COLORS: {
+    AccentColor: "ACCENT",
+    Text: "TEXT",
+    DangerText: "DANGER_TEXT",
+    ChipHover: "CHIP_HOVER",
+    Sidebar: "SIDEBAR",
+    Raised: "OVERLAY",
+  },
   SYMBOLS: ["CircleCheck", "X"],
   ENTITLEMENTS: {
     ...APP_GROUP_ENTITLEMENTS,
@@ -598,7 +608,7 @@ const extensionPlist = (extension: AppExtension, version: string, build: string)
 const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConfig => {
   const colors = Object.entries(extension.COLORS ?? {});
 
-  const symbols = LUCIDE_SYMBOL_TEMPLATES.filter(({ name }) =>
+  const symbols = [...LUCIDE_SYMBOL_TEMPLATES, ...TASK_STATUS_SYMBOL_TEMPLATES].filter(({ name }) =>
     (extension.SYMBOLS ?? []).includes(name),
   );
 
@@ -608,9 +618,7 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
   );
 
   if (missing.length > 0)
-    throw new Error(
-      `${extension.TARGET} names Lucide symbols with no template: ${missing.join(", ")}`,
-    );
+    throw new Error(`${extension.TARGET} names symbols with no template: ${missing.join(", ")}`);
 
   const catalogued = colors.length > 0 || symbols.length > 0;
 

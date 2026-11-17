@@ -1,19 +1,17 @@
 /**
  * onboarding-events.ts -- an account's sign-up and task activity, told to Resend for its onboarding emails.
  *
- * The emails a new account is sent over its first two weeks are Resend's
- * automation, not the service's: it starts on the event `vespin.signed_up`,
- * stops for an account that accepts a workspace invitation within the hour
- * (`vespin.invite_accepted`), since that person joined someone else's work
- * rather than starting their own, and picks which note goes out on day 3, 7,
- * and 14 by three numbers kept on the account's Resend contact. The service
- * tells Resend those three things and nothing else:
+ * Which onboarding emails go out, and when, is set in Resend's automations,
+ * not here. The service tells Resend these things and nothing else:
  *
  * - At sign-up, from the auth route (`auth-app.ts`), the contact is made by
- *   its address alone (https://resend.com/docs/api-reference/contacts/create-contact),
+ *   its address and first name (https://resend.com/docs/api-reference/contacts/create-contact),
  *   so a task made before the automation's first step has a contact to land
- *   on, and `vespin.signed_up` is sent with the greeting the automation's
- *   notes open with (`greetingOf`), the welcome email's own
+ *   on. It joins the list of every account that product-update broadcasts go
+ *   to (`PRODUCT_UPDATES`), subscribed to their topic, which the broadcast's
+ *   unsubscribe link leaves without touching onboarding. Then
+ *   `vespin.signed_up` is sent with the greeting the automation's notes open
+ *   with (`greetingOf`), the welcome email's own
  *   (https://resend.com/docs/api-reference/events/send-event).
  * - An invitation accepted, from the same route, sends `vespin.invite_accepted`.
  * - A task made through the one make every door shares
@@ -21,8 +19,7 @@
  *   (https://resend.com/docs/api-reference/contacts/update-contact):
  *   `has_task`, 1 once the account has started a task; `task_days`, on how
  *   many days it started one; and `last_task_day`, the latest of those days.
- *   A day is counted from the sign-up, the first 24 hours being day 0, so
- *   day 14's "came back in its second week" reads `last_task_day` ≥ 7. They
+ *   A day is counted from the sign-up, the first 24 hours being day 0. They
  *   are read from every task the account started each time, not added up
  *   here, so a report lost to an outage is made whole by the next. An
  *   account with no task keeps Resend's fallbacks, 0, 0, and -1.
@@ -54,7 +51,7 @@ import { callAnswered } from "../core.js";
 import { afterResponse } from "../http/after-response.js";
 import { readAccountPerson } from "./account-person.js";
 import { readResendSender, resendCall } from "./resend.js";
-import { greetingOf, WELCOME_MAIL_ENVIRONMENT } from "./welcome-mail.js";
+import { firstNameOf, greetingOf, WELCOME_MAIL_ENVIRONMENT } from "./welcome-mail.js";
 
 /** Resend's paths the onboarding calls, beside its emails. */
 const RESEND_PATH = {
@@ -77,6 +74,20 @@ const ONBOARDING_PROPERTY = {
   TASK_DAYS: "task_days",
   LAST_TASK_DAY: "last_task_day",
 } as const;
+
+/**
+ * The Resend segment every account joins for product-update broadcasts, and the
+ * topic those broadcasts go out under, as the deployment's Resend account names
+ * them (made in Resend on November 16, 2026, and backfilled with every account
+ * then).
+ */
+const PRODUCT_UPDATES = {
+  SEGMENT_ID: "c290144d-226c-4ad4-ab7b-0cf0cca8cd8d",
+  TOPIC_ID: "011d1425-2e35-4da4-87f1-f23c4921a019",
+} as const;
+
+/** A topic subscription, as Resend names it. */
+const TOPIC_SUBSCRIPTION = { OPT_IN: "opt_in" } as const;
 
 /** The one field of `vespin.signed_up`'s payload, as the event's schema in Resend names it. */
 const SIGNED_UP_PAYLOAD = { GREETING: "greeting" } as const;
@@ -188,7 +199,12 @@ export const onboardingEventsFromEnvironment: Layer.Layer<
     return {
       signedUp: (email: string, name: string) =>
         Effect.andThen(
-          send("contact", HTTP_METHOD.POST, RESEND_PATH.CONTACTS, { email }),
+          send("contact", HTTP_METHOD.POST, RESEND_PATH.CONTACTS, {
+            email,
+            first_name: firstNameOf(name),
+            segments: [{ id: PRODUCT_UPDATES.SEGMENT_ID }],
+            topics: [{ id: PRODUCT_UPDATES.TOPIC_ID, subscription: TOPIC_SUBSCRIPTION.OPT_IN }],
+          }),
           sendEvent(ONBOARDING_EVENT.SIGNED_UP, email, {
             [SIGNED_UP_PAYLOAD.GREETING]: greetingOf(name),
           }),

@@ -1,5 +1,6 @@
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
 import { fileMarkers } from "@repo/features/file-marker";
+import { isComposingKey } from "@repo/ui/composing-key";
 import type { JSONContent } from "@tiptap/core";
 import Image from "@tiptap/extension-image";
 import {
@@ -486,7 +487,7 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
         const escaped = (event: KeyboardEvent) => {
           const pos = getPos();
 
-          if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
+          if (event.key !== "Escape" || event.defaultPrevented || isComposingKey(event)) return;
 
           if (pos === undefined) return;
           event.preventDefault();

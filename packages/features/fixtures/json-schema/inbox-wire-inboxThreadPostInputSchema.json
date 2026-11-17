@@ -4,7 +4,8 @@
     "key": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 80
+      "maxLength": 80,
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
     },
     "title": {
       "type": "string",
@@ -92,7 +93,8 @@
                           "properties": {
                             "url": {
                               "type": "string",
-                              "maxLength": 2000
+                              "maxLength": 2000,
+                              "pattern": "^https:\\/\\/\\S+$"
                             },
                             "label": {
                               "type": "string",

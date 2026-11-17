@@ -10,15 +10,31 @@
  * was taken writes nothing (`../schemas/voice-call.ts`). Any member who
  * reaches the agent reads which calls stand on it, the caller and when each
  * opened alone, so every window on the agent draws a call from its start.
+ *
+ * A call is how a member starts an agent by speaking: the box that starts
+ * one starts it blank, handed nothing, and the call opens on it, so its
+ * first words are the caller's. Where the call ends with nobody having said
+ * a word to it, the agent is the caller's to let go, as a draft closed
+ * unsent is: the call's end deletes it, and its task where that holds
+ * nothing else, so a press of Talk and a hang-up leave nothing behind
+ * (`endVoiceCall`).
  */
 
-import { and, asc, eq, sql } from "drizzle-orm";
-import { Effect, type Option, Schema } from "effect";
-import { SqlSchema } from "effect/sql";
+import { TASK_PRIORITY, TASK_STATUS, UNTITLED_TASK_NAME } from "@repo/features/task-wire";
+import { MESSAGE_ROLE } from "@repo/wire";
+import { and, asc, eq, exists, isNull, not, or, sql } from "drizzle-orm";
+import { Effect, Option, Schema } from "effect";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
+import { descriptionCommentThread } from "../schemas/description-comment.js";
+import { conversations, messages, turns } from "../schemas/storage.js";
+import { task } from "../schemas/task.js";
+import { taskBlock } from "../schemas/task-block.js";
+import { taskPageVersion } from "../schemas/task-page.js";
 import { voiceCallTable } from "../schemas/voice-call.js";
 import { EpochMillisColumnSchema, InstantColumnSchema } from "./columns.js";
+import { deleteConversations } from "./conversation-delete.js";
 import { agentVisibleTo } from "./workspace-store.js";
 
 type VoiceCallEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
@@ -161,10 +177,197 @@ const deleteOfCaller = SqlSchema.findAll({
     ),
 });
 
+const endOfCaller = SqlSchema.findOneOption({
+  Request: Schema.Struct({ callerId: Schema.String, id: Schema.String }),
+  Result: Schema.Struct({ agentId: Schema.String }),
+  execute: ({ callerId, id }) =>
+    Database.use((db) =>
+      db
+        .delete(voiceCallTable)
+        .where(and(eq(voiceCallTable.id, id), eq(voiceCallTable.callerId, callerId)))
+        .returning({ agentId: voiceCallTable.agentId }),
+    ),
+});
+
+/**
+ * The caller's own blank agent, handed neither the description, a prompt,
+ * nor another agent's work, with its conversation locked, the lock every
+ * write of its lines and turns takes; none for any other agent.
+ */
+const lockBlank = SqlSchema.findOneOption({
+  Request: Schema.Struct({ callerId: Schema.String, agentId: Schema.String }),
+  Result: Schema.Struct({ conversationId: Schema.String, taskId: Schema.String }),
+  execute: ({ callerId, agentId }) =>
+    Database.use((db) =>
+      db
+        .select({ conversationId: agentTable.conversationId, taskId: agentTable.taskId })
+        .from(agentTable)
+        .innerJoin(conversations, eq(conversations.id, agentTable.conversationId))
+        .where(
+          and(
+            eq(agentTable.id, agentId),
+            eq(agentTable.userId, callerId),
+            isNull(agentTable.prompt),
+            isNull(agentTable.descriptionSnapshot),
+            isNull(agentTable.startedFrom),
+          ),
+        )
+        .for("update", { of: conversations }),
+    ),
+});
+
+/** Whether anybody said a word to the agent: a turn, a member's line, or another call standing on it. */
+const findSpokenTo = SqlSchema.findAll({
+  Request: Schema.Struct({ agentId: Schema.String, conversationId: Schema.String }),
+  Result: Schema.Struct({ spoken: Schema.Boolean }),
+  execute: ({ agentId, conversationId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          spoken: sql<boolean>`${or(
+            exists(
+              db
+                .select({ id: turns.id })
+                .from(turns)
+                .where(eq(turns.conversationId, conversationId)),
+            ),
+            exists(
+              db
+                .select({ id: messages.id })
+                .from(messages)
+                .where(
+                  and(
+                    eq(messages.conversationId, conversationId),
+                    eq(messages.role, MESSAGE_ROLE.USER),
+                  ),
+                ),
+            ),
+            exists(
+              db
+                .select({ id: voiceCallTable.id })
+                .from(voiceCallTable)
+                .where(eq(voiceCallTable.agentId, agentId)),
+            ),
+          )}`,
+        })
+        .from(conversations)
+        .where(eq(conversations.id, conversationId)),
+    ),
+});
+
+/** The agent's conversation locked, as `endVoiceCall` takes it, so a call opening on the agent and its cleanup are one after the other; none for an agent gone. */
+const lockAgentConversation = SqlSchema.findOneOption({
+  Request: Schema.String,
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: (agentId) =>
+    Database.use((db) =>
+      db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .innerJoin(agentTable, eq(agentTable.conversationId, conversations.id))
+        .where(eq(agentTable.id, agentId))
+        .for("update", { of: conversations }),
+    ),
+});
+
+/** The caller's task row locked, as a Start locks it before it adds an agent, so the emptiness read after it sees every agent added before. */
+const lockCallerTask = SqlSchema.findOneOption({
+  Request: Schema.Struct({ callerId: Schema.String, taskId: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ callerId, taskId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: task.id })
+        .from(task)
+        .where(and(eq(task.id, taskId), eq(task.userId, callerId)))
+        .for("update"),
+    ),
+});
+
+const deleteAgentById = SqlSchema.void({
+  Request: Schema.String,
+  execute: (agentId) =>
+    Database.use((db) => db.delete(agentTable).where(eq(agentTable.id, agentId))),
+});
+
+/**
+ * The caller's task deleted where it holds nothing a member or an agent put
+ * there: still untitled, to do, unweighed, and unassigned or assigned to the
+ * caller as their start assigns it, with no description, brief, or page, no
+ * agent left on it, archived ones included, no comment, and no parent,
+ * sub-task, or block either way. Nothing for any other.
+ */
+const deleteEmptyTask = SqlSchema.void({
+  Request: Schema.Struct({ callerId: Schema.String, taskId: Schema.String }),
+  execute: ({ callerId, taskId }) =>
+    Database.use((db) => {
+      const child = db.select({ id: task.id }).from(task).where(eq(task.parentTaskId, taskId));
+
+      return db.delete(task).where(
+        and(
+          eq(task.id, taskId),
+          eq(task.userId, callerId),
+          eq(task.name, UNTITLED_TASK_NAME),
+          eq(task.status, TASK_STATUS.TODO),
+          eq(task.priority, TASK_PRIORITY.NONE),
+          or(isNull(task.assigneeId), eq(task.assigneeId, callerId)),
+          eq(task.description, ""),
+          isNull(task.brief),
+          isNull(task.parentTaskId),
+          not(
+            exists(
+              db
+                .select({ id: agentTable.id })
+                .from(agentTable)
+                .where(eq(agentTable.taskId, taskId)),
+            ),
+          ),
+          not(exists(child)),
+          not(
+            exists(
+              db
+                .select({ id: descriptionCommentThread.id })
+                .from(descriptionCommentThread)
+                .where(eq(descriptionCommentThread.taskId, taskId)),
+            ),
+          ),
+          not(
+            exists(
+              db
+                .select({ id: taskPageVersion.id })
+                .from(taskPageVersion)
+                .where(eq(taskPageVersion.taskId, taskId)),
+            ),
+          ),
+          not(
+            exists(
+              db
+                .select({ id: taskBlock.blockerTaskId })
+                .from(taskBlock)
+                .where(
+                  or(eq(taskBlock.blockerTaskId, taskId), eq(taskBlock.blockedTaskId, taskId)),
+                ),
+            ),
+          ),
+        ),
+      );
+    }),
+});
+
 /** The call's row, opened at lease epoch 1 and held until `leaseUntil`. */
 export function insertVoiceCall(opened: VoiceCallOpened): VoiceCallEffect<VoiceCallRow> {
-  // An insert returns its row, so a missing one is a defect.
-  return insertOne(opened).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+  // Note that the agent's conversation is locked first, as a call's end locks it to let a blank agent go, so the
+  // call either stands before that end reads what was said, or finds the agent gone and fails.
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        yield* lockAgentConversation(opened.agentId);
+
+        // An insert returns its row, so a missing one is a defect.
+        return yield* insertOne(opened).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+      }),
+    ),
+  );
 }
 
 /** The call's row where `callerId` is the member on it, none for any other member's. */
@@ -207,4 +410,42 @@ export function saveVoiceCallState(
 /** The call's row deleted, whether `callerId` was the member on it. */
 export function deleteVoiceCall(callerId: string, id: string): VoiceCallEffect<boolean> {
   return Effect.map(deleteOfCaller({ callerId, id }), (rows) => rows.length > 0);
+}
+
+/**
+ * The call's row deleted, whether `callerId` was the member on it; and,
+ * where it was, the agent the call was on deleted with its conversation
+ * where it is the caller's own blank agent nobody said a word to, with its
+ * task where that then holds nothing else, all in the one transaction.
+ * Note that the agent's conversation is locked before what was said to it
+ * is read, so a line typed as the call ends either landed first, and the
+ * agent stands, or waits on the lock and finds no agent.
+ */
+export function endVoiceCall(callerId: string, id: string): VoiceCallEffect<boolean> {
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        const ended = yield* endOfCaller({ callerId, id });
+
+        if (Option.isNone(ended)) return false;
+        const { agentId } = ended.value;
+        const blank = yield* lockBlank({ callerId, agentId });
+
+        if (Option.isNone(blank)) return true;
+        const { conversationId, taskId } = blank.value;
+        // Read after the lock, so a line written before it is seen.
+        const [said] = yield* findSpokenTo({ agentId, conversationId });
+
+        if (said?.spoken !== false) return true;
+        yield* deleteAgentById(agentId);
+        yield* deleteConversations([conversationId]);
+        // Note that the task is locked apart from its delete, so the delete's read sees an agent a Start added meanwhile.
+        const locked = yield* lockCallerTask({ callerId, taskId });
+
+        if (Option.isSome(locked)) yield* deleteEmptyTask({ callerId, taskId });
+
+        return true;
+      }),
+    ),
+  );
 }

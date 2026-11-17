@@ -19,7 +19,9 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
+import { useAgentThreadViews } from "../tasks/agent-thread-views.js";
 import { NO_LOOKS } from "../tasks/use-task-looks.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { handInboxItems } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
@@ -96,6 +98,13 @@ const ITEMS: readonly InboxItem[] = [
 
 const roots: Root[] = [];
 
+/** The task's page over `tasks`, its agents' cards' threads held as the Tasks tab holds them. */
+function TaskPage({ tasks }: { tasks: TasksControl }): React.JSX.Element {
+  const agentThreads = useAgentThreadViews();
+
+  return createElement(DesktopTasks, { looks: NO_LOOKS, tasks: { ...tasks, agentThreads } });
+}
+
 beforeEach(installScrollIntoView);
 
 afterEach(() => {
@@ -154,9 +163,7 @@ async function mount(
   roots.push(root);
   act(() =>
     root.render(
-      windowRouter().provide(
-        withQueryClient(createElement(DesktopTasks, { looks: NO_LOOKS, tasks: control })),
-      ),
+      windowRouter().provide(withQueryClient(createElement(TaskPage, { tasks: control }))),
     ),
   );
   await act(async () => {

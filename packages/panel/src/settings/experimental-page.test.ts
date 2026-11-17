@@ -142,14 +142,15 @@ test("the workspace's experiments and the account's own stand in two groups, eac
       "Suggestions",
       "Task descriptions",
       "Computer use",
+      "Cursor",
       "Done and follow-ups",
       "Goals",
       "Merge queue",
       "Move agents",
       "Rewind restores files",
       "Skills",
+      "Starter tasks",
       "Turn changes",
-      "Voice",
     ],
   );
 });
@@ -228,14 +229,15 @@ test("an experiment's Send feedback opens the dialog about that experiment", () 
     EXPERIMENT.REPLY_BUTTONS,
     EXPERIMENT.DESCRIPTIONS,
     EXPERIMENT.COMPUTER_USE,
+    EXPERIMENT.CURSOR,
     EXPERIMENT.TURN_END,
     EXPERIMENT.GOALS,
     EXPERIMENT.MERGE_QUEUE,
     EXPERIMENT.MOVE_AGENTS,
     EXPERIMENT.REWIND_FILES,
     EXPERIMENT.SKILLS,
+    EXPERIMENT.STARTER_TASKS,
     EXPERIMENT.TURN_CHANGES,
-    EXPERIMENT.VOICE,
   ]);
 });
 

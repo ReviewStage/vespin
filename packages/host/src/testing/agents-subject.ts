@@ -28,7 +28,6 @@ import {
   type AgentSummary,
   CHANGED_FILE_STATUS,
   CHECK_SUMMARY,
-  MERGE_STATE,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { FAILURE_FACT, GATE_CLOSED_BY } from "@repo/features/failure-facts";
@@ -60,8 +59,6 @@ import {
   type ProviderKeySummary,
 } from "@repo/features/provider-key-wire";
 import { PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
-import { PULL_REQUEST_CHAPTERS_STATE } from "@repo/features/pull-request-chapters-wire";
-import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import {
   GATEWAY_CLIENT_ROLE,
   GATEWAY_EVENT,
@@ -130,17 +127,8 @@ const PUBLISHED = {
   },
 };
 
-/** The agent's changes, as the service answers them. */
-/** A pull request's chapters as the service answers them: none made yet for its head. */
-export const CHAPTERS = {
-  pullRequest: {
-    number: 11,
-    generatable: true,
-    chapters: { status: PULL_REQUEST_CHAPTERS_STATE.NONE },
-  },
-} as const;
-
-export const CHANGES = {
+/** The agent's pull request's changed files, as the service answers them, which a turn's changes are read from. */
+const CHANGES = {
   pullRequest: {
     url: "https://github.com/acme/relay/pull/123",
     files: [
@@ -162,34 +150,6 @@ export const CHANGES = {
 export const TURN_CHANGES = {
   files: CHANGES.pullRequest === null ? [] : CHANGES.pullRequest.files.slice(0, 1),
   truncated: false,
-} as const;
-
-/** That pull request itself, its checks, and its conversation, as its Pull request tab's overview reads them. */
-/** What the reviewer and label pickers offer, as the service answers it. */
-const REVIEW_OPTIONS = {
-  labels: [{ name: "bug", color: "d73a4a" }],
-  users: [{ login: "priyan", bot: false }],
-  teams: [{ slug: "reviewers", name: "Reviewers" }],
-};
-
-const OVERVIEW = {
-  pullRequest: {
-    pullRequest: {
-      number: 123,
-      title: "Send the invite once",
-      url: "https://github.com/acme/relay/pull/123",
-      state: PULL_REQUEST_STATE.OPEN,
-      html: "<p>Sends the invite once.</p>",
-      base: "main",
-      head: "agent/invite-once",
-      createdAt: 1_800_000_000_000,
-      mergedAt: null,
-      merge: MERGE_STATE.CLEAN,
-      requested: [],
-    },
-  },
-  checks: { pullRequest: { checks: [] } },
-  conversation: { pullRequest: { reviewers: [], conversation: [], earlier: 0 } },
 } as const;
 
 /** A synthetic key, as Settings carries it once; nothing below may answer it back. */
@@ -720,64 +680,14 @@ function fakeService() {
 
         return PUBLISHED;
       }),
-    changes: (agentId, number) =>
-      Effect.sync(() => {
-        asked.push(`changes:${agentId}${number === undefined ? "" : `#${number}`}`);
-
-        return CHANGES;
-      }),
     turnChanges: (agentId, messageId) =>
       Effect.sync(() => {
         asked.push(`turn-changes:${agentId}:${messageId}`);
 
         return TURN_CHANGES;
       }),
-    generateChapters: (agentId, number) =>
-      Effect.sync(() => {
-        asked.push(`chapters-generate:${agentId}${number === undefined ? "" : `#${number}`}`);
-
-        return CHAPTERS;
-      }),
-    overviewPullRequest: (agentId) =>
-      Effect.sync(() => {
-        asked.push(`overview-pull-request:${agentId}`);
-
-        return OVERVIEW.pullRequest;
-      }),
-    reviewOptions: (agentId) =>
-      Effect.sync(() => {
-        asked.push(`review-options:${agentId}`);
-
-        return REVIEW_OPTIONS;
-      }),
     workspaceTools: () => Effect.die("no Vespin tools read in this suite"),
     setDefaultMachine: () => Effect.die("no default machine set in this suite"),
-    overviewChecks: (agentId) =>
-      Effect.sync(() => {
-        asked.push(`overview-checks:${agentId}`);
-
-        return OVERVIEW.checks;
-      }),
-    overviewConversation: (agentId) =>
-      Effect.sync(() => {
-        asked.push(`overview-conversation:${agentId}`);
-
-        return OVERVIEW.conversation;
-      }),
-    pullRequestAction: (agentId, request, number) =>
-      Effect.sync(() => {
-        asked.push(
-          `pull-request-action:${agentId}${number === undefined ? "" : `#${number}`}:${request.action}`,
-        );
-
-        return { outcome: PULL_REQUEST_WRITE_OUTCOME.DONE };
-      }),
-    pullRequestViewed: (agentId) =>
-      Effect.sync(() => {
-        asked.push(`pull-request-viewed:${agentId}`);
-
-        return { outcome: PULL_REQUEST_WRITE_OUTCOME.DONE, files: [] };
-      }),
     githubImage: (agentId, src) =>
       Effect.sync(() => {
         asked.push(`github-image:${agentId}:${src}`);

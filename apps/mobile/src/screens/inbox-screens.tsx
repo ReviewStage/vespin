@@ -41,6 +41,7 @@ import {
   CHOOSE_AN_ITEM_WORDS,
   NO_RESULTS_HINT,
   noResultsForWords,
+  PATH_OPENS,
   SELECTION_WORDS,
   selectedWords,
 } from "@repo/features/words";
@@ -90,7 +91,7 @@ import {
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
 import {
@@ -98,6 +99,7 @@ import {
   useDetailPush,
   useStackRoot,
   useStandFocusedDetailFront,
+  useTopPage,
 } from "../detail-stack.js";
 import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -110,6 +112,7 @@ import {
   useInboxScope,
   useInboxThread,
   useReadOnOpen,
+  useStandFrontSteps,
   useThreadMedia,
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
@@ -166,9 +169,6 @@ const NARROWING_SCOPES: ReadonlySet<InboxShow> = new Set([
 
 /** The bar's menu of the Inbox's other acts, a round glass ⋯ as iOS draws a toolbar's menu. */
 const MORE = { label: "More", symbol: GLYPH.MORE } as const;
-
-/** What a thread's path opens, as the panel's crumbs open its task and its agent. */
-const PATH_OPENS = { TASK: "Open task", AGENT: "Open agent" } as const;
 
 /** What ends Select mode, as the system's own Done does. */
 const SELECT_DONE = "Done";
@@ -666,7 +666,8 @@ function ThreadDetail({
 }) {
   const colors = useColors();
   const { holder, item } = listed;
-  const openLink = useOpenLink();
+  // Note that a pull request a thread names opens in the app by its task's workspace.
+  const openLink = useOpenLink(holder.task.workspaceId);
   const { name: agentName, harness } = useAgentLabel(item.agentId);
   const pictureOf = useMemberPictures();
 
@@ -788,6 +789,10 @@ function ThreadDetail({
     handedOrders.set(id, place.steps.order);
     router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
   };
+
+  // Note that a pushed thread stands its arrows' steps for the iPad's K and J while it's the screen in front; a split view's list stands its own (`InboxSplitScreen`).
+  const focused = useIsFocused();
+  useStandFrontSteps(place.inStack ? place.steps : {}, stepTo, place.inStack && focused);
 
   const answer = useThreadAnswer(listed, openStarted);
   const remind = useRemind();
@@ -1336,6 +1341,17 @@ function InboxSplitScreen({
 
   const threeColumns = useThreeColumns();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
+
+  // Note that the iPad's K and J step through the rows the list column shows now, its scope and its search as they stand, from the thread beside it, as the panel's step through the list on screen; never while a page pushed over the thread covers it, since a pick would take that page away.
+  const focused = useIsFocused();
+  const covered = useTopPage(SIDEBAR_PLACE.INBOX) !== undefined;
+  const shownIds = listing.listed.map(({ item }) => item.id);
+  const at = selected === undefined ? -1 : shownIds.indexOf(selected);
+  useStandFrontSteps(
+    at < 0 ? {} : { previous: shownIds[at - 1], next: shownIds[at + 1] },
+    select,
+    focused && at >= 0 && !covered,
+  );
 
   const rows = (
     <InboxRows

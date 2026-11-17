@@ -20,7 +20,6 @@ import {
   type DescriptionCommentThreadAnswer,
   descriptionCommentWordsSchema,
 } from "@repo/features/description-comment-wire";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
 import { EXPERIMENT_OFF_REFUSAL, type ExperimentsOn } from "../agents/workspace-experiment-on.js";
@@ -236,8 +235,6 @@ export function commentedTaskOf(input: UnparsedWireValue): string | undefined {
 /** Who wrote an entry, as an agent reads it. */
 function writerOf(entry: DescriptionCommentEntry): string {
   switch (entry.writer.actor) {
-    case DESCRIPTION_COMMENT_ACTOR.APP:
-      return PRODUCT_NAME;
     case DESCRIPTION_COMMENT_ACTOR.AGENT:
       return entry.writer.agentId === undefined ? "agent" : `agent ${entry.writer.agentId}`;
     case DESCRIPTION_COMMENT_ACTOR.MEMBER:
@@ -247,9 +244,7 @@ function writerOf(entry: DescriptionCommentEntry): string {
 
 /** Whom a thread was sent to, as an agent reads it. */
 function askedName(asked: DescriptionCommentAsked | undefined): string {
-  return asked?.actor === DESCRIPTION_COMMENT_ACTOR.APP
-    ? PRODUCT_NAME
-    : `agent ${asked?.agentId ?? ""}`;
+  return `agent ${asked?.agentId ?? ""}`;
 }
 
 /** A thread as an agent reads it: what it is on, its comments, and who was asked to answer it. */

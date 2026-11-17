@@ -204,7 +204,7 @@ import {
 import { NewTaskButton, NewTaskInButton } from "./new-task-button.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead } from "./phone-head.js";
-import { useInboxWaiting } from "./places-waiting.js";
+import { useInboxViewCount } from "./places-waiting.js";
 import { ProductIdentity } from "./product-identity.js";
 import { RowPlaced, useRowMoveKeys } from "./row-moves.js";
 import { SIDEBAR_WIDTH, type SidebarCollapse, sidebarInSight } from "./sidebar-collapse.js";
@@ -2147,7 +2147,7 @@ function SidebarColumn({
     inAdmin ||
     (onTasks && tasks.agentView.agentId !== undefined);
 
-  const waiting = useInboxWaiting(tasks);
+  const inboxCount = useInboxViewCount(tasks);
 
   // A press in the list is always about tasks, so it brings the Tasks tab
   // forward from Settings as well as choosing; a task's row goes back to work
@@ -2559,7 +2559,7 @@ function SidebarColumn({
               onOpenInTab={inTab({ kind: LINK_DESTINATION.HOME })}
             />
             <SidebarInboxRow
-              waiting={waiting}
+              count={inboxCount}
               current={inInbox}
               disabled={!tasks.signedIn}
               onOpen={chosen(openInbox)}

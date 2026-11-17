@@ -33,12 +33,14 @@ env:
 # instead, its Filter button, so the flow opens it first there, whether or
 # not a thread stands beside it. Note that it is found by "Filter", its whole
 # name on iOS 26.5, where it is a glyph alone, and the start of it on iOS 27,
-# where the scope chosen follows.
+# where the scope chosen follows; and that the word must end there, because a
+# narrowing scope stands "Filtered by: …" under the column's title, which a
+# bare "Filter.*" matches first.
 - runFlow:
     when:
       true: ${FLOATING_TABS == 'true'}
     commands:
-      - tapOn: "Filter.*"
+      - tapOn: 'Filter(\W.*)?'
 - tapOn: "All"
 - scrollUntilVisible:
     element: "Which day the digest goes out"
@@ -60,7 +62,7 @@ env:
     when:
       true: ${FLOATING_TABS == 'true'}
     commands:
-      - tapOn: "Filter.*"
+      - tapOn: 'Filter(\W.*)?'
 - tapOn: "Open.*"
 # The thread comes first, before the row's swipes and its long press: a row
 # a swipe opened takes the next tap to close its actions, and its files, the
@@ -258,7 +260,7 @@ env:
     when:
       true: ${FLOATING_TABS == 'true'}
     commands:
-      - tapOn: "Filter.*"
+      - tapOn: 'Filter(\W.*)?'
 - tapOn: "Reminders"
 - assertVisible: "Recorded the invite flow"
 - assertVisible: "Reminder .*"
@@ -268,7 +270,7 @@ env:
     when:
       true: ${FLOATING_TABS == 'true'}
     commands:
-      - tapOn: "Filter.*"
+      - tapOn: 'Filter(\W.*)?'
 - tapOn: "Open.*"
 - waitForAnimationToEnd
 # The search, a round glass button in the bar, narrows the list to
