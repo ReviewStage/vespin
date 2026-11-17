@@ -2486,6 +2486,36 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
   );
 
   it.effect(
+    "a turn OpenAI's safeguards refused ends as a refusal, as Claude Code's does, rather than a model call failed",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CODEX, ["Review the classifier's records."]);
+        yield* post(
+          agent.bearer,
+          refusedLaunch(agent.lineId, 0, {
+            message: "This request was flagged as potentially violating our cyber policy.",
+            codexErrorInfo: "cyberPolicy",
+            additionalDetails: null,
+          }),
+        );
+        const db = yield* Database;
+
+        const ended = yield* db
+          .select({
+            status: turns.status,
+            failure: turns.failure,
+            failureDetail: turns.failureDetail,
+          })
+          .from(turns)
+          .where(eq(turns.conversationId, agent.target.conversationId));
+
+        // The agent reads as refused, which its tab offers a continue on another model for.
+        assert.deepEqual(ended.map(agentFailureOf), [AGENT_FAILURE.REFUSAL]);
+      }),
+  );
+
+  it.effect(
     "a ChatGPT plan's row takes how each turn found it: verified by P16's recorded turn, its limit reached with the reset Codex heard, then signed out, and a turn that ran never lifts a sign-in OpenAI refused",
     () =>
       Effect.gen(function* () {
