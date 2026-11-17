@@ -6,15 +6,20 @@ const ORPC_FILE = /node_modules[\\/]@orpc[\\/]/u;
 /** Mermaid's one-file build, which the app never runs, only hands to the diagrams' sealed page (`@repo/ui-native`'s `diagram.tsx`). */
 const SOURCE_TEXT_FILE = /node_modules[\\/]mermaid[\\/]dist[\\/]mermaid\.min\.js$/u;
 
-/** A character past ASCII, by its UTF-16 unit. */
-const PAST_ASCII = /[\u0080-￿]/gu;
+/** A character past printable ASCII and its tab and line breaks, which the code holds only inside its strings and regular expressions. */
+const PAST_ASCII = /[^\t\n\r -~]/gu;
 
-/** Code with each character past ASCII written as its `\uXXXX` escape, which the code reads as the same character. */
+/** A character as its `\uXXXX` escapes, one to each of its UTF-16 units, which the code reads as the same character. */
+function escapedCharacter(character) {
+  return character
+    .split("")
+    .map((unit) => `\\u${unit.charCodeAt(0).toString(16).padStart(4, "0")}`)
+    .join("");
+}
+
+/** Code with each character past ASCII written as its escapes. */
 function asciiOnly(code) {
-  return code.replace(
-    PAST_ASCII,
-    (unit) => `\\u${unit.charCodeAt(0).toString(16).padStart(4, "0")}`,
-  );
+  return code.replace(PAST_ASCII, escapedCharacter);
 }
 
 /**
