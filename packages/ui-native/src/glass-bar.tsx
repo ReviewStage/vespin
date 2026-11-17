@@ -67,6 +67,9 @@ export const BAR_RADIUS = 24;
  */
 export const BAR_EDGE = 2;
 
+/** How far the bar stands in from its column's edges, so what stands over its end, such as Jump to latest, can stand over its last press. */
+export const BAR_MARGIN = SPACE.ROW + 2;
+
 /** How far apart the row's pieces stand: not at all, since a press's frame holds the room around its mark that the row's spacing held before. */
 export const BAR_ROW_SPACING = 0;
 
@@ -91,9 +94,11 @@ const styles = StyleSheet.create({
   // The bar's column, as wide as the dock and no wider than the reading width a wide window centers its content at.
   column: { width: "100%" },
   // A row with no bar stands in from the screen's edges as far as a bar does.
-  row: { marginHorizontal: SPACE.ROW + 2 },
+  row: { marginHorizontal: BAR_MARGIN },
+  // What stands over a bar in a glass of its own, as far in as the bar and apart from it.
+  above: { marginHorizontal: BAR_MARGIN, marginBottom: SPACE.TIGHT * 2 },
   bar: {
-    marginHorizontal: SPACE.ROW + 2,
+    marginHorizontal: BAR_MARGIN,
     padding: BAR_EDGE,
     borderRadius: BAR_RADIUS,
   },
@@ -318,10 +323,13 @@ function DockedFoot({ children }: { readonly children: ReactNode }) {
 export function GlassBar({
   children,
   head,
+  above,
   modifiers = [],
   field = false,
 }: {
   readonly children: ReactNode;
+  /** SwiftUI standing over the bar in a glass of its own, such as an agent's queued messages, as the panel stands its queue over its box; nothing where none is given. */
+  readonly above?: ReactNode;
   /** Whether the row is a field with its presses, which stands on a filled pill inside the glass, as Messages stands its field, so its placeholder and glyphs read over a bright picture scrolling under the bar. */
   readonly field?: boolean;
   /** What stands over the row inside the same glass, such as a composer's queued messages and attached pictures; nothing where none is given. */
@@ -367,7 +375,16 @@ export function GlassBar({
     </GlassView>
   );
 
-  return <DockedFoot>{bar}</DockedFoot>;
+  return (
+    <DockedFoot>
+      {above === undefined ? null : (
+        <Host matchContents={{ vertical: true }} style={[styles.content, styles.above]}>
+          {above}
+        </Host>
+      )}
+      {bar}
+    </DockedFoot>
+  );
 }
 
 /**

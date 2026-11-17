@@ -236,8 +236,9 @@ export const COMPUTER_TOOL = {
     "first time an agent uses each app, and they may decline, in which case the call answers " +
     "`not-run`; agents are never offered terminals, password managers, System Settings, or " +
     `${PRODUCT_NAME}. Reach for it last: an integration's tools where one serves the app, ` +
-    "run_on_mac where a shell can do it, and browser for localhost and public pages. Use this " +
-    "for what only an app's window shows or takes, a browser on the developer's Mac among them, " +
+    "run_on_mac where a shell can do it, and browser, where you have it, for localhost and public " +
+    "pages. Use this for what only an app's window shows or takes, a browser on the developer's " +
+    "Mac among them, " +
     "such as a page that needs their own signed-in session. To show the developer a flow you " +
     "drove in an app, the iOS Simulator above all, record it: record starts a video of the " +
     "app's window, your cursor drawn over it while it records, " +
@@ -245,7 +246,7 @@ export const COMPUTER_TOOL = {
     "stop_recording, with a caption and the machine's id its record answered in machine, stops " +
     "it on the machine it runs on and keeps it in your transcript, where it plays; " +
     "it stops by itself once its time runs out, and stop_recording still keeps it then. Its " +
-    "answer names the path the video stays at in your sandbox until your next recording, by " +
+    "answer names the path the video stays at on your machine until your next recording, by " +
     "which you can post it to a thread, or says why it has none.",
   inputSchema: COMPUTER_INPUT,
 } as const;

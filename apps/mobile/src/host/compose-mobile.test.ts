@@ -2,9 +2,11 @@ import { NodeFileSystem } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { AUTH_SESSION_END } from "@repo/credentials";
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { QUEUE_CHANGE } from "@repo/features/agent-wire";
+import { LIVE_READ } from "@repo/features/live-wire";
 import { READ_MARK } from "@repo/features/read-mark";
 import { ACT_KIND } from "@repo/host/acts";
-import { RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
+import { OWN_TRANSCRIPT, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
 import { inboxGroupsIn, selectExperiment, selectInboxHoldings } from "@repo/host/app-state-reads";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { EXPERIMENT, THEME } from "@repo/settings";
@@ -50,6 +52,21 @@ const testDevice: DeviceSeams = {
 
 /** The device a flow signs in on against the stubbed account service: its sheet granting at once. */
 const stubDevice: DeviceSeams = { ...testDevice, authSession: stubAuthSession };
+
+/**
+ * The document's version once the host has had many turns to stage the
+ * fixture again. Note that each change the store announces stages the
+ * fixture again, so a stage that always hands the store something new never
+ * lets the version stand.
+ */
+const settledVersion = (bridge: {
+  readonly requestAppState: () => Promise<{ readonly version: number }>;
+}) =>
+  Effect.gen(function* () {
+    yield* Effect.forEach(Array.from({ length: 50 }), () => Effect.yieldNow, { discard: true });
+
+    return (yield* Effect.promise(() => bridge.requestAppState())).version;
+  });
 
 /** The host stood up in a scope of its own over `stateRoot`, reaching no network, its counts run on the test's own services. */
 const standingHost = (
@@ -159,18 +176,48 @@ it.effect(
           acts[ACT_KIND.TASKS_MARK_READ]({ taskId: task?.id ?? "", readMark: READ_MARK.READ }),
         );
 
-        // Note that each change the store announces stages the fixture again, so a stage that always hands the store something new never lets the version stand.
-        const settledVersion = Effect.gen(function* () {
-          yield* Effect.forEach(Array.from({ length: 50 }), () => Effect.yieldNow, {
-            discard: true,
+        const first = yield* settledVersion(bridge);
+        const second = yield* settledVersion(bridge);
+
+        expect(second).toBe(first);
+      }),
+    ),
+);
+
+it.effect(
+  "a fixture run moves its agent's queued messages as a reorder asks, and settles once it has",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const root = yield* ownFolder;
+        const { acts, bridge } = yield* standingHost(root, RUN_PROFILE.INBOX);
+
+        const queued = (state: Awaited<ReturnType<typeof bridge.requestAppState>>) =>
+          Object.entries(state[LIVE_READ.TRANSCRIPT]).flatMap(([agentId, held]) => {
+            const queue = held?.[OWN_TRANSCRIPT]?.rows?.word?.queue;
+
+            return queue === undefined
+              ? []
+              : [{ agentId, ids: queue.messages.map(({ id }) => id) }];
           });
 
-          return (yield* Effect.promise(() => bridge.requestAppState())).version;
-        });
+        const [staged] = queued(yield* Effect.promise(() => bridge.requestAppState()));
+        const [firstId, secondId] = staged?.ids ?? [];
 
-        const first = yield* settledVersion;
-        const second = yield* settledVersion;
+        expect(staged?.ids).toHaveLength(2);
 
+        yield* Effect.promise(() =>
+          acts[ACT_KIND.AGENTS_QUEUE]({
+            agentId: staged?.agentId ?? "",
+            change: { change: QUEUE_CHANGE.REORDER, order: [secondId ?? "", firstId ?? ""] },
+          }),
+        );
+
+        const first = yield* settledVersion(bridge);
+        const second = yield* settledVersion(bridge);
+        const [moved] = queued(yield* Effect.promise(() => bridge.requestAppState()));
+
+        expect(moved?.ids).toEqual([secondId, firstId]);
         expect(second).toBe(first);
       }),
     ),

@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { eq } from "drizzle-orm";
 import { DateTime, Effect, Option, Redacted, Result } from "effect";
+import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { INTEGRATION_ROW_STATUS } from "../../integration-vocabulary.js";
 import { member as memberTable, organization, user } from "../../schemas/auth.js";
@@ -14,6 +15,7 @@ import { parseKeyRing } from "../provider-key-seal.js";
 import {
   deleteSlackBotToken,
   deleteSlackInstallation,
+  deleteSlackTeamInstallations,
   linkSlackInstallation,
   openSlackBot,
   recordSlackMemberLookup,
@@ -218,6 +220,39 @@ it.layer(getTestDB())("the Slack installation store", (it) => {
       assert.equal(Option.isSome(yield* workspaceSlackInstallation(workspace)), true);
       assert.equal(yield* deleteSlackBotToken(workspace), false);
     }),
+  );
+
+  it.effect(
+    "a team's uninstall deletes its installations linked before it, never one linked or relinked after or another team's",
+    () =>
+      Effect.gen(function* () {
+        const member = yield* openAccount;
+
+        const [before, after, other] = [
+          yield* openWorkspace,
+          yield* openWorkspace,
+          yield* openWorkspace,
+        ];
+
+        const link = { teamName: "Team", userId: member };
+        // A team of this case's own, since the store is shared with the cases above.
+        const teamId = `T-${randomUUID()}`;
+
+        yield* linkSlackInstallation({ ...link, organizationId: before, teamId });
+        yield* linkSlackInstallation({ ...link, organizationId: after, teamId });
+        yield* linkSlackInstallation({ ...link, organizationId: other, teamId: "T0002" });
+        yield* recordSlackMemberLookup(before, member, "U0001");
+        const uninstalledAt = yield* DateTime.nowAsDate;
+
+        yield* TestClock.adjust("1 minute");
+        // The same team linked again, as a reinstall does before the uninstall is heard.
+        yield* linkSlackInstallation({ ...link, organizationId: after, teamId });
+
+        assert.deepEqual(yield* deleteSlackTeamInstallations(teamId, uninstalledAt), [before]);
+        assert.equal(Option.isNone(yield* slackMemberLookup(before, member)), true);
+        assert.equal(Option.isSome(yield* workspaceSlackInstallation(after)), true);
+        assert.equal(Option.isSome(yield* workspaceSlackInstallation(other)), true);
+      }),
   );
 
   it.effect("a disconnect, or a link to another team, forgets every member's Slack id", () =>

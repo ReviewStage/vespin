@@ -373,18 +373,18 @@ variables above for every environment that receives its deliveries.
 
 ## The Vespin Slack bot
 
-Vespin's own Slack bot writes to a workspace's members in Slack. It is one
-Slack app, Vercel Connect's managed `slack/vespin` connector, apart from the
-Slack connector each member connects for their agents (`SLACK_CONNECTOR_UID`).
-`src/slack/slack-bot.ts`'s `SlackBot` reads the connector's UID from
-`SLACK_BOT_CONNECTOR_UID` and asks Connect for the bot token under an app
-subject at each call; a deployment without the variable builds the service,
-answers `configured: false`, and writes nothing. Only the deployment's own
-Vercel OIDC token can mint the app token, so the CLI cannot check it: check it
-on a Preview. An owner or admin connects the bot under Settings › Workspace
-(`src/slack/slack-bot-procedures.ts`), which calls `auth.test` and keeps the
-team in `slack_installation`, one per workspace; Disconnect deletes it.
-`SlackBot.dm` finds a member by the Slack id kept in `slack_member`
+Vespin's own Slack bot writes to a workspace's members in Slack. It is our
+own Slack app, apart from the Slack connector each member connects for their
+agents (`SLACK_CONNECTOR_UID`), installed in each workspace's Slack team, whose
+install grants that workspace its own bot token, kept sealed in
+`slack_installation` under `PROVIDER_KEY_ENCRYPTION_KEYS`, one per workspace;
+Disconnect deletes it. `src/slack/slack-bot.ts`'s `SlackBot.forWorkspace`
+opens the workspace's token for each piece of work, and every call made for
+that workspace is made on it; a workspace holding no token, or one that will
+not open, is written nothing, and a deployment without the key ring answers
+`configured: false` and writes nothing. The old Connect button
+(`workspaceSlackBot.connect`) is refused as unavailable.
+`SlackWorkspaceBot.dm` finds a member by the Slack id kept in `slack_member`
 (`@repo/database/models/slack-installation-store`), else through a Slack
 account the member connected for their agents whose `auth.test` answers the
 installed team, else by their email (`users.lookupByEmail`), and keeps the
@@ -407,13 +407,27 @@ reaches our Slack route (`/api/slack/events`) as an `app_mention` or
 (`src/slack/slack-agent-starts.ts`), once the answer has left; Slack's
 retries (`x-slack-retry-num`) and bots' messages are dropped. The writer is
 found by the Slack id the bot kept, else through the Slack accounts members
-connected that no kept id names yet, one `auth.test` each (`SlackBot.memberOf`),
+connected that no kept id names yet, one `auth.test` each (`SlackWorkspaceBot.memberOf`),
 or else by the email Slack holds for them (`users.info`). The bot reacts to
 the message with 👀 (`eyes`), replying in the thread only to refuse, the
 thread is kept against the agent in `slack_agent_thread`, a later mention in
 that thread is sent to the agent instead, and every settled turn of the agent
 is posted back in the thread once, with the agent's link (`SettledTurnListener`). The Slack app must
 subscribe to the `app_mention` and `message.im` bot events.
+
+Slack sends our app's requests, events and interactivity alike, straight to
+`/api/slack/events`, signed with the app's signing secret
+(`SLACK_APP_SIGNING_SECRET`). The route checks `X-Slack-Signature`, the
+`v0` HMAC-SHA256 of `v0:<timestamp>:<raw body>`, in constant time, and
+refuses a request whose `X-Slack-Request-Timestamp` stands more than five
+minutes from its clock, before it reads anything of the body; a deployment
+missing the secret answers unavailable. It answers Slack's `url_verification`
+challenge, and an `app_uninstalled` event, or a `tokens_revoked` event that
+names a bot token, deletes the installation of every workspace connected to
+that team, with its bot token and its members' Slack ids, unless it was linked
+after the event's `event_time`, so a late or repeated delivery never takes a
+reinstall. The Slack app must
+also subscribe to those two events.
 
 An owner or admin names the repository a Slack start defaults to under
 Settings › Workspace › Slack bot (`POST /api/workspaces/slack-bot/repository`,
@@ -2777,6 +2791,23 @@ repository no agent of the workspace started in for 30 days
 (`src/agents/workspace-drive-cleanup.ts`). The queue's consumer
 (`src/agents/workspace-drive-builds.ts`) prunes that drive, and comes again
 shortly where a fill holds it.
+
+Vercel's sandbox sessions are charged to the usage ledger (`usage_charge`) in
+two ways (`src/billing/sandbox-session-charges.ts`, priced at Vercel's Pro
+rates for the session's region in `src/billing/sandbox-session-price.ts`).
+Vercel forgets a deleted sandbox's sessions, and a resume deletes the stopped
+sandbox it makes again on its own drive, so the Vercel adapter reads a
+sandbox's ended sessions just before any delete of it, stopping a running one
+first, and hands them to `EndedSessionsOnDelete`, which this runtime answers
+by charging them; a read that fails is logged and the delete goes on. Once a
+day, at 06:00 UTC, the `usage-ledger` schedule calls
+`apps/web/server/routes/maintenance/usage-ledger.ts` under the same
+`CRON_SECRET` and charges every ended session the project created in the last
+72 hours, for sandboxes never deleted. The ledger takes an item once by its
+kind and source id, so the two never double-count, and a session no
+`sandbox_owner` row names is logged and passed by. It always runs, whether or
+not billing is live. Each daily job's endpoint is
+`src/maintenance/scheduled-call-app.ts` over its own path and job.
 
 The sweep ends what no request will. `MaintenanceSweeps`
 (`src/maintenance/maintenance-sweep.ts`) runs its sweeps in turn and

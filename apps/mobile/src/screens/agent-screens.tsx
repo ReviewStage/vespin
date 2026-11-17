@@ -340,8 +340,6 @@ function AgentComposerBar({
   const head =
     !denies &&
     banner === undefined &&
-    composer.queued.length === 0 &&
-    composer.paused === undefined &&
     composer.attached.length === 0 &&
     composer.skills === undefined &&
     otherCall === undefined &&
@@ -359,12 +357,6 @@ function AgentComposerBar({
         )}
         {banner === undefined ? null : <HeldCallBanner {...banner} />}
         {denies ? <DeniesWaiting onShow={onShowWaiting} /> : null}
-        <QueuedLines
-          lines={composer.queued}
-          paused={composer.paused}
-          onSteer={composer.steer}
-          onDelete={composer.remove}
-        />
         <AttachedPictures pictures={composer.attached} onDetach={composer.detach} />
         {said === undefined ? null : <AskNote words={said} />}
       </>
@@ -383,6 +375,17 @@ function AgentComposerBar({
     stopping: composer.stopping,
     call,
     head,
+    above:
+      composer.queued.length === 0 && composer.paused === undefined ? undefined : (
+        <QueuedLines
+          lines={composer.queued}
+          paused={composer.paused}
+          onSteer={composer.steer}
+          onDelete={composer.remove}
+          onMove={composer.move}
+          onResume={composer.resume}
+        />
+      ),
   };
 
   return inColumn ? <ComposerFoot {...props} shown={shown} /> : <Composer {...props} />;
@@ -1072,6 +1075,7 @@ export function AgentConversation({
         />
       )}
       <ConfirmAsk destructive {...talk.switching} />
+      <ConfirmAsk destructive {...composer.removing} />
       <ConfirmAsk
         title={actions.archiveAsk.question.title}
         message={actions.archiveAsk.question.message}

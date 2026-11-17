@@ -89,7 +89,6 @@ import { ListFilterIcon, MailIcon, UsersIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { askAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor, YouBadge } from "../actor-ref.js";
-import { useAppCommand } from "../app-commands.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { LinkWorkspaceProvider, linkItems, useLinkItems, useOpenInTab } from "../copy-link-item.js";
@@ -99,7 +98,7 @@ import { focusSeek } from "../focus-seek.js";
 import { useThisMac } from "../machine-name.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
-import { useAutomationsDoor, usePersonDoor } from "../places/routed-doors.js";
+import { useAutomationsDoor } from "../places/routed-doors.js";
 import type { PersonLanding } from "../places/routed-exits.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { centerWithin, scrollerOf } from "../scroll-within.js";
@@ -174,7 +173,7 @@ import { useAutomations } from "./use-automations.js";
  * workspace the page stands in. Its lists move: a row arriving slides in, one
  * leaving slides out, and one taken from a section into another glides
  * across. Each section folds on a press on its head, its count read with
- * its noun, as a task's Overview's groups do. Escape leaves the page.
+ * its noun, as a task's Overview's groups do.
  */
 
 /** What a page's head says under a name, by who the person is to the workspace. */
@@ -1307,8 +1306,6 @@ export function PersonPage({
   /** A phone's way back out of the page (`WindowHistory`'s `onLeave`), which heads it as a phone's page; none elsewhere. */
   away?: TaskHeadBack | undefined;
 }): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_PERSON_PAGE, usePersonDoor(tasks).close);
-
   return (
     <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
       <PersonColumn tasks={tasks} userId={userId} name={name} staged={staged} away={away} />

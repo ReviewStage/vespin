@@ -62,8 +62,16 @@ export const SANDBOX_BROWSER_PIN = {
   DISPLAY: 77,
 } as const;
 
-/** What every command a harness runs in the cloud is handed of the image's tools: each Playwright's browsers in its own package (`PLAYWRIGHT_PIN`). */
-export const SANDBOX_TOOL_ENV = { PLAYWRIGHT_BROWSERS_PATH: "0" } as const;
+/**
+ * What every command a harness runs in the cloud is handed of the image's
+ * tools: each Playwright's browsers in its own package, and the image's global
+ * modules on `NODE_PATH`, so a script's `require("playwright")` resolves from
+ * any folder (`PLAYWRIGHT_PIN`).
+ */
+export const SANDBOX_TOOL_ENV = {
+  PLAYWRIGHT_BROWSERS_PATH: "0",
+  NODE_PATH: `${PLAYWRIGHT_PIN.PREFIX}/lib/node_modules`,
+} as const;
 
 /**
  * The directory the image installs our own tools under, only root writing

@@ -37,6 +37,8 @@ const styles = StyleSheet.create({
 export interface HeldAct {
   readonly label: string;
   readonly symbol: Glyph;
+  /** Whether it takes something away for good, which the system draws red, as a queued message's Delete. */
+  readonly destructive?: boolean | undefined;
   readonly onPress: () => void;
 }
 
@@ -102,7 +104,12 @@ export function useKeeping(): Keeping | undefined {
 
 function HeldActButtons({ acts }: { readonly acts: readonly HeldAct[] }) {
   return acts.map((act) => (
-    <Button key={act.label} {...actContent(act.label, act.symbol)} onPress={act.onPress} />
+    <Button
+      key={act.label}
+      {...actContent(act.label, act.symbol)}
+      onPress={act.onPress}
+      {...(act.destructive === true ? { role: "destructive" as const } : {})}
+    />
   ));
 }
 

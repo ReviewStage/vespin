@@ -1,4 +1,4 @@
-// composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, one act or a menu, the field, and Send or Stop on the right, in a React Native bar or a SwiftUI column's foot.
+// composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, one act or a menu, the field, and Send, Stop, or Talk on the right, in a React Native bar or a SwiftUI column's foot.
 
 import {
   Button,
@@ -30,10 +30,18 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { longPasteIn } from "@repo/features/long-paste";
+import { TALK_LABEL } from "@repo/features/voice-call-words";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
-import { BAR_EDGE, BAR_ROW_SPACING, BarHead, GlassBar, useBarGlass } from "./glass-bar.js";
+import {
+  BAR_EDGE,
+  BAR_MARGIN,
+  BAR_ROW_SPACING,
+  BarHead,
+  GlassBar,
+  useBarGlass,
+} from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
@@ -149,14 +157,16 @@ type ComposerProps = {
   readonly onAdd?: (() => void) | undefined;
   /** What the + opens as a menu in place of `onAdd`'s one act, such as an agent's Photos, Permissions, and Fast. */
   readonly addMenu?: ComposerMenu | undefined;
-  /** What the composer offers of a voice call into its agent: Talk before Send while the field is empty, or the call's presses there while the call stands; none where it calls no one. */
+  /** What the composer offers of a voice call into its agent: Talk in Send's place while the field holds nothing to send and no Stop stands, or the call's presses before Send while the call stands; none where it calls no one. */
   readonly call?: ComposerCall | undefined;
   /** Stops the turn under way, drawn as Stop in Send's place while the field is empty, as the panel's box offers it while its agent works. */
   readonly onStop?: (() => void) | undefined;
   /** Whether a Stop is out, which stands as the system's spinner in Stop's place until the agent stops. */
   readonly stopping?: boolean | undefined;
-  /** What stands over the field inside the same glass: the messages queued behind the turn, the pictures attached, and what a send that did not go said. */
+  /** What stands over the field inside the same glass: the pictures attached, and what a send that did not go said. */
   readonly head?: ReactNode;
+  /** SwiftUI standing over the composer in a glass of its own, as the panel stands an agent's queue over its box: the messages queued behind the turn. */
+  readonly above?: ReactNode;
   /** Whether the field takes the keyboard as it stands, as a new comment's field does once opened for its words. */
   readonly autoFocus?: boolean | undefined;
   /** Called with the file addresses of pictures dropped on the composer from Photos, Files, or another app, on an iPad; it takes no drop where none is given. */
@@ -169,18 +179,22 @@ type ComposerProps = {
  * The round button at the field's end, the system's own prominent circle as
  * Messages draws Send: Send in the ink once there is something to send and
  * the system's dimmed circle until then, or, while nothing is typed, Stop
- * while a turn runs, and the system's spinner once it is pressed.
+ * while a turn runs, and the system's spinner once it is pressed, and else
+ * Talk where the composer calls its agent, the waveform on the same circle,
+ * as ChatGPT's composer offers voice, so the first word turns it into Send.
  */
 function SendButton({
   empty,
   onSend,
   onStop,
   stopping,
+  onTalk,
 }: {
   readonly empty: boolean;
   readonly onSend: (() => void) | undefined;
   readonly onStop: (() => void) | undefined;
   readonly stopping: boolean;
+  readonly onTalk: (() => void) | undefined;
 }) {
   const colors = useColors();
   // Note that the circle and its marks grow with the reader's text size, as Messages' Send does, so the field's words never outgrow the button beside them.
@@ -205,6 +219,17 @@ function SendButton({
     return (
       <Button onPress={onStop} modifiers={[...roundModifiers(colors), accessibilityLabel("Stop")]}>
         <Image {...glyphImage(GLYPH.STOP_TURN)} size={stopSize} modifiers={roundMark(round)} />
+      </Button>
+    );
+  }
+
+  if (empty && onTalk !== undefined) {
+    return (
+      <Button
+        onPress={onTalk}
+        modifiers={[...roundModifiers(colors), accessibilityLabel(TALK_LABEL.TALK)]}
+      >
+        <Image {...glyphImage(GLYPH.TALK)} size={sendSize} modifiers={roundMark(round)} />
       </Button>
     );
   }
@@ -403,10 +428,14 @@ function ComposerPieces(props: ComposerProps) {
           accessibilityIdentifier("composer-field"),
         ]}
       />
-      {call === undefined || (call.kind === COMPOSER_CALL.TALK && !empty) ? null : (
-        <ComposerCallPresses call={call} />
-      )}
-      <SendButton empty={empty} onSend={send} onStop={onStop} stopping={stopping} />
+      {call?.kind === COMPOSER_CALL.ON_CALL ? <ComposerCallPresses presses={call.presses} /> : null}
+      <SendButton
+        empty={empty}
+        onSend={send}
+        onStop={onStop}
+        stopping={stopping}
+        onTalk={call?.kind === COMPOSER_CALL.TALK ? call.onTalk : undefined}
+      />
     </>
   );
 }
@@ -428,6 +457,7 @@ export function Composer(props: ComposerProps) {
     <GlassBar
       field
       head={props.head}
+      above={props.above}
       modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
     >
       <ComposerPieces {...props} />
@@ -449,28 +479,36 @@ export function ComposerFoot(props: ComposerProps & { readonly shown: boolean })
   const [room, setRoom] = useState(COMPOSER_FOOT_UNMEASURED);
   useNoticeLift({ room }, props.shown);
 
+  const measured = onGeometryChange(({ height }) => setRoom(height + SPACE.ROW));
+
   const glass = [
     padding({ all: BAR_EDGE }),
     ...useBarGlass(),
-    padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
-    onGeometryChange(({ height }) => setRoom(height + SPACE.ROW)),
+    padding({ horizontal: BAR_MARGIN, bottom: SPACE.ROW }),
     ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
   ];
 
-  if (props.head === undefined) {
-    return (
+  const foot =
+    props.head === undefined ? (
       <HStack alignment="bottom" spacing={BAR_ROW_SPACING} modifiers={glass}>
         <ComposerPieces {...props} />
       </HStack>
+    ) : (
+      <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
+        <BarHead>{props.head}</BarHead>
+        <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
+          <ComposerPieces {...props} />
+        </HStack>
+      </VStack>
     );
-  }
 
+  // Note that what stands over the composer is measured with it, so the notice stands over both, and the composer keeps its place under it whether or not anything stands there, so its field is never drawn anew as the queue comes and goes.
   return (
-    <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
-      <BarHead>{props.head}</BarHead>
-      <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
-        <ComposerPieces {...props} />
-      </HStack>
+    <VStack spacing={SPACE.TIGHT * 2} modifiers={[measured]}>
+      {props.above === undefined ? null : (
+        <VStack modifiers={[padding({ horizontal: BAR_MARGIN })]}>{props.above}</VStack>
+      )}
+      {foot}
     </VStack>
   );
 }

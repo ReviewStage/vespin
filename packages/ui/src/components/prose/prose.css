@@ -30,8 +30,19 @@
     border-radius: 0.4em;
     background: var(--ui-prose-tint, var(--ui-color-fill-hover));
     font-family: var(--ui-font-mono);
-    /* Mono runs wider than the words around it at equal size. */
-    font-size: 0.9em;
+    /* At the words' own size, as the system's mono face is drawn to stand
+       beside its sans: its capitals as tall as theirs, so code reads as the
+       same size as the line it sits in. */
+    font-size: 1em;
+  }
+
+  /* A span's line box stands inside its line's. Note that a span inherits
+     its line's leading, and a mono face's ascent runs taller than the
+     words' at the same leading, so a line set in pixels (a message box's)
+     would grow to hold it; at `1` it never does, and its tint, which paints
+     the face's own box and the padding, stays where it was. */
+  .ui-prose :not(pre) > code {
+    line-height: 1;
   }
 
   .ui-prose pre code {
@@ -124,9 +135,12 @@
   }
 
   /* A code span is the prose one above, on the note's own tint, a step
-     heavier because the thread's words are small, in a transcript's flow as
-     in a note's. */
+     heavier because the thread's words are small, and on the window's corner
+     role rather than the site's `em` one, in a transcript's flow as in a
+     note's and the editors that stand in for one, so code reads the same in
+     each. */
   .ui-markdown-flow :not(pre) > code {
+    border-radius: var(--ui-radius-6);
     font-weight: var(--ui-type-label-weight);
     letter-spacing: 0;
   }

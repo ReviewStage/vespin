@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
 } from "react";
+import { isComposingKey } from "../../composing-key.js";
 
 /**
  * list-selection.ts -- the rows a `List` holds chosen at once, as a Mac's list chooses them: ⌘-click one in or out, ⇧-click a run of them, ⌘A every one, Esc none, and ⇧↑↓ grow the run from the row in hand.
@@ -334,7 +335,7 @@ export function useListSelection(
       const list = event.currentTarget;
 
       if (event.key === "Escape") {
-        if (current.selected.size === 0 || event.nativeEvent.isComposing) return false;
+        if (current.selected.size === 0 || isComposingKey(event)) return false;
         // Note that the key goes no further, so what stands behind the list stays open.
         event.preventDefault();
         event.stopPropagation();

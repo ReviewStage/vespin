@@ -732,7 +732,7 @@ export const MACHINE_UNREACHED = {
   UNKNOWN_MACHINE: "unknown-machine",
   /** The call named no machine, its agent picked none, and its owner has no default machine. */
   NO_MACHINE: "no-machine",
-  /** A terminal command for the machine a local agent runs on itself, whose own shell runs there already. */
+  /** A terminal command for the machine a local agent runs on itself. No longer sent; kept for the transcripts and released clients that still read it. */
   OWN_SHELL: "own-shell",
 } as const;
 

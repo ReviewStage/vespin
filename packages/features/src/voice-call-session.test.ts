@@ -27,6 +27,7 @@ function harness() {
   const sent: string[] = [];
   const answer = held<VoiceCallOpened>();
   const failures: VoiceCallFailure[] = [];
+  const asked: { readonly agentId: string; readonly sdp: string }[] = [];
   let events: VoiceCallPeerEvents | undefined;
   let channelOpen = false;
   let released = 0;
@@ -59,7 +60,11 @@ function harness() {
         },
       };
     },
-    open: () => answer.promise,
+    open: (offer) => {
+      asked.push(offer);
+
+      return answer.promise;
+    },
     now: () => 1_000,
     onChange: (next) => {
       call = next;
@@ -83,6 +88,7 @@ function harness() {
     openChannel,
     sent,
     failures,
+    asked,
     answer,
     settled,
     events: () => events,
@@ -94,6 +100,33 @@ function harness() {
 }
 
 describe("a voice call session", () => {
+  it("readies the microphone and its offer while its agent starts, stands and asks for the session once it lands, and asks nothing where it never does", async () => {
+    const landed = harness();
+    const agent = held<{ readonly agentId: string; readonly taskId: string } | undefined>();
+    landed.session.startLanding(agent.promise);
+    await landed.settled();
+
+    expect(landed.events()).toBeDefined();
+    expect(landed.call()).toBeUndefined();
+    expect(landed.asked).toEqual([]);
+
+    agent.settle(INTO);
+    await landed.settled();
+    expect(landed.call()?.agentId).toBe(INTO.agentId);
+    expect(landed.asked).toEqual([{ agentId: INTO.agentId, sdp: "offer" }]);
+
+    const refused = harness();
+    const none = held<{ readonly agentId: string; readonly taskId: string } | undefined>();
+    refused.session.startLanding(none.promise);
+    await refused.settled();
+    none.settle(undefined);
+    await refused.settled();
+
+    expect(refused.call()).toBeUndefined();
+    expect(refused.asked).toEqual([]);
+    expect(refused.released()).toBe(1);
+  });
+
   it("tells the session a mute pressed while it connected the moment it starts", async () => {
     const test = harness();
     test.session.start(INTO);

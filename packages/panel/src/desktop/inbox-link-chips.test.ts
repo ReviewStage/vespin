@@ -227,13 +227,13 @@ async function inbox(options: {
   return { container, asked };
 }
 
-/** The chips the chosen item's words draw, by the name each says and the state after it. */
+/** The chips the chosen item's words draw, by the name each says and the state a screen reader hears after it. */
 function chips(container: HTMLElement): [string | null, string | null][] {
   return [
     ...container.querySelectorAll<HTMLElement>("[data-inbox-message-text] [data-mention-ref]"),
   ].map((chip) => [
     chip.querySelector(".ui-inline-ref-label")?.textContent ?? null,
-    chip.querySelector(".ui-inline-ref-state")?.textContent ?? null,
+    chip.querySelector(".ui-visually-hidden:last-child")?.textContent ?? null,
   ]);
 }
 

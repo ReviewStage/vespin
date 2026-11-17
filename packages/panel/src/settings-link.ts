@@ -24,11 +24,12 @@ import { ROUTED_PLACE, useWindowPlace } from "./places/routed-places.js";
  *
  * Every Open Settings press names where it leads as a `SettingsLink`, which
  * is one navigation: entering Settings is a step after the place it was
- * opened from, and turning its page replaces the step standing, so Settings
- * is one step however many of its pages are turned; but a narrow room's
- * page opened from its list is a step after the list, which Back returns
- * to. Its section is looked for by the door once its move lands
- * (`app.tsx`'s `goSettings`), and given up on quietly where it is not drawn.
+ * opened from, and each page turned is a step after the one before, as a
+ * narrow room's page opened from its list is, so Back returns to the page
+ * last shown, and leaving Settings goes back past all of its pages to where
+ * it was opened from (`WindowHistory`'s `away`). Its section is looked for
+ * by the door once its move lands (`app.tsx`'s `goSettings`), and given up
+ * on quietly where it is not drawn.
  */
 
 /** Settings as the router stands it, and the doors that move it. */
@@ -52,13 +53,12 @@ export interface SettingsRoute {
 /** The route of a pairing's link, `/connect/<code>`, which Settings' Hosts page opens from. */
 const PAIRING_ROUTE = "/places/connect/$code";
 
-/** Settings as the router stands it, over the account's `workspaces`, the sidebar listing `listedId`, in a room `narrow` or not. */
+/** Settings as the router stands it, over the account's `workspaces`, the sidebar listing `listedId`. */
 export function useSettingsRoute(input: {
   workspaces: readonly Workspace[];
   listedId: string | undefined;
-  narrow: boolean;
 }): SettingsRoute {
-  const { workspaces, listedId, narrow } = input;
+  const { workspaces, listedId } = input;
   const router = useRouter();
   const navigate = useNavigate();
   const here = useWindowPlace();
@@ -119,11 +119,9 @@ export function useSettingsRoute(input: {
 
     // Note that entering Settings in a narrow room stands it on its page list, which a link to the list keeps.
     const to = link.listed === true ? undefined : link.page;
-    // A page opened from a narrow room's list is a step after it; any other turn of Settings takes its step in place, and so
-    // does Settings opened from a pairing's link loaded at its own address, which names no place to come back to.
-    const fromPairing = here.leaf === PAIRING_ROUTE;
-    const replace = (standing && !(narrow && listed && to !== undefined)) || fromPairing;
-    go(to, slugFor(link.workspaceId ?? workspaceId ?? listedId), replace);
+    // Note that Settings opened from a pairing's link loaded at its own address takes that entry's step in place, since the
+    // link names no place to come back to.
+    go(to, slugFor(link.workspaceId ?? workspaceId ?? listedId), here.leaf === PAIRING_ROUTE);
   };
 
   const list = () => {

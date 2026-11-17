@@ -41,21 +41,19 @@ import { logStoreFailure } from "../http/store-failure.js";
  * call, and a refusal says how to mend the call.
  */
 
-/** A sandbox as the tool reads a page from it: one file read as a stream of bytes, or nothing where there is no file. */
+/** A sandbox as the tool reads a page from it: where its checkout stands, which a relative path is read from, and one file read as a stream of bytes, or nothing where there is no file. */
 interface PageSandbox {
+  readonly checkout: string;
   readonly readFile: (options: {
     readonly path: string;
   }) => PromiseLike<ReadableStream<Uint8Array> | null>;
 }
 
-/** Where a call's page is written: the account and the task that the service bound, and, for an agent with one, its sandbox, opened on first use, and the checkout a relative path is read from. */
+/** Where a call's page is written: the account and the task that the service bound, and, for an agent with one, its sandbox, opened on first use. */
 export interface PageToolBinding {
   readonly userId: string;
   readonly taskId: string;
-  readonly sandbox?: {
-    readonly door: () => Promise<PageSandbox>;
-    readonly checkout: string;
-  };
+  readonly sandbox?: () => Promise<PageSandbox>;
 }
 
 /** Why a call showed nothing, in words the model can act on. */
@@ -167,20 +165,19 @@ const readBoundedText = Effect.fnUntraced(function* (stream: ReadableStream<Uint
 
 /**
  * The page's HTML at the path, read from the agent's sandbox, or the one
- * sentence refusing it. A path is resolved from the checkout: inside it
- * when relative, as written when absolute.
+ * sentence refusing it. A path is resolved from the sandbox's checkout:
+ * inside it when relative, as written when absolute.
  */
 function readPageFile(
   sandbox: NonNullable<PageToolBinding["sandbox"]>,
   path: string,
 ): Effect.Effect<Result.Result<string, string>> {
-  // Note that the rule reads the path as resolved, because `x/.env/.` names the `.env` it spells around.
-  const resolved = posix.resolve(sandbox.checkout, path);
-
-  if (isSecretFile(resolved)) return Effect.succeed(Result.fail(SHOW_PAGE_REFUSAL.SECRET));
-
   return Effect.gen(function* () {
-    const opened = yield* Effect.tryPromise(() => sandbox.door());
+    const opened = yield* Effect.tryPromise(() => sandbox());
+    // Note that the rule reads the path as resolved, because `x/.env/.` names the `.env` it spells around.
+    const resolved = posix.resolve(opened.checkout, path);
+
+    if (isSecretFile(resolved)) return Result.fail(SHOW_PAGE_REFUSAL.SECRET);
     const stream = yield* Effect.tryPromise(() => opened.readFile({ path: resolved }));
 
     if (stream === null) return Result.fail(`${SHOW_PAGE_REFUSAL.NO_FILE} ${path}`);

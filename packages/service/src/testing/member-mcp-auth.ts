@@ -72,6 +72,7 @@ import {
 } from "../member-mcp/resource.js";
 import { PageLinks } from "../pages/page-links.js";
 import { modelCatalogOf } from "../providers/model-catalog.js";
+import { SlackApp, slackAppService } from "../slack/slack-app.js";
 import { SlackBot, slackBotOver } from "../slack/slack-bot.js";
 import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-config.js";
 import { FAKE_IMAGE } from "./agent-browser-fake.js";
@@ -263,6 +264,7 @@ export function memberMcpStanding(options: MemberMcpStandingOptions = {}) {
       pullRequestLinksLayer,
       options.integrations ?? integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
       Layer.succeed(SlackBot, slackBotOver(undefined)),
+      Layer.succeed(SlackApp, slackAppService(undefined, [])),
     );
 
     yield* seedRows.pipe(Effect.provide(services));

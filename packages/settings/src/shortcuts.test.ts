@@ -83,7 +83,7 @@ test("every key that answers in place stands in exactly one group of the Keyboar
   assert.deepEqual([...listed].sort(), Object.values(IN_CONTEXT_KEY).sort());
 });
 
-test("the Keyboard shortcuts page names the window's Escape once, for every layer it steps back from", () => {
+test("the Keyboard shortcuts page names the window's Escape once, for every layer it closes", () => {
   const groups = shownShortcutGroups({}, Object.values(HOST_CAPABILITY));
 
   const escapes = [
@@ -96,7 +96,7 @@ test("the Keyboard shortcuts page names the window's Escape once, for every laye
   assert.equal(escapes.length, 1);
   assert.ok(
     groups.some((group) => group.keys.some((key) => key === IN_CONTEXT_KEY.STEP_BACK)),
-    "the one Escape is the step back",
+    "the one Escape is the window's close",
   );
 });
 

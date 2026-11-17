@@ -26,12 +26,14 @@
  * leaves the phone but to the session, and none is stored or counted.
  */
 
-import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import { type CallAgentLine, callAgentLine } from "@repo/features/call-agent-line";
+import { LIVE_READ } from "@repo/features/live-wire";
 import { agentName, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { savesOpenAiKey } from "@repo/features/provider-key-wire";
 import {
   VOICE_CALL_FAILURE,
   VOICE_EVENTS_CHANNEL,
@@ -47,7 +49,8 @@ import {
 import { callLineWords } from "@repo/features/voice-call-words";
 import { DEFAULT_LIVE_VOICE } from "@repo/features/voices";
 import { ACT_KIND } from "@repo/host/acts";
-import { selectAppSettingsView, selectTranscript } from "@repo/host/app-state-reads";
+import type { AppStateSnapshot } from "@repo/host/app-state";
+import { selectAccount, selectAppSettingsView, selectTranscript } from "@repo/host/app-state-reads";
 import {
   BUZZ,
   buzz,
@@ -59,7 +62,15 @@ import {
 } from "@repo/ui-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { type MediaStream, mediaDevices, RTCPeerConnection } from "react-native-webrtc";
 import { appStateQuery } from "./host/app-state-query.js";
 import {
@@ -68,6 +79,7 @@ import {
   useTaskListCollections,
   useTaskListRow,
 } from "./host/host-provider.js";
+import { useLiveFollow } from "./host/live-follow.js";
 import { useCallLiveActivity } from "./live-activity/call-activity.js";
 import { voiceAudioModule } from "./voice-audio-module.js";
 
@@ -104,6 +116,8 @@ interface PhoneVoiceCall {
   readonly call: StandingVoiceCall | undefined;
   /** Calls the agent, ending a call already standing first. */
   readonly start: (into: VoiceCallInto) => void;
+  /** Takes a press now for a call into an agent still starting, readying the microphone at once and answering what calls it once it lands; a press made since wins, so a late one calls no one. */
+  readonly startWhenStarted: () => (into: VoiceCallInto | undefined) => void;
   readonly end: () => void;
   readonly setMicrophoneMuted: (muted: boolean) => void;
   readonly setSpeakerMuted: (muted: boolean) => void;
@@ -113,6 +127,7 @@ const NO_CALL: PhoneVoiceCall = {
   offered: false,
   call: undefined,
   start: () => undefined,
+  startWhenStarted: () => () => undefined,
   end: () => undefined,
   setMicrophoneMuted: () => undefined,
   setSpeakerMuted: () => undefined,
@@ -307,6 +322,19 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
     start: (into) => {
       if (callable) session.start(into);
     },
+    // Note that the microphone and the peer's offer are readied in the press, while the agent starts, so the call opens the moment it lands; a press made since asks for the newer call, and the session lets this one go.
+    startWhenStarted: () => {
+      let land: (into: VoiceCallInto | undefined) => void = () => undefined;
+
+      if (!callable) return land;
+      session.startLanding(
+        new Promise((resolve) => {
+          land = resolve;
+        }),
+      );
+
+      return land;
+    },
     end: session.end,
     setMicrophoneMuted: session.setMicrophoneMuted,
     setSpeakerMuted: session.setSpeakerMuted,
@@ -424,5 +452,77 @@ export function useAgentTalk(agentId: string, taskId: string | undefined): Agent
       onTalk: () => (call === undefined ? start() : setAsking(true)),
     },
     switching,
+  };
+}
+
+/** The account's saved keys the host holds, as a `select`; none until read. */
+function heldKeys(accountId: string) {
+  return (state: AppStateSnapshot) => state[LIVE_READ.PROVIDER_KEYS][accountId]?.rows?.keys;
+}
+
+/** Talk in a sheet that starts a new agent: its press, and the question it asks first while another call stands. */
+export interface NewAgentTalk {
+  readonly onTalk: () => void;
+  readonly switching: AgentTalk["switching"];
+}
+
+/**
+ * Talk in a sheet that starts a new agent, as the panel's New task and
+ * draft offer it: `start` starts the agent blank, handed nothing, and
+ * answers it once it lands, or nothing where it was refused, and the call
+ * opens on it, so the caller's first words are its first message. Note that
+ * the account's keys are followed so that Talk with no OpenAI key starts
+ * nothing and says to add one, rather than leaving an agent no call can
+ * open on; a press while another call stands asks first, as an agent's own
+ * Talk does. None while calls are not offered.
+ */
+export function useNewAgentTalk(
+  start: () => Promise<VoiceCallInto | undefined>,
+): NewAgentTalk | undefined {
+  const voice = useVoiceCall();
+  const acts = useHostActs();
+  const notices = useFailureNotices();
+  const [asking, setAsking] = useState(false);
+  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const key = accountId ?? "";
+  useLiveFollow(accountId, () => acts[ACT_KIND.PROVIDER_KEYS_FOLLOW]());
+  const keys = useQuery({ ...appStateQuery, select: useCallback(heldKeys(key), [key]) }).data;
+
+  const go = () => {
+    setAsking(false);
+    // Note that the press is taken now, so a call pressed for while the agent starts stands over this one.
+    void start().then(voice.startWhenStarted());
+  };
+
+  if (!voice.offered) return undefined;
+
+  // Note that Talk starts nothing until the keys are read, since an agent started with no key could take no call.
+  const onTalk = () => {
+    if (keys === undefined) return;
+
+    if (!savesOpenAiKey(keys)) {
+      buzz(BUZZ.ERROR);
+      notices.say({
+        kind: NOTICE_KIND.REFUSED,
+        words: VOICE_CALL_NOTE[VOICE_CALL_FAILURE.OPENAI_KEY_MISSING],
+      });
+
+      return;
+    }
+
+    if (voice.call === undefined) return go();
+    setAsking(true);
+  };
+
+  return {
+    onTalk,
+    switching: {
+      title: SWITCH_QUESTION.TITLE,
+      message: SWITCH_QUESTION.MESSAGE,
+      act: SWITCH_QUESTION.ACT,
+      presented: asking,
+      onAct: go,
+      onDismiss: () => setAsking(false),
+    },
   };
 }

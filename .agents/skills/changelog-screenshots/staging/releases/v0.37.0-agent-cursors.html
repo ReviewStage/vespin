@@ -1,0 +1,410 @@
+<!doctype html>
+<!-- index.html -- Vespin "A cursor for each agent": one still for the 0.37.0 changelog, cut from Charles's 12.6 s Twitter clip
+     on the changelog's 2400 x 1591 canvas, the Golden Gate Sunset aerial as its desktop.
+     Two agents work two apps on one Mac, each with its own copper cursor; while both
+     show, each wears its agent's name. Geometry of the cursor and tag follows
+     apps/desktop/native/macos/ComputerUse.swift (arrow path, 4.5° sway, ripple, 18 pt tag). -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <script src="assets/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: "Geist";
+        src: url("assets/fonts/geist-latin-wght-normal.woff2") format("woff2");
+        font-weight: 100 900;
+      }
+      :root {
+        --ground: #f3f2ef;
+        --ink: #171717;
+        --muted: #737373;
+        --line: #e7e7e7;
+        --bar: #ebebeb;
+        --pointer: #a7611b;
+        --blue: #0a84ff;
+        --green: #1f9d55;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { background: #000; }
+      #root {
+        position: relative; width: 2400px; height: 1591px; overflow: hidden;
+        background: url("assets/desktop.jpg") center / cover; font-family: "Geist", sans-serif; color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+      }
+      #scene { position: absolute; inset: 0; }
+      /* The scene is drawn in 640 × 360 points and magnified 3×, so the UI reads on a phone. */
+      #stage { position: absolute; left: 0; top: 0; width: 640px; height: 424.27px; zoom: 3.75; }
+
+      /* Menu bar */
+      .menubar { display: none !important; position: absolute; left: 0; top: 0; width: 640px; height: 22px; display: flex;
+        align-items: center; padding: 0 14px; font-size: 11.5px; letter-spacing: -0.01em;
+        background: rgba(255,255,255,.42); backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4); }
+      .menubar .apple { width: 12px; height: 14px; margin-right: 16px; fill: var(--ink); }
+      .menubar .item { margin-right: 15px; color: #2b2b2b; }
+      .menubar .item.bold { font-weight: 600; color: var(--ink); }
+      .menubar .right { margin-left: auto; display: flex; align-items: center; gap: 13px; color: #2b2b2b; }
+      .menubar svg.ic { height: 11px; fill: none; stroke: #2b2b2b; stroke-width: 1.4; }
+
+      /* Windows */
+      .win { position: absolute; background: #fff; border-radius: 12px; overflow: hidden;
+        box-shadow: 0 0 0 0.5px rgba(0,0,0,.14), 0 14px 36px rgba(0,0,0,.11), 0 3px 8px rgba(0,0,0,.05); }
+      .lights { position: absolute; left: 13px; top: 13px; display: flex; gap: 7px; }
+      .lights i { width: 11px; height: 11px; border-radius: 50%; box-shadow: inset 0 0 0 0.5px rgba(0,0,0,.12); }
+      .lights i:nth-child(1) { background: #ff5f57; }
+      .lights i:nth-child(2) { background: #febc2e; }
+      .lights i:nth-child(3) { background: #28c840; }
+
+      /* Browser */
+      #win-a { left: 28px; top: 44px; width: 340px; height: 318px; }
+      .toolbar { position: absolute; left: 0; top: 0; right: 0; height: 37px; border-bottom: 0.5px solid #e2e2e2; background: #fbfbfb; }
+      .toolbar .nav { position: absolute; left: 74px; top: 12px; display: flex; gap: 10px; }
+      .toolbar .nav svg { width: 13px; height: 13px; fill: none; stroke: #8a8a8a; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+      .toolbar .nav svg + svg { stroke: #c4c4c4; }
+      .address { position: absolute; left: 124px; top: 7px; width: 196px; height: 23px; border-radius: 7px;
+        background: #efefef; font-size: 10.5px; color: #3a3a3a; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+      .address .host { color: #6c6c6c; }
+      .address .paths { position: relative; height: 13px; overflow: hidden; display: inline-block; }
+      .address .paths span { display: block; line-height: 13px; }
+      .page { position: absolute; left: 0; right: 0; top: 37px; bottom: 0; }
+      .col { position: absolute; left: 70px; width: 200px; top: 0; }
+      .h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
+      .sub { margin-top: 7px; height: 6px; width: 118px; border-radius: 3px; background: var(--bar); }
+      .label { font-size: 10px; color: var(--muted); font-weight: 500; }
+      .field { position: relative; margin-top: 5px; height: 28px; border-radius: 7px; border: 0.75px solid #dcdcdc;
+        background: #fff; font-size: 11px; display: flex; align-items: center; padding: 0 9px; }
+      .field .ring { position: absolute; inset: -3.5px; border-radius: 9.5px; border: 2.5px solid rgba(10,132,255,.32); opacity: 0; }
+      .field .chars span { display: none; }
+      .field .dots span { display: none; font-size: 9px; letter-spacing: 1.5px; }
+      .caret { display: inline-block; width: 1px; height: 13px; background: var(--ink); margin-left: 1px; opacity: 0; }
+      .button { position: relative; margin-top: 16px; height: 30px; border-radius: 7px; background: var(--ink); color: #fff;
+        font-size: 11.5px; font-weight: 550; display: flex; align-items: center; justify-content: center; }
+      .button .spin { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%;
+        border: 1.6px solid rgba(255,255,255,.3); border-top-color: #fff; opacity: 0; }
+      .foot { margin: 16px auto 0; height: 6px; width: 132px; border-radius: 3px; background: var(--bar); }
+      #success { opacity: 0; text-align: center; }
+      .check { margin: 0 auto; width: 30px; height: 30px; border-radius: 50%; background: var(--green); display: flex; align-items: center; justify-content: center; }
+      .check svg { width: 15px; height: 15px; fill: none; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+      .signout { display: inline-block; margin-top: 20px; font-size: 11px; font-weight: 500; color: #3a3a3a; padding: 5px 12px; border-radius: 7px; border: 0.75px solid #dcdcdc; }
+
+      /* Reminders */
+      #win-b { left: 352px; top: 100px; width: 262px; height: 280px; }
+      .side { position: absolute; left: 0; top: 0; bottom: 0; width: 100px; background: #f4f4f3; border-right: 0.5px solid #e4e4e4; }
+      .side .group { position: absolute; left: 14px; top: 44px; height: 5px; width: 44px; border-radius: 3px; background: #dedede; }
+      .side .lists { position: absolute; left: 7px; right: 7px; top: 58px; }
+      .side .li { height: 26px; border-radius: 6px; display: flex; align-items: center; padding: 0 7px; gap: 8px; font-size: 11px; font-weight: 500; }
+      .side .li.on { background: #e3e3e2; }
+      .side .li i { width: 15px; height: 15px; border-radius: 50%; flex: none; }
+      .side .li b { height: 5px; border-radius: 3px; background: #dcdcdc; }
+      .main { position: absolute; left: 100px; top: 0; right: 0; bottom: 0; }
+      .main .title { position: absolute; left: 20px; top: 38px; font-size: 21px; font-weight: 700; color: var(--blue); letter-spacing: -0.02em; }
+      .rows { position: absolute; left: 0; right: 0; top: 84px; }
+      .row { height: 30px; overflow: hidden; }
+      .row .in { position: relative; height: 30px; display: flex; align-items: center; padding-left: 18px; }
+      .row .box { position: relative; width: 15px; height: 15px; border-radius: 50%; border: 1.4px solid #c6c6c6; flex: none; }
+      .row .box .fill { position: absolute; inset: -1.4px; border-radius: 50%; background: var(--blue); opacity: 0; transform: scale(.4); display: flex; align-items: center; justify-content: center; }
+      .row .box .fill svg { width: 9px; height: 9px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+      .row .txt { margin-left: 10px; height: 6px; border-radius: 3px; background: #e1e1e1; }
+      .row .sep { position: absolute; left: 43px; right: 0; bottom: 0; height: 0.5px; background: #e9e9e9; }
+
+      /* Agent cursors */
+      .cursor { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+      .cursor .c-in { position: absolute; left: 0; top: 0; transform: scale(1.2); transform-origin: 0 0; }
+      #cur-b { opacity: 0; }
+      .cursor .arrow { position: absolute; left: -4px; top: -4px; width: 22px; height: 22px; overflow: visible; }
+      .cursor .ripple { position: absolute; left: -12px; top: -12px; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--pointer); opacity: 0; }
+      .cursor .tag { position: absolute; left: 12px; top: 15px; height: 18px; border-radius: 9px; background: var(--pointer); color: #fff;
+        font-size: 11px; font-weight: 600; line-height: 18px; padding: 0 7px; white-space: nowrap; opacity: 0;
+        box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+      /* Vespin's window, in its light theme: a task's page with the message box at its foot. */
+      #vwin { left: 108px; top: 26px; width: 424px; height: 326px; z-index: 5;
+        box-shadow: 0 0 0 0.5px rgba(0,0,0,.16), 0 24px 60px rgba(0,0,0,.18), 0 6px 16px rgba(0,0,0,.08); }
+      #vwin .tools { position: absolute; left: 76px; top: 10px; display: flex; gap: 11px; }
+      #vwin .tools svg { width: 14px; height: 14px; fill: none; stroke: #9a9a9a; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+      #vwin .tools svg + svg + svg { stroke: #cfcfcf; }
+      #vwin .ttl { position: absolute; left: 22px; top: 40px; font-size: 17px; font-weight: 650; letter-spacing: -0.02em; }
+      #vwin .desc { position: absolute; left: 22px; height: 6px; border-radius: 3px; background: #ececec; }
+      .bubble { position: absolute; right: 16px; top: 126px; max-width: 318px; background: #f3f3f2; border-radius: 12px;
+        padding: 7px 11px; font-size: 12px; line-height: 19px; opacity: 0; }
+      .runs { position: absolute; left: 22px; top: 186px; }
+      .run { display: flex; align-items: center; gap: 7px; height: 20px; font-size: 11.5px; opacity: 0; }
+      .run b { font-weight: 600; }
+      .run .st { color: #737373; }
+      .run .mark { position: relative; width: 12px; height: 12px; }
+      .run .spin2 { position: absolute; inset: 0; border-radius: 50%; border: 1.6px solid rgba(167,97,27,.22); border-top-color: var(--pointer); }
+      .run .ok { position: absolute; inset: 0; border-radius: 50%; background: var(--green); opacity: 0; display: flex; align-items: center; justify-content: center; }
+      .run .ok svg { width: 8px; height: 8px; fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+      .run .st .done { display: none; }
+      .composer { position: absolute; left: 12px; right: 12px; bottom: 12px; height: 84px; border-radius: 12px; background: #fff;
+        border: 0.75px solid #e0e0e0; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+      .ctext { position: absolute; left: 13px; right: 13px; top: 11px; font-size: 12.5px; line-height: 19px; color: var(--ink); }
+      .ctext .k { display: none; }
+      .ctext .caret { height: 14px; vertical-align: -2px; opacity: 1; }
+      .cbar { position: absolute; left: 7px; right: 8px; bottom: 8px; height: 26px; display: flex; align-items: center; gap: 12px; font-size: 11.5px; color: #3a3a3a; }
+      .cbar svg { width: 14px; height: 14px; fill: none; stroke: #5a5a5a; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+      .cbar .mach { display: flex; align-items: center; gap: 5px; }
+      .cbar .model { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+      .cbar .model i { font-style: normal; color: #8a8a8a; }
+      .cbar .model svg { width: 10px; height: 10px; }
+      .send { position: relative; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); display: flex; align-items: center; justify-content: center; }
+      .send svg { stroke: #fff; width: 13px; height: 13px; stroke-width: 1.9; }
+      /* An app named in a message: its icon and name, as the box's @ list writes it. */
+      .chip { display: inline-flex; align-items: center; gap: 4px; height: 17px; padding: 0 6px 0 3px; border-radius: 5px; background: #f1f1f0;
+        border: 0.5px solid #e1e1e1; font-size: 11.5px; font-weight: 500; vertical-align: -3px; line-height: 17px; white-space: nowrap; }
+      .chip svg { width: 12px; height: 12px; display: block; }
+      /* Your own pointer, the Mac's black arrow. */
+      #you { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 9; }
+      #you svg { position: absolute; left: -2px; top: -2px; width: 18px; height: 24px; overflow: visible; }
+      .menubar .app2 { display: none; }
+      /* Vespin's name over its window, so the app is never in doubt. */
+      #vwin .brand { position: absolute; left: 76px; top: 11.8px; height: 14px; width: auto; }
+      #vwin .tools { display: none; }
+      /* While the agents work, Vespin waits as a compact card: its icon and each agent's row. */
+      #vcard { display: none !important; position: absolute; left: 170px; top: 308px; width: 300px; height: 46px; z-index: 6; opacity: 0; border-radius: 12px;
+        background: rgba(255,255,255,.97); box-shadow: 0 0 0 0.5px rgba(0,0,0,.16), 0 12px 32px rgba(0,0,0,.16);
+        display: flex; align-items: center; gap: 13px; padding: 0 12px; }
+      #vcard .m svg { width: 26px; height: 26px; display: block; }
+      #vcard .run { opacity: 1; height: 17px; font-size: 10.5px; gap: 6px; }
+      #vcard .run .mark { width: 11px; height: 11px; }
+      .cursor { z-index: 10; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="agent-cursors" data-start="0" data-duration="12.6" data-width="2400" data-height="1591">
+      <section id="scene" class="clip" data-start="0" data-duration="12.6" data-track-index="0" data-layout-allow-overflow data-layout-allow-overlap>
+        <div id="stage">
+          <div class="menubar">
+            <svg class="apple" viewBox="0 0 24 24"><path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03.07-.463 1.58-1.518 3.12-.945 1.34-1.94 2.71-3.43 2.71-1.517 0-1.9-.88-3.63-.88-1.698 0-2.302.91-3.67.91-1.377 0-2.332-1.26-3.428-2.8-1.287-1.82-2.323-4.63-2.323-7.28 0-4.28 2.797-6.55 5.552-6.55 1.448 0 2.675.95 3.6.95.865 0 2.222-1.01 3.902-1.01.613 0 2.886.06 4.374 2.19-.13.09-2.383 1.37-2.383 4.19 0 3.26 2.854 4.42 2.955 4.45z"/></svg>
+            <span class="item bold app1">Vespin</span><span class="item bold app2">Safari</span><span class="item">File</span><span class="item">Edit</span><span class="item">View</span><span class="item">Window</span><span class="item">Help</span>
+            <div class="right">
+              <svg class="ic" viewBox="0 0 16 12"><path d="M1.5 4.2a9.5 9.5 0 0 1 13 0M3.8 6.6a6.2 6.2 0 0 1 8.4 0M6.1 9a2.9 2.9 0 0 1 3.8 0"/></svg>
+              <svg class="ic" viewBox="0 0 24 12"><rect x="1" y="1.5" width="19" height="9" rx="2.6"/><rect x="2.9" y="3.4" width="12" height="5.2" rx="1.2" fill="#2b2b2b" stroke="none"/><path d="M22 4.6v2.8"/></svg>
+              <span>Sun Nov 15&nbsp;&nbsp;9:41 AM</span>
+            </div>
+          </div>
+
+          <div id="win-a" class="win">
+            <div class="toolbar">
+              <div class="lights"><i></i><i></i><i></i></div>
+              <div class="nav">
+                <svg viewBox="0 0 14 14"><path d="M9 2.5 4.5 7 9 11.5"/></svg>
+                <svg viewBox="0 0 14 14"><path d="M5 2.5 9.5 7 5 11.5"/></svg>
+              </div>
+              <div class="address"><span class="host">localhost:3000</span><span class="paths"><span id="path-a">/signup</span><span id="path-b">/welcome</span></span></div>
+            </div>
+            <div class="page">
+              <div id="form" class="col" style="top: 30px">
+                <div class="h1">Create your account</div>
+                <div class="sub"></div>
+                <div class="label" style="margin-top: 22px">Email</div>
+                <div id="email" class="field"><div class="ring"></div><span class="chars"><span>d</span><span>e</span><span>a</span><span>n</span><span>@</span><span>a</span><span>c</span><span>m</span><span>e</span><span>.</span><span>d</span><span>e</span><span>v</span></span><i class="caret"></i></div>
+                <div class="label" style="margin-top: 12px">Password</div>
+                <div id="password" class="field"><div class="ring"></div><span class="dots"><span>●</span><span>●</span><span>●</span><span>●</span><span>●</span><span>●</span><span>●</span><span>●</span><span>●</span><span>●</span></span><i class="caret"></i></div>
+                <div id="create" class="button"><span class="lbl">Create account</span><span class="spin"></span></div>
+                <div class="foot"></div>
+              </div>
+              <div id="success" class="col" style="top: 62px">
+                <div class="check"><svg viewBox="0 0 16 16"><path d="M3.5 8.4 6.6 11.3 12.6 4.9"/></svg></div>
+                <div class="h1" style="margin-top: 14px">Welcome, Dean</div>
+                <div class="sub" style="margin: 8px auto 0; width: 132px"></div>
+                <div class="signout">Sign out</div>
+              </div>
+            </div>
+          </div>
+
+          <div id="win-b" class="win">
+            <div class="side">
+              <div class="lights"><i></i><i></i><i></i></div>
+              <div class="group"></div>
+              <div class="lists">
+                <div class="li on"><i style="background: var(--blue)"></i>Launch</div>
+                <div class="li"><i style="background: #ff9f0a"></i><b style="width: 40px"></b></div>
+                <div class="li"><i style="background: #34c759"></i><b style="width: 52px"></b></div>
+                <div class="li"><i style="background: #af52de"></i><b style="width: 34px"></b></div>
+              </div>
+            </div>
+            <div class="main">
+              <div class="title">Launch</div>
+              <div id="rows" class="rows"></div>
+            </div>
+          </div>
+
+          <div id="vwin" class="win">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <div class="tools">
+              <svg viewBox="0 0 14 14"><rect x="1.5" y="2.5" width="11" height="9" rx="2"/><path d="M5.5 2.5v9"/></svg>
+              <svg viewBox="0 0 14 14"><path d="M11 7H3M6.5 3.5 3 7l3.5 3.5"/></svg>
+              <svg viewBox="0 0 14 14"><path d="M3 7h8M7.5 3.5 11 7l-3.5 3.5"/></svg>
+            </div>
+            <svg class="brand" xmlns="http://www.w3.org/2000/svg" viewBox="-6 -87.65 445.88 108.65" fill="none"><g transform="translate(0 -81.65) scale(0.92)"><path d="M0,50c0,-13.55 5.39,-25.84 14.14,-34.84c0.54,-0.56 1.30,-0.90 2.15,-0.90c1.22,0 2.28,0.73 2.74,1.79l26.14,56.07c0.81,1.84 2.65,3.13 4.80,3.13c2.14,0 3.99,-1.29 4.80,-3.13l26.14,-56.07c0.46,-1.05 1.51,-1.79 2.74,-1.79c0.84,0 1.60,0.34 2.15,0.90c8.75,9.00 14.14,21.29 14.14,34.84c0,27.61 -22.38,50 -50,50c-27.61,0 -50,-22.38 -50,-50zM28.66,4.76c6.46,-3.05 13.70,-4.76 21.33,-4.76c7.63,0 14.86,1.70 21.33,4.76l-0.00,0.01c1.01,0.48 1.72,1.51 1.72,2.71c0,0.47 -0.11,0.92 -0.30,1.32l-19.99,42.87c-0.46,1.05 -1.51,1.79 -2.74,1.79c-1.22,0 -2.28,-0.73 -2.74,-1.79l-19.99,-42.87c-0.19,-0.39 -0.30,-0.84 -0.30,-1.32c0,-1.19 0.70,-2.23 1.72,-2.71z" fill="#a7611b"/></g><path transform="translate(123.68 0)" d="M43.2 0L27.6 0L1.9 -71L15.6 -71L35.5 -14.5L55.3 -71L69 -71L43.2 0M94.2 1.2L94.2 1.2Q86.2 1.2 80.3 -2.25Q74.4 -5.7 71.2 -12Q68 -18.3 68 -26.7L68 -26.7Q68 -35.1 71.2 -41.4Q74.4 -47.7 80.25 -51.15Q86.1 -54.6 93.9 -54.6L93.9 -54.6Q101.5 -54.6 107.2 -51.2Q112.9 -47.8 116.05 -41.4Q119.2 -35 119.2 -26L119.2 -26L119.2 -23.1L81.3 -23.1Q81.6 -16.1 85.1 -12.55Q88.6 -9 94.3 -9L94.3 -9Q103 -9 105.4 -16.4L105.4 -16.4L118.5 -15.6Q116.3 -7.8 109.85 -3.3Q103.4 1.2 94.2 1.2M81.3 -31.7L81.3 -31.7L106 -31.7Q105.5 -38.2 102.25 -41.35Q99 -44.5 93.9 -44.5L93.9 -44.5Q88.7 -44.5 85.4 -41.2Q82.1 -37.9 81.3 -31.7M148.9 1.2L148.9 1.2Q136.7 1.2 130.7 -3.9Q124.7 -9 124.1 -16.8L124.1 -16.8L137.2 -17.4Q137.9 -13.2 140.55 -10.9Q143.2 -8.6 149 -8.6L149 -8.6Q153.5 -8.6 155.85 -10.05Q158.2 -11.5 158.2 -14.6L158.2 -14.6Q158.2 -16.4 157.35 -17.6Q156.5 -18.8 154.05 -19.7Q151.6 -20.6 146.9 -21.5L146.9 -21.5Q138.8 -22.9 134.2 -24.95Q129.6 -27 127.75 -30.1Q125.9 -33.2 125.9 -37.8L125.9 -37.8Q125.9 -45.2 131.65 -49.9Q137.4 -54.6 148.5 -54.6L148.5 -54.6Q156.2 -54.6 161.15 -52.15Q166.1 -49.7 168.65 -45.65Q171.2 -41.6 171.6 -36.6L171.6 -36.6L158.6 -36Q158.4 -39.8 156 -42.3Q153.6 -44.8 148.3 -44.8L148.3 -44.8Q143.8 -44.8 141.45 -43Q139.1 -41.2 139.1 -38.2L139.1 -38.2Q139.1 -35 141.35 -33.45Q143.6 -31.9 149.6 -30.9L149.6 -30.9Q157.8 -29.7 162.6 -27.6Q167.4 -25.5 169.45 -22.35Q171.5 -19.2 171.5 -14.8L171.5 -14.8Q171.5 -7.1 165.35 -2.95Q159.2 1.2 148.9 1.2M192.3 15L179.5 15L179.5 -53.4L191.8 -53.4L192 -45.4Q194.3 -49.9 198.5 -52.25Q202.7 -54.6 208 -54.6L208 -54.6Q215.6 -54.6 220.65 -50.85Q225.7 -47.1 228.2 -40.75Q230.7 -34.4 230.7 -26.7L230.7 -26.7Q230.7 -19 228.15 -12.7Q225.6 -6.4 220.55 -2.6Q215.5 1.2 207.9 1.2L207.9 1.2Q202.8 1.2 198.65 -1.05Q194.5 -3.3 192.3 -7.3L192.3 -7.3L192.3 15M204.9 -9.2L204.9 -9.2Q210.7 -9.2 214.05 -13.85Q217.4 -18.5 217.4 -26.7L217.4 -26.7Q217.4 -34.9 214.05 -39.55Q210.7 -44.2 204.9 -44.2L204.9 -44.2Q199.1 -44.2 195.7 -39.8Q192.3 -35.4 192.3 -26.7L192.3 -26.7Q192.3 -18 195.65 -13.6Q199 -9.2 204.9 -9.2M237.83 -66.20a7.17 7.17 0 1 0 14.34 0a7.17 7.17 0 1 0 -14.34 0ZM251.4 0L238.6 0L238.6 -53.4L251.4 -53.4L251.4 0M276.9 0L264.1 0L264.1 -53.4L275.7 -53.4L276 -44.3Q278.2 -49.8 282.45 -52.2Q286.7 -54.6 292 -54.6L292 -54.6Q300.8 -54.6 305.5 -48.95Q310.2 -43.3 310.2 -34.3L310.2 -34.3L310.2 0L297.4 0L297.4 -30.2Q297.4 -37 295.35 -40.6Q293.3 -44.2 288.1 -44.2L288.1 -44.2Q282.9 -44.2 279.9 -40.6Q276.9 -37 276.9 -30.2L276.9 -30.2L276.9 0" fill="#171614"/></svg>
+            <div class="ttl">Launch</div>
+            <div class="desc" style="top: 74px; width: 330px"></div>
+            <div class="desc" style="top: 86px; width: 362px"></div>
+            <div class="desc" style="top: 98px; width: 300px"></div>
+            <div class="desc" style="top: 110px; width: 184px"></div>
+            <div class="bubble" id="bubble">Clean up my Launch list in <span class="chip"><svg viewBox="0 0 12 12"><rect x=".5" y=".5" width="11" height="11" rx="2.6" fill="#fff" stroke="#d4d4d4" stroke-width=".6"/><circle cx="3.3" cy="3.6" r="1" fill="#0a84ff"/><circle cx="3.3" cy="6.1" r="1" fill="#ff9f0a"/><circle cx="3.3" cy="8.6" r="1" fill="#ff453a"/><path d="M5.2 3.6h4.2M5.2 6.1h4.2M5.2 8.6h4.2" stroke="#cfcfcf" stroke-width=".8"/></svg>Reminders</span> and test the signup flow in <span class="chip"><svg viewBox="0 0 12 12"><defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3fb6ff"/><stop offset="1" stop-color="#0a6fe0"/></linearGradient></defs><circle cx="6" cy="6" r="5.6" fill="url(#sg)"/><path d="M8.6 3.4 5.2 5.2 6.8 6.8Z" fill="#ff4a3d"/><path d="M3.4 8.6 6.8 6.8 5.2 5.2Z" fill="#fff"/></svg>Safari</span></div>
+            <div class="runs"><div class="run r0" id="run-0"><div class="mark"><div class="spin2"></div><div class="ok"><svg viewBox="0 0 10 10"><path d="M2.2 5.2 4.2 7.1 7.9 3"/></svg></div></div><b>Launch prep</b><span class="st"><span class="go">Working in Reminders</span><span class="done">Done</span></span></div><div class="run r1" id="run-1"><div class="mark"><div class="spin2"></div><div class="ok"><svg viewBox="0 0 10 10"><path d="M2.2 5.2 4.2 7.1 7.9 3"/></svg></div></div><b>Test signup</b><span class="st"><span class="go">Working in Safari</span><span class="done">Done</span></span></div></div>
+            <div class="composer">
+              <div class="ctext" id="ctext"><span class="k">C</span><span class="k">l</span><span class="k">e</span><span class="k">a</span><span class="k">n</span><span class="k">&nbsp;</span><span class="k">u</span><span class="k">p</span><span class="k">&nbsp;</span><span class="k">m</span><span class="k">y</span><span class="k">&nbsp;</span><span class="k">L</span><span class="k">a</span><span class="k">u</span><span class="k">n</span><span class="k">c</span><span class="k">h</span><span class="k">&nbsp;</span><span class="k">l</span><span class="k">i</span><span class="k">s</span><span class="k">t</span><span class="k">&nbsp;</span><span class="k">i</span><span class="k">n</span><span class="k">&nbsp;</span><span class="k"><span class="chip"><svg viewBox="0 0 12 12"><rect x=".5" y=".5" width="11" height="11" rx="2.6" fill="#fff" stroke="#d4d4d4" stroke-width=".6"/><circle cx="3.3" cy="3.6" r="1" fill="#0a84ff"/><circle cx="3.3" cy="6.1" r="1" fill="#ff9f0a"/><circle cx="3.3" cy="8.6" r="1" fill="#ff453a"/><path d="M5.2 3.6h4.2M5.2 6.1h4.2M5.2 8.6h4.2" stroke="#cfcfcf" stroke-width=".8"/></svg>Reminders</span></span><span class="k">&nbsp;</span><span class="k">a</span><span class="k">n</span><span class="k">d</span><span class="k">&nbsp;</span><span class="k">t</span><span class="k">e</span><span class="k">s</span><span class="k">t</span><span class="k">&nbsp;</span><span class="k">t</span><span class="k">h</span><span class="k">e</span><span class="k">&nbsp;</span><span class="k">s</span><span class="k">i</span><span class="k">g</span><span class="k">n</span><span class="k">u</span><span class="k">p</span><span class="k">&nbsp;</span><span class="k">f</span><span class="k">l</span><span class="k">o</span><span class="k">w</span><span class="k">&nbsp;</span><span class="k">i</span><span class="k">n</span><span class="k">&nbsp;</span><span class="k"><span class="chip"><svg viewBox="0 0 12 12"><defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3fb6ff"/><stop offset="1" stop-color="#0a6fe0"/></linearGradient></defs><circle cx="6" cy="6" r="5.6" fill="url(#sg)"/><path d="M8.6 3.4 5.2 5.2 6.8 6.8Z" fill="#ff4a3d"/><path d="M3.4 8.6 6.8 6.8 5.2 5.2Z" fill="#fff"/></svg>Safari</span></span><i class="caret"></i></div>
+              <div class="cbar">
+                <svg viewBox="0 0 14 14"><path d="M7 2.5v9M2.5 7h9"/></svg>
+                <span class="mach"><svg viewBox="0 0 14 14"><rect x="2.5" y="3" width="9" height="6" rx="1"/><path d="M1.5 11h11"/></svg>This Mac</span>
+                <svg viewBox="0 0 14 14"><path d="M5 1.8v2.6M9 1.8v2.6M3.6 4.4h6.8v2.1a3.4 3.4 0 0 1-6.8 0zM7 9.9v2.3"/></svg>
+                <span class="model">Opus 5.5 <i>High</i><svg viewBox="0 0 10 10"><path d="M2.5 4 5 6.5 7.5 4"/></svg></span>
+                <svg viewBox="0 0 14 14"><rect x="5" y="1.8" width="4" height="6.6" rx="2"/><path d="M3 6.8a4 4 0 0 0 8 0M7 10.8v1.6"/></svg>
+                <div class="send" id="send"><svg viewBox="0 0 14 14"><path d="M7 11.5v-9M3.2 6.3 7 2.5l3.8 3.8"/></svg></div>
+              </div>
+            </div>
+          </div>
+          <div id="vcard"><div class="m"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none"><rect x="100" y="100" width="824" height="824" rx="185.4" fill="#a7611b"/><g transform="translate(190.64 190.64) scale(6.43)"><path d="M0,50c0,-13.55 5.39,-25.84 14.14,-34.84c0.54,-0.56 1.30,-0.90 2.15,-0.90c1.22,0 2.28,0.73 2.74,1.79l26.14,56.07c0.81,1.84 2.65,3.13 4.80,3.13c2.14,0 3.99,-1.29 4.80,-3.13l26.14,-56.07c0.46,-1.05 1.51,-1.79 2.74,-1.79c0.84,0 1.60,0.34 2.15,0.90c8.75,9.00 14.14,21.29 14.14,34.84c0,27.61 -22.38,50 -50,50c-27.61,0 -50,-22.38 -50,-50zM28.66,4.76c6.46,-3.05 13.70,-4.76 21.33,-4.76c7.63,0 14.86,1.70 21.33,4.76l-0.00,0.01c1.01,0.48 1.72,1.51 1.72,2.71c0,0.47 -0.11,0.92 -0.30,1.32l-19.99,42.87c-0.46,1.05 -1.51,1.79 -2.74,1.79c-1.22,0 -2.28,-0.73 -2.74,-1.79l-19.99,-42.87c-0.19,-0.39 -0.30,-0.84 -0.30,-1.32c0,-1.19 0.70,-2.23 1.72,-2.71z" fill="#ffffff"/></g></svg></div><div><div class="run r0" id="crun-0"><div class="mark"><div class="spin2"></div><div class="ok"><svg viewBox="0 0 10 10"><path d="M2.2 5.2 4.2 7.1 7.9 3"/></svg></div></div><b>Launch prep</b><span class="st"><span class="go">Working in Reminders</span><span class="done">Done</span></span></div><div class="run r1" id="crun-1"><div class="mark"><div class="spin2"></div><div class="ok"><svg viewBox="0 0 10 10"><path d="M2.2 5.2 4.2 7.1 7.9 3"/></svg></div></div><b>Test signup</b><span class="st"><span class="go">Working in Safari</span><span class="done">Done</span></span></div></div></div>
+          <div id="you"><svg viewBox="-1 -1 14 20"><path d="M0 0v15.6l3.9-3.6 2.6 5.8 2.5-1.1-2.6-5.7H11.6Z" fill="#111" stroke="#fff" stroke-width="1.1" stroke-linejoin="round" style="filter: drop-shadow(0 .8px 1.2px rgba(0,0,0,.35))"/></svg></div>
+          <div id="cur-a" class="cursor"><div class="c-in">
+            <div class="ripple"></div>
+            <div class="tag">Test signup</div>
+            <svg class="arrow" viewBox="-4 -4 22 22"><g class="sway"><path d="M0 0 12.07 4.16C13.49 4.65 13.65 5.12 12.56 5.58L7.64 7.64 5.58 12.56C5.12 13.65 4.65 13.49 4.16 12.07Z" fill="#a7611b" stroke="#fff" stroke-width="1.6" stroke-linejoin="round" paint-order="stroke" style="filter: drop-shadow(0 .6px .9px rgba(0,0,0,.35))"/></g></svg>
+          </div></div>
+          <div id="cur-b" class="cursor"><div class="c-in">
+            <div class="ripple"></div>
+            <div class="tag">Launch prep</div>
+            <svg class="arrow" viewBox="-4 -4 22 22"><g class="sway"><path d="M0 0 12.07 4.16C13.49 4.65 13.65 5.12 12.56 5.58L7.64 7.64 5.58 12.56C5.12 13.65 4.65 13.49 4.16 12.07Z" fill="#a7611b" stroke="#fff" stroke-width="1.6" stroke-linejoin="round" paint-order="stroke" style="filter: drop-shadow(0 .6px .9px rgba(0,0,0,.35))"/></g></svg>
+          </div></div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      // Rows of the list: widths repeat every three, so three checked rows later the list reads as it began.
+      const WIDTHS = [96, 72, 104];
+      const rows = document.getElementById("rows");
+      for (let i = 0; i < 12; i++) {
+        rows.insertAdjacentHTML("beforeend",
+          `<div class="row" id="row-${i}"><div class="in"><div class="box"><div class="fill"><svg viewBox="0 0 10 10"><path d="M2.2 5.2 4.2 7.1 7.9 3"/></svg></div></div><div class="txt" style="width:${WIDTHS[i % 3]}px"></div><div class="sep"></div></div></div>`);
+      }
+
+      const root = gsap.timeline({ paused: true });
+      // The agents' work is its own timeline, placed after the ask that starts it (W).
+      const tl = gsap.timeline();
+      const W = 3.95;
+      const $ = (s) => document.querySelector(s);
+      const $$ = (s) => [...document.querySelectorAll(s)];
+      const A = "#cur-a", B = "#cur-b";
+      const GLIDE = 0.55;
+
+      // Note that the arrow's tip is the cursor's origin, so a point is where the tip lands.
+      const at = { rest: [218, 240], email: [196, 195], password: [196, 253], create: [200, 299], signout: [188, 256], bHome: [526, 269], check: [477, 199] };
+
+      const glide = (c, to, t) => tl.to(c, { x: to[0], y: to[1], duration: GLIDE, ease: "power2.inOut" }, t);
+      const press = (c, t) => tl.fromTo(`${c} .ripple`, { scale: 0.4, opacity: 1 }, { scale: 1.4, opacity: 0, duration: 0.42, ease: "power1.out", immediateRender: false }, t);
+      // One sway there and back about the tip, ending upright, over the rest from t to end.
+      const sway = (c, t, end, deg = 4.5) => {
+        const q = (end - t) / 4, g = `${c} .sway`;
+        tl.to(g, { rotation: -deg, duration: q, ease: "sine.out", svgOrigin: "0 0" }, t)
+          .to(g, { rotation: deg, duration: q * 2, ease: "sine.inOut", svgOrigin: "0 0" }, t + q)
+          .to(g, { rotation: 0, duration: q, ease: "sine.in", svgOrigin: "0 0" }, t + q * 3);
+      };
+      const tagIn = (c, t) => tl.fromTo(`${c} .tag`, { opacity: 0, scale: 0.6, x: -6, y: -6 }, { opacity: 1, scale: 1, x: 0, y: 0, duration: 0.32, ease: "back.out(1.6)", transformOrigin: "0% 0%", immediateRender: false }, t);
+      const tagOut = (c, t) => tl.to(`${c} .tag`, { opacity: 0, scale: 0.6, x: -6, y: -6, duration: 0.24, ease: "power2.in", transformOrigin: "0% 0%" }, t);
+      const typeInto = (sel, t, step) => $$(sel).forEach((s, i) => tl.set(s, { display: "inline" }, t + i * step));
+      const focus = (id, t) => {
+        tl.to(`#${id} .ring`, { opacity: 1, duration: 0.18 }, t).set(`#${id} .caret`, { opacity: 1 }, t);
+        tl.to(`#${id}`, { borderColor: "#7fb8f5", duration: 0.18 }, t);
+      };
+      const blur = (id, t) => {
+        tl.to(`#${id} .ring`, { opacity: 0, duration: 0.15 }, t).set(`#${id} .caret`, { opacity: 0 }, t);
+        tl.to(`#${id}`, { borderColor: "#dcdcdc", duration: 0.15 }, t);
+      };
+      // Check a row off: the circle fills, the row dims, then it folds away and the rows below rise.
+      const checkRow = (i, t) => {
+        tl.to(`#row-${i} .fill`, { opacity: 1, scale: 1, duration: 0.22, ease: "back.out(2)" }, t)
+          .to(`#row-${i} .txt`, { opacity: 0.45, duration: 0.2 }, t + 0.1)
+          .to(`#row-${i}`, { height: 0, opacity: 0, duration: 0.38, ease: "power2.inOut" }, t + 0.55);
+      };
+
+      // Start: neither agent is on screen yet.
+      gsap.set(A, { x: at.rest[0], y: at.rest[1], opacity: 0 }); gsap.set(B, { x: at.bHome[0], y: at.bHome[1], opacity: 0 });
+
+      // A comes in over its window's middle, a bare arrow while it is alone.
+      tl.fromTo(A, { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.3, ease: "power2.out", immediateRender: false }, 0);
+      // A: email.
+      glide(A, at.email, 0.35); press(A, 0.88); focus("email", 0.9); typeInto("#email .chars span", 1.0, 0.045);
+      // B arrives over its window's middle; with two cursors on screen, both name their agent.
+      tl.fromTo(B, { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.3, ease: "power2.out", immediateRender: false }, 1.15);
+      tagIn(A, 1.3); tagIn(B, 1.36);
+      glide(B, at.check, 1.75);
+      // A: password, then Create account.
+      blur("email", 1.9); glide(A, at.password, 1.8); press(A, 2.38); focus("password", 2.4); typeInto("#password .dots span", 2.5, 0.04);
+      blur("password", 3.05); glide(A, at.create, 3.0);
+      press(A, 3.58);
+      tl.to("#create", { scale: 0.97, duration: 0.08, yoyo: true, repeat: 1 }, 3.58)
+        .to("#create .lbl", { opacity: 0, duration: 0.15 }, 3.64)
+        .to("#create .spin", { opacity: 1, duration: 0.15 }, 3.7)
+        .fromTo("#create .spin", { rotation: 0 }, { rotation: 540, duration: 0.8, ease: "none", immediateRender: false }, 3.64);
+      // The page moves on to /welcome.
+      tl.to("#form", { opacity: 0, y: -6, duration: 0.24, ease: "power2.in" }, 4.4)
+        .fromTo("#success", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.34, ease: "power2.out", immediateRender: false }, 4.6)
+        .to(["#path-a", "#path-b"], { y: -13, duration: 0.32, ease: "power2.inOut" }, 4.42);
+      glide(A, at.signout, 4.95);
+
+      // B checks three rows; each next row rises under its pointer.
+      press(B, 2.32); checkRow(0, 2.34);
+      press(B, 3.42); checkRow(1, 3.44);
+      press(B, 4.52); checkRow(2, 4.54);
+      sway(B, 2.5, 3.4, 3); sway(B, 3.6, 4.5, 3);
+
+      // B's turn ends: its cursor goes, and the lone one left is a bare arrow again.
+      tl.to(B, { opacity: 0, scale: 0.8, duration: 0.3, ease: "power2.in" }, 5.55);
+      tagOut(A, 5.62);
+
+      // A signs out, which brings the form back as it began.
+      press(A, 6.1);
+      tl.to("#success", { opacity: 0, y: -6, duration: 0.22, ease: "power2.in" }, 6.16);
+      $$("#email .chars span, #password .dots span").forEach((s) => tl.set(s, { display: "none" }, 6.4));
+      tl.set("#create .lbl", { opacity: 1 }, 6.4).set("#create .spin", { opacity: 0 }, 6.4)
+        .fromTo("#form", { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.34, ease: "power2.out", immediateRender: false }, 6.4)
+        .to(["#path-a", "#path-b"], { y: 0, duration: 0.32, ease: "power2.inOut" }, 6.18);
+      sway(A, 5.5, 6.05);
+      // A's turn ends too.
+      tl.to(A, { opacity: 0, scale: 0.8, duration: 0.3, ease: "power2.in" }, 6.6);
+
+      // ---- The ask, in Vespin, and the answer it comes back to. ----
+      const R = root;
+      gsap.set("#you", { x: 424, y: 262 });
+      // You type the ask; each app you name lands whole, as a chip.
+      $$("#ctext .k").forEach((k, i) => R.set(k, { display: "inline" }, 0.35 + i * 0.03));
+      const typed = 0.35 + $$("#ctext .k").length * 0.03;
+      // Your pointer goes to Send and presses it.
+      R.to("#you", { x: 500, y: 320, duration: 0.55, ease: "power2.inOut" }, typed + 0.1);
+      const sent = typed + 0.72;
+      R.to("#send", { scale: 0.9, duration: 0.08, yoyo: true, repeat: 1 }, sent);
+      $$("#ctext .k").forEach((k) => R.set(k, { display: "none" }, sent + 0.06));
+      R.fromTo("#bubble", { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.34, ease: "power3.out", immediateRender: false }, sent + 0.06);
+      // Vespin starts an agent for each part.
+      ["#run-0", "#run-1"].forEach((r, i) => R.fromTo(r, { opacity: 0, y: 6 }, { opacity: 1, y: 0, duration: 0.3, ease: "power2.out", immediateRender: false }, sent + 0.32 + i * 0.12));
+      R.fromTo(".run .spin2", { rotation: 0 }, { rotation: 360 * 9, duration: 12, ease: "none", immediateRender: false }, sent + 0.32);
+      // The apps the agents use come forward; Vespin steps back.
+      R.to("#vwin", { scale: 0.3, opacity: 0, transformOrigin: "50% 100%", duration: 0.5, ease: "power3.in" }, W - 0.5);
+      R.fromTo("#vcard", { opacity: 0, scale: 0.86, y: 8 }, { opacity: 1, scale: 1, y: 0, duration: 0.42, ease: "back.out(1.5)", immediateRender: false }, W - 0.12);
+      R.to("#you", { opacity: 0, duration: 0.25 }, W - 0.35);
+      R.set(".menubar .app1", { display: "none" }, W).set(".menubar .app2", { display: "inline" }, W);
+      R.add(tl, W);
+      // Both turns over, Vespin comes back with each agent done.
+      const back = W + 6.95;
+      // Each agent's row in Vespin turns Done as its turn ends.
+      [[".r0", W + 5.65], [".r1", W + 6.7]].forEach(([r, t]) => {
+        R.to(`${r} .spin2`, { opacity: 0, duration: 0.15 }, t).fromTo(`${r} .ok`, { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 0.28, ease: "back.out(2)", immediateRender: false }, t)
+          .set(`${r} .go`, { display: "none" }, t).set(`${r} .done`, { display: "inline" }, t);
+      });
+      R.set(".menubar .app2", { display: "none" }, back).set(".menubar .app1", { display: "inline" }, back);
+      R.to("#vcard", { opacity: 0, scale: 0.9, y: 6, duration: 0.25, ease: "power2.in" }, back);
+      R.to("#vwin", { scale: 1, opacity: 1, duration: 0.5, ease: "power3.out" }, back + 0.12);
+      // Then the page clears for the next ask.
+      R.to(["#bubble", "#run-0", "#run-1"], { opacity: 0, duration: 0.3, ease: "power2.in" }, back + 1.15);
+      // Your pointer is back where the loop began.
+      R.set("#you", { x: 424, y: 262 }, back).to("#you", { opacity: 1, duration: 0.3 }, back + 0.25);
+      R.set(".run .spin2", { opacity: 1 }, back + 1.5).set(".run .ok", { opacity: 0 }, back + 1.5)
+        .set(".run .go", { display: "inline" }, back + 1.5).set(".run .done", { display: "none" }, back + 1.5);
+
+      window.__timelines = window.__timelines || {};
+      window.__timelines["agent-cursors"] = root;
+    </script>
+  </body>
+</html>

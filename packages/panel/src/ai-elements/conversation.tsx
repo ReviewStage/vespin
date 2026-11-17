@@ -446,7 +446,8 @@ const SCROLL_LABEL = "Scroll to the newest line";
  * from it: the shared icon button, round, floating over the lines on a
  * ground of its own in the log's bottom right corner, as phone chat apps
  * stand theirs, so it covers at most a line's end rather than the middle of
- * the words, or a reply box being typed in.
+ * the words, or a reply box being typed in. It stands in the log's column,
+ * its center over the composer's send button below it.
  */
 export function ConversationScrollButton(): ReactNode {
   const { isAtBottom, scrollToBottom } = useConversation();
@@ -455,7 +456,7 @@ export function ConversationScrollButton(): ReactNode {
 
   return (
     // Its ground is the button's own (`--ui-button-ground`), which the button's lit fill is laid over as a title bar's is.
-    <div className="conversation-scroll absolute right-content-inset bottom-conversation-scroll flex rounded-disc bg-button-ground shadow-floating-edge [--ui-button-ground:var(--ui-color-well)]">
+    <div className="conversation-scroll absolute right-conversation-scroll-end bottom-conversation-scroll flex rounded-disc bg-button-ground shadow-floating-edge [--ui-button-ground:var(--ui-color-well)]">
       <Tooltip label={SCROLL_LABEL}>
         <IconButton
           label={SCROLL_LABEL}

@@ -167,6 +167,10 @@
     "dest": "/api/default.js?route=maintenance/provider-keys-rewrap"
   },
   {
+    "src": "/api/maintenance/usage-ledger",
+    "dest": "/api/default.js?route=maintenance/usage-ledger"
+  },
+  {
     "src": "/api/maintenance/workspace-drives",
     "dest": "/api/default.js?route=maintenance/workspace-drives"
   },
@@ -181,6 +185,10 @@
   {
     "src": "/api/slack/events",
     "dest": "/api/default.js?route=slack/events"
+  },
+  {
+    "src": "/api/slack/oauth/callback",
+    "dest": "/api/default.js?route=slack/oauth/callback"
   },
   {
     "src": "/api/triggers/sentry",

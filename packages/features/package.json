@@ -102,6 +102,7 @@
     "./video-signature": "./src/video-signature.js",
     "./voice-delegation": "./src/voice-delegation.js",
     "./markdown-nesting": "./src/markdown-nesting.js",
+    "./markdown-plain-text": "./src/markdown-plain-text.js",
     "./markdown-tree": "./src/markdown-tree.js",
     "./media-read-words": "./src/media-read-words.js",
     "./media-signature": "./src/media-signature.js",

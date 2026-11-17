@@ -65,6 +65,7 @@ import {
   Stack,
   useComboboxField,
 } from "@repo/ui";
+import { isComposingKey } from "@repo/ui/composing-key";
 import { land } from "@repo/ui/landed";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useStateWithRef } from "@repo/ui/use-state-with-ref";
@@ -163,8 +164,8 @@ const EXPERIMENT_WORDS = "experiment preview beta labs early try";
 /** The words every window shortcut answers to, which change nothing and so offer no removal. */
 const WINDOW_SHORTCUT_WORDS = "keyboard shortcut key chord";
 
-/** The words the one Escape row answers to besides, which stands for every layer the key steps back from. */
-const ESCAPE_WORDS = "escape esc exit leave back";
+/** The words the one Escape row answers to besides, which stands for every layer the key closes. */
+const ESCAPE_WORDS = "escape esc exit dismiss deselect";
 
 /** The words every writing chord and Markdown rule answers to besides. */
 const WRITING_WORDS = "format formatting markdown editor text";
@@ -796,7 +797,7 @@ export function SettingsSearchField({
         // Note that an Escape is stopped even mid-composition, because the
         // input method spends that press dismissing its candidates, and the
         // window's own Escape would turn the page behind the field.
-        if (event.key === "Escape" && event.nativeEvent.isComposing) event.stopPropagation();
+        if (event.key === "Escape" && isComposingKey(event)) event.stopPropagation();
       }}
     >
       <SearchField

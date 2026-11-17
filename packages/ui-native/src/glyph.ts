@@ -179,6 +179,10 @@ export const GLYPH = {
   UNARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE_RESTORE),
   MOVE: lucide(LUCIDE_SYMBOL.FOLDER_INPUT),
   SUGGEST: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
+  // A queued message's acts, as the panel's queue dock draws Steer; Move Up and Move Down are its drag's reorder as a long press offers it.
+  STEER: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
+  MOVE_UP: lucide(LUCIDE_SYMBOL.ARROW_UP),
+  MOVE_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
   ADD_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_PLUS),
   REMOVE_FROM_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_MINUS),
   NEW_THREAD: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE_PLUS),

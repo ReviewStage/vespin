@@ -10,6 +10,7 @@
     "repository": {
       "type": "string",
       "maxLength": 140,
+      "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*\\/(?!\\.{1,2}$)[A-Za-z0-9_.-]+$",
       "description": "The repository whose run actions to edit, as owner/name, under any casing of its name."
     },
     "actionId": {
@@ -31,6 +32,7 @@
     "command": {
       "type": "string",
       "maxLength": 4096,
+      "pattern": "\\S",
       "description": "The bash it runs from the repository's checkout, with the workspace's environment variables, such as pnpm dev."
     },
     "icon": {
@@ -68,7 +70,8 @@
                 },
                 "glyph": {
                   "type": "string",
-                  "maxLength": 64
+                  "maxLength": 64,
+                  "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
                 },
                 "color": {
                   "type": "string",

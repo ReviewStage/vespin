@@ -47,6 +47,7 @@ import {
 import { Effect, Equal, MutableHashMap, Option, type Scope } from "effect";
 import { type AppWorkspaceInvitations, NO_KEYS_HELD } from "./app-state.js";
 import { type EntityStore, KEPT_READ } from "./entity-store.js";
+import { KEPT_LIST } from "./kept-lists.js";
 import {
   type CarriedWaits,
   carriedWaits,
@@ -169,6 +170,7 @@ function followInvitations(
           // Note that no invitation write answers a transaction, so the read hands no wait and each write waits on its rows (`carried`).
           confirmation: () => undefined,
           adopts: (row) => row.workspaceId === workspaceId,
+          kept: { ...KEPT_LIST.INVITATIONS, workspace: workspaceId },
         },
       );
 

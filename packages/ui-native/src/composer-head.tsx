@@ -1,9 +1,8 @@
-// composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures attached to the message as thumbnails and its pasted text files as tiles, each taken off by its ×, and the skills a `/` offers.
+// composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as tiles, each taken off by its ×, and the skills a `/` offers.
 
 import { Button, HStack, Image, ScrollView, Text, VStack, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
-  accessibilityHidden,
   accessibilityLabel,
   buttonStyle,
   font,
@@ -13,158 +12,11 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
-import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { GLYPH, glyphImage } from "./glyph.js";
 import { AvatarPhoto } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
-
-/** The panel's words for a queued message's acts. */
-const WORDS = {
-  STEER: "Steer",
-  DELETE: "Delete",
-} as const;
-
-/** One message waiting behind the turn, which its starter may steer or delete. */
-export type QueuedLine = {
-  readonly id: string;
-  readonly words: string;
-};
-
-type QueuedLinesProps = {
-  readonly lines: readonly QueuedLine[];
-  /** Why the queue stands paused, said over its lines; nothing while it hands its messages on. */
-  readonly paused?: string | undefined;
-  /** Sends a queued message now, steering the turn; Steer is not offered where none is given, as for a reader who did not start the agent. */
-  readonly onSteer?: ((id: string) => void) | undefined;
-  /** Takes a queued message out of the queue; Delete is not offered where none is given. */
-  readonly onDelete?: ((id: string) => void) | undefined;
-};
-
-/** A queued line's small act at its end: its words in the muted ink, or its glyph alone, pressed anywhere in a frame of a press's size. */
-function LineAct({
-  label,
-  symbol,
-  onPress,
-}: {
-  readonly label: string;
-  readonly symbol?: Glyph | undefined;
-  readonly onPress: () => void;
-}) {
-  const colors = useColors();
-  const glyph = useScaledSize(MARK_SIZE.GLYPH);
-
-  return (
-    <Button onPress={onPress} modifiers={[buttonStyle("plain"), accessibilityLabel(label)]}>
-      {/* Note that the press's frame and its shape stand on the label, not on the button, since a plain button takes a press only where its label is hit. */}
-      <HStack
-        modifiers={[
-          frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
-          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-        ]}
-      >
-        {symbol === undefined ? (
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
-              foregroundStyle(colors.TEXT_BODY),
-            ]}
-          >
-            {label}
-          </Text>
-        ) : (
-          <Image {...glyphImage(symbol)} size={glyph} color={colors.TEXT_MUTED} />
-        )}
-      </HStack>
-    </Button>
-  );
-}
-
-/** How many lines a queued message keeps at an accessibility size before it is cut. */
-const QUEUED_LINES_LARGE = 3;
-
-/** A queued message's Steer and Delete, where each is offered. */
-function QueuedActs({
-  id,
-  onSteer,
-  onDelete,
-}: {
-  readonly id: string;
-  readonly onSteer: QueuedLinesProps["onSteer"];
-  readonly onDelete: QueuedLinesProps["onDelete"];
-}) {
-  return (
-    <>
-      {onSteer === undefined ? null : <LineAct label={WORDS.STEER} onPress={() => onSteer(id)} />}
-      {onDelete === undefined ? null : (
-        <LineAct label={WORDS.DELETE} symbol={GLYPH.DELETE} onPress={() => onDelete(id)} />
-      )}
-    </>
-  );
-}
-
-/**
- * The messages queued behind the agent's turn, oldest first, as the panel's
- * queue dock lists them over its box: each on one line led by the panel's queued glyph, with
- * Steer, which sends it into the turn now, and Delete; a message on its way
- * reads Sending in their place. Why the queue stands paused heads them.
- */
-export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesProps) {
-  const colors = useColors();
-  const large = useAccessibilitySize();
-  const glyph = useScaledSize(MARK_SIZE.GLYPH);
-
-  if (lines.length === 0 && paused === undefined) return null;
-
-  return (
-    <VStack alignment="leading" spacing={0}>
-      {paused === undefined ? null : (
-        <Text
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
-        >
-          {paused}
-        </Text>
-      )}
-      {lines.map((line) => {
-        const words = (
-          <HStack spacing={SPACE.ROW} modifiers={[frame({ minHeight: PRESS_SIZE })]}>
-            <Image
-              {...glyphImage(GLYPH.QUEUED)}
-              size={glyph}
-              color={colors.TEXT_MUTED}
-              modifiers={[accessibilityHidden()]}
-            />
-            <Text
-              modifiers={[
-                font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-                foregroundStyle(colors.TEXT_BODY),
-                lineLimit(large ? QUEUED_LINES_LARGE : 1),
-                frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-              ]}
-            >
-              {line.words}
-            </Text>
-            {large ? null : <QueuedActs id={line.id} onSteer={onSteer} onDelete={onDelete} />}
-          </HStack>
-        );
-
-        // Note that at an accessibility size a queued message keeps a few lines and its acts stand under it, since on one line beside Steer and Delete it read as a few letters on the folded Duo's 466 pt.
-        return large ? (
-          <VStack key={line.id} alignment="trailing" spacing={0}>
-            {words}
-            <HStack spacing={SPACE.ROW}>
-              <QueuedActs id={line.id} onSteer={onSteer} onDelete={onDelete} />
-            </HStack>
-          </VStack>
-        ) : (
-          <VStack key={line.id} spacing={0}>
-            {words}
-          </VStack>
-        );
-      })}
-    </VStack>
-  );
-}
 
 /** A picture's thumbnail over a composer's field, as Messages draws one: a square cropped from it, its corners rounded as a card's; a pasted text file stands as a tile of the same size. */
 const THUMBNAIL = { SIZE: 56, CORNER: 10 } as const;

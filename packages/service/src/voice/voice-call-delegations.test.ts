@@ -6,7 +6,7 @@ import { readAgent } from "@repo/database/models/agent-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { messages } from "@repo/database/schemas/storage";
 import { getTestDB } from "@repo/database/testing";
-import { RUN_STATUS } from "@repo/features/turn-run";
+import { RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
 import { LIVE_CLIENT_EVENT, LIVE_SERVER_EVENT } from "@repo/features/voice-delegation";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { asc, eq } from "drizzle-orm";
@@ -196,6 +196,50 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
           { role: "user", words: "Then write them.", span: [2400, 3000] },
         ]);
       }).pipe(Effect.provide(world)),
+  );
+
+  it.effect("a turn that ends with `end_turn` is answered with its summary", () =>
+    Effect.gen(function* () {
+      const { call, callerId, agentId } = yield* openCall;
+      const told = yield* Queue.unbounded<{ readonly type: string }>();
+      const session = fakeLiveSession(undefined, told);
+      const sync = wakeableSync();
+      const ready = yield* Deferred.make<void>();
+      const agent = Option.getOrThrow(yield* readAgent(callerId, agentId));
+
+      const run = Effect.gen(function* () {
+        const holder = yield* Effect.forkChild(
+          holdVoiceCall({ callId: call.id, callerId, epoch: 1, delivery: 1 }, settingOut(ready)),
+        );
+
+        yield* Deferred.await(ready);
+
+        yield* endedAt(
+          agent,
+          RUN_STATUS.SUCCEEDED,
+          1_000,
+          "Writing the docs.",
+          TURN_FAILURE.MODEL,
+          "The docs are written.",
+        );
+
+        // Note that a later turn follows, so a reply left untold shows as the wrong reply rather than a wait.
+        yield* endedAt(agent, RUN_STATUS.SUCCEEDED, 2_000, "Nothing else changed.");
+        yield* sync.wake;
+        assert.equal(yield* nextCommentary(told), "The docs are written.");
+        yield* Fiber.interrupt(holder);
+      });
+
+      yield* run.pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            sync.layer,
+            takingHarness(yield* Queue.unbounded<string>()),
+            session.layer,
+          ),
+        ),
+      );
+    }).pipe(Effect.provide(world)),
   );
 
   it.effect(

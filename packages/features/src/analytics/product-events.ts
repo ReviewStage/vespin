@@ -338,6 +338,7 @@ export const PRODUCT_EXPERIMENT = {
   GOALS: "goals",
   MOVE_AGENTS: "move-agents",
   CURSOR: "cursor",
+  STARTER_TASKS: "starter-tasks",
 } as const;
 
 export type ProductExperiment = (typeof PRODUCT_EXPERIMENT)[keyof typeof PRODUCT_EXPERIMENT];

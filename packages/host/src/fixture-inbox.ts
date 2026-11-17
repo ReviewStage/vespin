@@ -29,6 +29,7 @@ import {
   type AgentPermissionMode,
   APPROVAL_STATUS_OF_ANSWER,
 } from "@repo/features/agent-approval-wire";
+import { type AgentQueue, QUEUE_PAUSE, type QueuedMessage } from "@repo/features/agent-queue-wire";
 import {
   AGENT_CALL_FAILURE,
   type AgentTranscriptOlderAnswer,
@@ -40,9 +41,11 @@ import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_RUNTIME,
   AGENT_STATUS,
+  type AgentQueueChange,
   type AgentSummary,
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
+  QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import {
@@ -1965,19 +1968,22 @@ const INVITES_TRANSCRIPT = withQueued(
 /** The rounding agent's finished run, long enough that its page opens far below its first row, its words wide in places: a link, a code block, and a table. */
 const ROUNDING_TRANSCRIPT = fixtureLongTranscript(LANDED - 5 * DAY, ADA, "Fix ledger rounding");
 
-/** A transcript with one message of the account's queued behind its turn, which the agent's composer lists over its field with Steer and Delete. */
+/** A transcript with two messages of the account's queued behind its turn, which the agent's page lists over its composer with Steer and Delete, two so a flow may put one in the other's place. */
 function withQueued(transcript: AppTranscript): AppTranscript {
-  const queued = {
-    id: fixtureId(90),
-    text: "Then add a Resend button beside each pending invite.",
-    queuedBy: ADA.userId,
-  };
+  const queued = [
+    {
+      id: fixtureId(90),
+      text: "Then add a Resend button beside each pending invite.",
+      queuedBy: ADA.userId,
+    },
+    { id: fixtureId(95), text: "Also log each resend to the audit trail.", queuedBy: ADA.userId },
+  ];
 
   const { word } = transcript;
 
   if (word === undefined) return transcript;
 
-  return { ...transcript, word: { ...word, queue: { messages: [queued], revision: 1 } } };
+  return { ...transcript, word: { ...word, queue: { messages: queued, revision: 1 } } };
 }
 
 /** The transcripts main holds with the invitations and rounding agents' laid over them, one object for each of main's. */
@@ -2051,6 +2057,131 @@ export function olderPageAnswer(
   if (!STAGED_PROFILES.has(profile) || params.agentId !== AGENT.INVITES) return undefined;
 
   return asks >= OLDER_LANDS_ON ? { landed: true } : { failure: AGENT_CALL_FAILURE.UNANSWERED };
+}
+
+/** The queues a fixture run changed, by agent. */
+export type KeptQueues = ReadonlyMap<string, AgentQueue>;
+
+/** A queued message with no edit holding it. */
+function unheld({ editing: _editing, ...message }: QueuedMessage): QueuedMessage {
+  return message;
+}
+
+/** The messages of `queue` with the one under `id` as `change` leaves it. */
+function messageChanged(
+  queue: AgentQueue,
+  id: string,
+  change: (message: QueuedMessage) => QueuedMessage,
+): readonly QueuedMessage[] {
+  return queue.messages.map((message) => (message.id === id ? change(message) : message));
+}
+
+/** The messages of `queue` as `change` leaves them, as the service takes a change, though a steered message goes nowhere and an edit's files are left as they were. */
+function changedMessages(queue: AgentQueue, change: AgentQueueChange): readonly QueuedMessage[] {
+  switch (change.change) {
+    case QUEUE_CHANGE.ADD:
+      return [...queue.messages, { id: change.id, text: change.text, queuedBy: ADA.userId }];
+    case QUEUE_CHANGE.EDIT:
+      return messageChanged(queue, change.messageId, (message) => ({
+        ...unheld(message),
+        text: change.text,
+      }));
+    case QUEUE_CHANGE.HOLD:
+      return messageChanged(queue, change.messageId, (message) =>
+        change.held ? { ...message, editing: true } : unheld(message),
+      );
+    case QUEUE_CHANGE.DELETE:
+    case QUEUE_CHANGE.STEER:
+      return queue.messages.filter((message) => message.id !== change.messageId);
+    case QUEUE_CHANGE.REORDER: {
+      const at = (message: QueuedMessage) => {
+        const place = change.order.indexOf(message.id);
+
+        return place === -1 ? change.order.length : place;
+      };
+
+      return queue.messages.toSorted((one, other) => at(one) - at(other));
+    }
+
+    case QUEUE_CHANGE.RESUME:
+      return queue.messages;
+  }
+}
+
+/**
+ * The queue `agentId` stands at once the act is taken, as the service takes
+ * it: a change to the queue made, Resume dropping its pause, and a Stop
+ * pausing it; none for any other act, or an agent staged with no queue.
+ * `queues` holds what the run changed so far, over the queues as staged.
+ */
+export function queueAfter(
+  queues: KeptQueues,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): { readonly agentId: string; readonly queue: AgentQueue } | undefined {
+  if (kind !== ACT_KIND.AGENTS_QUEUE && kind !== ACT_KIND.AGENTS_STOP) return undefined;
+  // SAFETY: both kinds' payloads name the agent.
+  const { agentId } = payload as PortActPayload<typeof ACT_KIND.AGENTS_STOP>;
+
+  const held =
+    queues.get(agentId) ?? (agentId === AGENT.INVITES ? INVITES_TRANSCRIPT.word?.queue : undefined);
+
+  if (held === undefined) return undefined;
+  const revision = held.revision + 1;
+
+  if (kind === ACT_KIND.AGENTS_STOP) {
+    return { agentId, queue: { ...held, paused: { because: QUEUE_PAUSE.STOPPED }, revision } };
+  }
+
+  // SAFETY: the payload is the one its kind declares.
+  const { change } = payload as PortActPayload<typeof ACT_KIND.AGENTS_QUEUE>;
+  const { paused: _paused, ...resumed } = held;
+  const messages = changedMessages(held, change);
+  const queue = change.change === QUEUE_CHANGE.RESUME ? resumed : held;
+
+  return { agentId, queue: { ...queue, messages, revision } };
+}
+
+/** Each agent's own transcript as staged with the queue the run left it, by the transcript and then the queue, so laying one again hands the store the same object. */
+const QUEUED_TRANSCRIPTS = new WeakMap<AppTranscript, WeakMap<AgentQueue, AppTranscript>>();
+
+/** The transcript with its queue standing as `queue`. */
+function queuedTranscript(rows: AppTranscript, queue: AgentQueue): AppTranscript {
+  const byQueue = QUEUED_TRANSCRIPTS.get(rows) ?? new WeakMap<AgentQueue, AppTranscript>();
+  const kept = byQueue.get(queue);
+
+  if (kept !== undefined) return kept;
+  const { word } = rows;
+  const queued = word === undefined ? rows : { ...rows, word: { ...word, queue } };
+  QUEUED_TRANSCRIPTS.set(rows, byQueue.set(queue, queued));
+
+  return queued;
+}
+
+/**
+ * The document with each queue the run changed standing on its agent's own
+ * transcript, as the host draws a change the moment it is asked; the
+ * document handed in where the run changed none. Note that only the phone's
+ * fixture host lays it, since a desktop's fixture run lays its queue
+ * through the host's own outbox.
+ */
+export function queuedAppState(state: AppStateSnapshot, queues: KeptQueues): AppStateSnapshot {
+  if (!STAGED_PROFILES.has(state.run.profile) || queues.size === 0) return state;
+  const held = state[LIVE_READ.TRANSCRIPT];
+  const laid = { ...held };
+
+  for (const [agentId, queue] of queues) {
+    const rows = held[agentId]?.[OWN_TRANSCRIPT]?.rows;
+
+    if (rows !== undefined) {
+      laid[agentId] = {
+        ...held[agentId],
+        [OWN_TRANSCRIPT]: { rows: queuedTranscript(rows, queue) },
+      };
+    }
+  }
+
+  return { ...state, [LIVE_READ.TRANSCRIPT]: laid };
 }
 
 /** The models the account may start an agent on, as the service's catalog lists them, and no device of its own. */
@@ -2723,7 +2854,7 @@ const ANSWERS: StagedAnswers = {
     labels: [{ port: 5173, label: "vite" }],
   }),
   [ACT_KIND.AGENTS_PORT_SHARED]: () => ({ shared: null }),
-  // Note that a message, a queue change, and a Stop are taken as the service takes them, answered with the agent or the queue as it then stands, though nothing here moves, so the transcript reads as staged.
+  // Note that a message, a queue change, and a Stop are taken as the service takes them, answered with the agent or the queue as it then stands, though nothing here moves, so the transcript reads as staged; the iOS run lays a queue change and a Stop's pause over the transcript itself (`queuedAppState`).
   [ACT_KIND.AGENTS_MESSAGE]: ({ agentId }) => {
     const held = stagedAgent(agentId);
 

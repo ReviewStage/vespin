@@ -57,6 +57,14 @@ export const AGENT_TAG = "agentId";
 export const SESSION_TAG = "sessionId";
 
 /**
+ * The tag a sandbox we create carries for the workspace it is billed to,
+ * an agent's and a workspace drive's fill's alike, so Vercel's dashboard
+ * names it too; the record billing reads is `sandbox_owner`
+ * (`@repo/database/models/sandbox-owners`).
+ */
+export const ORGANIZATION_TAG = "organizationId";
+
+/**
  * The agent tag's name before the product's rename, read after `AGENT_TAG`'s
  * and never written. Note that a sandbox's tags are written only as it is
  * created, so one made before carries the old name for as long as it lives;
@@ -114,9 +122,16 @@ export function agentSandboxName(sessionId: string): string {
   return `${SANDBOX_NAME}${digest.slice(0, 32)}`;
 }
 
-/** The tags a sandbox we open carries: its session's, and the agent it is opened for. */
-export function agentSandboxTags(sessionId: string, agentId: string) {
-  return { [SESSION_TAG]: sessionId, [AGENT_TAG]: agentId } satisfies Record<string, string>;
+/** The tags a sandbox we open carries: its session's, the agent it is opened for, and the agent's workspace. */
+export function agentSandboxTags(
+  sessionId: string,
+  agent: { readonly id: string; readonly organizationId: string },
+) {
+  return {
+    [SESSION_TAG]: sessionId,
+    [AGENT_TAG]: agent.id,
+    [ORGANIZATION_TAG]: agent.organizationId,
+  } satisfies Record<string, string>;
 }
 
 /** The calls the lookup makes of `Sandbox`. */
@@ -192,7 +207,9 @@ export function reopenedOf(
   return Effect.succeed({
     sessionId,
     tags:
-      agentId === undefined ? { [SESSION_TAG]: sessionId } : agentSandboxTags(sessionId, agentId),
+      agentId === undefined
+        ? { [SESSION_TAG]: sessionId }
+        : { [SESSION_TAG]: sessionId, [AGENT_TAG]: agentId },
     vcpus: standing.vcpus,
     ...(standing.snapshotId === undefined
       ? undefined

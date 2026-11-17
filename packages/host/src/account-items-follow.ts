@@ -13,6 +13,7 @@ import { Clock, Effect } from "effect";
 import type { AppHostRead, AppInboxItems } from "./app-state.js";
 import { type EntityStore, KEPT_READ, type KeptRows } from "./entity-store.js";
 import { type AccountWideReads, INBOX_ITEM, type InboxChange } from "./inbox-collections.js";
+import { KEPT_LIST } from "./kept-lists.js";
 import {
   confirmWrite,
   followTakingRows,
@@ -75,6 +76,12 @@ import {
  * Inbox's 4.8 MB would add about 0.3 s to every launch.
  */
 export const KEPT_CHARACTERS = 1_000_000;
+
+/** The items the local database keeps: the first, in the order the read answered them, whose JSON fits in `KEPT_CHARACTERS`. */
+const KEPT_INBOX_BOUND = {
+  size: (item: InboxItem) => JSON.stringify(item).length,
+  within: KEPT_CHARACTERS,
+};
 
 /** A read the service did not answer, `gone` where it never will again. */
 
@@ -278,6 +285,7 @@ export function followAccountItems(
 
           return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
         },
+        kept: { ...KEPT_LIST.INBOX, bound: KEPT_INBOX_BOUND },
       });
 
       yield* dependencies.accountWide.stand(() => wait);

@@ -39,6 +39,7 @@ import {
   type TasksControlOverrides,
   tasksControl,
 } from "../testing/tasks-control.js";
+import { standWindowEscape } from "../testing/window-escape.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { useVersionHistoryRoute, type VersionHistoryRoute } from "../version-history-route.js";
 import {
@@ -51,7 +52,6 @@ import {
   useRoutedViews,
 } from "../workspace-routes.js";
 import { type HistoryRows, useHistoryRows } from "./history-rows.js";
-import { type NarrowBacks, useNarrowBacks } from "./narrow-backs.js";
 import { PLACE_BINDING, usePlaceBinding } from "./place-binding.js";
 import { type LeaveAsk, type PlaceLeave, usePlaceLeave } from "./place-leave.js";
 import { useRoutedExits } from "./routed-exits.js";
@@ -123,8 +123,6 @@ function mount(
   ) => StepTitle | undefined,
 ) {
   let history: (WindowHistory & HistoryBehind & TaskVisits & RecentSteps) | undefined;
-  let open: TasksControl | undefined;
-  let backs: NarrowBacks | undefined;
   let restand: ((tasks: Standing) => void) | undefined;
   let admin: AdminRoute | undefined;
   let board: BoardRoute | undefined;
@@ -278,8 +276,6 @@ function mount(
     // The ways back read the window's history, as the window's root hands it its routed exits.
     exits.behind = history.behind;
     useHistoryMouseButtons(history, true);
-    open = tasks;
-    backs = useNarrowBacks(false);
 
     return null;
   }
@@ -371,11 +367,6 @@ function mount(
     at: () => held.history.location.pathname,
     /** Opens an Admin view by the router, as Admin's own doors do. */
     openAdmin: (view: AdminView) => act(() => admin?.onOpen(view)),
-    /** Presses Escape on the open task, which takes the task's way out (`places/narrow-backs.ts`). */
-    escape: () =>
-      act(() => {
-        if (open !== undefined) backs?.task(open.onLeaveTask);
-      }),
     /** The address of every entry the router's history holds, oldest first. */
     addresses: () => held.addresses(),
     /** Moves the history by itself, as a browser's Back and Forward do, never through the window. */
@@ -481,17 +472,20 @@ function inboxOrTask(onTask: boolean, left: string[]): Standing {
   });
 }
 
-test("Escape on a task opened from the Inbox returns to the Inbox, as Back does, rather than leaving the task for the home page", () => {
+test("Escape on a task opened from the Inbox leaves the task standing, its step back still Back's to take", () => {
   const left: string[] = [];
+  const windowEscape = standWindowEscape();
   const window = mount(inboxOrTask(false, left));
   window.stand(inboxOrTask(true, left));
 
-  window.escape();
+  act(() => {
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  });
+  act(() => windowEscape.unmount());
 
-  assert.equal(window.at(), "/acme/inbox");
-  assert.deepEqual(left, [], "the task is not left for the home page");
-  assert.equal(window.history().canGoBack, false, "Escape took the one step back");
-  assert.equal(window.history().canGoForward, true, "which Forward takes again");
+  assert.equal(window.at(), `/acme/task/${TASK_ID}`);
+  assert.deepEqual(left, [], "the task is not left");
+  assert.equal(window.history().canGoBack, true, "the step back stands");
 });
 
 test("a task New task starts over the Inbox takes the step its starting page stood on, the task bound under the Inbox, so Back from it returns to the Inbox", () => {
@@ -504,62 +498,6 @@ test("a task New task starts over the Inbox takes the step its starting page sto
   act(() => window.history().onBack());
 
   assert.equal(window.at(), "/acme/inbox");
-});
-
-test("Escape on a task opened from a person's page returns to that page", async () => {
-  const left: string[] = [];
-  const listed = { workspaces: [ACME], workspace: ACME, onLeaveTask: () => left.push(TASK_ID) };
-  const window = mount(listedTab(listed));
-  window.openPerson("user-charles", undefined, ACME.slug);
-  await settle();
-  window.leaveFor(
-    listedTab({
-      ...listed,
-      page: TASKS_PAGE.TASK,
-      activeTaskId: TASK_ID,
-      boundFor: TASK_ID,
-    }),
-  );
-
-  window.escape();
-  await settle();
-
-  assert.equal(window.at(), "/acme/person/user-charles");
-  assert.deepEqual(left, []);
-});
-
-test("Escape on a task with no step behind it, as a launch or a link opens one on, leaves the task once", () => {
-  const left: string[] = [];
-
-  const window = mount(
-    listedTab({
-      page: TASKS_PAGE.TASK,
-      activeTaskId: TASK_ID,
-      boundFor: TASK_ID,
-      onLeaveTask: () => left.push(TASK_ID),
-    }),
-  );
-
-  window.escape();
-
-  assert.deepEqual(left, [TASK_ID]);
-});
-
-test("Escape on a task whose step back is canceled at the leave ask moves nothing, and Leave takes that step", () => {
-  const asked: (() => void)[] = [];
-  const left: string[] = [];
-  const window = mount(inboxOrTask(false, left));
-  window.stand(inboxOrTask(true, left));
-
-  window.standAsk(asked);
-  window.escape();
-  assert.notEqual(window.at(), "/acme/inbox", "the step waits on the ask");
-  assert.deepEqual(left, [], "and the task is not left in its place");
-  assert.equal(window.history().canGoBack, true, "and the history has not moved");
-
-  act(() => asked[0]?.());
-  assert.equal(window.at(), "/acme/inbox", "Leave takes the step it asked about");
-  assert.deepEqual(left, []);
 });
 
 test("a person's page is a step of its own, which Back from a plan opened after it returns to, and another person's is another step", async () => {
@@ -787,7 +725,7 @@ test("the Board stands at its workspace's /tasks and a person's page at /person/
   ]);
 });
 
-test("the Admin place stands at its workspace's /admin though a task stands under it, a section at /admin/<section> in place, and an account's page at /admin/user/<id> as a step, as Copy link copies each", async () => {
+test("the Admin place stands at its workspace's /admin though a task stands under it, a section at /admin/<section> and an account's page at /admin/user/<id> each as a step, as Copy link copies each", async () => {
   const copied: string[] = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
   const task = onTask([ACME]);
@@ -800,6 +738,7 @@ test("the Admin place stands at its workspace's /admin though a task stands unde
 
   assert.deepEqual(window.addresses(), [
     `/acme/task/${DOCUMENT_TASK.id}`,
+    "/acme/admin",
     "/acme/admin/cost",
     "/acme/admin/user/user-ada",
   ]);

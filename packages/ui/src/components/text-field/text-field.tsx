@@ -299,7 +299,7 @@ function noop(): void {}
  * Marks an Escape taken where `onEscape` is given, and answers it unless an
  * input method is composing. Note that the press still reaches the window,
  * marked as taken, because the app's own Escape passes a taken press by
- * and so leaves a live call and every page alone. A composing press is
+ * and so leaves every page where it is. A composing press is
  * the input method's already when the page hears it, so marking it takes
  * nothing from the input method.
  */
