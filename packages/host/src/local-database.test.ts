@@ -33,8 +33,10 @@ const filled = (root: string, accountId: string) =>
   Effect.scoped(
     Effect.map(openLocalDatabase(root, accountId), (database) => {
       database.prepare("INSERT INTO row VALUES (?, ?, ?)").run("plan", "p1", "{}");
-      database.prepare("INSERT INTO held VALUES (?, ?, ?)").run("taskList", "", "p1");
-      database.prepare("INSERT INTO cursor VALUES (?, ?, ?, ?)").run("taskList", "", "7", "{}");
+      database
+        .prepare("INSERT INTO held VALUES (?, ?, ?, ?, ?)")
+        .run("taskList", "", "plan", "p1", 0);
+      database.prepare("INSERT INTO cursor VALUES (?, ?, ?)").run("taskList", "", "7");
       database
         .prepare("INSERT INTO outbox (name, idempotency_key, input) VALUES (?, ?, ?)")
         .run("renameTask", "k1", "{}");
