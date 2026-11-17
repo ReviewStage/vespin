@@ -27,6 +27,11 @@
  * call runs on the account's own OpenAI key, so with none saved a start
  * opens Settings › Agents instead.
  *
+ * Talk in a box that starts a new agent calls an agent that does not stand
+ * yet: its press makes the call's audio context, as any Talk's does, and
+ * the call starts once the box's blank agent lands (`startWhenStarted`), or
+ * lets the context go where the agent was refused.
+ *
  * The call's levels, how loud the caller and the voice each are, which the
  * mutes ring with (`CallMute`), are measured here: an analyzer on the
  * microphone and one on the voice, in an audio context of the call's own,
@@ -70,12 +75,19 @@ export interface VoiceCall {
   readonly call: VoiceCallState | undefined;
   /** Calls the agent, ending a call already standing first. */
   readonly start: (into: { readonly agentId: string; readonly taskId: string }) => void;
+  /** Takes the press now for a call into an agent still starting, answering what calls it once it lands, or lets the press go where none did. */
+  readonly startWhenStarted: () => CallWhenStarted;
   readonly end: () => void;
   readonly setMicrophoneMuted: (muted: boolean) => void;
   readonly setSpeakerMuted: (muted: boolean) => void;
   /** How loud the caller and the voice are, frame by frame, while a call stands; nothing but silence otherwise. */
   readonly levels: CallLevels;
 }
+
+/** Calls the agent a press of Talk started, once it lands; nothing where it was refused. */
+export type CallWhenStarted = (
+  into: { readonly agentId: string; readonly taskId: string } | undefined,
+) => void;
 
 /** Why a call stopped short, in the words its toast says. */
 const VOICE_CALL_NOTE: Record<VoiceCallFailure, string> = {
@@ -105,6 +117,7 @@ interface Meters {
 const NO_CALL: VoiceCall = {
   call: undefined,
   start: () => undefined,
+  startWhenStarted: () => () => undefined,
   end: () => undefined,
   setMicrophoneMuted: () => undefined,
   setSpeakerMuted: () => undefined,
@@ -347,6 +360,18 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     session.start(into);
   };
 
+  // Note that the press's context is held apart until the agent lands, since another call's press may come meanwhile.
+  const startWhenStarted = (): CallWhenStarted => {
+    const context = pressedContext();
+
+    return (into) => {
+      if (into === undefined) return void context?.close().catch(() => undefined);
+      pressed.current?.close().catch(() => undefined);
+      pressed.current = context;
+      session.start(into);
+    };
+  };
+
   // The window going away, or the provider with it, closes the session and drops the call.
   useEffect(() => {
     const hangUp = () => session.hangUp();
@@ -361,6 +386,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
   const value: VoiceCall = {
     call,
     start,
+    startWhenStarted,
     end: session.end,
     setMicrophoneMuted: session.setMicrophoneMuted,
     setSpeakerMuted: session.setSpeakerMuted,

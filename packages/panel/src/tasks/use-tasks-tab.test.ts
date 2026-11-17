@@ -4247,6 +4247,7 @@ const readAgentNamed = Schema.decodeUnknownOption(
       Schema.Struct({
         idempotencyKey: Schema.String,
         prompt: Schema.optionalKey(Schema.String),
+        blank: Schema.optionalKey(Schema.Boolean),
         model: Schema.optionalKey(Schema.String),
         effort: Schema.optionalKey(Schema.String),
       }),
@@ -4333,6 +4334,44 @@ test("New task's Agent mode sends one start carrying the agent, its words and mo
   );
   assert.equal(tab.control().agents.draft, undefined, "no draft stands in its place");
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the task opens on its tab");
+});
+
+test("New task's Talk starts the task's agent blank on the chip's model, opens the task on it, and calls the agent it started", async () => {
+  const started = { ...RUNNING_AGENT, taskId: OTHER_TASK_ID };
+
+  const tab = mount(
+    { shown: true, tasks: withAgents([started]), descriptions: AGENT_DESCRIPTIONS },
+    {
+      [ACT_KIND.TASKS_START]: () =>
+        Promise.resolve({ taskId: OTHER_TASK_ID, agentStart: { agent: started } }),
+    },
+  );
+
+  const choice = { model: "anthropic/claude-opus-5.5", effort: "high" };
+  const called: unknown[] = [];
+  act(() => tab.control().newTask.onOpen());
+  await act(async () => {
+    await tab.control().newTask.start("", "acme/web", undefined, {
+      handed: {
+        idempotencyKey: AGENT_KEY,
+        prompt: "",
+        attachments: [],
+        choice,
+        disabledServers: [],
+        talk: (into) => called.push(into),
+      },
+    });
+  });
+  tab.stand({ tasks: AGENT_TASK });
+  await settle();
+
+  const starts = tab.payloads
+    .filter(({ kind }) => kind === ACT_KIND.TASKS_START)
+    .map(({ payload }) => Option.getOrUndefined(readAgentNamed(payload)));
+
+  assert.deepEqual(starts[0]?.agent, { idempotencyKey: AGENT_KEY, blank: true, ...choice });
+  assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the task opens on its tab");
+  assert.deepEqual(called, [{ agentId: AGENT_ID, taskId: OTHER_TASK_ID }]);
 });
 
 test("archiving a task's last agent takes its tab at once, and a refused archive brings it back", async () => {

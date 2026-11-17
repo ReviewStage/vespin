@@ -83,6 +83,7 @@ import {
   withdrawUndo,
 } from "../undo-stack.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
+import type { CallWhenStarted } from "../voice-call.js";
 import type { ApprovalAnswerWriter, PermissionModeWriter } from "./agent-approvals.js";
 import {
   archivedManyWords,
@@ -431,6 +432,21 @@ export interface AgentsControl {
     disabledServers?: readonly string[],
     runsOn?: AgentRunsOnRequest,
     permissionMode?: AgentPermissionMode,
+  ) => Promise<StartFailure | undefined>;
+  /**
+   * Starts the draft's agent blank, handed nothing, for Talk: under the
+   * draft's key, on its choice, servers, place, and mode as `startPrompt`
+   * takes them, its tab opening as a Start's does, then `call` called on
+   * it, or with nothing where it did not start. Answers why it did not
+   * start, or nothing once it did.
+   */
+  startBlank: (
+    draftId: string,
+    choice: ModelChoice | undefined,
+    disabledServers: readonly string[],
+    runsOn: AgentRunsOnRequest | undefined,
+    permissionMode: AgentPermissionMode | undefined,
+    call: CallWhenStarted,
   ) => Promise<StartFailure | undefined>;
   /**
    * Starts the draft's fork: from its source at its message, under the
@@ -1550,6 +1566,43 @@ export function useAgents(input: {
     return undefined;
   };
 
+  const startBlank = async (
+    draftId: string,
+    choice: ModelChoice | undefined,
+    disabledServers: readonly string[],
+    runsOn: AgentRunsOnRequest | undefined,
+    permissionMode: AgentPermissionMode | undefined,
+    call: CallWhenStarted,
+  ): Promise<StartFailure | undefined> => {
+    if (taskId === undefined) {
+      call(undefined);
+
+      return { reason: FAILURE_REASON.OTHER, text: START_NEEDS_TASK };
+    }
+
+    const answer = await askStart(taskId, {
+      idempotencyKey: draftId,
+      blank: true,
+      ...(disabledServers.length === 0 ? undefined : { disabledServers }),
+      ...(choice === undefined ? undefined : choiceRequest(choice)),
+      ...runsOnOf(runsOn),
+      ...pickedModeOf(permissionMode),
+    });
+
+    if ("failure" in answer) {
+      call(undefined);
+
+      return { ...startFailureNote(answer, taskId), cause: answer };
+    }
+
+    dropHeld(taskId, draftId);
+    writer.drop((place) => place.kind === DRAFT_PLACE.NEW_AGENT && place.draftId === draftId);
+    landed(taskId, answer.agent);
+    call({ agentId: answer.agent.id, taskId });
+
+    return undefined;
+  };
+
   // Note that a fork is sent under the draft's key as a prompt is, for the same reason.
   const startFork = async (
     draftId: string,
@@ -1957,6 +2010,7 @@ export function useAgents(input: {
   // A start reads the agents as they stand when it is pressed, so the doors to it stand across draws.
   const steadyStartPrompt = useSteadyDoor(startPrompt);
   const steadyStartFork = useSteadyDoor(startFork);
+  const steadyStartBlank = useSteadyDoor(startBlank);
   const steadyStartSuggestion = useSteadyDoor(startSuggestion);
   const steadyContinueAgent = useSteadyDoor(continueAgent);
 
@@ -1984,6 +2038,7 @@ export function useAgents(input: {
     onDiscardDraft,
     startPrompt: steadyStartPrompt,
     startFork: steadyStartFork,
+    startBlank: steadyStartBlank,
     startSuggestion: steadyStartSuggestion,
     onRetryList,
     models: offered.data?.models,

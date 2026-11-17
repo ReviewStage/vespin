@@ -194,6 +194,21 @@ test("a call connects in the default voice, goes live as the session starts, and
   assert.ok(microphone.stopped, "the microphone is let go");
 });
 
+test("Talk pressed before its agent stands opens the call once the agent lands, and nothing where it was refused", async () => {
+  await mounted();
+
+  const refused = call.startWhenStarted();
+  act(() => refused(undefined));
+  await settleQueries();
+  assert.equal(call.call, undefined);
+  assert.deepEqual(opened, []);
+
+  const landed = call.startWhenStarted();
+  act(() => landed({ agentId: AGENT_ID, taskId: TASK_ID }));
+  await settleQueries();
+  assert.deepEqual(opened, [{ agentId: AGENT_ID, voice: "marin", sdp: "v=0 offer" }]);
+});
+
 test("muting the microphone tells the session, and muting the speaker tells it nothing", async () => {
   await mounted();
   const peer = await called();
