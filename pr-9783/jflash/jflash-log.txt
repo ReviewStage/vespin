@@ -1,0 +1,50 @@
+== bundle MFLcontrol base 3f905ecaf7
+  built 3f905ecaf7 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+== control 3f905ecaf7
+control-1-transcript-open: fails 0 shots 4 
+control-1-tap1: fails 0 shots 1 
+control-1-tap1: tap 'Fix ledger rounding' RUNNING 15:29:27.721000, COMPLETED +1115 ms (Maestro settles before COMPLETED); 'Rounding is settled' seen +1750 ms from RUNNING; sheet control-1-tap1-after-tap.png, 60 tiles every 50 ms from 200 ms before RUNNING
+control-1-tap2: fails 0 shots 1 
+control-1-tap2: tap 'Fix ledger rounding' RUNNING 15:30:37.839000, COMPLETED +1178 ms (Maestro settles before COMPLETED); 'Rounding is settled' seen +1572 ms from RUNNING; sheet control-1-tap2-after-tap.png, 60 tiles every 50 ms from 200 ms before RUNNING
+control-1-tap3: fails 0 shots 1 
+control-1-tap3: tap 'Fix ledger rounding' RUNNING 15:31:42.590000, COMPLETED +2181 ms (Maestro settles before COMPLETED); 'Rounding is settled' seen +2479 ms from RUNNING; sheet control-1-tap3-after-tap.png, 60 tiles every 50 ms from 200 ms before RUNNING
+control-1-tap4: fails 0 shots 1 
+control-1-tap4: tap 'Fix ledger rounding' RUNNING 15:32:44.596000, COMPLETED +2049 ms (Maestro settles before COMPLETED); 'Rounding is settled' seen +2357 ms from RUNNING; sheet control-1-tap4-after-tap.png, 60 tiles every 50 ms from 200 ms before RUNNING
+control-1-tap5: fails 0 shots 1 
+control-1-tap5: tap 'Fix ledger rounding' RUNNING 15:33:55.924000, COMPLETED +1277 ms (Maestro settles before COMPLETED); 'Rounding is settled' seen +1750 ms from RUNNING; sheet control-1-tap5-after-tap.png, 60 tiles every 50 ms from 200 ms before RUNNING
+control-2-jump: fails 0 shots 2 
+control-3-older: fails 0 shots 3 
+control-4-held: fails 0 shots 2 
+control-4b-tall: fails 0 shots 2 
+control-5-a11y: fails 0 shots 1 
+control-5-a11y order:       20 labeled rows; first 100% battery power | last Horizontal scroll bar, 1 page
+control app log: act port failures 0; JS errors 0
+== bundle MFLhead base 93dee44eb6
+  built 93dee44eb6 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+== head 93dee44eb6
+head-1-transcript-open: fails 0 shots 4 
+head-1-tap1: fails 0 shots 1 
+head-1-tap1: tap 'Fix ledger rounding' RUNNING 15:42:53.574000, COMPLETED +2161 ms (Maestro settles before COMPLETED); 'Rounding is settled' seen +2478 ms from RUNNING; sheet head-1-tap1-after-tap.png, 60 tiles every 50 ms from 200 ms before RUNNING
+head-1-tap2: fails 0 shots 1 
+head-1-tap2: tap 'Fix ledger rounding' RUNNING 15:44:09.497000, COMPLETED +2132 ms (Maestro settles before COMPLETED); 'Rounding is settled' seen +2469 ms from RUNNING; sheet head-1-tap2-after-tap.png, 60 tiles every 50 ms from 200 ms before RUNNING
+head-1-tap3: fails 1 shots 1 Assert that "Created by .*" is visible... FAILED
+head-1-tap3: tap 'Fix ledger rounding' RUNNING None, COMPLETED +None ms (Maestro settles before COMPLETED); 'Rounding is settled' seen +None ms from RUNNING; sheet head-1-tap3-after-tap.png, 60 tiles every 50 ms from 200 ms before RUNNING
+head-1-tap4: fails 0 shots 1 
+head-1-tap4: tap 'Fix ledger rounding' RUNNING 15:47:17.193000, COMPLETED +2250 ms (Maestro settles before COMPLETED); 'Rounding is settled' seen +2565 ms from RUNNING; sheet head-1-tap4-after-tap.png, 60 tiles every 50 ms from 200 ms before RUNNING
+head-1-tap5: fails 1 shots 1 Assert that "Created by .*" is visible... FAILED
+head-1-tap5: tap 'Fix ledger rounding' RUNNING None, COMPLETED +None ms (Maestro settles before COMPLETED); 'Rounding is settled' seen +None ms from RUNNING; sheet head-1-tap5-after-tap.png, 60 tiles every 50 ms from 200 ms before RUNNING
+head-2-jump: fails 0 shots 2 
+head-3-older: fails 0 shots 3 
+head-4-held: fails 0 shots 2 
+head-4b-tall: fails 1 shots 1 Assert that "Run the members tests.*" is visible... FAILED
+head-5-a11y: fails 0 shots 1 
+head-5-a11y order:       12 labeled rows; first A customer may see a total one cent lower where a hal | last Horizontal scroll bar, 1 page
+head app log: act port failures 0; JS errors 0

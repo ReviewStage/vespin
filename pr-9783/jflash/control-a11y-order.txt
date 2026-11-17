@@ -1,0 +1,20 @@
+   25  100% battery power
+   26  SSID, 3 of 3 Wi-Fi bars
+   30  Which reports read the rounded totals?
+   66  Fix ledger rounding
+   74  The monthly statement, the revenue report, and the customer export. All three read total.ts, so they move toge
+  116  Vertical scroll bar, 3 pages
+  138  Worked for 1m · Thursday, 4:09 PM
+  182  Can the old totals be recomputed without a migration?
+  244  Yes. Totals are computed on read from the stored millicents, so nothing stored changes; only what a report sho
+  308  Worked for 1m · Thursday, 4:15 PM
+  352  Write down what changes for a customer reading their statement.
+  414  A customer may see a total one cent lower where a half cent used to round up. No balance changes, since balanc
+  478  Worked for 1m · Thursday, 4:21 PM
+  523  Run the whole ledger suite once more.
+  567  All 412 ledger tests pass, with six new cases for half-cents at each boundary.
+  613  Worked for 1m · Thursday, 4:27 PM
+  657  Anything left before this is settled?
+  701  Rounding is settled: every total now rounds half-cents to even, as the bank's statements do.
+  747  Worked for 1m · Thursday, 4:33 PM
+  841  Horizontal scroll bar, 1 page

@@ -1,0 +1,12 @@
+   11  A customer may see a total one cent lower where a half cent used to round up. No balance changes, since balanc
+   28  Fix ledger rounding
+   28  Fix ledger rounding, Options, Opus 5.5
+   57  Worked for 1m · Thursday, 4:36 PM
+   78  Vertical scroll bar, 6 pages
+  101  Run the whole ledger suite once more.
+  145  All 412 ledger tests pass, with six new cases for half-cents at each boundary.
+  173  Worked for 1m · Thursday, 4:42 PM
+  217  Anything left before this is settled?
+  261  Rounding is settled: every total now rounds half-cents to even, as the bank's statements do.
+  289  Worked for 1m · Thursday, 4:48 PM
+  369  Horizontal scroll bar, 1 page
