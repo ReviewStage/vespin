@@ -73,6 +73,8 @@ type WordsFieldProps = {
   readonly look?: WordsLook | undefined;
   /** Takes words pasted long enough to come as a file (`@repo/features/long-paste`), answering whether it did, so the field takes them back out of its words; they paste as words where none is given. */
   readonly onLongPaste?: ((words: string) => boolean) | undefined;
+  /** The most characters it holds, such as the words beside a survey's Other; no bound where none is given. */
+  readonly maxLength?: number | undefined;
 };
 
 /**
@@ -95,6 +97,7 @@ export function WordsField({
   verbatim = false,
   look = WORDS_LOOK.ROW,
   onLongPaste,
+  maxLength,
 }: WordsFieldProps) {
   const colors = useColors();
   const text = useNativeState(words ?? initialWords);
@@ -121,10 +124,12 @@ export function WordsField({
   const type = (next: string) => {
     const pasted = onLongPaste === undefined ? undefined : longPasteIn(shown.current, next);
     const taken = pasted !== undefined && onLongPaste?.(pasted.words) === true;
-    const words = taken ? pasted.kept : next;
+    const kept = taken ? pasted.kept : next;
+    // Note that words past the most the field holds are cut back as they are typed or pasted, so the field stands still at its bound.
+    const words = maxLength === undefined ? kept : kept.slice(0, maxLength);
     shown.current = words;
 
-    if (taken) text.set(words);
+    if (words !== next) text.set(words);
     onWords(words);
   };
 

@@ -28,6 +28,7 @@ import { PLUS_TAB, placeOfRoute, SIDEBAR_PLACE } from "../../screens/app-sidebar
 import { AppSplit } from "../../screens/app-split.js";
 import { PageDrawerProvider } from "../../screens/detail-stack-column.js";
 import { PushedPageView } from "../../screens/pushed-pages.js";
+import { useNewTaskAfterSetup } from "../../setup/setup-place.js";
 import { useSidebarChoiceLapse } from "../../sidebar-shown.js";
 import { useStandingCallCard } from "../../voice-call.js";
 
@@ -131,6 +132,8 @@ export default function TabsLayout() {
   // The members of the workspace the phone works in, whose pictures every face reads, followed once for every tab.
   useMemberPicturesFollow();
   useSidebarChoiceLapse();
+  // New task over the app setup's Finish just let in, where the workspace reaches a repository.
+  useNewTaskAfterSetup();
   const iconOnly = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const appSidebar = useThreeColumns();
   const pathname = usePathname();
