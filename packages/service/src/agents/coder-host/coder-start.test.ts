@@ -14,7 +14,7 @@ import { task } from "@repo/database/schemas/task";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
 import { BOOT_FAILURE, BOOT_PHASE, type BootFailure } from "@repo/features/agent-boot";
-import { AGENT_KIND } from "@repo/features/agent-wire";
+import { AGENT_KIND, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING, type AutomationFiring } from "@repo/features/automation-wire";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_MODE, TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
@@ -34,6 +34,7 @@ import {
   type InstallationFixture,
   openGithubUser,
 } from "../../testing/github-app-fake.js";
+import { scriptedHarnessLayer } from "../../testing/native-harness-fake.js";
 import {
   type AgentSessions,
   MACHINE_UP,
@@ -48,7 +49,9 @@ import {
 } from "../sessions/agent-sessions.js";
 import { WorkspaceDriveFills } from "../workspace-drive.js";
 import { WorkspaceDriveBuilds } from "../workspace-drive-builds.js";
+import { changeAgentQueue } from "./queue-change.js";
 import { type StartAsk, startAgent } from "./start.js";
+import { STEER_OUTCOME, steerMemberWords } from "./steer.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 
 /** The attributes an error reporter is handed beside the failure it reports. */
@@ -77,7 +80,7 @@ const RELAY = { owner: "Acme", name: "Relay" } as const;
 const RELAY_REPOSITORY = `${RELAY.owner}/${RELAY.name}`;
 
 /** One installation for each test's workspace, since one installation connects to one workspace and the suite's tests share a database. */
-const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 13 }, (_, index) => ({
+const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 14 }, (_, index) => ({
   id: 8_000 + index,
   login: RELAY.owner,
   accountId: 80_000 + index,
@@ -322,6 +325,51 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
         assert.deepEqual(
           opened.map((message) => message.conversationId),
           [agent.conversationId],
+        );
+      }),
+  );
+
+  it.effect(
+    "an agent started on no task takes its member's later message and a message queued behind it",
+    () =>
+      Effect.gen(function* () {
+        const { owner, workspaceId } = yield* openConnectedWorkspace;
+        const { agentSessions, sessions } = fakeAgentSessions();
+
+        const started = yield* startAgent(agentSessions, owner, {
+          taskId: null,
+          workspaceId,
+          repository: RELAY_REPOSITORY,
+          prompt: TASK,
+          idempotencyKey: randomUUID(),
+          choice: undefined,
+        }).pipe(Effect.provide(services));
+
+        const agent = Option.getOrThrow(yield* readAgent(owner, started.agent.id));
+
+        const harness = Layer.mergeAll(
+          services,
+          keptAfterResponse().layer,
+          scriptedHarnessLayer(() => sessions),
+        );
+
+        const writer = storeWriter({ tools: CODER_TOOL_SET });
+
+        const sent = yield* steerMemberWords(writer, owner, agent, {
+          text: "Then run the tests",
+          clientKey: randomUUID(),
+        }).pipe(Effect.provide(harness));
+
+        const queue = yield* changeAgentQueue(owner, agent, {
+          change: QUEUE_CHANGE.ADD,
+          id: randomUUID(),
+          text: "And open a pull request",
+        }).pipe(Effect.provide(harness));
+
+        assert.notEqual(sent.outcome, STEER_OUTCOME.REPEATED);
+        assert.deepEqual(
+          queue.messages.map((message) => message.text),
+          ["And open a pull request"],
         );
       }),
   );

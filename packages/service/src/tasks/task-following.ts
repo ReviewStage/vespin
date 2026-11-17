@@ -150,12 +150,15 @@ export function setFollowerMachinesAsked(
  * A member's own words to one of the task's agents make them follow it, with
  * their machines on, where they did not follow it yet; a follower's row
  * stands as it is. It never fails the message it follows: a write the store
- * could not make is logged for the operator and the message goes on.
+ * could not make is logged for the operator and the message goes on. An
+ * agent on no task has no task to follow, so its message follows nothing.
  */
 export function followAsMessaged(
   userId: string,
-  taskId: string,
+  taskId: string | null,
 ): Effect.Effect<void, never, DatabaseServices> {
+  if (taskId === null) return Effect.void;
+
   return followTask(userId, { taskId, followerId: userId, machines: true }).pipe(
     Effect.tapError(logStoreFailure),
     Effect.orElseSucceed(() => Option.none()),

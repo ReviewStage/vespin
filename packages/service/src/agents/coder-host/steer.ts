@@ -6,7 +6,6 @@ import {
   type Agent,
   type AgentLatestTurn,
   type AgentStoreEffect,
-  agentTaskId,
   dispatchMentioningServers,
   latestTurnsOfReached,
   RUNNING_TURN_STATUSES,
@@ -1048,8 +1047,7 @@ export const steerMemberWords = /* @__PURE__ */ Effect.fn("web/steerMemberWords"
   });
 
   // A member who messages one of the task's agents follows the task, with their machines on where they did not yet; a repeat wrote nothing new.
-  if (written.outcome !== STEER_OUTCOME.REPEATED)
-    yield* followAsMessaged(userId, agentTaskId(agent));
+  if (written.outcome !== STEER_OUTCOME.REPEATED) yield* followAsMessaged(userId, agent.taskId);
 
   if (written.sent !== undefined) {
     yield* recordServerEvent(
