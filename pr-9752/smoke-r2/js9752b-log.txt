@@ -1,0 +1,32 @@
+== bundle MS52control base eab992e5c0
+  built eab992e5c0 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+== control eab992e5c0
+control-s1-text-reply: fails 0 shots 2 
+control-s2-photo-reply: fails 0 shots 6 
+control-s3-quicklook: fails 0 shots 3 
+control-s4-setting: fails 0 shots 2 
+control-s4-setting: before switch value ['1']; failure words: none; switch at 346,414
+control-s4-setting 2-switched: switch value ['0']; failure words: none
+control-s4-setting 3-switched-back: switch value ['1']; failure words: none
+control-s5-pin: fails 1 shots 4 Assert that "Unpin" is visible... FAILED
+control app log:   183629 lines; act port failures 0; red box 0; JS errors 0
+== bundle MS52head base f5a0c6c1b6
+  built f5a0c6c1b6 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+== head f5a0c6c1b6
+head-s1-text-reply: fails 0 shots 2 
+head-s2-photo-reply: fails 0 shots 6 
+head-s3-quicklook: fails 0 shots 3 
+head-s4-setting: fails 0 shots 2 
+head-s4-setting: before switch value ['1']; failure words: none; switch at 346,414
+head-s4-setting 2-switched: switch value ['1']; failure words: none
+head-s4-setting 3-switched-back: switch value ['0']; failure words: none
+head-s5-pin: fails 1 shots 4 Assert that "Unpin" is visible... FAILED
+head app log:   161323 lines; act port failures 0; red box 0; JS errors 0
