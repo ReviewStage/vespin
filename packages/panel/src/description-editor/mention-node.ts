@@ -1,10 +1,11 @@
 import { MENTION_SIGIL, mentionMarkdownLink } from "@repo/features/link-grammar";
 import { mentionLinksIn, mentionName } from "@repo/features/mention-link";
+import { keySpansIn } from "@repo/features/workspace-key";
 import { type Editor, type JSONContent, Node } from "@tiptap/core";
 import { TextSelection, type Transaction } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 import { chipOverSelection } from "./chip-spacing.js";
-import type { MentionDrawer, MentionNode, MentionNodeDoors, NamesChip } from "./contract.js";
+import type { ChipsRead, MentionDrawer, MentionNode, MentionNodeDoors } from "./contract.js";
 
 /**
  * mention-node.ts -- a mention in the editors' words: an atom holding the name it was written with and its link's target, drawn by the panel, written back as the link it was read from.
@@ -23,13 +24,20 @@ import type { MentionDrawer, MentionNode, MentionNodeDoors, NamesChip } from "./
  * same (a file's, a pull request's, a bare address) is the node too, where
  * the panel says which targets it chips (`namesChip`), so its chip stands
  * open as it stood drawn; it holds its words, formatting and all, and is
- * written back as the link it was. Nothing here knows what a target names.
+ * written back as the link it was. So is a listed task's key written among
+ * plain words (`ACME-42`), which the read view draws as its task's chip
+ * (`keyTargets`): its chip stands open as it stood drawn, saying the key,
+ * and it is written back as the bare key it was. Nothing here knows what a
+ * target names.
  */
 
 export const MENTION_NODE = "mention";
 
 /** The link mark's name, as StarterKit spells it. */
 const LINK_MARK = "link";
+
+/** A code block's name, as StarterKit spells it, whose words hold no key. */
+const CODE_BLOCK = "codeBlock";
 
 /** An address GitHub's dialect links written bare. */
 const WEB_ADDRESS = /^https?:\/\/\S+$/u;
@@ -89,6 +97,7 @@ interface MentionAttrs {
   readonly name?: unknown;
   readonly target?: unknown;
   readonly words?: unknown;
+  readonly unlinked?: unknown;
 }
 
 /** The words a link written as plain words holds, each a run of its label as read; none for a mention written `[@name](target)`. */
@@ -129,17 +138,25 @@ export function mentionNode(drawMention: MentionDrawer | undefined) {
         name: { default: "", rendered: false },
         target: { default: "", rendered: false },
         words: { default: null, rendered: false },
+        unlinked: { default: false, rendered: false },
       };
     },
     renderHTML({ node: held }) {
       return ["span", { "data-chip": MENTION_NODE }, writtenOf(mentionOf(held.attrs))];
     },
     renderText({ node: held }) {
+      const words = wordsOf(held.attrs);
+
+      if (held.attrs.unlinked === true && words !== undefined) return plainOf(words);
+
       return mentionLink({ name: String(held.attrs.name), target: String(held.attrs.target) });
     },
     renderMarkdown: (held: JSONContent, helpers) => {
       const words = wordsOf(held.attrs);
       const target = String(held.attrs?.target ?? "");
+
+      // Note that a task's key read from plain words is written as those words again, as it was.
+      if (held.attrs?.unlinked === true && words !== undefined) return plainOf(words);
 
       if (words === undefined) return mentionLink({ name: String(held.attrs?.name ?? ""), target });
 
@@ -188,10 +205,41 @@ function linkOf(node: JSONContent): string | undefined {
   return href === undefined || href === null ? undefined : String(href);
 }
 
-/** One inline run as read: a run of text under one link whose words start with `@` becomes a mention, as does one whose target `namesChip` chips, and anything else stands. */
+/** A run of plain words with each listed task's key in it made its task's mention, the words between left as they were; words with any formatting stand. */
+function keyedWords(node: JSONContent, keyTargets: ReadonlyMap<string, string>): JSONContent[] {
+  const text = node.text ?? "";
+
+  const spans =
+    node.type === "text" && (node.marks ?? []).length === 0 ? keySpansIn(text, keyTargets) : [];
+
+  if (spans.length === 0) return [node];
+
+  const read: JSONContent[] = [];
+  let from = 0;
+
+  for (const span of spans) {
+    if (span.start > from) read.push({ type: "text", text: text.slice(from, span.start) });
+    read.push({
+      type: MENTION_NODE,
+      attrs: {
+        name: span.key,
+        target: span.known,
+        words: [{ type: "text", text: span.key }],
+        unlinked: true,
+      },
+    });
+    from = span.end;
+  }
+
+  if (from < text.length) read.push({ type: "text", text: text.slice(from) });
+
+  return read;
+}
+
+/** One inline run as read: a run of text under one link whose words start with `@` becomes a mention, as does one whose target `namesChip` chips, and a listed task's key among plain words, and anything else stands. */
 function mentionsOfRun(
   content: readonly JSONContent[],
-  namesChip: NamesChip | undefined,
+  chips: ChipsRead | undefined,
 ): JSONContent[] {
   const read: JSONContent[] = [];
 
@@ -202,7 +250,8 @@ function mentionsOfRun(
     const href = linkOf(node);
 
     if (href === undefined) {
-      read.push(withMentions(node, namesChip));
+      const block = withMentions(node, chips);
+      read.push(...(chips === undefined ? [block] : keyedWords(block, chips.keyTargets)));
       continue;
     }
 
@@ -220,7 +269,7 @@ function mentionsOfRun(
         attrs: { name: words.slice(MENTION_SIGIL.length), target: href },
       });
     } else if (
-      namesChip?.(href) === true &&
+      chips?.namesChip(href) === true &&
       run.every((each) => each.type === "text" && !titled(each))
     ) {
       read.push({
@@ -253,11 +302,11 @@ function withoutLink(word: JSONContent): JSONContent {
   return marks.length === 0 ? bare : { ...bare, marks };
 }
 
-/** A block read from markdown with each link whose words start with `@`, or whose target `namesChip` chips, made the mention node. */
-export function withMentions(node: JSONContent, namesChip?: NamesChip | undefined): JSONContent {
-  if (node.content === undefined) return node;
+/** A block read from markdown with each link whose words start with `@`, or whose target `chips` chips, and each listed task's key among its plain words, made the mention node; a code block's words stand. */
+export function withMentions(node: JSONContent, chips?: ChipsRead | undefined): JSONContent {
+  if (node.content === undefined || node.type === CODE_BLOCK) return node;
 
-  return { ...node, content: mentionsOfRun(node.content, namesChip) };
+  return { ...node, content: mentionsOfRun(node.content, chips) };
 }
 
 /** A mention written in plain words: where its link stands, and what it holds. */

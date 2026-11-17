@@ -147,8 +147,8 @@ export function PhoneHead(slots: PhoneHeadSlots): React.JSX.Element {
 
 /**
  * A phone's way back, its start corner: the back's glyph, named by where it
- * leads. Note that it names no key, because the window's Back takes one
- * history step and this leaves the page, as the task's way back does.
+ * leads, the window's Back, as the task's way back is. Note that it names
+ * no key, as no phone's header does.
  */
 export function PhoneBack({ back }: { back: TaskHeadBack }): React.JSX.Element {
   return (

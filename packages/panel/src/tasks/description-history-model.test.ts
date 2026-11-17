@@ -39,7 +39,12 @@ const CHARLES = { userId: "user-charles", name: "Charles Pan" };
 function line(overrides: Partial<DescriptionRevisionLine> = {}): DescriptionRevisionLine {
   return {
     seq: 3,
-    lastEdit: { actor: DESCRIPTION_ACTOR.NOTETAKER, at: NOW - 2 * HOUR, duringCall: false },
+    lastEdit: {
+      actor: DESCRIPTION_ACTOR.DEVELOPER,
+      by: CHARLES,
+      at: NOW - 2 * HOUR,
+      duringCall: false,
+    },
     startedAt: NOW - 3 * HOUR,
     changes: 14,
     ...overrides,
@@ -123,7 +128,6 @@ test("a revision names its writer as the developer knows them, and says what it 
       ),
     );
 
-  assert.equal(named({}), "Vespin");
   assert.equal(named({ actor: DESCRIPTION_ACTOR.DEVELOPER, by: DEAN }), "You");
   assert.equal(
     named({ actor: DESCRIPTION_ACTOR.AGENT, label: "Invite emails" }, AGENT_ID),
@@ -152,9 +156,9 @@ test("a revision names its writer as the developer knows them, and says what it 
 });
 
 /**
- * A description's revisions, newest first, as the service lists them: the app's on a
- * call, moved on by saves from three hours ago to two, an agent's five hours
- * ago, and the description before its history began.
+ * A description's revisions, newest first, as the service lists them: a
+ * teammate's, moved on by saves from three hours ago to two, an agent's five
+ * hours ago, and the description before its history began.
  */
 const REVISIONS = [
   line({ seq: 3, startedAt: NOW - 3 * HOUR }),
@@ -374,7 +378,7 @@ test("only a revision of several changes opens its sections: not one change, a r
   );
 });
 
-test("a revision's Open goes to its agent's tab, and nowhere for Vespin's own saves, whose work no tab draws, or anyone else", () => {
+test("a revision's Open goes to its agent's tab, and nowhere for anyone else", () => {
   const agentEdit = {
     actor: DESCRIPTION_ACTOR.AGENT,
     label: "Invite emails",
@@ -382,7 +386,6 @@ test("a revision's Open goes to its agent's tab, and nowhere for Vespin's own sa
     duringCall: false,
   };
 
-  assert.equal(revisionSource(line()), undefined);
   assert.deepEqual(revisionSource({ lastEdit: agentEdit, agentId: AGENT_ID }), {
     kind: REVISION_SOURCE.AGENT,
     agentId: AGENT_ID,

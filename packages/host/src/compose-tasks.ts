@@ -3029,7 +3029,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         })),
     }),
     // The task the service answered is drawn in place, so the edit stands on
-    // its description at once and the notetaker's drafts drawn before it drop. It
+    // its description at once and the agents' drafts drawn before it drop. It
     // stands until the task's record and the list carry its transaction,
     // which is waited for behind the answer.
     TASKS_EDIT: ({ taskId, edit }) =>

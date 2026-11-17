@@ -5,7 +5,11 @@ import { DateTime, Duration, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
 import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
-import { INTEGRATION_INSTALLATION_STATUS } from "../integration-vocabulary.js";
+import {
+  INSTALL_INTENT_PROVIDER,
+  INTEGRATION_INSTALLATION_STATUS,
+  type InstallIntentProvider,
+} from "../integration-vocabulary.js";
 import {
   integrationInstallation,
   integrationInstallIntent,
@@ -33,6 +37,8 @@ import type { TaskStoreEffect } from "./task-store.js";
 export const INTEGRATION_INSTALL_INTENT_LIFETIME = Duration.hours(1);
 
 const ProviderSchema = Schema.Literals(Object.values(TRIGGER_PROVIDER));
+
+const IntentProviderSchema = Schema.Literals(Object.values(INSTALL_INTENT_PROVIDER));
 
 /** The random bytes an intent's state is spelled from. */
 const STATE_BYTES = 32;
@@ -196,7 +202,7 @@ const findWorkspaceInstallations = SqlSchema.findAll({
 const insertIntent = SqlSchema.void({
   Request: Schema.Struct({
     stateHash: Schema.String,
-    provider: ProviderSchema,
+    provider: IntentProviderSchema,
     userId: Schema.String,
     organizationId: Schema.String,
     expiresAt: Schema.Date,
@@ -234,7 +240,11 @@ const deleteExpiredIntents = SqlSchema.void({
 const InstallIntentSchema = Schema.Struct({ userId: Schema.String, organizationId: Schema.String });
 
 const deleteIntent = SqlSchema.findOneOption({
-  Request: Schema.Struct({ stateHash: Schema.String, provider: ProviderSchema, now: Schema.Date }),
+  Request: Schema.Struct({
+    stateHash: Schema.String,
+    provider: IntentProviderSchema,
+    now: Schema.Date,
+  }),
   Result: InstallIntentSchema,
   execute: ({ stateHash, provider, now }) =>
     Database.use((db) =>
@@ -311,7 +321,7 @@ export function workspaceIntegrationInstallations(
 
 /** A new install intent for the account and the workspace at the provider; answers the state the install address carries, which nothing stores. */
 export function openIntegrationInstallIntent(
-  provider: TriggerProvider,
+  provider: InstallIntentProvider,
   userId: string,
   organizationId: string,
 ): TaskStoreEffect<string> {
@@ -334,7 +344,7 @@ export function openIntegrationInstallIntent(
 
 /** The intent a state stands for at the provider, spent so it never links twice; nothing for a state unknown, another provider's, spent, or expired. */
 export function spendIntegrationInstallIntent(
-  provider: TriggerProvider,
+  provider: InstallIntentProvider,
   state: string,
 ): TaskStoreEffect<Option.Option<IntegrationInstallIntent>> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>

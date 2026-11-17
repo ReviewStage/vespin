@@ -103,7 +103,10 @@ builds a control of its own.
   kind, as the rows' glyphs are chosen (`transcript-look.ts`). A pull
   request an agent opened stands in its call's place as `PullRequestCard`, as the
   task list holds it now. A page an agent showed is `SealedPage`, the app's
-  one web view, handed the page's HTML sealed by `@repo/features/sealed-page`. `Pressable`,
+  one web view a reader sees, handed the page's HTML sealed by `@repo/features/sealed-page`;
+  a description's Mermaid fences are drawn by `DiagramRenderer`, Mermaid
+  run in a hidden sealed web view only while words with a fence stand, each
+  diagram handed back as a picture (`DiagramBlock`). `Pressable`,
   `TextInput`, and the rest of React Native's controls appear only here. SwiftUI standing inside those views, such as a message's long press
   menu, a call's glyph, or a pull request card in a transcript, stands in
   `InlineHost`, which ignores the window's safe area, so a row scrolled
@@ -194,8 +197,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Inline titles, no large titles.** A tab's root shows its name small and
   inline. A split view's list column beside the app sidebar stands its title
   bold at its bar's leading edge (`inlineLarge`), as Mail names the mailbox
-  over its list, and its search is one button at the window's trailing edge,
-  as Mail's is; a list standing first, as a portrait iPad's, keeps its title
+  over its list, and its search is the system's field under that title, in
+  its own column's bar (`navigationBarDrawer`), never a lone button over the
+  detail, whose bar stays the page's alone; a list standing first, as a portrait iPad's, keeps its title
   small and inline, since its bar also holds the switcher, ⋯ and the
   sidebar button. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading

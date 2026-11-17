@@ -1,31 +1,48 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import {
+  PROVIDER_KEY_ENCRYPTION_ENVIRONMENT,
+  parseKeyRing,
+} from "@repo/database/models/provider-key-seal";
+import {
   linkSlackInstallation,
-  workspaceSlackInstallation,
+  saveSlackBotToken,
 } from "@repo/database/models/slack-installation-store";
 import { member, organization, user } from "@repo/database/schemas/auth";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { DateTime, Effect, Option } from "effect";
-import { HOSTED_REFUSAL } from "../http/http-effect.js";
+import { ConfigProvider, DateTime, Effect, Layer, Option, Redacted, Result } from "effect";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import {
   beginIntegrationSignIn,
   completeIntegrationSignIn,
 } from "../integrations/integration-store.js";
-import { firstIntegrationAccount } from "../testing/integration-connect.js";
-import { SlackBot, SlackBotFailure, type SlackWebApi, slackBotOver } from "./slack-bot.js";
-import { connectSlackBot } from "./slack-bot-operations.js";
+import {
+  CONNECTOR_ASKED_NOTHING,
+  firstIntegrationAccount,
+  integrationConnectOf,
+} from "../testing/integration-connect.js";
+import { SlackApp, slackAppService } from "./slack-app.js";
+import {
+  SlackBot,
+  SlackBotFailure,
+  type SlackWebApi,
+  slackBotFromEnvironment,
+  slackBotOver,
+} from "./slack-bot.js";
+import { readSlackBot } from "./slack-bot-operations.js";
 
 /**
  * Our Slack bot writing to a member, over a real store and a fake
  * Slack: a member whose email Slack knows is written to, one it does not
  * know is written nothing unless they connected their own Slack account in
  * the bot's team, and a Slack that refuses answers nothing rather than
- * failing whoever asked. A workspace's owner connects the bot only where
- * they are someone in its team.
+ * failing whoever asked. Each workspace's calls are made on the token its
+ * own install granted, and one that holds none writes nothing. Settings
+ * offers the bot only where the deployment holds both the key ring that
+ * opens a token and our Slack app whose install grants one.
  *
  * Synthetic accounts, workspaces, and Slack ids throughout.
  */
@@ -33,6 +50,9 @@ import { connectSlackBot } from "./slack-bot-operations.js";
 const KNOWN_EMAIL = "known@app.test";
 const POSTED = { channel: "D0001", ts: "1700000000.000100" };
 const CONTENT = { text: "A thread needs you", blocks: [] };
+
+/** The deployment's key ring as its variable spells it: one fresh key. */
+const RING_VARIABLE = `1:${randomBytes(32).toString("base64")}`;
 
 /** A Slack that knows one member, by `KNOWN_EMAIL`, answers a member's own account as the user its subject names in the team, and posts every message it is handed. */
 const fakeSlack: SlackWebApi = (method, args, memberSubject) => {
@@ -108,10 +128,10 @@ it.layer(getTestDB())("the Slack bot", (it) => {
       const known = yield* openAccount(KNOWN_EMAIL);
       const unknown = yield* openAccount(`${randomUUID()}@app.test`);
       const workspace = yield* openConnectedWorkspace(known);
-      const bot = slackBotOver(fakeSlack);
+      const bot = yield* slackBotOver(fakeSlack).forWorkspace(workspace);
 
-      assert.deepEqual(yield* bot.dm(workspace, known, CONTENT), Option.some(POSTED));
-      assert.deepEqual(yield* bot.dm(workspace, unknown, CONTENT), Option.none());
+      assert.deepEqual(yield* bot.dm(known, CONTENT), Option.some(POSTED));
+      assert.deepEqual(yield* bot.dm(unknown, CONTENT), Option.none());
     }),
   );
 
@@ -126,14 +146,11 @@ it.layer(getTestDB())("the Slack bot", (it) => {
         yield* joinWorkspace(workspace, writing);
         yield* connectOwnSlack(writtenTo);
         yield* connectOwnSlack(writing);
-        const bot = slackBotOver(fakeSlack);
+        const bot = yield* slackBotOver(fakeSlack).forWorkspace(workspace);
 
-        assert.deepEqual(yield* bot.dm(workspace, writtenTo, CONTENT), Option.some(POSTED));
-        assert.deepEqual(
-          yield* bot.memberOf(workspace, "T0001", `U-${writing}`),
-          Option.some(writing),
-        );
-        assert.deepEqual(yield* bot.memberOf(workspace, "T0001", "U-stranger"), Option.none());
+        assert.deepEqual(yield* bot.dm(writtenTo, CONTENT), Option.some(POSTED));
+        assert.deepEqual(yield* bot.memberOf("T0001", `U-${writing}`), Option.some(writing));
+        assert.deepEqual(yield* bot.memberOf("T0001", "U-stranger"), Option.none());
       }),
   );
 
@@ -142,28 +159,102 @@ it.layer(getTestDB())("the Slack bot", (it) => {
       const known = yield* openAccount(`${randomUUID()}-${KNOWN_EMAIL}`);
       const workspace = yield* openConnectedWorkspace(known);
 
-      const bot = slackBotOver((method) =>
+      const bot = yield* slackBotOver((method) =>
         Effect.fail(new SlackBotFailure({ method, code: "invalid_auth" })),
-      );
+      ).forWorkspace(workspace);
 
-      assert.deepEqual(yield* bot.dm(workspace, known, CONTENT), Option.none());
+      assert.deepEqual(yield* bot.dm(known, CONTENT), Option.none());
     }),
   );
 
-  it.effect("is connected by an owner in its team, and refused to one Slack does not know", () =>
+  it.effect(
+    "calls Slack for each workspace on its own token, and for one holding none not at all",
+    () => {
+      const bearers: (string | undefined)[] = [];
+
+      const slack = HttpClient.make((request) =>
+        Effect.sync(() => {
+          bearers.push(request.headers.authorization);
+
+          return HttpClientResponse.fromWeb(request, Response.json({ ok: true, ...POSTED }));
+        }),
+      );
+
+      const bot = slackBotFromEnvironment.pipe(
+        Layer.provide(
+          Layer.mergeAll(
+            Layer.succeed(HttpClient.HttpClient, slack),
+            integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
+            ConfigProvider.layer(
+              ConfigProvider.fromUnknown({
+                [PROVIDER_KEY_ENCRYPTION_ENVIRONMENT.KEYS]: RING_VARIABLE,
+              }),
+            ),
+          ),
+        ),
+      );
+
+      return Effect.gen(function* () {
+        const owner = yield* openAccount(`${randomUUID()}@app.test`);
+        const ours = yield* openConnectedWorkspace(owner);
+        const theirs = yield* openConnectedWorkspace(owner);
+        const unsealed = yield* openConnectedWorkspace(owner);
+        const ring = Result.getOrThrow(parseKeyRing(Redacted.make(RING_VARIABLE)));
+
+        for (const [organizationId, token] of [
+          [ours, "xoxb-ours"],
+          [theirs, "xoxb-theirs"],
+        ] as const) {
+          yield* saveSlackBotToken(ring, {
+            organizationId,
+            teamId: "T0001",
+            token: Redacted.make(token),
+            botUserId: "U0BOT",
+            botId: "B0BOT",
+            appId: "A0APP",
+            scopes: ["chat:write"],
+            enterpriseId: null,
+            isEnterpriseInstall: false,
+          });
+        }
+
+        const { forWorkspace } = yield* SlackBot;
+
+        const replies = yield* Effect.forEach([theirs, ours, unsealed], (organizationId) =>
+          Effect.flatMap(forWorkspace(organizationId), (one) => one.reply("C0001", "1.0", CONTENT)),
+        );
+
+        assert.deepEqual(replies, [Option.some(POSTED), Option.some(POSTED), Option.none()]);
+        assert.deepEqual(bearers, ["Bearer xoxb-theirs", "Bearer xoxb-ours"]);
+      }).pipe(Effect.provide(bot));
+    },
+  );
+
+  it.effect.each([
+    { holds: "the key ring and the Slack app", ring: true, app: true, configured: true },
+    { holds: "the key ring alone", ring: true, app: false, configured: false },
+    { holds: "the Slack app alone", ring: false, app: true, configured: false },
+  ])("is offered in Settings where the deployment holds $holds: $configured", (row) =>
     Effect.gen(function* () {
-      const insider = yield* openAccount(`${randomUUID()}@app.test`);
-      const outsider = yield* openAccount(`${randomUUID()}@app.test`);
-      const theirs = yield* openWorkspace(insider);
-      const outsiders = yield* openWorkspace(outsider);
-      yield* connectOwnSlack(insider);
+      const owner = yield* openAccount(`${randomUUID()}@app.test`);
+      const workspace = yield* openWorkspace(owner);
 
-      const refused = yield* Effect.flip(connectSlackBot(outsider, outsiders));
-      yield* connectSlackBot(insider, theirs);
-
-      assert.deepEqual(refused, HOSTED_REFUSAL.NOT_PERMITTED);
-      assert.deepEqual(yield* workspaceSlackInstallation(outsiders), Option.none());
-      assert.equal(Option.isSome(yield* workspaceSlackInstallation(theirs)), true);
-    }).pipe(Effect.provideService(SlackBot, slackBotOver(fakeSlack))),
+      assert.equal((yield* readSlackBot(owner, workspace)).configured, row.configured);
+    }).pipe(
+      Effect.provideService(SlackBot, slackBotOver(row.ring ? fakeSlack : undefined)),
+      Effect.provideService(
+        SlackApp,
+        slackAppService(
+          row.app
+            ? {
+                clientId: "1.2",
+                clientSecret: Redacted.make("client-secret"),
+                signingSecret: Redacted.make("signing-secret"),
+              }
+            : undefined,
+          [],
+        ),
+      ),
+    ),
   );
 });

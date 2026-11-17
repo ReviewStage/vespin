@@ -6,12 +6,13 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { sandboxOwner } from "@repo/database/models/sandbox-owners";
 import { workspaceDriveRepositories } from "@repo/database/models/workspace-drive-repositories";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
 import { Sandbox } from "@repo/sandbox";
 import { type MemoryCommand, memorySandbox } from "@repo/sandbox/testing";
-import { Deferred, Effect, Fiber } from "effect";
+import { Deferred, Effect, Fiber, Option } from "effect";
 import { TestClock } from "effect/testing";
 import {
   connectWorkspaceGitHub,
@@ -134,6 +135,16 @@ it.layer(getTestDB())("a workspace's drive", (it) => {
         assert.deepEqual(commands.filter(isPrune), []);
         assert.deepEqual(memory.state.deleted, [name]);
         assert.deepEqual(yield* workspaceDriveRepositories(workspace.workspaceId), ["acme/relay"]);
+        // The fill's sandbox is billed to the workspace, under no agent and no member.
+        const owned = yield* sandboxOwner(name);
+        assert.deepEqual(
+          Option.map(owned, ({ organizationId, agentId, userId }) => ({
+            organizationId,
+            agentId,
+            userId,
+          })),
+          Option.some({ organizationId: workspace.workspaceId, agentId: null, userId: null }),
+        );
       }),
   );
 

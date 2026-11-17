@@ -117,6 +117,7 @@ import {
   usePersonRoute,
 } from "../workspace-routes.js";
 import { inboxItemHomeQueryOptions, taskByNumberQueryOptions } from "./agent-reads.js";
+import { type AgentThreadViews, useAgentThreadViews } from "./agent-thread-views.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./automations-place.js";
 import { type ByPullRequest, NO_PULL_REQUESTS_KEPT, withPullRequest } from "./by-pull-request.js";
 import {
@@ -193,7 +194,7 @@ import { sayRestored } from "./version-view.js";
  * use-tasks-tab.ts -- the panel's Tasks tab as one control: which page shows, the presses each page makes, and the host's read of the tasks as the tab shows.
  *
  * The tab draws the tasks view main holds, and every press is an act. It
- * saves nothing and decides nothing about a task: the task's notetaker writes
+ * saves nothing and decides nothing about a task: the task's agents write
  * the document, and the tab redraws it in
  * place as the host brings its drafts and its reads. A rename, a pin, and an
  * archive are the presses drawn before the host answers them: each shows at
@@ -245,9 +246,9 @@ export type InboxChoice =
  */
 export interface InboxViewControl {
   /**
-   * Goes back from the item chosen to its list, which stands the list alone where the Inbox shows one column: a step
-   * back where the list is the step behind, else its route's own move, unasked (`inbox-route.ts`), standing the list in
-   * the item's step (`places/narrow-backs.ts`). The Inbox's other doors are `places/routed-doors.ts`'s `useInboxDoor`,
+   * Goes back from the item chosen to its list, which stands the list alone where the Inbox shows one column: the
+   * window's Back, one step back, else, where none stands behind, its route's own move, unasked (`inbox-route.ts`),
+   * standing the list in the item's step (`places/narrow-backs.ts`). The Inbox's other doors are `places/routed-doors.ts`'s `useInboxDoor`,
    * and where it stands, what is chosen in it, and its narrowing are read through `useInboxView`.
    */
   readonly onClear: () => void;
@@ -276,7 +277,6 @@ interface AgentViewControl {
   /** The agent whose page stands, none while none does. */
   readonly agentId: string | undefined;
   readonly onOpen: (agentId: string) => void;
-  readonly onClose: () => void;
 }
 
 /** The places that are an agent's own, which open on its task where it has one, else on its page. */
@@ -464,6 +464,8 @@ export interface TasksControl {
   inboxView: InboxViewControl;
   /** Says which agent's card in the column shows its threads in its transcript's place (`agent-threads.tsx`), none while it shows its transcript, so main is not told that transcript is on screen. */
   onThreadsShown: (agentId: string | undefined) => void;
+  /** Which agents' cards show their threads, by task and agent, which the window's history stands as it lands on a task's step (`agent-thread-views.ts`). */
+  agentThreads: AgentThreadViews;
   /** One agent's own address: which agent's stands in the task's place, if any, and its presses. */
   agentView: AgentViewControl;
   /**
@@ -539,14 +541,6 @@ export interface TasksControl {
   liveAgents: readonly ListedAgent[] | undefined;
   /** The pull request of every agent the list followed live carries that opened one, as its row keeps it; none while it is not. */
   listedPullRequests: readonly ListedPullRequest[] | undefined;
-  /**
-   * Steps back one layer, the window's Escape, answering whether there was one
-   * to step back from: a side panel filling the window back beside the
-   * document, or a narrow room's shut by its way back, else an open task
-   * left by a step back to the page it was opened from, or where none stands
-   * behind it for the page the window rests on (`places/narrow-backs.ts`).
-   */
-  back: () => boolean;
   /** The window's one ask before leaving a page whose unsaved work would be lost (`places/place-leave.ts`). */
   placeLeave: PlaceLeave;
 }
@@ -1410,6 +1404,7 @@ export function useTasksTab(input: {
   }, [draftInView, blankDraft, columnSettled]);
   // The agent whose card in the column shows its threads rather than its transcript, as the task's page says.
   const [threadsShown, setThreadsShown] = useState<string | undefined>(undefined);
+  const agentThreads = useAgentThreadViews();
 
   // An agent's transcript beside the Inbox shows its agent as its tab would, while the panel stands open on it.
   const inboxTranscript =
@@ -2217,8 +2212,9 @@ export function useTasksTab(input: {
     });
   };
 
-  // One the developer goes back to work on, from a sidebar row, ⌘K, or Recent, lands on its
-  // agent (`resumingAgentOf`); one with none, on the tab its column falls to, a new agent's draft
+  // One the developer goes back to work on, from a sidebar row, ⌘K, or Recent, opens as they
+  // left it, on the tab they last viewed there; one never viewed here lands on its agent
+  // (`resumingAgentOf`), or one with none on the tab its column falls to, a new agent's draft
   // where no agent's stands. In a narrow room the panel shuts over it, and the agent stands as a
   // screen over the task's details, which its header's Back, named for the task, returns to, a
   // task with no agent opening on its details.
@@ -2227,6 +2223,8 @@ export function useTasksTab(input: {
     const narrow = input.room === SHELL_ROOM.NARROW;
 
     if (narrow) sidePanel.onSetOpen(false);
+
+    if (mainTabs.remembers(taskId)) return;
     const agentId = resumingAgentOf(taskId, liveAgents, inboxWaiting);
 
     if (agentId !== undefined) mainTabs.onShow(taskId, agentTab(agentId));
@@ -3438,17 +3436,6 @@ export function useTasksTab(input: {
     else sidePanel.onChoose(closedKind);
   };
 
-  // The tab rests on no task, so only an open task steps back,
-  // and a panel filling the window over it is the nearer layer.
-  const back = useCallback((): boolean => {
-    if (page !== TASKS_PAGE.TASK) return false;
-
-    if (sidePanel.fullScreen) sidePanel.onToggleFullScreen();
-    else leaveTask();
-
-    return true;
-  }, [leaveTask, page, sidePanel.fullScreen, sidePanel.onToggleFullScreen]);
-
   // A side panel standing only full screen, a narrow room's, is a pane over the page it stands on, so each of its ways
   // out takes the pane's way back (`places/narrow-backs.ts`): its toggle, which reads Close panel, leaving full screen,
   // and closing the last tab its strip draws, which closes the tab as ever and then shuts the panel by the way back.
@@ -3466,20 +3453,6 @@ export function useTasksTab(input: {
   const panelWays = shutsWhole
     ? { onToggle: paneBack, onToggleFullScreen: paneBack, onClose: closePane }
     : { onToggle: toggleSidePanel, onClose: closeSidePanelTab };
-
-  // The window's Escape on an open task, past a panel filling the window, is the toolbar's Back: one step back, to the
-  // page the task was opened from, and the task is left as ever only where no step stands behind it.
-  const escapeTask = (): boolean => {
-    if (page !== TASKS_PAGE.TASK || (!shutsWhole && sidePanel.fullScreen)) return back();
-
-    if (shutsWhole) paneBack();
-    else backs.task(leaveTask);
-
-    return true;
-  };
-
-  // Note that Escape's step back stands across draws, calling the newest, as the tab's doors do.
-  const steadyEscape = useSteadyDoor(escapeTask);
 
   // Note that the tab is handed back steady, so a part that holds while its share of the tab does (`memo`) holds for every draw that moved nothing it reads.
   const steady = useSteadyDoors<Omit<TasksControl, "liveAgents" | "listedPullRequests">>({
@@ -3572,6 +3545,7 @@ export function useTasksTab(input: {
     onTabKeysTaken: onKeysTaken,
     inboxShown: shownInbox,
     onThreadsShown: setThreadsShown,
+    agentThreads,
     // The window's Inbox is the router's (`places/routed-doors.ts`'s `useInboxDoor`); what stays here is the tab's own.
     inboxView: {
       // Note that an item is a step after the list it was chosen in, which its way back steps back to (`places/narrow-backs.ts`).
@@ -3586,8 +3560,6 @@ export function useTasksTab(input: {
       agentId: agentView?.agentId,
       // An agent's page is only the router's move there, which asks as it goes while a page holds unsaved work.
       onOpen: (agentId: string) => openAgentPage(agentId),
-      // Note that its close is its route's move to the place the window's state says, which the router's blocker holds.
-      onClose: () => placeLeave.arrive(input.agentView.onClose, NOTHING),
     },
     // A person's page is the router's, which draws it in the plan's place (`workspace-routes.ts`); a version history there gives way.
     onOpenPerson: (userId: string, name?: string, workspaceId?: string) => {
@@ -3695,7 +3667,6 @@ export function useTasksTab(input: {
     taskPlaceStands: input.place === undefined || input.place.binding === PLACE_BINDING.TASK,
     typedNamesNow,
     onDraftName: draftName,
-    back: steadyEscape,
     placeLeave,
   });
 

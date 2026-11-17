@@ -550,7 +550,13 @@ export const ROUTED_PLACE = {
       // A narrow room keeps the side panel's tab in its pane of its own, named as a wide room's side is.
       const side = taskStep.side ?? openPanelTab(taskStep.panel);
 
-      return { kind: NAMED_STEP.TASK, taskId: taskStep.taskId, column: taskStep.column, side };
+      return {
+        kind: NAMED_STEP.TASK,
+        taskId: taskStep.taskId,
+        column: taskStep.column,
+        side,
+        threads: taskStep.threads !== undefined,
+      };
     },
     links: ({ under }) => under(),
     narrowBack: NARROW_BACK.PANE,
@@ -623,12 +629,12 @@ export const ROUTED_PLACE = {
 
       return { label: INBOX_WORDS, detail };
     },
-    // An Inbox step is named by its chosen item's task, else the one its list is narrowed to.
+    // An Inbox step is named by its chosen item's thread and task, else the task its list is narrowed to.
     named: (params, search, { itemTask }) => {
       const holder = params.itemId === undefined ? undefined : itemTask(params.itemId);
       const narrowed = params.taskId ?? search.get("task") ?? undefined;
 
-      return { kind: NAMED_STEP.INBOX, taskId: holder ?? narrowed };
+      return { kind: NAMED_STEP.INBOX, taskId: holder ?? narrowed, itemId: params.itemId };
     },
     links: ({ tasks, rows, views, at, listed, under }) => {
       if (!views.inbox.open) return under();

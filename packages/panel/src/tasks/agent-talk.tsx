@@ -1,38 +1,46 @@
 /**
- * agent-talk.tsx -- an agent's box taking calls: Talk at rest, and on a call into the agent the call's presses in the microphone's place.
+ * agent-talk.tsx -- an agent's box taking calls: Talk in Send's place at rest, and on a call into the agent the call's presses in the microphone's place.
  *
  * One call stands in a window at a time (`../voice-call.tsx`). At rest the
- * box offers Talk, the waveform beside Dictate, which calls the agent; with
- * no OpenAI API key saved it says to add one and its press opens Settings ›
+ * box offers Talk, the waveform in Send's place while the box holds nothing
+ * to send and no Stop stands, which calls the agent; the first word or file
+ * turns it into Send, as ChatGPT's composer does (Dean, Nov 17). With no
+ * OpenAI API key saved it says to add one and its press opens Settings ›
  * Agents (`../openai-key.tsx`), as Dictate's does. Talk into this agent
  * while a call into another stands asks first, since the other call ends.
- * On a call into this agent the same place holds the call's presses (the
- * speaker and microphone mutes, and End call), with no status beside them,
- * since the row stays uncrowded (Dean, Nov 13), and Dictate
- * goes, since the call holds the microphone; a dictation under way as the
- * call starts ends, keeping the words already said. The field stays the
- * agent's as ever, so a typed line goes to the agent as any line does. A
- * narrow box folds Talk into its ⋯ as it folds Dictate; the call's
- * presses stay (`CallComposerControls`). Nothing of
- * it stands in any box but an agent's own tab's.
+ * On a call into this agent the microphone's place holds the call's presses
+ * (the speaker and microphone mutes, and End call), with no status beside
+ * them, since the row stays uncrowded (Dean, Nov 13), and Dictate goes,
+ * since the call holds the microphone; a dictation under way as the call
+ * starts ends, keeping the words already said. Send's place then holds Send
+ * alone, since the call is already up. The field stays the agent's as ever,
+ * so a typed line goes to the agent as any line does. Talk stands whole in
+ * a narrow box, as Send does; the call's presses stay too
+ * (`CallComposerControls`). Nothing of it stands in any box but an agent's
+ * own tab's and a box that starts a new agent.
+ *
+ * A box that starts a new agent, New task's and a draft agent's, offers
+ * Talk the same way, which starts the agent blank, handed nothing, on the
+ * box's choices, and calls it once it lands (`NewAgentTalk`), so the
+ * caller's first words are its first message (Dean, Nov 17). With no key
+ * saved it starts nothing and opens Settings › Agents; while that start is
+ * out, Talk stands disabled. A call that ends with nobody having spoken to
+ * the agent lets it go (`endVoiceCall`).
  */
 
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { TALK_LABEL } from "@repo/features/voice-call-words";
 import {
   CallComposerControls,
   CONFIRM_LOSS,
+  type ComposerTalk,
   ConfirmDialog,
-  TalkButton,
   useConfirmDialog,
-  WaveformIcon,
 } from "@repo/ui";
 import { neverBusyAct } from "@repo/ui/confirm-state";
 import type { ReactNode } from "react";
 import { confirmFailure } from "../failure-report.js";
-import { useOpenAiKeyMissing } from "../openai-key.js";
-import { useVoiceCall } from "../voice-call.js";
-import { OVERFLOW_PRESS, type OverflowOffer } from "./message-box.js";
+import { useOpenAiKeyMissing, useOpenApiKeys } from "../openai-key.js";
+import { type CallWhenStarted, useVoiceCall } from "../voice-call.js";
 import type { DictationControl } from "./use-dictation.js";
 
 /** What Talk asks while a call into another agent stands. */
@@ -49,11 +57,17 @@ export interface TalkInto {
   readonly taskId: string;
 }
 
-/** What a box draws of calls: whether a call into its agent holds the microphone, what stands beside Dictate, and Talk's row in its ⋯. */
+/** A box that starts a new agent: its blank start, which calls `call` once the agent lands, or with nothing where it was refused, and whether one is out. */
+export interface NewAgentTalk {
+  readonly start: (call: CallWhenStarted) => void;
+  readonly starting: boolean;
+}
+
+/** What a box draws of calls: whether a call into its agent holds the microphone, what stands in the microphone's place, and Talk for Send's place while no call into its agent stands. */
 export interface AgentTalk {
   readonly onCall: boolean;
   readonly press: ReactNode;
-  readonly offer: OverflowOffer | undefined;
+  readonly talk: ComposerTalk | undefined;
 }
 
 /**
@@ -62,11 +76,12 @@ export interface AgentTalk {
  * dictation first, keeping its words where any were recorded.
  */
 export function useAgentTalk(
-  into: TalkInto | undefined,
+  into: TalkInto | NewAgentTalk | undefined,
   dictation: DictationControl,
 ): AgentTalk | undefined {
   const voice = useVoiceCall();
   const keyMissing = useOpenAiKeyMissing();
+  const openApiKeys = useOpenApiKeys();
   const { call } = voice;
 
   const start = () => {
@@ -74,7 +89,12 @@ export function useAgentTalk(
 
     if (dictation.startedAt !== undefined) dictation.finish();
     else dictation.cancel();
-    voice.start(into);
+
+    if (!("start" in into)) return voice.start(into);
+
+    // Note that a new agent is started only where a call can open on it, so no key saved starts nothing.
+    if (keyMissing) return openApiKeys();
+    into.start(voice.startWhenStarted());
   };
 
   const switching = useConfirmDialog(
@@ -86,12 +106,14 @@ export function useAgentTalk(
   if (into === undefined) return undefined;
 
   // Note that a key missing is the call's own to answer, which opens Settings › Agents, so it never asks to end another call first.
+  const agentId = "start" in into ? undefined : into.agentId;
+
   const talk = () => {
-    if (keyMissing || call === undefined || call.agentId === into.agentId) return start();
+    if (keyMissing || call === undefined || call.agentId === agentId) return start();
     switching.ask();
   };
 
-  if (call !== undefined && call.agentId === into.agentId) {
+  if (call !== undefined && call.agentId === agentId) {
     return {
       onCall: true,
       press: (
@@ -108,34 +130,20 @@ export function useAgentTalk(
           onEnd={voice.end}
         />
       ),
-      offer: undefined,
+      talk: undefined,
     };
   }
 
+  // Note that the question stands apart from Talk, since Talk leaves Send's place as words come.
   return {
     onCall: false,
     press: (
-      <>
-        {/* Note that the box is what a narrow card's stylesheet hides and its ⋯ reads. */}
-        <span className={`${OVERFLOW_PRESS.TALK} flex`}>
-          <TalkButton keyMissing={keyMissing} onPress={talk} />
-        </span>
-        <ConfirmDialog
-          open
-          confirm={switching}
-          question={{ ...SWITCH_QUESTION, loss: CONFIRM_LOSS.IRREVERSIBLE, replayUnmasked: true }}
-        />
-      </>
+      <ConfirmDialog
+        open
+        confirm={switching}
+        question={{ ...SWITCH_QUESTION, loss: CONFIRM_LOSS.IRREVERSIBLE, replayUnmasked: true }}
+      />
     ),
-    offer: {
-      press: OVERFLOW_PRESS.TALK,
-      entries: [
-        {
-          label: keyMissing ? TALK_LABEL.KEY_MISSING : TALK_LABEL.TALK,
-          icon: <WaveformIcon />,
-          onSelect: talk,
-        },
-      ],
-    },
+    talk: { keyMissing, disabled: "start" in into && into.starting, onPress: talk },
   };
 }

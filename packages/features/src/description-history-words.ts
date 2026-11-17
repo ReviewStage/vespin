@@ -7,7 +7,6 @@
  */
 
 import { VERSION_CHANGE, type VersionUnit } from "./description-version-diff.js";
-import { PRODUCT_NAME } from "./product-name.js";
 import {
   DESCRIPTION_ACTOR,
   type DescriptionLastEdit,
@@ -63,7 +62,7 @@ export function revisionSummary(line: DescriptionRevisionLine): string {
   return line.changes === 1 ? "1 change" : `${line.changes} changes`;
 }
 
-/** Who wrote a revision, as the panel's row names them: You for the reader's own, a member by name, the app, a coding agent by its title, or Earlier for the description before history. */
+/** Who wrote a revision, as the panel's row names them: You for the reader's own, a member by name, a coding agent by its title, or Earlier for the description before history. */
 export function revisionWriterName(
   lastEdit: Pick<DescriptionLastEdit, "actor" | "by" | "label">,
   readerId: string | undefined,
@@ -75,8 +74,6 @@ export function revisionWriterName(
       return readerId !== undefined && lastEdit.by.userId === readerId
         ? UNNAMED_WRITER.YOU
         : lastEdit.by.name;
-    case DESCRIPTION_ACTOR.NOTETAKER:
-      return PRODUCT_NAME;
     case DESCRIPTION_ACTOR.AGENT:
       return lastEdit.label ?? UNNAMED_WRITER.AGENT;
     case DESCRIPTION_ACTOR.EARLIER:

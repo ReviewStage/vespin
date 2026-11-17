@@ -83,11 +83,16 @@ it("offers every model Cursor lists once, at fast speed where a variant runs fas
   );
 });
 
-it("reads each model of Cursor's list on its own: one it cannot read is left out, and one with no name is named by its id", () => {
+it("reads each model of Cursor's list on its own: one it cannot read is left out, one with no name is named by its id, and one whose name an earlier model took carries its id", () => {
   const offered = withCursorModels(
     [],
     OFFER,
-    cursorModelsOf([{ id: 7, displayName: "Broken" }, { id: "kimi-k3" }, ...LIST.slice(0, 1)]),
+    cursorModelsOf([
+      { id: 7, displayName: "Broken" },
+      { id: "kimi-k3" },
+      ...LIST.slice(0, 1),
+      { id: "auto-smart", displayName: "Auto" },
+    ]),
   );
 
   assert.deepEqual(
@@ -95,6 +100,7 @@ it("reads each model of Cursor's list on its own: one it cannot read is left out
     [
       ["cursor/kimi-k3", "kimi-k3"],
       ["cursor/auto", "Auto"],
+      ["cursor/auto-smart", "Auto (auto-smart)"],
     ],
   );
 });

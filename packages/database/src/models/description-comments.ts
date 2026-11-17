@@ -467,11 +467,9 @@ function entryOf(row: EntryRow, files: readonly FileRow[]): DescriptionCommentEn
   const agent = row.agentId === null ? undefined : { agentId: row.agentId };
 
   const asked: DescriptionCommentAsked | undefined =
-    row.askedActor === DESCRIPTION_COMMENT_ACTOR.APP
-      ? { actor: DESCRIPTION_COMMENT_ACTOR.APP }
-      : row.askedActor === DESCRIPTION_COMMENT_ACTOR.AGENT && row.askedAgentId !== null
-        ? { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: row.askedAgentId }
-        : undefined;
+    row.askedActor === DESCRIPTION_COMMENT_ACTOR.AGENT && row.askedAgentId !== null
+      ? { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: row.askedAgentId }
+      : undefined;
 
   return {
     id: row.id,

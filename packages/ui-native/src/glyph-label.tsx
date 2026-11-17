@@ -98,6 +98,15 @@ export function actContent(
 }
 
 /**
+ * What a menu's choice holds where it leads with an emoji, such as a
+ * section's 💡: its words beside the emoji, which stands in the glyph's place
+ * as the sidebar draws it, so its words line up with the glyphed choices'.
+ */
+export function emojiContent(label: string, emoji: string) {
+  return { children: <Label title={label} icon={<Text>{emoji}</Text>} /> };
+}
+
+/**
  * What a menu's act holds: as `actContent`, or, where it says more under its
  * words, such as when a reminder comes due, its words over that line beside
  * its glyph, which a system menu draws as its title and subtitle.

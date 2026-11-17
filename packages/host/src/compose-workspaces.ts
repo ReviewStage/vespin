@@ -183,6 +183,7 @@ export interface WorkspacesClient {
     | "sentryDisconnect"
     | "slackBot"
     | "slackBotConnect"
+    | "slackBotInstall"
     | "slackBotDisconnect"
     | "slackBotNotifications"
     | "slackBotRepository"
@@ -1328,6 +1329,7 @@ function workspaceConnectionActs(
   | "WORKSPACE_SENTRY_INSTALL"
   | "WORKSPACE_SENTRY_DISCONNECT"
   | "WORKSPACE_SLACK_BOT_CONNECT"
+  | "WORKSPACE_SLACK_BOT_INSTALL"
   | "WORKSPACE_SLACK_BOT_DISCONNECT"
 > {
   const { client } = dependencies;
@@ -1386,6 +1388,18 @@ function workspaceConnectionActs(
           yield* integrated.integrations.confirmed(workspaceId, connected.answer.txid);
 
         return yield* workspaceAnswered("slackBot")(slackBotAnswered(slackBotOf(connected)));
+      }),
+    // Slack's authorize address is answered to the procedure that opens it
+    // and held nowhere: the install lands in the browser, and the held read
+    // of the workspace's integrations carries the team once it does.
+    WORKSPACE_SLACK_BOT_INSTALL: ({ workspaceId }) =>
+      Effect.gen(function* () {
+        if (!gate()) return yield* workspaceRefused(WORKSPACE_UNANSWERED.failure);
+        const begun = yield* served(client.workspaces.slackBotInstall(workspaceId));
+
+        if (!begun.ok) return yield* workspaceRefused(begun.failure);
+
+        return begun.answer;
       }),
     WORKSPACE_SLACK_BOT_DISCONNECT: declaredWrite(
       dependencies.pool,

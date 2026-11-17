@@ -44,10 +44,10 @@ sidebar, one page at a time:
 - **Document page**: the open task's saved document. Its header holds
   still, and only the document scrolls beneath it.
 
-Escape on the document page is Back: one step back through the window's
-history, to wherever the task was opened from, or to Home where nothing
-stands behind it, which leaves the task; on Home it closes nothing. Escape
-on any Settings page leaves Settings.
+Escape closes the nearest thing open and never steps through the window's
+history: a menu, a dialog, a peek, a field, a selection, a side panel filling
+the window, then an agent's threads, Settings, or a version history. On any
+other page, the document page among them, it does nothing.
 
 ### Opening and leaving
 
@@ -57,8 +57,8 @@ on any Settings page leaves Settings.
   none stands, the column's "+" offering **New agent**.
 - A task stays open while the developer turns to Settings or closes the
   window.
-- A task is left by Back or Escape, by opening another task or page, or by
-  a sign-out.
+- A task is left by Back, by opening another task or page, or by a
+  sign-out.
 - Nothing polls. An agent's saves reach the open task through its tab: once
   the transcript the tab reads shows an `edit_description` answered, the task is
   read again (`tasks/agent-tab.tsx`).

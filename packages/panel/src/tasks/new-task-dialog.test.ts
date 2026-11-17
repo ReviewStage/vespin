@@ -18,6 +18,7 @@ import {
   TASK_SKILL_SOURCE,
   TASK_TREE_ENTRY,
 } from "@repo/features/task-wire";
+import { TALK_LABEL } from "@repo/features/voice-call-words";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
@@ -310,10 +311,9 @@ async function mount(
     note: () => document.querySelector('[role="alert"]')?.textContent ?? undefined,
     /** What the composer asks for while its box is empty. */
     placeholder: () => document.querySelector(".agent-composer-placeholder")?.textContent,
-    /** The round Start agent button, by its place at the foot's end, since an empty box names it for what ⌘Return does there. */
+    /** The round Start agent button, by its place at the foot's end; none while the box is empty, where Talk stands in its place. */
     startButton: () =>
-      document.querySelector<HTMLButtonElement>('.ui-composer-foot button[type="submit"]') ??
-      assert.fail("the round Start agent button stands"),
+      document.querySelector<HTMLButtonElement>('.ui-composer-foot button[type="submit"]'),
     /** The card's buttons in order, as a reader meets them. */
     controls: () =>
       [...(dialog()?.querySelectorAll("button") ?? [])].flatMap((each) =>
@@ -324,7 +324,7 @@ async function mount(
   };
 }
 
-test("the card, named New task, holds the composer with its words focused, the repository chip in the head row, and the model chip on the account's default and Start at its foot, with no Plan toggle", async () => {
+test("the card, named New task, holds the composer with its words focused, the repository chip in the head row, and the model chip on the account's default and Talk at its foot, with no Plan toggle", async () => {
   const card = await mount();
   const controls = card.controls();
   const head = card.dialog()?.querySelector(".new-task-head");
@@ -334,7 +334,7 @@ test("the card, named New task, holds the composer with its words focused, the r
   assert.equal(card.placeholder(), "Describe the task");
   assert.equal(controls.includes("Plan with Vespin first"), false, "no Plan toggle stands");
 
-  for (const each of ["Add files and more", "acme/web", "Start a task with no agent"]) {
+  for (const each of ["Add files and more", "acme/web", TALK_LABEL.TALK]) {
     assert.ok(controls.includes(each), `${each} stands in the card`);
   }
 
@@ -362,7 +362,7 @@ test("the card, named New task, holds the composer with its words focused, the r
 
 test("Return starts the task without planning, Untitled, on the repository last used, and an agent on the words naming no model while the chip is unpicked", async () => {
   const card = await mount();
-  assert.equal(card.startButton().disabled, true, "an empty box starts nothing");
+  assert.equal(card.startButton(), null, "an empty box holds Talk in Start's place");
   card.type("  Make the sidebar keep its folds.  ");
   await card.key("Enter");
 
@@ -719,7 +719,7 @@ test("a model nothing pays for holds Start and asks for an agent over the box be
   card.type("Dark mode toggle");
   await card.key("Enter");
 
-  assert.equal(card.startButton().disabled, true);
+  assert.equal(card.startButton()?.disabled, true);
   assert.deepEqual(card.starts, []);
   assert.match(card.dialog()?.textContent ?? "", /Connect an agent to start/u);
   assert.ok(card.button("Connect Codex"), "with nothing connected, Codex is offered too");
@@ -1314,9 +1314,9 @@ test("for an automation's agent files alone hold Start, since the words are the 
 
   for (let read = 0; read < 4; read += 1) await settle();
   assert.ok(card.dialog()?.textContent?.includes("notes.md"), "the file is attached");
-  assert.equal(card.startButton().disabled, true, "Start is held");
+  assert.equal(card.startButton()?.disabled, true, "Start is held");
 
   card.type("Post the notes every Friday.");
   await settle();
-  assert.equal(card.startButton().disabled, false, "words let it start");
+  assert.equal(card.startButton()?.disabled, false, "words let it start");
 });

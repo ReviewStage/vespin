@@ -1,6 +1,7 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { askHeadWords } from "@repo/features/inbox-ask-words";
 import {
   answerOf,
@@ -90,7 +91,7 @@ import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace, VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import { isWireString } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
-import { BotIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActorGlyph, ActorLine, ActorRef, commentAuthor } from "../actor-ref.js";
 import {
@@ -109,6 +110,7 @@ import {
   THREAD_TASK_KEYS,
 } from "../desktop/crumb-menus.js";
 import { PhoneHead, phoneFindGroups } from "../desktop/phone-head.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { failureShown } from "../failure-report.js";
 import { type Directory, useMemberDirectory, usePerson } from "../member-directory.js";
 import { useShortcutTarget } from "../shortcut-target.js";
@@ -1149,7 +1151,7 @@ function phoneItemGroups(
     label: OPEN_AGENT,
     detail: by.subject.name,
     replayMasked: true,
-    icon: <BotIcon />,
+    icon: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
     onSelect: by.onOpen,
   };
 
@@ -1587,7 +1589,7 @@ function PhoneHolder({
  * its end, the open ask's controls standing in it.
  * Where the item stands alone, the whole Inbox wide, the crumbs follow a
  * way back to the list (`inbox-columns.ts`), its tooltip naming Back's
- * chord, which goes back as Escape does, and the bar ends in the pager,
+ * chord, which goes back too, and the bar ends in the pager,
  * "2 of 8" and the arrows up and down the list (`inbox-pager.tsx`).
  */
 export function InboxPane({

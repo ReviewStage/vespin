@@ -1773,7 +1773,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             title: "Invites by week",
             html: "<h1>Invites by week</h1>",
           },
-          { kind: PAGE_SHOWER.APP },
+          { kind: PAGE_SHOWER.AGENT, agentId: other.agent.id },
         );
 
         assert.ok(Option.isSome(shown));

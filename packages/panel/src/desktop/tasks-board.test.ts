@@ -12,7 +12,6 @@ import {
 } from "@repo/features/task-wire";
 import type { Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { CARD_PRESS_SELECTOR, CHIP_LOOK } from "@repo/ui";
 import {
   COMPLETED_WINDOW,
@@ -24,7 +23,6 @@ import {
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { runAppCommand } from "../app-commands.js";
 import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
@@ -37,7 +35,7 @@ import { restOn } from "../testing/hint-rest.js";
 import { layScrollerOut } from "../testing/scroller.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
-import { leavingBy, windowRouter } from "../testing/window-router.js";
+import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { TasksBoard } from "./tasks-board.js";
 
@@ -89,9 +87,6 @@ let keeps = true;
 /** Each display the board asked for, in order. */
 let displayed: TasksDisplay[] = [];
 
-/** How many times the board was closed. */
-let closed = 0;
-
 /** The pages the board opened, in order. */
 let pages: string[] = [];
 
@@ -100,7 +95,6 @@ beforeEach(() => {
   renamed = [];
   sent = [];
   keeps = true;
-  closed = 0;
   displayed = [];
   pages = [];
   window.localStorage.clear();
@@ -196,7 +190,7 @@ async function mountBoard(
     ...overrides,
   });
 
-  // The window's router, whose routed exits the Board's close leaves by, as the window's history does.
+  // The window's router, which the Board's doors move, as the window's history does.
   const { provide } = windowRouter();
 
   const draw = (shown: TasksDisplay, changed: Partial<typeof control> = {}) =>
@@ -206,7 +200,6 @@ async function mountBoard(
           createElement(
             Fragment,
             null,
-            leavingBy(() => (closed += 1)),
             createElement(MemberDirectory, {
               workspace: ACME,
               readerId: DEAN,
@@ -413,14 +406,6 @@ test("a task from a service before statuses stands under Todo", async () => {
 
   const board = await mountBoard([older]);
   assert.deepEqual(columns(board)[1], ["Todo", ["ACME-30"]]);
-});
-
-test("Escape closes the board", async () => {
-  await mountBoard();
-  act(() => {
-    assert.ok(runAppCommand(APP_COMMAND.EXIT_BOARD), "the board's way out is offered");
-  });
-  assert.equal(closed, 1);
 });
 
 test("a press on a card opens its task", async () => {

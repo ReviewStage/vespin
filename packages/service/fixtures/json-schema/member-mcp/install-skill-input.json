@@ -32,6 +32,7 @@
       "type": "string",
       "minLength": 40,
       "maxLength": 40,
+      "pattern": "^[0-9a-f]{40}$",
       "description": "From a GitHub source, the commit preview_skill_install answered, so the files installed are the ones the member was shown."
     },
     "name": {

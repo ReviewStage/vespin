@@ -2,6 +2,7 @@
 
 import {
   type BarAction,
+  CallSidebarFoot,
   GLYPH,
   KeptColumns,
   type KeptView,
@@ -12,6 +13,7 @@ import { useEffect, useState } from "react";
 import { useDetailOnly } from "../detail-only.js";
 import { useStandDetailFront } from "../detail-stack.js";
 import { InFrontProvider, type PlaceColumns, usePlaceColumns } from "../place-columns.js";
+import { useStandingCallCard } from "../voice-call.js";
 import {
   SIDEBAR_PLACE,
   type SidebarPlace,
@@ -80,14 +82,20 @@ function keptViews(
  * inside the detail's own column, with a Back there, as Mail opens a
  * message's related pages, so the sidebar and the list stand beside it; each
  * place keeps its own pages, which go as another row is picked
- * (`detail-stack.ts`).
+ * (`detail-stack.ts`). The way back to a voice call stands at the sidebar's
+ * foot, where the hidden tab bar's accessory would hold it, as the panel
+ * docks its call card, while any page but the call's own agent's
+ * (`shownAgent`) is in front.
  */
 export function AppSplit({
   place,
   front,
+  shownAgent,
 }: {
   readonly place: SidebarPlace | undefined;
   readonly front: boolean;
+  /** The agent whose page is in front, whose composer holds a call's presses itself; none where no agent's page is. */
+  readonly shownAgent: string | undefined;
 }) {
   const inbox = usePlaceColumns(SIDEBAR_PLACE.INBOX);
   const tasks = usePlaceColumns(SIDEBAR_PLACE.TASKS);
@@ -131,6 +139,9 @@ export function AppSplit({
   // Note that the menu bar's Back pops this place's pages only while the split view stands in front, so it never acts on a detail the reader can't see.
   useStandDetailFront(standing, front);
 
+  // Note that the way back to a call stands at the sidebar's foot, because the tab bar whose accessory holds it elsewhere is hidden beside the app sidebar.
+  const call = useStandingCallCard(shownAgent);
+
   // Note that Collapse stays while the page stands alone even once nothing is picked, so the columns always have a way back.
   const lead = detailOnly ? [expand] : columns?.root === undefined ? [compose] : [expand, compose];
 
@@ -138,6 +149,9 @@ export function AppSplit({
     <Screen>
       <SplitView
         {...sidebar}
+        sidebarFoot={
+          call === undefined ? undefined : <CallSidebarFoot call={call.card} onOpen={call.open} />
+        }
         content={<KeptColumns shown={standing} views={keptViews(kept, standing, front)} />}
         contentBar={columns?.contentBar}
         detail={stack.wrap(columns?.detail)}

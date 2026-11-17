@@ -44,6 +44,7 @@ import {
   selectFixtureStaged,
   selectListedTasks,
 } from "../use-app-state.js";
+import type { CallWhenStarted } from "../voice-call.js";
 import { startFailureNote as agentStartFailureNote, choiceRequest } from "./agent-model.js";
 import { NEW_TASK_PURPOSE, type NewTaskPurpose } from "./new-task-purpose.js";
 import type { NewTaskRelation } from "./new-task-relation.js";
@@ -101,13 +102,15 @@ export interface NewTaskAgent {
   readonly disabledServers: readonly string[];
   /** The mode the agent starts in, as the chip's Permissions row picked it; none for the member's Default permissions. */
   readonly permissionMode?: AgentPermissionMode | undefined;
+  /** Talk's call into the agent, which starts it blank, handed nothing, and opens on it once it lands; none for a start on words. */
+  readonly talk?: CallWhenStarted | undefined;
 }
 
-/** The agent a task's start starts on it, as the act carries it: the card's key, the prompt, the files where any, the chip's model where one was picked, the servers switched off where any, and the mode where one was picked. */
+/** The agent a task's start starts on it, as the act carries it: the card's key, the prompt and the files where any, or blank for Talk's, the chip's model where one was picked, the servers switched off where any, and the mode where one was picked. */
 function agentRequest(handed: NewTaskAgent) {
   return {
     idempotencyKey: handed.idempotencyKey,
-    prompt: handed.prompt,
+    ...(handed.talk === undefined ? { prompt: handed.prompt } : { blank: true }),
     ...(handed.attachments.length === 0 ? undefined : { attachments: handed.attachments }),
     ...(handed.choice === undefined ? undefined : choiceRequest(handed.choice)),
     ...(handed.disabledServers.length === 0
@@ -504,6 +507,7 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
       }
 
       if (handed !== undefined) {
+        handed.talk?.(undefined);
         letGoOfPage();
         // Note that what stood before the press comes back only where the developer went nowhere since.
         standBack();
@@ -638,14 +642,18 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
     if (started !== undefined && !("failure" in started)) {
       agents.onTaskStarted(taskId, started.agent);
       showTab(taskId, agentTab(started.agent.id));
+      handed.talk?.({ agentId: started.agent.id, taskId });
 
       return;
     }
 
+    handed.talk?.(undefined);
+
     // Note that the refusal keeps the answer that said it, so the draft's tab reports the service's word for it.
     const answer = started ?? { failure: AGENT_CALL_FAILURE.UNANSWERED };
     const refused = { ...agentStartFailureNote(answer, taskId, device), cause: answer };
-    const { idempotencyKey: id, ...words } = handed;
+    // Note that a draft holds no call, since Talk's own press is what opens one.
+    const { idempotencyKey: id, talk: _talk, ...words } = handed;
     agents.onHandDraft(taskId, { id, ...words, refused });
     showTab(taskId, draftTab(id));
   };

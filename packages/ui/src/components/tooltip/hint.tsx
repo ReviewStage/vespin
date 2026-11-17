@@ -115,6 +115,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
+import { isComposingKey } from "../../composing-key.js";
 import { useDisclosure } from "../../use-disclosure.js";
 import { useStateWithRef } from "../../use-state-with-ref.js";
 import { createWait, useWait, type Wait } from "../../wait.js";
@@ -892,9 +893,12 @@ export function Tooltip({
   });
 
   // While a pill stands, the window's own movements take it down. A key is
-  // a press too, Escape among them, and the key is still the control's or
-  // the window's: the pill is no layer of its own to take one, bar a
-  // modifier held alone, which presses nothing yet. Only a card
+  // a press too, and the key is still the control's or the window's: the
+  // pill is no layer of its own to take one, bar a modifier held alone,
+  // which presses nothing yet, and Escape, which dismisses what stands
+  // (WAI-ARIA's tooltip pattern) and is marked taken so the page under it
+  // stays where it is. It still goes on, so a menu or a dialog, which closes
+  // on Escape whether or not it is marked, closes with the pill. Only a card
   // the pointer is on lets a key other than Escape pass, since that key is
   // most likely the copy of what was selected on it, and a list scrolling
   // within a standing card, this one or one stacked over it, leaves it
@@ -906,6 +910,8 @@ export function Tooltip({
 
     const key = (event: KeyboardEvent) => {
       if (MODIFIER_KEYS.has(event.key)) return;
+
+      if (event.key === "Escape" && !isComposingKey(event)) event.preventDefault();
 
       if (event.key === "Escape" || !overCard.current) hide();
     };

@@ -70,7 +70,7 @@ import {
 import { pushThreadPost, pushThreadSettled } from "../../push/inbox-pushes.js";
 import { dmThreadPost, settleThreadDms, threadStandsOpen } from "../../slack/thread-dms.js";
 import { placeholderLinksWords } from "../link-rule.js";
-import { CODER } from "./bounds.js";
+
 import {
   type InboxSandboxDoor,
   readSandboxBodyFile,
@@ -127,7 +127,8 @@ const MAX_VIDEO_MB = (INBOX_BOUNDS.MAX_VIDEO_BYTES / 1_000_000).toFixed(1);
 const MAX_PDF_MB = (AGENT_BOUNDS.MAX_PDF_BYTES / 1_000_000).toFixed(1);
 
 const POST_THREAD_WORDS =
-  "Post a message on a thread in the inbox, apart from your transcript. " +
+  "Post a message to the developer's inbox, which is where they look for anything that needs them. " +
+  "Use it whenever you need something from them or have something ready for them to look at, and when someone writes to you on a thread, reply on that same thread. " +
   "key is your own short lowercase slug, such as branch-protection: the first post under a key opens its thread and must name its title, " +
   "and a later one adds a message to that thread, a title it names renaming it. " +
   "to is the member the ask waits on, by their [@Name](link) mention; without it, the task's assignee, or the developer who started you. " +
@@ -170,7 +171,8 @@ export const INBOX_TOOLS = {
     name: INBOX_TOOL.WITHDRAW,
     description:
       "Withdraw the open ask of one of your threads, by its key, with why: you no longer need it, you found the answer yourself, " +
-      "or you checked that the to-do is done. The thread and its messages stay.",
+      "or you checked that the to-do is done. That closes the thread, and its messages stay; a thread " +
+      "already answered, closed, or withdrawn answers how it was.",
     inputSchema: inboxWithdrawInputSchema,
   },
   LIST: {
@@ -768,7 +770,7 @@ function bodyFiles(
     const read: InboxBodyPicture[] = [];
 
     for (const path of paths) {
-      const file = yield* readSandboxBodyFile(sandbox, CODER.CHECKOUT_PATH, path, PICTURE_REFUSALS);
+      const file = yield* readSandboxBodyFile(sandbox, path, PICTURE_REFUSALS);
 
       if (Result.isFailure(file)) return Result.fail(file.failure);
       read.push({ ...file.success, path, name: posix.basename(path) || path });
@@ -817,7 +819,7 @@ function keptOptionMedia(
   const { path } = posted;
 
   return Effect.map(
-    readSandboxMedia(sandbox, CODER.CHECKOUT_PATH, path, OPTION_FILE_REFUSALS),
+    readSandboxMedia(sandbox, path, OPTION_FILE_REFUSALS),
     Result.map((read) => {
       const file = { ...read, id: randomUUID(), name: posix.basename(path) || path };
       const caption = posted.caption === undefined ? {} : { caption: posted.caption };

@@ -88,23 +88,18 @@ export const APP_COMMAND = {
   FIND_PREVIOUS: "find-previous",
   EXIT_SETTINGS: "exit-settings",
   EXIT_VERSION_HISTORY: "exit-version-history",
+  CLEAR_SELECTION: "clear-selection",
   HOME: "home",
   INBOX: "inbox",
   TASKS: "tasks",
-  INBOX_LIST: "inbox-list",
   PREVIOUS_INBOX_ITEM: "previous-inbox-item",
   NEXT_INBOX_ITEM: "next-inbox-item",
   EXIT_AGENT_THREADS: "exit-agent-threads",
   REPLY_TO_SELECTION: "reply-to-selection",
   SET_STATUS: "set-status",
-  EXIT_AGENT_PAGE: "exit-agent-page",
-  EXIT_PERSON_PAGE: "exit-person-page",
   AUTOMATIONS: "automations",
-  EXIT_AUTOMATIONS: "exit-automations",
-  EXIT_BOARD: "exit-board",
   ADMIN: "admin",
   MERGE_QUEUE: "merge-queue",
-  EXIT_ADMIN: "exit-admin",
   BACK: "back",
   FORWARD: "forward",
   SEND_FEEDBACK: "send-feedback",
@@ -362,9 +357,9 @@ function modifierGlyph(name: string): string {
 /**
  * A chord: Command, the modifiers named here, and the key. A `bare` chord is
  * the key alone. In the command table only Escape is bare: the window's
- * Escape steps back one layer at a time in `app.tsx`, so the keymap leaves it
- * there, and the table names it so the menu bar and the shortcuts page can say
- * what it does. Outside the table a surface draws its own keys as bare chords
+ * Escape closes the nearest thing open (`window-escape.ts` in `@repo/panel`),
+ * so the keymap leaves it there, and the table names it so the menu bar and
+ * the shortcuts page can say what it does. Outside the table a surface draws its own keys as bare chords
  * to spell them in a hint, the palette's arrows and Return among them, which
  * it answers itself and the keymap never sees. A
  * `plain` chord is a letter alone too, which the keymap answers itself, but
@@ -652,14 +647,14 @@ export const APP_SHORTCUTS = {
     chord: { key: SHORTCUT_KEY.ESCAPE, bare: true },
     experiment: EXPERIMENT.DESCRIPTIONS,
   },
+  [APP_COMMAND.CLEAR_SELECTION]: {
+    label: "Clear selection",
+    chord: { key: SHORTCUT_KEY.ESCAPE, bare: true },
+  },
   [APP_COMMAND.HOME]: { label: "Home", chord: { key: SHORTCUT_KEY.H, shift: true } },
   [APP_COMMAND.INBOX]: { label: "Inbox", chord: { key: SHORTCUT_KEY.I, shift: true } },
   // Note that the Tasks page takes ⇧⌘B, for the Board it once was alone, because ⇧⌘T reopens a closed tab.
   [APP_COMMAND.TASKS]: { label: "Tasks", chord: { key: SHORTCUT_KEY.B, shift: true } },
-  [APP_COMMAND.INBOX_LIST]: {
-    label: "Back to inbox list",
-    chord: { key: SHORTCUT_KEY.ESCAPE, bare: true },
-  },
   [APP_COMMAND.EXIT_AGENT_THREADS]: {
     label: "Back to transcript",
     chord: { key: SHORTCUT_KEY.ESCAPE, bare: true },
@@ -681,29 +676,9 @@ export const APP_SHORTCUTS = {
     label: "Set status",
     chord: { key: SHORTCUT_KEY.S, plain: true },
   },
-  [APP_COMMAND.EXIT_AGENT_PAGE]: {
-    label: "Exit agent page",
-    chord: { key: SHORTCUT_KEY.ESCAPE, bare: true },
-  },
-  [APP_COMMAND.EXIT_PERSON_PAGE]: {
-    label: "Exit profile",
-    chord: { key: SHORTCUT_KEY.ESCAPE, bare: true },
-  },
   [APP_COMMAND.AUTOMATIONS]: {
     label: "Automations",
     chord: { key: SHORTCUT_KEY.U, shift: true },
-  },
-  [APP_COMMAND.EXIT_AUTOMATIONS]: {
-    label: "Exit automations",
-    chord: { key: SHORTCUT_KEY.ESCAPE, bare: true },
-  },
-  [APP_COMMAND.EXIT_BOARD]: {
-    label: "Exit tasks",
-    chord: { key: SHORTCUT_KEY.ESCAPE, bare: true },
-  },
-  [APP_COMMAND.EXIT_ADMIN]: {
-    label: "Exit admin",
-    chord: { key: SHORTCUT_KEY.ESCAPE, bare: true },
   },
 
   [APP_COMMAND.BACK]: { label: "Back", chord: { key: SHORTCUT_KEY.OPEN_BRACKET } },
@@ -747,7 +722,7 @@ export const APP_SHORTCUTS = {
 
 /**
  * A key the Keyboard shortcuts page lists that no app command holds: the
- * window's layered Escape, named once for every layer it steps back from,
+ * window's layered Escape, named once for every layer it closes,
  * or one that answers in one place alone, where focus or a selection
  * stands. The window's keymap never claims one and no menu item carries it;
  * each place answers it itself, and this table only names it for the page.
@@ -797,8 +772,8 @@ export interface InContextShortcut {
 
 /**
  * The keys that answer in place, each read where its place answers it: the
- * window's layered Escape, once for every layer it steps back from
- * (`app.tsx` in `@repo/panel`); an Inbox ask's options by their number
+ * window's layered Escape, once for every layer it closes
+ * (`window-escape.ts` in `@repo/panel`); an Inbox ask's options by their number
  * (`inbox-ask-controls.tsx`); a tab strip's arrows and Delete (`tabs.tsx` in
  * `@repo/ui`); the tab switcher's keys while ⌃ is held (`tab-switcher.tsx`);
  * the file viewer's arrows and its picture's zoom (`attachment-viewer.tsx`,
@@ -808,7 +783,7 @@ export interface InContextShortcut {
  */
 export const IN_CONTEXT_SHORTCUTS = {
   [IN_CONTEXT_KEY.STEP_BACK]: {
-    label: "Close what's open, or step back",
+    label: "Close or cancel",
     chord: { key: SHORTCUT_KEY.ESCAPE, bare: true },
   },
   [IN_CONTEXT_KEY.INBOX_OPTION]: {
@@ -942,6 +917,7 @@ export const APP_SHORTCUT_GROUPS = [
       APP_COMMAND.FIND_NEXT,
       APP_COMMAND.FIND_PREVIOUS,
       APP_COMMAND.EXIT_SETTINGS,
+      APP_COMMAND.CLEAR_SELECTION,
       APP_COMMAND.HIDE,
       APP_COMMAND.HIDE_OTHERS,
       APP_COMMAND.QUIT,
@@ -968,18 +944,12 @@ export const APP_SHORTCUT_GROUPS = [
       APP_COMMAND.HOME,
       APP_COMMAND.INBOX,
       APP_COMMAND.TASKS,
-      APP_COMMAND.INBOX_LIST,
       APP_COMMAND.EXIT_AGENT_THREADS,
       APP_COMMAND.PREVIOUS_INBOX_ITEM,
       APP_COMMAND.NEXT_INBOX_ITEM,
       APP_COMMAND.REPLY_TO_SELECTION,
       APP_COMMAND.SET_STATUS,
-      APP_COMMAND.EXIT_AGENT_PAGE,
-      APP_COMMAND.EXIT_PERSON_PAGE,
       APP_COMMAND.AUTOMATIONS,
-      APP_COMMAND.EXIT_AUTOMATIONS,
-      APP_COMMAND.EXIT_BOARD,
-      APP_COMMAND.EXIT_ADMIN,
     ],
   },
   {
@@ -1686,7 +1656,7 @@ export function chaptersKeyFor(event: ShortcutKeyPress): ChaptersKey | undefined
   return CHAPTERS_KEYS.find((key) => shortcutMatches(CHAPTERS_SHORTCUTS[key].chord, event));
 }
 
-/** Whether the keymap leaves the chord to the window's own Escape, which steps back a layer at a time. */
+/** Whether the keymap leaves the chord to the window's own Escape, which closes the nearest thing open. */
 export function shortcutLayered(chord: ShortcutChord): boolean {
   return chord.bare === true;
 }

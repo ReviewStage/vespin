@@ -1,3 +1,4 @@
+import { DIAGRAM_LANGUAGE } from "@repo/features/mermaid-diagram";
 import { matchRanges } from "@repo/features/search-tokens";
 import { keySpansIn } from "@repo/features/workspace-key";
 import { SEARCH_MATCH_CLASS } from "@repo/ui";
@@ -524,7 +525,7 @@ function plainLabelOf(link: HastParent | undefined): string | undefined {
 }
 
 /** The class a fence's code wears when the fence names Mermaid as its language. */
-const DIAGRAM_FENCE_CLASS = "language-mermaid";
+const DIAGRAM_FENCE_CLASS = `language-${DIAGRAM_LANGUAGE}`;
 
 /**
  * A fence's code where it may be drawn as its diagram: a Mermaid fence whose

@@ -111,11 +111,16 @@ const UNDER_SPLIT = 800;
 /** The screens that take the whole window, and so are as wide as the stage they fill. */
 const WHOLE_WINDOW_SCREENS = ["app-stage", "desktop-settings", "desktop-version-history"];
 
-/** A revision of the description by the notetaker. */
+/** A revision of the description by a teammate. */
 function line(seq: number) {
   return {
     seq,
-    lastEdit: { actor: DESCRIPTION_ACTOR.NOTETAKER, at: 10 * seq, duringCall: false },
+    lastEdit: {
+      actor: DESCRIPTION_ACTOR.DEVELOPER,
+      by: { userId: "user-charles", name: "Charles Pan" },
+      at: 10 * seq,
+      duringCall: false,
+    },
     startedAt: 10 * seq,
     changes: 2,
   };
@@ -229,7 +234,7 @@ function Shell({
 
 /** Settings as the window holds it, by the router (`settings-link.ts`), opened plainly or by the link given, as the window's root opens it. */
 function SettingsWindow({ link }: { link: SettingsLink | undefined }): React.JSX.Element {
-  const place = useSettingsRoute({ workspaces: [], listedId: undefined, narrow: false });
+  const place = useSettingsRoute({ workspaces: [], listedId: undefined });
   const opened = useRef(false);
   useEffect(() => {
     if (opened.current) return;

@@ -508,7 +508,7 @@ test("a teammate's message names them over its bubble, with when and its Copy on
   fakeAppBridge({});
 });
 
-test("an agent started blank draws its first line as a line, no description's card and no task under its starter's name, a line spoken on a call naming no one and a teammate's typed line naming them", async () => {
+test("an agent started blank draws its first line as a line, no description's card and no task under its starter's name, a line spoken on a call naming no one and a teammate's typed line naming them, and waits on its first words before any", async () => {
   const blank: AgentSummary = { ...AGENT, brief: AGENT_BRIEF.BLANK };
 
   const spoken: AgentTranscriptMessage = {
@@ -523,4 +523,9 @@ test("an agent started blank draws its first line as a line, no description's ca
     ["typed", ACTOR_KIND.PERSON, "Dean Stratakos"],
   ]);
   assert.equal(document.querySelector("[data-origin-description]"), null);
+  act(() => root?.unmount());
+
+  // Before its first words, it waits on them rather than saying it is starting, since nothing starts until it is told.
+  await sendersFor(CHARLES.userId, blank, []);
+  assert.match(document.body.textContent ?? "", /Waiting for your first message\./u);
 });

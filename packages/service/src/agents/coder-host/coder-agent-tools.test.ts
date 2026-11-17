@@ -1309,7 +1309,7 @@ test("start_agent starts an agent on the caller's own task as the deployment act
   assert.ok(message.includes(`"${caller.name}"`) && message.includes(caller.id), message);
   // It reports back by message.
   assert.ok(
-    message.includes(`call ${AGENT_TOOL.MESSAGE_AGENT} with its agentId, ${caller.id}.`),
+    message.includes(`Message it with ${AGENT_TOOL.MESSAGE_AGENT}, its agentId ${caller.id}, `),
     message,
   );
   // An agent's own pick of a model is no member's new default.
@@ -3716,7 +3716,7 @@ test("read_page reads a page a teammate showed on another task of the caller's w
         bob,
         taskPageOwner(tasks.billing),
         { title: "Seats", html: "<h1>One</h1>" },
-        { kind: PAGE_SHOWER.APP },
+        { kind: PAGE_SHOWER.AGENT, agentId: agents.teammates.id },
       ),
     ),
   );
@@ -3726,7 +3726,7 @@ test("read_page reads a page a teammate showed on another task of the caller's w
       bob,
       taskPageOwner(tasks.billing),
       { pageId: shown.id, title: "Seats by month", html: rows },
-      { kind: PAGE_SHOWER.APP },
+      { kind: PAGE_SHOWER.AGENT, agentId: agents.teammates.id },
     ),
   );
 
@@ -3736,7 +3736,7 @@ test("read_page reads a page a teammate showed on another task of the caller's w
         agents.otherWorkspaces.userId,
         taskPageOwner(tasks.elsewhere),
         { title: "Theirs", html: "<p/>" },
-        { kind: PAGE_SHOWER.APP },
+        { kind: PAGE_SHOWER.AGENT, agentId: agents.otherWorkspaces.id },
       ),
     ),
   );

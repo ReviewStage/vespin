@@ -249,15 +249,13 @@ export interface CommentAgent {
   readonly harness: ModelProvider | undefined;
 }
 
-/** Who wrote an entry, as the panel's thread names them: a member by their name and picture, the app by its own, and a coding agent by the name its task lists it under. */
+/** Who wrote an entry, as the panel's thread names them: a member by their name and picture, and a coding agent by the name its task lists it under. */
 function writerOf(
   entry: DescriptionCommentEntry,
   agents: ReadonlyMap<string, CommentAgent>,
   pictureOf: PictureOf,
 ): ThreadMessage["writer"] {
   const { writer } = entry;
-
-  if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) return { name: PRODUCT_NAME, agent: true };
 
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT) {
     const known = writer.agentId === undefined ? undefined : agents.get(writer.agentId);

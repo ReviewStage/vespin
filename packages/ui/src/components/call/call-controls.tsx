@@ -1,5 +1,5 @@
 /**
- * call-controls.tsx -- a call's controls: Talk, which starts one; its two mutes; the one red End call; the composer's row of them; and the bar that lays the mutes and End call out beside the call's status.
+ * call-controls.tsx -- a call's controls: Talk, which starts one from Send's place; its two mutes; the one red End call; the composer's row of them; and the bar that lays the mutes and End call out beside the call's status.
  *
  * Every place a call is steered from draws these, so a mute and the way to
  * hang up wear the same words, glyphs, and colors wherever they stand. Each
@@ -28,6 +28,7 @@ import {
 import { useMotionHeld } from "../../use-motion-held.js";
 import {
   BUTTON_CORNERS,
+  BUTTON_TYPE,
   BUTTON_VARIANT,
   type ButtonCorners,
   IconButton,
@@ -135,11 +136,14 @@ export interface CallMuteState {
 }
 
 /**
- * Talk, the waveform beside Dictate, which opens a call into the agent. With
- * no OpenAI API key saved (`keyMissing`) it reads as unavailable and says
- * what a call needs, yet still takes a press, which is the owner's to answer,
- * as Dictate's own does: open the settings the key is saved in. `disabled`
- * takes every press away, as while a draft's agent is still starting.
+ * Talk, which opens a call into the agent: the waveform on the round disc in
+ * the send's ink, since it stands in Send's place while an agent's box holds
+ * nothing to send (`ComposerFoot`'s `talk`), as ChatGPT's composer offers
+ * voice. With no OpenAI API key saved (`keyMissing`) it reads as unavailable
+ * and says what a call needs, yet still takes a press, which is the owner's
+ * to answer, as Dictate's own does: open the settings the key is saved in.
+ * `disabled` takes every press away, as while a draft's agent is still
+ * starting.
  */
 export function TalkButton({
   keyMissing = false,
@@ -157,7 +161,10 @@ export function TalkButton({
     <Tooltip label={label}>
       <IconButton
         icon={<WaveformIcon />}
+        variant={BUTTON_VARIANT.INK}
+        corners={BUTTON_CORNERS.ROUND}
         label={label}
+        type={BUTTON_TYPE.BUTTON}
         disabled={disabled || keyMissing}
         focusableWhenDisabled={refused}
         onRefused={refused ? onPress : undefined}

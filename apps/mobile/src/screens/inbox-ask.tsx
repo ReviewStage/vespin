@@ -36,6 +36,7 @@ import {
   AnswerFields,
   AskActs,
   AskNote,
+  AttachedPictures,
   type BarAction,
   type BarFootItem,
   type BarMenu,
@@ -49,13 +50,22 @@ import {
   StepList,
 } from "@repo/ui-native";
 import { Predicate } from "effect";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { useFocusShown } from "../focus-shown.js";
 import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
+import {
+  attachedFiles,
+  PICKER_FAILED,
+  pickPictures,
+  takePictures,
+} from "../use-attached-pictures.js";
 import { REMIND_ME } from "./inbox-remind.js";
 
 /** The ⋯ menu a thread's bar holds. */
 const THREAD_MORE = { label: "More", symbol: GLYPH.MORE } as const;
+
+/** The box's + item that attaches pictures, as an agent's composer names it. */
+const ATTACH_PHOTOS = { label: "Photos", symbol: GLYPH.ATTACH } as const;
 
 /** Each field type an answer ask names, as the card draws it. */
 const FIELD_KIND = {
@@ -294,9 +304,12 @@ export function OpenAskCard({
  * The box under a thread: the composer, its line asking for a note while an
  * ask's controls stand over it and a reply otherwise, Send lit once an answer
  * is picked; docked in a compact window, or at a split view column's foot.
- * Its + holds the panel's "Send as a new thread to" the thread's agent,
- * which turns the next send into a new thread's first message, its line
- * asking to start one.
+ * Its + attaches pictures from Photos, as the panel's box attaches files,
+ * held on the thread's draft as capsules over the field until a send
+ * carries them, and holds the panel's "Send as a new thread to" the
+ * thread's agent, which turns the next send into a new thread's first
+ * message, its line asking to start one. What the picker or a bound said
+ * of the pictures stands in the field's head.
  */
 export function ThreadComposer({
   item,
@@ -313,7 +326,50 @@ export function ThreadComposer({
 }) {
   // Note that the thread's screen hears its focus here rather than reading it whole, so a change of focus draws only the composer again (`useFocusShown`).
   const focused = useFocusShown();
-  const { draft, onDraft, note, answerReady, send, asNew, setAsNew, start } = answer;
+  const { draft, onDraft, note: sendNote, answerReady, send, asNew, setAsNew, start } = answer;
+  const [pictureNote, setPictureNote] = useState<string | undefined>(undefined);
+
+  // Note that the pictures picked are named and bounded against the draft as it stands when the picker answers, since a refused send may have put words and pictures back while it stood open.
+  const attach = () => {
+    pickPictures(draft.attachments.length)
+      .then((picked) => {
+        if (picked.length === 0) return;
+        let note: string | undefined;
+        onDraft((now) => {
+          const taken = takePictures(now.attachments, picked);
+          note = taken.note;
+
+          return { ...now, attachments: [...now.attachments, ...taken.files] };
+        });
+        setPictureNote(note);
+      })
+      // Note that a picker that did not open says so in the box's head, as a refusal does, rather than leaving the press unanswered.
+      .catch((cause: unknown) => {
+        console.error("The photo picker did not open.", cause);
+        setPictureNote(PICKER_FAILED);
+      });
+  };
+
+  const detach = (name: string) => {
+    setPictureNote(undefined);
+    onDraft((now) => ({
+      ...now,
+      attachments: now.attachments.filter((file) => file.name !== name),
+    }));
+  };
+
+  // Note that each picture's thumbnail draws from its bytes, made once for the files the draft holds, so a redraw neither builds its address anew nor hands the thumbnail a new string.
+  const pictures = useMemo(() => attachedFiles(draft.attachments), [draft.attachments]);
+
+  // Note that the box's head holds the pictures attached, then what the picker refused, then why the last send didn't go.
+  const head =
+    pictures.length === 0 && pictureNote === undefined && sendNote === undefined ? undefined : (
+      <>
+        <AttachedPictures pictures={pictures} onDetach={detach} />
+        {pictureNote === undefined ? null : <AskNote words={pictureNote} />}
+        {sendNote === undefined ? null : <AskNote words={sendNote} />}
+      </>
+    );
 
   const placeholder = asNew
     ? INBOX_BOX_WORDS.NEW_THREAD_PLACEHOLDER
@@ -323,15 +379,15 @@ export function ThreadComposer({
 
   const props = {
     placeholder,
-    // Note that what a send that did not go said stands in the box's head, beside the words it put back, as a comment's reply says it.
-    head: note === undefined ? undefined : <AskNote words={note} />,
     words: draft.note,
     onWords: (note: string) => onDraft({ ...draft, note }),
     // Note that a new thread starts from words alone, so no picked answer lights Send for one.
     sendable: !asNew && answerReady,
     onSend: () => (asNew ? start() : send()),
+    // Note that what a send that did not go said stands in the box's head with the pictures, beside the words it put back, as a comment's reply says it.
+    head,
     addMenu: {
-      actions: [],
+      actions: [{ ...ATTACH_PHOTOS, onPress: attach }],
       switches: [
         {
           label: `${INBOX_BOX_WORDS.SEND_AS_NEW} ${agentName}`,

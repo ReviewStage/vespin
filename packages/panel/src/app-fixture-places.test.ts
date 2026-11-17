@@ -33,9 +33,8 @@ import { type TestWindowRouter, windowRouter } from "./testing/window-router.js"
  * with nothing read, opens the window where its Settings, Admin, or
  * Automations profile names, signed in as the fixture's synthetic account,
  * each page drawn from the answers the fixture stages at the act door rather
- * than its signed-out line, and its person profile's account reads its own
- * page as its own; and a fixture run on any other profile still draws the
- * account main holds.
+ * than its signed-out line; and a fixture run on any other profile still
+ * draws the account main holds.
  */
 
 declare global {
@@ -205,36 +204,6 @@ it.effect(
         "true",
         "the column opens on its first tab, the task's Overview",
       );
-    }),
-);
-
-it.effect(
-  "the person profile's account opens its own profile from its menu and reads it as its own",
-  () =>
-    Effect.gen(function* () {
-      yield* drawWindow(RUN_PROFILE.PERSON);
-
-      // The account's button at the sidebar's foot, named by the account alone where the workspace's switcher says more.
-      const account = [...document.querySelectorAll("button")].find(
-        (button) => button.textContent?.endsWith("Ada Lovelace") && !button.matches("[aria-label]"),
-      );
-
-      assert.ok(account, "the account's button stands");
-      act(() => account.click());
-
-      const profile = [...document.querySelectorAll('[role="menuitem"]')].find(
-        (item): item is HTMLElement =>
-          item instanceof HTMLElement &&
-          item.querySelector(".ui-menu-item-label")?.textContent === "Your profile",
-      );
-
-      assert.ok(profile, "its menu offers Your profile");
-      act(() => profile.click());
-      yield* Effect.promise(settle);
-
-      assert.match(drawn(), /Assigned to you/u);
-      assert.match(drawn(), /Needs you/u);
-      assert.doesNotMatch(drawn(), /Waiting on their answer/u);
     }),
 );
 

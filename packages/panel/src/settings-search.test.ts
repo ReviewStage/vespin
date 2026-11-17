@@ -206,6 +206,7 @@ test("an experiment is found by its name, what it brings, and what other apps ca
   }
 
   const experiments = [
+    "Starter tasks",
     "Cursor",
     "Move agents",
     "Goals",
@@ -267,7 +268,7 @@ test("a writing chord is found by its name and by the Markdown typed for it, on 
   assert.ok(shortcutsFound("markdown").includes("Divider"), "a rule with no chord is listed too");
 });
 
-test("Escape and the keys that answer in place are found on the Keyboard shortcuts page, Escape by every word for leaving", () => {
+test("Escape and the keys that answer in place are found on the Keyboard shortcuts page, Escape by every word for closing", () => {
   const shortcutsFound = (query: string) =>
     (
       searchSettings(
@@ -283,7 +284,7 @@ test("Escape and the keys that answer in place are found on the Keyboard shortcu
       .filter((group) => group.page === SETTINGS_VIEW.SHORTCUTS)
       .flatMap((group) => group.items.map((entry) => entry.label));
 
-  assert.deepEqual(shortcutsFound("exit"), ["Close what's open, or step back"]);
+  assert.deepEqual(shortcutsFound("exit"), ["Close or cancel"]);
   assert.deepEqual(shortcutsFound("option by its number"), [
     "Choose an ask's option by its number",
   ]);
