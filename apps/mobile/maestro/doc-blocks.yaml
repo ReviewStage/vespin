@@ -1,0 +1,101 @@
+# doc-blocks.yaml -- a task's description holding every block its editor can write, shot page by page from its top to its end, for a side-by-side with the desktop's (not a gate: it asserts only that the page opens).
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, whose Teammate invitations
+# description holds every block (`@repo/host/fixture-inbox`'s
+# `INVITES_DESCRIPTION`). Note that the page is swiped at its right side, as
+# `markdown.yaml` does, since a landscape iPad's center falls in the list
+# column beside the task.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Inbox"
+    timeout: 30000
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-00
+- swipe:
+    start: 85%, 75%
+    end: 85%, 30%
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-01
+- swipe:
+    start: 85%, 75%
+    end: 85%, 30%
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-02
+- swipe:
+    start: 85%, 75%
+    end: 85%, 30%
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-03
+- swipe:
+    start: 85%, 75%
+    end: 85%, 30%
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-04
+- swipe:
+    start: 85%, 75%
+    end: 85%, 30%
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-05
+- swipe:
+    start: 85%, 75%
+    end: 85%, 30%
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-06
+- swipe:
+    start: 85%, 75%
+    end: 85%, 30%
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-07
+- swipe:
+    start: 85%, 75%
+    end: 85%, 30%
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-08
+- swipe:
+    start: 85%, 75%
+    end: 85%, 30%
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-09
+- swipe:
+    start: 85%, 75%
+    end: 85%, 30%
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-10
+- swipe:
+    start: 85%, 75%
+    end: 85%, 30%
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-11
+- swipe:
+    start: 85%, 75%
+    end: 85%, 30%
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-12
+- swipe:
+    start: 85%, 75%
+    end: 85%, 30%
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-13
+- swipe:
+    start: 85%, 75%
+    end: 85%, 30%
+- waitForAnimationToEnd
+- takeScreenshot: doc-blocks-14
+- scrollUntilVisible:
+    element: "Turn it on for everyone.*"
+    direction: DOWN
+    optional: true
+- takeScreenshot: doc-blocks-end
