@@ -1201,6 +1201,11 @@ export function AgentTranscript({
     if (keyboard > 0 && anchored.current) list.current?.scrollToEnd({ animated: !reduceMotion });
   }, [keyboard, reduceMotion]);
 
+  // Note that the dock's room growing under a reader at the newest row, as it does once the dock is first measured or a queued line or a held call joins the composer's head, keeps the row clear of it, as the keyboard's rise does, since the list holds the row the reader reads where it stood rather than its end.
+  useEffect(() => {
+    if (dock > 0 && anchored.current) list.current?.scrollToEnd({ animated: false });
+  }, [dock]);
+
   return (
     <View
       style={[styles.list, { backgroundColor: colors.GROUND }]}
