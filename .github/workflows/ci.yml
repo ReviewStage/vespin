@@ -19,9 +19,9 @@ concurrency:
 # its longest job: the tests, which are the bulk of `check.sh`, are spread
 # across runners rather than run behind the lint and typecheck.
 #
-# Every job runs on smol machines (`runs-on: smol`), whose GitHub App the
-# ReviewStage organization linked at https://smolmachines.com/console/ci, and
-# whose machine time bills to that account rather than to GitHub's minutes.
+# Every job but the tests runs on smol machines (`runs-on: smol`), whose GitHub
+# App the ReviewStage organization linked at https://smolmachines.com/console/ci,
+# and whose machine time bills to that account rather than to GitHub's minutes.
 #
 # The TypeScript checks and the tests run through Turborepo (`turbo.json`),
 # which replays a task whose inputs it has already seen pass. Its cache is
@@ -59,7 +59,11 @@ jobs:
   # set, so no test file can fall outside every job or run twice.
   tests:
     name: Tests (${{ matrix.slice }})
-    runs-on: smol
+    # Note that the tests stay on GitHub's runners, because smol splits each
+    # vitest shard again across machines, then miscounts what its slices ran
+    # and fails a step in which every test passed (6 of 52 split jobs on
+    # 2026-11-17, #9818).
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
