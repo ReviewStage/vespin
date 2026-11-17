@@ -1,0 +1,200 @@
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = "1.0";
+    UNNotificationExtensionCategory =     (
+        "extension-marketing"
+    );
+    UNNotificationExtensionDefaultContentHidden = 1;
+    UNNotificationExtensionInitialContentSizeRatio = "0.1";
+}
+2026-11-17 01:43:53.321 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.shortcuts.AutomationNotificationContent for categories [ triggerPromptCategory, triggerNotifyBackgroundCategory, triggersEnabledCategory ] with attributes: {
+    NSExtensionPointName = "com.apple.usernotifications.content-extension";
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = "10.0";
+    UNNotificationExtensionCategory =     (
+        triggerPromptCategory,
+        triggerNotifyBackgroundCategory,
+        triggersEnabledCategory
+    );
+    UNNotificationExtensionDefaultContentHidden = 1;
+    UNNotificationExtensionInitialContentSizeRatio = "0.5";
+    UNNotificationExtensionUserInteractionEnabled = 1;
+}
+2026-11-17 01:43:53.321 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.ScreenTimeUI.ScreenTimeNotificationContentExtension for categories [ com.apple.screentime.weekly-usage-report ] with attributes: {
+    NSExtensionPointName = "com.apple.usernotifications.content-extension";
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = "3.0";
+    UNNotificationExtensionCategory = "com.apple.screentime.weekly-usage-report";
+    UNNotificationExtensionCustomSectionIdentifier = "com.apple.ScreenTimeNotifications";
+    UNNotificationExtensionDefaultContentHidden = 1;
+    UNNotificationExtensionInitialContentSizeRatio = 1;
+}
+2026-11-17 01:43:53.321 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.AppleMediaServicesUI.AMSEngagementNotificationsExtension for categories [ ams-notifications-extension ] with attributes: {
+    NSExtensionPointName = "com.apple.usernotifications.content-extension";
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = "1.0";
+    UNNotificationExtensionCategory =     (
+        "ams-notifications-extension"
+    );
+    UNNotificationExtensionCustomSectionIdentifier = "com.apple.AppleMediaServicesUI.engagement.notifications";
+    UNNotificationExtensionDefaultContentHidden = 1;
+    UNNotificationExtensionInitialContentSizeRatio = "0.1";
+    UNNotificationExtensionUserInteractionEnabled = 1;
+}
+2026-11-17 01:43:53.321 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.MobileSMS.MessagesNotificationExtension for categories [ MessageExtension, MessageExtension-AudioRaise, MessageExtension-Madrid, MessageExtension-MadridGroup, MessageExtension-SMS, MessageExtension-RCS, MessageExtension-MadridBusiness, MessageExtension-NoRelay ] with attributes: {
+    NSExtensionPointName = "com.apple.usernotifications.content-extension";
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = "26.0";
+    SFBUISNotificationExtensionDefaultScrollViewNotProvided = 1;
+    UNNotificationExtensionCategory =     (
+        MessageExtension,
+        "MessageExtension-AudioRaise",
+        "MessageExtension-Madrid",
+        "MessageExtension-MadridGroup",
+        "MessageExtension-SMS",
+        "MessageExtension-RCS",
+        "MessageExtension-MadridBusiness",
+        "MessageExtension-NoRelay"
+    );
+    UNNotificationExtensionDefaultContentHidden = 1;
+    UNNotificationExtensionInitialContentSizeRatio = "0.98";
+    UNNotificationExtensionOverridesDefaultTitle = 1;
+    UNNotificationExtensionScrollsO
+2026-11-17 01:43:53.321 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.accessibility.RTTUI.RTTNotifications for categories [ com.apple.RTTNotifications.message ] with attributes: {
+    NSExtensionPointName = "com.apple.usernotifications.content-extension";
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = 1;
+    UNNotificationExtensionCategory =     (
+        "com.apple.RTTNotifications.message"
+    );
+    UNNotificationExtensionCustomSectionIdentifier = "com.apple.RTTNotifications";
+    UNNotificationExtensionDefaultContentHidden = 1;
+    UNNotificationExtensionInitialContentSizeRatio = 1;
+    UNNotificationExtensionOverridesDefaultTitle = 1;
+    UNNotificationExtensionUserInteractionEnabled = 1;
+}
+2026-11-17 01:43:53.321 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.SeymourServices.SeymourNotifications for categories [ fitcored-engagement-category ] with attributes: {
+    NSExtensionPointName = "com.apple.usernotifications.content-extension";
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = "1.0";
+    UNNotificationExtensionCategory =     (
+        "fitcored-engagement-category"
+    );
+    UNNotificationExtensionCustomSectionIdentifier = "com.apple.Fitness";
+    UNNotificationExtensionDefaultContentHidden = 1;
+    UNNotificationExtensionInitialContentSizeRatio = "0.1";
+    UNNotificationExtensionUserInteractionEnabled = 1;
+}
+2026-11-17 01:43:53.321 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.health.HealthMedicationsUI.HealthMedicationsNotificationContentExtension for categories [ MedicationsHealthAppPlugin.NotMissed, MedicationsHealthAppPlugin.NotMissed.Singular, MedicationsHealthAppPlugin.NotMissedFollowUp, MedicationsHealthAppPlugin.NotMissedFollowUp.Singular ] with attributes: {
+    NSExtensionPointName = "com.apple.usernotifications.content-extension";
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = "1.0";
+    UNNotificationExtensionCategory =     (
+        "MedicationsHealthAppPlugin.NotMissed",
+        "MedicationsHealthAppPlugin.NotMissed.Singular",
+        "MedicationsHealthAppPlugin.NotMissedFollowUp",
+        "MedicationsHealthAppPlugin.NotMissedFollowUp.Singular"
+    );
+    UNNotificationExtensionCustomSectionIdentifier = "com.apple.Health";
+    UNNotificationExtensionDefaultContentHidden = 0;
+    UNNotificationExtensionInitialContentSizeRatio = "0.01";
+    UNNotificationExtensionOverridesDefaultTitle = 1;
+}
+2026-11-17 01:43:53.321 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.mobileslideshow.photosnotifications-updates for categories [ updates, updatesLiked, updatesCommented, invitations, invitationsWithJunkReport, expiringCMMs, readyToViewInvitationCMM, sharedLibrarySuggestions, sharedLibraryParticipantAssetTrashNotification ] with attributes: {
+    NSExtensionPointName = "com.apple.usernotifications.content-extension";
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = "1.0";
+    UNNotificationExtensionCategory =     (
+        updates,
+        updatesLiked,
+        updatesCommented,
+        invitations,
+        invitationsWithJunkReport,
+        expiringCMMs,
+        readyToViewInvitationCMM,
+        sharedLibrarySuggestions,
+        sharedLibraryParticipantAssetTrashNotification
+    );
+    UNNotificationExtensionInitialContentSizeRatio = "0.02";
+}
+2026-11-17 01:43:53.321 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.news.articlenotificationextension for categories [ extension-article ] with attributes: {
+    NSExtensionPointName = "com.apple.usernotifications.content-extension";
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = "4.0";
+    UNNotificationExtensionCategory =     (
+        "extension-article"
+    );
+    UNNotificationExtensionDefaultContentHidden = 1;
+    UNNotificationExtensionInitialContentSizeRatio = "1.32";
+}
+2026-11-17 01:43:53.322 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.mobiletimer-framework.MobileTimerNotificationExtension for categories [ AlarmSnoozeCountdown ] with attributes: {
+    NSExtensionPointName = "com.apple.usernotifications.content-extension";
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = "1.0";
+    UNNotificationExtensionCategory = AlarmSnoozeCountdown;
+    UNNotificationExtensionCustomSectionIdentifier = "com.apple.mobiletimer";
+    UNNotificationExtensionDefaultContentHidden = 1;
+    UNNotificationExtensionInitialContentSizeRatio = "0.7";
+}
+2026-11-17 01:43:53.322 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.CalendarNotification.CalendarContentExtension for categories [ com.apple.calendar.notifications.TriggeredEvent, com.apple.calendar.notifications.TriggeredEvent.Snooze, com.apple.calendar.notifications.TriggeredEvent.Directions, com.apple.calendar.notifications.TriggeredEvent.ConferenceCall, com.apple.calendar.notifications.TriggeredEvent.MailOrganizer, com.apple.calendar.notifications.TriggeredEvent.Directions.Snooze, com.apple.calendar.notifications.TriggeredEvent.ConferenceCall.Snooze, com.apple.calendar.notifications.TriggeredEvent.MailOrganizer.Snooze, com.apple.calendar.notifications.TriggeredEvent.Directions.ConferenceCall, com.apple.calendar.notifications.TriggeredEvent.Directions.MailOrganizer, com.apple.calendar.notifications.TriggeredEvent.ConferenceCall.MailOrganizer, com.apple.calendar.notifications.TriggeredEvent.Directions.ConferenceCall.Snooze, com.apple.calendar.notifications.TriggeredEvent.Directions.ConferenceCall.MailOrganizer, com.apple.calendar.notifications.TriggeredEvent.Directi<…> ] with attributes: <decode: missing data>
+2026-11-17 01:43:53.322 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.SleepHealthUI.SleepNotificationContentExtension for categories [ BedtimeReminderCategory, WindDownReminderCategory, FocusIntroCategory ] with attributes: {
+    NSExtensionPointName = "com.apple.usernotifications.content-extension";
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = "1.0";
+    UNNotificationExtensionCategory =     (
+        BedtimeReminderCategory,
+        WindDownReminderCategory,
+        FocusIntroCategory
+    );
+    UNNotificationExtensionCustomSectionIdentifier = "com.apple.Health";
+    UNNotificationExtensionInitialContentSizeRatio = "0.001";
+}
+2026-11-17 01:43:53.322 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.MobileSMS.MessagesPluginNotificationExtension for categories [ com.apple.messages.notification.customplugin.category ] with attributes: {
+    NSExtensionPointName = "com.apple.usernotifications.content-extension";
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = "1.0";
+    UNNotificationExtensionCategory = "com.apple.messages.notification.customplugin.category";
+    UNNotificationExtensionInitialContentSizeRatio = 0;
+}
+2026-11-17 01:43:53.322 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.Passbook.NotificationContentExtension for categories [ PKPaymentTransactionNotificationCategory, PKTransitPaymentTransactionNotificationCategory, PDUserNotificationTypePassTransitRelevancy ] with attributes: {
+    NSExtensionPointName = "com.apple.usernotifications.content-extension";
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = "1.0";
+    UNNotificationExtensionCategory =     (
+        PKPaymentTransactionNotificationCategory,
+        PKTransitPaymentTransactionNotificationCategory,
+        PDUserNotificationTypePassTransitRelevancy
+    );
+    UNNotificationExtensionDefaultContentHidden = 1;
+    UNNotificationExtensionInitialContentSizeRatio = "0.5";
+}
+2026-11-17 01:43:53.322 Df SpringBoard[70455:bfe1cb7] [com.apple.UserNotificationsUI:Extensions] Loaded extension com.apple.BarcodeSupport.BarcodeNotificationExtension for categories [ barcodeNotificationCategory ] with attributes: {
+    NSExtensionPointName = "com.apple.usernotifications.content-extension";
+    NSExtensionPointVersion = "1.0";
+    NSExtensionVersion = 1001;
+    UNNotificationExtensionCategory = barcodeNotificationCategory;
+    UNNotificationExtensionCustomSectionIdentifier =     (
+        "com.apple.barcodesupport.qrcode",
+        "com.apple.barcodesupport.nfc"
+    );
+    UNNotificationExtensionDefaultContentHidden = 1;
+    UNNotificationExtensionInitialContentSizeRatio = 1;
+}
+2026-11-17 01:43:53.324 Df SpringBoard[70455:bfde841] [com.apple.SpringBoard:ProactiveHome] (47155CB7-9404-48BF-A783-A2E7570A9F94: Stack configuration: Identifier: AE157F4B-0959-4EAC-B5DA-CE1CF231B728;Allows new widget: 1; Allows smart rotate: 1; Widgets: (
+    "{\134n    appBundleId = \134"com.apple.mobilecal\134";\134n    intent = \134"sirikit.intents.custom.com.apple.CalendarWidget.IntentsExtension.EKUICalendarsIntent\134";\134n    onboardingWidget = 0;\134n    score = 0;\134n    size = 0;\134n    suggestedWidget = 0;\134n    widgetBundleId = \134"com.apple.mobilecal.CalendarWidgetExtension\134";\134n    widgetKind = \134"com.apple.CalendarWidget.CalendarUpNextWidget\134";\134n    widgetUniqueId = \134"D4134960-1BD6-468C-A9B8-C36E4E595C6B\134";\134n}\134nFull Intent: <INIntent: 0x11bcdc8c0> {\134n    mirrorCalendarApp = 1;\134n    hideAllDayEvents = <null>;\134n    calendars = <null>;\134n}\134n",
+    "{\134n    appBundleId = \134"com.apple.news\134";\134n    intent = \134"sirikit.intents.custom.com.apple.news.widgetintents.TodayIntent\134";\134n    onboardingWidget = 0;\134n    score = 0;\134n    size = 0;\134n    suggestedWidget = 0;\134n    widgetBundleId = \134"com.apple.news.widget\134";\134n    widgetKind = today;\134n
+2026-11-17 01:43:53.324 Df SpringBoard[70455:bfde841] [com.apple.SpringBoard:WidgetIntent] Archived widget intent data not found for icon: <SBWidgetIcon: 0x117557f00; uniqueIdentifier: 8DC7F048-DFF9-441C-AEAC-47F4A7B7B004; gridSizeClass: small; widget: com.apple.Batteries.BatteriesAvocadoWidgetExtension>, bundleID=(null), storageIdentifier: com.apple.Batteries, dataSourceUniqueIdentifier: 23680108-78EB-4B8B-9755-72008C5C2834
+2026-11-17 01:43:53.828 Df SpringBoard[70455:bfde841] [com.apple.SpringBoard:ProactiveHome] (C79DACBB-303A-4CBE-A85A-D2D0EBB52408: Stack configuration: Identifier: AE157F4B-0959-4EAC-B5DA-CE1CF231B728;Allows new widget: 1; Allows smart rotate: 1; Widgets: (
+    "{\134n    appBundleId = \134"com.apple.mobilecal\134";\134n    intent = \134"sirikit.intents.custom.com.apple.CalendarWidget.IntentsExtension.EKUICalendarsIntent\134";\134n    onboardingWidget = 0;\134n    score = 0;\134n    size = 0;\134n    suggestedWidget = 0;\134n    widgetBundleId = \134"com.apple.mobilecal.CalendarWidgetExtension\134";\134n    widgetKind = \134"com.apple.CalendarWidget.CalendarUpNextWidget\134";\134n    widgetUniqueId = \134"D4134960-1BD6-468C-A9B8-C36E4E595C6B\134";\134n}\134nFull Intent: <INIntent: 0x11bcdc8c0> {\134n    mirrorCalendarApp = 1;\134n    hideAllDayEvents = <null>;\134n    calendars = <null>;\134n}\134n",
+    "{\134n    appBundleId = \134"com.apple.news\134";\134n    intent = \134"sirikit.intents.custom.com.apple.news.widgetintents.TodayIntent\134";\134n    onboardingWidget = 0;\134n    score = 0;\134n    size = 0;\134n    suggestedWidget = 0;\134n    widgetBundleId = \134"com.apple.news.widget\134";\134n    widgetKind = today;\134n
+2026-11-17 01:43:53.829 Df SpringBoard[70455:bfde841] [com.apple.SpringBoard:WidgetIntent] Archived widget intent data not found for icon: <SBWidgetIcon: 0x117557f00; uniqueIdentifier: 8DC7F048-DFF9-441C-AEAC-47F4A7B7B004; gridSizeClass: small; widget: com.apple.Batteries.BatteriesAvocadoWidgetExtension>, bundleID=(null), storageIdentifier: com.apple.Batteries, dataSourceUniqueIdentifier: 23680108-78EB-4B8B-9755-72008C5C2834
+2026-11-17 01:43:54.363 F  SpringBoard[70455:bfe1cb7] [com.apple.duetexpertd.atx:general] ATXAssets2 - could not find path for resource: ATXDefaultHomeScreenItemUpdater with extension: plist
+2026-11-17 01:43:54.365 F  SpringBoard[70455:bfe1cb7] [com.apple.duetexpertd.atx:general] ATXAssets2 - could not find path for resource: ATXDefaultHomeScreenItemUpdater with extension: plist
+2026-11-17 01:43:54.365 F  SpringBoard[70455:bfe1cb7] [com.apple.duetexpertd.atx:general] ATXAssets2 - could not find path for resource: ATXDefaultHomeScreenItemUpdater with extension: plist
+2026-11-17 01:43:54.367 F  SpringBoard[70455:bfe1cb7] [com.apple.duetexpertd.atx:general] ATXAssets2 - could not find path for resource: ATXDefaultHomeScreenItemUpdater with extension: plist
+2026-11-17 01:43:54.368 F  SpringBoard[70455:bfe1cb7] [com.apple.duetexpertd.atx:general] ATXAssets2 - could not find path for resource: ATXDefaultHomeScreenItemUpdater with extension: plist
+2026-11-17 01:43:54.396 Df SpringBoard[70455:bfe095e] [com.apple.runningboard:monitor] Received state update for 72958 (xpcservice<com.apple.texttospeech.SiriAUSP([osservice<com.apple.accessibility.axassetsd>:63514])>{vt hash: 0}{definition:com.apple.texttospeech.SiriAUSP[extension][client]}, running-active-NotVisible
+2026-11-17 01:43:54.415 Df SpringBoard[70455:bfe1cb7] [com.apple.runningboard:monitor] Received state update for 72995 (xpcservice<com.apple.speech.MacinTalkFramework.MacinTalkAUSP([osservice<com.apple.accessibility.axassetsd>:63514])>{vt hash: 0}{definition:com.apple.speech.MacinTalkFramework.MacinTalkAUSP[extension][client]}, running-active-NotVisible
+2026-11-17 01:43:54.429 Df SpringBoard[70455:bfe095e] [com.apple.runningboard:monitor] Received state update for 72872 (xpcservice<com.apple.ax.MauiTTSSupport.MauiAUSP([osservice<com.apple.accessibility.axassetsd>:63514])>{vt hash: 0}{definition:com.apple.ax.MauiTTSSupport.MauiAUSP[extension][client]}, running-active-NotVisible
+2026-11-17 01:43:54.749 Df SpringBoard[70455:bfe1cb7] [com.apple.runningboard:monitor] Received state update for 72872 (xpcservice<com.apple.ax.MauiTTSSupport.MauiAUSP([osservice<com.apple.accessibility.axassetsd>:63514])>{vt hash: 0}{definition:com.apple.ax.MauiTTSSupport.MauiAUSP[extension][client]}, running-suspended-NotVisible
+2026-11-17 01:43:54.749 Df SpringBoard[70455:bfe1cb7] [com.apple.runningboard:monitor] Received state update for 72958 (xpcservice<com.apple.texttospeech.SiriAUSP([osservice<com.apple.accessibility.axassetsd>:63514])>{vt hash: 0}{definition:com.apple.texttospeech.SiriAUSP[extension][client]}, running-suspended-NotVisible
+2026-11-17 01:43:54.749 Df SpringBoard[70455:bfe1cb7] [com.apple.runningboard:monitor] Received state update for 72995 (xpcservice<com.apple.speech.MacinTalkFramework.MacinTalkAUSP([osservice<com.apple.accessibility.axassetsd>:63514])>{vt hash: 0}{definition:com.apple.speech.MacinTalkFramework.MacinTalkAUSP[extension][client]}, running-suspended-NotVisible
