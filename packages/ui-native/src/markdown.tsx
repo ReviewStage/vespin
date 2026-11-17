@@ -210,6 +210,7 @@ const styles = StyleSheet.create({
   },
   picture: { width: "100%", borderRadius: RADIUS.BLOCK },
   pending: { alignItems: "center", justifyContent: "center" },
+  measured: { alignSelf: "stretch" },
 });
 
 /** What drawing a run needs beyond the run: the colors, the reader's text scale, and the doors a press opens. */
@@ -1071,6 +1072,7 @@ export function Picture({
 }: PictureProps) {
   const colors = useColors();
   const [natural, setNatural] = useState<MediaSize | undefined>(undefined);
+  const [boxWidth, setBoxWidth] = useState<number | undefined>(undefined);
   const heard = alt === "" ? "Picture" : alt;
 
   const kept: Kept | undefined =
@@ -1111,31 +1113,41 @@ export function Picture({
     );
   }
 
+  // Note that the picture stands as its well until the width its box gives it is known, and is then held to that width from its first frame in its menu's host, since a host that measures its own width a frame later laid the picture out with none, at no height, and its message stood collapsed until the picture drew. The box keeps measuring, so a turn of the screen bounds it anew.
   return (
     <MediaBox frame={frame}>
-      <HeldMenu acts={acts}>
-        <Press
-          onPress={show}
-          disabled={show === undefined}
-          accessibilityRole="imagebutton"
-          accessibilityLabel={heard}
-          accessibilityHint="Opens full screen"
-          testID="markdown-picture"
-        >
-          <Image
-            source={{ uri: source }}
-            resizeMode={fill ? "cover" : "contain"}
-            onLoad={(event) => {
-              const loaded = event.nativeEvent.source;
+      <View
+        style={styles.measured}
+        onLayout={(event) => setBoxWidth(event.nativeEvent.layout.width)}
+      >
+        {boxWidth === undefined ? (
+          <View style={well} accessible accessibilityLabel={heard} />
+        ) : (
+          <HeldMenu acts={acts} width={boxWidth}>
+            <Press
+              onPress={show}
+              disabled={show === undefined}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={heard}
+              accessibilityHint="Opens full screen"
+              testID="markdown-picture"
+            >
+              <Image
+                source={{ uri: source }}
+                resizeMode={fill ? "cover" : "contain"}
+                onLoad={(event) => {
+                  const loaded = event.nativeEvent.source;
 
-              if (loaded.width > 0 && loaded.height > 0) {
-                setNatural({ width: loaded.width, height: loaded.height });
-              }
-            }}
-            style={well}
-          />
-        </Press>
-      </HeldMenu>
+                  if (loaded.width > 0 && loaded.height > 0) {
+                    setNatural({ width: loaded.width, height: loaded.height });
+                  }
+                }}
+                style={well}
+              />
+            </Press>
+          </HeldMenu>
+        )}
+      </View>
     </MediaBox>
   );
 }

@@ -7,6 +7,7 @@
  * back, open again, the ask the reader's close withdrew open again.
  */
 
+import type { AgentAttachment } from "./agent-wire.js";
 import {
   INBOX_ASK_STATUS,
   INBOX_MESSAGE_AUTHOR,
@@ -79,16 +80,35 @@ export function acknowledgedNow(
   };
 }
 
+/** A reply's files as a message names them, none where it carries none, so a reply of pictures alone never stands as an empty message. */
+function filesNamed(files: readonly InboxSendingFile[] | undefined) {
+  return files === undefined || files.length === 0
+    ? undefined
+    : {
+        files: files.map(({ attachmentId, name, mediaType }) => ({
+          attachmentId,
+          name,
+          mediaType,
+        })),
+      };
+}
+
 /**
  * The item as the reader answered it, before the service says how it
  * stands: as a nod leaves it (`acknowledgedNow`), and its open ask answered
  * and the reply carrying the answer after it, under the reply's own key
- * until the service names the message. Note that the files the reply
- * carried are not drawn until then, since the service names them.
+ * until the service names the message, with the files the reply carried
+ * where the send holds their bytes (`files`), which the window draws them
+ * from until a read carries them.
  */
 export function answeredNow(
   item: InboxItem,
-  sent: { readonly key: string; readonly text: string; readonly answers: InboxAnswers },
+  sent: {
+    readonly key: string;
+    readonly text: string;
+    readonly answers: InboxAnswers;
+    readonly files?: readonly InboxSendingFile[] | undefined;
+  },
   reader: InboxReader | undefined,
   now: number,
 ): InboxItem {
@@ -98,6 +118,7 @@ export function answeredNow(
     ...(reader === undefined ? undefined : { member: reader }),
     text: sent.text,
     answers: sent.answers,
+    ...filesNamed(sent.files),
     createdAt: now,
   };
 
@@ -180,13 +201,22 @@ export const INBOX_SENDING = {
   CLOSE: "close",
 } as const;
 
-/** One thing the reader sent on a thread, as it is drawn until a read carries it: a reply under its own key, written at `at`, or a close of the revision the reader was shown. */
+/** A file a reply carries as it is drawn until a read carries it: the attachment it is drawn under, named as a read names one, and its bytes, which the window draws it from rather than reading it back. */
+export interface InboxSendingFile {
+  readonly attachmentId: string;
+  readonly name: string;
+  readonly mediaType: string;
+  readonly base64: string;
+}
+
+/** One thing the reader sent on a thread, as it is drawn until a read carries it: a reply under its own key, with the files it carries, written at `at`, or a close of the revision the reader was shown. */
 export type InboxSending =
   | {
       readonly kind: typeof INBOX_SENDING.REPLY;
       readonly key: string;
       readonly text: string;
       readonly answers?: InboxAnswers | undefined;
+      readonly files?: readonly InboxSendingFile[] | undefined;
       readonly at: number;
     }
   | { readonly kind: typeof INBOX_SENDING.CLOSE; readonly revision: number; readonly at: number };
@@ -217,24 +247,89 @@ function sendingDrawn(
     return item;
   }
 
-  const { key, text, answers, at } = sending;
+  const { key, text, answers, files, at } = sending;
 
   if (answers !== undefined) {
     return asksOpen(item, answers.ask)
-      ? answeredNow(item, { key, text, answers }, reader, at)
+      ? answeredNow(item, { key, text, answers, files }, reader, at)
       : item;
   }
 
+  // Note that a reply's files stand on it at once, as the read will carry them.
   const reply: InboxMessage = {
     id: key,
     author: INBOX_MESSAGE_AUTHOR.MEMBER,
     ...(reader === undefined ? undefined : { member: reader }),
     text,
+    ...filesNamed(files),
     clientKey: key,
     createdAt: at,
   };
 
   return { ...item, thread: [...thread, reply], unread: false };
+}
+
+/** The files a reply sent under `key` carries as its send draws them: each under an attachment of its own, the key with its place in the last group, so no two of a reply share one. */
+export function inboxSendingFiles(
+  key: string,
+  attachments: readonly AgentAttachment[],
+): readonly InboxSendingFile[] {
+  return attachments.map((attachment, place) => ({
+    attachmentId: `${key.slice(0, 24)}${place.toString(16).padStart(12, "0")}`,
+    name: attachment.name,
+    mediaType: attachment.mediaType,
+    base64: attachment.data,
+  }));
+}
+
+/** The file a read of `thread` carries under `attachmentId` for a reply among `replies`, at its place among that reply's files, where its name and type are the send's. */
+function carriedFile(
+  replies: readonly InboxSending[],
+  thread: readonly InboxMessage[],
+  attachmentId: string,
+): InboxSendingFile | undefined {
+  const carried = thread.find(
+    ({ clientKey, files }) =>
+      clientKey !== undefined && files?.some((file) => file.attachmentId === attachmentId),
+  );
+
+  const reply = replies.find(
+    (each) => each.kind === INBOX_SENDING.REPLY && each.key === carried?.clientKey,
+  );
+
+  const place = carried?.files?.findIndex((file) => file.attachmentId === attachmentId) ?? -1;
+  const read = carried?.files?.[place];
+  const sent = reply?.kind === INBOX_SENDING.REPLY ? reply.files?.[place] : undefined;
+
+  return read !== undefined && sent?.name === read.name && sent.mediaType === read.mediaType
+    ? sent
+    : undefined;
+}
+
+/**
+ * A file a reply sent from this window carries, by its attachment, as its
+ * bytes are drawn: one still drawn from its send, or one a read of `thread`
+ * now carries under the service's own attachment, matched to the send by its
+ * key and its place among the reply's files. None for any other attachment,
+ * such as an agent's. Note that a file the read carries is drawn from the
+ * send's bytes only where its name and type are the send's, so a read that
+ * orders a reply's files otherwise reads them back rather than drawing one
+ * as another.
+ */
+export function inboxSendingFile(
+  sending: Iterable<InboxSending>,
+  attachmentId: string,
+  thread: readonly InboxMessage[] = [],
+): { readonly contentType: string; readonly base64: string } | undefined {
+  const replies = [...sending];
+
+  const drawn = replies
+    .flatMap((each) => (each.kind === INBOX_SENDING.REPLY ? (each.files ?? []) : []))
+    .find((held) => held.attachmentId === attachmentId);
+
+  const file = drawn ?? carriedFile(replies, thread, attachmentId);
+
+  return file === undefined ? undefined : { contentType: file.mediaType, base64: file.base64 };
 }
 
 /**

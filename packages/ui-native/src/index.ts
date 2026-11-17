@@ -194,7 +194,7 @@ export {
 
 export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
 
-export { useMinute } from "./minute.js";
+export { useMinute, useToday } from "./minute.js";
 
 export { useNoticeFootRoom } from "./notice-lift.js";
 

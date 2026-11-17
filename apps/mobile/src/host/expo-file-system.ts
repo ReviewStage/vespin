@@ -1,27 +1,55 @@
 /**
  * expo-file-system.ts -- the host's files on the device: each file the host keeps, under the app's own Documents folder, through `expo-file-system`.
  *
- * The host in the app keeps one small file, the settings store's
- * `settings.json`, and retires none of an older layout's, so this answers
- * only what the settings store and the retired store call, as the web's
+ * The host in the app keeps the settings store's `settings.json` and the
+ * account's local database (`@repo/host/local-database`), and retires none
+ * of an older layout's, so this answers only what those call, as the web's
  * storage does (`apps/web/src/app/local-storage-file-system.ts`): a read, a
- * write, a directory made, a mode set, a rename, and a removal. Every other
- * call is `FileSystem.layerNoop`'s refusal. The host names its files by
- * plain paths under its state root, which `expo-file-system` reads as
- * `file://` addresses, so each path is turned into one here and nowhere
- * else.
+ * write of text or of bytes, a directory made, a mode set, a rename, and a
+ * removal. Every other call is `FileSystem.layerNoop`'s refusal, which
+ * answers `NotFound`, so a call the host starts making must be answered
+ * here too. The host names its files by plain paths under its state root,
+ * which `expo-file-system` reads as `file://` addresses, so each path is
+ * turned into one here and nowhere else.
+ *
+ * `expo-file-system`'s `File` and `Directory` are taken as a seam, as the
+ * database's driver takes `openDatabaseSync`, so a test runs this layer on
+ * Node, where no Expo module loads.
  */
 
 import { Effect, type Layer } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { systemError } from "effect/PlatformError";
-import { Directory, File, Paths } from "expo-file-system";
 
 const FILE_SCHEME = "file://";
 
-/** The folder the host's files stand in, as a plain path: `host` under the app's Documents, which iOS keeps across launches and backs up. */
-export function hostStateRoot(): string {
-  return `${plainPath(Paths.document.uri)}/host`;
+/** What the layer calls of an `expo-file-system` folder (`Directory`). */
+interface ExpoDirectory {
+  readonly exists: boolean;
+  create(options: { readonly intermediates: boolean; readonly idempotent: boolean }): void;
+  list(): readonly unknown[];
+  delete(): void;
+}
+
+/** What the layer calls of an `expo-file-system` file (`File`), moved over another of its own kind (`Self`). */
+interface ExpoFile<Self> {
+  readonly exists: boolean;
+  readonly parentDirectory: ExpoDirectory;
+  textSync(): string;
+  writeSync(content: string | Uint8Array): void;
+  moveSync(destination: Self, options: { readonly overwrite: boolean }): void;
+  delete(): void;
+}
+
+/** `expo-file-system`'s classes, each built over a `file://` address. */
+export interface ExpoFiles<Kind extends ExpoFile<Kind>> {
+  readonly File: new (uri: string) => Kind;
+  readonly Directory: new (uri: string) => ExpoDirectory;
+}
+
+/** The folder the host's files stand in, as a plain path: `host` under the app's Documents (`documentUri`), which iOS keeps across launches and backs up. */
+export function hostStateRootIn(documentUri: string): string {
+  return `${plainPath(documentUri)}/host`;
 }
 
 /** A `file://` address as a plain absolute path, without a trailing slash. */
@@ -53,6 +81,19 @@ function missing(method: string, path: string) {
   });
 }
 
+/** A file made only where none stood (`wx`) that already stands, refused as Node refuses one. */
+function standing(method: string, path: string) {
+  return systemError({
+    // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
+    _tag: "AlreadyExists",
+    module: "FileSystem",
+    method,
+    pathOrDescriptor: path,
+    description: "File exists",
+    cause: Object.assign(new Error(`EEXIST: ${path}`), { code: "EEXIST" }),
+  });
+}
+
 /** A call the device's file system refused. */
 function refused(method: string, path: string, cause: unknown) {
   return systemError({
@@ -70,8 +111,11 @@ function refused(method: string, path: string, cause: unknown) {
 const attempt = <A>(method: string, path: string, run: () => A) =>
   Effect.try({ try: run, catch: (cause) => refused(method, path, cause) });
 
-/** The host's `FileSystem` over the device's own, each path read under `file://`. */
-export function expoFileSystem(): Layer.Layer<FileSystem.FileSystem> {
+/** The host's `FileSystem` over the device's own (`files`), each path read under `file://`. */
+export function expoFileSystem<Kind extends ExpoFile<Kind>>({
+  File,
+  Directory,
+}: ExpoFiles<Kind>): Layer.Layer<FileSystem.FileSystem> {
   const fileAt = (path: string) => new File(fileUri(path));
   const directoryAt = (path: string) => new Directory(fileUri(path));
   const exists = (path: string) => fileAt(path).exists || directoryAt(path).exists;
@@ -91,6 +135,17 @@ export function expoFileSystem(): Layer.Layer<FileSystem.FileSystem> {
         const file = fileAt(path);
         file.parentDirectory.create({ intermediates: true, idempotent: true });
         file.writeSync(data);
+      }),
+    // Note that the local database makes its empty file only where none stands (`wx`) before SQLite opens it, so that flag refuses a file that does.
+    writeFile: (path, data, options) =>
+      Effect.suspend(() => {
+        if (options?.flag === "wx" && exists(path)) return Effect.fail(standing("writeFile", path));
+
+        return attempt("writeFile", path, () => {
+          const file = fileAt(path);
+          file.parentDirectory.create({ intermediates: true, idempotent: true });
+          file.writeSync(data);
+        });
       }),
     makeDirectory: (path, options) =>
       attempt("makeDirectory", path, () =>

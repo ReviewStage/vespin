@@ -11,13 +11,14 @@ import {
   type OwnedAgent,
 } from "@repo/database/models/agent-store";
 import { linkedGitHubUserIds } from "@repo/database/models/github-token-store";
-import type { TaskStoreEffect } from "@repo/database/models/task-store";
+import { readTaskHeader, type TaskStoreEffect } from "@repo/database/models/task-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { githubAppAvatarUrl, githubAvatarUrl } from "@repo/features/account-picture";
 import { AGENT_BOUNDS, AGENT_STATUS } from "@repo/features/agent-wire";
 import { GITHUB_READER, type GitHubAccess } from "@repo/features/github-repositories-wire";
 import { mentionMarkdownLink } from "@repo/features/link-grammar";
+import { isTaskSettled } from "@repo/features/task-wire";
 import type { Sandbox } from "@repo/sandbox";
 import {
   EXCESS_KEYS,
@@ -52,7 +53,7 @@ import {
 } from "./pull-requests.js";
 
 /**
- * agent-wakes.ts -- a review, a comment, or a failed check on a coding agent's pull request, told to the agent as a message from GitHub.
+ * agent-wakes.ts -- a review, a comment, a failed check, or a merge on a coding agent's pull request, told to the agent as a message from GitHub.
  *
  * An agent's turn ends with its pull request open, and what happens on it
  * after reached nobody until the developer looked: a review, a comment, a
@@ -139,10 +140,21 @@ import {
  * The fifth is the merge queue taking an agent's pull request out while it
  * stays open (`pull_request` `dequeued`): the agent queued it and ended its
  * turn, and a check the queue ran fails on the queue's own branch, which no
- * agent stands on, so nothing else would tell it. A pull request merged or
- * closed, or taken out by hand (GitHub's reason `MANUAL`, as the agent's own
- * `gh pr merge --disable-auto` takes it out), tells nobody. It is admitted as
- * a review is, so one by our own App reaches only an agent not at work.
+ * agent stands on, so nothing else would tell it. One taken out by hand
+ * (GitHub's reason `MANUAL`, as the agent's own `gh pr merge --disable-auto`
+ * takes it out) tells nobody. It is admitted as a review is, so one by our
+ * own App reaches only an agent not at work.
+ *
+ * The sixth is the pull request merged or closed without merging
+ * (`pull_request` `closed`), so an agent that queued it and ended its turn,
+ * or whose pull request the developer merged by hand, learns that its work
+ * landed or was dropped and marks its task Done where that finishes it, as
+ * its instructions say. Note that the service never moves the task itself:
+ * Done is the agent's call. It is admitted as a review is, so the agent's
+ * own `gh pr merge` or `gh pr close` inside a turn does not wake it, and is
+ * told to no agent whose task already stands Done or Canceled, because a
+ * turn starting there moves the task back to In progress (`beginTaskWork`),
+ * which would undo a developer who merged and closed the task by hand.
  *
  * A failed check names what failed from the same read of the head's checks,
  * made only where an agent is told, on its token, and waited on for
@@ -160,6 +172,10 @@ export const AGENT_WAKE = {
   CHECKS_COMPLETED: "checks-completed",
   /** The merge queue took the pull request out without merging it, told to its agent, which queued it. */
   DEQUEUED: "dequeued",
+  /** The pull request merged, told to its agent so it may mark its task Done. */
+  MERGED: "merged",
+  /** The pull request closed without merging, told to its agent so it may mark its task Done. */
+  CLOSED: "closed",
 } as const;
 
 type AgentWakeKind = (typeof AGENT_WAKE)[keyof typeof AGENT_WAKE];
@@ -211,7 +227,11 @@ const WAKE_ACTION = {
   CREATED: "created",
   COMPLETED: "completed",
   DEQUEUED: "dequeued",
+  CLOSED: "closed",
 } as const;
+
+/** The wakes that tell a pull request's end, which no agent of a settled task is told. */
+const ENDED_WAKES: ReadonlySet<AgentWakeKind> = new Set([AGENT_WAKE.MERGED, AGENT_WAKE.CLOSED]);
 
 /** The state of a pull request still open, the only one that can be queued again. */
 const OPEN_STATE = "open";
@@ -267,6 +287,10 @@ const FENCE_TAG = {
 function cutMark(reader: string): string {
   return `\n… (cut to fit; read the rest with ${reader})`;
 }
+
+/** What a merged or closed pull request's line closes with: what the agent does next, by its instructions' rule for Done. */
+const ENDED_CLOSE =
+  "If that finishes your task's work, mark it Done as your instructions say; otherwise go on with what is left.";
 
 /** What a review's or a comment's words are read as, said before them. */
 const FENCE_PREAMBLE =
@@ -347,7 +371,7 @@ const CheckRunDeliverySchema = Schema.Struct({
   }),
 });
 
-const DequeuedDeliverySchema = Schema.Struct({
+const PullRequestDeliverySchema = Schema.Struct({
   action: Schema.String,
   reason: Schema.optionalKey(Schema.String),
   repository: RepositorySchema,
@@ -357,6 +381,7 @@ const DequeuedDeliverySchema = Schema.Struct({
     html_url: Schema.String,
     state: Schema.String,
     merged: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+    closed_at: Schema.optionalKey(Schema.NullOr(Schema.String)),
     head: Schema.Struct({ ref: Schema.String }),
   }),
 });
@@ -464,7 +489,7 @@ function commentWake(payload: UnparsedWireValue, now: number): AgentWake | undef
  * names no instant, so it is told as of when it arrived.
  */
 function dequeuedWake(payload: UnparsedWireValue, now: number): AgentWake | undefined {
-  const read = readDelivery(DequeuedDeliverySchema, payload);
+  const read = readDelivery(PullRequestDeliverySchema, payload);
 
   if (Result.isFailure(read)) return undefined;
   const { action, reason, repository, sender, pull_request: pullRequest } = read.success;
@@ -489,6 +514,26 @@ function dequeuedWake(payload: UnparsedWireValue, now: number): AgentWake | unde
     ...githubAvatarOf(sender),
     at: now,
     ...(reason !== undefined && reason !== "" && { reason }),
+  };
+}
+
+/** A pull request merged or closed without merging, as the agent on its branch is told of it. */
+function closedWake(payload: UnparsedWireValue, now: number): AgentWake | undefined {
+  const read = readDelivery(PullRequestDeliverySchema, payload);
+
+  if (Result.isFailure(read) || read.success.action !== WAKE_ACTION.CLOSED) return undefined;
+  const { repository, sender, pull_request: pullRequest } = read.success;
+
+  return {
+    kind: pullRequest.merged === true ? AGENT_WAKE.MERGED : AGENT_WAKE.CLOSED,
+    repository: repository.full_name,
+    branches: [pullRequest.head.ref],
+    pullRequest: pullRequest.number,
+    url: pullRequest.html_url,
+    by: sender.login,
+    ...githubIdOf(sender),
+    ...githubAvatarOf(sender),
+    at: instantOf(pullRequest.closed_at ?? null, now),
   };
 }
 
@@ -652,7 +697,7 @@ export function agentWakeOf(
 ): AgentWake | undefined {
   switch (event) {
     case WAKE_EVENT.PULL_REQUEST:
-      return dequeuedWake(payload, now);
+      return dequeuedWake(payload, now) ?? closedWake(payload, now);
     case WAKE_EVENT.PULL_REQUEST_REVIEW:
       return reviewWake(payload, now);
     case WAKE_EVENT.ISSUE_COMMENT:
@@ -811,6 +856,11 @@ function agentWakeText(
         `Read why with ${reader}: where a check the queue ran failed, it ran on the queue's own \`gh-readonly-queue/\` branch, under the \`merge_group\` event, rather than on yours. Fix the cause and push, bringing your branch up to date with its base only where the cause is a change there, then queue it again with \`gh pr merge --auto\`. Where it needs the developer instead, leave it unqueued and say so.`,
       ].join("\n\n");
     }
+
+    case AGENT_WAKE.MERGED:
+      return `@${wake.by} merged ${pullRequestWords(wake)}\n\n${ENDED_CLOSE}`;
+    case AGENT_WAKE.CLOSED:
+      return `@${wake.by} closed ${pullRequestWords(wake)} It was not merged: leave it closed unless the developer asks otherwise.\n\n${ENDED_CLOSE}`;
   }
 }
 
@@ -821,6 +871,8 @@ const LINE_EVENT_OF_WAKE = {
   [AGENT_WAKE.CHECK_FAILED]: GITHUB_LINE_EVENT.CHECK_FAILED,
   [AGENT_WAKE.CHECKS_COMPLETED]: GITHUB_LINE_EVENT.CHECKS_COMPLETED,
   [AGENT_WAKE.DEQUEUED]: GITHUB_LINE_EVENT.DEQUEUED,
+  [AGENT_WAKE.MERGED]: GITHUB_LINE_EVENT.MERGED,
+  [AGENT_WAKE.CLOSED]: GITHUB_LINE_EVENT.CLOSED,
 } as const;
 
 /** What GitHub's author wrote, trimmed as the line reads it, and cut to the metadata's bound. */
@@ -1052,8 +1104,8 @@ function renderingOfWake(
 /**
  * Whether an agent is told of a delivery, from its newest turn and the
  * login of our own App: never an archived agent; every check finished, or a
- * review, a comment, or the merge queue taking the pull request out by
- * anyone but our App, always; and a failed check, or one of those by our
+ * review, a comment, the merge queue taking the pull request out, or the
+ * pull request merged or closed, by anyone but our App, always; and a failed check, or one of those by our
  * App, only where the agent is not at work and its newest turn ended before
  * GitHub says it was made: the agent did not make that comment, and was not
  * watching when that check failed, so a delivery that arrives after the
@@ -1145,6 +1197,12 @@ function checksOfWake(
   }
 }
 
+/** Whether the agent's task stands open, neither Done nor Canceled, so a turn starting on it reopens nothing; one its owner no longer reaches is not. */
+const onOpenTask = ({ userId, agent }: OwnedAgent) =>
+  Effect.map(readTaskHeader(userId, agent.taskId), (header) =>
+    Option.exists(header, ({ status }) => !isTaskSettled(status)),
+  );
+
 /**
  * The key every check finished is told under: the repository, the commit,
  * and a digest of every check's outcome, so a delivery read again tells
@@ -1191,7 +1249,9 @@ function agentsOf(wake: AgentWake) {
 /**
  * Tells the agent the delivery is about (`agentsOf`), where `agentIsWoken`
  * admits it, through the sessions `sessionsFor` answers for its owner, under
- * the delivery's id; answers how many were told. Every check finished is
+ * the delivery's id; answers how many were told. A pull request merged or
+ * closed is told only where the agent's task stands open (`onOpenTask`).
+ * Every check finished is
  * told only where they all did, under its own key
  * (`checksCompletedKey`). A check line's checks are read on the told
  * agent's token (`headChecksFor`). A send refused is
@@ -1213,9 +1273,14 @@ export const wakeAgents = /* @__PURE__ */ Effect.fn("web/githubWakeAgents")(func
     const agents = yield* agentsOf(wake);
     const turns = yield* latestTurnsOfReached(agents.map(({ agent }) => agent.conversationId));
 
-    const woken = agents.filter(({ agent }) =>
+    const admitted = agents.filter(({ agent }) =>
       agentIsWoken(wake, agent, turns.get(agent.conversationId), appLogin, now),
     );
+
+    // A pull request's end is told to no agent whose task already stands settled.
+    const woken = ENDED_WAKES.has(wake.kind)
+      ? yield* Effect.filter(admitted, onOpenTask)
+      : admitted;
 
     // Read on the told agent's token: the review's inline comments, its rendering, and the head's checks.
     const inline = yield* inlineCommentsOf(wake, woken[0]);

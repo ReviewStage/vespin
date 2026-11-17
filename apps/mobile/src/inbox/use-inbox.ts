@@ -11,6 +11,7 @@
 
 import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import { sizeLabel } from "@repo/features/attachment-model";
+import { base64PictureSize, type ImageDimensions } from "@repo/features/image-signature";
 import {
   INBOX_MEDIA,
   INBOX_SHOW,
@@ -81,7 +82,11 @@ const INBOX_MEDIA_PREFIX = "inbox";
 const INBOX_SCOPE_KEY = "inboxScope";
 
 /** No file of a thread read yet. */
-const NOTHING_READ: ThreadMediaRead = { sources: new Map(), sizes: new Map() };
+const NOTHING_READ: ThreadMediaRead = {
+  sources: new Map(),
+  sizes: new Map(),
+  pictureSizes: new Map(),
+};
 
 /** How one close of a batch resolve came back: taken, answered but not taken, as for a thread settled already, or never answered. */
 const CLOSE_WENT = {
@@ -746,6 +751,8 @@ interface ThreadMediaRead {
   /** What each file is drawn from, by its attachment: an address once read, `null` once its read failed, and absent while it is on its way. */
   readonly sources: ReadonlyMap<string, string | null>;
   readonly sizes: ReadonlyMap<string, string>;
+  /** The size each picture's header states, in pixels, by its attachment, which it stands at before it decodes. */
+  readonly pictureSizes: ReadonlyMap<string, ImageDimensions>;
 }
 
 /** A thread's files as read, and what reads one that failed again. */
@@ -776,6 +783,25 @@ function sourceOf(
   }
 }
 
+/** The files read with one more landed: what it is drawn from, its size in words, and a picture's size in pixels, as its header states it. */
+function withRead(
+  held: ThreadMediaRead,
+  each: InboxMessageMedia,
+  source: string,
+  base64: string,
+): ThreadMediaRead {
+  const pictureSize = each.kind === INBOX_MEDIA.PICTURE ? base64PictureSize(base64) : undefined;
+
+  return {
+    sources: new Map(held.sources).set(each.attachmentId, source),
+    sizes: new Map(held.sizes).set(each.attachmentId, sizeLabel(base64)),
+    pictureSizes:
+      pictureSize === undefined
+        ? held.pictureSizes
+        : new Map(held.pictureSizes).set(each.attachmentId, pictureSize),
+  };
+}
+
 /**
  * What each of a thread's files is drawn from, by its attachment, read once
  * through the host as the panel reads one (`AGENTS_INBOX_ATTACHMENT`): a
@@ -797,6 +823,10 @@ function sourceOf(
 export function useThreadMedia(
   itemId: string | undefined,
   media: readonly InboxMessageMedia[],
+  pending?: (
+    itemId: string,
+    attachmentId: string,
+  ) => { readonly contentType: string; readonly base64: string } | undefined,
 ): ThreadFiles {
   const acts = useHostActs();
   const [read, setRead] = useState<ThreadMediaRead>(NOTHING_READ);
@@ -829,10 +859,23 @@ export function useThreadMedia(
 
         if (asked.current.itemId !== itemId) return;
         setRead((held) => ({
+          ...held,
           sources: new Map(held.sources).set(each.attachmentId, null),
-          sizes: held.sizes,
         }));
       };
+
+      // Note that a file of a reply still on its way is drawn from the reply's own bytes, since the service names its files only once a read carries the reply.
+      const held = pending?.(itemId, each.attachmentId);
+
+      if (held !== undefined) {
+        void sourceOf(each, held)
+          .then((source) => {
+            if (asked.current.itemId !== itemId) return;
+            setRead((was) => withRead(was, each, source, held.base64));
+          })
+          .catch(failed);
+        continue;
+      }
 
       // A video or a sound clip is asked for as the MP4 copy iOS's player plays, which only a recording or an Ogg clip is kept with: one kept without it, an older recording's WebM or any other clip, is answered as it is.
       const played = each.kind === INBOX_MEDIA.VIDEO || each.kind === INBOX_MEDIA.AUDIO;
@@ -850,15 +893,11 @@ export function useThreadMedia(
           const source = await sourceOf(each, answer);
 
           if (asked.current.itemId !== itemId) return;
-          const size = sizeLabel(answer.base64);
-          setRead((held) => ({
-            sources: new Map(held.sources).set(each.attachmentId, source),
-            sizes: new Map(held.sizes).set(each.attachmentId, size),
-          }));
+          setRead((held) => withRead(held, each, source, answer.base64));
         })
         .catch(failed);
     }
-  }, [acts, itemId, media, retries]);
+  }, [acts, itemId, media, retries, pending]);
 
   const retry = useCallback((attachmentId: string) => {
     asked.current.ids.delete(attachmentId);
@@ -866,10 +905,28 @@ export function useThreadMedia(
       const sources = new Map(held.sources);
       sources.delete(attachmentId);
 
-      return { sources, sizes: held.sizes };
+      return { ...held, sources };
     });
     setRetries((count) => count + 1);
   }, []);
 
-  return { ...read, retry };
+  // Note that a picture of a reply still held is drawn from its bytes, at the size its header states, in the render that first draws it, rather than after the read above lands, so its bubble never stands as a spinner or at another shape first.
+  const drawn = useMemo(
+    () =>
+      media.reduce((was, each) => {
+        const bytes =
+          itemId === undefined ||
+          each.kind !== INBOX_MEDIA.PICTURE ||
+          read.sources.has(each.attachmentId)
+            ? undefined
+            : pending?.(itemId, each.attachmentId);
+
+        return bytes === undefined
+          ? was
+          : withRead(was, each, `data:${bytes.contentType};base64,${bytes.base64}`, bytes.base64);
+      }, read),
+    [itemId, media, pending, read],
+  );
+
+  return { ...drawn, retry };
 }

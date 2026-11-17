@@ -37,7 +37,8 @@ import {
  * token Apple says is gone is forgotten, and one registered since is kept.
  * Refreshes that overlap start one activity, an end that crosses a new turn
  * starts it again, a start or an end Apple did not take is tried again by
- * the sweep, a phone set to never take a push has its activity ended, and
+ * the sweep, one near iOS's eight hours is ended and dismissed before a
+ * fresh one starts, a phone set to never take a push has its activity ended, and
  * one member's refresh that dies leaves the sweep standing. One member's
  * refresh never pushes another's phone. Synthetic accounts, agents, and
  * tokens throughout; the test clock starts at the epoch.
@@ -429,6 +430,66 @@ it.layer(getTestDB())("a member's live activity", (it) => {
         const [ended] = yield* listLiveActivityPhones(member);
         assert.equal(ended?.activityToken, null);
         assert.equal(ended?.startedAt, null);
+      }).pipe(Effect.provide(sender.layer));
+    },
+  );
+
+  it.effect(
+    "an activity near iOS's eight hours is ended and dismissed before a fresh one starts",
+    () => {
+      const sender = recordingApnsSender();
+
+      return Effect.gen(function* () {
+        const member = yield* openUser;
+        const { phone, startToken } = yield* phoneOf(member);
+        yield* runningAgent(member, "Fix the refresh");
+        yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+        const activityToken = token();
+        yield* registerLiveActivityToken(
+          member,
+          phone,
+          LIVE_ACTIVITY_TOKEN.ACTIVITY,
+          activityToken,
+        );
+
+        yield* TestClock.adjust("465 minutes");
+        yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+        assert.deepEqual(
+          sender.sent.map((each) => [each.device.token, each.payload.aps.event]),
+          [
+            [startToken, "start"],
+            [activityToken, "end"],
+            [startToken, "start"],
+          ],
+        );
+        // Note that the old activity leaves the lock screen at once rather than standing ended beside the new one.
+        const end = said(sender.sent[1]).aps;
+        assert.equal(end["dismissal-date"], end.timestamp);
+        const [rotated] = yield* listLiveActivityPhones(member);
+        assert.equal(rotated?.activityToken, null);
+        assert.equal(rotated?.startedAt?.getTime(), yield* Clock.currentTimeMillis);
+      }).pipe(Effect.provide(sender.layer));
+    },
+  );
+
+  it.effect(
+    "an activity whose update token never came is not rotated early, since no end could reach it",
+    () => {
+      const sender = recordingApnsSender();
+
+      return Effect.gen(function* () {
+        const member = yield* openUser;
+        yield* phoneOf(member);
+        yield* runningAgent(member, "Fix the refresh");
+        yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+
+        yield* TestClock.adjust("465 minutes");
+        yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+        assert.deepEqual(events(sender.sent), ["start"]);
+
+        yield* TestClock.adjust("15 minutes");
+        yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+        assert.deepEqual(events(sender.sent), ["start", "start"]);
       }).pipe(Effect.provide(sender.layer));
     },
   );

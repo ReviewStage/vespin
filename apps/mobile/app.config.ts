@@ -195,6 +195,13 @@ type AppExtension = {
   readonly SYMBOLS?: readonly string[];
   readonly ENTITLEMENTS?: Readonly<Record<string, PlistValue>>;
   readonly INFO?: Readonly<Record<string, PlistValue>>;
+  /**
+   * System frameworks the target links by name. Note that Swift links an
+   * imported framework only once a symbol of its is used, and a conformance
+   * to an Objective-C protocol uses none, so an extension point whose context
+   * class lives in a framework the code merely conforms to names it here.
+   */
+  readonly FRAMEWORKS?: readonly string[];
 };
 
 const EXTENSION_SWIFT_VERSION = "5.0";
@@ -217,8 +224,8 @@ const INBOX_WIDGET_SNAPSHOT: ExtensionFile = {
   NAME: "InboxWidgetSnapshot.swift",
 };
 
-// The Notification Service Extension, which sets a decide push's buttons and
-// moves the Inbox widget's snapshot by each post that waits on the member.
+// The Notification Service Extension, which moves the Inbox widget's
+// snapshot by each post that waits on the member.
 const NOTIFICATION_SERVICE: AppExtension = {
   TARGET: "NotificationService",
   BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.NotificationService`,
@@ -229,6 +236,34 @@ const NOTIFICATION_SERVICE: AppExtension = {
   EXTENSION_POINT: "com.apple.usernotifications.service",
   PRINCIPAL_CLASS: "NotificationService",
   ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
+};
+
+// The Notification Content Extension, which draws a thread post's Markdown
+// in the expanded notification a long press opens, and sets a decide's options
+// as its buttons; the system's own words for it stay hidden under its view.
+// Note that its categories are `PUSH_CATEGORY`'s decide and reply
+// (`@repo/features/inbox-push-wire`), spelled here since Expo's config loader
+// reads a package only through a TypeScript export, which that one is not.
+const NOTIFICATION_CONTENT: AppExtension = {
+  TARGET: "NotificationContent",
+  BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.NotificationContent`,
+  SOURCES: [{ FROM: "notification-content", NAME: "NotificationViewController.swift" }],
+  EXTENSION_POINT: "com.apple.usernotifications.content-extension",
+  PRINCIPAL_CLASS: "NotificationViewController",
+  // Note that the extension point's context class is UserNotificationsUI's, so an appex that doesn't link it traps as SpringBoard connects.
+  FRAMEWORKS: ["UserNotificationsUI"],
+  ATTRIBUTES: {
+    UNNotificationExtensionCategory: ["inbox-decide", "inbox-reply"],
+    UNNotificationExtensionInitialContentSizeRatio: 0.4,
+    UNNotificationExtensionDefaultContentHidden: true,
+  },
+  COLORS: {
+    Ground: "GROUND",
+    Text: "TEXT",
+    TextMuted: "TEXT_MUTED",
+    Edge: "CHIP_EDGE",
+    Well: "WELL",
+  },
 };
 
 // The Live Activities' button intents, Stop on an agent's row and a voice
@@ -539,7 +574,11 @@ const plistXml = (value: PlistValue, depth: number): string => {
 
   if (Predicate.isBoolean(value)) return `${indent}<${value}/>`;
 
-  if (Predicate.isNumber(value)) return `${indent}<integer>${value}</integer>`;
+  // Note that a whole number is a plist integer and any other a real, such as a content extension's size ratio.
+  if (Predicate.isNumber(value))
+    return Number.isInteger(value)
+      ? `${indent}<integer>${value}</integer>`
+      : `${indent}<real>${value}</real>`;
 
   if (Array.isArray(value))
     return `${indent}<array>\n${value.map((item) => plistXml(item, depth + 1)).join("\n")}\n${indent}</array>`;
@@ -726,6 +765,11 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
         ...(entitlements.length === 0
           ? undefined
           : { CODE_SIGN_ENTITLEMENTS: `${extension.TARGET}/${entitlements[0]}` }),
+        ...(extension.FRAMEWORKS === undefined
+          ? undefined
+          : {
+              OTHER_LDFLAGS: `"${["$(inherited)", ...extension.FRAMEWORKS.map((name) => `-framework ${name}`)].join(" ")}"`,
+            }),
       });
     }
 
@@ -1025,11 +1069,12 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
   });
 
 // The images the screens draw and the flat app icon, written into the asset
-// catalog over the rest, and the Notification Service Extension, the Live
-// Activity's widget extension, and the share extension beside the app, with
+// catalog over the rest, and the Notification Service and Content
+// Extensions, the Live Activity's widget extension, and the share extension
+// beside the app, with
 // the Stop intent the widget draws built into the app as well.
 const config = (context?: ConfigContext): ExpoConfig =>
-  [NOTIFICATION_SERVICE, LIVE_ACTIVITY, SHARE_EXTENSION].reduce(
+  [NOTIFICATION_SERVICE, NOTIFICATION_CONTENT, LIVE_ACTIVITY, SHARE_EXTENSION].reduce(
     withAppExtension,
     withLiveActivityIntents(withMarketingIcon(withImageSets(baseConfig(context)))),
   );

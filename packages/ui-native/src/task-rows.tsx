@@ -384,13 +384,21 @@ export function AgentRow(props: AgentRowProps) {
   const column = useNestColumn();
   const folding = startedFold(name);
 
+  // Note that the whole row takes a press, its tile and the room between its pieces included, so a tap on the tile opens the agent as a tap on its name does.
   const row: ReactElement = (
-    <VStack alignment="leading" spacing={2} modifiers={[padding({ leading: depth * column })]}>
+    <VStack
+      alignment="leading"
+      spacing={2}
+      modifiers={[
+        padding({ leading: depth * column }),
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+      ]}
+    >
       <RowHead
         unread={false}
         faded={false}
         fold={fold === undefined ? undefined : <FoldChevron fold={fold} words={folding} />}
-        lead={<AgentTile name={name} harness={harness} size={tile} />}
+        lead={<AgentTile harness={harness} size={tile} />}
         title={name}
         ink={colors.TEXT}
         end={
@@ -623,7 +631,7 @@ function VersionMark({ writer }: { readonly writer: VersionWriter }) {
     case VERSION_WRITER.PERSON:
       return <Avatar name={writer.face.name} picture={writer.face.picture} size={size} />;
     case VERSION_WRITER.AGENT:
-      return <AgentTile name={writer.name} harness={writer.harness} size={size} />;
+      return <AgentTile harness={writer.harness} size={size} />;
     case VERSION_WRITER.EARLIER:
       return <LeadGlyph symbol={GLYPH.HISTORY} ink={colors.TEXT_MUTED} />;
   }

@@ -8,7 +8,7 @@
  * `inboxPushResponseOf` turns a tap or an action into the screen it opens
  * and what the app sends there. A decide's buttons are named by each
  * option's place in the payload's `options`, 0 first, which the app's
- * Notification Service Extension writes as each action's identifier; a
+ * Notification Content Extension writes as each action's identifier; a
  * reply typed in place comes back under `INBOX_PUSH_ACTION.REPLY`. The
  * app's share extension posts one notification of its own, a local one
  * naming the task it started (`PUSH_KIND.SHARE_STARTED`), which a tap opens
@@ -33,7 +33,7 @@ export const PUSH_KIND = {
   SHARE_STARTED: "share-started",
 } as const;
 
-/** The actions the app offers on an alert, as its `aps.category` names them; the app registers each. */
+/** The actions the app offers on an alert, as its `aps.category` names them; the app registers each, and its config names the decide and reply for its content extension (`apps/mobile/app.config.ts`). */
 export const PUSH_CATEGORY = {
   /** A decide that takes one option: a button per option, labeled from the payload's `options`. */
   DECIDE: "inbox-decide",
