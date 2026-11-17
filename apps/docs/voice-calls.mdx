@@ -1,32 +1,35 @@
 ---
 title: "Voice calls"
-description: "Talk to an agent out loud through a voice that relays to it and tells you what it did"
+description: "Talk to an agent out loud"
 ---
 
-A voice call lets you talk to an agent out loud. A voice answers you, hands what you ask to the agent, and tells you in its own words what the agent did.
+A voice call lets you talk to an agent instead of typing. A voice answers you, passes what you ask on to the agent, and tells you what the agent did.
 
 ## Start a call
 
-While an agent's message box is empty, **Talk** stands in place of **Send**. Press it to call that agent. In a box that starts a new agent, **Talk** starts the agent and calls it, and your first words become its first message. If you hang up without saying anything, the new agent is deleted.
+When an agent's message box is empty, **Talk** appears in place of **Send**. Press it to call the agent.
 
-Calls work in the Mac app and on the web. A window holds one call at a time, and **Talk** on another agent asks to end the call you're on first.
+You can also call from the box that starts a new agent. Your first words become the agent's first message, and if you hang up without saying anything, the agent is deleted.
 
-## What a call needs
+Calls work in the Mac app and on the web, one call per window at a time.
 
-A call runs on your own OpenAI API key, never Vespin's. Add one on the **Codex** card in **Settings › Agents**; a ChatGPT plan doesn't count. Without a key, **Talk** reads **Add an OpenAI API key** and opens that page.
+## What you need
 
-Choose how the call sounds under **Voice** on the same page. A new voice applies on the next call. In the Mac app, **Prefer the Mac's microphone** in **Settings › This Mac** applies to calls as well as dictation.
+Calls run on your own OpenAI API key. Add one to the **Codex** card in **Settings › Agents**. A ChatGPT plan doesn't work for calls. Without a key, **Talk** reads **Add an OpenAI API key**.
+
+You can pick the voice under **Voice** on the same page. In the Mac app, **Prefer the Mac's microphone** in **Settings › This Mac** applies to calls too.
 
 ## During a call
 
-The voice starts with the agent's name, its task's name, and the agent's newest messages. It hands the agent every request, decision, and correction you make, and never claims to have done the work itself. As the agent works and replies, the voice tells you briefly what it did and what waits on you. What you ask while the agent's turn runs is queued until the turn ends.
+The voice knows the agent's name, its task, and its latest messages. It passes along every request, decision, and correction you make. As the agent works, the voice tells you what it did and what it needs from you. Anything you say while the agent is mid-turn is queued for when the turn ends.
 
-- **Mute microphone** stops the voice hearing you. **Mute speaker** silences the voice on this device alone.
-- **End call** hangs up and leaves the agent working. The agent's **Stop** stops it.
-- A line you type in the box goes to the agent as usual. Dictation is off while the call holds the microphone.
-- Away from the agent, a call card sits at the foot of the sidebar, and its agent's name takes you back. In the Mac app, the card floats over other windows while you work in another app.
-- Closing the window ends the call.
+- **Mute microphone** stops the voice from hearing you. **Mute speaker** mutes the voice on this device only.
+- **End call** hangs up and leaves the agent working. To stop the agent, press **Stop**.
+- You can still type to the agent during a call.
+- If you leave the agent's page, the call moves to a card at the bottom of the sidebar. In the Mac app, the card floats above other windows.
+
+Closing the window ends the call.
 
 ## What's kept
 
-The call's audio goes between your window and OpenAI and is never stored. What you and the voice said is kept as text in the agent's transcript, one message per utterance. Your words reach the agent as your messages. The voice's words stay in the transcript but are never handed to the agent's model. Vespin keeps the call's length on your usage for the day.
+Audio goes only between your window and OpenAI, and is never stored. What you and the voice say is kept as text in the agent's transcript. Your words reach the agent as messages. The voice's words appear in the transcript but are never sent to the agent's model. Call time counts toward your daily usage.

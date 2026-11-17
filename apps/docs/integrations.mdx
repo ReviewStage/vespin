@@ -3,21 +3,21 @@ title: "Integrations"
 description: "Connect your accounts at other services so your agents can use their tools"
 ---
 
-An integration connects one of your accounts at another service, such as Linear or Notion, to your agents as an MCP server. Your agents then use that service's tools as you, with what your account there can see and do.
+An integration gives your agents the tools of an account you have at another service, such as Linear or Notion. Agents use those tools as you, so they can see and do what your account can.
 
 ## Connect an account
 
-Integrations belong to your Vespin account, not to a workspace. In **Settings › Integrations**, press **Connect** on a row and sign in to the provider in your browser. A row moves to **Connected** once the provider's server answers with its tools. If a sign-in expires, use **Reconnect**.
+Integrations belong to you, not to a workspace. In **Settings › Integrations**, click **Connect** next to a service and sign in. If a sign-in expires later, click **Reconnect**.
 
-The **GitHub** row uses the GitHub you sign in to Vespin with, and gives agents GitHub's tools as you. A workspace's repositories come from the GitHub connected in **Settings › Workspace** instead.
+The **GitHub** integration uses the GitHub account you sign in to Vespin with. It's separate from the GitHub connection in **Settings › Workspace**, which gives agents access to your repositories.
 
-The **Slack** row also tells Vespin's Slack bot who you are. See [Slack](/slack).
+Connecting **Slack** also lets Vespin's Slack bot recognize you. See [Slack](/slack).
 
-## Providers
+## Services
 
-Some providers aren't offered to every account. A provider not offered to you has no row.
+Which services you see can depend on your account.
 
-| Provider | What agents get |
+| Service | What agents get |
 | --- | --- |
 | Executor | The apps, APIs, and skills you set up in Executor |
 | GitHub | Issues, pull requests, and code, as you |
@@ -40,16 +40,18 @@ Some providers aren't offered to every account. A provider not offered to you ha
 
 ## More than one account
 
-Where a provider takes more than one account, such as two Notion workspaces, use **Add another account** in its row's ⋯ menu. Each account gets its own row and reaches your agents as its own server. Once you hold more than one, **Rename** in the ⋯ menu names an account. When the agent doesn't know which account you mean, it asks before it writes.
+Some services let you connect more than one account, such as two Notion workspaces. Choose **Add another account** from the **⋯** menu, and use **Rename** to tell them apart. When an agent isn't sure which account you mean, it asks before making changes.
 
 ## What agents get
 
-Every agent you start gets every tool of each integration you connected, including tools that write. Automation runs get them too, since they run as you, and an automation's form has its own **MCP servers** field. To turn an integration off for one agent, open **MCP servers** from the agent box's + menu. Mention a server with `@` to hand it to that agent's next turn only, even while it's off.
+Every agent you start can use every tool from your connected integrations, including tools that make changes. Automation runs get them too, since they run as you.
 
-Anything a tool answers, including a credential the provider returns, reaches the agent's model and its transcript.
+To turn an integration off for one agent, open **MCP servers** from the **+** menu in its message box. You can also `@`-mention a server to give the agent access for its next turn only.
+
+Anything a tool returns, including a credential, ends up in the agent's transcript and is sent to its model.
 
 ## Disconnect
 
-Use **Disconnect** in a row's ⋯ menu. It asks first, then revokes the grant at the provider, and agents lose the account at their next call. Your other accounts at that provider stay connected. On the GitHub row, **Disconnect** unlinks the GitHub you sign in with.
+Choose **Disconnect** from the **⋯** menu. Vespin revokes its access at the service, and agents lose the account on their next call. Other accounts at the same service stay connected.
 
-From a terminal, `vespin integrations` lists, connects, renames, and disconnects your accounts, and lists each one's tools. See [Workspace](/cli/workspace).
+From a terminal, use `vespin integrations`. See [Workspace](/cli/workspace).

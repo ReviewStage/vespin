@@ -3,7 +3,7 @@ title: "Cloud environment"
 description: "Variables, software, setup scripts, and run actions for your cloud agents"
 ---
 
-Each cloud agent works in its own sandbox: a Linux machine with a checkout of the task's repository. **Settings › Cloud environment** sets up what every sandbox in the workspace starts with. Owners and admins edit it. Members can read the scripts, every variable's name, and a config variable's value.
+Each cloud agent works in its own sandbox: a Linux machine with a checkout of the task's repository. **Settings › Cloud environment** sets up what every sandbox in the workspace starts with. Owners and admins edit it. Members can read the scripts, the variable names, and the values of config variables.
 
 <Frame>
   <img src="/images/cloud-environment.png" alt="Settings, Cloud environment: Sandbox at 2 vCPUs and 4 GB, five variables with who added each, two of them configs with their values hidden behind a show button, and the install script" />
@@ -15,7 +15,7 @@ Every cloud agent in the workspace runs at one size, which owners and admins cho
 
 ## Variables
 
-Variables are set in every cloud agent's sandbox, in every repository. Use them for the keys your tests and dev server need. A **Secret**'s value is hidden once it's saved, and a **Config**'s value stays visible to everyone in the workspace. Use **Edit** in its row's menu to change one.
+Variables are set in every cloud agent's sandbox, in every repository. Use them for the keys your tests and dev server need. A **Secret** is hidden once it's saved. A **Config** stays visible to everyone in the workspace. To change a value, choose **Edit** from the variable's **⋯** menu.
 
 The agent can read a variable's value, so anything it prints may reach its model and transcript. Agents on a Mac don't get these variables; they use the Mac's own environment.
 
