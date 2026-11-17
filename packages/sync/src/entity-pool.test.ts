@@ -8,6 +8,8 @@ import {
   type FieldChange,
   fieldKind,
   type HeldRows,
+  type KeptAnswer,
+  type KeptRead,
   type WriteDeclaration,
 } from "./entity-pool.js";
 
@@ -313,4 +315,111 @@ it.effect(
       assert.deepEqual(list.rows.rows(), [{ id: "1", name: "Triage issues", runs: 0 }]);
       assert.equal(refusedCount.now, 0, "a write let go is not told as one the service refused");
     }).pipe(Effect.scoped),
+);
+
+/** A pool whose store records each kept answer, and a kept read stood on it in a scope the test closes. */
+function keptStanding(kept: KeptRead<Row>) {
+  return Effect.gen(function* () {
+    const told: KeptAnswer[] = [];
+
+    const pool = yield* entityPool({
+      mintKey: () => "key",
+      replayRefused: Effect.void,
+      store: { rows: { answered: (answer) => Effect.sync(() => void told.push(answer)) } },
+    });
+
+    const scope = yield* Scope.make();
+
+    const rows = yield* Scope.provide(scope)(
+      pool.stand(ROW, { redraw: () => Effect.void, confirmation: () => undefined, kept }),
+    );
+
+    return { pool, rows, told, letGo: Scope.close(scope, Exit.void) };
+  });
+}
+
+it.effect(
+  "a kept read hands the store the synced rows that moved and the keys it holds, and nothing as it closes",
+  () =>
+    Effect.gen(function* () {
+      const { pool, rows, told, letGo } = yield* keptStanding({
+        name: "feed",
+        kind: "row",
+        workspace: "w",
+      });
+
+      const triage = { id: "1", name: "Triage", runs: 0 };
+      const deploy = { id: "2", name: "Deploy", runs: 0 };
+      yield* rows.answer([triage, deploy], { cursor: { syncId: 1 } });
+
+      // Note that a write standing over a row never reaches the store; only the service's next answer does.
+      const rename = yield* Effect.forkChild(
+        pool.write({ ...MAKES, change: () => () => ({ name: "Renamed" }) }, deploy),
+      );
+
+      yield* settled;
+      const ship = { id: "3", name: "Ship", runs: 0 };
+      yield* rows.answer([{ ...deploy, runs: 1 }, ship], { cursor: { syncId: 2 } });
+      yield* Fiber.interrupt(rename);
+      yield* letGo;
+
+      assert.deepEqual(told, [
+        {
+          read: "feed",
+          kind: "row",
+          workspace: "w",
+          upserted: [
+            { key: "1", row: triage },
+            { key: "2", row: deploy },
+          ],
+          deleted: [],
+          held: ["1", "2"],
+          cursor: { syncId: 1 },
+        },
+        {
+          read: "feed",
+          kind: "row",
+          workspace: "w",
+          upserted: [
+            { key: "2", row: { ...deploy, runs: 1 } },
+            { key: "3", row: ship },
+          ],
+          deleted: ["1"],
+          held: ["2", "3"],
+          cursor: { syncId: 2 },
+        },
+      ]);
+    }),
+);
+
+it.effect(
+  "a bounded kept read hands the store only its first rows that fit, and no cursor once it leaves one out",
+  () =>
+    Effect.gen(function* () {
+      const { rows, told } = yield* keptStanding({
+        name: "inbox",
+        kind: "row",
+        bound: { size: (row) => row.name.length, within: 10 },
+      });
+
+      const triage = { id: "1", name: "Triage", runs: 0 };
+      const ship = { id: "2", name: "Ship", runs: 0 };
+      yield* rows.answer([triage, ship], { cursor: "c1" });
+      yield* rows.answer([triage, ship, { id: "3", name: "Deploy", runs: 0 }], { cursor: "c2" });
+
+      assert.deepEqual(
+        told.map(({ upserted, held, cursor }) => ({ upserted, held, cursor })),
+        [
+          {
+            upserted: [
+              { key: "1", row: triage },
+              { key: "2", row: ship },
+            ],
+            held: ["1", "2"],
+            cursor: "c1",
+          },
+          { upserted: [], held: ["1", "2"], cursor: undefined },
+        ],
+      );
+    }),
 );
