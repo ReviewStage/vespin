@@ -220,10 +220,13 @@ const SESSIONS_API = {
  * How a delete waits on a session it stopped before reading what it used:
  * Vercel answers a stop at once and stops the session after, which took up
  * to 21 seconds of 38 stops read on Nov 17, 2026 (2.7 at the median), and
- * only a stopped session's figures are whole. One still not stopped by the
- * last read is left uncharged.
+ * only a stopped session's figures are whole. Note that the wait is held to
+ * about ten seconds, because a deleted workspace's deletes each run under 15
+ * (`@repo/service`'s `ARCHIVE_DELETE.TIMEOUT`), and one cut off there leaves
+ * its sandbox standing; a session still not stopped by the last read is left
+ * uncharged.
  */
-const STOP_WAIT = { POLL: Duration.seconds(1), TRIES: 30 } as const;
+const STOP_WAIT = { POLL: Duration.seconds(1), TRIES: 10 } as const;
 
 /** How a session Vercel lists ended, by its status; one still up, or on its way, ended in none. */
 const SESSION_END_OF_VERCEL: ReadonlyMap<string, SessionEnd> = new Map([
@@ -1209,7 +1212,7 @@ function vercelSandbox(
   /**
    * The named sandbox's ended sessions, read just before its delete: its
    * running session stopped first, and the sessions read again until none is
-   * still on its way down, at most `STOP_WAIT.TRIES` times. A sandbox gone
+   * still on its way down, at most `STOP_WAIT.TRIES` times more. A sandbox gone
    * has none, and a read that failed says so rather than failing the delete.
    */
   const endedBeforeDelete = (name: string): Effect.Effect<DeleteCapture> =>
