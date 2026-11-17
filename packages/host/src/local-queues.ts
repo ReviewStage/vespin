@@ -6,11 +6,7 @@
  * statement, before the pool first sends it, and deleted as it stands
  * down, so the disk holds what the pool holds and nothing saves the queue
  * from memory. A launch reads it back oldest first, to lay it back over
- * the pool (`requeue`). The first launch of a database that never imported
- * them, and that read `entities.sealed`, takes in each waiting write an
- * older build kept there whose key the outbox does not hold, in the same
- * transaction that marks them imported (`META_KEY.OUTBOX_IMPORTED`), so
- * they are imported once and never again.
+ * the pool (`requeue`).
  *
  * The refused messages are kept in the form `agent-queue-writes.ts` hands
  * them out (`refusedKept`): each time that record moves, the entries it no
@@ -25,7 +21,7 @@
 
 import type { OutboxStore, QueuedEntry } from "@repo/sync";
 import { Data, Effect, Schema } from "effect";
-import { type LocalDatabaseConnection, META_KEY } from "./local-database.js";
+import type { LocalDatabaseConnection } from "./local-database.js";
 
 /** The tables a read of the queues may fail on. */
 export const LOCAL_QUEUE = {
@@ -67,34 +63,6 @@ function inTransaction(connection: LocalDatabaseConnection, step: () => void): v
   }
 }
 
-/**
- * `sealed` inserted into `connection`'s outbox behind its own, oldest first,
- * where it never imported any, and marked imported, in one transaction.
- * Note that a write whose key the outbox holds already is skipped, since a
- * build that wrote both kept it in each, and that one already sent and
- * gone from the outbox is harmless to send again, since the service takes
- * a key once.
- */
-function imported(connection: LocalDatabaseConnection, sealed: readonly QueuedEntry[]): void {
-  inTransaction(connection, () => {
-    const [mark] = connection
-      .prepare("SELECT value FROM meta WHERE key = ?")
-      .all(META_KEY.OUTBOX_IMPORTED);
-
-    if (mark !== undefined) return;
-
-    const inserted = connection.prepare(
-      "INSERT OR IGNORE INTO outbox (name, idempotency_key, input) VALUES (?, ?, ?)",
-    );
-
-    for (const entry of sealed) inserted.run(entry.name, entry.key, JSON.stringify(entry.input));
-
-    connection
-      .prepare("INSERT INTO meta (key, value) VALUES (?, ?)")
-      .run(META_KEY.OUTBOX_IMPORTED, "1");
-  });
-}
-
 /** An `outbox` row as the driver answers it, its input parsed from its JSON. */
 const outboxRowSchema = Schema.Struct({
   name: Schema.String,
@@ -114,10 +82,8 @@ const decodeRefusedTexts = Schema.decodeUnknownSync(Schema.Array(refusedTextSche
 
 /** The account's waiting writes in `connection`, as the pool reports them and a launch reads them back. */
 export interface LocalOutbox extends OutboxStore {
-  /** Every waiting write kept, oldest added first, `sealed` imported first where this database never imported any; none where `entities.sealed` was not read, which imports nothing and marks nothing. */
-  readonly restored: (
-    sealed: readonly QueuedEntry[] | undefined,
-  ) => Effect.Effect<readonly QueuedEntry[], LocalQueueReadFailed>;
+  /** Every waiting write kept, oldest added first. */
+  readonly restored: Effect.Effect<readonly QueuedEntry[], LocalQueueReadFailed>;
 }
 
 /** The account's refused agent messages in `connection`, in the form `agent-queue-writes.ts` hands them out. */
@@ -142,19 +108,13 @@ export function localOutbox(connection: LocalDatabaseConnection): LocalOutbox {
       committed(LOCAL_QUEUE.OUTBOX, () =>
         connection.prepare("DELETE FROM outbox WHERE idempotency_key = ?").run(entry.key),
       ),
-    restored: (sealed) =>
-      Effect.try({
-        try: () => {
-          if (sealed !== undefined) imported(connection, sealed);
-
-          return decodeOutboxRows(
-            connection
-              .prepare("SELECT name, idempotency_key, input FROM outbox ORDER BY seq")
-              .all(),
-          ).map(({ name, idempotency_key, input }) => ({ name, key: idempotency_key, input }));
-        },
-        catch: (cause) => new LocalQueueReadFailed({ queue: LOCAL_QUEUE.OUTBOX, cause }),
-      }),
+    restored: Effect.try({
+      try: () =>
+        decodeOutboxRows(
+          connection.prepare("SELECT name, idempotency_key, input FROM outbox ORDER BY seq").all(),
+        ).map(({ name, idempotency_key, input }) => ({ name, key: idempotency_key, input })),
+      catch: (cause) => new LocalQueueReadFailed({ queue: LOCAL_QUEUE.OUTBOX, cause }),
+    }),
   };
 }
 

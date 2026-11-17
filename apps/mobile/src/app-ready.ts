@@ -80,7 +80,6 @@ export function useAppReadyCount(shown: boolean): void {
       ...(stood?.ms === undefined
         ? undefined
         : { standing_seconds: productLaunchSeconds(stood.ms) }),
-      ...(stood === undefined ? undefined : { kept_store: stood.keptStore }),
       ...(BUILD_NUMBER === undefined ? undefined : { app_build: BUILD_NUMBER }),
       first_rows: firstShownKept ? PRODUCT_FIRST_ROWS.KEPT : PRODUCT_FIRST_ROWS.FEED,
     });

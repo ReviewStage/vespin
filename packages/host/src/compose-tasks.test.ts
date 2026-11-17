@@ -273,11 +273,11 @@ it.effect(
         });
 
         const launch = yield* subject(service, { pool });
-        yield* local.open(
-          "user-dana",
-          { kept: () => [], moves: Stream.empty, restored: () => Effect.void },
-          { queue: undefined },
-        );
+        yield* local.open("user-dana", {
+          kept: () => [],
+          moves: Stream.empty,
+          restored: () => Effect.void,
+        });
         yield* launch.open;
 
         return launch;
@@ -324,11 +324,11 @@ const launchedOver = (directory: string, key: string) =>
       store: copy.store,
     });
 
-    const waiting = yield* copy.open(
-      "user-dana",
-      { kept: () => [], moves: Stream.empty, restored: () => Effect.void },
-      { queue: undefined },
-    );
+    const waiting = yield* copy.open("user-dana", {
+      kept: () => [],
+      moves: Stream.empty,
+      restored: () => Effect.void,
+    });
 
     return { pool, waiting };
   });
