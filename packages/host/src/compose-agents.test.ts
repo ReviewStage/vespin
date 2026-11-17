@@ -46,7 +46,7 @@ import {
 } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppTranscript } from "./app-state.js";
-import { localCopy, type SealedQueues } from "./local-copy.js";
+import { localCopy } from "./local-copy.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
 import { taskListCollections } from "./task-list-collections.js";
 import {
@@ -968,16 +968,15 @@ it.effect(
 /** The platform a local database stands on here: Node's SQLite over a disk of the test's own. */
 const localPlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, nodeSqliteDriverLayer);
 
-/** Dana's local database over `stateRoot` opened as a sign-in opens it, laying back `harness`'s refused messages, and `sealed`'s where its table holds none. */
+/** Dana's local database over `stateRoot` opened as a sign-in opens it, laying back `harness`'s refused messages. */
 function signedInLocal(
   stateRoot: string,
   harness: Effect.Success<ReturnType<typeof queueFollowed>>,
-  sealed: SealedQueues = { queue: undefined },
 ) {
   return Effect.gen(function* () {
     const scope = yield* Scope.make();
     const local = yield* localCopy(stateRoot).pipe(Scope.provide(scope));
-    yield* local.open("user-dana", harness.refused, sealed);
+    yield* local.open("user-dana", harness.refused);
     yield* settled;
 
     return { local, quit: Scope.close(scope, Exit.void) };
@@ -1025,36 +1024,6 @@ it.effect(
       const after = yield* queueFollowed();
       yield* (yield* signedInLocal(stateRoot, after)).quit;
       assert.deepEqual(refusedDrawn(after), [SENT_REFUSED]);
-    }).pipe(Effect.provide(localPlatform)),
-);
-
-it.effect(
-  "a message refused that an older build kept in entities.sealed is drawn after the upgrade, taken into the local database once, and the file told to drop it",
-  () =>
-    Effect.gen(function* () {
-      const stateRoot = yield* temporaryDirectoryScoped("compose-agents-local-");
-      const before = yield* refusedSent;
-      let imported = false;
-
-      // Note that what the file kept went through JSON, as the sealed file does.
-      const sealed: SealedQueues = {
-        queue: undefined,
-        refused: {
-          entries: JSON.parse(JSON.stringify(before.refused.kept())),
-          imported: Effect.sync(() => {
-            imported = true;
-          }),
-        },
-      };
-
-      const upgraded = yield* queueFollowed();
-      yield* (yield* signedInLocal(stateRoot, upgraded, sealed)).quit;
-      assert.deepEqual(refusedDrawn(upgraded), [SENT_REFUSED]);
-      assert.equal(imported, true);
-
-      const relaunched = yield* queueFollowed();
-      yield* (yield* signedInLocal(stateRoot, relaunched)).quit;
-      assert.deepEqual(refusedDrawn(relaunched), [SENT_REFUSED]);
     }).pipe(Effect.provide(localPlatform)),
 );
 

@@ -680,8 +680,8 @@ interface AgentTurnPlace {
   readonly workers?: ReadonlyMap<string, ToolState>;
   /** The developer's lines that reached the turn while it ran (`arrivedIn`), each drawn among its parts after the steps it arrived after. */
   readonly arrived?: readonly AgentTranscriptMessage[];
-  /** Whether the voice told the turn's reply on a call (`voice-call-lines.ts`'s `toldTurnsOf`), which folds its words with its work once it has finished. */
-  readonly told?: boolean;
+  /** Whether a call's delegation opened the turn (`voice-call-lines.ts`'s `delegatedTurnsOf`), which folds its words with its work once it has finished. */
+  readonly delegated?: boolean;
 }
 
 /** The `connection_execute` calls among the parts that an integration's own call ran under, by their ids. */
@@ -915,13 +915,13 @@ export function followUpsWords(chosen: readonly string[]): string | undefined {
  * its agent's does, since a run of calls reads the same whoever made it.
  * The agent's words and every set of pictures, page, and recording it
  * showed stand on rows of their own, never folded, and its words too but
- * on a finished turn the voice told (`told`). A line that reached the
+ * on a finished turn a call's delegation opened (`delegated`). A line that reached the
  * turn while it ran (`arrived`) stands among its parts where it arrived.
  */
 export function agentRows(
   message: AgentTranscriptMessage,
   moving: boolean,
-  { workers = NO_WORKERS, arrived = [], told = false }: AgentTurnPlace = {},
+  { workers = NO_WORKERS, arrived = [], delegated = false }: AgentTurnPlace = {},
 ): readonly TurnRow<AgentPart>[] {
   const drawn = drawnParts(message, arrived);
   // Note that a turn that ended with `end_turn` reads its summary as its reply, and the words it wrote on the way as notes, which fold away with its work.
@@ -943,7 +943,7 @@ export function agentRows(
       (part.kind === AGENT_PART.TOOL && workers.get(part.callId) === TOOL_STATE.INPUT_AVAILABLE),
   };
 
-  return turnRows(parts, reading, { moving, told });
+  return turnRows(parts, reading, { moving, delegated });
 }
 
 /** One of a transcript's rows as the tab draws it, with the developer's lines that reached it while its turn ran. */

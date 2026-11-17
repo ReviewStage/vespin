@@ -185,6 +185,7 @@ import {
   useAppCommand,
   useOverlayHold,
 } from "../app-commands.js";
+import { useBillingShown } from "../billing.js";
 import {
   COMMAND_PLACE,
   commandWords,
@@ -1694,10 +1695,11 @@ function useOpenThingKeys(
 function settingsPageRows(
   capabilities: readonly HostCapability[],
   experiments: ExperimentChoices,
+  billing: boolean,
   open: (page: SettingsView) => void,
 ): readonly PaletteRow[] {
   return SETTINGS_PAGE_LIST.filter((page) =>
-    settingsPageShown(page, capabilities, experiments),
+    settingsPageShown(page, capabilities, experiments, billing),
   ).map((page) => {
     const { title, icon } = settingsPageOf(page);
 
@@ -2021,6 +2023,7 @@ export function CommandPalette({
   const [open, setOpen] = useState(false);
   // The experiments on in the workspace the window lists, the account's own beside them.
   const experiments = useExperimentsIn(tasks.workspace?.id);
+  const billing = useBillingShown(tasks.workspace);
   const inboxWaiting = useInboxWaitingTasks();
   // Note that the palette stands outside a task page, so it reads the open task's workspace's members itself, the reader among them, which a starter's face is told from.
   const directory = useWorkspaceDirectory(tasks.workspace);
@@ -2433,7 +2436,7 @@ export function CommandPalette({
       ].map((row) => ({ ...row, loose: true })),
     ],
     [PALETTE_FILTER.SETTINGS]: () => [
-      settingsPageRows(settings.capabilities, experiments, openPage),
+      settingsPageRows(settings.capabilities, experiments, billing, openPage),
       settingRows(settings.rows, land),
     ],
   } as const satisfies Record<

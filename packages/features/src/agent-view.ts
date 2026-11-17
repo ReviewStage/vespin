@@ -26,6 +26,7 @@ import {
   refusedDeviceSchema,
 } from "./agent-wire.js";
 import { AUDIO_TYPE } from "./audio-signature.js";
+import { billingRequiredDataSchema } from "./billing-refusal-wire.js";
 import { accountContract } from "./contract/account.js";
 import { agentPullRequestsContract } from "./contract/agent-pull-requests.js";
 import { agentsContract } from "./contract/agents.js";
@@ -66,6 +67,7 @@ import {
   chatGptDeviceStartRequestSchema,
   modelApiProviderSchema,
   PROVIDER_KEY_PROVIDER,
+  planUsageRefreshRequestSchema,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
   providerKeyResetCreditRequestSchema,
@@ -141,6 +143,7 @@ const AGENT_ACCOUNT_CALLS = {
     saveProviderKey: accountContract.saveProviderKey,
     setProviderKeyForAgents: accountContract.setProviderKeyForAgents,
     useResetCredit: accountContract.useResetCredit,
+    refreshPlanUsage: accountContract.refreshPlanUsage,
     renameSubscription: accountContract.renameSubscription,
     reorderSubscriptions: accountContract.reorderSubscriptions,
     removeProviderKey: accountContract.removeProviderKey,
@@ -342,7 +345,7 @@ const failed = EffectSchema.Struct({
   cause: EffectSchema.optionalKey(failureFactsSchema),
 });
 
-/** A failed start or message, with why the repository is out of reach where it is and the service said (`repository-reach-wire.ts`), when a plan's reached limit resets where it is that, the provider whose credential is missing where it is that, and why the task's device would not take the agent, with the device and its owner where it is another member's, where it is that. */
+/** A failed start or message, with why the repository is out of reach where it is and the service said (`repository-reach-wire.ts`), when a plan's reached limit resets where it is that, the provider whose credential is missing where it is that, why the task's device would not take the agent, with the device and its owner where it is another member's, where it is that, and why billing refused a cloud agent, and whether the reader manages billing, where it is that. */
 const failedReaching = EffectSchema.Struct({
   ...failed.fields,
   unreached: EffectSchema.optionalKey(repositoryUnreachedSchema),
@@ -350,6 +353,7 @@ const failedReaching = EffectSchema.Struct({
   provider: EffectSchema.optionalKey(modelProviderSchema),
   localAgentRefusal: EffectSchema.optionalKey(localAgentRefusalSchema),
   refusedDevice: EffectSchema.optionalKey(refusedDeviceSchema),
+  ...billingRequiredDataSchema.fields,
 });
 
 /**
@@ -529,6 +533,11 @@ export type ProviderKeyForAgentsParams = typeof providerKeyForAgentsParamsSchema
 export const providerKeyResetCreditParamsSchema = providerKeyResetCreditRequestSchema;
 
 export type ProviderKeyResetCreditParams = typeof providerKeyResetCreditParamsSchema.Type;
+
+/** Checking a plan's usage again now, as the window asks it: the plan. */
+export const planUsageRefreshParamsSchema = planUsageRefreshRequestSchema;
+
+export type PlanUsageRefreshParams = typeof planUsageRefreshParamsSchema.Type;
 
 /** Naming a subscription, as the window asks it: which one, and its name or none for its default. */
 export const subscriptionLabelParamsSchema = subscriptionLabelRequestSchema;

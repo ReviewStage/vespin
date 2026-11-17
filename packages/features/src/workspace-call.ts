@@ -1,3 +1,4 @@
+import { billingContract } from "./contract/billing.js";
 import { githubContract } from "./contract/github.js";
 import { workspaceEnvironmentContract } from "./contract/workspace-environment.js";
 import { workspaceGithubContract } from "./contract/workspace-github.js";
@@ -43,6 +44,7 @@ const WORKSPACE_CALLS = {
   workspaceEnvironment: workspaceEnvironmentContract,
   workspaceSandboxSetup: workspaceSandboxSetupContract,
   workspaceSandboxSize: workspaceSandboxSizeContract,
+  billing: billingContract,
   workspaceMergeQueue: workspaceMergeQueueContract,
   workspaceGithub: workspaceGithubContract,
   workspaceSentry: workspaceSentryContract,

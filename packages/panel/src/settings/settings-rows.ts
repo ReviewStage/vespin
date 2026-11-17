@@ -45,6 +45,7 @@ const PAGE_CAPABILITY = {
   [SETTINGS_VIEW.ACCOUNT]: null,
   [SETTINGS_VIEW.PREFERENCES]: null,
   [SETTINGS_VIEW.WORKSPACE]: null,
+  [SETTINGS_VIEW.BILLING]: null,
   [SETTINGS_VIEW.ENVIRONMENT]: null,
   [SETTINGS_VIEW.AGENTS]: null,
   [SETTINGS_VIEW.HOSTS]: null,
@@ -92,17 +93,25 @@ export function experimentPages(experiment: Experiment): readonly SettingsView[]
   return SETTINGS_PAGE_LIST.filter((view) => PAGE_EXPERIMENT[view] === experiment);
 }
 
-/** Whether a page stands on this platform and for the account's experiments: the sidebar, the command palette, the search, and the page Settings shows all ask it. */
+/**
+ * Whether a page stands on this platform, for the account's experiments, and
+ * for billing: the sidebar, the command palette, the search, and the page
+ * Settings shows all ask it. Note that Billing stands only where `billing`
+ * says so, which is where the service answers that billing is on for a
+ * workspace the reader manages, read at runtime (`useBillingShown`).
+ */
 export function settingsPageShown(
   view: SettingsView,
   capabilities: readonly HostCapability[],
   experiments: ExperimentChoices,
+  billing: boolean,
 ): boolean {
   const capability: HostCapability | null = PAGE_CAPABILITY[view];
 
   return (
     (capability === null || capabilities.includes(capability)) &&
-    settingsPageExperimentStands(view, experiments)
+    settingsPageExperimentStands(view, experiments) &&
+    (view !== SETTINGS_VIEW.BILLING || billing)
   );
 }
 
@@ -117,8 +126,9 @@ export function shownSettingsView(
   view: SettingsView,
   capabilities: readonly HostCapability[],
   experiments: ExperimentChoices,
+  billing: boolean,
 ): SettingsView {
-  return settingsPageShown(view, capabilities, experiments) ? view : SETTINGS_VIEW.ACCOUNT;
+  return settingsPageShown(view, capabilities, experiments, billing) ? view : SETTINGS_VIEW.ACCOUNT;
 }
 
 /** The workspace the page shows: the one the sidebar lists, else the first; none before the workspaces are read. */
@@ -151,11 +161,14 @@ export function settingsRowsInput({
   account,
   capabilities,
   workspace,
+  billing = false,
 }: {
   settings?: AppSettingsView | undefined;
   account: AccountSnapshot;
   capabilities: readonly HostCapability[];
   workspace?: ListedWorkspaces | undefined;
+  /** Whether the Billing page stands for the workspace shown. */
+  billing?: boolean;
 }): SettingsSearchInput | undefined {
   if (!settings) return undefined;
   const accountDrawn = account.status === ACCOUNT_STATUS.SIGNED_IN;
@@ -166,5 +179,6 @@ export function settingsRowsInput({
     accountDrawn,
     capabilities,
     workspace: shown,
+    billing,
   };
 }

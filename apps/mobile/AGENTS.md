@@ -323,8 +323,8 @@ A flow is written one way throughout:
 
 - **Native components only.** The tab bar is expo-router's `NativeTabs`, a
   screen stack is its native `Stack` with the system's headers, search, and
-  toolbars, glass is `expo-glass-effect` through `@repo/ui-native`'s
-  `GlassBar`, and everything else is `@expo/ui`.
+  toolbars, and everything else, glass included (`glassEffect` and the
+  `glass` button style, through `@repo/ui-native`), is `@expo/ui`.
   Never a tab bar or header drawn in JavaScript, never a hand-drawn copy of
   glass, and never a DOM component (`'use dom'`).
 - **SwiftUI first.** A screen is drawn by SwiftUI through `@expo/ui` (`Host`,
@@ -337,10 +337,9 @@ A flow is written one way throughout:
   with no network and no navigation.
 - **Every control comes from `@repo/ui-native`**, the app's design system
   (`packages/ui-native/AGENTS.md`), as the web's come from `@repo/ui`. A
-  screen composes its components and imports neither `@expo/ui` nor
-  `expo-glass-effect`, which lint refuses
-  (`vespin/no-raw-press-outside-ui-native`); the app still declares both,
-  since Expo links a native module from the app's own dependencies.
+  screen composes its components and never imports `@expo/ui`, which lint
+  refuses (`vespin/no-raw-press-outside-ui-native`); the app still declares
+  it, since Expo links a native module from the app's own dependencies.
 - **The app is a shell.** A module whose imports name no Expo, React Native,
   or expo-router API is logic and belongs in a package. A relative import ends
   in `.js`, as the packages' do (`scripts/repository-checks.sh` holds it), and

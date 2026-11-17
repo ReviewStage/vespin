@@ -12,11 +12,7 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import {
-  billableMicroUsd,
-  INCLUDED_USAGE_MICRO_USD,
-  withinIncludedUsage,
-} from "@repo/database/usage-vocabulary";
+import { billableMicroUsd, INCLUDED_USAGE_MICRO_USD } from "@repo/database/usage-vocabulary";
 import type {
   AdminAccountSandboxUsage,
   AdminBillingFigures,
@@ -27,6 +23,7 @@ import type {
 import type { AdminBilling, AdminBillingWorkspace } from "@repo/features/admin-billing-wire";
 import { type AdminBillingQuery, adminMonthKey, utcMonthKey } from "@repo/features/admin-wire";
 import { Clock, Effect } from "effect";
+import { admitsCloudStart, exemptFromBilling } from "../billing/billing-gate.js";
 import { ADMIN_REFUSAL, type AdminRefusal } from "./http-effect.js";
 import { type AdminSeamEffect, unavailableSeam } from "./seam.js";
 
@@ -38,6 +35,8 @@ export interface AdminBillingWorkspaceSource {
   name: string;
   personal: boolean;
   usageMicroUsd: number;
+  /** Whether it has billing set up and no invoice given up on. */
+  chargeable: boolean;
 }
 
 /** What the Billing read reads: the months the ledger holds, and the covered month's usage by workspace. */
@@ -50,6 +49,10 @@ export interface AdminBillingSource {
 /** What one workspace's page reads: its usage by month, and the current month's by member. */
 export interface AdminWorkspaceBillingSource {
   months: readonly { month: string; usageMicroUsd: number }[];
+  /** Whether it has billing set up and no invoice given up on. */
+  chargeable: boolean;
+  /** Whether it is Stage's own, which the start gate never refuses. */
+  exempt: boolean;
   members: readonly {
     userId: string | null;
     account: AdminWorkspaceOwner | null;
@@ -72,12 +75,18 @@ function billingFigures(usageMicroUsd: number): AdminBillingFigures {
 
 /**
  * Whether the start gate would refuse the workspace a cloud agent now: in
- * the current month, past the allowance, with no billing set up. Note that
- * no workspace can set billing up yet, since that lands with the Stripe
- * change, so until then every workspace past the allowance would be refused.
+ * the current month, and where the gate's own rule (`admitsCloudStart`)
+ * admits it not, past the allowance with no billing it can be charged
+ * through and not Stage's own.
  */
-function wouldRefuse(month: string, currentMonth: string, usageMicroUsd: number): boolean {
-  return month === currentMonth && !withinIncludedUsage(usageMicroUsd);
+function wouldRefuse(
+  month: string,
+  currentMonth: string,
+  usageMicroUsd: number,
+  chargeable: boolean,
+  exempt: boolean,
+): boolean {
+  return month === currentMonth && !admitsCloudStart({ usageMicroUsd, chargeable, exempt });
 }
 
 /** Most usage first; the id breaks a tie, so a refresh keeps the order. */
@@ -100,6 +109,7 @@ export function buildAdminBilling(
   source: AdminBillingSource,
   month: string,
   now: number,
+  exemptWorkspaceId: string | undefined,
 ): AdminBilling {
   const currentMonth = utcMonthKey(now);
 
@@ -110,7 +120,13 @@ export function buildAdminBilling(
       name: row.name,
       personal: row.personal,
       ...billingFigures(row.usageMicroUsd),
-      wouldRefuse: wouldRefuse(month, currentMonth, row.usageMicroUsd),
+      wouldRefuse: wouldRefuse(
+        month,
+        currentMonth,
+        row.usageMicroUsd,
+        row.chargeable,
+        exemptFromBilling(row.id, exemptWorkspaceId),
+      ),
     }));
 
   const usageMicroUsd = source.workspaces.reduce((total, row) => total + row.usageMicroUsd, 0);
@@ -151,7 +167,13 @@ export function buildAdminWorkspaceBilling(
       month,
       ...billingFigures(usageByMonth.get(month) ?? 0),
     })),
-    wouldRefuse: wouldRefuse(currentMonth, currentMonth, currentUsage),
+    wouldRefuse: wouldRefuse(
+      currentMonth,
+      currentMonth,
+      currentUsage,
+      source.chargeable,
+      source.exempt,
+    ),
     members,
   };
 }

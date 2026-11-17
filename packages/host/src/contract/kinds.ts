@@ -43,6 +43,8 @@ export const ACCOUNT_ASK_ACT_KIND = {
   PROVIDER_KEYS_FOR_AGENTS: "providerKeys.forAgents",
   /** One of a ChatGPT plan's rate-limit reset credits spent from Settings or a limit notice's Use reset, under the press's key. */
   PROVIDER_KEYS_USE_RESET_CREDIT: "providerKeys.useResetCredit",
+  /** A plan's usage checked again now, from its ⋯'s Refresh usage in Settings. */
+  PROVIDER_KEYS_REFRESH_USAGE: "providerKeys.refreshUsage",
   /** One of the account's subscriptions named, or its name cleared, from its row in Settings. */
   SUBSCRIPTION_RENAME: "providerKeys.rename",
   /** The account's subscriptions of a kind put in a new order, as their list in Settings was dragged. */
@@ -913,6 +915,12 @@ export const WORKSPACE_ACT_KIND = {
   /** A workspace's cloud sandbox size, read once as Settings › Cloud environment opens; a choice by an owner or admin answers the size as it then stands. */
   WORKSPACE_SANDBOX_SIZE_READ: "workspace.sandboxSizeRead",
   WORKSPACE_SANDBOX_SIZE_PUT: "workspace.sandboxSizePut",
+  /** A workspace's billing as its owners and admins read it, read as Settings › Billing opens: whether billing is on, set up, or blocked, and this month's usage. */
+  WORKSPACE_BILLING_STATUS: "workspace.billingStatus",
+  /** Stripe's Checkout page where a workspace's billing is set up, opened in the browser. */
+  WORKSPACE_BILLING_SETUP: "workspace.billingSetup",
+  /** Stripe's Customer Portal page where a workspace's card is changed and its invoices read, opened in the browser. */
+  WORKSPACE_BILLING_PORTAL: "workspace.billingPortal",
   /** Every pull request GitHub's merge queues hold across a workspace's repositories, read as the Merge queue page opens and again while it stands; refused while the account's Merge queue experiment is off. */
   WORKSPACE_MERGE_QUEUE_READ: "workspace.mergeQueueRead",
   /** The machines of a workspace's members, as the @ list offers them and a machine's chip names its owner, read as a place drawing them opens. */
@@ -1059,6 +1067,7 @@ export const PORT_ACT_USE = {
   PROVIDER_KEYS_REMOVE: ACT_USE.WRITE,
   PROVIDER_KEYS_FOR_AGENTS: ACT_USE.WRITE,
   PROVIDER_KEYS_USE_RESET_CREDIT: ACT_USE.WRITE,
+  PROVIDER_KEYS_REFRESH_USAGE: ACT_USE.WRITE,
   SUBSCRIPTION_RENAME: ACT_USE.WRITE,
   SUBSCRIPTIONS_REORDER: ACT_USE.WRITE,
   CHATGPT_DEVICE_START: ACT_USE.WRITE,
@@ -1383,6 +1392,9 @@ export const PORT_ACT_USE = {
   WORKSPACE_RUN_ACTIONS_PUT: ACT_USE.WRITE,
   WORKSPACE_SANDBOX_SIZE_READ: ACT_USE.FETCH,
   WORKSPACE_SANDBOX_SIZE_PUT: ACT_USE.WRITE,
+  WORKSPACE_BILLING_STATUS: ACT_USE.FETCH,
+  WORKSPACE_BILLING_SETUP: ACT_USE.WRITE,
+  WORKSPACE_BILLING_PORTAL: ACT_USE.WRITE,
   WORKSPACE_MERGE_QUEUE_READ: ACT_USE.FETCH,
   WORKSPACE_MACHINES_READ: ACT_USE.FETCH,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;

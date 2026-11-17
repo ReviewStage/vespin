@@ -92,6 +92,11 @@ below travel as one edge and nothing is seen through a block still sliding
 off it; closing, it gives up its room at once and rolls up on
 `--ui-duration-exit` as what stands under it closes over it on the same
 tokens, never fading to an empty gap a block then travels the spring across.
+A card drawn around it carries its edge on that same beat (`motionFrame`,
+`list-motion.tsx`): its box lands at once, as every box does, and its foot is
+clipped back to where it stood and unrolled or rolled up with the rows, so
+the card's ground never stands empty under rows still on their way, and rows
+closing over a fold are never drawn outside the card they belong to.
 A tall section and a one-row group then move alike, and no surface times its
 own fold (`style-guard/fold-motion`).
 

@@ -249,13 +249,11 @@ export function useTaskRelationWrites(): TaskRelationWrites {
 }
 
 /**
- * Opens Settings › Workspace at its GitHub, for the workspace the task
- * belongs to: the list's, else the open document's where the list read did
- * not land.
+ * The workspace a task belongs to, read as a press needs it: the list's,
+ * else the open document's where the list read did not land; none where
+ * neither holds the task.
  */
-export function useOpenWorkspaceGitHub(
-  onOpenSettings: (link: SettingsLink) => void,
-): (taskId: string) => void {
+export function useTaskWorkspaceOf(): (taskId: string) => string | undefined {
   const queryClient = useQueryClient();
   const collections = useTaskListCollections();
 
@@ -265,9 +263,24 @@ export function useOpenWorkspaceGitHub(
       const held = state?.[LIVE_READ.HELD_TASK];
       const open = state === undefined ? undefined : selectListedTasks(state).activeTaskId;
 
-      const workspaceId =
+      return (
         collections.tasks.get(taskId)?.workspaceId ??
-        (open === taskId ? heldTask({ held }, taskId)?.workspaceId : undefined);
+        (open === taskId ? heldTask({ held }, taskId)?.workspaceId : undefined)
+      );
+    },
+    [queryClient, collections],
+  );
+}
+
+/** Opens Settings › Workspace at its GitHub, for the workspace the task belongs to (`useTaskWorkspaceOf`). */
+export function useOpenWorkspaceGitHub(
+  onOpenSettings: (link: SettingsLink) => void,
+): (taskId: string) => void {
+  const workspaceOf = useTaskWorkspaceOf();
+
+  return useCallback(
+    (taskId: string) => {
+      const workspaceId = workspaceOf(taskId);
 
       onOpenSettings({
         page: SETTINGS_VIEW.WORKSPACE,
@@ -275,6 +288,6 @@ export function useOpenWorkspaceGitHub(
         ...(workspaceId === undefined ? undefined : { workspaceId }),
       });
     },
-    [queryClient, collections, onOpenSettings],
+    [workspaceOf, onOpenSettings],
   );
 }

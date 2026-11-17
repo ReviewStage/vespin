@@ -18,10 +18,10 @@
  * the one row it hides only costs a click.
  * A message that reached a turn while it ran, a steer from whoever sent
  * it, stands where it arrived: it ends the group before it.
- * A finished turn whose reply the voice told on a call is the one
- * exception: its words fold with its work, under a line that says a written
- * reply is there, since the voice's own words stand after it and the reader
- * of a settled call wants what was said (Dean, Nov 17).
+ * A finished turn a call's delegation opened is the one exception: its
+ * words fold with its work, under a line that says a written reply is
+ * there, since the reader of a settled call wants what was said aloud
+ * (Dean, Nov 17).
  */
 
 import { Predicate } from "effect";
@@ -683,14 +683,14 @@ interface Held {
   readonly calls: number;
   readonly subagents: number;
   readonly startedAgents: number;
-  /** The model's words folded with the work, which only a told turn's run holds. */
+  /** The model's words folded with the work, which only a delegated turn's run holds. */
   readonly words: number;
 }
 
 /** What a group's line says of the words it folds: the reply written beside the voice's. */
 const WRITTEN_REPLY = "written reply";
 
-/** What a group's line says it holds: its calls, a coding agent's start among them, then its subagents, in the same words while the turn moves and once it has finished, and last a told turn's written reply. */
+/** What a group's line says it holds: its calls, a coding agent's start among them, then its subagents, in the same words while the turn moves and once it has finished, and last a delegated turn's written reply. */
 function groupSummary({ calls, subagents, startedAgents, words }: Held): string {
   const tools = calls + startedAgents;
 
@@ -726,8 +726,8 @@ interface Keyed<B> {
  * latest work on a turn that moves. A run of thoughts with no work in it
  * stands as its rows. A run of one call or subagent is its own row, unless
  * it is that latest work, which is drawn as a group so the work after it
- * joins it rather than redraw it. A finished turn the voice told folds its
- * words with its work too, a run holding words always a group, so only
+ * joins it rather than redraw it. A finished turn a call's delegation opened
+ * folds its words with its work too, a run holding words always a group, so only
  * what stands on rows of its own is left open beside the voice's lines.
  */
 export function turnRows<B>(
@@ -736,13 +736,13 @@ export function turnRows<B>(
   turn: {
     /** Whether the turn still moves, which keeps its latest group open. */
     readonly moving: boolean;
-    /** Whether the voice told its reply on a call (`voice-call-lines.ts`'s `toldTurnsOf`), which folds its words once it has finished. */
-    readonly told?: boolean;
+    /** Whether a call's delegation opened it (`voice-call-lines.ts`'s `delegatedTurnsOf`), which folds its words once it has finished. */
+    readonly delegated?: boolean;
   },
 ): readonly TurnRow<B>[] {
   const rows: TurnRow<B>[] = [];
   let group: Keyed<B>[] = [];
-  const foldsWords = turn.told === true && !turn.moving;
+  const foldsWords = turn.delegated === true && !turn.moving;
 
   const flush = (trailing: boolean) => {
     const held = counted(group, read);

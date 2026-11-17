@@ -120,6 +120,8 @@ export function connectTabs(browser: ConnectBrowser): ConnectTabs {
     const integration = client[INTEGRATION_ACT_KIND.INTEGRATIONS_CONNECT];
     const github = client[WORKSPACE_ACT_KIND.WORKSPACE_GITHUB_CONNECT];
     const slack = client[WORKSPACE_ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL];
+    const billingSetup = client[WORKSPACE_ACT_KIND.WORKSPACE_BILLING_SETUP];
+    const billingPortal = client[WORKSPACE_ACT_KIND.WORKSPACE_BILLING_PORTAL];
 
     // SAFETY: every procedure the contract names is read off the client, so this answers each one the client does.
     const procedures = Object.fromEntries(
@@ -136,6 +138,10 @@ export function connectTabs(browser: ConnectBrowser): ConnectTabs {
         press(() => github(...args)),
       [WORKSPACE_ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL]: (...args: Parameters<typeof slack>) =>
         press(() => slack(...args)),
+      [WORKSPACE_ACT_KIND.WORKSPACE_BILLING_SETUP]: (...args: Parameters<typeof billingSetup>) =>
+        press(() => billingSetup(...args)),
+      [WORKSPACE_ACT_KIND.WORKSPACE_BILLING_PORTAL]: (...args: Parameters<typeof billingPortal>) =>
+        press(() => billingPortal(...args)),
     };
   };
 

@@ -8,9 +8,9 @@ import type { SecretCipher } from "../settings-store.js";
 /**
  * An account source that stands on the one account and credential a test
  * hands it and keeps nothing of its own: no tokens in the settings file, so
- * it hands the store no cipher unless the test hands it one, which seals
- * `entities.sealed`, and no sign-in, so it needs no consent. What
- * a host assembled over a source other than the desktop's stands on.
+ * it hands the store no cipher unless the test hands it one, and no
+ * sign-in, so it needs no consent. What a host assembled over a source
+ * other than the desktop's stands on.
  */
 export function fixedAccountSource(
   input: {

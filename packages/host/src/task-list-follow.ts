@@ -20,7 +20,7 @@ import {
  * The read is fetched from the service and followed by sync id
  * (`live-follow.ts`, `LIVE_POLL.SYNC`): its first answer, and any while it
  * is too far behind, is every plan and agent whole, unless the list drawn
- * was kept on disk at a sync id (`entity-store.ts`), which the first read
+ * was kept on disk at a sync id (`local-rows.ts`), which the first read
  * asks past instead, and each poll after is
  * held until something moves past the id the last answer named, and
  * answered only the rows that moved, with the ids of those that stand no

@@ -140,6 +140,8 @@ export * from "./usage-charge.js";
 
 export * from "./voice-call.js";
 
+export * from "./workspace-billing.js";
+
 export * from "./workspace-drive-repository.js";
 
 export * from "./workspace-environment-variable.js";

@@ -40,6 +40,7 @@ import {
   buzz,
   Chip,
   type ChipMenuGroup,
+  ComposeSheet,
   ConfirmAsk,
   FieldChip,
   GLYPH,
@@ -59,7 +60,6 @@ import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { useCloseSheet } from "../close-sheet.js";
-import { FocusedComposeSheet } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useListedTasks } from "../host/host-provider.js";
 import { useOnTab } from "../tab-route.js";
@@ -773,7 +773,7 @@ export function NewAgentScreen({
             : { talk, ready: talk.ready && !starting }
         }
       />
-      <FocusedComposeSheet
+      <ComposeSheet
         title={
           opened === undefined
             ? undefined
@@ -1129,7 +1129,7 @@ export function NewTaskScreen({
             : { talk, ready: talk.ready && placed && !starting }
         }
       />
-      <FocusedComposeSheet
+      <ComposeSheet
         head={head}
         words={{
           placeholder: WORDS.TASK_PLACEHOLDER,

@@ -87,7 +87,7 @@ function algorithmNamed(algorithm: AlgorithmIdentifier): CryptoDigestAlgorithm {
 // bytes for a webhook secret and a sign-in's verifier
 // (`compose-automations.ts`, `@repo/credentials`'s `pkce.ts`) and hashes
 // the schema of the rows it keeps with SHA-256 as its store opens
-// (`entity-store.ts`); `expo-crypto`'s native module answers each, and
+// (`local-database.ts`); `expo-crypto`'s native module answers each, and
 // nothing else of `SubtleCrypto` is stood up.
 if (globalThis.crypto === undefined) {
   const subtle: Pick<SubtleCrypto, "digest"> = {

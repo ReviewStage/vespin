@@ -10,12 +10,15 @@
 
 import { Database } from "@repo/database/core/query";
 import { utcMonthOf, workspaceMonthMemberTotals } from "@repo/database/models/usage-charges";
+import { workspaceBilling } from "@repo/database/models/workspace-billing";
 import { WORKSPACE_NAME } from "@repo/database/models/workspace-store";
 import { organization } from "@repo/database/schemas/auth";
 import { usageChargeTable } from "@repo/database/schemas/usage-charge";
+import { workspaceBillingTable } from "@repo/database/schemas/workspace-billing";
 import { and, desc, eq, gte, lt, sql, sum } from "drizzle-orm";
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
+import { exemptFromBilling } from "../billing/billing-gate.js";
 import { isAdminRole } from "./admin-access.js";
 import {
   type AdminBillingSource,
@@ -35,6 +38,9 @@ const CHARGE_MONTH = sql<string>`to_char(${usageChargeTable.occurredAt} at time 
 /** The charges summed; a bigint's sum is Postgres's numeric, which the aggregate schema reads. */
 const SUMMED = sql<string>`coalesce(${sum(usageChargeTable.amountMicroUsd)}, 0)`;
 
+/** Whether the workspace has billing set up and no invoice given up on, which lets it past the allowance. */
+const CHARGEABLE = sql<boolean>`coalesce(bool_or(${workspaceBillingTable.stripeCustomerId} is not null and ${workspaceBillingTable.blockedAt} is null), false)`;
+
 const MonthRangeSchema = Schema.Struct({ from: Schema.Date, to: Schema.Date });
 
 const WorkspaceUsageSchema = Schema.Struct({
@@ -42,6 +48,7 @@ const WorkspaceUsageSchema = Schema.Struct({
   name: Schema.String,
   personal: Schema.Boolean,
   usageMicroUsd: AggregateColumnSchema,
+  chargeable: Schema.Boolean,
 });
 
 /** The charges between the two instants, the first held and the second not. */
@@ -64,9 +71,14 @@ const findMonthWorkspaces = SqlSchema.findAll({
           name: WORKSPACE_NAME,
           personal: PERSONAL,
           usageMicroUsd: SUMMED,
+          chargeable: CHARGEABLE,
         })
         .from(usageChargeTable)
         .innerJoin(organization, eq(organization.id, usageChargeTable.organizationId))
+        .leftJoin(
+          workspaceBillingTable,
+          eq(workspaceBillingTable.organizationId, usageChargeTable.organizationId),
+        )
         .where(between(range))
         .groupBy(organization.id),
     ),
@@ -108,9 +120,14 @@ const findAccountWorkspaces = SqlSchema.findAll({
           name: WORKSPACE_NAME,
           personal: PERSONAL,
           usageMicroUsd: SUMMED,
+          chargeable: CHARGEABLE,
         })
         .from(usageChargeTable)
         .innerJoin(organization, eq(organization.id, usageChargeTable.organizationId))
+        .leftJoin(
+          workspaceBillingTable,
+          eq(workspaceBillingTable.organizationId, usageChargeTable.organizationId),
+        )
         .where(and(eq(usageChargeTable.userId, request.userId), between(request)))
         .groupBy(organization.id),
     ),
@@ -131,10 +148,14 @@ function readAdminBillingSource(month: string): AdminSeamEffect<AdminBillingSour
   );
 }
 
-/** The Billing screen's answer for the month, its `YYYY-MM` key. */
-export function readAdminBilling(month: string, now: number) {
+/** The Billing screen's answer for the month, its `YYYY-MM` key; the exempt workspace is Stage's own, which the gate never refuses. */
+export function readAdminBilling(
+  month: string,
+  now: number,
+  exemptWorkspaceId: string | undefined,
+) {
   return Effect.map(readAdminBillingSource(month), (source) =>
-    buildAdminBilling(source, month, now),
+    buildAdminBilling(source, month, now, exemptWorkspaceId),
   );
 }
 
@@ -142,12 +163,14 @@ export function readAdminBilling(month: string, now: number) {
 function readWorkspaceBillingSource(
   organizationId: string,
   now: number,
+  exemptWorkspaceId: string | undefined,
 ): AdminSeamEffect<AdminWorkspaceBillingSource> {
   return Effect.gen(function* () {
-    const [months, memberTotals] = yield* Effect.all(
+    const [months, memberTotals, billing] = yield* Effect.all(
       [
         findWorkspaceMonths(organizationId),
         workspaceMonthMemberTotals(organizationId, new Date(now)),
+        workspaceBilling(organizationId),
       ],
       { concurrency: "unbounded" },
     );
@@ -161,6 +184,11 @@ function readWorkspaceBillingSource(
 
     return {
       months,
+      chargeable: Option.match(billing, {
+        onNone: () => false,
+        onSome: (row) => row.stripeCustomerId !== null && row.blockedAt === null,
+      }),
+      exempt: exemptFromBilling(organizationId, exemptWorkspaceId),
       members: memberTotals.map((row) => ({
         userId: row.userId,
         account: row.userId === null ? null : (faceById.get(row.userId) ?? null),
@@ -170,9 +198,13 @@ function readWorkspaceBillingSource(
   });
 }
 
-/** One workspace's page's billing section. */
-export function readAdminWorkspaceBilling(organizationId: string, now: number) {
-  return Effect.map(readWorkspaceBillingSource(organizationId, now), (source) =>
+/** One workspace's page's billing section; the exempt workspace is Stage's own, which the gate never refuses. */
+export function readAdminWorkspaceBilling(
+  organizationId: string,
+  now: number,
+  exemptWorkspaceId: string | undefined,
+) {
+  return Effect.map(readWorkspaceBillingSource(organizationId, now, exemptWorkspaceId), (source) =>
     buildAdminWorkspaceBilling(source, now),
   );
 }

@@ -1,13 +1,15 @@
 /**
  * setup-model.ts -- a new account's setup: who it is for, the steps that follows from, and whether the window owes it.
  *
+ * Every client walks the same steps from the same place on the account
+ * (`setup-place.ts`), so setup left partway on one resumes on another.
  * Setup stands once, in the window after sign-in, for a new account (see
  * `setupGate`), until it is finished. An account invited into a team's
  * workspace with no agent connected walks the survey and Connect an agent
  * alone.
  */
 
-import { SETUP_AUDIENCE, type SetupAudience } from "@repo/settings";
+import { SETUP_AUDIENCE, type SetupAudience } from "./setup-place.js";
 
 /** Setup's steps, each a card of its own. */
 export const SETUP_STEP = {
@@ -20,6 +22,9 @@ export const SETUP_STEP = {
 } as const;
 
 export type SetupStep = (typeof SETUP_STEP)[keyof typeof SETUP_STEP];
+
+/** What setup says over GitHub's step, which may be skipped, and every client's GitHub connection beside it: agents work in the account's repositories. */
+export const GITHUB_PURPOSE = "Agents work in your repositories and open pull requests.";
 
 /**
  * The steps an account set up for `audience` walks, in order. Note that a

@@ -16,6 +16,7 @@ import {
   DetailPage,
   EmptyState,
   GLYPH,
+  GlassDock,
   glyphSymbol,
   NOTICE_KIND,
   PATH_PART,
@@ -27,7 +28,7 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { PUSHED_PAGE, useDetailCovered, useDetailLeave, useHandToDetail } from "../detail-stack.js";
-import { FocusedDock, useFocusShown } from "../focus-shown.js";
+import { useFocusShown } from "../focus-shown.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import { useInFront } from "../place-columns.js";
@@ -329,7 +330,7 @@ export function CommentThread({
   if (inColumn) {
     return (
       <DetailPage bar={thread === undefined ? { path: { path, status: task?.status } } : {}}>
-        {page(<ComposerFoot {...composer} shown={inFront} />) ?? (
+        {page(<ComposerFoot {...composer} />) ?? (
           <ThreadMissing taskId={taskId} overview={overview} />
         )}
       </DetailPage>
@@ -358,9 +359,9 @@ export function CommentThread({
           <ThreadMissing taskId={taskId} overview={overview} />
         </Screen>
       ) : (
-        <FocusedDock bar={<Composer {...composer} />}>
+        <GlassDock bar={<Composer {...composer} />}>
           <Screen>{page()}</Screen>
-        </FocusedDock>
+        </GlassDock>
       )}
     </>
   );
@@ -428,9 +429,6 @@ export function NewComment({
   readonly again?: string | undefined;
   readonly inColumn?: boolean | undefined;
 }) {
-  const columnShown = useInFront();
-  const covered = useDetailCovered();
-  const inFront = columnShown && !covered;
   const router = useRouter();
   const detail = useDetailLeave();
   const onOwnTab = useOnOwnTab();
@@ -537,7 +535,7 @@ export function NewComment({
       <DetailPage
         bar={block === undefined ? { path: { path, status: overview?.task.status } } : {}}
       >
-        {page(<ComposerFoot {...composer} shown={inFront} />) ?? empty}
+        {page(<ComposerFoot {...composer} />) ?? empty}
       </DetailPage>
     );
   }
@@ -553,9 +551,9 @@ export function NewComment({
       {block === undefined ? (
         <Screen>{empty}</Screen>
       ) : (
-        <FocusedDock bar={<Composer {...composer} />}>
+        <GlassDock bar={<Composer {...composer} />}>
           <Screen>{page()}</Screen>
-        </FocusedDock>
+        </GlassDock>
       )}
     </>
   );

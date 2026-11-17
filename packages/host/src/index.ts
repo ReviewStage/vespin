@@ -12,8 +12,6 @@
  * client does not reach yet is added when one arrives.
  */
 
-export { ENTITY_STORE_FILE_NAME } from "./entity-store.js";
-
 export {
   appProcesses,
   type ElectronProcessName,
