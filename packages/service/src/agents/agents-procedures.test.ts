@@ -656,13 +656,15 @@ it.layer(SUITE)("an agent on no task", (it) => {
         yield* Effect.flatMap(Database, (db) =>
           db.update(agentTable).set({ taskId: null }).where(eq(agentTable.id, agent.id)),
         );
+
         const call = yield* standing(
           new Map([["Bearer owner", userId]]),
           scriptedSandbox(SANDBOX_STATE.RUNNING).layer,
         );
+
         const desktop = clientHeaders({ platform: CLIENT_PLATFORM.DESKTOP, version: "1.0.0" });
         // A build from before an agent on no task, which would refuse a whole answer over one null task.
-        const older = { ...desktop, [CLIENT_HEADER.API_VERSION]: "4" };
+        const older = { ...desktop, [CLIENT_HEADER.API_VERSION]: "5" };
 
         const seenBy = (headers: Record<string, string>) =>
           Effect.gen(function* () {
@@ -671,7 +673,9 @@ it.layer(SUITE)("an agent on no task", (it) => {
               "Bearer owner",
               { headers },
             );
+
             const read = yield* call.bytes(agentOf(agent.id), "Bearer owner", { headers });
+
             // SAFETY: the router answers JSON; the test reads the agents' ids and tasks it compares.
             const { agents } = JSON.parse(listed.text) as {
               agents: readonly { id: string; taskId: string | null }[];
