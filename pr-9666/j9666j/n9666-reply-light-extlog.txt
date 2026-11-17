@@ -1,0 +1,12 @@
+2026-11-17 02:44:10.088 Df launchd_sim[6458:c109d42] [dev.vespin.ios.NotificationContent:] Unknown key for Boolean: EnableTransactions
+2026-11-17 02:44:10.088 Df launchd_sim[6458:c109d42] [dev.vespin.ios.NotificationContent:] Unknown key for Boolean: EnablePressuredExit
+2026-11-17 02:44:12.617 Df NotificationContent[42870:c10a24d] [dev.vespin.ios.NotificationContent:view] loaded at 402.000000×874.000000
+2026-11-17 02:44:12.707 Df NotificationContent[42870:c10a24d] [dev.vespin.ios.NotificationContent:view] fits 0 blocks at 402.000000×32.000000
+2026-11-17 02:44:12.877 Df NotificationContent[42870:c10a24d] [dev.vespin.ios.NotificationContent:view] received inbox-reply with 5 blocks, markdown true
+2026-11-17 02:44:12.922 Df NotificationContent[42870:c10a24d] [dev.vespin.ios.NotificationContent:view] fits 5 blocks at 374.000000×200.666667
+2026-11-17 02:45:59.469 Df launchd_sim[6458:c114444] [dev.vespin.ios.NotificationContent:] Unknown key for Boolean: EnableTransactions
+2026-11-17 02:45:59.469 Df launchd_sim[6458:c114444] [dev.vespin.ios.NotificationContent:] Unknown key for Boolean: EnablePressuredExit
+2026-11-17 02:46:02.265 Df NotificationContent[60362:c114490] [dev.vespin.ios.NotificationContent:view] loaded at 402.000000×874.000000
+2026-11-17 02:46:02.368 Df NotificationContent[60362:c114490] [dev.vespin.ios.NotificationContent:view] fits 0 blocks at 402.000000×32.000000
+2026-11-17 02:46:02.650 Df NotificationContent[60362:c114490] [dev.vespin.ios.NotificationContent:view] received inbox-reply with 5 blocks, markdown true
+2026-11-17 02:46:02.698 Df NotificationContent[60362:c114490] [dev.vespin.ios.NotificationContent:view] fits 5 blocks at 374.000000×200.666667
