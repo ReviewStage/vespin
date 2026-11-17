@@ -15,8 +15,7 @@
  * way to run it, while one needing a Mac is offered only to a member who
  * has one, since that is no press away. Its prompt is the words a press writes into the box, which
  * the member reads, edits, and starts; one that needs something typed, such
- * as the site's address, ends where it goes. Home offers them behind
- * `EXPERIMENT.STARTER_TASKS`.
+ * as the site's address, ends where it goes.
  */
 
 /** How many tasks the workspace holds before Home shows no starters. */

@@ -1,7 +1,6 @@
 import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { devicePlatformOf } from "@repo/features/device-platform";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
-import { EXPERIMENT } from "@repo/settings";
 import { MARK_PROVIDER, ProviderMark, SuggestionCard, SuggestionCards } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
@@ -21,7 +20,6 @@ import {
   startersFor,
 } from "../tasks/starter-tasks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { appStateQuery, selectExperiment } from "../use-app-state.js";
 
 /**
  * home-starters.tsx -- the starters under Home's composer while the listed workspace holds few tasks: a card for each job, whose press writes the job into New task's box, or connects GitHub for one that needs it.
@@ -38,9 +36,8 @@ import { appStateQuery, selectExperiment } from "../use-app-state.js";
  * needing a repository the workspace lacks says at its foot, as a Sentry
  * automation's card asks for Sentry, the press that adds one, Connect
  * GitHub or a member's Add with your token (`useRepositoryMend`), and its
- * press opens Settings there. Nothing stands while the member has Starter
- * tasks off (`EXPERIMENT.STARTER_TASKS`), until the task list is read, nor
- * once the workspace holds `STARTER_BOUNDS.UNTIL_TASKS` tasks, by which
+ * press opens Settings there. Nothing stands until the task list is
+ * read, nor once the workspace holds `STARTER_BOUNDS.UNTIL_TASKS` tasks, by which
  * time the box alone serves.
  */
 
@@ -57,7 +54,7 @@ const STARTER_GLYPH = {
   [STARTER.SITE_WALKTHROUGH]: <GLYPH.RECORDING />,
 } as const satisfies Record<Starter, React.JSX.Element>;
 
-/** Home's starters while the member has them on and the listed workspace holds few tasks; nothing otherwise. */
+/** Home's starters while the listed workspace holds few tasks; nothing otherwise. */
 export function HomeStarters({
   tasks,
   onFilled,
@@ -66,10 +63,6 @@ export function HomeStarters({
   /** Hands the composer's words the caret once a press wrote into them. */
   onFilled: () => void;
 }): React.JSX.Element | null {
-  const on =
-    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.STARTER_TASKS) }).data ===
-    true;
-
   const { workspaceId, devices } = tasks.newTask;
   const listed = useNamedTasks(tasks.typedNames, NAMED_ORDER.PINNED_FIRST, tasks.workspace?.id);
   const repositories = useQuery(repositoryListsQuery(workspaceId)).data?.repositories;
@@ -79,7 +72,7 @@ export function HomeStarters({
   const writer = useDraftWriter();
   const mac = offered.find((device) => devicePlatformOf(device) === DEVICE_PLATFORM.DARWIN);
 
-  if (!on || !tasks.signedIn || !tasks.listRead || workspaceId === undefined) return null;
+  if (!tasks.signedIn || !tasks.listRead || workspaceId === undefined) return null;
 
   if (listed.length >= STARTER_BOUNDS.UNTIL_TASKS) return null;
 
