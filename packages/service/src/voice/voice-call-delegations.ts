@@ -18,10 +18,13 @@
  * - What the voice is told goes out over the sideband (`VoiceCallHolder`'s
  *   `send`).
  * - An untitled agent is named, its untitled task with it, as the voice
- *   first answers the caller (`titleNativeAgent`), off the loop, because a
- *   call whose voice answers by itself starts no turn, and a turn is
- *   otherwise what names an agent: an agent Talk started blank stood
- *   "Untitled" through a whole call (Dean, Nov 17).
+ *   answers the caller (`titleNativeAgent`), off the loop, because a call
+ *   whose voice answers by itself starts no turn, and a turn is otherwise
+ *   what names an agent: an agent Talk started blank stood "Untitled"
+ *   through a whole call (Dean, Nov 17). It is asked again at each answer to
+ *   a new line of the caller's while the agent stands untitled, as a turn's
+ *   end asks again, up to `CODER.TITLE_TURNS` times a lease, since a
+ *   greeting names nothing.
  *
  * Every act is fenced by the lease's epoch, read just before it, so a holder
  * whose lease another took acts no more and lets go.
@@ -409,10 +412,24 @@ const refusedLogged = <A, E, R>(label: string, act: Effect.Effect<A, E, R>) =>
     ),
   );
 
-/** Whether this lease asked for the agent's title, which it asks once, as the voice first answers the caller. */
+/** How this lease has asked for the agent's title: whether the caller spoke since it last asked, and how many times it asked. */
 interface CallNaming {
-  asked: boolean;
+  heard: boolean;
+  asks: number;
 }
+
+/** The agent's title asked for where it still stands untitled, read again since the lease's copy of it is as old as the lease. */
+const namedAgent = (target: AgentTarget, callerId: string, agentId: string) =>
+  Effect.gen(function* () {
+    const found = yield* readAgent(callerId, agentId);
+
+    if (Option.isNone(found)) return;
+    yield* titleNativeAgent(target, found.value);
+  }).pipe(
+    Effect.catch((failure) =>
+      Effect.logWarning(`a voice call's agent was not named: ${failureKind(failure)}`),
+    ),
+  );
 
 /**
  * One output carried out under the lease, fenced by its epoch: whether the
@@ -450,10 +467,18 @@ const carriedOut = Effect.fnUntraced(function* (
         yield* Effect.logWarning(`a voice call's line was refused: ${written.failure.refusal}`);
       }
 
-      // Note that the voice answering is when the caller has said something to name the agent by, and the title is asked off the loop, since its model call would hold the call's lines.
-      if (output.speaker === VOICE_SPEAKER.VOICE && agent.title === null && !naming.asked) {
-        naming.asked = true;
-        yield* Effect.forkDetach(titleNativeAgent(target, agent));
+      if (output.speaker === VOICE_SPEAKER.CALLER) naming.heard = true;
+
+      // Note that the voice answering a line of the caller's is when there are words to name the agent by, and the title is asked off the loop, since its model call would hold the call's lines.
+      if (
+        output.speaker === VOICE_SPEAKER.VOICE &&
+        agent.title === null &&
+        naming.heard &&
+        naming.asks < CODER.TITLE_TURNS
+      ) {
+        naming.heard = false;
+        naming.asks += 1;
+        yield* Effect.forkDetach(namedAgent(target, call.callerId, call.agentId));
       }
 
       return true;
@@ -519,7 +544,7 @@ export const voiceCallDelegations: VoiceCallObserver<
     const inputs = yield* Queue.unbounded<VoiceInput>();
     const offer = (input: VoiceInput) => Effect.asVoid(Queue.offer(inputs, input));
 
-    const naming: CallNaming = { asked: false };
+    const naming: CallNaming = { heard: false, asks: 0 };
 
     const carried = Stream.runForEachWhile(
       voiceDelegations(Stream.fromQueue(inputs), start),
