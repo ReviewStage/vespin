@@ -2290,11 +2290,19 @@ function OverviewPage({
   overview,
   onRefresh,
   archiving,
+  entered,
 }: {
   readonly overview: TaskOverview;
   readonly onRefresh: () => Promise<void>;
   /** Archive on its agents' rows, asked first by the row pressed (`useAgentArchiveAsk`). */
   readonly archiving: AgentArchiving;
+  /**
+   * Whether the page has come in: a pushed page once its push has ended
+   * (`usePushStood`), and a split view's detail, which slides in nothing,
+   * at once. Note that a pushed page's sections wait for it, since their
+   * mount during the push dropped its frames.
+   */
+  readonly entered: boolean;
 }) {
   const router = useRouter();
   const toDetail = useDetailPush();
@@ -2302,7 +2310,7 @@ function OverviewPage({
   const onOwnTab = useOnOwnTab();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
-  const sections = useSectionsShown(task.id);
+  const sections = useSectionsShown(task.id) && entered;
 
   const { data: descriptions = false } = useQuery({
     ...appStateQuery,
@@ -2485,6 +2493,7 @@ export function useTaskDetail(
         overview={overview}
         onRefresh={refreshTasks}
         archiving={archiving}
+        entered
       />
     ) : selected === undefined ? (
       <NoSelection title={CHOOSE_AN_ITEM_WORDS} />
@@ -2733,7 +2742,12 @@ export function TaskScreen() {
       )}
       <Screen>
         {overview !== undefined ? (
-          <OverviewPage overview={overview} onRefresh={refreshTasks} archiving={archiving} />
+          <OverviewPage
+            overview={overview}
+            onRefresh={refreshTasks}
+            archiving={archiving}
+            entered={stood}
+          />
         ) : read && !found.seeking ? (
           <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         ) : (
