@@ -676,15 +676,13 @@ export const APP_SETTING_SCHEMA = {
     field: "inbox",
     id: APP_SETTING_ID.INBOX,
     label: "Use the Inbox",
-    detail: "Agents post what they need from you there. Turned off, they ask in their replies.",
     default: true,
     page: SETTINGS_PAGE.PREFERENCES,
     section: SETTING_SECTION.GENERAL,
     order: 306,
     // Nothing to run per write: an agent's session reads it as it starts.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
-    // Note that no row draws it until every window hides the Inbox it turns off.
-    visible: () => false,
+    visible: accountDrawn,
   }),
   lineNumbers: toggleSetting({
     field: "lineNumbers",

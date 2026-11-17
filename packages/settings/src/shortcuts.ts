@@ -426,6 +426,14 @@ export interface AppShortcut {
    * experiment's is not.
    */
   capability?: HostCapability;
+  /**
+   * Whether the command is the Inbox's. While the account keeps no Inbox
+   * (`APP_SETTING_SCHEMA.inbox`), it is in none of the window's lists; the
+   * menu bar, whose process reads no choice of the account's, draws it only
+   * where the focused window offers it, which a window keeping no Inbox does
+   * not.
+   */
+  inbox?: true;
 }
 
 /**
@@ -657,7 +665,7 @@ export const APP_SHORTCUTS = {
     chord: { key: SHORTCUT_KEY.ESCAPE, bare: true },
   },
   [APP_COMMAND.HOME]: { label: "Home", chord: { key: SHORTCUT_KEY.H, shift: true } },
-  [APP_COMMAND.INBOX]: { label: "Inbox", chord: { key: SHORTCUT_KEY.I, shift: true } },
+  [APP_COMMAND.INBOX]: { label: "Inbox", chord: { key: SHORTCUT_KEY.I, shift: true }, inbox: true },
   // Note that the Tasks page takes ⇧⌘B, for the Board it once was alone, because ⇧⌘T reopens a closed tab.
   [APP_COMMAND.TASKS]: { label: "Tasks", chord: { key: SHORTCUT_KEY.B, shift: true } },
   [APP_COMMAND.EXIT_AGENT_THREADS]: {
@@ -667,10 +675,12 @@ export const APP_SHORTCUTS = {
   [APP_COMMAND.PREVIOUS_INBOX_ITEM]: {
     label: "Previous inbox item",
     chord: { key: SHORTCUT_KEY.K, plain: true },
+    inbox: true,
   },
   [APP_COMMAND.NEXT_INBOX_ITEM]: {
     label: "Next inbox item",
     chord: { key: SHORTCUT_KEY.J, plain: true },
+    inbox: true,
   },
   [APP_COMMAND.REPLY_TO_SELECTION]: {
     label: "Reply to selection",
@@ -1395,6 +1405,13 @@ export function shortcutShown(
   return experimentStands && capabilityStands;
 }
 
+/** Whether a keyed command is the Inbox's (`AppShortcut.inbox`), which stands only while the account keeps one. */
+export function shortcutOfInbox(command: KeyedCommand): boolean {
+  const shortcut: AppShortcut = APP_SHORTCUTS[command];
+
+  return shortcut.inbox === true;
+}
+
 /** The workspace experiment a keyed command stands on, where it is one's: a window offers it only while its own workspace has it on. */
 export function shortcutWorkspaceExperiment(
   command: KeyedCommand,
@@ -1444,13 +1461,15 @@ export function inContextShown(
 /**
  * The shortcut groups as the Keyboard shortcuts page and its settings search
  * list them: only the commands that stand for the account's experiments and
- * the platform's capabilities, none the layered Escape reaches, which the
+ * the platform's capabilities, none of the Inbox's where the account keeps
+ * none (`inbox`), none the layered Escape reaches, which the
  * group's one Escape key names for them all, and only the keys in place the
  * platform offers.
  */
 export function shownShortcutGroups(
   experiments: ExperimentChoices,
   capabilities: readonly HostCapability[],
+  inbox: boolean,
 ): readonly {
   readonly title: string;
   readonly commands: readonly KeyedCommand[];
@@ -1462,7 +1481,8 @@ export function shownShortcutGroups(
       commands: group.commands.filter(
         (command) =>
           !shortcutLayered(APP_SHORTCUTS[command].chord) &&
-          shortcutShown(command, experiments, capabilities),
+          shortcutShown(command, experiments, capabilities) &&
+          (inbox || !shortcutOfInbox(command)),
       ),
       keys: group.keys.filter((key) => inContextShown(key, capabilities)),
     };

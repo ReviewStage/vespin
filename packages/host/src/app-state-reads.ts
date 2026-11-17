@@ -306,6 +306,10 @@ export const selectSettingsHeld = (state: AppStateSnapshot): boolean =>
 export const selectAppSettingsView = (state: AppStateSnapshot): AppSettingsView | undefined =>
   state.settings === undefined ? undefined : appSettingsView(state.settings);
 
+/** Whether the account keeps an Inbox (`@repo/settings`'s `inbox`): every window draws it but the account's that turned it off; signed out, or before the settings are read, it stands. */
+export const selectInboxOn = (state: AppStateSnapshot): boolean =>
+  state.settings?.stored.inbox !== false;
+
 /** Every experiment the account chose as its store holds them, a workspace experiment's old choice among them; signed out, every one is off. Read only to combine with a workspace's (`workspace-experiments.ts`). */
 export const selectStoredExperimentChoices = (state: AppStateSnapshot): ExperimentChoices =>
   state.settings?.experiments ?? NO_EXPERIMENTS;

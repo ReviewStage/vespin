@@ -40,7 +40,11 @@ function groupRows(title: string, capabilities = DESKTOP_CAPABILITIES): string[]
   roots.push(root);
   act(() =>
     root.render(
-      createElement(WindowShortcutSections, { experiments: NO_EXPERIMENTS, capabilities }),
+      createElement(WindowShortcutSections, {
+        experiments: NO_EXPERIMENTS,
+        capabilities,
+        inbox: true,
+      }),
     ),
   );
 
