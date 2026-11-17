@@ -36,6 +36,7 @@ import {
   padding,
   tag,
   tint,
+  zIndex,
 } from "@expo/ui/swift-ui/modifiers";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { type InboxLineKind, NEEDS_YOU } from "@repo/features/inbox-list-model";
@@ -49,6 +50,7 @@ import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -204,6 +206,8 @@ type RowActs = {
   readonly preview?: ReactElement | undefined;
   /** Its vespin.dev link, which a drag carries out of the row: into another app as a URL, or onto a section here (`ListSection`'s `onDropLink`). */
   readonly link?: string | undefined;
+  /** What its own acts ask first, standing by the row (`RowAsking`), `QUIET_ROW_QUESTION` while it asks nothing; none for a row whose acts never ask. */
+  readonly question?: RowQuestion | undefined;
 };
 
 type ListRowProps = RowActs & {
@@ -479,6 +483,11 @@ function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
     : actionButton(swipe, colors);
 }
 
+/** A row's content with the question its acts ask standing by it, where its acts ask any. */
+function asking(content: ReactElement, question: RowQuestion | undefined): ReactElement {
+  return question === undefined ? content : <RowAsking question={question}>{content}</RowAsking>;
+}
+
 /**
  * A row's frame in its list: the id its list picks it by, the list's own
  * ground behind it rather than a card's, its insets, which stand the unread
@@ -506,6 +515,7 @@ export function RowFrame({
   menuGroups = [],
   preview,
   link,
+  question,
   vertical,
   indent,
   leading,
@@ -549,7 +559,7 @@ export function RowFrame({
   const ownGroup = swiped.length + menuSubmenus.length + menuActions.length > 0;
 
   if (!ownGroup && groups.length === 0 && preview === undefined) {
-    return <HStack modifiers={frameModifiers}>{row}</HStack>;
+    return <HStack modifiers={frameModifiers}>{asking(row, question)}</HStack>;
   }
 
   const opening: readonly RowAction[] =
@@ -560,7 +570,7 @@ export function RowFrame({
           { label: VERB.OPEN, tone: ROW_ACTION_TONE.NEUTRAL, onPress: () => open(id) },
         ];
 
-  const menu = (
+  const menu = asking(
     <ContextMenu>
       <ContextMenu.Items>
         {opening.map((action) => actionButton(action, colors))}
@@ -578,7 +588,8 @@ export function RowFrame({
       </ContextMenu.Items>
       <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
       {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
-    </ContextMenu>
+    </ContextMenu>,
+    question,
   );
 
   // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal.
@@ -687,7 +698,7 @@ export function RowHead({
   // Note that at an accessibility size the line's end stands under the title rather than beside it, as Mail's rows stack their date, so the title keeps the row's width rather than wrapping a word to a line, and the dot stands on the title's first line rather than centered on the whole stack.
   const line = (
     <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
-      {/* Note that the fold and the marks stand centered on each other, so the chevron, laid out at no height, sits beside the ring rather than on the row's top edge where an accessibility size aligns the line to its top. */}
+      {/* Note that the fold and the marks stand centered on each other, so the chevron sits beside the ring rather than on the row's top edge where an accessibility size aligns the line to its top. */}
       <HStack spacing={SPACE.ROW} alignment="center">
         {fold}
         {mark === undefined ? null : (
@@ -974,10 +985,14 @@ const FOLD_TARGET = 44;
 /**
  * A parent's fold before its status ring, as the panel's chevron stands
  * before a task's name: it opens the sub-tasks under the row, while a press
- * on the row itself still opens the task. Note that the chevron lays out a
- * lead mark's width, so a sub-task's ring stands under its parent's, but
- * answers a press across a 44 pt square, its overhang laid out at no size
- * so the row stands no taller than its siblings.
+ * on the row itself still opens the task. Note that the button itself is
+ * the whole 44 pt square, since a borderless button in a selectable row
+ * takes a press only within its own frame, and the overhang is taken back
+ * outside it, so the row lays out a lead mark's square: a sub-task's ring
+ * stands under its parent's and the row stands no taller than its ring. It
+ * stands above the ring beside it, which its square reaches over. While
+ * the overhang was taken back inside the button, laying it out at no
+ * height, a press on it opened the row instead (j9614, Nov 16).
  */
 function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPress: () => void }) {
   const colors = useColors();
@@ -985,7 +1000,7 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
   const lead = useScaledSize(MARK_SIZE.LEAD);
   const glyph = useScaledSize(MARK_SIZE.GLYPH - 4);
   const target = Math.max(FOLD_TARGET, lead);
-  const overhang = { across: (target - lead) / 2, down: target / 2 };
+  const overhang = (target - lead) / 2;
 
   return (
     <Button
@@ -993,6 +1008,8 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
       modifiers={[
         buttonStyle("borderless"),
         accessibilityLabel(open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS),
+        padding({ all: -overhang }),
+        zIndex(1),
       ]}
     >
       <Image
@@ -1002,12 +1019,6 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
         modifiers={[
           frame({ width: target, height: target }),
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-          padding({
-            leading: -overhang.across,
-            trailing: -overhang.across,
-            top: -overhang.down,
-            bottom: -overhang.down,
-          }),
         ]}
       />
     </Button>

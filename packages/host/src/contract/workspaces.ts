@@ -150,6 +150,15 @@ export const WORKSPACE_ACTS = declaredActs({
     panelOnly: true,
     door: ACT.REMOTE_WORK,
   }),
+  WORKSPACE_SLACK_BOT_INSTALL: hostAct({
+    input: tasksWorkspaceParamsSchema,
+    output: EffectSchema.String,
+    portOutput: EffectSchema.Void,
+    refusal: "Could not open Slack to connect that workspace on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    byHand: true,
+  }),
   WORKSPACE_SLACK_BOT_DISCONNECT: hostAct({
     input: tasksWorkspaceParamsSchema,
     output: workspaceSlackBotAnswerSchema,

@@ -7,7 +7,8 @@ import { AUDIO_PLAYER_PLACE, AudioPlayer, type AudioPlayerPlace } from "../../in
 
 /**
  * audio-player.test.ts -- a sound clip drawn again, as Expand draws it in
- * the viewer, starts where it was left rather than at its start; and > and
+ * the viewer, starts where it was left, at the speed it was left at, rather
+ * than at its start at 1×; and > and
  * its speed button step it along a voice message's speeds. The browser's
  * media element is the boundary, so a stand-in seeks and changes its speed
  * as one does, telling its events, and the player is read by the time and
@@ -22,8 +23,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** A clip's bytes as a picture read answers them; the stand-in element never decodes them. */
-const CLIP_URL = "data:audio/wav;base64,UklGRg==";
+/** Clips' bytes as a picture read answers them, one to each case, since a clip's place outlives its player; the stand-in element never decodes them. */
+const CLIP_URL = {
+  EXPANDED: "data:audio/wav;base64,UklGRg==",
+  STEPPED: "data:audio/wav;base64,UklGRh==",
+} as const;
 
 /** How long the stand-in runs, in seconds. */
 const LENGTH_S = 20;
@@ -54,7 +58,7 @@ function standInMedia(audio: HTMLAudioElement): void {
 }
 
 /** Draws a player of the clip, its element a stand-in, and answers its keys, its buttons, and the time it shows. */
-function mountPlayer(place: AudioPlayerPlace, onExpand?: () => void) {
+function mountPlayer(dataUrl: string, place: AudioPlayerPlace, onExpand?: () => void) {
   vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:clip");
   vi.spyOn(URL, "revokeObjectURL").mockReturnValue(undefined);
   const container = document.createElement("div");
@@ -62,9 +66,7 @@ function mountPlayer(place: AudioPlayerPlace, onExpand?: () => void) {
   const root = createRoot(container);
   roots.push(root);
   act(() =>
-    root.render(
-      createElement(AudioPlayer, { dataUrl: CLIP_URL, label: "A chime", place, onExpand }),
-    ),
+    root.render(createElement(AudioPlayer, { dataUrl, label: "A chime", place, onExpand })),
   );
   const audio = container.querySelector("audio");
   const frame = container.querySelector<HTMLElement>("[role=group]");
@@ -83,17 +85,19 @@ function mountPlayer(place: AudioPlayerPlace, onExpand?: () => void) {
   };
 }
 
-test("a clip opened in the viewer starts where it was left", () => {
-  const inline = mountPlayer(AUDIO_PLAYER_PLACE.INLINE, () => undefined);
+test("a clip opened in the viewer starts where it was left, at the speed it was left at", () => {
+  const inline = mountPlayer(CLIP_URL.EXPANDED, AUDIO_PLAYER_PLACE.INLINE, () => undefined);
   inline.press("ArrowRight");
   inline.press("ArrowRight");
+  inline.press(">");
   inline.pressButton("Expand");
-  const viewer = mountPlayer(AUDIO_PLAYER_PLACE.VIEWER);
+  const viewer = mountPlayer(CLIP_URL.EXPANDED, AUDIO_PLAYER_PLACE.VIEWER);
   expect(viewer.time()).toBe("0:10 / 0:20");
+  expect(viewer.speed()).toBe("Playback speed: 1.5×");
 });
 
 test("> steps a clip's speed and its speed button walks on from there, back to 1× after 2×", () => {
-  const player = mountPlayer(AUDIO_PLAYER_PLACE.INLINE);
+  const player = mountPlayer(CLIP_URL.STEPPED, AUDIO_PLAYER_PLACE.INLINE);
   player.press(">");
   expect(player.speed()).toBe("Playback speed: 1.5×");
   player.pressButton("Playback speed: 1.5×");

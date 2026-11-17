@@ -16,6 +16,7 @@ import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { useRef, useState } from "react";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
+import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
 import { unreadShown } from "../failure-report.js";
 import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
@@ -28,6 +29,7 @@ import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWaitingItems, type WaitingItems } from "../tasks/use-waiting-items.js";
 import { letGoOfFocus, useHomeNewTask, useListsTask, welcomed } from "./desktop-welcome.js";
+import { HomeStarters } from "./home-starters.js";
 import { PERSON_SECTION_FOLD, PersonBody, PersonSectionFrame } from "./person-frame.js";
 import { RecentTasks } from "./recent-tasks.js";
 
@@ -47,9 +49,11 @@ import { RecentTasks } from "./recent-tasks.js";
  * a press opening it. Its sections are a person's page's (`person-frame.tsx`),
  * whose voice was Home's to begin with, each folding on a press on its
  * head as the person's page's do, and standing in its body
- * (`PersonBody`), so Recent glides as Inbox folds or its rows go. Inbox
- * stands only while something waits, so a new account's page is its
- * greeting and composer alone, and a
+ * (`PersonBody`), so Recent glides as Inbox folds or its rows go. While the
+ * workspace holds few tasks, a few starters stand under the composer, each
+ * a job a press writes into it, since a blank box leaves a newcomer to
+ * think of what to ask. Inbox stands only while something waits, so a new
+ * account's page is its greeting and composer alone, and a
  * cleared one's Recent rises under the composer. An account with nothing yet
  * is greeted as new.
  * Nothing here names the sidebar, which may be folded away.
@@ -238,7 +242,9 @@ function HomeRecent({
  * over it from the page's top is cut off under the page's head. A start
  * pressed here and refused opens it again on what it pressed, with why under
  * it and Retry, as the dialog's card opens on a refusal, rather than a dialog
- * drawing a second composer over it (`newTask.homeRefused`).
+ * drawing a second composer over it (`newTask.homeRefused`). Under it, while
+ * the workspace holds few tasks, stand the starters (`home-starters.tsx`),
+ * whose press writes a job into its words and hands them the caret.
  */
 function HomeComposer({
   tasks,
@@ -253,22 +259,28 @@ function HomeComposer({
 
   if (!tasks.signedIn) return null;
 
+  // A starter pressed hands the words it wrote the caret, which the editor lays at their end.
+  const takeCaret = () => box.current?.querySelector<HTMLElement>(EDITOR_ROOT_SELECTOR)?.focus();
+
   return (
-    <div className="home-composer mb-page-section-gap" ref={box}>
-      <NewTaskComposer
-        // Note that each refusal mounts the composer afresh, as the card opens on what it pressed only as it mounts.
-        key={refusal?.opening}
-        newTask={{
-          ...tasks.newTask,
-          preset: refusal === undefined ? undefined : { refused: refusal.refused },
-        }}
-        workspaceId={tasks.newTask.workspaceId}
-        onLeave={letGoOfFocus}
-        takesFocus={takesFocus}
-        listSide={MENTION_MENU_SIDE.BELOW}
-        notices={NOTICE_LOOK.CARD}
-      />
-    </div>
+    <>
+      <div className="home-composer mb-page-section-gap" ref={box}>
+        <NewTaskComposer
+          // Note that each refusal mounts the composer afresh, as the card opens on what it pressed only as it mounts.
+          key={refusal?.opening}
+          newTask={{
+            ...tasks.newTask,
+            preset: refusal === undefined ? undefined : { refused: refusal.refused },
+          }}
+          workspaceId={tasks.newTask.workspaceId}
+          onLeave={letGoOfFocus}
+          takesFocus={takesFocus}
+          listSide={MENTION_MENU_SIDE.BELOW}
+          notices={NOTICE_LOOK.CARD}
+        />
+      </div>
+      <HomeStarters tasks={tasks} onFilled={takeCaret} />
+    </>
   );
 }
 
