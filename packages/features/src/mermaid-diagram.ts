@@ -16,14 +16,14 @@ const ALT_LIMIT = 80;
 /** The front matter a Mermaid code may open with: its settings between two `---` fences, which name nothing of the diagram but a `title`. */
 const FRONT_MATTER = /^\s*---[ \t]*\n([\s\S]*?)\n---[ \t]*(?:\n|$)/u;
 
-/** The title a front matter names (`title: Order flow`), a top-level key. */
-const FRONT_TITLE = /^title:[ \t]*(.+?)[ \t]*$/mu;
+/** The title a front matter names (`title: Order flow`), a top-level key: the rest of its line, which is trimmed after. */
+const FRONT_TITLE = /^title:(.*)$/mu;
 
-/** A title a diagram's own lines name, as a line of its own or after the diagram's kind (`title Votes`, `pie title Votes`). */
-const BODY_TITLE = /^[ \t]*(?:\w+[ \t]+)?title[ \t]+(.+?)[ \t]*$/mu;
+/** A title a diagram's own lines name, as a line of its own or after the diagram's kind (`title Votes`, `pie title Votes`): the rest of its line, which is trimmed after. */
+const BODY_TITLE = /^[ \t]*(?:\w+[ \t]+)?title[ \t](.*)$/mu;
 
-/** A line of Mermaid code that names nothing of the diagram: blank or a comment. */
-const SILENT_LINE = /^\s*(?:%%.*)?\s*$/u;
+/** What opens a Mermaid comment. */
+const COMMENT = "%%";
 
 /**
  * The palette's roles a diagram draws in: the ground it stands on, the
@@ -75,6 +75,25 @@ export type DiagramThemeVariables = { readonly darkMode: boolean } & Partial<
   Record<keyof typeof MERMAID_ROLE, string>
 >;
 
+/**
+ * The words a title's line holds, trimmed, or none where it holds none.
+ * Note that a line is trimmed here rather than matched to its words' end,
+ * because a pattern that weighs a run of whitespace both ways backtracks
+ * over it, which a long run of tabs in a fence's words made take seconds.
+ */
+function titleWords(match: RegExpExecArray | null): string | undefined {
+  const words = match?.[1]?.trim();
+
+  return words === undefined || words === "" ? undefined : words;
+}
+
+/** Whether a line of Mermaid code names nothing of the diagram: blank or a comment. */
+function silentLine(line: string): boolean {
+  const words = line.trim();
+
+  return words === "" || words.startsWith(COMMENT);
+}
+
 /** The words kept of a title or first line, cut at the limit with an ellipsis. */
 function altWords(line: string): string {
   const words = line.replace(/^["']|["']$/gu, "").trim();
@@ -86,8 +105,8 @@ function altWords(line: string): string {
 export function diagramAlt(code: string): string {
   const front = FRONT_MATTER.exec(code);
   const body = front === null ? code : code.slice(front[0].length);
-  const title = FRONT_TITLE.exec(front?.[1] ?? "")?.[1] ?? BODY_TITLE.exec(body)?.[1];
-  const first = body.split("\n").find((line) => !SILENT_LINE.test(line));
+  const title = titleWords(FRONT_TITLE.exec(front?.[1] ?? "")) ?? titleWords(BODY_TITLE.exec(body));
+  const first = body.split("\n").find((line) => !silentLine(line));
   const words = altWords(title ?? first ?? "");
 
   return words === "" ? DIAGRAM_WORDS.HEAD : `${DIAGRAM_WORDS.HEAD}: ${words}`;
