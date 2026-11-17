@@ -10,6 +10,7 @@
     "repository": {
       "type": "string",
       "maxLength": 140,
+      "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*\\/(?!\\.{1,2}$)[A-Za-z0-9_.-]+$",
       "description": "The repository whose skills lead the list, by its full name (owner/name); the member's installed skills alone where left out."
     }
   },

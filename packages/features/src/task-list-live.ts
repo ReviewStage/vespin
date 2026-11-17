@@ -122,7 +122,7 @@ const taskLiveRowSchema = EffectSchema.Struct({
   /** Who made the task for its owner (`DESCRIPTION_ACTOR`); absent from a service before it was sent, read as made by hand. */
   creatorActor: EffectSchema.optionalKey(
     literalsReadingUnknown(
-      [DESCRIPTION_ACTOR.DEVELOPER, DESCRIPTION_ACTOR.NOTETAKER, DESCRIPTION_ACTOR.AGENT],
+      [DESCRIPTION_ACTOR.DEVELOPER, DESCRIPTION_ACTOR.AGENT],
       DESCRIPTION_ACTOR.DEVELOPER,
     ),
   ),

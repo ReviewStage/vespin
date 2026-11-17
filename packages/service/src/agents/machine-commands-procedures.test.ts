@@ -727,6 +727,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
 
           const door = () =>
             Promise.resolve({
+              checkout: "/workspace/repository",
               readFile: () => Promise.resolve(null),
               writeFile: (file: { readonly name: string; readonly contents: Uint8Array }) => {
                 saved.push(file);

@@ -13,8 +13,9 @@ import type { TaskSummary } from "@repo/features/task-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { BackButton, FILL_ELEMENT, Fill, Toolbar, useMinute } from "@repo/ui";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useAppCommand } from "../app-commands.js";
+import { useBackOr } from "../places/narrow-backs.js";
 import { useInboxResolver } from "../tasks/inbox-close.js";
 import {
   INBOX_COLUMNS,
@@ -55,9 +56,12 @@ import { paneDoors, startedThreads } from "./desktop-inbox.js";
  * narrow for both, the card shows one at a time as the Inbox does
  * (`inbox-columns.ts`).
  *
- * Each agent keeps whether its card shows its threads, and which, for as
- * long as the task's page stands (`useAgentThreadViews`), so going to
- * another agent's tab and back finds the card as it was left.
+ * Each agent keeps whether its card shows its threads, and which
+ * (`tasks/agent-thread-views.ts`), so going to another agent's tab and back
+ * finds the card as it was left, and the task's step in the window's
+ * history holds them: opening them from the dock, and each thread chosen,
+ * K and J among them, is a step of its own, and their ways back are Back
+ * where what they go back to is the step behind (`places/task-step.ts`).
  */
 
 /** What the card's way back says, and the place its hint names. */
@@ -65,21 +69,6 @@ const TRANSCRIPT = { LABEL: "Transcript", PLACE: "transcript" } as const;
 
 /** What the list lists: every item, open or settled, as an Inbox narrowed to a task does. */
 const AGENT_LISTS = { show: INBOX_SHOW.ALL, whose: EVERYONES } as const;
-
-/** What an agent's card shows in its transcript's place: its threads, on the item chosen, none while the list stands alone. */
-interface AgentThreadsShown {
-  readonly itemId: string | undefined;
-}
-
-/** Which agents' cards show their threads, and the presses that change it. */
-export interface AgentThreadViews {
-  /** What the agent's card shows in its transcript's place; none where it shows its transcript. */
-  readonly shown: (agentId: string) => AgentThreadsShown | undefined;
-  /** Shows the agent's threads in its card, on the item given. */
-  readonly onOpen: (agentId: string, itemId: string | undefined) => void;
-  /** Gives the agent's card its transcript back. */
-  readonly onClose: (agentId: string) => void;
-}
 
 /**
  * The pane's doors as the window's Inbox hands them for an item of a task
@@ -101,30 +90,6 @@ function agentPaneDoors(
     ...doors,
     onOpenAgent: (each) => (each === agentId ? onBack() : doors.onOpenAgent(each)),
   };
-}
-
-/** Each agent's card's threads, by the agent, held while the task's page stands. */
-export function useAgentThreadViews(): AgentThreadViews {
-  const [views, setViews] = useState<ReadonlyMap<string, AgentThreadsShown>>(() => new Map());
-
-  const onOpen = useCallback((agentId: string, itemId: string | undefined) => {
-    setViews((was) => new Map(was).set(agentId, { itemId }));
-  }, []);
-
-  const onClose = useCallback((agentId: string) => {
-    setViews((was) => {
-      if (!was.has(agentId)) return was;
-      const next = new Map(was);
-      next.delete(agentId);
-
-      return next;
-    });
-  }, []);
-
-  return useMemo(
-    () => ({ shown: (agentId: string) => views.get(agentId), onOpen, onClose }),
-    [views, onOpen, onClose],
-  );
 }
 
 /** The agent's threads in its card: the Inbox's list of its items beside the one chosen. */
@@ -184,10 +149,13 @@ export function AgentThreads({
 
   const counts = useMemo(() => inboxCounts(standing, me), [standing, me]);
 
+  // Note that the narrow card's ‹ back to the list is the window's Back, as the Inbox's is, the list taking the thread's step only where none stands behind.
+  const backOr = useBackOr();
+
   // Note that the card's columns hold no item while it is off screen, so no way back of theirs takes the window's Back meanwhile,
   // nor one the read no longer holds, so a narrow card stands its list, with its way back, rather than nothing.
   const columns = useInboxColumns(shown ? listed?.item.id : undefined, {
-    onClear: () => onChoose(undefined),
+    onClear: () => backOr(() => onChoose(undefined)),
   });
 
   const choose = (each: InboxListed) => {

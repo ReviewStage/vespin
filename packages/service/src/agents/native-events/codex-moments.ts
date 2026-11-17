@@ -123,6 +123,17 @@ const PLAN_REASON_STATUS: ReadonlyMap<string, PlanStatus> = new Map([
  */
 const PLAN_NOT_INCLUDED = "To use Codex with your ChatGPT plan, upgrade";
 
+/**
+ * The kinds of `codexErrorInfo` that say OpenAI's safeguards refused the
+ * turn, which read as the model's refusal, as Claude Code's
+ * `model_refusal_no_fallback` does, so the agent offers to continue on
+ * another model rather than saying a model call failed.
+ */
+const SAFEGUARD_REFUSALS: ReadonlySet<string | undefined> = new Set([
+  CODEX_ERROR_INFO.CYBER_POLICY,
+  CODEX_ERROR_INFO.MISALIGNMENT_POLICY_VIOLATION,
+]);
+
 /** The status OpenAI refuses a credential with, which a failed connection carries in its `codexErrorInfo`. */
 const HTTP_UNAUTHORIZED = 401;
 
@@ -731,8 +742,9 @@ function errorInfoWords(info: WireValue | undefined): readonly string[] {
 /**
  * A model turn's end: failed where Codex says it failed, said in Codex's own
  * word for it and the codes OpenAI refused the plan with, which name a usage
- * limit, an account not eligible, and a sign-in not accepted alike. The
- * failure's whole message is the launch's end's to say.
+ * limit, an account not eligible, and a sign-in not accepted alike, and
+ * refused where OpenAI's safeguards refused it. The failure's whole message
+ * is the launch's end's to say.
  */
 function turnCompletedMoments(params: WireValue): readonly NativeMoment[] {
   const read = readTurnCompleted(params);
@@ -762,9 +774,17 @@ function turnCompletedMoments(params: WireValue): readonly NativeMoment[] {
   ]);
 
   const plan = PLAN_REFUSAL_ORDER.find((status) => found.has(status));
+  const kept = failure.slice(0, FAILURE_CHARS);
+
+  // Note that a refusal fails the model turn on its own, so the result says no failure beside it.
+  const ended: readonly NativeMoment[] = SAFEGUARD_REFUSALS.has(
+    codexErrorKind(error?.codexErrorInfo),
+  )
+    ? [{ kind: NATIVE_MOMENT.REFUSED, detail: kept }, { kind: NATIVE_MOMENT.RESULT }]
+    : [{ kind: NATIVE_MOMENT.RESULT, failure: kept }];
 
   return [
-    { kind: NATIVE_MOMENT.RESULT, failure: failure.slice(0, FAILURE_CHARS) },
+    ...ended,
     ...(plan === undefined ? [] : [{ kind: NATIVE_MOMENT.PLAN, status: plan } as const]),
   ];
 }

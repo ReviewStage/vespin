@@ -7,6 +7,7 @@ import {
   GearIcon,
   PlusIcon,
   SearchIcon,
+  STATUS_TONE,
 } from "@repo/ui";
 import { useState } from "react";
 import type { Example } from "../example";
@@ -14,8 +15,8 @@ import { CatalogSection } from "../section";
 
 /**
  * bar-items.tsx -- a phone's bar of places: glyphs over names, the place
- * shown in the accent's ink, counts of what waits on the reader on their
- * glyphs, short and long, and a last item that opens a drawer and says
+ * shown in the accent's ink, counts on their glyphs, short and long, what
+ * waits on the reader in the needs-you fill and a tally in the muted one, and a last item that opens a drawer and says
  * whether it stands open; and the phone's floating bar, its places in one
  * pill beside a round action.
  */
@@ -41,7 +42,7 @@ function Bar(): React.JSX.Element {
       <BarItem
         icon={<GearIcon />}
         current={place === PLACE.TASKS}
-        count={{ value: 128, noun: "need you" }}
+        count={{ value: 128, noun: "threads", tone: STATUS_TONE.NEUTRAL }}
         onPress={() => setPlace(PLACE.TASKS)}
       >
         Tasks

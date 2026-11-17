@@ -470,11 +470,9 @@ export function AnswerFields({
     <Toolbar>
       {card}
       <Toolbar.Content>
-        <ToolbarItem placement="keyboard">
-          <HStack>
-            <Spacer />
-            <SwiftUIButton label={KEYBOARD_DONE} onPress={() => void focused.current?.blur()} />
-          </HStack>
+        {/* Note that a flexible space stands before Done in one group, as Settings' stands it at the bar's trailing edge, because iOS 26 centers a keyboard bar's lone item, which neither a `Spacer` inside it nor a `ToolbarSpacer` moved. */}
+        <ToolbarItem placement="keyboard" spacerBefore>
+          <SwiftUIButton label={KEYBOARD_DONE} onPress={() => void focused.current?.blur()} />
         </ToolbarItem>
       </Toolbar.Content>
     </Toolbar>

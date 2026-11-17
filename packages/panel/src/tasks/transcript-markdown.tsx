@@ -1,4 +1,5 @@
 import { draftKindOf } from "@repo/features/draft-text";
+import { DIAGRAM_LANGUAGE } from "@repo/features/mermaid-diagram";
 import type { CodeLines } from "@repo/features/tasks-view";
 import { CODE_ROW, CodeCard, type CodeRow, DraftCard } from "@repo/ui";
 import { SUGGESTED_CHANGE_LANGUAGE } from "@repo/ui/github-html";
@@ -35,9 +36,6 @@ import { useOpenLink } from "./use-open-link.js";
  * its header, its one Copy, its cut at 40 lines, and the screen recording's
  * leaving its lines out are the card's.
  */
-
-/** The language a fence names to be drawn as its diagram once it is whole. */
-const MERMAID_LANGUAGE = "mermaid";
 
 /** The language a diff is fenced in, whose rows are tinted by what they do. */
 const DIFF_LANGUAGE = "diff";
@@ -264,7 +262,7 @@ function TranscriptFence(props: ComponentProps<"code"> & MarkdownNodeProps): Rea
   const source = <TranscriptCodeBlock {...props} />;
   const streaming = openTail !== undefined && openTail.endsWith(code.split("\n").at(-1) ?? "");
 
-  if (language !== MERMAID_LANGUAGE || streaming) return source;
+  if (language !== DIAGRAM_LANGUAGE || streaming) return source;
 
   return <DescriptionDiagram code={code} source={source} />;
 }

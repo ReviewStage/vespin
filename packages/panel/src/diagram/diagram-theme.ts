@@ -1,3 +1,9 @@
+import {
+  DIAGRAM_ROLE,
+  type DiagramRole,
+  type DiagramThemeVariables,
+  diagramThemeVariablesOf,
+} from "@repo/features/mermaid-diagram";
 import { DIAGRAM_APPEARANCE, type DiagramAppearance } from "@repo/ui/diagram-contract";
 
 /**
@@ -14,46 +20,17 @@ import { DIAGRAM_APPEARANCE, type DiagramAppearance } from "@repo/ui/diagram-con
  * drawn on, and handed over as an opaque `#rrggbb`.
  */
 
-/** The palette's roles a diagram draws in, by the token each is read from. */
+/** The palette's roles a diagram draws in (`@repo/features/mermaid-diagram`), by the token each is read from. */
 const DIAGRAM_TOKENS = {
-  ground: "--ui-color-ground",
-  words: "--ui-color-text",
-  lines: "--ui-color-text-muted",
-  box: "--ui-color-chip",
-  raised: "--ui-color-chip-hover",
-  edge: "--ui-color-chip-edge-strong",
-  group: "--ui-color-well",
-  groupEdge: "--ui-color-chip-edge",
-} as const satisfies Record<string, `--ui-color-${string}`>;
-
-type DiagramRole = keyof typeof DIAGRAM_TOKENS;
-
-/**
- * Each color Mermaid is handed, by the role it is drawn in: the primary ink
- * for words, the secondary ink for lines and arrows, a chip's face for a box
- * and its hover step for what is raised off one (a note, a label on a
- * line), a chip's strong edge for a box's, and a well for a group.
- */
-const MERMAID_ROLES = {
-  primaryColor: "box",
-  primaryBorderColor: "edge",
-  primaryTextColor: "words",
-  secondaryColor: "raised",
-  tertiaryColor: "raised",
-  lineColor: "lines",
-  textColor: "words",
-  actorBkg: "box",
-  actorBorder: "edge",
-  actorTextColor: "words",
-  signalColor: "lines",
-  signalTextColor: "words",
-  noteBkgColor: "raised",
-  noteBorderColor: "edge",
-  noteTextColor: "words",
-  edgeLabelBackground: "raised",
-  clusterBkg: "group",
-  clusterBorder: "groupEdge",
-} as const satisfies Record<string, DiagramRole>;
+  [DIAGRAM_ROLE.GROUND]: "--ui-color-ground",
+  [DIAGRAM_ROLE.WORDS]: "--ui-color-text",
+  [DIAGRAM_ROLE.LINES]: "--ui-color-text-muted",
+  [DIAGRAM_ROLE.BOX]: "--ui-color-chip",
+  [DIAGRAM_ROLE.RAISED]: "--ui-color-chip-hover",
+  [DIAGRAM_ROLE.EDGE]: "--ui-color-chip-edge-strong",
+  [DIAGRAM_ROLE.GROUP]: "--ui-color-well",
+  [DIAGRAM_ROLE.GROUP_EDGE]: "--ui-color-chip-edge",
+} as const satisfies Record<DiagramRole, `--ui-color-${string}`>;
 
 /** The attributes a surface wears its roles and its palette in (`@repo/ui`'s `surfaceAttributes`). */
 const PROFILE_ATTRIBUTE = "data-ui-profile";
@@ -64,11 +41,6 @@ const SRGB = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+
 
 /** A color's channels, 0 to 255, and its alpha, 0 to 1. */
 type Channels = readonly [red: number, green: number, blue: number, alpha: number];
-
-/** Mermaid's theme variables in an appearance: a role's color where the window's palette reaches it. */
-type DiagramThemeVariables = { readonly darkMode: boolean } & Partial<
-  Record<keyof typeof MERMAID_ROLES, string>
->;
 
 /** A computed color's channels: read from its text where it is sRGB, and by a canvas painting it where it is not (an `oklch()` on the web). */
 function channelsOf(color: string): Channels | undefined {
@@ -131,7 +103,7 @@ function paletteIn(appearance: DiagramAppearance): Map<DiagramRole, string> {
   }
 
   probe.remove();
-  const ground = read.get("ground");
+  const ground = read.get(DIAGRAM_ROLE.GROUND);
   const palette = new Map<DiagramRole, string>();
 
   if (ground === undefined) return palette;
@@ -149,11 +121,8 @@ function paletteIn(appearance: DiagramAppearance): Map<DiagramRole, string> {
 export function diagramThemeVariables(appearance: DiagramAppearance): DiagramThemeVariables {
   const palette = paletteIn(appearance);
 
-  const colors = Object.entries(MERMAID_ROLES).flatMap(([name, role]) => {
-    const color = palette.get(role);
-
-    return color === undefined ? [] : [[name, color]];
-  });
-
-  return { ...Object.fromEntries(colors), darkMode: appearance === DIAGRAM_APPEARANCE.DARK };
+  return diagramThemeVariablesOf(
+    (role) => palette.get(role),
+    appearance === DIAGRAM_APPEARANCE.DARK,
+  );
 }

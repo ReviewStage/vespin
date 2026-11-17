@@ -267,7 +267,7 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
   );
 
   it.effect(
-    "a local agent's action on an app goes to the machine it runs on, which always counts for it, and its terminal command never does but goes to the owner's default elsewhere",
+    "a local agent's action on an app goes to the machine it runs on, which always counts for it, and its terminal command goes to the owner's default, its own machine included",
     () =>
       Effect.gen(function* () {
         const { owner, teammate, taskId, agentId, target } = yield* openPeople;
@@ -296,34 +296,12 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
         const own = (route: MachineRoute) =>
           route.kind === MACHINE_ROUTE.MACHINE && route.machine.id;
 
-        const why = (route: MachineRoute) => route.kind === MACHINE_ROUTE.REFUSED && route.why;
-
         assert.equal(own(appsHere), laptop);
-        assert.equal(why(shellOnDefault), MACHINE_UNREACHED.OWN_SHELL, "its default is its own");
-        assert.match(
-          shellOnDefault.kind === MACHINE_ROUTE.REFUSED ? shellOnDefault.reason : "",
-          /^Not run: you run on Laptop yourself, so run the command from your own shell\. It can go to Studio \(Ana\)/u,
-        );
-        assert.equal(why(shellNamed), MACHINE_UNREACHED.OWN_SHELL, "named, too");
+        assert.equal(own(shellOnDefault), laptop, "its default is its own");
+        assert.equal(own(shellNamed), laptop, "named, too");
         assert.equal(own(shellElsewhere), studio);
         assert.equal(own(appsAfterReassign), laptop);
         assert.equal(own(shellAfterReassign), bens, "the new owner's default");
-      }),
-  );
-
-  it.effect(
-    "a local agent's terminal command for its own machine is refused, even where an old Mac listens as the account",
-    () =>
-      Effect.gen(function* () {
-        const { owner, agentId, target } = yield* openPeople;
-        const laptop = yield* openMachine(owner, "Laptop", false);
-        yield* setAgent(agentId, { deviceId: laptop });
-        const routed = yield* route(target, { account: true });
-
-        assert.equal(
-          routed.kind === MACHINE_ROUTE.REFUSED && routed.why,
-          MACHINE_UNREACHED.OWN_SHELL,
-        );
       }),
   );
 

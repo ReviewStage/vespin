@@ -30,10 +30,9 @@ export const descriptionRevision = pgTable(
     seq: integer("seq").notNull(),
     actor: text("actor").$type<DescriptionActor>().notNull(),
     /**
-     * The member who wrote it: the developer whose edit or restore it is, or
-     * the one whose call the notetaker wrote it on. Null for a coding agent's,
-     * for one written before writers were kept, and once the member's account
-     * is gone, which reads as nobody the service can name.
+     * The member who wrote it: the developer whose edit or restore it is. Null
+     * for a coding agent's, for one written before writers were kept, and once
+     * the member's account is gone, which reads as nobody the service can name.
      */
     userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
     /** The coding agent that wrote it; null for any other writer, and once the agent's row is gone. */

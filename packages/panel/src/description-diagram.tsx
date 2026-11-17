@@ -1,3 +1,4 @@
+import { DIAGRAM_WORDS, diagramAlt } from "@repo/features/mermaid-diagram";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   Button,
@@ -15,7 +16,7 @@ import { type ReactNode, useContext, useLayoutEffect, useRef, useState } from "r
 import { DIAGRAM_REFUSED_LINE } from "./bundle-loader.js";
 import { coarsePointerNow, useCoarsePointer } from "./coarse-pointer.js";
 import type { EditorDiagram } from "./description-editor/contract.js";
-import { diagramAlt, useAppearance, useDrawing } from "./diagram-drawing.js";
+import { useAppearance, useDrawing } from "./diagram-drawing.js";
 import { failureShown } from "./failure-report.js";
 import { SHELL_ROOM } from "./shell-room.js";
 import { ShellRoomContext } from "./stage-room.js";
@@ -147,11 +148,11 @@ function DiagramCard({
       aria-busy={drawingNow === undefined}
     >
       <div className={HEAD_CLASS} contentEditable={outsideText}>
-        <span>Diagram</span>
+        <span>{DIAGRAM_WORDS.HEAD}</span>
         {picture === undefined ? null : (
           <span className="flex items-center gap-tight-gap">
             <Button onClick={() => shown.onShowCode(!shown.showingCode)}>
-              {shown.showingCode ? "Show diagram" : "Show code"}
+              {shown.showingCode ? DIAGRAM_WORDS.SHOW_DIAGRAM : DIAGRAM_WORDS.SHOW_CODE}
             </Button>
             {pictureShown ? (
               <span className="hidden pointer-coarse:flex shell-narrow:flex">

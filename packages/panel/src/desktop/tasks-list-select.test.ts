@@ -36,13 +36,14 @@ import {
   UNMOVED_LINK_READS,
 } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
+import { standWindowEscape } from "../testing/window-escape.js";
 import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { TasksPage } from "./tasks-page.js";
 import { TasksPageHeld } from "./tasks-page-held.js";
 
 /**
- * tasks-list-select.test.ts -- the Tasks page's List chooses rows as a Mac's list does: ⌘-click two tasks and the bar's Mark done sets both Done at once, under one toast whose Undo puts both back where they stood; Set status and Move to section act on them all alike; a right-click on a chosen row offers the bar's acts on them all, one on a row not chosen its own menu; a finger's row draws no ⋯, its menu a long press away; and Esc lets the selection go.
+ * tasks-list-select.test.ts -- the Tasks page's List chooses rows as a Mac's list does: ⌘-click two tasks and the bar's Mark done sets both Done at once, under one toast whose Undo puts both back where they stood; Set status and Move to section act on them all alike; a right-click on a chosen row offers the bar's acts on them all, one on a row not chosen its own menu; a finger's row draws no ⋯, its menu a long press away; and Esc lets the selection go, wherever the keyboard stands.
  *
  * The List stands over the tasks tab itself (`useTasksTab`), so what a
  * press sends is what the service is asked, and what the rows draw is the
@@ -505,17 +506,22 @@ test("under a finger, a task's row draws no ⋯, and a long press on it offers t
   assert.ok(openMenu().items.includes("Rename"), "the task's own menu offers Rename");
 });
 
-test("Esc lets the selection go, and the bar with it", async () => {
+test.each<[string, (page: HTMLElement) => HTMLElement]>([
+  ["on a chosen row", (page) => pressOf(page, "ACME-36")],
+  ["with the keyboard outside the list", () => document.body],
+])("Esc %s lets the selection go, and the bar with it", async (_where, target) => {
+  const windowEscape = standWindowEscape();
   const { page } = await mountPage();
   commandClick(page, "ACME-39");
   commandClick(page, "ACME-36");
   assert.deepEqual(chosen(page), ["ACME-39", "ACME-36"]);
 
   act(() => {
-    pressOf(page, "ACME-36").dispatchEvent(
+    target(page).dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
     );
   });
+  act(() => windowEscape.unmount());
 
   assert.deepEqual(chosen(page), []);
   assert.equal(page.querySelector('[role="toolbar"]'), null);

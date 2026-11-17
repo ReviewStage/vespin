@@ -4,22 +4,16 @@
  * Admin is a routed place (`panel-router.tsx`) under the workspace the
  * sidebar lists, its view read from its address alone: the Overview at
  * `/<workspace>/admin`, a section at `/admin/<section>`, and an account's, a
- * workspace's, or a day's page beneath. Its sections are one step, each
- * turned in the step's place as Settings' pages are, so Back leaves the
- * place; an account's, a workspace's, or a day's page is a step of its own.
+ * workspace's, or a day's page beneath. Each view is a step of its own, a
+ * section turned from another as much as an account's, a workspace's, or a
+ * day's page, so Back returns to the view shown before.
  */
 
 import { ADMIN_LINK_SECTION, type AdminLinkSection } from "@repo/features/link-grammar";
 import { type NavigateOptions, useNavigate, useRouter } from "@tanstack/react-router";
 import { useRoutedExits } from "../places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
-import {
-  ADMIN_TAB,
-  type AdminView,
-  adminLinkFields,
-  adminSection,
-  adminViewOfLink,
-} from "./routing.js";
+import { ADMIN_TAB, type AdminView, adminLinkFields, adminViewOfLink } from "./routing.js";
 
 /** The Overview, where Admin opens with no view named. */
 const ADMIN_OVERVIEW: AdminView = { kind: ADMIN_TAB.DASHBOARD };
@@ -63,9 +57,8 @@ export interface AdminRoute {
   readonly open: boolean;
   /** The view standing, or the Overview while the place does not stand. */
   readonly view: AdminView;
-  /** Opens the place on `view`; where none is named, on the Overview. */
-  readonly onOpen: (view?: AdminView) => void;
-  readonly onClose: () => void;
+  /** Opens the place on `view`, where none is named on the Overview, as a step of its own, or in the step's place where `inPlace`. */
+  readonly onOpen: (view?: AdminView, inPlace?: boolean) => void;
   /** Reads the place ahead of a press the pointer says is coming, its chunk, charts and all. */
   readonly onPreload: () => void;
 }
@@ -87,7 +80,7 @@ export function useAdminView(): AdminView {
   );
 }
 
-/** Admin as the router stands it, opened under the workspace `listedSlug` names as it is pressed, and left by the window's routed exit (`places/routed-exits.ts`). */
+/** Admin as the router stands it, opened under the workspace `listedSlug` names as it is pressed, and kept standing by the window's routed stay (`places/routed-exits.ts`). */
 export function useAdminRoute(input: { listedSlug: () => string | undefined }): AdminRoute {
   const exits = useRoutedExits();
   const router = useRouter();
@@ -97,7 +90,7 @@ export function useAdminRoute(input: { listedSlug: () => string | undefined }): 
   const open = here.place === ROUTED_PLACE.ADMIN;
   const { params } = here;
 
-  const onOpen = (to: AdminView = ADMIN_OVERVIEW) => {
+  const onOpen = (to: AdminView = ADMIN_OVERVIEW, inPlace = false) => {
     const workspace = (open ? params.workspace : undefined) ?? input.listedSlug();
 
     if (workspace === undefined) return;
@@ -111,9 +104,7 @@ export function useAdminRoute(input: { listedSlug: () => string | undefined }): 
       return;
     }
 
-    // A section turned from another stands in its step's place; any other view is a step of its own.
-    const replace = open && adminSection(view) && adminSection(to);
-    void navigate({ ...options, replace });
+    void navigate({ ...options, replace: inPlace });
   };
 
   const onPreload = () => {
@@ -123,5 +114,5 @@ export function useAdminRoute(input: { listedSlug: () => string | undefined }): 
       void router.preloadRoute({ to: "/$workspace/admin", params: { workspace } });
   };
 
-  return { open, view, onOpen, onClose: () => exits.leave(), onPreload };
+  return { open, view, onOpen, onPreload };
 }

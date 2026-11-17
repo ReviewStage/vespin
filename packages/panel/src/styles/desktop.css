@@ -886,6 +886,8 @@ body,
 .desktop-agent,
 .desktop-inbox {
   --reading-room: calc((100% - var(--ui-page-measure)) / 2);
+  /* The column's inset, which the way back to the newest line keeps to (`--spacing-conversation-scroll-end`). */
+  --conversation-column-inset: max(var(--content-inset), var(--reading-room));
   position: relative;
 }
 
@@ -1256,23 +1258,13 @@ body,
   }
 }
 
-/* The Automations list's toolbar: where its two acts' words would crowd the
-   title, Create with an agent folds to its glyph and New automation keeps
-   its words (`automation-list-frame.tsx`). */
-/* off-scale: 600px, where the Automations toolbar's acts stop fitting */
-@container automations-toolbar (width < 600px) {
-  .automations-acts {
-    --ui-fold: folded;
-  }
-}
-
 /* The prompt's placeholder, the height of its field at the rows it stands
    (`--automation-prompt-rows`, the editor's `PROMPT_ROWS`), its insets and
    its border (`text-field.css`). */
 .automation-prompt-skeleton {
   height: calc(
     var(--automation-prompt-rows) *
-    var(--ui-type-body-leading) +
+    var(--agent-composer-line) +
     2 *
     var(--ui-space-6) +
     2px
@@ -1287,7 +1279,7 @@ body,
   --agent-composer-field-block: calc(2 * var(--ui-space-6));
   --agent-composer-field-lines: calc(
     24 *
-    var(--ui-type-body-leading) +
+    var(--agent-composer-line) +
     var(--agent-composer-field-block)
   );
 }
@@ -1295,7 +1287,7 @@ body,
 .automation-prompt .agent-composer-input {
   min-height: calc(
     var(--automation-prompt-rows) *
-    var(--ui-type-body-leading) +
+    var(--agent-composer-line) +
     var(--agent-composer-field-block)
   );
   padding: var(--ui-space-6) var(--ui-control-inset);
@@ -1601,6 +1593,7 @@ body,
      where it is spent: a percentage there is of the box's frame, which is
      the panel's width. */
   --reading-room: calc((100% - var(--ui-page-measure)) / 2);
+  --conversation-column-inset: max(var(--content-inset), var(--reading-room));
   position: relative;
   /* The container every tab answers its width from (`@container
      side-panel`, tasks.css), so one width lays out every tab narrow; it
@@ -1723,7 +1716,7 @@ body,
 /* The words field stands at least five lines tall, so a task's prompt has
    room before it is written; it still grows to the agent box's eight. */
 .new-task-composer .agent-composer-input {
-  min-height: calc(5 * var(--ui-type-body-leading) + var(--agent-composer-field-block));
+  min-height: calc(5 * var(--agent-composer-line) + var(--agent-composer-field-block));
 }
 
 /* In the dialog, which does not scroll, a window too short for five lines,
@@ -1732,7 +1725,7 @@ body,
    its composer keeps the five lines but in a narrow room (below). */
 .new-task .new-task-composer .agent-composer-input {
   min-height: min(
-    calc(5 * var(--ui-type-body-leading) + var(--agent-composer-field-block)),
+    calc(5 * var(--agent-composer-line) + var(--agent-composer-field-block)),
     calc(var(--ui-stage-height) * 0.25)
   );
 }
@@ -1741,7 +1734,7 @@ body,
    rather than five, so Home's Inbox stays in view under it; it still grows
    to the cap as the words are written. */
 :where(:root)[data-ui-room="narrow"] .new-task-composer .agent-composer-input {
-  min-height: calc(2 * var(--ui-type-body-leading) + var(--agent-composer-field-block));
+  min-height: calc(2 * var(--agent-composer-line) + var(--agent-composer-field-block));
 }
 
 /* The foot stands on one row however narrow the card: the Runs on chip and

@@ -48,6 +48,7 @@ import {
   type SandboxGetOrCreate,
   type SandboxRoute,
   type SandboxRunning,
+  type SandboxSession,
   type SandboxTarget,
   type SandboxUser,
   UP_STATUSES,
@@ -65,6 +66,12 @@ export interface SandboxService {
     tag: string,
     value: string,
   ) => Effect.Effect<readonly ListedSandbox[], SandboxError>;
+  /**
+   * Every session of every sandbox the deployment's project ran that was
+   * created at or after `since`, in epoch milliseconds, the newest first,
+   * ended or not.
+   */
+  readonly sessionsSince: (since: number) => Effect.Effect<readonly SandboxSession[], SandboxError>;
   /** The sandbox of that name, as it stands, without resuming it; none where there is no such sandbox. */
   readonly get: (name: string) => Effect.Effect<ListedSandbox | undefined, SandboxError>;
   /** Whether a drive of that name stands, without making one. */
@@ -204,6 +211,18 @@ export interface SandboxService {
 export class Sandbox extends Context.Service<Sandbox, SandboxService>()("@repo/sandbox/Sandbox") {}
 
 /**
+ * What is done with a sandbox's ended sessions just before it is deleted.
+ * Note that it is handed them there, because a provider forgets a deleted
+ * sandbox's sessions with it, so what they used can be read only before;
+ * the deployment charges them (`@repo/service`'s
+ * `billing/sandbox-session-charges.ts`), and anywhere else nothing is done.
+ * It never fails: what it does with them is its own to log.
+ */
+export const EndedSessionsOnDelete = Context.Reference<
+  (sessions: readonly SandboxSession[]) => Effect.Effect<void>
+>("@repo/sandbox/EndedSessionsOnDelete", { defaultValue: () => () => Effect.void });
+
+/**
  * How long a sandbox runs past its last touch: what every open and create
  * runs for, and how far ahead of now each touch puts its end. Five minutes
  * with no agent or terminal activity, the bound every sandbox stops by:
@@ -300,7 +319,7 @@ export const touchedWhileUsed = (
 /**
  * What a base drive is filled as: the fill's sandbox's name, which is its
  * lock, the drive's name and where it is mounted, the image the sandbox
- * opens from, and its size.
+ * opens from, its size, and its tags.
  */
 export interface DriveFill {
   readonly name: string;
@@ -308,6 +327,8 @@ export interface DriveFill {
   readonly at: string;
   readonly image: string;
   readonly vcpus?: number;
+  /** The tags the fill's sandbox carries, such as the workspace it is billed to. */
+  readonly tags?: Readonly<Record<string, string>>;
   /** The user made in the fill's sandbox, so what the steps hand it is that user's on every fork. */
   readonly user?: SandboxUser;
 }
@@ -339,7 +360,7 @@ export const filledDrive = <E, R>(
         name: ask.name,
         from: { image: ask.image },
         drive: { fill: ask.drive, at: ask.at },
-        tags: {},
+        tags: ask.tags ?? {},
         ...(ask.vcpus === undefined ? undefined : { vcpus: ask.vcpus }),
         ...(ask.user === undefined ? undefined : { user: ask.user }),
         env: {},

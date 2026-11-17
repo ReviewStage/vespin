@@ -53,7 +53,7 @@ import {
 } from "@repo/features/agent-wire";
 import { carryOnLineWords } from "@repo/features/carry-on-words";
 import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
-import type { KnownNames } from "@repo/features/entity-kind";
+import { ENTITY_KIND, type KnownNames } from "@repo/features/entity-kind";
 import {
   CONTINUE_IN_CLOUD_LABEL,
   FAILURE_REASON,
@@ -131,6 +131,7 @@ import {
   isVoiceLine,
   spokenLineOf,
 } from "@repo/features/voice-call-lines";
+import { VOICE_CALL_STAGE, type VoiceCallStage } from "@repo/features/voice-wire";
 import { replyFromWords } from "@repo/features/words";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { AGENT_ENTER, EXPERIMENT } from "@repo/settings";
@@ -183,7 +184,7 @@ import {
   type WireValue,
 } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
-import { BotIcon, WebhookIcon, ZapIcon } from "lucide-react";
+import { WebhookIcon, ZapIcon } from "lucide-react";
 import {
   createContext,
   memo,
@@ -226,6 +227,7 @@ import { AutomationsWanted, useAutomation } from "../automation-directory.js";
 import { useConnected } from "../connection.js";
 import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
 import { useAgentArchive } from "../desktop/agent-archive.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
@@ -235,6 +237,7 @@ import { useTaskListCollections, useTaskListRow } from "../task-list-collections
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
+import { useVoiceCall } from "../voice-call.js";
 import {
   type AgentApprovalsControl,
   ApprovalsProvider,
@@ -477,6 +480,26 @@ export const AGENT_LEAD: TranscriptLead = {
   startingLine: "The agent is starting.",
 };
 
+/** What the empty transcript of an agent started blank says: its call connecting, the call listening for its first words, or the box waiting on them. */
+const BLANK_AGENT_LINE = {
+  CONNECTING: "Connecting the call.",
+  LISTENING: "Listening. Say what you want done.",
+  WAITING: "Waiting for your first message.",
+} as const;
+
+/**
+ * The line an agent started blank stands on before its first words, as
+ * Talk in a new agent's box starts one: no agent is starting, since none
+ * runs until it is told what to do, so it says what it waits on instead.
+ */
+function blankAgentLine(callStands: boolean, ownStage: VoiceCallStage | undefined): string {
+  if (ownStage === VOICE_CALL_STAGE.CONNECTING) return BLANK_AGENT_LINE.CONNECTING;
+
+  return callStands || ownStage === VOICE_CALL_STAGE.LIVE
+    ? BLANK_AGENT_LINE.LISTENING
+    : BLANK_AGENT_LINE.WAITING;
+}
+
 /** The description's own tab, which a task's name over its description's card opens. */
 const TASK_TARGET: ToolTarget = { kind: TOOL_TARGET.DESCRIPTION };
 
@@ -513,7 +536,7 @@ const OLDER_FAILED_LINE = "Earlier messages could not be read.";
 /** A worker's transcript: the subagent task it was handed, and the worker starting. */
 const WORKER_LEAD: TranscriptLead = {
   label: "Subagent task",
-  icon: <BotIcon />,
+  icon: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
   startingLine: "The worker is starting.",
 };
 
@@ -2860,6 +2883,7 @@ function AgentTranscriptView({
   signIn?: GitHubSignInDoors | undefined;
 }): React.JSX.Element {
   const connected = useConnected();
+  const ownCall = useVoiceCall().call;
   const { members, former } = useMemberDirectory();
   const undelivered = useUndeliveredLines();
   const unsent = useUnsentLines();
@@ -3268,7 +3292,19 @@ function AgentTranscriptView({
   if (ended === undefined && boot === undefined) {
     return (
       <ConversationLead className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}>
-        {starting ?? <WorkingLine startedAt={undefined} words={lead.startingLine} />}
+        {starting ?? (
+          <WorkingLine
+            startedAt={undefined}
+            words={
+              brief === AGENT_BRIEF.BLANK && origin === undefined
+                ? blankAgentLine(
+                    standingCalls.length > 0,
+                    ownCall?.agentId === agentId ? ownCall?.stage : undefined,
+                  )
+                : lead.startingLine
+            }
+          />
+        )}
         {endTrail}
       </ConversationLead>
     );

@@ -95,6 +95,9 @@ catalogs:
     '@types/react':
       specifier: 19.3.0
       version: 19.3.0
+    expo-sqlite:
+      specifier: 58.0.17
+      version: 58.0.17
     react:
       specifier: 19.3.0
       version: 19.3.0
@@ -127,12 +130,14 @@ overrides:
   node-gyp>undici: 6.29.1
   '@sentry/cli>undici': 6.29.1
 
+pnpmfileChecksum: sha256-5zr6kRyJg2o93o3vk5Q2kSNgqpI4ylynD9Hmzi2Ddnc=
+
 patchedDependencies:
   '@better-auth/oauth-provider@1.7.7':
     hash: b4b560cbadacfe5a94972c9a6c390e724b8fc4d34b6328f41345f642cd1ec060
     path: patches/@better-auth__oauth-provider@1.7.7.patch
   '@expo/ui@58.0.27':
-    hash: 88754994cefb25ddc9f469b890946d3f4485fc2977ba2eebbedcaa5a7b2962fc
+    hash: 19e0a7e1bd96ce3634a1506cf9858cbe79c70a8e39739dfbac58c6a9e8ff4d68
     path: patches/@expo__ui@58.0.27.patch
   '@sentry/browser@11.8.0':
     hash: af32b6645b074a081cae42956870b6c779240a52fac319191531b3724c5be619
@@ -458,7 +463,7 @@ importers:
         version: 15.0.2(expo@58.0.23)
       '@expo/ui':
         specifier: 58.0.27
-        version: 58.0.27(patch_hash=88754994cefb25ddc9f469b890946d3f4485fc2977ba2eebbedcaa5a7b2962fc)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
+        version: 58.0.27(patch_hash=19e0a7e1bd96ce3634a1506cf9858cbe79c70a8e39739dfbac58c6a9e8ff4d68)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
       '@formatjs/intl-datetimeformat':
         specifier: 8.0.3
         version: 8.0.3
@@ -534,6 +539,9 @@ importers:
       expo-haptics:
         specifier: 58.0.7
         version: 58.0.7(expo@58.0.23)
+      expo-image-manipulator:
+        specifier: 58.0.16
+        version: 58.0.16(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
       expo-image-picker:
         specifier: 58.0.10
         version: 58.0.10(expo@58.0.23)
@@ -558,6 +566,9 @@ importers:
       expo-splash-screen:
         specifier: 58.0.13
         version: 58.0.13(expo@58.0.23)(typescript@7.0.2)
+      expo-sqlite:
+        specifier: catalog:mobile
+        version: 58.0.17(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
       expo-symbols:
         specifier: 58.0.4
         version: 58.0.4(patch_hash=3e021b5b48de4d77b2c561684810f503c93394e081747073961e42e036be882c)(expo-font@58.0.11)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
@@ -1665,7 +1676,7 @@ importers:
     dependencies:
       '@expo/ui':
         specifier: 58.0.27
-        version: 58.0.27(patch_hash=88754994cefb25ddc9f469b890946d3f4485fc2977ba2eebbedcaa5a7b2962fc)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
+        version: 58.0.27(patch_hash=19e0a7e1bd96ce3634a1506cf9858cbe79c70a8e39739dfbac58c6a9e8ff4d68)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
       '@repo/features':
         specifier: workspace:*
         version: link:../features
@@ -1690,6 +1701,9 @@ importers:
       expo-video:
         specifier: 58.0.13
         version: 58.0.13(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
+      mermaid:
+        specifier: 11.17.2
+        version: 11.17.2
       react:
         specifier: catalog:mobile
         version: 19.3.0
@@ -6394,6 +6408,9 @@ packages:
     resolution: {integrity: sha512-+q/t7Ekv1EDY2l6Gda6LLiX14rU9TV20Wa3ofeQmwPFZbOMo9DXrLbOjFaaclkXKWidIaopwAObQDqwWtGUjqg==}
     engines: {node: '>= 4.0.0'}
 
+  await-lock@2.2.2:
+    resolution: {integrity: sha512-aDczADvlvTGajTDjcjpJMqRkOF6Qdz3YbPZm/PyW6tKPkx2hlYBzxMhEywM/tU72HrVZjgl5VCdRuMlA7pZ8Gw==}
+
   aws4@1.13.2:
     resolution: {integrity: sha512-lHe62zvbTB5eEABUVi/AwVh0ZKY9rMMDhmm+eeyuuUQbQ3+J+fONVQOZyj+DdrvD4BY33uYniyRJ4UJIaSKAfw==}
 
@@ -7231,7 +7248,6 @@ packages:
       better-sqlite3: '>=9.3.0'
       bun-types: '*'
       effect: '>=4.0.0-beta.83 || >=4.0.0'
-      expo-sqlite: '>=14.0.0'
       mssql: ^11.0.1
       mysql2: '>=2'
       pg: '>=8'
@@ -7315,8 +7331,6 @@ packages:
       bun-types:
         optional: true
       effect:
-        optional: true
-      expo-sqlite:
         optional: true
       mssql:
         optional: true
@@ -7614,6 +7628,13 @@ packages:
     peerDependencies:
       expo: '*'
 
+  expo-image-manipulator@58.0.16:
+    resolution: {integrity: sha512-KY4Y4GjyaPuvRrZWQ2qDDPC0+q4xOpz9rydrK8/jexU+zwCMHsQGalOPjFwZrC0QhvGxfvvG9H/Qwv6Yh9vlOg==}
+    peerDependencies:
+      expo: '*'
+      react: '*'
+      react-native: '*'
+
   expo-image-picker@58.0.10:
     resolution: {integrity: sha512-yqQC9UYMWSUxk6U0jaS1vE1w+b9Ru0FJmQ3KjUf9Q9oVg5xBxmg8+Ts+usazMAuPoskNIXJ++VZ+uK6br9yUGQ==}
     peerDependencies:
@@ -7732,6 +7753,13 @@ packages:
     resolution: {integrity: sha512-RsvDF13tU1wQIy2blzmdbZoWpPWNTYks2A0CUq2AENR7i7u8elSSEfQOdh5TeC0lrrFVbiWfPj2JiM7y/m08Ig==}
     peerDependencies:
       expo: '*'
+
+  expo-sqlite@58.0.17:
+    resolution: {integrity: sha512-nzIS8doaxGYPBu+jJD1aa1wsF5vsafLEr3ji4wwR1MWd66KV3u4lKotJPylxJkP08DZWn2uUnTXyMw9t7BdGUA==}
+    peerDependencies:
+      expo: '*'
+      react: '*'
+      react-native: '*'
 
   expo-status-bar@58.0.4:
     resolution: {integrity: sha512-e6JJHziSSNb1v1VSzmDrAPf6GFoPRdVOIDrTCcK3bHfbJEAZGZ3YZXfqlorZtUFDT0z6NcjaZf0mPWifJZcqew==}
@@ -12418,7 +12446,7 @@ snapshots:
 
   '@expo/sudo-prompt@9.3.2': {}
 
-  '@expo/ui@58.0.27(patch_hash=88754994cefb25ddc9f469b890946d3f4485fc2977ba2eebbedcaa5a7b2962fc)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)':
+  '@expo/ui@58.0.27(patch_hash=19e0a7e1bd96ce3634a1506cf9858cbe79c70a8e39739dfbac58c6a9e8ff4d68)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)':
     dependencies:
       expo: 58.0.23(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.17)(expo-router@58.0.30)(react-dom@19.2.8)(react-native-webview@14.0.1)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)(typescript@7.0.2)
       react: 19.3.0
@@ -15190,6 +15218,8 @@ snapshots:
 
   at-least-node@1.0.0: {}
 
+  await-lock@2.2.2: {}
+
   aws4@1.13.2: {}
 
   b4a@1.9.0: {}
@@ -16428,6 +16458,13 @@ snapshots:
     dependencies:
       expo: 58.0.23(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.17)(expo-router@58.0.30)(react-dom@19.2.8)(react-native-webview@14.0.1)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)(typescript@7.0.2)
 
+  expo-image-manipulator@58.0.16(expo@58.0.23)(react-native@0.88.1)(react@19.3.0):
+    dependencies:
+      expo: 58.0.23(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.17)(expo-router@58.0.30)(react-dom@19.2.8)(react-native-webview@14.0.1)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)(typescript@7.0.2)
+      expo-image-loader: 58.0.3(expo@58.0.23)
+      react: 19.3.0
+      react-native: 0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.88.1)(@types/react@19.3.0)(react@19.3.0)
+
   expo-image-picker@58.0.10(expo@58.0.23):
     dependencies:
       expo: 58.0.23(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.17)(expo-router@58.0.30)(react-dom@19.2.8)(react-native-webview@14.0.1)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)(typescript@7.0.2)
@@ -16539,7 +16576,7 @@ snapshots:
       sf-symbols-typescript: 2.2.0
       standard-navigation: 0.0.5
     optionalDependencies:
-      '@expo/ui': 58.0.27(patch_hash=88754994cefb25ddc9f469b890946d3f4485fc2977ba2eebbedcaa5a7b2962fc)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
+      '@expo/ui': 58.0.27(patch_hash=19e0a7e1bd96ce3634a1506cf9858cbe79c70a8e39739dfbac58c6a9e8ff4d68)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
       expo-symbols: 58.0.4(patch_hash=3e021b5b48de4d77b2c561684810f503c93394e081747073961e42e036be882c)(expo-font@58.0.11)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
       react-dom: 19.2.8(react@19.3.0)
       react-native-gesture-handler: 3.5.0(react-native@0.88.1)(react@19.3.0)
@@ -16564,6 +16601,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
       - typescript
+
+  expo-sqlite@58.0.17(expo@58.0.23)(react-native@0.88.1)(react@19.3.0):
+    dependencies:
+      await-lock: 2.2.2
+      expo: 58.0.23(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.17)(expo-router@58.0.30)(react-dom@19.2.8)(react-native-webview@14.0.1)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)(typescript@7.0.2)
+      react: 19.3.0
+      react-native: 0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.88.1)(@types/react@19.3.0)(react@19.3.0)
 
   expo-status-bar@58.0.4(expo@58.0.23)(react-native@0.88.1)(react@19.3.0):
     dependencies:

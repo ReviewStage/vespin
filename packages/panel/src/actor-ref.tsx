@@ -8,6 +8,7 @@ import {
   automationTriggerText,
 } from "@repo/features/automation-list-model";
 import type { AutomationRunSummary, AutomationSummary } from "@repo/features/automation-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import {
   AVATAR_OUTLINE,
@@ -51,10 +52,11 @@ import {
   SOMEONE_REASON,
 } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
-import { BotIcon, HistoryIcon, type LucideIcon, UserRoundIcon, UserRoundXIcon } from "lucide-react";
+import { HistoryIcon, type LucideIcon, UserRoundIcon, UserRoundXIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAutomation } from "./automation-directory.js";
 import { automationNextText, automationOwnerFor } from "./desktop/automation-words.js";
+import { EntityGlyph } from "./entities/entity-glyph.js";
 import { useCreator } from "./member-directory.js";
 import { useActorDoor, usePreloadedPerson } from "./person-door.js";
 import { StateGlyph } from "./state-glyph.js";
@@ -73,7 +75,7 @@ import { AgentMark } from "./tasks/tab-look.js";
  * never by a name of theirs; someone the service names nobody for
  * stands on a quiet outline. Someone GitHub names
  * who is no member stands by their GitHub avatar, a person on a circle and
- * an App's bot on a square, its robot until the avatar loads, and its name
+ * an App's bot on a square, its hard hat until the avatar loads, and its name
  * wears a quiet "bot" badge wherever it is said, as GitHub's own pages mark
  * one. A picture on GitHub's avatar host is asked for at twice the size it
  * is drawn, so a Retina screen draws it sharp and nothing larger is
@@ -236,7 +238,7 @@ function PersonDisc({
   );
 }
 
-/** A square holding a glyph alone, bare or on its tile; an App's bot's avatar stands over its robot once it loads, since a bot's square never holds a letter. */
+/** A square holding a glyph alone, bare or on its tile; an App's bot's avatar stands over its hard hat once it loads, since a bot's square never holds a letter. */
 function GlyphSquare({
   name,
   glyph,
@@ -347,7 +349,7 @@ function Face({
       return actor.bot ? (
         <GlyphSquare
           name={actor.login}
-          glyph={<BotIcon />}
+          glyph={<EntityGlyph kind={ENTITY_KIND.AGENT} />}
           size={size}
           tiled={tiled}
           src={pictureAt(actor.avatarUrl, size)}
@@ -412,7 +414,7 @@ export function commentAuthor(actor: Actor): CommentAuthor {
         ? {
             name: actor.login,
             outline: AVATAR_OUTLINE.SQUARE,
-            glyph: <BotIcon />,
+            glyph: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
             picture: picture(actor.avatarUrl),
           }
         : { name: actor.login, picture: picture(actor.avatarUrl) };
@@ -724,20 +726,11 @@ export function PersonCard({
   );
 }
 
-/** The app's own card: its face, how long ago it wrote where the place knows, then what it wrote here. Read, never followed. */
-export function AppCard({
-  sub,
-  latest,
-}: {
-  /** How long ago he wrote: "2h ago". */
-  sub?: ReactNode;
-  /** What he last wrote in this description, in a line: "Edited Rollout and Risks". */
-  latest?: ReactNode;
-}): React.JSX.Element {
+/** The app's own card: its face. Read, never followed. */
+export function AppCard(): React.JSX.Element {
   return (
     <HoverCard data-actor-card={ACTOR_KIND.APP}>
-      <ActorHead actor={APP_ACTOR} sub={sub} />
-      {latest === undefined ? null : <LatestRow latest={latest} />}
+      <ActorHead actor={APP_ACTOR} />
     </HoverCard>
   );
 }

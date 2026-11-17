@@ -35,15 +35,12 @@ export interface HomeRoute {
   readonly standingIn: string | undefined;
   /** Opens Home under the workspace listed, or at `/app` while none is; nothing where Home stands. */
   readonly onOpen: () => void;
-  /** Leaves Home for the task bound. */
-  readonly onClose: () => void;
   /** Stands Home of `workspace` in the step's place, as another workspace listed under Home does. */
   readonly onTurn: (workspace: string) => void;
 }
 
-/** Home as the router stands it, opened under the workspace `listed` names as it is pressed, and left by the window's routed exit. */
+/** Home as the router stands it, opened under the workspace `listed` names as it is pressed. */
 export function useHomeRoute(input: { listed: () => string | undefined }): HomeRoute {
-  const exits = useRoutedExits();
   const navigate = useNavigate();
   const here = useWindowPlace();
   const open = here.place === ROUTED_PLACE.HOME;
@@ -62,7 +59,7 @@ export function useHomeRoute(input: { listed: () => string | undefined }): HomeR
     void navigate({ to: "/$workspace", params: { workspace }, replace: true });
   };
 
-  return { open, standingIn, onOpen, onClose: () => exits.leave(), onTurn };
+  return { open, standingIn, onOpen, onTurn };
 }
 
 /** A workspace's Board as the router stands it. */
@@ -72,7 +69,6 @@ export interface BoardRoute {
   readonly standingIn: string | undefined;
   /** Opens the Board of the workspace whose address step is `workspace`. */
   readonly onOpen: (workspace: string) => void;
-  readonly onClose: () => void;
   /** Stands the Board of `workspace` in the step's place, as another workspace listed under the Board does. */
   readonly onTurn: (workspace: string) => void;
   /** Reads the Board ahead of a press the pointer says is coming. */
@@ -96,12 +92,13 @@ export interface PersonRoute {
     workspace: string,
     machineId?: string,
   ) => void;
+  /** Leaves the page for the place the window's state says, as a page of a workspace no longer listed does. */
   readonly onClose: () => void;
   /** Reads the page ahead of a press the pointer says is coming. */
   readonly onPreload: (userId: string, workspace: string) => void;
 }
 
-/** The Board as the router stands it, left by the window's routed exit, and kept standing by its stay where a leave was asked of it before a door asked for the Board standing (`places/routed-exits.ts`). */
+/** The Board as the router stands it, kept standing by the window's routed stay where a leave was asked of it before a door asked for the Board standing (`places/routed-exits.ts`). */
 export function useBoardRoute(): BoardRoute {
   const exits = useRoutedExits();
   const router = useRouter();
@@ -130,10 +127,10 @@ export function useBoardRoute(): BoardRoute {
     void router.preloadRoute({ to: "/$workspace/tasks", params: { workspace } });
   };
 
-  return { open, standingIn, onOpen, onClose: () => exits.leave(), onTurn, onPreload };
+  return { open, standingIn, onOpen, onTurn, onPreload };
 }
 
-/** A person's page as the router stands it, left and kept standing by the window's routed exits as the Board is. */
+/** A person's page as the router stands it, left by the window's routed exit, and kept standing by its stay as the Board is. */
 export function usePersonRoute(): PersonRoute {
   const exits = useRoutedExits();
   const router = useRouter();
@@ -238,10 +235,9 @@ export interface UnknownWorkspaceRoute {
   readonly workspace: string | undefined;
   /** Opens the address of the workspace whose address step is `workspace`, in the step's place. */
   readonly onOpen: (workspace: string) => void;
-  readonly onClose: () => void;
 }
 
-/** A workspace not there for the reader as the router stands it, left and kept standing by the window's routed exits as the Board is. */
+/** A workspace not there for the reader as the router stands it, kept standing by the window's routed stay as the Board is. */
 export function useUnknownWorkspaceRoute(): UnknownWorkspaceRoute {
   const exits = useRoutedExits();
   const router = useRouter();
@@ -267,5 +263,5 @@ export function useUnknownWorkspaceRoute(): UnknownWorkspaceRoute {
     void navigate({ to: "/$workspace", params: { workspace }, replace: true });
   };
 
-  return { workspace: standingIn, onOpen, onClose: () => exits.leave() };
+  return { workspace: standingIn, onOpen };
 }

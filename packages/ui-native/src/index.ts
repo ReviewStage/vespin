@@ -17,6 +17,11 @@ export {
 
 export {
   ConfirmAsk,
+  QUIET_ROW_QUESTION,
+  type RowAsker,
+  RowAsking,
+  type RowQuestion,
+  useRowAsker,
   WORDS_ASK_KIND,
   WordsAsk,
   type WordsAskAct,
@@ -52,6 +57,7 @@ export {
   CallAccessory,
   CallCardRow,
   type CallPresses,
+  CallSidebarFoot,
   COMPOSER_CALL,
   type ComposerCall,
   type StandingCallCard,
@@ -79,13 +85,11 @@ export {
   MenuChip,
 } from "./compose-sheet.js";
 
-export { Composer, ComposerFoot, type ComposerMenu } from "./composer.js";
+export { Composer, ComposerFoot, type ComposerMenu, type ComposerSaving } from "./composer.js";
 
 export {
   type AttachedPicture,
   AttachedPictures,
-  type QueuedLine,
-  QueuedLines,
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
@@ -159,10 +163,10 @@ export {
   ROW_ACTION_TONE,
   type RowAction,
   type RowActionTone,
+  type RowFold,
   type RowMenuGroup,
   type RowSubmenu,
   type RowSwipe,
-  type TaskFold,
   TaskRow,
 } from "./list-row.js";
 
@@ -226,6 +230,8 @@ export {
   PullRequestHead,
   WriteNoteRow,
 } from "./pull-request-page.js";
+
+export { type QueuedLine, QueuedLines } from "./queued-lines.js";
 
 export { RemindPickSheet } from "./remind-sheet.js";
 

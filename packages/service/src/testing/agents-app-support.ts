@@ -97,6 +97,7 @@ import { hostedFetch } from "../orpc/handler.js";
 import { PageLinks } from "../pages/page-links.js";
 import { modelCatalogOf, type OfferedModel } from "../providers/model-catalog.js";
 import type { WebServices } from "../runtime.js";
+import { SlackApp, slackAppService } from "../slack/slack-app.js";
 import { SlackBot, slackBotOver } from "../slack/slack-bot.js";
 import { tasksProcedures } from "../tasks/tasks-procedures.js";
 import { AGENT_KEY_RING, connectAgentApiKeys } from "../testing/agent-credentials.js";
@@ -521,6 +522,7 @@ export const standing = (
       Layer.succeed(PageLinks, { sandbox: undefined }),
       pullRequestLinksLayer,
       Layer.succeed(SlackBot, slackBotOver(undefined)),
+      Layer.succeed(SlackApp, slackAppService(undefined, [])),
       ANALYTICS.layer,
     );
 

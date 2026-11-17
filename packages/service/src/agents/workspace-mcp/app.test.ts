@@ -192,6 +192,7 @@ function sandboxWith(files: Readonly<Record<string, string>>) {
 
   const door: InboxSandboxDoor = () =>
     Promise.resolve({
+      checkout: "/workspace/repository",
       readFile: ({ path }: { path: string }) => {
         asked.push(path);
         const text = files[path];

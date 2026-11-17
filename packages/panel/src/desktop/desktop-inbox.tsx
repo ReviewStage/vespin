@@ -128,8 +128,8 @@ import { taskCardOf } from "./task-card.js";
  * chosen, answered, though the list draws it no row. Escape never leaves it, a stray press
  * being no reason to lose the item being read; any row of the sidebar does, and so does Back. Too narrow for the list and the item
  * side by side, it shows one at a time (`inbox-columns.ts`): the list,
- * and the item once a row's press or a link opens it, whose way back, Back's
- * chord, or Escape gives the list again. K and J, and the pager where the
+ * and the item once a row's press or a link opens it, whose way back or
+ * Back's chord gives the list again. K and J, and the pager where the
  * item stands alone, step through the list (`inbox-pager.tsx`). Everything in it that names a
  * person, an answer and an agent's starter, reads them against the listed
  * workspace's members (`member-directory.tsx`). The chosen item's box

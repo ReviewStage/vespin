@@ -29,7 +29,7 @@ import {
   StateRoot,
   TerminalSocket,
 } from "@repo/host/effect";
-import { armedWatchLayer, mirrorPlatform } from "@repo/host/node";
+import { armedWatchLayer, mirrorPlatform, nodeSqliteDriverLayer } from "@repo/host/node";
 import { ConfigProvider, Layer } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { net } from "electron";
@@ -67,6 +67,8 @@ function hostSeamLayersFor(dependencies: HostSeamDependencies) {
     Layer.succeed(Environment, ConfigProvider.fromEnvRecord(config.environment)),
     Layer.succeed(IdSource, { create: () => randomUUID() }),
     reporterLayer(config.report),
+    // The account's local database opens on Node's own `node:sqlite`, bundled with Electron.
+    nodeSqliteDriverLayer,
     Layer.succeed(TerminalSocket, openTerminalSocketOverWs),
     // A forwarded cloud port is listened on at 127.0.0.1 alone, over `node:net`.
     Layer.succeed(LoopbackListener, listenOnLoopbackOverNet),

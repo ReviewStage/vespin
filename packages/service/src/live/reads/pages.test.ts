@@ -86,12 +86,17 @@ it.layer(getTestDB())("a task's pages followed live", (it) => {
 
         assert.deepEqual(yield* agrees, []);
 
+        const shower = {
+          kind: PAGE_SHOWER.AGENT,
+          agentId: yield* openAgent(owner, { taskId: task.id }),
+        } as const;
+
         const funnel = Option.getOrThrow(
           yield* writePage(
             owner,
             taskPageOwner(task.id),
             { title: "Invite funnel", html: "<p>One</p>" },
-            { kind: PAGE_SHOWER.APP },
+            shower,
           ),
         );
 
@@ -105,14 +110,14 @@ it.layer(getTestDB())("a task's pages followed live", (it) => {
           owner,
           taskPageOwner(other.id),
           { title: "Another task's page", html: "<p>Elsewhere</p>" },
-          { kind: PAGE_SHOWER.APP },
+          { kind: PAGE_SHOWER.AGENT, agentId: yield* openAgent(owner, { taskId: other.id }) },
         );
         assert.equal((yield* agrees).length, 2);
         yield* writePage(
           owner,
           taskPageOwner(task.id),
           { pageId: funnel.id, title: "Invite funnel, revised", html: "<p>Two</p>" },
-          { kind: PAGE_SHOWER.APP },
+          shower,
         );
         const pages = yield* agrees;
         assert.deepEqual(

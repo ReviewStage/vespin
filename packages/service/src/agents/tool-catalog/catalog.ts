@@ -642,7 +642,7 @@ const CATALOG = [
   // A wakeup booked for later.
   agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup),
   // A turn's end: the summary its developer reads as the reply, and the follow-ups it offers.
-  agentTool(END_TURN_TOOL, runEndTurn, { gate: TOOL_GATE.TURN_END }),
+  agentTool(END_TURN_TOOL, runEndTurn, { ...LOADED, gate: TOOL_GATE.TURN_END }),
 ] as const;
 
 /** The name of a tool the catalog serves. */

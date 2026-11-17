@@ -48,18 +48,13 @@ const SKELETON_ROW_MARK = "20px";
 const SKELETON_OWNER_MARK = "16px";
 
 /** How wide the toolbar's two acts stand while the pages load: Create with an agent, and New automation. */
-const SKELETON_ACTS = { AGENT: "168px", NEW: "140px" } as const;
+const SKELETON_ACTS = { AGENT: "150px", NEW: "140px" } as const;
 
-/** The list's toolbar: its title, and its acts at its end, folded to their glyphs as its own width narrows. */
+/** The list's toolbar: its title, and its acts at its end. */
 export function AutomationsToolbar({ children }: { children: ReactNode }): React.JSX.Element {
-  // The toolbar's own width, which a container query reads, folds Create with an agent to its glyph before it crowds the title.
   return (
-    <div className="automations-toolbar flex-none @container/automations-toolbar">
-      <Toolbar
-        title="Automations"
-        titleReplayUnmasked
-        actions={<div className="automations-acts contents">{children}</div>}
-      />
+    <div className="automations-toolbar flex-none">
+      <Toolbar title="Automations" titleReplayUnmasked actions={children} />
     </div>
   );
 }

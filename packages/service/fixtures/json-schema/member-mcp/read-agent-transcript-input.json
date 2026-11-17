@@ -84,6 +84,8 @@
     },
     "entries": {
       "type": "integer",
+      "minimum": 1,
+      "maximum": 200,
       "description": "At most how many entries of its transcript the page holds, such as 1 for what it last said or did; as many as fit in 16000 characters when left out."
     }
   },

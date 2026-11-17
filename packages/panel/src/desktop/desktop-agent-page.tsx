@@ -10,8 +10,7 @@
  * Until then the page stands in an agent tab's own shape saying Reading; an
  * agent the service does not hold for the reader, deleted or of a workspace
  * they are not in, is not found; and a read that did not land says so with
- * Retry, and Escape leaves it for wherever it was opened from. Its step is
- * never one Back or Forward goes to
+ * Retry. Its step is never one Back or Forward goes to
  * (`places/routed-places.ts`'s `AGENT`), so Back from the task it opened on
  * passes over it.
  */
@@ -19,7 +18,6 @@
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
-import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   ERROR_STATE_PLACEMENT,
   ErrorState,
@@ -32,7 +30,6 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { useAppCommand } from "../app-commands.js";
 import { unreadShown } from "../failure-report.js";
 import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
@@ -78,14 +75,13 @@ export function AgentRoutePage({
   away,
 }: {
   tasks: TasksControl;
-  /** A phone's way back out of the page, to the page it was opened from (`WindowHistory`'s `onLeave`); none elsewhere. */
+  /** A phone's way back out of the page, the window's Back; none elsewhere. */
   away?: TaskHeadBack | undefined;
 }): React.JSX.Element {
   const { agentId } = useParams({ from: "/places/$workspace/agent/$agentId" });
   const found = useAgentFound(tasks, agentId);
   const taskId = "taskId" in found ? found.taskId : undefined;
   const { onShowAgent } = tasks;
-  useAppCommand(APP_COMMAND.EXIT_AGENT_PAGE, tasks.agentView.onClose);
   useEffect(() => {
     if (taskId !== undefined) onShowAgent(taskId, agentId);
   }, [onShowAgent, taskId, agentId]);

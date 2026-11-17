@@ -43,6 +43,7 @@ const GONE = "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e506";
 
 /** Who edits a description here, as the service names a member. */
 const LEE = { userId: "user-lee", name: "Lee Park" };
+const CHARLES = { userId: "user-charles", name: "Charles Pan" };
 
 const HOUR = 60 * 60 * 1000;
 
@@ -179,7 +180,8 @@ test("who last changed a picture's section is said in the viewer over the window
       { section: "", actor: DESCRIPTION_ACTOR.DEVELOPER, by: LEE, at: now, duringCall: false },
       {
         section: "Approach",
-        actor: DESCRIPTION_ACTOR.NOTETAKER,
+        actor: DESCRIPTION_ACTOR.DEVELOPER,
+        by: CHARLES,
         at: now - 2 * HOUR,
         duringCall: false,
       },
@@ -190,7 +192,7 @@ test("who last changed a picture's section is said in the viewer over the window
 
   assert.deepEqual(
     [...view.querySelectorAll(".description-unit-byline")].map((line) => lineWords(line)),
-    ["Vespin 2h"],
+    ["Charles Pan 2h"],
     "only the section with a heading carries its line in the words",
   );
 
@@ -205,7 +207,7 @@ test("who last changed a picture's section is said in the viewer over the window
   });
   assert.equal(
     note(),
-    "Edited by Vespin · 2h ago",
+    "Edited by Charles Pan · 2h ago",
     "the next picture, by the section that draws it rather than one naming its address",
   );
 });

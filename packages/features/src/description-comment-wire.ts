@@ -1,4 +1,3 @@
-import { LEGACY_APP_WORD, literalsReadingLegacy } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { AGENT_BOUNDS, agentMessageRequestSchema } from "./agent-wire.js";
 import { pageVersionNumberSchema } from "./page-wire.js";
@@ -16,7 +15,7 @@ import { filledText } from "./text-schema.js";
  * on every save (`description-comment-anchor.ts`); a thread whose words were
  * deleted keeps its quote and stands with no anchor, which the window says
  * as "Original content deleted". A thread's entries are its comments, and
- * the lines of what happened to it in between: who asked the app or a coding
+ * the lines of what happened to it in between: who asked a coding
  * agent to read it, and who resolved or reopened it. Posting a comment asks
  * no one anything.
  *
@@ -83,27 +82,24 @@ export const DESCRIPTION_COMMENT_STATUS = {
 export type DescriptionCommentStatus =
   (typeof DESCRIPTION_COMMENT_STATUS)[keyof typeof DESCRIPTION_COMMENT_STATUS];
 
-/** Who wrote an entry: a member of the workspace, the app, or one of the task's coding agents. */
+/** Who wrote an entry: a member of the workspace, or one of the task's coding agents. */
 export const DESCRIPTION_COMMENT_ACTOR = {
   MEMBER: "member",
-  APP: "app",
   AGENT: "agent",
 } as const;
 
 export type DescriptionCommentActor =
   (typeof DESCRIPTION_COMMENT_ACTOR)[keyof typeof DESCRIPTION_COMMENT_ACTOR];
 
-/** Who wrote an entry or was asked in it, as its row stores it. Note that it reads `luke`, which rows from before the app was named `app` hold, as the app (a legacy read). */
-export const descriptionCommentActorSchema = literalsReadingLegacy(
+/** Who wrote an entry or was asked in it, as its row stores it. */
+export const descriptionCommentActorSchema = EffectSchema.Literals(
   Object.values(DESCRIPTION_COMMENT_ACTOR),
-  LEGACY_APP_WORD,
-  DESCRIPTION_COMMENT_ACTOR.APP,
 );
 
 /** What one entry of a thread is: a comment, or a line of what happened to the thread. */
 export const DESCRIPTION_COMMENT_ENTRY = {
   COMMENT: "comment",
-  /** Someone sent the thread to the app or a coding agent to read and answer. */
+  /** Someone sent the thread to a coding agent to read and answer. */
   ASKED: "asked",
   RESOLVED: "resolved",
   REOPENED: "reopened",
@@ -130,8 +126,8 @@ const descriptionCommentSpanSchema = EffectSchema.Struct({
 });
 
 /**
- * Who wrote an entry: a member, named as the service names one, the app, or a
- * coding agent by its id, whose name the window reads off the task's agents.
+ * Who wrote an entry: a member, named as the service names one, or a coding
+ * agent by its id, whose name the window reads off the task's agents.
  * An entry whose member's account is gone names no member.
  */
 const descriptionCommentWriterSchema = EffectSchema.Struct({
@@ -142,13 +138,9 @@ const descriptionCommentWriterSchema = EffectSchema.Struct({
 
 export type DescriptionCommentWriter = typeof descriptionCommentWriterSchema.Type;
 
-/** Who a thread was sent to: the app, or a coding agent by its id. */
+/** Who a thread was sent to: a coding agent by its id. */
 const descriptionCommentAskedSchema = EffectSchema.Struct({
-  actor: literalsReadingLegacy(
-    [DESCRIPTION_COMMENT_ACTOR.APP, DESCRIPTION_COMMENT_ACTOR.AGENT],
-    LEGACY_APP_WORD,
-    DESCRIPTION_COMMENT_ACTOR.APP,
-  ),
+  actor: EffectSchema.Literal(DESCRIPTION_COMMENT_ACTOR.AGENT),
   agentId: EffectSchema.optionalKey(wireUuidSchema),
 });
 
@@ -332,7 +324,7 @@ export const DESCRIPTION_COMMENT_ACTION = {
   RESOLVE: "resolve",
   REOPEN: "reopen",
   DELETE_THREAD: "delete-thread",
-  /** Sends the thread to the app or one of the task's coding agents, to read with the description and answer in the thread. */
+  /** Sends the thread to one of the task's coding agents, to read with the description and answer in the thread. */
   ASK: "ask",
 } as const;
 
@@ -438,7 +430,7 @@ export const descriptionCommentAnchorsSchema = EffectSchema.Struct({
 
 export type DescriptionCommentAnchors = typeof descriptionCommentAnchorsSchema.Type;
 
-/** The tools the app and every coding agent on the task read and answer the description's comments with, by the name the model calls each. */
+/** The tools every coding agent on the task reads and answers the description's comments with, by the name the model calls each. */
 export const DESCRIPTION_COMMENT_TOOL = {
   READ: "read_comments",
   REPLY: "reply_to_comment",

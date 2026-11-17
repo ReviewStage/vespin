@@ -6,6 +6,7 @@ import {
   type FileChip,
   sizeLabel,
 } from "@repo/features/attachment-model";
+import { diagramAlt } from "@repo/features/mermaid-diagram";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { SHORTCUT_KEY, type ShortcutChord } from "@repo/settings/shortcuts";
 import {
@@ -61,7 +62,7 @@ import {
 } from "../copy-feedback.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 import { PhoneHead, PlaceMore } from "../desktop/phone-head.js";
-import { diagramAlt, useAppearance, useDrawing } from "../diagram-drawing.js";
+import { useAppearance, useDrawing } from "../diagram-drawing.js";
 import { failureShown } from "../failure-report.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { FileTypeIcon } from "./file-type-icon.js";

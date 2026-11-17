@@ -1747,7 +1747,7 @@ test("Search lists the pinned tasks first, the newest pinned first whenever each
   ]);
 });
 
-test("a task Vespin or a coding agent made says who in its detail and is found by it, but wears who is on it rather than its maker", () => {
+test("a task a coding agent made says who in its detail and is found by it, but wears who is on it rather than its maker", () => {
   const dean = { userId: "user-dean", name: "Dean Stratakos" };
 
   // Note that each is started after the next, as the list the host hands lists them newest started first.
@@ -1769,7 +1769,6 @@ test("a task Vespin or a coding agent made says who in its detail and is found b
       me: dean.userId,
       tasks: [
         task("Invite emails", 3, { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-gone" }),
-        task("Audit log export", 2, { actor: DESCRIPTION_ACTOR.NOTETAKER }),
         task("Rate limits", 1),
       ],
     }),
@@ -1783,12 +1782,8 @@ test("a task Vespin or a coding agent made says who in its detail and is found b
         null,
     );
 
-  assert.deepEqual(rows(), [
-    "Invite emails · relay · by Agent",
-    "Audit log export · relay · by Vespin",
-    "Rate limits · relay",
-  ]);
-  assert.deepEqual(marks(), [null, null, null]);
+  assert.deepEqual(rows(), ["Invite emails · relay · by Agent", "Rate limits · relay"]);
+  assert.deepEqual(marks(), [null, null]);
   type("agent");
   assert.deepEqual(rows(), ["Invite emails · relay · by Agent"]);
 });
@@ -1816,10 +1811,10 @@ test("a command ⌘K alone offers, the sidebar's Show my tasks, is listed by its
   assert.deepEqual(ran, ["show my tasks"]);
 });
 
-/** Offers two commands whose only key is Esc, as Settings and the Inbox's item do while they stand, and records each run. */
+/** Offers two commands whose only key is Esc, as Settings and an agent's threads do while they stand, and records each run. */
 function OffersEscapes({ ran }: { ran: string[] }): null {
   useAppCommand(APP_COMMAND.EXIT_SETTINGS, () => ran.push("exit settings"));
-  useAppCommand(APP_COMMAND.INBOX_LIST, () => ran.push("back to inbox list"));
+  useAppCommand(APP_COMMAND.EXIT_AGENT_THREADS, () => ran.push("back to transcript"));
 
   return null;
 }
@@ -1833,8 +1828,8 @@ test("a command whose only key is Esc is no row in ⌘K, though it is still offe
   chooseFilter("Commands");
   type("exit settings");
   assert.equal(rows().includes("Exit settings"), false);
-  type("back to inbox list");
-  assert.equal(rows().includes("Back to inbox list"), false);
+  type("back to transcript");
+  assert.equal(rows().includes("Back to transcript"), false);
   assert.ok(appCommandOffered(APP_COMMAND.EXIT_SETTINGS), "Exit settings is still offered");
 });
 

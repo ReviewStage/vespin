@@ -1,9 +1,11 @@
 /**
  * use-attached-pictures.ts -- the pictures a message or a start carries, as an agent's composer and the sheets that start work hold them: picked from the system's photo picker or dropped from Photos or Files, compressed as they are read, named as the panel names them, held to the service's bounds, and taken off on a press; and words pasted long enough to come as a text file of their own.
  *
- * A picture is read as a JPEG at `PICTURE_QUALITY`, but a PNG within the
- * bound for one picture, such as a screenshot, is kept as its own PNG so
- * its words and lines stay sharp, as the panel sends one. Each is named "Picture 1",
+ * A picture is drawn with its long edge within 2048 pixels and read as a
+ * JPEG at `PICTURE_QUALITY`, lower only where it would not stand within the
+ * bound for one picture (`@repo/features/picture-fit`); but a PNG picked
+ * within that bound, such as a screenshot, is kept as its own PNG so its
+ * words and lines stay sharp, as the panel sends one. Each is named "Picture 1",
  * "Picture 2", and on past every picture the holder has, and checked against
  * the service's bounds for one message (`AGENT_BOUNDS`), or the holder's
  * own, such as a note's to the people who make the app, as it is attached
@@ -29,15 +31,17 @@ import {
 } from "@repo/features/agent-wire";
 import { pictureName } from "@repo/features/file-marker";
 import { PASTED_TEXT_BYTES, pastedFile } from "@repo/features/long-paste";
+import { encodeWithin, PICTURE_LONG_EDGE } from "@repo/features/picture-fit";
 import type { AttachedPicture } from "@repo/ui-native";
 import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { File } from "expo-file-system";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { type ImagePickerAsset, launchImageLibraryAsync } from "expo-image-picker";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
-/** How a picture is compressed as it is read from the library: JPEG at this quality keeps a phone's photo under the service's bound for an image. */
-const PICTURE_QUALITY = 0.7;
+/** The JPEG quality a message's picture is first read at, once drawn within its long edge, as the panel's feedback form reads a screenshot. */
+const PICTURE_QUALITY = 0.8;
 
 /** What a picture the service would refuse says, in the panel's words for a file. */
 const PICTURE_REFUSAL = {
@@ -52,7 +56,7 @@ export interface PictureBounds {
   readonly most: number;
   readonly pictureBytes: number;
   readonly totalBytes: number;
-  /** The JPEG quality a picture is read at. */
+  /** The JPEG quality a picture is first read at, before it steps down to stand within `pictureBytes`. */
   readonly quality: number;
   readonly full: string;
 }
@@ -80,35 +84,11 @@ interface ReadPicture {
   readonly mediaType: typeof AGENT_ATTACHMENT_TYPE.JPEG | typeof AGENT_ATTACHMENT_TYPE.PNG;
 }
 
-/** A JPEG read as base64, as the picker and a drop answer one; none for one that could not be read. */
+/** A JPEG read as base64, as `readPicture` answers one; none for one that could not be read. */
 function jpegOf(base64: string | null | undefined): ReadPicture | undefined {
   return base64 === null || base64 === undefined
     ? undefined
     : { data: base64, mediaType: AGENT_ATTACHMENT_TYPE.JPEG };
-}
-
-/**
- * A picture the picker answered, as it goes: a PNG within `pictureBytes`
- * read from the file the picker wrote, which keeps it a PNG, and every other
- * picture, or a PNG whose file could not be read, as the JPEG the picker
- * compressed it to. Note that the picker answers base64 as a JPEG whatever
- * the picture was, so its file is the one way to the PNG.
- */
-async function pickedPicture(
-  asset: ImagePickerAsset,
-  pictureBytes: number,
-): Promise<ReadPicture | undefined> {
-  const keepsPng =
-    asset.mimeType === AGENT_ATTACHMENT_TYPE.PNG &&
-    asset.fileSize !== undefined &&
-    asset.fileSize <= pictureBytes;
-
-  if (!keepsPng) return jpegOf(asset.base64);
-  const png = await new File(asset.uri).base64().catch(() => undefined);
-
-  return png === undefined
-    ? jpegOf(asset.base64)
-    : { data: png, mediaType: AGENT_ATTACHMENT_TYPE.PNG };
 }
 
 /** Whether a file held is a pasted text file rather than a picture. */
@@ -119,6 +99,81 @@ function isText(file: AgentAttachment): boolean {
 /** The next picture's name, numbered past every picture held, a pasted text file not counted. */
 function nextName(pictures: readonly HeldPicture[], offset: number): string {
   return pictureName(pictures.filter(({ file }) => !isText(file)).length + offset + 1);
+}
+
+/** Deletes a JPEG the manipulator saved, once its bytes are read; one that stays only costs the cache. */
+function deleteSaved(uri: string) {
+  try {
+    const file = new File(uri);
+
+    if (file.exists) file.delete();
+  } catch (error: unknown) {
+    console.error("A resized picture's file was not deleted.", error);
+  }
+}
+
+/**
+ * A picture at `uri` as JPEG base64: decoded with its long edge within
+ * `PICTURE_LONG_EDGE`, then encoded at the bounds' quality, stepping down
+ * only until it stands within the bound for one picture. Note that the
+ * picture is drawn smaller as it is decoded, never after, since the
+ * picker's own quality compresses but never resizes, and several
+ * full-size camera photos read at once would stand in memory together.
+ */
+async function readPicture(uri: string, bounds: PictureBounds): Promise<string> {
+  const context = ImageManipulator.manipulate(uri, {
+    maxWidth: PICTURE_LONG_EDGE,
+    maxHeight: PICTURE_LONG_EDGE,
+  });
+
+  try {
+    const image = await context.renderAsync();
+
+    return await encodeWithin(
+      async (quality) => {
+        const saved = await image.saveAsync({
+          compress: quality,
+          format: SaveFormat.JPEG,
+          base64: true,
+        });
+
+        deleteSaved(saved.uri);
+
+        if (saved.base64 === undefined) throw new Error("The picture was saved without its bytes.");
+
+        return saved.base64;
+      },
+      bounds.pictureBytes,
+      bounds.quality,
+    );
+  } finally {
+    context.release();
+  }
+}
+
+/**
+ * A picture the picker answered, as it goes: a PNG within `bounds`' bytes
+ * for one picture, read from the file the picker wrote, which keeps it a PNG
+ * so a screenshot's words stay sharp; and every other picture, or a PNG
+ * whose file could not be read, drawn within its long edge and read as a
+ * JPEG (`readPicture`).
+ */
+async function pickedPicture(
+  asset: ImagePickerAsset,
+  bounds: PictureBounds,
+): Promise<ReadPicture | undefined> {
+  const keepsPng =
+    asset.mimeType === AGENT_ATTACHMENT_TYPE.PNG &&
+    asset.fileSize !== undefined &&
+    asset.fileSize <= bounds.pictureBytes;
+
+  const png = keepsPng ? await new File(asset.uri).base64().catch(() => undefined) : undefined;
+
+  if (png !== undefined) return { data: png, mediaType: AGENT_ATTACHMENT_TYPE.PNG };
+
+  return readPicture(asset.uri, bounds)
+    .then(jpegOf)
+    .catch(() => undefined);
 }
 
 /** Why the pictures held cannot all go together, in the panel's words; none where they can. */
@@ -152,7 +207,7 @@ export interface AttachedPictures {
   readonly drop: (uris: readonly string[], unreadable: number) => void;
   /** Whether the pictures the holder opened with are still being read, while nothing it sends would carry them. */
   readonly opening: boolean;
-  /** Whether pictures dropped on the holder, or picked and kept as their own PNG, are still being read, while a send would go without them. */
+  /** Whether pictures picked or dropped on the holder are still being read, while a send would go without them. */
   readonly reading: boolean;
   readonly detach: (id: string) => void;
   /** Takes every picture off, as a send does, answering what was held so a refusal can put it back. */
@@ -235,20 +290,14 @@ export function useAttachedPictures(
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
       selectionLimit: room,
-      quality: bounds.quality,
-      base64: true,
     })
       .then(async (picked) => {
         if (picked.canceled) return;
-        // Note that a PNG kept as one is read from its file after the picker closes, so the holder stands reading until it lands, and a send meanwhile waits rather than going without it.
+        // Note that each picture is read after the picker closes, drawn within its long edge or kept as its PNG, so the holder stands reading until they land, and a send meanwhile waits rather than going without them.
         setReads((count) => count + 1);
 
         try {
-          add(
-            await Promise.all(
-              picked.assets.map((asset) => pickedPicture(asset, bounds.pictureBytes)),
-            ),
-          );
+          add(await Promise.all(picked.assets.map((asset) => pickedPicture(asset, bounds))));
         } finally {
           setReads((count) => count - 1);
         }
@@ -276,14 +325,13 @@ export function useAttachedPictures(
     return true;
   };
 
-  // Each dropped JPEG is read whole and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
+  // Each dropped JPEG is read, fit within the bound, and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
   const dropped = (uris: readonly string[], unreadable: number) =>
     Promise.all(
       uris.map((uri) => {
         const file = new File(uri);
 
-        return file
-          .base64()
+        return readPicture(uri, bounds)
           .then(jpegOf)
           .catch(() => undefined)
           .finally(() => {

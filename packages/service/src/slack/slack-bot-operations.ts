@@ -8,9 +8,13 @@
  *
  * - The read takes any member, and answers whether this deployment holds
  *   the bot and the Slack team the workspace's bot is connected to.
- * - A connect takes an owner or admin who is someone in the team the bot's
- *   token answers for (`auth.test`), and keeps it as the workspace's
- *   installation.
+ * - A connect is refused as unavailable: the bot is connected by installing
+ *   our Slack app, whose install grants the workspace its own token, and
+ *   the door stays only for released clients that still name it.
+ * - An install takes an owner or admin, opens an install intent bound to
+ *   them and the workspace, and answers Slack's authorize address for our
+ *   Slack app, whose callback connects the bot (`slack-install-app.ts`);
+ *   unavailable where the deployment holds no Slack app.
  * - A disconnect takes an owner or admin, and deletes the installation,
  *   every member's Slack id with it; the bot stays installed in Slack, where
  *   only Slack's admins remove it.
@@ -32,9 +36,10 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
+import { INSTALL_INTENT_PROVIDER } from "@repo/database/integration-vocabulary";
+import { openIntegrationInstallIntent } from "@repo/database/models/integration-installation-store";
 import {
   deleteSlackInstallation,
-  linkSlackInstallation,
   type SlackChannelRepository,
   slackNotificationsOn,
   slackStartRepositories,
@@ -60,7 +65,9 @@ import {
   type HostedRefusal,
   hostedStoreOrUnavailable,
 } from "../http/http-effect.js";
-import { SlackBot, type SlackBotService } from "./slack-bot.js";
+import { SlackApp } from "./slack-app.js";
+import { SlackBot, type SlackWorkspaceBot, slackBotConfigured } from "./slack-bot.js";
+import { slackAuthorizeUrl, slackInstallCallback } from "./slack-install-app.js";
 
 /** One channel changed: the bot put in it or taken out of it, and its default repository named or cleared, either or both. */
 export type SlackChannelChange = Omit<
@@ -69,11 +76,16 @@ export type SlackChannelChange = Omit<
 >;
 
 /** What a write that names a repository reaches: the store, the bot, and GitHub through the App. */
-type SlackBotWriteServices = DatabaseServices | SlackBot | GitHubApp | HttpClient.HttpClient;
+type SlackBotWriteServices =
+  | DatabaseServices
+  | SlackBot
+  | SlackApp
+  | GitHubApp
+  | HttpClient.HttpClient;
 
 /** The team's channels as Settings lists them, each with its default repository; none where Slack could not be read. */
 const listedChannels = Effect.fn("web/slackBotChannels")(function* (
-  bot: SlackBotService,
+  bot: SlackWorkspaceBot,
   channels: readonly SlackChannelRepository[],
 ) {
   const listed = yield* bot.channels;
@@ -96,9 +108,9 @@ const listedChannels = Effect.fn("web/slackBotChannels")(function* (
 const workspaceSlackBot = Effect.fn("web/workspaceSlackBot")(function* (
   workspace: Workspace,
   userId: string,
-): Effect.fn.Return<WorkspaceSlackBot, HostedRefusal, DatabaseServices | SlackBot> {
-  const bot = yield* SlackBot;
-  const { configured } = bot;
+): Effect.fn.Return<WorkspaceSlackBot, HostedRefusal, DatabaseServices | SlackBot | SlackApp> {
+  const { forWorkspace } = yield* SlackBot;
+  const configured = yield* slackBotConfigured;
   const installation = yield* hostedStoreOrUnavailable(workspaceSlackInstallation(workspace.id));
 
   if (Option.isNone(installation)) return { configured };
@@ -109,7 +121,9 @@ const workspaceSlackBot = Effect.fn("web/workspaceSlackBot")(function* (
     slackStartRepositories(workspace.id),
   );
 
-  const listed = managesWorkspace(workspace) ? yield* listedChannels(bot, channels) : undefined;
+  const listed = managesWorkspace(workspace)
+    ? yield* listedChannels(yield* forWorkspace(workspace.id), channels)
+    : undefined;
 
   return {
     configured,
@@ -144,7 +158,7 @@ const reachedRepository = Effect.fn("web/slackBotRepository")(function* (
   return reached.repository.fullName;
 });
 
-/** The workspace named, where an owner or admin of it asks and its bot is connected; the bot as the deployment holds it. */
+/** The workspace named, where an owner or admin of it asks and its bot is connected; the workspace's bot, on its own token. */
 const connectedWorkspace = Effect.fn("web/slackBotConnected")(function* (
   userId: string,
   workspaceId: string,
@@ -153,11 +167,11 @@ const connectedWorkspace = Effect.fn("web/slackBotConnected")(function* (
   const installation = yield* hostedStoreOrUnavailable(workspaceSlackInstallation(workspace.id));
 
   if (Option.isNone(installation)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-  const bot = yield* SlackBot;
+  const { configured, forWorkspace } = yield* SlackBot;
 
-  if (!bot.configured) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+  if (!configured) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
 
-  return { workspace, bot };
+  return { workspace, bot: yield* forWorkspace(workspace.id) };
 });
 
 /** The workspace's Slack bot, to any member of it. */
@@ -170,42 +184,42 @@ export const readSlackBot = Effect.fn("web/readSlackBot")(function* (
   return yield* workspaceSlackBot(workspace, userId);
 });
 
-/** The bot connected to the team its token answers for, by someone in that team; unavailable where the deployment holds no bot or Slack did not answer. */
+/**
+ * Refused as unavailable to an owner or admin: the bot is connected by
+ * installing our Slack app, which grants the workspace its own token. Note
+ * that it stays, because released clients still call it.
+ */
 export const connectSlackBot = Effect.fn("web/connectSlackBot")(function* (
   userId: string,
   workspaceId: string,
+): Effect.fn.Return<WorkspaceSlackBot, HostedRefusal, DatabaseServices> {
+  yield* managedWorkspace(userId, workspaceId);
+
+  return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+});
+
+/**
+ * Where an owner or admin goes to Add to Slack: Slack's authorize address,
+ * carrying a new install intent's state and the callback on `origin`, the
+ * host the request came through; unavailable where the deployment holds no
+ * Slack app.
+ */
+export const installSlackBot = Effect.fn("web/installSlackBot")(function* (
+  userId: string,
+  workspaceId: string,
+  origin: string,
 ) {
   const workspace = yield* managedWorkspace(userId, workspaceId);
-  const bot = yield* SlackBot;
 
-  if (!bot.configured) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-
-  const team = yield* bot.team.pipe(
-    Effect.tapError((failure) =>
-      Effect.logWarning("The Slack bot could not read its team", failure.message),
-    ),
+  const settings = yield* (yield* SlackApp).settings.pipe(
     Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
   );
 
-  const inTeam = yield* bot.inTeam(team.id, userId).pipe(
-    Effect.tapError((failure) =>
-      Effect.logWarning("The Slack bot could not find who connects it", failure.message),
-    ),
-    Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
+  const state = yield* hostedStoreOrUnavailable(
+    openIntegrationInstallIntent(INSTALL_INTENT_PROVIDER.SLACK, userId, workspace.id),
   );
 
-  if (!inTeam) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
-
-  const txid = yield* hostedStoreOrUnavailable(
-    linkSlackInstallation({
-      organizationId: workspace.id,
-      teamId: team.id,
-      teamName: team.name,
-      userId,
-    }),
-  );
-
-  return withTxid(yield* workspaceSlackBot(workspace, userId), Option.some(txid));
+  return { url: slackAuthorizeUrl(settings, state, slackInstallCallback(origin)) };
 });
 
 /** The bot disconnected from the workspace; disconnecting one already gone answers it as it stands. */

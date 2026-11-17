@@ -159,6 +159,31 @@ function namingLines(repository: string | null, ownTask: OwnTask, workspace: str
 }
 
 /**
+ * What the agent is told of its task's status, which nothing but an agent
+ * or the developer moves, so a task left In progress stands in the
+ * developer's sidebar until they move it by hand. The agent keeps it
+ * current in the order the task menu lists them: Backlog when set aside,
+ * To do when it waits on another task, In progress while open or waiting,
+ * Done once its work is finished, and Canceled when dropped. Done
+ * withdraws the task's open asks and archives its agents, the one that
+ * moved it once its turn ends (`../../tasks/task-finish.ts`), so it waits
+ * on both; a turn starting on the task moves it back into progress from
+ * any status. A merge tells the agent nothing
+ * (`../../github/agent-wakes.ts`), so one that queued its pull request
+ * books a wakeup to see it land.
+ */
+function statusLines(publishes: boolean): string[] {
+  const done = publishes
+    ? `Mark it Done before your last message, once your pull requests merged or closed, no ask is open on the task, and no other agent on it is at work; work with no pull request is finished once its result is ready. Nothing tells you a pull request merged, so after you queue one, book a wakeup with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` to check.`
+    : "Mark it Done before your last message, once its result is ready, no ask is open on the task, and no other agent on it is at work.";
+
+  return [
+    `Keep your task's status current with \`${AGENT_TOOL.UPDATE_TASK}\`: Backlog when the developer sets it aside, To do when it waits on another task, In progress while you work or wait on a review, a merge, or the developer, Done once the work is finished, and Canceled when the developer drops it.`,
+    done,
+  ];
+}
+
+/**
  * The instructions for one agent: on the repository its row names, or none,
  * where it works in a folder with no checkout; worded for what it was
  * handed, its harness's shell, its machine, whose its commits are, the
@@ -166,7 +191,7 @@ function namingLines(repository: string | null, ownTask: OwnTask, workspace: str
  * token. A line on a gated tool of ours is told by whether the agent's
  * standing is offered it (`../tool-catalog/catalog.ts`'s `offers`): its
  * pull request by `open_pull_request`, its description by
- * `edit_description`. The repository's own `AGENTS.md` or `CLAUDE.md` is
+ * `edit_description`, its reply by `end_turn`. The repository's own `AGENTS.md` or `CLAUDE.md` is
  * not named, since each harness loads its own.
  */
 export function coderInstructions(
@@ -183,6 +208,7 @@ export function coderInstructions(
 ): string {
   const describes = offers(standing, EDIT_DESCRIPTION_TOOL.name);
   const publishes = repository !== null && offers(standing, AGENT_TOOL.OPEN_PULL_REQUEST);
+  const endsTurns = offers(standing, AGENT_TOOL.END_TURN);
   const shell = harness === CODER_HARNESS.CLAUDE_CODE ? "Bash" : "your shell";
   const branch = startBranch === null ? "" : ` on \`${startBranch}\``;
 
@@ -198,14 +224,17 @@ export function coderInstructions(
     UNCLEAR_LINE,
     ...(publishes ? publishLines(authorship, startBranch, memberToken) : []),
     `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\` and post it in a thread.`,
-    "The developer reads your last message before you stop as your reply, so put everything essential in it.",
-    `Ask the developer what you need, and show them what is ready to look at, in a thread with \`${INBOX_TOOLS.POST.name}\`.`,
+    endsTurns
+      ? `End every turn by calling \`${AGENT_TOOL.END_TURN}\` last: its summary is what the developer reads as your reply.`
+      : "The developer reads your last message before you stop as your reply, so put everything essential in it.",
+    `When you need something from the developer, or have something ready for them to look at, post it in a thread with \`${INBOX_TOOLS.POST.name}\`. If someone asks you something on a thread, answer on that thread, not just in your reply. Every post reaches the developer as a notification, so never post one that needs nothing of them: no thanks or acknowledgment, no confirmation that you did what they just told you, such as arming auto-merge or queueing a merge, no news that a pull request merged or its checks passed, and no correction of a link or a number, even where they wrote to you on a thread: say it in your reply instead.`,
     ...(describes
       ? [
           `Record a decision you made, or a question left open with the assumption you go on, in the task's description with \`${EDIT_DESCRIPTION_TOOL.name}\`${read}.`,
         ]
       : []),
     `Save screenshots under \`${machine.sharedFiles}/\` and show them with \`${AGENT_TOOL.SHOW_MEDIA}\`.`,
+    ...statusLines(publishes),
     ...namingLines(repository, ownTask, workspace),
   ];
 

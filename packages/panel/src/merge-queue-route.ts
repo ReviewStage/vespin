@@ -28,7 +28,6 @@ export interface MergeQueueRoute {
   readonly marked: string | undefined;
   /** Opens the page under the workspace whose address step is `workspace`, marking the pull request at `pullRequest` where one is named. */
   readonly onOpen: (workspace: string, pullRequest?: string) => void;
-  readonly onClose: () => void;
   /** Stands the page under `workspace` in the step's place, as another workspace listed under it does. */
   readonly onTurn: (workspace: string) => void;
 }
@@ -38,7 +37,7 @@ export function useMergeQueueOn(): boolean {
   return useQuery({ ...appStateQuery, select: selectMergeQueueOn }).data === true;
 }
 
-/** The Merge queue page as the router stands it, left by the window's routed exit, and kept standing by its stay where a door asks for the page standing. */
+/** The Merge queue page as the router stands it, kept standing by the window's routed stay where a door asks for the page standing. */
 export function useMergeQueueRoute(): MergeQueueRoute {
   const router = useRouter();
   const navigate = useNavigate();
@@ -68,7 +67,7 @@ export function useMergeQueueRoute(): MergeQueueRoute {
     void navigate({ href: pathUnder(pathname, workspace), replace: true });
   };
 
-  return { open, standingIn, marked, onOpen, onClose: () => exits.leave(), onTurn };
+  return { open, standingIn, marked, onOpen, onTurn };
 }
 
 /**

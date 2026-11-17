@@ -4,6 +4,7 @@ import {
   type ReviewCommentMode,
 } from "@repo/features/pull-request-write-wire";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, CARD_CORNER, CARD_PADDING, Card } from "@repo/ui";
+import { isComposingKey } from "@repo/ui/composing-key";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useState } from "react";
 import { type CommentLines, commentLinesLabel } from "./changes-model.js";
@@ -129,10 +130,12 @@ export function LineComment({
       className="line-comment flex max-w-line-comment flex-col gap-control-gap px-list-inset pt-row-inset pb-list-inset"
       onFocus={onActive}
       onKeyDown={(event) => {
-        if (event.key !== "Escape" || sending) return;
+        if (event.key !== "Escape" || isComposingKey(event)) return;
+        // Note that a comment on its way still takes its Escape, so the page behind it stays put while it waits.
         event.preventDefault();
         event.stopPropagation();
-        onClose();
+
+        if (!sending) onClose();
       }}
     >
       <p className="line-comment-head m-0 text-caption-inline font-ui-semibold text-muted-foreground">
