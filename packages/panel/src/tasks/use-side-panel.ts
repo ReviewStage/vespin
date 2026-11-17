@@ -467,6 +467,7 @@ const taskTabsSchema = Schema.Struct({
   order: Schema.optional(keptList(anyTabSchema)),
   changes: Schema.optional(keptList(changesKindTabSchema)),
   viewedAt: Schema.optional(keptList(Schema.Struct({ tab: anyTabSchema, at: Schema.Number }))),
+  panel: Schema.optional(Schema.Struct({ open: Schema.Boolean, width: Schema.Number })),
 });
 
 /** A task's own choices as the hook holds them: today's kinds alone, its open Changes tabs, and tabs viewed and an order that may hold any tab, which the record keeps only the kept kinds of. */
@@ -481,6 +482,14 @@ interface TaskTabs {
   readonly viewedAt?: readonly ViewedAt<SidePanelTab>[] | undefined;
   /** The agent each tab a link or the "+" opened stands under where it is not the tab's own (`ownerOf`), kept for this launch alone. */
   readonly owners?: readonly TabOwner[] | undefined;
+  /** How the panel stood on the task as it was last left there; none on a task it was never shown on. */
+  readonly panel?: TaskPanel | undefined;
+}
+
+/** How the panel stands on a task: shown or shut, and how wide. */
+interface TaskPanel {
+  readonly open: boolean;
+  readonly width: number;
 }
 
 /** A tab and the agent whose strip it stands in. */
@@ -831,6 +840,36 @@ function withTaskTabs(
     ...held,
     tasks: Object.fromEntries([...kept, [taskId, choice] as const].slice(-TASKS_KEPT)),
   };
+}
+
+/**
+ * The state with how the panel stands kept on the task it stands on, so the
+ * task opens again with it so; nothing kept on a task it was never shown
+ * on, while it stays shut there.
+ */
+function withPanelKept(held: HeldState, taskId: string): HeldState {
+  return withTaskTabs(held, taskId, (was) => {
+    const { panel } = was;
+
+    if (panel === undefined && !held.open) return was;
+
+    if (panel?.open === held.open && panel.width === held.width) return was;
+
+    return { ...was, panel: { open: held.open, width: held.width } };
+  });
+}
+
+/**
+ * The state arrived at a stop: the panel shown or shut and as wide as it
+ * was last left on the task given, or shut at the width it stands at where
+ * none is given or it was never shown there.
+ */
+function withPanelOf(held: HeldState, taskId: string | undefined): HeldState {
+  const panel = taskTabs(held, taskId).panel;
+  const open = panel?.open ?? false;
+  const width = panel?.width ?? held.width;
+
+  return held.open === open && held.width === width ? held : { ...held, open, width };
 }
 
 /** The state with the fixed tab opened or closed on the task. */
@@ -1854,11 +1893,12 @@ function withFileInPlace(
 function currentTasks(tasks: SidePanelState["tasks"]): HeldState["tasks"] {
   return Object.fromEntries(
     Object.entries(tasks ?? {}).map(
-      ([task, { opened, closed, recent, order, changes, viewedAt }]) => [
+      ([task, { opened, closed, recent, order, changes, viewedAt, panel }]) => [
         task,
         {
           opened,
           closed,
+          ...(panel === undefined ? undefined : { panel }),
           ...(recent === undefined ? undefined : { recent }),
           ...(order === undefined ? undefined : { order }),
           ...(changes === undefined ? undefined : { changes }),
@@ -1968,7 +2008,7 @@ function storedTasks(tasks: HeldState["tasks"]): NonNullable<SidePanelState["tas
 
   return Object.fromEntries(
     Object.entries(tasks).map(
-      ([task, { opened, closed, recent = [], order = [], changes, viewedAt = [] }]) => {
+      ([task, { opened, closed, recent = [], order = [], changes, viewedAt = [], panel }]) => {
         const stamps = viewedAt.flatMap(({ tab, at }) => (keptChoice(tab) ? [{ tab, at }] : []));
 
         return [
@@ -1980,6 +2020,7 @@ function storedTasks(tasks: HeldState["tasks"]): NonNullable<SidePanelState["tas
             order: kept(order),
             changes: changes === undefined || changes.length === 0 ? undefined : changes,
             viewedAt: stamps.length === 0 ? undefined : stamps,
+            panel,
           },
         ] as const;
       },
@@ -2300,12 +2341,24 @@ export function useSidePanel(
   // shown with nothing in it.
   const narrow = room === SHELL_ROOM.NARROW;
   const shown = state.open && strip.length > 0;
-  // Note that the panel belongs to the stop it was opened at, so a new stop
-  // starts with it shut: a task or an Inbox item, two
-  // items of one task being two stops. A tab asked for on the stop arrived
-  // at, as a link, a pin, or a step of the history opens one there, was
-  // asked for, so it stands.
+  // Note that the panel belongs to the stop it was opened at: a task or an
+  // Inbox item, two items of one task being two stops. A task opens with the
+  // panel shown or shut, and as wide, as it was last left there, so it
+  // opens as the developer left it; an Inbox item, a task it was never shown
+  // on, and every stop in a narrow room, where it would stand over the
+  // document, start with it shut. A tab asked for on the stop arrived at, as
+  // a link, a pin, or a step of the history opens one there, was asked for,
+  // so it stands.
   const stop = task.stop ?? taskId;
+  const keptOn = task.stop === undefined && !narrow ? taskId : undefined;
+
+  // How the panel stands on the task is kept on it as it changes, so it is there to come back to;
+  // not while a tab asked for on another stop is carried there, which is that stop's to keep.
+  const elsewhere = carrying || (asked !== undefined && asked.task !== taskId);
+
+  useEffect(() => {
+    if (keptOn !== undefined && !elsewhere) update((held) => withPanelKept(held, keptOn));
+  }, [keptOn, elsewhere, state.open, state.width, update]);
   const [standing, setStanding] = useState(stop);
 
   if (standing !== stop) {
@@ -2314,7 +2367,7 @@ export function useSidePanel(
 
       if (taskId !== undefined) update((held) => withShownCarried(held, taskId));
     } else if (asked?.carry === true && asked.task === taskId) setAsked({ ...asked, carry: false });
-    else if (state.open) update((held) => (held.open ? { ...held, open: false } : held));
+    else update((held) => withPanelOf(held, keptOn));
     setStanding(stop);
   }
 
