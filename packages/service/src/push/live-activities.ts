@@ -179,12 +179,19 @@ function contentStateOf(
   });
 }
 
-/** The push-to-start: the activity's type and its state, with the alert Apple asks a start for, silent. */
+/**
+ * The push-to-start: the activity's type and its state, with the alert Apple
+ * asks a start for, silent. Note that it asks for an update push token
+ * (`input-push-token`), as Apple's ActivityKit push guide says a start must
+ * on iOS 18 and later for the activity to take updates by token, so the
+ * system wakes the app with that token to send on.
+ */
 function startPayload(state: LiveActivityContentState, now: number): ApnsPayload {
   return {
     aps: {
       timestamp: epochSeconds(now),
       event: APNS_LIVE_ACTIVITY_EVENT.START,
+      "input-push-token": 1,
       "attributes-type": LIVE_ACTIVITY_ATTRIBUTES_TYPE,
       attributes: {},
       "content-state": state,
