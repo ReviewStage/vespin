@@ -11,7 +11,7 @@ import { archivedWithDoneTask } from "../agents/agent-change.js";
  * (`coder-host/instructions.ts`), and a member's: nothing moves it to done on
  * its own, so a task an agent misses stands in progress until someone marks it,
  * but for the task an automation's run made for itself, which moves to Done
- * as "Archive finished runs" puts its run away (`../automations/run-archive.ts`).
+ * as "Mark finished runs Done" puts its run away (`../automations/run-archive.ts`).
  *
  * Only a member's or an agent's move to Done archives the task's agents
  * standing idle with it, as them (`task-store.ts`'s `updateTaskCommitted`),

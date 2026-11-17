@@ -214,7 +214,7 @@ const SCOPE = describeWire(
 
 const ARCHIVE_SUCCESSFUL = describeWire(
   Schema.Boolean,
-  "Archive each run's agent once it succeeds and leaves no thread open.",
+  "Mark each run's task Done, archiving its agents, once every agent of the run succeeds and leaves no pull request or thread open.",
 );
 
 const SLACK_DELIVERY = describeWire(

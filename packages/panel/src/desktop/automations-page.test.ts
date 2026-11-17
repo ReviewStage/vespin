@@ -1654,7 +1654,7 @@ test("archiving successful runs is saved", async () => {
   mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
   await settle();
 
-  act(() => button("Archive finished runs").click());
+  act(() => button("Mark finished runs Done").click());
   act(() => button("Save").click());
   await settle();
 

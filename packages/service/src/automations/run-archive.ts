@@ -1,5 +1,5 @@
 /**
- * run-archive.ts -- "Archive finished runs": an automation run's agents put away once each finished well, as soon as what held the run back lets go.
+ * run-archive.ts -- "Mark finished runs Done": an automation run's agents put away, and its task Done, once each finished well, as soon as what held the run back lets go.
  *
  * An automation that archives its successful runs has the agents of each
  * run, the run's own agent and the helpers it started alike,
@@ -50,7 +50,7 @@ const ENDED_UNWELL: ReadonlySet<AgentStatus> = new Set([
   AGENT_STATUS.CANCELED,
 ]);
 
-/** An agent "Archive finished runs" may put away, as its reader saw it: whose it is, its id, its conversation and how far its lines had run, when it was made, and when it was put away where it already was. */
+/** An agent "Mark finished runs Done" may put away, as its reader saw it: whose it is, its id, its conversation and how far its lines had run, when it was made, and when it was put away where it already was. */
 type FinishedAgentRead = Pick<
   ArchivableRunAgent,
   "userId" | "agentId" | "conversationId" | "createdAt" | "archivedAt" | "conversationSeq"
@@ -109,7 +109,7 @@ function archiveAsRead<A extends FinishedAgentRead>(
 }
 
 /**
- * The agents archived under "Archive finished runs"' rule, each answered in
+ * The agents archived under the rule of "Mark finished runs Done", each answered in
  * order: one standing unarchived that finished well, read as its tab reads
  * it, is archived only while its lines stand where they were read and it
  * holds no pull request or inbox item open (`archivedUnmovedAgent`), by the
