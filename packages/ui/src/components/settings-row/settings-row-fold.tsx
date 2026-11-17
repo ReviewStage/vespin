@@ -27,7 +27,7 @@ import {
  * words, so what it holds reads as part of the row rather than a box of its
  * own in the card. It opens and closes on the disclosure's motion
  * (`useDisclosureFold`): a press unrolls the body and fades it in, a close
- * fades it out first, and reduced motion holds it still at the tokens; a
+ * rolls it up as it fades, and reduced motion holds it still at the tokens; a
  * fold drawn open from the start replays nothing.
  *
  * What it folds open is its caller's, whole: a GitHub account's
