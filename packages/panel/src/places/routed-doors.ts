@@ -158,7 +158,7 @@ export function useAdminDoor(tasks: Pick<TasksControl, "placeLeave" | "workspace
 export interface AutomationsDoor {
   /** Opens the page asked for, the list where none is, under the listed workspace; nothing while none is listed. */
   readonly open: (place?: AutomationsPlace) => void;
-  /** A page's ‹ back to the list: one step back, else the list in the page's step (`useBackOr`). */
+  /** A page's ‹ back to the list: one step back, else the list in the page's step (`useBackOr`), under the listed workspace, else the one standing. */
   readonly back: () => void;
 }
 
@@ -171,15 +171,20 @@ export function useAutomationsDoor(
   const { placeLeave, workspace } = tasks;
   const backOr = useBackOr();
 
-  // Opens `place` under the listed workspace, as a step of its own or in the step's place where `inPlace`.
-  const open = (place: AutomationsPlace, inPlace: boolean) =>
+  const listed = workspace === undefined ? undefined : stepOf(workspace);
+
+  // Opens `place` under the workspace whose step is `under`, as a step of its own or in the step's place where `inPlace`.
+  const open = (place: AutomationsPlace, under: string | undefined, inPlace: boolean) =>
     placeLeave.arrive(() => {
-      if (workspace !== undefined) route.onOpen(place, stepOf(workspace), inPlace);
+      if (under !== undefined) route.onOpen(place, under, inPlace);
     }, NOTHING);
 
   return {
-    open: (place = { kind: AUTOMATIONS_PAGE.LIST }) => open(place, false),
-    back: () => backOr(() => open({ kind: AUTOMATIONS_PAGE.LIST }, true)),
+    open: (place = { kind: AUTOMATIONS_PAGE.LIST }) => open(place, listed, false),
+    // Note that a page linked to while the workspaces could not be read lists none, so its back opens the list under the
+    // workspace its address names, rather than nowhere.
+    back: () =>
+      backOr(() => open({ kind: AUTOMATIONS_PAGE.LIST }, listed ?? route.standingIn, true)),
   };
 }
 
