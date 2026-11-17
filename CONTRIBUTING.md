@@ -47,9 +47,8 @@ Create Deployment in Vercel, then pass the address it prints as
 
 - **On Linux**, `./scripts/bootstrap.sh` installs dependencies (it skips
   Electron's binary), and `./scripts/check.sh`, the vitest suites
-  (`pnpm exec vitest run <path>`), and lint all work. CI runs on Linux, on
-  smol machines. The app itself does not launch there: `run.sh` requires
-  macOS.
+  (`pnpm exec vitest run <path>`), and lint all work. CI runs on ubuntu-24.04.
+  The app itself does not launch there: `run.sh` requires macOS.
 - **On a Mac**, `./scripts/run.sh --fixture smoke` runs the app on fixture data
   and needs no credentials.
 - **A live run** (`./scripts/run.sh` without `--fixture`) signs in to the
