@@ -1597,7 +1597,7 @@ test("Escape while writing the prompt lets go of the caret and reaches the windo
   pressEscape({});
   window.removeEventListener("keydown", listen);
 
-  // Note that both reach the window, whose live call Escape stops first, marked taken, so neither leaves the page.
+  // Note that both reach the window marked taken, so neither leaves the page.
   assert.deepEqual(reached, [true, true]);
   assert.equal(document.activeElement === prompt, false);
   assert.equal(prompt.textContent, "Triage the issues opened overnight.");
