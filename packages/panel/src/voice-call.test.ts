@@ -194,7 +194,7 @@ test("a call connects in the default voice, goes live as the session starts, and
   assert.ok(microphone.stopped, "the microphone is let go");
 });
 
-test("Talk pressed before its agent stands opens the call once the agent lands, and nothing where it was refused", async () => {
+test("Talk pressed before its agent stands opens the call once the agent lands, nothing where it was refused, and nothing over a call pressed for since", async () => {
   await mounted();
 
   const refused = call.startWhenStarted();
@@ -207,6 +207,19 @@ test("Talk pressed before its agent stands opens the call once the agent lands, 
   act(() => landed({ agentId: AGENT_ID, taskId: TASK_ID }));
   await settleQueries();
   assert.deepEqual(opened, [{ agentId: AGENT_ID, voice: "marin", sdp: "v=0 offer" }]);
+
+  // A Talk whose agent lands after a newer press leaves the newer call standing.
+  const late = call.startWhenStarted();
+  const newer = { agentId: "6e7f8a9b-0c1d-4e2f-8a3b-4c5d6e7f8a9b", taskId: TASK_ID };
+  act(() => call.start(newer));
+  await settleQueries();
+  act(() => late({ agentId: AGENT_ID, taskId: TASK_ID }));
+  await settleQueries();
+  assert.deepEqual(
+    opened.slice(1),
+    [{ agentId: newer.agentId, voice: "marin", sdp: "v=0 offer" }],
+    "the late Talk opened no call over the newer one",
+  );
 });
 
 test("muting the microphone tells the session, and muting the speaker tells it nothing", async () => {

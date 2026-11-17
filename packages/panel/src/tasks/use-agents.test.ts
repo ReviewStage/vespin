@@ -446,7 +446,7 @@ test("a draft asks nothing of the service, one per plan, until its first message
   assert.equal(tab.control().draft?.id, other, "another plan's draft stands");
 });
 
-test("Talk on a draft starts its agent blank under the draft's key on its chips, opening its tab and calling the agent it started, and calls nothing where it was refused", async () => {
+test("Talk on a draft starts its agent blank under a key of its own on its chips, opening its tab and calling the agent it started, and calls nothing where it was refused", async () => {
   const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [] });
   tab.answer(
     ACT_KIND.AGENTS_START,
@@ -477,13 +477,9 @@ test("Talk on a draft starts its agent blank under the draft's key on its chips,
   assert.equal(tab.control().draft?.id, draft, "and keeps the draft");
 
   await talk();
-  assert.deepEqual(startPayloads(tab.asked).at(-1), {
-    taskId: TASK,
-    idempotencyKey: draft,
-    blank: true,
-    disabledServers,
-    ...choice,
-  });
+  const { idempotencyKey, ...blank } = startPayloads(tab.asked).at(-1) ?? {};
+  assert.deepEqual(blank, { taskId: TASK, blank: true, disabledServers, ...choice });
+  assert.notEqual(idempotencyKey, draft, "the draft's key stays its words'");
   assert.deepEqual(tab.started, [AGENT]);
   assert.deepEqual(called, [undefined, { agentId: AGENT, taskId: TASK }]);
   assert.equal(tab.control().draft, undefined, "the started draft is let go");

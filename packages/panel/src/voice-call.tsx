@@ -308,6 +308,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
   // Note that the microphone's opener and the press's audio context are refs, because the session reads them when a start connects, outside any render.
   const opener = useRef(openMicrophone);
   const pressed = useRef<AudioContext | undefined>(undefined);
+  // How many presses asked for a call, so a Talk whose agent lands late knows whether one asked since.
+  const asked = useRef(0);
 
   useEffect(() => {
     opener.current = openMicrophone;
@@ -355,17 +357,24 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
 
   const start = (into: { readonly agentId: string; readonly taskId: string }) => {
     if (keyMissing) return openApiKeys();
+    asked.current += 1;
     // Note that the meters' context is made here, in the press, since Safari runs one only from a gesture; the session's connect takes it at once.
     pressed.current = pressedContext();
     session.start(into);
   };
 
   // Note that the press's context is held apart until the agent lands, since another call's press may come meanwhile.
+  // Note that a press made since asks for the newer call, so a Talk landing late lets its press go rather than end that call.
   const startWhenStarted = (): CallWhenStarted => {
     const context = pressedContext();
+    asked.current += 1;
+    const press = asked.current;
 
     return (into) => {
-      if (into === undefined) return void context?.close().catch(() => undefined);
+      if (into === undefined || press !== asked.current) {
+        return void context?.close().catch(() => undefined);
+      }
+
       pressed.current?.close().catch(() => undefined);
       pressed.current = context;
       session.start(into);

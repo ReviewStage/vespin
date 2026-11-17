@@ -434,8 +434,8 @@ export interface AgentsControl {
     permissionMode?: AgentPermissionMode,
   ) => Promise<StartFailure | undefined>;
   /**
-   * Starts the draft's agent blank, handed nothing, for Talk: under the
-   * draft's key, on its choice, servers, place, and mode as `startPrompt`
+   * Starts the draft's agent blank, handed nothing, for Talk: under a key
+   * of its own, on the draft's choice, servers, place, and mode as `startPrompt`
    * takes them, its tab opening as a Start's does, then `call` called on
    * it, or with nothing where it did not start. Answers why it did not
    * start, or nothing once it did.
@@ -1580,8 +1580,10 @@ export function useAgents(input: {
       return { reason: FAILURE_REASON.OTHER, text: START_NEEDS_TASK };
     }
 
+    // Note that a blank start mints a key of its own, never the draft's, so a Talk whose answer was lost
+    // never hands its blank agent to the words the draft sends later under the draft's key.
     const answer = await askStart(taskId, {
-      idempotencyKey: draftId,
+      idempotencyKey: crypto.randomUUID(),
       blank: true,
       ...(disabledServers.length === 0 ? undefined : { disabledServers }),
       ...(choice === undefined ? undefined : choiceRequest(choice)),
