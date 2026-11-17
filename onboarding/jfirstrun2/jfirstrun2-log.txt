@@ -1,0 +1,10 @@
+== bundle MFIRST2 base d96fb50acf
+  built d96fb50acf base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-allow: fails 0 shots 14 
+iphone-dark-deny: fails 0 shots 14 
+ipad26-light-allow: fails 0 shots 14 
+ipad26-dark-deny: fails 0 shots 14 
