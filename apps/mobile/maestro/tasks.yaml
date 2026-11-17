@@ -245,9 +245,14 @@ env:
       - takeScreenshot: task-agent-swipe
       - tapOn: "Created by .*"
       - waitForAnimationToEnd
-- scrollUntilVisible:
-    element: "Goal"
-    direction: DOWN
+# Note that the task's page is scrolled by drags inside it on an iPad
+# (`BESIDE`), since a scroll at the window's middle lands on a landscape
+# window's list column beside it, and the page never moved.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Goal"
+      BESIDE: ${FLOATING_TABS}
 - takeScreenshot: task-description
 # A page in its Pages opens whole on the app's own page screen, its ⋯
 # offering Open in browser, and back leads to the Overview. A tap off the
@@ -262,6 +267,7 @@ env:
     env:
       ELEMENT: "Invite funnel"
       BELOW: "relay › AL-42"
+      BESIDE: ${FLOATING_TABS}
 - tapOn: "Invite funnel"
 - extendedWaitUntil:
     visible: "Invites sent in the staging workspace.*"
@@ -285,15 +291,20 @@ env:
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
-- scrollUntilVisible:
-    element: "Goal"
-    direction: DOWN
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Goal"
+      BESIDE: ${FLOATING_TABS}
 # Its status chip opens the menu of statuses, the one it stands at checked,
 # and a pick says at once on the chip. Its priority and assignee chips open
 # theirs the same way; a tap off a menu closes it.
-- scrollUntilVisible:
-    element: "Created by .*"
-    direction: UP
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Created by .*"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
 - tapOn: "Status, .*"
 - takeScreenshot: task-status-menu
 - tapOn: "Todo"
@@ -341,9 +352,11 @@ env:
 # Sub-tasks' + offers New sub-task and Link existing task; New sub-task
 # opens New task as a sub-task of it, its repository the task's own; Cancel
 # on a sheet with nothing typed closes it.
-- scrollUntilVisible:
-    element: "Add sub-task"
-    direction: DOWN
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Add sub-task"
+      BESIDE: ${FLOATING_TABS}
 - tapOn: "Add sub-task"
 - assertVisible: "Link existing task"
 - takeScreenshot: task-sub-task-add
@@ -369,6 +382,7 @@ env:
     file: subflows/scroll-to.yaml
     env:
       ELEMENT: "Should an owner be able to resend.*"
+      BESIDE: ${FLOATING_TABS}
 - takeScreenshot: task-comments
 - tapOn: "Should an owner be able to resend.*"
 - assertVisible: "Yes: Resend stands beside each expired invite.*"
@@ -429,10 +443,11 @@ env:
 - extendedWaitUntil:
     visible: "Created by .*"
     timeout: 20000
-- scrollUntilVisible:
-    element: "Fix ledger rounding"
-    direction: DOWN
-    centerElement: true
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Fix ledger rounding"
+      BESIDE: ${FLOATING_TABS}
 - waitForAnimationToEnd
 - swipe:
     from:
