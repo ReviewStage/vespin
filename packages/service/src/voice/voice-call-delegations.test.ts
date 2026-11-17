@@ -201,7 +201,7 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
   );
 
   it.effect(
-    "a call whose voice answers the caller names the untitled agent and its untitled task, with no turn of the agent's",
+    "a call whose voice answers the caller names the untitled agent and its untitled task, with no turn of the agent's, though the voice greeted first",
     () =>
       Effect.gen(function* () {
         const { call, callerId, agentId } = yield* openCall;
@@ -230,8 +230,19 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
 
           yield* Deferred.await(ready);
           yield* session.say(
+            LIVE_SERVER_EVENT.OUTPUT_TRANSCRIPT_DELTA,
+            fragment("Hi, what should we work on?", 0, 600),
+          );
+
+          // Note that the greeting is let settle, a title asked on it with it, before the caller says anything to name the agent by.
+          yield* storedLines(agentId, call.id).pipe(
+            Effect.tap(() => Effect.yieldNow),
+            Effect.repeat({ until: (lines) => lines.length === 1, times: 2_000 }),
+          );
+          yield* Effect.repeat(Effect.yieldNow, { times: 500 });
+          yield* session.say(
             LIVE_SERVER_EVENT.INPUT_TRANSCRIPT_DELTA,
-            fragment("Expire invitations after a week.", 0, 900),
+            fragment("Expire invitations after a week.", 700, 1100),
           );
           yield* session.say(
             LIVE_SERVER_EVENT.OUTPUT_TRANSCRIPT_DELTA,
