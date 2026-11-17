@@ -114,6 +114,18 @@
     calc((var(--ui-control-height) - var(--ui-control-icon)) / 2);
 }
 
+/* The account's row at the column's foot (`sidebar-foot.tsx`) stands on the
+   head's lines: its face, at the workspace tile's size, is centered where
+   the rows' glyphs are and its name starts where theirs do, by the head's
+   own overhang, and Send feedback and Settings meet edge to edge at its end
+   (`sidebar-foot-end`), so they stand under Back and Forward. */
+.desktop-sidebar .sidebar-account-row > .ui-nav-item {
+  --sidebar-account-overhang: calc((var(--spacing-avatar-row) - var(--ui-control-icon)) / 2);
+
+  gap: calc(var(--ui-icon-gap) - var(--sidebar-account-overhang));
+  padding-inline-start: calc(var(--ui-row-inset) - var(--sidebar-account-overhang));
+}
+
 /* Note that the strip over it keeps a top row's hairline the work's own row
    beside it leaves out (`.desktop-main`'s `--desktop-bar-height`), so the
    head rises by it to stand level. A drawer keeps no strip. */
