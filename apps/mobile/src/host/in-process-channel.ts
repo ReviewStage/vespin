@@ -60,11 +60,19 @@ export function inProcessChannel(): InProcessChannel {
     return {
       postMessage: (data) => {
         if (closed) return;
+        const kind = typeof data;
+        const chars = kind === "string" ? (data as string).length : undefined;
         // Note that delivery waits a turn, as a channel's does, so a message posted from inside a listener reaches the other end after the listener returns.
         queueMicrotask(() => {
           if (closed) return;
+          const at = performance.now();
 
           for (const listener of [...other.message]) listener({ data });
+          const ms = performance.now() - at;
+
+          if (ms > 4 || (chars ?? 0) > 50_000) {
+            globalThis.__perfStep?.("port:delivered", { to: own === 0 ? 1 : 0, kind, chars, ms });
+          }
         });
       },
       addEventListener: (type, listener) => {

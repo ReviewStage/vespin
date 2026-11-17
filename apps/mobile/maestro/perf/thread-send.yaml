@@ -1,0 +1,47 @@
+# thread-send.yaml -- MEASUREMENT ONLY: five text replies, then five photo replies, sent on one open thread of the Inbox fixture, each Send labeled "T:<path>" so analyze.py times it.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: ${FIXTURE}
+      perfStream: ${STREAM}
+- assertVisible: "Recorded the invite flow"
+- scrollUntilVisible:
+    element: "acceptInvite can add a member twice"
+    direction: DOWN
+- tapOn: "acceptInvite can add a member twice"
+- assertVisible: ".*moving both writes into one transaction.*"
+- waitForAnimationToEnd:
+    timeout: 3000
+# A text reply: the words typed, then Send timed.
+- repeat:
+    times: 5
+    commands:
+      - tapOn: "Reply"
+      - inputText: "Probe reply."
+      - tapOn:
+          text: "Send"
+          retryTapIfNoChange: false
+          label: "T:send-text"
+      - assertVisible: "Probe reply."
+      - waitForAnimationToEnd:
+          timeout: 3000
+# A photo reply: the picker's first photo attached, then Send timed. The rig adds a 9:16 test photo first, so the first cell is stable.
+- repeat:
+    times: 5
+    commands:
+      - tapOn: "Add"
+      - tapOn: "Photos"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          point: "17%, 28%"
+      - tapOn: "Add"
+      - assertVisible: "Picture.*"
+      - tapOn:
+          text: "Send"
+          retryTapIfNoChange: false
+          label: "T:send-photo"
+      - waitForAnimationToEnd:
+          timeout: 3000

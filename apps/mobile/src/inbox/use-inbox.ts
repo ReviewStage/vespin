@@ -783,6 +783,15 @@ function sourceOf(
   }
 }
 
+/** PROBE (never merged): how long `run` holds the thread, stamped as `name`. */
+function timedStep<T>(name: string, run: () => T): T {
+  const at = performance.now();
+  const value = run();
+  globalThis.__perfStep?.(name, { ms: performance.now() - at });
+
+  return value;
+}
+
 /** The files read with one more landed: what it is drawn from, its size in words, and a picture's size in pixels, as its header states it. */
 function withRead(
   held: ThreadMediaRead,
@@ -790,7 +799,12 @@ function withRead(
   source: string,
   base64: string,
 ): ThreadMediaRead {
+  const sizedAt = performance.now();
   const pictureSize = each.kind === INBOX_MEDIA.PICTURE ? base64PictureSize(base64) : undefined;
+  globalThis.__perfStep?.("media:picture-size", {
+    chars: base64.length,
+    ms: performance.now() - sizedAt,
+  });
 
   return {
     sources: new Map(held.sources).set(each.attachmentId, source),
@@ -913,18 +927,20 @@ export function useThreadMedia(
   // Note that a picture of a reply still held is drawn from its bytes, at the size its header states, in the render that first draws it, rather than after the read above lands, so its bubble never stands as a spinner or at another shape first.
   const drawn = useMemo(
     () =>
-      media.reduce((was, each) => {
-        const bytes =
-          itemId === undefined ||
-          each.kind !== INBOX_MEDIA.PICTURE ||
-          read.sources.has(each.attachmentId)
-            ? undefined
-            : pending?.(itemId, each.attachmentId);
+      timedStep("media:drawn", () =>
+        media.reduce((was, each) => {
+          const bytes =
+            itemId === undefined ||
+            each.kind !== INBOX_MEDIA.PICTURE ||
+            read.sources.has(each.attachmentId)
+              ? undefined
+              : pending?.(itemId, each.attachmentId);
 
-        return bytes === undefined
-          ? was
-          : withRead(was, each, `data:${bytes.contentType};base64,${bytes.base64}`, bytes.base64);
-      }, read),
+          return bytes === undefined
+            ? was
+            : withRead(was, each, `data:${bytes.contentType};base64,${bytes.base64}`, bytes.base64);
+        }, read),
+      ),
     [itemId, media, pending, read],
   );
 

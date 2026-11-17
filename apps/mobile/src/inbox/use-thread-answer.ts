@@ -434,6 +434,8 @@ export function useThreadAnswer(
   };
 
   const send = (pressed?: InboxDraft) => {
+    const pressedAt = performance.now();
+    globalThis.__perfStep?.("send:pressed", { files: (pressed ?? draft).attachments.length });
     const sending = pressed ?? draft;
     const unreadable = unreadableNumber(thread, sending);
 
@@ -444,7 +446,9 @@ export function useThreadAnswer(
       return;
     }
 
+    const readAt = performance.now();
     const sent = inboxThreadSend(thread, sending);
+    globalThis.__perfStep?.("send:read-draft", { ms: performance.now() - readAt });
 
     if (sent === undefined) {
       const missing = inboxMissing(thread, sending);
@@ -472,17 +476,27 @@ export function useThreadAnswer(
         at: Date.now(),
       }),
     }));
+    globalThis.__perfStep?.("send:held", { ms: performance.now() - pressedAt });
     // A send refused says why on the box, where its words go back, rather than in the notice.
     write(
-      () =>
-        acts[ACT_KIND.AGENTS_INBOX_MESSAGE]({
+      () => {
+        globalThis.__perfStep?.("send:act-call");
+        const callAt = performance.now();
+        const answer = acts[ACT_KIND.AGENTS_INBOX_MESSAGE]({
           itemId,
           text: sent.text,
           ...(sent.attachments.length === 0 ? undefined : { attachments: [...sent.attachments] }),
           ...(sent.answers === undefined ? undefined : { answers: sent.answers }),
           ...(revision === undefined ? undefined : { revision }),
           clientKey: key,
-        }),
+        });
+        globalThis.__perfStep?.("send:act-called", { ms: performance.now() - callAt });
+        void Promise.resolve(answer).then(() =>
+          globalThis.__perfStep?.("send:act-answered", { ms: performance.now() - callAt }),
+        );
+
+        return answer;
+      },
       {
         refused: (answer) => ("failure" in answer ? refusedWords(answer.failure) : undefined),
         unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),

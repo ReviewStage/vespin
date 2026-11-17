@@ -41,7 +41,13 @@ export const appStateQuery = queryOptions({
       : Promise.resolve(held);
   },
   staleTime: Infinity,
-  structuralSharing: shareAppState,
+  structuralSharing: (held, next) => {
+    const at = performance.now();
+    const shared = shareAppState(held, next);
+    globalThis.__perfStep?.("app-state:shared", { ms: performance.now() - at });
+
+    return shared;
+  },
   retry: false,
 });
 

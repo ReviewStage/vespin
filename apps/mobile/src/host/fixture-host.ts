@@ -236,6 +236,16 @@ export function stageFixture(
   updateNeeded = false,
   machineAsk = false,
 ): void {
+  const at = performance.now();
+  stageFixtureTimed(state, updateNeeded, machineAsk);
+  globalThis.__perfStep?.("fixture:staged", { ms: performance.now() - at });
+}
+
+function stageFixtureTimed(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  updateNeeded = false,
+  machineAsk = false,
+): void {
   if (machineAsk) MACHINE_ASKED.add(state);
 
   const snapshot = state.snapshot();
@@ -302,6 +312,7 @@ function keepSentReply(
 
   if (Predicate.isObject(answer) && "failure" in answer) return;
 
+  globalThis.__perfStep?.("fixture:keep-sent-reply");
   // SAFETY: the payload is the kind's, which the guard above names.
   const reply = inboxSentReply(
     payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_MESSAGE>,

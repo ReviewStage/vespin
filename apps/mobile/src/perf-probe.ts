@@ -52,6 +52,9 @@ globalThis.__perfMark = (name, data = {}) => {
 };
 globalThis.__perfMark("bundle");
 
+// A step stamped every time, unlike a mark: a send's phases, each copy of a send's bytes, and how long each took.
+globalThis.__perfStep = (name, data = {}) => stamp("step", { name, ...data });
+
 // React Native's own startup marks, in performance.now()'s timebase: the instance's start, the runtime's, and the bundle's entry, read once the first rows draw, since they are filled as the launch goes.
 globalThis.__perfStartup = () => {
   try {

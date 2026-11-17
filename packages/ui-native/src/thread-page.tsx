@@ -649,6 +649,11 @@ export function ThreadPage(props: ThreadPageProps) {
     ...drawing
   } = props;
 
+  // PROBE (never merged): each render of the page.
+  (globalThis as { __perfStep?: (name: string, data?: object) => void }).__perfStep?.(
+    "thread:render",
+    { messages: messages.length },
+  );
   // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
   const footRoom = useDockRoom();
 
