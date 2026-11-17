@@ -205,11 +205,7 @@ export function CallCardRow({
           spacing={SPACE.TIGHT * 2}
           modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
         >
-          <AgentTile
-            name={call.agentName}
-            harness={call.harness}
-            size={inline ? TILE_SIZE.INLINE : TILE_SIZE.FULL}
-          />
+          <AgentTile harness={call.harness} size={inline ? TILE_SIZE.INLINE : TILE_SIZE.FULL} />
           <VStack alignment="leading" spacing={0}>
             <Text
               modifiers={[
