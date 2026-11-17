@@ -3,7 +3,7 @@ import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE } from "@repo/wire";
 import { test } from "vitest";
 import { placedMessages } from "./agent-parts.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
-import { CALL_ITEM, type CallItem, callItemsOf } from "./voice-call-lines.js";
+import { CALL_ITEM, type CallItem, callItemsOf, toldTurnsOf } from "./voice-call-lines.js";
 
 /**
  * Each edge a call leaves in a transcript, as the rows the service stores in
@@ -216,4 +216,27 @@ test.each<{
   },
 ])("$case", ({ script, standing = [], drawn: expected }) => {
   assert.deepEqual(drawing(script, standing), expected);
+});
+
+test("a turn is told once a line of the voice on the call that handed it the ask follows it after it ended, and only such a turn", () => {
+  const at = (line: AgentTranscriptMessage, sentAt: number) => ({ ...line, sentAt });
+
+  const script: Script = [
+    caller("ask", true),
+    turn("told"),
+    voice("retell"),
+    typed("typed ask"),
+    turn("typed turn"),
+    voice("small talk"),
+    caller("ask again", true),
+    turn("acked early"),
+    at(voice("on it"), 0),
+    caller("other ask", true, "call-2"),
+    turn("other call's turn"),
+    voice("call-1 retell"),
+    caller("last ask", true),
+    turn("hung up on"),
+  ];
+
+  assert.deepEqual([...toldTurnsOf(placedMessages(script))].sort(), ["acked early", "told"]);
 });
