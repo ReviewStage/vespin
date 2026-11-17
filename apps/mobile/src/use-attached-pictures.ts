@@ -51,6 +51,9 @@ const PICTURE_REFUSAL = {
   UNREADABLE: (name: string) => `${name} couldn't be read.`,
 } as const;
 
+/** What a holder says where the photo picker did not open, as a refusal's note stands beside the box. */
+export const PICKER_FAILED = "Photos couldn't be opened. Try again.";
+
 /** How many pictures a holder carries, how large each and all of them may be, how they are compressed as they are read, and what a holder that is full says. */
 export interface PictureBounds {
   readonly most: number;
@@ -390,7 +393,10 @@ export function useAttachedPictures(
           setReads((count) => count - 1);
         }
       })
-      .catch((cause: unknown) => console.error("The photo picker did not open.", cause));
+      .catch((cause: unknown) => {
+        console.error("The photo picker did not open.", cause);
+        onNote(PICKER_FAILED);
+      });
   };
 
   // Every pasted file's name the holder has handed out, so a file taken off or sent frees no number a later paste reuses.
