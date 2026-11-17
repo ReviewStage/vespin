@@ -16,7 +16,14 @@ import {
   keyboardType,
   textInputAutocapitalization,
 } from "@expo/ui/swift-ui/modifiers";
-import { type ReactElement, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { ActionSheetIOS, type ActionSheetIOSOptions, Alert as SystemAlert } from "react-native";
 import { WORDS_KIND, type WordsKind } from "./system-asks.js";
 import { useWindowSizeClass } from "./use-window-size-class.js";
@@ -133,8 +140,8 @@ function GatedConfirm({
  * it takes something away, and the system's own Cancel; in a regular one an
  * alert with Cancel and its act. Note that it's raised once each time
  * `presented` turns true, and that an answer coming after the caller let
- * the question go acts on nothing, since UIKit's question can't be taken
- * down from React Native.
+ * the question go, after the ask unmounted, or to an earlier question acts
+ * on nothing, since UIKit's question can't be taken down from React Native.
  */
 function SystemConfirm({
   title,
@@ -146,29 +153,33 @@ function SystemConfirm({
   onDismiss,
   compact,
 }: ConfirmAskProps & { readonly compact: boolean }) {
-  // The newest answers and whether the question still stands, which an answer reads as it lands.
-  const live = useRef({ presented, onAct, onDismiss });
+  // The newest answers, which an answer reads as it lands.
+  const live = useRef({ onAct, onDismiss });
   useEffect(() => {
-    live.current = { presented, onAct, onDismiss };
+    live.current = { onAct, onDismiss };
   });
-  // Note that a question raised stays raised until `presented` turns false, so a second run of the effect never raises it twice.
-  const raised = useRef(false);
+  // The question raised and still answerable, by its own token: none once `presented` turns false or the ask unmounts, so a second run of the effect never raises it twice, and an answer to an earlier question, or one landing after the ask went, acts on nothing.
+  const standing = useRef<symbol | undefined>(undefined);
+
+  // Note that the token is let go during the commit that lets the question go or unmounts the ask, in a layout effect, so no native answer landing before the passive effects run can still act.
+  useLayoutEffect(() => {
+    if (!presented) standing.current = undefined;
+
+    return () => {
+      standing.current = undefined;
+    };
+  }, [presented]);
 
   useEffect(() => {
-    if (!presented) {
-      raised.current = false;
+    if (!presented || standing.current !== undefined) return;
 
-      return;
-    }
-
-    if (raised.current) return;
-
-    raised.current = true;
+    const raise = Symbol("raise");
+    standing.current = raise;
 
     const answer = (acted: boolean) => {
-      const now = live.current;
+      if (standing.current !== raise) return;
 
-      if (!now.presented) return;
+      const now = live.current;
 
       if (acted) now.onAct();
 
