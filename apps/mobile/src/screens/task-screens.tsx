@@ -723,6 +723,7 @@ export function TaskListRow({
   const look = listing.lookOf(task);
   const openRelation = useOpenRelation();
   const asker = useRowAsker();
+  const asks = listing.rowAsks(asker);
 
   return (
     <TaskRow
@@ -736,7 +737,8 @@ export function TaskListRow({
       blocked={task.blocked === true}
       taskKey={keyed ? keyOf(task, listing.workspace) : undefined}
       depth={depth}
-      {...rowActs(task, look.unread, listing, listing.rowAsks(asker), openRelation)}
+      {...rowActs(task, look.unread, listing, asks, openRelation)}
+      statusMenu={statusSubmenu(task, asks.setStatus)}
       preview={taskPreview(task, listing)}
       link={
         listing.workspace === undefined
@@ -1596,6 +1598,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
             name={sub.name}
             status={sub.status}
             faded={taskFinished(sub)}
+            statusMenu={statusSubmenu(sub, overview.setStatus)}
             // Note that a sub-task is settled in place, as Reminders' subtasks are and the panel's related rows' Status is, before its relation is changed.
             trailingActions={[
               ...settleSwipes(sub, overview.setStatus),
@@ -1631,6 +1634,9 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
                   name={other?.name ?? WORDS.UNLISTED_TASK}
                   status={other?.status}
                   faded={other !== undefined && taskFinished(other)}
+                  statusMenu={
+                    other === undefined ? undefined : statusSubmenu(other, overview.setStatus)
+                  }
                   relation={TASK_RELATION_WORDS[kind]}
                   relationMark={{
                     glyph: RELATION_KIND_SYMBOL[kind],

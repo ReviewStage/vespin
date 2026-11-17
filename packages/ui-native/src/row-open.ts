@@ -24,3 +24,10 @@ export const RowSelectedContext = createContext<string | undefined>(undefined);
  * list of what a search found.
  */
 export const RowSearchedContext = createContext<readonly string[]>([]);
+
+/**
+ * Whether its list stands in Select mode, where a press on a row ticks it,
+ * so a row's own controls, such as a task's status ring, take no press of
+ * their own. False outside a list that chooses.
+ */
+export const RowChoosingContext = createContext(false);
