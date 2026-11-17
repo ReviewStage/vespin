@@ -754,7 +754,7 @@ function ThreadDetail({
     [item.thread],
   );
 
-  const { sources, sizes, retry } = useThreadMedia(item.id, media, pending);
+  const { sources, sizes, pictureSizes, retry } = useThreadMedia(item.id, media, pending);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
   const router = useRouter();
@@ -892,7 +892,14 @@ function ThreadDetail({
         };
       }
 
-      return { kind: THREAD_MEDIA.PICTURE, key, source, alt: each.name, onRetry };
+      return {
+        kind: THREAD_MEDIA.PICTURE,
+        key,
+        source,
+        alt: each.name,
+        size: pictureSizes.get(key),
+        onRetry,
+      };
     }),
   }));
 

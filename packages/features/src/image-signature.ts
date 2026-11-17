@@ -132,6 +132,9 @@ function webpDimensions(bytes: Uint8Array): ImageDimensions | undefined {
   return undefined;
 }
 
+/** The base64 a held picture's size is read from: enough for a JPEG's frame header after a camera's EXIF segment, which runs to 64 KB, four characters to three bytes, so it cuts on a whole group. */
+const SIZE_HEAD_CHARS = 128 * 1024;
+
 const DIMENSIONS_OF = {
   [INBOX_IMAGE_TYPE.PNG]: pngDimensions,
   [INBOX_IMAGE_TYPE.JPEG]: jpegDimensions,
@@ -149,4 +152,15 @@ export function imageDimensions(
     return undefined;
 
   return dimensions;
+}
+
+/** The size a picture held as base64 states in its header, read from its head alone, so a reader can stand it at its shape before it decodes; nothing where its bytes are no PNG, JPEG, or WebP, or state no size. */
+export function base64PictureSize(base64: string): ImageDimensions | undefined {
+  const head = Uint8Array.from(atob(base64.slice(0, SIZE_HEAD_CHARS)), (char) =>
+    char.charCodeAt(0),
+  );
+
+  const type = sniffImageType(head);
+
+  return type === undefined ? undefined : imageDimensions(head, type);
 }
