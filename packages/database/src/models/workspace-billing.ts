@@ -84,6 +84,45 @@ const updateContract = SqlSchema.void({
     ),
 });
 
+const updateStripeCustomer = SqlSchema.void({
+  Request: Schema.Struct({ organizationId: Schema.String, stripeCustomerId: Schema.String }),
+  execute: ({ organizationId, stripeCustomerId }) =>
+    Database.use((db) =>
+      db
+        .update(workspaceBillingTable)
+        .set({ stripeCustomerId, updatedAt: sql`now()` })
+        .where(eq(workspaceBillingTable.organizationId, organizationId)),
+    ),
+});
+
+const findOfStripeCustomer = SqlSchema.findOneOption({
+  Request: Schema.String,
+  Result: BillingSchema,
+  execute: (stripeCustomerId) =>
+    Database.use((db) =>
+      db
+        .select(BILLING_COLUMNS)
+        .from(workspaceBillingTable)
+        .where(eq(workspaceBillingTable.stripeCustomerId, stripeCustomerId)),
+    ),
+});
+
+const updateBlocked = SqlSchema.findAll({
+  Request: Schema.Struct({
+    stripeCustomerId: Schema.String,
+    blockedAt: Schema.NullOr(Schema.Date),
+  }),
+  Result: Schema.Struct({ organizationId: Schema.String }),
+  execute: ({ stripeCustomerId, blockedAt }) =>
+    Database.use((db) =>
+      db
+        .update(workspaceBillingTable)
+        .set({ blockedAt, updatedAt: sql`now()` })
+        .where(eq(workspaceBillingTable.stripeCustomerId, stripeCustomerId))
+        .returning({ organizationId: workspaceBillingTable.organizationId }),
+    ),
+});
+
 /** Where each of the workspaces is billed, by workspace; one with no row yet is left out. */
 export function workspaceBillings(
   organizationIds: readonly string[],
@@ -125,4 +164,31 @@ export function recordMetronomeContract(
   metronomeContractId: string,
 ): AgentStoreEffect<void> {
   return updateContract({ organizationId, metronomeContractId });
+}
+
+/** Records the Stripe customer the workspace's invoices are charged to, once billing is set up; its Metronome customer must be recorded first. */
+export function recordStripeCustomer(
+  organizationId: string,
+  stripeCustomerId: string,
+): AgentStoreEffect<void> {
+  return updateStripeCustomer({ organizationId, stripeCustomerId });
+}
+
+/** Where the workspace whose Stripe customer this is is billed; none where no workspace has set billing up with it. */
+export function workspaceBillingOfStripeCustomer(
+  stripeCustomerId: string,
+): AgentStoreEffect<Option.Option<WorkspaceBilling>> {
+  return findOfStripeCustomer(stripeCustomerId);
+}
+
+/**
+ * Blocks the workspace whose Stripe customer this is from the instant, or
+ * lifts its block where `blockedAt` is null; answers whether a workspace
+ * was found.
+ */
+export function setStripeCustomerBlocked(
+  stripeCustomerId: string,
+  blockedAt: Date | null,
+): AgentStoreEffect<boolean> {
+  return Effect.map(updateBlocked({ stripeCustomerId, blockedAt }), (rows) => rows.length > 0);
 }

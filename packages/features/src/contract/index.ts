@@ -13,6 +13,7 @@ import { agentPortsContract } from "./agent-ports.js";
 import { agentPullRequestsContract } from "./agent-pull-requests.js";
 import { agentsContract } from "./agents.js";
 import { automationsContract } from "./automations.js";
+import { billingContract } from "./billing.js";
 import { descriptionCommentsContract } from "./description-comments.js";
 import { deviceAgentsContract } from "./device-agents.js";
 import { dictationContract } from "./dictation.js";
@@ -83,6 +84,7 @@ export type HostedContract = {
   agentPullRequests: typeof agentPullRequestsContract;
   agents: typeof agentsContract;
   automations: typeof automationsContract;
+  billing: typeof billingContract;
   dictation: typeof dictationContract;
   events: typeof eventsContract;
   github: typeof githubContract;
@@ -131,6 +133,7 @@ export const hostedContract: HostedContract = {
   agentPullRequests: agentPullRequestsContract,
   agents: agentsContract,
   automations: automationsContract,
+  billing: billingContract,
   dictation: dictationContract,
   events: eventsContract,
   github: githubContract,

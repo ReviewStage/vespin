@@ -26,22 +26,17 @@ import {
   type UnsentUsageCharge,
   unsentUsageCharges,
 } from "@repo/database/models/usage-charges";
-import {
-  recordMetronomeContract,
-  recordMetronomeCustomer,
-  workspaceBillings,
-} from "@repo/database/models/workspace-billing";
+import { workspaceBillings } from "@repo/database/models/workspace-billing";
 import { Array as Arr, Clock, Duration, Effect } from "effect";
 import { BillingEnvironment, type MetronomeAccount } from "./billing-environment.js";
 import {
-  createMetronomeContract,
-  createMetronomeCustomer,
   ingestMetronomeEvents,
   METRONOME,
   METRONOME_USAGE,
   type MetronomeCallFailed,
   type MetronomeEvent,
 } from "./metronome.js";
+import { workspaceContract } from "./workspace-contract.js";
 
 /** How far back Metronome takes a usage event; a charge older than this is never read. */
 const METRONOME_BACKDATING = Duration.days(34);
@@ -67,11 +62,6 @@ function eventOf(charge: UnsentUsageCharge): MetronomeEvent {
     timestamp: charge.occurredAt.toISOString(),
     properties: { [usage.costProperty]: String(charge.amountMicroUsd) },
   };
-}
-
-/** The first instant of the UTC month the instant falls in. */
-function utcMonthStart(instant: Date): Date {
-  return new Date(Date.UTC(instant.getUTCFullYear(), instant.getUTCMonth(), 1));
 }
 
 /** A refusal as a log line names it: the path, the status, and Metronome's own words, never the token. */
@@ -103,29 +93,13 @@ const contractedWorkspaces = Effect.fn("web/contractedWorkspaces")(function* (
   const contracted = new Set<string>();
 
   for (const organizationId of organizationIds) {
-    const made = yield* Effect.gen(function* () {
-      const standing = billings.get(organizationId);
-
-      if (standing?.metronomeContractId != null) return true;
-
-      // Note that the customer is recorded before its contract is made, so a contract that failed is made on the next run on the same customer.
-      const customerId =
-        standing?.metronomeCustomerId ??
-        (yield* recordMetronomeCustomer(
-          organizationId,
-          yield* createMetronomeCustomer(account, organizationId),
-        )).metronomeCustomerId;
-
-      const contractId = yield* createMetronomeContract(account, {
-        organizationId,
-        customerId,
-        startingAt: utcMonthStart(earliest.get(organizationId) ?? now),
-      });
-
-      yield* recordMetronomeContract(organizationId, contractId);
-
-      return true;
-    }).pipe(
+    const made = yield* workspaceContract(
+      account,
+      organizationId,
+      billings.get(organizationId),
+      earliest.get(organizationId) ?? now,
+    ).pipe(
+      Effect.as(true),
       Effect.catchTag("MetronomeCallFailed", (failure) =>
         Effect.as(
           Effect.logError(

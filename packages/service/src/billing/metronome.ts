@@ -16,7 +16,8 @@
  * (`INCLUDED_USAGE_MICRO_USD`) a period, unprorated and never rolled over
  * (https://docs.metronome.com/guides/pricing-packaging/billing-model-guides/free-trials/implement-a-trial).
  * Neither names a billing provider, so Metronome keeps its invoices to
- * itself until billing is set up.
+ * itself until billing is set up, when both are linked to the workspace's
+ * Stripe customer (`linkMetronomeToStripe`).
  *
  * A call answered 429 or 5xx, or not answered at all, is tried again with
  * backoff; any other refusal fails at once. A failure says the path, the
@@ -42,6 +43,8 @@ export const METRONOME = {
   CUSTOMERS_PATH: "/v1/customers",
   CREATE_CONTRACT_PATH: "/v1/contracts/create",
   INGEST_PATH: "/v1/ingest",
+  SET_BILLING_PROVIDER_PATH: "/v1/setCustomerBillingProviderConfigurations",
+  EDIT_CONTRACT_PATH: "/v2/contracts/edit",
   /** The most events one ingest request takes. */
   INGEST_BATCH: 100,
   REQUEST_TIMEOUT_MS: 15_000,
@@ -128,10 +131,48 @@ interface MetronomeContractInput {
 }
 
 /** What a request to Metronome carries: a customer, a contract, or a batch of events. */
+/** How invoices reach Stripe, as Metronome spells it: sent straight to the customer's Stripe account, and charged to its default card (https://docs.metronome.com/integrations/invoice-integrations/stripe). */
+const STRIPE_PROVIDER = {
+  BILLING_PROVIDER: "stripe",
+  DELIVERY_METHOD: "direct_to_billing_provider",
+  COLLECTION_METHOD: "charge_automatically",
+  /** A contract's invoices go to Stripe from the start of the period it is linked in, so that month's are charged too. */
+  EFFECTIVE_AT: "START_OF_CURRENT_PERIOD",
+} as const;
+
+/** A customer's Stripe configuration, as `POST /v1/setCustomerBillingProviderConfigurations` takes it. */
+interface MetronomeBillingProviderInput {
+  readonly data: readonly {
+    readonly customer_id: string;
+    readonly billing_provider: typeof STRIPE_PROVIDER.BILLING_PROVIDER;
+    readonly delivery_method: typeof STRIPE_PROVIDER.DELIVERY_METHOD;
+    readonly configuration: {
+      readonly stripe_customer_id: string;
+      readonly stripe_collection_method: typeof STRIPE_PROVIDER.COLLECTION_METHOD;
+    };
+  }[];
+}
+
+/** A contract's edit adding its billing provider, as `POST /v2/contracts/edit` takes it. */
+interface MetronomeContractEditInput {
+  readonly customer_id: string;
+  readonly contract_id: string;
+  readonly add_billing_provider_configuration_update: {
+    readonly billing_provider_configuration: {
+      readonly billing_provider: typeof STRIPE_PROVIDER.BILLING_PROVIDER;
+      readonly delivery_method: typeof STRIPE_PROVIDER.DELIVERY_METHOD;
+    };
+    readonly schedule: { readonly effective_at: typeof STRIPE_PROVIDER.EFFECTIVE_AT };
+  };
+}
+
+/** What a request to Metronome carries: a customer, a contract, a batch of events, or a link to Stripe. */
 type MetronomeRequestBody =
   | MetronomeCustomerInput
   | MetronomeContractInput
-  | readonly MetronomeEvent[];
+  | readonly MetronomeEvent[]
+  | MetronomeBillingProviderInput
+  | MetronomeContractEditInput;
 
 const CreatedSchema = Schema.Struct({ data: Schema.Struct({ id: Schema.String }) });
 
@@ -291,4 +332,45 @@ export const ingestMetronomeEvents = Effect.fn("web/ingestMetronomeEvents")(func
   events: readonly MetronomeEvent[],
 ) {
   yield* metronomeRequest(account, METRONOME.INGEST_PATH, events);
+});
+
+/**
+ * Links the workspace's customer to its Stripe customer, charged
+ * automatically, and its contract to Stripe from the start of the current
+ * period, so that month's invoice and every later one reaches Stripe
+ * (https://docs.metronome.com/integrations/invoice-integrations/stripe).
+ */
+export const linkMetronomeToStripe = Effect.fn("web/linkMetronomeToStripe")(function* (
+  account: MetronomeAccount,
+  link: {
+    readonly customerId: string;
+    readonly contractId: string;
+    readonly stripeCustomerId: string;
+  },
+) {
+  yield* metronomeRequest(account, METRONOME.SET_BILLING_PROVIDER_PATH, {
+    data: [
+      {
+        customer_id: link.customerId,
+        billing_provider: STRIPE_PROVIDER.BILLING_PROVIDER,
+        delivery_method: STRIPE_PROVIDER.DELIVERY_METHOD,
+        configuration: {
+          stripe_customer_id: link.stripeCustomerId,
+          stripe_collection_method: STRIPE_PROVIDER.COLLECTION_METHOD,
+        },
+      },
+    ],
+  });
+
+  yield* metronomeRequest(account, METRONOME.EDIT_CONTRACT_PATH, {
+    customer_id: link.customerId,
+    contract_id: link.contractId,
+    add_billing_provider_configuration_update: {
+      billing_provider_configuration: {
+        billing_provider: STRIPE_PROVIDER.BILLING_PROVIDER,
+        delivery_method: STRIPE_PROVIDER.DELIVERY_METHOD,
+      },
+      schedule: { effective_at: STRIPE_PROVIDER.EFFECTIVE_AT },
+    },
+  });
 });

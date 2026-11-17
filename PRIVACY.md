@@ -557,7 +557,10 @@ data with:
   you accepted a workspace invitation, and on which days you started a task),
   Metronome (billing: each workspace's id and what each of its agents' cloud
   sandbox sessions cost, which Metronome totals into the workspace's monthly
-  usage), and Slack (feedback, setup answers, and Vespin's Slack bot).
+  usage), Stripe (billing: the card and billing details a workspace's owner or
+  admin gives it to pay the workspace's invoices, which Metronome hands it
+  with each workspace's monthly usage total), and Slack (feedback, setup
+  answers, and Vespin's Slack bot).
 - **Integrations and connected apps:** the services and MCP clients you connect
   receive what your agents send them, or what our tools answer, and keep it
   under their own policies.

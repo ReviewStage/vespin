@@ -27,6 +27,9 @@ const ACCOUNT: BillingEnvironmentValues = {
     creditProductId: "credit-product-1",
   },
   metronomeWebhookSecret: undefined,
+  live: false,
+  stripeSecretKey: undefined,
+  stripeWebhookSecret: undefined,
 };
 
 /** The fields of a create's body the tests pick it out by; the rest is compared whole. */
@@ -267,6 +270,9 @@ it.layer(getTestDB())("usage sent to Metronome", (it) => {
             Layer.succeed(BillingEnvironment, {
               metronome: undefined,
               metronomeWebhookSecret: undefined,
+              live: false,
+              stripeSecretKey: undefined,
+              stripeWebhookSecret: undefined,
             }),
           ),
         ),
