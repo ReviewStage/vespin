@@ -75,7 +75,7 @@ export function AgentRoutePage({
   away,
 }: {
   tasks: TasksControl;
-  /** A phone's way back out of the page, to the page it was opened from (`WindowHistory`'s `onLeave`); none elsewhere. */
+  /** A phone's way back out of the page, the window's Back; none elsewhere. */
   away?: TaskHeadBack | undefined;
 }): React.JSX.Element {
   const { agentId } = useParams({ from: "/places/$workspace/agent/$agentId" });

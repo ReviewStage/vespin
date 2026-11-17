@@ -23,8 +23,8 @@ import { useCopyLink } from "../links-at-hand.js";
 import { SHELL_ROOM } from "../shell-room.js";
 import { type TaskRoute, useTaskRoute } from "../task-route.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
-import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
-import { isOverviewTab } from "../tasks/use-main-tabs.js";
+import { MAIN_TAB, SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
+import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
 import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
@@ -52,11 +52,12 @@ import {
   useRoutedViews,
 } from "../workspace-routes.js";
 import { type HistoryRows, useHistoryRows } from "./history-rows.js";
+import { type BackStep, useBackToOr } from "./narrow-backs.js";
 import { PLACE_BINDING, usePlaceBinding } from "./place-binding.js";
 import { type LeaveAsk, type PlaceLeave, usePlaceLeave } from "./place-leave.js";
 import { useRoutedExits } from "./routed-exits.js";
 import type { RoutedPlace } from "./routed-places.js";
-import { taskAtOf, taskOfAt } from "./task-step.js";
+import { type ThreadsStep, taskAtOf, taskOfAt } from "./task-step.js";
 import {
   type HistoryBehind,
   type RecentStep,
@@ -123,6 +124,7 @@ function mount(
   ) => StepTitle | undefined,
 ) {
   let history: (WindowHistory & HistoryBehind & TaskVisits & RecentSteps) | undefined;
+  let backToOr: ((to: BackStep, stand: () => void) => void) | undefined;
   let restand: ((tasks: Standing) => void) | undefined;
   let admin: AdminRoute | undefined;
   let board: BoardRoute | undefined;
@@ -276,6 +278,7 @@ function mount(
     // The ways back read the window's history, as the window's root hands it its routed exits.
     exits.behind = history.behind;
     useHistoryMouseButtons(history, true);
+    backToOr = useBackToOr();
 
     return null;
   }
@@ -367,6 +370,8 @@ function mount(
     at: () => held.history.location.pathname,
     /** Opens an Admin view by the router, as Admin's own doors do. */
     openAdmin: (view: AdminView) => act(() => admin?.onOpen(view)),
+    /** Presses a ‹ out of what it opened within a task, back to `to` where it is the step behind, else `stand` (`places/narrow-backs.ts`). */
+    backToOr: (to: BackStep, stand: () => void) => act(() => backToOr?.(to, stand)),
     /** The address of every entry the router's history holds, oldest first. */
     addresses: () => held.addresses(),
     /** Moves the history by itself, as a browser's Back and Forward do, never through the window. */
@@ -844,29 +849,30 @@ test("a link loaded into a workspace not the reader's stays at its own address, 
   assert.equal(window.history().canGoBack, false);
 });
 
-/** A press of the pointer, as lands before whatever door it opens. */
-function press(): void {
-  act(() => {
-    globalThis.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-  });
-}
-
 const AGENT_A = agentTab("agent-a");
 const AGENT_B = agentTab("agent-b");
 const AGENT_C = agentTab("agent-c");
 
-/** The task open on the column's tab and the side panel's tab given, or the panel shut, its strips holding `agents`, every tab each strip is asked to show recorded in `shown`, and the panel shut as `side:shut`; `opened` counts the things a link opened in the panel. */
+/** The task open on the column's tab and the side panel's tab given, or the panel shut, its strips holding `agents`, the column's agent's card showing `threads` where given, every tab each strip is asked to show recorded in `shown`, the panel shut as `side:shut`, and each card's threads as `threads:<agent>:<item>` or `threads:<agent>:shut`; `opened` counts the things a link opened in the panel. */
 function onTabs(input: {
-  column: typeof AGENT_A | undefined;
+  column: MainTab | undefined;
   side?: SidePanelTab | undefined;
   agents?: readonly (typeof AGENT_A)[];
+  threads?: ThreadsStep | undefined;
   shown?: string[];
   opened?: number;
 }): TasksControl {
   const base = listedTab();
   const agents = input.agents ?? [AGENT_A, AGENT_B, AGENT_C];
+  const { threads } = input;
 
   return listedTab({
+    agentThreads: {
+      shown: (_taskId, agentId) =>
+        threads?.agentId === agentId ? { itemId: threads.itemId } : undefined,
+      onOpen: (_taskId, agentId, itemId) => input.shown?.push(`threads:${agentId}:${itemId}`),
+      onClose: (_taskId, agentId) => input.shown?.push(`threads:${agentId}:shut`),
+    },
     page: TASKS_PAGE.TASK,
     activeTaskId: TASK_ID,
     boundFor: TASK_ID,
@@ -896,6 +902,58 @@ function onTabs(input: {
     },
   });
 }
+
+/** Stands the task on `input`'s column by way of its description, a step of its own, which an agent chosen over it takes in place, as the column's ‹ Agents leaves it with nothing behind. */
+function standOverDescription(
+  window: ReturnType<typeof mount>,
+  input: Parameters<typeof onTabs>[0],
+): void {
+  window.stand(onTabs({ ...input, column: MAIN_TAB.OVERVIEW }));
+  window.stand(onTabs(input));
+}
+
+test("an agent's tab chosen for another takes the task's step in place, so Back from the task leaves it in one step", () => {
+  const window = mount(listedTab());
+  window.stand(onTabs({ column: AGENT_A }));
+  window.stand(onTabs({ column: AGENT_B }));
+  window.stand(onTabs({ column: AGENT_C }));
+  assert.equal(window.addresses().length, 2, "Home, and the task");
+
+  act(() => window.history().onBack());
+  assert.equal(window.at(), "/acme");
+  assert.equal(window.history().canGoBack, false);
+});
+
+test("the description opened over an agent is a step whose ‹ Agents steps back, so Back from the agent leaves the task rather than opening the description again", () => {
+  const shown: string[] = [];
+  const window = mount(listedTab());
+  window.stand(onTabs({ column: AGENT_A, shown }));
+  window.stand(onTabs({ column: MAIN_TAB.OVERVIEW, shown }));
+  assert.equal(window.addresses().length, 3, "Home, the agent, and the description");
+
+  window.backToOr({ task: { taskId: TASK_ID, column: AGENT_A } }, () => shown.push("in place"));
+  assert.deepEqual(shown, ["column:agent-a", "threads:agent-a:shut", "side:shut"]);
+  window.stand(onTabs({ column: AGENT_A, shown }));
+
+  act(() => window.history().onBack());
+  assert.equal(window.at(), "/acme", "Back leaves the task");
+  assert.equal(window.history().canGoBack, false);
+});
+
+test("an agent's threads opened over its transcript and each thread chosen in them are steps, so Back to the task from another page stands the agent on the thread it showed", () => {
+  const shown: string[] = [];
+  const thread = (itemId: string) => ({ agentId: AGENT_A.agent, itemId });
+  const window = mount(onTabs({ column: AGENT_A, shown }));
+  window.stand(onTabs({ column: AGENT_A, threads: thread("item-1"), shown }));
+  window.stand(onTabs({ column: AGENT_A, threads: thread("item-2"), shown }));
+  // Note that the panes' doors are the window's wherever it stands, so the Inbox holds the task's as the window does.
+  const { mainTabs, sidePanel, agentThreads } = onTabs({ column: AGENT_A, shown });
+  window.stand(listedTab({ mainTabs, sidePanel, agentThreads, inboxStands: {} }));
+  assert.equal(window.addresses().length, 4, "the transcript, two threads, and the Inbox");
+
+  act(() => window.history().onBack());
+  assert.deepEqual(shown, ["column:agent-a", "threads:agent-a:item-2", "side:shut"]);
+});
 
 /** Each step named as the window's root names the one it stands on (`stepTitle`). */
 const namedAsShown = (
@@ -944,7 +1002,6 @@ test("Back's list names a task and its agent's tab by the names they go by now, 
     namedAsShown,
   );
 
-  press();
   window.stand(
     listedTab({
       tasks: [listedTask("Auth rewrite")],
@@ -970,7 +1027,6 @@ test("a delivery moving a task no step stands on leaves the history's answers as
   const open = onTabs({ column: AGENT_A });
   const window = mount({ ...open, tasks: [held, other] }, windowRouter(), namedAsShown);
 
-  press();
   window.stand(listedTab({ tasks: [held, other] }));
   const { steps, away } = window.history();
   assert.equal(steps.back[0]?.title?.label, "Auth refactor");
@@ -999,7 +1055,6 @@ test("Back's list names a renamed agent's tab by its name now beside a page's ta
     namedAsShown,
   );
 
-  press();
   window.stand(
     listedTab({
       tasks: [listedTask("Auth refactor")],
@@ -1030,7 +1085,6 @@ test("Back's list names a person's page by the name the workspace's members give
     namedAsShown,
   );
 
-  press();
   window.openPerson("user-lee", "Lee Park", workspace.id);
   await settle();
   window.leaveFor(
@@ -1060,14 +1114,17 @@ test("a page a link opens in the side panel is one step, which Back undoes, shut
   const shown: string[] = [];
   const notes = fileTab("docs/notes.md");
   const window = mount(onTabs({ column: AGENT_A, shown }));
-  press();
   window.stand(onTabs({ column: AGENT_A, side: notes, opened: 1, shown }));
   assert.equal(window.addresses().length, 2);
 
   act(() => window.history().onBack());
-  assert.deepEqual(shown, ["column:agent-a", "side:shut"]);
+  assert.deepEqual(shown, ["column:agent-a", "threads:agent-a:shut", "side:shut"]);
   act(() => window.history().onForward());
-  assert.deepEqual(shown.slice(2), ["column:agent-a", "side:docs/notes.md"]);
+  assert.deepEqual(shown.slice(3), [
+    "column:agent-a",
+    "threads:agent-a:shut",
+    "side:docs/notes.md",
+  ]);
 });
 
 test("an Inbox item's step holds the panel beside it, so Back from the next item opens it again on what a link opened there, and Back again stands the item shut", () => {
@@ -1098,9 +1155,7 @@ test("an Inbox item's step holds the panel beside it, so Back from the next item
   };
 
   const window = mount(onItem(TASK_ID, "item-a", undefined));
-  press();
   window.stand(onItem(TASK_ID, "item-a", page, 1));
-  press();
   window.stand(onItem(OTHER_TASK, "item-b", undefined, 1));
   assert.equal(
     window.addresses().length,
@@ -1141,7 +1196,6 @@ test("Back to another task whose panel stood shut leaves the panel to shut as th
   };
 
   const window = mount(onTask(OTHER_TASK, undefined));
-  press();
   window.stand(onTask(TASK_ID, notes));
 
   act(() => window.history().onBack());
@@ -1157,9 +1211,7 @@ test("an Inbox item chosen by a press where the Inbox splits is a step of its ow
     });
 
   const window = mount(onInbox("item-1"));
-  press();
   window.stand(onInbox("item-2"));
-  press();
   window.stand(onInbox("item-3"));
   assert.equal(window.addresses().length, 3);
 
@@ -1178,7 +1230,6 @@ test("the side panel's tabs a link opens are steps though the task's agents are 
   };
 
   const window = mount(unread(SIDE_PANEL_TAB.COMMENTS, 0));
-  press();
   window.stand(unread(fileTab("docs/notes.md"), 1));
   assert.equal(window.addresses().length, 2);
 
@@ -1189,16 +1240,13 @@ test("the side panel's tabs a link opens are steps though the task's agents are 
 test("a task opened again before its agents are read keeps the column it was last seen with, so a step on an agent's tab since closed is still passed over", () => {
   const shown: string[] = [];
   const window = mount(onTabs({ column: AGENT_A, shown }));
-  press();
-  window.stand(onTabs({ column: AGENT_B, shown }));
-  press();
-  window.stand(onTabs({ column: AGENT_C, shown }));
+  standOverDescription(window, { column: AGENT_B, shown });
+  standOverDescription(window, { column: AGENT_C, shown });
+  shown.length = 0;
   // Agent B's tab closed from the strip, then the window goes home.
   window.stand(onTabs({ column: AGENT_C, agents: [AGENT_A, AGENT_C], shown }));
-  press();
   window.stand(listedTab());
   // The task opened again, its agents on their way.
-  press();
   const unread = onTabs({ column: undefined, shown });
   window.stand({ ...unread, mainTabs: { ...unread.mainTabs, tabs: [], openAgents: undefined } });
 
@@ -1207,7 +1255,14 @@ test("a task opened again before its agents are read keeps the column it was las
   act(() => window.history().onBack());
   assert.deepEqual(
     shown,
-    ["column:agent-c", "side:shut", "column:agent-a", "side:shut"],
+    [
+      "column:agent-c",
+      "threads:agent-c:shut",
+      "side:shut",
+      "column:agent-a",
+      "threads:agent-a:shut",
+      "side:shut",
+    ],
     "home, then C, then A past B",
   );
 });
@@ -1216,7 +1271,6 @@ test("the open task deleted, as the host binds none, goes Home by a move of the 
   const held = windowRouter();
   const task = listedTask("Auth refactor");
   const window = mount(listedTab({ tasks: [task] }), held);
-  press();
   window.stand(
     listedTab({
       tasks: [task],
@@ -1240,8 +1294,8 @@ test("a browser's Back onto a step it cannot reach, with none behind it and the 
   const shown: string[] = [];
   const held = windowRouter();
   const window = mount(onTabs({ column: AGENT_A, shown }), held);
-  press();
-  window.stand(onTabs({ column: AGENT_B, shown }));
+  standOverDescription(window, { column: AGENT_B, shown });
+  shown.length = 0;
   // Both tabs closed from the strip, as the window last saw it, while B still stands.
   window.stand(onTabs({ column: AGENT_B, agents: [AGENT_C], shown }));
   const moves: string[] = [];
@@ -1268,12 +1322,10 @@ test("Back's and Forward's steps are listed the nearest first, each named as the
   };
 
   const window = mount(listedTab(), windowRouter(), titled);
-  press();
   window.stand(onTabs({ column: AGENT_A, shown }));
-  press();
-  window.stand(onTabs({ column: AGENT_B, shown }));
-  press();
-  window.stand(onTabs({ column: AGENT_C, shown }));
+  standOverDescription(window, { column: AGENT_B, shown });
+  standOverDescription(window, { column: AGENT_C, shown });
+  shown.length = 0;
 
   const listed = window.history().steps.back;
   assert.deepEqual(
@@ -1293,7 +1345,11 @@ test("Back's and Forward's steps are listed the nearest first, each named as the
   const toA = listed[1]?.number;
   assert.ok(toA !== undefined);
   act(() => window.history().onGoTo(toA));
-  assert.deepEqual(shown, ["column:agent-a", "side:shut"], "the step listed is gone to at once");
+  assert.deepEqual(
+    shown,
+    ["column:agent-a", "threads:agent-a:shut", "side:shut"],
+    "the step listed is gone to at once",
+  );
   assert.deepEqual(
     window.history().steps.forward.map((step) => step.title?.detail),
     ["agent-b", "agent-c"],
@@ -1338,7 +1394,6 @@ test("a task the Inbox is narrowed to is a step linked by it and named by the ta
 
   const window = mount(onInbox, windowRouter(), stepTitleOf);
   await settle();
-  press();
   act(() => window.inbox().onOpen({ workspace: "acme", narrowed: taskId }));
 
   assert.deepEqual(window.addresses(), ["/acme/inbox", `/acme/inbox/task/${taskId}`]);
@@ -1443,57 +1498,49 @@ function screenOf(step: RecentStep): string {
   return `${columnWord} beside ${sideWord}`;
 }
 
-test("⌃Tab's screens are Back's steps, most recent first: a tab chosen in the side panel's strip takes the screen in place, a column tab and an Inbox item are each their own, and a step Back lands on comes first", () => {
+test("⌃Tab's screens are Back's steps, most recent first: a tab chosen in the side panel's strip or an agent's tab chosen for another takes the screen in place, an Inbox item is its own, and a step Back lands on comes first", () => {
   const readme = fileTab("README.md");
   const notes = fileTab("docs/notes.md");
   const onItem = listedTab({ inboxStands: { chosen: { itemId: "item-1", taskId: TASK_ID } } });
   const window = mount(onTabs({ column: AGENT_A, side: readme }));
-  press();
   window.stand(onTabs({ column: AGENT_A, side: notes }));
-  press();
   window.stand(onTabs({ column: AGENT_B, side: notes }));
-  press();
   window.stand(onItem);
   assert.deepEqual(window.history().recent().map(screenOf), [
     "/acme/inbox/item-1",
     "agent-b beside docs/notes.md",
-    "agent-a beside docs/notes.md",
   ]);
 
   act(() => window.history().onBack());
   const recent = window.history().recent();
-  assert.deepEqual(recent.map(screenOf), [
-    "agent-b beside docs/notes.md",
-    "/acme/inbox/item-1",
-    "agent-a beside docs/notes.md",
-  ]);
+  assert.deepEqual(recent.map(screenOf), ["agent-b beside docs/notes.md", "/acme/inbox/item-1"]);
   assert.deepEqual(
     recent.map((step) => step.standing),
-    [true, false, false],
+    [true, false],
   );
 });
 
 test("⌃Tab goes to a screen as a visit after the one standing, standing it as Back stands a step it lands on, so Back returns from it", () => {
   const shown: string[] = [];
   // Note that the panes' doors are the window's wherever it stands, so the Inbox holds the task's as the window does.
-  const { mainTabs, sidePanel } = onTabs({ column: AGENT_A, shown });
+  const { mainTabs, sidePanel, agentThreads } = onTabs({ column: AGENT_A, shown });
 
   const onItem = listedTab({
     mainTabs,
     sidePanel: { ...sidePanel, open: false },
+    agentThreads,
     inboxStands: { chosen: { itemId: "item-1", taskId: TASK_ID } },
   });
 
   const window = mount(onTabs({ column: AGENT_A, shown }));
-  press();
-  window.stand(onTabs({ column: AGENT_B, shown }));
-  press();
+  standOverDescription(window, { column: AGENT_B, shown });
   window.stand(onItem);
+  shown.length = 0;
   const agentA = window.history().recent()[2];
   assert.ok(agentA !== undefined);
 
   act(() => window.history().onVisitStep(agentA.place));
-  assert.deepEqual(shown, ["column:agent-a", "side:shut"]);
+  assert.deepEqual(shown, ["column:agent-a", "threads:agent-a:shut", "side:shut"]);
   window.stand(onTabs({ column: AGENT_A, shown }));
   assert.equal(window.addresses().length, 4, "one visit after the Inbox item");
   assert.deepEqual(window.history().recent().map(screenOf), [

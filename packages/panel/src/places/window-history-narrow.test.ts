@@ -388,12 +388,8 @@ function mount(
           inbox.onClose();
         restand?.(to);
       }),
-    /** Presses through the shell, as a press of the pointer lands before the door it opens. */
-    press: (press: () => void) =>
-      act(() => {
-        window.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
-        press();
-      }),
+    /** Presses through the shell, as a door's press does. */
+    press: (press: () => void) => act(press),
     /** The address of every entry the router's history holds, oldest first, and the one standing. */
     addresses: () => held.addresses(),
     standingAddress: () => held.history.location.href,
@@ -896,39 +892,4 @@ test("on a narrow stage another thing a link opens in the side panel standing ov
 
   act(() => window.history().onBack());
   assert.deepEqual(window.at().panel, { open: true, tab: PAGE_TAB });
-});
-
-test("on a narrow stage a task's way out steps back past its own panes to the page it was opened from, pushing nothing, and Forward opens the task again", () => {
-  const window = mount(SHELL_ROOM.NARROW, {
-    ...ON_TASK,
-    inbox: { open: true, chosen: undefined },
-  });
-
-  assert.equal(window.history().away, undefined, "the Inbox's list has nothing behind it");
-  window.move((held) => ({
-    ...held,
-    inbox: { ...held.inbox, open: false },
-    panel: { open: true, tab: SIDE_PANEL_TAB.DESCRIPTION },
-  }));
-  // The task's own panes, each a step of its own: the agents' column, then a page's tab.
-  window.press(() => window.back().pane());
-  window.press(() => window.tab().sidePanel.onShow(DOCUMENT_TASK.id, PAGE_TAB));
-  const steps = window.addresses();
-  assert.equal(steps.length, 3);
-  assert.ok(window.history().away, "the Inbox stands behind the task");
-
-  act(() => window.history().onLeave());
-  assert.equal(window.at().inbox.open, true, "the way out lands on the Inbox at once");
-  assert.deepEqual(window.addresses(), steps, "and pushes nothing");
-  assert.equal(window.held.at(), 0);
-
-  act(() => window.history().onForward());
-  assert.equal(window.at().inbox.open, false, "Forward opens the task again");
-});
-
-test("on a narrow stage a task with no page behind it, as one a link opened, names none for its way out", () => {
-  const window = mount(SHELL_ROOM.NARROW, { ...ON_TASK, panel: { open: true, tab: PAGE_TAB } });
-  window.press(() => window.tab().sidePanel.onShow(DOCUMENT_TASK.id, SIDE_PANEL_TAB.DESCRIPTION));
-  assert.equal(window.history().canGoBack, true, "Back has the task's own pane behind it");
-  assert.equal(window.history().away, undefined, "but the way out has no page to go back to");
 });
