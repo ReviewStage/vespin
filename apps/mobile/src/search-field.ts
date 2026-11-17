@@ -6,10 +6,16 @@ import type { SearchBarCommands, SearchBarPlacement } from "react-native-screens
 /** The param code opens Search with to have its field focused, such as ⌘F, since the system activates the field only when its tab is tapped. */
 export const SEARCH_FOCUS_PARAM = "focus";
 
-/** A ref that, the first time the field it is handed stands, tells it `text`, and never again, so nothing typed after is overwritten. */
-function refillingRef(text: string): RefObject<SearchBarCommands | null> {
+/** The Stack's search field, held by a tab: its ref, and a focus asked of it, which waits for the field to stand where it doesn't yet. */
+export type SearchFieldRef = RefObject<SearchBarCommands | null> & {
+  readonly focusOnce: () => void;
+};
+
+/** A ref that, the first time the field it is handed stands, tells it `text`, and never again, so nothing typed after is overwritten; and focuses it as it stands where a focus was asked before it did. */
+function refillingRef(text: string): SearchFieldRef {
   let held = text;
   let field: SearchBarCommands | null = null;
+  let focusWaiting = false;
 
   return {
     get current() {
@@ -18,9 +24,26 @@ function refillingRef(text: string): RefObject<SearchBarCommands | null> {
     set current(next) {
       field = next;
 
-      if (next === null || held === "") return;
-      next.setText(held);
-      held = "";
+      if (next === null) return;
+
+      if (held !== "") {
+        next.setText(held);
+        held = "";
+      }
+
+      if (focusWaiting) {
+        focusWaiting = false;
+        next.focus();
+      }
+    },
+    focusOnce() {
+      if (field === null) {
+        focusWaiting = true;
+
+        return;
+      }
+
+      field.focus();
     },
   };
 }
@@ -33,9 +56,9 @@ function refillingRef(text: string): RefObject<SearchBarCommands | null> {
  * is drawn, so it is told them once rather than left blank over a filtered
  * list. It refills as the field is attached rather than in an effect,
  * because expo-router may attach the field after the screen's own effects
- * ran.
+ * ran, which is why a focus asked before then waits for it too.
  */
-export function useRefilledSearchField(text: string): RefObject<SearchBarCommands | null> {
+export function useRefilledSearchField(text: string): SearchFieldRef {
   const [field] = useState(() => refillingRef(text));
 
   return field;
