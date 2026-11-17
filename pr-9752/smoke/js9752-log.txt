@@ -1,0 +1,15 @@
+== bundle MS9752 base f5a0c6c1b6
+  built f5a0c6c1b6 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+added a 900x1600 portrait photo
+s1-text-reply: fails 0 shots 2 
+s2-photo-reply: fails 0 shots 6 
+s3-pictures-quicklook: fails 1 shots 4 Assert that id: markdown-picture is visible... FAILED
+s4-setting: fails 1 shots 2 Tap on "Signed in with .*"... FAILED
+s4-setting: before switch value ?; failure words: none; switch at ,
+s5-pin: fails 1 shots 4 Assert that "Unpin" is visible... FAILED
+s5-pin end: Pinned header y [], Billing export rows y []
+app log:   278619 lines; act port failures 0; red box 0; JS errors 0
