@@ -1242,7 +1242,7 @@
 }
 
 .review-summary .agent-composer-input {
-  min-height: calc(3 * var(--ui-type-body-leading) + var(--agent-composer-field-block));
+  min-height: calc(3 * var(--agent-composer-line) + var(--agent-composer-field-block));
   padding: var(--ui-space-6) var(--ui-control-inset);
 }
 
@@ -1631,17 +1631,21 @@ summary button[data-tool-agent-ref]:focus-visible {
 }
 
 /* An inline span of code, in a transcript, a to-do's step, a pull request's
-   description, or a card's branches, is the prose's (`.ui-prose code`, `@repo/ui`'s
-   prose.css) in its padding, tint, face and size, and the corner role nearest
-   its own, so code reads the same wherever words carry it. */
+   description, a card's branches, or a message box's words, is the prose's
+   (`.ui-prose code`, `@repo/ui`'s prose.css) in its padding, tint, face and
+   size, and the corner role nearest its own, so code reads the same wherever
+   words carry it. Its line height is the prose's too (below it), so it
+   never sets its line taller. */
 .transcript-inline-code,
 .pull-request-description-text :not(pre) > code,
-.card-code {
+.card-code,
+.composer-editor code {
   padding: 0.1em 0.4em;
   border-radius: var(--ui-radius-6);
   background: var(--ui-prose-tint, var(--ui-color-fill-hover));
   font-family: var(--ui-font-mono);
-  font-size: 0.9em;
+  font-size: 1em;
+  line-height: 1;
 }
 
 /* On a phone a table too wide for the column would otherwise squeeze each
@@ -1931,13 +1935,25 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
    of what is seen (`--ui-stage-height`), so a short window, a laptop's
    with a dock, is not filled by its composer; a narrow room's keyboard
    takes a smaller share (desktop.css). */
+/* A line of the box stands as a line of the message it sends: the body
+   type at the transcript's reading leading (`@repo/ui`'s prose.css), so
+   what is typed reads as it will once sent, a code span's pill clear of the
+   lines around it. The box and its placeholder set the leading itself, as
+   the transcript does; this is its length, for the heights the box and what
+   stands in for it while it loads (the automation prompt's skeleton) take.
+   Note that it stands on the root, where the profile's type is, so a
+   skeleton outside the field and a box in a dialog read it alike. */
+:root {
+  --agent-composer-line: calc(var(--ui-type-body-size) * var(--ui-type-reading-leading));
+}
+
 .agent-composer-field {
   position: relative;
   --agent-composer-field-cap: calc(var(--ui-stage-height) * 0.4);
   --agent-composer-field-block: calc(var(--ui-space-16) + var(--ui-space-8));
   --agent-composer-field-lines: calc(
     8 *
-    var(--ui-type-body-leading) +
+    var(--agent-composer-line) +
     var(--agent-composer-field-block)
   );
 }
@@ -1945,7 +1961,7 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
 .agent-composer-input {
   box-sizing: border-box;
   width: 100%;
-  min-height: calc(var(--ui-type-body-leading) + var(--agent-composer-field-block));
+  min-height: calc(var(--agent-composer-line) + var(--agent-composer-field-block));
   max-height: min(var(--agent-composer-field-lines), var(--agent-composer-field-cap));
   overflow-x: hidden;
   overflow-y: auto;
@@ -1954,7 +1970,7 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   background: transparent;
   color: var(--ui-color-text);
   font-size: var(--ui-type-body-size);
-  line-height: var(--ui-type-body-leading);
+  line-height: var(--ui-type-reading-leading);
   outline: none; /* no ring: the caret marks the field */
   user-select: text;
 }
@@ -1980,6 +1996,18 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   margin: 0;
 }
 
+/* A code span typed in the box stands as it will once sent: on the tint and
+   at the weight a transcript's flow gives it (`@repo/ui`'s prose.css), so
+   sending it moves no word. */
+.composer-editor {
+  --ui-prose-tint: color-mix(in srgb, currentColor 13%, transparent);
+}
+
+.composer-editor code {
+  font-weight: var(--ui-type-label-weight);
+  letter-spacing: 0;
+}
+
 /* A quote stands a tight gap off the lines around it, as the blank line it
    is sent with sets it apart once drawn. */
 .composer-editor > blockquote {
@@ -1994,7 +2022,7 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   padding: var(--ui-space-16) var(--ui-space-16) 0;
   color: var(--ui-color-text-muted);
   font-size: var(--ui-type-body-size);
-  line-height: var(--ui-type-body-leading);
+  line-height: var(--ui-type-reading-leading);
   pointer-events: none;
 }
 
@@ -2671,7 +2699,7 @@ svg.lucide {
 .comment-field .agent-composer-field {
   --agent-composer-field-lines: calc(
     8 *
-    1.45em +
+    var(--agent-composer-line) +
     10px
   ); /* off-scale: eight lines and the padding */
 }
@@ -2679,7 +2707,6 @@ svg.lucide {
 .comment-field .agent-composer-input {
   min-height: 36px; /* off-scale: one line and its padding */
   padding: var(--ui-row-inset) var(--comment-field-inline) var(--ui-space-2);
-  line-height: 1.45;
 }
 
 /* A field's foot, its `ComposerFoot`, holds its tools a size under a

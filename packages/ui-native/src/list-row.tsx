@@ -50,6 +50,7 @@ import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -205,6 +206,8 @@ type RowActs = {
   readonly preview?: ReactElement | undefined;
   /** Its vespin.dev link, which a drag carries out of the row: into another app as a URL, or onto a section here (`ListSection`'s `onDropLink`). */
   readonly link?: string | undefined;
+  /** What its own acts ask first, standing by the row (`RowAsking`), `QUIET_ROW_QUESTION` while it asks nothing; none for a row whose acts never ask. */
+  readonly question?: RowQuestion | undefined;
 };
 
 type ListRowProps = RowActs & {
@@ -480,6 +483,11 @@ function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
     : actionButton(swipe, colors);
 }
 
+/** A row's content with the question its acts ask standing by it, where its acts ask any. */
+function asking(content: ReactElement, question: RowQuestion | undefined): ReactElement {
+  return question === undefined ? content : <RowAsking question={question}>{content}</RowAsking>;
+}
+
 /**
  * A row's frame in its list: the id its list picks it by, the list's own
  * ground behind it rather than a card's, its insets, which stand the unread
@@ -507,6 +515,7 @@ export function RowFrame({
   menuGroups = [],
   preview,
   link,
+  question,
   vertical,
   indent,
   leading,
@@ -550,7 +559,7 @@ export function RowFrame({
   const ownGroup = swiped.length + menuSubmenus.length + menuActions.length > 0;
 
   if (!ownGroup && groups.length === 0 && preview === undefined) {
-    return <HStack modifiers={frameModifiers}>{row}</HStack>;
+    return <HStack modifiers={frameModifiers}>{asking(row, question)}</HStack>;
   }
 
   const opening: readonly RowAction[] =
@@ -561,7 +570,7 @@ export function RowFrame({
           { label: VERB.OPEN, tone: ROW_ACTION_TONE.NEUTRAL, onPress: () => open(id) },
         ];
 
-  const menu = (
+  const menu = asking(
     <ContextMenu>
       <ContextMenu.Items>
         {opening.map((action) => actionButton(action, colors))}
@@ -579,7 +588,8 @@ export function RowFrame({
       </ContextMenu.Items>
       <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
       {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
-    </ContextMenu>
+    </ContextMenu>,
+    question,
   );
 
   // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal.

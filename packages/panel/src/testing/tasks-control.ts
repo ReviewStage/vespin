@@ -538,6 +538,7 @@ export function tasksControl(overrides: TasksControlOverrides = {}): ListingTask
       onNewTab: ignore,
       onNewTabAnswered: ignore,
       viewedAt: [],
+      remembers: () => false,
       onViewedAt: ignore,
       onDoze: ignore,
       onWake: ignore,
