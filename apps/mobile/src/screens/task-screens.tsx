@@ -2397,7 +2397,8 @@ function TasksSplitScreen({
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
+      {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it, which iPadOS 26 shows and VoiceOver says as the route's name otherwise. */}
+      <Stack.Screen options={{ headerShown: false, title: TASKS_TITLE }} />
       <Screen>
         <SplitView {...first} detail={detail} detailBar={firstDetailBar} />
       </Screen>
