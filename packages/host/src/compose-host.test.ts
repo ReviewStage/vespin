@@ -13,7 +13,6 @@ import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { type RecordedRequest, recordingHttpClient } from "@repo/wire/testing";
 import { Context, Effect, ErrorReporter, Layer, Option, Path, Result } from "effect";
-import { Base64 } from "effect/encoding";
 import * as FileSystem from "effect/FileSystem";
 import type { AccountSourceHost } from "./account-source.js";
 import { hostAssemblyLayer } from "./compose-host.js";
@@ -27,7 +26,6 @@ import {
   THIS_MAC_AGENT_STATUS,
   ThisMacHost,
 } from "./effect/seams.js";
-import { ENTITY_STORE_FILE_NAME } from "./entity-store.js";
 import {
   ALL_CLIENT_CAPABILITIES,
   ALL_HOST_PLATFORM_CONCERNS,
@@ -39,12 +37,12 @@ import {
 import { LocalDatabaseDriver } from "./local-database.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
 import { oauthAccountSourceLayer } from "./oauth-account-source.js";
+import { ENTITY_STORE_FILE_NAME } from "./retired-entity-file.js";
 import type { SecretCipher as SecretCipherType } from "./settings-store.js";
 import { fixedAccountSource } from "./testing/fixed-account-source.js";
 import { machineOver } from "./testing/host-machine.js";
 import { scriptedSpawner } from "./testing/scripted-spawner.js";
 import { planListRow } from "./testing/task-list-rows.js";
-import { testCipher } from "./testing/test-cipher.js";
 
 /**
  * The host assembled with a chosen set of platform concerns, on a fixture
@@ -216,8 +214,8 @@ describe("the host's account source", () => {
   );
 });
 
-describe("the account's lists kept on disk", () => {
-  it.effect("are deleted as the account gate closes at a sign-out", () =>
+describe("the file an older build kept the account's lists in", () => {
+  it.effect("is deleted unread as the host stands", () =>
     Effect.gen(function* () {
       const stateRoot = yield* temporaryDirectoryScoped("host-entities-");
       const fileSystem = yield* FileSystem.FileSystem;
@@ -230,29 +228,14 @@ describe("the account's lists kept on disk", () => {
         provider: ACCOUNT_PROVIDER.GITHUB,
       } as const;
 
-      let gate: AccountSourceHost | undefined;
-
       const host = hostStandingLayer.pipe(
         Layer.provideMerge(hostAssemblyLayer([])),
-        Layer.provide(
-          Layer.merge(
-            machineOver(stateRoot),
-            fixedAccountSource({
-              account,
-              opened: (opened) => {
-                gate = opened;
-              },
-            }),
-          ),
-        ),
+        Layer.provide(Layer.merge(machineOver(stateRoot), fixedAccountSource({ account }))),
       );
 
-      yield* Effect.provide(
-        Effect.suspend(() => gate?.stopCapabilities ?? Effect.die("the source was never opened")),
-        host,
-      );
+      const stands = yield* Effect.provide(fileSystem.exists(file), host);
 
-      assert.equal(yield* fileSystem.exists(file), false);
+      assert.equal(stands, false);
     }).pipe(Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer))),
   );
 });
@@ -479,67 +462,11 @@ describe("the account's local database", () => {
     ).pipe(Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer))),
   );
 
-  /** Dana's file as a build that kept its waiting writes in it left it: the one rename below waiting, at row shapes of its own. */
-  const sealedByOlderBuild = (stateRoot: string) =>
-    Effect.gen(function* () {
-      const kept = {
-        hash: "an older build's",
-        accountId: SIGNED_IN.id,
-        reads: {},
-        queue: [
-          {
-            name: "tasks.rename",
-            key: "rename-old",
-            input: { taskId: INVITES.id, name: "Invites" },
-          },
-        ],
-      };
-
-      const file = (yield* Path.Path).join(stateRoot, ENTITY_STORE_FILE_NAME);
-      const sealed = Base64.encode(testCipher().encrypt(JSON.stringify(kept)));
-      yield* (yield* FileSystem.FileSystem).writeFileString(file, sealed);
-    });
-
   /** Lets the host run on the event loop until the service was sent a rename, or a thousand turns pass. */
   const renameSent = (requests: readonly RecordedRequest[]) =>
     Effect.promise(() => new Promise<void>((resolve) => setImmediate(resolve))).pipe(
       Effect.repeat({ until: () => renameKeys(requests).length > 0, times: 1_000 }),
     );
-
-  it.effect(
-    "sends the queue an older build kept in entities.sealed after the upgrade launch, and never imports it twice",
-    () =>
-      Effect.gen(function* () {
-        const stateRoot = yield* temporaryDirectoryScoped("host-local-database-");
-        const launch = { stateRoot, cipher: testCipher(), renamed: SERVICE.WRITTEN };
-
-        yield* sealedByOlderBuild(stateRoot);
-
-        const upgraded = yield* Effect.scoped(
-          Effect.gen(function* () {
-            const host = yield* signedIn(nodeSqliteDriverLayer, launch);
-            yield* renameSent(host.requests);
-
-            return renameKeys(host.requests);
-          }),
-        );
-
-        // Note that the file is left holding the queue, as a quit before its next save leaves it.
-        yield* sealedByOlderBuild(stateRoot);
-
-        const next = yield* Effect.scoped(
-          Effect.gen(function* () {
-            const host = yield* signedIn(nodeSqliteDriverLayer, launch);
-            yield* renameSent(host.requests);
-
-            return renameKeys(host.requests);
-          }),
-        );
-
-        assert.deepEqual(upgraded, ["rename-old"]);
-        assert.deepEqual(next, []);
-      }).pipe(Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer))),
-  );
 
   it.effect("sends a write left waiting at a quit after the relaunch, under its key", () =>
     Effect.gen(function* () {

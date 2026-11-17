@@ -43,7 +43,7 @@ export function sinceLaunch(): number | undefined {
   }
 }
 
-/** Notes, as the host starts, whether the kept lists' file stands, which the host deletes as it opens where the build no longer reads its rows. */
+/** Notes, as the host starts, whether the kept lists' file an older build left stands, which the host deletes unread as it opens. */
 export function noteHostStarting(): void {
   keptBefore = keptFileStands();
   stood = undefined;

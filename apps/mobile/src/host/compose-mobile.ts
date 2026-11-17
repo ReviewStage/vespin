@@ -77,7 +77,6 @@ import {
   IdSource,
   issuedTokenAccountSourceLayer,
   type KeepIssuedToken,
-  KeptListsDue,
   OAUTH_ACCOUNT_CLIENT,
   oauthAccountSourceLayerFor,
   RunMode,
@@ -92,7 +91,7 @@ import {
 import { LocalDatabaseDriver, type LocalDatabaseDriverSeam } from "@repo/host/local-database";
 import { effectServiceLayer } from "@repo/host/service-layer";
 import { plainCodeLines } from "@repo/host/task-code-remote";
-import { Cause, ConfigProvider, Context, Effect, Layer, Path, Queue, Stream } from "effect";
+import { Cause, ConfigProvider, Context, Effect, Layer, Path, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as HttpClient from "effect/http/HttpClient";
 import { fixtureActs, stageFixture } from "./fixture-host.js";
@@ -203,20 +202,6 @@ function accountSeams(device: DeviceSeams) {
   );
 }
 
-/** Each time the app leaves the foreground, when the host writes the account's kept lists (`KeptListsDue`), rather than every thirty seconds while the member taps. */
-function appLeaves(device: DeviceSeams): Stream.Stream<void> {
-  return Stream.callback<void>((queue) =>
-    Effect.acquireRelease(
-      Effect.sync(() =>
-        device.onAppActiveChanged((active) => {
-          if (!active) Queue.offerUnsafe(queue, undefined);
-        }),
-      ),
-      (unsubscribe) => Effect.sync(unsubscribe),
-    ),
-  );
-}
-
 /** Every seam the host's kernel and assembly stand on, as the app answers it. */
 function seamLayers(options: MobileHostOptions) {
   const { stateRoot, appVersion, fixture, device } = options;
@@ -232,7 +217,6 @@ function seamLayers(options: MobileHostOptions) {
     Layer.succeed(ShutdownSignal, { notify: undefined }),
     Layer.succeed(ServiceOrigin, SERVICE_ORIGIN),
     Layer.succeed(TerminalSocket, device.openSocket),
-    Layer.succeed(KeptListsDue, appLeaves(device)),
     device.localDatabaseDriver === undefined
       ? Layer.empty
       : Layer.succeed(LocalDatabaseDriver, device.localDatabaseDriver),

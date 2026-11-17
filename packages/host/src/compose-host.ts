@@ -39,7 +39,7 @@ import {
 } from "@repo/settings";
 import type { SettingsUpdateResult } from "@repo/settings/wire";
 import { entityPool } from "@repo/sync";
-import { Effect, Exit, Layer, Option, Scope, Stream } from "effect";
+import { Effect, Layer, Option, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as HttpClient from "effect/http/HttpClient";
 import type * as Path from "effect/Path";
@@ -68,11 +68,10 @@ import { mergedActs, mergedMethods } from "./effect/composer.js";
 import { type HostAssembly, HostAssemblyTag, hostDrain } from "./effect/host.js";
 import { HostKernelTag, HostService } from "./effect/kernel.js";
 import {
-  AccountSource,
+  type AccountSource,
   AppIdentity,
   ComputerUseHelper,
   type Environment,
-  KeptListsDue,
   LoopbackListener,
   MirrorPlatform,
   Reporter,
@@ -81,7 +80,6 @@ import {
   ThisMacHost,
   type ThisMacHostSeam,
 } from "./effect/seams.js";
-import { type EntityStore, forgetEntityStore, openEntityStore } from "./entity-store.js";
 import { ActRefused, type HostActTable } from "./host-acts.js";
 import {
   HOST_CONCERN,
@@ -99,6 +97,7 @@ import { localCopy } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
 import { HOST_NODE_CAPABILITY } from "./node-capabilities.js";
 import { offlineRefusedCount } from "./queued-writes.js";
+import { forgetEntityStore } from "./retired-entity-file.js";
 import { createGatewayService } from "./service.js";
 import {
   enrolledHostDeviceId,
@@ -283,10 +282,10 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const hostService = yield* HostService;
     const shutdownSignal = yield* ShutdownSignal;
     const { report } = yield* Reporter;
-    const { tokenCipher } = yield* AccountSource;
-    const listsDue = yield* Effect.serviceOption(KeptListsDue);
     const localDriver = yield* Effect.serviceOption(LocalDatabaseDriver);
     const fileSystemContext = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
+    // Note that the file an older build kept the account's queues in is deleted unread, since a release before this one imported them into the local database.
+    yield* Effect.provideContext(forgetEntityStore(kernel.stateRoot), fileSystemContext);
 
     const settings = yield* composeSettings();
     const account = yield* composeAccount({ settings });
@@ -401,12 +400,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
             store: local?.store,
           }
         : undefined,
-    );
-
-    /** The signed-in account's waiting writes kept on disk (`entity-store.ts`), from the account gate opening until it closes; none where nothing seals them. */
-    let entities: { readonly store: EntityStore; readonly scope: Scope.Closeable } | undefined;
-    yield* Effect.addFinalizer(() =>
-      entities === undefined ? Effect.void : Scope.close(entities.scope, Exit.void),
     );
 
     // Note that the integrations stand before the tasks, which ask GitHub's standing of them again once a GitHub connect or disconnect answers.
@@ -751,67 +744,24 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         };
 
     /**
-     * The signed-in account's store opened where none stands: only where the
-     * account source seals with a cipher the system can use, and the run
-     * needs an account, so neither a browser tab nor a fixture run keeps one,
-     * and only once the account is signed in, so the Keychain is never read
-     * before the tokens' own read.
-     */
-    const openEntities = Effect.gen(function* () {
-      const signedInId = account.signedIn() ? accountId() : undefined;
-
-      if (entities !== undefined || signedInId === undefined) return;
-
-      if (tokenCipher === undefined || !tokenCipher.isAvailable()) return;
-
-      if (!kernel.runMode.requiresAccount) return;
-      const scope = yield* Scope.make();
-
-      const store = yield* openEntityStore({
-        directory: kernel.stateRoot,
-        cipher: tokenCipher,
-        accountId: signedInId,
-        ...(Option.isSome(listsDue) ? { listsDue: listsDue.value } : undefined),
-      }).pipe(Scope.provide(scope), Effect.provideContext(fileSystemContext));
-
-      entities = { store, scope };
-    });
-
-    /**
      * The signed-in account's local database opened where the host has one,
-     * after `entities.sealed` opened, with its refused messages and its
-     * waiting writes laid back before any read draws, so the first answer
-     * draws under them: the database's, which imports once what an older
-     * build kept in `entities.sealed`. A host with no database lays the
-     * refused messages back from the file alone.
+     * with its refused messages and its waiting writes laid back before any
+     * read draws, so the first answer draws under them. A host with no
+     * database keeps them in memory alone.
      */
     const openLocal = Effect.gen(function* () {
       const signedInId = account.signedIn() ? accountId() : undefined;
 
-      if (signedInId === undefined) return;
-
-      if (local === undefined) {
-        return yield* agents.refused.restored(signedInId, entities?.store.refused?.entries ?? []);
-      }
-
-      const sealed = { queue: entities?.store.queue, refused: entities?.store.refused };
-      const waiting = yield* local.open(signedInId, agents.refused, sealed);
+      if (signedInId === undefined || local === undefined) return;
+      const waiting = yield* local.open(signedInId, agents.refused);
       yield* pool.requeue(waiting, [...tasks.queueable, ...agents.queueable]);
     });
 
-    /** The store forgotten, its file deleted, as a sign-out does; a file no store stands over is deleted too. */
+    /** The account's queues let go and its local database and any file an older build kept deleted, as a sign-out does. */
     const forgetEntities = Effect.gen(function* () {
-      const standing = entities;
-      entities = undefined;
       yield* pool.letGoQueued;
       yield* agents.refused.forgotten;
       offlineRefused.clear();
-
-      if (standing !== undefined) {
-        yield* standing.store.forget;
-        yield* Scope.close(standing.scope, Exit.void);
-      }
-
       yield* Effect.provideContext(forgetEntityStore(kernel.stateRoot), fileSystemContext);
 
       if (local !== undefined) yield* local.forget;
@@ -826,7 +776,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       if (account.signedIn()) {
         yield* settings.reconcileAccountPreferences();
         yield* account.refreshAccess;
-        yield* openEntities;
         yield* openLocal;
         yield* tasks.open;
         yield* workspaces.open;
