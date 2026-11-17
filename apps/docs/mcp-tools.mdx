@@ -802,7 +802,7 @@ Creates an automation on a schedule, a GitHub event, or a Sentry event. Webhook 
 | `disabledServers` | array of string | The member's connections each run's agent is not handed, by what they connect, such as neon, sentry, or notion-2 for a second Notion account; the whole list. (up to 32 items) |
 | `agentId` | string or null | Hand every run to this agent, by its list_agents id, so runs share its conversation; null for a new agent each run, the default. |
 | `scope` | `personal` \| `workspace` | personal, the default, is its creator's; workspace is every member's. |
-| `archiveSuccessful` | boolean | Mark each run's task Done, archiving its agents, once every agent of the run succeeds and leaves no pull request or thread open. |
+| `archiveSuccessful` | boolean | Where each run starts a new agent, mark the run's task Done, archiving its agents, once every agent of the run succeeds and leaves no pull request or thread open. |
 | `slackDelivery` | boolean | Send each run's result to the member on Slack from Vespin's bot, so the run's agent needs no Slack of its own; the workspace must have the bot connected. |
 
 ### update_automation
@@ -822,7 +822,7 @@ Changes an automation. A new trigger replaces the old one whole.
 | `disabledServers` | array of string | The member's connections each run's agent is not handed, by what they connect, such as neon, sentry, or notion-2 for a second Notion account; the whole list. (up to 32 items) |
 | `agentId` | string or null | Hand every run to this agent, by its list_agents id, so runs share its conversation; null for a new agent each run, the default. |
 | `scope` | `personal` \| `workspace` | personal, the default, is its creator's; workspace is every member's. |
-| `archiveSuccessful` | boolean | Mark each run's task Done, archiving its agents, once every agent of the run succeeds and leaves no pull request or thread open. |
+| `archiveSuccessful` | boolean | Where each run starts a new agent, mark the run's task Done, archiving its agents, once every agent of the run succeeds and leaves no pull request or thread open. |
 | `slackDelivery` | boolean | Send each run's result to the member on Slack from Vespin's bot, so the run's agent needs no Slack of its own; the workspace must have the bot connected. |
 
 ### run_automation

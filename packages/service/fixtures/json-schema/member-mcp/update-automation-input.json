@@ -293,7 +293,7 @@
     },
     "archiveSuccessful": {
       "type": "boolean",
-      "description": "Mark each run's task Done, archiving its agents, once every agent of the run succeeds and leaves no pull request or thread open."
+      "description": "Where each run starts a new agent, mark the run's task Done, archiving its agents, once every agent of the run succeeds and leaves no pull request or thread open."
     },
     "slackDelivery": {
       "type": "boolean",
