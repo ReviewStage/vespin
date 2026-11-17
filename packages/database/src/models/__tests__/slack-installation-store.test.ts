@@ -223,7 +223,7 @@ it.layer(getTestDB())("the Slack installation store", (it) => {
   );
 
   it.effect(
-    "a team's uninstall deletes its installations linked before it, never one linked after or another team's",
+    "a team's uninstall deletes its installations linked before it, never one linked or relinked after or another team's",
     () =>
       Effect.gen(function* () {
         const member = yield* openAccount;
@@ -239,11 +239,13 @@ it.layer(getTestDB())("the Slack installation store", (it) => {
         const teamId = `T-${randomUUID()}`;
 
         yield* linkSlackInstallation({ ...link, organizationId: before, teamId });
+        yield* linkSlackInstallation({ ...link, organizationId: after, teamId });
         yield* linkSlackInstallation({ ...link, organizationId: other, teamId: "T0002" });
         yield* recordSlackMemberLookup(before, member, "U0001");
         const uninstalledAt = yield* DateTime.nowAsDate;
 
         yield* TestClock.adjust("1 minute");
+        // The same team linked again, as a reinstall does before the uninstall is heard.
         yield* linkSlackInstallation({ ...link, organizationId: after, teamId });
 
         assert.deepEqual(yield* deleteSlackTeamInstallations(teamId, uninstalledAt), [before]);

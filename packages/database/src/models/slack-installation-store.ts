@@ -204,9 +204,11 @@ const upsertInstallation = SqlSchema.findOne({
         })
         .onConflictDoUpdate({
           target: slackInstallation.organizationId,
+          // Note that a relink is a new connection, so a late uninstall of the one it replaced never deletes it.
           set: {
             teamName: sql`excluded.team_name`,
             linkedByUserId: sql`excluded.linked_by_user_id`,
+            createdAt: sql`excluded.created_at`,
             updatedAt: sql`excluded.updated_at`,
           },
         })
