@@ -121,9 +121,9 @@ import {
  * go to (`server-card.tsx`); a page of an integration's, a Linear
  * issue say, wears the integration's mark and opens the page in the
  * browser, its card saying its address. A pull request's chip and a GitHub
- * issue's say the state it stands in after their name, wearing GitHub's
- * mark for it, as the workspace's own GitHub App answers them on the
- * service (`use-link-standing.ts`). A pull request or a GitHub issue GitHub
+ * issue's wear GitHub's mark for the state it stands in, heard but never
+ * drawn in words, so no word lands late and shifts the line, as the
+ * workspace's GitHub App answers them (`use-link-standing.ts`). A pull request or a GitHub issue GitHub
  * answered for is then called by its number alone, `#42`, its repository's
  * name before it where that is not the task's, `relay#42`, whatever words
  * its link was written with, so a pasted address, an agent's `[@#42](…)`,
@@ -695,8 +695,8 @@ function MentionChip({
       name={whole ? INLINE_REF_NAME.WHOLE : INLINE_REF_NAME.NAME}
       before={ownerOf(mention, target, doors)}
       mark={machineMark}
-      heard={ownerHeard}
-      state={told ?? standing?.state}
+      heard={ownerHeard ?? standing?.state}
+      state={told}
       gone={state === MENTION_STATE.GONE}
       onPress={
         press === undefined
@@ -713,7 +713,6 @@ function MentionChip({
       data-mention-ref=""
       data-kind={mention.kind}
       data-state={state}
-      data-stated={standing?.state === undefined ? undefined : ""}
     />
   );
 }
