@@ -1,5 +1,5 @@
 /**
- * workspace-billing.test.ts -- where each workspace is billed, over a real dialect: the first Metronome customer recorded stands, its contract is recorded on it, and a read answers only the workspaces it names. Synthetic accounts, workspaces, and ids throughout.
+ * workspace-billing.test.ts -- where each workspace is billed, over a real dialect: the first Metronome customer recorded stands, its contract is recorded on it, a read answers only the workspaces it names, and a Stripe customer blocks and unblocks its own workspace alone. Synthetic accounts, workspaces, and ids throughout.
  */
 
 import assert from "node:assert/strict";
@@ -12,7 +12,10 @@ import { getTestDB, openWorkspace } from "../../testing/index.js";
 import {
   recordMetronomeContract,
   recordMetronomeCustomer,
+  recordStripeCustomer,
+  setStripeCustomerBlocked,
   workspaceBilling,
+  workspaceBillingOfStripeCustomer,
   workspaceBillings,
 } from "../workspace-billing.js";
 
@@ -64,6 +67,43 @@ it.layer(getTestDB())("workspace billing", (it) => {
 
       assert.deepEqual([...read.keys()], [acme]);
       assert.equal(read.get(acme)?.metronomeCustomerId, "customer-acme");
+    }),
+  );
+
+  it.effect("blocks and unblocks only the workspace whose Stripe customer it is", () =>
+    Effect.gen(function* () {
+      const owner = yield* openAccount;
+      const [acme, globex] = [yield* openWorkspace(owner), yield* openWorkspace(owner)];
+      const [acmeStripe, globexStripe] = [`cus_${randomUUID()}`, `cus_${randomUUID()}`];
+
+      for (const [workspace, stripe] of [
+        [acme, acmeStripe],
+        [globex, globexStripe],
+      ] as const) {
+        yield* recordMetronomeCustomer(workspace, `customer-${workspace}`);
+        yield* recordStripeCustomer(workspace, stripe);
+      }
+
+      const blockedAt = new Date("2026-12-09T00:00:00Z");
+
+      assert.equal(yield* setStripeCustomerBlocked(acmeStripe, blockedAt), true);
+      assert.equal(yield* setStripeCustomerBlocked(`cus_${randomUUID()}`, blockedAt), false);
+
+      const blocked = yield* workspaceBillings([acme, globex]);
+
+      assert.deepEqual(blocked.get(acme)?.blockedAt, blockedAt);
+      assert.equal(blocked.get(globex)?.blockedAt, null);
+      assert.deepEqual(
+        Option.map(
+          yield* workspaceBillingOfStripeCustomer(globexStripe),
+          (row) => row.organizationId,
+        ),
+        Option.some(globex),
+      );
+
+      yield* setStripeCustomerBlocked(acmeStripe, null);
+
+      assert.equal((yield* workspaceBillings([acme])).get(acme)?.blockedAt, null);
     }),
   );
 });

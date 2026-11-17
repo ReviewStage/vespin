@@ -38,6 +38,8 @@ export interface AdminBillingWorkspaceSource {
   name: string;
   personal: boolean;
   usageMicroUsd: number;
+  /** Whether it has billing set up and no invoice given up on. */
+  chargeable: boolean;
 }
 
 /** What the Billing read reads: the months the ledger holds, and the covered month's usage by workspace. */
@@ -50,6 +52,8 @@ export interface AdminBillingSource {
 /** What one workspace's page reads: its usage by month, and the current month's by member. */
 export interface AdminWorkspaceBillingSource {
   months: readonly { month: string; usageMicroUsd: number }[];
+  /** Whether it has billing set up and no invoice given up on. */
+  chargeable: boolean;
   members: readonly {
     userId: string | null;
     account: AdminWorkspaceOwner | null;
@@ -72,12 +76,16 @@ function billingFigures(usageMicroUsd: number): AdminBillingFigures {
 
 /**
  * Whether the start gate would refuse the workspace a cloud agent now: in
- * the current month, past the allowance, with no billing set up. Note that
- * no workspace can set billing up yet, since that lands with the Stripe
- * change, so until then every workspace past the allowance would be refused.
+ * the current month, past the allowance, and with no billing it can be
+ * charged through, which is billing set up and no invoice given up on.
  */
-function wouldRefuse(month: string, currentMonth: string, usageMicroUsd: number): boolean {
-  return month === currentMonth && !withinIncludedUsage(usageMicroUsd);
+function wouldRefuse(
+  month: string,
+  currentMonth: string,
+  usageMicroUsd: number,
+  chargeable: boolean,
+): boolean {
+  return month === currentMonth && !chargeable && !withinIncludedUsage(usageMicroUsd);
 }
 
 /** Most usage first; the id breaks a tie, so a refresh keeps the order. */
@@ -110,7 +118,7 @@ export function buildAdminBilling(
       name: row.name,
       personal: row.personal,
       ...billingFigures(row.usageMicroUsd),
-      wouldRefuse: wouldRefuse(month, currentMonth, row.usageMicroUsd),
+      wouldRefuse: wouldRefuse(month, currentMonth, row.usageMicroUsd, row.chargeable),
     }));
 
   const usageMicroUsd = source.workspaces.reduce((total, row) => total + row.usageMicroUsd, 0);
@@ -151,7 +159,7 @@ export function buildAdminWorkspaceBilling(
       month,
       ...billingFigures(usageByMonth.get(month) ?? 0),
     })),
-    wouldRefuse: wouldRefuse(currentMonth, currentMonth, currentUsage),
+    wouldRefuse: wouldRefuse(currentMonth, currentMonth, currentUsage, source.chargeable),
     members,
   };
 }

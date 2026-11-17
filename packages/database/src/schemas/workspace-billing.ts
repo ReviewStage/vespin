@@ -1,4 +1,4 @@
-import { pgTable, text } from "drizzle-orm/pg-core";
+import { pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
 import { createdAt, timestamptz, updatedAt } from "./_helpers.js";
 import { organization } from "./auth.js";
 
@@ -13,17 +13,24 @@ import { organization } from "./auth.js";
  * marked uncollectible. It holds ids and instants alone, and goes with its
  * workspace.
  */
-export const workspaceBillingTable = pgTable("workspace_billing", {
-  organizationId: text("organization_id")
-    .primaryKey()
-    .references(() => organization.id, { onDelete: "cascade" }),
-  metronomeCustomerId: text("metronome_customer_id").notNull(),
-  /** The contract the workspace's usage is rated on; null only until it is made. */
-  metronomeContractId: text("metronome_contract_id"),
-  /** The Stripe customer invoices are charged to; null until billing is set up. */
-  stripeCustomerId: text("stripe_customer_id"),
-  /** When an invoice the workspace owes was marked uncollectible; null while none is. */
-  blockedAt: timestamptz("blocked_at"),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const workspaceBillingTable = pgTable(
+  "workspace_billing",
+  {
+    organizationId: text("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    metronomeCustomerId: text("metronome_customer_id").notNull(),
+    /** The contract the workspace's usage is rated on; null only until it is made. */
+    metronomeContractId: text("metronome_contract_id"),
+    /** The Stripe customer invoices are charged to; null until billing is set up. */
+    stripeCustomerId: text("stripe_customer_id"),
+    /** When an invoice the workspace owes was marked uncollectible; null while none is. */
+    blockedAt: timestamptz("blocked_at"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    // Stripe's events name the customer alone, which names one workspace.
+    uniqueIndex("workspace_billing_stripe_customer").on(table.stripeCustomerId),
+  ],
+);
