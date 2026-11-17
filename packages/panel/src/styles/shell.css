@@ -100,18 +100,38 @@
    It meets New task edge to edge, as Back meets Forward over it, and its
    chevron is centered in a control's square at its end, as Back's arrow is
    in its button, so the chevron stands under Back and New task under
-   Forward. */
-.sidebar-workspace {
+   Forward. The account's row at the column's foot (`sidebar-foot.tsx`)
+   stands on the same lines by the same rules: its face is the tile's size,
+   and Send feedback and Settings meet edge to edge (`sidebar-foot-end`)
+   under Back and Forward. */
+.sidebar-workspace,
+.desktop-sidebar .sidebar-account-row {
   --sidebar-workspace-overhang: calc((var(--spacing-avatar-row) - var(--ui-control-icon)) / 2);
 }
 
-.sidebar-workspace .workspace-ref[data-size="head"] {
+.sidebar-workspace .workspace-ref[data-size="head"],
+.desktop-sidebar .sidebar-account-row > .ui-nav-item {
   gap: calc(var(--ui-icon-gap) - var(--sidebar-workspace-overhang));
 }
 
-.sidebar-workspace > .ui-nav-item {
+.sidebar-workspace > .ui-nav-item,
+.desktop-sidebar .sidebar-account-row > .ui-nav-item {
   padding-inline: calc(var(--ui-row-inset) - var(--sidebar-workspace-overhang))
     calc((var(--ui-control-height) - var(--ui-control-icon)) / 2);
+}
+
+/* The account's row is one control high, as the head is, rather than the
+   taller identity row it is drawn as elsewhere. */
+.desktop-sidebar .sidebar-account-row > .ui-nav-item {
+  min-height: var(--ui-control-height);
+  padding-block: 0;
+}
+
+/* As the head's top is level with the work's sheet beside it, the foot's
+   row ends level with the sheet's bottom edge, a sheet's gap above the
+   window's rather than the column's inset. A drawer has no sheet beside it. */
+:where(:root):not([data-ui-room="narrow"]) .desktop-sidebar .sidebar-foot {
+  margin-bottom: calc(var(--sheet-gap) - var(--column-inset));
 }
 
 /* Note that the strip over it keeps a top row's hairline the work's own row
