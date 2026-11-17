@@ -50,7 +50,8 @@ builds a control of its own.
   compact window, its act first, and its alert in a regular one or where
   words must be typed), `WordsAsk` (the system's alert words are typed in,
   such as an invitation's address), `AuthPage` and `ProviderButton`, `SettingsForm` and its
-  rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a form's words,
+  rows, with `WordsField` (its `SECRET` look the system's secure field, for a key or
+  a token pasted), `AttachRow`, and `MenuPickRow` for a form's words,
   pictures and choices, `ComposeSheet` for a sheet that starts work (its
   words filling the page, and the + and `MenuChip` capsule menus over the
   keyboard, each the system's own glass button in a `DockRow` with no bar
