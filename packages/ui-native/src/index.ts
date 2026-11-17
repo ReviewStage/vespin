@@ -22,10 +22,6 @@ export {
   RowAsking,
   type RowQuestion,
   useRowAsker,
-  WORDS_ASK_KIND,
-  WordsAsk,
-  type WordsAskAct,
-  type WordsAskKind,
 } from "./asks.js";
 
 export { AuthPage } from "./auth-page.js";
@@ -323,7 +319,16 @@ export {
 
 export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
-export { askForName, type NameAsk, shareWords } from "./system-asks.js";
+export {
+  askForName,
+  askForWords,
+  type NameAsk,
+  shareWords,
+  WORDS_KIND,
+  type WordsAct,
+  type WordsAsk,
+  type WordsKind,
+} from "./system-asks.js";
 
 export {
   AGENT_ROW_STATE,
