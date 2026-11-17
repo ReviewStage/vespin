@@ -1077,8 +1077,13 @@ function TaskPage({ task, followUp }: { task: Task; followUp: string }): React.J
       </div>
       <section className="ui-hero-sheet ui-hero-agent" aria-label={task.name}>
         <div className="ui-hero-log">
+          {started ? <span className="ui-hero-log-room" aria-hidden="true" /> : null}
           {started ? (
-            task.lines.map((line) => <TranscriptLine key={line.id} line={line} />)
+            <div className="ui-hero-log-lines">
+              {task.lines.map((line) => (
+                <TranscriptLine key={line.id} line={line} />
+              ))}
+            </div>
           ) : (
             <div className="ui-hero-empty">
               <GlyphSlot size={ICON_SIZE.LARGE}>

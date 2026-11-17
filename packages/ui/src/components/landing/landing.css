@@ -271,7 +271,7 @@
   .ui-landing-hero-app {
     position: relative;
     z-index: 1;
-    mask-image: linear-gradient(to bottom, black 62%, transparent 98%);
+    mask-image: linear-gradient(to bottom, black calc(100% - 24px), transparent);
   }
 
   /* The hero's app (`landing-hero.tsx`): the Mac app at its own size,
@@ -728,19 +728,32 @@
     display: inline-flex;
   }
 
-  /* The log grows from its foot, its oldest turns passing under a faded
-     top edge, as the app's does while it follows a running agent; nothing
-     in the hero scrolls. */
+  /* The log reads from its top while its turns fit, and once they
+     outgrow it keeps its latest turn at its foot, its oldest passing under
+     a faded top edge, as the app's does while it follows a running agent;
+     nothing in the hero scrolls. Note that the column stands reversed from
+     its foot, so turns that overflow pass out at its top, and the room under
+     them grows to hold short turns at its top. */
   .ui-hero-log {
     display: flex;
     flex: 1;
-    flex-direction: column;
-    gap: var(--ui-block-gap);
+    flex-direction: column-reverse;
     min-height: 0;
     overflow: hidden;
-    justify-content: flex-end;
-    mask-image: linear-gradient(to bottom, transparent, black 64px);
+    mask-image: linear-gradient(to bottom, transparent, black var(--ui-section-gap));
     padding: var(--ui-section-gap) var(--ui-hero-reading-room) var(--ui-block-gap);
+  }
+
+  .ui-hero-log-room {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+
+  .ui-hero-log-lines {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: var(--ui-block-gap);
   }
 
   .ui-hero-message-you {
@@ -1715,6 +1728,13 @@
   .ui-landing-pull-request {
     display: inline-flex;
     color: var(--ui-color-complete);
+  }
+
+  /* The glyph stands at a row's leading size, which the row gives only a
+     glyph standing straight in its slot. */
+  .ui-landing-pull-request > svg {
+    width: var(--ui-control-icon);
+    height: var(--ui-control-icon);
   }
 
   .ui-landing-effort {
