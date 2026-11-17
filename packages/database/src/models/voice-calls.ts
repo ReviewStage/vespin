@@ -255,6 +255,35 @@ const findSpokenTo = SqlSchema.findAll({
     ),
 });
 
+/** The agent's conversation locked, as `endVoiceCall` takes it, so a call opening on the agent and its cleanup are one after the other; none for an agent gone. */
+const lockAgentConversation = SqlSchema.findOneOption({
+  Request: Schema.String,
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: (agentId) =>
+    Database.use((db) =>
+      db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .innerJoin(agentTable, eq(agentTable.conversationId, conversations.id))
+        .where(eq(agentTable.id, agentId))
+        .for("update", { of: conversations }),
+    ),
+});
+
+/** The caller's task row locked, as a Start locks it before it adds an agent, so the emptiness read after it sees every agent added before. */
+const lockCallerTask = SqlSchema.findOneOption({
+  Request: Schema.Struct({ callerId: Schema.String, taskId: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ callerId, taskId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: task.id })
+        .from(task)
+        .where(and(eq(task.id, taskId), eq(task.userId, callerId)))
+        .for("update"),
+    ),
+});
+
 const deleteAgentById = SqlSchema.void({
   Request: Schema.String,
   execute: (agentId) =>
@@ -323,8 +352,18 @@ const deleteEmptyTask = SqlSchema.void({
 
 /** The call's row, opened at lease epoch 1 and held until `leaseUntil`. */
 export function insertVoiceCall(opened: VoiceCallOpened): VoiceCallEffect<VoiceCallRow> {
-  // An insert returns its row, so a missing one is a defect.
-  return insertOne(opened).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+  // Note that the agent's conversation is locked first, as a call's end locks it to let a blank agent go, so the
+  // call either stands before that end reads what was said, or finds the agent gone and fails.
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        yield* lockAgentConversation(opened.agentId);
+
+        // An insert returns its row, so a missing one is a defect.
+        return yield* insertOne(opened).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+      }),
+    ),
+  );
 }
 
 /** The call's row where `callerId` is the member on it, none for any other member's. */
@@ -396,7 +435,10 @@ export function endVoiceCall(callerId: string, id: string): VoiceCallEffect<bool
         if (said?.spoken !== false) return true;
         yield* deleteAgentById(agentId);
         yield* deleteConversations([conversationId]);
-        yield* deleteEmptyTask({ callerId, taskId });
+        // Note that the task is locked apart from its delete, so the delete's read sees an agent a Start added meanwhile.
+        const locked = yield* lockCallerTask({ callerId, taskId });
+
+        if (Option.isSome(locked)) yield* deleteEmptyTask({ callerId, taskId });
 
         return true;
       }),
