@@ -1,0 +1,17 @@
+656 empty avg 253 spread 0
+790 empty avg 253 spread 0
+806 empty avg 253 spread 0
+821 empty avg 253 spread 0
+838 empty avg 253 spread 0
+860 empty avg 253 spread 0
+885 empty avg 253 spread 0
+890 empty avg 253 spread 0
+915 empty avg 253 spread 0
+925 empty avg 253 spread 0
+970 empty avg 253 spread 0
+1310 empty avg 249 spread 0
+1376 empty avg 249 spread 0
+1431 empty avg 249 spread 0
+1445 box avg 242 spread 0
+1495 box avg 242 spread 0
+1586 photo avg 87 spread 162
