@@ -262,12 +262,28 @@ env:
 # that the page is scrolled to in short steps until it stands clear under
 # the task's name in the bar (`scroll-to.yaml`'s `BELOW`), because a scroll
 # that stops once it shows leaves it under the bar, where the tap misses it.
+# Note that an iPad's detail column stands its path in the bar as a title of
+# its own, with no bar named for it in the tree, so there the card is
+# scrolled up and then drawn a step further down instead, clear of the bar.
 - runFlow:
-    file: subflows/scroll-to.yaml
-    env:
-      ELEMENT: "Invite funnel"
-      BELOW: "relay › AL-42"
-      BESIDE: ${FLOATING_TABS}
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - runFlow:
+          file: subflows/scroll-to.yaml
+          env:
+            ELEMENT: "Invite funnel"
+            BELOW: "relay › AL-42"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - runFlow:
+          file: subflows/scroll-to.yaml
+          env:
+            ELEMENT: "Invite funnel"
+            DIRECTION: UP
+            BESIDE: "true"
 - tapOn: "Invite funnel"
 - extendedWaitUntil:
     visible: "Invites sent in the staging workspace.*"
