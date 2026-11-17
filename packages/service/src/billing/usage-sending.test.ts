@@ -134,14 +134,15 @@ function acmeRows(organizationId: string) {
 
 it.layer(getTestDB())("usage sent to Metronome", (it) => {
   it.effect(
-    "makes a workspace's customer and contract once, sends each charge once as its event, and stamps it sent",
+    "makes a workspace's customer and contract once, from the month of its earliest unsent charge, sends each charge once as its event, and stamps it sent",
     () =>
       Effect.gen(function* () {
         yield* TestClock.setTime(NOW.getTime());
         const owner = yield* openAccount;
         const acme = yield* openWorkspace(owner);
         yield* recordUsageCharges([
-          charge(acme, 2_500, "2026-11-10T08:00:00Z"),
+          // Last month's, so the contract starts on its 1st and covers it.
+          charge(acme, 2_500, "2026-10-30T08:00:00Z"),
           charge(acme, 400, "2026-11-11T09:30:00Z"),
           // Older than Metronome takes an event, so never read.
           charge(acme, 9_000, "2026-09-01T00:00:00Z"),
@@ -176,7 +177,7 @@ it.layer(getTestDB())("usage sent to Metronome", (it) => {
         assert.deepEqual(contracts[0]?.body, {
           customer_id: Option.getOrThrow(yield* workspaceBilling(acme)).metronomeCustomerId,
           rate_card_id: "rate-card-1",
-          starting_at: "2026-11-01T00:00:00.000Z",
+          starting_at: "2026-10-01T00:00:00.000Z",
           name: "Vespin usage",
           uniqueness_key: acme,
           usage_statement_schedule: { frequency: "MONTHLY", day: "FIRST_OF_MONTH" },
@@ -188,7 +189,7 @@ it.layer(getTestDB())("usage sent to Metronome", (it) => {
               // $10 in cents.
               access_amount: { unit_price: 1000, quantity: 1 },
               commit_duration: { value: 1, unit: "PERIODS" },
-              starting_at: "2026-11-01T00:00:00.000Z",
+              starting_at: "2026-10-01T00:00:00.000Z",
               proration: "NONE",
               rollover_fraction: 0,
             },
@@ -203,7 +204,7 @@ it.layer(getTestDB())("usage sent to Metronome", (it) => {
               transaction_id: rows.get(2_500),
               customer_id: acme,
               event_type: "sandbox_session",
-              timestamp: "2026-11-10T08:00:00.000Z",
+              timestamp: "2026-10-30T08:00:00.000Z",
               properties: { cost_micro_usd: "2500" },
             },
             {

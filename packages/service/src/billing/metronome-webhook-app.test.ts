@@ -1,5 +1,5 @@
 /**
- * metronome-webhook-app.test.ts -- Metronome's webhook as its route answers it: a delivery signed over its date and body under the secret is acknowledged, and one whose signature does not hold, or whose date is past the tolerance, is refused unread. Synthetic secrets and events throughout.
+ * metronome-webhook-app.test.ts -- Metronome's webhook as its route answers it: a delivery signed over its `X-Metronome-Date` and body under the secret is acknowledged whatever its `Date` says, and one whose signature does not hold, or whose date is past the tolerance, is refused unread. Synthetic secrets and events throughout.
  */
 
 import assert from "node:assert/strict";
@@ -20,7 +20,7 @@ const BODY = JSON.stringify({
   properties: { invoice_id: "invoice-1" },
 });
 
-/** A delivery dated `date`, signed over that date and the body under `secret`, as Metronome signs one. */
+/** A delivery dated `date` in Metronome's own header, signed over that date and the body under `secret`, as Metronome signs one, beside a `Date` a proxy rewrote. */
 function delivery(date: Date, secret: string): Request {
   const dated = date.toUTCString();
   const signature = createHmac("sha256", secret).update(`${dated}\n${BODY}`).digest("hex");
@@ -29,7 +29,9 @@ function delivery(date: Date, secret: string): Request {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      date: dated,
+      "x-metronome-date": dated,
+      // A proxy's own date, which the signature does not cover.
+      date: new Date(date.getTime() + 1_000).toUTCString(),
       "metronome-webhook-signature": signature,
     },
     body: BODY,

@@ -21,6 +21,7 @@
  */
 
 import {
+  earliestUnsentUsage,
   markUsageChargesSent,
   type UnsentUsageCharge,
   unsentUsageCharges,
@@ -78,13 +79,27 @@ function described(failure: MetronomeCallFailed): string {
   return `${failure.path} answered ${failure.status ?? "nothing"}: ${failure.message}`;
 }
 
-/** The workspaces among those named whose contract stands, each made where it was missing; one that could not be made is logged and left out. */
+/**
+ * The workspaces among those named whose contract stands, each made where it
+ * was missing; one that could not be made is logged and left out. A contract
+ * made here starts on the 1st of the month of the workspace's earliest
+ * unsent charge, so every charge it then sends falls within it. Note that a
+ * charge in a month whose invoice Metronome has already finalized is counted
+ * in no invoice, whenever its contract was made.
+ */
 const contractedWorkspaces = Effect.fn("web/contractedWorkspaces")(function* (
   account: MetronomeAccount,
   organizationIds: readonly string[],
+  since: Date,
   now: Date,
 ) {
   const billings = yield* workspaceBillings(organizationIds);
+
+  const uncontracted = organizationIds.filter(
+    (organizationId) => billings.get(organizationId)?.metronomeContractId == null,
+  );
+
+  const earliest = yield* earliestUnsentUsage(uncontracted, since);
   const contracted = new Set<string>();
 
   for (const organizationId of organizationIds) {
@@ -104,7 +119,7 @@ const contractedWorkspaces = Effect.fn("web/contractedWorkspaces")(function* (
       const contractId = yield* createMetronomeContract(account, {
         organizationId,
         customerId,
-        startingAt: utcMonthStart(now),
+        startingAt: utcMonthStart(earliest.get(organizationId) ?? now),
       });
 
       yield* recordMetronomeContract(organizationId, contractId);
@@ -131,10 +146,11 @@ const contractedWorkspaces = Effect.fn("web/contractedWorkspaces")(function* (
 const sentPage = Effect.fn("web/sentUsagePage")(function* (
   account: MetronomeAccount,
   page: readonly UnsentUsageCharge[],
+  since: Date,
   now: Date,
 ) {
   const workspaces = [...new Set(page.map((charge) => charge.organizationId))];
-  const contracted = yield* contractedWorkspaces(account, workspaces, now);
+  const contracted = yield* contractedWorkspaces(account, workspaces, since, now);
   const sendable = page.filter((charge) => contracted.has(charge.organizationId));
   let sent = 0;
 
@@ -188,7 +204,7 @@ export const sendUnsentUsage = Effect.fn("web/sendUnsentUsage")(function* () {
     const last = page.at(-1);
 
     if (last === undefined) break;
-    const run = yield* sentPage(metronome, page, now);
+    const run = yield* sentPage(metronome, page, since, now);
     sent += run.sent;
     unsent += run.unsent;
     after = last.id;

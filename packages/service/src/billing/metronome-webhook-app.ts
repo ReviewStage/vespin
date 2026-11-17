@@ -3,10 +3,10 @@
  *
  * Metronome signs each delivery with the webhook's secret
  * (`METRONOME_WEBHOOK_SECRET`, `billing-environment.ts`): the
- * `Metronome-Webhook-Signature` header is the hex HMAC-SHA256 of the `Date`
- * header, a newline, and the body's own bytes, as Metronome's SDK verifies
- * it, and a delivery whose `Date` is more than five minutes off our clock is
- * refused as a replay. Nothing of a delivery is read before its signature
+ * `Metronome-Webhook-Signature` header is the hex HMAC-SHA256 of the
+ * `X-Metronome-Date` header (or `Date`, where that is all a delivery
+ * carries), a newline, and the body's own bytes, and a delivery whose date
+ * is more than five minutes off our clock is refused as a replay. Nothing of a delivery is read before its signature
  * holds, and a deployment with no secret refuses every delivery.
  *
  * `invoice.billing_provider_error` says an invoice did not reach Stripe,
@@ -41,9 +41,10 @@ export const METRONOME_WEBHOOK_PATH = "/api/billing/metronome-webhook";
 /** Metronome's events are small; bounded all the same before anything is read. */
 const MAXIMUM_DELIVERY_BYTES = 1024 * 1024;
 
-/** The headers a delivery is signed under. */
+/** The headers a delivery is signed under: Metronome's own date, or the standard one it still signs for older endpoints, which a proxy may rewrite. */
 const DELIVERY_HEADER = {
-  DATE: "date",
+  DATE: "x-metronome-date",
+  LEGACY_DATE: "date",
   SIGNATURE: "metronome-webhook-signature",
 } as const;
 
@@ -102,7 +103,10 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/metronomeWebhookEndpoint
     }
 
     const body = yield* readBodyBytesEffect(MAXIMUM_DELIVERY_BYTES);
-    const date = request.headers[DELIVERY_HEADER.DATE] ?? "";
+
+    const date =
+      request.headers[DELIVERY_HEADER.DATE] ?? request.headers[DELIVERY_HEADER.LEGACY_DATE] ?? "";
+
     const signature = request.headers[DELIVERY_HEADER.SIGNATURE] ?? "";
     const sentAt = Date.parse(date);
     const now = yield* Clock.currentTimeMillis;

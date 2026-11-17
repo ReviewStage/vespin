@@ -188,7 +188,23 @@ function metronomeRequest(
     });
   });
 
-  return once.pipe(
+  // Note that the attempt's deadline spans the body's read too, because the call's own ends with the headers and a body that never ends would hold every later batch behind it.
+  const bounded = once.pipe(
+    Effect.timeoutOrElse({
+      duration: Duration.millis(METRONOME.REQUEST_TIMEOUT_MS),
+      orElse: () =>
+        Effect.fail(
+          new MetronomeCallFailed({
+            path,
+            status: undefined,
+            message: "no answer within the deadline",
+            retryable: true,
+          }),
+        ),
+    }),
+  );
+
+  return bounded.pipe(
     Effect.retry({
       schedule: Schedule.exponential(RETRY.FIRST_WAIT),
       times: RETRY.TIMES,

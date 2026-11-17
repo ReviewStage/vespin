@@ -2,7 +2,7 @@
  * billing-environment.ts -- what the deployment's environment says about billing, read once as the services are built: the Metronome account usage is sent to, and the secret its webhook is signed with.
  *
  * Usage is sent to Metronome only where its token and the two ids made in
- * its one-time setup are all set (`metronome.ts`'s `METRONOME_SETUP`); with
+ * its one-time setup are all set (`metronome.ts`); with
  * any of them unset the daily job writes the ledger and sends nothing, so
  * the service deploys before the account exists. A blank value is unset.
  */

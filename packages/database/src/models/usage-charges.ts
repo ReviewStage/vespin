@@ -11,7 +11,7 @@
  * that sends them, and stamped as sent once they are.
  */
 
-import { and, asc, eq, gt, gte, inArray, isNull, lt, sql, sum } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, lt, min, sql, sum } from "drizzle-orm";
 import { Array as Arr, Effect, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
@@ -115,6 +115,30 @@ const findUnsent = SqlSchema.findAll({
     ),
 });
 
+const findEarliestUnsent = SqlSchema.findAll({
+  Request: Schema.Struct({ organizationIds: Schema.Array(Schema.String), since: Schema.Date }),
+  Result: Schema.Struct({ organizationId: Schema.String, occurredAt: Schema.Date }),
+  execute: ({ organizationIds, since }) =>
+    Database.use((db) =>
+      db
+        .select({
+          organizationId: usageChargeTable.organizationId,
+          occurredAt: sql<Date>`${min(usageChargeTable.occurredAt)}`.mapWith(
+            usageChargeTable.occurredAt,
+          ),
+        })
+        .from(usageChargeTable)
+        .where(
+          and(
+            inArray(usageChargeTable.organizationId, [...organizationIds]),
+            isNull(usageChargeTable.sentAt),
+            gte(usageChargeTable.occurredAt, since),
+          ),
+        )
+        .groupBy(usageChargeTable.organizationId),
+    ),
+});
+
 const stampSent = SqlSchema.void({
   Request: Schema.Struct({ ids: Schema.Array(Schema.String), sentAt: Schema.Date }),
   execute: ({ ids, sentAt }) =>
@@ -208,6 +232,19 @@ export function unsentUsageCharges(page: {
   readonly limit: number;
 }): AgentStoreEffect<readonly UnsentUsageCharge[]> {
   return findUnsent(page);
+}
+
+/** When each of the workspaces' earliest charge not yet sent on happened, at or after `since`; a workspace with none is left out. */
+export function earliestUnsentUsage(
+  organizationIds: readonly string[],
+  since: Date,
+): AgentStoreEffect<ReadonlyMap<string, Date>> {
+  if (organizationIds.length === 0) return Effect.succeed(new Map());
+
+  return Effect.map(
+    findEarliestUnsent({ organizationIds, since }),
+    (rows) => new Map(rows.map((row) => [row.organizationId, row.occurredAt])),
+  );
 }
 
 /** Stamps the charges as sent on at the instant; one already stamped keeps its first stamp. */
