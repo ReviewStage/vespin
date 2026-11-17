@@ -30,13 +30,7 @@ import { AudioClip } from "./audio-clip.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { FileChip } from "./file-chip.js";
-import {
-  BAR_EDGE,
-  BAR_MARGIN,
-  DOCK_FOLLOWS_KEYBOARD,
-  useDockKeyboard,
-  useDockRoom,
-} from "./glass-bar.js";
+import { BAR_EDGE, BAR_MARGIN, useDockKeyboard, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
@@ -1347,8 +1341,8 @@ export function AgentTranscript({
         maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
         // Note that the list stands its end clear of the keyboard with the system's own inset, moved on the keyboard's own curve, so the newest rows never sit behind it.
         automaticallyAdjustKeyboardInsets
-        // Note that a drag lowers the keyboard, since the composer docked over the list holds no key that does: under the finger, as Messages' does, where the dock follows the keyboard frame by frame, and at once where it follows only the keyboard's announced moves, since its composer would stand still through the drag, then jump.
-        keyboardDismissMode={DOCK_FOLLOWS_KEYBOARD ? "interactive" : "on-drag"}
+        // Note that a drag lowers the keyboard under the finger, as Messages' does, since the composer docked over the list holds no key that does and the dock follows the keyboard frame by frame.
+        keyboardDismissMode="interactive"
         onContentSizeChange={onContentSizeChange}
         onScrollToIndexFailed={onScrollToIndexFailed}
         onScroll={onScroll}

@@ -417,9 +417,6 @@ export function DockRow({
   );
 }
 
-/** Whether the dock follows the keyboard frame by frame, as the native dock does; a list over it may then lower the keyboard under the reader's finger rather than at the first drag. */
-export const DOCK_FOLLOWS_KEYBOARD = KeyboardDockArea !== undefined;
-
 /** What a dock holds: the screen's content, and the bar pinned over its foot. */
 interface DockProps {
   readonly children: ReactNode;
@@ -477,56 +474,6 @@ function DockColumn({
 }
 
 /**
- * The dock where the app's native dock stands (`keyboard-dock.ts`): it lifts
- * the bar with the keyboard frame by frame, through a drag that pulls the
- * keyboard down, the suggestion strip's growth, and a form sheet's own lift,
- * and tells how far the keyboard stands over its foot, which the content
- * leaves room for. Note that the bar must stand last in it, since the native
- * dock lifts its last child.
- */
-function NativeDock({
-  area: Area,
-  children,
-  bar,
-  shown,
-}: DockProps & { readonly area: NonNullable<typeof KeyboardDockArea> }) {
-  const [overlap, setOverlap] = useState(0);
-  const { room, measure } = useDockLift(overlap, shown);
-
-  return (
-    <Area style={styles.dock} onOverlap={(event) => setOverlap(event.nativeEvent.overlap)}>
-      <DockKeyboard.Provider value={overlap}>
-        <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
-      </DockKeyboard.Provider>
-      {/* Note that the docked view is never flattened away, since the native dock lifts its last child, which must be this view and not whatever the bar mounts first. */}
-      <View style={styles.docked} collapsable={false}>
-        <DockLifted.Provider value={true}>
-          <DockColumn bar={bar} onRoom={measure} />
-        </DockLifted.Provider>
-      </View>
-    </Area>
-  );
-}
-
-/** The dock in a build without the native one: the bar lifted by the keyboard's height as the system announces it, rising and falling on the keyboard's own curve, but standing still through a drag that pulls the keyboard down. */
-function AnnouncedDock({ children, bar, shown }: DockProps) {
-  // Note that the bar is lifted by the keyboard's own height, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
-  const keyboard = useKeyboardHeight();
-  const { room, measure } = useDockLift(keyboard, shown);
-
-  return (
-    <View style={styles.dock}>
-      <DockKeyboard.Provider value={keyboard}>
-        <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
-      </DockKeyboard.Provider>
-      <View style={[styles.docked, { bottom: keyboard }]}>
-        <DockColumn bar={bar} onRoom={measure} />
-      </View>
-    </View>
-  );
-}
-
-/**
  * A screen with a bar pinned at its foot, such as a thread's composer: the
  * screen's content fills it, the bar floating over its foot as the system's
  * bars do, and rising with the keyboard so the field stays above it. The
@@ -536,20 +483,32 @@ function AnnouncedDock({ children, bar, shown }: DockProps) {
  * as it stands over the dock (`useDockKeyboard`). In a wide window the bar
  * stands in the content's own centered column, at the reading width, as
  * Messages' field stands under its conversation, rather than across the
- * whole window. Where the build carries the native dock, the bar follows the
- * keyboard frame by frame, so a list over it may lower the keyboard under the
- * reader's finger. While its screen is the one in front (`shown`), the app's
+ * whole window. The app's native dock (`keyboard-dock.ts`) lifts the bar
+ * with the keyboard frame by frame, through a drag that pulls the keyboard
+ * down, the suggestion strip's growth, and a form sheet's own lift, so a list
+ * over it may lower the keyboard under the reader's finger; the bar stands
+ * last in it, since the native dock lifts its last child. While its screen is the one in front (`shown`), the app's
  * notice stands over the bar, where the bar stands in the window.
  */
 export function GlassDock({ children, bar, shown }: DockProps) {
-  return KeyboardDockArea === undefined ? (
-    <AnnouncedDock bar={bar} shown={shown}>
-      {children}
-    </AnnouncedDock>
-  ) : (
-    <NativeDock area={KeyboardDockArea} bar={bar} shown={shown}>
-      {children}
-    </NativeDock>
+  const [overlap, setOverlap] = useState(0);
+  const { room, measure } = useDockLift(overlap, shown);
+
+  return (
+    <KeyboardDockArea
+      style={styles.dock}
+      onOverlap={(event) => setOverlap(event.nativeEvent.overlap)}
+    >
+      <DockKeyboard.Provider value={overlap}>
+        <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
+      </DockKeyboard.Provider>
+      {/* Note that the docked view is never flattened away, since the native dock lifts its last child, which must be this view and not whatever the bar mounts first. */}
+      <View style={styles.docked} collapsable={false}>
+        <DockLifted.Provider value={true}>
+          <DockColumn bar={bar} onRoom={measure} />
+        </DockLifted.Provider>
+      </View>
+    </KeyboardDockArea>
   );
 }
 

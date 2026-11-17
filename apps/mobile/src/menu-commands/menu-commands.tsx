@@ -400,7 +400,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
 
     if (told.current === now) return;
     told.current = now;
-    menuCommandsModule?.setState(
+    menuCommandsModule.setState(
       subject.focus.kind,
       enabled,
       toggled,
@@ -592,11 +592,11 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     latest.current = act;
   });
   useEffect(() => {
-    const listening = menuCommandsModule?.addListener("onCommand", ({ command, index }) =>
+    const listening = menuCommandsModule.addListener("onCommand", ({ command, index }) =>
       latest.current(command, index),
     );
 
-    return () => listening?.remove();
+    return () => listening.remove();
   }, []);
 
   const done = settleStopWords(TASK_STATUS.DONE, working);

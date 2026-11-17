@@ -161,7 +161,7 @@ async function openMicrophone(): Promise<
  * own audio session picks, or from headphones while any are connected.
  */
 async function connect(events: VoiceCallPeerEvents): Promise<VoiceCallConnected> {
-  voiceAudioModule?.preferSpeaker();
+  voiceAudioModule.preferSpeaker();
   const opened = await openMicrophone();
 
   if ("refused" in opened) return opened;
