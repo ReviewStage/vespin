@@ -718,6 +718,7 @@ function fakeService() {
         return { keys: [] };
       }),
     useResetCredit: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    refreshPlanUsage: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     renameSubscription: (rename) =>
       Effect.sync(() => {
         asked.push(`rename:${rename.subscriptionId}`);

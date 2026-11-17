@@ -67,6 +67,7 @@ import {
   chatGptDeviceStartRequestSchema,
   modelApiProviderSchema,
   PROVIDER_KEY_PROVIDER,
+  planUsageRefreshRequestSchema,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
   providerKeyResetCreditRequestSchema,
@@ -142,6 +143,7 @@ const AGENT_ACCOUNT_CALLS = {
     saveProviderKey: accountContract.saveProviderKey,
     setProviderKeyForAgents: accountContract.setProviderKeyForAgents,
     useResetCredit: accountContract.useResetCredit,
+    refreshPlanUsage: accountContract.refreshPlanUsage,
     renameSubscription: accountContract.renameSubscription,
     reorderSubscriptions: accountContract.reorderSubscriptions,
     removeProviderKey: accountContract.removeProviderKey,
@@ -531,6 +533,11 @@ export type ProviderKeyForAgentsParams = typeof providerKeyForAgentsParamsSchema
 export const providerKeyResetCreditParamsSchema = providerKeyResetCreditRequestSchema;
 
 export type ProviderKeyResetCreditParams = typeof providerKeyResetCreditParamsSchema.Type;
+
+/** Checking a plan's usage again now, as the window asks it: the plan. */
+export const planUsageRefreshParamsSchema = planUsageRefreshRequestSchema;
+
+export type PlanUsageRefreshParams = typeof planUsageRefreshParamsSchema.Type;
 
 /** Naming a subscription, as the window asks it: which one, and its name or none for its default. */
 export const subscriptionLabelParamsSchema = subscriptionLabelRequestSchema;

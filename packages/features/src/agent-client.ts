@@ -78,6 +78,7 @@ import {
   type MemoryForgetParams,
   type MemorySaveAnswerView,
   type MemorySaveParams,
+  type PlanUsageRefreshParams,
   type ProviderKeyForAgentsParams,
   type ProviderKeyRemoveParams,
   type ProviderKeyResetCreditParams,
@@ -194,6 +195,7 @@ import {
   chatGptDeviceLoginRequestSchema,
   type ModelApiProvider,
   PROVIDER_KEY_QUERY,
+  planUsageRefreshRequestSchema,
   providerKeyForAgentsRequestSchema,
   providerKeyResetCreditRequestSchema,
   providerKeySaveRequestSchema,
@@ -727,6 +729,17 @@ export class HostedAgentClient {
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
 
     return hostedCall(this.#hosted.account.useResetCredit, admitted);
+  }
+
+  /** A plan's usage checked again now, from its ⋯'s Refresh usage, answering the keys as they then stand. */
+  refreshPlanUsage(
+    params: PlanUsageRefreshParams,
+  ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(planUsageRefreshRequestSchema)(params));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(this.#hosted.account.refreshPlanUsage, admitted);
   }
 
   /** One of the account's subscriptions named, or its name cleared, answering the keys as they then stand; a request the service would refuse by shape never travels. */

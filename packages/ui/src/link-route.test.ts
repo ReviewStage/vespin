@@ -45,7 +45,7 @@ test("a link to a page of Settings opens it on the workspace its slug names, whe
 test("a link to Settings with no page, or a page this window does not know, opens Settings on its page list, at its first page", () => {
   for (const place of [
     { kind: LINK_DESTINATION.SETTINGS },
-    { kind: LINK_DESTINATION.SETTINGS, page: "billing" },
+    { kind: LINK_DESTINATION.SETTINGS, page: "invoices" },
   ] as const) {
     assert.deepEqual(linkRoute({ workspace: "acme", place }, WINDOW), {
       kind: LINK_ROUTE.SETTINGS,

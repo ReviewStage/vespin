@@ -1266,6 +1266,83 @@ it.layer(getTestDB())("the provider keys route", (it) => {
   );
 
   it.effect(
+    "a refresh asks for a Codex plan's usage however fresh its reading, and asks nothing for a plan another account holds",
+    () =>
+      Effect.gen(function* () {
+        const device = fakeDeviceAuth();
+        device.state.codePollStatus = HTTP_STATUS.OK;
+
+        const { owner, other, ask, checks } = yield* openAccounts({
+          ring: KEK.ONE,
+          auth: device.auth,
+        });
+
+        yield* connectPlan(ask, owner);
+        const asked = () => checks.filter((check) => check.url === CHATGPT_USAGE_URL).length;
+        const planId = keysOf(yield* ask(request(owner))).subscriptions?.[0]?.id ?? "";
+
+        const refresh = (userId: string) =>
+          ask(
+            request(userId, {
+              method: "POST",
+              path: "/api/account/provider-keys/usage",
+              body: { subscriptionId: planId },
+            }),
+          );
+
+        yield* refresh(owner);
+        const byOwner = asked();
+        yield* refresh(other);
+
+        assert.deepEqual([byOwner, asked()], [2, 2]);
+      }),
+  );
+
+  it.effect(
+    "a Claude plan's refresh reads its 5-hour and weekly windows from the headers Anthropic answers a one-token quota check with, a 429 at its limit included",
+    () =>
+      Effect.gen(function* () {
+        const resetsAt = { session: 1_800_000_000, week: 1_800_400_000 };
+
+        const limited = new Response("{}", {
+          status: 429,
+          headers: {
+            "anthropic-ratelimit-unified-5h-utilization": "1.0",
+            "anthropic-ratelimit-unified-5h-reset": String(resetsAt.session),
+            "anthropic-ratelimit-unified-7d-utilization": "0.25",
+            "anthropic-ratelimit-unified-7d-reset": String(resetsAt.week),
+          },
+        });
+
+        const { owner, ask, checks } = yield* openAccounts({
+          ring: KEK.ONE,
+          fast: new Map([[SETUP_TOKEN, limited]]),
+        });
+
+        yield* ask(saveToken(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, SETUP_TOKEN));
+        const planId = keysOf(yield* ask(request(owner))).subscriptions?.[0]?.id ?? "";
+
+        const refreshed = keysOf(
+          yield* ask(
+            request(owner, {
+              method: "POST",
+              path: "/api/account/provider-keys/usage",
+              body: { subscriptionId: planId },
+            }),
+          ),
+        );
+
+        const probe = checks.find((check) => check.url === FAST_CHECK_URL);
+
+        assert.deepEqual(refreshed.subscriptions?.[0]?.usageWindows, [
+          { usedPercent: 100, windowMins: 300, resetsAt: resetsAt.session * 1000 },
+          { usedPercent: 25, windowMins: 10_080, resetsAt: resetsAt.week * 1000 },
+        ]);
+        assert.equal(probe?.authorization, `Bearer ${SETUP_TOKEN}`);
+      }),
+  );
+
+  it.effect(
     "removing the ChatGPT plan revokes its refresh token at OpenAI first and answers whether OpenAI confirmed it",
     () =>
       Effect.gen(function* () {
