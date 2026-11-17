@@ -453,7 +453,8 @@ and its manifest (https://docs.slack.dev/reference/app-manifest/) holds:
   `message.im`, `reaction_added`, `app_uninstalled`, `tokens_revoked`, and
   `app_home_opened`
   (https://docs.slack.dev/reference/events/).
-- `settings.interactivity.request_url`: the same
+- `settings.interactivity`: `is_enabled` set to `true`, which Slack requires
+  with any interactivity setting, and `request_url` the same
   `https://<deployment>/api/slack/events`, where an ask's buttons arrive as
   `block_actions`.
 - `features.agent_view`, the Agent messaging experience, in which a
