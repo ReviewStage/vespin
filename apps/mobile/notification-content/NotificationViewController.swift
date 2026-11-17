@@ -21,10 +21,14 @@
 // own, and a press anywhere else opens the thread. `app.config.ts` adds this
 // target to the project Expo generates.
 
+import OSLog
 import SwiftUI
 import UIKit
 import UserNotifications
 import UserNotificationsUI
+
+/// What the view logs of its own steps: counts and sizes only, never a post's words.
+private let log = Logger(subsystem: "dev.vespin.ios.NotificationContent", category: "view")
 
 /// One block of a post as the expanded notification lays it out.
 struct PostBlock: Identifiable {
@@ -195,11 +199,15 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
       host.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
     ])
     host.didMove(toParent: self)
+    log.notice("loaded at \(self.view.bounds.width, privacy: .public)×\(self.view.bounds.height, privacy: .public)")
   }
 
   func didReceive(_ notification: UNNotification) {
     let content = notification.request.content
     shown = PostView(title: content.title, blocks: Self.blocks(of: content))
+    log.notice(
+      "received \(content.categoryIdentifier, privacy: .public) with \(self.shown.blocks.count, privacy: .public) blocks, markdown \(content.userInfo["markdown"] != nil, privacy: .public)"
+    )
     host.rootView = PostView(title: shown.title, blocks: shown.blocks, fills: true)
     if content.categoryIdentifier == Self.decideCategory,
       let options = content.userInfo["options"] as? [String], !options.isEmpty
@@ -232,6 +240,7 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
     let measure = UIHostingController(rootView: shown)
     let height = measure.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude)).height
     guard abs(preferredContentSize.height - height) > 0.5 else { return }
+    log.notice("fits \(self.shown.blocks.count, privacy: .public) blocks at \(width, privacy: .public)×\(height, privacy: .public)")
     preferredContentSize = CGSize(width: width, height: height)
   }
 }
