@@ -10,6 +10,7 @@
  */
 
 import type { Workspace } from "@repo/features/workspace-wire";
+import { changeSignal } from "@repo/ui-native";
 import { Predicate } from "effect";
 import { useSyncExternalStore } from "react";
 import { Settings } from "react-native";
@@ -25,7 +26,7 @@ function keptChoice(): string | undefined {
 }
 
 /** The screens reading the choice, each told when it is made here. */
-const readers = new Set<() => void>();
+const chosen = changeSignal();
 
 /**
  * Calls `listener` each time the kept choice changes until the returned
@@ -34,11 +35,11 @@ const readers = new Set<() => void>();
  * defaults it wrote itself, and `watchKeys` only one made elsewhere.
  */
 function watchChoice(listener: () => void): () => void {
-  readers.add(listener);
+  const stop = chosen.subscribe(listener);
   const watching = Settings.watchKeys([CHOSEN_WORKSPACE_KEY], listener);
 
   return () => {
-    readers.delete(listener);
+    stop();
     Settings.clearWatch(watching);
   };
 }
@@ -46,8 +47,7 @@ function watchChoice(listener: () => void): () => void {
 /** Keeps `id` as the workspace the phone works in, and tells every screen reading it. */
 function choose(id: string): void {
   Settings.set({ [CHOSEN_WORKSPACE_KEY]: id });
-
-  for (const reader of readers) reader();
+  chosen.tell();
 }
 
 /**

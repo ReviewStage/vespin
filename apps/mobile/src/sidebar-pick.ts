@@ -1,5 +1,6 @@
 // sidebar-pick.ts -- the app sidebar's last pick, the place and the Tasks collection it stood on, kept across launches so a wide window opens where it was left, as Mail opens on the mailbox last read.
 
+import { changeSignal } from "@repo/ui-native";
 import { Predicate } from "effect";
 import { useSyncExternalStore } from "react";
 import { Settings } from "react-native";
@@ -18,26 +19,13 @@ function kept(key: (typeof KEY)[keyof typeof KEY]): string | undefined {
   return Predicate.isString(value) && value !== "" ? value : undefined;
 }
 
-/** The screens reading the collection, each told as a pick changes it. */
-const readers = new Set<() => void>();
-
-function subscribe(listener: () => void): () => void {
-  readers.add(listener);
-
-  return () => {
-    readers.delete(listener);
-  };
-}
-
-/** Tells every reader that the kept pick changed, since React Native's settings manager hears no change it wrote itself. */
-function tell(): void {
-  for (const reader of readers) reader();
-}
+/** The screens reading the collection, each told as a pick changes it, since React Native's settings manager hears no change it wrote itself. */
+const picked = changeSignal();
 
 /** Keeps the place a sidebar row picked. */
 export function keepSidebarPlace(place: SidebarPlace): void {
   Settings.set({ [KEY.PLACE]: place });
-  tell();
+  picked.tell();
 }
 
 /**
@@ -48,7 +36,7 @@ export function keepSidebarPlace(place: SidebarPlace): void {
  */
 export function keepTasksCollection(key: string | undefined): void {
   Settings.set({ [KEY.COLLECTION]: key ?? "" });
-  tell();
+  picked.tell();
 }
 
 /** The place the sidebar last picked, as it was kept; none before any pick. */
@@ -58,5 +46,5 @@ export function keptSidebarPlace(): string | undefined {
 
 /** The group of tasks the sidebar last picked, Pinned, Following, or a section, by its key; none for every task. */
 export function useTasksCollection(): string | undefined {
-  return useSyncExternalStore(subscribe, () => kept(KEY.COLLECTION));
+  return useSyncExternalStore(picked.subscribe, () => kept(KEY.COLLECTION));
 }

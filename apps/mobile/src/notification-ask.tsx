@@ -12,7 +12,7 @@
  * nothing.
  */
 
-import { GLYPH, PermissionAsk } from "@repo/ui-native";
+import { changeSignal, GLYPH, PermissionAsk } from "@repo/ui-native";
 import { Predicate } from "effect";
 import { useSyncExternalStore } from "react";
 import { Settings } from "react-native";
@@ -46,14 +46,14 @@ function keptDismissal(): string | undefined {
 }
 
 /** The screens reading the dismissal, each told when it is made here, since React Native hears no change of the defaults it wrote itself. */
-const readers = new Set<() => void>();
+const dismissals = changeSignal();
 
 function watchDismissal(listener: () => void): () => void {
-  readers.add(listener);
+  const stop = dismissals.subscribe(listener);
   const watching = Settings.watchKeys([DISMISSED_KEY], listener);
 
   return () => {
-    readers.delete(listener);
+    stop();
     Settings.clearWatch(watching);
   };
 }
@@ -61,8 +61,7 @@ function watchDismissal(listener: () => void): () => void {
 /** Lets the row go in `standing`, and tells every screen reading it. */
 function dismiss(standing: string): void {
   Settings.set({ [DISMISSED_KEY]: standing });
-
-  for (const reader of readers) reader();
+  dismissals.tell();
 }
 
 /** The Inbox's notification ask while iOS does not let the app notify and the reader hasn't let it go; nothing otherwise. */
