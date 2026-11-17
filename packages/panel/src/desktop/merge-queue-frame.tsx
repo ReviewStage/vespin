@@ -28,12 +28,11 @@ import {
   taskRowFit,
 } from "@repo/ui";
 import type { ReactNode } from "react";
-import { ACTOR_SIZE, actorMarkWidth } from "../actor-ref.js";
 
 /** What the page says while it reads the queues. */
 const READING = "Reading the merge queues…";
 
-/** A placeholder mark, at a glyph's size: the repository's picture and the queued pull request's mark. */
+/** The placeholder repository's picture, at a glyph's size. */
 const SKELETON_MARK = "16px";
 
 /** How wide the placeholder repository's name stands, as a short repository's does. */
@@ -41,9 +40,6 @@ const SKELETON_REPOSITORY = "56px";
 
 /** How wide a placeholder number stands: a four-digit one and its #, in the key's monospaced type. */
 const SKELETON_NUMBER = "5ch";
-
-/** How wide a placeholder count of checks stands, as a glyph and two figures do. */
-const SKELETON_CHECKS = "28px";
 
 /** How wide a placeholder estimate stands, as a short one does: in 8m. */
 const SKELETON_TIME = "32px";
@@ -112,23 +108,18 @@ export function MergeQueueSection({
 /**
  * The queues still being read: one repository's section, a block where its
  * picture and its name will stand, over rows of the page's own cells, a
- * block in each where its number, its mark, its checks, its author, and its
- * estimate will.
+ * block where each row's number, its title, and its estimate will. Note
+ * that the small marks between them, its queued mark, its checks, and its
+ * author, stand as no block, so the rows read calm while their columns
+ * still stand where the page's do.
  */
 export function MergeQueueSkeleton(): React.JSX.Element {
   const blocks = {
     [TASK_ROW_CELL.KEY]: <Skeleton width={SKELETON_NUMBER} />,
-    [TASK_ROW_CELL.STATUS]: (
-      <TaskRowGlyph>
-        <Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_MARK} />
-      </TaskRowGlyph>
-    ),
-    [TASK_ROW_CELL.SUB_TASKS]: <Skeleton width={SKELETON_CHECKS} />,
-    [TASK_ROW_CELL.CREATOR]: (
-      <Skeleton kind={SKELETON_KIND.CIRCLE} width={actorMarkWidth(ACTOR_SIZE.INLINE)} />
-    ),
+    // Note that the mark's column is held empty, so the titles start where the page's do.
+    [TASK_ROW_CELL.STATUS]: <TaskRowGlyph>{null}</TaskRowGlyph>,
     [TASK_ROW_CELL.UPDATED]: <Skeleton width={SKELETON_TIME} />,
-  } as const satisfies Record<(typeof QUEUE_ROW_CELLS)[number], ReactNode>;
+  } as const satisfies Partial<Record<(typeof QUEUE_ROW_CELLS)[number], ReactNode>>;
 
   return (
     <SkeletonRegion label={READING}>
