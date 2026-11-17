@@ -22,9 +22,10 @@ import { useDescriptionComments } from "./use-description-comments.js";
 
 /**
  * A comment whose mention could not hand the thread over: the reply posts,
- * and the thread says who could not take it; and an edit the service
+ * and the thread says who could not take it; an edit the service
  * refused, whose field closed as it was sent, keeps its words as the
- * comment's draft. Synthetic thread.
+ * comment's draft; and a thread started is drawn as it is asked, before the
+ * host's draw of it comes back. Synthetic thread.
  */
 
 const PLAN = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
@@ -122,5 +123,58 @@ test("an edit the service refused keeps its words as the comment's draft, which 
 
   assert.equal(landed, false);
   assert.equal(drafted, "Ship by Friday.");
+  act(() => root.unmount());
+});
+
+test("a thread started on the description is drawn as it is asked, until the host's answer comes back", async () => {
+  fakeAppBridge({});
+  handHostReads({});
+
+  const answered = Promise.withResolvers<{
+    failure: typeof DESCRIPTION_COMMENT_CALL_FAILURE.UNANSWERED;
+  }>();
+
+  fakeActPort({
+    [TASKS_ACT_KIND.TASKS_COMMENT_START]: () => answered.promise,
+  });
+  let control: DescriptionCommentsControl | undefined;
+  const subject = { taskId: PLAN };
+
+  function Probe() {
+    control = useDescriptionComments(subject);
+
+    return null;
+  }
+
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  // The window's document lands first, which names the member signed in.
+  await act(async () => root.render(withQueryClient(createElement(Probe))));
+  await act(async () => undefined);
+
+  const text = "## Testing\n\nWe add a retry to the send.";
+  let started: Promise<unknown> | undefined;
+  act(() => {
+    started = control?.start({
+      id: THREAD.id,
+      clientKey: THREAD.id,
+      scope: DESCRIPTION_COMMENT_SCOPE.WORDS,
+      quote: "a retry",
+      anchor: { from: text.indexOf("a retry"), to: text.indexOf("a retry") + 7 },
+      text,
+      words: "Why a retry?",
+    });
+  });
+
+  const drawn = control?.threads.find((thread) => thread.id === THREAD.id);
+  assert.equal(drawn?.section, "Testing");
+  assert.equal(drawn?.entries[0]?.words, "Why a retry?");
+  assert.equal(drawn?.entries[0]?.writer.by?.name, "Dev");
+
+  await act(async () => {
+    answered.resolve({ failure: DESCRIPTION_COMMENT_CALL_FAILURE.UNANSWERED });
+    await started;
+  });
+
+  assert.equal(control?.threads.length, 0, "the host's draw, here none, takes over");
   act(() => root.unmount());
 });

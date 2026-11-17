@@ -188,9 +188,6 @@ function drawn(
   me?: string,
   read = true,
   agents?: EditAgents,
-  starting: () => ReturnType<DescriptionCommentsControl["start"]> = async () => ({
-    note: "not in this test",
-  }),
 ) {
   const asked: { thread: string; action: DescriptionCommentActionRequest }[] = [];
   const started: DescriptionCommentStartRequest[] = [];
@@ -204,10 +201,10 @@ function drawn(
     failed: false,
     onRetry: () => undefined,
     notes,
-    start: (start) => {
+    start: async (start) => {
       if (!("page" in start)) started.push(start);
 
-      return starting();
+      return { note: "not in this test" };
     },
     act: async (thread, action) => {
       asked.push({ thread, action });
@@ -1303,30 +1300,8 @@ test("a reply's field empties as it is sent and takes the next at once, each sen
   assert.notEqual(keys[2], keys[1]);
 });
 
-test("a thread being started keeps its words marked and its card in place, its words in its field and taking nothing more, until the thread it was sent as is drawn, which takes over open, its draft let go as the words land, and words refused stay as its draft, sent again under their key", async () => {
-  type StartAnswer = Awaited<ReturnType<DescriptionCommentsControl["start"]>>;
-
-  const answers: PromiseWithResolvers<StartAnswer>[] = [];
-
-  const { container, started, rethread } = wide(() =>
-    drawn(
-      "page",
-      [],
-      () => true,
-      PLAN,
-      undefined,
-      undefined,
-      undefined,
-      true,
-      undefined,
-      () => {
-        const answer = Promise.withResolvers<StartAnswer>();
-        answers.push(answer);
-
-        return answer.promise;
-      },
-    ),
-  );
+test("a thread being started gives its card's place to the thread as its words are sent, under the id its first comment's key names, and words refused stand as not sent where its words are commented on again", async () => {
+  const { container, started } = wide(() => drawn("page", []));
 
   const paragraph = [...container.querySelectorAll("p")].find((p) =>
     p.textContent?.startsWith("Admins can withdraw"),
@@ -1340,97 +1315,24 @@ test("a thread being started keeps its words marked and its card in place, its w
   };
 
   const pending = () => container.querySelector(`.comment-card[data-thread="pending"]`);
-  const field = () => pending()?.querySelector<HTMLElement>(".composer-editor");
-
-  const marked = (thread: string) =>
-    container.querySelector(`.description-comment-mark[data-threads~="${thread}"]`) !== null;
-
   comment();
-  typeInto(field(), "Ask Vespin about retries");
-  act(() => {
-    field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  });
+  const field = pending()?.querySelector<HTMLElement>(".composer-editor");
+  assert.ok(field);
+  typeInto(field, "Ask Vespin about retries");
 
+  act(() => {
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+  assert.equal(pending(), null, "the card gives way as its words are sent");
   const [start] = started;
   assert.ok(start);
   assert.equal(start.id, start.clientKey);
-  assert.ok(pending(), "the card stands until the thread is drawn");
-  assert.ok(marked("pending"), "its words stay marked meanwhile");
-  assert.equal(wordsIn(field()), "Ask Vespin about retries", "its words stay in its field");
-  assert.ok(
-    pending()?.hasAttribute("inert"),
-    "it takes nothing meanwhile, which the thread would leave behind",
-  );
 
-  // The host draws the thread under the id its first comment's key names.
-  const thread = threadOn(start.id ?? "", "Admins can withdraw", "Ask Vespin about retries", {
-    scope: start.scope,
-    quote: start.quote,
-    anchor: start.anchor,
-  });
-
-  rethread([thread]);
-
-  assert.equal(pending(), null, "the card gives way to the thread");
-  assert.equal(
-    container.querySelector<HTMLElement>(`.comment-card[data-thread="${start.id}"]`)?.dataset.open,
-    "true",
-  );
-  assert.ok(marked(start.id ?? ""), "the thread's words are marked in their place");
-
-  await act(async () => answers[0]?.resolve({ thread }));
-  rethread([]);
+  await act(async () => undefined);
   comment();
-  assert.equal(wordsIn(field()), "", "the words landed are no draft");
-  typeInto(field(), "Or a code?");
-  act(() => {
-    field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  });
-  await act(async () => answers[1]?.resolve({ note: "not posted" }));
-  assert.equal(wordsIn(field()), "Or a code?", "words refused stay in the field");
-
-  // A thread started on other words while the words are out keeps its own, and the words refused stay as the draft on theirs.
-  act(() => {
-    field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  });
-
-  const goal = [...container.querySelectorAll("p")].find((p) =>
-    p.textContent?.startsWith("An admin invites"),
-  );
-
-  act(() => goal?.dispatchEvent(new Event("pointerover", { bubbles: true })));
-  act(() => container.querySelector<HTMLButtonElement>(".comment-block-button button")?.click());
-  typeInto(field(), "Other words");
-  await act(async () => answers[2]?.resolve({ note: "not posted" }));
-  assert.equal(wordsIn(field()), "Other words");
-
-  comment();
-  assert.equal(wordsIn(field()), "Or a code?");
-  act(() => {
-    field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  });
-
-  const keys = started.map((each) => each.clientKey);
-  assert.equal(keys[2], keys[1], "words refused go again under their key");
-  assert.equal(keys[3], keys[2], "so do words refused once the field moved on");
-  await act(async () => answers[3]?.resolve({ note: "not posted" }));
-
-  // Words refused once their thread was drawn, which the host then takes back, stand as not sent.
-  typeInto(field(), "Lost on the way");
-  act(() => {
-    field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  });
-
-  const lost = started[4];
-  assert.ok(lost);
-  rethread([threadOn(lost.id ?? "", "Admins can withdraw", "Lost on the way", lost)]);
-  rethread([]);
-  await act(async () => answers[4]?.resolve({ note: "not posted" }));
-  comment();
-  assert.equal(wordsIn(field()), "");
   assert.equal(
     pending()?.querySelector("[data-unsent] .comment-words")?.textContent,
-    "Lost on the way",
+    "Ask Vespin about retries",
   );
 });
 

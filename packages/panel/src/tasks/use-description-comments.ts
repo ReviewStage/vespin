@@ -1,10 +1,19 @@
+import {
+  ACCOUNT_STATUS,
+  type AccountSnapshot,
+  signedInAccountId,
+} from "@repo/credentials/snapshot";
 import { COMMENT_NOTE, commentRefusalNote } from "@repo/features/description-comment-notes";
 import {
   DESCRIPTION_COMMENT_ACTION,
+  DESCRIPTION_COMMENT_ACTOR,
+  DESCRIPTION_COMMENT_ENTRY,
+  DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentActionRequest,
   type DescriptionCommentStart,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
+import { sectionAt } from "@repo/features/description-sections";
 import {
   FAILURE_CONDITION,
   FAILURE_SURFACE,
@@ -27,6 +36,7 @@ import {
   descriptionCommentsRetryMutation,
 } from "../live-reads.js";
 import { useToast } from "../toast.js";
+import { appStateQuery, selectAccount } from "../use-app-state.js";
 
 /**
  * use-description-comments.ts -- a description's comment threads, or one of its task's pages', as one control: held by the host while the surface shows them, and each write on its way back.
@@ -40,7 +50,10 @@ import { useToast } from "../toast.js";
  * Every write is drawn by the host over the held threads the moment it is
  * asked (`@repo/host`'s `description-comment-writes.ts`), a thread started among
  * them under the id its caller minted, and stands until the read carries
- * it, so nothing here waits on one. A thread is started, and each comment
+ * it, so nothing here waits on one. A thread started on the description is
+ * drawn here too, in the frame it is asked, until the host's answer comes
+ * back across the act port, by which time the host draws it, so its words
+ * and its card never stand unmarked between the two. A thread is started, and each comment
  * posted, under a key the caller keeps for as long as its words stand, so a
  * write sent again after a lost answer is taken once. A write that did not
  * land is taken back by the host: a reply's is said on its thread, its words
@@ -60,6 +73,45 @@ function unsentWords(answer: TasksCommentAnswer): string | undefined {
   const unsent = "thread" in answer ? (answer.unsent ?? []) : [];
 
   return unsent.length === 0 ? undefined : COMMENT_NOTE.AGENT_AWAY;
+}
+
+/**
+ * A thread started on the description as the host draws it before the
+ * service answers: open, its one comment the member's; none for a page's,
+ * for a start naming no id, or where the window names no member, which the
+ * host draws alone.
+ */
+function startedThread(
+  start: DescriptionCommentStart,
+  account: AccountSnapshot | undefined,
+  at: number,
+): DescriptionCommentThread | undefined {
+  if ("page" in start || start.id === undefined) return undefined;
+  const userId = signedInAccountId(account);
+  const name = account?.status === ACCOUNT_STATUS.SIGNED_IN ? account.name : undefined;
+
+  if (userId === undefined || name === undefined) return undefined;
+
+  return {
+    id: start.id,
+    scope: start.scope,
+    quote: start.quote,
+    anchor: start.anchor,
+    section: sectionAt(start.text, start.anchor.from),
+    status: DESCRIPTION_COMMENT_STATUS.OPEN,
+    entries: [
+      {
+        id: start.clientKey,
+        kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: { userId, name } },
+        words: start.words,
+        at,
+      },
+    ],
+    createdAt: at,
+    updatedAt: at,
+    revision: 0,
+  };
 }
 
 /** Where a write's refusal is reported, by what it did. */
@@ -94,6 +146,9 @@ export function useDescriptionComments(
   const toast = useToast();
   const drafts = useDraftWriter();
   const [notes, setNotes] = useState<ReadonlyMap<string, string>>(new Map());
+  // The threads started here that the host's answer has not come back for yet, drawn over the read's.
+  const [drawing, setDrawing] = useState<readonly DescriptionCommentThread[]>([]);
+  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
   const taskId = subject?.taskId;
 
   /** Says in a toast that a write the host drew was taken back, and why. */
@@ -126,10 +181,16 @@ export function useDescriptionComments(
   const start = useCallback(
     async (begun: DescriptionCommentStart) => {
       if (taskId === undefined) return { note: COMMENT_NOTE.NOT_POSTED };
+      const drawn = startedThread(begun, account, Date.now());
+
+      if (drawn !== undefined) setDrawing((was) => [...was, drawn]);
 
       const answer = await sendStart({ taskId, start: begun }).catch(
         (): TasksCommentAnswer => UNANSWERED,
       );
+
+      // Note that the host drew the thread before it answered, or took it back where it was refused, so its own draw takes over.
+      if (drawn !== undefined) setDrawing((was) => was.filter((each) => each !== drawn));
 
       if (!("thread" in answer)) {
         const words =
@@ -144,7 +205,7 @@ export function useDescriptionComments(
 
       return { thread: answer.thread };
     },
-    [taskId, sendStart, note, takenBack],
+    [taskId, account, sendStart, note, takenBack],
   );
 
   const act = useCallback(
@@ -192,7 +253,15 @@ export function useDescriptionComments(
     [taskId, sendCommentAct, note, takenBack, drafts],
   );
 
-  const rows = read.data;
+  const held = read.data;
+
+  // Note that a thread the read holds already is drawn as the read holds it.
+  const rows = useMemo(() => {
+    const extra = drawing.filter((each) => !held?.some((row) => row.id === each.id));
+
+    return extra.length === 0 ? held : [...(held ?? NO_THREADS), ...extra];
+  }, [held, drawing]);
+
   const { isSuccess, isError } = read;
   // Note that Try again moves with the subject alone, as the read's own did, since a render builds it anew.
   const pageId = subject?.pageId;

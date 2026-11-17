@@ -1205,7 +1205,6 @@ function ReplyField({
   failure,
   variant = REPLY_VARIANT.REPLY,
   review,
-  holdsSent = false,
 }: {
   label: string;
   /** Where the words are kept unsent, so Esc, a press away, or the thread closing finds them as the field opens again. */
@@ -1225,8 +1224,6 @@ function ReplyField({
   variant?: ReplyVariant;
   /** Where the words may be held in the writer's review rather than posted; none where they may not. */
   review?: CommentReview | undefined;
-  /** Whether words sent stay in the field until they land, as a thread's first comment does while its card stands in for the thread; it empties once they do. */
-  holdsSent?: boolean;
 }): React.JSX.Element {
   const { draft, update } = useDraft(place);
   const words = draft.text;
@@ -1244,17 +1241,8 @@ function ReplyField({
   });
 
   const { files } = box;
-  // The last send refused at each place the field was drawn for, whose key the same words and files sent again there go under, so a send whose answer was lost is taken once; a thread being started's field moves on to other words, and each keeps its own.
-  const attempts = useRef<readonly { place: DescriptionCommentPlace; send: CommentSend }[]>([]);
-
-  const attemptAt = (at: DescriptionCommentPlace) =>
-    attempts.current.find((each) => Equal.equals(each.place, at))?.send;
-
-  const keepAttempt = (at: DescriptionCommentPlace, send: CommentSend | undefined) => {
-    const others = attempts.current.filter((each) => !Equal.equals(each.place, at));
-    attempts.current = send === undefined ? others : [...others, { place: at, send }];
-  };
-
+  // The last send refused, whose key the same words and files sent again go under, so a send whose answer was lost is taken once.
+  const attempt = useRef<CommentSend | undefined>(undefined);
   // Sends refused that the field could not take back beside what was typed or added since, kept apart in the order written, marked as not sent, with Retry under their keys.
   const lines = useSelector(unsentLines.store);
   const unsent = lines.filter((each) => Equal.equals(each.place, place)).map(({ send }) => send);
@@ -1269,9 +1257,6 @@ function ReplyField({
   // The words the field holds this moment, for a send's answer that lands after the render it was made in.
   const wordsNow = useRef(words);
   wordsNow.current = words;
-  // Where the field keeps its words this moment, since a thread being started on other words draws in the same field.
-  const placeNow = useRef(place);
-  placeNow.current = place;
   // Whether the field still stands, since sends refused after their thread closed have no field to come back into.
   const standing = useRef(true);
   useEffect(() => {
@@ -1287,9 +1272,7 @@ function ReplyField({
     const [first] = sends;
 
     if (first === undefined) return;
-    // Note that a send refused after the field moved on to other words stands apart under its own place, its key with it, so neither draft takes the other's.
-    const moved = !Equal.equals(placeNow.current, place);
-    keepAttempt(place, first);
+    attempt.current = first;
     const typed = wordsNow.current;
 
     const back = {
@@ -1297,7 +1280,7 @@ function ReplyField({
       attachments: [...first.attachments, ...files.now()],
     };
 
-    if (sends.length > 1 || !standing.current || moved || !carried(back)) {
+    if (sends.length > 1 || !standing.current || !carried(back)) {
       addUnsent(sends);
 
       return;
@@ -1320,41 +1303,17 @@ function ReplyField({
     // Note that sends not sent go first, so comments land in the order they were written.
     if (trimmed === "" || files.reading || unsent.length > 0) return;
     const { attachments } = files;
-    const was = attemptAt(place);
+    const was = attempt.current;
     const same = was?.words === trimmed && sameFiles(was.attachments, attachments);
     // Note that the key is let go as the words go, since the same words sent again while they are out, or once they land, are a new comment.
-    keepAttempt(place, undefined);
-    const out = { words: trimmed, attachments, key: same ? was.key : crypto.randomUUID() };
-
-    if (holdsSent) {
-      keepSent(out);
-
-      return;
-    }
-
+    attempt.current = undefined;
     // Note that the field empties as the words are sent, since a send may wait on the ones before it and on those its mentions hand the thread to.
     setWords("");
     files.set([]);
-    go(out);
-  };
-
-  // Note that words kept in the field as they are sent leave its draft once they land, its card gone with its thread drawn by then, unless the draft was written anew meanwhile; refused, they are still there, sent again under their key.
-  const keepSent = (out: CommentSend) => {
-    void onSend(out.words, out.key, out.attachments).then((sent) => {
-      if (!sent) {
-        keepAttempt(place, out);
-
-        // Note that words refused once their card gave way to the thread, drawn before the service refused it, stand as not sent, their files with them, rather than as a draft.
-        if (!standing.current) {
-          update((now) => (now.text.trim() === out.words ? { ...now, text: "" } : now));
-          addUnsent([out]);
-        }
-
-        return;
-      }
-
-      update((now) => (now.text.trim() === out.words ? { ...now, text: "" } : now));
-      files.set([]);
+    go({
+      words: trimmed,
+      attachments,
+      key: same ? was.key : crypto.randomUUID(),
     });
   };
 
@@ -1364,7 +1323,7 @@ function ReplyField({
 
     if (review === undefined || trimmed === "" || files.reading || unsent.length > 0) return;
     const { attachments } = files;
-    keepAttempt(place, undefined);
+    attempt.current = undefined;
     setWords("");
     files.set([]);
     review.onHold(trimmed, attachments);
@@ -1398,7 +1357,7 @@ function ReplyField({
     neverBusyAct(() => {
       dropUnsent();
       // Note that words written again after a discard are a new comment, so they go under a new key.
-      keepAttempt(place, undefined);
+      attempt.current = undefined;
     }),
     confirmFailure(FAILURE_SURFACE.DESCRIPTION_COMMENT_DISCARD),
   );
@@ -1628,8 +1587,6 @@ function CommentCard({
   lit?: boolean | undefined;
   "data-thread"?: string | undefined;
   "data-pointed"?: boolean | undefined;
-  /** Whether it takes no input, as a thread being started does once its words are sent. */
-  inert?: boolean | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   return (
@@ -1875,9 +1832,8 @@ interface FirstComment {
  * comment: on the description's words, or on a page or one of its elements, as
  * `begin` makes the start of it. The thread is started under the key its
  * first comment is sent under, so a send tried again names the same
- * thread. The host draws it as it is asked, but only once the act reaches
- * it, so the card hands its place to the thread as the thread is drawn
- * (`onStarted`), never before, which would leave its words unmarked between.
+ * thread, and the host draws it the moment it is asked, so the card hands
+ * its place to the thread at once.
  */
 function PendingCard({
   on,
@@ -1888,8 +1844,6 @@ function PendingCard({
   onStarted,
   onCancel,
   review,
-  standsIn = false,
-  sent = false,
 }: {
   /** What the thread is started on, which its unsent words are kept under. */
   on: { readonly quote: string; readonly scope: DescriptionCommentThread["scope"] };
@@ -1898,18 +1852,14 @@ function PendingCard({
   head?: ReactNode;
   doors: ThreadDoors;
   begin: (first: FirstComment) => DescriptionCommentStart;
-  /** Hands the card's place to the thread it started, by its id, once the thread is drawn or `landed` says whether its words did. */
-  onStarted: (threadId: string, landed: Promise<boolean>) => void;
+  /** Hands the card's place to the thread it started, by its id. */
+  onStarted: (threadId: string) => void;
   onCancel: () => void;
   /** Where its first comment may be held in the writer's review rather than posted; the card closes once it is. */
   review?: CommentReview | undefined;
-  /** Whether it stands in for its thread from the send until the thread is drawn, its words kept in its field meanwhile; it gives way as they are sent otherwise. */
-  standsIn?: boolean;
-  /** Whether its words were sent and it stands in for their thread until the thread is drawn, taking nothing meanwhile, since what it took would be left behind as the thread takes over. */
-  sent?: boolean;
 }): React.JSX.Element {
   return (
-    <CommentCard place={place} open data-thread={PENDING_THREAD} inert={sent}>
+    <CommentCard place={place} open data-thread={PENDING_THREAD}>
       {head}
       <ReplyField
         label={COMMENT_WORDS.ADD}
@@ -1917,7 +1867,6 @@ function PendingCard({
         autoFocus
         onCancel={onCancel}
         variant={REPLY_VARIANT.FIRST}
-        holdsSent={standsIn}
         review={
           review === undefined
             ? undefined
@@ -1930,20 +1879,18 @@ function PendingCard({
               }
         }
         onSend={(words, clientKey, attachments) => {
-          const landed = doors.control
-            .start(
-              begin({
-                id: clientKey,
-                clientKey,
-                words,
-                ...(attachments.length === 0 ? undefined : { attachments }),
-              }),
-            )
-            .then((answer) => !("note" in answer));
+          const started = doors.control.start(
+            begin({
+              id: clientKey,
+              clientKey,
+              words,
+              ...(attachments.length === 0 ? undefined : { attachments }),
+            }),
+          );
 
-          onStarted(clientKey, landed);
+          onStarted(clientKey);
 
-          return landed;
+          return started.then((answer) => !("note" in answer));
         }}
       />
     </CommentCard>
@@ -2793,43 +2740,10 @@ export function DescriptionCommentLayer({
     setPending(undefined);
   };
 
-  // The thread the one being started was sent as, which it stands in for, its words marked and its card in place, until the host draws it.
-  const [handing, setHanding] = useState<{ thread: string; from: PendingThread } | undefined>(
-    undefined,
-  );
-
-  const handingNow = useRef(handing);
-  handingNow.current = handing;
-
-  const handOver = (threadId: string, kept: boolean) => {
-    if (handingNow.current?.thread !== threadId) return;
-    handingNow.current = undefined;
-    setHanding(undefined);
-
-    // Note that words refused stay with the thread being started, back in its field.
-    if (!kept) return;
+  const startedFromPending = (threadId: string) => {
     setPending(undefined);
     onActive(threadId);
   };
-
-  const startedFromPending = (threadId: string, landed: Promise<boolean>) => {
-    if (pending === undefined) return;
-    handingNow.current = { thread: threadId, from: pending };
-    setHanding(handingNow.current);
-    // Note that the host draws a thread before it answers, so one answered undrawn is handed over all the same.
-    void landed.then((kept) => handOver(threadId, kept));
-  };
-
-  // Note that the thread takes over before the frame it is first drawn in is painted, so its words stay marked throughout.
-  const handedDrawn =
-    handing !== undefined && doors.control.threads.some((thread) => thread.id === handing.thread);
-
-  useLayoutEffect(() => {
-    if (handedDrawn && handing !== undefined) handOver(handing.thread, true);
-  });
-
-  // Note that a thread being started let go meanwhile, by Esc or a press away, or another started in its place, lets its thread go unopened.
-  if (handing !== undefined && pending !== handing.from) setHanding(undefined);
 
   const pendingCard =
     pending === undefined ? null : (
@@ -2839,8 +2753,6 @@ export function DescriptionCommentLayer({
         begin={descriptionBegin(pending, text)}
         onCancel={close}
         onStarted={startedFromPending}
-        standsIn
-        sent={handing !== undefined}
       />
     );
 
@@ -2953,8 +2865,6 @@ export function DescriptionCommentLayer({
                   begin={descriptionBegin(card.pending, text)}
                   onCancel={close}
                   onStarted={startedFromPending}
-                  standsIn
-                  sent={handing !== undefined}
                 />
               ) : null}
             </MarginSlot>
