@@ -1,14 +1,16 @@
 import {
   type AppSettingField,
+  type DrawnSchemaSettingRow,
   isAppSettingId,
   type SETTINGS_PAGE as SCHEMA_SETTINGS_PAGE,
   SETTING_SECTION,
   type SettingSection,
   type SettingsRowsInput,
   settingFromOption,
-  settingRowsForPage,
+  settingRowsDrawnForPage,
+  type settingRowsForPage,
 } from "@repo/settings";
-import type { FootRow, RowActions } from "@repo/ui";
+import { type FootRow, Reveal, type RowActions } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { APP_SETTING_KIND, APP_TOGGLE_VALUE } from "@repo/wire/app-settings";
 import { useSettingRowWrite } from "./row-write.js";
@@ -226,11 +228,11 @@ export function SchemaSettingRows({
   /** What a toggle's turn does beside its write, in the press itself, by the setting it stores; none where the write is all. */
   onTurned?: ((field: AppSettingField, enabled: boolean) => void) | undefined;
 }): React.JSX.Element {
-  const rows = settingRowsForPage(page, section, view).flatMap((row) => {
+  const rowOf = (row: DrawnSchemaSettingRow): React.ReactNode => {
     const { field, entry, control } = row;
 
     if (entry.kind === APP_SETTING_KIND.TOGGLE) {
-      return [
+      return (
         <SchemaToggleRow
           key={entry.id}
           id={entry.id}
@@ -239,13 +241,13 @@ export function SchemaSettingRows({
           detail={entry.detail}
           checked={entry.value === APP_TOGGLE_VALUE.ON}
           onTurned={onTurned === undefined ? undefined : (enabled) => onTurned(field, enabled)}
-        />,
-      ];
+        />
+      );
     }
 
-    if (entry.kind !== APP_SETTING_KIND.CHOICE || !control) return [];
+    if (entry.kind !== APP_SETTING_KIND.CHOICE || !control) return null;
 
-    return [
+    return (
       <SchemaChoiceRow
         key={entry.id}
         id={entry.id}
@@ -260,9 +262,20 @@ export function SchemaSettingRows({
         icons={icons === undefined ? undefined : (token) => icons(field, token)}
         action={actions?.(field)}
         menu={menus?.(field)}
-      />,
-    ];
-  });
+      />
+    );
+  };
+
+  // Note that a row standing only while its condition holds is revealed, so it unrolls in and rolls up with what turned it rather than popping.
+  const rows = settingRowsDrawnForPage(page, section, view).map((row) =>
+    row.revealed ? (
+      <Reveal key={row.entry.id} shown={row.shown}>
+        {rowOf(row)}
+      </Reveal>
+    ) : (
+      rowOf(row)
+    ),
+  );
 
   return <>{rows}</>;
 }
