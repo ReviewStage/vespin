@@ -1101,7 +1101,7 @@ function ManagedGitHub({
   add: React.ReactNode;
   /** What the last add was refused with, said under the row. */
   addRefusal: string | undefined;
-  /** The chevron folding GitHub's accounts under the row, last in its end. */
+  /** The chevron folding GitHub's accounts under the row, last among its controls, before its ⋯. */
   chevron: React.ReactNode;
 }): React.JSX.Element {
   const { mutateAsync: sendWorkspaceGithubConnect } = useMutation(
@@ -1155,9 +1155,9 @@ function ManagedGitHub({
                   {CONNECT}
                 </Button>
               )}
+              {chevron}
             </>
           ),
-          end: chevron,
         }}
       />
     </Stack>
@@ -1194,6 +1194,7 @@ function WorkspaceGitHub({ workspace }: { workspace: Workspace }): React.JSX.Ele
   return (
     <SettingsRowsFold
       label={GITHUB_FOLD}
+      room={false}
       head={(chevron) =>
         managesWorkspace(workspace) ? (
           <ManagedGitHub
@@ -1209,9 +1210,13 @@ function WorkspaceGitHub({ workspace }: { workspace: Workspace }): React.JSX.Ele
             label="GitHub"
             description={connectionLine(connections.length > 0, false)}
             error={replayMaskedError(refusedShown(addRefusal, FAILURE_SURFACE.WORKSPACE_GITHUB))}
-            end={() => chevron}
           >
-            {() => add}
+            {() => (
+              <>
+                {add}
+                {chevron}
+              </>
+            )}
           </SettingsRow>
         )
       }
@@ -1318,8 +1323,6 @@ function ManagedSentry({
                 {CONNECT}
               </Button>
             ),
-          // Note that Sentry folds nothing, so it keeps the chevron's room for its end to stand in GitHub's and Slack's column.
-          end: <SettingsRowActSlot />,
         }}
       />
       <ConfirmDialog
@@ -1400,7 +1403,7 @@ function ManagedSlackBot({
   workspace: Workspace;
   slack: WorkspaceSlack;
   channels: readonly SlackListedChannel[] | undefined;
-  /** The chevron folding the bot's rows under its row, last in its end. */
+  /** The chevron folding the bot's rows under its row, last among its controls, before its ⋯. */
   chevron: React.ReactNode;
 }): React.JSX.Element {
   const { mutateAsync: sendWorkspaceSlackBotInstall } = useMutation(
@@ -1456,26 +1459,29 @@ function ManagedSlackBot({
             refusedShown(installing.refusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT) ??
               refusedShown(addRefusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT_CHANNEL),
           ),
-          control:
-            slack.team !== undefined ? (
-              channels === undefined ? null : (
-                <AddSlackChannel
-                  workspaceId={workspaceId}
-                  channels={channels}
-                  onRefused={setAddRefusal}
-                />
-              )
-            ) : (
-              <Button
-                variant={BUTTON_VARIANT.OUTLINE}
-                busy={installing.running}
-                busyLabel="Opening Slack"
-                onClick={install}
-              >
-                {CONNECT}
-              </Button>
-            ),
-          end: chevron,
+          control: (
+            <>
+              {slack.team !== undefined ? (
+                channels === undefined ? null : (
+                  <AddSlackChannel
+                    workspaceId={workspaceId}
+                    channels={channels}
+                    onRefused={setAddRefusal}
+                  />
+                )
+              ) : (
+                <Button
+                  variant={BUTTON_VARIANT.OUTLINE}
+                  busy={installing.running}
+                  busyLabel="Opening Slack"
+                  onClick={install}
+                >
+                  {CONNECT}
+                </Button>
+              )}
+              {chevron}
+            </>
+          ),
         }}
       />
       <ConfirmDialog
@@ -1512,6 +1518,7 @@ function ManagedSlackBotRows({
   return (
     <SettingsRowsFold
       label={SLACK_BOT_FOLD}
+      room={false}
       head={(chevron) => (
         <ManagedSlackBot
           workspace={workspace}
@@ -1540,18 +1547,11 @@ function SlackBotRows({
   if (managesWorkspace(workspace))
     return <ManagedSlackBotRows workspace={workspace} slack={slack} />;
 
-  // Note that a member's row folds nothing, but stands in the fold so its end keeps the chevron's room, as every row of the card does.
   return (
-    <SettingsRowsFold
-      label={SLACK_BOT_FOLD}
-      head={(chevron) => (
-        <SettingsRow
-          leading={SLACK_MARK}
-          label="Slack"
-          description={connectionLine(slack.team !== undefined, false)}
-          end={() => chevron}
-        />
-      )}
+    <SettingsRow
+      leading={SLACK_MARK}
+      label="Slack"
+      description={connectionLine(slack.team !== undefined, false)}
     />
   );
 }
