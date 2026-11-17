@@ -296,6 +296,25 @@ const agentWithBearer = Effect.gen(function* () {
   };
 });
 
+/** A member of the agent's workspace its task is assigned to, by their id. */
+function assignedTo(agent: { readonly organizationId: string; readonly taskId: string }) {
+  return Effect.gen(function* () {
+    const db = yield* Database;
+    const assignee = `user-${randomUUID()}`;
+    yield* db.insert(user).values({ id: assignee, name: "Ada", email: `${assignee}@app.test` });
+    yield* db.insert(member).values({
+      id: randomUUID(),
+      organizationId: agent.organizationId,
+      userId: assignee,
+      role: "member",
+      createdAt: new Date(),
+    });
+    yield* db.update(taskTable).set({ assigneeId: assignee }).where(eq(taskTable.id, agent.taskId));
+
+    return assignee;
+  });
+}
+
 /** A Codex agent on a task in no repository, with a runner's bearer recorded for its conversation. */
 const agentInNoRepositoryWithBearer = Effect.gen(function* () {
   const db = yield* Database;
@@ -787,25 +806,23 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       why: "whose task's assignee turned the Inbox off, though its starter keeps one, the threads it posts",
       agent: Effect.gen(function* () {
         const agent = yield* agentWithBearer;
-        const db = yield* Database;
-        const assignee = `user-${randomUUID()}`;
-        yield* db.insert(user).values({ id: assignee, name: "Ada", email: `${assignee}@app.test` });
-        yield* db.insert(member).values({
-          id: randomUUID(),
-          organizationId: agent.organizationId,
-          userId: assignee,
-          role: "member",
-          createdAt: new Date(),
-        });
-        yield* db
-          .update(taskTable)
-          .set({ assigneeId: assignee })
-          .where(eq(taskTable.id, agent.taskId));
+        const assignee = yield* assignedTo(agent);
         yield* writeAccountPreferences(assignee, { inbox: false });
 
         return agent;
       }),
       withheld: ["post_thread", "list_threads", "withdraw_ask"],
+    },
+    {
+      why: "whose starter turned the Inbox off but whose task's assignee never chose, nothing more",
+      agent: Effect.gen(function* () {
+        const agent = yield* agentWithBearer;
+        yield* assignedTo(agent);
+        yield* writeAccountPreferences(agent.userId, { inbox: false });
+
+        return agent;
+      }),
+      withheld: [],
     },
   ])(
     "tools/list leaves out what the catalog's gates offer no agent $why, and the memory, the description's, the turn's end, the reply buttons', and the computer tools where its starter has Memory, Task descriptions, Done and follow-ups, Reply buttons, and Computer use off",
