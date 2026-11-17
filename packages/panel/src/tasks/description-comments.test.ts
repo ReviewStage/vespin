@@ -188,6 +188,9 @@ function drawn(
   me?: string,
   read = true,
   agents?: EditAgents,
+  starting: () => ReturnType<DescriptionCommentsControl["start"]> = async () => ({
+    note: "not in this test",
+  }),
 ) {
   const asked: { thread: string; action: DescriptionCommentActionRequest }[] = [];
   const started: DescriptionCommentStartRequest[] = [];
@@ -201,10 +204,10 @@ function drawn(
     failed: false,
     onRetry: () => undefined,
     notes,
-    start: async (start) => {
+    start: (start) => {
       if (!("page" in start)) started.push(start);
 
-      return { note: "not in this test" };
+      return starting();
     },
     act: async (thread, action) => {
       asked.push({ thread, action });
@@ -1300,8 +1303,28 @@ test("a reply's field empties as it is sent and takes the next at once, each sen
   assert.notEqual(keys[2], keys[1]);
 });
 
-test("a thread being started gives its card's place to the thread as its words are sent, under the id its first comment's key names, and words refused stand as not sent where its words are commented on again", async () => {
-  const { container, started } = wide(() => drawn("page", []));
+test("a thread being started keeps its words marked and its card in place until the thread it was sent as is drawn, which takes over open, and words refused come back into its field", async () => {
+  const answers: PromiseWithResolvers<{ note: string }>[] = [];
+
+  const { container, started, rethread } = wide(() =>
+    drawn(
+      "page",
+      [],
+      () => true,
+      PLAN,
+      undefined,
+      undefined,
+      undefined,
+      true,
+      undefined,
+      () => {
+        const answer = Promise.withResolvers<{ note: string }>();
+        answers.push(answer);
+
+        return answer.promise;
+      },
+    ),
+  );
 
   const paragraph = [...container.querySelectorAll("p")].find((p) =>
     p.textContent?.startsWith("Admins can withdraw"),
@@ -1315,25 +1338,47 @@ test("a thread being started gives its card's place to the thread as its words a
   };
 
   const pending = () => container.querySelector(`.comment-card[data-thread="pending"]`);
-  comment();
-  const field = pending()?.querySelector<HTMLElement>(".composer-editor");
-  assert.ok(field);
-  typeInto(field, "Ask Vespin about retries");
+  const field = () => pending()?.querySelector<HTMLElement>(".composer-editor");
 
+  const marked = (thread: string) =>
+    container.querySelector(`.description-comment-mark[data-threads~="${thread}"]`) !== null;
+
+  comment();
+  typeInto(field(), "Ask Vespin about retries");
   act(() => {
-    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
-  assert.equal(pending(), null, "the card gives way as its words are sent");
+
   const [start] = started;
   assert.ok(start);
   assert.equal(start.id, start.clientKey);
+  assert.ok(pending(), "the card stands until the thread is drawn");
+  assert.ok(marked("pending"), "its words stay marked meanwhile");
 
-  await act(async () => undefined);
-  comment();
+  // The host draws the thread under the id its first comment's key names.
+  rethread([
+    threadOn(start.id ?? "", "Admins can withdraw", "Ask Vespin about retries", {
+      scope: start.scope,
+      quote: start.quote,
+      anchor: start.anchor,
+    }),
+  ]);
+
+  assert.equal(pending(), null, "the card gives way to the thread");
   assert.equal(
-    pending()?.querySelector("[data-unsent] .comment-words")?.textContent,
-    "Ask Vespin about retries",
+    container.querySelector<HTMLElement>(`.comment-card[data-thread="${start.id}"]`)?.dataset.open,
+    "true",
   );
+  assert.ok(marked(start.id ?? ""), "the thread's words are marked in their place");
+
+  rethread([]);
+  comment();
+  typeInto(field(), "Or a code?");
+  act(() => {
+    field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+  await act(async () => answers[1]?.resolve({ note: "not posted" }));
+  assert.equal(wordsIn(field()), "Or a code?", "words refused come back into the field");
 });
 
 test("a thread's resolve reads as its writer's own line, drawn as a comment's head, an agent of another task named as the workspace's list names it, and an empty tab says how a thread starts", async () => {

@@ -1832,8 +1832,9 @@ interface FirstComment {
  * comment: on the description's words, or on a page or one of its elements, as
  * `begin` makes the start of it. The thread is started under the key its
  * first comment is sent under, so a send tried again names the same
- * thread, and the host draws it the moment it is asked, so the card hands
- * its place to the thread at once.
+ * thread. The host draws it as it is asked, but only once the act reaches
+ * it, so the card hands its place to the thread as the thread is drawn
+ * (`onStarted`), never before, which would leave its words unmarked between.
  */
 function PendingCard({
   on,
@@ -1852,8 +1853,8 @@ function PendingCard({
   head?: ReactNode;
   doors: ThreadDoors;
   begin: (first: FirstComment) => DescriptionCommentStart;
-  /** Hands the card's place to the thread it started, by its id. */
-  onStarted: (threadId: string) => void;
+  /** Hands the card's place to the thread it started, by its id, once the thread is drawn or `landed` says whether its words did. */
+  onStarted: (threadId: string, landed: Promise<boolean>) => void;
   onCancel: () => void;
   /** Where its first comment may be held in the writer's review rather than posted; the card closes once it is. */
   review?: CommentReview | undefined;
@@ -1879,18 +1880,20 @@ function PendingCard({
               }
         }
         onSend={(words, clientKey, attachments) => {
-          const started = doors.control.start(
-            begin({
-              id: clientKey,
-              clientKey,
-              words,
-              ...(attachments.length === 0 ? undefined : { attachments }),
-            }),
-          );
+          const landed = doors.control
+            .start(
+              begin({
+                id: clientKey,
+                clientKey,
+                words,
+                ...(attachments.length === 0 ? undefined : { attachments }),
+              }),
+            )
+            .then((answer) => !("note" in answer));
 
-          onStarted(clientKey);
+          onStarted(clientKey, landed);
 
-          return started.then((answer) => !("note" in answer));
+          return landed;
         }}
       />
     </CommentCard>
@@ -2740,10 +2743,43 @@ export function DescriptionCommentLayer({
     setPending(undefined);
   };
 
-  const startedFromPending = (threadId: string) => {
+  // The thread the one being started was sent as, which it stands in for, its words marked and its card in place, until the host draws it.
+  const [handing, setHanding] = useState<{ thread: string; from: PendingThread } | undefined>(
+    undefined,
+  );
+
+  const handingNow = useRef(handing);
+  handingNow.current = handing;
+
+  const handOver = (threadId: string, kept: boolean) => {
+    if (handingNow.current?.thread !== threadId) return;
+    handingNow.current = undefined;
+    setHanding(undefined);
+
+    // Note that words refused stay with the thread being started, back in its field.
+    if (!kept) return;
     setPending(undefined);
     onActive(threadId);
   };
+
+  const startedFromPending = (threadId: string, landed: Promise<boolean>) => {
+    if (pending === undefined) return;
+    handingNow.current = { thread: threadId, from: pending };
+    setHanding(handingNow.current);
+    // Note that the host draws a thread before it answers, so one answered undrawn is handed over all the same.
+    void landed.then((kept) => handOver(threadId, kept));
+  };
+
+  // Note that the thread takes over before the frame it is first drawn in is painted, so its words stay marked throughout.
+  const handedDrawn =
+    handing !== undefined && doors.control.threads.some((thread) => thread.id === handing.thread);
+
+  useLayoutEffect(() => {
+    if (handedDrawn && handing !== undefined) handOver(handing.thread, true);
+  });
+
+  // Note that a thread being started let go meanwhile, by Esc or a press away, or another started in its place, lets its thread go unopened.
+  if (handing !== undefined && pending !== handing.from) setHanding(undefined);
 
   const pendingCard =
     pending === undefined ? null : (
