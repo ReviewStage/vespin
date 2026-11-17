@@ -32,7 +32,9 @@ it.effect("reads the waiting writes back oldest first after a reopen, less those
     );
 
     const waiting = yield* Effect.scoped(
-      Effect.flatMap(openLocalDatabase(root, ACCOUNT), (database) => localOutbox(database).waiting),
+      Effect.flatMap(openLocalDatabase(root, ACCOUNT), (database) =>
+        localOutbox(database).restored([]),
+      ),
     );
 
     assert.deepEqual(waiting, [RENAME, MOVE]);
