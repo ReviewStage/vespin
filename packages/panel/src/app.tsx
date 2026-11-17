@@ -45,6 +45,7 @@ import { DesktopShell } from "./desktop/desktop-shell.js";
 import { ListedAutomations } from "./desktop/listed-automations.js";
 import { useSidebarCollapse } from "./desktop/sidebar-collapse.js";
 import { TabSwitcher } from "./desktop/tab-switcher.js";
+import { useWorkspaceKeys } from "./desktop/workspace-keys.js";
 import { useExpiredServerToasts } from "./expired-server-toasts.js";
 import { FeedbackDialog } from "./feedback-dialog.js";
 import { GitHubConnectProvider } from "./github-connect.js";
@@ -751,6 +752,8 @@ function AppWindow(): React.JSX.Element {
   useAppKeymap(true);
   useMenuCommands(true);
   useMenuOffers();
+  // ⌃1 through ⌃9 switch to the workspaces the workspace menu lists, past the sign-in, on a desktop app.
+  useWorkspaceKeys(tasks, !accountGated);
   useHistoryMouseButtons(history, true);
 
   // The doors the window hands every page are held across draws, each part that reads one holding while it does.

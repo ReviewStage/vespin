@@ -1,6 +1,7 @@
 import { WORKSPACE_SWITCHER_WORDS, workspaceSharedWords } from "@repo/features/workspace-tile";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
+import type { ShortcutChord } from "@repo/settings/shortcuts";
 import { ChevronDownIcon, dropBelowStart, GearIcon, NavItem, PlusIcon, useMenu } from "@repo/ui";
 import { ShieldUserIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
@@ -11,6 +12,7 @@ import { appStateQuery, selectAdminAccess } from "../use-app-state.js";
 import { ActionMenu, type MenuAction } from "./action-menu.js";
 import { NewTaskButton } from "./new-task-button.js";
 import { useOpenNewWorkspace } from "./new-workspace.js";
+import { useWorkspaceChords } from "./workspace-keys.js";
 import { WORKSPACE_REF_SIZE, WorkspaceCard, WorkspaceRef } from "./workspace-ref.js";
 import { WorkspaceTile } from "./workspace-tile.js";
 
@@ -51,8 +53,10 @@ export interface AdminMenuDoor {
   readonly onPreload: () => void;
 }
 
-/** What the menu's last items open: New workspace's cards, Settings, and for an admin, Admin. */
+/** What the menu's last items open: New workspace's cards, Settings, and for an admin, Admin; and the chords its workspaces are reached by. */
 export interface WorkspaceMenuDoors {
+  /** The chords that switch to the workspaces, in the menu's order, each printed at its row's end: ⌃1 through ⌃9 where the window answers them (`workspace-keys.ts`), none elsewhere. */
+  readonly chords: readonly ShortcutChord[];
   readonly onNewWorkspace: () => void;
   readonly onOpenSettings: (link: SettingsLink) => void;
   /** Admin's door, for an admin alone; none offers no Admin item. */
@@ -64,13 +68,14 @@ export function useWorkspaceMenuDoors(admin: AdminMenuDoor): WorkspaceMenuDoors 
   const isAdmin = useQuery({ ...appStateQuery, select: selectAdminAccess }).data === true;
 
   return {
+    chords: useWorkspaceChords(),
     onNewWorkspace: useOpenNewWorkspace(),
     onOpenSettings: useOpenSettings(),
     admin: isAdmin ? admin : undefined,
   };
 }
 
-/** The menu's items: every workspace by its tile, with who shares it under its name, the listed one checked; then New workspace, Workspace settings, which opens Settings on the listed workspace's page, and Admin where its door is given. */
+/** The menu's items: every workspace by its tile, with who shares it under its name, the listed one checked, and the chord that switches to it at its end; then New workspace, Workspace settings, which opens Settings on the listed workspace's page, and Admin where its door is given. */
 export function workspaceMenuGroups(
   listed: Workspace,
   tasks: TasksControl,
@@ -79,7 +84,7 @@ export function workspaceMenuGroups(
   const first = tasks.workspaces[0]?.id;
 
   const choices = tasks.workspaces.map(
-    (workspace): MenuAction => ({
+    (workspace, index): MenuAction => ({
       label: workspace.name,
       key: workspace.id,
       replayMasked: true,
@@ -91,6 +96,7 @@ export function workspaceMenuGroups(
       detail: workspaceSharedWords(workspace.memberCount, workspace.id === first),
       card: <WorkspaceCard workspace={workspace} personal={workspace.id === first} />,
       checked: workspace.id === listed.id,
+      chord: doors.chords[index],
       onSelect: () => tasks.onChooseWorkspace(workspace.id),
     }),
   );
