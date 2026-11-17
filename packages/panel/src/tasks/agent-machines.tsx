@@ -132,26 +132,42 @@ function defaultMachineMutation(agentId: string) {
 /** A pick of the agent's default machine, as its act asks it. */
 type DefaultMachinePick = ActVariables<typeof ACT_KIND.AGENTS_SET_DEFAULT_MACHINE>;
 
+/** A pick as the window's mutations hold it: what it asked, whether it is still out, and when it was made. */
+interface PickState {
+  readonly pick: DefaultMachinePick | undefined;
+  readonly out: boolean;
+  readonly at: number;
+}
+
 /**
- * The machine the newest pick still out set the agent's default to, read
- * from the window's mutations (`useMutationState`), as the Optimistic
- * Updates guide reads another component's, so every surface drawing the
- * agent's row draws the pick, one mounted since among them; none while no
- * pick is out.
+ * The machine the agent's newest pick set its default to while that pick is
+ * still out, read from the window's mutations (`useMutationState`), as the
+ * Optimistic Updates guide reads another component's, so every surface
+ * drawing the agent's row draws the pick, one mounted since among them.
+ * None once the newest pick answered, so the default the service holds
+ * stands then, whatever an older pick still out asked for.
  */
 function usePickedMachine(agentId: string): string | undefined {
-  const out = useMutationState<
-    DefaultMachinePick | undefined,
+  const picks = useMutationState<
+    PickState,
     Mutation<ActResult<typeof ACT_KIND.AGENTS_SET_DEFAULT_MACHINE>, Error, DefaultMachinePick>
   >({
-    filters: {
-      mutationKey: actMutation(ACT_KIND.AGENTS_SET_DEFAULT_MACHINE).mutationKey,
-      status: "pending",
-    },
-    select: (mutation) => mutation.state.variables,
+    filters: { mutationKey: actMutation(ACT_KIND.AGENTS_SET_DEFAULT_MACHINE).mutationKey },
+    select: (mutation) => ({
+      pick: mutation.state.variables,
+      out: mutation.state.status === "pending",
+      at: mutation.state.submittedAt,
+    }),
   });
 
-  return out.findLast((pick) => pick?.agentId === agentId)?.machineId;
+  const newest = picks
+    .filter((each) => each.pick?.agentId === agentId)
+    .reduce<PickState | undefined>(
+      (latest, each) => (latest === undefined || each.at >= latest.at ? each : latest),
+      undefined,
+    );
+
+  return newest?.out === true ? newest.pick?.machineId : undefined;
 }
 
 /** The value a row of the place popover ends in, muted: a teammate's face where the machine is theirs, then its name; or None, for the Default machine row with none. */

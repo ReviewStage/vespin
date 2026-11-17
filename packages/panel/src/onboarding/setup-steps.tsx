@@ -234,9 +234,12 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
   const personal = tasks.newTask.workspaces.find((workspace) => workspace.personal === true)?.id;
   // Note that each move is merged over the last one written, because two may land before the account's place comes back, as a team's workspace made and the step after it do.
   const written = useRef<SetupPlace | undefined>(undefined);
+  const placeOut = asked !== undefined;
+
+  // Note that the stored place is taken up only while no move is out, because an older move landing meanwhile would otherwise put back the place a newer one left, and the next move would merge over a place other than the one drawn.
   useEffect(() => {
-    written.current = setupPlaceFrom(stored);
-  }, [stored]);
+    if (!placeOut) written.current = setupPlaceFrom(stored);
+  }, [stored, placeOut]);
 
   const keep = useCallback(
     (next: SetupPlace) => {
