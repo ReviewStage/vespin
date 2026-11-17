@@ -182,6 +182,7 @@
     "./link-open": "./src/link-open.js",
     "./link-grammar": "./src/link-grammar.js",
     "./mention-link": "./src/mention-link.js",
+    "./mermaid-diagram": "./src/mermaid-diagram.js",
     "./open-address": "./src/open-address.js",
     "./integration-row-wire": "./src/integration-row-wire.js",
     "./integration-view": "./src/integration-view.js",

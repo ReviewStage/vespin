@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AudioClip } from "./audio-clip.js";
 import { ChipMarkView, ChipSymbol, useChipMarkOf } from "./chip-mark.js";
 import type { ChipMarkOf } from "./chip-mark-model.js";
+import { DiagramBlock, DiagramRenderer } from "./diagram.js";
 import { DraftCard } from "./draft-card.js";
 import { FileChip } from "./file-chip.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
@@ -49,7 +50,7 @@ import {
 } from "./markdown-model.js";
 import { MediaBox } from "./media-box.js";
 import { MediaFailed } from "./media-failed.js";
-import { type MediaSize, mediaFrame } from "./media-frame.js";
+import { COLUMN_BOUNDS, type MediaBounds, type MediaSize, mediaFrame } from "./media-frame.js";
 import { Press } from "./press.js";
 import {
   SUGGESTION_LOOK,
@@ -1051,6 +1052,10 @@ type PictureProps = {
   readonly onRetry?: (() => void) | undefined;
   /** Whether it fills its tile, cropped as a set's tiles stand, rather than standing whole inside it. */
   readonly fill?: boolean | undefined;
+  /** Its own size in points where it is known before it loads, as a diagram drawn at the screen's scale is, whose pixels would read as three times its size; the pixels it reports, one to a point, where none is given. */
+  readonly size?: MediaSize | undefined;
+  /** The most it stands at, a message's `MEDIA_BOUNDS` where none is given; a diagram's is its column's width alone (`COLUMN_BOUNDS`). */
+  readonly bounds?: MediaBounds | undefined;
 };
 
 /**
@@ -1063,7 +1068,15 @@ type PictureProps = {
  * is, the system's spinner in it as Photos stands one, so the words under
  * it do not jump twice and it never reads as an empty box.
  */
-export function Picture({ source, alt, tileAspect, onRetry, fill = false }: PictureProps) {
+export function Picture({
+  source,
+  alt,
+  tileAspect,
+  onRetry,
+  fill = false,
+  size,
+  bounds,
+}: PictureProps) {
   const colors = useColors();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -1076,7 +1089,7 @@ export function Picture({ source, alt, tileAspect, onRetry, fill = false }: Pict
   );
 
   // Note that a tile fills its tile at the tile's shape, and any other picture stands at its own shape and size, held to the one rule every message's media keeps (`mediaFrame`) in its box (`MediaBox`).
-  const frame = tileAspect === undefined ? mediaFrame(natural) : undefined;
+  const frame = tileAspect === undefined ? mediaFrame(size ?? natural, bounds) : undefined;
 
   const well = [
     styles.picture,
@@ -1280,6 +1293,21 @@ function BlockView({
       return <TableView key={drawing.fontScale} block={block} drawing={drawing} />;
     case MARKDOWN_BLOCK.CODE:
       return <CodeView text={block.text} drawing={drawing} />;
+    case MARKDOWN_BLOCK.DIAGRAM:
+      return (
+        <DiagramBlock
+          code={block.code}
+          codeView={<CodeView text={block.code} drawing={drawing} />}
+          picture={(picture, alt) => (
+            <Picture
+              source={picture?.source}
+              alt={alt}
+              size={picture?.size}
+              bounds={COLUMN_BOUNDS}
+            />
+          )}
+        />
+      );
     case MARKDOWN_BLOCK.DRAFT:
       return <DraftCard draft={block.draft} onOpenLink={drawing.openLink} />;
     case MARKDOWN_BLOCK.RULE:
@@ -1354,6 +1382,8 @@ type MarkdownProps = {
     | undefined;
   /** The widest the words stand where the caller knows it before they are laid out, as a transcript's row does, which holds a chip until they are measured; the window's width less a page's margins where none is given. */
   readonly width?: number | undefined;
+  /** Whether a Mermaid fence is drawn as its diagram, as a description's are (`DiagramBlock`); it stands as its code where none is given, as a transcript still being written keeps it. */
+  readonly diagrams?: boolean | undefined;
 };
 
 /** A video or a sound clip the words name as a picture, played in its place: the file it plays from, none while it is on its way and `null` where it could not be read, its name, whether it is a sound clip, where a video opens where the player cannot read it, and what reads it again. */
@@ -1423,6 +1453,7 @@ export function Markdown({
   linkStanding = noStanding,
   suggestion = noSuggestion,
   width: known,
+  diagrams = false,
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
@@ -1438,8 +1469,15 @@ export function Markdown({
 
   const blocks = useMemo(
     () =>
-      markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed, hidesHtml }),
-    [words, repository, typed, hidesHtml],
+      markdownBlocks(words, {
+        repository,
+        now: Date.now(),
+        zone: readerZone(),
+        typed,
+        hidesHtml,
+        diagrams,
+      }),
+    [words, repository, typed, hidesHtml, diagrams],
   );
 
   const drawing: Drawing = {
@@ -1466,7 +1504,13 @@ export function Markdown({
         if (laid > 0) setMeasured(laid);
       }}
     >
-      <Blocks blocks={blocks} drawing={drawing} />
+      {diagrams ? (
+        <DiagramRenderer>
+          <Blocks blocks={blocks} drawing={drawing} />
+        </DiagramRenderer>
+      ) : (
+        <Blocks blocks={blocks} drawing={drawing} />
+      )}
     </View>
   );
 }

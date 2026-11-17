@@ -27,6 +27,7 @@ import {
   type Mention,
   mentionChipLabel,
 } from "@repo/features/mention-link";
+import { DIAGRAM_LANGUAGE } from "@repo/features/mermaid-diagram";
 import { placeChipLook } from "@repo/features/place-chip-model";
 import { type ReplyButtonLink, readReplyButtonLink } from "@repo/features/reply-button-wire";
 import { Match } from "effect";
@@ -65,6 +66,7 @@ export const MARKDOWN_BLOCK = {
   TABLE: "table",
   CODE: "code",
   DRAFT: "draft",
+  DIAGRAM: "diagram",
   RULE: "rule",
   PICTURE: "picture",
 } as const;
@@ -182,6 +184,8 @@ export type MarkdownBlock =
   | { readonly kind: typeof MARKDOWN_BLOCK.CODE; readonly text: string }
   /** Words an agent wrote to be sent elsewhere, fenced ```slack, ```email, or ```draft, read as the panel's draft card reads them. */
   | { readonly kind: typeof MARKDOWN_BLOCK.DRAFT; readonly draft: Draft }
+  /** A Mermaid fence, drawn as its diagram where the words are read for diagrams (`MarkdownReading`'s `diagrams`). */
+  | { readonly kind: typeof MARKDOWN_BLOCK.DIAGRAM; readonly code: string }
   | { readonly kind: typeof MARKDOWN_BLOCK.RULE }
   | { readonly kind: typeof MARKDOWN_BLOCK.PICTURE; readonly source: string; readonly alt: string };
 
@@ -204,6 +208,12 @@ export interface MarkdownReading {
    * as the words it was written with.
    */
   readonly hidesHtml?: boolean | undefined;
+  /**
+   * Whether a Mermaid fence is drawn as its diagram, as a description's are;
+   * elsewhere, such as a transcript still being written, it stays its code,
+   * since a fence redrawn at each word would draw a picture each time.
+   */
+  readonly diagrams?: boolean | undefined;
 }
 
 /** A line break inside a paragraph's words, which Markdown reads as a space. */
@@ -563,8 +573,12 @@ function tableBlock(node: Table, reader: Reader): MarkdownBlock {
   };
 }
 
-/** A fence: a draft where it is named for where its words go, as the panel draws every rendered text's (`DraftFence`), and code otherwise. */
-function codeBlock(node: Code): MarkdownBlock {
+/** A fence: a diagram where it names Mermaid and the words are read for diagrams, a draft where it is named for where its words go, as the panel draws every rendered text's (`DraftFence`), and code otherwise. */
+function codeBlock(node: Code, reading: MarkdownReading): MarkdownBlock {
+  if (reading.diagrams === true && node.lang === DIAGRAM_LANGUAGE) {
+    return { kind: MARKDOWN_BLOCK.DIAGRAM, code: node.value };
+  }
+
   const kind = draftKindOf(node.lang ?? "");
 
   if (kind === undefined) return { kind: MARKDOWN_BLOCK.CODE, text: node.value };
@@ -591,7 +605,7 @@ function blockOf(node: RootContent, reader: Reader): MarkdownBlock[] {
     case "table":
       return [tableBlock(node, reader)];
     case "code":
-      return [codeBlock(node)];
+      return [codeBlock(node, reader.reading)];
     case "thematicBreak":
       return [{ kind: MARKDOWN_BLOCK.RULE }];
     case "html":

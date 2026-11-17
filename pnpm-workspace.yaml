@@ -194,9 +194,13 @@ patchedDependencies:
 # while the list keeps the whole width, so a drag beside the column scrolls it
 # as Mail's does; `listSectionMargins` moved no plain list's rows. And it hands
 # a `List` its edit mode as a binding (`editing`, `onEditingChange`), so a
-# two-finger drag down a list can switch Select mode on. Delete it
-# when an `@expo/ui` release offers a tinted image and a photo a menu keeps,
-# and scroll content margins.
+# two-finger drag down a list can switch Select mode on. And it gives a
+# `ToolbarItem` a `spacerBefore`, which stands the item after a `Spacer` in
+# one `ToolbarItemGroup`, since iOS 26 centers a keyboard bar's lone item,
+# such as a number pad's Done, which neither a `Spacer` inside the item nor
+# a `ToolbarSpacer` moves to the trailing edge. Delete it when an `@expo/ui` release offers a tinted
+# image and a photo a menu keeps, scroll content margins, and a toolbar
+# spacer.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
 #
 # `@sentry/react-native` 8.28.0's native start (`RNSentrySDK.start`, which the

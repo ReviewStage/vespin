@@ -163,10 +163,10 @@ export {
   ROW_ACTION_TONE,
   type RowAction,
   type RowActionTone,
+  type RowFold,
   type RowMenuGroup,
   type RowSubmenu,
   type RowSwipe,
-  type TaskFold,
   TaskRow,
 } from "./list-row.js";
 
