@@ -35,12 +35,11 @@ import { appStateQuery, selectExperiment } from "../use-app-state.js";
  * as any message's, and a server the prompt names is handed to every run
  * whatever the automation switched off (`automation-runs.ts`). Note that
  * the prompt is kept rather than sent, so a bare Enter writes a new line,
- * as the text area it replaced did, ⌘ or Ctrl with Enter saves the
- * automation, as it finishes a document's text, and Escape lets go of the caret and
- * reaches the window marked taken, as every field's on the page does.
+ * ⌘ or Ctrl with Enter saves the automation, as it finishes a document's
+ * text, and Escape lets go of the caret and reaches the window marked taken,
+ * as every field's on the page does.
  */
 
-/** The prompt's placeholder, an example of a prompt. */
 const PROMPT_PLACEHOLDER = "Find the flakiest test in CI this week and fix it.";
 
 /** The tasks of a window that lists none yet. */

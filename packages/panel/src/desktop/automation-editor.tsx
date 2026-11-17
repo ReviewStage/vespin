@@ -294,7 +294,6 @@ export interface AutomationWrites {
   toggle(automationId: string, enabled: boolean): Promise<AutomationWriteAnswer>;
 }
 
-/** The kinds of schedule as the picker offers them, in its order. */
 const SCHEDULE_KINDS: readonly { value: ScheduleKind; label: string }[] = [
   { value: SCHEDULE_KIND.HOURLY, label: "Hourly" },
   { value: SCHEDULE_KIND.DAILY, label: "Daily" },
@@ -332,7 +331,6 @@ const SENTRY_LEVELS: readonly { value: SentryLevel; label: string }[] = [
   { value: SENTRY_LEVEL.FATAL, label: "Fatal" },
 ];
 
-/** The GitHub events the event menu offers, in its order. */
 const GITHUB_EVENTS: readonly { value: GitHubTriggerEvent; label: string }[] = [
   { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED, label: "Pull request opened or updated" },
   { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED, label: "Pull request opened" },
@@ -356,10 +354,8 @@ const WEEKDAYS = [
   "Saturday",
 ] as const;
 
-/** The minutes past the hour an hourly schedule offers. */
 const HOURLY_MINUTES = [0, 15, 30, 45] as const;
 
-/** Every zone this Mac knows, as the zone menu lists them. */
 const TIME_ZONES = timeZoneNames();
 
 /** What a short menu says where a search matches nothing, which it has no search to say. */
@@ -558,12 +554,10 @@ function DateField({
   );
 }
 
-/** A minute past the hour as the hourly picker names it: "At :15". */
 function hourlyLabel(minute: number): string {
   return `At :${String(minute).padStart(2, "0")}`;
 }
 
-/** A zone as the zone picker names it, its underscores read as spaces. */
 function zoneLabel(zone: string): string {
   return zone.replaceAll("_", " ");
 }
@@ -877,7 +871,6 @@ function nextRunsText(draft: AutomationDraft): string | undefined {
   return `Next: ${dayAndTimeText(first)}${then}`;
 }
 
-/** The parse the schedule's picker reads its kind back with. */
 const scheduleKindOf = optionValue(SCHEDULE_KINDS);
 
 /** Which field a schedule is written in: a cron for a custom one, a clock for the rest. */
@@ -888,8 +881,8 @@ const SCHEDULE_FIELD = {
 
 /**
  * A schedule's rows: how often, under its next runs; then the time, day,
- * or cron that kind asks for; then its zone, searched since every zone this
- * Mac knows is listed.
+ * or cron that kind asks for; then its zone, searched since every zone is
+ * listed.
  */
 function ScheduleRows({
   draft,
@@ -1644,7 +1637,6 @@ function FilterRow({
   );
 }
 
-/** The parse the Sentry event picker reads its event back with. */
 const sentryEventOf = optionValue(SENTRY_EVENTS);
 
 /**
@@ -2241,7 +2233,6 @@ function AgentRow({
   );
 }
 
-/** The parse the Runs land in picker reads its target back with. */
 const targetOf = optionValue(TARGETS);
 
 /** Where a run lands, under the repository it works in: a new agent each time, on a model, archived once it succeeds where asked, or the one agent chosen. */
@@ -2370,10 +2361,8 @@ function RunsGroup({
   );
 }
 
-/** The parse the Trigger picker reads its kind back with. */
 const triggerKindOf = optionValue(TRIGGERS);
 
-/** The parse the event picker reads its event back with. */
 const githubEventOf = optionValue(GITHUB_EVENTS);
 
 /**

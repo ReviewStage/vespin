@@ -171,14 +171,12 @@ const AUTOMATIONS = "Automations";
 const NEW_AUTOMATION = "New automation";
 const CREATE_WITH_AGENT = "Create with an agent";
 
-/** What the list says where it could not be read. */
 const UNREAD_LINE = "The automations could not be read.";
 
 /** What the Runs tab says where its runs could not be read, and while they are first read. */
 const RUNS_UNREAD_LINE = "The runs could not be read.";
 const READING_RUNS = "Reading the runs…";
 
-/** What the pages say where no workspace is listed because the workspaces could not be read. */
 const WORKSPACES_UNREAD_LINE = "The workspaces could not be read.";
 
 /** Why the bar's two acts are unavailable while no workspace is chosen. */
@@ -222,7 +220,7 @@ function OwnerCell({
  * Who made an automation, as its row's column says it: their face and their
  * name, or You, its owner and their whole name on hover where the column cuts
  * it short. One whose maker the members do not name says its owner instead
- * (`OwnerCell`), as the column did before it named makers.
+ * (`OwnerCell`).
  */
 function MakerCell({
   automation,
@@ -294,19 +292,14 @@ function useRunNow(automationId: string): UseRunNowResult {
 }
 
 /**
- * One automation's row: its tile, the glyph of what fires it wearing where its newest run
- * stands, its name over what fires it, who made it, when it runs next with a
- * failure's mark before it, and its switch, hanging the automation's card. The maker and the next run each keep a column of their
- * own, so they line up down the list whatever each row says. Everything but the switch is one press
- * that opens its page, as a sidebar task's row is, so the row opens wherever
- * it is pressed and the switch beside the press only switches. Its ⋯,
- * right-click, long press and menu key offer Copy link, then Delete in red,
- * which asks first, and
- * hands focus back to its press as the menu closes; a right-click on the switch is the switch's own and opens
- * nothing. A narrow room, a phone's, has no width for the two columns beside
- * the name, so the row keeps its name whole and says when it runs next in
- * the line under it, its maker said by its card's foot instead. A finger's
- * row draws its switch and no ⋯, so what fires it keeps the room.
+ * One automation's row. The maker and the next run each keep a column of
+ * their own, so they line up down the list whatever each row says.
+ * Everything but the switch is one press that opens its page, so the switch
+ * beside the press only switches, and a right-click on it opens nothing.
+ * A narrow room, a phone's, has no width for the two columns beside the
+ * name, so the row says when it runs next in the line under it, its maker
+ * said by its card's foot instead. A finger's row draws its switch and no
+ * ⋯, so what fires it keeps the room.
  */
 function AutomationRow({
   automation,
@@ -454,10 +447,7 @@ function AutomationGroupRows({
 
 /**
  * The list, each owner's automations in a list, under its own heading where
- * both stand, or in a narrow room, whose rows name no owner. Note that a
- * lone owner's list is still a region named by its owner, as a headed one is
- * by its heading, so a reader moving by landmark hears whose automations
- * they are either way.
+ * both stand, or in a narrow room, whose rows name no owner.
  */
 function AutomationList({
   groups,

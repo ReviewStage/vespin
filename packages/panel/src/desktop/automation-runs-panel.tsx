@@ -62,10 +62,9 @@ const RUNS = "Runs";
 /**
  * automation-runs-panel.tsx -- the panel on an automation's page's right: its runs, newest first, each opening its agent.
  *
- * Per Editor round 2, an automation's runs stand beside its setup rather
- * than under it, in the window's own run rows: the glyph of what fired it,
- * a schedule's clock, GitHub's or an integration's mark, a webhook's hook,
- * or Run now's play, wearing where the run stands, its agent's title, what
+ * An automation's runs stand beside its setup rather than under it, in the
+ * window's own run rows: the glyph of what fired it, a schedule's clock,
+ * GitHub's or an integration's mark, a webhook's hook, or Run now's play, wearing where the run stands, its agent's title, what
  * it is about (a Sentry issue's title), or what fired it, a line saying
  * where its agent stands or why it did not start, and when it fired. A run
  * that started an agent opens that agent's page; one that started none opens
@@ -121,7 +120,7 @@ function subjectLink(run: AutomationRunSummary): { url: string; label: string } 
   return { url: firing.subject.url, label: `Open in ${TRIGGER_CATALOG[firing.provider].name}` };
 }
 
-/** One run's row, a press opening its agent where it started one, or else its subject where it names one, or else its automation, and its ⋯ and right-click offering its Copy link and its subject; under a finger it draws no ⋯, its menu a long press away. A row among many automations' runs names its automation on a line of its own. */
+/** One run's row. Under a finger it draws no ⋯, its menu a long press away. A row among many automations' runs names its automation on a line of its own. */
 export function RunRow({
   run,
   keyHolder,
