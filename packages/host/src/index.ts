@@ -13,12 +13,14 @@
  */
 
 export { ENTITY_STORE_FILE_NAME } from "./entity-store.js";
+
 export {
   appProcesses,
   type ElectronProcessName,
   type ProcessTableRow,
   readProcessTable,
 } from "./mac-resources.js";
+
 export { type RunMode, runModeFor, sentryReportingEnabled } from "./run-mode.js";
 
 export type { SecretCipher } from "./settings-store.js";
