@@ -125,6 +125,13 @@ export const accountPreference = pgTable("account_preference", {
    */
   introsSeen: text("intros_seen"),
   /**
+   * Which kinds of GitHub activity on an agent's pull request no longer wake
+   * the account's agents, as the JSON list of their ids (`@repo/settings`'s
+   * `GITHUB_WAKE`); null, as an empty list, turns none off. A part of the
+   * snapshot of its own, as the link choice is.
+   */
+  githubWakesOff: text("github_wakes_off"),
+  /**
    * The model and effort a coding agent starts on when Start is clicked, as
    * AI Gateway's catalog names them (`packages/service/src/providers/model-catalog.ts`); null on both
    * means the account has never chosen and starts on the catalog's default.

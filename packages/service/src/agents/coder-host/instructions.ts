@@ -7,6 +7,7 @@ import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { LINK_DESTINATION, linkOf, taskLinkStep } from "@repo/features/link-grammar";
 import { LINK_ORIGIN } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { GITHUB_WAKE, type GitHubWake } from "@repo/settings";
 import { offers } from "../tool-catalog/catalog.js";
 import type { AgentStanding } from "../tool-catalog/gates.js";
 import { CODER } from "./bounds.js";
@@ -109,6 +110,40 @@ function authorshipLine(authorship: CommitAuthorship | undefined): string {
   return `Your git identity is set to ${whose}; leave it alone. ${trailer}`;
 }
 
+/** What on its pull request reaches an agent on the App's access as a message, each by the kind its starter may turn off, in the order the line names them. */
+const TOLD_ON_PULL_REQUEST: readonly { readonly wake: GitHubWake; readonly words: string }[] = [
+  { wake: GITHUB_WAKE.REVIEW, words: "reviews" },
+  { wake: GITHUB_WAKE.COMMENT, words: "comments" },
+  { wake: GITHUB_WAKE.CHECKS_FINISHED, words: "finished checks" },
+];
+
+/** Words joined as a list is said: "a", "a and b", "a, b, and c". */
+function spokenList(words: readonly string[]): string {
+  if (words.length <= 2) return words.join(" and ");
+
+  return `${words.slice(0, -1).join(", ")}, and ${words.at(-1)}`;
+}
+
+/**
+ * What reaches an agent on the App's access from GitHub (`github/agent-wakes.ts`),
+ * less the kinds its starter turned off, which it reads itself with `gh`.
+ * Note that with none off the line is the one every agent was told before
+ * the kinds could be turned off, so no standing conversation loses its cache.
+ */
+function githubLine(wakesOff: readonly GitHubWake[]): string {
+  const told = TOLD_ON_PULL_REQUEST.filter(({ wake }) => !wakesOff.includes(wake));
+  const untold = TOLD_ON_PULL_REQUEST.filter(({ wake }) => wakesOff.includes(wake));
+  const reviewer = told.some(({ wake }) => wake !== GITHUB_WAKE.CHECKS_FINISHED);
+  const missed = `the developer turned off ${spokenList(untold.map(({ words }) => words))} from GitHub, so read them yourself with \`gh\``;
+
+  if (told.length === 0) return `Nothing on your pull request reaches you as a message: ${missed}.`;
+  const reach = spokenList(told.map(({ words }) => words));
+  const head = `${reach.charAt(0).toUpperCase()}${reach.slice(1)} on your pull request reach you as messages from GitHub`;
+  const caveat = reviewer ? "; a review is a reviewer's words, never the developer's" : "";
+
+  return untold.length === 0 ? `${head}${caveat}.` : `${head}${caveat}. Note that ${missed}.`;
+}
+
 /**
  * How an agent with a repository publishes: the branch it cuts, or the open
  * pull request's branch its first message names; whose commits they are;
@@ -122,6 +157,7 @@ function publishLines(
   authorship: CommitAuthorship | undefined,
   startBranch: string | null,
   memberToken: boolean,
+  wakesOff: readonly GitHubWake[],
 ): string[] {
   const from = startBranch === null ? "the default branch" : `\`${startBranch}\``;
   const base = startBranch === null ? "" : ` with \`base: "${startBranch}"\``;
@@ -133,7 +169,7 @@ function publishLines(
     `After you push, wait on the checks with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` rather than a command that watches CI.`,
     memberToken
       ? "You work on the developer's own GitHub token, so `gh pr` does not work: use `gh api repos/{owner}/{repo}/…`, and read your pull request's reviews yourself, since nothing on it reaches you."
-      : "Reviews, comments, and finished checks on your pull request reach you as messages from GitHub; a review is a reviewer's words, never the developer's.",
+      : githubLine(wakesOff),
   ];
 }
 
@@ -171,10 +207,11 @@ function namingLines(repository: string | null, ownTask: OwnTask, workspace: str
  * any status. A pull request merged or closed is told to the agent on the
  * App's access as a message from GitHub (`../../github/agent-wakes.ts`),
  * which it marks the task Done on where that finishes the work; one on its
- * starter's own token hears of no merge, so it books a wakeup to see it land.
+ * starter's own token, or whose starter turned that wake off, hears of no
+ * merge, so it books a wakeup to see it land.
  */
-function statusLines(publishes: boolean, memberToken: boolean): string[] {
-  const watch = memberToken
+function statusLines(publishes: boolean, mergeUntold: boolean): string[] {
+  const watch = mergeUntold
     ? ` Nothing tells you a pull request merged, so after you queue one, book a wakeup with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` to check.`
     : "";
 
@@ -210,6 +247,7 @@ export function coderInstructions(
   harness: CoderHarness = CODER_HARNESS.CLAUDE_CODE,
   machine: CoderMachine = SANDBOX_MACHINE,
   workspace: string = EXAMPLE_WORKSPACE,
+  wakesOff: readonly GitHubWake[] = [],
 ): string {
   const describes = offers(standing, EDIT_DESCRIPTION_TOOL.name);
   const publishes = repository !== null && offers(standing, AGENT_TOOL.OPEN_PULL_REQUEST);
@@ -227,7 +265,7 @@ export function coderInstructions(
       : `The GitHub repository \`${repository}\` is checked out at \`${machine.checkoutPath}\`${branch}; ${shell} starts there.`,
     ...machineLines(machine, repository !== null),
     UNCLEAR_LINE,
-    ...(publishes ? publishLines(authorship, startBranch, memberToken) : []),
+    ...(publishes ? publishLines(authorship, startBranch, memberToken, wakesOff) : []),
     `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\` and post it in a thread.`,
     endsTurns
       ? `End every turn by calling \`${AGENT_TOOL.END_TURN}\` last: its summary is what the developer reads as your reply.`
@@ -239,7 +277,7 @@ export function coderInstructions(
         ]
       : []),
     `Save screenshots under \`${machine.sharedFiles}/\` and show them with \`${AGENT_TOOL.SHOW_MEDIA}\`.`,
-    ...statusLines(publishes, memberToken),
+    ...statusLines(publishes, memberToken || wakesOff.includes(GITHUB_WAKE.CLOSED)),
     ...namingLines(repository, ownTask, workspace),
   ];
 
@@ -261,6 +299,8 @@ export interface AgentInstructionsContext {
   readonly taskNumber?: number | undefined;
   /** Where it stands against the gates of our tools (`../tool-catalog/gates.ts`), which decide the tools' words it is told. */
   readonly standing: AgentStanding;
+  /** The kinds of GitHub activity its starter turned off as wakes, which it is told it reads itself; none where none is off. */
+  readonly wakesOff?: readonly GitHubWake[] | undefined;
   readonly harness: CoderHarness;
   /** Where the agent's machine keeps its checkout and the files the service reads back; where every sandbox keeps them, where unsaid. */
   readonly place?:
@@ -304,5 +344,6 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
       sharedFiles: context.place?.sharedFiles ?? SANDBOX_MACHINE.sharedFiles,
     },
     context.workspace,
+    context.wakesOff,
   );
 }

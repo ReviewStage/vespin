@@ -241,6 +241,7 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
     body.turnNotifications === undefined &&
     body.onboardingSurvey === undefined &&
     body.introsSeen === undefined &&
+    body.githubWakesOff === undefined &&
     body.agent === undefined &&
     body.chaptersModel === undefined &&
     body.experiments === undefined
@@ -375,6 +376,13 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
 
     if (introsSeen === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.introsSeen = introsSeen;
+  }
+
+  if (body.githubWakesOff !== undefined) {
+    const githubWakesOff = ownPreferenceFromWire("githubWakesOff", body.githubWakesOff);
+
+    if (githubWakesOff === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    write.githubWakesOff = githubWakesOff;
   }
 
   if (body.agent !== undefined) {

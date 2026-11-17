@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
+import { readAccountPreferences } from "@repo/database/models/account-store";
 import {
   type Agent,
   type AgentLatestTurn,
@@ -20,6 +21,7 @@ import { GITHUB_READER, type GitHubAccess } from "@repo/features/github-reposito
 import { mentionMarkdownLink } from "@repo/features/link-grammar";
 import { isTaskSettled } from "@repo/features/task-wire";
 import type { Sandbox } from "@repo/sandbox";
+import { GITHUB_WAKE, type GitHubWake, githubWakesOffFrom } from "@repo/settings";
 import {
   EXCESS_KEYS,
   GITHUB_LINE_BOUNDS,
@@ -156,6 +158,11 @@ import {
  * turn starting there moves the task back to In progress (`beginTaskWork`),
  * which would undo a developer who merged and closed the task by hand.
  *
+ * Each of the six kinds is on until the agent's starter turns it off in
+ * Preferences › Agents (`@repo/settings`'s `githubWakesOff`): an agent whose
+ * starter turned a kind off is told nothing of it, and its instructions say
+ * so (`coder-host/instructions.ts`).
+ *
  * A failed check names what failed from the same read of the head's checks,
  * made only where an agent is told, on its token, and waited on for
  * `FAILED_CHECKS_GRACE` alone, so the delivery still answers inside GitHub's
@@ -229,6 +236,17 @@ const WAKE_ACTION = {
   DEQUEUED: "dequeued",
   CLOSED: "closed",
 } as const;
+
+/** The kind of GitHub activity each wake is, by which its agent's starter may have turned it off (`githubWakesOff`). */
+const PREFERENCE_OF_WAKE = {
+  [AGENT_WAKE.REVIEW]: GITHUB_WAKE.REVIEW,
+  [AGENT_WAKE.COMMENT]: GITHUB_WAKE.COMMENT,
+  [AGENT_WAKE.CHECK_FAILED]: GITHUB_WAKE.CHECK_FAILED,
+  [AGENT_WAKE.CHECKS_COMPLETED]: GITHUB_WAKE.CHECKS_FINISHED,
+  [AGENT_WAKE.DEQUEUED]: GITHUB_WAKE.DEQUEUED,
+  [AGENT_WAKE.MERGED]: GITHUB_WAKE.CLOSED,
+  [AGENT_WAKE.CLOSED]: GITHUB_WAKE.CLOSED,
+} as const satisfies Record<AgentWakeKind, GitHubWake>;
 
 /** The wakes that tell a pull request's end, which no agent of a settled task is told. */
 const ENDED_WAKES: ReadonlySet<AgentWakeKind> = new Set([AGENT_WAKE.MERGED, AGENT_WAKE.CLOSED]);
@@ -1203,6 +1221,14 @@ const onOpenTask = ({ userId, agent }: OwnedAgent) =>
     Option.exists(header, ({ status }) => !isTaskSettled(status)),
   );
 
+/** Whether the agent's starter leaves this kind of wake on, as every account does until it turns one off in Preferences › Agents. */
+const starterTakes = (wake: AgentWake, { agent }: OwnedAgent) =>
+  Effect.map(
+    readAccountPreferences(agent.userId),
+    (row) =>
+      !githubWakesOffFrom(row?.preferences.githubWakesOff).includes(PREFERENCE_OF_WAKE[wake.kind]),
+  );
+
 /**
  * The key every check finished is told under: the repository, the commit,
  * and a digest of every check's outcome, so a delivery read again tells
@@ -1249,8 +1275,10 @@ function agentsOf(wake: AgentWake) {
 /**
  * Tells the agent the delivery is about (`agentsOf`), where `agentIsWoken`
  * admits it, through the sessions `sessionsFor` answers for its owner, under
- * the delivery's id; answers how many were told. A pull request merged or
- * closed is told only where the agent's task stands open (`onOpenTask`).
+ * the delivery's id; answers how many were told. A kind of wake its
+ * starter turned off in Preferences › Agents is told to it never
+ * (`starterTakes`). A pull request merged or closed is told only where the
+ * agent's task stands open (`onOpenTask`).
  * Every check finished is
  * told only where they all did, under its own key
  * (`checksCompletedKey`). A check line's checks are read on the told
@@ -1273,8 +1301,11 @@ export const wakeAgents = /* @__PURE__ */ Effect.fn("web/githubWakeAgents")(func
     const agents = yield* agentsOf(wake);
     const turns = yield* latestTurnsOfReached(agents.map(({ agent }) => agent.conversationId));
 
-    const admitted = agents.filter(({ agent }) =>
-      agentIsWoken(wake, agent, turns.get(agent.conversationId), appLogin, now),
+    const admitted = yield* Effect.filter(
+      agents.filter(({ agent }) =>
+        agentIsWoken(wake, agent, turns.get(agent.conversationId), appLogin, now),
+      ),
+      (owned) => starterTakes(wake, owned),
     );
 
     // A pull request's end is told to no agent whose task already stands settled.
