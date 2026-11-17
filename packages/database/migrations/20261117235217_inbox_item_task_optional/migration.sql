@@ -1,0 +1,1 @@
+ALTER TABLE "inbox_item" ALTER COLUMN "task_id" DROP NOT NULL;

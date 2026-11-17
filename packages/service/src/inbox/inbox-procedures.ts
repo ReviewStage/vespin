@@ -15,7 +15,6 @@
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
-  agentTaskId,
   readAgent,
   readVisibleAgent,
   readVisibleAgentWorkspace,
@@ -57,6 +56,7 @@ import { agentTakingMessage, steerAgent } from "../agents/coder-host/steer.js";
 import { titleInboxThread } from "../agents/coder-host/title.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import type { TypedTurn } from "../agents/sessions/agent-sessions.js";
+import { readsTasklessAgents } from "../agents/taskless-reads.js";
 import { reconsiderRunArchive } from "../automations/run-archive.js";
 import type { HostedEnvironment } from "../environment.js";
 import { recordServerEvent, recordServerEventIn, SERVER_EVENT } from "../events/server-events.js";
@@ -332,6 +332,25 @@ export const acknowledgeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
+ * Refused where a member's message would carry files onto a thread on no
+ * task, since a thread's files are kept under its task (`attachment.ts`)
+ * and nothing keeps one on no task yet; a thread the member may not read
+ * is left for the write to answer as not found.
+ */
+const inboxFilesRefused = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  itemId: string,
+  files: readonly AgentAttachment[],
+) {
+  if (files.length === 0) return;
+  const home = yield* hostedStoreOrUnavailable(readInboxItemHome(userId, itemId));
+
+  if (Option.isSome(home) && home.value.taskId === null) {
+    return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+  }
+});
+
+/**
  * A member's answer to the thread's open ask, taken first, with its words
  * and files, as the member's message that carries it (`answerInboxAsk`),
  * its agent brought back before it where it stands archived, though an
@@ -372,6 +391,7 @@ export const answerAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   const stored = yield* hostedStoreOrUnavailable(readInboxItem(userId, itemId));
 
   if (Option.isNone(stored)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  yield* inboxFilesRefused(userId, itemId, attachments);
   // Note that the agent is brought back as every member's word on its thread brings it back, though an ask its archive withdrew stays withdrawn.
   yield* agentHearing(userId, stored.value.item.agentId);
 
@@ -503,6 +523,7 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   const { revision, clientKey } = asked;
   const note = { text: asked.text ?? "", files: asked.attachments ?? [] };
   const noted = note.text !== "" || note.files.length > 0;
+  yield* inboxFilesRefused(userId, itemId, note.files);
   const { item, answerKey } = stored.value;
 
   // A close sent again is the one taken only while the item still stands as that close left it, never once its agent moved it on.
@@ -687,6 +708,8 @@ export const messageAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
     });
   }
 
+  yield* inboxFilesRefused(userId, itemId, attachments);
+
   const posted = yield* hostedStoreOrUnavailable(
     postInboxMessage(userId, itemId, { text, clientKey, files: attachments, revision }),
   );
@@ -772,8 +795,12 @@ export const startAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
   if (!controlsAgent(userId, agent.value)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
-  const { userId: starterId } = agent.value;
-  const taskId = agentTaskId(agent.value);
+  const { userId: starterId, taskId } = agent.value;
+
+  // Note that files on a thread with an agent on no task are refused, since nothing keeps a thread's files on no task yet (`inboxFilesRefused`).
+  if (taskId === null && attachments.length > 0) {
+    return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+  }
 
   const written = yield* hostedStoreOrUnavailable(
     startInboxThread(
@@ -973,6 +1000,11 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
       const home = yield* hostedStoreOrUnavailable(readInboxItemHome(context.userId, itemId));
 
       if (Option.isNone(home)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+      // Note that a build that reads no item on no task is answered as for one that does not exist.
+      if (home.value.taskId === null && !readsTasklessAgents(context.request)) {
+        return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+      }
 
       return home.value;
     }),

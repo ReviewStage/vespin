@@ -179,10 +179,10 @@ import type { SyncMoved } from "../sync/live-query.js";
 /** What an inbox store operation answers: an effect over the ambient client, composed into whatever called it. */
 export type InboxStoreEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
-/** The agent an item belongs to, as every write of the agent's names it: the task it works on. */
+/** The agent an item belongs to, as every write of the agent's names it: the task it works on, none for an agent on no task. */
 export interface InboxAgent {
   readonly userId: string;
-  readonly taskId: string;
+  readonly taskId: string | null;
   readonly agentId: string;
 }
 
@@ -208,7 +208,7 @@ export interface InboxStamp {
   readonly updatedAt: number;
   /** Whether the item is unread for the member the stamps were read for. */
   readonly unread: boolean;
-  /** The member the item waits on: its task's assignee, else its agent's starter. */
+  /** The member the item waits on: its task's assignee, else its agent's starter, as on an item on no task. */
   readonly waitsOn: string;
 }
 
@@ -404,7 +404,7 @@ function liveReminderFor(readerId: string): LiveReminderForResult {
  * The member an item waits on: the member its agent addressed it to, or,
  * where it names none, its task's assignee while a member of its workspace,
  * or the member who started its agent where the task has nobody assigned
- * or is assigned to a member who left. A
+ * or is assigned to a member who left, or the item stands on no task. A
  * scalar read rather than a join, because `returning` projects it too and
  * joins nothing, and every name is qualified, because it is nested in reads
  * that join the task themselves.
@@ -628,7 +628,8 @@ function itemReachableBy(userId: string): SQL {
  * The condition that the account may read the item a statement reads, the
  * one rule every Inbox read keeps, a count as much as a list or
  * a read by id: it reaches the item (`itemReachableBy`), and for an item on a
- * task that task too (`taskReachableBy`). Note that the task is asked as
+ * task that task too (`taskReachableBy`); an item on no task, its agent's
+ * on no task, follows that agent alone. Note that the task is asked as
  * well, because a teammate's agent may reach the reader while its task, on
  * a token the reader's reads no repository of, does not, and then its items
  * stand nowhere the reader looks, as the agent does (`agentVisibleTo`).
@@ -641,7 +642,7 @@ function itemVisibleTo(userId: string): SQL {
       .where(and(eq(task.id, inboxItem.taskId), taskReachableBy(userId))),
   );
 
-  return sql`(${itemReachableBy(userId)} and ${taskReached})`;
+  return sql`(${itemReachableBy(userId)} and (${isNull(inboxItem.taskId)} or ${taskReached}))`;
 }
 
 /** The step a link names the agent's workspace by: its slug, or its id where it has none, as a description's picture names it. */
@@ -673,7 +674,7 @@ const lockAgent = SqlSchema.findOneOption({
 
 const PostWriteSchema = Schema.Struct({
   userId: Schema.String,
-  taskId: Schema.String,
+  taskId: Schema.NullOr(Schema.String),
   organizationId: Schema.String,
   agentId: Schema.String,
   key: Schema.String,
@@ -788,11 +789,30 @@ const insertMessageFiles = SqlSchema.void({
     ),
 });
 
-/** A message's files written as rows of the item's in one statement, each naming the message, at its place among the message's files. */
-function writeMessageFiles(
-  files: readonly (typeof MessageFileWriteSchema.Type)[],
-): InboxStoreEffect<void> {
-  return files.length === 0 ? Effect.void : insertMessageFiles(files);
+/** A message's file as its caller hands it: the task its item stands on, none for an item on no task. */
+type MessageFileWrite = Omit<typeof MessageFileWriteSchema.Type, "taskId"> & {
+  readonly taskId: string | null;
+};
+
+/**
+ * A message's files written as rows of the item's in one statement, each
+ * naming the message, at its place among the message's files. Note that a
+ * file of an item on no task is a broken contract, because a file is kept
+ * under its task (`attachment.ts`), so every caller refuses files on such a
+ * thread before it writes (`inboxFilesRefused`).
+ */
+function writeMessageFiles(files: readonly MessageFileWrite[]): InboxStoreEffect<void> {
+  if (files.length === 0) return Effect.void;
+
+  return Effect.suspend(() => {
+    const onTask = files.flatMap(({ taskId, ...file }) =>
+      taskId === null ? [] : [{ ...file, taskId }],
+    );
+
+    return onTask.length === files.length
+      ? insertMessageFiles(onTask)
+      : Effect.die(new Error("a message's files were written on a thread on no task"));
+  });
 }
 
 /** Where an ask is to stand: open again, answered, replaced, or withdrawn with why. */
@@ -1752,6 +1772,8 @@ function accountItemsOf(userId: string, settledSince: Date, narrowed: SQL, chang
   const carried = and(
     // Every item the account may read, as its read of what waits names them (`accountWaiting`).
     itemVisibleTo(userId),
+    // Note that an item on no task is left out for now, because a build before `HOSTED_API_VERSION` 6 fails its whole answer on one null task, and a live read is not told the build reading it.
+    isNotNull(inboxItem.taskId),
     // Note that a settled item stands by the latest of its last change, its settling, and the time the reader's reminder brings it back, since a nod on an old notice settles it without moving its last change, and a reminder must find it still carried when it comes back.
     or(
       eq(inboxItem.status, INBOX_STATUS.OPEN),
@@ -1884,12 +1906,12 @@ const findItem = SqlSchema.findOneOption({
     ),
 });
 
-/** Where an item the account may read stands: its agent, its task, and its workspace. */
+/** Where an item the account may read stands: its agent, its task, none for an item on no task, and its workspace. */
 const findItemHome = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, itemId: Schema.String }),
   Result: Schema.Struct({
     agentId: Schema.String,
-    taskId: Schema.String,
+    taskId: Schema.NullOr(Schema.String),
     workspaceId: Schema.String,
   }),
   execute: ({ userId, itemId }) =>
@@ -1915,12 +1937,12 @@ const findItemOf = SqlSchema.findOneOption({
     ),
 });
 
-/** The account, task, and workspace an item stands under, which its attachments are written under too. */
+/** The account, task, and workspace an item stands under, which its attachments are written under too; no task for an item on none. */
 const findItemScope = SqlSchema.findOne({
   Request: Schema.Struct({ itemId: Schema.String }),
   Result: Schema.Struct({
     userId: Schema.String,
-    taskId: Schema.String,
+    taskId: Schema.NullOr(Schema.String),
     organizationId: Schema.String,
   }),
   execute: ({ itemId }) =>
@@ -3899,7 +3921,7 @@ const findStartedThread = SqlSchema.findOneOption({
 const insertStartedItem = SqlSchema.findOne({
   Request: Schema.Struct({
     userId: Schema.String,
-    taskId: Schema.String,
+    taskId: Schema.NullOr(Schema.String),
     organizationId: Schema.String,
     agentId: Schema.String,
     key: Schema.String,
