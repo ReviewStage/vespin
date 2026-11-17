@@ -324,6 +324,11 @@ test("an open pull request GitHub's merge queue holds wears the queued mark as a
   const { container } = await drawn(`Queued behind ${QUEUED}.`, ACME_WITH_GITHUB);
 
   assert.deepEqual(chips(container), [["#46", null, "queued"]]);
+  // Note that the word the chip no longer draws is still heard, since its mark is hidden from a screen reader.
+  assert.equal(
+    container.querySelector("[data-mention-ref] .ui-visually-hidden:last-child")?.textContent,
+    "Queued",
+  );
 
   act(() => root?.unmount());
   root = undefined;

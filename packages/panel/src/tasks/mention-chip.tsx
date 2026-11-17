@@ -658,8 +658,10 @@ function MentionChip({
 
   const state = mentionState(mention, doors);
 
-  // Note that a pull request's chip says its state by its mark alone, its card in words.
-  const stated = standing?.pullRequest === undefined ? standing?.state : undefined;
+  // Note that a pull request's chip draws its state by its mark alone, its card in words, and a screen reader still hears it, since the mark is hidden from one.
+  const drawn = standing?.pullRequest === undefined;
+  const stated = drawn ? standing?.state : undefined;
+  const stateHeard = drawn ? undefined : standing?.state;
   const machineId = mention.kind === MENTION_KIND.MACHINE ? mention.machineId : undefined;
   const machineWorkspace = readLink(target)?.workspace ?? doors.place.workspace;
   const machinePress = useMachinePress(machineId, machineWorkspace);
@@ -705,7 +707,7 @@ function MentionChip({
       name={whole ? INLINE_REF_NAME.WHOLE : INLINE_REF_NAME.NAME}
       before={ownerOf(mention, target, doors)}
       mark={machineMark}
-      heard={ownerHeard}
+      heard={ownerHeard ?? stateHeard}
       state={told ?? stated}
       gone={state === MENTION_STATE.GONE}
       onPress={
