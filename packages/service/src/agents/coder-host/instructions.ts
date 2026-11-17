@@ -168,13 +168,13 @@ function namingLines(repository: string | null, ownTask: OwnTask, workspace: str
  * withdraws the task's open asks and archives its agents, the one that
  * moved it once its turn ends (`../../tasks/task-finish.ts`), so it waits
  * on both; a turn starting on the task moves it back into progress from
- * any status. A merge tells the agent nothing
- * (`../../github/agent-wakes.ts`), so one that queued its pull request
- * books a wakeup to see it land.
+ * any status. A pull request merged or closed is told to the agent as a
+ * message from GitHub (`../../github/agent-wakes.ts`), which it marks the
+ * task Done on where that finishes the work.
  */
 function statusLines(publishes: boolean): string[] {
   const done = publishes
-    ? `Mark it Done before your last message, once your pull requests merged or closed, no ask is open on the task, and no other agent on it is at work; work with no pull request is finished once its result is ready. Nothing tells you a pull request merged, so after you queue one, book a wakeup with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` to check.`
+    ? `Mark it Done before your last message, once your pull requests merged or closed, no ask is open on the task, and no other agent on it is at work; work with no pull request is finished once its result is ready.`
     : "Mark it Done before your last message, once its result is ready, no ask is open on the task, and no other agent on it is at work.";
 
   return [

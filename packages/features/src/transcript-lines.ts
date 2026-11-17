@@ -188,6 +188,12 @@ const COMMENTED = "commented on";
 /** What the merge queue taking the pull request out without merging it reads as, in GitHub's own word. */
 const DEQUEUED = "dequeued";
 
+/** What the pull request merging reads as. */
+const MERGED = "merged";
+
+/** What the pull request closing without merging reads as. */
+const CLOSED = "closed";
+
 /** How a check a GitHub line names ended, in words, as its row on the line's card says it. */
 export const CONCLUSION_WORDS = {
   [GITHUB_CHECK_CONCLUSION.SUCCESS]: "Passed",
@@ -307,6 +313,10 @@ export function githubLineHead(line: GitHubLineMetadata, words: string): GitHubL
 
     case GITHUB_LINE_EVENT.DEQUEUED:
       return { event: `@${line.by} ${DEQUEUED}`, does: DEQUEUED, target };
+    case GITHUB_LINE_EVENT.MERGED:
+      return { event: `@${line.by} ${MERGED}`, does: MERGED, target };
+    case GITHUB_LINE_EVENT.CLOSED:
+      return { event: `@${line.by} ${CLOSED}`, does: CLOSED, target };
   }
 }
 
