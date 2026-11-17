@@ -164,6 +164,8 @@ export interface MobileHostOptions {
   readonly fixtureUpdateNeeded?: boolean | undefined;
   /** Whether a fixture run holds an ask of Ada's MacBook for an agent's command, which `-machineAsk true` asks; never in a live run. */
   readonly fixtureMachineAsk?: boolean | undefined;
+  /** Whether a fixture run's account stands as one that started setup and hasn't finished it, which `-setupOwed true` asks; never in a live run. */
+  readonly fixtureSetupOwed?: boolean | undefined;
   /** Whether a fixture run's act port refuses the writes a flow presses, which `-refuseWrites true` asks; never in a live run. */
   readonly fixtureRefusesWrites?: boolean | undefined;
   /** This build's version, as the app's config names it. */
@@ -363,10 +365,15 @@ const servedActPort = (
  * otherwise. The store drops a patch that says nothing new, so laying the
  * same data twice settles rather than loops.
  */
-const stagedFixture = (state: AppStateStore, updateNeeded: boolean, machineAsk: boolean) =>
+const stagedFixture = (
+  state: AppStateStore,
+  updateNeeded: boolean,
+  machineAsk: boolean,
+  setupOwed: boolean,
+) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
-      stageFixture(state, updateNeeded, machineAsk);
+      stageFixture(state, updateNeeded, machineAsk, setupOwed);
       yield* publishAppStateChanges(
         state,
         () => Effect.sync(() => stageFixture(state, updateNeeded)),
@@ -521,6 +528,7 @@ export function composeMobile(
               mobile.state,
               options.fixtureUpdateNeeded === true,
               options.fixtureMachineAsk === true,
+              options.fixtureSetupOwed === true,
             );
 
       return Layer.provideMerge(staged, standing);

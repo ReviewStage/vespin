@@ -1,0 +1,32 @@
+# setup.yaml -- a new account's setup on the phone: an account owed setup lands on Welcome in the tabs' place, picks Just me, goes on, skips the survey, and reaches Connect an agent.
+#
+# Launched on the host's Inbox fixture with `-setupOwed true`, which stands
+# the account as one that started setup on another device and never
+# finished it (`fixture-host.ts`'s `withSetupOwed`), so the gate owes setup
+# and it resumes at Welcome. The fixture's account holds no plan or key, so
+# Connect an agent offers only its ways to add one, and no server is reached.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      setupOwed: "true"
+- extendedWaitUntil:
+    visible: "Welcome to Vespin"
+    timeout: 30000
+- assertVisible: "Just me"
+- assertVisible: "With my team"
+- assertNotVisible: "Recorded the invite flow"
+- waitForAnimationToEnd
+- takeScreenshot: setup-welcome
+- tapOn: "Just me"
+- tapOn: "Continue"
+- waitForAnimationToEnd
+- assertVisible: "Tell us about yourself"
+- takeScreenshot: setup-survey
+- tapOn: "Skip"
+- waitForAnimationToEnd
+- assertVisible: "Connect an agent"
+- assertVisible: "Paste a Claude token"
+- takeScreenshot: setup-agent
