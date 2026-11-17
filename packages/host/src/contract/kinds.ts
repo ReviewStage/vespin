@@ -43,6 +43,8 @@ export const ACCOUNT_ASK_ACT_KIND = {
   PROVIDER_KEYS_FOR_AGENTS: "providerKeys.forAgents",
   /** One of a ChatGPT plan's rate-limit reset credits spent from Settings or a limit notice's Use reset, under the press's key. */
   PROVIDER_KEYS_USE_RESET_CREDIT: "providerKeys.useResetCredit",
+  /** A plan's usage checked again now, from its ⋯'s Refresh usage in Settings. */
+  PROVIDER_KEYS_REFRESH_USAGE: "providerKeys.refreshUsage",
   /** One of the account's subscriptions named, or its name cleared, from its row in Settings. */
   SUBSCRIPTION_RENAME: "providerKeys.rename",
   /** The account's subscriptions of a kind put in a new order, as their list in Settings was dragged. */
@@ -1059,6 +1061,7 @@ export const PORT_ACT_USE = {
   PROVIDER_KEYS_REMOVE: ACT_USE.WRITE,
   PROVIDER_KEYS_FOR_AGENTS: ACT_USE.WRITE,
   PROVIDER_KEYS_USE_RESET_CREDIT: ACT_USE.WRITE,
+  PROVIDER_KEYS_REFRESH_USAGE: ACT_USE.WRITE,
   SUBSCRIPTION_RENAME: ACT_USE.WRITE,
   SUBSCRIPTIONS_REORDER: ACT_USE.WRITE,
   CHATGPT_DEVICE_START: ACT_USE.WRITE,

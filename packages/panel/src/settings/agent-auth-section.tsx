@@ -14,7 +14,6 @@ import {
   keyRemovalWords,
   keyStanding,
   keysOf,
-  limitWords,
   PLAN_DISCONNECT_WORDS,
   type PlanProvider,
   plansOf,
@@ -102,7 +101,7 @@ import { type InlineRename, type RenameWrite, useInlineRename } from "@repo/ui/u
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { actMutation } from "../act-mutations.js";
+import { actMutation, pressMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
@@ -138,7 +137,7 @@ import { ReadFailed } from "./marks.js";
  * Under its name it says how much of its usage window it has used, with a
  * bar, nothing before a turn has said, or that it is at its limit until
  * when, its bar full in the attention ink, or what is wrong with it in the
- * attention tint; and ends in a ⋯ holding Rename, Move up and down, Replace
+ * attention tint; and ends in a ⋯ holding Rename, Replace
  * token, and Disconnect, the fix its state asks for standing beside it:
  * Replace token for a Claude token Anthropic refused, Reconnect for a
  * Codex plan whose sign-in expired (Sign in again for one whose plan has no
@@ -148,7 +147,7 @@ import { ReadFailed } from "./marks.js";
  * (`reset-credit.tsx`). A key is named by the name the
  * account gave it, else API key and its hint, renamed in place as a Claude
  * plan is; says what is wrong with it, if anything; and ends in a ⋯ holding
- * Rename, Move up and down, Replace key, and Remove key. With neither a plan nor a key, no agent
+ * Rename, Replace key, and Remove key. With neither a plan nor a key, no agent
  * starts on that provider's models, since our key pays for no coding agent.
  * Calls and dictation run on the OpenAI API key alone, so every answer here
  * is handed to the window too (`../openai-key.tsx`), and removing that key
@@ -287,7 +286,6 @@ function planLine(provider: PlanProvider, plan: SubscriptionKeySummary, now: num
 
   if (plan.status === PROVIDER_KEY_STATUS.LIMIT_REACHED) {
     return {
-      words: limitWords(plan, now),
       ok: false,
       ...(usage === undefined
         ? { meter: { value: 100, tone: PROGRESS_TONE.ATTENTION } }
@@ -775,18 +773,6 @@ function useCredentialRename(
   });
 }
 
-/** A row's Move up and Move down, where it has somewhere to go. */
-function moveActions(
-  at: number,
-  count: number,
-  onMove: (from: number, to: number) => void,
-): readonly MenuAction[] {
-  return [
-    ...(at > 0 ? [{ label: WORDS.MOVE_UP, onSelect: () => onMove(at, at - 1) }] : []),
-    ...(at < count - 1 ? [{ label: WORDS.MOVE_DOWN, onSelect: () => onMove(at, at + 1) }] : []),
-  ];
-}
-
 /* ----- A harness's list ----- */
 
 /** What a harness's steps stand open for: adding a plan or a key, or a row's own replace. */
@@ -946,19 +932,16 @@ function renameIn(rename: InlineRename, onClose: () => void): void {
  * One plan's row in its harness's order: its logo, its name, renamed by
  * pressing it for a Claude plan (`RenamableName`), and its line, how much
  * of its window it has used with a bar under it, or how it stands; its fix where its state asks for
- * one, and a ⋯ holding Rename, Move up and down, Replace token, and
+ * one, and a ⋯ holding Rename, Replace token, and
  * Disconnect. Its replace's steps open under it.
  */
 function PlanRow({
   provider,
   plan,
   name,
-  at,
-  count,
   open,
   onOpen,
   onClose,
-  onMove,
   renames,
   onUnconfirmed,
   alignWith,
@@ -968,12 +951,9 @@ function PlanRow({
   name: string;
   /** Every plan's meter rows on the page, which its meters line up with. */
   alignWith: readonly UsageMeterRow[];
-  at: number;
-  count: number;
   open: typeof STEPS.REPLACE | undefined;
   onOpen: (steps: typeof STEPS.REPLACE) => void;
   onClose: () => void;
-  onMove: (from: number, to: number) => void;
   /** The harness's renames, of which this row's is the one asked for its credential. */
   renames: RenameWrite;
   onUnconfirmed: (unconfirmed: boolean) => void;
@@ -986,10 +966,15 @@ function PlanRow({
   const offer = useResetCreditOffer(claude ? undefined : plan);
   const rename = useInlineRename(plan.id, renames);
   const openLink = useOpenLink();
+  const refresh = useMutation(pressMutation(ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE));
 
   const own = [
+    {
+      label: WORDS.REFRESH_USAGE,
+      disabled: refresh.isPending,
+      onSelect: () => refresh.mutate({ subscriptionId: plan.id }),
+    },
     ...(claude ? [{ label: WORDS.RENAME, onSelect: () => renameIn(rename, onClose) }] : []),
-    ...moveActions(at, count, onMove),
     ...(claude ? [{ label: WORDS.REPLACE_TOKEN, onSelect: () => onOpen(STEPS.REPLACE) }] : []),
     ...(claude ? [] : [{ label: WORDS.MANAGE_USAGE, onSelect: () => openLink(CHATGPT_USAGE_URL) }]),
   ];
@@ -1080,28 +1065,22 @@ function PlanRow({
  * One of the harness's API keys' rows in the same order: its provider's
  * logo, its name, renamed by pressing it as a Claude plan's is, and what is
  * wrong with it, if anything; Replace key beside a ⋯ where its provider refused it,
- * and a ⋯ holding Rename, Move up and down, Replace key, and Remove key.
+ * and a ⋯ holding Rename, Replace key, and Remove key.
  * Its replace's steps open under it.
  */
 function KeyRow({
   provider,
   apiKey,
-  at,
-  count,
   open,
   onOpen,
   onClose,
-  onMove,
   renames,
 }: {
   provider: SettingsProvider;
   apiKey: ProviderKeySummary;
-  at: number;
-  count: number;
   open: typeof STEPS.REPLACE | undefined;
   onOpen: (steps: typeof STEPS.REPLACE) => void;
   onClose: () => void;
-  onMove: (from: number, to: number) => void;
   /** The harness's renames, of which this row's is the one asked for its credential. */
   renames: RenameWrite;
 }): React.JSX.Element {
@@ -1152,7 +1131,6 @@ function KeyRow({
                 ...(named
                   ? [{ label: WORDS.RENAME, onSelect: () => renameIn(rename, onClose) }]
                   : []),
-                ...moveActions(at, count, onMove),
                 { label: WORDS.REPLACE_KEY, onSelect: () => onOpen(STEPS.REPLACE) },
               ],
               [
@@ -1307,7 +1285,7 @@ function HarnessCredentials({
           label={harness.name}
           onPointerDown={drag}
           gutter={aligned.gutter}
-          rows={order.ordered.map((credential, at) => {
+          rows={order.ordered.map((credential) => {
             const rowOpen =
               open !== undefined &&
               "subscriptionId" in open &&
@@ -1326,12 +1304,9 @@ function HarnessCredentials({
                   <KeyRow
                     provider={provider}
                     apiKey={credential.key}
-                    at={at}
-                    count={order.ordered.length}
                     open={rowOpen}
                     onOpen={onRowOpen}
                     onClose={onClose}
-                    onMove={order.move}
                     renames={renames}
                   />
                 ) : planProvider === undefined ? null : (
@@ -1339,12 +1314,9 @@ function HarnessCredentials({
                     provider={planProvider}
                     plan={credential.plan}
                     name={names.get(credential.id) ?? HARNESS_PLAN[planProvider].planName}
-                    at={at}
-                    count={order.ordered.length}
                     open={rowOpen}
                     onOpen={onRowOpen}
                     onClose={onClose}
-                    onMove={order.move}
                     renames={renames}
                     onUnconfirmed={setUnconfirmed}
                     alignWith={aligned.meters}

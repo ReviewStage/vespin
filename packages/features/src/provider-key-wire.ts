@@ -375,6 +375,11 @@ export const providerKeyResetCreditRequestSchema = EffectSchema.Struct({
   idempotencyKey: wireUuidSchema,
 });
 
+/** A plan's usage checked again now, however fresh its reading (POST): the plan. */
+export const planUsageRefreshRequestSchema = EffectSchema.Struct({
+  subscriptionId: subscriptionIdSchema,
+});
+
 /**
  * Naming one of the account's subscriptions or API keys (PUT): the
  * provider, its kind, its id, and its new name, or none for its default.

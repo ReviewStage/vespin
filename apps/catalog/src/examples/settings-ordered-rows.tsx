@@ -64,7 +64,6 @@ const PLANS: readonly Plan[] = [
   {
     id: "work",
     name: "ana@work.example",
-    state: "At its limit · back at 3:40 PM",
     limited: true,
     meter: { value: 100, tone: PROGRESS_TONE.ATTENTION },
     offer: "Use reset",
