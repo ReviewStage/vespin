@@ -237,8 +237,11 @@ type ListRowProps = RowActs & {
   readonly due?: number | undefined;
 };
 
-/** Whether a parent task's sub-tasks stand open under it, and what turns them. */
-export type TaskFold = { readonly open: boolean; readonly onToggle: () => void };
+/** Whether the rows nested under a row stand open, and what turns them: a parent task's sub-tasks, or the agents an agent started. */
+export type RowFold = { readonly open: boolean; readonly onToggle: () => void };
+
+/** What a fold's chevron and its menu item are heard as, folded and open: "Show sub-tasks", "Hide sub-tasks". */
+export type FoldWords = { readonly show: string; readonly hide: string };
 
 type TaskRowProps = RowActs & {
   readonly id: string;
@@ -257,7 +260,7 @@ type TaskRowProps = RowActs & {
   /** Its key, `ACME-42`, which ends the line. */
   readonly taskKey?: string | undefined;
   /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its chevron's press does. Its caller holds it, since a recycled row holds no state (`RowForEach`). */
-  readonly fold?: TaskFold | undefined;
+  readonly fold?: RowFold | undefined;
   /** How deep it stands under the tasks above it, which sets it in from the list's edge. */
   readonly depth?: number | undefined;
 };
@@ -979,28 +982,34 @@ function TaskEndMark({ needsYou = false, agents }: Pick<TaskRowProps, "needsYou"
   }
 }
 
-/** What a parent's chevron is heard as, folded and open. */
-const SHOW_SUB_TASKS = "Show sub-tasks";
-const HIDE_SUB_TASKS = "Hide sub-tasks";
+/** What a parent task's chevron is heard as, folded and open. */
+const SUB_TASK_FOLD: FoldWords = { show: "Show sub-tasks", hide: "Hide sub-tasks" };
 
 /** The least a fold chevron answers a press across, in points, as the system asks of every target. */
 const FOLD_TARGET = 44;
 
 /**
- * A parent's fold before its status ring, as the panel's chevron stands
- * before a task's name: it opens the sub-tasks under the row, while a press
- * on the row itself still opens the task. Note that the button itself is
- * the whole 44 pt square, since a borderless button in a selectable row
- * takes a press only within its own frame, and the overhang is taken back
- * outside it, so the row lays out a lead mark's square: a sub-task's ring
- * stands under its parent's and the row stands no taller than its ring. It
- * stands above the ring beside it, which its square reaches over. While
- * the overhang was taken back inside the button, laying it out at no
- * height, a press on it opened the row instead (j9614, Nov 16).
+ * A parent's fold before its lead mark, as the panel's chevron stands
+ * before a task's or an agent's name: it opens the rows nested under it,
+ * while a press on the row itself still opens what the row is. Note that
+ * the button itself is the whole 44 pt square, since a borderless button
+ * in a selectable row takes a press only within its own frame, and the
+ * overhang is taken back outside it, so the row lays out a lead mark's
+ * square: a nested row's mark stands under its parent's and the row stands
+ * no taller than its mark. It stands above the mark beside it, which its
+ * square reaches over. While the overhang was taken back inside the
+ * button, laying it out at no height, a press on it opened the row instead
+ * (j9614, Nov 16).
  */
-function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPress: () => void }) {
+export function FoldChevron({
+  fold,
+  words,
+}: {
+  readonly fold: RowFold;
+  readonly words: FoldWords;
+}) {
   const colors = useColors();
-  // Note that the chevron and the column it lays out grow with the reader's text, as the ring beside it does, so it stands no speck beside large words.
+  // Note that the chevron and the column it lays out grow with the reader's text, as the mark beside it does, so it stands no speck beside large words.
   const lead = useScaledSize(MARK_SIZE.LEAD);
   const glyph = useScaledSize(MARK_SIZE.GLYPH - 4);
   const target = Math.max(FOLD_TARGET, lead);
@@ -1008,16 +1017,16 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
 
   return (
     <Button
-      onPress={onPress}
+      onPress={fold.onToggle}
       modifiers={[
         buttonStyle("borderless"),
-        accessibilityLabel(open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS),
+        accessibilityLabel(fold.open ? words.hide : words.show),
         padding({ all: -overhang }),
         zIndex(1),
       ]}
     >
       <Image
-        {...glyphImage(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
+        {...glyphImage(fold.open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
         size={glyph}
         color={colors.TEXT_MUTED}
         modifiers={[
@@ -1027,6 +1036,25 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
       />
     </Button>
   );
+}
+
+/** A fold's item in its row's long press menu, so a person who reaches the row as one element, through VoiceOver or Voice Control, still opens what it folds; none for a row that folds nothing. */
+export function foldActions(fold: RowFold | undefined, words: FoldWords): readonly RowAction[] {
+  if (fold === undefined) return [];
+
+  return [
+    {
+      label: fold.open ? words.hide : words.show,
+      symbol: fold.open ? GLYPH.UNFOLDED : GLYPH.FOLDED,
+      tone: ROW_ACTION_TONE.NEUTRAL,
+      onPress: fold.onToggle,
+    },
+  ];
+}
+
+/** How far each level of nesting, or a parent's fold, sets a row in: a column of the lead's scaled width, so a nested row's mark stands under its parent's at every size. */
+export function useNestColumn(): number {
+  return useScaledSize(MARK_SIZE.LEAD) + SPACE.ROW;
 }
 
 /**
@@ -1045,9 +1073,8 @@ export function TaskRow(props: TaskRowProps) {
   const { id, name, status, unread = false, finished = false, taskKey, fold, depth = 0 } = props;
 
   const colors = useColors();
-  // Note that each level of sub-tasks stands in past a parent's fold, its column the lead's scaled width, so a sub-task's mark stands under its parent's at every size.
   const lead = useScaledSize(MARK_SIZE.LEAD);
-  const column = lead + SPACE.ROW;
+  const column = useNestColumn();
   // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth and past a parent's fold, each a column of the lead's scaled width, and by however much the lead has grown.
   const grown = lead - MARK_SIZE.LEAD;
   const indent = (depth + (fold === undefined ? 0 : 1)) * column + grown;
@@ -1058,9 +1085,7 @@ export function TaskRow(props: TaskRowProps) {
         dot={false}
         unread={unread}
         faded={finished}
-        fold={
-          fold === undefined ? undefined : <SubTaskFold open={fold.open} onPress={fold.onToggle} />
-        }
+        fold={fold === undefined ? undefined : <FoldChevron fold={fold} words={SUB_TASK_FOLD} />}
         lead={<TaskStatusMark status={status} />}
         title={name}
         ink={titleInk(colors, unread, finished)}
@@ -1088,19 +1113,6 @@ export function TaskRow(props: TaskRowProps) {
     </HStack>
   );
 
-  // Note that the fold stands in the row's menu too, so a person who reaches the row as one element, through VoiceOver or Voice Control, still opens its sub-tasks.
-  const folding: readonly RowAction[] =
-    fold === undefined
-      ? []
-      : [
-          {
-            label: fold.open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS,
-            symbol: fold.open ? GLYPH.UNFOLDED : GLYPH.FOLDED,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: fold.onToggle,
-          },
-        ];
-
   return (
     <RowFrame
       {...props}
@@ -1108,7 +1120,7 @@ export function TaskRow(props: TaskRowProps) {
       row={row}
       indent={indent}
       leading={ROW_INSET.PLAIN}
-      menuActions={[...folding, ...(props.menuActions ?? [])]}
+      menuActions={[...foldActions(fold, SUB_TASK_FOLD), ...(props.menuActions ?? [])]}
       heard={props.heard ?? taskHeard(props)}
     />
   );

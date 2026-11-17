@@ -41,6 +41,7 @@ import { needsYouWords } from "@repo/features/inbox-list-model";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
+import type { StartedAgentsCount } from "@repo/features/task-agents-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard } from "@repo/features/time-format";
@@ -54,14 +55,19 @@ import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dropLink } from "./interactions.js";
 import {
   actionButton,
+  FoldChevron,
+  type FoldWords,
+  foldActions,
   ROW_PLACE,
   type RowAction,
+  type RowFold,
   RowFrame,
   RowHead,
   type RowSubmenu,
   type RowSwipe,
   RowTime,
   rowPlacement,
+  useNestColumn,
 } from "./list-row.js";
 import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
 import {
@@ -69,6 +75,7 @@ import {
   Avatar,
   type Face,
   FailedMark,
+  ProgressCount,
   TaskStatusMark,
   ToneGlyph,
   WorkingMark,
@@ -140,12 +147,19 @@ function LeadGlyph({
  * accessibility size each fact stands on a line of its own, as Mail's rows
  * stack, since side by side they broke mid-word.
  */
-function RowLine({ children }: { readonly children: ReactNode }) {
+function RowLine({
+  past = 0,
+  children,
+}: {
+  /** How much more stands before the title's words, such as a parent's fold. */
+  readonly past?: number | undefined;
+  readonly children: ReactNode;
+}) {
   const stacked = useAccessibilitySize();
   const lead = useScaledSize(MARK_SIZE.LEAD);
-  // Note that the line starts where the title's words do: past the unread dot and the lead's column, each as it grows with the reader's text.
+  // Note that the line starts where the title's words do: past the unread dot and the lead's column, each as it grows with the reader's text, and past whatever else leads the title.
   const dot = useScaledSize(MARK_SIZE.UNREAD);
-  const inset = padding({ leading: dot + SPACE.TIGHT + lead + SPACE.ROW });
+  const inset = padding({ leading: dot + SPACE.TIGHT + lead + SPACE.ROW + past });
 
   if (stacked) {
     return (
@@ -252,7 +266,23 @@ type AgentRowProps = {
   readonly preview?: ReactElement | undefined;
   /** What its acts ask first, such as Archive, standing by the row; none where its acts never ask. */
   readonly question?: RowQuestion | undefined;
+  /** How deep it stands nested under the agent that started it, which sets it in from the list's edge; at the top unless said. */
+  readonly depth?: number | undefined;
+  /** The fold of the agents it started, where it started any: whether they stand open under it, and what its chevron's press does. Its caller holds it and draws them as rows of their own under it, a level deeper. */
+  readonly fold?: RowFold | undefined;
+  /** How many of the agents it started have finished, of all of them, as a task counts its sub-tasks; none where it started none. */
+  readonly started?: StartedAgentsCount | undefined;
 };
+
+/** What an agent's fold is heard as, folded and open, naming the agent. */
+function startedFold(name: string): FoldWords {
+  return { show: `Show agents started by ${name}`, hide: `Hide agents started by ${name}` };
+}
+
+/** What an agent's count of the agents it started is heard as in its figures' place. */
+function startedHeard(finished: number, total: number): string {
+  return `${finished} of ${total} ${total === 1 ? "agent" : "agents"} it started finished`;
+}
 
 /** How far past its words an agent row's pull request link takes a press, in points: out to either side short of the line's gap to its neighbors, up only to the gap under the line above, and down to the row's foot, or only to the gap under it where a fact stands below it at an accessibility size; so the row stays its height and its other words keep the row's own press. */
 const LINK_REACH = {
@@ -334,24 +364,32 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
 
 /**
  * One agent on a task, as a row: its tile, its name with where it runs at
- * the line's end, and under them what it is doing, its pull request, and
- * how many of its threads wait on the reader, in the accent, since they
- * want you.
+ * the line's end, and under them what it is doing, how many of the agents
+ * it started have finished, its pull request, and how many of its threads
+ * wait on the reader, in the accent, since they want you. An agent that
+ * started others leads with the fold a parent task's row leads with, whose
+ * press opens them; its caller draws them as rows of their own under it, a
+ * level deeper, as a task's sub-tasks stand.
  */
 export function AgentRow(props: AgentRowProps) {
-  const { id, name, harness, state, runsOn, waiting, pullRequest, task } = props;
+  const { id, name, harness, state, runsOn, waiting, pullRequest, task, fold, started } = props;
+  const depth = props.depth ?? 0;
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
-  const told = !resting || pullRequest !== undefined;
+  const told = !resting || pullRequest !== undefined || started !== undefined;
   // Note that the facts stand one to a line at the accessibility sizes (`RowLine`), where the needs-you count leads its own line with no separator, and the tile grows with the title.
   const stacked = useAccessibilitySize();
   const tile = useScaledSize(MARK_SIZE.LEAD);
+  // Note that each level stands in past the agent that started it, and the words past a fold, by a lead's column, so a nested agent's tile stands under its starter's at every size.
+  const column = useNestColumn();
+  const folding = startedFold(name);
 
   const row: ReactElement = (
-    <VStack alignment="leading" spacing={2}>
+    <VStack alignment="leading" spacing={2} modifiers={[padding({ leading: depth * column })]}>
       <RowHead
         unread={false}
         faded={false}
+        fold={fold === undefined ? undefined : <FoldChevron fold={fold} words={folding} />}
         lead={<AgentTile name={name} harness={harness} size={tile} />}
         title={name}
         ink={colors.TEXT}
@@ -365,7 +403,7 @@ export function AgentRow(props: AgentRowProps) {
         }
       />
       {!told && waiting === 0 && task === undefined ? null : (
-        <RowLine>
+        <RowLine past={fold === undefined ? 0 : column}>
           {task === undefined ? null : (
             <Text
               modifiers={[
@@ -388,6 +426,13 @@ export function AgentRow(props: AgentRowProps) {
             </Text>
           )}
           {resting ? null : <AgentStateWords working={state === AGENT_ROW_STATE.WORKING} />}
+          {started === undefined ? null : (
+            <ProgressCount
+              done={started.finished}
+              total={started.total}
+              heard={startedHeard(started.finished, started.total)}
+            />
+          )}
           {pullRequest === undefined ? null : (
             <PullRequestLink pullRequest={pullRequest} factBelow={stacked && waiting > 0} />
           )}
@@ -410,8 +455,9 @@ export function AgentRow(props: AgentRowProps) {
     <RowFrame
       id={id}
       row={row}
+      indent={(depth + (fold === undefined ? 0 : 1)) * column}
       trailingActions={props.trailingActions}
-      menuActions={props.menuActions}
+      menuActions={[...foldActions(fold, folding), ...(props.menuActions ?? [])]}
       preview={props.preview}
       question={props.question}
     />

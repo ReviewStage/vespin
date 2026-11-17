@@ -24,7 +24,12 @@ import {
   taskNumberOf,
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
-import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
+import {
+  agentRunsOnWords,
+  agentStillWriting,
+  agentTree,
+  type StartedAgentsCount,
+} from "@repo/features/task-agents-model";
 import {
   CHANGE_REPOSITORY,
   CHOOSE_REPOSITORY,
@@ -121,6 +126,7 @@ import {
   ROW_ACTION_TONE,
   type RowAction,
   type RowAsker,
+  type RowFold,
   RowForEach,
   RowList,
   type RowMenuGroup,
@@ -134,7 +140,6 @@ import {
   type StandingMenus,
   sectionEmoji,
   sectionGlyph,
-  type TaskFold,
   TaskHead,
   TaskPreview,
   TaskRow,
@@ -712,7 +717,7 @@ export function TaskListRow({
   readonly task: TaskSummary;
   readonly listing: TasksListing;
   readonly depth?: number;
-  readonly fold?: TaskFold | undefined;
+  readonly fold?: RowFold | undefined;
   readonly keyed: boolean;
 }) {
   const look = listing.lookOf(task);
@@ -1783,8 +1788,11 @@ export function TaskAgentRow({
   task,
   named = false,
   archiving,
+  nest,
 }: {
   readonly line: TaskAgentLine;
+  /** Where it stands in its task's tree of agents: how deep under the agent that started it, the fold of those it started, and how many of them finished; at the top, folding nothing, where none is given. */
+  readonly nest?: AgentNest | undefined;
   /** The task it works on, which its preview names over it; none where the list does not hold it. */
   readonly task?: TaskSummary | undefined;
   /** Whether its row names the task in its line, as a list of many tasks' agents does, such as Search's; its preview names it either way. */
@@ -1823,6 +1831,9 @@ export function TaskAgentRow({
       runsOn={runsOn}
       runsOnGlyph={runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform })}
       waiting={waiting}
+      depth={nest?.depth}
+      fold={nest?.fold}
+      started={nest?.started}
       task={named ? task?.name : undefined}
       pullRequest={
         pullRequest === undefined
@@ -1878,7 +1889,21 @@ export function TaskAgentRow({
   );
 }
 
-/** The task's agents as the panel's Agents group lists them, counted while it has any, its header's + New agent, which opens its sheet, and the line of its threads that need you. */
+/** Where an agent's row stands in its task's tree of agents (`agentTree`). */
+type AgentNest = {
+  readonly depth: number;
+  readonly fold: RowFold | undefined;
+  readonly started: StartedAgentsCount | undefined;
+};
+
+/**
+ * The task's agents as the panel's Agents group lists them, each nested
+ * under the agent that started it (`agentTree`), folded under it until
+ * opened, as a task's sub-tasks are, a folded row counting the threads that
+ * wait on the reader under it too, so none waits unsaid; counted while it
+ * has any, its header's + New agent, which opens its sheet, and the line of
+ * its threads that need you.
+ */
 function OverviewAgents({
   overview,
   archiving,
@@ -1888,6 +1913,22 @@ function OverviewAgents({
 }) {
   const router = useRouter();
   const { task } = overview;
+  const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
+
+  const tree = agentTree(
+    overview.agents,
+    (line) => line.agent,
+    (agentId) => opened.has(agentId),
+  );
+
+  const toggle = (agentId: string) =>
+    setOpened((held) => {
+      const next = new Set(held);
+
+      if (!next.delete(agentId)) next.add(agentId);
+
+      return next;
+    });
 
   return (
     <ListSection
@@ -1904,8 +1945,24 @@ function OverviewAgents({
         ],
       }}
     >
-      {overview.agents.map((line) => (
-        <TaskAgentRow key={line.agent.id} line={line} task={task} archiving={archiving} />
+      {tree.map(({ entry, depth, started, folded }) => (
+        <TaskAgentRow
+          key={entry.agent.id}
+          line={{
+            ...entry,
+            waiting: (folded ?? []).reduce((sum, under) => sum + under.waiting, entry.waiting),
+          }}
+          task={task}
+          archiving={archiving}
+          nest={{
+            depth,
+            fold:
+              started === undefined
+                ? undefined
+                : { open: opened.has(entry.agent.id), onToggle: () => toggle(entry.agent.id) },
+            started,
+          }}
+        />
       ))}
       {overview.waitingElsewhere === 0 ? null : (
         <LinkRow
