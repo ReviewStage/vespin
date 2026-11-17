@@ -10,7 +10,7 @@ import {
   WorkspaceSwitcherItem,
 } from "@repo/ui-native";
 import { useIsFocused, useRouter } from "expo-router";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Platform } from "react-native";
 import { useSettingsAccount } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
@@ -94,6 +94,12 @@ export function useListColumn(list: ListColumn): FirstColumn {
   const switcher = useWorkspaceSwitcher();
   const { shown, setShown } = useSidebarShown();
   const focused = useIsFocused();
+  // Note that a tab behind another keeps the list as it last stood in front, because a split view handed a change off screen, such as the fold a portrait turn brings, never takes the change back once its tab returns.
+  const [kept, keep] = useState(shown);
+
+  useEffect(() => {
+    if (focused) keep(shown);
+  }, [focused, shown]);
 
   const leading =
     switcher !== undefined ? (
@@ -110,7 +116,7 @@ export function useListColumn(list: ListColumn): FirstColumn {
     sidebar: list.view,
     // Note that New task leads the detail's bar instead (`useDetailColumnBar`), as in Mail, so the narrow list's bar keeps only its own acts, such as Select mode's Done, and acts it leads with, such as Select all, stand in the switcher's place, as on the iPhone, since a second leading item folds into the bar's overflow.
     sidebarBar: { ...list.bar, leading: (list.bar.lead ?? []).length > 0 ? undefined : leading },
-    sidebarShown: shown,
+    sidebarShown: focused ? shown : kept,
     // Note that only the split view in front is heard, because a tab kept behind another lays its split view out off screen, which reports its list folded, and that report stood as the person's choice once its tab came back.
     onSidebarShownChange: (next) => {
       if (focused) setShown(next);
