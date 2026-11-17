@@ -29,8 +29,9 @@
  *
  * Talk in a box that starts a new agent calls an agent that does not stand
  * yet: its press makes the call's audio context, as any Talk's does, and
- * the call starts once the box's blank agent lands (`startWhenStarted`), or
- * lets the context go where the agent was refused.
+ * opens the microphone and makes the peer's offer while the box's blank
+ * agent starts, so the call stands and its session opens the moment the
+ * agent lands (`startWhenStarted`), and nothing opens where it was refused.
  *
  * The call's levels, how loud the caller and the voice each are, which the
  * mutes ring with (`CallMute`), are measured here: an analyzer on the
@@ -308,8 +309,6 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
   // Note that the microphone's opener and the press's audio context are refs, because the session reads them when a start connects, outside any render.
   const opener = useRef(openMicrophone);
   const pressed = useRef<AudioContext | undefined>(undefined);
-  // How many presses asked for a call, so a Talk whose agent lands late knows whether one asked since.
-  const asked = useRef(0);
 
   useEffect(() => {
     opener.current = openMicrophone;
@@ -357,28 +356,22 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
 
   const start = (into: { readonly agentId: string; readonly taskId: string }) => {
     if (keyMissing) return openApiKeys();
-    asked.current += 1;
     // Note that the meters' context is made here, in the press, since Safari runs one only from a gesture; the session's connect takes it at once.
     pressed.current = pressedContext();
     session.start(into);
   };
 
-  // Note that the press's context is held apart until the agent lands, since another call's press may come meanwhile.
-  // Note that a press made since asks for the newer call, so a Talk landing late lets its press go rather than end that call.
+  // Note that the microphone and the peer's offer are readied in the press, while the agent starts, so the call opens the moment it lands; a press made since asks for the newer call, and the session lets this one go.
   const startWhenStarted = (): CallWhenStarted => {
-    const context = pressedContext();
-    asked.current += 1;
-    const press = asked.current;
+    pressed.current = pressedContext();
+    let land: CallWhenStarted = () => undefined;
+    session.startLanding(
+      new Promise((resolve) => {
+        land = resolve;
+      }),
+    );
 
-    return (into) => {
-      if (into === undefined || press !== asked.current) {
-        return void context?.close().catch(() => undefined);
-      }
-
-      pressed.current?.close().catch(() => undefined);
-      pressed.current = context;
-      session.start(into);
-    };
+    return land;
   };
 
   // The window going away, or the provider with it, closes the session and drops the call.

@@ -69,7 +69,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import { type MediaStream, mediaDevices, RTCPeerConnection } from "react-native-webrtc";
@@ -117,7 +116,7 @@ interface PhoneVoiceCall {
   readonly call: StandingVoiceCall | undefined;
   /** Calls the agent, ending a call already standing first. */
   readonly start: (into: VoiceCallInto) => void;
-  /** Takes a press now for a call into an agent still starting, answering what calls it once it lands; a press made since wins, so a late one calls no one. */
+  /** Takes a press now for a call into an agent still starting, readying the microphone at once and answering what calls it once it lands; a press made since wins, so a late one calls no one. */
   readonly startWhenStarted: () => (into: VoiceCallInto | undefined) => void;
   readonly end: () => void;
   readonly setMicrophoneMuted: (muted: boolean) => void;
@@ -262,8 +261,6 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
   });
 
   const [call, setCall] = useState<VoiceCallState | undefined>(undefined);
-  // How many presses asked for a call, so a Talk whose agent lands late knows whether one asked since.
-  const asked = useRef(0);
 
   const [session] = useState<VoiceCallSession>(() =>
     voiceCallSession({
@@ -323,17 +320,20 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
     offered: callable,
     call: standing,
     start: (into) => {
-      asked.current += 1;
-
       if (callable) session.start(into);
     },
+    // Note that the microphone and the peer's offer are readied in the press, while the agent starts, so the call opens the moment it lands; a press made since asks for the newer call, and the session lets this one go.
     startWhenStarted: () => {
-      asked.current += 1;
-      const press = asked.current;
+      let land: (into: VoiceCallInto | undefined) => void = () => undefined;
 
-      return (into) => {
-        if (into !== undefined && press === asked.current && callable) session.start(into);
-      };
+      if (!callable) return land;
+      session.startLanding(
+        new Promise((resolve) => {
+          land = resolve;
+        }),
+      );
+
+      return land;
     },
     end: session.end,
     setMicrophoneMuted: session.setMicrophoneMuted,
