@@ -27,6 +27,7 @@ afterEach(() => {
 const CLIP_URL = {
   EXPANDED: "data:audio/wav;base64,UklGRg==",
   STEPPED: "data:audio/wav;base64,UklGRh==",
+  SPED_ELSEWHERE: "data:audio/wav;base64,UklGRi==",
 } as const;
 
 /** How long the stand-in runs, in seconds. */
@@ -75,6 +76,7 @@ function mountPlayer(dataUrl: string, place: AudioPlayerPlace, onExpand?: () => 
   standInMedia(audio);
 
   return {
+    play: () => act(() => audio.dispatchEvent(new Event("play"))),
     press: (key: string) =>
       act(() => frame.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }))),
     pressButton: (label: string) =>
@@ -104,4 +106,13 @@ test("> steps a clip's speed and its speed button walks on from there, back to 1
   expect(player.speed()).toBe("Playback speed: 2×");
   player.pressButton("Playback speed: 2×");
   expect(player.speed()).toBe("Playback speed: 1×");
+});
+
+test("a clip played again takes up the speed another player set, though that player moved it nowhere", () => {
+  const card = mountPlayer(CLIP_URL.SPED_ELSEWHERE, AUDIO_PLAYER_PLACE.INLINE);
+  const other = mountPlayer(CLIP_URL.SPED_ELSEWHERE, AUDIO_PLAYER_PLACE.INLINE);
+  card.press("ArrowRight");
+  other.press(">");
+  card.play();
+  expect(card.speed()).toBe("Playback speed: 1.5×");
 });
