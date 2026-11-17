@@ -789,6 +789,36 @@ function useSaveRunActions(workspaceId: string) {
 /** The section's one save of a repository's run actions. */
 type RunActionSave = ReturnType<typeof useSaveRunActions>;
 
+/**
+ * The list of `repository`'s run actions the section's save still out asks
+ * for, while it is out; none while no save of that repository's is.
+ */
+function pendingRunActions(
+  saving: RunActionSave,
+  repository: string,
+): readonly RunActionWritten[] | undefined {
+  const { isPending, variables } = saving;
+
+  return isPending && variables !== undefined && sameRepository(variables.repository, repository)
+    ? variables.actions
+    : undefined;
+}
+
+/**
+ * A saved action as its row draws it: as the save still out asks for it,
+ * where one is out and names it, so a pick stands from the press rather
+ * than the stored value until the answer lands; else as it is saved.
+ */
+function drawnRunAction(
+  saving: RunActionSave,
+  repository: string,
+  action: RunAction,
+): RunActionWritten {
+  const pending = pendingRunActions(saving, repository)?.find((each) => each.id === action.id);
+
+  return pending ?? writtenOf(action);
+}
+
 type UseRunActionOrderResult = {
   ordered: readonly RunAction[];
   move: (from: number, to: number) => void;
@@ -796,38 +826,37 @@ type UseRunActionOrderResult = {
 
 /**
  * A repository's run actions in the order the service keeps, a drag drawn
- * at once and saved as the whole list; the list rests on the order sent
- * until the save answers, and its refusal is said under the repository's
- * row as any save's is.
+ * at once and saved as the whole list: while any save of the list is out,
+ * its actions stand in the order it asks for, read off the section's save
+ * (`pendingRunActions`), and its refusal is said under the repository's row
+ * as any save's is.
  */
 function useRunActionOrder(
   saving: RunActionSave,
   repository: string,
   actions: readonly RunAction[],
 ): UseRunActionOrderResult {
-  const [sentOrder, setSentOrder] = useState<readonly string[] | undefined>(undefined);
+  const sent = pendingRunActions(saving, repository)?.flatMap((each) =>
+    each.id === undefined ? [] : [each.id],
+  );
+
   const byId = new Map(actions.map((action) => [action.id, action]));
 
-  // Note that an action added or removed meanwhile is drawn where the service says, after those sent.
+  // Note that the actions the save names fill their own places in the order it asks for, and one it leaves out, as a removal does or one added meanwhile, keeps its place.
+  const named = sent?.flatMap((id) => byId.get(id) ?? []) ?? [];
+
   const ordered =
-    sentOrder === undefined
+    sent === undefined
       ? actions
-      : [
-          ...sentOrder.flatMap((id) => byId.get(id) ?? []),
-          ...actions.filter((action) => !sentOrder.includes(action.id)),
-        ];
+      : actions.map((action) => (sent.includes(action.id) ? (named.shift() ?? action) : action));
 
   const move = (from: number, to: number) => {
-    const next = [...ordered];
-    const [moved] = next.splice(from, 1);
+    const moved = [...ordered];
+    const [one] = moved.splice(from, 1);
 
-    if (moved === undefined || from === to) return;
-    next.splice(to, 0, moved);
-    setSentOrder(next.map((action) => action.id));
-    void saving
-      .mutateAsync({ repository, actions: next.map(writtenOf) })
-      .catch(() => undefined)
-      .then(() => setSentOrder(undefined));
+    if (one === undefined || from === to) return;
+    moved.splice(to, 0, one);
+    saving.mutate({ repository, actions: moved.map(writtenOf) });
   };
 
   return { ordered, move };
@@ -844,8 +873,9 @@ function useRunActionOrder(
  * edited, Discard and Save standing at the row's end once it differs from
  * what is saved, ⌘S or ⌘↩ in it pressing Save and Escape Discard. An icon
  * picked from the well is saved as soon as it is picked, as a section's is,
- * and a rename as it ends, pressing the name or Rename in the ⋯ opening it. The ⋯
- * also moves it up or down, which a keyboard reaches where the grip's drag
+ * and drawn from the pick while its save is out, as the default and where it
+ * may run are, and a rename as it ends, pressing the name or Rename in the ⋯
+ * opening it. The ⋯ also moves it up or down, which a keyboard reaches where the grip's drag
  * does not, makes it the default or lets the default go, picks where it may
  * run (cloud and local agents, cloud agents only, or local agents only),
  * saved as soon as it is picked, and removes it, a removal asking first. An action just added stands open, its label being
@@ -877,7 +907,8 @@ function RunActionRow({
   const busy = saving.isPending;
   const savedLabel = action?.label ?? "";
   const savedCommand = action?.command ?? "";
-  const savedIcon = action?.icon === undefined ? undefined : knownTaskSectionIcon(action.icon);
+  // A saved action's icon, availability, and default stand as the save still out asks for them, so a pick never flashes back to the stored one.
+  const drawn = action === undefined ? undefined : drawnRunAction(saving, repository, action);
   // A new action's name is held here until its first save; a saved one's rename is the app's shared one (`useInlineRename`) over the section's save, so a refused name reopens the field over what was asked.
   const [renaming, setRenaming] = useState(added !== undefined);
 
@@ -906,8 +937,8 @@ function RunActionRow({
   // The command as typed, held apart from what is saved until a save agrees with it.
   const [edited, setEdited] = useState<string | undefined>(undefined);
   const label = action === undefined ? newLabel : savedLabel;
-  const icon = action === undefined ? newIcon : savedIcon;
-  const availability = action === undefined ? newAvailability : runActionAvailability(action);
+  const icon = drawn === undefined ? newIcon : drawn.icon;
+  const availability = drawn === undefined ? newAvailability : drawn.availableIn;
 
   // An edit the saved command now agrees with, its own save's or another's, is let go, as a script's is (`ScriptRow`).
   if (edited !== undefined && action !== undefined && edited === savedCommand && !busy) {
@@ -970,7 +1001,7 @@ function RunActionRow({
     confirmFailure(FAILURE_SURFACE.WORKSPACE_SANDBOX_SETUP_SAVE),
   );
 
-  const isDefault = action?.isDefault === true;
+  const isDefault = drawn?.isDefault === true;
 
   const setDefault = (on: boolean) =>
     saving.mutate({
