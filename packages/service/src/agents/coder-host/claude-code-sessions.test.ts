@@ -65,6 +65,7 @@ import {
 } from "@repo/database/models/provider-key-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { runnerLinesPast } from "@repo/database/models/runner-line-store";
+import { sandboxOwner } from "@repo/database/models/sandbox-owners";
 import { queuedTurnOf, recordTurnSnapshot } from "@repo/database/models/turn-state";
 import { workspaceDriveRepositories } from "@repo/database/models/workspace-drive-repositories";
 import { setWorkspaceVariables } from "@repo/database/models/workspace-environment-store";
@@ -2218,6 +2219,16 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.equal(ended, RUNNER_ENDED.LEFT);
         assert.equal(api.sandboxes[0]?.status, "running");
+        // The launch recorded the workspace the sandbox is billed to, and the agent's member.
+        const owned = yield* sandboxOwner(api.sandboxes[0]?.name ?? "");
+        assert.deepEqual(
+          Option.map(owned, ({ organizationId, agentId, userId }) => ({
+            organizationId,
+            agentId,
+            userId,
+          })),
+          Option.some({ organizationId: agent.organizationId, agentId: agent.id, userId }),
+        );
         api.idleStop();
         assert.equal(
           (yield* sessions.cancel(opened.sessionId, "turn_0")).outcome,
