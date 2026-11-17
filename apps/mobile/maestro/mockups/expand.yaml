@@ -1,14 +1,25 @@
-# expand.yaml -- MOCK: the pushed notification found in Notification Center and held, so it stands expanded with its actions; `TEXT` names its title.
+# expand.yaml -- MOCK: the pushed notification held while its banner stands over the Home Screen, so it expands with its actions; `TEXT` names its title. Where the banner went by, Notification Center is pulled down and the notification held there instead.
 appId: dev.vespin.ios
 ---
-- swipe:
-    start: 30%, 0%
-    end: 30%, 70%
-- waitForAnimationToEnd
 - extendedWaitUntil:
     visible: ".*${TEXT}.*"
-    timeout: 15000
-- takeScreenshot: ${SHOT}-list
-- longPressOn: ".*${TEXT}.*"
+    timeout: 6000
+    optional: true
+- runFlow:
+    when:
+      visible: ".*${TEXT}.*"
+    commands:
+      - takeScreenshot: ${SHOT}-banner
+      - longPressOn: ".*${TEXT}.*"
+- runFlow:
+    when:
+      notVisible: "Allow once|The member who sent it"
+    commands:
+      - swipe:
+          start: 30%, 0%
+          end: 30%, 70%
+      - waitForAnimationToEnd
+      - takeScreenshot: ${SHOT}-list
+      - longPressOn: ".*${TEXT}.*"
 - waitForAnimationToEnd
 - takeScreenshot: ${SHOT}-expanded
