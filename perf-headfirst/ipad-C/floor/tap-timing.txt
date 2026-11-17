@@ -1,0 +1,21 @@
+/Users/deanstratakos/vespin-ipad-agent/perf-wt/apps/mobile/scripts/perf/tap-timing.sh:15: no matches found: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/ABD9B3FE-4859-40A8-85F9-63B98B47142F/data/Containers/Data/Application/B6893F3B-F3B8-4F52-AE3D-EA4181901916/Documents/perf-probe-*.jsonl
+probe rows 0, commands 59, frames 2315
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle
+floor-settings-push | 6 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | 678 | 838 | 838 | 1443
+floor-settings-back | 5 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | 844 | 858 | 858 | 2050
+floor-files-more | 6 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | 579 | 997 | 997 | 1958
+
+most rendered components per path (summed over its taps):
+floor-settings-push: 
+floor-settings-back: 
+floor-files-more: 
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+floor-settings-push: 
+floor-settings-back: 
+floor-files-more: 
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+floor-settings-push: markdown 0.0, rest 0.0
+floor-settings-back: markdown 0.0, rest 0.0
+floor-files-more: markdown 0.0, rest 0.0
