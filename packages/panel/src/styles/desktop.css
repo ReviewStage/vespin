@@ -643,8 +643,11 @@ body,
   .desktop-task:has(> .desktop-task-main)
   > .side-panel
   > .side-panel-bar {
+  /* Note that the row is a pane bar's height, padded as `PaneBar` is, because
+     it stands level with the bar heading the column beside it (an automation
+     run's, a tab's), and a row inset over and under its tabs stood it taller. */
   min-height: var(--ui-pane-bar-height);
-  padding: var(--ui-row-inset) var(--column-inset);
+  padding: var(--ui-tight-gap) var(--column-inset);
   border-bottom: 1px solid var(--ui-color-border);
   -webkit-app-region: no-drag;
 }
