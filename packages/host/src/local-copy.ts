@@ -19,8 +19,9 @@
  * A database that will not open leaves the store doing nothing for that
  * sign-in, and the failure is reported to Sentry by its tag and its
  * cause's kind, never by a row or a path, which is what the release's gate
- * reads. Its refusals are then laid back from `entities.sealed`, which
- * keeps them as they move until an open takes them (`keptInFile`).
+ * reads. Its refusals are then laid back from `entities.sealed` and kept
+ * in memory for that launch alone, as the waiting writes are, while the
+ * file still holds what an older build kept until an open takes them.
  */
 
 import { failureKind, reportUnexpected } from "@repo/runtime/effect";
@@ -57,11 +58,6 @@ export interface RefusedMessages {
 export interface SealedRefusals {
   /** As the file held them. */
   readonly entries: readonly unknown[];
-  /** Has the file keep them as `now` answers and `moves` move them, where no database took them. */
-  readonly follow: (
-    now: () => readonly unknown[],
-    moves: Stream.Stream<void>,
-  ) => Effect.Effect<void>;
   /** Has the file drop them, since the database holds them now. */
   readonly imported: Effect.Effect<void>;
 }
@@ -75,23 +71,7 @@ export interface SealedQueues {
 }
 
 /** No file, so no refusals to take. */
-const NO_SEALED_REFUSALS: SealedRefusals = {
-  entries: [],
-  follow: () => Effect.void,
-  imported: Effect.void,
-};
-
-/** Lays back the refusals `legacy` holds, which the file keeps as they move, where no database took them. */
-export function keptInFile(
-  accountId: string,
-  refused: RefusedMessages,
-  legacy: SealedRefusals = NO_SEALED_REFUSALS,
-): Effect.Effect<void> {
-  return Effect.andThen(
-    refused.restored(accountId, legacy.entries),
-    legacy.follow(refused.kept, refused.moves),
-  );
-}
+const NO_SEALED_REFUSALS: SealedRefusals = { entries: [], imported: Effect.void };
 
 /** The account's database, from its sign-in until its sign-out. */
 export interface LocalCopy {
@@ -168,7 +148,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
         yield* Scope.close(scope, Exit.void);
         yield* reported(LOCAL_DATABASE_REPORT.OPEN_FAILED, connection.failure);
 
-        return yield* keptInFile(accountId, refused, legacy);
+        return yield* refused.restored(accountId, legacy.entries);
       }
 
       const kept = localRefused(connection.success);
@@ -179,7 +159,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
         yield* Scope.close(scope, Exit.void);
         yield* reported(LOCAL_DATABASE_REPORT.REFUSED_READ_FAILED, stored.failure);
 
-        return yield* keptInFile(accountId, refused, legacy);
+        return yield* refused.restored(accountId, legacy.entries);
       }
 
       // Note that an empty table takes the file's refusals, which a database opened before this build mirrored, so a table that holds any is the newer word.
@@ -194,8 +174,6 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
 
       if (Result.isSuccess(written) && written.success.length === refused.kept().length) {
         yield* legacy.imported;
-      } else {
-        yield* legacy.follow(refused.kept, refused.moves);
       }
 
       yield* Effect.forkIn(
