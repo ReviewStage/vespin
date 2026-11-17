@@ -33,6 +33,7 @@ import {
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
+import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { lowerKeyboard } from "../native-interactions-module.js";
@@ -65,6 +66,9 @@ const SCOPE_LABEL = "Show";
 
 /** The scopes, in the order they stand: All, then each kind. */
 const SCOPES: readonly SearchScope[] = Object.values(SEARCH_SCOPE);
+
+/** The scopes while the member turned the Inbox off, which leave its own out. */
+const SCOPES_WITHOUT_INBOX = SCOPES.filter((each) => each !== SEARCH_SCOPE.INBOX);
 
 /** The screen each row found opens, by the row's id: a task's Overview, an item's thread, an agent's page, each in its own tab. */
 function foundRoutes(found: SearchFound): ReadonlyMap<string, string | undefined> {
@@ -239,9 +243,12 @@ const SEARCH_IDLE = null;
  * every listing on each delivery with nothing typed cost every tap in the
  * app.
  */
-function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => void) {
+function useSearchScreen({ query, scope: chosen, setScope }: SearchWords, leave?: () => void) {
   const router = useRouter();
   const found = useSearchFound(query);
+  const inboxShown = useInboxShown();
+  // Note that the Inbox's scope, chosen before the member turned the Inbox off, stands as All, since no scope offers it then.
+  const scope = inboxShown || chosen !== SEARCH_SCOPE.INBOX ? chosen : SEARCH_SCOPE.ALL;
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
   const doors = useTaskRowDoors(found.listing.workspace?.id);
   const { listing, status, deletion } = useListingAsks(found.listing, doors);
@@ -266,7 +273,7 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
   const none = shown.tasks.length + shown.inbox.length + shown.agents.length === 0;
   const reading = scopeReading(found, scope);
 
-  const scopes = SCOPES.map((each) => ({
+  const scopes = (inboxShown ? SCOPES : SCOPES_WITHOUT_INBOX).map((each) => ({
     label: SEARCH_SCOPE_TITLE[each],
     selected: each === scope,
     onPress: () => setScope(each),

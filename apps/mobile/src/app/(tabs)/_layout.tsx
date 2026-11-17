@@ -1,4 +1,4 @@
-// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; a sidebar the system draws in a regular window, and hidden in a compact window over a conversation or while the Inbox stands in Select mode.
+// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, on an iPhone, the prominent round + that opens New task, and over it the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window, and hidden in a compact window over a conversation or while the Inbox stands in Select mode.
 
 import {
   IOS_TAB,
@@ -17,6 +17,7 @@ import { usePathname, useRouter, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { useEffect, useState } from "react";
 import { useInboxChoosingOn } from "../../inbox/inbox-choosing.js";
+import { useInboxShown, useKeepInboxShown } from "../../inbox/inbox-shown.js";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
 import { PLUS_TAB } from "../../screens/app-sidebar.js";
@@ -99,9 +100,20 @@ function useInboxListStands(segments: readonly string[]): boolean {
 // Each tab carries an id of its own (`inbox-tab`, `tasks-tab`, `search-tab`),
 // since a list's title, a back button, and a split view's search field
 // share their names, and a flow taps a tab by it.
+//
+// The Inbox stands only while the member keeps it on (the account's `inbox`
+// preference), since with it off their agents post no threads, so the bar
+// and a regular window's sidebar hold no Inbox and no count, and the router
+// stands Tasks, the first tab left, wherever a route named the Inbox's own
+// stack. Note that the bar standing another set of tabs mounts every tab
+// again, as a + coming or going would, which happens only as the choice
+// itself changes, since the host's first document, read before anything is
+// drawn, carries it.
 export default function TabsLayout() {
   const colors = useColors();
   const router = useRouter();
+  const inboxShown = useInboxShown();
+  useKeepInboxShown(inboxShown);
   const waiting = useInboxBadge();
   // The members of the workspace the phone works in, whose pictures every face reads, followed once for every tab.
   useMemberPicturesFollow();
@@ -133,7 +145,12 @@ export default function TabsLayout() {
           <CallWayBack shown={shownAgent} />
         </NativeTabs.BottomAccessory>
       ) : null}
-      <NativeTabs.Trigger name="(inbox)" accessibilityLabel="Inbox" testID="inbox-tab">
+      <NativeTabs.Trigger
+        name="(inbox)"
+        hidden={!inboxShown}
+        accessibilityLabel="Inbox"
+        testID="inbox-tab"
+      >
         <NativeTabs.Trigger.Icon xcasset={GLYPH.INBOX} />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Inbox</NativeTabs.Trigger.Label>
         {/* Note that the badge is left out at none rather than marked hidden, since NativeTabs draws a badge that holds a value whatever its hidden says. */}
