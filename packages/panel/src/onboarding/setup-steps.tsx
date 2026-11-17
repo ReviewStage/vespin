@@ -199,7 +199,8 @@ interface SetupStepsProps {
 
 /** The step setup stands at. */
 function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.Element {
-  const { mutate: updateSetting } = useMutation(actMutation(ACT_KIND.SETTING_UPDATE));
+  const placing = useMutation(actMutation(ACT_KIND.SETTING_UPDATE));
+  const { mutate: updateSetting } = placing;
   const { mutateAsync: signOut } = useMutation(actMutation(ACT_KIND.ACCOUNT_SIGN_OUT));
 
   // Note that a refused or failed delete is logged on the mutation rather than the call, because Finish has let the app in and setup is gone by the time it answers.
@@ -214,7 +215,14 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
 
   const [, , keepFinished] = useKept(SETUP_FINISHED, []);
   const stored = useQuery({ ...appStateQuery, select: selectAppSettingsView }).data?.setupPlace;
-  const kept = setupPlaceFrom(stored);
+
+  // Note that the place a move asked for is drawn while it is out, as the docs' Optimistic Updates guide draws a mutation's `variables`, so a step's press never stands on the step it left until the account's place comes back.
+  const asked =
+    placing.isPending && placing.variables.field === APP_SETTING_SCHEMA.setupPlace.field
+      ? setupPlaceFrom(placing.variables.value)
+      : undefined;
+
+  const kept = asked ?? setupPlaceFrom(stored);
 
   const workspacesFailed =
     useQuery({ ...appStateQuery, select: selectWorkspacesFailed }).data === true;

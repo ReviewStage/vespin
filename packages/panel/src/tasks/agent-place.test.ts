@@ -233,7 +233,7 @@ test("where a move is offered, Agent runs in opens the places, Cloud wearing its
   assert.equal(moved.length, 1);
 });
 
-test("the Default machine row names the agent's default with its dot, offline as such, a teammate's face before a machine of theirs, and a pick of another machine sets it; a local agent's chip opens the same rows", async () => {
+test("the Default machine row names the agent's default with its dot, offline as such, a teammate's face before a machine of theirs, and a pick of another machine sets it, named from the press while the service has yet to answer; a local agent's chip opens the same rows", async () => {
   const sent: unknown[] = [];
   const owner = { userId: "user-ada", name: "Ada Lovelace" };
 
@@ -241,7 +241,8 @@ test("the Default machine row names the agent's default with its dot, offline as
     [AGENT_ACT_KIND.AGENTS_SET_DEFAULT_MACHINE]: (payload) => {
       sent.push(payload);
 
-      return Promise.resolve({});
+      // Note that the service never answers, so the pick is still out when the chip opens again.
+      return new Promise(() => undefined);
     },
   });
 
@@ -310,7 +311,7 @@ test("the Default machine row names the agent's default with its dot, offline as
   act(() => placeChip().click());
   assert.deepEqual(optionsOf("Where this agent works"), [
     "Agent runs inMini",
-    "Terminal and computer useALaptop",
+    "Terminal and computer useAStudio",
   ]);
 });
 
