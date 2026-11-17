@@ -1,0 +1,55 @@
+---
+title: "Integrations"
+description: "Connect your accounts at other services so your agents can use their tools"
+---
+
+An integration connects one of your accounts at another service, such as Linear or Notion, to your agents as an MCP server. Your agents then use that service's tools as you, with what your account there can see and do.
+
+## Connect an account
+
+Integrations belong to your Vespin account, not to a workspace. In **Settings › Integrations**, press **Connect** on a row and sign in to the provider in your browser. A row moves to **Connected** once the provider's server answers with its tools. If a sign-in expires, use **Reconnect**.
+
+The **GitHub** row uses the GitHub you sign in to Vespin with, and gives agents GitHub's tools as you. A workspace's repositories come from the GitHub connected in **Settings › Workspace** instead.
+
+The **Slack** row also tells Vespin's Slack bot who you are. See [Slack](/slack).
+
+## Providers
+
+Some providers aren't offered to every account. A provider not offered to you has no row.
+
+| Provider | What agents get |
+| --- | --- |
+| Executor | The apps, APIs, and skills you set up in Executor |
+| GitHub | Issues, pull requests, and code, as you |
+| Gmail | Read mail and write drafts. Agents can't send mail. |
+| Google Calendar | Events, invitations, and free time |
+| Google Drive | Docs, sheets, and files |
+| Granola | Meeting notes and transcripts |
+| Linear | Issues, projects, and cycles |
+| Mercury | Accounts, transactions, and payments. An approver confirms payments in Mercury. |
+| Neon | Postgres projects, branches, and SQL |
+| Notion | Pages, databases, and comments |
+| PostHog | Analytics, feature flags, and experiments |
+| Resend | Send email and read delivery logs |
+| Sentry | Errors, traces, and releases |
+| Slack | Messages, channels, and threads |
+| Stripe | Payments, customers, and subscriptions. You approve refunds and money movements in Stripe. |
+| Supabase | Postgres, auth, storage, and edge functions |
+| Vercel | Deployments, logs, and domains |
+| Y Combinator | Bookface companies, founders, and investors |
+
+## More than one account
+
+Where a provider takes more than one account, such as two Notion workspaces, use **Add another account** in its row's ⋯ menu. Each account gets its own row and reaches your agents as its own server. Once you hold more than one, **Rename** in the ⋯ menu names an account. When the agent doesn't know which account you mean, it asks before it writes.
+
+## What agents get
+
+Every agent you start gets every tool of each integration you connected, including tools that write. Automation runs get them too, since they run as you, and an automation's form has its own **MCP servers** field. To turn an integration off for one agent, open **MCP servers** from the agent box's + menu. Mention a server with `@` to hand it to that agent's next turn only, even while it's off.
+
+Anything a tool answers, including a credential the provider returns, reaches the agent's model and its transcript.
+
+## Disconnect
+
+Use **Disconnect** in a row's ⋯ menu. It asks first, then revokes the grant at the provider, and agents lose the account at their next call. Your other accounts at that provider stay connected. On the GitHub row, **Disconnect** unlinks the GitHub you sign in with.
+
+From a terminal, `vespin integrations` lists, connects, renames, and disconnects your accounts, and lists each one's tools. See [Workspace](/cli/workspace).
