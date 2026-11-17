@@ -7,6 +7,8 @@
  * it and a command started as that user, a short command, a PTY, a network
  * policy, a snapshot, its tags and its public ports — is asked here, of the
  * SDK at the version the catalog pins, which loads in a function's bundle.
+ * The project's sessions, which the SDK lists only a sandbox at a time, are
+ * listed of Vercel's REST API itself under the same token (`SESSIONS_API`).
  * The SDK tries a 429, a 5xx, and a failure to connect again before it answers (a
  * 429 waits out Vercel's `Retry-After` up to 20 seconds), so nothing here
  * tries again.
@@ -82,10 +84,13 @@ import {
   SandboxGone,
   SandboxNameTaken,
   type SandboxRoute,
+  type SandboxSession,
   type SandboxStatus,
   type SandboxTarget,
   SandboxUnavailable,
   type SandboxUser,
+  SESSION_END,
+  type SessionEnd,
   SnapshotGone,
   UP_STATUSES,
 } from "../vocabulary.js";
@@ -193,6 +198,30 @@ const SANDBOX_API = {
   EXIT_WAIT: Duration.seconds(2),
 } as const;
 
+/**
+ * The project's sessions as Vercel's REST API lists them, newest first, a
+ * page at a time. Note that the list is asked of the API itself, because
+ * `@vercel/sandbox` lists only one sandbox's sessions and does not export
+ * the client beneath it; the call goes under the same token and `fetch` as
+ * the SDK's, though without the SDK's own retries, which a caller reading
+ * again on a later day stands in for.
+ */
+const SESSIONS_API = {
+  /** Vercel's API, and the list's path under it, as the SDK's own client joins them. */
+  BASE: "https://vercel.com/api",
+  PATH: "/v2/sandboxes/sessions",
+  /** The widest page the list takes, as `SANDBOX_API.PAGE` is for sandboxes. */
+  PAGE: 50,
+  ORDER: "desc",
+} as const;
+
+/** How a session Vercel lists ended, by its status; one still up, or on its way, ended in none. */
+const SESSION_END_OF_VERCEL: ReadonlyMap<string, SessionEnd> = new Map([
+  ["stopped", SESSION_END.STOPPED],
+  ["failed", SESSION_END.FAILED],
+  ["aborted", SESSION_END.ABORTED],
+]);
+
 /** The span each call is traced under, named for the call alone, never for what it was asked. */
 const SANDBOX_CALL_SPAN = {
   [SANDBOX_CALL.CREATE]: "web/sandboxCreate",
@@ -206,6 +235,7 @@ const SANDBOX_CALL_SPAN = {
   [SANDBOX_CALL.GET]: "web/sandboxGet",
   [SANDBOX_CALL.DRIVE]: "web/sandboxDrive",
   [SANDBOX_CALL.LIST]: "web/sandboxList",
+  [SANDBOX_CALL.SESSIONS]: "web/sandboxSessions",
   [SANDBOX_CALL.DELETE]: "web/sandboxDelete",
   [SANDBOX_CALL.STOP]: "web/sandboxStop",
   [SANDBOX_CALL.RUN]: "web/sandboxSession",
@@ -302,6 +332,31 @@ const ErrorAnswerSchema = Schema.Struct({
   }),
 });
 
+/** A page of the project's sessions as Vercel lists it: the figures a session is billed on, and the cursor to the next page, null on the last. */
+const SessionPageSchema = Schema.Struct({
+  sessions: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      sourceSandboxName: Schema.optional(Schema.String),
+      status: Schema.String,
+      region: Schema.String,
+      vcpus: Schema.Number,
+      memory: Schema.Number,
+      createdAt: Schema.Number,
+      startedAt: Schema.optional(Schema.Number),
+      stoppedAt: Schema.optional(Schema.Number),
+      duration: Schema.optional(Schema.Number),
+      activeCpuDurationMs: Schema.optional(Schema.Number),
+      networkTransfer: Schema.optional(
+        Schema.Struct({ ingress: Schema.Number, egress: Schema.Number }),
+      ),
+    }),
+  ),
+  pagination: Schema.Struct({ next: Schema.NullOr(Schema.String) }),
+});
+
+type ListedSession = (typeof SessionPageSchema.Type)["sessions"][number];
+
 /** Where a sandbox's own PTY server is served: Vercel's sandbox domain, as it addresses a sandbox's routes, on a secure socket. */
 const SANDBOX_SHELL_ADDRESS = {
   HOST_SUFFIX: ".vercel.run",
@@ -325,6 +380,7 @@ function isSandboxShellAddress(address: string): boolean {
 
 const readClaims = readEither(OidcClaimsSchema, { excess: EXCESS_KEYS.DROP });
 const readErrorAnswer = readEither(ErrorAnswerSchema, { excess: EXCESS_KEYS.DROP });
+const readSessionPage = readEither(SessionPageSchema, { excess: EXCESS_KEYS.DROP });
 
 /** The most characters a failure's detail keeps, so one log line stays one line's worth. */
 const DETAIL_CHARS = 300;
@@ -854,6 +910,31 @@ function commandParams(ask: CommandAsk) {
   };
 }
 
+/** A listed session as the package reads it. */
+function sessionOfListed(listed: ListedSession): SandboxSession {
+  return {
+    id: listed.id,
+    sandboxName: listed.sourceSandboxName,
+    ended: SESSION_END_OF_VERCEL.get(listed.status),
+    status: listed.status,
+    region: listed.region,
+    vcpus: listed.vcpus,
+    memoryMb: listed.memory,
+    createdAt: listed.createdAt,
+    startedAt: listed.startedAt,
+    stoppedAt: listed.stoppedAt,
+    durationMs: listed.duration,
+    activeCpuMs: listed.activeCpuDurationMs,
+    networkTransfer:
+      listed.networkTransfer === undefined
+        ? undefined
+        : {
+            ingressBytes: listed.networkTransfer.ingress,
+            egressBytes: listed.networkTransfer.egress,
+          },
+  };
+}
+
 /** `Sandbox` over the SDK, under the token `SandboxToken` reads afresh for each call and the `fetch` `SandboxFetch` names, its PTY reached over the HTTP client given. */
 function vercelSandbox(
   readToken: OidcTokenRead,
@@ -954,8 +1035,60 @@ function vercelSandbox(
           .toSorted((first, second) => (second.createdAt ?? 0) - (first.createdAt ?? 0)),
     );
 
+  /** One page of the project's sessions, newest first, from the cursor given or the first. */
+  const sessionPage = (cursor: string | undefined) =>
+    Effect.flatMap(credentials(SANDBOX_CALL.SESSIONS), (under) =>
+      Effect.flatMap(
+        sdkCall(SANDBOX_CALL.SESSIONS, async (signal) => {
+          const url = new URL(`${SESSIONS_API.BASE}${SESSIONS_API.PATH}`);
+          url.searchParams.set("project", under.projectId);
+          url.searchParams.set("teamId", under.teamId);
+          url.searchParams.set("limit", String(SESSIONS_API.PAGE));
+          url.searchParams.set("sortOrder", SESSIONS_API.ORDER);
+
+          if (cursor !== undefined) url.searchParams.set("cursor", cursor);
+
+          const response = await under.fetch(url.toString(), {
+            headers: { authorization: `Bearer ${under.token}` },
+            signal,
+          });
+
+          return { status: response.status, text: await response.text() };
+        }),
+        (answered) => {
+          const page = readSessionPage(unparsedWire(valueFromJsonText(answered.text)));
+
+          return succeeded(answered.status) && Result.isSuccess(page)
+            ? Effect.succeed(page.success)
+            : Effect.fail(refused(SANDBOX_CALL.SESSIONS, answered));
+        },
+      ),
+    );
+
+  /**
+   * The sessions created at or after `since`, read a page at a time until a
+   * page reaches past it: the list runs newest first, so a page naming one
+   * older than `since` is the last that names any newer.
+   */
+  const sessionsSince = (since: number) =>
+    Effect.gen(function* () {
+      const found: SandboxSession[] = [];
+      let cursor: string | undefined;
+
+      do {
+        const page = yield* sessionPage(cursor);
+        const newer = page.sessions.filter((listed) => listed.createdAt >= since);
+        found.push(...newer.map(sessionOfListed));
+        cursor =
+          newer.length === page.sessions.length ? (page.pagination.next ?? undefined) : undefined;
+      } while (cursor !== undefined);
+
+      return found;
+    });
+
   return {
     listTagged: (tag, value) => said(listTagged(tag, value)),
+    sessionsSince: (since) => said(sessionsSince(since)),
     get: (name) =>
       said(
         found(SANDBOX_CALL.GET, name).pipe(

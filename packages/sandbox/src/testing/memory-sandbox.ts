@@ -33,6 +33,7 @@ import {
   SandboxGone,
   SandboxNameTaken,
   type SandboxRoute,
+  type SandboxSession,
   type SandboxSource,
   type SandboxStatus,
   type SandboxTarget,
@@ -132,6 +133,8 @@ export interface MemorySandboxState {
   readonly interactive: { readonly name: string; readonly running: string }[];
   /** Every running run a touch reached, in order. */
   readonly touched: { readonly name: string; readonly running: string }[];
+  /** The sessions the provider bills, which a suite puts here for `sessionsSince` to list. */
+  readonly sessions: SandboxSession[];
 }
 
 /** A memory `Sandbox`: its layer, its state, and how a suite moves a command's exit. */
@@ -195,6 +198,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
     resumed: [],
     interactive: [],
     touched: [],
+    sessions: [],
   };
 
   const nextRun = counter("run_");
@@ -374,6 +378,16 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
               record.tags[tag] === value ? [{ ...listedOf(record), routes: undefined }] : [],
             )
             .toSorted((first, second) => (second.createdAt ?? 0) - (first.createdAt ?? 0)),
+        ),
+      ),
+    sessionsSince: (since) =>
+      scripted(
+        SANDBOX_CALL.SESSIONS,
+        "",
+        Effect.sync(() =>
+          state.sessions
+            .filter((session) => session.createdAt >= since)
+            .toSorted((first, second) => second.createdAt - first.createdAt),
         ),
       ),
     get: (name) =>

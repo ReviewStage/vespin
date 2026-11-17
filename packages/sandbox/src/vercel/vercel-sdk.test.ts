@@ -1,5 +1,5 @@
 /**
- * vercel-sdk.test.ts -- `Sandbox` as Vercel answers it, against a scripted fake of Vercel behind the SDK's `fetch`: what a failure says (the call, Vercel's status and error or the cause's, every token-shaped run redacted) and which of the package's failures Vercel's answer is; and what the adapter decides beside the SDK: a get-or-create hands a sandbox it created to its setup, and meets its name taken with the sandbox holding it, a create refuses it as taken, a sandbox or a snapshot already gone reads as gone, a delete wakes nothing, and a touch lengthens a running session alone, by the rule `TOUCH` sets.
+ * vercel-sdk.test.ts -- `Sandbox` as Vercel answers it, against a scripted fake of Vercel behind the SDK's `fetch`: what a failure says (the call, Vercel's status and error or the cause's, every token-shaped run redacted) and which of the package's failures Vercel's answer is; and what the adapter decides beside the SDK: a get-or-create hands a sandbox it created to its setup, and meets its name taken with the sandbox holding it, a create refuses it as taken, a sandbox or a snapshot already gone reads as gone, a delete wakes nothing, a touch lengthens a running session alone, by the rule `TOUCH` sets, and the project's sessions are read back only as far as asked.
  */
 
 import assert from "node:assert/strict";
@@ -54,6 +54,7 @@ const CALLS: readonly {
   { call: SANDBOX_CALL.TAGS, ask: (api) => api.updateTags(NAME, { sessionId: "s" }) },
   { call: SANDBOX_CALL.GET, ask: (api) => api.get(NAME) },
   { call: SANDBOX_CALL.LIST, ask: (api) => api.listTagged("sessionId", "session_fixture") },
+  { call: SANDBOX_CALL.SESSIONS, ask: (api) => api.sessionsSince(0) },
 ];
 
 /** An error body Vercel answers a refused call with. */
@@ -75,6 +76,15 @@ function apiOver(respond: Responder, readToken?: () => Promise<string>) {
 /** The failure's line, where it is one that carries one. */
 function detailOf(failure: SandboxError): string | undefined {
   return Predicate.isTagged(failure, "SandboxUnavailable") ? failure.detail : undefined;
+}
+
+/** The figures Vercel lists of a session beside its size and place, some only once it ended. */
+interface ListedFigures {
+  readonly startedAt?: number;
+  readonly stoppedAt?: number;
+  readonly duration?: number;
+  readonly activeCpuDurationMs?: number;
+  readonly networkTransfer?: { readonly ingress: number; readonly egress: number };
 }
 
 const refusedWith = (status: number) => () => Response.json({ error: REFUSAL }, { status });
@@ -470,5 +480,101 @@ it.effect(
       yield* touchedAt(minutes(24 * 60 + 20));
 
       assert.deepEqual(extensions, [minutes(2), minutes(24 * 60 - 7)]);
+    }),
+);
+
+it.effect(
+  "the project's sessions are read a page at a time, newest first, until a page reaches past the time asked",
+  () =>
+    Effect.gen(function* () {
+      const hours = (count: number) => Duration.toMillis(Duration.hours(count));
+      const now = CREATED_AT + hours(72);
+      const asked: (string | null)[] = [];
+
+      /** A session as Vercel lists it, created `ago` hours before now, with the figures it answers once ended. */
+      const listed = (id: string, status: string, ago: number, more: ListedFigures = {}) => ({
+        id,
+        sourceSandboxName: `agent-sandbox-${id}`,
+        status,
+        region: "iad1",
+        vcpus: 4,
+        memory: 8192,
+        timeout: hours(1),
+        requestedAt: now - hours(ago),
+        createdAt: now - hours(ago),
+        cwd: "/vercel",
+        updatedAt: now - hours(ago),
+        ...more,
+      });
+
+      const pages = new Map([
+        [
+          "first",
+          {
+            sessions: [
+              listed("sbx_up", "running", 1, { startedAt: now - hours(1) }),
+              listed("sbx_done", "stopped", 30, {
+                startedAt: now - hours(30),
+                stoppedAt: now - hours(30) + 18_277,
+                duration: 18_277,
+                activeCpuDurationMs: 21_780,
+                networkTransfer: { ingress: 41_246_989, egress: 1_288_336 },
+              }),
+            ],
+            pagination: { count: 2, next: "cursor-2" },
+          },
+        ],
+        [
+          "cursor-2",
+          {
+            sessions: [
+              listed("sbx_failed", "failed", 47),
+              listed("sbx_old", "stopped", 49, { duration: 60_000 }),
+            ],
+            pagination: { count: 2, next: "cursor-3" },
+          },
+        ],
+      ]);
+
+      const api = yield* apiOver((url) => {
+        const query = new URL(url).searchParams;
+        asked.push(query.get("cursor"));
+        const limit = Number(query.get("limit"));
+
+        if (query.get("project") !== "prj_fixture" || limit < 1 || limit > 50) {
+          return refusedWith(400)();
+        }
+
+        const page = pages.get(query.get("cursor") ?? "first");
+
+        return page === undefined ? refusedWith(500)() : Response.json(page);
+      });
+
+      const sessions = yield* api.sessionsSince(now - hours(48));
+
+      assert.deepEqual(asked, [null, "cursor-2"]);
+      assert.deepEqual(
+        sessions.map((session) => [session.id, session.ended]),
+        [
+          ["sbx_up", undefined],
+          ["sbx_done", "stopped"],
+          ["sbx_failed", "failed"],
+        ],
+      );
+      assert.deepEqual(sessions[1], {
+        id: "sbx_done",
+        sandboxName: "agent-sandbox-sbx_done",
+        ended: "stopped",
+        status: "stopped",
+        region: "iad1",
+        vcpus: 4,
+        memoryMb: 8192,
+        createdAt: now - hours(30),
+        startedAt: now - hours(30),
+        stoppedAt: now - hours(30) + 18_277,
+        durationMs: 18_277,
+        activeCpuMs: 21_780,
+        networkTransfer: { ingressBytes: 41_246_989, egressBytes: 1_288_336 },
+      });
     }),
 );

@@ -167,6 +167,10 @@
     "dest": "/api/default.js?route=maintenance/provider-keys-rewrap"
   },
   {
+    "src": "/api/maintenance/usage-ledger",
+    "dest": "/api/default.js?route=maintenance/usage-ledger"
+  },
+  {
     "src": "/api/maintenance/workspace-drives",
     "dest": "/api/default.js?route=maintenance/workspace-drives"
   },

@@ -2778,6 +2778,19 @@ repository no agent of the workspace started in for 30 days
 (`src/agents/workspace-drive-builds.ts`) prunes that drive, and comes again
 shortly where a fill holds it.
 
+Once a day, at 06:00 UTC, the `usage-ledger` schedule calls
+`apps/web/server/routes/maintenance/usage-ledger.ts` under the same
+`CRON_SECRET`. It reads every Vercel sandbox session the project created in
+the last 48 hours, newest first, and charges each one that ended (stopped,
+failed, or aborted) to the workspace whose `sandbox_owner` row names its
+sandbox, at Vercel's own Pro rates for its region
+(`src/billing/sandbox-session-charges.ts`, `src/billing/sandbox-session-price.ts`).
+The ledger (`usage_charge`) takes an item once by its kind and source id, so a
+run reads again what the last one read and keeps no cursor, and a missed day
+is read over by the next. A session no owner row names is logged and passed by.
+It always runs, whether or not billing is live. Each daily job's endpoint is
+`src/maintenance/scheduled-call-app.ts` over its own path and job.
+
 The sweep ends what no request will. `MaintenanceSweeps`
 (`src/maintenance/maintenance-sweep.ts`) runs its sweeps in turn and
 answers what each did; one that fails is logged and answered as failed while

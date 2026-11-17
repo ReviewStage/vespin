@@ -44,6 +44,7 @@ export const SANDBOX_CALL = {
   GET: "get",
   DRIVE: "drive",
   LIST: "list",
+  SESSIONS: "sessions",
   DELETE: "delete",
   STOP: "stop",
   RUN: "run",
@@ -177,6 +178,49 @@ export interface ListedSandbox {
   readonly expiresAt?: number | undefined;
   /** The public routes it serves; a list names none, only a lookup by name. */
   readonly routes?: readonly SandboxRoute[] | undefined;
+}
+
+/**
+ * How a sandbox's session ended: stopped as asked or by its timeout, failed,
+ * or aborted before it ran. A session not yet ended has none.
+ */
+export const SESSION_END = {
+  STOPPED: "stopped",
+  FAILED: "failed",
+  ABORTED: "aborted",
+} as const;
+
+export type SessionEnd = (typeof SESSION_END)[keyof typeof SESSION_END];
+
+/**
+ * One session of a sandbox, as the provider bills it: the run, the sandbox
+ * it ran, how it ended, where it ran and on what, and what it used. Times
+ * are epoch milliseconds and memory is in megabytes. The figures a session
+ * is billed on are answered once it ends, and some only then: the CPU time
+ * it used is answered for a session that stopped, and none for one that
+ * failed or was aborted.
+ */
+export interface SandboxSession {
+  readonly id: string;
+  /** The sandbox it ran, by name; none where the provider names none. */
+  readonly sandboxName: string | undefined;
+  /** How it ended; none while it is up or on its way up or down. */
+  readonly ended: SessionEnd | undefined;
+  /** The provider's word for where it stands, as it said it. */
+  readonly status: string;
+  readonly region: string;
+  readonly vcpus: number;
+  readonly memoryMb: number;
+  readonly createdAt: number;
+  readonly startedAt: number | undefined;
+  readonly stoppedAt: number | undefined;
+  /** How long it ran, from its start to its stop. */
+  readonly durationMs: number | undefined;
+  /** The CPU time it used, summed across its vCPUs. */
+  readonly activeCpuMs: number | undefined;
+  readonly networkTransfer:
+    | { readonly ingressBytes: number; readonly egressBytes: number }
+    | undefined;
 }
 
 /** A sandbox a create or a resume answered: it opens ready, so it always names the run it is up in. */
