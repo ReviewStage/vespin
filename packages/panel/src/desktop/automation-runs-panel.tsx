@@ -120,7 +120,7 @@ function subjectLink(run: AutomationRunSummary): { url: string; label: string } 
   return { url: firing.subject.url, label: `Open in ${TRIGGER_CATALOG[firing.provider].name}` };
 }
 
-/** One run's row. Under a finger it draws no ⋯, its menu a long press away. A row among many automations' runs names its automation on a line of its own. */
+/** One run's row. Under a finger it draws no ⋯, its menu a long press away. A row among many automations' runs leads its line with its automation's name. */
 export function RunRow({
   run,
   keyHolder,

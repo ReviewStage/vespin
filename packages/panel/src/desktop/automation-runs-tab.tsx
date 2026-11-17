@@ -22,11 +22,11 @@ import type { WorkspaceRunsRead } from "./use-automation-runs.js";
  * automation-runs-tab.tsx -- the Automations page's Runs tab: every run of the listed workspace's automations, newest first, each opening its agent.
  *
  * An automation's agent has no place of its own in the sidebar, so this
- * tab is where every one of them is found: the runs of every automation the reader may read, archived
- * agents among them, since archiving takes a run out of the sidebar and
- * never out of reach. Each run is the row an automation's own runs panel
- * draws (`automation-runs-panel.tsx`), its automation named on a line of
- * its own, and the tab narrows them to the runs still working or the ones
+ * tab is where every one of them is found: the runs of every automation the
+ * reader may read, archived agents among them, since archiving takes a run
+ * out of the sidebar and never out of reach. Each run is the row an
+ * automation's own runs panel draws (`automation-runs-panel.tsx`), its line
+ * led by its automation's name, and the tab narrows them to the runs still working or the ones
  * that failed. A run with nothing of its own to open opens its automation,
  * as the automation's row in the list does. A run that starts slides in at
  * the top.
