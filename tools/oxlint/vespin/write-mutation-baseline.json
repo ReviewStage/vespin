@@ -1,0 +1,18 @@
+{
+  "packages/panel/src/admin/app-admin-doors.tsx": 1,
+  "packages/panel/src/tasks/agent-forward.tsx": 5,
+  "packages/panel/src/tasks/agent-machines.tsx": 1,
+  "packages/panel/src/tasks/browser-live-port.ts": 2,
+  "packages/panel/src/tasks/follow-offer-dock.tsx": 1,
+  "packages/panel/src/tasks/machine-refusal-card.tsx": 1,
+  "packages/panel/src/tasks/pull-request-source.ts": 2,
+  "packages/panel/src/tasks/run-actions-button.tsx": 5,
+  "packages/panel/src/tasks/suggestion-send.ts": 1,
+  "packages/panel/src/tasks/task-delete.ts": 1,
+  "packages/panel/src/tasks/use-agent-transcript.ts": 1,
+  "packages/panel/src/tasks/use-tasks-tab.ts": 1,
+  "packages/panel/src/tasks/use-terminal-session.ts": 10,
+  "packages/panel/src/tasks/use-warm-agent.ts": 2,
+  "packages/panel/src/use-active-beat.ts": 1,
+  "packages/panel/src/voice-call.tsx": 1
+}
