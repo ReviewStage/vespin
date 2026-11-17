@@ -221,12 +221,17 @@ const SESSIONS_API = {
  * Vercel answers a stop at once and stops the session after, which took up
  * to 21 seconds of 38 stops read on Nov 17, 2026 (2.7 at the median), and
  * only a stopped session's figures are whole. Note that the wait is held to
- * about ten seconds, because a deleted workspace's deletes each run under 15
+ * ten seconds, slow reads and all, because a deleted workspace's deletes each run under 15
  * (`@repo/service`'s `ARCHIVE_DELETE.TIMEOUT`), and one cut off there leaves
  * its sandbox standing; a session still not stopped by the last read is left
  * uncharged.
  */
-const STOP_WAIT = { POLL: Duration.seconds(1), TRIES: 10 } as const;
+const STOP_WAIT = {
+  POLL: Duration.seconds(1),
+  TRIES: 10,
+  /** How long the stop and the reads may take together, a slow read among them, before the delete goes on with none. */
+  DEADLINE: Duration.seconds(10),
+} as const;
 
 /** How a session Vercel lists ended, by its status; one still up, or on its way, ended in none. */
 const SESSION_END_OF_VERCEL: ReadonlyMap<string, SessionEnd> = new Map([
@@ -784,13 +789,14 @@ async function replacedOnOwnDrive(
   const [standing, own, read] = await Promise.all([
     SdkSandbox.get({ ...under, name, resume: false, signal }).catch(absentIfNotFound),
     Drive.get({ ...under, name: ownDriveName(name), signal }).catch(absentIfNotFound),
-    captured(name, under, signal),
+    sessionsRead(name, under, signal),
   ]);
 
   if (standing === undefined || own === undefined) return false;
 
   if (STATUS_OF_VERCEL.get(standing.status) !== SANDBOX_STATUS.STOPPED) return false;
-  captures.push(read);
+  // Note that a read that saw a session still stopping, beside a lookup that saw it stopped, is read again, so its figures are not lost to the race.
+  captures.push(unsettled(read) ? await captured(name, under, signal) : endedOf(read));
   await standing.delete({ deleteOrphanSnapshots: true, signal }).catch(absentIfNotFound);
 
   return true;
@@ -1019,12 +1025,29 @@ type DeleteCapture =
   | { readonly name: string; readonly sessions: readonly SandboxSession[] }
   | { readonly name: string; readonly unread: Refused };
 
-/** The named sandbox's ended sessions, read before its delete; never throws, so a delete goes on whatever the read answered. */
-function captured(name: string, under: Under, signal: AbortSignal): Promise<DeleteCapture> {
+/** The named sandbox's sessions, ended or not, read before its delete; never throws, so a delete goes on whatever the read answered. */
+function sessionsRead(name: string, under: Under, signal: AbortSignal): Promise<DeleteCapture> {
   return sandboxSessions(name, under, signal).then(
-    (sessions) => ({ name, sessions: sessions.filter((each) => each.ended !== undefined) }),
+    (sessions) => ({ name, sessions }),
     (cause: unknown) => ({ name, unread: sdkFailure(SANDBOX_CALL.SESSIONS, cause) }),
   );
+}
+
+/** Whether a read saw a session still up or on its way down, whose figures are not yet whole. */
+function unsettled(read: DeleteCapture): boolean {
+  return "sessions" in read && read.sessions.some((each) => each.ended === undefined);
+}
+
+/** A read's ended sessions alone, what a delete hands on. */
+function endedOf(read: DeleteCapture): DeleteCapture {
+  return "unread" in read
+    ? read
+    : { name: read.name, sessions: read.sessions.filter((each) => each.ended !== undefined) };
+}
+
+/** The named sandbox's ended sessions, read before its delete. */
+async function captured(name: string, under: Under, signal: AbortSignal): Promise<DeleteCapture> {
+  return endedOf(await sessionsRead(name, under, signal));
 }
 
 /**
@@ -1242,7 +1265,21 @@ function vercelSandbox(
       );
 
       return { name, sessions: sessions.filter((each) => each.ended !== undefined) };
-    }).pipe(Effect.catch((unread) => Effect.succeed<DeleteCapture>({ name, unread })));
+    }).pipe(
+      Effect.timeout(STOP_WAIT.DEADLINE),
+      Effect.catch((failure) =>
+        Effect.succeed<DeleteCapture>({
+          name,
+          unread:
+            failure instanceof Refused
+              ? failure
+              : new Refused({
+                  call: SANDBOX_CALL.SESSIONS,
+                  detail: "the read outlasted its deadline",
+                }),
+        }),
+      ),
+    );
 
   return {
     listTagged: (tag, value) => said(listTagged(tag, value)),
