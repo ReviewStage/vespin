@@ -197,8 +197,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Inline titles, no large titles.** A tab's root shows its name small and
   inline. A split view's list column beside the app sidebar stands its title
   bold at its bar's leading edge (`inlineLarge`), as Mail names the mailbox
-  over its list, and its search is one button at the window's trailing edge,
-  as Mail's is; a list standing first, as a portrait iPad's, keeps its title
+  over its list, and its search is the system's field under that title, in
+  its own column's bar (`navigationBarDrawer`), never a lone button over the
+  detail, whose bar stays the page's alone; a list standing first, as a portrait iPad's, keeps its title
   small and inline, since its bar also holds the switcher, ⋯ and the
   sidebar button. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading
