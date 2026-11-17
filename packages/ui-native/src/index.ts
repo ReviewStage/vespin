@@ -90,8 +90,6 @@ export { Composer, ComposerFoot, type ComposerMenu } from "./composer.js";
 export {
   type AttachedPicture,
   AttachedPictures,
-  type QueuedLine,
-  QueuedLines,
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
@@ -232,6 +230,8 @@ export {
   PullRequestHead,
   WriteNoteRow,
 } from "./pull-request-page.js";
+
+export { type QueuedLine, QueuedLines } from "./queued-lines.js";
 
 export { RemindPickSheet } from "./remind-sheet.js";
 
