@@ -1,4 +1,14 @@
-import { index, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { SLACK_THREAD_ORIGIN, type SlackThreadOrigin } from "../storage-vocabulary.js";
 import { timestamptz } from "./_helpers.js";
 import { agentTable } from "./agent.js";
@@ -31,23 +41,61 @@ import { organization, user } from "./auth.js";
  * An owner or admin may name a default repository for the workspace's Slack
  * starts, and one for each channel the bot is in; a channel's leaves with
  * its installation, and when the bot leaves the channel.
+ *
+ * Once the bot runs on our own Slack app, installed per workspace, the row
+ * also holds the bot token Slack granted that workspace, sealed by
+ * `models/provider-key-seal.ts` under the provider keys' ring with purposes
+ * of its own and the workspace and team bound beside them, with the bot's
+ * own Slack user id and id, the scopes it was granted, and the app that
+ * granted it. Those seven are set together or none is: none on a row linked
+ * through the Vercel connector, and none once Slack revoked the token. The
+ * Enterprise Grid org an install was made in, and whether it was made across
+ * the org, are kept beside them as Bolt's installation keeps them. The token leaves with the row.
  */
-export const slackInstallation = pgTable("slack_installation", {
-  organizationId: text("organization_id")
-    .primaryKey()
-    .references(() => organization.id, { onDelete: "cascade" }),
-  /** Slack's id for the team the bot token answers for (`T…`). */
-  teamId: text("team_id").notNull(),
-  /** The team's name as Slack answered it, which the settings row shows. */
-  teamName: text("team_name").notNull(),
-  /** The repository, `owner/name`, an agent started from Slack works in where neither its message nor its channel names one; null for none. */
-  defaultRepository: text("default_repository"),
-  linkedByUserId: text("linked_by_user_id").references(() => user.id, {
-    onDelete: "set null",
-  }),
-  createdAt: timestamptz("created_at").notNull(),
-  updatedAt: timestamptz("updated_at").notNull(),
-});
+export const slackInstallation = pgTable(
+  "slack_installation",
+  {
+    organizationId: text("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** Slack's id for the team the bot token answers for (`T…`). */
+    teamId: text("team_id").notNull(),
+    /** The team's name as Slack answered it, which the settings row shows. */
+    teamName: text("team_name").notNull(),
+    /** The repository, `owner/name`, an agent started from Slack works in where neither its message nor its channel names one; null for none. */
+    defaultRepository: text("default_repository"),
+    linkedByUserId: text("linked_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    /** The version of the deployment's key-encryption key the bot token's data key is wrapped under; null where no token is held. */
+    botKeyVersion: integer("bot_key_version"),
+    /** base64 of nonce, ciphertext, and tag: the bot token's data key under the key-encryption key. */
+    botSealedDataKey: text("bot_sealed_data_key"),
+    /** base64 of nonce, ciphertext, and tag: the bot token (`xoxb-…`) under the data key. */
+    botSealedToken: text("bot_sealed_token"),
+    /** Slack's id for the bot's own user in the team (`U…`). */
+    botUserId: text("bot_user_id"),
+    /** The scopes Slack granted the bot token, as its install answered them. */
+    botScopes: text("bot_scopes").array(),
+    /** Slack's id for the bot itself (`B…`), as its install answered it. */
+    botId: text("bot_id"),
+    /** Slack's id for the app the bot token was granted by (`A…`). */
+    appId: text("app_id"),
+    /** Slack's id for the Enterprise Grid org the install was made in (`E…`); null for a single-workspace install, the only kind our app allows. */
+    enterpriseId: text("enterprise_id"),
+    /** Whether the app was installed across an Enterprise Grid org rather than one workspace. */
+    isEnterpriseInstall: boolean("is_enterprise_install").notNull().default(false),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (t) => [
+    // The token, its seal, the bot's ids, its scopes, and its app stand together or not at all.
+    check(
+      "slack_installation_bot_token_whole",
+      sql`num_nonnulls(${t.botKeyVersion}, ${t.botSealedDataKey}, ${t.botSealedToken}, ${t.botUserId}, ${t.botScopes}, ${t.botId}, ${t.appId}) in (0, 7)`,
+    ),
+  ],
+);
 
 /** One member's Slack user id in the workspace's connected team, or null where their email matched no one when it was looked up. */
 export const slackMember = pgTable(

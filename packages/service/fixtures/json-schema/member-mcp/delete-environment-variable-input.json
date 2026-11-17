@@ -10,6 +10,7 @@
     "name": {
       "type": "string",
       "maxLength": 256,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
       "description": "The variable's name: a letter or underscore, then letters, digits, and underscores, such as DATABASE_URL."
     }
   },

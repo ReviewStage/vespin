@@ -32,7 +32,7 @@ export type SandboxDoorRunner<R = HttpClient.HttpClient> = <A, E>(
   effect: Effect.Effect<A, E, R>,
 ) => Promise<A>;
 
-/** The doors to the admitted agent's sandbox: one to read a file through, which also makes a recording's MP4 there and writes a file under its attachments folder. */
+/** The doors to the admitted agent's sandbox: one to read a file through, which names where its machine keeps its checkout, also makes a recording's MP4 there, and writes a file under its attachments folder. */
 export interface AgentSandboxDoors {
   readonly files: InboxSandboxDoor;
 }
@@ -68,22 +68,20 @@ export function agentSandboxDoors<R>(
     if (sessionId === undefined) return { files: unfound };
 
     return {
-      files: () =>
-        Promise.resolve({
-          readFile: async ({ path }: { readonly path: string }) => {
-            const bytes = await ask((each) =>
-              each.readFile(sessionId, path, SANDBOX_DOOR_MAX_BYTES),
-            );
+      files: async () => ({
+        checkout: await ask((each) => each.checkoutPath(sessionId)),
+        readFile: async ({ path }: { readonly path: string }) => {
+          const bytes = await ask((each) => each.readFile(sessionId, path, SANDBOX_DOOR_MAX_BYTES));
 
-            return bytes === undefined ? null : streamOf(bytes);
-          },
-          phoneVideo: async ({ path }: { readonly path: string }) =>
-            (await ask((each) => each.phoneVideo(sessionId, path))) ?? null,
-          phoneAudio: async ({ path }: { readonly path: string }) =>
-            (await ask((each) => each.phoneAudio(sessionId, path))) ?? null,
-          writeFile: (file: { readonly name: string; readonly contents: Uint8Array }) =>
-            ask((each) => each.writeFile(sessionId, file)),
-        }),
+          return bytes === undefined ? null : streamOf(bytes);
+        },
+        phoneVideo: async ({ path }: { readonly path: string }) =>
+          (await ask((each) => each.phoneVideo(sessionId, path))) ?? null,
+        phoneAudio: async ({ path }: { readonly path: string }) =>
+          (await ask((each) => each.phoneAudio(sessionId, path))) ?? null,
+        writeFile: (file: { readonly name: string; readonly contents: Uint8Array }) =>
+          ask((each) => each.writeFile(sessionId, file)),
+      }),
     };
   };
 }

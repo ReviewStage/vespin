@@ -542,6 +542,11 @@ export interface AgentMachineService {
     bound: number,
   ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
   /**
+   * Where the session's place holds the agent's checkout (`MachineLayout`'s
+   * `checkoutPath`), which a path the agent names relative is read from.
+   */
+  readonly checkoutPath: (session: string) => Effect.Effect<string, SandboxError | LaunchRefused>;
+  /**
    * One file written into the session's place, under the folder a message's
    * files are written under (`MachineLayout`'s `attachments`) at the
    * relative path given, readable by the agent's own user, as a message's

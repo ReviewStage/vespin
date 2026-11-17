@@ -148,7 +148,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
           unparsedWire({
             key: "invite-queue",
             title: "Which queue sends the invitation emails?",
-            body: "\n  The repo runs [@Postgres](https://github.com/acme/relay/blob/HEAD/db.ts) already.  \nPick one.",
+            body: "\n  The repo runs [@Postgres](https://github.com/acme/relay/blob/HEAD/db.ts) **already**.  \nPick `one`:\n\n- outbox\n- Redis",
             ask: {
               type: INBOX_ASK.DECIDE,
               options: [
@@ -178,7 +178,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
               aps: {
                 alert: {
                   title: "Which queue sends the invitation emails?",
-                  body: "The repo runs @Postgres already.",
+                  body: "The repo runs @Postgres already.\nPick one:\n• outbox\n• Redis",
                 },
                 "thread-id": poster.taskId,
                 category: "inbox-decide",

@@ -30,7 +30,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWaitingItems, type WaitingItems } from "../tasks/use-waiting-items.js";
 import { letGoOfFocus, useHomeNewTask, useListsTask, welcomed } from "./desktop-welcome.js";
 import { HomeStarters } from "./home-starters.js";
-import { PERSON_SECTION_FOLD, PersonSectionFrame } from "./person-frame.js";
+import { PERSON_SECTION_FOLD, PersonBody, PersonSectionFrame } from "./person-frame.js";
 import { RecentTasks } from "./recent-tasks.js";
 
 /**
@@ -48,10 +48,12 @@ import { RecentTasks } from "./recent-tasks.js";
  * each the Tasks page's row as a person's page lists it (`recent-tasks.tsx`),
  * a press opening it. Its sections are a person's page's (`person-frame.tsx`),
  * whose voice was Home's to begin with, each folding on a press on its
- * head as the person's page's do. While the workspace holds few tasks, a few
- * starters stand under the composer, each a job a press writes into it,
- * since a blank box leaves a newcomer to think of what to ask. Inbox stands only while something
- * waits, so a new account's page is its greeting and composer alone, and a
+ * head as the person's page's do, and standing in its body
+ * (`PersonBody`), so Recent glides as Inbox folds or its rows go. While the
+ * workspace holds few tasks, a few starters stand under the composer, each
+ * a job a press writes into it, since a blank box leaves a newcomer to
+ * think of what to ask. Inbox stands only while something waits, so a new
+ * account's page is its greeting and composer alone, and a
  * cleared one's Recent rises under the composer. An account with nothing yet
  * is greeted as new.
  * Nothing here names the sidebar, which may be folded away.
@@ -321,8 +323,10 @@ export function DesktopHome({
             <Arrival reading={arriving} label={READING_TASKS}>
               {/* The Inbox's rows name who started each agent, and Recent's who is on each task, read against the listed workspace's members. */}
               <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
-                <HomeInbox tasks={tasks} read={read} waiting={waiting} />
-                <HomeRecent tasks={tasks} room={room} staged={staged} />
+                <PersonBody reading={false}>
+                  <HomeInbox tasks={tasks} read={read} waiting={waiting} />
+                  <HomeRecent tasks={tasks} room={room} staged={staged} />
+                </PersonBody>
               </MemberDirectory>
             </Arrival>
           </ReplayUnmask>
