@@ -105,10 +105,9 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
  *
  * `IntegrationConnect` is the one place each integration's connector UID and
  * allowlist are read, for the account routes that connect and disconnect an account and
- * the agents that read its tokens alike. `SlackBot` is the one place the
- * bot's own connector is read (`slack/slack-bot.ts`), and `SlackApp` the one
- * place our own Slack app's client and signing secrets are
- * (`slack/slack-app.ts`).
+ * the agents that read its tokens alike. `SlackBot` opens each workspace's
+ * own bot token (`slack/slack-bot.ts`), and `SlackApp` is the one place our
+ * own Slack app's client and signing secrets are (`slack/slack-app.ts`).
  *
  * `SettledTurnListener` is here because the store writer tells it of every
  * coding agent turn it settles, on whichever function the settle ran: it

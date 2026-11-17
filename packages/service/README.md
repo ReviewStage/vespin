@@ -373,18 +373,18 @@ variables above for every environment that receives its deliveries.
 
 ## The Vespin Slack bot
 
-Vespin's own Slack bot writes to a workspace's members in Slack. It is one
-Slack app, Vercel Connect's managed `slack/vespin` connector, apart from the
-Slack connector each member connects for their agents (`SLACK_CONNECTOR_UID`).
-`src/slack/slack-bot.ts`'s `SlackBot` reads the connector's UID from
-`SLACK_BOT_CONNECTOR_UID` and asks Connect for the bot token under an app
-subject at each call; a deployment without the variable builds the service,
-answers `configured: false`, and writes nothing. Only the deployment's own
-Vercel OIDC token can mint the app token, so the CLI cannot check it: check it
-on a Preview. An owner or admin connects the bot under Settings › Workspace
-(`src/slack/slack-bot-procedures.ts`), which calls `auth.test` and keeps the
-team in `slack_installation`, one per workspace; Disconnect deletes it.
-`SlackBot.dm` finds a member by the Slack id kept in `slack_member`
+Vespin's own Slack bot writes to a workspace's members in Slack. It is our
+own Slack app, apart from the Slack connector each member connects for their
+agents (`SLACK_CONNECTOR_UID`), installed in each workspace's Slack team, whose
+install grants that workspace its own bot token, kept sealed in
+`slack_installation` under `PROVIDER_KEY_ENCRYPTION_KEYS`, one per workspace;
+Disconnect deletes it. `src/slack/slack-bot.ts`'s `SlackBot.forWorkspace`
+opens the workspace's token for each piece of work, and every call made for
+that workspace is made on it; a workspace holding no token, or one that will
+not open, is written nothing, and a deployment without the key ring answers
+`configured: false` and writes nothing. The old Connect button
+(`workspaceSlackBot.connect`) is refused as unavailable.
+`SlackWorkspaceBot.dm` finds a member by the Slack id kept in `slack_member`
 (`@repo/database/models/slack-installation-store`), else through a Slack
 account the member connected for their agents whose `auth.test` answers the
 installed team, else by their email (`users.lookupByEmail`), and keeps the
@@ -407,7 +407,7 @@ reaches our Slack route (`/api/slack/events`) as an `app_mention` or
 (`src/slack/slack-agent-starts.ts`), once the answer has left; Slack's
 retries (`x-slack-retry-num`) and bots' messages are dropped. The writer is
 found by the Slack id the bot kept, else through the Slack accounts members
-connected that no kept id names yet, one `auth.test` each (`SlackBot.memberOf`),
+connected that no kept id names yet, one `auth.test` each (`SlackWorkspaceBot.memberOf`),
 or else by the email Slack holds for them (`users.info`). The bot reacts to
 the message with 👀 (`eyes`), replying in the thread only to refuse, the
 thread is kept against the agent in `slack_agent_thread`, a later mention in

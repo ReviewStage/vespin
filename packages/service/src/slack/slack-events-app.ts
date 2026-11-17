@@ -33,7 +33,7 @@
  * nothing else. The presser is found back as
  * the workspace member the bot's lookups kept under that Slack user, or
  * one whose own Slack account is that user, in the team the item's
- * workspace connected (`SlackBot.memberOf`), and the ask is
+ * workspace connected (`SlackWorkspaceBot.memberOf`), and the ask is
  * answered as that member (`answerAsMember`) under the button's action id,
  * so a press Slack sends again is the answer already taken. The answer
  * taken is handed to the agent as its "Thread answer", and the DM is
@@ -377,9 +377,8 @@ const answerPress = /* @__PURE__ */ Effect.fnUntraced(function* (press: BlockAct
 
   if (teamId === undefined) return;
 
-  const member = yield* hostedStoreOrUnavailable(
-    (yield* SlackBot).memberOf(organizationId.value, teamId, press.user.id),
-  );
+  const bot = yield* (yield* SlackBot).forWorkspace(organizationId.value);
+  const member = yield* hostedStoreOrUnavailable(bot.memberOf(teamId, press.user.id));
 
   if (Option.isNone(member)) return;
   const { answers, line } = yield* pressedAnswer(member.value, choice, press);
