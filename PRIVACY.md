@@ -338,7 +338,10 @@ Apple's gateways the token belongs to and the app it was issued to, and we
 keep them with your account. When the Service pushes a notification to your
 phone, it sends Apple that token and the notification itself: **its title and
 body, which may carry the words of an Inbox thread, and the agent's or the
-task's name**, with the ids the app opens on a tap. Apple delivers it under
+task's name**, with the ids the app opens on a tap. A post's notification also
+carries the post's words as written, as many of them as fit Apple's 4 KB
+limit on a notification, which the app shows formatted when you press and
+hold it. Apple delivers it under
 its own policies, and your phone keeps it in its notification history under
 its own settings, outside Vespin. We keep the token while the phone stays
 registered: the app unregisters it when you sign out, we delete it when
@@ -528,7 +531,8 @@ data with:
   check for updates and load avatars.
 - **Apple:** notifications to the Vespin iOS app go through Apple's Push
   Notification service, which receives your phone's push token and each
-  notification's title and body, as the Notifications section says.
+  notification's title, body and, for a post, its words as written, as the
+  Notifications section says.
 - **Infrastructure providers:** Vercel (hosting, agent sandboxes, and Vercel
   Connect, which holds integration tokens), Neon (database), PostHog (usage
   data, screen recordings, feedback, and setup answers), Sentry (error and

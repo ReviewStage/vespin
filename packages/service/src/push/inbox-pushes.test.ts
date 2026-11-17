@@ -195,6 +195,8 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
               ask: "decide",
               options: ["Postgres outbox", "Redis"],
               recommended: ["Postgres outbox"],
+              markdown:
+                "The repo runs [@Postgres](https://github.com/acme/relay/blob/HEAD/db.ts) **already**.  \nPick `one`:\n\n- outbox\n- Redis",
             },
           },
         ]);
@@ -225,6 +227,35 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
             },
           },
         ]);
+      }).pipe(Effect.provide(sender.layer));
+    },
+  );
+
+  it.effect(
+    "a post past Apple's bound carries its Markdown's whole first paragraphs, within 4 KB",
+    () => {
+      const sender = recordingApnsSender();
+
+      // Note that each paragraph holds two-byte letters, so the bound is read in bytes, not characters.
+      const paragraphs = Array.from(
+        { length: 80 },
+        (_, at) => `**Step ${at + 1}:** déployer la file d'attente, puis vérifier.`,
+      );
+
+      return Effect.gen(function* () {
+        const { poster } = yield* openWorkspaceAgent;
+        yield* postToInbox(
+          poster,
+          unparsedWire({ key: "long-plan", title: "The plan", body: paragraphs.join("\n\n") }),
+          noSandbox,
+        );
+        const [sent] = sender.sent;
+        assert.ok(sent !== undefined);
+        assert.ok(new TextEncoder().encode(JSON.stringify(sent.payload)).length <= 4096);
+
+        const kept = String(sent.payload.markdown).split("\n\n");
+        assert.ok(kept.length > 1 && kept.length < paragraphs.length);
+        assert.deepEqual(kept, paragraphs.slice(0, kept.length));
       }).pipe(Effect.provide(sender.layer));
     },
   );
