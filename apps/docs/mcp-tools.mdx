@@ -261,7 +261,7 @@ One agent: its branch, its pull request, and a page of its transcript. The agent
 | `from` | `end` \| `start` | Where to read its transcript from where neither before nor after is given: end, the default, for its newest page, or start for its first, from the message it was started with. |
 | `before` | object | The older place a page answered, to read the page of entries before it. |
 | `after` | object | The newer place a page answered, to read the page of entries after it. |
-| `entries` | integer | At most how many entries of its transcript the page holds, such as 1 for what it last said or did; as many as fit in 16000 characters when left out. |
+| `entries` | integer | At most how many entries of its transcript the page holds, such as 1 for what it last said or did; as many as fit in 16000 characters when left out. (1–200) |
 
 ### read_agent_transcript
 
@@ -275,7 +275,7 @@ An agent's whole transcript, a page at a time, one worker's transcript, or one c
 | `from` | `end` \| `start` | Where to read its transcript from where neither before nor after is given: end, the default, for its newest page, or start for its first, from the message it was started with. |
 | `before` | object | The older place a page answered, to read the page of entries before it. |
 | `after` | object | The newer place a page answered, to read the page of entries after it. |
-| `entries` | integer | At most how many entries of its transcript the page holds, such as 1 for what it last said or did; as many as fit in 16000 characters when left out. |
+| `entries` | integer | At most how many entries of its transcript the page holds, such as 1 for what it last said or did; as many as fit in 16000 characters when left out. (1–200) |
 
 ### read_agent_changes
 
@@ -301,7 +301,7 @@ Starts an agent on a task, on a new task, or from another agent. Answers once it
 | `branch` | string | The branch of the task's repository to clone the agent's checkout at and cut its own branch from, such as the head branch of a pull request it builds on; it must already be on GitHub. Leave it out for the repository's default branch. (1–255 characters) |
 | `model` | string | The model to run on, by its catalog id (such as anthropic/claude-opus-5.5); leave it out with the effort for the member's default. (1–200 characters) |
 | `effort` | string | The reasoning effort, as the model lists it (such as high); given with the model or not at all. (1–200 characters) |
-| `runsOn` | object | Where the agent runs: &#123;"machine":"vercel"&#125; for the cloud, or &#123;"machine":"device","device":"&lt;name&gt;"&#125; for one of the member's own devices (a Mac or a host) by its name, in any case, or &#123;"machine":"device","deviceId":"&lt;id&gt;"&#125; by its id, which must be registered and online; a name that matches none of the member's devices, or more than one, is refused with their devices listed by name, id, and whether each is online. With from, another place than that agent's moves it there. Leave it out for where the agent it starts from runs, with from; else where the member's newest agent on the task runs; else where the member last chose to run one; else the cloud. |
+| `runsOn` | object | Where the agent runs: &#123;"machine":"vercel"&#125; for the cloud, or &#123;"machine":"device","device":"&lt;name&gt;"&#125; for one of the member's own devices (a Mac or a host) by its name, or &#123;"machine":"device","deviceId":"&lt;id&gt;"&#125; by its id; it must be online, and a name matching none of their devices, or several, is refused with the devices listed. Left out: where the agent it starts from runs, with from; else where the member's newest agent on the task runs; else where the member last chose to run one; else the cloud. With from, another place than that agent's moves it there. |
 | `from` | object | Another agent of your workspace to take over from, on its own task: the new agent is handed its brief and its transcript (with Vespin's summary of the steps that do not fit) and a copy of its work, runs on its model unless you name one, and hears the note after them; it takes no prompt and no branch. Without messageId it continues the agent, which is stopped; with one it forks the agent at that message, which goes on. |
 
 ### message_agent
