@@ -1303,7 +1303,7 @@ export function PersonPage({
   name?: string | undefined;
   /** Whether the run is a fixture's, whose sidebar view is kept nowhere. */
   staged?: boolean;
-  /** A phone's way back out of the page (`WindowHistory`'s `onLeave`), which heads it as a phone's page; none elsewhere. */
+  /** A phone's way back out of the page, the window's Back, which heads it as a phone's page; none elsewhere. */
   away?: TaskHeadBack | undefined;
 }): React.JSX.Element {
   return (

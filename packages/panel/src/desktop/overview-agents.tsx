@@ -84,8 +84,8 @@ import type { ChosenRows } from "./tasks-selection.js";
  * opened, the row it stands under counting how many of them finished
  * (`agentTree`); a worker an orchestrator started before it was continued
  * stands under the agent that continued it.
- * Those agents come first, then those at work, then the newest started, each
- * row at the top standing where the first agent under it does; an
+ * The agents list oldest started first, as Sub-tasks do, each row at the
+ * top standing where the first agent under it does; an
  * archived agent is not listed. New agent stands on the group's head at
  * every width, a + at rest as Sub-tasks' is, the strip's "+" by another
  * place (`newAgentStarts`), so it stands while the group is folded too. A
@@ -300,8 +300,7 @@ function PlanArchivedAgents({
 
 /**
  * The task's agents at the head of its description, under their group's head,
- * those waiting on the developer first, then those at work, then the
- * newest, or its head alone where it lists none and offers New agent;
+ * oldest started first, or its head alone where it lists none and offers New agent;
  * nothing where it offers neither.
  * A row's press is handed to `onOpenAgent` by its agent's id, and
  * `onOpenPullRequest` opens an agent's pull request as its own chip does, by
@@ -369,11 +368,7 @@ export function OverviewAgents({
   const inboxRow = phone !== undefined && unmarked > 0 ? phone : undefined;
   const more = !useCoarsePointer();
 
-  const ordered = inAgentListOrder(
-    entries,
-    (entry) => entry.agent,
-    (entry) => waiting.has(entry.row.id),
-  );
+  const ordered = inAgentListOrder(entries, (entry) => entry.agent);
 
   // Note that the agents an agent started stand folded under it until opened, as a sub-task's own sub-tasks do.
   const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());

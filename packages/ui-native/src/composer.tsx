@@ -167,6 +167,8 @@ type ComposerProps = {
   readonly head?: ReactNode;
   /** SwiftUI standing over the composer in a glass of its own, as the panel stands an agent's queue over its box: the messages queued behind the turn. */
   readonly above?: ReactNode;
+  /** A queued message's words being edited in the field: Send stands as Save, and, where it may steer, held it offers Steer, as the panel's held Send steers an edit. */
+  readonly saving?: ComposerSaving | undefined;
   /** Whether the field takes the keyboard as it stands, as a new comment's field does once opened for its words. */
   readonly autoFocus?: boolean | undefined;
   /** Called with the file addresses of pictures dropped on the composer from Photos, Files, or another app, on an iPad; it takes no drop where none is given. */
@@ -174,6 +176,51 @@ type ComposerProps = {
   /** Takes words pasted long enough to come as a file (`@repo/features/long-paste`), answering whether it did, so the field takes them back out of its words; they paste as words where none is given. */
   readonly onLongPaste?: ((words: string) => boolean) | undefined;
 };
+
+/** What Send does while the field holds a queued message's words being edited. */
+export interface ComposerSaving {
+  /** Writes the words back into the message's place in the queue. */
+  readonly onSave: () => void;
+  /** Sends them now as that message, steering the turn; none where it may not. */
+  readonly onSteer?: (() => void) | undefined;
+}
+
+/** The panel's words for an edit's two ways. */
+const SAVING_WORDS = { SAVE: "Save", STEER: "Steer" } as const;
+
+/**
+ * Send while the field holds a queued message's words: the same round
+ * button, its mark a check, which saves them back in the message's place;
+ * where it may steer, the system's menu with a primary act, so a tap saves
+ * and a hold offers Steer, as the panel's held Send steers an edit.
+ */
+function SaveButton({ saving }: { readonly saving: ComposerSaving }) {
+  const colors = useColors();
+  const round = useScaledSize(SEND_SIZE);
+  const markSize = useScaledSize(MARK_SIZE.GLYPH);
+  const mark = <Image {...glyphImage(GLYPH.CHECK)} size={markSize} modifiers={roundMark(round)} />;
+
+  if (saving.onSteer === undefined) {
+    return (
+      <Button
+        onPress={saving.onSave}
+        modifiers={[...roundModifiers(colors), accessibilityLabel(SAVING_WORDS.SAVE)]}
+      >
+        {mark}
+      </Button>
+    );
+  }
+
+  return (
+    <Menu
+      label={mark}
+      onPrimaryAction={saving.onSave}
+      modifiers={[...roundModifiers(colors), accessibilityLabel(SAVING_WORDS.SAVE)]}
+    >
+      <Button {...actContent(SAVING_WORDS.STEER, GLYPH.STEER)} onPress={saving.onSteer} />
+    </Menu>
+  );
+}
 
 /**
  * The round button at the field's end, the system's own prominent circle as
@@ -429,13 +476,17 @@ function ComposerPieces(props: ComposerProps) {
         ]}
       />
       {call?.kind === COMPOSER_CALL.ON_CALL ? <ComposerCallPresses presses={call.presses} /> : null}
-      <SendButton
-        empty={empty}
-        onSend={send}
-        onStop={onStop}
-        stopping={stopping}
-        onTalk={call?.kind === COMPOSER_CALL.TALK ? call.onTalk : undefined}
-      />
+      {props.saving === undefined ? (
+        <SendButton
+          empty={empty}
+          onSend={send}
+          onStop={onStop}
+          stopping={stopping}
+          onTalk={call?.kind === COMPOSER_CALL.TALK ? call.onTalk : undefined}
+        />
+      ) : (
+        <SaveButton saving={props.saving} />
+      )}
     </>
   );
 }

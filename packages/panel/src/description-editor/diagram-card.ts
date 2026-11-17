@@ -1,3 +1,4 @@
+import { DIAGRAM_LANGUAGE } from "@repo/features/mermaid-diagram";
 import { Extension } from "@tiptap/core";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
@@ -18,9 +19,6 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
  * there does, shows the code until it leaves. This module marks the block
  * the caret stands in, which its view reads.
  */
-
-/** The language a code block names to be drawn as a diagram. */
-export const DIAGRAM_LANGUAGE = "mermaid";
 
 /** The node a fence opens as. */
 const CODE_BLOCK = "codeBlock";

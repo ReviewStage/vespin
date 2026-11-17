@@ -1,7 +1,9 @@
-// marks.tsx -- the small marks a row leads or ends with: the unread dot, a task's status, a person's avatar or photo, an agent's tile, the needs-you, working, and failed marks, and a glyph in its tone.
+// marks.tsx -- the small marks a row leads or ends with: the unread dot, a task's status, a person's avatar or photo, an agent's tile, the needs-you, working, and failed marks, a glyph in its tone, and a count of what is done as a ring and its figures.
 
 import {
   Circle,
+  Gauge,
+  HStack,
   Image,
   ProgressView,
   RNHostView,
@@ -16,8 +18,11 @@ import {
   font,
   foregroundStyle,
   frame,
+  gaugeStyle,
+  monospacedDigit,
   opacity,
   resizable,
+  scaleEffect,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
@@ -46,10 +51,13 @@ import {
 } from "./status-mark-model.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
-import { MARK_SIZE } from "./tokens/space.js";
+import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TASK_PRIORITY_UNLIT_OPACITY } from "./tokens/task-status-symbols.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { tileHue } from "./workspace-tile-model.js";
+
+/** The width SwiftUI lays a circular capacity gauge out at, in points, which a progress ring scales down from to the size it stands at. */
+const GAUGE_WIDTH = 58;
 
 /** The share of an avatar's width its letter stands at, half of it, as the panel's avatar sets its letter. */
 const LETTER_SCALE = 0.5;
@@ -502,5 +510,53 @@ export function WorkingMark() {
         accessibilityLabel(GLYPH_STATE_WORDS[GLYPH_STATE.WORKING]),
       ]}
     />
+  );
+}
+
+/**
+ * How many of the things a row holds are done, of all of them, as the
+ * panel's `ProgressCount` says it: a small ring filled to that share in the
+ * working ink, then "3/4" in the muted ink, heard whole in place of the
+ * picture and the figures (`heard`, "3 of 4 agents it started finished").
+ * Note that the ring is the system's circular capacity gauge, scaled from
+ * the size SwiftUI draws it at down to a glyph's, growing with the reader's
+ * text as the figures beside it do.
+ */
+export function ProgressCount({
+  done,
+  total,
+  heard,
+}: {
+  readonly done: number;
+  readonly total: number;
+  /** What the figures count, said whole to a reader who hears no figures. */
+  readonly heard: string;
+}) {
+  const colors = useColors();
+  const ring = useScaledSize(MARK_SIZE.GLYPH - 2);
+
+  return (
+    <HStack spacing={SPACE.TIGHT}>
+      <Gauge
+        value={total > 0 ? done / total : 0}
+        modifiers={[
+          gaugeStyle("circularCapacity"),
+          tint(colors.WORKING),
+          scaleEffect(ring / GAUGE_WIDTH),
+          frame({ width: ring, height: ring }),
+          accessibilityHidden(),
+        ]}
+      />
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.ROW_LINE }),
+          monospacedDigit(),
+          foregroundStyle(colors.TEXT_MUTED),
+          accessibilityLabel(heard),
+        ]}
+      >
+        {`${done}/${total}`}
+      </Text>
+    </HStack>
   );
 }

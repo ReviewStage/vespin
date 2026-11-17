@@ -1000,20 +1000,19 @@ function ThreadDetail({
       />
       <Stack.Toolbar placement="right">
         {/* Note that the arrows and ⋯ stand in one bar, since a screen's last `Stack.Toolbar` of a placement replaces the ones before it, and an arrow at the list's end stands dimmed rather than gone, so the other one never moves under the thumb, as Mail's do. */}
+        {/* Note that a glyph here is named as a symbol, as ⋯'s is, because a top bar loads an `xcasset` as a React Native image, which drew our Lucide symbol sets as empty glass. */}
         <Stack.Toolbar.Button
           accessibilityLabel={STEP_WORDS.PREVIOUS}
           disabled={place.steps.previous === undefined}
+          icon={glyphSymbol(GLYPH.PREVIOUS_ITEM)}
           onPress={() => stepTo(place.steps.previous)}
-        >
-          <Stack.Toolbar.Icon xcasset={GLYPH.PREVIOUS_ITEM} renderingMode="template" />
-        </Stack.Toolbar.Button>
+        />
         <Stack.Toolbar.Button
           accessibilityLabel={STEP_WORDS.NEXT}
           disabled={place.steps.next === undefined}
+          icon={glyphSymbol(GLYPH.NEXT_ITEM)}
           onPress={() => stepTo(place.steps.next)}
-        >
-          <Stack.Toolbar.Icon xcasset={GLYPH.NEXT_ITEM} renderingMode="template" />
-        </Stack.Toolbar.Button>
+        />
         <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
           <Stack.Toolbar.Menu inline title={path.join(PATH_PART)}>
             {pathActions.map((action) => (

@@ -1141,6 +1141,11 @@ test("with no workspace listed because the workspaces could not be read, the lis
   act(() => button("Retry").click());
   await settle();
   assert.equal(world.tasksRefreshes, 2);
+
+  // Nothing stands behind the link, so its way back opens the list under the workspace its address names.
+  act(() => button("Automations").click());
+  await settle();
+  assert.equal(world.pageRouter?.history.location.pathname, `/${WORKSPACE.id}/automations`);
 });
 
 test("an automation's page whose list could not be read says so with Retry, rather than calling it gone", async () => {

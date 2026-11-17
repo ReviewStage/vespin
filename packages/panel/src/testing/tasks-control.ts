@@ -643,6 +643,7 @@ export function tasksControl(overrides: TasksControlOverrides = {}): ListingTask
     },
     agentView: { agentId: undefined, onOpen: ignore },
     onThreadsShown: ignore,
+    agentThreads: { shown: () => undefined, onOpen: ignore, onClose: ignore },
     onOpenPerson: ignore,
     atHome: false,
     taskPlaceStands: true,

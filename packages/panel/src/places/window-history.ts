@@ -74,16 +74,18 @@
  * where the task stands behind. Its task is passed over once deleted, as the
  * task's own step is.
  *
- * What a page shows within it is a step too: the tab the task's column
- * shows, and the Inbox's item and the task it is narrowed to, so Back goes back to what the window was
- * just showing rather than past it to the page before. Such a choice is a
- * step only where a press or a key led to it: one the window makes by
- * itself, as a task's tabs arriving after it opens, an agent's tab shown as
- * it starts, or the tab shown in place of one closed, takes the standing
- * step in place. A tab or an item not yet known, as a task's tabs on their
- * way or an Inbox with nothing chosen, fills in the step it stands in. A
- * step on a column's tab since closed is passed over, as a deleted task is,
- * as far as the window last saw that task's strip.
+ * What a page shows within it is a step too where a ‹ goes back from it:
+ * the task's description over its agents, an agent's threads over its
+ * transcript and each thread chosen in them, and the Inbox's item and the
+ * task it is narrowed to, so Back goes back to what the window was just
+ * showing rather than past it to the page before. Sibling tabs are not: an
+ * agent's tab chosen for another takes the standing step in place, so Back
+ * from a task leaves it in one step, and the page remembers the tab it was
+ * left on. Each kind of change says which it is, whoever made it
+ * (`task-step.ts`'s `stepWithin`). A tab or an item not yet known, as a
+ * task's tabs on their way or an Inbox with nothing chosen, fills in the
+ * step it stands in. A step on a column's tab since closed is passed over,
+ * as a deleted task is, as far as the window last saw that task's strip.
  *
  * The side panel belongs to the stop it was opened at, a task, an agent's
  * page, or an Inbox item, so each such step holds it: the tab it shows, or
@@ -124,9 +126,8 @@
  * from. A
  * step between two such panes of one page leaves no page, so it never asks
  * first, as leaving an automation with unsaved changes does. A phone's way
- * out of a task goes back past all of the task's own steps at once, to the
- * nearest step on another page, the list it was opened from, and is named
- * as that step is (`WindowHistory`'s `away` and `onLeave`). A place a
+ * out of a task is the window's Back, one step, named as that step is, as
+ * every ‹ is. A place a
  * narrow room stands another in the place of stands it as its declaration
  * says (`narrowInstead`): a phone has no Home, so where the window would
  * stand on it, the Inbox's list takes its step in place, so a phone opens on
@@ -148,6 +149,7 @@ import {
   withTaskId,
 } from "@repo/features/link-grammar";
 import { PANEL_PATH } from "@repo/features/link-home";
+import { agentOfTab } from "@repo/ui/tab-strip-model";
 import { type HistoryLocation, type RouterHistory, useRouter } from "@tanstack/react-router";
 import {
   useCallback,
@@ -163,6 +165,7 @@ import type { InboxRoute } from "../inbox-route.js";
 import { useRouteAccess } from "../route-gates.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoors } from "../steady-door.js";
+import type { MainTab } from "../tasks/use-main-tabs.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useSurfaceOpen } from "../use-surface-open.js";
 import type { VersionHistoryRoute } from "../version-history-route.js";
@@ -177,7 +180,7 @@ import {
   tabSurface,
   useWindowPlace,
 } from "./routed-places.js";
-import type { LinkStep, PanelStep, SideStep, TaskAt, TaskStep } from "./task-step.js";
+import type { LinkStep, PanelStep, SideStep, TaskAt, TaskStep, ThreadsStep } from "./task-step.js";
 import {
   type AwayStep,
   addressOf,
@@ -295,8 +298,7 @@ export interface WindowHistory extends NavigationHistory {
   /**
    * Leaves the place standing for the nearest step behind it on another
    * place, passing over the place's own steps, a task's panes and tabs, or
-   * every page of Settings, as a phone's way back out of a task goes back
-   * to the list it was opened from, and Settings' way out to where it was
+   * every page of Settings, as Settings' way out goes back to where it was
    * opened from, pushing nothing; where none stands, as on a task a link
    * loaded, it opens Home.
    */
@@ -615,24 +617,8 @@ function useWindowSteps(input: {
   });
   // The list a narrow screen went up to with no step behind, which the next visit takes in place.
   const wentUp = useRef<Place | undefined>(undefined);
-  // How many presses and keys the window has heard, and how many it had as it last wrote a step.
-  const presses = useRef(0);
-  const pressesWritten = useRef(0);
   // How many opens the side panel had as the window last wrote a step.
   const openedWritten = useRef(opened);
-  useEffect(() => {
-    const heard = () => {
-      presses.current += 1;
-    };
-
-    window.addEventListener("pointerdown", heard, true);
-    window.addEventListener("keydown", heard, true);
-
-    return () => {
-      window.removeEventListener("pointerdown", heard, true);
-      window.removeEventListener("keydown", heard, true);
-    };
-  }, []);
   // Whether the window has written or stood on a step since it knew where it stands.
   const started = useRef(false);
   // What Back and Forward draw, read from the steps known as they stand once the visit to `place` below is written, and
@@ -653,11 +639,10 @@ function useWindowSteps(input: {
     const moved = visited.current?.place !== place || visited.current?.address !== address;
     // A window first knowing where it stands on a history that already stands on a step goes there rather than writing.
     const writes = place !== undefined && moved && (started.current || known.at < 0);
-    const pressed = presses.current !== pressesWritten.current;
     const opens = opened !== openedWritten.current;
 
     const write = writes
-      ? visitWrite(known, place, address, wentUp.current, pressed, opens, onTaskRoute)
+      ? visitWrite(known, place, address, wentUp.current, opens, onTaskRoute)
       : undefined;
 
     const next = readingOf(
@@ -672,11 +657,10 @@ function useWindowSteps(input: {
     return drawn.current;
   });
 
-  // A step of the window's own, after which what it heard and opened since is written.
+  // A step of the window's own, after which what the side panel opened since is written.
   const wrote = useCallback(
     (write: StepWrite) => {
       started.current = true;
-      pressesWritten.current = presses.current;
       openedWritten.current = latest.current.opened;
       writeStep(record, write);
     },
@@ -702,18 +686,8 @@ function useWindowSteps(input: {
     // Note that a routed place the router moved off since the window was drawn, as a door earlier in the same commit moves
     // it, is no visit, since the window is drawn again where the router stands.
     if (!isTaskPlace(place) && place.address !== record.history.location.href) return;
-    const pressed = presses.current !== pressesWritten.current;
     const opens = latest.current.opened !== openedWritten.current;
-
-    const write = visitWrite(
-      record.known,
-      place,
-      address,
-      up,
-      pressed,
-      opens,
-      latest.current.onTaskRoute,
-    );
+    const write = visitWrite(record.known, place, address, up, opens, latest.current.onTaskRoute);
 
     if (write !== undefined) wrote(write);
   }, [record, place, address, wrote]);
@@ -805,12 +779,11 @@ function useWindowSteps(input: {
     [record, goTo],
   );
 
-  // Note that a link's step is written as the window would write it on arriving, read from the presses and opens heard
-  // since the last write, so the window arriving there finds it standing and writes nothing more.
+  // Note that a link's step is written as the window would write it on arriving, read from the opens heard since the last
+  // write, so the window arriving there finds it standing and writes nothing more.
   const visit = (to: Place): boolean => {
     // Note that a window that has written no step yet, as a link said as the page loads finds it, leaves the loaded entry to its own first write.
     if (standingStep(record) === undefined) return false;
-    const pressed = presses.current !== pressesWritten.current;
     const opens = latest.current.opened !== openedWritten.current;
 
     const write = visitWrite(
@@ -818,7 +791,6 @@ function useWindowSteps(input: {
       to,
       to.address,
       undefined,
-      pressed,
       opens,
       latest.current.onTaskRoute,
     );
@@ -951,6 +923,7 @@ export function useWindowHistory(input: {
     | "agents"
     | "pages"
     | "workspaces"
+    | "agentThreads"
   >;
 }): WindowHistory & TaskVisits & HistoryBehind & RecentSteps {
   const { tasks, rows } = input;
@@ -969,6 +942,16 @@ export function useWindowHistory(input: {
   // The column's tabs are known only once the task's agents are read, the side panel's at once.
   const columnKnown = stripsKnown && tasks.mainTabs.openAgents !== undefined;
   const columnTab = columnKnown ? tasks.mainTabs.tab : undefined;
+  // The column's agent, whose card's threads its step holds; a narrow room shows none in its card.
+  const columnAgent = narrow ? undefined : agentOfTab(columnTab);
+
+  const threadsShown =
+    columnAgent === undefined || boundFor === undefined
+      ? undefined
+      : tasks.agentThreads.shown(boundFor, columnAgent);
+
+  const threadsOpen = threadsShown !== undefined;
+  const threadsItem = threadsShown?.itemId;
   // A narrow room holds the side panel as a pane of its own over the plan (`panel`), whose tab its step keeps as it always has.
   const sideTab = stripsKnown && !narrow ? panelTab : undefined;
   // The side panel as the stop standing holds it: its tab while open, and shut otherwise.
@@ -1074,6 +1057,10 @@ export function useWindowHistory(input: {
       taskId: boundFor,
       panel: narrow ? { open: panelOpen, tab: panelTab } : undefined,
       column: columnTab,
+      threads:
+        threadsOpen && columnAgent !== undefined
+          ? { agentId: columnAgent, itemId: threadsItem }
+          : undefined,
       side: taskSide,
     });
   }, [
@@ -1088,6 +1075,9 @@ export function useWindowHistory(input: {
     panelOpen,
     panelTab,
     columnTab,
+    columnAgent,
+    threadsOpen,
+    threadsItem,
     taskSide,
     sideHeld,
     inboxOpen,
@@ -1153,10 +1143,23 @@ export function useWindowHistory(input: {
 
   // The task a step holds, with the tabs its panes showed; its task is asked for as the window arrives on its place (`place-binding.ts`).
   const goToTask = (to: TaskStep) => {
-    if (to.column !== undefined) tasks.mainTabs.onShow(to.taskId, to.column);
+    if (to.column !== undefined) {
+      tasks.mainTabs.onShow(to.taskId, to.column);
+      standThreads(to.taskId, to.column, to.threads);
+    }
 
     if (to.panel !== undefined) standPanel(to.taskId, to.panel);
     else standSide(to.taskId, to.taskId, to.side);
+  };
+
+  // The column's agent's card as a step held it: its threads on the thread it showed, or its transcript.
+  const standThreads = (taskId: string, column: MainTab, threads: ThreadsStep | undefined) => {
+    const agentId = agentOfTab(column);
+
+    if (agentId === undefined) return;
+
+    if (threads?.agentId === agentId) tasks.agentThreads.onOpen(taskId, agentId, threads.itemId);
+    else tasks.agentThreads.onClose(taskId, agentId);
   };
 
   // The side panel as a wide step or an Inbox item's held it: shut, or open on its tab, on the stop's own task; one not yet known is left as it stands.

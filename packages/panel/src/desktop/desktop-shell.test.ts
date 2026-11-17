@@ -40,6 +40,7 @@ import { appBridge } from "../app-bridge.js";
 import { runAppCommand } from "../app-commands.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import { type PlaceLeave, usePlaceLeave } from "../places/place-leave.js";
+import type { StepTitle } from "../places/window-steps.js";
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { MAIN_TAB, SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
@@ -1726,10 +1727,10 @@ test("the sign-in, which needs the network, says over it when the Mac is offline
   await vi.waitFor(() => assert.equal(titleBarOffline(container)?.textContent, "Offline"));
 });
 
-test("on a phone an open task leads its own row with the way back the window's history names, in the sidebar toggle's place, and a wide window keeps the toggle", async () => {
+test("on a phone an open task leads its own row with its way back, the window's Back, named for the step behind, in the sidebar toggle's place, and a wide window keeps the toggle", async () => {
   const left: string[] = [];
 
-  const render = (away: Parameters<typeof DesktopShell>[0]["history"]["away"], room: ShellRoom) => {
+  const render = (behind: StepTitle | undefined, room: ShellRoom) => {
     const container = document.body.appendChild(document.createElement("div"));
     root = createRoot(container);
 
@@ -1745,7 +1746,18 @@ test("on a phone an open task leads its own row with the way back the window's h
           underRouter(
             createElement(DesktopShell, {
               ...props,
-              history: { ...props.history, away, onLeave: () => left.push("left") },
+              history: {
+                ...props.history,
+                canGoBack: behind !== undefined,
+                onBack: () => left.push("back"),
+                steps: {
+                  back:
+                    behind === undefined
+                      ? []
+                      : [{ number: 0, title: behind, page: { kind: "routed", of: "/acme/inbox" } }],
+                  forward: [],
+                },
+              },
               room,
             }),
           ),
@@ -1760,12 +1772,12 @@ test("on a phone an open task leads its own row with the way back the window's h
     page.querySelector<HTMLButtonElement>(".task-head .ui-toolbar-lead button") ??
     assert.fail("a way back");
 
-  const fromInbox = render({ title: { label: "Inbox" } }, SHELL_ROOM.NARROW);
+  const fromInbox = render({ label: "Inbox" }, SHELL_ROOM.NARROW);
   await settle();
   assert.equal(back(fromInbox).textContent, "Inbox");
   assert.equal(fromInbox.querySelector(".desktop-shell > .title-bar-controls") === null, true);
   act(() => back(fromInbox).click());
-  assert.deepEqual(left, ["left"]);
+  assert.deepEqual(left, ["back"]);
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
@@ -1775,7 +1787,7 @@ test("on a phone an open task leads its own row with the way back the window's h
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
-  const wide = render({ title: { label: "Inbox" } }, SHELL_ROOM.WIDE);
+  const wide = render({ label: "Inbox" }, SHELL_ROOM.WIDE);
   await settle();
   assert.equal(wide.querySelector(".task-head") === null, true);
   assert.ok(

@@ -207,30 +207,17 @@ export function agentStillWriting(status: AgentStatus): boolean {
 }
 
 /**
- * Agents in the order a task's Agents group lists them: those waiting on
- * the developer first, then those still writing, then the newest started,
- * each group's order otherwise kept. An entry with no agent, a draft's, is
- * started at none.
+ * Agents in the order a task's Agents group lists them: the oldest started
+ * first, as its sub-tasks read in the order they were made. An entry with
+ * no agent, a draft's, is started at none.
  */
 export function inAgentListOrder<Entry>(
   entries: readonly Entry[],
-  agentOf: (entry: Entry) => Pick<ListedAgent, "status" | "createdAt"> | undefined,
-  waits: (entry: Entry) => boolean,
+  agentOf: (entry: Entry) => Pick<ListedAgent, "createdAt"> | undefined,
 ): readonly Entry[] {
-  const writing = (entry: Entry) => {
-    const agent = agentOf(entry);
-
-    return agent !== undefined && agentStillWriting(agent.status);
-  };
-
   const started = (entry: Entry) => agentOf(entry)?.createdAt ?? 0;
 
-  return entries.toSorted(
-    (a, b) =>
-      Number(waits(b)) - Number(waits(a)) ||
-      Number(writing(b)) - Number(writing(a)) ||
-      started(b) - started(a),
-  );
+  return entries.toSorted((a, b) => started(a) - started(b));
 }
 
 /** What a task's Agents tree reads of each agent: who started it, what it was started from, and whether it still works. */
@@ -288,8 +275,7 @@ function closesLoop(id: string, starters: ReadonlyMap<string, string>): boolean 
  * listed agent that started it (`listedStarter`), to any depth, those under
  * a row not `open` passed by. Siblings keep the order handed in
  * (`inAgentListOrder`), and each row at the top stands where the first of
- * the agents under it, itself among them, stands, so a lead whose worker
- * waits on the developer stands with it. A row counts the agents nested
+ * the agents under it, itself among them, stands. A row counts the agents nested
  * directly under it, and how many of them no longer work, and a row
  * standing folded names every agent its fold passes by, so what waits on
  * the developer there can still be said on it. A loop of

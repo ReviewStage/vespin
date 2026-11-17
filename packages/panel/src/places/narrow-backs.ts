@@ -79,6 +79,21 @@ export function useBackOr(): (stand: () => void) => void {
   };
 }
 
+/**
+ * A ‹ out of what it opened within a page, as ‹ Agents leaves the task's
+ * description and ‹ Transcript an agent's threads: a step back where `to`,
+ * what the page showed before, is the step behind, and otherwise `stand`,
+ * which shows it in the step's place, so Back from there never opens what
+ * the ‹ left again.
+ */
+export function useBackToOr(): (to: BackStep, stand: () => void) => void {
+  const exits = useRoutedExits();
+
+  return (to, stand) => {
+    if (!exits.behind.backTo(to)) stand();
+  };
+}
+
 /** The ways back in a room `narrow` or not, reading the window's history as each is pressed. */
 export function useNarrowBacks(narrow: boolean): NarrowBacks {
   const exits = useRoutedExits();

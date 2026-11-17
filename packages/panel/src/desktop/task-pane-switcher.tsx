@@ -32,8 +32,10 @@ import { PhoneHead, type TaskHeadBack } from "./phone-head.js";
  * none of its tabs here: each is reached from what opens it.
  *
  * The row is a phone's standard header and holds nothing else: the way
- * back, its glyph alone, leads out of the task on Overview, to the list the
- * task was opened from, and back a screen anywhere else, named for where it
+ * back, its glyph alone, is the window's Back, one step back, on Overview
+ * to the page the task was opened from, and back a screen anywhere else,
+ * Overview standing in the screen's step where it is no step behind,
+ * named for where it
  * goes ("Back to Overview"); the title, one line centered between the two
  * equal corners and fading where it is cut, names what is on screen, or
  * nothing on Overview until the description's own heading scrolls away; and the ⋯
@@ -76,15 +78,12 @@ export function screenBack(label: string, onPress: () => void): TaskHeadBack {
 }
 
 /**
- * The way out of a task, named for the page it goes back to, as the
- * window's history names that step (`WindowHistory`'s `away`): the Tasks
- * page, the Inbox, or another task; Home where none stands behind it,
- * which `onLeave` then opens.
+ * What a phone's way back out of a task is called: the step the window's
+ * Back goes to, as its history names it, the Tasks page, the Inbox, or
+ * another task; Home where none stands behind it.
  */
-export function awayBack(away: AwayStep | undefined, onLeave: () => void): TaskHeadBack {
-  const label = away === undefined ? HOME_BACK : (away.title?.label ?? BACK);
-
-  return { label, onPress: onLeave };
+export function awayBack(behind: AwayStep | undefined): Pick<TaskHeadBack, "label"> {
+  return { label: behind === undefined ? HOME_BACK : (behind.title?.label ?? BACK) };
 }
 
 /** The task's name being edited in the title's place, as the ⋯'s Rename asks. */
@@ -124,7 +123,7 @@ export function TaskHead({
     <PhoneHead
       place="task"
       start={
-        // Note that it names no key, because the window's Back takes one history step and this leaves the task or its screen.
+        // Note that it names no key, as no phone's header does.
         <BackButton
           label={back.label}
           place={back.label}

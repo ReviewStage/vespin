@@ -6,8 +6,9 @@
  * (`places/task-step.ts`), or the side panel beside an Inbox item. The window saves each in its router history entry's state
  * beside its address (`SavedStep`), and reads it back from whatever a
  * browser held there, an older build's shapes among it: Home's and a task's
- * from before each was the router's, and tabs saved before they carried
- * their kind (`savedStepOf`).
+ * from before each was the router's, tabs saved before they carried their
+ * kind, and a task's step saved before an agent's threads were steps, which
+ * reads as its transcript (`savedStepOf`).
  *
  * The rules here read the steps the window knows its router's history
  * holds (`window-history.ts`) and write nothing: whether a visit pushes a
@@ -284,21 +285,17 @@ export function addressOf(link: ReadLink): string {
  * standing step takes in place, as a router's place moved within writes, and so does
  * the automation a new automation's page made, and an address changed under
  * it, and so does `up`, a list a narrow screen went up to from its item where
- * the list was no step behind. A tab or an Inbox item chosen
- * within the page standing is a visit only where a press or a key led to it
- * (`pressed`), and the side panel standing otherwise only where a door
- * naming a thing opened it (`opened`): one the window chose by itself, as a
- * task's tabs arriving after it opens, an agent's tab shown as it starts, or
- * the tab chosen in place of one closed, takes the standing step in place,
- * and so does a tab chosen in the panel's strip or its toggle. Any other
- * place is a visit, whichever door opened it.
+ * the list was no step behind. What the page standing shows within it is a
+ * visit or takes the standing step in place by the kind of change it is
+ * (`stepWithin`), the side panel standing otherwise a visit only where a
+ * door naming a thing opened it (`opened`). Any other place is a visit,
+ * whichever door opened it.
  */
 export function visitWrite(
   steps: KnownSteps,
   place: Place,
   address: string,
   up: Place | undefined,
-  pressed: boolean,
   opened: boolean,
   onTaskRoute: (address: string) => boolean,
 ): StepWrite | undefined {
@@ -316,7 +313,7 @@ export function visitWrite(
   // What the place shows within the page standing, as a step of its own, the window settling, or the step standing (`places/task-step.ts`).
   const within =
     standing !== undefined && samePage(standing.place, place)
-      ? stepWithin(shownOf(standing.place), shownOf(place), { pressed, opened })
+      ? stepWithin(shownOf(standing.place), shownOf(place), { opened })
       : STEP_WITHIN.VISIT;
 
   if (standing !== undefined && (wentUp || within === STEP_WITHIN.SETTLE || routedHere)) {

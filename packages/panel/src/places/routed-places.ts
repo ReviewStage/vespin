@@ -550,7 +550,13 @@ export const ROUTED_PLACE = {
       // A narrow room keeps the side panel's tab in its pane of its own, named as a wide room's side is.
       const side = taskStep.side ?? openPanelTab(taskStep.panel);
 
-      return { kind: NAMED_STEP.TASK, taskId: taskStep.taskId, column: taskStep.column, side };
+      return {
+        kind: NAMED_STEP.TASK,
+        taskId: taskStep.taskId,
+        column: taskStep.column,
+        side,
+        threads: taskStep.threads !== undefined,
+      };
     },
     links: ({ under }) => under(),
     narrowBack: NARROW_BACK.PANE,
