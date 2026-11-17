@@ -1,8 +1,9 @@
-// _layout.tsx -- the app's root: the host started over every screen, the tabs, Settings, the New task and New agent sheets, an agent's model sheet, and a task's Task relation sheet once an account is signed in, the sign-in screen until then, and the update screen in front of both while the service refuses this build.
+// _layout.tsx -- the app's root: the host started over every screen, the tabs, Settings, the New task and New agent sheets, an agent's model sheet, and a task's Task relation sheet once an account is signed in, or setup in their place while the account owes it, the sign-in screen until then, and the update screen in front of both while the service refuses this build.
 
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { SETUP_GATE } from "@repo/settings";
 import {
   BAR_TITLE,
   type BrandColors,
@@ -32,6 +33,7 @@ import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
+import { useSetupGate } from "../setup/use-setup-gate.js";
 import { useShareSheet } from "../share-sheet.js";
 import { SHORT_SHEET_DETENTS } from "../sheet-stack.js";
 import { holdSplash } from "../splash.js";
@@ -132,7 +134,9 @@ function screenLayout({
  * The screens, each behind the account's standing: the tabs, Settings, and
  * the sheets that start a task or an agent or change an agent's model while an account is signed in, and the sign-in screen otherwise, so a
  * sign-out anywhere, Settings' or a refused renewal's, lands on it and a
- * sign-in lands on the Inbox. A fixture run stands signed in as its
+ * sign-in lands on the Inbox, or on setup while the account owes it
+ * (`use-setup-gate.ts`), which stands alone in the tabs' place until it is
+ * finished, with only the sheets its steps open. A fixture run stands signed in as its
  * profile's account. While the service refuses this build as older than it
  * serves (`network.updateNeeded`), the update screen stands in front of
  * both, signed in or not, since every call either would make is refused;
@@ -176,6 +180,8 @@ function GuardedScreens() {
   useNoticeForAccount();
   useShareSheet(updateNeeded);
   useHostConnectLink(signedIn && !updateNeeded);
+  const app = signedIn && !updateNeeded;
+  const gate = useSetupGate(app);
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
@@ -208,7 +214,7 @@ function GuardedScreens() {
         }}
         screenLayout={screenLayout}
       >
-        <Stack.Protected guard={signedIn && !updateNeeded}>
+        <Stack.Protected guard={app && gate === SETUP_GATE.NONE}>
           <Stack.Screen name="index" />
           {/* Note that the tabs stand at once, with no push, because the launch reaches them by the index route's redirect, which the stack animated as a push: the Inbox's list was laid out again on every frame of the slide, holding the splash and the first frame about 1.5 s on a cold launch; a sign-in reaches them the same way, and a link opens inside them, so nothing else ever slid them in. */}
           <Stack.Screen name="(tabs)" options={{ animation: "none" }} />
@@ -254,6 +260,13 @@ function GuardedScreens() {
             name={SHEET_ROUTE.NEW_WORKSPACE}
             options={{ presentation: sheetPresentation, title: "New workspace" }}
           />
+        </Stack.Protected>
+        {/* Note that setup stands with no push, in the tabs' place, as the tabs do, since nothing slides it in. */}
+        <Stack.Protected guard={app && gate !== SETUP_GATE.NONE}>
+          <Stack.Screen name="setup" options={{ animation: "none", gestureEnabled: false }} />
+        </Stack.Protected>
+        {/* The sheets setup's Connect an agent opens, as Settings › Agents does. */}
+        <Stack.Protected guard={app}>
           <Stack.Screen
             name={SHEET_ROUTE.AGENT_KEY}
             options={{ presentation: sheetPresentation, title: "Agent key" }}
