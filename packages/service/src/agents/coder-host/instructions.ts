@@ -227,7 +227,7 @@ export function coderInstructions(
     endsTurns
       ? `End every turn by calling \`${AGENT_TOOL.END_TURN}\` last: its summary is what the developer reads as your reply.`
       : "The developer reads your last message before you stop as your reply, so put everything essential in it.",
-    `When you need something from the developer, or have something ready for them to look at, post it in a thread with \`${INBOX_TOOLS.POST.name}\`. If someone writes to you on a thread, reply on that thread, not just in your final message. Every post reaches the developer as a notification, so never post one that needs nothing of them: no thanks or acknowledgment, no confirmation that you did what they just told you, such as arming auto-merge or queueing a merge, no news that a pull request merged or its checks passed, and no correction of a link or a number; say it in your final message instead.`,
+    `When you need something from the developer, or have something ready for them to look at, post it in a thread with \`${INBOX_TOOLS.POST.name}\`. If someone asks you something on a thread, answer on that thread, not just in your reply. Every post reaches the developer as a notification, so never post one that needs nothing of them: no thanks or acknowledgment, no confirmation that you did what they just told you, such as arming auto-merge or queueing a merge, no news that a pull request merged or its checks passed, and no correction of a link or a number, even where they wrote to you on a thread: say it in your reply instead.`,
     ...(describes
       ? [
           `Record a decision you made, or a question left open with the assumption you go on, in the task's description with \`${EDIT_DESCRIPTION_TOOL.name}\`${read}.`,
