@@ -58,7 +58,10 @@ builds a control of its own.
   mark),
   `SwitchRow` for an agent's options, `askForName` (the system's alert a name is
   typed in, its act preferred, for a task and an agent alike),
-  `AccountButton`, `FailureNoticeProvider` (the app's one notice that a
+  `AccountButton`, `PermissionAsk` (a row heading a list, its `RowList`'s
+  `lead`, that asks in place for what the app lacks, as Apple asks: why in
+  one line, the act that raises the system's own prompt or, once refused,
+  opens Settings, never worded "Allow", and Not Now), `FailureNoticeProvider` (the app's one notice that a
   write did not go: a banner of Liquid Glass rising at the window's foot,
   over the composer or the compact tab bar there (`useNoticeLift`), as Mail
   and Messages stand Undo, so it never covers the heading or search field it

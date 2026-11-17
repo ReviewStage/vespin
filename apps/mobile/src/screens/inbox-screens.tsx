@@ -118,6 +118,7 @@ import {
 import { pendingThreadFile, useThreadAnswer } from "../inbox/use-thread-answer.js";
 import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pictures.js";
+import { NotificationAsk } from "../notification-ask.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns, useInFront } from "../place-columns.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
@@ -263,6 +264,7 @@ function InboxRows({
       onSelect={onSelect}
       onRefresh={onRefresh}
       choosing={choosing}
+      lead={<NotificationAsk />}
       scopes={scopes}
       empty={empty}
       onChooseStart={onChooseStart}

@@ -127,6 +127,8 @@ type RowListProps = {
   readonly choosing?: RowChoosing | undefined;
   /** What a search typed, whose words each row's title sets in bold; none for a list no search found. */
   readonly searched?: string | undefined;
+  /** What stands above everything else in it, such as a `PermissionAsk`, scrolling away with the rows; none where nothing does. */
+  readonly lead?: ReactNode | undefined;
   /** The scopes it lists under, standing as its first row so they scroll away with the rows; none where it has none. */
   readonly scopes?: ListScopes | undefined;
   /** What the list says while it holds no rows, such as an `EmptyState` saying why; none while it holds rows. */
@@ -266,6 +268,7 @@ export function RowList({
   onRefresh,
   choosing,
   searched,
+  lead,
   scopes,
   empty,
   onChooseStart,
@@ -349,6 +352,8 @@ export function RowList({
       <ListLookContext value={look}>
         <RowOpenContext value={onSelect}>
           <RowSelectedContext value={choosing === undefined ? selected : undefined}>
+            {/* Note that Select mode leaves the lead out too, since the rows chosen are what the screen acts on then. */}
+            {lead === undefined || choosing !== undefined ? null : lead}
             {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
             {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
             <RowSearchedContext value={searchedWords}>{children}</RowSearchedContext>

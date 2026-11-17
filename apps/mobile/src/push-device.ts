@@ -36,7 +36,7 @@ import { useMutation, useMutationState, useQuery, useQueryClient } from "@tansta
 import { Predicate } from "effect";
 import Constants from "expo-constants";
 import { getDevicePushTokenAsync } from "expo-notifications";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostActs } from "./host/host-provider.js";
 import {
@@ -183,24 +183,14 @@ export function registeredPushDevice(acts: ActPortClient, key: PushDeviceKey): P
 
 /**
  * The phone registered under the account signed in, once a launch while iOS
- * lets it notify; nothing while signed out. Note that iOS's own prompt is
- * asked once the account is signed in where it was never asked, as most apps
- * ask it, since the phone takes no notification and no Live Activity until
- * it is allowed; a refusal is left to Settings' step toward iOS's Settings.
- * A fixture run stands for a phone that allowed it, so it asks nothing.
+ * lets it notify; nothing while signed out. Note that nothing here asks iOS's
+ * prompt: the Inbox asks it in place, saying why first (`notification-ask.tsx`),
+ * since iOS raises it once an install and a prompt raised the moment an
+ * account signs in was refused before any ask had been seen.
  */
 export function usePushRegistration(signedIn: boolean): void {
   const acts = useHostActs();
-  const fixture = useFixtureRun();
-  const { standing, allow } = useNotificationPermission();
   const key = usePushDeviceKey();
-  // Whether this launch asked already, so the prompt is never asked twice while its answer is read.
-  const asked = useRef(false);
-  useEffect(() => {
-    if (!signedIn || fixture || standing !== NOTIFICATION_STANDING.UNASKED || asked.current) return;
-    asked.current = true;
-    allow();
-  }, [signedIn, fixture, standing, allow]);
   useEffect(() => {
     if (!signedIn) {
       // Note that a sign-out the app did not start, such as a refused renewal, runs no unregister, so the next account registers afresh.
