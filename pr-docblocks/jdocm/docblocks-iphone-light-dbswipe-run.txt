@@ -1,0 +1,25 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow dbswipe
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run flow when ".*Would Like to Send You Notifications.*" is visible...
+Run flow when ".*Would Like to Send You Notifications.*" is visible... SKIPPED
+Assert that "Inbox" is visible... COMPLETED
+Tap on "Tasks"... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Swipe from (85%, 75%) to (85%, 30%) in 400 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot dbswipe-01... COMPLETED
+Swipe from (85%, 40%) to (15%, 40%) in 600 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot dbswipe-01-left-40... COMPLETED
+Swipe from (85%, 55%) to (15%, 55%) in 600 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot dbswipe-01-left-55... COMPLETED
+Swipe from (85%, 70%) to (15%, 70%) in 600 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot dbswipe-01-left-70... COMPLETED
