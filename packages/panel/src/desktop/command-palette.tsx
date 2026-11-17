@@ -2156,8 +2156,8 @@ export function CommandPalette({
   }, [open, sought, query]);
 
   // Note that no key pressed in the palette goes on to the window, which the
-  // dialog sees to, because the window's Escape would stop an agent mid-reply and
-  // a window chord would change what stands behind the palette. Escape itself
+  // dialog sees to, because the window's Escape would step back from the page
+  // behind the palette and a window chord would change it. Escape itself
   // is the dialog's, which closes the palette alone.
   const keyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {

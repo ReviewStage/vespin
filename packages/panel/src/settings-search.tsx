@@ -65,6 +65,7 @@ import {
   Stack,
   useComboboxField,
 } from "@repo/ui";
+import { isComposingKey } from "@repo/ui/composing-key";
 import { land } from "@repo/ui/landed";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useStateWithRef } from "@repo/ui/use-state-with-ref";
@@ -796,7 +797,7 @@ export function SettingsSearchField({
         // Note that an Escape is stopped even mid-composition, because the
         // input method spends that press dismissing its candidates, and the
         // window's own Escape would turn the page behind the field.
-        if (event.key === "Escape" && event.nativeEvent.isComposing) event.stopPropagation();
+        if (event.key === "Escape" && isComposingKey(event)) event.stopPropagation();
       }}
     >
       <SearchField
