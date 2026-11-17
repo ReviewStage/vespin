@@ -141,11 +141,46 @@ it.effect.each([
       Effect.flatMap(fileOf(directory), (file) => fileSystem.exists(file)),
     );
 
-    const fits = reopenedAs === DANA && !otherSchemas;
+    // Note that the shapes' hash is a hint only, so rows kept under another build's still read where they still fit these shapes.
+    const fits = reopenedAs === DANA;
     assert.deepEqual(reopened.store.stored(KEPT_READ.TASK_LIST), fits ? LIST : undefined);
     assert.deepEqual(reopened.store.stored(KEPT_READ.INBOX), fits ? INBOX : undefined);
     assert.equal(stays, fits);
   }).pipe(Effect.provide(files)),
+);
+
+it.effect(
+  "a build that changed one shape costs only the rows that no longer read: the other reads stand, and the Inbox drops the item and its sync id",
+  () =>
+    Effect.gen(function* () {
+      const directory = yield* temporaryDirectoryScoped("entity-store-");
+      const first = yield* opened(directory, DANA);
+      yield* first.store.keep(KEPT_READ.TASK_LIST, LIST);
+      yield* first.store.keep(KEPT_READ.INBOX, INBOX);
+      yield* first.closed;
+
+      // An older build kept a second thread whose status this build no longer reads, under its own shapes' hash.
+      const fileSystem = yield* FileSystem.FileSystem;
+      const kept = JSON.parse(yield* openedText(directory));
+      const [thread] = INBOX.items;
+      assert.ok(thread !== undefined);
+
+      const stale = {
+        ...thread,
+        item: { ...thread.item, id: "6b5a4f3e-2d1c-4b0a-9f8e-7d6c5b4a3f2e", status: 42 },
+      };
+
+      kept.hash = "another build's";
+      kept.reads[KEPT_READ.INBOX].items.push(stale);
+      const sealed = Base64.encode(testCipher().encrypt(JSON.stringify(kept)));
+      yield* fileSystem.writeFileString(yield* fileOf(directory), sealed);
+
+      const reopened = yield* opened(directory, DANA);
+
+      assert.deepEqual(reopened.store.stored(KEPT_READ.TASK_LIST), LIST);
+      assert.deepEqual(reopened.store.stored(KEPT_READ.INBOX), { items: INBOX.items });
+      yield* reopened.closed;
+    }).pipe(Effect.provide(files)),
 );
 
 it.effect(
