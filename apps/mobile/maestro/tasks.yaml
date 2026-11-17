@@ -140,7 +140,11 @@ env:
     env:
       ROW: Weekly digest email
       ITEM: Permanently delete
-- tapOn: "Permanently delete"
+# Note that the tap is never retried, because a retry once the menu has
+# closed lands behind the question and puts it away.
+- tapOn:
+    text: "Permanently delete"
+    retryTapIfNoChange: false
 - assertVisible: "Permanently delete task?"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-delete-ask
@@ -365,7 +369,11 @@ env:
 - assertVisible: "Copy link"
 - assertVisible: "Permanently delete"
 - takeScreenshot: task-more-menu
-- tapOn: "Permanently delete"
+# Note that the tap is never retried, because a retry once the menu has
+# closed lands behind the question and puts it away.
+- tapOn:
+    text: "Permanently delete"
+    retryTapIfNoChange: false
 - assertVisible: "Permanently delete task?"
 - waitForAnimationToEnd
 - takeScreenshot: task-delete-ask
