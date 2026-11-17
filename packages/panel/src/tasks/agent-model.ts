@@ -8,6 +8,7 @@ import {
 import { AGENT_PART, agentParts, endTurnOf, endTurnSummary } from "@repo/features/agent-parts";
 import {
   ACTION,
+  billingRequiredWords,
   credentialMissingWords,
   deviceAwayWords,
   HOST_REMOVED,
@@ -48,6 +49,7 @@ import {
   type NativeAgentRuntime,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
+import { BILLING_REFUSAL } from "@repo/features/billing-refusal-wire";
 import type { DeviceLaunchStep, DeviceLaunchUnstarted } from "@repo/features/device-agent-wire";
 import {
   FAILURE_REASON,
@@ -957,6 +959,26 @@ function planRefusalWords(refused: RefusedCall, payer: AgentPayer | undefined): 
   return undefined;
 }
 
+/**
+ * A cloud agent's Start billing refused: its sentence, and for an owner or
+ * admin of the task's workspace, the press that sets billing up, or manages
+ * it where an invoice was given up on.
+ */
+function billingFailure(refused: RefusedCall, taskId: string | null): Failure {
+  const text = billingRequiredWords(refused.billingRefusal, refused.billingManager);
+
+  if (refused.billingManager !== true || taskId === null) return callFailure(text);
+
+  return {
+    reason:
+      refused.billingRefusal === BILLING_REFUSAL.BLOCKED
+        ? FAILURE_REASON.MANAGE_BILLING
+        : FAILURE_REASON.SET_UP_BILLING,
+    text,
+    taskId,
+  };
+}
+
 /** What a Start that did not start says beside the button, and what mends it, naming the task's device where it refused and the panel knows it. */
 export function startFailureNote(
   refused: RefusedCall,
@@ -971,6 +993,10 @@ export function startFailureNote(
     return callFailure(
       localAgentRefusalWords(refused.localAgentRefusal, refused.refusedDevice ?? device),
     );
+  }
+
+  if (refused.failure === AGENT_CALL_FAILURE.BILLING_REQUIRED) {
+    return billingFailure(refused, taskId);
   }
 
   return (

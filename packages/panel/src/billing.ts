@@ -11,9 +11,12 @@ import type { BillingStatusAnswer } from "@repo/features/billing-wire";
 import { managesWorkspace } from "@repo/features/workspace-role";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { queryOptions, useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
 import { askAct } from "./act.js";
 import { QUERY_ROOT } from "./query-keys.js";
+import { useTaskWorkspaceOf } from "./tasks/use-task-relation-writes.js";
 
 /** The workspace's billing, read as a place drawing it opens and on Try again. */
 export function billingStatusQuery(workspaceId: string) {
@@ -45,4 +48,36 @@ export function useBillingShown(workspace: Workspace | undefined): boolean {
   });
 
   return manages && billingIsLive(status.data);
+}
+
+/**
+ * Opens Stripe's page for the workspace a task belongs to, as a refused
+ * cloud Start's press does: Checkout to set billing up, or the Customer
+ * Portal to manage it. Where the host could not open it, or the task's
+ * workspace is not held, Settings › Billing opens instead, which says why
+ * and offers the same press.
+ */
+export function useOpenTaskBilling(
+  onOpenSettings: (link: SettingsLink) => void,
+): (taskId: string, manage: boolean) => void {
+  const workspaceOf = useTaskWorkspaceOf();
+
+  return useCallback(
+    (taskId: string, manage: boolean) => {
+      const workspaceId = workspaceOf(taskId);
+
+      const settings = () =>
+        onOpenSettings({
+          page: SETTINGS_VIEW.BILLING,
+          ...(workspaceId === undefined ? undefined : { workspaceId }),
+        });
+
+      if (workspaceId === undefined) return settings();
+
+      const kind = manage ? ACT_KIND.WORKSPACE_BILLING_PORTAL : ACT_KIND.WORKSPACE_BILLING_SETUP;
+
+      void askAct(kind, { workspaceId }).catch(settings);
+    },
+    [workspaceOf, onOpenSettings],
+  );
 }

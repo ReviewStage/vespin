@@ -30,6 +30,7 @@ const ACCOUNT: BillingEnvironmentValues = {
   live: false,
   stripeSecretKey: undefined,
   stripeWebhookSecret: undefined,
+  exemptWorkspaceId: undefined,
 };
 
 /** The fields of a create's body the tests pick it out by; the rest is compared whole. */
@@ -273,6 +274,7 @@ it.layer(getTestDB())("usage sent to Metronome", (it) => {
               live: false,
               stripeSecretKey: undefined,
               stripeWebhookSecret: undefined,
+              exemptWorkspaceId: undefined,
             }),
           ),
         ),

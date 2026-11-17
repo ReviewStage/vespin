@@ -245,6 +245,7 @@
     "./workspace-environment-wire": "./src/workspace-environment-wire.js",
     "./workspace-sandbox-setup-wire": "./src/workspace-sandbox-setup-wire.js",
     "./workspace-sandbox-size-wire": "./src/workspace-sandbox-size-wire.js",
+    "./billing-refusal-wire": "./src/billing-refusal-wire.js",
     "./billing-wire": "./src/billing-wire.js",
     "./repository-reach-wire": "./src/repository-reach-wire.js",
     "./run-actions-model": "./src/run-actions-model.js",

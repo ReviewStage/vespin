@@ -135,6 +135,7 @@ import {
   allowedCommandAddRequestSchema,
   allowedCommandEditRequestSchema,
 } from "./allowed-command-wire.js";
+import type { BillingRefusal } from "./billing-refusal-wire.js";
 import {
   CHAPTERS_MODEL,
   CHAPTERS_PICK_LIST,
@@ -251,6 +252,8 @@ type Failed = {
   readonly provider?: ModelProvider;
   readonly localAgentRefusal?: LocalAgentRefusal;
   readonly refusedDevice?: RefusedDevice;
+  readonly billingRefusal?: BillingRefusal;
+  readonly billingManager?: boolean;
 };
 
 /** The refusals a Start's contract declares, which are the ones a refusal beside a task it made may be read as. */

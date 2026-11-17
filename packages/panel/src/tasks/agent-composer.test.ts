@@ -858,6 +858,7 @@ async function mountedRefusedForMove() {
     openWorkspaceGitHub: ignore,
     openGitHub: ignore,
     chooseRepository: ignore,
+    openBilling: () => undefined,
     moveTask: () => new Promise<boolean>((resolve) => moves.push({ resolve })),
   };
 
@@ -925,6 +926,7 @@ async function mountedRefusedOnToken(unreached: RepositoryUnreached) {
     openWorkspaceGitHub: ignore,
     openGitHub: (url) => opened.github.push(url),
     chooseRepository: ignore,
+    openBilling: () => undefined,
     moveTask: () => Promise.resolve(false),
   };
 

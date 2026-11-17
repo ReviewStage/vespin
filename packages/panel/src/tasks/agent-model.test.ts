@@ -24,6 +24,7 @@ import {
   LOCAL_AGENT_REFUSAL,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
+import { BILLING_REFUSAL, type BillingRefusal } from "@repo/features/billing-refusal-wire";
 import { FAILURE_REASON, remedyLabel } from "@repo/features/failure-remedy";
 import { choiceOn, effortFor } from "@repo/features/model-effort";
 import { MODEL_PROVIDER, MODEL_SPEED } from "@repo/features/models-wire";
@@ -1003,6 +1004,37 @@ test("a missing credential's press names the harness to connect, and Settings wh
   assert.deepEqual(
     [missing(MODEL_PROVIDER.ANTHROPIC), missing(MODEL_PROVIDER.OPENAI), missing()],
     ["Connect Claude", "Connect Codex", "Open Settings"],
+  );
+});
+
+test("a cloud Start billing refused offers an owner or admin Set up billing, or Manage billing once a payment failed, and a member the words alone", () => {
+  const taskId = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
+
+  const refused = (billingRefusal: BillingRefusal, billingManager: boolean) =>
+    startFailureNote(
+      { failure: AGENT_CALL_FAILURE.BILLING_REQUIRED, billingRefusal, billingManager },
+      taskId,
+    );
+
+  assert.deepEqual(
+    [
+      refused(BILLING_REFUSAL.SET_UP, true),
+      refused(BILLING_REFUSAL.BLOCKED, true),
+      refused(BILLING_REFUSAL.SET_UP, false).reason,
+    ],
+    [
+      {
+        reason: FAILURE_REASON.SET_UP_BILLING,
+        text: "This workspace has used its free cloud usage for the month, so set up billing to start more cloud agents.",
+        taskId,
+      },
+      {
+        reason: FAILURE_REASON.MANAGE_BILLING,
+        text: "This workspace's last payment failed, so update its card in Manage billing to start cloud agents again.",
+        taskId,
+      },
+      FAILURE_REASON.OTHER,
+    ],
   );
 });
 

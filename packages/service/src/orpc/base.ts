@@ -26,7 +26,7 @@
 import { presentedClient } from "@repo/features/client-identity";
 import "@orpc/experimental-effect/extensions/effect";
 import { middlewareGen, type WithEffectContext } from "@orpc/experimental-effect";
-import { implement, type RouterImplementerWithMiddlewares } from "@orpc/server";
+import { implement, type MergedContext, type RouterImplementerWithMiddlewares } from "@orpc/server";
 import type { ResponseHeadersHandlerPluginContext } from "@orpc/server/plugins";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { type KeyRing, parseKeyRing } from "@repo/database/models/provider-key-seal";
@@ -147,6 +147,9 @@ function forAccount(context: HostedContext, userId: string): WithEffectContext<W
 }
 
 /** The hosted contract to implement, every procedure taking the context above, its type named because the inferred one is past the length declarations will hold. */
+/** The context every hosted procedure runs in: the request's, with the web runtime's services, as a resource's declared type names it. */
+export type HostedProcedureContext = MergedContext<HostedContext, WithEffectContext<WebServices>>;
+
 export const hosted: RouterImplementerWithMiddlewares<
   HostedContract,
   HostedContext,
