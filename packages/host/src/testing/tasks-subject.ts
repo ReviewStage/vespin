@@ -119,7 +119,6 @@ import {
   type TASKS_FOLLOWS,
   WORKSPACE_ACTS,
 } from "../contract/index.js";
-import type { EntityStore } from "../entity-store.js";
 import { type ActHandler, ActRefused, type HostActTable } from "../host-acts.js";
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "../kept-content.js";
 import { windowFocus } from "../window-focus.js";
@@ -1658,8 +1657,6 @@ export function subject(
     sendsNetwork?: boolean;
     /** The account signed in now, Dana's where none is named. */
     accountId?: () => string;
-    /** The account's lists kept on disk, none where none is named. */
-    entities?: EntityStore;
     /** The pool the composer's rows stand in, a fresh one that keeps no write waiting where none is named. */
     pool?: EntityPool;
   } = {},
@@ -1726,7 +1723,6 @@ export function subject(
       kept,
       focus,
       pool,
-      entities: () => options.entities,
       offlineRefused: { clear: () => undefined },
     }).pipe(Effect.provide(noNetwork));
 
@@ -1740,7 +1736,6 @@ export function subject(
       kept,
       focus,
       pool,
-      entities: () => options.entities,
       githubMoved: Effect.void,
       recordProductEvent: () => undefined,
       tasks: tasks.workspaces,

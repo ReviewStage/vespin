@@ -1,79 +1,24 @@
 import assert from "node:assert/strict";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
-import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { entityPool, type FieldChange, fieldKind, type WriteDeclaration } from "@repo/sync";
 import { Effect, Exit, Layer, Path, PubSub, Result, Schema, Scope, Stream } from "effect";
 import { Base64 } from "effect/encoding";
 import * as FileSystem from "effect/FileSystem";
 import { TestClock } from "effect/testing";
-import {
-  ENTITY_STORE_FILE_NAME,
-  KEPT_READ,
-  type KeptRows,
-  openEntityStore,
-} from "./entity-store.js";
-import { planListRow } from "./testing/task-list-rows.js";
+import { ENTITY_STORE_FILE_NAME, openEntityStore } from "./entity-store.js";
 import { testCipher } from "./testing/test-cipher.js";
 
 /**
- * The account's lists kept on disk, over a state root of the test's own and
- * a cipher standing in for the Keychain's: what a store kept comes back to
- * the same account at the same row shapes, and a file kept for another
- * account, or at other row shapes, draws nothing and is deleted as the store
- * opens. Synthetic accounts and rows throughout.
+ * The account's waiting writes kept on disk, over a state root of the test's
+ * own and a cipher standing in for the Keychain's: what a store kept comes
+ * back to the same account alone. Synthetic accounts and rows throughout.
  */
 
 const DANA = "user-dana";
 
 const files = Layer.merge(NodeFileSystem.layer, NodePath.layer);
-
-/** The task list as one answer left it, read at sync id 7. */
-const LIST: KeptRows[typeof KEPT_READ.TASK_LIST] = {
-  rows: {
-    tasks: [planListRow("7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10", "Teammate invitations")],
-    agents: [],
-  },
-  at: "7",
-};
-
-/** The Inbox as one answer left it, read at sync id 7: one thread, its message's words and file's name among it. */
-const INBOX: KeptRows[typeof KEPT_READ.INBOX] = {
-  items: [
-    {
-      item: {
-        id: "2f6c1d8e-4b3a-4e5f-9a7b-1c2d3e4f5a6b",
-        agentId: "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d",
-        key: "push-access",
-        revision: 1,
-        version: 5,
-        title: "Push to the release branch?",
-        needsReply: true,
-        status: "open",
-        thread: [
-          {
-            id: "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b",
-            author: "agent",
-            text: "May I push?",
-            files: [
-              {
-                attachmentId: "3d2c1b0a-9f8e-4d7c-8b6a-5f4e3d2c1b0a",
-                name: "plan.pdf",
-                mediaType: "application/pdf",
-              },
-            ],
-            createdAt: 1_800_000_000_000,
-          },
-        ],
-        postedAt: 1_800_000_000_000,
-        updatedAt: 1_800_000_000_000,
-      },
-      taskId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
-    },
-  ],
-  at: "7",
-};
 
 /** A store opened over `directory` for `accountId` in a scope of its own, which the test closes as a quit does. */
 function opened(directory: string, accountId: string) {
@@ -111,111 +56,6 @@ const writtenText = (directory: string) =>
 
     return yield* fileSystem.readFileString(file);
   });
-
-/** The file kept again as a build of other row shapes would have kept it: every byte its own but the hash. */
-const keptAtOtherSchemas = (directory: string) =>
-  Effect.gen(function* () {
-    const fileSystem = yield* FileSystem.FileSystem;
-    const kept = { ...JSON.parse(yield* openedText(directory)), hash: "another build's" };
-    const sealed = Base64.encode(testCipher().encrypt(JSON.stringify(kept)));
-    yield* fileSystem.writeFileString(yield* fileOf(directory), sealed);
-  });
-
-it.effect.each([
-  { kept: "the same account at the same row shapes", reopenedAs: DANA, otherSchemas: false },
-  { kept: "another account", reopenedAs: "user-ravi", otherSchemas: false },
-  { kept: "other row shapes", reopenedAs: DANA, otherSchemas: true },
-])("a file kept for $kept", ({ reopenedAs, otherSchemas }) =>
-  Effect.gen(function* () {
-    const directory = yield* temporaryDirectoryScoped("entity-store-");
-    const first = yield* opened(directory, DANA);
-    yield* first.store.keep(KEPT_READ.TASK_LIST, LIST);
-    yield* first.store.keep(KEPT_READ.INBOX, INBOX);
-    yield* first.closed;
-
-    if (otherSchemas) yield* keptAtOtherSchemas(directory);
-
-    const reopened = yield* opened(directory, reopenedAs);
-
-    const stays = yield* Effect.flatMap(FileSystem.FileSystem, (fileSystem) =>
-      Effect.flatMap(fileOf(directory), (file) => fileSystem.exists(file)),
-    );
-
-    const fits = reopenedAs === DANA && !otherSchemas;
-    assert.deepEqual(reopened.store.stored(KEPT_READ.TASK_LIST), fits ? LIST : undefined);
-    assert.deepEqual(reopened.store.stored(KEPT_READ.INBOX), fits ? INBOX : undefined);
-    assert.equal(stays, fits);
-  }).pipe(Effect.provide(files)),
-);
-
-it.effect(
-  "lists that moved are written within thirty seconds, sealed, while the store stands",
-  () =>
-    Effect.gen(function* () {
-      const directory = yield* temporaryDirectoryScoped("entity-store-");
-      const { store, closed } = yield* opened(directory, DANA);
-      // Note that the store closes before its folder is removed, whatever the assertions find.
-      yield* Effect.addFinalizer(() => closed);
-      yield* store.keep(KEPT_READ.TASK_LIST, LIST);
-
-      yield* TestClock.adjust("30 seconds");
-      const sealed = yield* writtenText(directory);
-
-      assert.equal(sealed.includes("Teammate invitations"), false, "nothing is kept in the clear");
-      assert.deepEqual(JSON.parse(yield* openedText(directory)).reads, {
-        [KEPT_READ.TASK_LIST]: LIST,
-      });
-    }).pipe(Effect.provide(files)),
-);
-
-it.effect(
-  "where the shell names its moments, lists that moved wait for one rather than thirty seconds, then are written",
-  () =>
-    Effect.gen(function* () {
-      const directory = yield* temporaryDirectoryScoped("entity-store-");
-      const due = yield* PubSub.unbounded<void>();
-      let saves = 0;
-
-      // Note that a save's first touch of the disk is making its folder, counted here, since a write the disk has not finished can't be awaited from a test.
-      const counted = Layer.effect(
-        FileSystem.FileSystem,
-        Effect.map(FileSystem.FileSystem, (fileSystem) => ({
-          ...fileSystem,
-          makeDirectory: (path: string, options?: Parameters<typeof fileSystem.makeDirectory>[1]) =>
-            Effect.suspend(() => {
-              saves += 1;
-
-              return fileSystem.makeDirectory(path, options);
-            }),
-        })),
-      ).pipe(Layer.provide(NodeFileSystem.layer));
-
-      const scope = yield* Scope.make();
-      yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
-
-      const store = yield* Scope.provide(scope)(
-        openEntityStore({
-          directory,
-          cipher: testCipher(),
-          accountId: DANA,
-          listsDue: Stream.fromPubSub(due),
-        }),
-      ).pipe(Effect.provide(Layer.merge(counted, NodePath.layer)));
-
-      yield* store.keep(KEPT_READ.TASK_LIST, LIST);
-      yield* TestClock.adjust("30 seconds");
-      yield* Effect.yieldNow;
-
-      assert.equal(saves, 0, "nothing is written while the app stays in front");
-
-      yield* PubSub.publish(due, undefined);
-      yield* writtenText(directory);
-
-      assert.deepEqual(JSON.parse(yield* openedText(directory)).reads, {
-        [KEPT_READ.TASK_LIST]: LIST,
-      });
-    }).pipe(Effect.provide(files)),
-);
 
 /** A plan's row as the waiting write below renames it. */
 interface Row {
@@ -291,41 +131,5 @@ it.effect(
       const another = yield* opened(directory, "user-ravi");
       assert.deepEqual(another.store.refused, []);
       yield* another.closed;
-    }).pipe(Effect.provide(files)),
-);
-
-it.effect(
-  "a workspace the kept list no longer names leaves with its people, and a late answer for it is not kept",
-  () =>
-    Effect.gen(function* () {
-      const directory = yield* temporaryDirectoryScoped("entity-store-");
-      const { store, closed } = yield* opened(directory, DANA);
-
-      const people = {
-        members: [
-          { userId: "user-ada", name: "Ada", email: "ada@app.test", role: "owner", image: null },
-        ],
-        former: [{ userId: "user-lee", name: "Lee", image: null }],
-      };
-
-      yield* store.keepIn(KEPT_READ.MEMBERS, "workspace-acme", people);
-      yield* store.keepIn(KEPT_READ.MEMBERS, "workspace-relay", people);
-
-      yield* store.keep(KEPT_READ.WORKSPACES, [
-        {
-          id: "workspace-acme",
-          name: "acme",
-          role: WORKSPACE_ROLE.MEMBER,
-          github: null,
-          githubInstallations: [],
-          memberCount: 2,
-        },
-      ]);
-      yield* store.keepIn(KEPT_READ.MEMBERS, "workspace-relay", people);
-      // Note that the store is closed before the folder is removed, so a save its open forked late, after the keeps above, is not still writing into it.
-      yield* closed;
-
-      assert.deepEqual(store.storedIn(KEPT_READ.MEMBERS, "workspace-acme"), people);
-      assert.equal(store.storedIn(KEPT_READ.MEMBERS, "workspace-relay"), undefined);
     }).pipe(Effect.provide(files)),
 );

@@ -409,7 +409,7 @@ it.effect(
 );
 
 it.effect(
-  "a bounded kept read hands the store only its first rows that fit, and no cursor once it leaves one out",
+  "a bounded kept read hands the store only its first rows that fit, and its cursor whole once it leaves one out",
   () =>
     Effect.gen(function* () {
       const { rows, told } = yield* keptStanding({
@@ -434,7 +434,7 @@ it.effect(
             held: ["1", "2"],
             cursor: "c1",
           },
-          { upserted: [], held: ["1", "2"], cursor: undefined },
+          { upserted: [], held: ["1", "2"], cursor: "c2" },
         ],
       );
     }),
@@ -522,6 +522,7 @@ it.effect(
 
       assert.deepEqual(rows.rows(), [triage, { ...deploy, name: "Renamed" }]);
       assert.deepEqual(rows.stored, { syncId: 7 });
+      assert.equal(rows.loaded, true);
       assert.deepEqual(told, [], "what the store held is not handed back to it");
 
       const ship = { id: "3", name: "Ship", runs: 0 };
@@ -542,5 +543,6 @@ it.effect("a kept read the store holds nothing of stands empty, with no cursor",
 
     assert.deepEqual(rows.rows(), []);
     assert.equal(rows.stored, undefined);
+    assert.equal(rows.loaded, false);
   }),
 );

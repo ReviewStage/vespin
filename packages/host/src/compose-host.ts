@@ -368,8 +368,9 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     );
 
     /**
-     * The signed-in account's local database (`local-copy.ts`), written and
-     * read by nothing in this release: only where the platform has a driver,
+     * The signed-in account's local database (`local-copy.ts`), which every
+     * kept list draws from at the gate opening and writes as it answers:
+     * only where the platform has a driver,
      * the Mac and the iPhone, and the run needs an account, so neither a
      * browser tab nor a fixture run keeps one.
      */
@@ -386,7 +387,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
      * them (`@repo/sync`). Where the run needs an account, a row write
      * that may wait for the service is sent under a key of the host's own
      * minting and waits while the service does not answer: kept on disk
-     * beside the lists where they are kept (`openEntities`), and in a
+     * where the account's store seals them (`openEntities`), and in a
      * browser tab for the tab's life alone, and sent again only as the
      * account that asked it. A fixture run keeps none waiting.
      */
@@ -401,7 +402,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         : undefined,
     );
 
-    /** The signed-in account's lists kept on disk (`entity-store.ts`), from the account gate opening until it closes; none where nothing seals them. */
+    /** The signed-in account's waiting writes kept on disk (`entity-store.ts`), from the account gate opening until it closes; none where nothing seals them. */
     let entities: { readonly store: EntityStore; readonly scope: Scope.Closeable } | undefined;
     yield* Effect.addFinalizer(() =>
       entities === undefined ? Effect.void : Scope.close(entities.scope, Exit.void),
@@ -444,7 +445,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         kept,
         focus,
         pool,
-        entities: () => entities?.store,
         offlineRefused,
         client: new HostedTaskClient({
           serviceBaseUrl: kernel.hostedServiceBaseUrl,
@@ -462,7 +462,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         kept,
         focus,
         pool,
-        entities: () => entities?.store,
         githubMoved: integrations.githubMoved,
         recordProductEvent: settings.recordProductEvent,
         tasks: tasks.workspaces,
@@ -545,7 +544,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         inboxNamed: tasks.inboxNamed,
         pool,
         agentListed,
-        entities: () => entities?.store,
       }),
     );
 
@@ -568,7 +566,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         account,
         accountId,
         pool,
-        entities: () => entities?.store,
         client: new HostedAutomationClient({
           serviceBaseUrl: kernel.hostedServiceBaseUrl,
           credential: account.credential,

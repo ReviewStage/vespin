@@ -140,7 +140,7 @@ export interface SidebarCollections {
   readonly keep: (txid: string | undefined, kept: TaskSections) => Effect.Effect<void>;
 }
 
-/** The account's sidebar, empty until its follow first answers or a pin is drawn. */
+/** The account's sidebar, empty until its follow first answers or a pin is drawn, where the local database held none of it. */
 export function sidebarCollections(
   dependencies: SidebarDependencies,
 ): Effect.Effect<SidebarCollections, never, Scope.Scope> {
@@ -185,6 +185,9 @@ export function sidebarCollections(
         repositoryPins: pinsInOrder(pins.rows()),
       });
     };
+
+    // Note that what the local database held of the sidebar is drawn at once, before its follow answers.
+    if (sections.loaded || pins.loaded) drawn();
 
     /** The sections answered, as the account's one row; none while nobody is signed in. */
     const sectionsRows = (answered: TaskSections): readonly SectionsRow[] => {

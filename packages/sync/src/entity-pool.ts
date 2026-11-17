@@ -191,8 +191,8 @@ export interface KeptRow {
 /**
  * One answer of a kept read, as the store is handed it: the synced rows that
  * moved since the read last answered, upserted and deleted by key, the keys
- * the read now holds, and its cursor with the answer's other fields; none
- * where the read answered none or its bound left rows out.
+ * the read now holds, and its cursor with the answer's other fields, whole
+ * even where its bound left rows out; none where the read answered none.
  */
 export interface KeptAnswer {
   readonly read: string;
@@ -291,6 +291,8 @@ export interface HeldRows<Row extends object, Change = unknown> {
   readonly standing: () => readonly Change[];
   /** The cursor the store held for a kept read as it stood, which its follow reads past; none where it held none. */
   readonly stored: unknown;
+  /** Whether the store held the kept read as it stood, rows or none, so the read draws what it held before the service answers. */
+  readonly loaded: boolean;
 }
 
 /**
@@ -783,21 +785,21 @@ function answeredWhole<Row extends object, Change>(
  * What `store` holds of `holding`'s kept read taken as its answer, before the
  * service's first: each row held and counted as already reported, but taken
  * only where the pool holds none of its key, since one another read answered
- * is newer; answering the stored cursor, none where it held nothing.
+ * is newer; answering what it held, none where it held nothing.
  */
 function loadedFrom<Row extends object, Change>(
   rows: KindRows<Row, Change>,
   holding: Holding<Row, Change>,
   store: RowsStore,
-): Effect.Effect<unknown> {
+): Effect.Effect<KeptLoad | undefined> {
   const kept = holding.read.kept;
 
-  if (kept === undefined) return Effect.void;
+  if (kept === undefined) return Effect.undefined;
 
   return Effect.flatMap(
     store.loaded({ read: kept.name, kind: kept.kind, workspace: kept.workspace }),
     (load) => {
-      if (load === undefined) return Effect.void;
+      if (load === undefined) return Effect.undefined;
       // SAFETY: the store hands back only rows it was handed as this kind's (`KeptAnswer`), under the kind it names.
       const keyed = new Map(load.rows.map((row) => [rows.kind.key(row as Row), row as Row]));
       const synced = rows.synced.held();
@@ -810,7 +812,7 @@ function loadedFrom<Row extends object, Change>(
           new Map([...keyed].filter(([key]) => !synced.has(key))),
           new Set(keyed.keys()),
         ),
-        load.cursor,
+        load,
       );
     },
   );
@@ -835,7 +837,9 @@ function cut<Row>(kept: KeptRead<Row>, rows: readonly Row[]): readonly Row[] {
 /**
  * A kept read's answer as the store is handed it, read the moment the answer
  * is taken: the synced rows of its cut that moved since it last answered, the
- * keys the cut holds, and its cursor where the cut holds every row.
+ * keys the cut holds, and its cursor, which the read keeps whole even where
+ * the cut leaves rows out, since the read alone knows whether it can follow
+ * on past it from what was kept.
  */
 function reported<Row extends object, Change>(
   rows: KindRows<Row, Change>,
@@ -859,7 +863,7 @@ function reported<Row extends object, Change>(
     ),
     deleted: changes.flatMap((change) => (change.type === "delete" ? [change.key] : [])),
     held: [...next.keys()],
-    cursor: keptRows.length === all.length ? cursor : undefined,
+    cursor,
   };
 }
 
@@ -902,11 +906,11 @@ function stood<Row extends object, Change>(
   return Effect.map(
     Effect.flatMap(acquired, (holding) =>
       Effect.map(
-        store === undefined ? Effect.void : loadedFrom(rows, holding, store),
-        (stored) => ({ holding, stored }),
+        store === undefined ? Effect.undefined : loadedFrom(rows, holding, store),
+        (load) => ({ holding, load }),
       ),
     ),
-    ({ holding, stored }): HeldRows<Row, Change> => ({
+    ({ holding, load }): HeldRows<Row, Change> => ({
       answer: (answered, how = {}) => {
         const { held, gone, at } = how;
 
@@ -946,7 +950,8 @@ function stood<Row extends object, Change>(
         return [...holding.held].flatMap((key) => synced.get(key) ?? []);
       },
       standing: () => rows.standing.map((write) => write.change),
-      stored,
+      stored: load?.cursor,
+      loaded: load !== undefined,
     }),
   );
 }

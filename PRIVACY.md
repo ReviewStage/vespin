@@ -442,11 +442,13 @@ Protection, and deletes it when you sign out. Your sign-in tokens are still
 kept encrypted under a key in the macOS Keychain, or in the iPhone's
 Keychain, which never leaves that iPhone.
 
-Until a coming release switches over to reading the database, the app also
-keeps the older copy of the same lists in one file, `entities.sealed`,
-encrypted under a key in the Keychain, and deletes it when you sign out.
-When that release switches over, it moves your waiting changes and
-undelivered messages from the file into the database and deletes the file. Transcripts
+The app draws your lists from the database. Until a coming release moves
+them there too, it also keeps your waiting changes and undelivered messages
+in an older file, `entities.sealed`, encrypted under a key in the Keychain,
+and deletes it when you sign out; the lists a build before kept in that file
+are written out of it the first time it is saved again. When that release
+switches over, it moves your waiting changes and undelivered messages from
+the file into the database and deletes the file. Transcripts
 and pictures you open are held in memory only.
 
 ### Spotlight and Handoff on your iPhone

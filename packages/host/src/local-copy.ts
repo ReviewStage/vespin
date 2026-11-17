@@ -1,5 +1,5 @@
 /**
- * local-copy.ts -- the signed-in account's local database as the sync engine's store: opened at sign-in, written as the pool answers and its writes wait, and deleted at sign-out, while nothing reads it back yet.
+ * local-copy.ts -- the signed-in account's local database as the sync engine's store: opened at sign-in, written as the pool answers and its writes wait, read back as each kept read first stands, and deleted at sign-out.
  *
  * This is the shadow release of the local database (`local-database.ts`).
  * The pool is handed one store for its life (`PoolOptions.store`), which
@@ -8,10 +8,11 @@
  * to `localRows`, its waiting writes to `localOutbox`, and the agent
  * messages the service refused to `localRefused`, each move written whole.
  *
- * Nothing loads from it: the store's `loaded` answers none, so each read
- * still draws first from `entities.sealed`, and the queues are still laid
- * back from there. A database that will not open leaves the store doing
- * nothing for that sign-in, and the failure is reported to Sentry by its
+ * Each kept read draws from it as it first stands (`loaded`), before the
+ * service answers, as Linear's local bootstrap does, and its follow reads
+ * past the cursor it kept; a read stood while none is open loads nothing.
+ * The queues are still laid back from `entities.sealed`. A database that
+ * will not open leaves the store doing nothing for that sign-in, and the failure is reported to Sentry by its
  * tag and its cause's kind, never by a row or a path, which is what the
  * release's gate reads.
  */
@@ -84,7 +85,6 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
 
   yield* Effect.addFinalizer(() => close);
 
-  // Note that nothing is loaded in this release, so every read draws first from `entities.sealed`.
   const store: PoolStore = {
     outbox: {
       added: (entry: QueuedEntry) => opened?.outbox.added(entry) ?? Effect.void,
@@ -92,7 +92,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
     },
     rows: {
       answered: (answer: KeptAnswer) => opened?.rows.answered(answer) ?? Effect.void,
-      loaded: () => Effect.undefined,
+      loaded: (name) => opened?.rows.loaded(name) ?? Effect.undefined,
     },
   };
 
