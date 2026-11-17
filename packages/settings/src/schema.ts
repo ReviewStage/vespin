@@ -664,9 +664,10 @@ export const APP_SETTING_SCHEMA = {
     guard: isGitHubWakesOffJson,
   }),
   /*
-   * Whether the account keeps an Inbox: on, as it always was, agents it
-   * starts post what they need of it to threads its Inbox lists; off, they
-   * are offered no thread to post and ask in their replies instead, and no
+   * Whether the account keeps an Inbox: on, as it always was, the agents on
+   * tasks assigned to it, or that it started on a task assigned to no one,
+   * post what they need of it to threads its Inbox lists; off, they are
+   * offered no thread to post and ask in their replies instead, and no
    * window of the account draws the Inbox. Nothing stored reads as on. An
    * account preference riding a part of the snapshot of its own, since the
    * service reads it as an agent's session starts (`inboxOn`).

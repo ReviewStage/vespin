@@ -15,8 +15,9 @@ import {
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
-import { organization, user } from "@repo/database/schemas/auth";
+import { member, organization, user } from "@repo/database/schemas/auth";
 import { conversations, turns } from "@repo/database/schemas/storage";
+import { task as taskTable } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   experimentInTestWorkspace,
@@ -777,6 +778,30 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       agent: Effect.gen(function* () {
         const agent = yield* agentWithBearer;
         yield* writeAccountPreferences(agent.userId, { inbox: false });
+
+        return agent;
+      }),
+      withheld: ["post_thread", "list_threads", "withdraw_ask"],
+    },
+    {
+      why: "whose task's assignee turned the Inbox off, though its starter keeps one, the threads it posts",
+      agent: Effect.gen(function* () {
+        const agent = yield* agentWithBearer;
+        const db = yield* Database;
+        const assignee = `user-${randomUUID()}`;
+        yield* db.insert(user).values({ id: assignee, name: "Ada", email: `${assignee}@app.test` });
+        yield* db.insert(member).values({
+          id: randomUUID(),
+          organizationId: agent.organizationId,
+          userId: assignee,
+          role: "member",
+          createdAt: new Date(),
+        });
+        yield* db
+          .update(taskTable)
+          .set({ assigneeId: assignee })
+          .where(eq(taskTable.id, agent.taskId));
+        yield* writeAccountPreferences(assignee, { inbox: false });
 
         return agent;
       }),
