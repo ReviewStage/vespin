@@ -952,7 +952,7 @@ export function TaskRowDraft({
   drafting: boolean;
   /** Whether an add is still out. */
   pending: boolean;
-  /** Whether it stands after a run drawing only the rows near the view (`VirtualTaskRows`' `after`), holding each column as wide as the run's placed rows hold it. */
+  /** Whether it stands beside a run drawing only the rows near the view, after it (`VirtualTaskRows`' `after`) or over it (the Tasks page's group), holding each column as wide as the run's placed rows hold it. */
   placed?: boolean | undefined;
   /** What room the rows it stands under keep at their edges, whose first cell it starts at: a list's gutter for their box, or their inset. */
   edges?: TaskRowEdges | undefined;
