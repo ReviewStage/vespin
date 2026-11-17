@@ -9,7 +9,6 @@ import {
   ACTOR_KIND,
   ACTOR_STATE,
   type Actor,
-  APP_ACTOR,
   actorName,
   type PersonActor,
   personActor,
@@ -22,7 +21,7 @@ import { providerOf } from "./agent-model.js";
  * description-history-model.ts -- the version history's words for each revision, and how a revision's sections open; a version drawn against another is `@repo/features/description-version-diff`.
  *
  * A revision is drawn under its writer the way the rest of the window draws
- * them (`@repo/ui/actor-model`): the app's face for the notetaker, the reader by their
+ * them (`@repo/ui/actor-model`): the reader by their
  * account's picture as You, a teammate as the workspace's members list them,
  * a coding agent by its harness and title, and Earlier for the description as it
  * stood before its history began. Its line says
@@ -71,7 +70,7 @@ function personOf(by: DescriptionEditor | undefined, reader: HistoryReader): Act
 
 /**
  * Who wrote a revision: a member, the reader as You only where the revision
- * names them; the app; a coding agent by the title its row has now, wearing
+ * names them; a coding agent by the title its row has now, wearing
  * the harness of the agent the line names among the task's `agents`, or no
  * harness where the agent is not among them; or the description before history.
  */
@@ -85,8 +84,6 @@ export function revisionAuthorOf(
   switch (lastEdit.actor) {
     case DESCRIPTION_ACTOR.DEVELOPER:
       return personOf(lastEdit.by, reader);
-    case DESCRIPTION_ACTOR.NOTETAKER:
-      return APP_ACTOR;
     case DESCRIPTION_ACTOR.AGENT: {
       const agent = agents.find((each) => each.id === line.agentId);
 

@@ -14,7 +14,7 @@ void React;
  * agent tile draws too. Anthropic's press kit carries the Claude Code wordmark
  * but no mark of Clawd alone. Codex's is OpenAI's picture, drawn from the
  * files the app serves (`CodexArt`). Cursor's is its cube from `@repo/brand`'s
- * table, in the ink of the words it leads. Each fills the glyph cell of the
+ * table, in the text's own ink, as Cursor's brand files draw it. Each fills the glyph cell of the
  * row, tab, or chip it leads, which sizes it.
  */
 

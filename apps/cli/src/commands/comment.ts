@@ -26,7 +26,6 @@ import {
   type DescriptionCommentThreadAnswer,
 } from "@repo/features/description-comment-wire";
 import { locatedPhrase } from "@repo/features/description-notes";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { answer, CommandFailed, readInput } from "../output.js";
@@ -72,8 +71,6 @@ function writerOf(entry: DescriptionCommentEntry): string {
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT)
     return `Agent ${writer.agentId ?? ""}`.trim();
 
-  if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) return PRODUCT_NAME;
-
   return writer.by?.name ?? "A former member";
 }
 
@@ -89,7 +86,7 @@ function entryLines(entry: DescriptionCommentEntry): readonly string[] {
         ...(entry.files ?? []).map((file) => `    [file] ${file.name}`),
       ];
     case DESCRIPTION_COMMENT_ENTRY.ASKED:
-      return [`  ${writer} sent it to ${entry.asked?.agentId ?? PRODUCT_NAME}`];
+      return [`  ${writer} sent it to ${entry.asked?.agentId ?? "an agent"}`];
     case DESCRIPTION_COMMENT_ENTRY.RESOLVED:
       return [`  ${writer} resolved it`];
     case DESCRIPTION_COMMENT_ENTRY.REOPENED:
@@ -144,7 +141,7 @@ const written = Effect.fnUntraced(function* (
       ...(unsent.length === 0
         ? []
         : [
-            `Not sent to ${unsent.map((to) => to.agentId ?? PRODUCT_NAME).join(", ")}: they could not take it.`,
+            `Not sent to ${unsent.map((to) => to.agentId ?? "an agent").join(", ")}: they could not take it.`,
           ]),
     ],
     ids: [saved.thread.id],

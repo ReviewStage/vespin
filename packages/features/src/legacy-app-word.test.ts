@@ -19,11 +19,6 @@ import {
   GITHUB_TRIGGER_EVENT,
 } from "./automation-wire.js";
 import { keptPictureIdOf } from "./conversation-picture-wire.js";
-import {
-  DESCRIPTION_COMMENT_ACTOR,
-  descriptionCommentActorSchema,
-} from "./description-comment-wire.js";
-import { PAGE_SHOWER, pageShowerSchema } from "./page-wire.js";
 
 const PULL_REQUEST_OPENED = {
   kind: AUTOMATION_TRIGGER.GITHUB,
@@ -36,16 +31,6 @@ test.each([
     "an agent's archiver",
     () => Schema.decodeUnknownSync(agentArchiverSchema)("luke"),
     AGENT_ARCHIVER.APP,
-  ],
-  [
-    "a page version's shower",
-    () => Schema.decodeUnknownSync(pageShowerSchema)({ kind: "luke" }),
-    { kind: PAGE_SHOWER.APP },
-  ],
-  [
-    "a comment's actor",
-    () => Schema.decodeUnknownSync(descriptionCommentActorSchema)("luke"),
-    DESCRIPTION_COMMENT_ACTOR.APP,
   ],
   [
     "a wakeup line's channel",

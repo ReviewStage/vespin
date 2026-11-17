@@ -17,7 +17,7 @@ import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, onTestFinished, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
-import type { NavigationHistory } from "../places/window-history.js";
+import type { NavigationHistory, WindowHistory } from "../places/window-history.js";
 import type { SettingsPanelProps } from "../settings/settings-panel.js";
 import type { WorkspaceSettingsControl } from "../settings/workspace-page.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
@@ -151,7 +151,8 @@ function settingsProps(
 }
 
 /** A history with nothing to go back or forward to. */
-const NO_HISTORY: NavigationHistory = {
+const NO_HISTORY: NavigationHistory & Pick<WindowHistory, "away"> = {
+  away: undefined,
   canGoBack: false,
   canGoForward: false,
   onBack: ignore,
@@ -184,7 +185,7 @@ function SettingsHarness({
   stored?: SettingsPanelProps["settings"];
   room?: ShellRoom;
   step?: SettingsStep;
-  history?: NavigationHistory;
+  history?: NavigationHistory & Pick<WindowHistory, "away">;
 }): React.JSX.Element {
   const [view, setView] = useState<SettingsView>(opensOn);
 
@@ -818,6 +819,7 @@ test("on a phone the page list is headed by its way out alone, named for the ste
       },
       history: {
         ...NO_HISTORY,
+        away: { title: { label: "Inbox" } },
         canGoBack: true,
         steps: {
           back: [

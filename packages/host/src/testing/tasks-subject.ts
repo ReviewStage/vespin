@@ -1041,6 +1041,7 @@ export function fakeService(tasks: Task[]): FakeService {
           return service.slackBotAnswer;
         }),
       slackBotConnect: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      slackBotInstall: () => Effect.succeed(UNANSWERED_WORKSPACE),
       slackBotDisconnect: (workspaceId) =>
         Effect.suspend(() => {
           service.reads.push(`slack-bot-disconnect:${workspaceId}`);

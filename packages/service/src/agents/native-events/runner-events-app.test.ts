@@ -972,9 +972,13 @@ it.layer(SUITE)("the runner events route", (it) => {
       }),
   );
 
-  it.effect(
-    "a background subagent's call stays running past Claude Code's launch notice, and its task notification settles it",
-    () =>
+  it.effect.each([
+    { status: "completed", summary: "It is in queue.ts." },
+    // A stop the agent asked for is no failure, and its summary is the task's description.
+    { status: "stopped", summary: "find the queue" },
+  ])(
+    "a background subagent's call stays running past Claude Code's launch notice, and its task notification settles it answered: $status",
+    ({ status, summary }) =>
       Effect.gen(function* () {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
@@ -1018,9 +1022,9 @@ it.layer(SUITE)("the runner events route", (it) => {
             subtype: "task_notification",
             task_id: "a1",
             tool_use_id: "toolu_agent",
-            status: "completed",
+            status,
             output_file: "/tmp/a1.output",
-            summary: "It is in queue.ts.",
+            summary,
             ...top,
           },
           {
@@ -1048,7 +1052,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         ]);
         assert.deepEqual(rows.at(-1)?.parts.map(drawn), [
           ["step-start"],
-          ["tool-Agent", "output-available", "It is in queue.ts."],
+          ["tool-Agent", "output-available", summary],
           ["step-start"],
           ["text", "Found it."],
         ]);
@@ -2479,6 +2483,36 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         [[TURN_STATUS.FAILED, "failed thread/start: app-server did not answer in time"]],
       );
     }),
+  );
+
+  it.effect(
+    "a turn OpenAI's safeguards refused ends as a refusal, as Claude Code's does, rather than a model call failed",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CODEX, ["Review the classifier's records."]);
+        yield* post(
+          agent.bearer,
+          refusedLaunch(agent.lineId, 0, {
+            message: "This request was flagged as potentially violating our cyber policy.",
+            codexErrorInfo: "cyberPolicy",
+            additionalDetails: null,
+          }),
+        );
+        const db = yield* Database;
+
+        const ended = yield* db
+          .select({
+            status: turns.status,
+            failure: turns.failure,
+            failureDetail: turns.failureDetail,
+          })
+          .from(turns)
+          .where(eq(turns.conversationId, agent.target.conversationId));
+
+        // The agent reads as refused, which its tab offers a continue on another model for.
+        assert.deepEqual(ended.map(agentFailureOf), [AGENT_FAILURE.REFUSAL]);
+      }),
   );
 
   it.effect(

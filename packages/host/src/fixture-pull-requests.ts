@@ -2,8 +2,9 @@
  * fixture-pull-requests.ts -- the pull requests the Inbox fixture's invitations agent opened, as the host holds their parts for a Pull request surface: one ready to merge with its checks green, one whose checks failed, and one second in its merge queue; and how a change made to one moves it.
  *
  * The Inbox fixture lays them on the document where the host holds a pull
- * request's parts (`LIVE_READ.PULL_REQUEST`, its checks, its conversation),
- * each under the agent and its number, so the iPhone's pull request screen
+ * request's parts by its repository (`LIVE_READ.REPOSITORY_PULL_REQUEST`,
+ * its checks, its conversation), each under the fixture's workspace, the
+ * agent's repository, and its number, so the iPhone's pull request screen
  * reads them as it reads a live run's. A fixture run asks GitHub nothing, so
  * a change a screen makes is answered as made (`fixture-inbox.ts`'s act
  * door) and handed back here as a move (`pullRequestMoveOf`), which the run
@@ -11,11 +12,6 @@
  * it. Every person, repository, and line here is invented.
  */
 
-import type {
-  AgentOverviewChecksAnswerView,
-  AgentOverviewConversationAnswerView,
-  AgentOverviewPullRequestAnswerView,
-} from "@repo/features/agent-view";
 import {
   type AgentOverviewPullRequest,
   CHECK_STATE,
@@ -30,17 +26,23 @@ import {
   REVIEW_STATE,
 } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type {
+  RepositoryOverviewChecksAnswerView,
+  RepositoryOverviewConversationAnswerView,
+  RepositoryOverviewPullRequestAnswerView,
+} from "@repo/features/pull-request-view";
 import {
   MERGE_METHOD,
   PULL_REQUEST_ACTION,
   type PullRequestActionRequest,
 } from "@repo/features/pull-request-write-wire";
-import type { AppPullRequestPart, AppStateSnapshot } from "./app-state.js";
+import type { AppRepositoryPullRequestHeld, AppStateSnapshot } from "./app-state.js";
+import { FIXTURE_IDS } from "./fixture-stage.js";
 
-/** The agent that opened them, the invitations agent the Inbox fixture stages (`fixture-inbox.ts`). */
-const INVITES_AGENT = "5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5";
+/** The repository the invitations agent the Inbox fixture stages works in (`fixture-inbox.ts`), in the fixture's workspace. */
+const REPOSITORY = "ada/relay";
 
-const REPOSITORY_URL = "https://github.com/ada/relay";
+const REPOSITORY_URL = `https://github.com/${REPOSITORY}`;
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -262,7 +264,7 @@ function entry(
 }
 
 /** Each one's conversation: where its reviewers stand, and its comments and reviews, oldest first. */
-const CONVERSATIONS: ReadonlyMap<number, AgentOverviewConversationAnswerView> = new Map([
+const CONVERSATIONS: ReadonlyMap<number, RepositoryOverviewConversationAnswerView> = new Map([
   [
     FIXTURE_PULL_REQUEST.READY,
     {
@@ -358,37 +360,46 @@ type LaidReads = WeakMap<object, { readonly moves: PullRequestMoves; readonly st
  * one cache would answer with the first part laid over it for all three.
  */
 const LAID = {
-  [LIVE_READ.PULL_REQUEST]: new WeakMap(),
-  [LIVE_READ.PULL_REQUEST_CHECKS]: new WeakMap(),
-  [LIVE_READ.PULL_REQUEST_CONVERSATION]: new WeakMap(),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST]: new WeakMap(),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: new WeakMap(),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: new WeakMap(),
 } as const satisfies Record<string, LaidReads>;
 
-/** Every part held of one read, its staged pull requests laid over the invitations agent's. */
+/** Every part held of one read, its staged pull requests laid over the repository's in the fixture's workspace. */
 function laid<Part>(
   cache: LaidReads,
-  held: AppPullRequestPart<Part>,
+  held: AppRepositoryPullRequestHeld<Part>,
   moves: PullRequestMoves,
   parts: () => ReadonlyMap<number, Part>,
-): AppPullRequestPart<Part> {
+): AppRepositoryPullRequestHeld<Part> {
   const kept = cache.get(held);
 
   if (kept?.moves === moves) {
     // SAFETY: a read's entry is only ever written below, from that same read.
-    return kept.staged as AppPullRequestPart<Part>;
+    return kept.staged as AppRepositoryPullRequestHeld<Part>;
   }
 
   const rows = Object.fromEntries(
     [...parts()].map(([number, each]) => [String(number), { rows: each }]),
   );
 
-  const staged = { ...held, [INVITES_AGENT]: { ...held[INVITES_AGENT], ...rows } };
+  const workspace = held[FIXTURE_IDS.WORKSPACE];
+
+  const staged = {
+    ...held,
+    [FIXTURE_IDS.WORKSPACE]: {
+      ...workspace,
+      [REPOSITORY]: { ...workspace?.[REPOSITORY], ...rows },
+    },
+  };
+
   cache.set(held, { moves, staged });
 
   return staged;
 }
 
 /**
- * The document with the invitations agent's pull requests' parts laid over
+ * The document with the invitations agent's pull requests' parts, by their repository, laid over
  * the host's, each as `moves` left it, so a fixture run's screen reads them
  * as the host would hold them read.
  */
@@ -397,7 +408,7 @@ export function pullRequestPartsAppState(
   moves: PullRequestMoves,
 ): AppStateSnapshot {
   const pullRequests = () =>
-    new Map<number, AgentOverviewPullRequestAnswerView>(
+    new Map<number, RepositoryOverviewPullRequestAnswerView>(
       [READY, FAILING, QUEUED].map((each) => [
         each.number,
         { pullRequest: moved(each, moves.get(each.number)) },
@@ -405,27 +416,27 @@ export function pullRequestPartsAppState(
     );
 
   const checks = () =>
-    new Map<number, AgentOverviewChecksAnswerView>(
+    new Map<number, RepositoryOverviewChecksAnswerView>(
       [...CHECKS].map(([number, each]) => [number, { pullRequest: { checks: each } }]),
     );
 
   return {
     ...state,
-    [LIVE_READ.PULL_REQUEST]: laid(
-      LAID[LIVE_READ.PULL_REQUEST],
-      state[LIVE_READ.PULL_REQUEST],
+    [LIVE_READ.REPOSITORY_PULL_REQUEST]: laid(
+      LAID[LIVE_READ.REPOSITORY_PULL_REQUEST],
+      state[LIVE_READ.REPOSITORY_PULL_REQUEST],
       moves,
       pullRequests,
     ),
-    [LIVE_READ.PULL_REQUEST_CHECKS]: laid(
-      LAID[LIVE_READ.PULL_REQUEST_CHECKS],
-      state[LIVE_READ.PULL_REQUEST_CHECKS],
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: laid(
+      LAID[LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS],
+      state[LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS],
       moves,
       checks,
     ),
-    [LIVE_READ.PULL_REQUEST_CONVERSATION]: laid(
-      LAID[LIVE_READ.PULL_REQUEST_CONVERSATION],
-      state[LIVE_READ.PULL_REQUEST_CONVERSATION],
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: laid(
+      LAID[LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION],
+      state[LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION],
       moves,
       () => CONVERSATIONS,
     ),

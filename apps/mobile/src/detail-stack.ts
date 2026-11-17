@@ -47,8 +47,12 @@ export type PushedPage =
     }
   | {
       readonly kind: typeof PUSHED_PAGE.PULL_REQUEST;
-      readonly agentId: string;
+      /** The workspace whose installation reaches its repository, the repository, and its number. */
+      readonly workspaceId: string;
+      readonly repository: string;
       readonly number: number;
+      /** The agent it was opened from, where one was, whose own menu stands in front of it. */
+      readonly agentId?: string | undefined;
     }
   | {
       readonly kind: typeof PUSHED_PAGE.AGENT_PAGE;
@@ -243,11 +247,15 @@ function routeOf(page: PushedPage, tab: IosTab): Href {
       return { pathname: on("/tasks/agent/[id]"), params };
     }
 
-    case PUSHED_PAGE.PULL_REQUEST:
+    case PUSHED_PAGE.PULL_REQUEST: {
+      const [owner = "", name = ""] = page.repository.split("/");
+
       return {
-        pathname: on("/tasks/agent/[id]/pull/[number]"),
-        params: { id: page.agentId, number: String(page.number) },
+        pathname: on("/tasks/pull/[workspace]/[owner]/[name]/[number]"),
+        params: { workspace: page.workspaceId, owner, name, number: String(page.number) },
       };
+    }
+
     case PUSHED_PAGE.AGENT_PAGE:
       return {
         pathname: on("/tasks/agent/[id]/page"),

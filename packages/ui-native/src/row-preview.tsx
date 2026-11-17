@@ -215,7 +215,7 @@ export function ThreadPreview({
 export type PreviewAgent = {
   readonly id: string;
   readonly name: string;
-  /** The provider whose harness it runs in, whose mark its tile wears; the sparkles where it is not known. */
+  /** The provider whose harness it runs in, whose mark its tile wears; the hard hat where it is not known. */
   readonly harness?: ModelProvider | undefined;
   readonly status: AgentStatus;
 };
@@ -330,7 +330,7 @@ export function AgentPreview({
   pullRequest,
 }: {
   readonly name: string;
-  /** The provider whose harness it runs in, whose mark its tile wears; the sparkles where it is not known. */
+  /** The provider whose harness it runs in, whose mark its tile wears; the hard hat where it is not known. */
   readonly harness?: ModelProvider | undefined;
   readonly status: AgentStatus;
   readonly task?: { readonly name: string; readonly status?: TaskStatus | undefined } | undefined;

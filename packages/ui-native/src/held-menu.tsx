@@ -37,6 +37,8 @@ const styles = StyleSheet.create({
 export interface HeldAct {
   readonly label: string;
   readonly symbol: Glyph;
+  /** Whether it takes something away for good, which the system draws red, as a queued message's Delete. */
+  readonly destructive?: boolean | undefined;
   readonly onPress: () => void;
 }
 
@@ -102,7 +104,12 @@ export function useKeeping(): Keeping | undefined {
 
 function HeldActButtons({ acts }: { readonly acts: readonly HeldAct[] }) {
   return acts.map((act) => (
-    <Button key={act.label} {...actContent(act.label, act.symbol)} onPress={act.onPress} />
+    <Button
+      key={act.label}
+      {...actContent(act.label, act.symbol)}
+      onPress={act.onPress}
+      {...(act.destructive === true ? { role: "destructive" as const } : {})}
+    />
   ));
 }
 
@@ -143,12 +150,17 @@ export function HeldSwiftMenu({
  */
 export function HeldMenu({
   acts,
+  width: known,
   children,
 }: {
   readonly acts: readonly HeldAct[];
+  /** The width the held views stand in where the caller knows it before they are laid out, as a transcript's row does, so they are bounded from their first frame; else the width the menu measures where it stands. */
+  readonly width?: number | undefined;
   readonly children: ReactElement;
 }) {
-  const [width, setWidth] = useState<number | undefined>(undefined);
+  const [measured, setWidth] = useState<number | undefined>(undefined);
+  // Note that a width known up front bounds the views on their first layout, since one measured comes a frame later, and the views laid out unbounded in that frame stood one line wide past the screen, their host's height a step behind their words.
+  const width = known ?? measured;
 
   if (acts.length === 0) return children;
 
@@ -195,12 +207,19 @@ export function HeldActsButton({ acts }: { readonly acts: readonly HeldAct[] }) 
 /** A message's React Native views, whose long press offers Copy message; the views alone for a message of no words. */
 export function CopyWordsMenu({
   words,
+  width,
   children,
 }: {
   readonly words: string;
+  /** The width the message stands in where the caller knows it before it is laid out (`HeldMenu`'s `width`). */
+  readonly width?: number | undefined;
   readonly children: ReactElement;
 }) {
-  return <HeldMenu acts={useCopyWordsActs(words)}>{children}</HeldMenu>;
+  return (
+    <HeldMenu acts={useCopyWordsActs(words)} width={width}>
+      {children}
+    </HeldMenu>
+  );
 }
 
 /** A message drawn in SwiftUI, such as a thread's, whose long press offers Copy message; the message alone where it has no words. */

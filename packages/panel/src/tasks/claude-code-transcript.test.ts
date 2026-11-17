@@ -268,6 +268,20 @@ test("Claude Code's Agent is drawn as a subagent's row, named by its description
   assert.ok(settled.textContent?.includes("Two callers round"));
 });
 
+test("a failed Agent's row says its error under it, but not an error that only repeats its description", () => {
+  const failed = (errorText: string) =>
+    drawn({
+      type: "tool-Agent",
+      toolCallId: "toolu_agent",
+      state: "output-error",
+      input: { description: "Find the invoice callers", prompt: "Find them." },
+      errorText,
+    }).container.textContent ?? "";
+
+  assert.ok(failed("API Error: 529 Overloaded").includes("API Error: 529 Overloaded"));
+  assert.equal(failed("Find the invoice callers").split("Find the invoice callers").length, 2);
+});
+
 test("an Edit's patch marks the lines it changed, the newline ending its words opening none", () => {
   const { container } = drawn(
     storedPart(

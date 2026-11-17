@@ -7,6 +7,7 @@ import { useAsyncAction } from "@repo/ui/use-async-action";
 import { useEffect, useRef, useState } from "react";
 import { useAgentDefault } from "../account-choices.js";
 import { ConversationLead } from "../ai-elements/conversation.js";
+import type { CallWhenStarted } from "../voice-call.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { agentName, unrunnableChoice } from "./agent-model.js";
@@ -44,7 +45,11 @@ import { WorkingLine } from "./working-time.js";
  * which asks again under the draft's own key, or, for a repository out of
  * reach, the press its reason names, a move of the task asking again by
  * itself once it lands. Closing the tab lets the draft go, and since
- * nothing was started, nothing is left behind. While the agent its page
+ * nothing was started, nothing is left behind. Talk, in the round button's
+ * place while the box is empty, starts the agent blank, handed nothing, on
+ * the chips, and calls it once it lands, so its first words are the
+ * caller's (`agent-talk.tsx`); a call that ends with nothing said lets the
+ * agent go. A fork's and a suggestion's draft offer no Talk. While the agent its page
  * draws is archived, nothing starts from it, so the box gives way to the
  * note that offers Unarchive, and the words written wait in the draft until
  * it is back.
@@ -231,6 +236,24 @@ export function DraftAgentTab({
     });
   };
 
+  // Talk starts the draft's agent blank on its chips and calls it once it lands; a fork or a
+  // suggestion starts from another agent's work, so it offers none.
+  const talk = (call: CallWhenStarted) => {
+    if (unpaid !== undefined) return call(undefined);
+
+    void starting.run(() => {
+      if (draft.refused !== undefined) latest.current.onDraftChange({ refused: undefined });
+      const { id, choice, disabledServers, runsOn, permissionMode } = draft;
+
+      return latest.current.startBlank(id, choice, disabledServers, runsOn, permissionMode, call);
+    });
+  };
+
+  const startsTalk =
+    fork === undefined && suggestion === undefined
+      ? { start: talk, starting: sending || unpaid !== undefined }
+      : undefined;
+
   const composer: AgentComposerControl = {
     held: { text: draft.prompt, attachments: draft.attachments },
     updateHeld: control.onDraftHeld,
@@ -306,6 +329,7 @@ export function DraftAgentTab({
             onOpenSettings: control.onOpenIntegrations,
           }}
           onStop={NOTHING_TO_STOP}
+          startsTalk={startsTalk}
           followsUp={false}
           keywords={control.keywords}
           skills={control.readSkills}

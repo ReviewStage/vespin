@@ -30,7 +30,11 @@
  * entry listed again before its exit finished, an Undo, stands again and
  * comes back the way it went. A row arriving rides the pair every arriving
  * element rides, opacity over `--ui-duration-quick` and its travel on
- * `--ui-spring`, rows that arrive together a `--ui-row-stagger` apart. A
+ * `--ui-spring`, rows that arrive together a `--ui-row-stagger` apart, and is
+ * clipped at the top of the row it pushes down, read where that row is
+ * drawn each frame as it glides out of its way, as a list of opaque rows
+ * uncovers a row inserted beneath them, so it never stands over that row's
+ * words, however many rows arrive together or changes land while they move. A
  * list that was not drawn before the change, a fold opened, draws its rows
  * at once, and nothing plays the first time a list is drawn. While what the
  * lists draw is still being read (`reading`), as an Inbox's reads land one
@@ -99,6 +103,7 @@ import {
   useState,
 } from "react";
 import { MOTION_TOKEN, milliseconds, tokenTiming } from "../../motion-timing.js";
+import { runningMotions } from "../../use-disclosure.js";
 
 /** What a list whose children move wears. */
 const ROWS_ATTRIBUTE = "data-motion-rows";
@@ -699,6 +704,97 @@ function arrive(mover: Element, step: number, away: Keyframe, timing: MoveTiming
 }
 
 /**
+ * The row a row arriving was pushed away by: the first row of its list
+ * under it that stood before the change; none where nothing that stood is
+ * under it.
+ */
+function rowUnder(
+  mover: Element,
+  movers: readonly Element[],
+  now: Map<Element, Place>,
+  wasOf: (mover: Element) => Place | undefined,
+): Element | undefined {
+  const at = now.get(mover);
+
+  if (at === undefined) return undefined;
+  let under: { readonly row: Element; readonly y: number } | undefined;
+
+  for (const other of movers) {
+    const is = now.get(other);
+
+    if (other.parentElement !== mover.parentElement || wasOf(other) === undefined) continue;
+
+    if (is === undefined || is.y <= at.y + STILL) continue;
+
+    if (under === undefined || is.y < under.y) under = { row: other, y: is.y };
+  }
+
+  return under?.row;
+}
+
+/** What stops each arriving row's following, by the row, so a change landing while one follows hands it on rather than running two. */
+const following = new WeakMap<HTMLElement, () => void>();
+
+/**
+ * Keeps a row sliding in behind the row it pushed down, as a list of
+ * opaque rows draws one, a row inserted under its neighbors and uncovered as
+ * they slide away: each frame until that row has come to rest, the arriving
+ * row is clipped at that row's top as drawn. Note that the edge is read
+ * where the row is drawn rather than foretold from the glide this change
+ * plays, because a change landing while rows still move adds its glide onto
+ * theirs, which no one glide's timing describes. It stops once `until` has
+ * passed and that row runs no motion, once a later change stands that row
+ * above it, or once either row is gone, and gives the row its own clip back.
+ */
+function followUnder(
+  root: HTMLElement,
+  mover: HTMLElement,
+  under: HTMLElement,
+  until: number,
+): void {
+  following.get(mover)?.();
+  let frame = 0;
+
+  const release = () => {
+    cancelAnimationFrame(frame);
+    mover.style.removeProperty("clip-path");
+    following.delete(mover);
+  };
+
+  const clip = () => {
+    const cut = mover.getBoundingClientRect().bottom - under.getBoundingClientRect().top;
+    // Note that an inset past the row's height hides it whole, and none is set where nothing covers it.
+    mover.style.setProperty(
+      "clip-path",
+      cut > 0 ? `inset(0 0 ${cut / drawnScale(root).y}px 0)` : "",
+    );
+  };
+
+  // Note that the rows are told apart where the layout stands them, since the one under is drawn at the arriving row's top as its glide sets off.
+  const laidTop = (row: HTMLElement) =>
+    row.getBoundingClientRect().top - shiftOf(row).y * drawnScale(root).y;
+
+  const step = () => {
+    // Note that a change that stood the row it followed above it, or took either away, leaves nothing to stand behind.
+    if (!(mover.isConnected && under.isConnected) || laidTop(under) <= laidTop(mover) + STILL) {
+      release();
+
+      return;
+    }
+
+    clip();
+    const moving = runningMotions(under).some((each) => each.playState === "running");
+
+    if (performance.now() < until || moving) frame = requestAnimationFrame(step);
+    else release();
+  };
+
+  following.set(mover, release);
+  clip();
+  frame = requestAnimationFrame(step);
+}
+
+/**
  * Replays from `before` what the commit moved under `root`: each mover
  * glides from where it stood, or where the row of its key stood in another
  * list, less what the group around it moved, which carries it, added onto
@@ -744,17 +840,23 @@ function playMoves(root: HTMLElement, before: Snapshot, timing: MoveTiming): voi
   const away = awayOf(root, timing.way);
   const seenArriving = arriving.filter((mover) => now.get(mover)?.seen === true);
 
-  for (const [step, mover] of seenArriving.entries()) arrive(mover, step, away, timing);
   // Note that rows arriving in a leaving row's place, a choice's next rows, set the beat what they move glides on.
   const glide = arriving.length === 0 ? (timing.close ?? timing.travel) : timing.travel;
+
+  const carriedOf = (mover: Element): Point => {
+    const carrier = carrierOf(root, mover);
+
+    return carrier === root ? { x: 0, y: 0 } : movedBy(carrier);
+  };
+
+  for (const [step, mover] of seenArriving.entries()) arrive(mover, step, away, timing);
 
   for (const mover of movers) {
     const was = wasOf(mover);
 
     if (was === undefined || !(was.seen || now.get(mover)?.seen === true)) continue;
-    const carrier = carrierOf(root, mover);
     const own = movedBy(mover);
-    const carried = carrier === root ? { x: 0, y: 0 } : movedBy(carrier);
+    const carried = carriedOf(mover);
     const x = own.x - carried.x;
     const y = own.y - carried.y;
 
@@ -765,6 +867,18 @@ function playMoves(root: HTMLElement, before: Snapshot, timing: MoveTiming): voi
       fill: "backwards",
       composite: "add",
     });
+  }
+
+  // Note that the rows are followed once every glide has started, so the first edge read is where each is drawn.
+  if (timing.way !== LIST_MOTION_WAY.SLIDE || !timing.travels) return;
+  const until = performance.now() + timing.wait + Number(glide.duration ?? 0);
+
+  for (const mover of seenArriving) {
+    const under = rowUnder(mover, movers, now, wasOf);
+
+    if (under instanceof HTMLElement && mover instanceof HTMLElement) {
+      followUnder(root, mover, under, until);
+    }
   }
 }
 

@@ -30,7 +30,6 @@ import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
-import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import { ACTION_RESULT_STATUS, MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement, Fragment, useEffect } from "react";
@@ -339,9 +338,7 @@ async function drawnTab(input: {
     act(() =>
       parts.deliverParts({
         [LIVE_READ.PULL_REQUEST_PUBLISHED]: {
-          [SOURCE]: {
-            [OWN_PULL_REQUEST]: { rows: { repository, branch: null, pullRequest: null } },
-          },
+          [SOURCE]: { rows: { repository, branch: null, pullRequest: null } },
         },
       }),
     );
@@ -371,6 +368,8 @@ async function drawnTab(input: {
     continuedNote: () => container.querySelector<HTMLElement>(".continued-composer"),
     continuedIn: () => [...container.querySelectorAll<HTMLElement>("[data-continued]")],
     sendButton: () => container.querySelector<HTMLButtonElement>('button[aria-label="Send"]'),
+    /** The agent's message box, whose round button reads Talk while it is empty. */
+    messageBox: () => container.querySelector<HTMLElement>(".message-box"),
     named: (within: ParentNode, words: string) =>
       [...within.querySelectorAll("button")].find((each) => each.textContent === words),
     buttons,
@@ -976,7 +975,7 @@ test("once agents continue the agent, its box gives way to Continued in with eac
 
   const note = tab.continuedNote() ?? assert.fail("the box gives way to its note");
 
-  assert.equal(tab.sendButton(), null, "the box takes no message");
+  assert.equal(tab.messageBox(), null, "the box takes no message");
   assert.deepEqual(
     tab.endRow()?.presses.map((each) => each.textContent),
     [AGAIN],
@@ -1183,7 +1182,7 @@ test("an agent with only forks keeps its box, since a fork is no continuation", 
 
   assert.equal(tab.continuedNote(), null);
   assert.equal(tab.continuedIn().length, 0);
-  assert.ok(tab.sendButton(), "the box still takes a message");
+  assert.ok(tab.messageBox(), "the box still takes a message");
 });
 
 test("the continued box's Archive archives the reader's own settled agent at once and asks first while it runs, and its Stop stands only while a turn runs", async () => {

@@ -133,7 +133,7 @@ env:
 - takeScreenshot: tasks-rename
 - tapOn: "Cancel"
 - waitForAnimationToEnd
-# Permanently delete asks first, in the panel's words, and Cancel keeps the
+# Permanently delete asks first, in the panel's words, and putting it away keeps the
 # task.
 - runFlow:
     file: subflows/row-menu.yaml
@@ -144,7 +144,10 @@ env:
 - assertVisible: "Permanently delete task?"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-delete-ask
-- tapOn: "Cancel"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Permanently delete task?"
 - waitForAnimationToEnd
 - assertVisible: "Weekly digest email"
 # Copy link copies the task's address at once, as Safari's and Notes' do,
@@ -179,7 +182,10 @@ env:
 - assertVisible: "Mark as Done?"
 - assertVisible: "Stop agent"
 - takeScreenshot: tasks-mark-done-ask
-- tapOn: "Cancel"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Mark as Done?"
 - waitForAnimationToEnd
 - assertVisible: "Weekly digest email"
 # Opening the task reads it, so its dot is gone once the list shows again.
@@ -327,7 +333,10 @@ env:
 - assertVisible: "Permanently delete task?"
 - waitForAnimationToEnd
 - takeScreenshot: task-delete-ask
-- tapOn: "Cancel"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Permanently delete task?"
 - waitForAnimationToEnd
 # Sub-tasks' + offers New sub-task and Link existing task; New sub-task
 # opens New task as a sub-task of it, its repository the task's own; Cancel
@@ -437,6 +446,8 @@ env:
     optional: true
 - assertVisible: "Archive agent?"
 - takeScreenshot: task-agent-archive-ask
-- tapOn: "Cancel"
-- assertNotVisible: "Archive agent?"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Archive agent?"
 - assertVisible: "Fix ledger rounding"

@@ -1,8 +1,12 @@
 import { AGENT_BOUNDS, type AgentPullRequest, type AgentSummary } from "@repo/features/agent-wire";
 import { openerOf } from "@repo/features/link-standing-model";
 import { machineAsksByAgent } from "@repo/features/machine-ask-live";
+import type { StartedAgentsCount } from "@repo/features/task-agents-model";
 import {
   InlineEdit,
+  type ListRowFold,
+  type ListRowNest,
+  ProgressCount,
   RowHint,
   RowHintOptions,
   TASK_ROW_CELL,
@@ -40,7 +44,10 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * beside it. Its glyph is its tab's (`AgentGlyph`), which gives way to the
  * working mark while the agent works, and its name is masked in a screen
  * recording; its task is its card's to name. Its trailing run holds, in
- * turn: how many of its threads wait on the developer, as the sidebar's Inbox row counts them (`WaitingCount`); its
+ * turn: how many of its threads wait on the developer, as the sidebar's Inbox row counts them (`WaitingCount`);
+ * how many of the agents it started have finished, of all of them, as a task
+ * counts its sub-tasks (`ProgressCount`), where its list nests the agents it
+ * started under it (`depth`, `nest`, `fold`) as a task's sub-tasks nest; its
  * pull request, where it opened one, as a chip of GitHub's mark in GitHub's
  * color for where it stands and its number (`pull-request-chip.tsx`),
  * hanging the pull request's one card, the agent whose it is and who it
@@ -69,6 +76,7 @@ export const AGENT_ROW_CELLS = [
   TASK_ROW_CELL.STATUS,
   TASK_ROW_CELL.REPOSITORY,
   TASK_ROW_CELL.WAITING,
+  TASK_ROW_CELL.SUB_TASKS,
   TASK_ROW_CELL.PULL_REQUESTS,
   TASK_ROW_CELL.AGENTS,
   TASK_ROW_CELL.UPDATED,
@@ -91,6 +99,10 @@ export function AgentListRow({
   place,
   more,
   settled = false,
+  depth,
+  nest,
+  fold,
+  started,
   onPress,
   onOpenPullRequest,
 }: {
@@ -116,6 +128,14 @@ export function AgentListRow({
   more?: boolean | undefined;
   /** Whether it stands settled beside the agents still listed, its name in the muted ink: an archived agent. */
   settled?: boolean | undefined;
+  /** How deep it stands nested under the agent that started it: at the top unless said. */
+  depth?: number | undefined;
+  /** Where it stands among the agents nested beside it, in a list that nests them; none in one that nests none. */
+  nest?: ListRowNest | undefined;
+  /** The agents it started, nested under it, which it folds; none where it started none. */
+  fold?: ListRowFold | undefined;
+  /** How many of the agents it started have finished, of all of them; none where it started none. */
+  started?: StartedAgentsCount | undefined;
   /** Opens the agent, as its pull request's card offers too. */
   onPress: () => void;
   onOpenPullRequest: () => void;
@@ -150,6 +170,14 @@ export function AgentListRow({
           </TaskRowGlyph>
         ),
         [TASK_ROW_CELL.WAITING]: <WaitingCount count={waits + asked} />,
+        [TASK_ROW_CELL.SUB_TASKS]:
+          started === undefined ? null : (
+            <ProgressCount
+              done={started.finished}
+              total={started.total}
+              label={`${started.finished} of ${started.total} agents it started finished`}
+            />
+          ),
         [TASK_ROW_CELL.PULL_REQUESTS]:
           pullRequest === undefined ? null : (
             <ReplayMask>
@@ -206,6 +234,9 @@ export function AgentListRow({
       onOpen={onPress}
       pressRef={press}
       place={place}
+      depth={depth}
+      nest={nest}
+      fold={fold}
     >
       {actions.dialog}
     </TaskRow>

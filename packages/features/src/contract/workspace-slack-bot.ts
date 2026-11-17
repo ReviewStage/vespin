@@ -18,6 +18,7 @@ import {
   WORKSPACE_SLACK_BOT_QUERY,
   workspaceSlackBotAnswerSchema,
   workspaceSlackBotChannelRequestSchema,
+  workspaceSlackBotInstallAnswerSchema,
   workspaceSlackBotNotificationsRequestSchema,
   workspaceSlackBotRepositoryRequestSchema,
   workspaceSlackBotRequestSchema,
@@ -47,6 +48,14 @@ export const workspaceSlackBotContract = {
     )
     .input(exactInput(workspaceSlackBotRequestSchema))
     .output(EffectSchema.flip(workspaceSlackBotAnswerSchema)),
+  install: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
+    .meta(bodyCap(BODY_BYTES))
+    .meta(
+      openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.WORKSPACE_SLACK_BOT_INSTALL }),
+    )
+    .input(exactInput(workspaceSlackBotRequestSchema))
+    .output(EffectSchema.flip(workspaceSlackBotInstallAnswerSchema)),
   disconnect: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
     .meta(bodyCap(BODY_BYTES))

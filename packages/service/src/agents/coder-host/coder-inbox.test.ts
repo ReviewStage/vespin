@@ -150,6 +150,7 @@ function sandboxWith(files: Readonly<Record<string, Uint8Array>>): InboxSandboxD
 
   return () =>
     Promise.resolve({
+      checkout: CODER.CHECKOUT_PATH,
       readFile: ({ path }: { path: string }) => {
         const bytes = byPath.get(path);
 
@@ -869,7 +870,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "withdraw_ask settles the open ask with why and leaves the thread; one with no open ask, an answered one among them, is refused and changes nothing",
+    "withdraw_ask settles the open ask with why and leaves the thread; one already settled is taken, says how, and changes nothing; a key with no thread is refused",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -903,7 +904,10 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           open: [],
         });
         const again = yield* withdrawAsk(agent, input({ key: SETTINGS.key, reason: "Twice." }));
-        assert.equal(refusalOf(again), INBOX_REFUSAL.NO_OPEN_ASK);
+        assert.deepEqual(again, {
+          ...withdrawn,
+          note: "Nothing withdrawn: the ask was already withdrawn: Did it myself.",
+        });
 
         yield* post(agent, QUEUE);
 
@@ -921,7 +925,13 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
 
         assert.equal(Option.getOrThrow(answered).item.status, INBOX_STATUS.ANSWERED);
         const late = yield* withdrawAsk(agent, input({ key: QUEUE.key, reason: "Too late." }));
-        assert.equal(refusalOf(late), INBOX_REFUSAL.NO_OPEN_ASK);
+        assert.deepEqual(
+          late.status === ACTION_RESULT_STATUS.ACCEPTED ? [late.thread.status, late.note] : late,
+          [
+            INBOX_STATUS.ANSWERED,
+            "Nothing withdrawn: Test User already answered the ask; their answer is on the thread.",
+          ],
+        );
 
         const after = (yield* taskInboxItems(agent.userId, agent.taskId)).find(
           (item) => item.key === QUEUE.key,
@@ -934,7 +944,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         );
 
         const refusals = [
-          [{ key: "no-such-thread", reason: "Gone." }, INBOX_REFUSAL.NO_OPEN_ASK],
+          [{ key: "no-such-thread", reason: "Gone." }, INBOX_REFUSAL.NO_KEYED_THREAD],
           [{ key: QUEUE.key }, INBOX_REFUSAL.UNREADABLE_WITHDRAW],
         ] as const;
 

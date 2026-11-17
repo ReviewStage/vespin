@@ -6,6 +6,7 @@ import {
   useLayoutEffect,
   useRef,
 } from "react";
+import { isComposingKey } from "../../composing-key.js";
 import { ANNOUNCE, useAnnounce } from "../announcer/announcer.js";
 import { focusRovingStop, ROVING_ORIENTATION, useRovingKeys } from "../roving-keys/roving-keys.js";
 import { focusChoosable } from "./list-selection.js";
@@ -74,7 +75,7 @@ export function useSelectionKeys({
     onKeyDown: (event) => {
       if (roving.onKeyDown(event) || event.defaultPrevented) return;
 
-      if (event.key !== "Escape" || event.nativeEvent.isComposing) return;
+      if (event.key !== "Escape" || isComposingKey(event)) return;
       event.preventDefault();
       event.stopPropagation();
       onClear();

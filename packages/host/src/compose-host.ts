@@ -95,6 +95,8 @@ import {
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "./kept-content.js";
 import { shutdownStepsFlushingEvents } from "./lifecycle.js";
 import { liveSocketClient } from "./live-socket.js";
+import { localCopy } from "./local-copy.js";
+import { LocalDatabaseDriver } from "./local-database.js";
 import { HOST_NODE_CAPABILITY } from "./node-capabilities.js";
 import { offlineRefusedCount } from "./queued-writes.js";
 import { createGatewayService } from "./service.js";
@@ -283,6 +285,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const { report } = yield* Reporter;
     const { tokenCipher } = yield* AccountSource;
     const listsDue = yield* Effect.serviceOption(KeptListsDue);
+    const localDriver = yield* Effect.serviceOption(LocalDatabaseDriver);
     const fileSystemContext = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
 
     const settings = yield* composeSettings();
@@ -365,6 +368,20 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     );
 
     /**
+     * The signed-in account's local database (`local-copy.ts`), written and
+     * read by nothing in this release: only where the platform has a driver,
+     * the Mac and the iPhone, and the run needs an account, so neither a
+     * browser tab nor a fixture run keeps one.
+     */
+    const local =
+      Option.isSome(localDriver) && kernel.runMode.requiresAccount
+        ? yield* localCopy(kernel.stateRoot).pipe(
+            Effect.provideService(LocalDatabaseDriver, localDriver.value),
+            Effect.provideContext(fileSystemContext),
+          )
+        : undefined;
+
+    /**
      * Every row the composers' reads hold, once, and the writes drawn over
      * them (`@repo/sync`). Where the run needs an account, a row write
      * that may wait for the service is sent under a key of the host's own
@@ -379,6 +396,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
             mintKey: kernel.createId,
             replayRefused: Effect.sync(() => offlineRefused.raise()),
             holder: accountId,
+            store: local?.store,
           }
         : undefined,
     );
@@ -768,6 +786,14 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       yield* agents.refused.restored(signedInId, store.refused);
     });
 
+    /** The signed-in account's local database opened where the host has one, after `entities.sealed` laid its queues back, so it keeps them as they stand. */
+    const openLocal = Effect.gen(function* () {
+      const signedInId = account.signedIn() ? accountId() : undefined;
+
+      if (local === undefined || signedInId === undefined) return;
+      yield* local.open(signedInId, agents.refused);
+    });
+
     /** The store forgotten, its file deleted, as a sign-out does; a file no store stands over is deleted too. */
     const forgetEntities = Effect.gen(function* () {
       const standing = entities;
@@ -782,6 +808,8 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       }
 
       yield* Effect.provideContext(forgetEntityStore(kernel.stateRoot), fileSystemContext);
+
+      if (local !== undefined) yield* local.forget;
     });
 
     /**
@@ -794,6 +822,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         yield* settings.reconcileAccountPreferences();
         yield* account.refreshAccess;
         yield* openEntities;
+        yield* openLocal;
         yield* tasks.open;
         yield* workspaces.open;
         yield* agents.open;

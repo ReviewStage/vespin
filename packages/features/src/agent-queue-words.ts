@@ -2,6 +2,7 @@
 
 import { QUEUE_PAUSE, type QueuePaused } from "./agent-queue-wire.js";
 import { type AgentQueueChange, QUEUE_CHANGE } from "./agent-wire.js";
+import { IRREVERSIBLE_WORDS } from "./words.js";
 
 /** What the queue over an agent's box says: its list, each message's acts, and why it stands paused. */
 export const QUEUE_WORDS = {
@@ -16,6 +17,13 @@ export const QUEUE_WORDS = {
   REFUSED: "Queue paused: the next message could not be sent",
   BOOT_FAILED: "Queue paused until the machine starts",
   PAUSED: "Queue paused",
+} as const;
+
+/** What asking to delete a queued message says: its title, what goes, and its act. */
+export const QUEUE_DELETE_QUESTION = {
+  TITLE: "Delete queued message?",
+  BODY: `It will not be sent, and any files it carries go with it. ${IRREVERSIBLE_WORDS}`,
+  VERB: "Delete message",
 } as const;
 
 /** What the toast says of a change the host drew and took back, by what it asked; a hold's refusal closes its edit, which says it. */

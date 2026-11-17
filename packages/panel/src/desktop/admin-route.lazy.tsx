@@ -26,7 +26,7 @@ function AdminRoutePlace(): React.JSX.Element {
       view={view}
       shown={tasks.shown}
       onOpen={admin.open}
-      onExit={admin.close}
+      onBack={admin.back}
     />
   );
 }

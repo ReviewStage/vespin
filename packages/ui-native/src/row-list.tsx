@@ -63,6 +63,7 @@ import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
 import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
+import { useRollingCount } from "./rolling-count.js";
 import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
@@ -402,6 +403,8 @@ type ListSectionProps = {
   readonly mark?: MarkLook | undefined;
   /** What the group is, before its title in the muted ink, as the panel's sidebar leads a section with its icon and a repository with its own mark; none where the words say it alone. */
   readonly glyph?: Glyph | undefined;
+  /** The emoji a section's member chose as its icon, drawn as words in the glyph's place, as the panel's sidebar draws it. */
+  readonly emoji?: string | undefined;
   /** The repository, `owner/name`, whose owner's picture stands in the glyph's place, as the panel's sidebar leads a repository's group; the glyph stands in until it draws. */
   readonly repository?: string | undefined;
   /** Whether a press on its header folds it in place, a chevron leading the header. */
@@ -455,6 +458,17 @@ type SectionAdd = {
   readonly acts: readonly SectionAct[];
 };
 
+/**
+ * One number for a section's done and total figures, which changes when
+ * either does, so `2/5` rolls on to `2/6` as a sub-task is added and not
+ * only to `3/5` as one is finished: Cantor's pairing, unique to each pair of
+ * whole numbers. Note that the figures stand in one `Text`, heard as one,
+ * so one animation keys on both.
+ */
+function progressKey({ done, total }: SectionProgress): number {
+  return ((done + total) * (done + total + 1)) / 2 + total;
+}
+
 /** A section's header: its fold chevron where it folds, its title in 13 pt medium, and its count, all muted. */
 function GroupHeader({
   title,
@@ -462,6 +476,7 @@ function GroupHeader({
   progress,
   mark,
   glyph,
+  emoji,
   repository,
   folded,
 }: {
@@ -470,12 +485,14 @@ function GroupHeader({
   readonly progress: SectionProgress | undefined;
   readonly mark: MarkLook | undefined;
   readonly glyph: Glyph | undefined;
+  readonly emoji: string | undefined;
   readonly repository: string | undefined;
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
   const chevron = useScaledSize(CHEVRON_SIZE);
   const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
+  const rolling = useRollingCount(progress === undefined ? (count ?? 0) : progressKey(progress));
 
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
@@ -498,6 +515,10 @@ function GroupHeader({
       )}
       {repository !== undefined ? (
         <RepositoryPicture repository={repository} size={glyphSize} />
+      ) : emoji !== undefined ? (
+        <Text modifiers={[font({ textStyle: TYPE_ROLE.GROUP_HEADER }), accessibilityHidden()]}>
+          {emoji}
+        </Text>
       ) : glyph === undefined ? null : (
         <Image
           {...glyphImage(glyph)}
@@ -524,6 +545,7 @@ function GroupHeader({
             monospacedDigit(),
             foregroundStyle(colors.TEXT_MUTED),
             accessibilityLabel(progress.heard),
+            ...rolling,
           ]}
         >
           {`${progress.done}/${progress.total}`}
@@ -534,6 +556,7 @@ function GroupHeader({
             font({ textStyle: TYPE_ROLE.GROUP_HEADER }),
             monospacedDigit(),
             foregroundStyle(colors.TEXT_MUTED),
+            ...rolling,
           ]}
         >
           {String(count)}
@@ -660,6 +683,7 @@ export function ListSection({
   progress,
   mark,
   glyph,
+  emoji,
   repository,
   foldable = false,
   folded: held,
@@ -692,6 +716,7 @@ export function ListSection({
         progress={progress}
         mark={mark}
         glyph={glyph}
+        emoji={emoji}
         repository={repository}
         folded={foldable ? folded : undefined}
       />

@@ -27,12 +27,7 @@ import { drawnCall } from "@repo/features/native-tool-calls";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import {
-  askMissingWords,
-  PERMISSION_MODE_HINT,
-  PERMISSION_MODE_LABEL,
-  PERMISSION_MODE_WORDS,
-} from "@repo/settings";
+import { PERMISSION_MODE_HINT, PERMISSION_MODE_LABEL, PERMISSION_MODE_WORDS } from "@repo/settings";
 import {
   APPROVAL_ACTION,
   type ApprovalAction,
@@ -97,8 +92,8 @@ import type { HeldCall } from "./transcript-blocks.js";
  * and Codex agents each ask in their own harness's terms, which these words
  * and hints, Codex's own, fit both. A Cursor agent takes Approve for me, as
  * Cursor's own Auto-review, and Full access, but never Ask for approval, so
- * its menu offers those two and says why the third is missing; a new one
- * whose member's default is Ask starts on Full access, which its menu says
+ * its menu offers those two alone; a new one whose member's default is Ask
+ * starts on Full access, which its menu shows checked
  * (`@repo/features`'s `modesOf`). An agent on no harness asks nothing, so it
  * is offered no mode.
  *
@@ -182,17 +177,10 @@ export interface AgentModeControl {
   readonly modes: readonly AgentPermissionMode[];
   /** Changes the agent's mode: from its next turn for a running agent, from its first for a new one. */
   readonly choose: (mode: AgentPermissionMode) => void;
-  /** What the Permissions submenu says under its modes: why a mode the harness never takes is missing, and when a change reaches the agent, from its next turn for a running agent; nothing for a new one whose harness takes every mode. */
+  /** When a change reaches the agent, said under the Permissions submenu: from its next turn for a running agent; nothing for a new one, whose first launch runs on it. */
   readonly applies: string | undefined;
   /** Why the last change did not take, said under the composer's bar; nothing while none failed. */
   readonly note: string | undefined;
-}
-
-/** The words under the Permissions submenu, each that stands, in order. */
-function noteOf(...words: readonly (string | undefined)[]): string | undefined {
-  const said = words.filter((each) => each !== undefined);
-
-  return said.length === 0 ? undefined : said.join(" ");
 }
 
 /** Whether an agent on the runtime has a mode to choose, which its harness takes beside Full access. */
@@ -239,7 +227,7 @@ export function useAgentPermissionMode(input: {
     mode: modeOf(agent),
     modes: modesOf(agent.runtime),
     choose,
-    applies: noteOf(askMissingWords(agent.runtime), MODE_APPLIES),
+    applies: MODE_APPLIES,
     note: note?.agentId === agent.id ? note.words : undefined,
   };
 }
@@ -253,8 +241,8 @@ const selectDefaultMode = (state: AppStateSnapshot): AgentPermissionMode =>
  * the member's Default permissions where the model's harness takes it, else
  * Full access, as the service starts it (`startingPermissionMode`), for a
  * model whose harness takes a mode, a Claude model's Claude Code, a GPT
- * model's Codex, or a Cursor model's Cursor, which never asks for approval
- * and says so; none before a model is chosen, or for one on none. Note that
+ * model's Codex, or a Cursor model's Cursor, which never asks for approval;
+ * none before a model is chosen, or for one on none. Note that
  * a pick is the new agent's alone, sent with its Start, and writes no
  * setting.
  */
@@ -273,14 +261,12 @@ export function useNewAgentPermissionMode(input: {
   const runtime = provider === undefined ? undefined : runtimeOfProvider(provider);
 
   if (!choosesMode(runtime)) return undefined;
-  const wanted = input.picked ?? fallback;
-  const mode = modeTakenOn(runtime, wanted);
 
   return {
-    mode,
+    mode: modeTakenOn(runtime, input.picked ?? fallback),
     modes: modesOf(runtime),
     choose: input.choose,
-    applies: askMissingWords(runtime, mode !== wanted),
+    applies: undefined,
     note: undefined,
   };
 }

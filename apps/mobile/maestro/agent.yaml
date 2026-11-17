@@ -265,12 +265,26 @@ env:
 - inputText: "Invite by email"
 - tapOn: "Rename"
 - assertVisible: "Invite by email"
-# Pinned, Unpin stands in its place.
+# Pinned, Unpin stands in its place. Note that a landscape iPad's sidebar
+# leads its Pinned row with a glyph heard as "Pin" too, which comes first in
+# the tree, so there the bar's Pin is found right of that row; a window with
+# no Pinned row standing holds one "Pin" alone.
 - runFlow:
     file: subflows/bar-act.yaml
     env:
       ACT: Pin
-- tapOn: "Pin"
+- runFlow:
+    when:
+      visible: "Pinned"
+    commands:
+      - tapOn:
+          text: "Pin"
+          rightOf: "Pinned"
+- runFlow:
+    when:
+      notVisible: "Pinned"
+    commands:
+      - tapOn: "Pin"
 - runFlow:
     file: subflows/bar-act.yaml
     env:
@@ -280,13 +294,17 @@ env:
     timeout: 5000
 - takeScreenshot: agent-pinned
 # Archive asks first, in the panel's words, since the agent still works and
-# archiving it stops it; Cancel leaves it.
+# archiving it stops it; putting the question away (a tap off the iPhone's
+# action sheet, the iPad alert's Cancel) leaves it.
 - tapOn: "Archive"
 - assertVisible: "Archive agent?"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-archive
-- tapOn: "Cancel"
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Archive agent?"
 - assertNotVisible: "Archive agent?"
 - assertVisible: "Invite by email"
 # Confirmed, the archive is taken, as the fixture takes it, with no refusal

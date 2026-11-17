@@ -36,21 +36,23 @@ import {
   padding,
   tag,
   tint,
+  zIndex,
 } from "@expo/ui/swift-ui/modifiers";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { type InboxLineKind, NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
-import { TASK_PRIORITY_WORDS, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
-import { TASK_PRIORITY, type TaskPriority, type TaskStatus } from "@repo/features/task-wire";
+import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
+import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
 import { Fragment, type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
+import { actContent, emojiContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { cellFocusRingOff, dragLink } from "./interactions.js";
 import {
@@ -58,7 +60,6 @@ import {
   type Face,
   FailedMark,
   NeedsYouDot,
-  TaskPriorityMark,
   TaskStatusMark,
   ToneGlyph,
   UnreadDot,
@@ -149,6 +150,8 @@ export type MenuChoice = {
   readonly tone?: StatusTone | undefined;
   /** A person's photo, as a file on this device, drawn round in the glyph's place, as the panel's assignee menu leads each member with their face. */
   readonly photo?: string | undefined;
+  /** An emoji drawn in the glyph's place, as a section's sidebar row leads with the one its member chose. */
+  readonly emoji?: string | undefined;
   readonly on: boolean;
   readonly onPress: () => void;
 };
@@ -205,6 +208,8 @@ type RowActs = {
   readonly preview?: ReactElement | undefined;
   /** Its vespin.dev link, which a drag carries out of the row: into another app as a URL, or onto a section here (`ListSection`'s `onDropLink`). */
   readonly link?: string | undefined;
+  /** What its own acts ask first, standing by the row (`RowAsking`), `QUIET_ROW_QUESTION` while it asks nothing; none for a row whose acts never ask. */
+  readonly question?: RowQuestion | undefined;
 };
 
 type ListRowProps = RowActs & {
@@ -239,9 +244,7 @@ type TaskRowProps = RowActs & {
   readonly id: string;
   readonly name: string;
   readonly status: TaskStatus;
-  /** Its priority, whose mark leads the line before its status, as the panel's List row leads with it; none where the list draws no priority. */
-  readonly priority?: TaskPriority | undefined;
-  /** Whether the task has news unread, which carries the dot and sets its name in semibold. */
+  /** Whether the task has news unread, which sets its name in semibold, as the panel's task rows say it, with no dot. */
   readonly unread?: boolean | undefined;
   /** Whether the task is done or canceled, which mutes its name, as a search finds one. */
   readonly finished?: boolean | undefined;
@@ -284,8 +287,10 @@ export function choiceColor(choice: MenuChoice, colors: BrandColors): string | u
   return choice.tone === undefined ? undefined : toneColor(colors, choice.tone);
 }
 
-/** What a menu's choice holds: its words beside its photo, or its glyph in its tone, or its words alone. */
+/** What a menu's choice holds: its words beside its emoji, or its photo, or its glyph in its tone, or its words alone. */
 export function choiceContent(choice: MenuChoice, colors: BrandColors) {
+  if (choice.emoji !== undefined) return emojiContent(choice.label, choice.emoji);
+
   return actContent(
     choice.label,
     choice.symbol,
@@ -386,12 +391,13 @@ export function rowPlacement(
   selected = false,
   vertical: number = ROW_INSET.VERTICAL,
   indent = 0,
+  leading: number = ROW_INSET.LEADING,
 ) {
   return [
     listRowBackground("clear"),
     listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
     padding({
-      leading: ROW_INSET.LEADING - ROW_INSET.FILL,
+      leading: leading - ROW_INSET.FILL,
       trailing: SPACE.EDGE - ROW_INSET.FILL,
       top: vertical,
       bottom: vertical,
@@ -481,6 +487,11 @@ function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
     : actionButton(swipe, colors);
 }
 
+/** A row's content with the question its acts ask standing by it, where its acts ask any. */
+function asking(content: ReactElement, question: RowQuestion | undefined): ReactElement {
+  return question === undefined ? content : <RowAsking question={question}>{content}</RowAsking>;
+}
+
 /**
  * A row's frame in its list: the id its list picks it by, the list's own
  * ground behind it rather than a card's, its insets, which stand the unread
@@ -508,8 +519,10 @@ export function RowFrame({
   menuGroups = [],
   preview,
   link,
+  question,
   vertical,
   indent,
+  leading,
   place = ROW_PLACE.LIST,
 }: RowActs & {
   readonly id: string;
@@ -518,6 +531,8 @@ export function RowFrame({
   readonly vertical?: number | undefined;
   /** How far past the list's text column the row's words start, where it stands in deeper, a second mark leads it, or its lead grows, so its hairline starts under them. */
   readonly indent?: number | undefined;
+  /** The row's leading inset: the unread dot's margin where none is given, or the list's edge for a row that draws no dot (`ROW_INSET.PLAIN`). */
+  readonly leading?: number | undefined;
   /** Whether it stands as a list's row or a sidebar's. */
   readonly place?: RowPlace | undefined;
 }) {
@@ -531,7 +546,7 @@ export function RowFrame({
     tag(id),
     ...(place === ROW_PLACE.SIDEBAR
       ? sidebarRowPlacement(colors, selected)
-      : rowPlacement(colors, selected, vertical, indent)),
+      : rowPlacement(colors, selected, vertical, indent, leading)),
     ...(heard === undefined
       ? []
       : [
@@ -548,7 +563,7 @@ export function RowFrame({
   const ownGroup = swiped.length + menuSubmenus.length + menuActions.length > 0;
 
   if (!ownGroup && groups.length === 0 && preview === undefined) {
-    return <HStack modifiers={frameModifiers}>{row}</HStack>;
+    return <HStack modifiers={frameModifiers}>{asking(row, question)}</HStack>;
   }
 
   const opening: readonly RowAction[] =
@@ -559,7 +574,7 @@ export function RowFrame({
           { label: VERB.OPEN, tone: ROW_ACTION_TONE.NEUTRAL, onPress: () => open(id) },
         ];
 
-  const menu = (
+  const menu = asking(
     <ContextMenu>
       <ContextMenu.Items>
         {opening.map((action) => actionButton(action, colors))}
@@ -577,7 +592,8 @@ export function RowFrame({
       </ContextMenu.Items>
       <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
       {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
-    </ContextMenu>
+    </ContextMenu>,
+    question,
   );
 
   // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal.
@@ -640,6 +656,7 @@ function TitleWords({
  * row's chevron there.
  */
 export function RowHead({
+  dot = true,
   unread,
   faded,
   fold,
@@ -651,6 +668,8 @@ export function RowHead({
   end,
   trail,
 }: {
+  /** Whether the unread dot stands in the margin; a task's row draws none, its unread name standing in semibold alone, as the panel's task rows do. */
+  readonly dot?: boolean | undefined;
   readonly unread: boolean;
   readonly faded: boolean;
   /** A parent's fold chevron, standing before its lead mark; none for a row that folds nothing. */
@@ -681,31 +700,37 @@ export function RowHead({
   );
 
   // Note that at an accessibility size the line's end stands under the title rather than beside it, as Mail's rows stack their date, so the title keeps the row's width rather than wrapping a word to a line, and the dot stands on the title's first line rather than centered on the whole stack.
+  const line = (
+    <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
+      {/* Note that the fold and the marks stand centered on each other, so the chevron sits beside the ring rather than on the row's top edge where an accessibility size aligns the line to its top. */}
+      <HStack spacing={SPACE.ROW} alignment="center">
+        {fold}
+        {mark === undefined ? null : (
+          <HStack modifiers={[frame({ width: leadWidth })]}>{mark}</HStack>
+        )}
+        <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+      </HStack>
+      {beside}
+      {stacked ? (
+        <VStack alignment="leading" spacing={2}>
+          {words}
+          {end}
+        </VStack>
+      ) : (
+        words
+      )}
+      <Spacer />
+      {stacked ? null : end}
+      {trail}
+    </HStack>
+  );
+
+  if (!dot) return line;
+
   return (
     <HStack spacing={SPACE.TIGHT} alignment={stacked ? "firstTextBaseline" : "center"}>
       <UnreadDot unread={unread} faded={faded} />
-      <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
-        {/* Note that the fold and the marks stand centered on each other, so the chevron, laid out at no height, sits beside the ring rather than on the row's top edge where an accessibility size aligns the line to its top. */}
-        <HStack spacing={SPACE.ROW} alignment="center">
-          {fold}
-          {mark === undefined ? null : (
-            <HStack modifiers={[frame({ width: leadWidth })]}>{mark}</HStack>
-          )}
-          <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
-        </HStack>
-        {beside}
-        {stacked ? (
-          <VStack alignment="leading" spacing={2}>
-            {words}
-            {end}
-          </VStack>
-        ) : (
-          words
-        )}
-        <Spacer />
-        {stacked ? null : end}
-        {trail}
-      </HStack>
+      {line}
     </HStack>
   );
 }
@@ -897,12 +922,11 @@ function agentsHeard(agents: TaskAgentsStatus | undefined): string | undefined {
   }
 }
 
-/** What a task row is heard as: its name, then unread, its status, its priority where it has one, a thread that needs you, its agents, its key, and whether its sub-tasks are open. */
+/** What a task row is heard as: its name, then unread, its status, a thread that needs you, its agents, its key, and whether its sub-tasks are open. */
 function taskHeard(props: TaskRowProps): RowHeard {
   const {
     name,
     status,
-    priority,
     unread = false,
     needsYou = false,
     blocked = false,
@@ -916,7 +940,6 @@ function taskHeard(props: TaskRowProps): RowHeard {
     value: [
       unread && UNREAD_WORDS,
       TASK_STATUS_WORDS[status],
-      priority !== undefined && priority !== TASK_PRIORITY.NONE && TASK_PRIORITY_WORDS[priority],
       blocked && BLOCKED_WORDS,
       needsYou && NEEDS_YOU.LABEL,
       agentsHeard(agents),
@@ -966,10 +989,14 @@ const FOLD_TARGET = 44;
 /**
  * A parent's fold before its status ring, as the panel's chevron stands
  * before a task's name: it opens the sub-tasks under the row, while a press
- * on the row itself still opens the task. Note that the chevron lays out a
- * lead mark's width, so a sub-task's ring stands under its parent's, but
- * answers a press across a 44 pt square, its overhang laid out at no size
- * so the row stands no taller than its siblings.
+ * on the row itself still opens the task. Note that the button itself is
+ * the whole 44 pt square, since a borderless button in a selectable row
+ * takes a press only within its own frame, and the overhang is taken back
+ * outside it, so the row lays out a lead mark's square: a sub-task's ring
+ * stands under its parent's and the row stands no taller than its ring. It
+ * stands above the ring beside it, which its square reaches over. While
+ * the overhang was taken back inside the button, laying it out at no
+ * height, a press on it opened the row instead (j9614, Nov 16).
  */
 function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPress: () => void }) {
   const colors = useColors();
@@ -977,7 +1004,7 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
   const lead = useScaledSize(MARK_SIZE.LEAD);
   const glyph = useScaledSize(MARK_SIZE.GLYPH - 4);
   const target = Math.max(FOLD_TARGET, lead);
-  const overhang = { across: (target - lead) / 2, down: target / 2 };
+  const overhang = (target - lead) / 2;
 
   return (
     <Button
@@ -985,6 +1012,8 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
       modifiers={[
         buttonStyle("borderless"),
         accessibilityLabel(open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS),
+        padding({ all: -overhang }),
+        zIndex(1),
       ]}
     >
       <Image
@@ -994,12 +1023,6 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
         modifiers={[
           frame({ width: target, height: target }),
           SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-          padding({
-            leading: -overhang.across,
-            trailing: -overhang.across,
-            top: -overhang.down,
-            bottom: -overhang.down,
-          }),
         ]}
       />
     </Button>
@@ -1007,46 +1030,37 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
 }
 
 /**
- * One task on a single line, as Linear's rows stand: the dot while it has
- * news, its priority's mark where its list draws one, its status ring, its
- * name in 15 pt, and at the line's end what its agents say and its key. A
+ * One task on a single line, as Linear's rows stand: its status ring, its
+ * name in 15 pt, semibold while it has news, and at the line's end what its
+ * agents say and its key, as the panel's task rows draw it, with no unread
+ * dot and no priority's mark, which the task's own Priority chip says. Its
+ * ring stands at the list's edge, where an Inbox row's ring stands past the
+ * dot's margin, so the two lists' marks and words line up. A
  * task with sub-tasks leads with the panel's fold before its marks, whose
  * press opens them; its caller draws them as rows
  * of their own under it, a level deeper. Note that SwiftUI's disclosure is
  * not used, because a press on its row folds it rather than picking the row.
  */
 export function TaskRow(props: TaskRowProps) {
-  const {
-    id,
-    name,
-    status,
-    priority,
-    unread = false,
-    finished = false,
-    taskKey,
-    fold,
-    depth = 0,
-  } = props;
+  const { id, name, status, unread = false, finished = false, taskKey, fold, depth = 0 } = props;
 
   const colors = useColors();
   // Note that each level of sub-tasks stands in past a parent's fold, its column the lead's scaled width, so a sub-task's mark stands under its parent's at every size.
   const lead = useScaledSize(MARK_SIZE.LEAD);
-  const dot = useScaledSize(MARK_SIZE.UNREAD);
   const column = lead + SPACE.ROW;
-  // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth, past a parent's fold and the priority's mark, each a column of the lead's scaled width, and by however much the unread dot's column and the lead have grown, since the dot holds its width even while hidden.
-  const grown = lead - MARK_SIZE.LEAD + dot - MARK_SIZE.UNREAD;
-  const marks = (fold === undefined ? 0 : 1) + (priority === undefined ? 0 : 1);
-  const indent = depth * column + marks * column + grown;
+  // Note that the hairline starts under the name, as Reminders' does under a subtask's, so it stands in by the row's depth and past a parent's fold, each a column of the lead's scaled width, and by however much the lead has grown.
+  const grown = lead - MARK_SIZE.LEAD;
+  const indent = (depth + (fold === undefined ? 0 : 1)) * column + grown;
 
   const row: ReactElement = (
     <HStack modifiers={[padding({ leading: depth * column })]}>
       <RowHead
+        dot={false}
         unread={unread}
         faded={finished}
         fold={
           fold === undefined ? undefined : <SubTaskFold open={fold.open} onPress={fold.onToggle} />
         }
-        mark={priority === undefined ? undefined : <TaskPriorityMark priority={priority} />}
         lead={<TaskStatusMark status={status} />}
         title={name}
         ink={titleInk(colors, unread, finished)}
@@ -1093,6 +1107,7 @@ export function TaskRow(props: TaskRowProps) {
       id={id}
       row={row}
       indent={indent}
+      leading={ROW_INSET.PLAIN}
       menuActions={[...folding, ...(props.menuActions ?? [])]}
       heard={props.heard ?? taskHeard(props)}
     />

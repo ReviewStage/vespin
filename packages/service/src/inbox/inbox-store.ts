@@ -1103,6 +1103,21 @@ const closeItem = SqlSchema.findOneOption({
     ),
 });
 
+/** The agent's item under the key, whatever it stands at; nothing where the agent has none under it. */
+const findAgentItemOfKey = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...AgentKeySchema.fields, key: Schema.String }),
+  Result: InboxRowSchema,
+  execute: ({ userId, agentId, key }) =>
+    Database.use((db) =>
+      db
+        .select(inboxColumns(userId))
+        .from(inboxItem)
+        .where(
+          and(eq(inboxItem.userId, userId), eq(inboxItem.agentId, agentId), eq(inboxItem.key, key)),
+        ),
+    ),
+});
+
 /** Where a read looks: one task's items, any member's agents' alike; one agent's own, under the member who started it; one agent's, as any member of its workspace reads them; or every item of one workspace a member may read. */
 const INBOX_SCOPE = {
   TASK: "plan",
@@ -2680,6 +2695,17 @@ export function closeInboxItem(
         return Option.some(yield* itemAsWritten(agent.userId, itemId));
       }),
     ),
+  );
+}
+
+/** The agent's own item under the key, open or settled, as its tools answer with it; nothing where the agent has no thread under the key. */
+export function agentInboxItemOfKey(
+  agent: Pick<InboxAgent, "userId" | "agentId">,
+  key: string,
+): InboxStoreEffect<Option.Option<InboxItem>> {
+  return Effect.map(
+    findAgentItemOfKey({ ...agent, key }),
+    Option.map((row) => storedItem(row).item),
   );
 }
 

@@ -284,7 +284,7 @@ function NoticeBanner({
 }) {
   const reduceMotion = useReduceMotion();
   const keyboard = useKeyboardHeight();
-  const { bottom: safeBottom } = useSafeAreaInsets();
+  const { bottom: safeBottom, left, right } = useSafeAreaInsets();
   const [place] = useState(() => new Animated.Value(0));
   const [drawn, setDrawn] = useState<ShownNotice | undefined>(notice);
   // Whether the banner stands in its place, or below it as it arrives and leaves.
@@ -374,8 +374,9 @@ function NoticeBanner({
 
   const foot = bannerFoot({ keyboard, safeBottom, lift, footRoom, placeFoot });
 
+  // Note that the banner keeps the window's side safe areas, so it stands short of a tab rail beside it, as the folded iPhone Duo stands one, as a docked composer does.
   return (
-    <View pointerEvents="box-none" style={[styles.edge, { bottom: foot }]}>
+    <View pointerEvents="box-none" style={[styles.edge, { bottom: foot, left, right }]}>
       <Animated.View
         style={[styles.lane, { opacity: place }]}
         pointerEvents="box-none"

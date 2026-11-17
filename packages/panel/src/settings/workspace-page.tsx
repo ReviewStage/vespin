@@ -1382,8 +1382,10 @@ function WorkspaceSentryRow({ workspace }: { workspace: Workspace }): React.JSX.
 
 /**
  * The workspace's Slack bot, for an owner or an admin: Connect
- * while it is not connected, which asks Slack which team the bot answers
- * for and keeps it, a connect that failed saying why under the row; and
+ * while it is not connected, which opens Slack's Add to Slack in the
+ * browser, an install that could not be begun saying why under the row,
+ * as Sentry's does: the browser's landing says how the install ended, and
+ * the row says Connected once the held read carries the team; and
  * once it is, a ⋯ whose menu disconnects it, which asks first. A disconnect stops the bot writing to
  * the workspace's members; the bot stays installed in Slack, which the
  * dialog says. Add channel stands beside the ⋯ once Slack has listed the
@@ -1401,8 +1403,8 @@ function ManagedSlackBot({
   /** The chevron folding the bot's rows under its row, last in its end. */
   chevron: React.ReactNode;
 }): React.JSX.Element {
-  const { mutateAsync: sendWorkspaceSlackBotConnect } = useMutation(
-    actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_CONNECT),
+  const { mutateAsync: sendWorkspaceSlackBotInstall } = useMutation(
+    actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL),
   );
 
   const { mutateAsync: sendWorkspaceSlackBotDisconnect, ...slackLeaving } = useMutation(
@@ -1411,10 +1413,10 @@ function ManagedSlackBot({
 
   const workspaceId = workspace.id;
   const [addRefusal, setAddRefusal] = useState<string>();
-  const connecting = useAsyncAction(rejectionWords);
+  const installing = useAsyncAction(rejectionWords);
 
-  const connect = () =>
-    void connecting.run(() => sendWorkspaceSlackBotConnect({ workspaceId }).then(() => undefined));
+  const install = () =>
+    void installing.run(() => sendWorkspaceSlackBotInstall({ workspaceId }).then(() => undefined));
 
   const disconnectAct = useConfirmAct(slackLeaving, {
     send: () => sendWorkspaceSlackBotDisconnect({ workspaceId }),
@@ -1451,7 +1453,7 @@ function ManagedSlackBot({
           label: "Slack",
           description: connectionLine(slack.team !== undefined, true),
           error: replayMaskedError(
-            refusedShown(connecting.refusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT) ??
+            refusedShown(installing.refusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT) ??
               refusedShown(addRefusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT_CHANNEL),
           ),
           control:
@@ -1466,9 +1468,9 @@ function ManagedSlackBot({
             ) : (
               <Button
                 variant={BUTTON_VARIANT.OUTLINE}
-                busy={connecting.running}
-                busyLabel="Connecting"
-                onClick={connect}
+                busy={installing.running}
+                busyLabel="Opening Slack"
+                onClick={install}
               >
                 {CONNECT}
               </Button>

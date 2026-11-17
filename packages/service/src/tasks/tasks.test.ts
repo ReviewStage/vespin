@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import type { DescriptionWriter } from "@repo/database/models/description-revisions";
 import {
   createTask,
   deleteTask,
@@ -21,7 +22,7 @@ import {
 import { noDatabase } from "@repo/database/testing/no-database";
 import type { DescriptionNote } from "@repo/features/description-notes";
 import { descriptionSections } from "@repo/features/description-sections";
-import { type Description, TASK_STATUS } from "@repo/features/task-wire";
+import { DESCRIPTION_ACTOR, type Description, TASK_STATUS } from "@repo/features/task-wire";
 import { Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { INVITATIONS_TEXT, makeDescriptionTask } from "../testing/descriptions.js";
@@ -85,6 +86,9 @@ const openUser = Effect.gen(function* () {
   return userId;
 });
 
+/** The developer, as the writer of the saves these tests make. */
+const DEVELOPER: DescriptionWriter = { actor: DESCRIPTION_ACTOR.DEVELOPER };
+
 /** The binding the service builds for a task: its account and its id. */
 function bound(userId: string, taskId: string): DescriptionBinding {
   return { userId, taskId };
@@ -143,8 +147,8 @@ it.layer(getTestDB())("named plans and the notes that write them", (it) => {
       const relay = yield* startTask(userId, RELAY_TASK);
       const ledger = yield* startTask(userId, LEDGER_TASK);
 
-      yield* saveNotes(bound(userId, relay.id), INVITATIONS_NOTES);
-      yield* saveNotes(bound(userId, ledger.id), EMPTY_STATE_NOTES);
+      yield* saveNotes(bound(userId, relay.id), INVITATIONS_NOTES, DEVELOPER);
+      yield* saveNotes(bound(userId, ledger.id), EMPTY_STATE_NOTES, DEVELOPER);
 
       const relayBody = (yield* resumedDocument(userId, relay.id)).body;
       const ledgerBody = (yield* resumedDocument(userId, ledger.id)).body;
@@ -162,7 +166,9 @@ it.layer(getTestDB())("named plans and the notes that write them", (it) => {
         const userId = yield* openUser;
         const { id: taskId } = yield* startTask(userId, RELAY_TASK);
 
-        const saved = savedDocument(yield* saveNotes(bound(userId, taskId), INVITATIONS_NOTES));
+        const saved = savedDocument(
+          yield* saveNotes(bound(userId, taskId), INVITATIONS_NOTES, DEVELOPER),
+        );
 
         assert.deepEqual(yield* resumedDocument(userId, taskId), saved);
         assert.deepEqual(saved.assumptions, []);
@@ -188,9 +194,11 @@ it.layer(getTestDB())("named plans and the notes that write them", (it) => {
         const { id: taskId } = yield* startTask(userId, RELAY_TASK);
         yield* makeDescriptionTask(taskId, INVITATIONS_TEXT);
 
-        const result = yield* saveNotes(bound(userId, taskId), [
-          added("Goal", "- Pending invites show in settings."),
-        ]);
+        const result = yield* saveNotes(
+          bound(userId, taskId),
+          [added("Goal", "- Pending invites show in settings.")],
+          DEVELOPER,
+        );
 
         const { body, assumptions } = savedDocument(result);
         assert.equal(
@@ -229,7 +237,7 @@ it.layer(getTestDB())("named plans and the notes that write them", (it) => {
         yield* TestClock.adjust("1 minute");
 
         yield* readTask(userId, relay.id);
-        yield* saveNotes(bound(userId, relay.id), INVITATIONS_NOTES);
+        yield* saveNotes(bound(userId, relay.id), INVITATIONS_NOTES, DEVELOPER);
 
         const listed = yield* listTasks(userId);
         assert.deepEqual(
@@ -261,7 +269,7 @@ it.layer(getTestDB())("named plans and the notes that write them", (it) => {
         );
 
         const saved = savedDocument(
-          yield* saveNotes(bound(teammate, started.id), INVITATIONS_NOTES),
+          yield* saveNotes(bound(teammate, started.id), INVITATIONS_NOTES, DEVELOPER),
         );
 
         assert.deepEqual(yield* resumedDocument(starter, started.id), saved);
@@ -284,10 +292,10 @@ it.layer(getTestDB())("named plans and the notes that write them", (it) => {
       const owner = yield* openUser;
       const intruder = yield* openUser;
       const { id: taskId } = yield* startTask(owner, RELAY_TASK);
-      yield* saveNotes(bound(owner, taskId), INVITATIONS_NOTES);
+      yield* saveNotes(bound(owner, taskId), INVITATIONS_NOTES, DEVELOPER);
       const saved = yield* resumedDocument(owner, taskId);
 
-      const result = yield* saveNotes(bound(intruder, taskId), EMPTY_STATE_NOTES);
+      const result = yield* saveNotes(bound(intruder, taskId), EMPTY_STATE_NOTES, DEVELOPER);
 
       assert.deepEqual(result, {
         status: DESCRIPTION_SAVE_STATUS.NOT_SAVED,
@@ -305,7 +313,7 @@ it.layer(getTestDB())("named plans and the notes that write them", (it) => {
       const userId = yield* openUser;
       const relay = yield* startTask(userId, RELAY_TASK);
       const ledger = yield* startTask(userId, LEDGER_TASK);
-      yield* saveNotes(bound(userId, relay.id), INVITATIONS_NOTES);
+      yield* saveNotes(bound(userId, relay.id), INVITATIONS_NOTES, DEVELOPER);
       const saved = yield* resumedDocument(userId, relay.id);
 
       const renamed = yield* updateTask(userId, relay.id, { name: "Team invites" });
@@ -395,10 +403,10 @@ it.layer(getTestDB())("named plans and the notes that write them", (it) => {
     Effect.gen(function* () {
       const userId = yield* openUser;
       const { id: taskId } = yield* startTask(userId, RELAY_TASK);
-      yield* saveNotes(bound(userId, taskId), INVITATIONS_NOTES);
+      yield* saveNotes(bound(userId, taskId), INVITATIONS_NOTES, DEVELOPER);
       const before = yield* resumedDocument(userId, taskId);
 
-      const result = yield* saveNotes(bound(userId, taskId), EMPTY_STATE_NOTES).pipe(
+      const result = yield* saveNotes(bound(userId, taskId), EMPTY_STATE_NOTES, DEVELOPER).pipe(
         Effect.provide(noDatabase),
       );
 

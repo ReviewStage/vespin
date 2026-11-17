@@ -15,7 +15,7 @@
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
-import { markedAs, type ReadMark } from "@repo/features/read-mark";
+import { markedAs, type ReadMark, type ReadMarked } from "@repo/features/read-mark";
 import {
   FOLLOWER_CALL_FAILURE,
   type ListedApart,
@@ -44,6 +44,7 @@ import {
   inboxReadMarksAppState,
   inboxRemindersAppState,
   inboxTasksView,
+  type KeptQueues,
   MEMORY_SAVE_REFUSED,
   machineAskAppState,
   NEW_MEMORY_ID,
@@ -52,6 +53,8 @@ import {
   type PullRequestMove,
   pullRequestMoveOf,
   pullRequestPartsAppState,
+  queueAfter,
+  queuedAppState,
   type SavedMemoryWords,
   savedMemoriesAppState,
 } from "@repo/host/fixture-inbox";
@@ -70,18 +73,33 @@ type KeptReadMark = { readonly mark: ReadMark; readonly at: number };
 /** The read marks each run's screens set on the fixture's tasks, by task, each map replaced whole as one is set. */
 type KeptReadMarks = ReadonlyMap<string, KeptReadMark>;
 
-/** The tasks of a list with the read marks a run set laid on them, as the host draws a mark: the list itself where no task's mark moved. */
+/** A task with a kept read mark laid on it: the very task where it stands so already. */
+function markedTask<Task extends ReadMarked>(task: Task, kept: KeptReadMark): Task {
+  const marked = markedAs(kept.mark, task, kept.at);
+  // SAFETY: the keys of a mark are the fields of `ReadMarked` it sets.
+  const keys = Object.keys(marked) as (keyof ReadMarked)[];
+
+  return keys.every((key) => task[key] === marked[key]) ? task : { ...task, ...marked };
+}
+
+/**
+ * The tasks of a list with the read marks a run set laid on them, as the
+ * host draws a mark: the list itself where no task's mark moved. Note that a
+ * task already standing as its mark says is kept, and a list none of whose
+ * tasks moved is kept whole, because the store tells the lists apart by
+ * identity, and each change it announces stages the fixture again: a fresh
+ * list on every stage never settled, and starved the JS thread.
+ */
 function markedTasksView(list: ListedTasksView, marks: KeptReadMarks): ListedTasksView {
   if (marks.size === 0) return list;
 
-  return {
-    ...list,
-    tasks: list.tasks.map((task) => {
-      const kept = marks.get(task.id);
+  const tasks = list.tasks.map((task) => {
+    const kept = marks.get(task.id);
 
-      return kept === undefined ? task : { ...task, ...markedAs(kept.mark, task, kept.at) };
-    }),
-  };
+    return kept === undefined ? task : markedTask(task, kept);
+  });
+
+  return tasks.every((task, place) => task === list.tasks[place]) ? list : { ...list, tasks };
 }
 
 /** The fixture's tasks laid over the list held beside the document, or the list held where it is staged already, its agents on the choices the run made and its rows on the read marks it set: the tasks slice, and the lists beside it. */
@@ -144,6 +162,12 @@ const CHOICES = new WeakMap<object, AgentChoices>();
 /** Nothing changed yet. */
 const NO_CHOICES: AgentChoices = new Map();
 
+/** The queues each run changed, by the store the run stages, each map replaced whole as one is changed. */
+const QUEUES = new WeakMap<object, KeptQueues>();
+
+/** No queue changed yet. */
+const NO_QUEUES: KeptQueues = new Map();
+
 /** The read marks each run's screens set on the fixture's tasks, by the store the run stages. */
 const READ_MARKS = new WeakMap<object, KeptReadMarks>();
 
@@ -196,9 +220,12 @@ export function stageFixture(
 
   if (inbox === held) return;
 
-  const parts = olderPageAppState(
-    pullRequestPartsAppState(inbox, MOVES.get(state) ?? NO_MOVES),
-    OLDER_ASKS.get(state) ?? 0,
+  const parts = queuedAppState(
+    olderPageAppState(
+      pullRequestPartsAppState(inbox, MOVES.get(state) ?? NO_MOVES),
+      OLDER_ASKS.get(state) ?? 0,
+    ),
+    QUEUES.get(state) ?? NO_QUEUES,
   );
 
   const saved = savedMemoriesAppState(
@@ -324,18 +351,32 @@ function keepChoice(
   stageFixture(state);
 }
 
+/** Keeps the queue a change to it or a Stop the fixture took leaves its agent, and lays it over the document at once, as the host draws one; nothing for any other act. */
+function keepQueue(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): void {
+  const held = QUEUES.get(state) ?? NO_QUEUES;
+  const after = queueAfter(held, kind, payload);
+
+  if (after === undefined) return;
+  QUEUES.set(state, new Map(held).set(after.agentId, after.queue));
+  stageFixture(state);
+}
+
 /** Keeps how a change the fixture took moved its pull request, and lays it over the document at once; nothing for any other act. */
 function keepMove(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
 ): void {
-  if (kind !== ACT_KIND.AGENTS_PULL_REQUEST_ACTION) return;
+  if (kind !== ACT_KIND.PULL_REQUESTS_ACTION) return;
   // SAFETY: the payload is the kind's, which the guard above names.
-  const { number, request } = payload as PortActPayload<typeof ACT_KIND.AGENTS_PULL_REQUEST_ACTION>;
+  const { number, request } = payload as PortActPayload<typeof ACT_KIND.PULL_REQUESTS_ACTION>;
   const move = pullRequestMoveOf(request);
 
-  if (number === undefined || move === undefined) return;
+  if (move === undefined) return;
   MOVES.set(state, new Map(MOVES.get(state) ?? NO_MOVES).set(number, move));
   stageFixture(state);
 }
@@ -413,7 +454,7 @@ const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>>
   [ACT_KIND.FEEDBACK_SEND, () => ({ delivered: false })],
   // Note that a change to a pull request is refused as GitHub refuses one, its words beside, so the pull request page shows its write note.
   [
-    ACT_KIND.AGENTS_PULL_REQUEST_ACTION,
+    ACT_KIND.PULL_REQUESTS_ACTION,
     () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.REFUSED, words: PULL_REQUEST_REFUSED_WORDS }),
   ],
 ]);
@@ -441,7 +482,9 @@ function memberAt<Member>(
  * would, so a screen draws it merged or out of the queue, and a reminder
  * set or cleared moves its item there, as the host draws one, so the Inbox
  * puts it away under Reminders, and a change of an agent's model, permission
- * mode, servers, name, or pin moves the agent there, as the host draws one.
+ * mode, servers, name, or pin moves the agent there, as the host draws one,
+ * and a change to its queue moves the queue there, a Stop pausing it, so a
+ * flow may move a queued message and Resume.
  * Where `refusesWrites`, the writes `REFUSED_WRITES` names are refused
  * before anything else answers them, so a flow sees the failure notice.
  */
@@ -490,6 +533,8 @@ export function fixtureActs(
         keepInboxReadMark(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepChoice(state, kind as PortActKind, payload);
+        // SAFETY: as above.
+        keepQueue(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepMemory(state, kind as PortActKind, payload);
         // SAFETY: as above.

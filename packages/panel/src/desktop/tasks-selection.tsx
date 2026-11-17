@@ -7,6 +7,7 @@ import {
   workspaceSections,
 } from "@repo/features/task-sections-model";
 import { countWords, IRREVERSIBLE_WORDS, type Noun, TERM } from "@repo/features/words";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   CONFIRM_LOSS,
   ConfirmDialog,
@@ -22,6 +23,7 @@ import { useMutation } from "@tanstack/react-query";
 import { type Store, useCreateStore, useSelector } from "@tanstack/react-store";
 import { Predicate } from "effect";
 import { createContext, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useAppCommand } from "../app-commands.js";
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
@@ -230,12 +232,15 @@ export function useChosen(drawn: ReadonlySet<string>, held?: ChosenTasksStore): 
   useEffect(() => {
     if (stale) store.setState((was) => new Set([...was].filter((id) => drawn.has(id))));
   });
+  const onClear = () => store.setState(() => new Set<string>());
+  // Escape chooses none wherever the keyboard stands, while any is chosen and nothing nearer takes it (`window-escape.ts`).
+  useAppCommand(APP_COMMAND.CLEAR_SELECTION, selected.size > 0 ? onClear : undefined);
 
   return {
     regionId,
     selected,
     setChosen: (next) => store.setState(Predicate.isFunction(next) ? next : () => next),
-    onClear: () => store.setState(() => new Set()),
+    onClear,
   };
 }
 

@@ -14,7 +14,7 @@ import { OverPane } from "./over-pane.js";
  * it, a press in it or on its toggle, or any of its toggles, does not; and
  * it takes the keyboard as it opens, holds it against Tab, and hands it back
  * to its toggle as it closes; one that comes as a peek takes no keyboard
- * until it is made open.
+ * until it is made open, and its Escape is taken before the window's.
  */
 
 declare global {
@@ -98,7 +98,9 @@ function openFromToggle(): void {
 
 function key(target: Element, name: string, shiftKey = false): void {
   act(() => {
-    target.dispatchEvent(new KeyboardEvent("keydown", { key: name, shiftKey, bubbles: true }));
+    target.dispatchEvent(
+      new KeyboardEvent("keydown", { key: name, shiftKey, bubbles: true, cancelable: true }),
+    );
   });
 }
 
@@ -223,7 +225,12 @@ test("a peek takes no keyboard and holds none against Tab, until it is made open
   expect(pane()?.getAttribute("data-state")).toBe("leaving");
 });
 
-test("Escape puts a peek away wherever the keyboard stands, though it holds none", () => {
+test("Escape puts a peek away wherever the keyboard stands, though it holds none, and marks the key taken before the window's own handler hears it", () => {
+  // Note that the window's listener is added before the peek's, as the
+  // app's Escape is, so the peek must hear the key before the window does.
+  const heard: boolean[] = [];
+  const page = (event: KeyboardEvent) => heard.push(event.defaultPrevented);
+  window.addEventListener("keydown", page);
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -232,7 +239,9 @@ test("Escape puts a peek away wherever the keyboard stands, though it holds none
   press(button("Peek"));
 
   key(button("Elsewhere"), "Escape");
+  window.removeEventListener("keydown", page);
   expect(pane()?.getAttribute("data-state")).toBe("leaving");
+  expect(heard).toEqual([true]);
 });
 
 test("a peek leaves Escape to what the keyboard stands in when that takes it", () => {
