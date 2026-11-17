@@ -377,22 +377,25 @@ export const HARNESS_MARK_ASSET = {
  * An agent's tile, as the panel's messages lead an agent's words with it: a
  * rounded square on the brand's well, the mark of the harness the agent runs
  * in on it (Claude Code's Clawd, Codex's picture), or the ink's hard hat where
- * the harness is not known, heard as the agent's name, so an agent never
- * reads as a person.
+ * the harness is not known, so an agent never reads as a person. It is never
+ * heard, since it always stands beside the name it leads, as `HarnessMark`
+ * is: heard as the name too, it read the name twice, and in an agent's row
+ * stood as a stop of its own that a tap on it did not open (j9642t).
  */
 export function AgentTile({
-  name,
   harness,
   size = MARK_SIZE.AVATAR,
-}: AvatarProps & {
+}: {
   /** The provider whose harness the agent runs in (`providerOf` its model); none where it is not known. */
   readonly harness?: ModelProvider | undefined;
+  /** Its width, in points; a row's where none is given. */
+  readonly size?: number | undefined;
 }) {
   const colors = useColors();
   const glyph = size * TILE_GLYPH_SCALE;
 
   return (
-    <ZStack modifiers={[frame({ width: size, height: size }), accessibilityLabel(name)]}>
+    <ZStack modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}>
       <RoundedRectangle
         cornerRadius={size * TILE_ROUNDING}
         modifiers={[foregroundStyle(colors.WELL)]}

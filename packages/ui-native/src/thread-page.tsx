@@ -561,7 +561,7 @@ function MessageView({
             ]}
           >
             {writer.agent ? (
-              <AgentTile name={writer.name} harness={writer.harness} size={MARK_SIZE.WRITER} />
+              <AgentTile harness={writer.harness} size={MARK_SIZE.WRITER} />
             ) : (
               <Avatar
                 name={writer.name}
