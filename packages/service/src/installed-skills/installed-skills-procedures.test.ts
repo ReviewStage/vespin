@@ -762,7 +762,7 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
   );
 
   it.effect(
-    "a skill's folder from a Mac installs every file with where it was read, under the name asked where its own is taken, and a folder past the bound or carrying a credential is refused",
+    "a skill's folder from a Mac installs every file with where it was read, and a name already held, a folder past the bound, or one carrying a credential is refused",
     () =>
       Effect.gen(function* () {
         const owner = yield* openGithubUser();
@@ -771,10 +771,7 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
         const base64 = (text: string) => Buffer.from(text).toString("base64");
         const notes = skillFile("release-notes", "Drafts release notes.");
 
-        const importFolder = (
-          files: Readonly<Record<string, string>>,
-          more: Readonly<Record<string, WireBoundaryInput>> = {},
-        ) =>
+        const importFolder = (files: Readonly<Record<string, string>>) =>
           ask(
             `${SKILLS}/import`,
             owner,
@@ -783,7 +780,6 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
               scope: INSTALLED_SKILL_SCOPE.PERSONAL,
               mac: { app: MAC_SKILL_APP.CLAUDE_CODE, folder: "~/.claude/skills/release-notes" },
               files: Object.entries(files).map(([path, text]) => ({ path, base64: base64(text) })),
-              ...more,
             }),
           );
 
@@ -809,24 +805,11 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
         assert.equal(yield* storedText(owner, first.id, "SKILL.md"), notes);
         assert.equal(yield* storedText(owner, first.id, "scripts/tags.sh"), "git tag --list");
 
-        // The name is taken now, so the same folder comes in under the one asked, written into its frontmatter.
+        // The same folder again finds its name taken, and is refused rather than renamed.
         assert.deepEqual((yield* importFolder(folder)).body, {
           error: HOSTED_API_ERROR.SKILL_NAME_TAKEN,
           skillName: "release-notes",
         });
-
-        const [second] = readAnswer(
-          installedSkillInstallAnswerSchema,
-          201,
-          yield* importFolder(folder, { name: "release-notes-2" }),
-        ).skills;
-
-        assert.ok(second);
-        assert.equal(second.name, "release-notes-2");
-        assert.equal(
-          yield* storedText(owner, second.id, "SKILL.md"),
-          `---\nname: "release-notes-2"\ndescription: "Drafts release notes."\n---\n\n# release-notes\n\nDo the thing.\n`,
-        );
 
         const half = "x".repeat(INSTALLED_SKILL_BOUNDS.MAX_IMPORT_BYTES / 2);
         assert.deepEqual(
@@ -838,15 +821,10 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
           },
         );
         assert.deepEqual(
-          (yield* importFolder(
-            { "SKILL.md": notes, "env.sh": `TOKEN=${FAKE_GITHUB_TOKEN}` },
-            {
-              name: "leaky",
-            },
-          )).body,
+          (yield* importFolder({ "SKILL.md": notes, "env.sh": `TOKEN=${FAKE_GITHUB_TOKEN}` })).body,
           {
             error: HOSTED_API_ERROR.SKILL_FILES_REFUSED,
-            skillName: "leaky",
+            skillName: "release-notes",
             skillRefusal: INSTALLED_SKILL_REFUSAL.CREDENTIAL,
           },
         );

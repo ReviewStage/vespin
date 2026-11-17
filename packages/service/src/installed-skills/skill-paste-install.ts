@@ -133,11 +133,7 @@ const NAME_OR_DESCRIPTION = /^(?:name|description):/u;
  * each written once in place of any key and lines it held, and the
  * frontmatter made where the text opens with none.
  */
-export function withNameAndDescription(
-  markdown: string,
-  name: string,
-  description: string,
-): string {
+function withNameAndDescription(markdown: string, name: string, description: string): string {
   // Note that a JSON string is a YAML double-quoted scalar, so any description reads back as written.
   const head = `name: ${JSON.stringify(name)}\ndescription: ${JSON.stringify(description)}`;
   const unmarked = markdown.replace(/^\uFEFF/u, "");

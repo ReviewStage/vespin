@@ -4,10 +4,8 @@
  * The desktop sends every file of the folder whole, in base64, with where
  * on the Mac it read them; nothing here reads the Mac. The skill is named
  * by its `SKILL.md`, or by its folder where it declares no name, as a
- * repository's skill is, and comes in under the name the member asked
- * where they already hold a skill of its own: that name is written into
- * its `SKILL.md`'s frontmatter, so a harness reading it from disk names it
- * as the store does. The folder is held to the one check every install is
+ * repository's skill is; a name the member already holds is refused as
+ * taken by the store, never renamed. The folder is held to the one check every install is
  * (`@repo/features/installed-skill-check`), and to a bound on its bytes
  * together, which one request carries whole.
  */
@@ -27,25 +25,11 @@ import {
 } from "@repo/features/installed-skill-wire";
 import { Effect } from "effect";
 import { HOSTED_REFUSAL, type HostedRefusal, installedSkillRefused } from "../http/http-effect.js";
-import { type MadeSkill, withNameAndDescription } from "./skill-paste-install.js";
+import type { MadeSkill } from "./skill-paste-install.js";
 
 /** The folder's own name, which names a skill whose `SKILL.md` declares none. */
 function folderName(folder: string): string {
   return folder.split("/").at(-1) ?? "";
-}
-
-/** The files with `SKILL.md`'s text written in place, where the skill comes in under another name. */
-function renamedFiles(
-  files: readonly SkillFile[],
-  markdown: string,
-  name: string,
-  description: string,
-): readonly SkillFile[] {
-  const written = new TextEncoder().encode(withNameAndDescription(markdown, name, description));
-
-  return files.map((file) =>
-    file.path === INSTALLED_SKILL_MAIN_FILE ? { path: file.path, bytes: written } : file,
-  );
 }
 
 /** The skill a folder read from a Mac makes, refused by name for the first check it breaks; a folder naming one path twice is no request. */
@@ -64,15 +48,13 @@ export function madeFromMac(
   const main = sent.find((file) => file.path === INSTALLED_SKILL_MAIN_FILE);
   const markdown = main === undefined ? "" : fileText(main.bytes);
   const own = skillHead(markdown, folderName(asked.mac.folder));
-  const name = asked.name ?? own.name;
-  // Note that the checks read the files as they are written, a renamed `SKILL.md` among them, since its new name may take it past a bound.
-  const files = name === own.name ? sent : renamedFiles(sent, markdown, name, own.description);
-  const total = files.reduce((bytes, file) => bytes + file.bytes.byteLength, 0);
+  const { name } = own;
+  const total = sent.reduce((bytes, file) => bytes + file.bytes.byteLength, 0);
 
   const refusal =
     total > INSTALLED_SKILL_BOUNDS.MAX_IMPORT_BYTES
       ? INSTALLED_SKILL_REFUSAL.TOO_LARGE
-      : skillRefusal({ name, description: own.description }, files);
+      : skillRefusal(own, sent);
 
   if (refusal !== undefined) {
     return Effect.fail(
@@ -85,6 +67,6 @@ export function madeFromMac(
     description: own.description,
     userInvocable: own.userInvocable,
     source: { type: INSTALLED_SKILL_SOURCE.TEXT, mac: asked.mac },
-    files,
+    files: sent,
   });
 }

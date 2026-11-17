@@ -220,16 +220,14 @@ const importedFileSchema = EffectSchema.Struct({
 
 /**
  * One skill's folder brought in from a Mac: whose it is, where on the Mac
- * it was read, every file it holds, and the name it comes in under where
- * the member already has a skill of its own name, which is written into
- * its `SKILL.md`. Its files are checked as any install's are, and refused
- * past `INSTALLED_SKILL_BOUNDS.MAX_IMPORT_BYTES` together.
+ * it was read, and every file it holds. Its files are checked as any
+ * install's are, and refused past `INSTALLED_SKILL_BOUNDS.MAX_IMPORT_BYTES`
+ * together; a name the member already holds is refused as taken.
  */
 export const installedSkillImportRequestSchema = EffectSchema.Struct({
   workspaceId: EffectSchema.NonEmptyString,
   scope: installedSkillScopeSchema,
   mac: macSkillOriginSchema,
-  name: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
   files: EffectSchema.Array(importedFileSchema).check(
     EffectSchema.isMinLength(1),
     EffectSchema.isMaxLength(INSTALLED_SKILL_BOUNDS.MAX_IMPORT_FILES),
