@@ -7,10 +7,9 @@ import type {
   SettingsRowIndent,
 } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
-import { useEffect } from "react";
 import { refusalShown } from "../failure-report.js";
 import { PickerRow } from "./picker-row.js";
-import type { RowChange } from "./row-write.js";
+import { type RowChange, useSettledWrite } from "./row-write.js";
 
 /** What the menu says when a search over a short fixed set matches nothing, which it has no search to say. */
 const NO_MATCH = "No options match";
@@ -99,11 +98,7 @@ export function SelectRow<Value extends string | number>({
 }): React.JSX.Element {
   const run = write === undefined ? onChange : write.run;
   const ahead = write?.ahead;
-  const agreed = write !== undefined && !write.busy && ahead !== undefined && ahead.value === value;
-  // Note that a pick drawn ahead of its answer is let go of once the stored value agrees, so the row then follows the store again, other windows' changes included.
-  useEffect(() => {
-    if (agreed) write.settle();
-  }, [agreed, write]);
+  useSettledWrite(write, value);
   const shown = ahead === undefined ? value : ahead.value;
   const chosen = options.find((option) => option.value === shown);
 

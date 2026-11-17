@@ -1,6 +1,7 @@
 import {
   type AppSettingField,
   isAppSettingId,
+  optionFromSetting,
   type SETTINGS_PAGE as SCHEMA_SETTINGS_PAGE,
   SETTING_SECTION,
   type SettingSection,
@@ -136,7 +137,12 @@ function SchemaChoiceRow({
   /** What the section adds to the menu, where it adds anything. */
   menu: ChoiceMenu | undefined;
 }): React.JSX.Element {
-  const write = useSettingRowWrite(field, (token: string) => settingFromOption(field, token, view));
+  const write = useSettingRowWrite(
+    field,
+    (token: string) => settingFromOption(field, token, view),
+    (value) => optionFromSetting(field, value),
+  );
+
   const own = menu?.own;
 
   // Note that an own option stands for its token in the setting, so the menu draws the own option chosen where the token is stored.

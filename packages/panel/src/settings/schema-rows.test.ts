@@ -24,7 +24,7 @@ import { SchemaSettingRows } from "./schema-rows.js";
 /**
  * schema-rows.test.ts -- a schema row as the reader meets it: a toggle is a
  * switch named by its row, a short choice a pop-up naming the stored value,
- * each writing what it is moved to, and a refused write said under the row
+ * each drawing and writing what it is moved to, and a refused write said under the row
  * that asked, its control pressable again.
  */
 
@@ -111,15 +111,15 @@ type MountThroughActsResult = {
   redraw: (settings: ReturnType<typeof settingsView>) => void;
 };
 
-/** This Mac's own rows, and a way to draw it again over the settings the store then holds. */
-function mountThroughActs(): MountThroughActsResult {
+/** A page's own rows, This Mac's unless named, and a way to draw it again over the settings the store then holds. */
+function mountThroughActs(page: DrawnPage = SETTINGS_PAGE.THIS_MAC): MountThroughActsResult {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
 
   function Page({ settings }: { settings: ReturnType<typeof settingsView> }) {
-    return rows(SETTINGS_PAGE.THIS_MAC, settings);
+    return rows(page, settings);
   }
 
   const redraw = (settings: ReturnType<typeof settingsView>) =>
@@ -160,8 +160,9 @@ async function settle(): Promise<void> {
   await act(async () => undefined);
 }
 
-test("Zoom is a pop-up naming the stored size, and choosing another size writes it", async () => {
+test("Zoom is a pop-up naming the stored size, and choosing another names it at once and writes it", async () => {
   const page = mount();
+  held = Promise.withResolvers<ActionResult>();
   const zoom = control(page, "Zoom: 100%");
   // The pop-up is the picker's menu, which the settings search lands on through the chip.
   assert.equal(zoom.getAttribute("data-search-anchor"), "zoom");
@@ -174,6 +175,10 @@ test("Zoom is a pop-up naming the stored size, and choosing another size writes 
   act(() => optionNamed("125%").click());
 
   await vi.waitFor(() => assert.deepEqual(written, [["zoom", 125]]));
+  control(page, "Zoom: 125%");
+  held.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
+  await settle();
+  control(page, "Zoom: 125%");
 });
 
 test("choosing the size a pop-up already names writes nothing", async () => {
@@ -225,6 +230,20 @@ test("a switch follows the settings again once they agree with what it flipped t
   await vi.waitFor(() =>
     assert.equal(control(page, "Open Vespin at login").getAttribute("aria-checked"), "true"),
   );
+});
+
+test("a pick follows the settings again once they move past it to another value", async () => {
+  const { page, redraw } = mountThroughActs(SETTINGS_PAGE.APPEARANCE);
+
+  act(() => control(page, "Zoom: 100%").click());
+  act(() => optionNamed("125%").click());
+  await vi.waitFor(() => assert.deepEqual(written, [["zoom", 125]]));
+  await settle();
+  control(page, "Zoom: 125%");
+
+  // Another window chose another size before this one's arrived; the pop-up is the store's again.
+  redraw(settingsView({ zoom: 150 }));
+  await vi.waitFor(() => control(page, "Zoom: 150%"));
 });
 
 test("a switch the store refuses flips back and says why in a toast, and can be pressed again", async () => {
@@ -291,7 +310,7 @@ test("a choice the store refuses says why under its own row and marks its pop-up
   answer = { status: ACTION_RESULT_STATUS.ACCEPTED };
   choose("90%");
   await vi.waitFor(() =>
-    assert.equal(control(page, "Zoom: 100%").getAttribute("aria-invalid"), null),
+    assert.equal(control(page, "Zoom: 90%").getAttribute("aria-invalid"), null),
   );
   assert.deepEqual(written, [
     ["zoom", 125],
