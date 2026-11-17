@@ -10,11 +10,8 @@ import {
   CallAccessory,
   GLYPH,
   SplitOverTabs,
-  TAB_BAR_ROOM,
   UNDER_SPLIT_SCREEN,
   useColors,
-  useNoticeFootRoom,
-  useTabRail,
   useThreeColumns,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -153,9 +150,6 @@ export default function TabsLayout() {
 
   // Note that the Inbox's Select mode hides the bar only while the Inbox's own list stands, so a link that opens another place never leaves the bar hidden over it.
   const choosing = useInboxChoosingOn() && atRoot && placeOfRoute(standing) === SIDEBAR_PLACE.INBOX;
-  // Note that the app's notice stands over a compact window's tab bar, or Select mode's toolbar standing in its place, and over nothing where a conversation hides the bar or the tabs stand as a rail at the side, as on the folded iPhone Duo; a conversation's composer says its own height.
-  const tabRail = useTabRail();
-  useNoticeFootRoom(iconOnly && !appSidebar && !conversation && !tabRail ? TAB_BAR_ROOM : 0);
 
   const tabs = (
     <NativeTabs

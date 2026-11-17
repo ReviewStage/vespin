@@ -12,17 +12,8 @@ import {
   strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
+import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
-  createContext,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import {
-  type HostInstance,
   Keyboard,
   type KeyboardEvent,
   LayoutAnimation,
@@ -34,7 +25,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReduceTransparency } from "./accessibility.js";
 import { KeyboardDockArea } from "./keyboard-dock.js";
-import { useNoticeLift } from "./notice-lift.js";
 import { useColors } from "./tokens/colors.js";
 import { PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 
@@ -51,7 +41,7 @@ const DockKeyboard = createContext(0);
 const DockLifted = createContext(false);
 
 /** Tells the dock how tall the bar inside it stands, with its gap, and where its top stands in the window; nothing outside a dock. */
-const DockMeasure = createContext<((room: number, top: number) => void) | undefined>(undefined);
+const DockMeasure = createContext<((room: number) => void) | undefined>(undefined);
 
 /** How far apart the controls of a row with no bar stand (`DockRow`), as the glass buttons over Notes' keyboard stand apart. */
 const DOCK_ROW_SPACING = SPACE.TIGHT * 2;
@@ -283,16 +273,11 @@ function DockedFoot({ children }: { readonly children: ReactNode }) {
   const keyboard = useKeyboardHeight() > 0;
   const lifted = useContext(DockLifted);
   const measure = useContext(DockMeasure);
-  const placed = useRef<HostInstance>(null);
 
-  // Note that it tells where its top stands in the window too, so a failure notice can stand right above it.
   const onLayout =
     measure === undefined
       ? undefined
-      : (event: LayoutChangeEvent) => {
-          const room = event.nativeEvent.layout.height + SPACE.ROW;
-          placed.current?.measureInWindow((_x, top) => measure(room, top));
-        };
+      : (event: LayoutChangeEvent) => measure(event.nativeEvent.layout.height + SPACE.ROW);
 
   // Note that the bottom safe area is let go while the keyboard stands, since the keyboard covers the tab bar it holds room for; the sides are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one. The native dock lifts the bar only as far past that safe area as the keyboard stands, so the bar keeps it throughout, and a drag that pulls the keyboard down lowers the bar without a jump at its end.
   return (
@@ -300,9 +285,7 @@ function DockedFoot({ children }: { readonly children: ReactNode }) {
       edges={keyboard && !lifted ? ["left", "right"] : ["bottom", "left", "right"]}
       style={styles.gap}
     >
-      <View ref={placed} onLayout={onLayout}>
-        {children}
-      </View>
+      <View onLayout={onLayout}>{children}</View>
     </SafeAreaView>
   );
 }
@@ -421,38 +404,6 @@ export function DockRow({
 interface DockProps {
   readonly children: ReactNode;
   readonly bar: ReactNode;
-  /** Whether the dock's screen is the one in front, rather than one a page was pushed over, a tab not shown, or a sheet on top: the notice stands over the bar only then. */
-  readonly shown: boolean;
-}
-
-/**
- * The room the dock's bar takes, as it measures it, and the measure the bar
- * reports to; while the dock's screen is in front, the app's notice stands
- * over the bar, where the bar stands in the window. Note that where the bar
- * stands is kept only as measured with the keyboard down, since the bar
- * rides the keyboard by its height alone, and it counts a tab bar under it,
- * which its height does not.
- */
-function useDockLift(keyboard: number, shown: boolean) {
-  const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
-  const [placed, setPlaced] = useState<{ readonly foot: number; readonly room: number }>();
-  const { height: windowHeight } = useWindowDimensions();
-
-  const measure = useCallback(
-    (next: number, top: number) => {
-      setRoom(next);
-
-      if (keyboard === 0) setPlaced({ foot: windowHeight - top + SPACE.ROW, room: next });
-    },
-    [keyboard, windowHeight],
-  );
-
-  // Note that a bar grown or shrunk while the keyboard stood moves its foot by that change alone, since with the keyboard down its bottom stands still, and the keyboard's fall moves the bar without laying it out, so nothing measures it again.
-  const foot = placed === undefined ? undefined : placed.foot + room - placed.room;
-
-  useNoticeLift({ room, foot }, shown);
-
-  return { room, measure };
 }
 
 /** The bar's column at the dock's foot, at the reading width in a wide window. */
@@ -461,7 +412,7 @@ function DockColumn({
   onRoom,
 }: {
   readonly bar: ReactNode;
-  readonly onRoom: (room: number, top: number) => void;
+  readonly onRoom: (room: number) => void;
 }) {
   // Note that the column holds the window's side safe areas too, which the bar's own safe area view pads inside it, so its glass spans the reading width.
   const { left, right } = useSafeAreaInsets();
@@ -487,12 +438,11 @@ function DockColumn({
  * with the keyboard frame by frame, through a drag that pulls the keyboard
  * down, the suggestion strip's growth, and a form sheet's own lift, so a list
  * over it may lower the keyboard under the reader's finger; the bar stands
- * last in it, since the native dock lifts its last child. While its screen is the one in front (`shown`), the app's
- * notice stands over the bar, where the bar stands in the window.
+ * last in it, since the native dock lifts its last child.
  */
-export function GlassDock({ children, bar, shown }: DockProps) {
+export function GlassDock({ children, bar }: DockProps) {
   const [overlap, setOverlap] = useState(0);
-  const { room, measure } = useDockLift(overlap, shown);
+  const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
 
   return (
     <KeyboardDockArea
@@ -505,7 +455,7 @@ export function GlassDock({ children, bar, shown }: DockProps) {
       {/* Note that the docked view is never flattened away, since the native dock lifts its last child, which must be this view and not whatever the bar mounts first. */}
       <View style={styles.docked} collapsable={false}>
         <DockLifted.Provider value={true}>
-          <DockColumn bar={bar} onRoom={measure} />
+          <DockColumn bar={bar} onRoom={setRoom} />
         </DockLifted.Provider>
       </View>
     </KeyboardDockArea>

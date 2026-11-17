@@ -56,6 +56,7 @@ import {
   BUTTON_LOOK,
   EmptyState,
   GLYPH,
+  GlassDock,
   glyphSymbol,
   isBarMenu,
   LIST_LOOK,
@@ -101,7 +102,6 @@ import {
   useStandFocusedDetailFront,
   useTopPage,
 } from "../detail-stack.js";
-import { FocusedDock } from "../focus-shown.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
@@ -991,14 +991,7 @@ function ThreadDetail({
             pathInHead: true,
             acts,
             menu: menuWithout(menu, acts),
-            foot: (
-              <ThreadComposer
-                item={item}
-                answer={answer}
-                agentName={agentName}
-                inColumn={{ inFront }}
-              />
-            ),
+            foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
           })}
     />
   );
@@ -1053,9 +1046,9 @@ function ThreadDetail({
           ))}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
-      <FocusedDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
+      <GlassDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
         <Screen>{page}</Screen>
-      </FocusedDock>
+      </GlassDock>
       {remind.sheet}
     </>
   );

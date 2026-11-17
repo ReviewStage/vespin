@@ -17,6 +17,7 @@ import {
   textInputAutocapitalization,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactElement, type ReactNode, useEffect, useState } from "react";
+import { WORDS_KIND, type WordsKind } from "./system-asks.js";
 import { useWindowSizeClass } from "./use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "./window-size-class.js";
 
@@ -51,7 +52,7 @@ type ConfirmAskProps = {
    */
   readonly gate?: string | undefined;
   /** What the gate's words are, which picks the keyboard its field raises, such as the address keyboard for an account's address. */
-  readonly gateKind?: WordsAskKind | undefined;
+  readonly gateKind?: WordsKind | undefined;
   readonly presented: boolean;
   readonly onAct: () => void;
   /** Called as the ask goes, by its act or Cancel. */
@@ -78,7 +79,7 @@ function AlertConfirm({
   act,
   destructive = false,
   gate,
-  gateKind = WORDS_ASK_KIND.NAME,
+  gateKind = WORDS_KIND.NAME,
   presented,
   onAct,
   onDismiss,
@@ -112,7 +113,7 @@ function AlertConfirm({
               placeholder={gate}
               onTextChange={setWords}
               modifiers={[
-                ...(gateKind === WORDS_ASK_KIND.EMAIL ? [keyboardType("email-address")] : []),
+                ...(gateKind === WORDS_KIND.EMAIL ? [keyboardType("email-address")] : []),
                 autocorrectionDisabled(),
                 textInputAutocapitalization("never"),
               ]}
@@ -271,109 +272,5 @@ export function RowAsking({
         </ConfirmationDialog.Message>
       )}
     </ConfirmationDialog>
-  );
-}
-
-/** What a `WordsAsk` field takes, and the keyboard it raises for it. */
-export const WORDS_ASK_KIND = {
-  /** A name, such as a rename's, its first word capitalized and corrected as Files' rename does. */
-  NAME: "name",
-  /** An email address, on the address keyboard, with nothing capitalized or corrected. */
-  EMAIL: "email",
-} as const;
-
-export type WordsAskKind = (typeof WORDS_ASK_KIND)[keyof typeof WORDS_ASK_KIND];
-
-/** One of a `WordsAsk`'s acts beside Cancel, handed the words typed. */
-export interface WordsAskAct {
-  readonly label: string;
-  readonly onAct: (words: string) => void;
-}
-
-type WordsAskProps = {
-  readonly title: string;
-  readonly message?: string | undefined;
-  readonly placeholder: string;
-  /** The words the field holds as the alert opens, such as the name a rename starts from. */
-  readonly initial?: string | undefined;
-  readonly kind: WordsAskKind;
-  /** Its acts, the last the one Return presses; each dimmed while the field is empty. */
-  readonly acts: readonly WordsAskAct[];
-  readonly presented: boolean;
-  /** Called as the alert goes, by an act or Cancel. */
-  readonly onDismiss: () => void;
-};
-
-/**
- * Words asked for in the system's alert, as iOS asks a rename or an
- * address, as Files and Notes rename a folder: its field, Cancel, and its
- * acts, each dimmed until something is typed. The field starts from
- * `initial` each time the alert opens. It stands in a host of its own, the
- * size of nothing, as `ConfirmAsk` does.
- */
-export function WordsAsk({
-  title,
-  message,
-  placeholder,
-  initial = "",
-  kind,
-  acts,
-  presented,
-  onDismiss,
-}: WordsAskProps) {
-  const typed = useNativeState(initial);
-  const [words, setWords] = useState(initial);
-  useEffect(() => {
-    if (!presented) return;
-    typed.value = initial;
-    setWords(initial);
-  }, [presented, initial, typed]);
-  const empty = words.trim().length === 0;
-
-  const field =
-    kind === WORDS_ASK_KIND.EMAIL
-      ? [
-          keyboardType("email-address"),
-          autocorrectionDisabled(),
-          textInputAutocapitalization("never"),
-        ]
-      : [textInputAutocapitalization("sentences")];
-
-  return (
-    <Host matchContents style={NO_SIZE}>
-      <Alert
-        title={title}
-        isPresented={presented}
-        onIsPresentedChange={(shown) => {
-          if (!shown) onDismiss();
-        }}
-      >
-        <Alert.Trigger>
-          <HiddenTrigger wide={false} />
-        </Alert.Trigger>
-        <Alert.Actions>
-          <TextField
-            text={typed}
-            placeholder={placeholder}
-            onTextChange={setWords}
-            modifiers={field}
-          />
-          <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={onDismiss} />
-          {acts.map((act) => (
-            <SwiftUIButton
-              key={act.label}
-              label={act.label}
-              onPress={() => act.onAct(words.trim())}
-              modifiers={[disabled(empty)]}
-            />
-          ))}
-        </Alert.Actions>
-        {message === undefined ? null : (
-          <Alert.Message>
-            <Text>{message}</Text>
-          </Alert.Message>
-        )}
-      </Alert>
-    </Host>
   );
 }

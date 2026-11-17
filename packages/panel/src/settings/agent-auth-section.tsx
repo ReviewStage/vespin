@@ -1,17 +1,37 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
-import { INTEGRATION_STATUS_WORDS } from "@repo/features/integration-status-words";
-import { INTEGRATION_STATUS } from "@repo/features/integration-wire";
-import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
-import { PRODUCT_NAME } from "@repo/features/product-name";
+import {
+  CREDENTIAL_WORDS,
+  type CredentialProvider,
+  HARNESS_INFO,
+  HARNESS_PLAN,
+  HARNESSES,
+  HARNESSES_WITH_CURSOR,
+  type HarnessInfo,
+  harnessReady,
+  keepsPlan,
+  keyLineWords,
+  keyRejectionWords,
+  keyRemovalWords,
+  keyStanding,
+  keysOf,
+  limitWords,
+  PLAN_DISCONNECT_WORDS,
+  type PlanProvider,
+  plansOf,
+  signInFix,
+  signInWords,
+  planStanding as standing,
+  tokenRejectionWords,
+  tokenWords,
+} from "@repo/features/agent-credentials-model";
+import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
   apiKeyName,
-  PLAN_NAME,
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_REJECTION,
   PROVIDER_KEY_STATUS,
   type ProviderKeyRejection,
-  type ProviderKeyStatus,
   type ProviderKeySummary,
   type ProviderKeysAnswer,
   pastedKeyFits,
@@ -20,8 +40,7 @@ import {
   type SubscriptionKeySummary,
 } from "@repo/features/provider-key-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { dueText } from "@repo/features/time-format";
-import { readingWords, SIGNED_OUT_WORDS, VERB } from "@repo/features/words";
+import { readingWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActPayload } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
@@ -165,39 +184,13 @@ import { ReadFailed } from "./marks.js";
 const CHATGPT_USAGE_URL = "https://chatgpt.com/settings/usage";
 
 /** The providers whose harness Agents draws a card for: Claude Code's, Codex's, and Cursor's. */
-type SettingsProvider =
-  | typeof PROVIDER_KEY_PROVIDER.ANTHROPIC
-  | typeof PROVIDER_KEY_PROVIDER.OPENAI
-  | typeof PROVIDER_KEY_PROVIDER.CURSOR;
+type SettingsProvider = CredentialProvider;
 
-/** The harnesses that keep a plan here as well as API keys: Claude's setup-token and Codex's ChatGPT sign-in. Cursor keeps none. */
-type PlanProvider = typeof PROVIDER_KEY_PROVIDER.ANTHROPIC | typeof PROVIDER_KEY_PROVIDER.OPENAI;
-
-/** What a harness's section and its keys' rows are drawn from. */
-interface Harness {
-  /** What its header row names it. */
-  readonly name: string;
-  /** The mark its header row leads with. */
-  readonly mark: ModelProvider;
+/** What a harness's section and its keys' rows are drawn from: its words, with the logo its rows lead with and the section a search or a remedy lands on. */
+interface Harness extends HarnessInfo {
   /** The logo its plans' rows and its keys' rows lead with. */
   readonly rowMark: React.JSX.Element;
-  readonly keyName: string;
-  /** Its key named with its article, as a refusal says it isn't one: "an Anthropic key". */
-  readonly keyNoun: string;
-  readonly keyUrl: string;
-  /** What the site a key is made on is called, which its link names. */
-  readonly keySite: string;
-  /** How a key of its begins, which its empty field shows. */
-  readonly keyExample: string;
-  /** What deleting one of its keys costs, which the question says. */
-  readonly keyLoss: string;
   readonly anchor: string;
-}
-
-/** What a harness that keeps a plan adds: the plan's name, wherever a surface names the credential, and its kind. */
-interface HarnessPlan {
-  readonly planName: string;
-  readonly plan: SubscriptionKeySummary["kind"];
 }
 
 /**
@@ -207,79 +200,29 @@ interface HarnessPlan {
  */
 const HARNESS = {
   [PROVIDER_KEY_PROVIDER.ANTHROPIC]: {
-    name: "Claude",
-    mark: MODEL_PROVIDER.ANTHROPIC,
+    ...HARNESS_INFO[PROVIDER_KEY_PROVIDER.ANTHROPIC],
     rowMark: <ProviderMark provider={MARK_PROVIDER.CLAUDE} size={PROVIDER_MARK_SIZE.ROW} />,
-    keyName: "Anthropic",
-    keyNoun: "an Anthropic key",
-    keyUrl: "https://console.anthropic.com/settings/keys",
-    keySite: "Anthropic Console",
-    keyExample: "sk-ant-api03-…",
-    keyLoss: `Agents on Anthropic models won't start without a ${PLAN_NAME[PROVIDER_KEY_PROVIDER.ANTHROPIC]}.`,
     anchor: SETTINGS_SECTION.CLAUDE,
   },
   [PROVIDER_KEY_PROVIDER.OPENAI]: {
-    name: "Codex",
-    mark: MODEL_PROVIDER.OPENAI,
+    ...HARNESS_INFO[PROVIDER_KEY_PROVIDER.OPENAI],
     rowMark: (
       <SettingsRowMark>
         <HarnessMark provider={MODEL_PROVIDER.OPENAI} />
       </SettingsRowMark>
     ),
-    keyName: "OpenAI",
-    keyNoun: "an OpenAI key",
-    keyUrl: "https://platform.openai.com/api-keys",
-    keySite: "OpenAI Platform",
-    keyExample: "sk-proj-…",
-    keyLoss: `Agents on OpenAI models won't start without a ${PLAN_NAME[PROVIDER_KEY_PROVIDER.OPENAI]}. Calls and dictation will be off.`,
     anchor: SETTINGS_SECTION.CODEX,
   },
   [PROVIDER_KEY_PROVIDER.CURSOR]: {
-    name: "Cursor",
-    mark: MODEL_PROVIDER.CURSOR,
+    ...HARNESS_INFO[PROVIDER_KEY_PROVIDER.CURSOR],
     rowMark: (
       <SettingsRowMark>
         <HarnessMark provider={MODEL_PROVIDER.CURSOR} />
       </SettingsRowMark>
     ),
-    keyName: "Cursor",
-    keyNoun: "a Cursor key",
-    keyUrl: "https://cursor.com/dashboard/api",
-    keySite: "Cursor's dashboard",
-    keyExample: "crsr_…",
-    keyLoss: "Cursor agents won't start without a Cursor API key.",
     anchor: SETTINGS_SECTION.CURSOR,
   },
 } as const satisfies Record<SettingsProvider, Harness>;
-
-/** The plan of each harness that keeps one, Claude's and Codex's. */
-const HARNESS_PLAN = {
-  [PROVIDER_KEY_PROVIDER.ANTHROPIC]: {
-    planName: PLAN_NAME[PROVIDER_KEY_PROVIDER.ANTHROPIC],
-    plan: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-  },
-  [PROVIDER_KEY_PROVIDER.OPENAI]: {
-    planName: PLAN_NAME[PROVIDER_KEY_PROVIDER.OPENAI],
-    plan: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
-  },
-} as const satisfies Record<PlanProvider, HarnessPlan>;
-
-/** Whether the harness keeps a plan here, so a plan's rows, its Add, and its steps may stand on its card. */
-function keepsPlan(provider: SettingsProvider): provider is PlanProvider {
-  return provider !== PROVIDER_KEY_PROVIDER.CURSOR;
-}
-
-/** The harnesses every account's Agents draws, in their order. */
-const HARNESSES: readonly SettingsProvider[] = [
-  PROVIDER_KEY_PROVIDER.ANTHROPIC,
-  PROVIDER_KEY_PROVIDER.OPENAI,
-];
-
-/** The harnesses an account trying Cursor draws: Cursor's card after the others. */
-const HARNESSES_WITH_CURSOR: readonly SettingsProvider[] = [
-  ...HARNESSES,
-  PROVIDER_KEY_PROVIDER.CURSOR,
-];
 
 /** The rows a harness's section draws with nothing connected: its header alone. */
 const SECTION_ROWS = 1;
@@ -291,56 +234,7 @@ const CREDENTIAL_ROW_SKELETON: SettingsRowSkeletonLayout = {
   controls: [SETTINGS_SKELETON_CONTROL.BUTTON],
 };
 
-const WORDS = {
-  READ_FAILED: "Your keys could not be read.",
-  SIGNED_OUT: SIGNED_OUT_WORDS,
-  ADD: "Add plan or key",
-  ADD_KEY: "Add key",
-  AT_LIMIT: "At its limit",
-  BACK_AT: "back at",
-  RENAME: "Rename",
-  PLAN_NAME: "Plan name",
-  KEY_NAME: "Key name",
-  MOVE_UP: "Move up",
-  MOVE_DOWN: "Move down",
-  RECONNECT: VERB.RECONNECT,
-  SIGN_IN_AGAIN: "Sign in again",
-  MANAGE_USAGE: "Manage usage in ChatGPT",
-  USING_RESET: "Using reset",
-  API_KEY: "API key",
-  CANCEL: "Cancel",
-  TOKEN_EXAMPLE: "sk-ant-oat01-…",
-  SAVING_TOKEN: "Saving the token",
-  CHECKING_KEY: "Checking the key",
-  DISCONNECT: "Disconnect",
-  DISCONNECTING: "Disconnecting",
-  DELETE_KEY: "Delete key",
-  DELETING: "Deleting",
-  REPLACE_KEY: "Replace key",
-  REPLACE_TOKEN: "Replace token",
-  RUN_SETUP_TOKEN: "Run this in a terminal",
-  PASTE_TOKEN: "Paste the token it prints",
-  CREATE_KEY: "Create an API key",
-  PASTE_KEY: "Paste the key",
-  SETUP_TOKEN_COMMAND: "claude setup-token",
-  SETUP_TOKEN_COMMAND_LABEL: "Setup-token command",
-  COMMAND: "command",
-  TOKEN_INVALID: "Anthropic rejected this token. Paste a new one.",
-  TOKEN_QUOTA: "Out of usage on your Claude plan.",
-  TOKEN_UNREADABLE: "This token can no longer be read. Paste a new one.",
-  CHATGPT_EXPIRED: INTEGRATION_STATUS_WORDS[INTEGRATION_STATUS.EXPIRED],
-  CHATGPT_UNREADABLE: "This sign-in can no longer be read.",
-  CHATGPT_INELIGIBLE:
-    "OpenAI says this account's plan doesn't include Codex. Sign in again to use another.",
-  REVOCATION_UNCONFIRMED: `${PRODUCT_NAME} signed out of Codex, but OpenAI didn't confirm it ended. To end it there too, remove ${PRODUCT_NAME} in your ChatGPT settings.`,
-  SAVE_TOKEN_FAILED: "Couldn't save the token. Try again.",
-  SAVE_KEY_FAILED: "Couldn't save the key. Try again.",
-  DELETE_KEY_FAILED: "Couldn't delete the key. Try again.",
-  CLAUDE_DISCONNECT_FAILED: "Couldn't disconnect your Claude plan. Try again.",
-  CHATGPT_DISCONNECT_FAILED: "Couldn't disconnect your Codex plan. Try again.",
-  REORDER_FAILED: "Couldn't reorder. Try again.",
-  RENAME_FAILED: "Couldn't rename it. Try again.",
-} as const;
+const WORDS = CREDENTIAL_WORDS;
 
 /** What a confirmed removal answers where it went. */
 const ACCEPTED_KEY: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
@@ -365,104 +259,14 @@ const KEY_REMOVE_REFUSED: ActionResult = {
 /** What disconnecting each harness's plan asks. */
 const PLAN_DISCONNECT = {
   [PROVIDER_KEY_PROVIDER.ANTHROPIC]: {
-    title: "Disconnect your Claude plan?",
-    body: `Claude agents stop running on your Claude plan, and ${PRODUCT_NAME} deletes its token.`,
-    verb: "Disconnect Claude plan",
-    running: WORDS.DISCONNECTING,
+    ...PLAN_DISCONNECT_WORDS[PROVIDER_KEY_PROVIDER.ANTHROPIC],
     loss: CONFIRM_LOSS.IRREVERSIBLE,
   },
   [PROVIDER_KEY_PROVIDER.OPENAI]: {
-    title: "Disconnect your Codex plan?",
-    body: `Codex agents stop running on this plan, and ${PRODUCT_NAME} signs out of it.`,
-    verb: "Disconnect Codex plan",
-    running: WORDS.DISCONNECTING,
+    ...PLAN_DISCONNECT_WORDS[PROVIDER_KEY_PROVIDER.OPENAI],
     loss: CONFIRM_LOSS.IRREVERSIBLE,
   },
 } as const satisfies Record<PlanProvider, DialogQuestion>;
-
-/* ----- Reading the credentials ----- */
-
-/** The harness's plans among the account's subscriptions, in the account's order; none for a harness that keeps no plan. */
-function plansOf(
-  answer: ProviderKeysAnswer,
-  provider: SettingsProvider,
-): readonly SubscriptionKeySummary[] {
-  if (!keepsPlan(provider)) return [];
-  const { plan } = HARNESS_PLAN[provider];
-
-  return (answer.subscriptions ?? [])
-    .filter((one) => one.kind === plan)
-    .toSorted((a, b) => a.position - b.position);
-}
-
-/** The provider's API keys among the account's keys. */
-function keysOf(
-  answer: ProviderKeysAnswer,
-  provider: SettingsProvider,
-): readonly ProviderKeySummary[] {
-  return answer.keys.filter((one) => one.provider === provider);
-}
-
-/** Whether a stored plan still stands: kept, answered, or only waiting on its limit to reset. */
-function standing(plan: SubscriptionKeySummary): boolean {
-  return (
-    plan.status === PROVIDER_KEY_STATUS.UNVERIFIED ||
-    plan.status === PROVIDER_KEY_STATUS.VERIFIED ||
-    plan.status === PROVIDER_KEY_STATUS.LIMIT_REACHED
-  );
-}
-
-/** Whether a stored key is one its provider has not refused. */
-function keyStanding(status: ProviderKeyStatus): boolean {
-  return status === PROVIDER_KEY_STATUS.VERIFIED || status === PROVIDER_KEY_STATUS.UNVERIFIED;
-}
-
-/** Whether the harness can start an agent now: a plan short of its limit, or a key that stands. */
-function harnessReady(answer: ProviderKeysAnswer, provider: SettingsProvider): boolean {
-  return (
-    plansOf(answer, provider).some(
-      (plan) => standing(plan) && plan.status !== PROVIDER_KEY_STATUS.LIMIT_REACHED,
-    ) || keysOf(answer, provider).some((key) => keyStanding(key.status))
-  );
-}
-
-/* ----- What a credential says ----- */
-
-/** A reached limit's words, with when it resets where the provider named it: "At its limit · back at 3:40 PM". */
-function limitWords(plan: SubscriptionKeySummary, now: number): string {
-  return plan.limitResetsAt === undefined
-    ? WORDS.AT_LIMIT
-    : `${WORDS.AT_LIMIT}, ${WORDS.BACK_AT} ${dueText(plan.limitResetsAt, now)}`;
-}
-
-/** What a Claude token that does not stand says. */
-function tokenWords(plan: SubscriptionKeySummary): string {
-  switch (plan.status) {
-    case PROVIDER_KEY_STATUS.QUOTA_EXCEEDED:
-      return WORDS.TOKEN_QUOTA;
-    case PROVIDER_KEY_STATUS.UNREADABLE:
-      return WORDS.TOKEN_UNREADABLE;
-    default:
-      return WORDS.TOKEN_INVALID;
-  }
-}
-
-/** What a Codex sign-in that does not stand says. */
-function signInWords(plan: SubscriptionKeySummary): string {
-  switch (plan.status) {
-    case PROVIDER_KEY_STATUS.UNREADABLE:
-      return WORDS.CHATGPT_UNREADABLE;
-    case PROVIDER_KEY_STATUS.INELIGIBLE:
-      return WORDS.CHATGPT_INELIGIBLE;
-    default:
-      return WORDS.CHATGPT_EXPIRED;
-  }
-}
-
-/** What mends a Codex sign-in that does not stand: Sign in again as another account where the plan has no Codex, else Reconnect. */
-function signInFix(plan: SubscriptionKeySummary): string {
-  return plan.status === PROVIDER_KEY_STATUS.INELIGIBLE ? WORDS.SIGN_IN_AGAIN : WORDS.RECONNECT;
-}
 
 /**
  * A plan's line under its name: its words, whether they need a hand, and
@@ -497,61 +301,9 @@ function planLine(provider: PlanProvider, plan: SubscriptionKeySummary, now: num
   return { words, ok: false };
 }
 
-/** What an API key's line says, by the provider it names: nothing where it stands, but its hint where its name hides it, or what is wrong with it. */
-function keyLineWords(provider: SettingsProvider, key: ProviderKeySummary): string | undefined {
-  const name = HARNESS[provider].keyName;
-
-  switch (key.status) {
-    case PROVIDER_KEY_STATUS.VERIFIED:
-    case PROVIDER_KEY_STATUS.UNVERIFIED:
-      return key.label === undefined ? undefined : `${WORDS.API_KEY} · ${key.hint}`;
-    case PROVIDER_KEY_STATUS.INVALID:
-      return `${name} rejected this key.`;
-    case PROVIDER_KEY_STATUS.QUOTA_EXCEEDED:
-    // Note that a plan's limit and eligibility are a subscription's words, which no API key is answered with.
-    case PROVIDER_KEY_STATUS.LIMIT_REACHED:
-    case PROVIDER_KEY_STATUS.INELIGIBLE:
-      return `Out of credit at ${name}.`;
-    case PROVIDER_KEY_STATUS.UNREADABLE:
-      return "This key can no longer be read.";
-  }
-}
-
-/** Why an API key's save kept nothing, in words the developer can act on. */
-function keyRejectionWords(provider: SettingsProvider, rejection: ProviderKeyRejection): string {
-  const name = HARNESS[provider].keyName;
-
-  switch (rejection) {
-    case PROVIDER_KEY_REJECTION.INVALID:
-      return `${name} didn't accept this key. Check it and try again.`;
-    case PROVIDER_KEY_REJECTION.WRONG_PROVIDER:
-      return `This isn't ${HARNESS[provider].keyNoun}. Paste it under the provider it's for.`;
-
-    case PROVIDER_KEY_REJECTION.UNREACHABLE:
-      return `Couldn't reach ${name} to check this key. Try again.`;
-    case PROVIDER_KEY_REJECTION.TOO_MANY_TRIES:
-      return "Too many tries in the last hour. Try again later.";
-  }
-}
-
-/** Why a Claude token's save kept nothing. */
-function tokenRejectionWords(rejection: ProviderKeyRejection): string {
-  return rejection === PROVIDER_KEY_REJECTION.TOO_MANY_TRIES
-    ? "Too many tries in the last hour. Try again later."
-    : "That isn't a Claude setup-token. Run claude setup-token and paste what it prints.";
-}
-
 /** What removing a provider's key asks. */
 function keyRemovalQuestion(provider: SettingsProvider): DialogQuestion {
-  const harness = HARNESS[provider];
-
-  return {
-    title: `Delete your ${harness.keyName} ${WORDS.API_KEY}?`,
-    body: harness.keyLoss,
-    verb: WORDS.DELETE_KEY,
-    running: WORDS.DELETING,
-    loss: CONFIRM_LOSS.IRREVERSIBLE,
-  };
+  return { ...keyRemovalWords(provider), loss: CONFIRM_LOSS.IRREVERSIBLE };
 }
 
 /* ----- Small parts ----- */

@@ -222,50 +222,26 @@ export function opensTurn(message: AgentTranscriptMessage): boolean {
 }
 
 /**
- * The agent's turns whose reply the voice told on a call, by their ids: a
- * finished turn a line of a call opened, a delegation's, that a line the
- * voice said on that same call follows after the turn had ended. Note that
- * the voice's line is read as told only once it began after the turn ended,
- * where both times stand, because the voice's "on it" can land after a turn
- * that started at once, and a reply the call hung up on before it was told
- * stays open as the only place it was said (Dean, Nov 17).
+ * The agent's turns a call's delegation opened, by their ids: each turn
+ * whose opening line, the last line before it that opens a turn, is a line
+ * the caller said on a call, which a delegation handed the agent. Its
+ * written words are folded once it has finished, whether or not the voice
+ * said them aloud (Dean, Nov 17).
  */
-export function toldTurnsOf(rows: readonly PlacedRow[]): ReadonlySet<string> {
-  const told = new Set<string>();
-  // The finished turns a call's line opened, still awaiting the voice's telling: the call, and when the turn ended.
-  const awaiting = new Map<string, { readonly callId: string; readonly endedAt: number }>();
-  let openedOn: string | undefined;
+export function delegatedTurnsOf(rows: readonly PlacedRow[]): ReadonlySet<string> {
+  const delegated = new Set<string>();
+  let openedOnCall = false;
 
   for (const { message } of rows) {
-    const spoken = spokenLineOf(message);
-
     if (isAgentTurn(message)) {
-      if (openedOn !== undefined && message.finishedAt !== undefined) {
-        awaiting.set(message.id, { callId: openedOn, endedAt: message.finishedAt });
-      }
-
-      openedOn = undefined;
-      continue;
-    }
-
-    if (opensTurn(message)) {
-      openedOn = spoken?.callId;
-      continue;
-    }
-
-    if (spoken?.speaker !== CALL_SPEAKER.VOICE) continue;
-
-    for (const [id, turn] of awaiting) {
-      const after = message.sentAt === undefined || message.sentAt >= turn.endedAt;
-
-      if (turn.callId === spoken.callId && after) {
-        told.add(id);
-        awaiting.delete(id);
-      }
+      if (openedOnCall) delegated.add(message.id);
+      openedOnCall = false;
+    } else if (opensTurn(message)) {
+      openedOnCall = spokenLineOf(message) !== undefined;
     }
   }
 
-  return told;
+  return delegated;
 }
 
 /**
@@ -283,8 +259,9 @@ export function toldTurnsOf(rows: readonly PlacedRow[]): ReadonlySet<string> {
  * 3. A turn is one row, its journal, written as it starts and grown in place
  *    (`writer.ts`), so a line said while it runs stands after all of it.
  * 4. A spoken turn draws as a typed one does: its words, its runs of calls
- *    folded as any turn's are, and its foot; but once the voice has told
- *    its reply, its written words fold with its work (`toldTurnsOf`).
+ *    folded as any turn's are, and its foot; but a turn a call's delegation
+ *    opened folds its written words with its work once it has finished
+ *    (`delegatedTurnsOf`).
  * 5. A call is marked by its start and end alone: its lines are drawn as
  *    any line of the member's and any reply of the agent's are, so two calls
  *    into the agent at once interleave by `seq` between their own starts
