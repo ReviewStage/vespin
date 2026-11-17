@@ -37,8 +37,8 @@ import {
  * token Apple says is gone is forgotten, and one registered since is kept.
  * Refreshes that overlap start one activity, an end that crosses a new turn
  * starts it again, a start or an end Apple did not take is tried again by
- * the sweep, an activity whose update token never came stands until it
- * comes rather than a second starting beside it, one near iOS's eight hours
+ * the sweep, an activity whose update token never came stands while it
+ * shows as current and a later turn then starts a fresh one, one near iOS's eight hours
  * is ended and dismissed before a fresh one starts, a phone set to never take a push has its activity ended, and
  * one member's refresh that dies leaves the sweep standing. One member's
  * refresh never pushes another's phone. Synthetic accounts, agents, and
@@ -436,13 +436,13 @@ it.layer(getTestDB())("a member's live activity", (it) => {
   );
 
   it.effect(
-    "an activity whose update token never came stands until it comes, and no second one starts beside it",
+    "an activity whose update token never came stands while it shows as current, and a later turn then starts a fresh one",
     () => {
       const sender = recordingApnsSender();
 
       return Effect.gen(function* () {
         const member = yield* openUser;
-        const { phone, startToken } = yield* phoneOf(member);
+        const { startToken } = yield* phoneOf(member);
         const first = yield* runningAgent(member, "Fix the refresh");
         yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
         yield* first.settle;
@@ -452,23 +452,17 @@ it.layer(getTestDB())("a member's live activity", (it) => {
         const [kept] = yield* listLiveActivityPhones(member);
         assert.ok(kept?.startedAt);
 
+        yield* TestClock.adjust("5 minutes");
         const second = yield* runningAgent(member, "Ship the invitations");
         yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
         assert.deepEqual(events(sender.sent), ["start"]);
 
+        // Note that once it no longer shows as current, the turn gets a fresh activity rather than a frozen one.
+        yield* TestClock.adjust("10 minutes");
+        yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+        assert.deepEqual(events(sentTo(sender.sent, startToken)), ["start", "start"]);
+        assert.equal(said(sender.sent[1]).aps["content-state"]?.running, 1);
         yield* second.settle;
-        const activityToken = token();
-        yield* registerLiveActivityToken(
-          member,
-          phone,
-          LIVE_ACTIVITY_TOKEN.ACTIVITY,
-          activityToken,
-        );
-        yield* TestClock.adjust("1 minute");
-        yield* refreshLiveActivities();
-        assert.deepEqual(events(sentTo(sender.sent, startToken, activityToken)), ["start", "end"]);
-        const [ended] = yield* listLiveActivityPhones(member);
-        assert.equal(ended?.startedAt, null);
       }).pipe(Effect.provide(sender.layer));
     },
   );

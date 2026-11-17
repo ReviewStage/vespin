@@ -46,12 +46,13 @@
  * still follows the hold. A phone set to never take a push takes no start
  * or update, and an activity standing on it when it is set so is ended.
  *
- * The phone must never stand two activities, and only an end pushed to an
- * activity's update token takes one off it, so the service lets go of an
- * activity only once it could end it. One whose update token the app has
- * not registered yet stands until it has, even once no agent runs, and the
- * next turn shows on it rather than starting a second; the sweep ends it
- * once its token comes. One near iOS's own end
+ * Only an end pushed to an activity's update token takes it off the phone,
+ * so the service lets go of one it could end only by ending it. One whose
+ * update token the app has not registered yet stands while it shows as
+ * current (`LIVE_ACTIVITY_PUSH.STALE_AFTER`), even once no agent runs, and
+ * an end goes to it if its token comes meanwhile; past that a turn starts
+ * a fresh one, and the app ends the frozen one as the new one wakes it
+ * (`apps/mobile/modules/live-activity/`). One near iOS's own end
  * (`LIVE_ACTIVITY_PUSH.ROTATE_AFTER`, inside `LIFETIME`) is ended and
  * dismissed at once before a fresh one starts. A token Apple says is gone
  * is forgotten (`forgetLiveActivityToken`), and an activity's update token
@@ -224,8 +225,9 @@ function endPayload(state: LiveActivityContentState, now: number, dismissAt: num
 
 /**
  * Whether an activity stands on the phone as the refresh reads it: one
- * started inside its lifetime that the phone confirmed, by its update token
- * or by Apple taking the start, or a claimed start still inside its hold.
+ * started before its rotation whose update token the phone registered, one
+ * Apple took whose token has not come yet while it still shows as current,
+ * or a claimed start still inside its hold.
  */
 function standsOn(phone: LiveActivityPhone, now: number): boolean {
   if (phone.startedAt === null) return false;
@@ -233,11 +235,12 @@ function standsOn(phone: LiveActivityPhone, now: number): boolean {
 
   if (age >= Duration.toMillis(LIVE_ACTIVITY_PUSH.ROTATE_AFTER)) return false;
 
-  const confirmed =
-    phone.activityToken !== null ||
-    (phone.sentAt !== null && phone.sentAt.getTime() >= phone.startedAt.getTime());
+  if (phone.activityToken !== null) return true;
+  // Note that one Apple took whose update token never came stands only while it shows as current, so a later turn starts a fresh one rather than staying on a frozen one; the app ends the older as the new one wakes it.
+  const taken = phone.sentAt !== null && phone.sentAt.getTime() >= phone.startedAt.getTime();
+  const hold = taken ? LIVE_ACTIVITY_PUSH.STALE_AFTER : LIVE_ACTIVITY_PUSH.START_HOLD;
 
-  return confirmed || age < Duration.toMillis(LIVE_ACTIVITY_PUSH.START_HOLD);
+  return age < Duration.toMillis(hold);
 }
 
 /** One push to the phone's activity, kept by Apple for a phone that is off until `expiresAfter` has passed. */
@@ -340,7 +343,7 @@ function endOn(
     // Note that whether an agent runs is read again here, as a turn may have begun since the state was read.
     if (!never && (yield* listRunningAgentTurns(userId)).length > 0) return;
 
-    // Note that an activity whose update token the app has not registered yet stands until it has, since nothing could end it on the phone, and a start would stand a second beside it.
+    // Note that an activity whose update token the app has not registered yet is left standing, since nothing could end it on the phone; it is let go once it no longer shows as current.
     if (phone.activityToken === null) return;
 
     const delivery = yield* sendTo(
