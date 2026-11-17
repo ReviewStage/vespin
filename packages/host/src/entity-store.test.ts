@@ -111,11 +111,14 @@ const writtenText = (directory: string) =>
     return yield* fileSystem.readFileString(file);
   });
 
-/** The file kept again as a build of other row shapes would have kept it: every byte its own but the hash. */
-const keptAtOtherSchemas = (directory: string) =>
+/** The file kept again as another build would have kept it: every byte its own but `changed`. */
+const keptAgainWith = (
+  directory: string,
+  changed: { readonly hash?: string; readonly refused?: readonly object[] },
+) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
-    const kept = { ...JSON.parse(yield* openedText(directory)), hash: "another build's" };
+    const kept = { ...JSON.parse(yield* openedText(directory)), ...changed };
     const sealed = Base64.encode(testCipher().encrypt(JSON.stringify(kept)));
     yield* fileSystem.writeFileString(yield* fileOf(directory), sealed);
   });
@@ -132,7 +135,7 @@ it.effect.each([
     yield* first.store.keep(KEPT_READ.INBOX, INBOX);
     yield* first.closed;
 
-    if (otherSchemas) yield* keptAtOtherSchemas(directory);
+    if (otherSchemas) yield* keptAgainWith(directory, { hash: "another build's" });
 
     const reopened = yield* opened(directory, reopenedAs);
 
@@ -284,38 +287,22 @@ it.effect(
 );
 
 it.effect(
-  "the messages refused are written within half a second of moving, and read back at the next launch by the same account alone",
+  "the messages refused an older build kept are handed out until the local database takes them, and the file is then written without them",
   () =>
     Effect.gen(function* () {
       const directory = yield* temporaryDirectoryScoped("entity-store-");
-      const moves = yield* PubSub.unbounded<void>();
-      let refused: readonly unknown[] = [];
-      const scope = yield* Scope.make();
+      const refused = [{ id: "line-1", text: "Rebase on main" }];
+      const first = yield* opened(directory, DANA);
+      yield* first.store.keep(KEPT_READ.TASK_LIST, LIST);
+      yield* first.closed;
+      yield* keptAgainWith(directory, { refused });
 
-      yield* Scope.provide(scope)(
-        openEntityStore({
-          directory,
-          cipher: testCipher(),
-          accountId: DANA,
-          refused: () => refused,
-          refusedMoves: Stream.fromPubSub(moves),
-        }),
-      );
+      const upgraded = yield* opened(directory, DANA);
+      assert.deepEqual(upgraded.store.refused?.entries, refused);
+      yield* upgraded.store.refused?.imported ?? Effect.void;
+      yield* upgraded.closed;
 
-      yield* Effect.yieldNow;
-      refused = [{ id: "line-1", text: "Rebase on main" }];
-      yield* PubSub.publish(moves, undefined);
-      yield* TestClock.adjust("500 millis");
-      yield* writtenText(directory);
-      yield* Scope.close(scope, Exit.void);
-
-      const again = yield* opened(directory, DANA);
-      assert.deepEqual(again.store.refused, refused);
-      yield* again.closed;
-
-      const another = yield* opened(directory, "user-ravi");
-      assert.deepEqual(another.store.refused, []);
-      yield* another.closed;
+      assert.equal("refused" in JSON.parse(yield* openedText(directory)), false);
     }).pipe(Effect.provide(files)),
 );
 

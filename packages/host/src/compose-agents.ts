@@ -361,15 +361,15 @@ export interface AgentsComposer extends Composer {
   readonly reset: Effect.Effect<void>;
   /** The row writes this composer declares that may wait for the service, which a queue kept on disk is laid back by. */
   readonly queueable: readonly AnyWrite[];
-  /** The messages the service refused, as the account's sealed store keeps them beside the writes waiting (`entity-store.ts`). */
+  /** The messages the service refused, as the account's local database keeps them (`local-copy.ts`). */
   readonly refused: {
-    /** The signed-in account's, as the store keeps them. */
+    /** The signed-in account's, as the database keeps them. */
     readonly kept: () => readonly unknown[];
-    /** Each moving of them, which has the store keep them again. */
+    /** Each moving of them, which has the database keep them again. */
     readonly moves: Stream.Stream<void>;
-    /** The account's, as the store kept them, laid back as a launch opens it. */
+    /** The account's, as the database kept them, laid back as a sign-in opens it. */
     readonly restored: (account: string, kept: readonly unknown[]) => Effect.Effect<void>;
-    /** Every one let go, as a sign-out lets the store go. */
+    /** Every one let go, as a sign-out lets the database go. */
     readonly forgotten: Effect.Effect<void>;
   };
 }

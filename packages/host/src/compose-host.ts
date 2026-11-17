@@ -369,7 +369,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
 
     /**
      * The signed-in account's local database (`local-copy.ts`), the only
-     * place the pool's waiting writes are kept: only where the platform has a driver,
+     * place the pool's waiting writes and the messages refused are kept: only where the platform has a driver,
      * the Mac and the iPhone, and the run needs an account, so neither a
      * browser tab nor a fixture run keeps one.
      */
@@ -773,29 +773,30 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         directory: kernel.stateRoot,
         cipher: tokenCipher,
         accountId: signedInId,
-        refused: agents.refused.kept,
-        refusedMoves: agents.refused.moves,
         ...(Option.isSome(listsDue) ? { listsDue: listsDue.value } : undefined),
       }).pipe(Scope.provide(scope), Effect.provideContext(fileSystemContext));
 
       entities = { store, scope };
-      // Note that the messages refused are laid back before any read draws, so the first answer draws under them.
-      yield* agents.refused.restored(signedInId, store.refused);
     });
 
     /**
      * The signed-in account's local database opened where the host has one,
-     * after `entities.sealed` laid its refused messages back, so it keeps
-     * them as they stand, and its waiting writes laid back over the pool
-     * before any read draws, so the first answer draws under them: the
-     * outbox's, which imports once the queue an older build kept in
-     * `entities.sealed`.
+     * after `entities.sealed` opened, with its refused messages and its
+     * waiting writes laid back before any read draws, so the first answer
+     * draws under them: the database's, which imports once what an older
+     * build kept in `entities.sealed`. A host with no database lays the
+     * refused messages back from the file alone.
      */
     const openLocal = Effect.gen(function* () {
       const signedInId = account.signedIn() ? accountId() : undefined;
 
-      if (local === undefined || signedInId === undefined) return;
-      const sealed = { queue: entities?.store.queue };
+      if (signedInId === undefined) return;
+
+      if (local === undefined) {
+        return yield* agents.refused.restored(signedInId, entities?.store.refused?.entries ?? []);
+      }
+
+      const sealed = { queue: entities?.store.queue, refused: entities?.store.refused };
       const waiting = yield* local.open(signedInId, agents.refused, sealed);
       yield* pool.requeue(waiting, [...tasks.queueable, ...agents.queueable]);
     });

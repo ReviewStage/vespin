@@ -366,7 +366,7 @@ const launchedOver = (directory: string, key: string) =>
 
     const waiting = yield* copy.open(
       "user-dana",
-      { kept: () => [], moves: Stream.empty },
+      { kept: () => [], moves: Stream.empty, restored: () => Effect.void },
       { queue: undefined },
     );
 
