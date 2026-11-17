@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { TASKS_PAGE } from "@repo/features/tasks-model";
+import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { type FileStripTab, fileTab } from "@repo/ui/tab-strip-model";
 import { test } from "vitest";
 import { liveStepTitle, NAMED_STEP, stepTitle } from "./history-titles.js";
@@ -91,7 +92,7 @@ test("a task's step listed later on its Overview is named by the task, its descr
   );
 });
 
-test("the Inbox's step names the task its item is of, Settings and Home are named alone, and Admin's step as the place under it", () => {
+test("the Inbox's step names the task its item is of, Home is named alone, and a Settings page under Settings", () => {
   const chosen: InboxChoice = { itemId: "item-1", taskId: TASK.id };
   const base = tasksControl({ tasks: [TASK] });
   const inbox = { ...VIEWS_AWAY, inbox: { open: true, chosen, narrowed: undefined } };
@@ -100,6 +101,9 @@ test("the Inbox's step names the task its item is of, Settings and Home are name
     detail: "Auth refactor",
   });
   assert.deepEqual(titleOf(ROUTED_PLACE.SETTINGS, base, VIEWS_AWAY), { label: "Settings" });
+  assert.deepEqual(
+    titleOf(ROUTED_PLACE.SETTINGS, base, { ...VIEWS_AWAY, settings: SETTINGS_VIEW.SHORTCUTS }),
+    { label: "Settings", detail: "Keyboard shortcuts" },
+  );
   assert.deepEqual(titleOf(undefined, base, VIEWS_AWAY), { label: "Home" });
-  assert.deepEqual(titleOf(ROUTED_PLACE.ADMIN, base, VIEWS_AWAY), { label: "Home" });
 });

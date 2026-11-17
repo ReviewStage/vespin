@@ -18,15 +18,21 @@
  */
 
 import { machineOfFragment } from "@repo/features/link-grammar";
+import { workspaceOfSlug } from "@repo/features/workspace-wire";
+import { type SettingsView, settingsViewNamed } from "@repo/settings/settings-views";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
+import { useAdminView } from "./admin/admin-route.js";
+import type { AdminView } from "./admin/routing.js";
 import { useAutomationsPlace } from "./automations-route.js";
 import { type InboxRoute, useInboxRoute } from "./inbox-route.js";
+import { automationsQuery } from "./live-reads.js";
 import { placeParamsOf } from "./places/place-params.js";
 import { type PersonLanding, useRoutedExits, useRoutedMemory } from "./places/routed-exits.js";
 import { ROUTED_PLACE, routedPlaceOf, useWindowPlace } from "./places/routed-places.js";
 import { useRouteAccess } from "./route-gates.js";
-import type { AutomationsPlace } from "./tasks/automations-place.js";
+import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./tasks/automations-place.js";
 
 /** A workspace's Home as the router stands it. */
 export interface HomeRoute {
@@ -206,26 +212,52 @@ export interface RoutedViews {
   readonly person: Pick<PersonRoute, "userId" | "name" | "workspace">;
   /** The Automations page standing, none while none does. */
   readonly automations: AutomationsPlace | undefined;
+  /** The name of the automation whose page stands, once its workspace's automations are read; none on any other page. */
+  readonly automationName: string | undefined;
   /** Whether the Merge queue page stands. */
   readonly mergeQueue: boolean;
   /** Whether the Inbox stands, the item chosen in it as its address names it, of whichever workspace (`listedInboxChoice`), and the task its list is narrowed to. */
   readonly inbox: Pick<InboxRoute, "open" | "chosen" | "narrowed">;
+  /** The Admin view standing, none while Admin does not stand. */
+  readonly admin: AdminView | undefined;
+  /** The Settings page its address names, none while its page list stands or Settings does not. */
+  readonly settings: SettingsView | undefined;
 }
 
-/** The Board, a person's page, the Automations pages, and the Inbox as the router stands them. */
+/** The Board, a person's page, the Automations pages, the Inbox, Admin, and Settings as the router stands them. */
 export function useRoutedViews(): RoutedViews {
   const { open } = useBoardRoute();
   const { userId, name, workspace } = usePersonRoute();
   const automations = useAutomationsPlace();
-  const mergeQueue = useWindowPlace().place === ROUTED_PLACE.MERGE_QUEUE;
+  const here = useWindowPlace();
+  const access = useRouteAccess();
+  const mergeQueue = here.place === ROUTED_PLACE.MERGE_QUEUE;
   const inbox = useInboxRoute();
+  const admin = useAdminView();
+  const { place } = automations;
+  const editing = automations.open && place.kind === AUTOMATIONS_PAGE.EDIT ? place : undefined;
+
+  // Note that the automation's name is read from the list its page reads, under the workspace its address names, so it follows nothing more.
+  const automationsOf =
+    editing === undefined || automations.standingIn === undefined
+      ? undefined
+      : workspaceOfSlug(access.workspaces, automations.standingIn)?.id;
+
+  const automationName = useQuery({
+    ...automationsQuery(automationsOf),
+    select: (listed) => listed.find((each) => each.id === editing?.automationId)?.name,
+  }).data;
 
   return {
     board: open,
     person: { userId, name, workspace },
-    automations: automations.open ? automations.place : undefined,
+    automations: automations.open ? place : undefined,
+    automationName: editing === undefined ? undefined : automationName,
     mergeQueue,
     inbox: { open: inbox.open, chosen: inbox.chosen, narrowed: inbox.narrowed },
+    admin: here.place === ROUTED_PLACE.ADMIN ? admin : undefined,
+    settings:
+      here.place === ROUTED_PLACE.SETTINGS ? settingsViewNamed(here.params.page) : undefined,
   };
 }
 

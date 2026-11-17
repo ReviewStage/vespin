@@ -418,8 +418,11 @@ export const VIEWS_AWAY: RoutedViews = {
   board: false,
   person: { userId: undefined, name: undefined, workspace: undefined },
   automations: undefined,
+  automationName: undefined,
   mergeQueue: false,
   inbox: { open: false, chosen: undefined, narrowed: undefined },
+  admin: undefined,
+  settings: undefined,
 };
 
 /** An agent's page's route standing nowhere, for a tasks tab drawn with no router to stand it. */

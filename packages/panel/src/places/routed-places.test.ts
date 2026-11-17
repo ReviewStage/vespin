@@ -4,6 +4,7 @@ import { agentTab } from "@repo/ui/tab-strip-model";
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { test } from "vitest";
+import { ADMIN_PAGE, ADMIN_TAB } from "../admin/routing.js";
 import { stepTitle } from "../history-titles.js";
 import { createPanelRouter } from "../panel-router.js";
 import type { RouteAccess } from "../route-gates.js";
@@ -144,7 +145,7 @@ test.each<readonly [string, string, Partial<PlaceThere>]>([
   assert.equal(stepStands(address, descriptionsOn, { ...THERE, ...gone }), false);
 });
 
-test("each place over the plan names its step for itself, and Admin's as the place under it", () => {
+test("each place over the plan names its step for itself, Admin's and the Automations' pages under their place", () => {
   const task = { ...DOCUMENT_TASK, id: TASK_ID, name: "Auth refactor" };
   const base = tasksControl({ tasks: [task] });
 
@@ -188,7 +189,26 @@ test("each place over the plan names its step for itself, and Admin's as the pla
     label: "Auth refactor",
     detail: "Version history",
   });
-  assert.deepEqual(titled({}, "ADMIN"), { label: "Home" });
+  // Note that Admin is named for itself over a task bound under it, never for that task.
+  assert.deepEqual(
+    titled({ boundFor: TASK_ID }, "ADMIN", { ...VIEWS_AWAY, admin: { kind: ADMIN_TAB.LIMITS } }),
+    { label: "Admin", detail: "Limits" },
+  );
+  assert.deepEqual(
+    titled({ boundFor: TASK_ID }, "ADMIN", {
+      ...VIEWS_AWAY,
+      admin: { kind: ADMIN_PAGE.DAY, day: "2026-11-17" },
+    }),
+    { label: "Admin", detail: "November 17, 2026" },
+  );
+  assert.deepEqual(
+    titled({}, "AUTOMATIONS", {
+      ...VIEWS_AWAY,
+      automations: { kind: AUTOMATIONS_PAGE.EDIT, automationId: "automation-1" },
+      automationName: "Weekly docs audit",
+    }),
+    { label: "Automations", detail: "Weekly docs audit" },
+  );
 });
 
 test.each([
