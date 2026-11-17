@@ -27,8 +27,8 @@ for a frame. Durations and delays come only from the tokens in
 autosave's Saved stands). Never write a literal millisecond into a
 rule: reduced motion and capture runs zero the tokens, and a literal is a
 motion those runs cannot stop. Easings are tokens too, never `ease` or `ease-out`: a fade, a
-hover settle and a press ride `--ui-motion-exit`, a pane and a fold `--ui-motion-pane`,
-and a travel the spring. A script that plays motion reads the same tokens through `tokenTiming`
+hover settle and a press ride `--ui-motion-exit`, a pane `--ui-motion-pane`,
+and a travel the spring, a fold's body among them, since what stands under it travels with it. A script that plays motion reads the same tokens through `tokenTiming`
 (`@repo/ui`), and asks `motionHeld` rather than `matchMedia` whether to move at all. The one sanctioned exception is an endless loop
 (a spinner, a breathing idle) whose
 `animation-play-state` answers `--ui-loop-motion`: those runs
@@ -83,6 +83,17 @@ a component tells the stylesheet a measured distance.
 A gesture that moves several elements gives each the same duration and
 spring and staggers only the delay, so the whole reads as one object. Stagger
 a list that arrives together by `--ui-row-stagger` per step.
+
+Something that opens or closes in place, a fold (`disclosure.css`) or a
+setting's revealed rows (`reveal.tsx`), is one gesture with what stands under
+it, whatever its size: opening, its body unrolls from its top edge on the
+spring what stands under it glides down on, so the clip's foot and the block
+below travel as one edge and nothing is seen through a block still sliding
+off it; closing, it gives up its room at once and rolls up on
+`--ui-duration-exit` as what stands under it closes over it on the same
+tokens, never fading to an empty gap a block then travels the spring across.
+A tall section and a one-row group then move alike, and no surface times its
+own fold (`style-guard/fold-motion`).
 
 ## Proving it
 

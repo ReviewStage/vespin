@@ -225,6 +225,20 @@ describe("a stylesheet", () => {
     ).toEqual([STYLE_RULE.BAR_CORNER]);
   });
 
+  it("refuses a fold moved its own way outside the disclosure's sheet, and passes its other styles", () => {
+    const sheet = `.chapter [data-disclosure="opening"] > .ui-disclosure-body { animation: none; }
+      [data-todos-dock][data-disclosure="closing"] { animation: sink var(--ui-duration-pane) var(--ui-motion-pane); }
+      .row .ui-disclosure-turn { transition: transform var(--ui-duration-exit) var(--ui-motion-exit); }
+      .row .ui-disclosure-body { padding: 0; }
+      .row .ui-disclosure-summary { transition: background-color var(--ui-duration-hover) var(--ui-motion-exit); }`;
+    expect(sheetRules(sheet, "packages/panel/src/styles/tasks.css")).toEqual([
+      STYLE_RULE.FOLD_MOTION,
+      STYLE_RULE.FOLD_MOTION,
+      STYLE_RULE.FOLD_MOTION,
+    ]);
+    expect(sheetRules(sheet, "packages/ui/src/components/disclosure/disclosure.css")).toEqual([]);
+  });
+
   it("refuses a box that rounds, draws a border, and clips, and passes one missing any of them", () => {
     const sheet = `.frame { border: 1px solid var(--ui-color-border); border-radius: var(--ui-radius-8); overflow: clip; }
       .edge { border: 1px solid var(--ui-color-border); border-radius: var(--ui-radius-8); }

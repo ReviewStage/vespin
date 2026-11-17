@@ -23,10 +23,11 @@
  *
  * A fold is a reveal its reader presses (`useDisclosureFold`, a group's
  * head or a disclosure), so an area moves what stands under one the same
- * way: what it opens or closes, every block under it in the area glides to
- * where the fold leaves it, on the spring every glide rides. Only a fold's
- * own press plays (`useListMotionReplay`), so the area's other changes still
- * land at once, as a reveal's do.
+ * way: as it opens, every block under it in the area glides down on the
+ * spring its body unrolls on, and as it closes, they close over it on the
+ * exit's tokens it rolls up on. Only a fold's own press plays
+ * (`useListMotionReplay`), so the area's other changes still land at once,
+ * as a reveal's do.
  *
  * Its rows stand in a box of their own, laid out as the rows around it are
  * (reveal.css): a column, its rows ruled one from the next as a card's are

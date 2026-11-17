@@ -26,6 +26,7 @@ export const STYLE_RULE = {
   BAR_CORNER: "bar-corner",
   GRID_COLUMNS: "grid-columns",
   EDGE_CLIP: "edge-clip",
+  FOLD_MOTION: "fold-motion",
 } as const;
 export type StyleRule = (typeof STYLE_RULE)[keyof typeof STYLE_RULE];
 
@@ -98,6 +99,11 @@ export const STYLE_RULES: Readonly<
       "a box that rounds its corners, draws a border, and clips what it holds (`overflow` hidden or clip): Chromium clips a layer it composites apart, a playing video's among them, at the box's outer corner and paints it over the border's curve, so the box keeps its border and `@repo/ui`'s `EdgeClip` clips inside it",
     backlog: true,
   },
+  [STYLE_RULE.FOLD_MOTION]: {
+    refuses:
+      "a fold's motion moved off its beat: a transition or animation on a fold's body, root, or chevron (`.ui-disclosure-body`, `[data-disclosure]`, `.ui-disclosure-turn`) outside `disclosure.css`, which times every fold on the beats what stands under it glides on, so a surface's fold never opens or closes on a motion of its own",
+    backlog: true,
+  },
 };
 
 export const STYLE_RULE_IDS: readonly StyleRule[] = Object.values(STYLE_RULE);
@@ -115,6 +121,7 @@ const TOOLING = [".agents/", ".claude/"];
  */
 const RULE_EXEMPT_FOLDERS: Readonly<Partial<Record<StyleRule, readonly string[]>>> = {
   [STYLE_RULE.PICKER_WIDTH]: ["packages/ui/", "apps/catalog/"],
+  [STYLE_RULE.FOLD_MOTION]: ["packages/ui/src/components/disclosure/"],
 };
 
 /**
@@ -647,6 +654,19 @@ function roundsBar(declaration: CssDeclaration, block: CssBlock, file: string): 
   return !(file === SHEET_CORNER_FILE && SHEET_CORNER_VALUE.test(declaration.value.trim()));
 }
 
+/** What names a fold's moving parts: its body, its root's motion mark, and its chevron. */
+const FOLD_PART = /\.ui-disclosure-(?:body|turn)(?![\w-])|\[data-disclosure(?![\w-])/u;
+
+/**
+ * Whether a declaration moves a fold its own way: a transition or an
+ * animation under a selector naming a fold's moving part anywhere in it,
+ * since a fold is timed once, in the disclosure's sheet, on the beats what
+ * stands under it glides on.
+ */
+function movesFold(declaration: CssDeclaration, block: CssBlock): boolean {
+  return MOTION_PROPERTY.test(declaration.property) && FOLD_PART.test(selectorOf(block));
+}
+
 /** What places a grid's items along its columns, which an `auto` column grows under. */
 const ITEMS_PLACEMENT = /^(?:place|justify)-items$/u;
 
@@ -1066,7 +1086,8 @@ export function styleViolations(
         const rule =
           cssRuleOf(declaration, block) ??
           (widensCrumb(declaration, block, capped) ? STYLE_RULE.CRUMB_WIDTH : undefined) ??
-          (roundsBar(declaration, block, file) ? STYLE_RULE.BAR_CORNER : undefined);
+          (roundsBar(declaration, block, file) ? STYLE_RULE.BAR_CORNER : undefined) ??
+          (movesFold(declaration, block) ? STYLE_RULE.FOLD_MOTION : undefined);
         if (rule === undefined) continue;
         violations.push({
           rule,
