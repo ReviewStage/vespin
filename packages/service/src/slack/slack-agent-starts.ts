@@ -839,7 +839,7 @@ const continueFromSlack = Effect.fnUntraced(function* (
 
 /** The message's 👀 taken off where its thread still marks it as worked on; one marked since stands. */
 const clearedWorking = Effect.fnUntraced(function* (
-  bot: SlackBotService,
+  bot: SlackWorkspaceBot,
   message: SlackThreadMessageAt,
 ) {
   if (!(yield* clearSlackThreadWorking(message))) return;
@@ -847,7 +847,7 @@ const clearedWorking = Effect.fnUntraced(function* (
 });
 
 /** 💤 taken off the message that started the agent, now that a message brought it back. */
-const awake = Effect.fnUntraced(function* (bot: SlackBotService, agentId: string) {
+const awake = Effect.fnUntraced(function* (bot: SlackWorkspaceBot, agentId: string) {
   const start = yield* slackStartMessage(agentId);
 
   if (Option.isSome(start)) {
@@ -1281,7 +1281,7 @@ const shownUploads = Effect.fnUntraced(function* (
  * lines had run before its standing is read; a failure is logged by its kind
  * alone.
  */
-const archivedWhenFinished = (bot: SlackBotService, agent: Agent) =>
+const archivedWhenFinished = (bot: SlackWorkspaceBot, agent: Agent) =>
   Effect.gen(function* () {
     const seq = yield* agentConversationSeq(agent.userId, agent.id);
 
@@ -1440,17 +1440,16 @@ export function markMergedInSlack(
   number: number,
 ): Effect.Effect<void, never, DatabaseServices | SlackBot> {
   return Effect.gen(function* () {
-    const bot = yield* SlackBot;
-
-    if (!bot.configured) return;
+    const slack = yield* SlackBot;
     const agents = yield* listAgentsOnPullRequest(repository, number, MERGED_AGENTS);
 
     for (const { agent } of agents) {
       const start = yield* slackStartMessage(agent.id);
 
-      if (Option.isSome(start)) {
-        yield* bot.react(start.value.channelId, start.value.ts, STATUS_EMOJI.MERGED);
-      }
+      if (Option.isNone(start)) continue;
+      // Note that each agent's mark is made on its own workspace's bot, which writes nothing where that workspace holds no token.
+      const bot = yield* slack.forWorkspace(agent.organizationId);
+      yield* bot.react(start.value.channelId, start.value.ts, STATUS_EMOJI.MERGED);
     }
   }).pipe(
     Effect.catchCause((cause) =>

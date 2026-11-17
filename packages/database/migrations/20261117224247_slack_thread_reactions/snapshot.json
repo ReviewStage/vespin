@@ -1,9 +1,9 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "4a258aca-1e09-40e0-bd29-fceea60453d6",
+  "id": "e1d33e90-39cb-4262-b378-3f4ae0d66469",
   "prevIds": [
-    "2243bab1-8557-4896-a17e-2e9fc406d439"
+    "635aba55-d0fc-4aad-91a5-c14e50335be7"
   ],
   "ddl": [
     {
@@ -663,6 +663,12 @@
     {
       "isRlsEnabled": false,
       "name": "voice_call",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "workspace_billing",
       "entityType": "tables",
       "schema": "public"
     },
@@ -10541,6 +10547,19 @@
       "default": null,
       "generated": null,
       "identity": null,
+      "name": "github_wakes_off",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_preference"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
       "name": "agent_model",
       "entityType": "columns",
       "schema": "public",
@@ -14203,6 +14222,97 @@
       "entityType": "columns",
       "schema": "public",
       "table": "voice_call"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_billing"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "metronome_customer_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_billing"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "metronome_contract_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_billing"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "stripe_customer_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_billing"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "blocked_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_billing"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_billing"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_billing"
     },
     {
       "type": "text",
@@ -18843,6 +18953,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "stripe_customer_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "workspace_billing_stripe_customer",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "workspace_billing"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "organization_id",
           "isExpression": false,
           "asc": true,
@@ -22547,6 +22678,23 @@
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
+      "name": "workspace_billing_organization_id_organization_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_billing"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "organization_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "organization",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
       "name": "workspace_drive_repository_organization_id_organization_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -23958,6 +24106,16 @@
       "name": "voice_call_pkey",
       "schema": "public",
       "table": "voice_call",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "organization_id"
+      ],
+      "nameExplicit": false,
+      "name": "workspace_billing_pkey",
+      "schema": "public",
+      "table": "workspace_billing",
       "entityType": "pks"
     },
     {
