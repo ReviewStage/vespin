@@ -314,8 +314,10 @@ export function ForkChip({
 }): React.JSX.Element {
   const openPlace = useOpenPlace();
   const { agentId, messageId } = fork;
-  // A source the list does not hold is opened on its own page.
-  const task = source === undefined ? undefined : { taskId: source.taskId };
+
+  // A source the list does not hold, or one on no task, is opened on its own page.
+  const task =
+    source === undefined || source.taskId === null ? undefined : { taskId: source.taskId };
 
   const open =
     openPlace === undefined
@@ -391,8 +393,10 @@ export function SuggestionChip({
 }): React.JSX.Element {
   const openPlace = useOpenPlace();
   const { agentId } = suggestion;
-  // A source the list does not hold is opened on its own page.
-  const task = source === undefined ? undefined : { taskId: source.taskId };
+
+  // A source the list does not hold, or one on no task, is opened on its own page.
+  const task =
+    source === undefined || source.taskId === null ? undefined : { taskId: source.taskId };
 
   const open =
     openPlace === undefined

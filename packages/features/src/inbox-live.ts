@@ -510,7 +510,7 @@ export function inboxOfLiveRows(rows: ScopeInboxLiveRows): readonly InboxItem[] 
  */
 const inboxItemStampRowSchema = EffectSchema.Struct({
   id: EffectSchema.String,
-  taskId: EffectSchema.String,
+  taskId: EffectSchema.NullOr(EffectSchema.String),
   agentId: EffectSchema.String,
   revision: countedNumber,
   version: countedNumber,

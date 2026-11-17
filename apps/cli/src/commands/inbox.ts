@@ -71,9 +71,11 @@ function threadsOf(
 ): readonly ListedThread[] {
   return read.items
     .flatMap((entry) => {
-      const task = tasks.get(entry.taskId);
+      const { taskId } = entry;
+      // Note that a thread on no task is left out, as one of a task outside the workspace is.
+      const task = taskId === null ? undefined : tasks.get(taskId);
 
-      if (task === undefined) return [];
+      if (taskId === null || task === undefined) return [];
 
       return [
         {
@@ -83,7 +85,7 @@ function threadsOf(
           asking: entry.asking !== false,
           agentId: entry.agentId,
           agent: entry.agentTitle ?? entry.agentModel,
-          taskId: entry.taskId,
+          taskId,
           task,
           updatedAt: entry.updatedAt,
         },

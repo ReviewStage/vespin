@@ -126,7 +126,7 @@ export function openRunAgent(
   tasks: Pick<TasksControl, "liveAgents" | "onShowAgent" | "agentView">,
   agentId: string,
 ): void {
-  const taskId = tasks.liveAgents?.find((each) => each.id === agentId)?.taskId;
+  const taskId = tasks.liveAgents?.find((each) => each.id === agentId)?.taskId ?? undefined;
 
   if (taskId === undefined) tasks.agentView.onOpen(agentId);
   else tasks.onShowAgent(taskId, agentId);

@@ -1439,8 +1439,8 @@ export function accountInboxLiveStatements(userId: string) {
       ordered: false,
       columns: {
         id: inboxItem.id,
-        // Note that a waiting item stands on a task (`accountWaiting`).
-        taskId: sql<string>`${inboxItem.taskId}`,
+        // Note that the wire reads an item on no task as null (`accountInboxEntrySchema`), though none stands on none yet.
+        taskId: sql<string | null>`${inboxItem.taskId}`,
         agentId: inboxItem.agentId,
         agentTitle: agentTable.title,
         agentModel: agentTable.model,
@@ -1766,7 +1766,8 @@ function accountItemsOf(userId: string, settledSince: Date, narrowed: SQL, chang
       ordered: false,
       columns: {
         id: inboxItem.id,
-        taskId: inboxItem.taskId,
+        // Note that the wire reads an item on no task as null, though none stands on none yet.
+        taskId: sql<string | null>`${inboxItem.taskId}`,
         agentId: inboxItem.agentId,
         revision: inboxItem.revision,
         version: inboxItem.version,

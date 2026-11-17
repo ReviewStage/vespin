@@ -24,7 +24,9 @@ import { PRODUCT_PLATFORM } from "./analytics/product-events.js";
  * agent's runtime (`MODEL_PROVIDER.CURSOR`, `AGENT_RUNTIME.CURSOR`), so a
  * service may offer Cursor's models and agents to it alone until the floor
  * passes 3. A build from 5 on reads an automation without its `guards`, so
- * a service may stop sending them once the floor reaches 5.
+ * a service may stop sending them once the floor reaches 5, and reads an
+ * agent, and an inbox item, on no task (`taskId: null`), so a service may
+ * answer one to it alone until the floor passes 4.
  */
 export const HOSTED_API_VERSION = 5;
 

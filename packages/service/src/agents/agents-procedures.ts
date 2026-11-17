@@ -136,6 +136,7 @@ import {
 } from "./sandbox-use.js";
 import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
+import { readsTasklessAgents } from "./taskless-reads.js";
 import { AgentSandbox } from "./terminal/agent-sandbox.js";
 import {
   listedShells,
@@ -335,6 +336,7 @@ export function agentsProcedures(
           ...(repository === undefined ? undefined : { repository }),
           ...(words === undefined ? undefined : { words }),
           includeArchived: listsArchived(input.archived),
+          onTaskOnly: !readsTasklessAgents(context.request),
           offset,
           // One past the bound tells whether a next page stands.
           limit: AGENT_BOUNDS.MAX_WORKSPACE_AGENTS + 1,
@@ -443,6 +445,12 @@ export function agentsProcedures(
     /** The agent as its own page. */
     read: signedIn.read.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
+
+      // Note that an agent on no task is not found by a build that cannot read one.
+      if (agent.taskId === null && !readsTasklessAgents(context.request)) {
+        return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+      }
+
       // An open of the agent hands on, past its answer, the queue a hand-off cut off left claimed, once
       // its claim lapsed. Note that it settles no turn: a turn past its deadline is the minute sweep's to
       // reap (`coder-host/reconcile.ts`), never a read's.

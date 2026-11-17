@@ -169,7 +169,7 @@ function rowsChanged(
 
     if (changed !== "gone") return [changed];
 
-    if (counted(entry, readerId)) {
+    if (entry.taskId !== null && counted(entry, readerId)) {
       answered.set(entry.taskId, (answered.get(entry.taskId) ?? 0) + 1);
     }
 

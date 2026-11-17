@@ -458,7 +458,7 @@ function PullRequestPage({
     if (asked !== undefined && !asks) setAsked(undefined);
   }, [asked, asks]);
   useScreenActivity((workspaces) =>
-    agent === undefined || title === undefined
+    agent === undefined || agent.taskId === null || title === undefined
       ? undefined
       : pullRequestActivity(
           {

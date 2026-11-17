@@ -261,7 +261,7 @@ function useSubject(signedIn: boolean): Subject {
 
   // Note that a pushed pull request or page opens itself in the browser, not the agent or task it stands over.
   if (ownPage !== undefined)
-    address = ownPageAddress(ownPage, task, agent?.taskId, (id) =>
+    address = ownPageAddress(ownPage, task, agent?.taskId ?? undefined, (id) =>
       linkWorkspaceStep(id, workspaces),
     );
 

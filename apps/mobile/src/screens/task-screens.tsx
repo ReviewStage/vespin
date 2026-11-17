@@ -2045,7 +2045,14 @@ export function TaskAgentRow({
   const link =
     linkStep === undefined
       ? undefined
-      : linkOf({ kind: LINK_DESTINATION.AGENT, taskId: agent.taskId, agentId: agent.id }, linkStep);
+      : linkOf(
+          {
+            kind: LINK_DESTINATION.AGENT,
+            ...(agent.taskId === null ? undefined : { taskId: agent.taskId }),
+            agentId: agent.id,
+          },
+          linkStep,
+        );
 
   // Note that a device's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac.
   const platform = useDevicePlatform(agent.mac?.deviceId);

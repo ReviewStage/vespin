@@ -111,7 +111,7 @@ function useTaskFoot(agent: AgentSummary | undefined): string | undefined {
   const tasks = useKnownNames().tasks;
 
   if (agent === undefined) return undefined;
-  const task = tasks.get(agent.taskId);
+  const task = agent.taskId === null ? undefined : tasks.get(agent.taskId);
 
   return task === undefined ? TASK_WORDS.UNKNOWN : `On ${task}`;
 }

@@ -1233,7 +1233,7 @@ export function agentOwnerOf(read: AgentOwnerRead): AgentOwner | undefined {
  */
 export const agentSummarySchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  taskId: wireUuidSchema,
+  taskId: EffectSchema.NullOr(wireUuidSchema),
   /** AI Gateway's catalog id, such as `anthropic/claude-opus-5.5`. */
   model: EffectSchema.String,
   effort: EffectSchema.String,
@@ -2137,7 +2137,7 @@ export type PullRequestReviewTeam = typeof reviewTeamSchema.Type;
 /** The agent whose pull request one of a stack is: its id, and its task's. */
 const stackAgentSchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  taskId: wireUuidSchema,
+  taskId: EffectSchema.NullOr(wireUuidSchema),
 });
 
 /**

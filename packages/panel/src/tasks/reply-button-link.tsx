@@ -168,7 +168,11 @@ export function ReplyButtonLink({
         ? was
         : { ...was, text: suggestedWords(was.text, action.text), suggestion },
     );
-    openPlace?.({ kind: LINK_DESTINATION.AGENT, taskId: to.taskId, agentId: to.id });
+    openPlace?.({
+      kind: LINK_DESTINATION.AGENT,
+      ...(to.taskId === null ? undefined : { taskId: to.taskId }),
+      agentId: to.id,
+    });
   };
 
   const target =
