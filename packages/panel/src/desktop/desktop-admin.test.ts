@@ -91,13 +91,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** The place on `view`, in `room`, every view it was asked to open and every exit written down. */
+/** The place on `view`, in `room`, every view it was asked to open written down. */
 async function open(
   view: AdminView,
   options: { room?: ShellRoom } = {},
-): Promise<{ page: HTMLElement; opened: AdminView[]; exits: number[] }> {
+): Promise<{ page: HTMLElement; opened: AdminView[] }> {
   const opened: AdminView[] = [];
-  const exits: number[] = [];
   const page = document.body.appendChild(document.createElement("div"));
   root = createRoot(page);
   act(() =>
@@ -108,7 +107,6 @@ async function open(
           view,
           shown: true,
           onOpen: (next) => opened.push(next),
-          onExit: () => exits.push(1),
         }),
       ),
     ),
@@ -118,7 +116,7 @@ async function open(
     expect(page.querySelector('[role="status"][aria-busy="true"]')).toBeNull(),
   );
 
-  return { page, opened, exits };
+  return { page, opened };
 }
 
 /** The bar of sections, each option by its name and whether it is the one chosen. */
@@ -160,16 +158,12 @@ test("a section stands under the place's own toolbar, titled Admin, with Open in
   ]);
 });
 
-test("a section chosen in the bar opens it, Escape leaves the place, and no way back stands", async () => {
-  const { page, opened, exits } = await open({ kind: "users" });
+test("a section chosen in the bar opens it, and no way back stands", async () => {
+  const { page, opened } = await open({ kind: "users" });
 
   act(() => section(page, "Cost").click());
-  act(() => {
-    assert.ok(runAppCommand(APP_COMMAND.EXIT_ADMIN));
-  });
 
   assert.deepEqual(opened, [{ kind: "cost" }]);
-  assert.equal(exits.length, 1);
   const names = [...page.querySelectorAll("button")].map((each) => each.getAttribute("aria-label"));
   assert.ok(!names.includes("Back"), "no way back stands");
 });

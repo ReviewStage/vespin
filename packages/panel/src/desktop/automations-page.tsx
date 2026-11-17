@@ -28,7 +28,6 @@ import { managesWorkspace } from "@repo/features/workspace-role";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT, type Experiment, experimentOn, INTRO } from "@repo/settings";
-import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BackButton,
   BUTTON_VARIANT,
@@ -47,6 +46,7 @@ import {
   IconButton,
   Inline,
   ListRow,
+  NO_BACK_KEY,
   NOT_FOUND_THING,
   NotFound,
   OneLine,
@@ -77,7 +77,6 @@ import { Fragment, useCallback, useState } from "react";
 import { unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor } from "../actor-ref.js";
-import { useAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
@@ -763,7 +762,6 @@ function ListPage({
   room: ShellRoom;
 }): React.JSX.Element {
   const door = useAutomationsDoor(tasks);
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, door.close);
   const now = useMinute();
   const workspace = tasks.workspace;
   const workspacesRead = useWorkspacesRead();
@@ -908,7 +906,6 @@ function RunsPage({
   room: ShellRoom;
 }): React.JSX.Element {
   const door = useAutomationsDoor(tasks);
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, door.close);
   const now = useMinute();
   const workspace = tasks.workspace;
   const { read, reload } = useWorkspaceRuns(workspace?.id);
@@ -993,7 +990,7 @@ function backBar(onBack: () => void, phone: boolean): ToolbarProps {
     <BackButton
       label={AUTOMATIONS_PLACE}
       place={AUTOMATIONS_PLACE_NAME}
-      command={APP_COMMAND.EXIT_AUTOMATIONS}
+      command={NO_BACK_KEY}
       onBack={onBack}
     />
   );
@@ -1014,8 +1011,6 @@ function AutomationAbsentPage({
   phone: boolean;
   children: React.ReactNode;
 }): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, onBack);
-
   return (
     <ReplayUnmask>
       <DetailPage
@@ -1057,8 +1052,6 @@ function UnreadPage({
 
 /** One automation's page that names an automation the list does not hold: it was deleted, or is of a workspace the reader is not in, as a link may name. */
 function GonePage({ onBack, phone }: { onBack: () => void; phone: boolean }): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, onBack);
-
   return (
     <ReplayUnmask>
       <NotFound replayUnmasked thing={NOT_FOUND_THING.AUTOMATION} bar={backBar(onBack, phone)} />
@@ -1076,8 +1069,6 @@ function ReadingPage({
   room: ShellRoom;
   offersOwner: boolean;
 }): React.JSX.Element {
-  useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, onBack);
-
   return <AutomationPageSkeleton room={room} offersOwner={offersOwner} onBack={onBack} />;
 }
 

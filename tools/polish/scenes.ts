@@ -111,14 +111,13 @@ const PHONE_TO_LIST: readonly Step[] = [
 
 const PHONE_PLACES = { role: "navigation", name: "Places" } as const;
 
-// The Inbox, by the sidebar's row or a phone's places bar, and back from the item it opens on to its
-// list, which a window too narrow for both shows alone; at full width Esc leaves the list as it stands.
-// A phone's places bar opens it on its list already.
+// The Inbox, by the sidebar's row or a phone's places bar, which opens it on its list.
+// A phone opens on the task's panel, which Esc shuts, so the places bar stands.
 const OPEN_INBOX: Step = { kind: STEP.CLICK, role: "button", name: "Inbox" };
-const TO_INBOX_LIST: Step = { kind: STEP.PRESS, keys: "Escape" };
+const PHONE_SHUT_PANEL: Step = { kind: STEP.PRESS, keys: "Escape" };
 
 const PHONE_TO_INBOX: readonly Step[] = [
-  TO_INBOX_LIST,
+  PHONE_SHUT_PANEL,
   { kind: STEP.CLICK, role: "button", name: "Inbox", within: PHONE_PLACES },
 ];
 
@@ -308,7 +307,7 @@ export const SCENES: readonly Scene[] = [
     title: "A long thread",
     profile: "inbox",
     sidebar: true,
-    steps: [OPEN_INBOX, TO_INBOX_LIST, LONG_THREAD],
+    steps: [OPEN_INBOX, LONG_THREAD],
     phoneSteps: [...PHONE_TO_INBOX, LONG_THREAD],
   },
   {
@@ -317,7 +316,7 @@ export const SCENES: readonly Scene[] = [
     title: "A form",
     profile: "inbox",
     sidebar: true,
-    steps: [OPEN_INBOX, TO_INBOX_LIST, FORM_ITEM],
+    steps: [OPEN_INBOX, FORM_ITEM],
     phoneSteps: [...PHONE_TO_INBOX, FORM_ITEM],
   },
   {
@@ -326,7 +325,7 @@ export const SCENES: readonly Scene[] = [
     title: "New thread",
     profile: "inbox",
     sidebar: true,
-    steps: [OPEN_INBOX, TO_INBOX_LIST, NEW_THREAD],
+    steps: [OPEN_INBOX, NEW_THREAD],
     phoneSteps: [...PHONE_TO_INBOX, ...PHONE_NEW_THREAD],
   },
   // A person's page: the account's own, from its menu at the sidebar's foot.
@@ -338,7 +337,7 @@ export const SCENES: readonly Scene[] = [
     sidebar: true,
     steps: [ACCOUNT_MENU, YOUR_PROFILE],
     phoneSteps: [
-      TO_INBOX_LIST,
+      PHONE_SHUT_PANEL,
       { kind: STEP.CLICK, role: "button", name: "More", within: PHONE_PLACES },
       ACCOUNT_MENU,
       YOUR_PROFILE,

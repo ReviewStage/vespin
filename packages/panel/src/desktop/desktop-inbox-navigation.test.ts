@@ -63,6 +63,7 @@ import {
 } from "../testing/desktop-inbox.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { tasksControl } from "../testing/tasks-control.js";
+import { standWindowEscape } from "../testing/window-escape.js";
 
 // Landed before any box renders, as the panel lands it after its first paint.
 beforeAll(() => Effect.runPromise(editorBundleLanded));
@@ -190,8 +191,8 @@ test("an item a link names before the account's task list is read says no Not fo
   );
 });
 
-test("an Inbox too narrow for the list and the item side by side shows the chosen item alone, the whole Inbox wide, under a way back that Back's chord and Escape take as well, the keyboard landing on the item's row; a row pressed opens its item again, and from the list Escape does not leave the Inbox", async () => {
-  const { page, asked } = mount({ chosen: ON_THRESHOLD });
+test("an Inbox too narrow for the list and the item side by side shows the chosen item alone, the whole Inbox wide, under a way back that Back's chord takes as well, the keyboard landing on the item's row; a row pressed opens its item again", async () => {
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   layOut(page, 800);
   assert.deepEqual(columnsShown(page), ["item"]);
@@ -216,14 +217,6 @@ test("an Inbox too narrow for the list and the item side by side shows the chose
     document.activeElement === rowNamed(page, "Expire after 7 days?"),
     "the keyboard is on its row",
   );
-
-  act(() => rowNamed(page, "Expire after 7 days?").click());
-  act(() => runAppCommand(APP_COMMAND.INBOX_LIST));
-  assert.deepEqual([columnsShown(page), asked.closed], [["list"], 0]);
-  act(() => {
-    assert.equal(runAppCommand(APP_COMMAND.INBOX_LIST), false, "the list offers no Escape");
-  });
-  assert.deepEqual([columnsShown(page), asked.closed], [["list"], 0], "the Inbox stands");
 });
 
 test("the Inbox joins only once narrowed past the band, keeping the item it shows, and splits again only once widened past it; split again with nothing chosen, narrowed it lands on its list", async () => {
@@ -770,6 +763,29 @@ test("on a phone the panel open over an item heads itself: the way back to the i
   act(() => head.querySelector<HTMLButtonElement>('[aria-label="Panel actions"]')?.click());
   act(() => head.querySelector<HTMLButtonElement>("button")?.click());
   assert.equal(shut, 1, "the way back shuts the panel");
+});
+
+test("Escape over the Inbox takes a side panel filling the window back beside the item, and the Inbox stands", async () => {
+  let exited = 0;
+
+  const panel: SidePanelControl = {
+    ...tasksControl().sidePanel,
+    open: true,
+    fullScreen: true,
+    onToggleFullScreen: () => {
+      exited += 1;
+    },
+  };
+
+  const windowEscape = standWindowEscape();
+  const { page, asked } = mount({ chosen: ON_THRESHOLD, panel });
+  await settle();
+  pressKey("Escape");
+  act(() => windowEscape.unmount());
+
+  assert.equal(exited, 1, "the panel comes back beside the item");
+  assert.equal(asked.closed, 0, "the Inbox stands");
+  assert.equal(page.querySelector("[data-inbox-title]")?.textContent, "Alert at 80%?");
 });
 
 /** The button standing anywhere in the window whose words are `words`. */

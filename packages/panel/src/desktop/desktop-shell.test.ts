@@ -1172,11 +1172,9 @@ test("⇧⌘B opens the Tasks page, bringing the Tasks tab forward from Settings
   assert.equal(placeRow(page, "Tasks")?.getAttribute("aria-keyshortcuts"), "Meta+Shift+B");
 });
 
-test("while the Automations pages are still loading their frame stands the list as quiet rows, and Escape closes Automations as the list does once it stands", async () => {
-  const closed: string[] = [];
-  const leave = () => closed.push("closed");
+test("while the Automations pages are still loading their frame stands the list as quiet rows", async () => {
   handState({});
-  mount(false, { workspaces: [ACME], workspace: ACME, leave }, PANEL_TAB.TASKS, ignore, {});
+  mount(false, { workspaces: [ACME], workspace: ACME }, PANEL_TAB.TASKS, ignore, {});
   await settle();
   act(() => root?.unmount());
   document.body.innerHTML = "";
@@ -1184,7 +1182,7 @@ test("while the Automations pages are still loading their frame stands the list 
   // Note that the window's state has landed in the test's Query client, so Automations opens within one render, before their chunk can.
   const page = mount(
     false,
-    { workspaces: [ACME], workspace: ACME, at: SHELL_AT.AUTOMATIONS, leave },
+    { workspaces: [ACME], workspace: ACME, at: SHELL_AT.AUTOMATIONS },
     PANEL_TAB.TASKS,
     ignore,
     {},
@@ -1205,11 +1203,6 @@ test("while the Automations pages are still loading their frame stands the list 
     true,
     "their chunk has not loaded yet",
   );
-  act(() => {
-    assert.ok(runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS), "Automations' way out is offered");
-  });
-
-  assert.deepEqual(closed, ["closed"]);
 });
 
 test("while a version history's chunk is still loading, its Back row and Escape leave the history, as they do once it stands, and on a phone its list stands headed as it will be, by the way out and its title", async () => {

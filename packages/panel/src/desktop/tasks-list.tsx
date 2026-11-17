@@ -39,7 +39,6 @@ import {
   TERM,
 } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
-import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   AVATAR_SIZE,
   CARD_PRESS_SELECTOR,
@@ -121,12 +120,10 @@ import {
   useState,
 } from "react";
 import { ACTOR_SIZE, ActorMark, UnassignedMark } from "../actor-ref.js";
-import { useAppCommand } from "../app-commands.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { useMemberDirectory } from "../member-directory.js";
-import { useBoardDoor } from "../places/routed-doors.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
@@ -971,7 +968,6 @@ export function TasksList({
   const pins = usePins(tasks.typedNamesNow);
   const listTasks: ListTasks = { ...tasks, ...pins };
   const pictures = useRepositoryPictures();
-  useAppCommand(APP_COMMAND.EXIT_BOARD, useBoardDoor(tasks).close);
   const { filter, display } = frame;
   const directory = useMemberDirectory();
   const now = useMinute();

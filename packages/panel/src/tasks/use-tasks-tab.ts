@@ -276,7 +276,6 @@ interface AgentViewControl {
   /** The agent whose page stands, none while none does. */
   readonly agentId: string | undefined;
   readonly onOpen: (agentId: string) => void;
-  readonly onClose: () => void;
 }
 
 /** The places that are an agent's own, which open on its task where it has one, else on its page. */
@@ -539,14 +538,6 @@ export interface TasksControl {
   liveAgents: readonly ListedAgent[] | undefined;
   /** The pull request of every agent the list followed live carries that opened one, as its row keeps it; none while it is not. */
   listedPullRequests: readonly ListedPullRequest[] | undefined;
-  /**
-   * Steps back one layer, the window's Escape, answering whether there was one
-   * to step back from: a side panel filling the window back beside the
-   * document, or a narrow room's shut by its way back, else an open task
-   * left by a step back to the page it was opened from, or where none stands
-   * behind it for the page the window rests on (`places/narrow-backs.ts`).
-   */
-  back: () => boolean;
   /** The window's one ask before leaving a page whose unsaved work would be lost (`places/place-leave.ts`). */
   placeLeave: PlaceLeave;
 }
@@ -3441,17 +3432,6 @@ export function useTasksTab(input: {
     else sidePanel.onChoose(closedKind);
   };
 
-  // The tab rests on no task, so only an open task steps back,
-  // and a panel filling the window over it is the nearer layer.
-  const back = useCallback((): boolean => {
-    if (page !== TASKS_PAGE.TASK) return false;
-
-    if (sidePanel.fullScreen) sidePanel.onToggleFullScreen();
-    else leaveTask();
-
-    return true;
-  }, [leaveTask, page, sidePanel.fullScreen, sidePanel.onToggleFullScreen]);
-
   // A side panel standing only full screen, a narrow room's, is a pane over the page it stands on, so each of its ways
   // out takes the pane's way back (`places/narrow-backs.ts`): its toggle, which reads Close panel, leaving full screen,
   // and closing the last tab its strip draws, which closes the tab as ever and then shuts the panel by the way back.
@@ -3469,20 +3449,6 @@ export function useTasksTab(input: {
   const panelWays = shutsWhole
     ? { onToggle: paneBack, onToggleFullScreen: paneBack, onClose: closePane }
     : { onToggle: toggleSidePanel, onClose: closeSidePanelTab };
-
-  // The window's Escape on an open task, past a panel filling the window, is the toolbar's Back: one step back, to the
-  // page the task was opened from, and the task is left as ever only where no step stands behind it.
-  const escapeTask = (): boolean => {
-    if (page !== TASKS_PAGE.TASK || (!shutsWhole && sidePanel.fullScreen)) return back();
-
-    if (shutsWhole) paneBack();
-    else backs.task(leaveTask);
-
-    return true;
-  };
-
-  // Note that Escape's step back stands across draws, calling the newest, as the tab's doors do.
-  const steadyEscape = useSteadyDoor(escapeTask);
 
   // Note that the tab is handed back steady, so a part that holds while its share of the tab does (`memo`) holds for every draw that moved nothing it reads.
   const steady = useSteadyDoors<Omit<TasksControl, "liveAgents" | "listedPullRequests">>({
@@ -3589,8 +3555,6 @@ export function useTasksTab(input: {
       agentId: agentView?.agentId,
       // An agent's page is only the router's move there, which asks as it goes while a page holds unsaved work.
       onOpen: (agentId: string) => openAgentPage(agentId),
-      // Note that its close is its route's move to the place the window's state says, which the router's blocker holds.
-      onClose: () => placeLeave.arrive(input.agentView.onClose, NOTHING),
     },
     // A person's page is the router's, which draws it in the plan's place (`workspace-routes.ts`); a version history there gives way.
     onOpenPerson: (userId: string, name?: string, workspaceId?: string) => {
@@ -3698,7 +3662,6 @@ export function useTasksTab(input: {
     taskPlaceStands: input.place === undefined || input.place.binding === PLACE_BINDING.TASK,
     typedNamesNow,
     onDraftName: draftName,
-    back: steadyEscape,
     placeLeave,
   });
 

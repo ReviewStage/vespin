@@ -55,8 +55,6 @@ export interface NarrowBacks {
   readonly list: (place: RoutedPlace, list: string | undefined, stand: () => void) => void;
   /** The way out of the side panel standing only full screen over `over`, the whole pane; `shut` shuts it. */
   readonly pane: (over: PaneOver, shut: () => void) => void;
-  /** Escape's way out of an open task, the toolbar's Back: one step back, to the page it was opened from, and `leave` only where none stands behind. */
-  readonly task: (leave: () => void) => void;
 }
 
 /** Whether a place's pane is a step of its own in a room `narrow` or not, as its declaration says. */
@@ -99,10 +97,6 @@ export function useNarrowBacks(narrow: boolean): NarrowBacks {
         { task: { taskId: over.taskId, panel: { open: false, tab: undefined } } },
         shut,
       );
-    },
-    // Note that a task with no step behind it, as one a reloaded tab or a link loaded, is left as ever.
-    task: (leave) => {
-      if (!exits.behind.stepBack()) leave();
     },
   };
 }

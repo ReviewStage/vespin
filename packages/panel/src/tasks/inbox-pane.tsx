@@ -1589,7 +1589,7 @@ function PhoneHolder({
  * its end, the open ask's controls standing in it.
  * Where the item stands alone, the whole Inbox wide, the crumbs follow a
  * way back to the list (`inbox-columns.ts`), its tooltip naming Back's
- * chord, which goes back as Escape does, and the bar ends in the pager,
+ * chord, which goes back too, and the bar ends in the pager,
  * "2 of 8" and the arrows up and down the list (`inbox-pager.tsx`).
  */
 export function InboxPane({
