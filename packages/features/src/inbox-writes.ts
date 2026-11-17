@@ -7,6 +7,7 @@
  * back, open again, the ask the reader's close withdrew open again.
  */
 
+import type { AgentAttachment } from "./agent-wire.js";
 import {
   INBOX_ASK_STATUS,
   INBOX_MESSAGE_AUTHOR,
@@ -180,13 +181,22 @@ export const INBOX_SENDING = {
   CLOSE: "close",
 } as const;
 
-/** One thing the reader sent on a thread, as it is drawn until a read carries it: a reply under its own key, written at `at`, or a close of the revision the reader was shown. */
+/** A file a reply carries as it is drawn until a read carries it: the attachment it is drawn under, named as a read names one, and its bytes, which the window draws it from rather than reading it back. */
+export interface InboxSendingFile {
+  readonly attachmentId: string;
+  readonly name: string;
+  readonly mediaType: string;
+  readonly base64: string;
+}
+
+/** One thing the reader sent on a thread, as it is drawn until a read carries it: a reply under its own key, with the files it carries, written at `at`, or a close of the revision the reader was shown. */
 export type InboxSending =
   | {
       readonly kind: typeof INBOX_SENDING.REPLY;
       readonly key: string;
       readonly text: string;
       readonly answers?: InboxAnswers | undefined;
+      readonly files?: readonly InboxSendingFile[] | undefined;
       readonly at: number;
     }
   | { readonly kind: typeof INBOX_SENDING.CLOSE; readonly revision: number; readonly at: number };
@@ -217,7 +227,7 @@ function sendingDrawn(
     return item;
   }
 
-  const { key, text, answers, at } = sending;
+  const { key, text, answers, files = [], at } = sending;
 
   if (answers !== undefined) {
     return asksOpen(item, answers.ask)
@@ -225,16 +235,54 @@ function sendingDrawn(
       : item;
   }
 
+  // Note that a reply's files stand on it at once, as the read will carry them, so a reply of pictures alone never stands as an empty message.
   const reply: InboxMessage = {
     id: key,
     author: INBOX_MESSAGE_AUTHOR.MEMBER,
     ...(reader === undefined ? undefined : { member: reader }),
     text,
+    ...(files.length === 0
+      ? undefined
+      : {
+          files: files.map(({ attachmentId, name, mediaType }) => ({
+            attachmentId,
+            name,
+            mediaType,
+          })),
+        }),
     clientKey: key,
     createdAt: at,
   };
 
   return { ...item, thread: [...thread, reply], unread: false };
+}
+
+/** The files a reply sent under `key` carries as its send draws them: each under an attachment of its own, the key with its place in the last group, so no two of a reply share one. */
+export function inboxSendingFiles(
+  key: string,
+  attachments: readonly AgentAttachment[],
+): readonly InboxSendingFile[] {
+  return attachments.map((attachment, place) => ({
+    attachmentId: `${key.slice(0, 24)}${place.toString(16).padStart(12, "0")}`,
+    name: attachment.name,
+    mediaType: attachment.mediaType,
+    base64: attachment.data,
+  }));
+}
+
+/** A file a reply still drawn from its send carries, by its attachment, as its bytes are drawn; none for any other attachment, such as one a read carries. */
+export function inboxSendingFile(
+  sending: Iterable<InboxSending>,
+  attachmentId: string,
+): { readonly contentType: string; readonly base64: string } | undefined {
+  for (const each of sending) {
+    if (each.kind !== INBOX_SENDING.REPLY) continue;
+    const file = each.files?.find((held) => held.attachmentId === attachmentId);
+
+    if (file !== undefined) return { contentType: file.mediaType, base64: file.base64 };
+  }
+
+  return undefined;
 }
 
 /**

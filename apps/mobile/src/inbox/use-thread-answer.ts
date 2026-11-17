@@ -66,6 +66,8 @@ import {
   type InboxReader,
   type InboxSending,
   inboxSendingDrawn,
+  inboxSendingFile,
+  inboxSendingFiles,
 } from "@repo/features/inbox-writes";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAccount } from "@repo/host/app-state-reads";
@@ -161,6 +163,16 @@ function subscribe(listener: () => void): () => void {
 
 function heldNow(): ReadonlyMap<string, ThreadHeld> {
   return held;
+}
+
+/** A file a reply still on its way on `itemId` carries, by its attachment, as the thread draws it from the reply's own bytes until a read carries the reply; none for any other. */
+export function pendingThreadFile(
+  itemId: string,
+  attachmentId: string,
+): { readonly contentType: string; readonly base64: string } | undefined {
+  const held = heldNow().get(itemId);
+
+  return held === undefined ? undefined : inboxSendingFile(held.sending.values(), attachmentId);
 }
 
 /** The store with the thread's holding changed as `change` says. */
@@ -440,6 +452,7 @@ export function useThreadAnswer(
         key,
         text: sent.text,
         answers: sent.answers,
+        files: inboxSendingFiles(key, sent.attachments),
         at: Date.now(),
       }),
     }));

@@ -797,6 +797,10 @@ function sourceOf(
 export function useThreadMedia(
   itemId: string | undefined,
   media: readonly InboxMessageMedia[],
+  pending?: (
+    itemId: string,
+    attachmentId: string,
+  ) => { readonly contentType: string; readonly base64: string } | undefined,
 ): ThreadFiles {
   const acts = useHostActs();
   const [read, setRead] = useState<ThreadMediaRead>(NOTHING_READ);
@@ -834,6 +838,22 @@ export function useThreadMedia(
         }));
       };
 
+      // Note that a file of a reply still on its way is drawn from the reply's own bytes, since the service names its files only once a read carries the reply.
+      const held = pending?.(itemId, each.attachmentId);
+
+      if (held !== undefined) {
+        void sourceOf(each, held)
+          .then((source) => {
+            if (asked.current.itemId !== itemId) return;
+            setRead((was) => ({
+              sources: new Map(was.sources).set(each.attachmentId, source),
+              sizes: new Map(was.sizes).set(each.attachmentId, sizeLabel(held.base64)),
+            }));
+          })
+          .catch(failed);
+        continue;
+      }
+
       // A video or a sound clip is asked for as the MP4 copy iOS's player plays, which only a recording or an Ogg clip is kept with: one kept without it, an older recording's WebM or any other clip, is answered as it is.
       const played = each.kind === INBOX_MEDIA.VIDEO || each.kind === INBOX_MEDIA.AUDIO;
       const playable = played ? ({ playable: MP4_TYPE } as const) : {};
@@ -858,7 +878,7 @@ export function useThreadMedia(
         })
         .catch(failed);
     }
-  }, [acts, itemId, media, retries]);
+  }, [acts, itemId, media, retries, pending]);
 
   const retry = useCallback((attachmentId: string) => {
     asked.current.ids.delete(attachmentId);

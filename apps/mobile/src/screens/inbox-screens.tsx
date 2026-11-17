@@ -115,7 +115,7 @@ import {
   useStandFrontSteps,
   useThreadMedia,
 } from "../inbox/use-inbox.js";
-import { useThreadAnswer } from "../inbox/use-thread-answer.js";
+import { pendingThreadFile, useThreadAnswer } from "../inbox/use-thread-answer.js";
 import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
@@ -748,7 +748,7 @@ function ThreadDetail({
     openInSafari(linkOf(place, workspaceStep));
   };
 
-  const { sources, sizes, retry } = useThreadMedia(item.id, media);
+  const { sources, sizes, retry } = useThreadMedia(item.id, media, pendingThreadFile);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
   const router = useRouter();

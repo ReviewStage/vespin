@@ -8,7 +8,7 @@ import {
   INBOX_WIRE_VERSION,
   type InboxItem,
 } from "./inbox-wire.js";
-import { INBOX_SENDING, inboxSendingDrawn } from "./inbox-writes.js";
+import { INBOX_SENDING, inboxSendingDrawn, inboxSendingFile } from "./inbox-writes.js";
 
 const ASK = "b1b2c3d4-0000-4000-8000-000000000001";
 const READER = { userId: "user-ada", name: "Ada Lovelace" };
@@ -63,6 +63,30 @@ describe("inboxSendingDrawn", () => {
     };
 
     expect(inboxSendingDrawn(carried, sending, READER)).toBe(carried);
+  });
+
+  it("draws a reply of pictures alone with its pictures at once, their bytes read back from the send", () => {
+    const picture = {
+      attachmentId: "d1b2c3d4-0000-4000-8000-000000000001",
+      name: "Picture 1",
+      mediaType: "image/jpeg",
+      base64: "/9j/",
+    };
+
+    const sending = [
+      { kind: INBOX_SENDING.REPLY, key: "key-2", text: "", files: [picture], at: 2_000 },
+    ];
+
+    const drawn = inboxSendingDrawn(ITEM, sending, READER);
+
+    expect(drawn.thread?.at(-1)?.files).toEqual([
+      { attachmentId: picture.attachmentId, name: "Picture 1", mediaType: "image/jpeg" },
+    ]);
+
+    expect(inboxSendingFile(sending, picture.attachmentId)).toEqual({
+      contentType: "image/jpeg",
+      base64: "/9j/",
+    });
   });
 
   it("settles the open ask with an answer and a close while each still stands open, and leaves an item settled since as it is", () => {
