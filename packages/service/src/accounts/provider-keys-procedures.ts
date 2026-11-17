@@ -13,8 +13,10 @@
  * A request may name a kind (`provider-key-wire.ts`'s `PROVIDER_KEY_KIND`);
  * one that names none is an API key's, as every desktop before kinds sends.
  * A subscription credential, a Claude setup-token, is braked and sealed as
- * a key is but never sent to its provider: it is kept unverified, and a
- * credential spelled as no credential of its kind is refused as invalid.
+ * a key is but not sent to its provider on save: it is kept unverified, and a
+ * credential spelled as no credential of its kind is refused as invalid. It
+ * reaches Anthropic from here only when the account refreshes the plan's
+ * usage by hand (`claude-usage.ts`).
  * An account may keep several API keys of a provider: a save adds one at
  * the bottom of its order, or replaces the one its id names. The answer's
  * `keys` are API keys alone, and the subscriptions stand apart beside them.
@@ -112,6 +114,7 @@ import {
 import { pollChatGptDeviceLogin, startChatGptDeviceLogin } from "./chatgpt-device-login.js";
 import { spentResetCredit } from "./chatgpt-reset-credits.js";
 import { readChatGptUsage, rereadPlanUsage } from "./chatgpt-usage.js";
+import { rereadClaudeUsage } from "./claude-usage.js";
 
 const SAVE_BRAKE = {
   windowMs: Duration.toMillis(Duration.hours(1)),
@@ -132,10 +135,11 @@ const DEVICE_POLL_BRAKE = {
 } as const;
 
 /**
- * A plan's usage checked by hand, per account: each press of a Codex
- * plan's is a call to its usage endpoint on the plan's token, so they are
- * braked well past what a developer pressing Refresh usage reaches, and
- * short of hammering the endpoint.
+ * A plan's usage checked by hand, per account: each press is a call to
+ * the plan's provider on its token, and a Claude plan's spends a sliver of
+ * the plan, so they are braked well past what a developer pressing Refresh
+ * usage reaches, and short of a loop spending the plan or hammering the
+ * provider.
  */
 const USAGE_REFRESH_BRAKE = {
   windowMs: Duration.toMillis(Duration.minutes(1)),
@@ -465,18 +469,25 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       return Option.isNone(outcome) ? keys : { ...keys, resetCredit: outcome.value };
     }),
 
-    /** One of the account's plans' usage checked again now, however fresh its reading: a Codex plan's asked of its usage endpoint, a Claude plan's answered as stored, since a setup-token cannot read Claude's usage endpoint. Answers the keys as they then stand; a plan it does not hold, a press past the brake, or one the endpoint answered nothing for keeps what it held. */
+    /** One of the account's plans' usage checked again now, however fresh its reading: a Codex plan's asked of its usage endpoint, a Claude plan's read from the headers of a one-token quota check (`claude-usage.ts`). Answers the keys as they then stand; a plan it does not hold, a press past the brake, or one whose provider answered nothing keeps what it held. */
     refreshPlanUsage: keyed.refreshPlanUsage.effect(function* ({ context, input }) {
       const { userId, ring } = context;
 
       if (yield* refreshBrake.check(userId)) {
-        const plans = yield* hostedStoreOrUnavailable(
-          listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH),
+        const [codex, claude] = yield* hostedStoreOrUnavailable(
+          Effect.all([
+            listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH),
+            listProviderKeyRows(userId, PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN),
+          ]),
         );
 
-        const plan = plans.find((row) => row.id === input.subscriptionId);
+        const mine = (row: ProviderKeyRow) => row.id === input.subscriptionId;
+        const codexPlan = codex.find(mine);
+        const claudePlan = claude.find(mine);
 
-        if (plan !== undefined) yield* rereadPlanUsage(userId, ring, plan);
+        if (codexPlan !== undefined) yield* rereadPlanUsage(userId, ring, codexPlan);
+
+        if (claudePlan !== undefined) yield* rereadClaudeUsage(userId, ring, claudePlan);
       }
 
       return yield* keysAnswer(context);

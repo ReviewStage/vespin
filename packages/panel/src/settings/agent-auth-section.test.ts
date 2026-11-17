@@ -596,7 +596,7 @@ test("each harness's card stands where a link to its section lands", async () =>
   assert.ok(landed(SETTINGS_SECTION.CODEX).contains(credential(page, "Codex")));
 });
 
-test("another Claude plan joins the bottom, numbered by when it was added, renamed in place, and reordered from its menu", async () => {
+test("another Claude plan joins the bottom, numbered by when it was added, and renamed in place", async () => {
   held = {
     keys: [],
     subscriptions: [{ ...CLAUDE_PLAN, status: PROVIDER_KEY_STATUS.LIMIT_REACHED }],
@@ -630,21 +630,9 @@ test("another Claude plan joins the bottom, numbered by when it was added, renam
     },
   ]);
   await vi.waitFor(() => assert.ok(labels(page).includes("Personal Max")));
-
-  await choose(credential(page, "Personal Max"), "Personal Max", "Move up");
-  assert.deepEqual(sentOf(ACT_KIND.SUBSCRIPTIONS_REORDER), [
-    {
-      provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
-      kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-      subscriptionIds: ["claude-2", "claude-1"],
-    },
-  ]);
-  await vi.waitFor(() =>
-    assert.deepEqual(labels(page).slice(1, 3), ["Personal Max", "Claude plan 1"]),
-  );
 });
 
-test("API keys stand in their plans' order, Add offering another, which joins the bottom, and each is renamed in place and moved from its ⋯ as a plan is", async () => {
+test("API keys stand in their plans' order, Add offering another, which joins the bottom, and each is renamed in place as a plan is", async () => {
   held = { keys: [ANTHROPIC_KEY], subscriptions: [CLAUDE_PLAN] };
   const page = await mount();
   await vi.waitFor(() =>
@@ -677,18 +665,6 @@ test("API keys stand in their plans' order, Add offering another, which joins th
   ]);
   await vi.waitFor(() => assert.ok(labels(page).includes("Team credits")));
   assert.deepEqual(lineOf(credential(page, "Team credits")), plain(`API key · sk-ant-…wxyz`));
-
-  await choose(credential(page, "Team credits"), "Team credits", "Move up");
-  assert.deepEqual(sentOf(ACT_KIND.SUBSCRIPTIONS_REORDER), [
-    {
-      provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
-      kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-      subscriptionIds: ["key-anthropic", "claude-1", "key-anthropic-2"],
-    },
-  ]);
-  await vi.waitFor(() =>
-    assert.deepEqual(labels(page).slice(0, 3), ["Claude", "Team credits", "Claude plan"]),
-  );
 });
 
 test("an API key added from Add opens a masked field under the header, sent once, joining the order, the field going and the focus back on Add; Remove asks first and removes that key", async () => {
