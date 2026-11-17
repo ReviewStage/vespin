@@ -1,0 +1,48 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow wrap-settings-integrations
+Set orientation ${ORIENT}...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Run settings-integrations.yaml...
+  Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+  Assert that "Recorded the invite flow" is visible... COMPLETED
+  Tap on id: workspace-switcher... COMPLETED
+  Tap on "Settings, .*"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Scrolling DOWN until "Integrations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Tap on "Integrations"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Assert that "Connected" is visible... COMPLETED
+  Assert that "Not connected" is visible... COMPLETED
+  Assert that "Notion · Relay" is visible... COMPLETED
+  Take screenshot settings-integrations... COMPLETED
+  Tap on "Sentry"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Assert that "Sign-in expired" is visible... COMPLETED
+  Assert that "Reconnect" is visible... COMPLETED
+  Take screenshot settings-integration-expired... COMPLETED
+  Tap on id: BackButton... COMPLETED
+  Wait for animation to end... COMPLETED
+  Tap on "Linear"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Assert that "Connected" is visible... COMPLETED
+  Scrolling DOWN until "Disconnect" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Tap on "Disconnect"... COMPLETED
+  Assert that "Disconnect Linear?" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot settings-integrations-disconnect... COMPLETED
+  Run subflows/dismiss-ask.yaml...
+    Run flow when "Cancel" is not visible...
+      Tap on point (50%, 20%)... COMPLETED
+    Run flow when "Cancel" is not visible... COMPLETED
+    Run flow when "Cancel" is visible...
+    Run flow when "Cancel" is visible... SKIPPED
+    Wait for animation to end... COMPLETED
+    Assert that "${QUESTION}" is not visible... COMPLETED
+  Run subflows/dismiss-ask.yaml... COMPLETED
+Run settings-integrations.yaml... COMPLETED
