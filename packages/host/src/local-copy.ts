@@ -47,21 +47,27 @@ export interface RefusedMessages {
   readonly moves: Stream.Stream<void>;
 }
 
+/** What `entities.sealed` held of the account's queues as it opened, read once for the database to import. */
+export interface SealedQueues {
+  /** The row writes an older build kept waiting there, oldest first. */
+  readonly queue: readonly QueuedEntry[];
+}
+
 /** The account's database, from its sign-in until its sign-out. */
 export interface LocalCopy {
   /** The pool's store for its life: the database open now, or nothing while none is. */
   readonly store: PoolStore;
   /**
    * Opens `accountId`'s database where none stands, its refused messages
-   * kept as they move, and answers its waiting writes, oldest first, `sealed`
-   * (the queue `entities.sealed` held) imported once first; a failure is
-   * reported, leaves none open, and answers `sealed`. One standing already
+   * kept as they move, and answers its waiting writes, oldest first,
+   * `sealed.queue` imported once first; a failure is reported, leaves none
+   * open, and answers `sealed.queue`. One standing already
    * answers none, since its writes were laid back as it opened.
    */
   readonly open: (
     accountId: string,
     refused: RefusedMessages,
-    sealed: readonly QueuedEntry[],
+    sealed: SealedQueues,
   ) => Effect.Effect<readonly QueuedEntry[]>;
   /** Closes the database and deletes the folder of the account it was last opened for, as a sign-out does. */
   readonly forget: Effect.Effect<void>;
@@ -113,7 +119,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
     },
   };
 
-  const open = (accountId: string, refused: RefusedMessages, sealed: readonly QueuedEntry[]) =>
+  const open = (accountId: string, refused: RefusedMessages, sealed: SealedQueues) =>
     Effect.gen(function* () {
       if (opened !== undefined) return [];
       account = accountId;
@@ -127,7 +133,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
         yield* Scope.close(scope, Exit.void);
         yield* reported(LOCAL_DATABASE_REPORT.OPEN_FAILED, connection.failure);
 
-        return sealed;
+        return sealed.queue;
       }
 
       const kept = localRefused(connection.success);
@@ -143,10 +149,10 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
 
       // Note that an outbox that will not read back leaves its writes on disk for the next launch, and this one sends the sealed queue.
       return yield* outbox
-        .restored(sealed)
+        .restored(sealed.queue)
         .pipe(
           Effect.catch((failure) =>
-            Effect.as(reported(LOCAL_DATABASE_REPORT.OUTBOX_UNREAD, failure), sealed),
+            Effect.as(reported(LOCAL_DATABASE_REPORT.OUTBOX_UNREAD, failure), sealed.queue),
           ),
         );
     }).pipe(Effect.provideContext(context));

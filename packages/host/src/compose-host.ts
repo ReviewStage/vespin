@@ -795,7 +795,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       const signedInId = account.signedIn() ? accountId() : undefined;
 
       if (local === undefined || signedInId === undefined) return;
-      const sealed = entities?.store.legacyQueue ?? [];
+      const sealed = { queue: entities?.store.legacyQueue ?? [] };
       const waiting = yield* local.open(signedInId, agents.refused, sealed);
       yield* pool.requeue(waiting, [...tasks.queueable, ...agents.queueable]);
     });
