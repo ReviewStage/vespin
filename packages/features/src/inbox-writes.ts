@@ -80,16 +80,35 @@ export function acknowledgedNow(
   };
 }
 
+/** A reply's files as a message names them, none where it carries none, so a reply of pictures alone never stands as an empty message. */
+function filesNamed(files: readonly InboxSendingFile[] | undefined) {
+  return files === undefined || files.length === 0
+    ? undefined
+    : {
+        files: files.map(({ attachmentId, name, mediaType }) => ({
+          attachmentId,
+          name,
+          mediaType,
+        })),
+      };
+}
+
 /**
  * The item as the reader answered it, before the service says how it
  * stands: as a nod leaves it (`acknowledgedNow`), and its open ask answered
  * and the reply carrying the answer after it, under the reply's own key
- * until the service names the message. Note that the files the reply
- * carried are not drawn until then, since the service names them.
+ * until the service names the message, with the files the reply carried
+ * where the send holds their bytes (`files`), which the window draws them
+ * from until a read carries them.
  */
 export function answeredNow(
   item: InboxItem,
-  sent: { readonly key: string; readonly text: string; readonly answers: InboxAnswers },
+  sent: {
+    readonly key: string;
+    readonly text: string;
+    readonly answers: InboxAnswers;
+    readonly files?: readonly InboxSendingFile[] | undefined;
+  },
   reader: InboxReader | undefined,
   now: number,
 ): InboxItem {
@@ -99,6 +118,7 @@ export function answeredNow(
     ...(reader === undefined ? undefined : { member: reader }),
     text: sent.text,
     answers: sent.answers,
+    ...filesNamed(sent.files),
     createdAt: now,
   };
 
@@ -227,29 +247,21 @@ function sendingDrawn(
     return item;
   }
 
-  const { key, text, answers, files = [], at } = sending;
+  const { key, text, answers, files, at } = sending;
 
   if (answers !== undefined) {
     return asksOpen(item, answers.ask)
-      ? answeredNow(item, { key, text, answers }, reader, at)
+      ? answeredNow(item, { key, text, answers, files }, reader, at)
       : item;
   }
 
-  // Note that a reply's files stand on it at once, as the read will carry them, so a reply of pictures alone never stands as an empty message.
+  // Note that a reply's files stand on it at once, as the read will carry them.
   const reply: InboxMessage = {
     id: key,
     author: INBOX_MESSAGE_AUTHOR.MEMBER,
     ...(reader === undefined ? undefined : { member: reader }),
     text,
-    ...(files.length === 0
-      ? undefined
-      : {
-          files: files.map(({ attachmentId, name, mediaType }) => ({
-            attachmentId,
-            name,
-            mediaType,
-          })),
-        }),
+    ...filesNamed(files),
     clientKey: key,
     createdAt: at,
   };
