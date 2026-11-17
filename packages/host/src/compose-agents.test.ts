@@ -2193,8 +2193,9 @@ it.effect(
       yield* open;
       yield* settled;
 
+      // Note that the store's items are marked kept until the answer takes their place, so a launch can tell which drew its first Inbox.
       assert.deepEqual(accountItems(), [
-        byPlan({ [TASK_ID]: [kept], [OTHER_TASK_ID]: [OTHER_ITEM] }),
+        { ...byPlan({ [TASK_ID]: [kept], [OTHER_TASK_ID]: [OTHER_ITEM] }), kept: true },
         byPlan({ [TASK_ID]: [HELD_ITEM] }),
       ]);
       assert.equal(asked.includes("account-items-live:user-dana"), false, "asked past the kept id");
