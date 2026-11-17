@@ -260,7 +260,7 @@ function contextOf(variant: CursorVariant | undefined): string | undefined {
   return variant?.params.find((param) => param.id === CURSOR_PARAMETER.CONTEXT)?.value;
 }
 
-/** A `context` value as a count of tokens; none for one spelled otherwise. */
+/** A `context` value as a token count; none when the spelling does not match. */
 function tokensOf(value: string | undefined): number | undefined {
   const match = value === undefined ? null : CONTEXT_VALUE.exec(value.toLowerCase());
 
