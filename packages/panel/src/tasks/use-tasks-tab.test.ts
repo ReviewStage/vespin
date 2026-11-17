@@ -1143,7 +1143,7 @@ test("⇧⌘T asks first while a page stands unsaved work, and reopens once the 
   assert.deepEqual(panel().strip, [PULLS]);
 });
 
-test("a task none of whose tabs was viewed shows its agents' last tab, opens on its agents again across a launch though left on its details, and shows the tab viewed before its last agent's once that closes", async () => {
+test("a task none of whose tabs was viewed shows its agents' last tab, opens across a launch on its details where it was left on them, and shows the tab viewed before its last agent's once that closes", async () => {
   const listed = withAgents([RUNNING_AGENT]);
   const tab = mount({ shown: true, tasks: listed });
   await settle();
@@ -1163,7 +1163,11 @@ test("a task none of whose tabs was viewed shows its agents' last tab, opens on 
   const launched = mount({ shown: true, tasks: listed });
   await settle();
   const again = () => launched.control().mainTabs;
-  assert.deepEqual(again().tab, agent, "a launch opens the task on its agents, its details let go");
+  assert.equal(
+    again().tab,
+    MAIN_TAB.OVERVIEW,
+    "a launch opens the task as it was left, on its details",
+  );
 
   act(() => again().onChoose(agent));
   act(() => again().onClose(agent));
@@ -1400,6 +1404,16 @@ test("a task opened from a list, gone back to from the sidebar, or named by a ch
     tab.control().mainTabs.tab,
     agentTab(AGENT_ID),
     "gone back to, the tab last viewed there, though an agent waits",
+  );
+
+  act(() => tab.control().mainTabs.onChoose(MAIN_TAB.OVERVIEW));
+  tab.stand({ tasks: elsewhere([waitingRow]) });
+  act(() => tab.control().onResume(TASK.id));
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
+  assert.equal(
+    tab.control().mainTabs.tab,
+    MAIN_TAB.OVERVIEW,
+    "its details too, where it was left on them",
   );
 });
 
@@ -4749,7 +4763,7 @@ test("a task with no agent opens on a new agent's draft, which closes once left 
   assert.equal(tab.control().agents.draft, undefined, "the empty draft left is let go");
   assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW]);
 
-  // Left for another task, the task opens on a new agent's draft again on coming back, its details let go.
+  // Left for another task on its draft, the task opens on a new agent's draft again on coming back, as it was left.
   openDraft(tab);
   tab.stand({ tasks: { ...OPEN, activeTaskId: OTHER_TASK_ID } });
   await settle();
@@ -4763,12 +4777,14 @@ test("a task with no agent opens on a new agent's draft, which closes once left 
   // And one left for another place, as Settings hides the tasks, from the details it was opened over.
   act(() => column().onChoose(MAIN_TAB.OVERVIEW));
   await settle();
-  openDraft(tab);
+  const left = openDraft(tab);
   tab.stand({ shown: false });
   await settle();
   tab.stand({ shown: true });
   await settle();
-  assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW], "the draft left for Settings is let go");
+  const fresh = tab.control().agents.draft;
+  assert.ok(fresh !== undefined && fresh.id !== left.id, "the draft left for Settings is let go");
+  assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, draftTab(fresh.id)], "and a new one stands");
 
   const written = openDraft(tab);
   act(() => tab.control().agents.onDraftHeld((now) => ({ ...now, text: "Fix login." })));

@@ -455,6 +455,14 @@ test("a task opens with the panel shown or shut, and as wide, as it was last lef
   assert.equal(panel.control().open, true, "each task keeps whether it stood shown");
   panel.render({ task: OTHER_TASK, taskAgents: [AGENT] });
   assert.equal(panel.control().open, false, "one shut there stays shut");
+  act(() => panel.control().onShow(TASK, CLOUD));
+  panel.render({ task: TASK, taskAgents: [AGENT] });
+  panel.render({ task: OTHER_TASK, taskAgents: [AGENT] });
+  assert.equal(
+    panel.control().open,
+    false,
+    "a tab asked for on another task, which opens the panel there, leaves the one it was asked from as it was",
+  );
 
   panel.render({ task: BARE_TASK, taskAgents: [], bare: true });
   assert.deepEqual(panel.control().strip, []);

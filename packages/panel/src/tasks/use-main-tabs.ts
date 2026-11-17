@@ -307,9 +307,10 @@ function stands(held: HeldState, drawn: DrawnTabs, tab: MainTab): boolean {
  * The tab shown on the task: the latest it viewed that still stands, else
  * its agents' last tab, since a task opens on its agents; none with no task
  * open, nor on a task with no agent's tab standing, which its column opens a
- * draft on (`use-tasks-tab.ts`). Note that a fallback is not counted viewed until it is
- * chosen, and an agent viewed waits on the agents' read, so a task opened on
- * an agent it viewed never shows another first.
+ * draft on (`use-tasks-tab.ts`). Note that a fallback is counted viewed once
+ * it was on screen (`onViewedAt`), so a task opens again on the tab it was
+ * left on, its details among them, and an agent viewed waits on the agents'
+ * read, so a task opened on an agent it viewed never shows another first.
  */
 function shownIn(held: HeldState, drawn: DrawnTabs): MainTab | undefined {
   if (drawn.taskId === undefined) return undefined;
@@ -317,10 +318,22 @@ function shownIn(held: HeldState, drawn: DrawnTabs): MainTab | undefined {
   if (drawn.agents === undefined) return shownBeforeList(held, drawn);
   const recent = choicesOn(held, drawn.taskId).recent ?? NO_TABS;
 
+  const last = recent.at(-1);
+
+  // Note that a task left on a draft let go, which held nothing, opens on its agents' tab or a new draft, as it was left.
+  if (last !== undefined && leftDraft(last) && !stands(held, drawn, last)) {
+    return movableOf(held, drawn).at(-1);
+  }
+
   return (
     recent.findLast((tab) => stands(held, drawn, tab)) ??
     (drawn.detailsFirst ? MAIN_TAB.OVERVIEW : movableOf(held, drawn).at(-1))
   );
+}
+
+/** Whether a tab viewed is a draft's, which is let go once left holding nothing. */
+function leftDraft(tab: MainTab): boolean {
+  return !isOverviewTab(tab) && tab.kind === STRIP_TAB_KIND.DRAFT;
 }
 
 /**
@@ -381,21 +394,20 @@ function withViewed(
 }
 
 /**
- * The state with the task's details let go of its tabs viewed, so the task
- * opens on its agents next time, its main view, whatever opens it: the
- * details stand as the tab shown only while the task stays open on them.
+ * The state with a tab stamped viewed on a task that remembers none counted
+ * viewed, the one it fell to and showed with nothing chosen, so it opens
+ * on it again. Note that a task remembering a tab is left as it is, because
+ * a stamp names a tab as it stops being shown, the one a choice replaced
+ * among them, which is no longer the task's.
  */
-function withDetailsLeft(held: HeldState, taskId: string): HeldState {
-  return withChoices(held, taskId, (was) =>
-    was.recent?.some(isOverviewTab) === true
-      ? { ...was, recent: was.recent.filter((tab) => !isOverviewTab(tab)) }
-      : was,
-  );
-}
-
-/** The state as a launch reads it: every task's details let go of its tabs viewed (`withDetailsLeft`). */
-function withEveryDetailsLeft(held: HeldState): HeldState {
-  return Object.keys(held.tasks).reduce(withDetailsLeft, held);
+function withFallenToViewed(
+  held: HeldState,
+  taskId: string,
+  viewed: readonly MainTab[],
+): HeldState {
+  return (choicesOn(held, taskId).recent?.length ?? 0) > 0
+    ? held
+    : withViewed(held, taskId, viewed);
 }
 
 /**
@@ -606,13 +618,12 @@ function storedText(key: string): string | null {
 function readStored(): HeldState {
   return Option.match(decodeKept(storedText(STORAGE_KEY)), {
     onNone: () => NOTHING_KEPT,
-    onSome: ({ closedAgents, dozing, openArchived, tasks }): HeldState =>
-      withEveryDetailsLeft({
-        closedAgents,
-        dozing: dozing ?? [],
-        openArchived: openArchived ?? [],
-        tasks,
-      }),
+    onSome: ({ closedAgents, dozing, openArchived, tasks }): HeldState => ({
+      closedAgents,
+      dozing: dozing ?? [],
+      openArchived: openArchived ?? [],
+      tasks,
+    }),
   });
 }
 
@@ -681,18 +692,6 @@ export function useMainTabs(
   useEffect(() => {
     if (letGo) update((held) => withLiveLetGo(held, agents));
   }, [letGo, agents, update]);
-  // A task left on its details lets them go, so it opens on its agents again wherever it is opened
-  // from; a phone's, whose details are where a task opens, keeps them.
-  const [standing, setStanding] = useState(taskId);
-
-  if (standing !== taskId) {
-    setStanding(taskId);
-
-    if (standing !== undefined && !detailsFirst) {
-      update((held) => withDetailsLeft(held, standing));
-    }
-  }
-
   // Note that a write that fails (storage full, or refused) costs only the
   // preference, so it is not worth a word on screen.
   useEffect(() => {
@@ -739,7 +738,9 @@ export function useMainTabs(
 
   const onViewedAt = useCallback(
     (on: string, viewed: readonly MainTab[], standing: readonly MainTab[], at: number) =>
-      update((held) => withViewedAt(held, on, viewed, standing, at)),
+      update((held) =>
+        withFallenToViewed(withViewedAt(held, on, viewed, standing, at), on, viewed),
+      ),
     [update],
   );
 
