@@ -1161,8 +1161,10 @@ const STATUS_WORD = "Status";
  * menu, anchored on the ring, each status by its mark in its tone and the
  * current one checked. Its target is 44 pt tall and reaches only toward the
  * row's leading edge, by `edge`, and into the gap before the name, so a
- * press on the name still opens the task; beside a parent's fold, whose
- * chevron keeps its own square, `edge` is the gap between them. It is the
+ * press on the name still opens the task; beside a parent's fold it reaches
+ * none of the way, since the chevron's 44 pt square already overhangs the
+ * gap between them, and a ring standing over that overhang took a press
+ * meant for the fold. It is the
  * mark alone where its row only reads, or while its list stands in Select
  * mode. Note that its row stays one element to VoiceOver, which offers the
  * menu among the row's actions as Status, since a heard row keeps its
@@ -1175,7 +1177,7 @@ export function StatusRing({
 }: {
   readonly status: TaskStatus;
   readonly menu: RowSubmenu | undefined;
-  /** How far toward the row's leading edge its target reaches: the row's leading inset, or the gap to a fold before it. */
+  /** How far toward the row's leading edge its target reaches: the row's leading inset, or nothing beside a fold, whose chevron's square takes the gap. */
   readonly edge: number;
 }) {
   const colors = useColors();
@@ -1286,7 +1288,7 @@ export function TaskRow(props: TaskRowProps) {
           <StatusRing
             status={status}
             menu={props.statusMenu}
-            edge={fold === undefined ? ROW_INSET.PLAIN : SPACE.ROW}
+            edge={fold === undefined ? ROW_INSET.PLAIN : 0}
           />
         }
         title={name}
