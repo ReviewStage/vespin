@@ -270,19 +270,54 @@ export function inboxSendingFiles(
   }));
 }
 
-/** A file a reply still drawn from its send carries, by its attachment, as its bytes are drawn; none for any other attachment, such as one a read carries. */
+/** The file a read of `thread` carries under `attachmentId` for a reply among `replies`, at its place among that reply's files, where its name and type are the send's. */
+function carriedFile(
+  replies: readonly InboxSending[],
+  thread: readonly InboxMessage[],
+  attachmentId: string,
+): InboxSendingFile | undefined {
+  const carried = thread.find(
+    ({ clientKey, files }) =>
+      clientKey !== undefined && files?.some((file) => file.attachmentId === attachmentId),
+  );
+
+  const reply = replies.find(
+    (each) => each.kind === INBOX_SENDING.REPLY && each.key === carried?.clientKey,
+  );
+
+  const place = carried?.files?.findIndex((file) => file.attachmentId === attachmentId) ?? -1;
+  const read = carried?.files?.[place];
+  const sent = reply?.kind === INBOX_SENDING.REPLY ? reply.files?.[place] : undefined;
+
+  return read !== undefined && sent?.name === read.name && sent.mediaType === read.mediaType
+    ? sent
+    : undefined;
+}
+
+/**
+ * A file a reply sent from this window carries, by its attachment, as its
+ * bytes are drawn: one still drawn from its send, or one a read of `thread`
+ * now carries under the service's own attachment, matched to the send by its
+ * key and its place among the reply's files. None for any other attachment,
+ * such as an agent's. Note that a file the read carries is drawn from the
+ * send's bytes only where its name and type are the send's, so a read that
+ * orders a reply's files otherwise reads them back rather than drawing one
+ * as another.
+ */
 export function inboxSendingFile(
   sending: Iterable<InboxSending>,
   attachmentId: string,
+  thread: readonly InboxMessage[] = [],
 ): { readonly contentType: string; readonly base64: string } | undefined {
-  for (const each of sending) {
-    if (each.kind !== INBOX_SENDING.REPLY) continue;
-    const file = each.files?.find((held) => held.attachmentId === attachmentId);
+  const replies = [...sending];
 
-    if (file !== undefined) return { contentType: file.mediaType, base64: file.base64 };
-  }
+  const drawn = replies
+    .flatMap((each) => (each.kind === INBOX_SENDING.REPLY ? (each.files ?? []) : []))
+    .find((held) => held.attachmentId === attachmentId);
 
-  return undefined;
+  const file = drawn ?? carriedFile(replies, thread, attachmentId);
+
+  return file === undefined ? undefined : { contentType: file.mediaType, base64: file.base64 };
 }
 
 /**

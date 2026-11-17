@@ -92,7 +92,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { memo, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
 import {
   PUSHED_PAGE,
@@ -748,7 +748,13 @@ function ThreadDetail({
     openInSafari(linkOf(place, workspaceStep));
   };
 
-  const { sources, sizes, retry } = useThreadMedia(item.id, media, pendingThreadFile);
+  // Note that a reply's files sent from the phone are drawn from their own bytes until the read carries it and after, so a sent photo never waits on a read of itself.
+  const pending = useCallback(
+    (itemId: string, attachmentId: string) => pendingThreadFile(itemId, attachmentId, item.thread),
+    [item.thread],
+  );
+
+  const { sources, sizes, retry } = useThreadMedia(item.id, media, pending);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
   const router = useRouter();

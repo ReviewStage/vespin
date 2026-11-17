@@ -165,14 +165,17 @@ function heldNow(): ReadonlyMap<string, ThreadHeld> {
   return held;
 }
 
-/** A file a reply still on its way on `itemId` carries, by its attachment, as the thread draws it from the reply's own bytes until a read carries the reply; none for any other. */
+/** A file a reply sent from the phone on `itemId` carries, by its attachment, as the thread draws it from the reply's own bytes, before a read carries the reply and after, under the attachment `thread` names it by; none for any other. */
 export function pendingThreadFile(
   itemId: string,
   attachmentId: string,
+  thread: readonly InboxMessage[] | undefined,
 ): { readonly contentType: string; readonly base64: string } | undefined {
   const held = heldNow().get(itemId);
 
-  return held === undefined ? undefined : inboxSendingFile(held.sending.values(), attachmentId);
+  return held === undefined
+    ? undefined
+    : inboxSendingFile(held.sending.values(), attachmentId, thread);
 }
 
 /** The store with the thread's holding changed as `change` says. */

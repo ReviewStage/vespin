@@ -87,6 +87,24 @@ describe("inboxSendingDrawn", () => {
       contentType: "image/jpeg",
       base64: "/9j/",
     });
+
+    // The read that carries the reply names its picture under the service's own attachment, which is still drawn from the send's bytes.
+    const read = [
+      ...(ITEM.thread ?? []),
+      {
+        id: "message-2",
+        author: INBOX_MESSAGE_AUTHOR.MEMBER,
+        text: "",
+        files: [{ attachmentId: "service-file-1", name: "Picture 1", mediaType: "image/jpeg" }],
+        clientKey: "key-2",
+        createdAt: 2_100,
+      },
+    ];
+
+    expect(inboxSendingFile(sending, "service-file-1", read)).toEqual({
+      contentType: "image/jpeg",
+      base64: "/9j/",
+    });
   });
 
   it("settles the open ask with an answer and a close while each still stands open, and leaves an item settled since as it is", () => {
