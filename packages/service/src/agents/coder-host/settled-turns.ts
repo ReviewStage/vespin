@@ -1,5 +1,5 @@
 /**
- * settled-turns.ts -- what hears of each coding agent turn the store writer settles, wherever it was settled: the deployment's count of it, the report to the agent's starter, the turn on Slack, a GitHub mention's first turn on GitHub, an automation run's result or a reply in its agent's thread, the push of a failed one to its member's phone, their Live Activity, the archive of a finished automation run, and the agent's queue handed on.
+ * settled-turns.ts -- what hears of each coding agent turn the store writer settles, wherever it was settled: the deployment's count of it, the report to the agent's starter, the turn on Slack, a GitHub mention's first turn on GitHub, an automation run's result or a reply in its agent's thread, the push of a failed one, or of a finished one where its member keeps no Inbox, to their phone, their Live Activity, the archive of a finished automation run, and the agent's queue handed on.
  *
  * The writer tells its `SettledTurnListener` once the settle's transaction
  * is done (`@repo/database/models/writer`), whichever path settled the turn:
@@ -13,8 +13,8 @@
  * where one speaks for it (`../../slack/slack-agent-starts.ts`), posts the
  * first of an agent a GitHub comment started back on that comment's issue or
  * pull request (`../../github/github-mentions.ts`), pushes a
- * failed one to the phones of the member who started the agent
- * (`../../push/inbox-pushes.ts`), refreshes that member's Live Activity,
+ * failed one, or a finished one where they keep no Inbox, to the phones of
+ * the member who started the agent (`../../push/inbox-pushes.ts`), refreshes that member's Live Activity,
  * which ends once none of their agents runs (`../../push/live-activities.ts`), and archives the automation run the agent belongs to where its last agent
  * finished well (`../../automations/run-archive.ts`), and hands on the
  * agent's queue, or pauses it where the turn failed (`agent-queue.ts`), so a
@@ -44,7 +44,7 @@ import type { GitHubApp } from "../../github/github-app.js";
 import { postTurnToGitHub } from "../../github/github-mentions.js";
 import { afterResponse } from "../../http/after-response.js";
 import { ApnsSender } from "../../push/apns.js";
-import { pushFailedTurn } from "../../push/inbox-pushes.js";
+import { pushSettledTurn } from "../../push/inbox-pushes.js";
 import { LIVE_ACTIVITY_CAUSE, refreshLiveActivity } from "../../push/live-activities.js";
 import { postTurnToSlack } from "../../slack/slack-agent-starts.js";
 import type { SlackBot } from "../../slack/slack-bot.js";
@@ -106,12 +106,12 @@ export const settledTurnListener: Layer.Layer<
 
     const pushed = (turn: SettledAgentTurn) =>
       afterResponse(
-        "a failed turn's push",
+        "a settled turn's push",
         Option.match(apns, {
           onNone: () => Effect.void,
           onSome: (sender) =>
             outsideTransaction(
-              pushFailedTurn(turn).pipe(Effect.provideService(ApnsSender, sender)),
+              pushSettledTurn(turn).pipe(Effect.provideService(ApnsSender, sender)),
             ),
         }),
       );
