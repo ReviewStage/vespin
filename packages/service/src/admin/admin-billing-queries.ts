@@ -18,6 +18,7 @@ import { workspaceBillingTable } from "@repo/database/schemas/workspace-billing"
 import { and, desc, eq, gte, lt, sql, sum } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
+import { exemptFromBilling } from "../billing/billing-gate.js";
 import { isAdminRole } from "./admin-access.js";
 import {
   type AdminBillingSource,
@@ -147,10 +148,14 @@ function readAdminBillingSource(month: string): AdminSeamEffect<AdminBillingSour
   );
 }
 
-/** The Billing screen's answer for the month, its `YYYY-MM` key. */
-export function readAdminBilling(month: string, now: number) {
+/** The Billing screen's answer for the month, its `YYYY-MM` key; the exempt workspace is Stage's own, which the gate never refuses. */
+export function readAdminBilling(
+  month: string,
+  now: number,
+  exemptWorkspaceId: string | undefined,
+) {
   return Effect.map(readAdminBillingSource(month), (source) =>
-    buildAdminBilling(source, month, now),
+    buildAdminBilling(source, month, now, exemptWorkspaceId),
   );
 }
 
@@ -158,6 +163,7 @@ export function readAdminBilling(month: string, now: number) {
 function readWorkspaceBillingSource(
   organizationId: string,
   now: number,
+  exemptWorkspaceId: string | undefined,
 ): AdminSeamEffect<AdminWorkspaceBillingSource> {
   return Effect.gen(function* () {
     const [months, memberTotals, billing] = yield* Effect.all(
@@ -182,6 +188,7 @@ function readWorkspaceBillingSource(
         onNone: () => false,
         onSome: (row) => row.stripeCustomerId !== null && row.blockedAt === null,
       }),
+      exempt: exemptFromBilling(organizationId, exemptWorkspaceId),
       members: memberTotals.map((row) => ({
         userId: row.userId,
         account: row.userId === null ? null : (faceById.get(row.userId) ?? null),
@@ -191,9 +198,13 @@ function readWorkspaceBillingSource(
   });
 }
 
-/** One workspace's page's billing section. */
-export function readAdminWorkspaceBilling(organizationId: string, now: number) {
-  return Effect.map(readWorkspaceBillingSource(organizationId, now), (source) =>
+/** One workspace's page's billing section; the exempt workspace is Stage's own, which the gate never refuses. */
+export function readAdminWorkspaceBilling(
+  organizationId: string,
+  now: number,
+  exemptWorkspaceId: string | undefined,
+) {
+  return Effect.map(readWorkspaceBillingSource(organizationId, now, exemptWorkspaceId), (source) =>
     buildAdminWorkspaceBilling(source, now),
   );
 }

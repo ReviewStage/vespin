@@ -11,13 +11,17 @@
  * its one-time setup are all set (`metronome.ts`); with any of them unset
  * the daily job writes the ledger and sends nothing, so the service deploys
  * before the account exists. A blank value is unset.
+ *
+ * Stage's own workspace is named by its id (`BILLING_EXEMPT_WORKSPACE_ID`),
+ * since nothing else marks it and a slug can change; the start gate never
+ * refuses it (`billing-gate.ts`).
  */
 
 import { Config, Context, Effect, Layer, Option, Redacted } from "effect";
 import { text } from "../core.js";
 
 /** The variables billing is read from. */
-const BILLING_ENVIRONMENT = {
+export const BILLING_ENVIRONMENT = {
   /** Whether billing is on for every workspace: `true`, and nothing else, turns it on. */
   BILLING_LIVE: "BILLING_LIVE",
   /** Metronome's API token, which every call to Metronome carries. */
@@ -32,6 +36,8 @@ const BILLING_ENVIRONMENT = {
   STRIPE_SECRET_KEY: "STRIPE_SECRET_KEY",
   /** The secret Stripe signs its webhook deliveries with. */
   STRIPE_WEBHOOK_SECRET: "STRIPE_WEBHOOK_SECRET",
+  /** Stage's own workspace, by its id, which the start gate never refuses. */
+  BILLING_EXEMPT_WORKSPACE_ID: "BILLING_EXEMPT_WORKSPACE_ID",
 } as const;
 
 /** The one value of `BILLING_LIVE` that turns billing on. */
@@ -55,6 +61,8 @@ export interface BillingEnvironmentValues {
   readonly stripeSecretKey: Redacted.Redacted | undefined;
   /** The secret Stripe's webhook deliveries are signed with; absent refuses every delivery. */
   readonly stripeWebhookSecret: Redacted.Redacted | undefined;
+  /** Stage's own workspace, which the start gate never refuses; absent exempts none. */
+  readonly exemptWorkspaceId: string | undefined;
 }
 
 export class BillingEnvironment extends Context.Service<
@@ -85,6 +93,9 @@ export const billingEnvironment = Layer.effect(
       stripeWebhookSecret: Config.option(
         Config.Redacted(BILLING_ENVIRONMENT.STRIPE_WEBHOOK_SECRET),
       ),
+      exemptWorkspaceId: Config.option(
+        Config.String(BILLING_ENVIRONMENT.BILLING_EXEMPT_WORKSPACE_ID),
+      ),
     }),
     (read) => {
       const apiToken = presentSecret(read.apiToken);
@@ -100,6 +111,7 @@ export const billingEnvironment = Layer.effect(
         metronomeWebhookSecret: presentSecret(read.webhookSecret),
         stripeSecretKey: presentSecret(read.stripeSecretKey),
         stripeWebhookSecret: presentSecret(read.stripeWebhookSecret),
+        exemptWorkspaceId: text(Option.getOrUndefined(read.exemptWorkspaceId)),
       };
 
       return values;

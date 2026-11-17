@@ -37,7 +37,7 @@ import { useAppCommand, useAppKeymap, useMenuCommands, useMenuOffers } from "./a
 import { appPlatform } from "./app-platform.js";
 import { type SettingsDoors, useSettingsPanel, useShownUpdate } from "./app-settings.js";
 import { useAutomationsRoute } from "./automations-route.js";
-import { useBillingShown } from "./billing.js";
+import { useBillingShown, useOpenTaskBilling } from "./billing.js";
 import { StandingCallProvider } from "./call/standing-call.js";
 import { useDraftsOwner } from "./composer-drafts.js";
 import { useConnected } from "./connection.js";
@@ -810,6 +810,7 @@ function AppWindow(): React.JSX.Element {
   );
 
   const openWorkspaceGitHub = useOpenWorkspaceGitHub(openSettings);
+  const openBilling = useOpenTaskBilling(openSettings);
 
   // A remedy under a refused start or message mends the task's repository through the Tasks tab's doors.
   const repositoryRemedies = useMemo<RepositoryRemedyDoors>(
@@ -818,8 +819,9 @@ function AppWindow(): React.JSX.Element {
       openGitHub: openRepositoryOnGitHub,
       chooseRepository: tasks.onChangeRepository,
       moveTask: tasks.onMoveTask,
+      openBilling,
     }),
-    [openWorkspaceGitHub, tasks.onChangeRepository, tasks.onMoveTask],
+    [openWorkspaceGitHub, tasks.onChangeRepository, tasks.onMoveTask, openBilling],
   );
 
   const gitHubConnect = useAccountGitHub();

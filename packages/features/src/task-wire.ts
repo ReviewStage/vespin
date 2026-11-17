@@ -12,6 +12,7 @@ import {
   PULL_REQUEST_STATE,
   startBrief,
 } from "./agent-wire.js";
+import { billingRequiredDataSchema } from "./billing-refusal-wire.js";
 import { DEVICE_KIND, DEVICE_PLATFORM } from "./device-agent-wire.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { commitShaSchema } from "./link-grammar.js";
@@ -1137,6 +1138,8 @@ const taskAgentRefusalSchema = EffectSchema.Struct({
   provider: EffectSchema.optionalKey(modelProviderSchema),
   /** Why the task's device would not take the agent, where that is why. */
   localAgentRefusal: EffectSchema.optionalKey(localAgentRefusalSchema),
+  /** Why billing refused a cloud agent, and whether its starter manages billing, where that is why. */
+  ...billingRequiredDataSchema.fields,
 });
 
 export type TaskAgentRefusal = typeof taskAgentRefusalSchema.Type;

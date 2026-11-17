@@ -11,8 +11,8 @@ import {
   recordStripeCustomer,
 } from "@repo/database/models/workspace-billing";
 import { user } from "@repo/database/schemas/auth";
-import { INCLUDED_USAGE_MICRO_USD } from "@repo/database/usage-vocabulary";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
+import { INCLUDED_USAGE_MICRO_USD } from "@repo/database/usage-vocabulary";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { Effect, Layer, Redacted } from "effect";
 import { afterEach, vi } from "vitest";
@@ -49,6 +49,7 @@ function environment(live: boolean): Layer.Layer<BillingEnvironment> {
     metronomeWebhookSecret: undefined,
     stripeSecretKey: Redacted.make("stripe-test-key"),
     stripeWebhookSecret: undefined,
+    exemptWorkspaceId: undefined,
   };
 
   return Layer.succeed(BillingEnvironment, values);

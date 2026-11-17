@@ -35,6 +35,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import type { ContractedRouter } from "@orpc/server";
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
   type Agent,
@@ -61,7 +62,7 @@ import {
   type AgentPullRequest,
   type AgentSummary,
 } from "@repo/features/agent-wire";
-import { AGENT_START_STATUS } from "@repo/features/contract";
+import { AGENT_START_STATUS, type HostedContract } from "@repo/features/contract";
 import type { Sandbox } from "@repo/sandbox";
 import { Clock, Effect, type Layer, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
@@ -83,7 +84,12 @@ import {
   pathUuid,
   type UserIdResolver,
 } from "../http/http-effect.js";
-import { accountMiddleware, hosted, writeReceiptMiddleware } from "../orpc/base.js";
+import {
+  accountMiddleware,
+  type HostedProcedureContext,
+  hosted,
+  writeReceiptMiddleware,
+} from "../orpc/base.js";
 import type { ModelChoiceRefused } from "../providers/model-catalog.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
 import {
@@ -284,8 +290,14 @@ export const agentChangesOf = (
     return { pullRequest: changes };
   });
 
-/** The agents resource: every procedure to a signed-in caller, a body read under its own cap. */
-export function agentsProcedures(seams: AgentsProcedureSeams) {
+/**
+ * The agents resource: every procedure to a signed-in caller, a body read
+ * under its own cap. Note that it answers as the hosted router takes it,
+ * because its inferred type is past the length declarations will hold.
+ */
+export function agentsProcedures(
+  seams: AgentsProcedureSeams,
+): ContractedRouter<HostedContract["agents"], HostedProcedureContext> {
   const writer = storeWriter({ tools: CODER_TOOL_SET });
   // The kept published answers, shared with the pull request procedures where the router hands them, so a change there lets go of what `changes` read.
   const published = seams.published ?? instancePublishedCache();

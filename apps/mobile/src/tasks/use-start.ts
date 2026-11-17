@@ -19,6 +19,7 @@
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
+  billingRequiredWords,
   localAgentRefusalWords,
   type RefusedCall,
   startFailureWords,
@@ -87,6 +88,10 @@ export type StartAnswer =
 export function startRefusalWords(refused: RefusedCall): string {
   if (refused.failure === AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED) {
     return localAgentRefusalWords(refused.localAgentRefusal, refused.refusedDevice);
+  }
+
+  if (refused.failure === AGENT_CALL_FAILURE.BILLING_REQUIRED) {
+    return billingRequiredWords(refused.billingRefusal, refused.billingManager);
   }
 
   return startFailureWords(refused.failure);

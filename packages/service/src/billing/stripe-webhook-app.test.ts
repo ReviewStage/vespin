@@ -66,6 +66,7 @@ function environment(live: boolean): BillingEnvironmentValues {
     metronomeWebhookSecret: undefined,
     stripeSecretKey: Redacted.make("stripe-test-key"),
     stripeWebhookSecret: Redacted.make(SECRET),
+    exemptWorkspaceId: undefined,
   };
 }
 

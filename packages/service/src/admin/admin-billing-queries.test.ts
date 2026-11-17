@@ -6,15 +6,14 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { recordUsageCharges, type UsageCharge } from "@repo/database/models/usage-charges";
+import { recordUsageCharges } from "@repo/database/models/usage-charges";
 import {
   recordMetronomeCustomer,
   recordStripeCustomer,
   setStripeCustomerBlocked,
 } from "@repo/database/models/workspace-billing";
 import { user } from "@repo/database/schemas/auth";
-import { getTestDB, openWorkspace } from "@repo/database/testing";
-import { USAGE_KIND } from "@repo/database/usage-vocabulary";
+import { getTestDB, openWorkspace, sessionCharge } from "@repo/database/testing";
 import { Effect } from "effect";
 import {
   readAdminAccountSandboxUsage,
@@ -33,40 +32,6 @@ const openAccount = Effect.gen(function* () {
   return id;
 });
 
-/** A sandbox session's charge to the workspace, for the member, of the dollars, at the instant. */
-function sessionCharge(
-  organizationId: string,
-  userId: string | null,
-  usd: number,
-  occurredAt: string,
-): UsageCharge {
-  return {
-    organizationId,
-    userId,
-    kind: USAGE_KIND.SANDBOX_SESSION,
-    sourceId: `sbx_${randomUUID()}`,
-    figures: {
-      sandboxName: `agent-sandbox-${randomUUID()}`,
-      status: "stopped",
-      region: "iad1",
-      vcpus: 4,
-      memoryMb: 8192,
-      startedAt: null,
-      stoppedAt: null,
-      durationMs: 60_000,
-      billedMinutes: 1,
-      activeCpuMs: null,
-      ingressBytes: null,
-      egressBytes: null,
-      cpuMicroUsdPerHour: 128_000,
-      memoryMicroUsdPerGbHour: 21_200,
-      transferMicroUsdPerGb: 0,
-    },
-    amountMicroUsd: usd * 1_000_000,
-    occurredAt: new Date(occurredAt),
-  };
-}
-
 it.layer(getTestDB())("the admin's usage ledger reads", (it) => {
   it.effect("sums each workspace's month, bills what passes $10, and splits it by member", () =>
     Effect.gen(function* () {
@@ -81,7 +46,7 @@ it.layer(getTestDB())("the admin's usage ledger reads", (it) => {
         sessionCharge(globex, grace, 4, "2026-11-06T00:00:00Z"),
       ]);
 
-      const november = yield* readAdminBilling("2026-11", NOW);
+      const november = yield* readAdminBilling("2026-11", NOW, undefined);
       const mine = november.workspaces.filter((row) => row.id === acme || row.id === globex);
 
       assert.deepEqual(
@@ -98,12 +63,12 @@ it.layer(getTestDB())("the admin's usage ledger reads", (it) => {
       );
       assert.ok(november.months.includes("2026-10") && november.months[0] === "2026-11");
 
-      const october = yield* readAdminBilling("2026-10", NOW);
+      const october = yield* readAdminBilling("2026-10", NOW, undefined);
       const acmeOctober = october.workspaces.find((row) => row.id === acme);
 
       assert.deepEqual(acmeOctober && [acmeOctober.usageUsd, acmeOctober.wouldRefuse], [3, false]);
 
-      const page = yield* readAdminWorkspaceBilling(acme, NOW);
+      const page = yield* readAdminWorkspaceBilling(acme, NOW, undefined);
 
       assert.deepEqual(
         page.months.map(({ month, billableUsd }) => [month, billableUsd]),
@@ -141,21 +106,24 @@ it.layer(getTestDB())("the admin's usage ledger reads", (it) => {
         yield* recordMetronomeCustomer(initech, `customer-${initech}`);
         yield* recordStripeCustomer(initech, stripeCustomer);
 
-        const wouldRefuse = Effect.gen(function* () {
-          const month = yield* readAdminBilling("2026-11", NOW);
-          const page = yield* readAdminWorkspaceBilling(initech, NOW);
+        const wouldRefuse = (exempt: string | undefined) =>
+          Effect.gen(function* () {
+            const month = yield* readAdminBilling("2026-11", NOW, exempt);
+            const page = yield* readAdminWorkspaceBilling(initech, NOW, exempt);
 
-          return [
-            month.workspaces.find((row) => row.id === initech)?.wouldRefuse,
-            page.wouldRefuse,
-          ];
-        });
+            return [
+              month.workspaces.find((row) => row.id === initech)?.wouldRefuse,
+              page.wouldRefuse,
+            ];
+          });
 
-        assert.deepEqual(yield* wouldRefuse, [false, false]);
+        assert.deepEqual(yield* wouldRefuse(undefined), [false, false]);
 
         yield* setStripeCustomerBlocked(stripeCustomer, new Date(NOW));
 
-        assert.deepEqual(yield* wouldRefuse, [true, true]);
+        assert.deepEqual(yield* wouldRefuse(undefined), [true, true]);
+        // Stage's own workspace is never refused, blocked or not.
+        assert.deepEqual(yield* wouldRefuse(initech), [false, false]);
       }),
   );
 });

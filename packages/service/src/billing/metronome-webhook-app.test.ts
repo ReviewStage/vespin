@@ -48,6 +48,7 @@ const answer = Effect.fn(function* (request: Request) {
       live: false,
       stripeSecretKey: undefined,
       stripeWebhookSecret: undefined,
+      exemptWorkspaceId: undefined,
     }),
   );
 

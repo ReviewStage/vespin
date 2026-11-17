@@ -65,6 +65,7 @@ import {
 } from "@repo/wire";
 import { Cause, Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
+import { cloudStartGate } from "../../billing/billing-gate.js";
 import {
   recordServerEvent,
   SERVER_AGENT_START_FAILURE,
@@ -917,6 +918,9 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
     runtime.runtime,
     landing.repository !== null,
   );
+
+  // A cloud agent's Start alone asks the billing gate, before anything is written; a Mac's never does.
+  if (placed.machine === AGENT_MACHINE.VERCEL) yield* cloudStartGate(userId, landing.workspaceId);
 
   const started = yield* hostedStoreOrUnavailable(
     createAgent(userId, {
