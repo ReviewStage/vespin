@@ -64,6 +64,9 @@ const USAGE_KIND_WORDS = new Map<string, string>([
 /** How often the status is read while setup is awaited, in milliseconds. */
 const SETUP_POLL_MS = 5_000;
 
+/** How long the status is read after Checkout opens before the page gives up waiting, in milliseconds. */
+const SETUP_POLL_LIMIT_MS = 120_000;
+
 const MICRO_USD_PER_USD = 1_000_000;
 
 /** Micro-dollars as dollars and cents, as an invoice would say them. */
@@ -180,12 +183,17 @@ function StatusSection({
 /** Settings › Billing over one workspace, read as the page opens; keyed to the workspace so another reads its own. */
 export function BillingPage({ workspace }: { workspace: Workspace }): React.JSX.Element {
   // Note that setup is recorded by Stripe's webhook, which may land after the member returns, so once Checkout has opened the page reads the status every few seconds until it shows setup.
-  const [waiting, setWaiting] = useState(false);
+  const [waitingSince, setWaitingSince] = useState<number | undefined>(undefined);
 
   const billing = useQuery({
     ...billingStatusQuery(workspace.id),
+    // Note that a hidden tab is never polled (`refetchIntervalInBackground` stays off), and the reading gives up after a bound, so a tab left open does not poll for ever.
     refetchInterval: (query) =>
-      waiting && query.state.data?.setUp !== true ? SETUP_POLL_MS : false,
+      waitingSince !== undefined &&
+      Date.now() - waitingSince < SETUP_POLL_LIMIT_MS &&
+      query.state.data?.setUp !== true
+        ? SETUP_POLL_MS
+        : false,
   });
 
   const status = billing.data;
@@ -209,7 +217,11 @@ export function BillingPage({ workspace }: { workspace: Workspace }): React.JSX.
   return (
     <Fragment key={workspace.id}>
       <UsageSection status={status} />
-      <StatusSection workspace={workspace} status={status} onSetupOpened={() => setWaiting(true)} />
+      <StatusSection
+        workspace={workspace}
+        status={status}
+        onSetupOpened={() => setWaitingSince(Date.now())}
+      />
     </Fragment>
   );
 }
