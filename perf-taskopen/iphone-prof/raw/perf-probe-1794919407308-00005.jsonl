@@ -1,0 +1,5 @@
+{"t":1794919413277,"p":392887286.948291,"kind":"event","name":"topTouchEnd","native":392886012.342667}
+{"t":1794919413277,"p":392887287.119541,"kind":"event","name":"topFocusChange","native":392886606.181}
+{"t":1794919413277,"p":392887287.169875,"kind":"event","name":"topOverlap","native":392886874.935333}
+{"t":1794919413277,"p":392887287.277125,"kind":"event","name":"topGlobalEvent","native":392886875.215625}
+{"t":1794919413277,"p":392887287.357541,"kind":"event","name":"topTextChange","native":392887230.88325}

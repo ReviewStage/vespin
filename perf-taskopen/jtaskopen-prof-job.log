@@ -1,0 +1,14 @@
+patch: iphone: 2 blocks to 7;ipad: 2 blocks to 7;tap-timing keeps raw;
+merging main at 993edb31d9
+Auto-merging apps/mobile/src/app/_layout.tsx
+Auto-merging apps/mobile/src/crash-reports.ts
+Auto-merging apps/mobile/src/host/compose-mobile.ts
+Auto-merging apps/mobile/src/host/host-provider.tsx
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+built e0ab46bcff = probe + main (PROFILE=1)
+install 0
+export 0
+signed 0
+iphone: maestro exit 0
+ipad: maestro exit 0
+ALLDONE

@@ -1,0 +1,17 @@
+{"t":1794919134891,"p":392608902.734125,"kind":"event","name":"topTransitionProgress","native":392608900.999458}
+{"t":1794919134891,"p":392608902.776375,"kind":"event","name":"topTransitionProgress","native":392608901.126375}
+{"t":1794919134906,"p":392608918.199791,"kind":"event","name":"topTransitionProgress","native":392608917.157541}
+{"t":1794919134906,"p":392608918.252458,"kind":"event","name":"topTransitionProgress","native":392608917.248875}
+{"t":1794919134923,"p":392608934.837,"kind":"event","name":"topTransitionProgress","native":392608934.253708}
+{"t":1794919134923,"p":392608934.888583,"kind":"event","name":"topTransitionProgress","native":392608934.380625}
+{"t":1794919134940,"p":392608951.577541,"kind":"event","name":"topTransitionProgress","native":392608950.578583}
+{"t":1794919134940,"p":392608951.63175,"kind":"event","name":"topTransitionProgress","native":392608950.679375}
+{"t":1794919134956,"p":392608968.018333,"kind":"event","name":"topTransitionProgress","native":392608967.186458}
+{"t":1794919134956,"p":392608968.075458,"kind":"event","name":"topTransitionProgress","native":392608967.271833}
+{"t":1794919134984,"p":392608995.806833,"kind":"event","name":"topTransitionProgress","native":392608983.850791}
+{"t":1794919134984,"p":392608995.857541,"kind":"event","name":"topTransitionProgress","native":392608983.967458}
+{"t":1794919134984,"p":392608995.870041,"kind":"event","name":"topAppear","native":392608992.580125}
+{"t":1794919134984,"p":392608995.905208,"kind":"event","name":"topTransitionProgress","native":392608992.5845}
+{"t":1794919134984,"p":392608995.916625,"kind":"event","name":"topFinishTransitioning","native":392608992.838416}
+{"t":1794919134990,"p":392609001.986666,"kind":"event","name":"topHeaderHeightChange","native":392609000.762708}
+{"rendered":3,"mounted":0,"hostRendered":2,"total":316,"top":[["DockedFoot",1],["obj",1],["View",1]],"slow":[["DockedFoot",0],["obj",0],["View",0]],"renderMs":0.1,"t":1794919135061,"p":392609072.55775,"kind":"commit","walkMs":0.0506250262260437}

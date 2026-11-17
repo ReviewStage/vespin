@@ -1,0 +1,10 @@
+{"t":1794919200209,"p":392674220.075625,"kind":"event","name":"topTouchStart","native":392673970.675708}
+{"t":1794919200209,"p":392674220.153041,"kind":"event","name":"topTouchEnd","native":392674087.342375}
+{"t":1794919200209,"p":392674220.185583,"kind":"event","name":"topWillAppear","native":392674115.298791}
+{"t":1794919200209,"p":392674220.202916,"kind":"event","name":"topWillDisappear","native":392674115.309166}
+{"t":1794919200209,"p":392674220.480416,"kind":"event","name":"topWillDisappear","native":392674115.341708}
+{"t":1794919200209,"p":392674220.683458,"kind":"event","name":"topTransitionProgress","native":392674115.351333}
+{"t":1794919200209,"p":392674220.706583,"kind":"event","name":"topHeaderHeightChange","native":392674120.668083}
+{"t":1794919200209,"p":392674220.739,"kind":"event","name":"topHeaderHeightChange","native":392674209.52275}
+{"t":1794919200209,"p":392674220.842625,"kind":"stall","ms":187,"endP":392674220.84175}
+{"rendered":2648,"mounted":140,"hostRendered":1086,"total":4289,"top":[["Button",280],["Text",228],["TextView",228],["Slot",160],["SlotView",160],["HStack",136],["HStackView",136],["Image",133],["ImageView",132],["GlyphLabel",90],["Label",90],["LabelView",90],["GlyphImage",90],["VStack",46],["VStackView",46],["UnreadDot",30],["Circle",30],["CircleView",30],["Spacer",30],["SpacerView",30],["RowTime",26],["ContextMenu",20],["Divider",20],["DividerView",20],["Menu",20]],"slow":[["InboxRowView",176.7],["SlotView",1.7],["Button",0.8],["Text",0.8],["RowFrame",0.7],["TextView",0.7],["ImageView",0.4],["HStackView",0.4],["ListRow",0.3],["LabelView",0.3],["Image",0.3],["Slot",0.2],["GlyphImage",0.2],["VStackView",0.2],["TaskLine",0.2],["HStack",0.2],["UnreadDot",0.2],["TaskStatusMark",0.2],["TitleWords",0.2],["RowTime",0.2],["SwipeActionsComponent",0.1],["SwipeActionsView",0.1],["ContextMenu",0.1],["DividerView",0.1],["GlyphLabel",0.1]],"renderMs":193,"t":1794919200206,"p":392674216.515166,"kind":"commit","walkMs":1.4166670441627502}

@@ -1,0 +1,14 @@
+{"t":1794919714190,"p":393188198.412416,"kind":"event","name":"topLoad","native":393188153.295916}
+{"t":1794919714190,"p":393188198.493333,"kind":"event","name":"topLoadEnd","native":393188153.301458}
+{"t":1794919714190,"p":393188198.504416,"kind":"event","name":"topLoadStart","native":393188153.408916}
+{"t":1794919714190,"p":393188198.514666,"kind":"event","name":"topLoad","native":393188154.007041}
+{"t":1794919714190,"p":393188198.536708,"kind":"event","name":"topLoadEnd","native":393188154.007791}
+{"t":1794919714191,"p":393188198.546875,"kind":"event","name":"topLoadStart","native":393188154.039666}
+{"t":1794919714191,"p":393188198.823125,"kind":"event","name":"topLoad","native":393188197.8375}
+{"t":1794919714191,"p":393188198.844666,"kind":"event","name":"topLoadEnd","native":393188197.840458}
+{"t":1794919714191,"p":393188198.852708,"kind":"event","name":"topLoadStart","native":393188197.874958}
+{"t":1794919714391,"p":393188398.682791,"kind":"event","name":"topGlobalEvent","native":393188246.56925}
+{"t":1794919714391,"p":393188398.770875,"kind":"event","name":"topWindowChange","native":393188365.173708}
+{"t":1794919714391,"p":393188398.821625,"kind":"event","name":"topWindowChange","native":393188365.18125}
+{"rendered":235,"mounted":0,"hostRendered":97,"total":748,"top":[["View",34],["obj",27],["Text",27],["Line",12],["Runs",12],["RunView",12],["RNHostView",8],["Slot",8],["SlotView",8],["Button",8],["Image",7],["ContextMenu",4],["GlyphLabel",4],["Label",4],["LabelView",4],["GlyphImage",4],["ImageView",4],["Avatar",2],["ZStack",2],["ZStackView",2],["AvatarPhoto",2],["Markdown",2],["DiagramRenderer",2],["Blocks",2],["BlockView",2]],"slow":[["Avatar",0.2],["Picture",0.2],["View",0.1],["Text",0.1],["PictureBlock",0.1],["ZStack",0],["ZStackView",0],["AvatarPhoto",0],["RNHostView",0],["obj",0],["Image",0],["Markdown",0],["DiagramRenderer",0],["Blocks",0],["BlockView",0],["TableView",0],["SidewaysScroll",0],["ScrollView",0],["Line",0],["Runs",0],["RunView",0],["FileChip",0],["HeldMenu",0],["InlineHost",0],["Host",0]],"renderMs":2.1,"t":1794919714195,"p":393188202.785541,"kind":"commit","walkMs":0.19595903158187866}
+{"rendered":41,"mounted":0,"hostRendered":13,"total":367,"top":[["obj",8],["Text",8],["RunView",6],["View",4],["Markdown",2],["DiagramRenderer",2],["Blocks",2],["BlockView",2],["Line",2],["Runs",2],["RowList",1],["List",1],["ListView",1]],"slow":[["RowList",0],["List",0],["ListView",0],["obj",0],["Markdown",0],["View",0],["DiagramRenderer",0],["Blocks",0],["BlockView",0],["Line",0],["Text",0],["Runs",0],["RunView",0]],"renderMs":0.4,"t":1794919714392,"p":393188399.976875,"kind":"commit","walkMs":0.06645798683166504}

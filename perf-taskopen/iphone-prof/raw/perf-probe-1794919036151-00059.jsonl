@@ -1,0 +1,8 @@
+{"t":1794919142990,"p":392617001.578375,"kind":"event","name":"topWillDisappear","native":392616999.302625}
+{"t":1794919142990,"p":392617001.654708,"kind":"event","name":"topTransitionProgress","native":392616999.319458}
+{"t":1794919143005,"p":392617016.948833,"kind":"event","name":"topHeaderHeightChange","native":392617007.530416}
+{"t":1794919143080,"p":392617091.735375,"kind":"event","name":"topWillDisappear","native":392617050.729541}
+{"rendered":1,"mounted":0,"hostRendered":0,"total":104,"top":[["NoticeBanner",1]],"slow":[["NoticeBanner",0]],"renderMs":0,"t":1794919143194,"p":392617206.09325,"kind":"commit","walkMs":0.023000001907348633}
+{"t":1794919143599,"p":392617610.828166,"kind":"event","name":"topDismissed","native":392617608.448541}
+{"t":1794919143599,"p":392617610.841416,"kind":"event","name":"topDisappear","native":392617608.452708}
+{"t":1794919143599,"p":392617610.849375,"kind":"event","name":"topFinishTransitioning","native":392617608.575208}

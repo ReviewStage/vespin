@@ -1,0 +1,13 @@
+{"t":1794919770616,"p":393244623.453,"kind":"event","name":"topLoad","native":393244364.993833}
+{"t":1794919770616,"p":393244623.550458,"kind":"event","name":"topLoadEnd","native":393244364.996625}
+{"t":1794919770616,"p":393244623.56475,"kind":"event","name":"topLoadStart","native":393244365.087083}
+{"t":1794919770616,"p":393244623.575208,"kind":"event","name":"topLoad","native":393244365.681541}
+{"t":1794919770616,"p":393244623.594708,"kind":"event","name":"topLoadEnd","native":393244365.682833}
+{"t":1794919770616,"p":393244623.60325,"kind":"event","name":"topLoadStart","native":393244365.7195}
+{"t":1794919770616,"p":393244623.915916,"kind":"event","name":"topLoad","native":393244412.713625}
+{"t":1794919770616,"p":393244623.941208,"kind":"event","name":"topLoadEnd","native":393244412.71775}
+{"t":1794919770616,"p":393244623.9495,"kind":"event","name":"topLoadStart","native":393244412.768041}
+{"t":1794919770616,"p":393244623.982375,"kind":"event","name":"topGlobalEvent","native":393244468.806458}
+{"t":1794919770616,"p":393244624.009125,"kind":"event","name":"topWindowChange","native":393244598.594791}
+{"t":1794919770617,"p":393244624.274083,"kind":"event","name":"topWindowChange","native":393244598.604375}
+{"rendered":276,"mounted":0,"hostRendered":110,"total":845,"top":[["View",38],["obj",35],["Text",35],["RunView",18],["Line",14],["Runs",14],["RNHostView",8],["Slot",8],["SlotView",8],["Button",8],["Image",7],["Markdown",4],["DiagramRenderer",4],["Blocks",4],["BlockView",4],["ContextMenu",4],["GlyphLabel",4],["Label",4],["LabelView",4],["GlyphImage",4],["ImageView",4],["Avatar",2],["ZStack",2],["ZStackView",2],["AvatarPhoto",2]],"slow":[["Avatar",0.2],["Picture",0.2],["RowList",0.1],["View",0.1],["Text",0.1],["PictureBlock",0.1],["List",0],["ListView",0],["obj",0],["ZStack",0],["ZStackView",0],["AvatarPhoto",0],["RNHostView",0],["Image",0],["Markdown",0],["DiagramRenderer",0],["Blocks",0],["BlockView",0],["Line",0],["Runs",0],["RunView",0],["TableView",0],["SidewaysScroll",0],["ScrollView",0],["FileChip",0]],"renderMs":2.4,"t":1794919770621,"p":393244628.437291,"kind":"commit","walkMs":0.24699997901916504}

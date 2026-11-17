@@ -1,0 +1,10 @@
+{"rendered":94,"mounted":1,"hostRendered":34,"total":550,"top":[["obj",15],["RNHostView",6],["Image",6],["View",5],["Button",4],["ZStack",3],["ZStackView",3],["AvatarPhoto",3],["ImageView",3],["RowList",2],["List",2],["ListView",2],["RepositoryPicture",2],["Text",2],["Slot",2],["SlotView",2],["DataListForEach",1],["DataListForEachView",1],["DataListForEachPoolView",1],["Avatar",1],["Markdown",1],["Blocks",1],["BlockView",1],["Line",1],["Runs",1]],"slow":[["RowList",0.1],["Avatar",0.1],["List",0],["ListView",0],["obj",0],["DataListForEach",0],["DataListForEachView",0],["DataListForEachPoolView",0],["ZStack",0],["ZStackView",0],["AvatarPhoto",0],["RNHostView",0],["View",0],["Image",0],["RepositoryPicture",0],["Markdown",0],["Blocks",0],["BlockView",0],["Line",0],["Text",0],["Runs",0],["RunView",0],["ComposerFoot",0],["VStack",0],["VStackView",0]],"renderMs":1.2,"t":1794919691295,"p":393165303.207416,"kind":"commit","walkMs":0.13920897245407104}
+{"rendered":6,"mounted":0,"hostRendered":0,"total":104,"top":[["obj",4],["FailureNoticeProvider",1],["NoticeBanner",1]],"slow":[["FailureNoticeProvider",0],["obj",0],["NoticeBanner",0]],"renderMs":0.1,"t":1794919691296,"p":393165303.764541,"kind":"commit","walkMs":0.016209006309509277}
+{"t":1794919692279,"p":393166287.539,"kind":"event","name":"topDidAppear","native":393166285.296666}
+{"t":1794919692279,"p":393166287.64,"kind":"event","name":"topAppear","native":393166285.537375}
+{"t":1794919692280,"p":393166287.690958,"kind":"event","name":"topTransitionProgress","native":393166285.539833}
+{"t":1794919692280,"p":393166287.705208,"kind":"event","name":"topFinishTransitioning","native":393166285.779875}
+{"t":1794919692280,"p":393166287.71775,"kind":"event","name":"topDidDisappear","native":393166285.962541}
+{"t":1794919692280,"p":393166287.730041,"kind":"event","name":"topDisappear","native":393166286.029083}
+{"t":1794919692280,"p":393166287.752166,"kind":"event","name":"topTransitionProgress","native":393166286.029791}
+{"t":1794919692294,"p":393166301.807666,"kind":"event","name":"topHeaderHeightChange","native":393166300.911375}

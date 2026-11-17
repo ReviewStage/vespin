@@ -1,0 +1,6 @@
+{"t":1794919131626,"p":392605637.559833,"kind":"event","name":"topTouchStart","native":392605622.128958}
+{"t":1794919131741,"p":392605753.294708,"kind":"event","name":"topTouchEnd","native":392605738.795625}
+{"t":1794919131741,"p":392605753.38525,"kind":"event","name":"topPressHeaderBarButtonItem","native":392605751.631916}
+{"t":1794919131786,"p":392605797.908166,"kind":"event","name":"topOverlap","native":392605777.7835}
+{"t":1794919131786,"p":392605797.952666,"kind":"event","name":"topGlobalEvent","native":392605783.277458}
+{"t":1794919131786,"p":392605798.038166,"kind":"event","name":"topFocusChange","native":392605785.081666}
