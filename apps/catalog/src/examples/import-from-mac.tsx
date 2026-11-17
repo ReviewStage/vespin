@@ -1,4 +1,5 @@
 import {
+  Badge,
   BUTTON_VARIANT,
   Button,
   Checkbox,
@@ -10,6 +11,7 @@ import {
   GAP,
   PlusIcon,
   SETTINGS_ROW_CONTROLS,
+  SETTINGS_ROW_STATE,
   SettingsPage,
   SettingsRow,
   SettingsRowMark,
@@ -69,14 +71,23 @@ interface Group {
   readonly title: string;
   readonly folder: string;
   readonly offered: readonly Found[];
-  readonly left: number;
 }
 
 const GROUPS: readonly Group[] = [
   {
+    title: "Agents folder",
+    folder: "~/.agents/skills",
+    offered: [
+      {
+        folder: "~/.agents/skills/storybook-snapshots",
+        name: "storybook-snapshots",
+        description: "Updates Storybook snapshots and explains each visual change.",
+      },
+    ],
+  },
+  {
     title: "Claude Code",
     folder: "~/.claude/skills",
-    left: 2,
     offered: [
       {
         folder: "~/.claude/skills/flaky-test-hunter",
@@ -94,7 +105,6 @@ const GROUPS: readonly Group[] = [
   {
     title: "Codex",
     folder: "~/.codex/skills",
-    left: 1,
     offered: [
       {
         folder: "~/.codex/skills/db-migrations",
@@ -106,19 +116,11 @@ const GROUPS: readonly Group[] = [
   },
 ];
 
-/** Every skill left out, with the agent whose folder held it and why. */
+/** Every skill left out, with the folder it came from and why. */
 const LEFT_OUT = [
-  {
-    name: "pr-review",
-    why: "Already installed, with the same files",
-    where: "Claude Code · ~/.claude/skills/pr-review",
-  },
-  {
-    name: "storybook-snapshots",
-    why: "The same folder as ~/.agents/skills/storybook-snapshots",
-    where: "Claude Code · ~/.claude/skills/storybook-snapshots",
-  },
-  { name: "plan", why: "Codex keeps it itself", where: "Codex · ~/.codex/skills/.system/plan" },
+  { name: "pr-review", from: "Claude Code", why: "Already installed" },
+  { name: "storybook-snapshots", from: "Claude Code", why: "Already listed" },
+  { name: "plan", from: "Codex", why: "Built into Codex" },
 ] as const;
 
 const OFFERED = GROUPS.flatMap((group) => group.offered);
@@ -212,11 +214,7 @@ function Review({
     <Stack gap={GAP.SECTION}>
       <Text>{`Found ${skillCount(OFFERED.length)} to bring in, and left out ${LEFT_OUT.length}.`}</Text>
       {GROUPS.map((group) => (
-        <GroupHead
-          key={group.title}
-          title={group.title}
-          caption={`${group.folder} · ${group.offered.length} found · ${group.left} left out`}
-        >
+        <GroupHead key={group.title} title={group.title} caption={group.folder}>
           {group.offered.map((skill) => (
             <SettingsRow
               key={skill.folder}
@@ -226,15 +224,20 @@ function Review({
                 </SettingsRowMark>
               }
               label={skill.name}
+              adornment={
+                skill.renamedFrom === undefined ? undefined : (
+                  <Badge tone={STATUS_TONE.ATTENTION}>Renamed</Badge>
+                )
+              }
               controls={SETTINGS_ROW_CONTROLS.BESIDE}
               description={
                 <>
                   {skill.description}
-                  <SettingsRowStateLine block>
-                    {skill.renamedFrom === undefined
-                      ? skill.folder
-                      : `You already have a different ${skill.renamedFrom}, so this one comes in as ${skill.name}`}
-                  </SettingsRowStateLine>
+                  {skill.renamedFrom === undefined ? null : (
+                    <SettingsRowStateLine block state={SETTINGS_ROW_STATE.ATTENTION}>
+                      {`You already have a ${skill.renamedFrom}`}
+                    </SettingsRowStateLine>
+                  )}
                 </>
               }
             >
@@ -252,18 +255,15 @@ function Review({
       <GroupHead title="Left out">
         {LEFT_OUT.map((row) => (
           <SettingsRow
-            key={row.where}
+            key={`${row.from}/${row.name}`}
             label={row.name}
-            description={
-              <>
-                {row.why}
-                <SettingsRowStateLine block>{row.where}</SettingsRowStateLine>
-              </>
-            }
-          />
+            description={row.from}
+            controls={SETTINGS_ROW_CONTROLS.BESIDE}
+          >
+            {() => <Badge>{row.why}</Badge>}
+          </SettingsRow>
         ))}
       </GroupHead>
-      <Text>Nothing in Cursor, Gemini CLI, or Factory.</Text>
     </Stack>
   );
 }
@@ -364,7 +364,7 @@ function ImportMockup(): React.JSX.Element {
                     key={skill.folder}
                     name={skill.name}
                     description={skill.description}
-                    line={`From your Mac · ${skill.folder}`}
+                    line={`From ${skill.folder} on your Mac`}
                     landed
                   />
                 ))
@@ -378,7 +378,7 @@ function ImportMockup(): React.JSX.Element {
                 </SettingsRowMark>
               }
               label="Bring in from your Mac"
-              description="Copy the skills your Mac's Claude Code, Codex, and Cursor already have, so every agent can use them."
+              description="Copy the skills already on your Mac, so every agent can use them."
             >
               {() => (
                 <Button
