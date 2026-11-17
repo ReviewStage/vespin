@@ -25,8 +25,7 @@
  * Slack's guide asks nothing of who approves the install beyond Slack's own
  * check that they may install apps in that Slack workspace, so neither do
  * we: the member who began it must still manage the workspace, and the
- * team is then linked to the workspace as Connect links it
- * (`linkSlackInstallation`) and the bot token sealed beside it
+ * team is then linked to the workspace (`linkSlackInstallation`) and the bot token sealed beside it
  * (`saveSlackBotToken`), in one transaction.
  *
  * The token and the code are used here and sealed or dropped; neither is
