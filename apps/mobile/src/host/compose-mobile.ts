@@ -32,7 +32,7 @@ import { PRODUCT_PLATFORM } from "@repo/features/analytics";
 import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
 import { LINK_ORIGIN } from "@repo/features/link-home";
 import type { OpenTerminalSocket } from "@repo/features/relay-socket";
-import type { SecretCipher as SecretCipherSeam } from "@repo/host";
+import type { SecretCipher as SecretCipherSeam, TokenVault } from "@repo/host";
 import { runModeFor } from "@repo/host";
 import {
   ACT_PORT_CROSSING,
@@ -80,6 +80,7 @@ import {
   type KeepIssuedToken,
   OAUTH_ACCOUNT_CLIENT,
   oauthAccountSourceLayerFor,
+  PlatformTokenVault,
   RunMode,
   reporterLayer,
   SecretCipher,
@@ -141,8 +142,10 @@ export interface DeviceSeams {
   readonly openSocket: OpenTerminalSocket;
   /** Whether the app is in the foreground, at each change, for as long as the subscription stands. */
   readonly onAppActiveChanged: (listener: (active: boolean) => void) => () => void;
-  /** What the account's tokens are sealed with in the settings file. */
+  /** What the account's tokens were sealed with in the settings file by builds before `tokenVault`, which opens them once to move them. */
   readonly cipher: SecretCipherSeam;
+  /** Where the Keychain keeps the account's tokens (`keychain-tokens.ts`); a device without one seals them with `cipher`. */
+  readonly tokenVault?: TokenVault;
   /** Where a sign-in's authorization page is shown and its redirect caught. */
   readonly authSession: AuthSession;
   /** Keeps each access token the account is issued where the share sheet reads it, or removes it, answering whether the Keychain took it (`share-token-module.ts`). */
@@ -190,14 +193,18 @@ const report = (message: string): void => {
 };
 
 /**
- * The account's two seams, as the phone answers them: the tokens sealed
- * under the Keychain's key (`keychain-cipher.ts`), and each sign-in shown in
+ * The account's seams, as the phone answers them: the tokens kept in the
+ * Keychain (`keychain-tokens.ts`), the cipher an older build sealed them
+ * with, which opens them once to move them there, and each sign-in shown in
  * the system's authentication session, which returns on the `ios` client's
  * one registered callback (`@repo/features/ios-sign-in-wire`).
  */
 function accountSeams(device: DeviceSeams) {
-  return Layer.merge(
+  return Layer.mergeAll(
     Layer.succeed(SecretCipher, device.cipher),
+    device.tokenVault === undefined
+      ? Layer.empty
+      : Layer.succeed(PlatformTokenVault, device.tokenVault),
     Layer.succeed(SignInConsent, {
       open: authSessionConsent({
         callbackUrl: IOS_OAUTH_CALLBACK_URL,
