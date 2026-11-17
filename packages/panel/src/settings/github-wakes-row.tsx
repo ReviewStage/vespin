@@ -24,8 +24,7 @@ import {
 import { SETTINGS_ROW_INDENT, SettingsRow, SettingsRowsFold } from "@repo/ui";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
 import type { UnparsedWireValue } from "@repo/wire";
-import { useEffect } from "react";
-import { useSettingRowWrite } from "./row-write.js";
+import { useSettingRowWrite, useSettledWrite } from "./row-write.js";
 import { SwitchRow } from "./switch-row.js";
 
 /** The row's name, and its chevron's. */
@@ -65,11 +64,7 @@ export function GitHubWakesRow({ view }: { view: SettingsRowsInput }): React.JSX
   // Note that each press builds on the list the newest press asked for, while it is out, rather than on what is stored.
   const latest = write.ahead?.value ?? stored;
   const off = githubWakesOffFrom(latest);
-  const agreed = write.ahead !== undefined && !write.busy && write.ahead.value === stored;
-
-  useEffect(() => {
-    if (agreed) write.settle();
-  }, [agreed, write]);
+  useSettledWrite(write, stored);
 
   return (
     <SettingsRowsFold

@@ -17,6 +17,7 @@ import type { AppSettingField, AppSettingValue, SettingsUpdateResult } from "@re
 import { STATUS_TONE } from "@repo/ui";
 import { actionRefused } from "@repo/wire";
 import { type UseMutationResult, useMutation } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { actFailureWords } from "../act.js";
 import { type SettingWrite, settingMutation } from "../act-mutations.js";
 import { showToast } from "../toast.js";
@@ -129,6 +130,31 @@ export function useSettingRowWrite<Field extends AppSettingField, Value>(
   });
 
   return settingRowWrite(mutation, field, stored, drawn);
+}
+
+/**
+ * Lets go of `write`'s landed pick once the stored value agrees with it, or
+ * once the stored value moves to another while the pick stands landed, so
+ * the row then follows the store again, other windows' changes included.
+ * Note that a write still out is never let go of, because the document
+ * carrying it may arrive after the answer, and that a move the store made
+ * while it was out is not one it made after, because that may be the write's
+ * own document.
+ */
+export function useSettledWrite<Value>(
+  write: RowWrite<Value> | undefined,
+  stored: Value | undefined,
+): void {
+  const seen = useRef(stored);
+  const ahead = write?.ahead;
+  const landed = write !== undefined && !write.busy && ahead !== undefined;
+  const release = landed && (ahead.value === stored || seen.current !== stored);
+
+  useEffect(() => {
+    seen.current = stored;
+
+    if (release) write.settle();
+  }, [release, write, stored]);
 }
 
 /**

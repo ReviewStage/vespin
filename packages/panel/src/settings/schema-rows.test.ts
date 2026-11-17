@@ -111,15 +111,15 @@ type MountThroughActsResult = {
   redraw: (settings: ReturnType<typeof settingsView>) => void;
 };
 
-/** This Mac's own rows, and a way to draw it again over the settings the store then holds. */
-function mountThroughActs(): MountThroughActsResult {
+/** A page's own rows, This Mac's unless named, and a way to draw it again over the settings the store then holds. */
+function mountThroughActs(page: DrawnPage = SETTINGS_PAGE.THIS_MAC): MountThroughActsResult {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
 
   function Page({ settings }: { settings: ReturnType<typeof settingsView> }) {
-    return rows(SETTINGS_PAGE.THIS_MAC, settings);
+    return rows(page, settings);
   }
 
   const redraw = (settings: ReturnType<typeof settingsView>) =>
@@ -230,6 +230,20 @@ test("a switch follows the settings again once they agree with what it flipped t
   await vi.waitFor(() =>
     assert.equal(control(page, "Open Vespin at login").getAttribute("aria-checked"), "true"),
   );
+});
+
+test("a pick follows the settings again once they move past it to another value", async () => {
+  const { page, redraw } = mountThroughActs(SETTINGS_PAGE.APPEARANCE);
+
+  act(() => control(page, "Zoom: 100%").click());
+  act(() => optionNamed("125%").click());
+  await vi.waitFor(() => assert.deepEqual(written, [["zoom", 125]]));
+  await settle();
+  control(page, "Zoom: 125%");
+
+  // Another window chose another size before this one's arrived; the pop-up is the store's again.
+  redraw(settingsView({ zoom: 150 }));
+  await vi.waitFor(() => control(page, "Zoom: 150%"));
 });
 
 test("a switch the store refuses flips back and says why in a toast, and can be pressed again", async () => {
