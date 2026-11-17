@@ -50,15 +50,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
-import {
-  createContext,
-  Fragment,
-  type ReactElement,
-  type ReactNode,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
+import { Fragment, type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
@@ -504,90 +496,9 @@ function swipeMenuButton(swipe: RowSwipe, colors: BrandColors) {
     : actionButton(swipe, colors);
 }
 
-/** The longest a question a long press menu's act raised waits for the menu to go: its whole wait on a row with no preview, whose going nothing tells, and a deadline where the preview's going is never told. */
-const MENU_GOES_MS = 450;
-
-/** A row's content with the question its acts ask standing by it, where its acts ask any, held back while its menu is still going. */
-function asking(
-  content: ReactElement,
-  question: RowQuestion | undefined,
-  menuGoing = false,
-): ReactElement {
-  if (question === undefined) return content;
-
-  return (
-    <RowAsking question={menuGoing ? { ...question, presented: false } : question}>
-      {content}
-    </RowAsking>
-  );
-}
-
-/**
- * What a menu standing in a row's own content, such as its status ring's,
- * tells as one of its acts is pressed, so a question the act raises waits
- * for that menu to go too (`useMenuGoing`); nothing outside a row.
- */
-const RowMenuGoingContext = createContext<() => void>(() => undefined);
-
-/** An act as the long press menu stands it, `going` told as it is pressed. */
-function pressedInMenu(action: RowAction, going: () => void): RowAction {
-  return {
-    ...action,
-    onPress: () => {
-      going();
-      action.onPress();
-    },
-  };
-}
-
-/** A submenu as the long press menu stands it, each of its choices and acts, and those of the menus inside it, telling `going` as they are pressed. */
-function submenuInMenu(submenu: RowSubmenu, going: () => void): RowSubmenu {
-  return {
-    ...submenu,
-    choices: submenu.choices.map((choice) => ({
-      ...choice,
-      onPress: () => {
-        going();
-        choice.onPress();
-      },
-    })),
-    submenus: submenu.submenus?.map((inner) => submenuInMenu(inner, going)),
-    actions: submenu.actions?.map((action) => pressedInMenu(action, going)),
-  };
-}
-
-/** A swiped act as the long press menu stands it again, telling `going` as it is pressed. */
-function swipeInMenu(swipe: RowSwipe, going: () => void): RowSwipe {
-  return isSubmenu(swipe) ? submenuInMenu(swipe, going) : pressedInMenu(swipe, going);
-}
-
-/**
- * Whether a question an act of the row's long press menu raised waits for
- * the menu to go, what tells it an act was pressed there, and what tells it
- * the menu's preview has gone, which ends the wait. Note that the question
- * waits, because SwiftUI stands it from the row while the menu's preview
- * still settles back into that row, and a dialog asked for then was let go
- * unseen, the menu closing on nothing (j9729, on main, Nov 17). The
- * preview's going is the one sign of the menu's end that reaches us, since
- * neither SwiftUI's menu nor `@expo/ui`'s tells its close, so a row with no
- * preview waits out `MENU_GOES_MS`, as one whose preview's going is never
- * told does; a row that raises no question never waits.
- */
-function useMenuGoing(question: RowQuestion | undefined) {
-  const [going, setGoing] = useState(false);
-
-  useEffect(() => {
-    if (!going) return;
-    const timer = setTimeout(() => setGoing(false), MENU_GOES_MS);
-
-    return () => clearTimeout(timer);
-  }, [going]);
-
-  const pressed = (): void => {
-    if (question !== undefined) setGoing(true);
-  };
-
-  return { going, pressed, gone: () => setGoing(false) };
+/** A row's content with the question its acts ask standing by it, where its acts ask any. */
+function asking(content: ReactElement, question: RowQuestion | undefined): ReactElement {
+  return question === undefined ? content : <RowAsking question={question}>{content}</RowAsking>;
 }
 
 /**
@@ -638,7 +549,6 @@ export function RowFrame({
   const open = useContext(RowOpenContext);
   const selected = useContext(RowSelectedContext) === id;
   const swiped = [...trailingActions, ...leadingActions];
-  const menuGoing = useMenuGoing(question);
 
   // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
   const frameModifiers = [
@@ -661,13 +571,8 @@ export function RowFrame({
   const groups = menuGroups.filter(menuGroupFilled);
   const ownGroup = swiped.length + menuSubmenus.length + menuActions.length > 0;
 
-  // Note that the row's own content hears the hold too, so a menu standing in it, such as a task's status ring, holds the row's question as the long press menu does.
-  const content = (
-    <RowMenuGoingContext.Provider value={menuGoing.pressed}>{row}</RowMenuGoingContext.Provider>
-  );
-
   if (!ownGroup && groups.length === 0 && preview === undefined) {
-    return <HStack modifiers={frameModifiers}>{asking(content, question, menuGoing.going)}</HStack>;
+    return <HStack modifiers={frameModifiers}>{asking(row, question)}</HStack>;
   }
 
   const opening: readonly RowAction[] =
@@ -678,37 +583,26 @@ export function RowFrame({
           { label: VERB.OPEN, tone: ROW_ACTION_TONE.NEUTRAL, onPress: () => open(id) },
         ];
 
-  const going = menuGoing.pressed;
-
   const menu = asking(
     <ContextMenu>
       <ContextMenu.Items>
         {opening.map((action) => actionButton(action, colors))}
         {opening.length > 0 && ownGroup ? <Divider /> : null}
-        {swiped.map((swipe) => swipeMenuButton(swipeInMenu(swipe, going), colors))}
-        {menuSubmenus.map((submenu) => rowSubmenu(submenuInMenu(submenu, going), colors))}
-        {menuActions.map((action) => actionButton(pressedInMenu(action, going), colors))}
+        {swiped.map((swipe) => swipeMenuButton(swipe, colors))}
+        {menuSubmenus.map((submenu) => rowSubmenu(submenu, colors))}
+        {menuActions.map((action) => actionButton(action, colors))}
         {groups.map((group, at) => (
           <Fragment key={menuGroupKey(group)}>
             {at === 0 && opening.length === 0 && !ownGroup ? null : <Divider />}
-            {(group.submenus ?? []).map((submenu) =>
-              rowSubmenu(submenuInMenu(submenu, going), colors),
-            )}
-            {(group.actions ?? []).map((action) =>
-              actionButton(pressedInMenu(action, going), colors),
-            )}
+            {(group.submenus ?? []).map((submenu) => rowSubmenu(submenu, colors))}
+            {(group.actions ?? []).map((action) => actionButton(action, colors))}
           </Fragment>
         ))}
       </ContextMenu.Items>
-      <ContextMenu.Trigger>{content}</ContextMenu.Trigger>
-      {preview === undefined ? null : (
-        <ContextMenu.Preview>
-          <VStack modifiers={[SwiftModifiers.onDisappear(menuGoing.gone)]}>{preview}</VStack>
-        </ContextMenu.Preview>
-      )}
+      <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
+      {preview === undefined ? null : <ContextMenu.Preview>{preview}</ContextMenu.Preview>}
     </ContextMenu>,
     question,
-    menuGoing.going,
   );
 
   // Note that a row with no swipe stands its menu in a plain frame, since a swipe with no acts has nothing to reveal.
@@ -1182,14 +1076,10 @@ export function StatusRing({
 }) {
   const colors = useColors();
   const choosing = useContext(RowChoosingContext);
-  const going = useContext(RowMenuGoingContext);
   const lead = useScaledSize(MARK_SIZE.LEAD);
   const target = Math.max(FOLD_TARGET, lead);
 
   if (menu === undefined || choosing) return <TaskStatusMark status={status} />;
-
-  // Note that a status its menu sets may ask first, such as Done while the task's agents work, so a choice holds that question until the menu has gone, as the row's long press menu does; this menu lifts no preview, so it waits out the deadline.
-  const held = submenuInMenu(menu, going);
 
   // Note that the ring never reaches past the gap before the name.
   const reach = {
@@ -1224,7 +1114,7 @@ export function StatusRing({
         zIndex(1),
       ]}
     >
-      {held.choices.map((choice) => (
+      {menu.choices.map((choice) => (
         <Toggle
           key={choice.label}
           {...choiceContent(choice, colors)}

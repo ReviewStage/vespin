@@ -2,7 +2,6 @@
 
 import {
   Alert,
-  ConfirmationDialog,
   Host,
   Button as SwiftUIButton,
   Text,
@@ -276,15 +275,18 @@ export function useRowAsker(): RowAsker {
 }
 
 /**
- * A row's content with the question its own acts ask first standing by it,
- * as iOS 26 stands a confirmation from the view that raised it: SwiftUI's
- * confirmation dialog with the row as its source, its glass by the row on
- * an iPhone and a popover from it on an iPad, its act red, and Cancel or a
- * tap outside letting it go. Note that it stands around every row that can
- * ask, asking or not, because wrapping a row only as it asks would draw
- * its long press menu anew as the menu went, and a question raised from a
- * screen's foot pointed at the tab bar rather than at the row it is about.
- * It stands inside the row's own SwiftUI tree, never beside a `Screen`.
+ * A row's content with the question its own acts ask first, such as a
+ * task's Permanently delete or an agent's Archive, raised as `ConfirmAsk`
+ * raises a screen's: UIKit's own action sheet from the screen's foot in a
+ * compact window, and its alert in a regular one. Note that it's UIKit's
+ * rather than SwiftUI's confirmation dialog from the row, because SwiftUI
+ * presents only from a key window, and React Native's alerts (a rename's,
+ * every `ConfirmAsk`) stand in a window of their own that leaves the app's
+ * window unkeyed once they close, so a row's dialog raised after one never
+ * showed (tasks.yaml, on main, Nov 17); UIKit's question stands in its own
+ * window too, and needs no wait for a long press menu to go. An iPad's
+ * question stands as the centered alert rather than a popover from its
+ * row, since a row is SwiftUI's and has no React Native view to anchor to.
  */
 export function RowAsking({
   question,
@@ -293,25 +295,21 @@ export function RowAsking({
   readonly question: RowQuestion;
   readonly children: ReactElement;
 }): ReactElement {
+  const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
+
   return (
-    <ConfirmationDialog
-      title={question.title}
-      titleVisibility="visible"
-      isPresented={question.presented}
-      onIsPresentedChange={(shown) => {
-        if (!shown) question.onDismiss();
-      }}
-    >
-      <ConfirmationDialog.Trigger>{children}</ConfirmationDialog.Trigger>
-      <ConfirmationDialog.Actions>
-        <SwiftUIButton label={question.act} role={DESTRUCTIVE_ROLE} onPress={question.onAct} />
-        <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={question.onDismiss} />
-      </ConfirmationDialog.Actions>
-      {question.message === undefined ? null : (
-        <ConfirmationDialog.Message>
-          <Text>{question.message}</Text>
-        </ConfirmationDialog.Message>
-      )}
-    </ConfirmationDialog>
+    <>
+      {children}
+      <SystemConfirm
+        title={question.title}
+        message={question.message}
+        act={question.act}
+        destructive
+        presented={question.presented}
+        onAct={question.onAct}
+        onDismiss={question.onDismiss}
+        compact={compact}
+      />
+    </>
   );
 }
