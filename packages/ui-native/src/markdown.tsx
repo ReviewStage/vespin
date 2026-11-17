@@ -7,19 +7,21 @@ import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import { SymbolView } from "expo-symbols";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   type AccessibilityActionEvent,
   ActivityIndicator,
   Image,
   Modal,
   ScrollView,
+  type ScrollViewInstance,
   StyleSheet,
   Text,
   type TextLayoutEvent,
   type TextStyle,
   useWindowDimensions,
   View,
+  type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AudioClip } from "./audio-clip.js";
@@ -125,6 +127,17 @@ const TEXT_ALIGN: Readonly<Record<ColumnAlign, TextStyle["textAlign"]>> = {
 /** The bounds a table's column is laid out within, in points, before the reader's Dynamic Type scales its words. */
 const COLUMN_WIDTH = { MIN: 48, MAX: 260 } as const;
 
+/** How wide the fade at a sideways scroller's edge stands, in points, where more stands past it. */
+const EDGE_FADE = 24;
+
+/** How far, in points, a scroller must stand from its edge before that edge counts as having more past it. */
+const EDGE_SLACK = 1;
+
+/** The edge of a sideways scroller a fade stands at, as a gradient's direction names it. */
+const SCROLL_EDGE = { START: "left", END: "right" } as const;
+
+type ScrollEdge = (typeof SCROLL_EDGE)[keyof typeof SCROLL_EDGE];
+
 /** The share of a line's size an inline chip sits below the baseline by, so it centers on the words rather than standing on them. */
 const CHIP_DROP = 0.22;
 
@@ -176,9 +189,15 @@ const QUOTE_INSET = QUOTE_RULE + SPACE.ROW;
 const styles = StyleSheet.create({
   marker: { position: "absolute", left: 0, top: 0 },
   quote: { borderLeftWidth: QUOTE_RULE, paddingLeft: SPACE.ROW },
-  well: { borderRadius: RADIUS.BLOCK, padding: SPACE.ROW },
-  tableBox: { alignSelf: "stretch", overflow: "hidden" },
-  table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.BLOCK, overflow: "hidden" },
+  well: { borderRadius: RADIUS.BLOCK, paddingVertical: SPACE.ROW, overflow: "hidden" },
+  wellLines: { paddingHorizontal: SPACE.ROW },
+  table: {
+    alignSelf: "stretch",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: RADIUS.BLOCK,
+    overflow: "hidden",
+  },
+  fade: { position: "absolute", top: 0, bottom: 0, width: EDGE_FADE, pointerEvents: "none" },
   row: { flexDirection: "row" },
   cell: { paddingHorizontal: SPACE.ROW, paddingVertical: 6 },
   chip: {
@@ -844,10 +863,91 @@ function ListItem({
   );
 }
 
+/** A color with none of it showing, the clear end of a fade into it. */
+function clearOf(color: string): string {
+  return /^#[\da-f]{6}$/iu.test(color) ? `${color}00` : "transparent";
+}
+
+/** A fade over a sideways scroller's edge into its card's fill, toward the edge it stands at. */
+function EdgeFade({ ground, side }: { readonly ground: string; readonly side: ScrollEdge }) {
+  return (
+    <View
+      style={[
+        styles.fade,
+        side === SCROLL_EDGE.START ? { left: 0 } : { right: 0 },
+        { backgroundImage: `linear-gradient(to ${side}, ${clearOf(ground)}, ${ground})` },
+      ]}
+    />
+  );
+}
+
 /**
- * A table, scrolling sideways inside its own box, which stands at the
- * words' width as a code block's well does, so a table wider than the page
- * scrolls within the page's inset rather than running past its edge. Note that React Native has
+ * What stands wider than its card scrolls sideways inside it, as the
+ * desktop's card scrolls a block of code or a table: the system's scroll
+ * indicator at its foot, flashed once as it first stands wider than the
+ * card, as iOS hints at more past a scroller's edge, and, given the card's
+ * fill as `ground`, a fade at each edge more stands past, so a line cut at
+ * the card's edge reads as one that goes on rather than one the screen
+ * cut. Note that it takes a pan only once the pan moves sideways, as UIKit
+ * settles a pan between two scrollers crossing, so the page still scrolls
+ * up and down over it.
+ */
+function SidewaysScroll({
+  ground,
+  lines,
+  children,
+}: {
+  readonly ground?: string | undefined;
+  /** The inset its content stands in from its own edges, which the content scrolls through. */
+  readonly lines?: ViewStyle | undefined;
+  readonly children: ReactNode;
+}) {
+  const scroller = useRef<ScrollViewInstance>(null);
+  const [card, setCard] = useState(0);
+  const [content, setContent] = useState(0);
+  const [atStart, setAtStart] = useState(true);
+  const [atEnd, setAtEnd] = useState(false);
+  const wider = card > 0 && content > card + EDGE_SLACK;
+
+  // Note that the hint flashes once, as the block first stands wider than its card.
+  useEffect(() => {
+    if (wider) scroller.current?.flashScrollIndicators();
+  }, [wider]);
+
+  return (
+    <View>
+      <ScrollView
+        ref={scroller}
+        horizontal
+        showsHorizontalScrollIndicator
+        scrollEventThrottle={32}
+        contentContainerStyle={lines}
+        onLayout={(event) => setCard(event.nativeEvent.layout.width)}
+        onContentSizeChange={(width) => setContent(width)}
+        onScroll={(event) => {
+          const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+          setAtStart(contentOffset.x <= EDGE_SLACK);
+          setAtEnd(contentOffset.x + layoutMeasurement.width >= contentSize.width - EDGE_SLACK);
+        }}
+      >
+        {children}
+      </ScrollView>
+      {ground === undefined || !wider || atStart ? null : (
+        <EdgeFade ground={ground} side={SCROLL_EDGE.START} />
+      )}
+      {ground === undefined || !wider || atEnd ? null : (
+        <EdgeFade ground={ground} side={SCROLL_EDGE.END} />
+      )}
+    </View>
+  );
+}
+
+/**
+ * A table, scrolling sideways inside its own bordered box, which stands
+ * still at the words' width while its columns move inside it, as a code
+ * block's well does, so a table wider than the page scrolls within the
+ * page's inset rather than running past its edge, its border showing where
+ * the box ends. Note that React Native has
  * no table layout, so every cell is first drawn at its own width, held
  * between the column's bounds, and each column then stands at its widest
  * cell's; the table is laid out afresh when the reader's text size changes.
@@ -872,9 +972,9 @@ function TableView({
     });
 
   return (
-    <View style={styles.tableBox}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={[styles.table, { borderColor: colors.CHIP_EDGE }]}>
+    <View style={[styles.table, { borderColor: colors.CHIP_EDGE }]}>
+      <SidewaysScroll>
+        <View>
           {block.rows.map((row, rowAt) => (
             <View
               key={rowAt}
@@ -912,25 +1012,29 @@ function TableView({
             </View>
           ))}
         </View>
-      </ScrollView>
+      </SidewaysScroll>
     </View>
   );
 }
 
-/** A block of code, in the monospaced face on a well, scrolling sideways rather than wrapping its lines. */
+/**
+ * A block of code, in the monospaced face on a well, scrolling sideways
+ * rather than wrapping its lines, which run under the well's edge into a
+ * fade where more of them stands past it.
+ */
 function CodeView({ text, drawing }: { readonly text: string; readonly drawing: Drawing }) {
   const { colors } = drawing;
 
   return (
     <View style={[styles.well, { backgroundColor: colors.WELL }]}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <SidewaysScroll ground={colors.WELL} lines={styles.wellLines}>
         <Text
           selectable
           style={{ fontFamily: MONOSPACE_FONT, fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT }}
         >
           {text}
         </Text>
-      </ScrollView>
+      </SidewaysScroll>
     </View>
   );
 }
