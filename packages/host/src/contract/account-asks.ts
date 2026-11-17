@@ -209,7 +209,7 @@ export const ACCOUNT_ASK_ACTS = declaredActs({
     output: soundStateViewSchema,
     refusal: "Could not rename your sound on this system.",
     panelOnly: true,
-    door: ACT.REMOTE_WORK,
+    door: ACT.ROW_WRITE,
     unanswered: UNANSWERED,
   }),
   SOUND_REMOVE: hostAct({
@@ -225,7 +225,7 @@ export const ACCOUNT_ASK_ACTS = declaredActs({
     output: soundChoiceAnswerViewSchema,
     refusal: "Could not choose your sound on this system.",
     panelOnly: true,
-    door: ACT.REMOTE_WORK,
+    door: ACT.ROW_WRITE,
     unanswered: UNANSWERED,
   }),
   DICTATION_TRANSCRIBE: hostAct({
