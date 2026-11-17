@@ -1635,6 +1635,14 @@ export const NEEDS_YOU = {
   NONE: "Nothing needs you",
 } as const;
 
+/** What a scope's count is read as after its figure, where a place counts what the scope lists: "3 need you", "5 open", "40 threads", "2 reminders". */
+export const INBOX_SHOW_COUNT = {
+  [INBOX_SHOW.NEEDS_ME]: NEEDS_YOU.COUNT,
+  [INBOX_SHOW.OPEN]: { one: "open", many: "open" },
+  [INBOX_SHOW.ALL]: { one: "thread", many: "threads" },
+  [INBOX_SHOW.REMINDERS]: { one: "reminder", many: "reminders" },
+} as const satisfies Record<InboxShow, { readonly one: string; readonly many: string }>;
+
 /** A count of what waits on the developer with its words, as a card's corner or a badge says it: "1 needs you", "3 need you". */
 export function needsYouWords(count: number): string {
   return `${count} ${count === 1 ? NEEDS_YOU.COUNT.one : NEEDS_YOU.COUNT.many}`;

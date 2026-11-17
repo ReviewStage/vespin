@@ -91,12 +91,10 @@ import {
   type AutomationsDoor,
   type BoardDoor,
   type InboxDoor,
-  type PersonDoor,
   useAdminDoor,
   useAutomationsDoor,
   useBoardDoor,
   useInboxDoor,
-  usePersonDoor,
 } from "../places/routed-doors.js";
 import { useRoutedExits } from "../places/routed-exits.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
@@ -337,9 +335,6 @@ const SENT_ON_MUTATIONS: readonly PortActKind[] = [
 /** The Board's doors in the window last mounted, as a surface holds them. */
 let boardDoor: BoardDoor | undefined;
 
-/** A person's page's doors in the window last mounted, as a surface holds them. */
-let personDoor: PersonDoor | undefined;
-
 /** Admin's doors in the window last mounted, as a surface holds them. */
 let adminDoor: AdminDoor | undefined;
 
@@ -553,7 +548,6 @@ function mount(
     everyNow = useNamedTasks(control.typedNames, NAMED_ORDER.PINNED_FIRST);
     // The routed places' doors, and how they stand, as the window's surfaces hold them.
     boardDoor = useBoardDoor(control);
-    personDoor = usePersonDoor(control);
     adminDoor = useAdminDoor(control);
     automationsDoor = useAutomationsDoor(control);
     inboxDoor = useInboxDoor(control);
@@ -3858,18 +3852,6 @@ const ROUTED_DOORS: [
     FROM_BOARD,
   ],
   ["the version history, sought to a version", (control) => control.onOpenHistory(BILLING.id, 1)],
-  ["the Board's close", () => boardDoor?.close(), FROM_BOARD],
-  [
-    "a person's page's close",
-    () => personDoor?.close(),
-    (control) => control.onOpenPerson("user-ada", "Ada"),
-  ],
-  [
-    "an agent's page's close",
-    (control) => control.agentView.onClose(),
-    (control) => control.agentView.onOpen(AGENT_ID),
-  ],
-  ["Automations' close", () => automationsDoor?.close(), () => automationsDoor?.open()],
   ["the Inbox's close", () => inboxRoute?.onClose()],
 ];
 
@@ -4247,6 +4229,7 @@ const readAgentNamed = Schema.decodeUnknownOption(
       Schema.Struct({
         idempotencyKey: Schema.String,
         prompt: Schema.optionalKey(Schema.String),
+        blank: Schema.optionalKey(Schema.Boolean),
         model: Schema.optionalKey(Schema.String),
         effort: Schema.optionalKey(Schema.String),
       }),
@@ -4333,6 +4316,44 @@ test("New task's Agent mode sends one start carrying the agent, its words and mo
   );
   assert.equal(tab.control().agents.draft, undefined, "no draft stands in its place");
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the task opens on its tab");
+});
+
+test("New task's Talk starts the task's agent blank on the chip's model, opens the task on it, and calls the agent it started", async () => {
+  const started = { ...RUNNING_AGENT, taskId: OTHER_TASK_ID };
+
+  const tab = mount(
+    { shown: true, tasks: withAgents([started]), descriptions: AGENT_DESCRIPTIONS },
+    {
+      [ACT_KIND.TASKS_START]: () =>
+        Promise.resolve({ taskId: OTHER_TASK_ID, agentStart: { agent: started } }),
+    },
+  );
+
+  const choice = { model: "anthropic/claude-opus-5.5", effort: "high" };
+  const called: unknown[] = [];
+  act(() => tab.control().newTask.onOpen());
+  await act(async () => {
+    await tab.control().newTask.start("", "acme/web", undefined, {
+      handed: {
+        idempotencyKey: AGENT_KEY,
+        prompt: "",
+        attachments: [],
+        choice,
+        disabledServers: [],
+        talk: (into) => called.push(into),
+      },
+    });
+  });
+  tab.stand({ tasks: AGENT_TASK });
+  await settle();
+
+  const starts = tab.payloads
+    .filter(({ kind }) => kind === ACT_KIND.TASKS_START)
+    .map(({ payload }) => Option.getOrUndefined(readAgentNamed(payload)));
+
+  assert.deepEqual(starts[0]?.agent, { idempotencyKey: AGENT_KEY, blank: true, ...choice });
+  assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the task opens on its tab");
+  assert.deepEqual(called, [{ agentId: AGENT_ID, taskId: OTHER_TASK_ID }]);
 });
 
 test("archiving a task's last agent takes its tab at once, and a refused archive brings it back", async () => {

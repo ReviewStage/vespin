@@ -2174,7 +2174,8 @@ const SUBAGENT_HINT = "Open the subagent";
  * place. Where it
  * opens no tab it is the same line, pressed by nothing, or, given the task
  * and the answer, a fold that opens onto them as a call's row does. A call that failed
- * says why in red under the line, open from the start.
+ * says why in red under the line, open from the start, set in under the
+ * job's words as a call's failure is, unless its error only repeats the job.
  */
 export function TranscriptSubagent({
   callId,
@@ -2231,13 +2232,20 @@ export function TranscriptSubagent({
       </Tooltip>
     );
 
+  // Note that an error that only repeats the job says nothing the row's failed mark does not.
+  const failure =
+    errorText === undefined || errorText.trim() === job.trim() ? undefined : errorText;
+
   return (
     <div className="subagent-row @container/subagent-row text-caption-inline" {...FIND_DETAIL}>
       {row}
-      {errorText === undefined ? null : (
-        <FailureNote failure={UNREPORTED.TOOL} time={FAILURE_NOTE_TIME.PAST}>
-          {errorText}
-        </FailureNote>
+      {failure === undefined ? null : (
+        // Set in under the job's words, where a call's failure stands under its line.
+        <div className="subagent-failure ml-transcript-gutter">
+          <FailureNote failure={UNREPORTED.TOOL} time={FAILURE_NOTE_TIME.PAST}>
+            {failure}
+          </FailureNote>
+        </div>
       )}
     </div>
   );

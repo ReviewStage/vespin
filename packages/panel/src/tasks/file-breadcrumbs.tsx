@@ -8,6 +8,7 @@ import {
   POPOVER_SIDE,
   RectFloat,
 } from "@repo/ui";
+import { isComposingKey } from "@repo/ui/composing-key";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useSideBundles } from "../bundle-loader.js";
@@ -200,7 +201,7 @@ function CrumbTree({
         tabIndex={-1}
         style={height === undefined ? undefined : { height }}
         onKeyDown={(event) => {
-          if (event.key !== "Escape") return;
+          if (event.key !== "Escape" || isComposingKey(event)) return;
           // Note that the Escape is stopped here, because the window's own would close the panel behind the tree.
           event.stopPropagation();
           latest.current.onClose(true);

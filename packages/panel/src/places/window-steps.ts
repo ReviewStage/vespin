@@ -13,7 +13,7 @@
  * holds (`window-history.ts`) and write nothing: whether a visit pushes a
  * step of its own or takes the standing step's place (`visitWrite`), which
  * steps Back and Forward can still reach (`nearest`, `useStepReach`), the
- * step a page's way out goes back to (`awayFrom`), and the lists Back and
+ * step a place's way out goes back to (`awayFrom`), and the lists Back and
  * Forward draw, each step named as its place's declaration names it now
  * (`useStepNames`).
  *
@@ -24,17 +24,19 @@
  * (`window-history.ts`'s `writeStep`).
  */
 
+import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import { linkOf, type ReadLink } from "@repo/features/link-grammar";
+import { cardTitle } from "@repo/features/plain-words";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { type StripTab, tabKey, taggedStripTab } from "@repo/ui/tab-strip-model";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type HistoryLocation, useRouter } from "@tanstack/react-router";
 import { Schema } from "effect";
 import { useRef, useSyncExternalStore } from "react";
 import type { AutomationsRoute } from "../automations-route.js";
 import { liveStepTitle, type NamedStep } from "../history-titles.js";
 import type { InboxRoute } from "../inbox-route.js";
-import { workspaceMembersQuery } from "../live-reads.js";
+import { inboxItemsQuery, workspaceMembersQuery } from "../live-reads.js";
 import type { RouteAccess } from "../route-gates.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import type { HistoryRows } from "./history-rows.js";
@@ -355,13 +357,15 @@ export function nearest(
 }
 
 /**
- * The nearest step behind the one standing that stands on another page and
- * can still be gone to, passing over the standing page's own steps, its
- * narrow panes and its tabs among them; none where no such step stands.
+ * The nearest step behind the one standing that stands on another place and
+ * can still be gone to, passing over the standing place's own steps, as
+ * `samePlace` tells them: a task's narrow panes and its tabs, or every page
+ * of Settings; none where no such step stands.
  */
 export function awayFrom(
   steps: KnownSteps,
   reachable: (place: Place) => boolean,
+  samePlace: (one: Place, other: Place) => boolean,
 ): number | undefined {
   const standing = steps.entries[steps.at]?.place;
 
@@ -370,7 +374,7 @@ export function awayFrom(
 
     if (place === undefined || !reachable(place)) continue;
 
-    if (standing === undefined || !samePage(standing, place)) return at;
+    if (standing === undefined || !samePlace(standing, place)) return at;
   }
 
   return undefined;
@@ -448,7 +452,7 @@ function listedSteps(
   return listed;
 }
 
-/** The step a page's way out goes back to, the nearest behind it on another page, as Back's list names it. */
+/** The step a place's way out goes back to, the nearest behind it on another place, as Back's list names it. */
 export interface AwayStep {
   readonly title: StepTitle | undefined;
 }
@@ -461,10 +465,12 @@ export interface HistoryReading {
   readonly away: AwayStep | undefined;
 }
 
+/** What Back and Forward draw of `steps`, the way out passing over the standing place's own steps as `samePlace` tells them (`awayFrom`). */
 export function readingOf(
   steps: KnownSteps,
   reachable: (place: Place) => boolean,
   named: (place: Place) => StepTitle | undefined,
+  samePlace: (one: Place, other: Place) => boolean,
 ): HistoryReading {
   return {
     canGoBack: nearest(steps, -1, reachable) !== undefined,
@@ -473,7 +479,7 @@ export function readingOf(
       back: listedSteps(steps, -1, reachable, named),
       forward: listedSteps(steps, 1, reachable, named),
     },
-    away: awayStep(steps, reachable, named),
+    away: awayStep(steps, reachable, named, samePlace),
   };
 }
 
@@ -515,13 +521,14 @@ export function sameReading(one: HistoryReading, other: HistoryReading): boolean
   );
 }
 
-/** The step behind on another page (`awayFrom`), as a way out names it now. */
+/** The step behind on another place (`awayFrom`), as a way out names it now. */
 function awayStep(
   steps: KnownSteps,
   reachable: (place: Place) => boolean,
   named: (place: Place) => StepTitle | undefined,
+  samePlace: (one: Place, other: Place) => boolean,
 ): AwayStep | undefined {
-  const at = awayFrom(steps, reachable);
+  const at = awayFrom(steps, reachable, samePlace);
   const place = at === undefined ? undefined : steps.entries[at]?.place;
 
   return place === undefined ? undefined : { title: named(place) };
@@ -688,6 +695,8 @@ export function useStepReach(input: {
  * What each step is called as Back's and Forward's lists name it now: as its
  * place's declaration names it, by the ids its address names, a task's by
  * what its step holds (`liveStepTitle`), else as the window called it there.
+ * An Inbox item's thread is named as the account's items read now, without
+ * following them, since a step is named again on every draw of the window.
  * The workspace's members, who name a person's page, are read only while
  * such a page stands among the steps known; the place standing counts as
  * among them already, so its visit, written after it draws, draws the window no
@@ -727,6 +736,17 @@ export function useStepNames(input: {
   const members = useQuery(workspaceMembersQuery(personListed ? tasks.workspace?.id : undefined))
     .data?.members;
 
+  const queryClient = useQueryClient();
+
+  // The first line of the thread an Inbox item's id names, as the account's items read now; none where they hold no such item.
+  const itemTitle = (itemId: string) => {
+    const fed = queryClient.getQueryData(inboxItemsQuery().queryKey);
+    const tasksItems = fed === undefined ? [] : Object.values(fed[INBOX_SCOPE_KIND.TASK]);
+    const item = tasksItems.flat().find((each) => each.id === itemId);
+
+    return item === undefined ? undefined : cardTitle(item.title);
+  };
+
   // The task an Inbox item is of, by the item's id, where a door chose it.
   const itemTask = (itemId: string) => {
     const chosen = inbox.choiceOf(itemId);
@@ -747,7 +767,7 @@ export function useStepNames(input: {
   };
 
   const { typedNames, activeTaskId, agents, pages } = tasks;
-  const naming = { typedNames, activeTaskId, agents, pages, rows };
+  const naming = { typedNames, activeTaskId, agents, pages, rows, itemTitle };
 
   return (to: Place) => liveStepTitle(routedNamed(to), titleOf(to), naming, members);
 }

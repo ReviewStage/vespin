@@ -14,7 +14,8 @@ import { RowHint, RowHintOptions, Tooltip } from "./hint.js";
  * the row's end, not its control's, so a control that gives its end up to
  * the row's acts on hover never puts the card over the row. And a finger,
  * which has no hover, opens a hint by hand: a tap on words that are no
- * control opens their card, and a tap elsewhere or Escape closes it, while a
+ * control opens their card, and a tap elsewhere or Escape closes it, the
+ * Escape marked taken so it acts on nothing else, while a
  * mouse's click opens nothing; a link's tap still goes where it leads, and
  * a long press opens its card instead, its release pressing nothing; and a
  * control whose long press opens its menu keeps it for the menu. A tap on a
@@ -243,7 +244,7 @@ test("under a finger, a tap on words that are no control opens their card at onc
   assert.equal(cardStands(), false, "it goes");
 });
 
-test("a card a tap opened goes on a tap elsewhere, or on Escape, and stays for a tap on itself", () => {
+test("a card a tap opened goes on a tap elsewhere, or on Escape, which it marks taken, and stays for a tap on itself", () => {
   const page = mount(
     createElement("div", null, WORKED, createElement("p", { "data-else": "" }, "Else")),
   );
@@ -265,10 +266,18 @@ test("a card a tap opened goes on a tap elsewhere, or on Escape, and stays for a
 
   tap(line);
   assert.equal(cardStands(), true);
+  const escapePress = () => new KeyboardEvent("keydown", { key: "Escape", cancelable: true });
+  const taking = escapePress();
   act(() => {
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    window.dispatchEvent(taking);
   });
   assert.equal(cardStands(), false, "Escape takes it down");
+  assert.equal(taking.defaultPrevented, true, "the Escape that takes it down acts on nothing else");
+  const after = escapePress();
+  act(() => {
+    window.dispatchEvent(after);
+  });
+  assert.equal(after.defaultPrevented, false, "an Escape with nothing standing is the page's");
 });
 
 test("with a mouse, a click on the words opens no card", () => {

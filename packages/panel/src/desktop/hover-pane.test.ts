@@ -149,7 +149,7 @@ test("an open pane stays for a press in it or on its toggle's press, and goes at
   assert.equal(standing(page), PANE_FLOAT.CLOSED);
 });
 
-test("a peek goes once the pointer leaves it, though not for the box it stays for, and Escape from the work under it puts it away", () => {
+test("a peek goes once the pointer leaves it, though not for the box it stays for, and Escape from the work under it puts it away unless the work took it", () => {
   const page = mount();
   const aside = part(page, "aside");
   const work = part(page, ".work");
@@ -162,6 +162,12 @@ test("a peek goes once the pointer leaves it, though not for the box it stays fo
 
   pointerCross(work, part(page, ".edge"));
   work.focus();
+  // Note that a field the keyboard stands in, closing a list of its own, takes the key first.
+  const taken = (event: Event) => event.preventDefault();
+  work.addEventListener("keydown", taken);
+  pressEscape(work);
+  work.removeEventListener("keydown", taken);
+  assert.equal(standing(page), PANE_FLOAT.PEEK, "the work's own Escape leaves the peek standing");
   const press = pressEscape(work);
   assert.deepEqual([standing(page), press.defaultPrevented], [PANE_FLOAT.CLOSED, true]);
 });

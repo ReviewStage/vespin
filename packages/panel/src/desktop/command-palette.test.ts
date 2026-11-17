@@ -1811,10 +1811,10 @@ test("a command ⌘K alone offers, the sidebar's Show my tasks, is listed by its
   assert.deepEqual(ran, ["show my tasks"]);
 });
 
-/** Offers two commands whose only key is Esc, as Settings and the Inbox's item do while they stand, and records each run. */
+/** Offers two commands whose only key is Esc, as Settings and an agent's threads do while they stand, and records each run. */
 function OffersEscapes({ ran }: { ran: string[] }): null {
   useAppCommand(APP_COMMAND.EXIT_SETTINGS, () => ran.push("exit settings"));
-  useAppCommand(APP_COMMAND.INBOX_LIST, () => ran.push("back to inbox list"));
+  useAppCommand(APP_COMMAND.EXIT_AGENT_THREADS, () => ran.push("back to transcript"));
 
   return null;
 }
@@ -1828,8 +1828,8 @@ test("a command whose only key is Esc is no row in ⌘K, though it is still offe
   chooseFilter("Commands");
   type("exit settings");
   assert.equal(rows().includes("Exit settings"), false);
-  type("back to inbox list");
-  assert.equal(rows().includes("Back to inbox list"), false);
+  type("back to transcript");
+  assert.equal(rows().includes("Back to transcript"), false);
   assert.ok(appCommandOffered(APP_COMMAND.EXIT_SETTINGS), "Exit settings is still offered");
 });
 

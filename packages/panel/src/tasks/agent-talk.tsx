@@ -17,7 +17,15 @@
  * so a typed line goes to the agent as any line does. Talk stands whole in
  * a narrow box, as Send does; the call's presses stay too
  * (`CallComposerControls`). Nothing of it stands in any box but an agent's
- * own tab's.
+ * own tab's and a box that starts a new agent.
+ *
+ * A box that starts a new agent, New task's and a draft agent's, offers
+ * Talk the same way, which starts the agent blank, handed nothing, on the
+ * box's choices, and calls it once it lands (`NewAgentTalk`), so the
+ * caller's first words are its first message (Dean, Nov 17). With no key
+ * saved it starts nothing and opens Settings › Agents; while that start is
+ * out, Talk stands disabled. A call that ends with nobody having spoken to
+ * the agent lets it go (`endVoiceCall`).
  */
 
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -31,8 +39,8 @@ import {
 import { neverBusyAct } from "@repo/ui/confirm-state";
 import type { ReactNode } from "react";
 import { confirmFailure } from "../failure-report.js";
-import { useOpenAiKeyMissing } from "../openai-key.js";
-import { useVoiceCall } from "../voice-call.js";
+import { useOpenAiKeyMissing, useOpenApiKeys } from "../openai-key.js";
+import { type CallWhenStarted, useVoiceCall } from "../voice-call.js";
 import type { DictationControl } from "./use-dictation.js";
 
 /** What Talk asks while a call into another agent stands. */
@@ -49,6 +57,12 @@ export interface TalkInto {
   readonly taskId: string;
 }
 
+/** A box that starts a new agent: its blank start, which calls `call` once the agent lands, or with nothing where it was refused, and whether one is out. */
+export interface NewAgentTalk {
+  readonly start: (call: CallWhenStarted) => void;
+  readonly starting: boolean;
+}
+
 /** What a box draws of calls: whether a call into its agent holds the microphone, what stands in the microphone's place, and Talk for Send's place while no call into its agent stands. */
 export interface AgentTalk {
   readonly onCall: boolean;
@@ -62,11 +76,12 @@ export interface AgentTalk {
  * dictation first, keeping its words where any were recorded.
  */
 export function useAgentTalk(
-  into: TalkInto | undefined,
+  into: TalkInto | NewAgentTalk | undefined,
   dictation: DictationControl,
 ): AgentTalk | undefined {
   const voice = useVoiceCall();
   const keyMissing = useOpenAiKeyMissing();
+  const openApiKeys = useOpenApiKeys();
   const { call } = voice;
 
   const start = () => {
@@ -74,7 +89,12 @@ export function useAgentTalk(
 
     if (dictation.startedAt !== undefined) dictation.finish();
     else dictation.cancel();
-    voice.start(into);
+
+    if (!("start" in into)) return voice.start(into);
+
+    // Note that a new agent is started only where a call can open on it, so no key saved starts nothing.
+    if (keyMissing) return openApiKeys();
+    into.start(voice.startWhenStarted());
   };
 
   const switching = useConfirmDialog(
@@ -86,12 +106,14 @@ export function useAgentTalk(
   if (into === undefined) return undefined;
 
   // Note that a key missing is the call's own to answer, which opens Settings › Agents, so it never asks to end another call first.
+  const agentId = "start" in into ? undefined : into.agentId;
+
   const talk = () => {
-    if (keyMissing || call === undefined || call.agentId === into.agentId) return start();
+    if (keyMissing || call === undefined || call.agentId === agentId) return start();
     switching.ask();
   };
 
-  if (call !== undefined && call.agentId === into.agentId) {
+  if (call !== undefined && call.agentId === agentId) {
     return {
       onCall: true,
       press: (
@@ -122,6 +144,6 @@ export function useAgentTalk(
         question={{ ...SWITCH_QUESTION, loss: CONFIRM_LOSS.IRREVERSIBLE, replayUnmasked: true }}
       />
     ),
-    talk: { keyMissing, onPress: talk },
+    talk: { keyMissing, disabled: "start" in into && into.starting, onPress: talk },
   };
 }

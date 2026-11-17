@@ -23,6 +23,7 @@
 import type { Workspace } from "@repo/features/workspace-wire";
 import type { EntityPool, HeldRows, Refused, RowKind, WriteDeclaration, Written } from "@repo/sync";
 import { Effect, Equal, type Scope } from "effect";
+import { KEPT_LIST } from "./kept-lists.js";
 import { carriedWaits } from "./live-collection.js";
 
 /** A change to a workspace: the row as it leaves it, from the row as it is drawn now. */
@@ -115,6 +116,7 @@ export function workspaceRows(
       redraw: () => drawn,
       // Note that no workspace write answers a transaction, so the read hands no wait and each write waits on the follow's next move (`carried`).
       confirmation: () => undefined,
+      kept: KEPT_LIST.WORKSPACES,
     });
 
     const waits = yield* carriedWaits(() => held.synced());

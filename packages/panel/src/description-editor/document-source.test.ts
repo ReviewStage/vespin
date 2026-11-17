@@ -9,6 +9,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, test } from "vitest";
 import { MarkdownMessage } from "../markdown-message.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import type { ChipsRead } from "./contract.js";
 import { markdownExtensions } from "./description-editor.js";
 import {
   BLANK_ENDS,
@@ -65,14 +66,10 @@ afterEach(() => {
 });
 
 /** The document in an editor, with what it would hand over now, as a document or, by `ends`, a message. */
-function opened(
-  markdown: string,
-  ends: BlankEnds = BLANK_ENDS.KEPT,
-  namesChip?: (target: string) => boolean,
-) {
+function opened(markdown: string, ends: BlankEnds = BLANK_ENDS.KEPT, chips?: ChipsRead) {
   const extensions = markdownExtensions();
   const manager = documentManager(extensions);
-  const source = documentOpened(manager, markdown, namesChip);
+  const source = documentOpened(manager, markdown, chips);
   const host = document.createElement("div");
   document.body.append(host);
 
@@ -567,11 +564,11 @@ test("links the read view draws as chips open as chips and are saved as written 
   const text =
     'Shipped in https://github.com/acme/app/pull/12 with [`store.ts`](https://github.com/acme/app/blob/HEAD/store.ts), [mention://file/app.ts](mention://file/app.ts), and [the app](https://github.com/acme/app "Open the app").\n';
 
-  const { editor, handedOver } = opened(
-    text,
-    BLANK_ENDS.KEPT,
-    (target) => target.startsWith("https://github.com/") || target.startsWith("mention://"),
-  );
+  const { editor, handedOver } = opened(text, BLANK_ENDS.KEPT, {
+    namesChip: (target) =>
+      target.startsWith("https://github.com/") || target.startsWith("mention://"),
+    keyTargets: new Map(),
+  });
 
   typedAtEnd(editor, " Done.");
   const chips = editor.getJSON().content?.[0]?.content?.filter((node) => node.type === "mention");
@@ -579,4 +576,29 @@ test("links the read view draws as chips open as chips and are saved as written 
   // Note that a titled link stays a link, since a chip has no place for its title.
   assert.equal(chips?.length, 3);
   assert.equal(handedOver(), text.replace(").\n", "). Done.\n"));
+});
+
+test("a listed task's key among plain words opens as its task's chip, and is saved as the bare key when its line is edited", () => {
+  const text = "STAG-3259 waits on `STAG-3260` and STAG-3261's PR, not UTF-8.\n";
+  const target = "https://vespin.dev/stage/task/3259";
+
+  const { editor, handedOver } = opened(text, BLANK_ENDS.KEPT, {
+    namesChip: () => false,
+    keyTargets: new Map([
+      ["STAG-3259", target],
+      ["STAG-3260", "https://vespin.dev/stage/task/3260"],
+      ["STAG-3261", "https://vespin.dev/stage/task/3261"],
+    ]),
+  });
+
+  typedAtEnd(editor, " Done.");
+  const chips: unknown[] = [];
+
+  editor.state.doc.descendants((node) => {
+    if (node.type.name === "mention") chips.push(node.attrs.target);
+  });
+
+  // Note that a key in code stays words, as the read view leaves it.
+  assert.deepEqual(chips, [target, "https://vespin.dev/stage/task/3261"]);
+  assert.equal(handedOver(), text.replace(".\n", ". Done.\n"));
 });

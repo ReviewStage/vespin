@@ -2,7 +2,12 @@ import type { AgentPullRequest } from "@repo/features/agent-wire";
 import { NEEDS_YOU, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { type NumberedAddress, pullRequestAddressOf } from "@repo/features/link-grammar";
-import { agentLastMovedAt, inAgentListOrder } from "@repo/features/task-agents-model";
+import {
+  agentLastMovedAt,
+  agentTree,
+  inAgentListOrder,
+  type StartedAgentsCount,
+} from "@repo/features/task-agents-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BUTTON_SIZE,
@@ -15,6 +20,8 @@ import {
   LIST_DENSITY,
   List,
   ListRow,
+  type ListRowFold,
+  type ListRowNest,
   TaskRows,
   Tooltip,
 } from "@repo/ui";
@@ -22,6 +29,7 @@ import { GLYPH, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
 import { Predicate, Schema } from "effect";
+import { useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
@@ -32,6 +40,7 @@ import type { MenuAction } from "./action-menu.js";
 import { agentEntries } from "./agent-entries.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
 import { useAgentsSelection } from "./agents-selection.js";
+import { nestsOf } from "./nested-rows.js";
 import { type CountNoun, foldedCount } from "./sidebar-fold.js";
 import type { AddEntry, HeldTranscripts } from "./strip-tabs.js";
 import type { ChosenRows } from "./tasks-selection.js";
@@ -70,7 +79,13 @@ import type { ChosenRows } from "./tasks-selection.js";
  * in a row's gutter, ⌘-click, ⇧-click, and ⌘A, and a row chosen among
  * several offers Archive, or Unarchive, and Permanently delete on every one
  * chosen (`agents-selection.tsx`).
- * Those agents come first, then those at work, then the newest started; an
+ * An agent another agent started stands nested under it, an orchestrator's
+ * workers under the orchestrator, as a task's sub-tasks nest, folded until
+ * opened, the row it stands under counting how many of them finished
+ * (`agentTree`); a worker an orchestrator started before it was continued
+ * stands under the agent that continued it.
+ * Those agents come first, then those at work, then the newest started, each
+ * row at the top standing where the first agent under it does; an
  * archived agent is not listed. New agent stands on the group's head at
  * every width, a + at rest as Sub-tasks' is, the strip's "+" by another
  * place (`newAgentStarts`), so it stands while the group is folded too. A
@@ -101,6 +116,9 @@ interface PlanAgentsPhone {
 
 /** What the group is called, and its list for a reader moving between lists. */
 const AGENTS_LIST = "Agents";
+
+/** The words an agent's fold is named by, before its name: the agents it started. */
+const STARTED_BY = "Agents started by";
 
 /** What the group's count counts, said to a reader beside the figure. */
 const AGENTS_NOUN = { one: "agent", many: "agents" } as const;
@@ -145,6 +163,10 @@ function PlanAgentRow({
   shown,
   more,
   chosen,
+  depth,
+  nest,
+  fold,
+  started,
   onOpenPullRequest,
 }: {
   entry: AddEntry;
@@ -160,6 +182,14 @@ function PlanAgentRow({
   more: boolean;
   /** The selection it stands in, where it is one of several chosen. */
   chosen: ChosenRows | undefined;
+  /** How deep it stands nested under the agent that started it. */
+  depth: number;
+  /** Where it stands among the agents nested beside it. */
+  nest: ListRowNest | undefined;
+  /** The agents it started, which it folds; none where it started none. */
+  fold: ListRowFold | undefined;
+  /** How many of the agents it started have finished, of all of them. */
+  started: StartedAgentsCount | undefined;
   onOpenPullRequest: () => void;
 }): React.JSX.Element | null {
   const { row, agent, card } = entry;
@@ -179,6 +209,10 @@ function PlanAgentRow({
       waits={waits}
       more={more}
       chosen={chosen}
+      depth={depth}
+      nest={nest}
+      fold={fold}
+      started={started}
       onPress={entry.onPick}
       onOpenPullRequest={onOpenPullRequest}
     />
@@ -341,6 +375,39 @@ export function OverviewAgents({
     (entry) => waiting.has(entry.row.id),
   );
 
+  // Note that the agents an agent started stand folded under it until opened, as a sub-task's own sub-tasks do.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
+
+  const tree = agentTree(
+    ordered,
+    (entry) => entry.agent,
+    (agentId) => opened.has(agentId),
+  );
+
+  const nests = nestsOf(tree);
+
+  const foldOf = (entry: AddEntry, open: boolean): ListRowFold => ({
+    open,
+    label: `${STARTED_BY} ${entry.agent?.title ?? AGENTS_NOUN.one}`,
+    onOpenChange: (asked) =>
+      setOpened((held) => {
+        if (asked === held.has(entry.row.id)) return held;
+        const next = new Set(held);
+
+        if (asked) next.add(entry.row.id);
+        else next.delete(entry.row.id);
+
+        return next;
+      }),
+  });
+
+  // Note that a row standing folded counts what waits on the developer under it too, so no thread waits unsaid.
+  const waitsUnder = (entry: AddEntry, folded: readonly AddEntry[] | undefined) =>
+    [entry, ...(folded ?? [])].reduce(
+      (count, each) => count + (waiting.get(each.row.id)?.length ?? 0),
+      0,
+    );
+
   const selection = useAgentsSelection(
     agents,
     ordered.flatMap(({ agent }) => (agent === undefined ? [] : [agent])),
@@ -382,11 +449,17 @@ export function OverviewAgents({
                 selection={{ selected: selection.selected, onChange: selection.onChange }}
                 moves
               >
-                {ordered.map((entry) => (
+                {tree.map(({ entry, depth, started, folded }, at) => (
                   <PlanAgentRow
                     key={entry.row.id}
                     entry={entry}
-                    waits={waiting.get(entry.row.id)?.length ?? 0}
+                    depth={depth}
+                    nest={nests[at]}
+                    fold={
+                      started === undefined ? undefined : foldOf(entry, opened.has(entry.row.id))
+                    }
+                    started={started}
+                    waits={waitsUnder(entry, folded)}
                     pullRequest={agents.pullRequests.get(entry.row.id)}
                     agents={agents}
                     held={held}

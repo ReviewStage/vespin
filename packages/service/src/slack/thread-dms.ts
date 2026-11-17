@@ -73,10 +73,10 @@ import { readInboxAttachment } from "../inbox/inbox-store.js";
 import {
   type SlackBlock,
   SlackBot,
-  type SlackBotService,
   type SlackMessage,
   type SlackMessageContent,
   type SlackUpload,
+  type SlackWorkspaceBot,
 } from "./slack-bot.js";
 import { slackClipped, slackMarkdownBlock } from "./slack-markdown.js";
 
@@ -636,7 +636,7 @@ function titleDmsOf(dms: readonly (typeof SlackDmSchema.Type)[]): readonly Title
  * where none does, with the thread's link, as `titleDmContent` draws it.
  */
 function redrawTitleDms(
-  bot: SlackBotService,
+  bot: SlackWorkspaceBot,
   itemId: string,
   thread: { readonly title: string; readonly link: string },
   titles: readonly TitleDm[],
@@ -727,18 +727,19 @@ export function rewriteThreadDm(
   line: string,
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
-    const bot = yield* Effect.serviceOption(SlackBot);
+    const slack = yield* Effect.serviceOption(SlackBot);
 
-    if (Option.isNone(bot) || !bot.value.configured) return;
+    if (Option.isNone(slack) || !slack.value.configured) return;
     const place = yield* findItemPlace(itemId);
 
     if (Option.isNone(place)) return;
+    const bot = yield* slack.value.forWorkspace(place.value.organizationId);
     const kept = yield* findMessageDm(message.id);
     const link = threadLink(itemId, place.value);
 
     // A press on the title DM, which the message's reply stands under, has it say the thread's open ask anew rather than the reply's line.
     if (Option.isSome(kept) && kept.value.dm.thread === dm.ts) {
-      yield* redrawTitleDms(bot.value, itemId, { title: place.value.title, link }, [dm]);
+      yield* redrawTitleDms(bot, itemId, { title: place.value.title, link }, [dm]);
 
       return;
     }
@@ -750,7 +751,7 @@ export function rewriteThreadDm(
       titled: Option.isSome(kept) && kept.value.dm.thread === undefined,
     };
 
-    yield* bot.value.update(dm.channel, dm.ts, threadDmContent(view, line));
+    yield* bot.update(dm.channel, dm.ts, threadDmContent(view, line));
   });
 }
 
@@ -775,21 +776,25 @@ export function settleThreadDms(
   chosen?: { readonly messageId: string; readonly line: string },
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
-    const bot = yield* Effect.serviceOption(SlackBot);
+    const slack = yield* Effect.serviceOption(SlackBot);
 
-    if (Option.isNone(bot) || !bot.value.configured) return;
-    const claimed = yield* claimSettledDms(itemId);
-
-    if (claimed.length === 0) return;
+    if (Option.isNone(slack) || !slack.value.configured) return;
     const place = yield* findItemPlace(itemId);
 
     if (Option.isNone(place)) return;
+    const bot = yield* slack.value.forWorkspace(place.value.organizationId);
+
+    // Note that a workspace holding no token claims nothing, so its DMs are rewritten once its token opens again.
+    if (!bot.connected) return;
+    const claimed = yield* claimSettledDms(itemId);
+
+    if (claimed.length === 0) return;
     const { title } = place.value;
     const link = threadLink(itemId, place.value);
     yield* Effect.forEach(
       claimed,
       ({ id, dm, text, steps, status }) =>
-        bot.value.update(
+        bot.update(
           dm.channel,
           dm.ts,
           threadDmContent(
@@ -804,12 +809,7 @@ export function settleThreadDms(
         ),
       { discard: true },
     );
-    yield* redrawTitleDms(
-      bot.value,
-      itemId,
-      { title, link },
-      titleDmsOf(claimed.map(({ dm }) => dm)),
-    );
+    yield* redrawTitleDms(bot, itemId, { title, link }, titleDmsOf(claimed.map(({ dm }) => dm)));
   });
 }
 
@@ -827,9 +827,9 @@ export function dmThreadPost(
   post: ThreadDmPost,
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
-    const bot = yield* Effect.serviceOption(SlackBot);
+    const slack = yield* Effect.serviceOption(SlackBot);
 
-    if (Option.isNone(bot) || !bot.value.configured) return;
+    if (Option.isNone(slack) || !slack.value.configured) return;
     const { item, organizationId } = post;
     yield* settleThreadDms(item.id);
     const message = postedMessage(item, post.asked);
@@ -852,10 +852,11 @@ export function dmThreadPost(
 
     if (Option.isNone(place)) return;
     const link = threadLink(item.id, place.value);
+    const bot = yield* slack.value.forWorkspace(organizationId);
 
     const opened =
       kept === undefined
-        ? yield* bot.value.dm(organizationId, recipient, titleDmContent(item.title, link))
+        ? yield* bot.dm(recipient, titleDmContent(item.title, link))
         : Option.some(kept);
 
     if (Option.isNone(opened)) return;
@@ -873,7 +874,7 @@ export function dmThreadPost(
     };
 
     const content = threadDmContent(view, undefined, askControls(item.id, message));
-    const sent = yield* bot.value.dm(organizationId, recipient, content, thread);
+    const sent = yield* bot.dm(recipient, content, thread);
 
     if (Option.isNone(sent)) return;
     yield* recordDm({
@@ -882,10 +883,10 @@ export function dmThreadPost(
     });
 
     if (message.ask?.status === INBOX_ASK_STATUS.OPEN) {
-      yield* redrawTitleDms(bot.value, item.id, { title: item.title, link }, [thread]);
+      yield* redrawTitleDms(bot, item.id, { title: item.title, link }, [thread]);
     }
 
     const uploads = yield* messageUploads(recipient, item.id, message);
-    yield* bot.value.upload(thread.channel, thread.ts, uploads);
+    yield* bot.upload(thread.channel, thread.ts, uploads);
   });
 }

@@ -56,7 +56,7 @@ import {
 import { AgentModelChip } from "./agent-model-chip.js";
 import { PayerValue, usePayerPlan } from "./agent-payer.js";
 import { type AgentServersControl, serversMenuPanel } from "./agent-servers.js";
-import { useAgentTalk } from "./agent-talk.js";
+import { type NewAgentTalk, useAgentTalk } from "./agent-talk.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide } from "./mention-picker.js";
 import { FOLD_WIDTH, MessageBox, OVERFLOW_PRESS, useMessageBox } from "./message-box.js";
 import type { MoveCarry } from "./move-agent.js";
@@ -317,6 +317,7 @@ function continuedInCloud(
 export function AgentComposer({
   agentId,
   talksIn,
+  startsTalk,
   status,
   stoppable = status === AGENT_STATUS.RUNNING,
   steers = stoppable,
@@ -363,6 +364,8 @@ export function AgentComposer({
   agentId?: string | undefined;
   /** The task the agent works on, which a call into it names; none where the box offers no Talk, as every box but an agent's own tab's (`agent-talk.tsx`). */
   talksIn?: string | undefined;
+  /** Talk in a box that starts a new agent: the agent's blank start the call opens on; none where the box offers no Talk. */
+  startsTalk?: NewAgentTalk | undefined;
   status: AgentStatus;
   /** Whether Stop stands in Send's place while the box is empty: while the agent runs where unsaid, and while a turn runs that a Stop can cancel where the tab knows (`offersStop`). */
   stoppable?: boolean;
@@ -546,7 +549,7 @@ export function AgentComposer({
   });
 
   const talk = useAgentTalk(
-    agentId === undefined || talksIn === undefined ? undefined : { agentId, taskId: talksIn },
+    agentId === undefined || talksIn === undefined ? startsTalk : { agentId, taskId: talksIn },
     box.dictation,
   );
 

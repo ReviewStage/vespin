@@ -368,6 +368,7 @@ import type { IntegrationConnect } from "../integrations/integration-connect.js"
 import { hostedKeyRing } from "../orpc/base.js";
 import type { PageLinks } from "../pages/page-links.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
+import type { SlackApp } from "../slack/slack-app.js";
 import type { SlackBot } from "../slack/slack-bot.js";
 import {
   changeSlackChannel,
@@ -458,6 +459,7 @@ export type MemberMcpServices =
   | SentryApp
   | IntegrationConnect
   | SlackBot
+  | SlackApp
   | AdmittedMember;
 
 /** A tool's input declaration: a wire schema the emitter can show and the reader can read. */

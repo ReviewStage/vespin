@@ -678,12 +678,12 @@ function leaveAsked(): string | undefined {
     .find((words) => words.includes("Leave with unsaved changes?"));
 }
 
-test("Escape leaves a page with nothing unsaved for the list, and asks first where its draft would be lost", async () => {
+test("the way back leaves a page with nothing unsaved for the list, and asks first where its draft would be lost", async () => {
   const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
   await settle();
 
   type(page.querySelector("input[aria-label='Automation name']"), "Sweep");
-  act(() => runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS));
+  act(() => button("Automations").click());
   // Note that the way out is the router's move, which asks a turn later, once its blocker holds it.
   await settle();
   assert.equal(world.places.length, 1, "the unsaved draft stands");
@@ -693,7 +693,7 @@ test("Escape leaves a page with nothing unsaved for the list, and asks first whe
   assert.equal(leaveAsked(), undefined);
 
   type(page.querySelector("input[aria-label='Automation name']"), SWEEP.name);
-  act(() => runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS));
+  act(() => button("Automations").click());
   assert.deepEqual(world.places.at(-1), { kind: AUTOMATIONS_PAGE.LIST });
 });
 
@@ -1098,17 +1098,6 @@ test("an automation's page opened before the list is read stands its toolbar's w
   assert.deepEqual(world.places.at(-1), { kind: AUTOMATIONS_PAGE.LIST });
 });
 
-test("Escape leaves an automation's page still waiting on the list for the list", async () => {
-  world.listHeld = true;
-  mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
-  await settle();
-
-  act(() => {
-    assert.ok(runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS), "its way out is offered");
-  });
-  assert.deepEqual(world.places.at(-1), { kind: AUTOMATIONS_PAGE.LIST });
-});
-
 test("what is typed while a save is out stands, unsaved, once the save lands", async () => {
   world.heldChanges = [];
   const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
@@ -1221,14 +1210,16 @@ test("an automation fired by an event says its trigger in one sentence, and a sa
   ]);
 });
 
-test("Escape keeps a new page whose schedule was changed, though nothing was typed", async () => {
+test("the way back asks before it leaves a new page whose schedule was changed, though nothing was typed", async () => {
   const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
   await settle();
 
   pick(page, "Runs", "Daily");
-  act(() => runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS));
+  act(() => button("Automations").click());
+  await settle();
 
   assert.equal(world.places.length, 1);
+  assert.ok(leaveAsked(), "the leave question stands");
 });
 
 /** A new automation's page, named and given its prompt, ready to have its schedule picked. */
@@ -1597,7 +1588,7 @@ test("Escape while writing the prompt lets go of the caret and reaches the windo
   pressEscape({});
   window.removeEventListener("keydown", listen);
 
-  // Note that both reach the window, whose live call Escape stops first, marked taken, so neither leaves the page.
+  // Note that both reach the window marked taken, so neither leaves the page.
   assert.deepEqual(reached, [true, true]);
   assert.equal(document.activeElement === prompt, false);
   assert.equal(prompt.textContent, "Triage the issues opened overnight.");
