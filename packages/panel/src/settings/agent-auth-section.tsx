@@ -85,6 +85,7 @@ import {
   SettingsRowUsage,
   SettingsSection,
   SettingsSectionsSkeleton,
+  STATUS_TONE,
   Stack,
   TEXT_TONE,
   TEXT_VARIANT,
@@ -101,7 +102,8 @@ import { type InlineRename, type RenameWrite, useInlineRename } from "@repo/ui/u
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { actMutation, pressMutation } from "../act-mutations.js";
+import type { ActResult } from "../act.js";
+import { actMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
@@ -113,6 +115,7 @@ import { type PlanUsageMeters, planUsageMeters } from "../plan-usage.js";
 import { renameWrite } from "../rename-write.js";
 import { ResetCreditCard, useResetCreditOffer } from "../reset-credit.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
+import { useWorkingToast } from "../toast.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectAccount, selectExperiment } from "../use-app-state.js";
 import { ChatGptDeviceLogin } from "./chatgpt-device-login.js";
@@ -297,6 +300,33 @@ function planLine(provider: PlanProvider, plan: SubscriptionKeySummary, now: num
   const words = provider === PROVIDER_KEY_PROVIDER.ANTHROPIC ? tokenWords(plan) : signInWords(plan);
 
   return { words, ok: false };
+}
+
+/** Whether a refresh's answer holds a newer reading of the plan than the one it was pressed over. */
+function refreshedIn(
+  answer: ActResult<typeof ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE>,
+  plan: SubscriptionKeySummary,
+): boolean {
+  if ("failure" in answer) return false;
+  const heardAt = answer.subscriptions?.find((one) => one.id === plan.id)?.usageHeardAt;
+
+  return heardAt !== undefined && heardAt > (plan.usageHeardAt ?? Number.NEGATIVE_INFINITY);
+}
+
+/** What a refresh's toast settles into: refreshed, or that it brought back no newer reading, whatever kept it: the service, the provider, or the way there. */
+function refreshOutcome(refreshed: boolean, cause: unknown) {
+  return refreshed
+    ? { words: WORDS.USAGE_REFRESHED, replayUnmasked: true, tone: STATUS_TONE.COMPLETE }
+    : {
+        words: WORDS.REFRESH_USAGE_FAILED,
+        replayUnmasked: true,
+        tone: STATUS_TONE.DANGER,
+        failure: {
+          surface: FAILURE_SURFACE.ACT,
+          act: ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE,
+          cause,
+        },
+      };
 }
 
 /** What removing a provider's key asks. */
@@ -963,13 +993,25 @@ function PlanRow({
   const offer = useResetCreditOffer(claude ? undefined : plan);
   const rename = useInlineRename(plan.id, renames);
   const openLink = useOpenLink();
-  const refresh = useMutation(pressMutation(ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE));
+  const refresh = useMutation(actMutation(ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE));
+  const working = useWorkingToast();
+
+  // Note that a refresh the service answered still fails where it holds no newer reading, since the service keeps what it held when the provider answers nothing.
+  // Note that the toast settles on the promise, not on `mutate`'s own callbacks, which are dropped once the row unmounts, as it does when Settings closes mid-refresh.
+  const refreshUsage = () => {
+    const settle = working(WORDS.REFRESHING_USAGE);
+
+    void refresh.mutateAsync({ subscriptionId: plan.id }).then(
+      (answer) => settle(refreshOutcome(refreshedIn(answer, plan), answer)),
+      (cause: unknown) => settle(refreshOutcome(false, cause)),
+    );
+  };
 
   const own = [
     {
       label: WORDS.REFRESH_USAGE,
       disabled: refresh.isPending,
-      onSelect: () => refresh.mutate({ subscriptionId: plan.id }),
+      onSelect: refreshUsage,
     },
     ...(claude ? [{ label: WORDS.RENAME, onSelect: () => renameIn(rename, onClose) }] : []),
     ...(claude ? [{ label: WORDS.REPLACE_TOKEN, onSelect: () => onOpen(STEPS.REPLACE) }] : []),
@@ -996,7 +1038,7 @@ function PlanRow({
             {line.usage !== undefined ? (
               <SettingsRowUsage
                 rows={line.usage.rows}
-                heard={line.usage.heard}
+                heard={line.usage.updated}
                 alignWith={alignWith}
               />
             ) : line.meter === undefined ? null : (
