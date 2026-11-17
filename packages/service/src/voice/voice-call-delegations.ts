@@ -17,6 +17,11 @@
  *   refuses is logged, and never tried again.
  * - What the voice is told goes out over the sideband (`VoiceCallHolder`'s
  *   `send`).
+ * - An untitled agent is named, its untitled task with it, as the voice
+ *   first answers the caller (`titleNativeAgent`), off the loop, because a
+ *   call whose voice answers by itself starts no turn, and a turn is
+ *   otherwise what names an agent: an agent Talk started blank stood
+ *   "Untitled" through a whole call (Dean, Nov 17).
  *
  * Every act is fenced by the lease's epoch, read just before it, so a holder
  * whose lease another took acts no more and lets go.
@@ -79,6 +84,7 @@ import { spokenLineMetadata } from "../agents/coder-host/spoken-line.js";
 import { endTurnSummary } from "../agents/coder-host/starter-report.js";
 import { steerMemberWords } from "../agents/coder-host/steer.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
+import { titleNativeAgent } from "../agents/native-events/native-title.js";
 import {
   MESSAGE_AUTHOR,
   MESSAGE_CHANNEL,
@@ -403,6 +409,11 @@ const refusedLogged = <A, E, R>(label: string, act: Effect.Effect<A, E, R>) =>
     ),
   );
 
+/** Whether this lease asked for the agent's title, which it asks once, as the voice first answers the caller. */
+interface CallNaming {
+  asked: boolean;
+}
+
 /**
  * One output carried out under the lease, fenced by its epoch: whether the
  * lease still held it, so a holder told no acts no more.
@@ -412,6 +423,7 @@ const carriedOut = Effect.fnUntraced(function* (
   agent: Agent,
   target: AgentTarget,
   output: VoiceOutput,
+  naming: CallNaming,
 ) {
   const { call } = holder;
 
@@ -436,6 +448,12 @@ const carriedOut = Effect.fnUntraced(function* (
 
       if (Result.isFailure(written)) {
         yield* Effect.logWarning(`a voice call's line was refused: ${written.failure.refusal}`);
+      }
+
+      // Note that the voice answering is when the caller has said something to name the agent by, and the title is asked off the loop, since its model call would hold the call's lines.
+      if (output.speaker === VOICE_SPEAKER.VOICE && agent.title === null && !naming.asked) {
+        naming.asked = true;
+        yield* Effect.forkDetach(titleNativeAgent(target, agent));
       }
 
       return true;
@@ -501,9 +519,11 @@ export const voiceCallDelegations: VoiceCallObserver<
     const inputs = yield* Queue.unbounded<VoiceInput>();
     const offer = (input: VoiceInput) => Effect.asVoid(Queue.offer(inputs, input));
 
+    const naming: CallNaming = { asked: false };
+
     const carried = Stream.runForEachWhile(
       voiceDelegations(Stream.fromQueue(inputs), start),
-      (output) => carriedOut(holder, agent, target, output),
+      (output) => carriedOut(holder, agent, target, output, naming),
     );
 
     return {

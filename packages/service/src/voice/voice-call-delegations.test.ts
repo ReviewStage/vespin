@@ -5,7 +5,9 @@ import { Database } from "@repo/database/core/query";
 import { readAgent } from "@repo/database/models/agent-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { messages } from "@repo/database/schemas/storage";
+import { task } from "@repo/database/schemas/task";
 import { getTestDB } from "@repo/database/testing";
+import { UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import { RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
 import { LIVE_CLIENT_EVENT, LIVE_SERVER_EVENT } from "@repo/features/voice-delegation";
 import { memorySandbox } from "@repo/sandbox/testing";
@@ -195,6 +197,73 @@ it.layer(SUITE)("a voice call's delegations, run by the lease holding it", (it) 
           { role: "assistant", words: "Only the docs.", span: [1200, 1800] },
           { role: "user", words: "Then write them.", span: [2400, 3000] },
         ]);
+      }).pipe(Effect.provide(world)),
+  );
+
+  it.effect(
+    "a call whose voice answers the caller names the untitled agent and its untitled task, with no turn of the agent's",
+    () =>
+      Effect.gen(function* () {
+        const { call, callerId, agentId } = yield* openCall;
+        const db = yield* Database;
+        yield* db.update(agentTable).set({ title: null }).where(eq(agentTable.id, agentId));
+        const agent = Option.getOrThrow(yield* readAgent(callerId, agentId));
+        yield* db.update(task).set({ name: UNTITLED_TASK_NAME }).where(eq(task.id, agent.taskId));
+        const session = fakeLiveSession(undefined);
+        const sync = wakeableSync();
+        const ready = yield* Deferred.make<void>();
+
+        const named = Effect.gen(function* () {
+          const [row] = yield* db
+            .select({ title: agentTable.title, name: task.name })
+            .from(agentTable)
+            .innerJoin(task, eq(task.id, agentTable.taskId))
+            .where(eq(agentTable.id, agentId));
+
+          return row;
+        });
+
+        const run = Effect.gen(function* () {
+          const holder = yield* Effect.forkChild(
+            holdVoiceCall({ callId: call.id, callerId, epoch: 1, delivery: 1 }, settingOut(ready)),
+          );
+
+          yield* Deferred.await(ready);
+          yield* session.say(
+            LIVE_SERVER_EVENT.INPUT_TRANSCRIPT_DELTA,
+            fragment("Expire invitations after a week.", 0, 900),
+          );
+          yield* session.say(
+            LIVE_SERVER_EVENT.OUTPUT_TRANSCRIPT_DELTA,
+            fragment("Sure, what should happen to the old ones?", 1200, 1800),
+          );
+
+          // Note that the title is asked off the loop, so the case reads the rows until it lands.
+          const titled = yield* named.pipe(
+            Effect.tap(() => Effect.yieldNow),
+            Effect.repeat({ until: (row) => row?.title !== null, times: 2_000 }),
+          );
+
+          yield* Fiber.interrupt(holder);
+
+          return titled;
+        });
+
+        const titled = yield* run.pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              sync.layer,
+              takingHarness(yield* Queue.unbounded<string>()),
+              session.layer,
+            ),
+          ),
+        );
+
+        // Note that the test's world holds no title key, so the caller's first words name it, with no model.
+        assert.deepEqual(titled, {
+          title: "Expire invitations after a week",
+          name: "Expire invitations after a week",
+        });
       }).pipe(Effect.provide(world)),
   );
 
