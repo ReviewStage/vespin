@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
+import plist, { type PlistValue } from "@expo/plist";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
 import {
@@ -166,14 +167,6 @@ type ExtensionFile = { readonly FROM: string; readonly NAME: string; readonly AS
 
 // The name an extension's copy of a file is built under.
 const copiedName = ({ NAME, AS }: ExtensionFile) => AS ?? NAME;
-
-/** A value an extension's Info.plist or entitlements hold. */
-type PlistValue =
-  | string
-  | boolean
-  | number
-  | readonly string[]
-  | { readonly [key: string]: PlistValue };
 
 /**
  * An app extension the app embeds: its target, the bundle id automatic
@@ -562,55 +555,12 @@ const writeSymbolSet = (catalog: string, name: string, svg: string) => {
   writeFileSync(join(symbolSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
 };
 
-// A string as plist XML's text.
-const plistText = (text: string) =>
-  text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-
-// A plist value as XML, indented by `depth` tabs.
-const plistXml = (value: PlistValue, depth: number): string => {
-  const indent = "\t".repeat(depth);
-
-  if (Predicate.isString(value)) return `${indent}<string>${plistText(value)}</string>`;
-
-  if (Predicate.isBoolean(value)) return `${indent}<${value}/>`;
-
-  // Note that a whole number is a plist integer and any other a real, such as a content extension's size ratio.
-  if (Predicate.isNumber(value))
-    return Number.isInteger(value)
-      ? `${indent}<integer>${value}</integer>`
-      : `${indent}<real>${value}</real>`;
-
-  if (Array.isArray(value))
-    return `${indent}<array>\n${value.map((item) => plistXml(item, depth + 1)).join("\n")}\n${indent}</array>`;
-
-  // SAFETY: the branches above take every PlistValue but a dictionary.
-  return `${indent}<dict>\n${plistEntries(value as Record<string, PlistValue>, depth + 1)}\n${indent}</dict>`;
-};
-
-// A dictionary's keys and values as XML, each key at `depth` tabs.
-const plistEntries = (entries: Readonly<Record<string, PlistValue>>, depth: number): string =>
-  Object.entries(entries)
-    .map(
-      ([key, value]) =>
-        `${"\t".repeat(depth)}<key>${plistText(key)}</key>\n${plistXml(value, depth)}`,
-    )
-    .join("\n");
-
-// A whole plist document of one dictionary.
-const plistDocument = (entries: Readonly<Record<string, PlistValue>>) =>
-  `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
-<plist version="1.0">
-${plistXml(entries, 0)}
-</plist>
-`;
-
 // An extension's Info.plist: its extension point and, where it has them, its
 // principal class and attributes, the app's version and build, which App
 // Store Connect refuses an extension to differ from, the App Group where it
 // shares it, and its own keys over the rest.
 const extensionPlist = (extension: AppExtension, version: string, build: string) =>
-  plistDocument({
+  plist.build({
     CFBundleDevelopmentRegion: "$(DEVELOPMENT_LANGUAGE)",
     CFBundleDisplayName: extension.TARGET,
     CFBundleExecutable: "$(EXECUTABLE_NAME)",
@@ -678,7 +628,7 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
       if (extension.ENTITLEMENTS !== undefined)
         writeFileSync(
           join(folder, extensionEntitlementsName(extension)),
-          plistDocument(extension.ENTITLEMENTS),
+          plist.build(extension.ENTITLEMENTS),
         );
 
       if (catalogued) {
