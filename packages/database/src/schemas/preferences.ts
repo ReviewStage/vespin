@@ -132,6 +132,13 @@ export const accountPreference = pgTable("account_preference", {
    */
   githubWakesOff: text("github_wakes_off"),
   /**
+   * Whether the account keeps an Inbox (`@repo/settings`'s `inbox`): off,
+   * its agents are offered no thread to post and its windows draw no Inbox;
+   * null until the account chooses, which reads as on. A part of the
+   * snapshot of its own, as the link choice is.
+   */
+  inbox: boolean("inbox"),
+  /**
    * The model and effort a coding agent starts on when Start is clicked, as
    * AI Gateway's catalog names them (`packages/service/src/providers/model-catalog.ts`); null on both
    * means the account has never chosen and starts on the catalog's default.

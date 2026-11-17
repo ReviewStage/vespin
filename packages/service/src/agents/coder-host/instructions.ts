@@ -40,9 +40,16 @@ const BRIEF_JOB = {
   [AGENT_BRIEF.BLANK]: "do what the developer asks of you in this conversation",
 } as const satisfies Record<AgentBrief, string>;
 
-/** What the agent does with a request it cannot read, whatever it was handed. */
-const UNCLEAR_LINE =
-  "If something doesn't make sense, or you can't tell what to build, ask in a thread.";
+/** What the agent does with a request it cannot read, whatever it was handed: ask in a thread, or in its reply where its starter keeps no Inbox. */
+const UNCLEAR_LINE = {
+  THREAD: "If something doesn't make sense, or you can't tell what to build, ask in a thread.",
+  REPLY:
+    "If something doesn't make sense, or you can't tell what to build, ask in your reply and stop there.",
+} as const;
+
+/** How the agent brings the developer what needs them where its starter keeps no Inbox (`@repo/settings`'s `inbox`), so it is offered no thread to post. */
+const NO_INBOX_LINE =
+  "The developer keeps no Inbox, so you post no threads: when you need something from them, or have something ready for them to look at, say so at the end of your reply and stop, and they answer you in this conversation.";
 
 export const CODER_HARNESS = {
   CLAUDE_CODE: CONVERSATION_RUNTIME.CLAUDE_CODE,
@@ -158,6 +165,7 @@ function publishLines(
   startBranch: string | null,
   memberToken: boolean,
   wakesOff: readonly GitHubWake[],
+  posts: boolean,
 ): string[] {
   const from = startBranch === null ? "the default branch" : `\`${startBranch}\``;
   const base = startBranch === null ? "" : ` with \`base: "${startBranch}"\``;
@@ -165,7 +173,7 @@ function publishLines(
   return [
     `Work on a branch named \`${CODER.BRANCH_PREFIX}<slug>\` cut from ${from}, never on ${from} itself, unless your first message names an open pull request's branch to push to.`,
     authorshipLine(authorship),
-    `Open a pull request with \`${AGENT_TOOL.OPEN_PULL_REQUEST}\`${base}, never \`gh pr create\`, and post it in a thread once it is ready for review.`,
+    `Open a pull request with \`${AGENT_TOOL.OPEN_PULL_REQUEST}\`${base}, never \`gh pr create\`, and ${posts ? "post it in a thread" : "name it in your reply"} once it is ready for review.`,
     `After you push, wait on the checks with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` rather than a command that watches CI.`,
     memberToken
       ? "You work on the developer's own GitHub token, so `gh pr` does not work: use `gh api repos/{owner}/{repo}/…`, and read your pull request's reviews yourself, since nothing on it reaches you."
@@ -180,8 +188,14 @@ function publishLines(
  * task, and a thing of ours by its kind and id under the workspace's
  * address (`../link-rule.ts` says the same to other authors at length).
  */
-function namingLines(repository: string | null, ownTask: OwnTask, workspace: string): string[] {
+function namingLines(
+  repository: string | null,
+  ownTask: OwnTask,
+  workspace: string,
+  posts: boolean,
+): string[] {
   const home = `${LINK_ORIGIN}/${workspace}`;
+  const item = posts ? " `/inbox/<item-id>`," : "";
 
   const file =
     repository === null
@@ -190,7 +204,7 @@ function namingLines(repository: string | null, ownTask: OwnTask, workspace: str
 
   return [
     `Name what the developer can open as a mention, \`[@name](target)\`, which ${PRODUCT_NAME} draws as a chip:${file} a pull request \`[@#42 Fix the refresh](https://github.com/${repository ?? EXAMPLE_REPOSITORY}/pull/42)\` (never a bare \`#42\`), or your task \`[@<its name>](${ownTask.link})\`.`,
-    `Name a thing of ours by the id a tool answered, under \`${home}\`: \`/agent/<agent-id>\`, \`/task/<task-id>\`, \`/automation/<automation-id>\`, \`/person/<user-id>\`, \`/inbox/<item-id>\`, or \`/task/<task-id>/page/<page-id>\`.`,
+    `Name a thing of ours by the id a tool answered, under \`${home}\`: \`/agent/<agent-id>\`, \`/task/<task-id>\`, \`/automation/<automation-id>\`, \`/person/<user-id>\`,${item} or \`/task/<task-id>/page/<page-id>\`.`,
   ];
 }
 
@@ -249,7 +263,8 @@ function statusLines(publishes: boolean, untold: QueueUntold): string[] {
  * token. A line on a gated tool of ours is told by whether the agent's
  * standing is offered it (`../tool-catalog/catalog.ts`'s `offers`): its
  * pull request by `open_pull_request`, its description by
- * `edit_description`, its reply by `end_turn`. The repository's own `AGENTS.md` or `CLAUDE.md` is
+ * `edit_description`, its reply by `end_turn`, and its threads by
+ * `post_thread`, which an agent whose starter keeps no Inbox is not offered. The repository's own `AGENTS.md` or `CLAUDE.md` is
  * not named, since each harness loads its own.
  */
 export function coderInstructions(
@@ -268,6 +283,7 @@ export function coderInstructions(
   const describes = offers(standing, EDIT_DESCRIPTION_TOOL.name);
   const publishes = repository !== null && offers(standing, AGENT_TOOL.OPEN_PULL_REQUEST);
   const endsTurns = offers(standing, AGENT_TOOL.END_TURN);
+  const posts = offers(standing, INBOX_TOOLS.POST.name);
   const shell = harness === CODER_HARNESS.CLAUDE_CODE ? "Bash" : "your shell";
   const branch = startBranch === null ? "" : ` on \`${startBranch}\``;
 
@@ -280,13 +296,15 @@ export function coderInstructions(
       ? `You work in no repository. Your folder is \`${machine.checkoutPath}\`; ${shell} starts there.`
       : `The GitHub repository \`${repository}\` is checked out at \`${machine.checkoutPath}\`${branch}; ${shell} starts there.`,
     ...machineLines(machine, repository !== null),
-    UNCLEAR_LINE,
-    ...(publishes ? publishLines(authorship, startBranch, memberToken, wakesOff) : []),
-    `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\` and post it in a thread.`,
+    posts ? UNCLEAR_LINE.THREAD : UNCLEAR_LINE.REPLY,
+    ...(publishes ? publishLines(authorship, startBranch, memberToken, wakesOff, posts) : []),
+    `For a plan, a design, or research, ${publishes ? "commit no document: " : ""}show a page with \`${AGENT_TOOL.SHOW_PAGE}\` and ${posts ? "post it in a thread" : "name it in your reply"}.`,
     endsTurns
       ? `End every turn by calling \`${AGENT_TOOL.END_TURN}\` last: its summary is what the developer reads as your reply.`
       : "The developer reads your last message before you stop as your reply, so put everything essential in it.",
-    `When you need something from the developer, or have something ready for them to look at, post it in a thread with \`${INBOX_TOOLS.POST.name}\`. If someone asks you something on a thread, answer on that thread, not just in your reply. Every post reaches the developer as a notification, so never post one that needs nothing of them: no thanks or acknowledgment, no confirmation that you did what they just told you, such as arming auto-merge or queueing a merge, no news that a pull request merged or its checks passed, and no correction of a link or a number, even where they wrote to you on a thread: say it in your reply instead.`,
+    posts
+      ? `When you need something from the developer, or have something ready for them to look at, post it in a thread with \`${INBOX_TOOLS.POST.name}\`. If someone asks you something on a thread, answer on that thread, not just in your reply. Every post reaches the developer as a notification, so never post one that needs nothing of them: no thanks or acknowledgment, no confirmation that you did what they just told you, such as arming auto-merge or queueing a merge, no news that a pull request merged or its checks passed, and no correction of a link or a number, even where they wrote to you on a thread: say it in your reply instead.`
+      : NO_INBOX_LINE,
     ...(describes
       ? [
           `Record a decision you made, or a question left open with the assumption you go on, in the task's description with \`${EDIT_DESCRIPTION_TOOL.name}\`${read}.`,
@@ -299,7 +317,7 @@ export function coderInstructions(
       closed: !memberToken && wakesOff.includes(GITHUB_WAKE.CLOSED),
       dequeued: !memberToken && wakesOff.includes(GITHUB_WAKE.DEQUEUED),
     }),
-    ...namingLines(repository, ownTask, workspace),
+    ...namingLines(repository, ownTask, workspace, posts),
   ];
 
   return lines.join("\n");
