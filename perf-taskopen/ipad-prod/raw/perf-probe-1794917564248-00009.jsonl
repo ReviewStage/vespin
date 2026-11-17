@@ -1,0 +1,5 @@
+{"t":1794917584501,"p":391058523.936958,"kind":"event","name":"topTouchStart","native":391058509.398625}
+{"t":1794917584627,"p":391058649.697708,"kind":"event","name":"topTouchEnd","native":391058626.065292}
+{"t":1794917584627,"p":391058649.817458,"kind":"event","name":"topSelectionChange","native":391058644.445666}
+{"t":1794917584753,"p":391058775.467333,"kind":"stall","ms":124,"endP":391058775.466041}
+{"t":1794917584852,"p":391058875.027,"kind":"event","name":"topGlobalEvent","native":391058858.286125}

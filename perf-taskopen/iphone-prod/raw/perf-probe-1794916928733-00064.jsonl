@@ -1,0 +1,17 @@
+{"t":1794917043054,"p":390517080.082833,"kind":"event","name":"topDismiss","native":390517075.614}
+{"t":1794917043099,"p":390517125.400791,"kind":"stall","ms":42,"endP":390517125.399375}
+{"t":1794917043259,"p":390517285.406416,"kind":"event","name":"topHeaderHeightChange","native":390517142.729666}
+{"t":1794917043259,"p":390517285.475541,"kind":"event","name":"topHeaderHeightChange","native":390517164.553833}
+{"t":1794917043259,"p":390517285.495791,"kind":"event","name":"topLoad","native":390517171.69375}
+{"t":1794917043259,"p":390517285.567041,"kind":"event","name":"topLoadEnd","native":390517171.695291}
+{"t":1794917043259,"p":390517285.57725,"kind":"event","name":"topLoadStart","native":390517171.768791}
+{"t":1794917043259,"p":390517285.587333,"kind":"event","name":"topLoad","native":390517185.296583}
+{"t":1794917043259,"p":390517285.616875,"kind":"event","name":"topLoadEnd","native":390517185.297458}
+{"t":1794917043259,"p":390517285.627583,"kind":"event","name":"topLoadStart","native":390517185.356041}
+{"t":1794917043259,"p":390517285.63625,"kind":"event","name":"topLoad","native":390517185.540083}
+{"t":1794917043259,"p":390517285.66775,"kind":"event","name":"topLoadEnd","native":390517185.541}
+{"t":1794917043259,"p":390517285.675875,"kind":"event","name":"topLoadStart","native":390517185.569125}
+{"t":1794917043259,"p":390517285.684458,"kind":"event","name":"topLoad","native":390517185.728958}
+{"t":1794917043259,"p":390517285.714208,"kind":"event","name":"topLoadEnd","native":390517185.72925}
+{"t":1794917043259,"p":390517285.722125,"kind":"event","name":"topLoadStart","native":390517185.748416}
+{"t":1794917043259,"p":390517285.730583,"kind":"event","name":"topHeaderHeightChange","native":390517189.355291}

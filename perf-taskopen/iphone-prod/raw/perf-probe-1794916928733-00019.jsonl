@@ -1,0 +1,9 @@
+{"t":1794916958211,"p":390432238.002166,"kind":"event","name":"topTouchStart","native":390432220.395458}
+{"t":1794916958333,"p":390432359.577208,"kind":"event","name":"topTouchEnd","native":390432337.062125}
+{"t":1794916958333,"p":390432359.702208,"kind":"event","name":"topSelectionChange","native":390432357.381875}
+{"t":1794916958451,"p":390432477.508583,"kind":"stall","ms":111,"endP":390432477.506208}
+{"t":1794916958458,"p":390432485.125375,"kind":"event","name":"topHeaderHeightChange","native":390432456.759541}
+{"t":1794916958459,"p":390432485.1985,"kind":"event","name":"topInsetsChange","native":390432460.092208}
+{"t":1794916958459,"p":390432485.276,"kind":"event","name":"topHeaderHeightChange","native":390432462.009208}
+{"t":1794916958459,"p":390432485.317333,"kind":"event","name":"topGlobalEvent","native":390432462.386541}
+{"t":1794916958459,"p":390432485.352541,"kind":"event","name":"topHeaderHeightChange","native":390432472.747666}

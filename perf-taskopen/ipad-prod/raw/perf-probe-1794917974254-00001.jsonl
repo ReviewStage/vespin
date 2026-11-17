@@ -1,0 +1,16 @@
+{"t":1794917974254,"p":391448274.76375,"kind":"mark","name":"bundle"}
+{"t":1794917974254,"p":391448274.772208,"kind":"probe-hook","hooked":-1}
+{"t":1794917974254,"p":391448274.783333,"kind":"probe-start"}
+{"t":1794917974481,"p":391448501.692416,"kind":"mark","name":"evaluated-polyfills"}
+{"t":1794917974664,"p":391448684.435333,"kind":"mark","name":"evaluated-crash-reports"}
+{"t":1794917974668,"p":391448688.433291,"kind":"mark","name":"evaluated-notification-task"}
+{"t":1794917974674,"p":391448694.089625,"kind":"stall","ms":403,"endP":391448694.084375}
+{"t":1794917974816,"p":391448836.090666,"kind":"mark","name":"evaluated-root-layout"}
+{"t":1794917974829,"p":391448849.809208,"kind":"event","name":"topInsetsChange","native":391448842.364541}
+{"t":1794917974832,"p":391448852.093333,"kind":"mark","name":"root-layout-render"}
+{"t":1794917974867,"p":391448887.702208,"kind":"mark","name":"host-start"}
+{"t":1794917974903,"p":391448923.061,"kind":"mark","name":"host-started"}
+{"t":1794917974904,"p":391448923.843416,"kind":"mark","name":"document-read"}
+{"t":1794917975157,"p":391449176.971458,"kind":"mark","name":"inbox-rows","rows":10}
+{"t":1794917975157,"p":391449176.99775,"kind":"startup","start":391448189.5486251,"runtime":391448189.54850006,"entry":391448189.5433334,"end":391448693.8660001}
+{"t":1794917975686,"p":391449706.803708,"kind":"stall","ms":997,"endP":391449706.799375}

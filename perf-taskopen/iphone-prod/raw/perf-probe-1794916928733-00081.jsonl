@@ -1,0 +1,17 @@
+{"t":1794917073679,"p":390547704.821291,"kind":"event","name":"topTouchStart","native":390547686.845625}
+{"t":1794917073795,"p":390547821.676416,"kind":"event","name":"topTouchEnd","native":390547803.512292}
+{"t":1794917073795,"p":390547821.778291,"kind":"event","name":"topButtonPress","native":390547818.041}
+{"t":1794917073869,"p":390547895.133,"kind":"event","name":"topHeaderHeightChange","native":390547826.776333}
+{"t":1794917073869,"p":390547895.216416,"kind":"event","name":"topLoad","native":390547827.634666}
+{"t":1794917073869,"p":390547895.296166,"kind":"event","name":"topLoadEnd","native":390547827.636166}
+{"t":1794917073869,"p":390547895.308708,"kind":"event","name":"topLoadStart","native":390547827.708}
+{"t":1794917073869,"p":390547895.319041,"kind":"event","name":"topLoad","native":390547828.373583}
+{"t":1794917073869,"p":390547895.339916,"kind":"event","name":"topLoadEnd","native":390547828.37475}
+{"t":1794917073869,"p":390547895.348208,"kind":"event","name":"topLoadStart","native":390547828.414875}
+{"t":1794917073869,"p":390547895.357958,"kind":"event","name":"topLoad","native":390547829.797041}
+{"t":1794917073869,"p":390547895.378291,"kind":"event","name":"topLoadEnd","native":390547829.797458}
+{"t":1794917073869,"p":390547895.386458,"kind":"event","name":"topLoadStart","native":390547829.830833}
+{"t":1794917073869,"p":390547895.39525,"kind":"event","name":"topHeaderHeightChange","native":390547830.726291}
+{"t":1794917073869,"p":390547895.459875,"kind":"event","name":"topGlobalEvent","native":390547844.5515}
+{"t":1794917073869,"p":390547895.535166,"kind":"event","name":"topGlobalEvent","native":390547845.318541}
+{"t":1794917073869,"p":390547895.559333,"kind":"event","name":"topGlobalEvent","native":390547861.619208}

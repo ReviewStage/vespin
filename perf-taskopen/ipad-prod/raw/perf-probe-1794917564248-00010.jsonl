@@ -1,0 +1,9 @@
+{"t":1794917587101,"p":391061123.886791,"kind":"event","name":"topTouchStart","native":391061104.886333}
+{"t":1794917587230,"p":391061252.741125,"kind":"event","name":"topTouchEnd","native":391061221.553}
+{"t":1794917587230,"p":391061252.853583,"kind":"event","name":"topSelectionChange","native":391061245.16075}
+{"t":1794917587411,"p":391061434.091375,"kind":"stall","ms":166,"endP":391061434.088333}
+{"t":1794917587581,"p":391061603.458166,"kind":"event","name":"topGlobalEvent","native":391061490.572833}
+{"t":1794917587658,"p":391061681.046791,"kind":"event","name":"topLoad","native":391061643.93475}
+{"t":1794917587658,"p":391061681.172875,"kind":"event","name":"topLoadEnd","native":391061643.938458}
+{"t":1794917587658,"p":391061681.186708,"kind":"event","name":"topLoadStart","native":391061644.012583}
+{"t":1794917587658,"p":391061681.302166,"kind":"event","name":"topFirstFrameRender","native":391061674.901916}

@@ -1,0 +1,5 @@
+{"t":1794916936399,"p":390410425.638333,"kind":"stall","ms":78,"endP":390410425.635041}
+{"t":1794916936985,"p":390411012.1095,"kind":"event","name":"topHeaderHeightChange","native":390410356.2045}
+{"t":1794916936985,"p":390411012.153125,"kind":"event","name":"topInsetsChange","native":390410365.112583}
+{"t":1794916936985,"p":390411012.22675,"kind":"event","name":"topHeaderHeightChange","native":390410367.482708}
+{"t":1794916936986,"p":390411012.276208,"kind":"event","name":"topGlobalEvent","native":390410371.2315}

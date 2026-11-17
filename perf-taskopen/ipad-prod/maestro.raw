@@ -1,0 +1,82 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad26 - iOS 26.5 - ABD9B3FE-4859-40A8-85F9-63B98B47142F
+ > Flow ipad
+  > On Flow Complete
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=${FIXTURE}, perfStream=${STREAM}})...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Set orientation LANDSCAPE_LEFT... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Repeat 7 times...
+  T:inbox-row... COMPLETED
+  Assert that "The test plan I followed:" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:inbox-row... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 7 times... COMPLETED
+Repeat 5 times...
+  T:more-menu... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  Tap on point (60%, 95%)... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Repeat 5 times...
+  T:new-task... COMPLETED
+  Assert that "Describe the task" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:new-task-cancel... COMPLETED
+  Assert that "Describe the task" is not visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Repeat 5 times...
+  T:tab-tasks... COMPLETED
+  Assert that "Teammate invitations" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:tab-inbox... COMPLETED
+  Assert that "Recorded the invite flow" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 5 times... COMPLETED
+Tap on "Tasks"... COMPLETED
+Assert that "Teammate invitations" is visible... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Repeat 7 times...
+  T:tasks-row... COMPLETED
+  Assert that "Created by .*" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:tasks-row... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 7 times... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Repeat 3 times...
+  T:status-chip-open... COMPLETED
+  Assert that "Backlog" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:status-pick... COMPLETED
+  Assert that "Status, Todo" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:status-chip-open... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+  T:status-pick... COMPLETED
+  Assert that "Status, Backlog" is visible... COMPLETED
+  Wait for animation to end within 3000 ms... COMPLETED
+Repeat 3 times... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=${FIXTURE}, perfStream=${STREAM}, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Assert that "Stop" is visible... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Repeat 3 times...
+  Tap on id: composer-field... COMPLETED
+  Input text Show the expiry too.... COMPLETED
+  Assert that "Send" is visible... COMPLETED
+  Wait for animation to end within 2000 ms... COMPLETED
+  T:send... COMPLETED
+  Assert that "Stop" is visible... COMPLETED
+  Wait for animation to end within 2000 ms... COMPLETED
+Repeat 3 times... COMPLETED
+Set orientation PORTRAIT... COMPLETED

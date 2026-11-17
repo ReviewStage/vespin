@@ -1,0 +1,15 @@
+{"t":1794917335532,"p":390809556.414916,"kind":"event","name":"topTextChange","native":390809553.174583}
+{"t":1794917335566,"p":390809590.730125,"kind":"event","name":"topTextChange","native":390809586.9635}
+{"t":1794917335600,"p":390809624.681291,"kind":"event","name":"topTextChange","native":390809620.186666}
+{"t":1794917335633,"p":390809657.532708,"kind":"event","name":"topTextChange","native":390809653.925875}
+{"t":1794917335651,"p":390809675.076208,"kind":"event","name":"topTextChange","native":390809670.740833}
+{"t":1794917335683,"p":390809707.968708,"kind":"event","name":"topTextChange","native":390809703.742916}
+{"t":1794917335717,"p":390809741.498541,"kind":"event","name":"topTextChange","native":390809736.921041}
+{"t":1794917335766,"p":390809790.944458,"kind":"event","name":"topTextChange","native":390809770.386083}
+{"t":1794917335781,"p":390809805.805291,"kind":"stall","ms":56,"endP":390809805.801}
+{"t":1794917335801,"p":390809825.310708,"kind":"event","name":"topTextChange","native":390809820.575583}
+{"t":1794917335831,"p":390809855.111916,"kind":"event","name":"topTextChange","native":390809837.296791}
+{"t":1794917335844,"p":390809868.212875,"kind":"stall","ms":46,"endP":390809868.210791}
+{"t":1794917335850,"p":390809874.774458,"kind":"event","name":"topTextChange","native":390809870.27675}
+{"t":1794917335884,"p":390809908.214875,"kind":"event","name":"topTextChange","native":390809903.572083}
+{"t":1794917335933,"p":390809957.773791,"kind":"event","name":"topTextChange","native":390809953.7855}

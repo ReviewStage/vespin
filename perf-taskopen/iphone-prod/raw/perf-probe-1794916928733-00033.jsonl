@@ -1,0 +1,13 @@
+{"t":1794916979644,"p":390453671.2045,"kind":"event","name":"topTouchStart","native":390453659.179958}
+{"t":1794916979825,"p":390453851.346875,"kind":"event","name":"topTouchEnd","native":390453775.846625}
+{"t":1794916979825,"p":390453851.423541,"kind":"event","name":"topWillDisappear","native":390453786.020166}
+{"t":1794916979825,"p":390453851.453083,"kind":"event","name":"topTransitionProgress","native":390453786.029375}
+{"t":1794916979825,"p":390453851.464666,"kind":"event","name":"topWillAppear","native":390453786.230125}
+{"t":1794916979825,"p":390453851.477291,"kind":"event","name":"topTransitionProgress","native":390453786.350958}
+{"t":1794916979825,"p":390453851.487708,"kind":"event","name":"topHeaderHeightChange","native":390453786.768666}
+{"t":1794916979825,"p":390453851.513458,"kind":"event","name":"topHeaderHeightChange","native":390453828.337291}
+{"t":1794916979825,"p":390453851.527958,"kind":"event","name":"topHeaderHeightChange","native":390453838.598541}
+{"t":1794916979825,"p":390453851.539583,"kind":"event","name":"topHeaderHeightChange","native":390453839.054875}
+{"t":1794916979825,"p":390453851.584,"kind":"event","name":"topWindowChange","native":390453849.494666}
+{"t":1794916979842,"p":390453868.822875,"kind":"event","name":"topTransitionProgress","native":390453867.251291}
+{"t":1794916979842,"p":390453868.860541,"kind":"event","name":"topTransitionProgress","native":390453867.329416}

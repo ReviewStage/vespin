@@ -1,0 +1,75 @@
+probe rows 3889, commands 319, frames 16834
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle
+cold-launch | 4 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | -28 | None | None | -28
+inbox-row | 8 | topTouchEnd | 762 | 0 | 0 | 0 | 0 | None | 120 | 0 | 208 | 218 | 969 | 1176
+back-from-thread | 7 | topTouchEnd | 793 | 0 | 0 | 0 | 0 | None | 0 | 0 | -13 | 141 | 953 | 1419
+more-menu | 6 | topTouchEnd | 793 | 0 | 0 | 0 | 0 | None | 0 | 0 | -9 | 261 | 1068 | 1045
+new-task | 6 | topTouchEnd | 730 | 0 | 0 | 0 | 0 | None | 0 | 0 | -24 | 307 | 1037 | 1377
+new-task-cancel | 5 | topTouchEnd | 758 | 0 | 0 | 0 | 0 | None | 0 | 0 | 3 | 136 | 896 | 791
+switcher-open | 6 | topTouchEnd | 714 | 0 | 0 | 0 | 0 | None | 0 | 0 | -16 | 164 | 941 | 1051
+switch-workspace | 5 | topButtonPress | 667 | 0 | 0 | 0 | 0 | None | 0 | 0 | 171 | 171 | 875 | 791
+switch-back | 5 | topButtonPress | 649 | 0 | 0 | 0 | 0 | None | 0 | 0 | 142 | 153 | 800 | 691
+tab-tasks | 6 | topTouchEnd | 771 | 0 | 0 | 0 | 0 | None | 0 | 0 | -22 | 61 | 832 | 907
+tab-inbox | 5 | topTouchEnd | 741 | 0 | 0 | 0 | 0 | None | 0 | 0 | -19 | 73 | 809 | 923
+tasks-row | 8 | topTouchEnd | 712 | 0 | 0 | 0 | 0 | None | 0 | 0 | 80 | None | None | 107
+back-from-task | 7 | topTouchEnd | 3947 | 0 | 0 | 0 | 0 | None | 183 | 0 | -12 | 112 | 4070 | 1024
+status-chip-open | 7 | topTouchEnd | 3988 | 0 | 0 | 0 | 0 | None | 0 | 0 | -22 | 220 | 4264 | 3530
+status-pick | 6 | topIsOnChange | 3769 | 0 | 0 | 0 | 0 | None | 44 | 0 | -24 | 88 | 3855 | 3766
+send | 4 | topTouchEnd | 838 | 0 | 0 | 0 | 0 | None | 0 | 0 | -10 | 170 | 1040 | 129
+
+most rendered components per path (summed over its taps):
+cold-launch: 
+inbox-row: 
+back-from-thread: 
+more-menu: 
+new-task: 
+new-task-cancel: 
+switcher-open: 
+switch-workspace: 
+switch-back: 
+tab-tasks: 
+tab-inbox: 
+tasks-row: 
+back-from-task: 
+status-chip-open: 
+status-pick: 
+send: 
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+cold-launch: 
+inbox-row: 
+back-from-thread: 
+more-menu: 
+new-task: 
+new-task-cancel: 
+switcher-open: 
+switch-workspace: 
+switch-back: 
+tab-tasks: 
+tab-inbox: 
+tasks-row: 
+back-from-task: 
+status-chip-open: 
+status-pick: 
+send: 
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+cold-launch: markdown 0.0, rest 0.0
+inbox-row: markdown 0.0, rest 0.0
+back-from-thread: markdown 0.0, rest 0.0
+more-menu: markdown 0.0, rest 0.0
+new-task: markdown 0.0, rest 0.0
+new-task-cancel: markdown 0.0, rest 0.0
+switcher-open: markdown 0.0, rest 0.0
+switch-workspace: markdown 0.0, rest 0.0
+switch-back: markdown 0.0, rest 0.0
+tab-tasks: markdown 0.0, rest 0.0
+tab-inbox: markdown 0.0, rest 0.0
+tasks-row: markdown 0.0, rest 0.0
+back-from-task: markdown 0.0, rest 0.0
+status-chip-open: markdown 0.0, rest 0.0
+status-pick: markdown 0.0, rest 0.0
+send: markdown 0.0, rest 0.0
+
+whole run: 441s, 0 commits, 0 components rendered, 20574 ms of stalls over 68 stalls
+events: topTransitionProgress×1729, topHeaderHeightChange×586, topLoad×153, topLoadEnd×153, topLoadStart×153, topGlobalEvent×114, topWindowChange×94, topFinishTransitioning×83, topWillAppear×81, topTouchStart×77, topTouchEnd×77, topWillDisappear×66, topAppear×63, topTextChange×60, topDisappear×49

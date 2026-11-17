@@ -1,0 +1,51 @@
+probe rows 1555, commands 227, frames 11168
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle
+inbox-row | 15 | topTouchEnd | 980 | 0 | 0 | 0 | 0 | None | 141 | 0 | 495 | 500 | 1476 | 572
+more-menu | 6 | topTouchEnd | 1031 | 0 | 0 | 0 | 0 | None | 0 | 0 | -7 | 7 | 913 | 1203
+new-task | 6 | topTouchEnd | 927 | 0 | 0 | 0 | 0 | None | 66 | 0 | 55 | 492 | 1426 | 1213
+new-task-cancel | 5 | topTouchEnd | 936 | 0 | 0 | 0 | 0 | None | 54 | 0 | 46 | 505 | 1376 | 1149
+tab-tasks | 6 | topTouchEnd | 967 | 0 | 0 | 0 | 0 | None | 522 | 0 | 48 | 1334 | 2338 | 1479
+tab-inbox | 5 | topTouchEnd | 567 | 0 | 0 | 0 | 0 | None | 587 | 0 | 44 | None | None | 758
+tasks-row | 15 | topTouchEnd | 4086 | 0 | 0 | 0 | 0 | None | 320 | 0 | -7 | 2796 | 6907 | 3926
+status-chip-open | 7 | topTouchEnd | 4324 | 0 | 0 | 0 | 0 | None | 0 | 0 | -3 | 1518 | 5850 | 3511
+status-pick | 6 | topIsOnChange | 3904 | 0 | 0 | 0 | 0 | None | 64 | 0 | -4 | 11 | 3587 | 3846
+send | 4 | topTouchEnd | 1060 | 0 | 0 | 0 | 0 | None | 0 | 0 | 44 | None | None | 255
+
+most rendered components per path (summed over its taps):
+inbox-row: 
+more-menu: 
+new-task: 
+new-task-cancel: 
+tab-tasks: 
+tab-inbox: 
+tasks-row: 
+status-chip-open: 
+status-pick: 
+send: 
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+inbox-row: 
+more-menu: 
+new-task: 
+new-task-cancel: 
+tab-tasks: 
+tab-inbox: 
+tasks-row: 
+status-chip-open: 
+status-pick: 
+send: 
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+inbox-row: markdown 0.0, rest 0.0
+more-menu: markdown 0.0, rest 0.0
+new-task: markdown 0.0, rest 0.0
+new-task-cancel: markdown 0.0, rest 0.0
+tab-tasks: markdown 0.0, rest 0.0
+tab-inbox: markdown 0.0, rest 0.0
+tasks-row: markdown 0.0, rest 0.0
+status-chip-open: markdown 0.0, rest 0.0
+status-pick: markdown 0.0, rest 0.0
+send: markdown 0.0, rest 0.0
+
+whole run: 445s, 0 commits, 0 components rendered, 23541 ms of stalls over 73 stalls
+events: topTransitionProgress×285, topLoad×124, topLoadEnd×124, topLoadStart×124, topGlobalEvent×109, topHeaderHeightChange×105, topWindowChange×82, topTouchStart×67, topTouchEnd×67, topTextChange×60, topFinishTransitioning×40, topSelectionChange×40, topWillAppear×39, topWillDisappear×33, topAppear×26

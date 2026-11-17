@@ -1,0 +1,10 @@
+{"t":1794917013832,"p":390487858.334,"kind":"event","name":"topTouchStart","native":390487835.19025}
+{"t":1794917013954,"p":390487980.345041,"kind":"event","name":"topTouchEnd","native":390487951.856917}
+{"t":1794917013954,"p":390487980.43225,"kind":"event","name":"topPressHeaderBarButtonItem","native":390487978.485083}
+{"t":1794917014007,"p":390488033.374666,"kind":"event","name":"topOverlap","native":390488015.1105}
+{"t":1794917014007,"p":390488033.429583,"kind":"event","name":"topGlobalEvent","native":390488020.13575}
+{"t":1794917014007,"p":390488033.46575,"kind":"event","name":"topFocusChange","native":390488021.997708}
+{"t":1794917014107,"p":390488133.957291,"kind":"event","name":"topWillDisappear","native":390488132.030791}
+{"t":1794917014107,"p":390488133.974208,"kind":"event","name":"topTransitionProgress","native":390488132.04725}
+{"t":1794917014134,"p":390488160.526666,"kind":"event","name":"topHeaderHeightChange","native":390488147.519}
+{"t":1794917014183,"p":390488209.496166,"kind":"event","name":"topWillDisappear","native":390488167.743333}
