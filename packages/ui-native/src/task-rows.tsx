@@ -47,6 +47,7 @@ import { sinceHeard } from "@repo/features/time-format";
 import type { ReactElement, ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import type { RowQuestion } from "./asks.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -249,6 +250,8 @@ type AgentRowProps = {
   readonly menuActions?: readonly RowAction[] | undefined;
   /** What its long press lifts over its menu (`AgentPreview`). */
   readonly preview?: ReactElement | undefined;
+  /** What its acts ask first, such as Archive, standing by the row; none where its acts never ask. */
+  readonly question?: RowQuestion | undefined;
 };
 
 /** How far past its words an agent row's pull request link takes a press, in points: out to either side short of the line's gap to its neighbors, up only to the gap under the line above, and down to the row's foot, or only to the gap under it where a fact stands below it at an accessibility size; so the row stays its height and its other words keep the row's own press. */
@@ -410,6 +413,7 @@ export function AgentRow(props: AgentRowProps) {
       trailingActions={props.trailingActions}
       menuActions={props.menuActions}
       preview={props.preview}
+      question={props.question}
     />
   );
 }
