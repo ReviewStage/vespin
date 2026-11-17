@@ -1,7 +1,7 @@
 // media-frame.test.ts -- a picture or a recording stands at its own shape, never past its own size, held to the bound.
 
 import { describe, expect, it } from "vitest";
-import { mediaFrame } from "./media-frame.js";
+import { COLUMN_BOUNDS, mediaFrame } from "./media-frame.js";
 
 describe("mediaFrame", () => {
   it.each([
@@ -13,8 +13,10 @@ describe("mediaFrame", () => {
     { natural: { width: 64, height: 48 }, width: 64, height: 48 },
     // Media of no known size stands as a film's well at the widest.
     { natural: undefined, width: 280, height: 157.5 },
-  ])("stands $natural at $width × $height", ({ natural, width, height }) => {
-    const frame = mediaFrame(natural);
+    // A diagram held only to the column stands at its own size, wider than a message's picture, so its labels stay readable.
+    { natural: { width: 600, height: 60 }, bounds: COLUMN_BOUNDS, width: 600, height: 60 },
+  ])("stands $natural at $width × $height", ({ natural, bounds, width, height }) => {
+    const frame = mediaFrame(natural, bounds);
 
     expect(frame.width).toBeCloseTo(width, 1);
     expect(frame.width / frame.aspectRatio).toBeCloseTo(height, 1);

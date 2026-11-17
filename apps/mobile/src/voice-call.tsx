@@ -455,14 +455,16 @@ export function useAgentTalk(agentId: string, taskId: string | undefined): Agent
   };
 }
 
-/** The account's saved keys the host holds, as a `select`; none until read. */
+/** The host's read of the account's saved keys, as a `select`: unread, failed, or its rows. */
 function heldKeys(accountId: string) {
-  return (state: AppStateSnapshot) => state[LIVE_READ.PROVIDER_KEYS][accountId]?.rows?.keys;
+  return (state: AppStateSnapshot) => state[LIVE_READ.PROVIDER_KEYS][accountId];
 }
 
-/** Talk in a sheet that starts a new agent: its press, and the question it asks first while another call stands. */
+/** Talk in a sheet that starts a new agent: its press, whether it may be pressed yet, and the question it asks first while another call stands. */
 export interface NewAgentTalk {
   readonly onTalk: () => void;
+  /** False while the account's keys are read, so a press never goes unanswered. */
+  readonly ready: boolean;
   readonly switching: AgentTalk["switching"];
 }
 
@@ -473,8 +475,9 @@ export interface NewAgentTalk {
  * opens on it, so the caller's first words are its first message. Note that
  * the account's keys are followed so that Talk with no OpenAI key starts
  * nothing and says to add one, rather than leaving an agent no call can
- * open on; a press while another call stands asks first, as an agent's own
- * Talk does. None while calls are not offered.
+ * open on, and Talk stands disabled until they are read; a press while
+ * another call stands asks first, as an agent's own Talk does. None while
+ * calls are not offered.
  */
 export function useNewAgentTalk(
   start: () => Promise<VoiceCallInto | undefined>,
@@ -486,7 +489,8 @@ export function useNewAgentTalk(
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
   const key = accountId ?? "";
   useLiveFollow(accountId, () => acts[ACT_KIND.PROVIDER_KEYS_FOLLOW]());
-  const keys = useQuery({ ...appStateQuery, select: useCallback(heldKeys(key), [key]) }).data;
+  const read = useQuery({ ...appStateQuery, select: useCallback(heldKeys(key), [key]) }).data;
+  const keys = read?.rows?.keys;
 
   const go = () => {
     setAsking(false);
@@ -496,11 +500,9 @@ export function useNewAgentTalk(
 
   if (!voice.offered) return undefined;
 
-  // Note that Talk starts nothing until the keys are read, since an agent started with no key could take no call.
+  // Note that Talk waits on the keys' read, standing disabled meanwhile, since an agent started with no key could take no call; a read that failed leaves the key to the service, which refuses a call with none.
   const onTalk = () => {
-    if (keys === undefined) return;
-
-    if (!savesOpenAiKey(keys)) {
+    if (keys !== undefined && !savesOpenAiKey(keys)) {
       buzz(BUZZ.ERROR);
       notices.say({
         kind: NOTICE_KIND.REFUSED,
@@ -516,6 +518,7 @@ export function useNewAgentTalk(
 
   return {
     onTalk,
+    ready: keys !== undefined || read?.failed === true,
     switching: {
       title: SWITCH_QUESTION.TITLE,
       message: SWITCH_QUESTION.MESSAGE,
