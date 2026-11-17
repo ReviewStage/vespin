@@ -53,6 +53,7 @@ export const SANDBOX_CALL = {
   INTERACTIVE: "interactive",
   SNAPSHOT: "snapshot",
   PORTS: "ports",
+  RESIZE: "resize",
 } as const;
 
 export type SandboxCall = (typeof SANDBOX_CALL)[keyof typeof SANDBOX_CALL];

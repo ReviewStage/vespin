@@ -12,6 +12,7 @@ import {
   fakeWorkspaceSeams,
   getTestDB,
   joinWorkspace,
+  openTaskAgent,
   openWorkspace,
 } from "@repo/database/testing";
 import {
@@ -97,7 +98,7 @@ import { dispatched } from "./support/platform-landing";
  * The Tasks tab's task routes, answered by the group the way a
  * function answers them, over a real dialect: the bearer names the account
  * and nothing else does, a task another account owns answers exactly as one
- * that does not exist, and what the notetaker's notes saved is what the window opens.
+ * that does not exist, and what notes saved is what the window opens.
  * A plan's own routes are asked at the path a client sends, landed through
  * the committed rewrites on the hosted oRPC router; the old group's at the
  * path the rewrite hands it, the task id moved from the path into the `id`
@@ -109,6 +110,9 @@ import { dispatched } from "./support/platform-landing";
  */
 
 const ORIGIN = "https://app.test";
+
+/** The member writing a description by hand, as the window's edits are written. */
+const DEVELOPER = { actor: DESCRIPTION_ACTOR.DEVELOPER } as const;
 const TASKS = "/api/tasks";
 const ONE_TASK = (taskId: string) => `${TASKS}/${taskId}`;
 const FILE = (taskId: string) => `${ONE_TASK(taskId)}/file`;
@@ -411,10 +415,14 @@ it.layer(getTestDB())("the plan routes", (it) => {
       const { owner, ask } = yield* openAccounts();
       const taskId = startedId(yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })));
 
-      const saved = yield* saveNotes({ userId: owner, taskId: taskId }, [
-        added("Context", "Only admins can invite."),
-        added("Open questions", "- Who can withdraw an invite?"),
-      ]);
+      const saved = yield* saveNotes(
+        { userId: owner, taskId: taskId },
+        [
+          added("Context", "Only admins can invite."),
+          added("Open questions", "- Who can withdraw an invite?"),
+        ],
+        DEVELOPER,
+      );
 
       assert.equal(saved.status, DESCRIPTION_SAVE_STATUS.SAVED);
 
@@ -1291,9 +1299,17 @@ it.layer(getTestDB())("the plan routes", (it) => {
    */
   const twoRevisions = (userId: string, taskId: string) =>
     Effect.gen(function* () {
-      yield* saveNotes({ userId, taskId: taskId }, [added("Context", "Only admins can invite.")]);
+      yield* saveNotes(
+        { userId, taskId: taskId },
+        [added("Context", "Only admins can invite.")],
+        DEVELOPER,
+      );
       yield* TestClock.adjust(Duration.millis(DESCRIPTION_REVISION.JOIN_WITHIN_MS + 1));
-      yield* saveNotes({ userId, taskId: taskId }, [added("Goal", "Members invite by email.")]);
+      yield* saveNotes(
+        { userId, taskId: taskId },
+        [added("Goal", "Members invite by email.")],
+        DEVELOPER,
+      );
     });
 
   it.effect(
@@ -1338,16 +1354,25 @@ it.layer(getTestDB())("the plan routes", (it) => {
       Effect.gen(function* () {
         const { owner, other, ask } = yield* openAccounts();
 
-        const taskId = startedId(
+        const started = readAnswer(
+          taskAnswerSchema,
+          HOSTED_HTTP_STATUS.CREATED,
           yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })),
-        );
+        ).task;
+
+        const taskId = started.id;
+
+        const shownBy = {
+          kind: PAGE_SHOWER.AGENT,
+          agentId: yield* openTaskAgent(owner, started.workspaceId, taskId),
+        } as const;
 
         const page = Option.getOrThrow(
           yield* writePage(
             owner,
             taskPageOwner(taskId),
             { title: "Invite funnel", html: "<p>v1</p>" },
-            { kind: PAGE_SHOWER.APP },
+            shownBy,
           ),
         );
 
@@ -1368,7 +1393,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
               title: "Invite funnel",
               version: 1,
               at: page.at,
-              shownBy: { kind: PAGE_SHOWER.APP },
+              shownBy,
               html: "<p>v1</p>",
             },
           },

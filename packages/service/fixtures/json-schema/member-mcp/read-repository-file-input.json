@@ -10,6 +10,7 @@
     "repository": {
       "type": "string",
       "maxLength": 140,
+      "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*\\/(?!\\.{1,2}$)[A-Za-z0-9_.-]+$",
       "description": "The repository, by its full name (owner/name), as list_repositories lists it."
     },
     "path": {
@@ -27,6 +28,7 @@
       "type": "string",
       "minLength": 40,
       "maxLength": 40,
+      "pattern": "^[0-9a-f]{40}$",
       "description": "The commit to read the file at, by its full SHA; the default branch's head where left out."
     }
   },

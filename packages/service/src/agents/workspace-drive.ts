@@ -368,7 +368,8 @@ const lockedFill = <E, R, E2, R2>(
       sandboxName: name,
       organizationId: workspace.workspaceId,
       agentId: null,
-      userId: workspace.userId,
+      // A fill is the workspace's work, not a member's.
+      userId: null,
       createdAt: yield* DateTime.nowAsDate,
     });
 

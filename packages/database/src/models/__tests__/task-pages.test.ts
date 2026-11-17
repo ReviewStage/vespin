@@ -26,8 +26,6 @@ import { createTask, deleteTask } from "../task-store.js";
  * Synthetic accounts and pages throughout.
  */
 
-const LUKE: PageShower = { kind: PAGE_SHOWER.APP };
-
 const onTask = (taskId: string): PageOwner => ({ kind: PAGE_OWNER.TASK, taskId });
 
 const shownByAgent = (agentId: string): PageShower => ({ kind: PAGE_SHOWER.AGENT, agentId });
@@ -90,13 +88,14 @@ it.layer(getTestDB())("a page read by its id", (it) => {
         yield* joinWorkspace(workspace, teammate);
         yield* openWorkspace(outsider);
         const task = yield* createTask(owner, { organizationId: workspace, name: "Invitations" });
+        const agent = shownByAgent(yield* openAgent(owner, workspace, task.id));
 
         const first = Option.getOrThrow(
           yield* writePage(
             owner,
             onTask(task.id),
             { title: "Invites", html: "<h1>One</h1>" },
-            LUKE,
+            agent,
           ),
         );
 
@@ -104,7 +103,7 @@ it.layer(getTestDB())("a page read by its id", (it) => {
           owner,
           onTask(task.id),
           { pageId: first.id, title: "Invites by week", html: "<h1>Two</h1>" },
-          LUKE,
+          agent,
         );
 
         const newest = Option.getOrThrow(yield* readPageById(teammate, first.id, undefined));
@@ -142,6 +141,7 @@ it.layer(getTestDB())("a page read by its id", (it) => {
         yield* openWorkspace(outsider);
         const task = yield* createTask(owner, { organizationId: workspace, name: "Invitations" });
         const agent = shownByAgent(yield* openAgent(owner, workspace, task.id));
+        const other = shownByAgent(yield* openAgent(owner, workspace, task.id));
 
         const shown = Option.getOrThrow(
           yield* writePage(
@@ -156,11 +156,11 @@ it.layer(getTestDB())("a page read by its id", (it) => {
           owner,
           onTask(task.id),
           { pageId: shown.id, title: "Invites", html: "<h1>Two</h1>" },
-          LUKE,
+          other,
         );
 
         const older = Option.getOrThrow(
-          yield* writePage(owner, onTask(task.id), { title: "Old", html: "<h1>Old</h1>" }, LUKE),
+          yield* writePage(owner, onTask(task.id), { title: "Old", html: "<h1>Old</h1>" }, other),
         );
 
         // A version shown before who showed it was kept, as the column's migration leaves it.
@@ -179,7 +179,7 @@ it.layer(getTestDB())("a page read by its id", (it) => {
             .map((page) => [page.title, page.shownBy] as const)
             .toSorted(([one], [other]) => one.localeCompare(other)),
           [
-            ["Invites", LUKE],
+            ["Invites", other],
             ["Old", undefined],
           ],
         );
@@ -214,7 +214,7 @@ it.layer(getTestDB())("a page read by its id", (it) => {
           owner,
           onTask(task.id),
           { pageId: shown.id, title: "Plan", html: "<p>2</p>" },
-          LUKE,
+          shownByAgent(onIt),
         );
 
         yield* deleteTask(owner, task.id);

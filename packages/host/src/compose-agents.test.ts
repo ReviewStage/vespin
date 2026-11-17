@@ -28,10 +28,6 @@ import {
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LIVE_SIGNED_OUT, type TranscriptNowAnswer } from "@repo/features/live-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
-import {
-  PULL_REQUEST_ACTION,
-  PULL_REQUEST_WRITE_OUTCOME,
-} from "@repo/features/pull-request-write-wire";
 import { GATEWAY_METHOD } from "@repo/gateway";
 import { entityPool } from "@repo/sync";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
@@ -57,8 +53,6 @@ import {
   AGENT,
   AGENT_ID,
   ATTACHMENT_ID,
-  CHANGES,
-  CHAPTERS,
   FOLLOWED,
   GATE_CLOSED_SIGNED_OUT,
   holding,
@@ -192,18 +186,9 @@ it.effect("each method asks the service once and answers what it said, whole", (
     assert.deepEqual(yield* acts.AGENTS_PAGE({ agentId: AGENT_ID }), {
       agent: PAGE,
     });
-    assert.deepEqual(yield* acts.AGENTS_CHANGES({ agentId: AGENT_ID }), CHANGES);
-    assert.deepEqual(yield* acts.AGENTS_CHANGES({ agentId: AGENT_ID, number: 11 }), CHANGES);
     assert.deepEqual(
       yield* acts.AGENTS_TURN_CHANGES({ agentId: AGENT_ID, messageId: "line-1" }),
       TURN_CHANGES,
-    );
-    assert.deepEqual(
-      yield* acts.CHAPTERS_GENERATE({
-        agentId: AGENT_ID,
-        number: 11,
-      }),
-      CHAPTERS,
     );
     assert.deepEqual(
       yield* acts.AGENTS_GITHUB_IMAGE({
@@ -211,14 +196,6 @@ it.effect("each method asks the service once and answers what it said, whole", (
         src: "https://camo.githubusercontent.com/abc",
       }),
       { contentType: GITHUB_IMAGE_TYPE.PNG, base64: "iVBORw0KGgo=" },
-    );
-    assert.deepEqual(
-      yield* acts.AGENTS_PULL_REQUEST_ACTION({
-        agentId: AGENT_ID,
-        number: 11,
-        request: { action: PULL_REQUEST_ACTION.READY_FOR_REVIEW },
-      }),
-      { outcome: PULL_REQUEST_WRITE_OUTCOME.DONE },
     );
     assert.deepEqual(
       yield* acts.AGENTS_INBOX_ATTACHMENT({
@@ -353,12 +330,8 @@ it.effect("each method asks the service once and answers what it said, whole", (
       `pin:${AGENT_ID}:true`,
       `delete:${AGENT_ID}`,
       `page:${AGENT_ID}`,
-      `changes:${AGENT_ID}`,
-      `changes:${AGENT_ID}#11`,
       `turn-changes:${AGENT_ID}:line-1`,
-      `chapters-generate:${AGENT_ID}#11`,
       `github-image:${AGENT_ID}:https://camo.githubusercontent.com/abc`,
-      `pull-request-action:${AGENT_ID}#11:${PULL_REQUEST_ACTION.READY_FOR_REVIEW}`,
       `attachment:${ITEM.id}:${ATTACHMENT_ID}`,
       `picture:${AGENT_ID}:${PICTURE_ID}:call-worker`,
       `part:${AGENT_ID}:message-1:2:`,

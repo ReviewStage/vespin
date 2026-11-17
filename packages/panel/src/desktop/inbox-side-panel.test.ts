@@ -273,6 +273,23 @@ async function inbox(
       tasks: [TASK, OTHER],
       taskAgents: LISTED_AGENTS,
       agentPullRequests: LISTED_PULL_REQUESTS,
+      taskPullRequests: [
+        {
+          taskId: TASK.id,
+          pullRequests: [
+            {
+              number: BATCHED.number,
+              title: BATCHED.title,
+              state: BATCHED.state,
+              checks: BATCHED.checks,
+              additions: BATCHED.additions,
+              deletions: BATCHED.deletions,
+              url: BATCHED.url,
+              agentId: AGENT.id,
+            },
+          ],
+        },
+      ],
     },
   });
   // The account's feed holds the task's one item, which the Inbox draws from.
@@ -427,10 +444,10 @@ test("a page the item names before its plan's pages are read is still the panel'
   assert.equal(left.links.length, 0, "the page is still the panel's to open");
 });
 
-test("an archived agent's Pull request tab stands beside the Inbox as any other, and closing the last tab drawn shuts the panel, as on a task's page", async () => {
+test("a pull request's tab stands beside the Inbox as on the task's page, and closing the last tab drawn shuts the panel, as on a task's page", async () => {
   const { container, panel } = await inbox();
-  // The archived agent's tab, as one opened on the task's page before the agent was archived, which still draws its pull request.
-  act(() => panel().onChoose(changesTab(ARCHIVED.id)));
+  // The pull request's tab, as one opened on the task's page.
+  act(() => panel().onChoose(changesTab({ repository: "acme/relay", number: 42 })));
   await settle();
   await pressChip(container, "relay#42");
   assert.equal(panelTabs(container)?.[0], "▸ #42 Send invitations in batches");

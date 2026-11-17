@@ -76,6 +76,7 @@ import { Effect, Option, Queue, Result, Stream } from "effect";
 import { CODER } from "../agents/coder-host/bounds.js";
 import { changeAgentQueue } from "../agents/coder-host/queue-change.js";
 import { spokenLineMetadata } from "../agents/coder-host/spoken-line.js";
+import { endTurnSummary } from "../agents/coder-host/starter-report.js";
 import { steerMemberWords } from "../agents/coder-host/steer.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import {
@@ -198,8 +199,11 @@ function toolCallsOf(record: StoredMessageRecord): readonly { id: string; step: 
   });
 }
 
-/** A finished journal's reply: the words of its last step, after every tool call, which are what the turn answered. */
+/** A finished journal's reply: the summary of its last `end_turn` where one took it (`endTurnSummary`), or else the words of its last step, after every tool call, which are what the turn answered. */
 function replyOf(record: StoredMessageRecord): string {
+  const summary = endTurnSummary(record.message);
+
+  if (summary !== undefined) return summary;
   const parts = record.message.parts.map((part) => partOf(part));
 
   const lastStep = parts.findLastIndex(

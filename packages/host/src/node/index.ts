@@ -8,6 +8,8 @@ export { armedWatchLayer } from "./armed-watch.js";
 
 export { jsonStateFile } from "./json-state-file.js";
 
+export { nodeSqliteDriverLayer } from "./node-sqlite-driver.js";
+
 export { mirrorPlatform } from "./open-on-mac.js";
 
 export { reportedLine, reportToStderr, tolerateClosedStderr } from "./stderr-report.js";

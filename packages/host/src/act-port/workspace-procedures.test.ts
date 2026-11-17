@@ -44,6 +44,7 @@ const SIGNED_IN = {
 const WORKSPACE = { workspaceId: "workspace-acme" };
 const INSTALL_URL = "https://github.com/apps/luke/installations/new?state=intent-1";
 const SENTRY_INSTALL_URL = "https://sentry.io/sentry-apps/luke/external-install/?state=fixture";
+const SLACK_INSTALL_URL = "https://slack.com/oauth/v2/authorize?client_id=fixture&state=fixture";
 
 /** What a declared act's refusal row holds: a payload its schema takes, and the sentence it is refused in. */
 interface RefusalRow {
@@ -144,6 +145,14 @@ const REFUSAL_ROWS: Readonly<Record<keyof typeof WORKSPACE_ACTS, RefusalRow>> = 
     refusal: "Could not save that variable on this system.",
     payload: { ...WORKSPACE, name: "API_TOKEN", value: "fixture-value" },
   },
+  WORKSPACE_ENVIRONMENT_SAVE: {
+    refusal: "Could not save those variables on this system.",
+    payload: {
+      ...WORKSPACE,
+      secret: true,
+      variables: [{ name: "API_TOKEN", value: "fixture-value" }],
+    },
+  },
   WORKSPACE_ENVIRONMENT_DELETE: {
     refusal: "Could not delete that variable on this system.",
     payload: { ...WORKSPACE, name: "API_TOKEN" },
@@ -151,6 +160,14 @@ const REFUSAL_ROWS: Readonly<Record<keyof typeof WORKSPACE_ACTS, RefusalRow>> = 
   WORKSPACE_SANDBOX_SETUP_READ: {
     refusal: "Could not read that workspace's cloud setup on this system.",
     payload: WORKSPACE,
+  },
+  WORKSPACE_SANDBOX_SIZE_READ: {
+    refusal: "Could not read that workspace's sandbox size on this system.",
+    payload: WORKSPACE,
+  },
+  WORKSPACE_SANDBOX_SIZE_PUT: {
+    refusal: "Could not save that sandbox size on this system.",
+    payload: { ...WORKSPACE, vcpus: 4 },
   },
   WORKSPACE_MERGE_QUEUE_READ: {
     refusal: "Could not read that workspace's merge queues on this system.",
@@ -186,6 +203,11 @@ const REFUSAL_ROWS: Readonly<Record<keyof typeof WORKSPACE_ACTS, RefusalRow>> = 
     payload: WORKSPACE,
     byHand: true,
   },
+  WORKSPACE_SLACK_BOT_INSTALL: {
+    refusal: "Could not open Slack to connect that workspace on this system.",
+    payload: WORKSPACE,
+    byHand: true,
+  },
 };
 
 /** Each declared act, with its kind and its row. */
@@ -213,6 +235,7 @@ afterEach(() => {
 function connectPort(answers: {
   readonly github: Effect.Effect<string, ActRefused>;
   readonly sentry: Effect.Effect<string, ActRefused>;
+  readonly slack: Effect.Effect<string, ActRefused>;
 }) {
   const opened: string[] = [];
 
@@ -226,6 +249,7 @@ function connectPort(answers: {
     workspaceProcedures(dependencies, {
       WORKSPACE_GITHUB_CONNECT: () => answers.github,
       WORKSPACE_SENTRY_INSTALL: () => answers.sentry,
+      WORKSPACE_SLACK_BOT_INSTALL: () => answers.slack,
     }),
   );
 
@@ -244,6 +268,7 @@ it.effect.each(ACTS)(
             const connect = connectPort({
               github: Effect.succeed(INSTALL_URL),
               sentry: Effect.succeed(SENTRY_INSTALL_URL),
+              slack: Effect.succeed(SLACK_INSTALL_URL),
             });
 
             return { port: connect.port, done: () => connect.opened };
@@ -306,46 +331,59 @@ it.effect(
     Effect.gen(function* () {
       const github = { kind: WORKSPACE_ACT_KIND.WORKSPACE_GITHUB_CONNECT, payload: WORKSPACE };
       const sentry = { kind: WORKSPACE_ACT_KIND.WORKSPACE_SENTRY_INSTALL, payload: WORKSPACE };
+      const slack = { kind: WORKSPACE_ACT_KIND.WORKSPACE_SLACK_BOT_INSTALL, payload: WORKSPACE };
 
       const own = connectPort({
         github: Effect.succeed(INSTALL_URL),
         sentry: Effect.succeed(SENTRY_INSTALL_URL),
+        slack: Effect.succeed(SLACK_INSTALL_URL),
       });
 
       const elsewhere = connectPort({
         github: Effect.succeed("https://evil.test/apps/luke/installations/new"),
         sentry: Effect.succeed("https://sentry.example/sentry-apps/luke/external-install/"),
+        slack: Effect.succeed("https://slack.com.evil.test/oauth/v2/authorize"),
       });
 
       const refused = connectPort({
         github: Effect.fail(new ActRefused({ sentence: WORKSPACE_NOT_PERMITTED_REFUSAL })),
         sentry: Effect.fail(new ActRefused({})),
+        slack: Effect.fail(new ActRefused({})),
       });
 
       const opening = [
         yield* own.port.perform(github, PANEL),
         yield* own.port.perform(sentry, PANEL),
+        yield* own.port.perform(slack, PANEL),
       ];
 
       const offOrigin = [
         yield* elsewhere.port.perform(github, PANEL),
         yield* elsewhere.port.perform(sentry, PANEL),
+        yield* elsewhere.port.perform(slack, PANEL),
       ];
 
       const refusing = [
         yield* refused.port.perform(github, PANEL),
         yield* refused.port.perform(sentry, PANEL),
+        yield* refused.port.perform(slack, PANEL),
       ];
 
-      assert.deepEqual(opening, [{ answer: undefined }, { answer: undefined }]);
-      assert.deepEqual(own.opened, [INSTALL_URL, SENTRY_INSTALL_URL]);
+      assert.deepEqual(opening, [
+        { answer: undefined },
+        { answer: undefined },
+        { answer: undefined },
+      ]);
+      assert.deepEqual(own.opened, [INSTALL_URL, SENTRY_INSTALL_URL, SLACK_INSTALL_URL]);
       assert.deepEqual(offOrigin, [
         { refused: WORKSPACE_ACTS.WORKSPACE_GITHUB_CONNECT.refusal },
         { refused: WORKSPACE_ACTS.WORKSPACE_SENTRY_INSTALL.refusal },
+        { refused: WORKSPACE_ACTS.WORKSPACE_SLACK_BOT_INSTALL.refusal },
       ]);
       assert.deepEqual(refusing, [
         { refused: WORKSPACE_NOT_PERMITTED_REFUSAL },
         { refused: WORKSPACE_ACTS.WORKSPACE_SENTRY_INSTALL.refusal },
+        { refused: WORKSPACE_ACTS.WORKSPACE_SLACK_BOT_INSTALL.refusal },
       ]);
       assert.deepEqual([...elsewhere.opened, ...refused.opened], []);
     }),

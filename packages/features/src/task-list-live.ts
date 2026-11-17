@@ -43,7 +43,7 @@ import {
 } from "./live-read.js";
 import { LIVE_USER_QUERY } from "./live-wire.js";
 import { readMarkOf } from "./read-mark.js";
-import { sandboxVcpus } from "./sandbox-size.js";
+import { SANDBOX_SIZE } from "./sandbox-size.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber } from "./service-wire.js";
 import { agentMarkedPullRequest, standingFailures } from "./task-agents-model.js";
@@ -122,7 +122,7 @@ const taskLiveRowSchema = EffectSchema.Struct({
   /** Who made the task for its owner (`DESCRIPTION_ACTOR`); absent from a service before it was sent, read as made by hand. */
   creatorActor: EffectSchema.optionalKey(
     literalsReadingUnknown(
-      [DESCRIPTION_ACTOR.DEVELOPER, DESCRIPTION_ACTOR.NOTETAKER, DESCRIPTION_ACTOR.AGENT],
+      [DESCRIPTION_ACTOR.DEVELOPER, DESCRIPTION_ACTOR.AGENT],
       DESCRIPTION_ACTOR.DEVELOPER,
     ),
   ),
@@ -185,6 +185,8 @@ const agentLiveRowSchema = EffectSchema.Struct({
   brief: literalsReadingUnknown(Object.values(AGENT_BRIEF), AGENT_BRIEF.PROMPT),
   /** The repository the agent works in; null for one that works in none. */
   repository: EffectSchema.NullOr(EffectSchema.String),
+  /** The vCPUs its sandbox opens with, its workspace's size (`sandbox-size.ts`); absent from a statement before it was carried. */
+  sandboxVcpus: EffectSchema.optionalKey(countedNumber),
   starterId: EffectSchema.String,
   starterName: EffectSchema.NullOr(EffectSchema.String),
   /** The coding agent that started this one; null where none did, and absent from a statement before it was carried. */
@@ -871,7 +873,7 @@ function agentSummaryOf(
     title: row.title,
     ...(row.machine === AGENT_MACHINE.DEVICE
       ? { machine: AGENT_MACHINE.DEVICE }
-      : { sandboxVcpus: sandboxVcpus(row.repository) }),
+      : { sandboxVcpus: row.sandboxVcpus ?? SANDBOX_SIZE.VCPUS }),
     ...(mac === undefined ? undefined : { mac }),
     createdAt: row.createdAt,
     status,

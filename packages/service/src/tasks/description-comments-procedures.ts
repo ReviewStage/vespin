@@ -23,7 +23,6 @@ import {
   type DescriptionCommentThreadAnswer,
 } from "@repo/features/description-comment-wire";
 import { askedInWords } from "@repo/features/mention-link";
-import { PAGE_SHOWER } from "@repo/features/page-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { COMMENT_LINE_BOUNDS } from "@repo/wire";
 import { Effect, Option } from "effect";
@@ -224,8 +223,8 @@ const commentAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /**
  * The writer of the page a thread is on: the agent that showed its newest
- * version, or the app where it showed it; none for a thread on the description, or
- * a page shown before who showed it was kept.
+ * version; none for a thread on the description, or a page shown before who
+ * showed it was kept.
  */
 const pageWriterOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
@@ -237,9 +236,7 @@ const pageWriterOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   if (shownBy === undefined) return undefined;
 
-  return shownBy.kind === PAGE_SHOWER.AGENT
-    ? { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: shownBy.agentId }
-    : { actor: DESCRIPTION_COMMENT_ACTOR.APP };
+  return { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: shownBy.agentId };
 });
 
 /** One the thread is handed to, and whether a hand-over that could not land is said back, as one asked whatever the words say is. */
@@ -306,7 +303,7 @@ function handedTo(
 /**
  * The thread handed to each of the task's standing agents the comment reaches
  * (`handedTo`); an agent of another task, or an archived one, cannot take
- * it, and neither can the app's own assistant, which no task has any more.
+ * it.
  * Who can take it is read before the answer, which says back the ones in the
  * thread who could not; the hand-overs themselves run past it
  * (`afterResponse`), because waking an idle agent resumes its sandbox, which

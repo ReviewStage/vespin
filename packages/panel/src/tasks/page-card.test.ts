@@ -73,7 +73,7 @@ test("a version written while the card stands is hidden until it loads, never th
   assert.equal(preview()?.dataset.loaded, "true");
 });
 
-test("a provenance row says who showed the version, wherever the card hangs: Vespin, an agent by the name the window holds, or an agent it holds none of, and nothing for a version from before", () => {
+test("a provenance row says who showed the version, wherever the card hangs: an agent by the name the window holds, or an agent it holds none of, and nothing for a version from before", () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -88,15 +88,13 @@ test("a provenance row says who showed the version, wherever the card hangs: Ves
 
   assert.deepEqual(
     [
-      subOf({ ...FUNNEL, shownBy: { kind: PAGE_SHOWER.APP } }),
-      subOf({ ...FUNNEL, version: 1, shownBy: { kind: PAGE_SHOWER.APP } }),
       subOf({
         ...FUNNEL,
         shownBy: { kind: PAGE_SHOWER.AGENT, agentId: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21" },
       }),
       subOf(FUNNEL),
     ],
-    ["Shown by Vespin", "Shown by Vespin", "Shown by Agent", undefined],
+    ["Shown by Agent", undefined],
   );
 });
 

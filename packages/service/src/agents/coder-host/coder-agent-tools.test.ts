@@ -1309,7 +1309,7 @@ test("start_agent starts an agent on the caller's own task as the deployment act
   assert.ok(message.includes(`"${caller.name}"`) && message.includes(caller.id), message);
   // It reports back by message.
   assert.ok(
-    message.includes(`call ${AGENT_TOOL.MESSAGE_AGENT} with its agentId, ${caller.id}.`),
+    message.includes(`Message it with ${AGENT_TOOL.MESSAGE_AGENT}, its agentId ${caller.id}, `),
     message,
   );
   // An agent's own pick of a model is no member's new default.
@@ -1508,7 +1508,7 @@ function pngOf(size: number, mark: number): Uint8Array {
   return bytes;
 }
 
-/** A picture kept beside the agent's conversation, as `show_image` keeps one, a PNG unless another type is given; answers its attachment id. */
+/** A picture kept beside the agent's conversation, as `show_media` keeps one, a PNG unless another type is given; answers its attachment id. */
 async function keptPicture(
   agent: ConversationTarget,
   bytes: Uint8Array,
@@ -1697,14 +1697,14 @@ test("start_agent refuses, in words that say why and starting nothing, a picture
 
   const unreached = (id: string) =>
     `Not started: attachment ${id} is no picture you can hand on. Name a picture of your own ` +
-    "conversation, such as one show_image kept.";
+    "conversation, such as one show_media kept.";
 
   for (const [images, reason] of [
     [[theirs], unreached(theirs)],
     [
       [recording],
-      `Not started: attachment ${recording} is a video, and only a picture, a PNG, JPEG, or ` +
-        "WebP, is handed to another agent.",
+      `Not started: attachment ${recording} is a video or a sound clip, and only a picture, a ` +
+        "PNG, JPEG, or WebP, is handed to another agent.",
     ],
     [
       [tooLargeId],
@@ -3716,7 +3716,7 @@ test("read_page reads a page a teammate showed on another task of the caller's w
         bob,
         taskPageOwner(tasks.billing),
         { title: "Seats", html: "<h1>One</h1>" },
-        { kind: PAGE_SHOWER.APP },
+        { kind: PAGE_SHOWER.AGENT, agentId: agents.teammates.id },
       ),
     ),
   );
@@ -3726,7 +3726,7 @@ test("read_page reads a page a teammate showed on another task of the caller's w
       bob,
       taskPageOwner(tasks.billing),
       { pageId: shown.id, title: "Seats by month", html: rows },
-      { kind: PAGE_SHOWER.APP },
+      { kind: PAGE_SHOWER.AGENT, agentId: agents.teammates.id },
     ),
   );
 
@@ -3736,7 +3736,7 @@ test("read_page reads a page a teammate showed on another task of the caller's w
         agents.otherWorkspaces.userId,
         taskPageOwner(tasks.elsewhere),
         { title: "Theirs", html: "<p/>" },
-        { kind: PAGE_SHOWER.APP },
+        { kind: PAGE_SHOWER.AGENT, agentId: agents.otherWorkspaces.id },
       ),
     ),
   );
@@ -4776,7 +4776,6 @@ test("list_automations, create_automation, update_automation, and delete_automat
       await update({
         scope: "workspace",
         agentId: null,
-        guards: { maxConcurrentRuns: 5, dailyRunCap: 50 },
       }),
     ).scope,
     "workspace",
@@ -4847,7 +4846,7 @@ test("list_automations, create_automation, update_automation, and delete_automat
   );
 });
 
-test("create_automation and update_automation take a Sentry trigger once the workspace installed Vespin's Sentry integration, with its filters and per-issue cooldown, and refuse one where the deployment configures no Sentry integration or the workspace installed none", async () => {
+test("create_automation and update_automation take a Sentry trigger once the workspace installed Vespin's Sentry integration, with its filters, and refuse one where the deployment configures no Sentry integration or the workspace installed none", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -4925,31 +4924,13 @@ test("create_automation and update_automation take a Sentry trigger once the wor
     rejected(AUTOMATION_TOOL_REFUSAL.SENTRY_UNCONFIGURED),
   );
 
-  const created = await call(
-    AGENT_TOOL.CREATE_AUTOMATION,
-    { ...made, guards: { maxConcurrentRuns: 1, dailyRunCap: 10, subjectCooldownHours: 6 } },
-    "installed",
-  );
+  const created = await call(AGENT_TOOL.CREATE_AUTOMATION, made, "installed");
 
   assert.equal(created.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(created));
-  assert.deepEqual(
-    [automationOf(created).trigger, automationOf(created).guards],
-    [alerts, { maxConcurrentRuns: 1, dailyRunCap: 10, subjectCooldownHours: 6 }],
-  );
+  assert.deepEqual(automationOf(created).trigger, alerts);
   const switched = await call(AGENT_TOOL.UPDATE_AUTOMATION, toSentry, "switch-installed");
   assert.equal(switched.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(switched));
   assert.deepEqual(automationOf(switched).trigger, toSentry.trigger);
-  assert.deepEqual(
-    await call(
-      AGENT_TOOL.UPDATE_AUTOMATION,
-      {
-        automationId: weekly.id,
-        guards: { maxConcurrentRuns: 1, dailyRunCap: 10, subjectCooldownHours: 169 },
-      },
-      "cooldown-too-long",
-    ),
-    rejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_UPDATE),
-  );
 });
 
 /** Turns the experiment on or off for everyone in the workspace, as the admin named would; its agents read and write no description, or keep no memory, while it is off. */

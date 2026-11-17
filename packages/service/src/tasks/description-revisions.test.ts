@@ -34,7 +34,6 @@ import {
  */
 
 const AGENT_MODEL = "anthropic/claude-opus-5.5";
-const NOTETAKER: DescriptionWriter = { actor: DESCRIPTION_ACTOR.NOTETAKER };
 
 /** Notes that write a draft into a description, each in a section of its own. */
 const DRAFT_NOTES: readonly DescriptionNote[] = [
@@ -103,7 +102,7 @@ it.layer(getTestDB())("a description's history", (it) => {
     () =>
       Effect.gen(function* () {
         const { userId, taskId } = yield* openTask;
-        yield* saveNotes({ userId, taskId }, DRAFT_NOTES, NOTETAKER);
+        yield* saveNotes({ userId, taskId }, DRAFT_NOTES, DEVELOPER);
         const agentId = yield* startAgent(userId, taskId);
         yield* saveNotes(
           { userId, taskId },
@@ -115,7 +114,7 @@ it.layer(getTestDB())("a description's history", (it) => {
           { seq: 2, actor: DESCRIPTION_ACTOR.AGENT, label: AGENT_TITLE, changes: 1 },
           {
             seq: 1,
-            actor: DESCRIPTION_ACTOR.NOTETAKER,
+            actor: DESCRIPTION_ACTOR.DEVELOPER,
             label: undefined,
             changes: DRAFT_NOTES.length,
           },
@@ -128,7 +127,7 @@ it.layer(getTestDB())("a description's history", (it) => {
       const { userId, taskId, workspaceId } = yield* openTask;
       const teammate = yield* openUser;
       yield* joinWorkspace(workspaceId, teammate);
-      yield* saveNotes({ userId, taskId }, DRAFT_NOTES, NOTETAKER);
+      yield* saveNotes({ userId, taskId }, DRAFT_NOTES, DEVELOPER);
 
       assert.equal((yield* revisionsOf(userId, taskId)).length, 1);
       assert.deepEqual(yield* revisionsOf(teammate, taskId), yield* revisionsOf(userId, taskId));
@@ -139,7 +138,7 @@ it.layer(getTestDB())("a description's history", (it) => {
     Effect.gen(function* () {
       const { userId, taskId } = yield* openTask;
       const intruder = yield* openTask;
-      yield* saveNotes({ userId, taskId }, DRAFT_NOTES, NOTETAKER);
+      yield* saveNotes({ userId, taskId }, DRAFT_NOTES, DEVELOPER);
 
       assert.deepEqual(yield* revisionsOf(intruder.userId, taskId), []);
       assert.equal((yield* revisionsOf(userId, taskId)).length, 1);
@@ -147,7 +146,7 @@ it.layer(getTestDB())("a description's history", (it) => {
   );
 
   /**
-   * The notetaker's notes, each a revision of its own: the saves stand further apart than
+   * The developer's notes, each a revision of its own: the saves stand further apart than
    * any join.
    */
   const apart = (userId: string, taskId: string, notes: readonly (readonly [string, string])[]) =>
@@ -155,7 +154,7 @@ it.layer(getTestDB())("a description's history", (it) => {
       notes,
       ([heading, text]) =>
         Effect.andThen(
-          saveNotes({ userId, taskId }, [added(heading, text)], NOTETAKER),
+          saveNotes({ userId, taskId }, [added(heading, text)], DEVELOPER),
           TestClock.adjust(Duration.millis(DESCRIPTION_REVISION.JOIN_WITHIN_MS + 1)),
         ),
       { discard: true },
@@ -265,16 +264,6 @@ it.layer(getTestDB())("a description's history", (it) => {
           assert.deepEqual(bySection.get("Approach"), CHARLES);
         }
       }),
-  );
-
-  it.effect("Vespin's notes on a member's turn are kept under that member", () =>
-    Effect.gen(function* () {
-      const { userId, taskId } = yield* openTask;
-      yield* saveNotes({ userId, taskId }, DRAFT_NOTES, NOTETAKER);
-
-      const [line] = yield* revisionsOf(userId, taskId);
-      assert.deepEqual(line?.lastEdit.by, { userId, name: "Test User" });
-    }),
   );
 
   it.effect(

@@ -28,6 +28,7 @@ const ACCOUNT_CREDENTIALS: readonly string[] = [
   RUNNER_ENV.CLAUDE_TOKEN,
   RUNNER_ENV.API_KEY,
   RUNNER_ENV.OPENAI_API_KEY,
+  RUNNER_ENV.CURSOR_API_KEY,
 ];
 
 /**
@@ -53,10 +54,13 @@ export function harnessEnvOf(
  * machine's own tools, a repository's Playwright among them, away from where
  * they keep their things.
  */
-export function toolEnvOf(
-  env: Readonly<Record<string, string | undefined>>,
-): Readonly<Record<string, string>> {
-  return runsOnHost(env) ? {} : SANDBOX_TOOL_ENV;
+export function toolEnvOf(env: Readonly<Record<string, string | undefined>>) {
+  if (runsOnHost(env)) return {};
+
+  // Note that a `NODE_PATH` the launch already carries stays, ahead of the image's.
+  const nodePath = [env.NODE_PATH, SANDBOX_TOOL_ENV.NODE_PATH].filter(Boolean).join(":");
+
+  return { ...SANDBOX_TOOL_ENV, NODE_PATH: nodePath };
 }
 
 /** Why a launch could not run at all, before or after its harness. */

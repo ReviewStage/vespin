@@ -82,6 +82,7 @@ const QUEUED_ENVIRONMENTS: ReadonlySet<string> = new Set([
 const HARNESS_LABEL = {
   [CODER_HARNESS.CLAUDE_CODE]: "Coding agent instructions, Claude Code",
   [CODER_HARNESS.CODEX]: "Coding agent instructions, Codex",
+  [CODER_HARNESS.CURSOR]: "Coding agent instructions, Cursor",
 } as const satisfies Record<CoderHarness, string>;
 
 const ms = (duration: Duration.Duration) => Duration.toMillis(duration);

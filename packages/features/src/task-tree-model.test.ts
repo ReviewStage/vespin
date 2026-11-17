@@ -112,6 +112,26 @@ test("a child task put in a section stands there with its own child tasks, not u
   ]);
 });
 
+test("a teammate's open sub-task stands under the reader's parent, whatever its status", () => {
+  const tree = taskTree({
+    view: {
+      tasks: [
+        task("Invites", TASK_STATUS.IN_PROGRESS, "ada/relay", 50),
+        task("Invite copy", TASK_STATUS.BACKLOG, "ada/relay", 60, {
+          parentTaskId: "Invites",
+          assignee: { userId: "user-grace", name: "Grace Hopper" },
+        }),
+      ],
+    },
+    workspaceId: WORKSPACE,
+    readerId: READER,
+    noRepository: "No repository",
+    tasksHead: "My tasks",
+  });
+
+  expect(drawn(tree)).toEqual([["", "Invites", "  Invite copy"]]);
+});
+
 test("Following holds the open tasks the reader follows that no other list holds", () => {
   const following = { followers: [{ userId: READER, assignee: false, machines: false }] };
   const teammate = { ownerId: "user-grace", createdBy: { userId: "user-grace", name: "Grace" } };

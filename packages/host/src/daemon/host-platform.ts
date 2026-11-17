@@ -77,7 +77,12 @@ export function hostPlatform(options: HostPlatformOptions): LocalAgentPlatformSe
         },
         clis.paths.gh,
       ),
-    tools: { node: options.node, claude: clis.paths.claude, codex: clis.paths.codex },
+    tools: {
+      node: options.node,
+      claude: clis.paths.claude,
+      codex: clis.paths.codex,
+      cursorSdk: clis.paths.cursor,
+    },
     clis,
     runnerBundle: `${options.installFolder}/${RUNNER_BUNDLE}`,
     runnerEnv: {

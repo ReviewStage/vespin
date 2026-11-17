@@ -104,6 +104,7 @@ const STAND_IN: DescriptionEditorModule = {
         return { base: merged, text: merged };
       },
       chooseMention: () => undefined,
+      retypeMention: () => undefined,
       insertBlock: () => undefined,
       markdown: () => props.markdown,
       replaceAnchors: () => undefined,
@@ -1490,28 +1491,31 @@ test("Keep mine in the open editor over a teammate's change to another section l
   ]);
 });
 
-test("words left waiting on a conflict are kept and said, and the toast's Keep mine saves them beside Vespin's", async () => {
-  const appText = `${BODY}Vespin's.\n`;
-  const by = { actor: DESCRIPTION_ACTOR.NOTETAKER, at: Date.now(), duringCall: false };
-  const appNote = "Vespin changed this section while you were editing.";
-  const { container, sent, render } = mount([{ conflict: { current: appText, by } }]);
+test("words left waiting on a conflict are kept and said, and the toast's Keep mine saves them beside a teammate's", async () => {
+  const theirs = `${BODY}Charles's.\n`;
+  const by = { actor: DESCRIPTION_ACTOR.DEVELOPER, by: CHARLES, at: Date.now(), duringCall: false };
+  const theirNote = "Charles Pan changed this section while you were editing.";
+  const { container, sent, render } = mount([{ conflict: { current: theirs, by } }]);
   const other = { ...DOCUMENT_TASK, id: "0c4f2e9a-7d1b-4a3e-8f6c-2b9d5e1a7c40" };
   act(() => block(container, "Goal").click());
   act(() => open().onDraft(`${BODY}Mine.\n`));
   act(() => open().onFinish(1, FINISH.ESCAPE));
   await settle();
-  assert.ok(container.textContent?.includes(appNote), "the conflict holds the editor open");
+  assert.ok(container.textContent?.includes(theirNote), "the conflict holds the editor open");
 
   render(other);
   await settle();
 
   assert.equal(sent.length, 1, "a conflict sends nothing more as the description is left");
-  assert.equal(newestToastSays(), `Your description edits could not be saved.${appNote}Keep mine`);
+  assert.equal(
+    newestToastSays(),
+    `Your description edits could not be saved.${theirNote}Keep mine`,
+  );
 
   act(() => newestToastAction()?.click());
   await settle();
 
-  assert.deepEqual(sent.at(-1), { description: { base: appText, value: `${appText}Mine.\n` } });
+  assert.deepEqual(sent.at(-1), { description: { base: theirs, value: `${theirs}Mine.\n` } });
   assert.equal(newestToastSays(), undefined);
   render(DOCUMENT_TASK);
   await settle();

@@ -93,7 +93,7 @@ import { WorkspaceRef } from "./workspace-ref.js";
  * window holds beside it (`use-task-work.ts`), so the card fetches nothing.
  *
  * Its list rows are buttons, as a GitHub hover card's are: a pull request
- * opens its agent's Pull request tab where the window knows the agent and
+ * opens its Pull request tab where the window opens one and
  * GitHub otherwise, and an agent opens the task on its tab; the creator's
  * line opens their page where the window offers one. The rest are facts,
  * left as text, the repository among them, which the task's menu opens. Its rows are `@repo/ui`'s
@@ -252,7 +252,7 @@ export function PullRequestLine({
 }: {
   pullRequest: TaskPullRequestLine;
 }): React.JSX.Element {
-  // Its page opens as a link to it does: in its agent's Pull request tab where the place or the window knows the agent (`../tasks/use-open-link.ts`), else on GitHub.
+  // Its page opens as a link to it does: in its Pull request tab where the place or the window opens one (`../tasks/use-open-link.ts`), else on GitHub.
   const openLink = useOpenLink();
   const { url } = pullRequest;
 

@@ -466,24 +466,24 @@ it.layer(getTestDB())("a description's starting text", (it) => {
 
 it.layer(getTestDB())("who made a task", (it) => {
   it.effect(
-    "a task its member made by hand names no origin, and one Vespin made on their call names it, in the list too",
+    "a task its member made by hand names no origin, and one an agent made for them names it, in the list too",
     () =>
       Effect.gen(function* () {
         const owner = yield* openAccount;
         const organizationId = yield* openWorkspace(owner);
         const byHand = yield* createTask(owner, { organizationId });
 
-        const onCall = yield* createTask(owner, {
+        const byAgent = yield* createTask(owner, {
           organizationId,
-          origin: { actor: DESCRIPTION_ACTOR.NOTETAKER },
+          origin: { actor: DESCRIPTION_ACTOR.AGENT },
         });
 
         assert.equal(byHand.origin, undefined);
-        assert.deepEqual(onCall.origin, { actor: DESCRIPTION_ACTOR.NOTETAKER });
+        assert.deepEqual(byAgent.origin, { actor: DESCRIPTION_ACTOR.AGENT });
         const listed = yield* listTasks(owner);
         const originOf = (taskId: string) => listed.find((each) => each.id === taskId)?.origin;
         assert.equal(originOf(byHand.id), undefined);
-        assert.deepEqual(originOf(onCall.id), { actor: DESCRIPTION_ACTOR.NOTETAKER });
+        assert.deepEqual(originOf(byAgent.id), { actor: DESCRIPTION_ACTOR.AGENT });
       }),
   );
 });

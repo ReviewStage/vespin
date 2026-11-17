@@ -17,7 +17,12 @@
  * it, and `stop` cancels it (`@repo/database/models/agent-wakeups`). The
  * delay is held to a minute through 7 days less an hour, the longest a
  * queue message is kept less the hour it is kept past due, and the instant
- * booked is answered so the agent reads what it got.
+ * booked is answered so the agent reads what it got. Note that a call
+ * written in the words of Claude Code's own `ScheduleWakeup`, its delay
+ * under `seconds`, `delay_seconds`, or `minutes` or spelled as a string, and
+ * its prompt under `reason`, is read as the described input, because Claude
+ * Code agents write it so from habit and a refusal only costs them a step;
+ * the described input names none of these, so no other agent is taught them.
  */
 
 import type { Agent } from "@repo/database/models/agent-store";
@@ -52,7 +57,7 @@ const SECOND_MS = 1_000;
 /** Why `schedule_wakeup` booked nothing, in words the model can act on. */
 const WAKEUP_REFUSAL = {
   UNREADABLE:
-    "Not booked: pass delaySeconds and a prompt, or stop: true to cancel the wakeup you booked; nothing else is read.",
+    "Not booked: pass delaySeconds, a whole number of seconds, and a prompt, or stop: true to cancel the wakeup you booked.",
   NO_DELAY: "Not booked: pass delaySeconds, how long from now to wake up.",
   NO_PROMPT: "Not booked: pass a prompt, what to do once the wakeup fires.",
   TOO_LONG: (length: number) =>
@@ -84,6 +89,43 @@ const SCHEDULE_WAKEUP_INPUT = Schema.Struct({
 
 const readInput = Schema.decodeUnknownResult(SCHEDULE_WAKEUP_INPUT);
 
+/** The names a delay is read under, the first given winning, each with the seconds one of its unit holds: the described delaySeconds, then those Claude Code's own `ScheduleWakeup` taught its agents. */
+const DELAY_NAMES = [
+  { key: "delaySeconds", seconds: 1 },
+  { key: "delay_seconds", seconds: 1 },
+  { key: "seconds", seconds: 1 },
+  { key: "minutes", seconds: 60 },
+] as const;
+
+/** A string that spells a number as that number; anything else as it came, for the schema to refuse. */
+function numberOf(value: UnparsedWireValue): UnparsedWireValue {
+  if (!Predicate.isString(value) || value.trim() === "") return value;
+  const read = Number(value);
+
+  return Number.isFinite(read) ? read : value;
+}
+
+/** The input as the described schema reads it: its delay under the first name that gives one, in whole seconds where its unit is larger, and its reason as the prompt where it names none. */
+function describedInput(input: UnparsedWireValue): UnparsedWireValue {
+  if (!isRecord(input)) return input;
+
+  const named = DELAY_NAMES.find(({ key }) => input[key] !== undefined);
+  const delay = named === undefined ? undefined : numberOf(input[named.key]);
+
+  const seconds =
+    named === undefined || named.seconds === 1 || !Predicate.isNumber(delay)
+      ? delay
+      : Math.round(delay * named.seconds);
+
+  return {
+    ...input,
+    ...(seconds === undefined ? undefined : { delaySeconds: seconds }),
+    ...(input.prompt === undefined && input.reason !== undefined
+      ? { prompt: input.reason }
+      : undefined),
+  };
+}
+
 /** `schedule_wakeup` as a coding agent is offered it: its name, its words, and its input. */
 export const SCHEDULE_WAKEUP_TOOL = {
   name: AGENT_TOOL.SCHEDULE_WAKEUP,
@@ -95,8 +137,7 @@ export const SCHEDULE_WAKEUP_TOOL = {
     `${WAKEUP_DELAY.MAX_SECONDS} seconds, a minute through 7 days less an hour; wait longer by ` +
     "booking again when it fires. One wakeup stands at a time: booking again replaces it, and " +
     "stop: true cancels it. A message that reaches you first, such as GitHub's that every check " +
-    "finished, starts a turn on its own, so cancel the wakeup then. Answers `accepted` with the instant booked and the delay as held, or with no " +
-    "wakeup once canceled, or `rejected` and why.",
+    "finished, starts a turn on its own, so cancel the wakeup then.",
   inputSchema: SCHEDULE_WAKEUP_INPUT,
 } as const;
 
@@ -116,7 +157,8 @@ type WakeupAsk =
   | { readonly kind: typeof WAKEUP_ASK.STOP };
 
 /** The call's input read, each refusal naming the one thing wrong. */
-function readAsk(input: UnparsedWireValue): Result.Result<WakeupAsk, string> {
+function readAsk(given: UnparsedWireValue): Result.Result<WakeupAsk, string> {
+  const input = describedInput(given);
   const read = readInput(input);
 
   if (Result.isFailure(read)) {

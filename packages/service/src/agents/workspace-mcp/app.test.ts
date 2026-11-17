@@ -83,7 +83,7 @@ import {
   runAgentEditDescription,
   runAgentLookAtPicture,
   runAgentOpenPullRequest,
-  runAgentShowImage,
+  runAgentShowMedia,
   runAgentShowPage,
 } from "../coder-host/agent-doors.js";
 import { DESCRIPTION_EDIT_REFUSAL } from "../coder-host/description-edit.js";
@@ -192,6 +192,7 @@ function sandboxWith(files: Readonly<Record<string, string>>) {
 
   const door: InboxSandboxDoor = () =>
     Promise.resolve({
+      checkout: "/workspace/repository",
       readFile: ({ path }: { path: string }) => {
         asked.push(path);
         const text = files[path];
@@ -446,7 +447,7 @@ const SERVED_TOOLS = [
   "open_pull_request",
   "edit_description",
   "look_at_picture",
-  "show_image",
+  "show_media",
   "show_page",
   ...AGENT_TOOLS,
   "read_comments",
@@ -497,7 +498,7 @@ const DOOR_OF: Readonly<
   open_pull_request: (admitted, input) => runAgentOpenPullRequest(admitted, input),
   edit_description: (admitted, input) => runAgentEditDescription(admitted, input, 0, NO_SANDBOX),
   look_at_picture: (admitted, input) => runAgentLookAtPicture(admitted, input, true, NO_SANDBOX),
-  show_image: (admitted, input) => runAgentShowImage(admitted, input, NO_SANDBOX),
+  show_media: (admitted, input) => runAgentShowMedia(admitted, input, NO_SANDBOX),
   show_page: (admitted, input) => runAgentShowPage(admitted, input, NO_SANDBOX),
   read_comments: commentTool("read_comments"),
   reply_to_comment: commentTool("reply_to_comment"),
@@ -756,7 +757,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       withheld: ["open_pull_request"],
     },
     {
-      why: "on a device, the browser, run_on_mac, and the sandbox's ports",
+      why: "on a device, the browser and the sandbox's ports",
       agent: Effect.gen(function* () {
         const agent = yield* agentWithBearer;
         yield* Database.use((db) =>
@@ -768,7 +769,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
         return agent;
       }),
-      withheld: ["browser", "run_on_mac", "list_ports", "share_port"],
+      withheld: ["browser", "list_ports", "share_port"],
     },
   ])(
     "tools/list leaves out what the catalog's gates offer no agent $why, and the memory, the description's, the turn's end, the reply buttons', and the computer tools where its starter has Memory, Task descriptions, Done and follow-ups, Reply buttons, and Computer use off",
@@ -894,7 +895,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
   );
 
   it.effect(
-    "a device agent's run_on_mac and browser are refused at the catalog in its sandbox gate's words, and neither door runs",
+    "a device agent's browser is refused at the catalog in its sandbox gate's words, and its door never runs, while its run_on_mac passes the catalog to its own door",
     () =>
       Effect.gen(function* () {
         // A browser that would answer and keep its tab, were the door run.
@@ -932,7 +933,9 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         yield* Effect.promise(() => client.close());
 
         const refused = { status: "not-run", reason: GATES[TOOL_GATE.SANDBOX].refusal };
-        assert.deepEqual([mac.isError, firstJson(mac)], [true, refused]);
+        // Note that no machine of the agent's listens, so the door refuses run_on_mac in its own words.
+        assert.equal(firstJson(mac).status, "not-run");
+        assert.notDeepEqual(firstJson(mac), refused);
         assert.deepEqual([browser.isError, firstJson(browser)], [true, refused]);
         assert.deepEqual(yield* listAgentBrowserTabs(agent.conversationId), []);
       }),

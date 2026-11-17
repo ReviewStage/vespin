@@ -74,7 +74,7 @@ import {
  * developer pauses (`use-description-editing.ts`), and the service merges them with
  * what the app writes.
  * A save's merged answer is taken into the open editor block by block, and
- * the notetaker's drafts never redraw it. The editor is every Markdown
+ * the agents' drafts never redraw it. The editor is every Markdown
  * document's (`./markdown-editor.tsx`), with every option a description takes: its
  * mentions, its pictures, its comment threads and Comment on the format
  * toolbar, in place of the read view's Comment bubble, its sections'

@@ -12,7 +12,6 @@ import {
   ACTOR_STATE,
   type Actor,
   type ActorState,
-  APP_ACTOR,
   activityWords,
   actorName,
   distinctActors,
@@ -22,7 +21,7 @@ import {
   latestActivity,
 } from "@repo/ui/actor-model";
 import { useMemo } from "react";
-import { ActorRef, AppCard, PersonCard } from "../actor-ref.js";
+import { ActorRef, PersonCard } from "../actor-ref.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { agentName, providerOf } from "./agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "./agent-ref.js";
@@ -120,7 +119,7 @@ const OWN_CONFLICT: ConflictWords = {
 /**
  * What a conflict says, naming who wrote the text it met as the "Edited by"
  * line names them: "Charles Pan changed this section while you were
- * editing." and "Use Charles Pan’s"; the app; a coding agent as the task's list
+ * editing." and "Use Charles Pan’s"; a coding agent as the task's list
  * names it, or its row where the list holds no such agent.
  */
 export function conflictWords(
@@ -145,14 +144,13 @@ export function conflictWords(
   };
 }
 
-/** What an actor last did in the description, in a card's line; none where no section's last change is theirs. */
-function latestLine(actor: Actor, place: EditPlace, now: number, ago: boolean): string | undefined {
+/** What an actor last did in the description, and how long ago, in a card's line; none where no section's last change is theirs. */
+function latestLine(actor: Actor, place: EditPlace, now: number): string | undefined {
   const activity = latestActivity(place.sections, actor);
 
   if (activity === undefined) return undefined;
-  const words = activityWords(activity);
 
-  return ago ? `${words} · ${agoText(activity.at, now)}` : words;
+  return `${activityWords(activity)} · ${agoText(activity.at, now)}`;
 }
 
 /** A person named in a line: their card says what they last did in the description; someone the window cannot name hangs their own. */
@@ -171,7 +169,7 @@ function PersonRef({
 
   const card =
     actor.kind === ACTOR_KIND.PERSON ? (
-      <PersonCard actor={actor} latest={latestLine(actor, place, now, true)} />
+      <PersonCard actor={actor} latest={latestLine(actor, place, now)} />
     ) : undefined;
 
   return <ActorRef actor={actor} card={card} sentence={sentence} faceOnly={faceOnly} />;
@@ -189,19 +187,10 @@ function WriterRef({
   sentence: boolean;
   faceOnly: boolean;
 }): React.JSX.Element | null {
-  const now = useMinute();
   const agent = agentOf(edit, place.agents);
   const actor = writerOf(edit, place);
 
   if (actor === undefined) return null;
-
-  if (actor.kind === ACTOR_KIND.APP) {
-    const card = (
-      <AppCard sub={agoText(edit.at, now)} latest={latestLine(APP_ACTOR, place, now, false)} />
-    );
-
-    return <ActorRef actor={actor} card={card} faceOnly={faceOnly} />;
-  }
 
   if (actor.kind !== ACTOR_KIND.AGENT) {
     return <PersonRef actor={actor} place={place} sentence={sentence} faceOnly={faceOnly} />;

@@ -30,7 +30,11 @@
  * entry listed again before its exit finished, an Undo, stands again and
  * comes back the way it went. A row arriving rides the pair every arriving
  * element rides, opacity over `--ui-duration-quick` and its travel on
- * `--ui-spring`, rows that arrive together a `--ui-row-stagger` apart. A
+ * `--ui-spring`, rows that arrive together a `--ui-row-stagger` apart, and is
+ * clipped at the top of the row it pushes down, read where that row is
+ * drawn each frame as it glides out of its way, as a list of opaque rows
+ * uncovers a row inserted beneath them, so it never stands over that row's
+ * words, however many rows arrive together or changes land while they move. A
  * list that was not drawn before the change, a fold opened, draws its rows
  * at once, and nothing plays the first time a list is drawn. While what the
  * lists draw is still being read (`reading`), as an Inbox's reads land one
@@ -99,6 +103,7 @@ import {
   useState,
 } from "react";
 import { MOTION_TOKEN, milliseconds, tokenTiming } from "../../motion-timing.js";
+import { runningMotions } from "../../use-disclosure.js";
 
 /** What a list whose children move wears. */
 const ROWS_ATTRIBUTE = "data-motion-rows";
@@ -169,16 +174,21 @@ export interface Drawn<T> {
   readonly leaving: boolean;
 }
 
-/** A leaving entry as handed to the motion: its key, and what lets it go once its exit has played. */
+/**
+ * A leaving entry as handed to the motion: its key, what lets it go once
+ * its exit has played, and what stands its element again, which the motion
+ * sets as it takes the element out and its list calls once it lists the
+ * entry again.
+ */
 interface Leaver {
   readonly key: string;
   readonly onLeft: () => void;
+  standAgain: (() => void) | undefined;
 }
 
-/** What the lists under one motion hand it in a commit: the entries that began to leave, the keys listed again before they had gone, and what asks it to read a commit it would not draw. */
+/** What the lists under one motion hand it in a commit: the entries that began to leave, and what asks it to read a commit it would not draw. */
 interface Leaves {
   readonly pending: Leaver[];
-  readonly returned: string[];
   readonly replay: () => void;
 }
 
@@ -318,20 +328,27 @@ export function useLeaving<T>(
     setHeld({ listed, drawn });
   }
 
-  const told = useRef(new Set<string>());
+  // The entries handed to the motion as leaving, by key, until they go or are listed again.
+  const told = useRef(new Map<string, Leaver>());
+  // Note that the list stands an entry listed again itself, in the commit that lists it, whether or not
+  // the motion reads that commit, because only the list knows it lists the entry again: an exit the
+  // motion took is stopped, and one it has not taken yet is never taken.
   useLayoutEffect(() => {
     const leaving = new Set(drawn.filter((entry) => entry.leaving).map((entry) => entry.key));
 
-    for (const key of told.current) {
+    for (const [key, leaver] of told.current) {
       if (leaving.has(key)) continue;
       told.current.delete(key);
 
-      if (drawn.some((entry) => entry.key === key)) leaves?.returned.push(key);
+      if (!drawn.some((entry) => entry.key === key)) continue;
+      leaver.standAgain?.();
+      const at = leaves?.pending.indexOf(leaver) ?? -1;
+
+      if (at >= 0) leaves?.pending.splice(at, 1);
     }
 
     for (const key of leaving) {
       if (told.current.has(key)) continue;
-      told.current.add(key);
 
       const onLeft = () =>
         setHeld((now) => ({
@@ -339,12 +356,14 @@ export function useLeaving<T>(
           drawn: now.drawn.filter((entry) => !(entry.leaving && entry.key === key)),
         }));
 
+      const leaver: Leaver = { key, onLeft, standAgain: undefined };
+      told.current.set(key, leaver);
+
       if (leaves === undefined) {
         onLeft();
         continue;
       }
 
-      const leaver = { key, onLeft };
       leaves.pending.push(leaver);
       // A list that drew on its own, its motion not drawn with it, lets the entry go at once.
       queueMicrotask(() => {
@@ -685,6 +704,97 @@ function arrive(mover: Element, step: number, away: Keyframe, timing: MoveTiming
 }
 
 /**
+ * The row a row arriving was pushed away by: the first row of its list
+ * under it that stood before the change; none where nothing that stood is
+ * under it.
+ */
+function rowUnder(
+  mover: Element,
+  movers: readonly Element[],
+  now: Map<Element, Place>,
+  wasOf: (mover: Element) => Place | undefined,
+): Element | undefined {
+  const at = now.get(mover);
+
+  if (at === undefined) return undefined;
+  let under: { readonly row: Element; readonly y: number } | undefined;
+
+  for (const other of movers) {
+    const is = now.get(other);
+
+    if (other.parentElement !== mover.parentElement || wasOf(other) === undefined) continue;
+
+    if (is === undefined || is.y <= at.y + STILL) continue;
+
+    if (under === undefined || is.y < under.y) under = { row: other, y: is.y };
+  }
+
+  return under?.row;
+}
+
+/** What stops each arriving row's following, by the row, so a change landing while one follows hands it on rather than running two. */
+const following = new WeakMap<HTMLElement, () => void>();
+
+/**
+ * Keeps a row sliding in behind the row it pushed down, as a list of
+ * opaque rows draws one, a row inserted under its neighbors and uncovered as
+ * they slide away: each frame until that row has come to rest, the arriving
+ * row is clipped at that row's top as drawn. Note that the edge is read
+ * where the row is drawn rather than foretold from the glide this change
+ * plays, because a change landing while rows still move adds its glide onto
+ * theirs, which no one glide's timing describes. It stops once `until` has
+ * passed and that row runs no motion, once a later change stands that row
+ * above it, or once either row is gone, and gives the row its own clip back.
+ */
+function followUnder(
+  root: HTMLElement,
+  mover: HTMLElement,
+  under: HTMLElement,
+  until: number,
+): void {
+  following.get(mover)?.();
+  let frame = 0;
+
+  const release = () => {
+    cancelAnimationFrame(frame);
+    mover.style.removeProperty("clip-path");
+    following.delete(mover);
+  };
+
+  const clip = () => {
+    const cut = mover.getBoundingClientRect().bottom - under.getBoundingClientRect().top;
+    // Note that an inset past the row's height hides it whole, and none is set where nothing covers it.
+    mover.style.setProperty(
+      "clip-path",
+      cut > 0 ? `inset(0 0 ${cut / drawnScale(root).y}px 0)` : "",
+    );
+  };
+
+  // Note that the rows are told apart where the layout stands them, since the one under is drawn at the arriving row's top as its glide sets off.
+  const laidTop = (row: HTMLElement) =>
+    row.getBoundingClientRect().top - shiftOf(row).y * drawnScale(root).y;
+
+  const step = () => {
+    // Note that a change that stood the row it followed above it, or took either away, leaves nothing to stand behind.
+    if (!(mover.isConnected && under.isConnected) || laidTop(under) <= laidTop(mover) + STILL) {
+      release();
+
+      return;
+    }
+
+    clip();
+    const moving = runningMotions(under).some((each) => each.playState === "running");
+
+    if (performance.now() < until || moving) frame = requestAnimationFrame(step);
+    else release();
+  };
+
+  following.set(mover, release);
+  clip();
+  frame = requestAnimationFrame(step);
+}
+
+/**
  * Replays from `before` what the commit moved under `root`: each mover
  * glides from where it stood, or where the row of its key stood in another
  * list, less what the group around it moved, which carries it, added onto
@@ -730,17 +840,23 @@ function playMoves(root: HTMLElement, before: Snapshot, timing: MoveTiming): voi
   const away = awayOf(root, timing.way);
   const seenArriving = arriving.filter((mover) => now.get(mover)?.seen === true);
 
-  for (const [step, mover] of seenArriving.entries()) arrive(mover, step, away, timing);
   // Note that rows arriving in a leaving row's place, a choice's next rows, set the beat what they move glides on.
   const glide = arriving.length === 0 ? (timing.close ?? timing.travel) : timing.travel;
+
+  const carriedOf = (mover: Element): Point => {
+    const carrier = carrierOf(root, mover);
+
+    return carrier === root ? { x: 0, y: 0 } : movedBy(carrier);
+  };
+
+  for (const [step, mover] of seenArriving.entries()) arrive(mover, step, away, timing);
 
   for (const mover of movers) {
     const was = wasOf(mover);
 
     if (was === undefined || !(was.seen || now.get(mover)?.seen === true)) continue;
-    const carrier = carrierOf(root, mover);
     const own = movedBy(mover);
-    const carried = carrier === root ? { x: 0, y: 0 } : movedBy(carrier);
+    const carried = carriedOf(mover);
     const x = own.x - carried.x;
     const y = own.y - carried.y;
 
@@ -751,6 +867,18 @@ function playMoves(root: HTMLElement, before: Snapshot, timing: MoveTiming): voi
       fill: "backwards",
       composite: "add",
     });
+  }
+
+  // Note that the rows are followed once every glide has started, so the first edge read is where each is drawn.
+  if (timing.way !== LIST_MOTION_WAY.SLIDE || !timing.travels) return;
+  const until = performance.now() + timing.wait + Number(glide.duration ?? 0);
+
+  for (const mover of seenArriving) {
+    const under = rowUnder(mover, movers, now, wasOf);
+
+    if (under instanceof HTMLElement && mover instanceof HTMLElement) {
+      followUnder(root, mover, under, until);
+    }
   }
 }
 
@@ -838,12 +966,9 @@ class ListMotionPlayer extends Component<
     _state: ListMotionPlayerState,
     batch: Batch | null,
   ): void {
-    const { pending, returned } = this.props.leaves;
-    const leavers = pending.splice(0);
+    const leavers = this.props.leaves.pending.splice(0);
     const root = this.props.root.current;
     root?.setAttribute(ROOT_ATTRIBUTE, "");
-
-    if (root !== null) this.standReturned(root, returned.splice(0));
 
     if (root === null || batch === null) {
       for (const leaver of leavers) leaver.onLeft();
@@ -918,24 +1043,14 @@ class ListMotionPlayer extends Component<
     });
   }
 
-  /** Stands again each element whose entry was listed again before its exit finished. */
-  private standReturned(root: HTMLElement, keys: readonly string[]): void {
-    if (keys.length === 0) return;
-    const back = new Set(keys);
-
-    for (const mover of moversOf(root)) {
-      const key = mover.getAttribute(KEY_ATTRIBUTE);
-
-      if (key !== null && back.has(key) && mover.hasAttribute("data-leaving")) standAgain(mover);
-    }
-  }
-
   /**
    * The element each leaving entry is drawn as, marked out of reach at once,
    * before the lists' own effects run, so a row holding the keyboard is seen
    * to have lost it. An entry whose row now stands in another list moved
    * rather than left: its old element is let go at once, and the new one
    * glides across from it. An entry no element was found for goes at once.
+   * Each element taken is handed back to its entry's list, which stands it
+   * again should it list the entry again (`useLeaving`).
    */
   private leavingOf(root: HTMLElement, leavers: readonly Leaver[], before: Snapshot): Exit[] {
     const keyedNow = new Map<string, Element[]>();
@@ -948,7 +1063,8 @@ class ListMotionPlayer extends Component<
 
     const leaving: Exit[] = [];
 
-    for (const { key, onLeft } of leavers) {
+    for (const leaver of leavers) {
+      const { key, onLeft } = leaver;
       const element = before.keyed.get(key);
 
       if (!(element instanceof HTMLElement) || !element.isConnected) {
@@ -956,6 +1072,7 @@ class ListMotionPlayer extends Component<
         continue;
       }
 
+      leaver.standAgain = () => standAgain(element);
       element.toggleAttribute("inert", true);
       element.setAttribute("data-leaving", LEAVING.MARKED);
 
@@ -1035,7 +1152,6 @@ export function ListMotion({
 
   const [leaves] = useState<Leaves>(() => ({
     pending: [],
-    returned: [],
     replay: () => setReplays((count) => count + 1),
   }));
 

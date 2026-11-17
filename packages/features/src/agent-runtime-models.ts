@@ -9,7 +9,11 @@
  * OpenAI API key pays, which it runs as the base model on its `fast` service
  * tier, and an Ultrafast version only where its OpenAI API key pays, on its
  * `ultrafast` tier, since OpenAI offers Ultrafast on few plans; on a Mac's
- * own sign-in, whatever it is signed in with, it runs neither. A runtime's
+ * own sign-in, whatever it is signed in with, it runs neither. Cursor takes
+ * Cursor's models, a fast version among them where the model has one,
+ * which it runs as the model with Cursor's `fast` parameter on, and a choice
+ * of context window where the model lists two, which it runs as Cursor's
+ * `context` parameter. A runtime's
  * rule is one row of `NATIVE_MODEL_RULE`, Codex's on the plan
  * (`CODEX_FAST`) and on an API key (`CODEX_ON_API_KEY`) its own; no runtime, or
  * one with no row, offers everything (`ANY_MODEL`).
@@ -17,7 +21,19 @@
  * decides the runtime (`agent-runtime-choice.ts`).
  */
 
-import { AGENT_PAYER, AGENT_RUNTIME, type AgentPayer, type AgentRuntime } from "./agent-wire.js";
+import {
+  CONNECTION_LOST_PROVIDER,
+  type ConnectionLostProvider,
+  USAGE_LIMIT_AGENT,
+  type UsageLimitAgent,
+} from "@repo/wire/ui-messages";
+import {
+  AGENT_PAYER,
+  AGENT_RUNTIME,
+  type AgentPayer,
+  type AgentRuntime,
+  type NativeAgentRuntime,
+} from "./agent-wire.js";
 import { MODEL_PROVIDER, MODEL_SPEED, type ModelProvider, modelSpeedOf } from "./models-wire.js";
 
 /** What a runtime lets an agent move to. */
@@ -69,6 +85,13 @@ const NATIVE_MODEL_RULE: Partial<Record<AgentRuntime, RuntimeModelRule>> = {
     fastRefusal: "which runs a fast version on the Codex plan or an OpenAI API key alone",
     ultrafastRefusal: "which runs an Ultrafast version on an OpenAI API key alone",
   },
+  cursor: {
+    provider: MODEL_PROVIDER.CURSOR,
+    fast: true,
+    ultrafast: false,
+    contextWindow: true,
+    name: "Cursor",
+  },
 };
 
 /** Codex where the account's ChatGPT plan pays: a GPT model's fast version runs on its `fast` service tier, and no Ultrafast version. */
@@ -90,11 +113,59 @@ const CODEX_ON_API_KEY: RuntimeModelRule = {
   name: "Codex",
 };
 
-/** The harness Settings › Agents names the row of the provider's credentials by: Claude for Anthropic's, Codex for OpenAI's. */
+/** The harness each provider's models run on, whoever pays: a model's provider decides an agent's runtime as it starts. */
+const PROVIDER_RUNTIME = {
+  [MODEL_PROVIDER.ANTHROPIC]: AGENT_RUNTIME.CLAUDE_CODE,
+  [MODEL_PROVIDER.OPENAI]: AGENT_RUNTIME.CODEX,
+  [MODEL_PROVIDER.CURSOR]: AGENT_RUNTIME.CURSOR,
+} as const satisfies Record<ModelProvider, NativeAgentRuntime>;
+
+/** The harness a provider's models run on, which a Start's box reads before its agent has a runtime of its own. */
+export function runtimeOfProvider(provider: ModelProvider): NativeAgentRuntime {
+  return PROVIDER_RUNTIME[provider];
+}
+
+/** What a turn's notices name each provider's agents by: the provider a lost connection was to, and the harness whose usage limit was reached. */
+const NOTICE_NAMES = {
+  [MODEL_PROVIDER.ANTHROPIC]: {
+    connection: CONNECTION_LOST_PROVIDER.ANTHROPIC,
+    limit: USAGE_LIMIT_AGENT.CLAUDE,
+  },
+  [MODEL_PROVIDER.OPENAI]: {
+    connection: CONNECTION_LOST_PROVIDER.OPENAI,
+    limit: USAGE_LIMIT_AGENT.CODEX,
+  },
+  [MODEL_PROVIDER.CURSOR]: {
+    connection: CONNECTION_LOST_PROVIDER.CURSOR,
+    limit: USAGE_LIMIT_AGENT.CURSOR,
+  },
+} as const satisfies Record<
+  ModelProvider,
+  { readonly connection: ConnectionLostProvider; readonly limit: UsageLimitAgent }
+>;
+
+/** The provider a lost connection's notice names, by the provider of the turn's model: Anthropic where the model is not known, as every turn's was before the notice named one. */
+export function connectionLostProviderOf(
+  provider: ModelProvider | undefined,
+): ConnectionLostProvider {
+  return NOTICE_NAMES[provider ?? MODEL_PROVIDER.ANTHROPIC].connection;
+}
+
+/** The harness a usage limit's notice names, by the provider of the agent's model: Claude where the model is not known. */
+export function usageLimitAgentOf(provider: ModelProvider | undefined): UsageLimitAgent {
+  return NOTICE_NAMES[provider ?? MODEL_PROVIDER.ANTHROPIC].limit;
+}
+
+/** The harness Settings › Agents names the row of the provider's credentials by: Claude for Anthropic's, Codex for OpenAI's, Cursor for Cursor's. */
 export function harnessNameOf(provider: ModelProvider): string {
-  return provider === MODEL_PROVIDER.ANTHROPIC
-    ? (NATIVE_MODEL_RULE.claude_code?.name ?? "Claude")
-    : (NATIVE_MODEL_RULE.codex?.name ?? "Codex");
+  switch (provider) {
+    case MODEL_PROVIDER.ANTHROPIC:
+      return NATIVE_MODEL_RULE.claude_code?.name ?? "Claude";
+    case MODEL_PROVIDER.OPENAI:
+      return NATIVE_MODEL_RULE.codex?.name ?? "Codex";
+    case MODEL_PROVIDER.CURSOR:
+      return NATIVE_MODEL_RULE.cursor?.name ?? "Cursor";
+  }
 }
 
 /** What separates a catalog id's provider from its model. */
@@ -239,6 +310,8 @@ function providerName(provider: ModelProvider | undefined): string {
   if (provider === MODEL_PROVIDER.ANTHROPIC) return "Claude";
 
   if (provider === MODEL_PROVIDER.OPENAI) return "GPT";
+
+  if (provider === MODEL_PROVIDER.CURSOR) return "Cursor";
 
   return "its provider's";
 }

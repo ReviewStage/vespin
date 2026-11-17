@@ -256,18 +256,23 @@ import { MachineGlyph, MachineOwnerFace, useWorkspaceMachines } from "./workspac
  * Nothing typed after the `@`, the list browses a row for each kind the
  * place offers, its glyph and name and chevron and nothing else, the
  * connected servers folded into one row: → or Enter on one narrows the list to that
- * kind, as typing its word and a colon does (`@files:`, `@agents:`,
- * `@servers:`, a server's provider such as `@linear:`), which no row
- * spells. Typed, a kind the words name leads the list with its row, so
+ * kind by writing the word as typing its word and a colon would (`@files:`,
+ * `@agents:`, `@servers:`, a server's provider such as `@linear:`), so the
+ * letters that found the row never run on into the words searched; a
+ * provider's second server, which has no word, narrows the list alone, the
+ * word left bare. Typed, a kind the words name leads the list with its row, so
  * `@agent` still offers the way into the agents, and a group holding more
  * than its few ends in the row a capped list ends in ("Show 3 more"), which
- * narrows the list to its kind searched by the same words. A narrowed list
+ * writes its kind's word before the same words (`@files:invite`). A narrowed list
  * stands under a crumb naming the kind, lists up to fifty rows, opens at
- * its top, and searches that kind alone; as a submenu does, ← or ⌫ on its
- * empty words, or Escape, widens it again, and only then does Escape close
- * the list. Narrowed to files and folders, → on a folder walks into it: its
+ * its top, and searches that kind alone; as a submenu does, Escape or the
+ * crumb's arrow widens it again, deleting the `kind:` and keeping the words,
+ * and only then does Escape close the list; ⌫ on its empty words deletes the
+ * colon, which widens it too, and on a list narrowed alone ← or ⌫ on its
+ * empty words steps back. Narrowed to files and folders, → on a folder walks
+ * into it, the word written as `@files:`: its
  * first row mentions the folder, the rest are what it holds, from the tree
- * already read, and the same keys climb back out. Narrowing changes only what the list offers; a
+ * already read, and ← or ⌫ on its empty words climbs back out. Narrowing changes only what the list offers; a
  * pick writes the same mention it would have written from the wide list.
  *
  * A pick hands the editor the mention's name and its target
@@ -523,7 +528,7 @@ interface Scope {
   readonly kind: MentionKind | undefined;
   /** The words as they stood when the kind was narrowed to, or the `kind:` typed. */
   readonly entry: string;
-  /** Whether the kind was typed (`@files:`), which ⌫ widens by deleting the colon rather than by a key the list takes. */
+  /** Whether the word spells the kind (`@files:`), typed or written as its row opened, which ⌫ widens by deleting the colon rather than by a key the list takes. */
   readonly typed: boolean;
   readonly walked: readonly Walked[];
   readonly term: string;
@@ -586,23 +591,28 @@ function scopeOf(
   return { kind, entry: typed[0], typed: true, walked: [], term: query.slice(typed[0].length) };
 }
 
+/** A step back out of a narrowed list: the narrowing held after it, and what the `@` word is written as where the step deletes the `kind:` it spells; none where the word stands. */
+interface Back {
+  readonly to: Held | undefined;
+  readonly words: string | undefined;
+}
+
 /**
  * Where back takes a narrowed list: out of the folder walked into, else to
- * every kind where a key narrowed it; nowhere for a wide list, or one whose
- * kind was typed, whose colon ⌫ deletes in the editor instead.
+ * every kind, the word spelling the kind written as the words it searches
+ * by; nowhere for a wide list.
  */
-function backFrom(
-  scope: Scope | undefined,
-  start: number,
-): { readonly to: Held | undefined } | undefined {
+function backFrom(scope: Scope | undefined, start: number): Back | undefined {
   if (scope?.kind === undefined) return undefined;
-  const { kind, entry, typed, walked } = scope;
+  const { kind, entry, typed, walked, term } = scope;
 
   if (walked.length > 0) {
-    return { to: { start, narrow: kind.narrow, entry, typed, walked: walked.slice(0, -1) } };
+    const to = { start, narrow: kind.narrow, entry, typed, walked: walked.slice(0, -1) };
+
+    return { to, words: undefined };
   }
 
-  return typed ? undefined : { to: undefined };
+  return { to: undefined, words: typed ? term : undefined };
 }
 
 /** Whether → opens the row: a kind's, which narrows the list, or a folder's, which walks into it. */
@@ -2109,6 +2119,7 @@ export function useMentionPicker({
   room,
   side,
   onChoose,
+  onRetype,
 }: {
   source: MentionSource | undefined;
   /** The agent whose box the list stands in, which it does not offer; none for the description's own words. */
@@ -2123,6 +2134,8 @@ export function useMentionPicker({
   room: RefObject<HTMLElement | null>;
   side: MentionMenuSide;
   onChoose: (mention: MentionNode) => void;
+  /** The `@` word written as `@` and the words given, as a kind's row opening writes its `kind:`. */
+  onRetype: (words: string) => void;
 }): MentionPicker {
   const now = useMinute();
   const listId = useId();
@@ -2513,33 +2526,52 @@ export function useMentionPicker({
     setHighlight(undefined);
   };
 
-  // A kind's row narrows the list to it; a folder's walks into it, narrowing a wide list to files and folders.
+  // A kind's row narrows the list to it, the word written as typing its `kind:` would write it, so
+  // the words never run on from the letters that found the row; a folder's walks into it, the word
+  // written as `files:`.
   const openRow = (row: MentionRow) => {
     if (trigger === undefined || scope === undefined) return;
-    const { start, query } = trigger;
+    const { start } = trigger;
 
     if ("from" in row) {
       // A group's foot opens its kind searched by the words already typed; a kind's own row opens it afresh.
-      const entry = row.keeps === true ? scope.entry : query;
-      narrowTo({ start, narrow: row.from.narrow, entry, typed: false, walked: [] });
+      const words = row.keeps === true ? scope.term : "";
+      const { keyword, narrow } = row.from;
+
+      // Note that a kind with no word of its own (a provider's second server) is held by the list alone.
+      narrowTo(
+        keyword === undefined ? { start, narrow, entry: "", typed: false, walked: [] } : undefined,
+      );
+      onRetype(keyword === undefined ? words : `${keyword}:${words}`);
 
       return;
     }
 
     if (!("mention" in row) || row.mention.kind !== MENTION_KIND.FOLDER) return;
+    const entry = `${MENTION_FROM.FILES}:`;
     const within = scope.kind?.narrow.from === MENTION_FROM.FILES;
-    const walked = { path: row.mention.path, entry: query };
+    const walked = { path: row.mention.path, entry };
     narrowTo({
       start,
       narrow: { from: MENTION_FROM.FILES },
-      entry: within ? scope.entry : query,
-      typed: within && scope.typed,
+      entry,
+      typed: true,
       walked: within ? [...scope.walked, walked] : [walked],
     });
+    onRetype(entry);
   };
 
   const backTo = trigger === undefined ? undefined : backFrom(scope, trigger.start);
-  const back = backTo === undefined ? undefined : () => narrowTo(backTo.to);
+
+  const back =
+    backTo === undefined
+      ? undefined
+      : () => {
+          narrowTo(backTo.to);
+
+          if (backTo.words !== undefined) onRetype(backTo.words);
+        };
+
   // The date picker opened from the list hangs from the word and writes the date picked in its place.
   const datePicker = useDatePicker(room);
 
@@ -2620,9 +2652,12 @@ export function useMentionPicker({
     if (!shown) return false;
     const bare = !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
 
-    // A list a key narrowed steps back as a submenu does: ← or ⌫ on its empty words, or Escape, before Escape closes it.
+    // A narrowed list steps back as a submenu does: ← or ⌫ on its empty words, or Escape, before Escape closes it; ← and ⌫ at a word's `kind:` are the editor's, which move past or delete its colon.
     const stepsBack =
-      (event.key === "Backspace" || event.key === "ArrowLeft") && bare && term === "";
+      (event.key === "Backspace" || event.key === "ArrowLeft") &&
+      bare &&
+      term === "" &&
+      backTo?.words === undefined;
 
     if (back !== undefined && (stepsBack || (event.key === "Escape" && bare))) {
       // Note that an Escape taken here is kept from the surface behind, as the field keeps one that closes the list, so a dialog around the box stays open.

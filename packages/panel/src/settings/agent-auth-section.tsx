@@ -10,7 +10,6 @@ import {
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_REJECTION,
   PROVIDER_KEY_STATUS,
-  type ProviderKeyProvider,
   type ProviderKeyRejection,
   type ProviderKeyStatus,
   type ProviderKeySummary,
@@ -25,6 +24,7 @@ import { dueText } from "@repo/features/time-format";
 import { readingWords, SIGNED_OUT_WORDS, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActPayload } from "@repo/host/contract";
+import { EXPERIMENT } from "@repo/settings";
 import { SETTINGS_SECTION } from "@repo/settings/settings-views";
 import {
   ANNOUNCE,
@@ -96,12 +96,12 @@ import { renameWrite } from "../rename-write.js";
 import { ResetCreditCard, useResetCreditOffer } from "../reset-credit.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { appStateQuery, selectAccount, selectExperiment } from "../use-app-state.js";
 import { ChatGptDeviceLogin } from "./chatgpt-device-login.js";
 import { ReadFailed } from "./marks.js";
 
 /**
- * agent-auth-section.tsx -- the agents' credentials, Settings › Agents' and setup's Connect an agent alike: a card each for Claude and Codex, its plans and its API key in the one order new turns try them, each added, replaced, renamed, reordered, and removed in place.
+ * agent-auth-section.tsx -- the agents' credentials, Settings › Agents' and setup's Connect an agent alike: a card each for Claude, Codex, and Cursor, its plans and its API key in the one order new turns try them, each added, replaced, renamed, reordered, and removed in place.
  *
  * The account holds as many plans per harness as it adds (Claude's
  * `claude setup-token`, or the Codex sign-in through ChatGPT), and as many
@@ -153,6 +153,10 @@ import { ReadFailed } from "./marks.js";
  * stand under the mask mark, since a saved key's hint, a plan's email, its
  * name, and its usage are the account's.
  *
+ * Cursor keeps no plan here: its card, drawn only for an account with the
+ * Cursor experiment on (`EXPERIMENT.CURSOR`), holds its API keys alone, its
+ * Add opening a key's paste at once, with no plan to choose.
+ *
  * Disconnecting a plan or removing a key asks first, over the window
  * (`ConfirmDialog`).
  */
@@ -160,65 +164,121 @@ import { ReadFailed } from "./marks.js";
 /** Where ChatGPT's usage settings are, which Manage usage opens as OpenAI's guidelines ask. */
 const CHATGPT_USAGE_URL = "https://chatgpt.com/settings/usage";
 
-/** What a harness's section and rows are drawn from. */
+/** The providers whose harness Agents draws a card for: Claude Code's, Codex's, and Cursor's. */
+type SettingsProvider =
+  | typeof PROVIDER_KEY_PROVIDER.ANTHROPIC
+  | typeof PROVIDER_KEY_PROVIDER.OPENAI
+  | typeof PROVIDER_KEY_PROVIDER.CURSOR;
+
+/** The harnesses that keep a plan here as well as API keys: Claude's setup-token and Codex's ChatGPT sign-in. Cursor keeps none. */
+type PlanProvider = typeof PROVIDER_KEY_PROVIDER.ANTHROPIC | typeof PROVIDER_KEY_PROVIDER.OPENAI;
+
+/** What a harness's section and its keys' rows are drawn from. */
 interface Harness {
   /** What its header row names it. */
   readonly name: string;
   /** The mark its header row leads with. */
   readonly mark: ModelProvider;
-  /** What its plan is called wherever a surface names the credential: its row's label, a disconnect's title. */
-  readonly planName: string;
-  readonly plan: SubscriptionKeySummary["kind"];
-  /** The logo its plans' rows and its key's row lead with. */
-  readonly planMark: React.JSX.Element;
+  /** The logo its plans' rows and its keys' rows lead with. */
+  readonly rowMark: React.JSX.Element;
   readonly keyName: string;
+  /** Its key named with its article, as a refusal says it isn't one: "an Anthropic key". */
+  readonly keyNoun: string;
   readonly keyUrl: string;
   /** What the site a key is made on is called, which its link names. */
   readonly keySite: string;
   /** How a key of its begins, which its empty field shows. */
   readonly keyExample: string;
+  /** What deleting one of its keys costs, which the question says. */
+  readonly keyLoss: string;
   readonly anchor: string;
 }
 
+/** What a harness that keeps a plan adds: the plan's name, wherever a surface names the credential, and its kind. */
+interface HarnessPlan {
+  readonly planName: string;
+  readonly plan: SubscriptionKeySummary["kind"];
+}
+
 /**
- * Each harness by the provider whose models it runs: its name, its plan's
- * name, kind, and logo, the provider's name on its key, where a key is
- * made, and the section a search or a remedy lands on.
+ * Each harness by the provider whose models it runs: its name and logo,
+ * the provider's name on its key, where a key is made, what deleting one
+ * costs, and the section a search or a remedy lands on.
  */
 const HARNESS = {
   [PROVIDER_KEY_PROVIDER.ANTHROPIC]: {
     name: "Claude",
     mark: MODEL_PROVIDER.ANTHROPIC,
-    planName: PLAN_NAME[PROVIDER_KEY_PROVIDER.ANTHROPIC],
-    plan: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-    planMark: <ProviderMark provider={MARK_PROVIDER.CLAUDE} size={PROVIDER_MARK_SIZE.ROW} />,
+    rowMark: <ProviderMark provider={MARK_PROVIDER.CLAUDE} size={PROVIDER_MARK_SIZE.ROW} />,
     keyName: "Anthropic",
+    keyNoun: "an Anthropic key",
     keyUrl: "https://console.anthropic.com/settings/keys",
     keySite: "Anthropic Console",
     keyExample: "sk-ant-api03-…",
+    keyLoss: `Agents on Anthropic models won't start without a ${PLAN_NAME[PROVIDER_KEY_PROVIDER.ANTHROPIC]}.`,
     anchor: SETTINGS_SECTION.CLAUDE,
   },
   [PROVIDER_KEY_PROVIDER.OPENAI]: {
     name: "Codex",
     mark: MODEL_PROVIDER.OPENAI,
-    planName: PLAN_NAME[PROVIDER_KEY_PROVIDER.OPENAI],
-    plan: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
-    planMark: (
+    rowMark: (
       <SettingsRowMark>
         <HarnessMark provider={MODEL_PROVIDER.OPENAI} />
       </SettingsRowMark>
     ),
     keyName: "OpenAI",
+    keyNoun: "an OpenAI key",
     keyUrl: "https://platform.openai.com/api-keys",
     keySite: "OpenAI Platform",
     keyExample: "sk-proj-…",
+    keyLoss: `Agents on OpenAI models won't start without a ${PLAN_NAME[PROVIDER_KEY_PROVIDER.OPENAI]}. Calls and dictation will be off.`,
     anchor: SETTINGS_SECTION.CODEX,
   },
-} as const satisfies Record<ProviderKeyProvider, Harness>;
+  [PROVIDER_KEY_PROVIDER.CURSOR]: {
+    name: "Cursor",
+    mark: MODEL_PROVIDER.CURSOR,
+    rowMark: (
+      <SettingsRowMark>
+        <HarnessMark provider={MODEL_PROVIDER.CURSOR} />
+      </SettingsRowMark>
+    ),
+    keyName: "Cursor",
+    keyNoun: "a Cursor key",
+    keyUrl: "https://cursor.com/dashboard/api",
+    keySite: "Cursor's dashboard",
+    keyExample: "crsr_…",
+    keyLoss: "Cursor agents won't start without a Cursor API key.",
+    anchor: SETTINGS_SECTION.CURSOR,
+  },
+} as const satisfies Record<SettingsProvider, Harness>;
 
-const HARNESSES: readonly ProviderKeyProvider[] = [
+/** The plan of each harness that keeps one, Claude's and Codex's. */
+const HARNESS_PLAN = {
+  [PROVIDER_KEY_PROVIDER.ANTHROPIC]: {
+    planName: PLAN_NAME[PROVIDER_KEY_PROVIDER.ANTHROPIC],
+    plan: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+  },
+  [PROVIDER_KEY_PROVIDER.OPENAI]: {
+    planName: PLAN_NAME[PROVIDER_KEY_PROVIDER.OPENAI],
+    plan: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+  },
+} as const satisfies Record<PlanProvider, HarnessPlan>;
+
+/** Whether the harness keeps a plan here, so a plan's rows, its Add, and its steps may stand on its card. */
+function keepsPlan(provider: SettingsProvider): provider is PlanProvider {
+  return provider !== PROVIDER_KEY_PROVIDER.CURSOR;
+}
+
+/** The harnesses every account's Agents draws, in their order. */
+const HARNESSES: readonly SettingsProvider[] = [
   PROVIDER_KEY_PROVIDER.ANTHROPIC,
   PROVIDER_KEY_PROVIDER.OPENAI,
+];
+
+/** The harnesses an account trying Cursor draws: Cursor's card after the others. */
+const HARNESSES_WITH_CURSOR: readonly SettingsProvider[] = [
+  ...HARNESSES,
+  PROVIDER_KEY_PROVIDER.CURSOR,
 ];
 
 /** The rows a harness's section draws with nothing connected: its header alone. */
@@ -235,6 +295,7 @@ const WORDS = {
   READ_FAILED: "Your keys could not be read.",
   SIGNED_OUT: SIGNED_OUT_WORDS,
   ADD: "Add plan or key",
+  ADD_KEY: "Add key",
   AT_LIMIT: "At its limit",
   BACK_AT: "back at",
   RENAME: "Rename",
@@ -294,7 +355,7 @@ const PLAN_DISCONNECT_REFUSED = {
     status: ACTION_RESULT_STATUS.REJECTED,
     reason: WORDS.CHATGPT_DISCONNECT_FAILED,
   },
-} as const satisfies Record<ProviderKeyProvider, ActionResult>;
+} as const satisfies Record<PlanProvider, ActionResult>;
 
 const KEY_REMOVE_REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
@@ -317,24 +378,27 @@ const PLAN_DISCONNECT = {
     running: WORDS.DISCONNECTING,
     loss: CONFIRM_LOSS.IRREVERSIBLE,
   },
-} as const satisfies Record<ProviderKeyProvider, DialogQuestion>;
+} as const satisfies Record<PlanProvider, DialogQuestion>;
 
 /* ----- Reading the credentials ----- */
 
-/** The harness's plans among the account's subscriptions, in the account's order. */
+/** The harness's plans among the account's subscriptions, in the account's order; none for a harness that keeps no plan. */
 function plansOf(
   answer: ProviderKeysAnswer,
-  provider: ProviderKeyProvider,
+  provider: SettingsProvider,
 ): readonly SubscriptionKeySummary[] {
+  if (!keepsPlan(provider)) return [];
+  const { plan } = HARNESS_PLAN[provider];
+
   return (answer.subscriptions ?? [])
-    .filter((one) => one.kind === HARNESS[provider].plan)
+    .filter((one) => one.kind === plan)
     .toSorted((a, b) => a.position - b.position);
 }
 
 /** The provider's API keys among the account's keys. */
 function keysOf(
   answer: ProviderKeysAnswer,
-  provider: ProviderKeyProvider,
+  provider: SettingsProvider,
 ): readonly ProviderKeySummary[] {
   return answer.keys.filter((one) => one.provider === provider);
 }
@@ -354,7 +418,7 @@ function keyStanding(status: ProviderKeyStatus): boolean {
 }
 
 /** Whether the harness can start an agent now: a plan short of its limit, or a key that stands. */
-function harnessReady(answer: ProviderKeysAnswer, provider: ProviderKeyProvider): boolean {
+function harnessReady(answer: ProviderKeysAnswer, provider: SettingsProvider): boolean {
   return (
     plansOf(answer, provider).some(
       (plan) => standing(plan) && plan.status !== PROVIDER_KEY_STATUS.LIMIT_REACHED,
@@ -414,11 +478,7 @@ interface PlanLine {
 }
 
 /** What a plan's line says, by its harness: its usage with room, its limit, or what is wrong with it. */
-function planLine(
-  provider: ProviderKeyProvider,
-  plan: SubscriptionKeySummary,
-  now: number,
-): PlanLine {
+function planLine(provider: PlanProvider, plan: SubscriptionKeySummary, now: number): PlanLine {
   const usage = planUsageMeters(plan, now);
 
   if (plan.status === PROVIDER_KEY_STATUS.LIMIT_REACHED) {
@@ -438,7 +498,7 @@ function planLine(
 }
 
 /** What an API key's line says, by the provider it names: nothing where it stands, but its hint where its name hides it, or what is wrong with it. */
-function keyLineWords(provider: ProviderKeyProvider, key: ProviderKeySummary): string | undefined {
+function keyLineWords(provider: SettingsProvider, key: ProviderKeySummary): string | undefined {
   const name = HARNESS[provider].keyName;
 
   switch (key.status) {
@@ -458,20 +518,14 @@ function keyLineWords(provider: ProviderKeyProvider, key: ProviderKeySummary): s
 }
 
 /** Why an API key's save kept nothing, in words the developer can act on. */
-function keyRejectionWords(provider: ProviderKeyProvider, rejection: ProviderKeyRejection): string {
+function keyRejectionWords(provider: SettingsProvider, rejection: ProviderKeyRejection): string {
   const name = HARNESS[provider].keyName;
 
   switch (rejection) {
     case PROVIDER_KEY_REJECTION.INVALID:
       return `${name} didn't accept this key. Check it and try again.`;
-    case PROVIDER_KEY_REJECTION.WRONG_PROVIDER: {
-      const other =
-        provider === PROVIDER_KEY_PROVIDER.ANTHROPIC
-          ? PROVIDER_KEY_PROVIDER.OPENAI
-          : PROVIDER_KEY_PROVIDER.ANTHROPIC;
-
-      return `This looks like an ${HARNESS[other].keyName} key. Paste it under ${HARNESS[other].name}.`;
-    }
+    case PROVIDER_KEY_REJECTION.WRONG_PROVIDER:
+      return `This isn't ${HARNESS[provider].keyNoun}. Paste it under the provider it's for.`;
 
     case PROVIDER_KEY_REJECTION.UNREACHABLE:
       return `Couldn't reach ${name} to check this key. Try again.`;
@@ -488,16 +542,12 @@ function tokenRejectionWords(rejection: ProviderKeyRejection): string {
 }
 
 /** What removing a provider's key asks. */
-function keyRemovalQuestion(provider: ProviderKeyProvider): DialogQuestion {
+function keyRemovalQuestion(provider: SettingsProvider): DialogQuestion {
   const harness = HARNESS[provider];
-  const name = harness.keyName;
 
   return {
-    title: `Delete your ${name} ${WORDS.API_KEY}?`,
-    body:
-      provider === PROVIDER_KEY_PROVIDER.OPENAI
-        ? `Agents on ${name} models won't start without a ${harness.planName}. Calls and dictation will be off.`
-        : `Agents on ${name} models won't start without a ${harness.planName}.`,
+    title: `Delete your ${harness.keyName} ${WORDS.API_KEY}?`,
+    body: harness.keyLoss,
     verb: WORDS.DELETE_KEY,
     running: WORDS.DELETING,
     loss: CONFIRM_LOSS.IRREVERSIBLE,
@@ -533,7 +583,7 @@ function GetKeyLink({
   provider,
   onOpened,
 }: {
-  provider: ProviderKeyProvider;
+  provider: SettingsProvider;
   onOpened: () => void;
 }): React.JSX.Element {
   const openLink = useOpenLink();
@@ -669,7 +719,7 @@ const SETUP_TOKEN_FIRST: PasteFirstStep = {
 };
 
 /** An API key's first step: the provider's site, opened to make one. */
-function keyFirst(provider: ProviderKeyProvider): PasteFirstStep {
+function keyFirst(provider: SettingsProvider): PasteFirstStep {
   return {
     title: WORDS.CREATE_KEY,
     body: (done) => <GetKeyLink provider={provider} onOpened={done} />,
@@ -712,7 +762,7 @@ function setupTokenPaste(placement: TokenPlacement): PasteKind {
 }
 
 /** An API key of the provider's, pasted: added at the bottom of the order, or in place of the key `replacing` names. */
-function keyPaste(provider: ProviderKeyProvider, replacing?: string): PasteKind {
+function keyPaste(provider: SettingsProvider, replacing?: string): PasteKind {
   return {
     first: keyFirst(provider),
     label: WORDS.PASTE_KEY,
@@ -784,7 +834,7 @@ function CredentialPasteSteps({
  * list afterward, since the plan's own row goes with it.
  */
 function usePlanRemoval(
-  provider: ProviderKeyProvider,
+  provider: PlanProvider,
   plan: SubscriptionKeySummary,
   onUnconfirmed: (unconfirmed: boolean) => void,
 ): DialogConfirm {
@@ -821,7 +871,7 @@ function usePlanRemoval(
 }
 
 /** One of the provider's API keys' Remove, by its id, asked first. */
-function useKeyRemoval(provider: ProviderKeyProvider, key: ProviderKeySummary): DialogConfirm {
+function useKeyRemoval(provider: SettingsProvider, key: ProviderKeySummary): DialogConfirm {
   const { mutateAsync: sendProviderKeysRemove, ...keyRemoving } = useMutation(
     actMutation(ACT_KIND.PROVIDER_KEYS_REMOVE),
   );
@@ -904,7 +954,7 @@ type UseCredentialOrderResult = {
  * list where it was refused.
  */
 function useCredentialOrder(
-  provider: ProviderKeyProvider,
+  provider: SettingsProvider,
   credentials: readonly Credential[],
 ): UseCredentialOrderResult {
   const { mutateAsync: sendReorder } = useMutation(actMutation(ACT_KIND.SUBSCRIPTIONS_REORDER));
@@ -921,7 +971,8 @@ function useCredentialOrder(
           ...credentials.filter((credential) => !sentOrder.includes(credential.id)),
         ];
 
-  const kind = HARNESS[provider].plan;
+  // Note that the service orders a provider's credentials whatever kind is named, and a harness with no plan orders its keys alone.
+  const kind = keepsPlan(provider) ? HARNESS_PLAN[provider].plan : PROVIDER_KEY_KIND.API_KEY;
 
   const move = (from: number, to: number) => {
     const ids = ordered.map((credential) => credential.id);
@@ -949,11 +1000,11 @@ function useCredentialOrder(
  * reopens the row's field over the name asked.
  */
 function useCredentialRename(
-  provider: ProviderKeyProvider,
+  provider: SettingsProvider,
   credentials: readonly Credential[],
 ): RenameWrite {
   const renaming = useMutation(actMutation(ACT_KIND.SUBSCRIPTION_RENAME));
-  const plan = HARNESS[provider].plan;
+  const plan = keepsPlan(provider) ? HARNESS_PLAN[provider].plan : PROVIDER_KEY_KIND.API_KEY;
 
   const plans = new Set(
     credentials.flatMap((credential) => ("plan" in credential ? [credential.id] : [])),
@@ -996,11 +1047,11 @@ const STEPS = {
 /** Which steps stand open, across both harnesses; a plan's own name the plan they stand under. */
 type OpenSteps =
   | {
-      readonly provider: ProviderKeyProvider;
+      readonly provider: SettingsProvider;
       readonly steps: typeof STEPS.ADD | typeof STEPS.KEY;
     }
   | {
-      readonly provider: ProviderKeyProvider;
+      readonly provider: SettingsProvider;
       readonly steps: typeof STEPS.REPLACE;
       readonly subscriptionId: string;
     };
@@ -1021,17 +1072,41 @@ function CancelPress({ onCancel }: { onCancel: () => void }): React.JSX.Element 
   );
 }
 
+/** The header's Add for a harness with no plan, which opens a key's paste at once under the header. */
+function AddKeyPress({
+  provider,
+  press,
+  onOpen,
+}: {
+  provider: SettingsProvider;
+  press: React.RefObject<HTMLButtonElement | null>;
+  onOpen: (steps: typeof STEPS.KEY) => void;
+}): React.JSX.Element {
+  return (
+    <Button
+      ref={press}
+      variant={BUTTON_VARIANT.OUTLINE}
+      icon={<PlusIcon />}
+      label={`${WORDS.ADD_KEY} to ${HARNESS[provider].name}`}
+      onClick={() => onOpen(STEPS.KEY)}
+    >
+      {WORDS.ADD_KEY}
+    </Button>
+  );
+}
+
 /** The header's Add, whose menu adds the harness's plan or an API key; what it opens stands under the header. */
 function AddPress({
   provider,
   press,
   onOpen,
 }: {
-  provider: ProviderKeyProvider;
+  provider: PlanProvider;
   press: React.RefObject<HTMLButtonElement | null>;
   onOpen: (steps: typeof STEPS.ADD | typeof STEPS.KEY) => void;
 }): React.JSX.Element {
   const harness = HARNESS[provider];
+  const { planName } = HARNESS_PLAN[provider];
   const menu = useMenu(true);
 
   return (
@@ -1051,7 +1126,7 @@ function AddPress({
           menu={menu.drawn}
           groups={[
             [
-              { label: harness.planName, onSelect: () => onOpen(STEPS.ADD) },
+              { label: planName, onSelect: () => onOpen(STEPS.ADD) },
               { label: WORDS.API_KEY, onSelect: () => onOpen(STEPS.KEY) },
             ],
           ]}
@@ -1069,7 +1144,7 @@ function PlanFix({
   plan,
   onOpen,
 }: {
-  provider: ProviderKeyProvider;
+  provider: PlanProvider;
   plan: SubscriptionKeySummary;
   onOpen: () => void;
 }): React.JSX.Element | null {
@@ -1091,7 +1166,7 @@ function PlanSteps({
   held,
   onDone,
 }: {
-  provider: ProviderKeyProvider;
+  provider: PlanProvider;
   /** Where a pasted token lands: on the plan it replaces, or at the bottom of the order. */
   placement: TokenPlacement;
   held: boolean;
@@ -1136,7 +1211,7 @@ function PlanRow({
   onUnconfirmed,
   alignWith,
 }: {
-  provider: ProviderKeyProvider;
+  provider: PlanProvider;
   plan: SubscriptionKeySummary;
   name: string;
   /** Every plan's meter rows on the page, which its meters line up with. */
@@ -1170,7 +1245,7 @@ function PlanRow({
   return (
     <>
       <SettingsRow
-        leading={harness.planMark}
+        leading={harness.rowMark}
         label={
           <RenamableName
             value={rename.asked ?? name}
@@ -1267,7 +1342,7 @@ function KeyRow({
   onMove,
   renames,
 }: {
-  provider: ProviderKeyProvider;
+  provider: SettingsProvider;
   apiKey: ProviderKeySummary;
   at: number;
   count: number;
@@ -1301,7 +1376,7 @@ function KeyRow({
   return (
     <>
       <SettingsRow
-        leading={harness.planMark}
+        leading={harness.rowMark}
         label={
           <RenamableName
             value={rename.asked ?? name}
@@ -1382,7 +1457,7 @@ function HarnessCredentials({
   onClose,
   aligned,
 }: {
-  provider: ProviderKeyProvider;
+  provider: SettingsProvider;
   answer: ProviderKeysAnswer;
   /** What every harness's card lines up with: whether one draws grips, and every plan's meters on the page. */
   aligned: PageAlignment;
@@ -1402,6 +1477,7 @@ function HarnessCredentials({
   const addPress = useRef<HTMLButtonElement | null>(null);
   const handBack = useRef<typeof STEPS.ADD | typeof STEPS.KEY | undefined>(undefined);
   const names = planNamesOf(provider, plans);
+  const planProvider = keepsPlan(provider) ? provider : undefined;
   const adding = open?.steps === STEPS.ADD || open?.steps === STEPS.KEY ? open.steps : undefined;
 
   // Note that the focus goes back to the row's press wherever the steps' going left it on nothing, and again once a credential they kept draws in its place, since the keys the host lays can land a draw after the steps go.
@@ -1437,10 +1513,10 @@ function HarnessCredentials({
         label={harness.name}
         controls={SETTINGS_ROW_CONTROLS.BESIDE_UNTIL_NARROW}
         below={
-          adding === STEPS.ADD
+          adding === STEPS.ADD && planProvider !== undefined
             ? () => (
                 <PlanSteps
-                  provider={provider}
+                  provider={planProvider}
                   placement={ADD_TOKEN}
                   held={false}
                   onDone={close(STEPS.ADD)}
@@ -1465,10 +1541,12 @@ function HarnessCredentials({
         }
       >
         {() =>
-          adding === undefined ? (
-            <AddPress provider={provider} press={addPress} onOpen={openSteps} />
-          ) : (
+          adding !== undefined ? (
             <CancelPress onCancel={close(adding)} />
+          ) : planProvider === undefined ? (
+            <AddKeyPress provider={provider} press={addPress} onOpen={openSteps} />
+          ) : (
+            <AddPress provider={planProvider} press={addPress} onOpen={openSteps} />
           )
         }
       </SettingsRow>
@@ -1490,23 +1568,9 @@ function HarnessCredentials({
 
             return {
               key: credential.id,
+              // Note that a harness with no plan has no plan among its credentials (`plansOf`), so none is drawn for it.
               row:
-                "plan" in credential ? (
-                  <PlanRow
-                    provider={provider}
-                    plan={credential.plan}
-                    name={names.get(credential.id) ?? harness.planName}
-                    at={at}
-                    count={order.ordered.length}
-                    open={rowOpen}
-                    onOpen={onRowOpen}
-                    onClose={onClose}
-                    onMove={order.move}
-                    renames={renames}
-                    onUnconfirmed={setUnconfirmed}
-                    alignWith={aligned.meters}
-                  />
-                ) : (
+                "key" in credential ? (
                   <KeyRow
                     provider={provider}
                     apiKey={credential.key}
@@ -1517,6 +1581,21 @@ function HarnessCredentials({
                     onClose={onClose}
                     onMove={order.move}
                     renames={renames}
+                  />
+                ) : planProvider === undefined ? null : (
+                  <PlanRow
+                    provider={planProvider}
+                    plan={credential.plan}
+                    name={names.get(credential.id) ?? HARNESS_PLAN[planProvider].planName}
+                    at={at}
+                    count={order.ordered.length}
+                    open={rowOpen}
+                    onOpen={onRowOpen}
+                    onClose={onClose}
+                    onMove={order.move}
+                    renames={renames}
+                    onUnconfirmed={setUnconfirmed}
+                    alignWith={aligned.meters}
                   />
                 ),
             };
@@ -1552,10 +1631,13 @@ type UseCredentialsResult = {
  */
 function useCredentials({
   signedIn,
+  harnesses,
   onKeys,
   onConnected,
 }: {
   signedIn: boolean;
+  /** The harnesses drawn, whose readiness setup hears. */
+  harnesses: readonly SettingsProvider[];
   onKeys?: ((keys: readonly ProviderKeySummary[]) => void) | undefined;
   onConnected?: ((connected: boolean) => void) | undefined;
 }): UseCredentialsResult {
@@ -1573,8 +1655,8 @@ function useCredentials({
   // Setup hears whether either harness can now start an agent.
   useEffect(() => {
     if (answer === undefined || onConnected === undefined) return;
-    onConnected(HARNESSES.some((provider) => harnessReady(answer, provider)));
-  }, [answer, onConnected]);
+    onConnected(harnesses.some((provider) => harnessReady(answer, provider)));
+  }, [answer, onConnected, harnesses]);
 
   return { answer, readFailed, retry: () => retryKeys.mutate() };
 }
@@ -1592,10 +1674,14 @@ interface PageAlignment {
   readonly meters: readonly UsageMeterRow[];
 }
 
-/** What the page's cards line up with, as the account's keys stand `now`. */
-function pageAlignment(answer: ProviderKeysAnswer, now: number): PageAlignment {
+/** What the page's cards line up with, as the account's keys stand `now` on the harnesses drawn. */
+function pageAlignment(
+  answer: ProviderKeysAnswer,
+  harnesses: readonly SettingsProvider[],
+  now: number,
+): PageAlignment {
   return {
-    gutter: HARNESSES.some(
+    gutter: harnesses.some(
       (provider) => plansOf(answer, provider).length + keysOf(answer, provider).length > 1,
     ),
     meters: (answer.subscriptions ?? []).flatMap((plan) => planUsageMeters(plan, now)?.rows ?? []),
@@ -1614,7 +1700,17 @@ function CredentialLists({
   onKeys?: ((keys: readonly ProviderKeySummary[]) => void) | undefined;
   onConnected?: ((connected: boolean) => void) | undefined;
 }): React.JSX.Element {
-  const { answer, readFailed, retry } = useCredentials({ signedIn, onKeys, onConnected });
+  // Note that Cursor's card stands only for an account trying Cursor, as nothing else of Cursor stands for one that is not.
+  const cursorOn = useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.CURSOR) });
+  const harnesses = cursorOn.data === true ? HARNESSES_WITH_CURSOR : HARNESSES;
+
+  const { answer, readFailed, retry } = useCredentials({
+    signedIn,
+    harnesses,
+    onKeys,
+    onConnected,
+  });
+
   const [open, setOpen] = useState<OpenSteps | undefined>(undefined);
 
   if (!signedIn) {
@@ -1637,7 +1733,7 @@ function CredentialLists({
     ) : (
       <SettingsSectionsSkeleton
         label={readingWords("your keys")}
-        sections={HARNESSES.map(() => ({
+        sections={harnesses.map(() => ({
           headed: false,
           rows: Array.from({ length: SECTION_ROWS }, () => CREDENTIAL_ROW_SKELETON),
         }))}
@@ -1645,12 +1741,12 @@ function CredentialLists({
     );
   }
 
-  const aligned = pageAlignment(answer, Date.now());
+  const aligned = pageAlignment(answer, harnesses, Date.now());
 
   return (
     <ReplayMask>
       <Stack gap={gap}>
-        {HARNESSES.map((provider) => (
+        {harnesses.map((provider) => (
           <HarnessCredentials
             key={provider}
             provider={provider}

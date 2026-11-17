@@ -147,9 +147,9 @@ import {
 } from "../workspace-routes.js";
 import { FIXTURE_AGENT_ID } from "./agent-fixture.js";
 import { AUTOMATIONS_PAGE } from "./automations-place.js";
+import { ofPullRequest } from "./by-pull-request.js";
 import { REVISION_SOURCE } from "./description-history-model.js";
 import { NEW_TASK_PURPOSE } from "./new-task-purpose.js";
-import { ofPullRequestTab } from "./pull-request-number.js";
 import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW, SIDE_PANEL_TAB } from "./task-tab-model.js";
 import { loadedTasksFixture, loadTasksFixture } from "./tasks-fixture-loader.js";
@@ -173,11 +173,33 @@ const TASK: Task = {
   description: { body: "# Teammate invitations", assumptions: [] },
 };
 
+const AGENT_ID = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
+
+/** The pull request the agent's row names, by its repository and number. */
+const RELAY_42 = { repository: "acme/relay", number: 42 } as const;
+
+/** The pull request the agent opened, as the list carries it beside the agent's row. */
+const AGENT_PULL_REQUEST = {
+  agentId: AGENT_ID,
+  taskId: TASK.id,
+  pullRequest: {
+    number: 42,
+    title: "Expire invitations",
+    url: "https://github.com/acme/relay/pull/42",
+    state: PULL_REQUEST_STATE.OPEN,
+    checks: CHECK_SUMMARY.PASSING,
+    additions: 4,
+    deletions: 1,
+    changedFiles: 1,
+  },
+};
+
 const OPEN: WrittenTasksView = {
   tasks: [],
   listStatus: TASKS_READ.READY,
   workspaces: [],
   activeTaskId: TASK.id,
+  agentPullRequests: [AGENT_PULL_REQUEST],
 };
 
 /** The open task's view with its own workspace listed, whose choices a task its list holds none of stands by. */
@@ -245,6 +267,8 @@ interface Standing {
   loadedAt?: string;
   /** Whether Home's own composer is drawn while Home stands, its words heeding New task as Home's do (`useHomeNewTask`). */
   homeComposer?: boolean;
+  /** Whether the window's task list has yet to answer as the tab mounts, as at launch, until the test stands it. */
+  listUnanswered?: boolean;
 }
 
 /** Home's own composer as New task reaches it: words that take the caret at each press while it stands. */
@@ -278,7 +302,7 @@ const SENT_ON_MUTATIONS: readonly PortActKind[] = [
   ACT_KIND.AGENTS_RENAME,
   ACT_KIND.AGENTS_ARCHIVE,
   ACT_KIND.AGENTS_DELETE,
-  ACT_KIND.CHAPTERS_GENERATE,
+  ACT_KIND.CHAPTERS_REPOSITORY_GENERATE,
   ACT_KIND.AGENTS_INBOX_ANSWER,
   ACT_KIND.AGENTS_INBOX_MESSAGE,
   ACT_KIND.AGENTS_INBOX_START,
@@ -576,8 +600,12 @@ function mount(
   document.body.append(container);
   // The window's toast stands beside the tab, as the app draws it.
   const surface = createElement(Fragment, null, createElement(Probe), createElement(ToastHost));
+
   // The window's task-list collections, standing on the tasks the tab lists, as the window's follow writes them.
-  const taskList = standingTaskList(listedOf(standing));
+  const taskList = standingTaskList(
+    standing.listUnanswered === true ? undefined : listedOf(standing),
+  );
+
   const root = createRoot(container);
   roots.push(root);
 
@@ -682,11 +710,16 @@ function _undoButton(): HTMLButtonElement {
   return undo;
 }
 
-/** One revision as the history lists it, written by the app on a call. */
+/** One revision as the history lists it, written by a teammate. */
 function revisionLine(seq: number) {
   return {
     seq,
-    lastEdit: { actor: DESCRIPTION_ACTOR.NOTETAKER, at: 10 * seq, duringCall: false },
+    lastEdit: {
+      actor: DESCRIPTION_ACTOR.DEVELOPER,
+      by: { userId: "user-charles", name: "Charles Pan" },
+      at: 10 * seq,
+      duringCall: false,
+    },
     startedAt: 10 * seq,
     changes: 2,
   };
@@ -1012,10 +1045,8 @@ function panelOf(tab: ReturnType<typeof mount>) {
   return { open, tab: shown };
 }
 
-const AGENT_ID = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
-
 /** The agent's Pull request tab, a tab of the side panel that stands again on its task. */
-const PULLS = changesTab(AGENT_ID);
+const PULLS = changesTab(RELAY_42);
 
 const RUNNING_AGENT: AgentSummary = {
   id: AGENT_ID,
@@ -1112,7 +1143,7 @@ test("⇧⌘T asks first while a page stands unsaved work, and reopens once the 
   assert.deepEqual(panel().strip, [PULLS]);
 });
 
-test("a task none of whose tabs was viewed shows its agents' last tab, opens on its agents again across a launch though left on its details, and shows the tab viewed before its last agent's once that closes", async () => {
+test("a task none of whose tabs was viewed shows its agents' last tab, opens across a launch on its details where it was left on them, and shows the tab viewed before its last agent's once that closes", async () => {
   const listed = withAgents([RUNNING_AGENT]);
   const tab = mount({ shown: true, tasks: listed });
   await settle();
@@ -1132,7 +1163,11 @@ test("a task none of whose tabs was viewed shows its agents' last tab, opens on 
   const launched = mount({ shown: true, tasks: listed });
   await settle();
   const again = () => launched.control().mainTabs;
-  assert.deepEqual(again().tab, agent, "a launch opens the task on its agents, its details let go");
+  assert.equal(
+    again().tab,
+    MAIN_TAB.OVERVIEW,
+    "a launch opens the task as it was left, on its details",
+  );
 
   act(() => again().onChoose(agent));
   act(() => again().onClose(agent));
@@ -1278,7 +1313,7 @@ it.effect(
     }),
 );
 
-test("in a narrow room a task opened from a list lands on its plan, its Overview with the side panel shut over it whichever tab it last showed, and on the desktop's width it stands shut once a plan with no tab was passed through", () => {
+test("in a narrow room a task opened from a list lands on its plan, its Overview with the side panel shut over it whichever tab it last showed, and on the desktop's width it opens with the panel as it was left there", () => {
   for (const room of [SHELL_ROOM.NARROW, SHELL_ROOM.WIDE]) {
     window.localStorage.clear();
 
@@ -1297,16 +1332,12 @@ test("in a narrow room a task opened from a list lands on its plan, its Overview
       assert.equal(tab.control().sidePanel.open, false, "narrow shuts the panel");
       assert.equal(tab.control().mainTabs.tab, MAIN_TAB.OVERVIEW, "over the task's Overview");
     } else {
-      assert.equal(
-        tab.control().sidePanel.open,
-        false,
-        "a plan with no tab passed through shuts it",
-      );
+      assert.equal(tab.control().sidePanel.open, true, "the panel stands as it was left there");
     }
   }
 });
 
-test("a task opened from a list, gone back to from the sidebar, or named by a chip opens on the agent waiting on the developer, past the one at work", () => {
+test("a task opened from a list, gone back to from the sidebar, or named by a chip opens on the agent waiting on the developer, past the one at work, until a tab viewed on it is opened again as it was left", () => {
   const WAITING = "1b2c3d4e-5f60-4718-8293-a4b5c6d7e8f9";
   // One agent at work and one resting, the resting one's thread waiting on the developer, as the list followed live holds them.
   const waitingRow = { ...row(TASK.id, 1), agents: { total: 2, working: 1, pullRequestTotal: 0 } };
@@ -1363,6 +1394,26 @@ test("a task opened from a list, gone back to from the sidebar, or named by a ch
     tab.control().mainTabs.tab,
     agentTab(WAITING),
     "from the sidebar, the agent waiting",
+  );
+
+  act(() => tab.control().mainTabs.onChoose(agentTab(AGENT_ID)));
+  tab.stand({ tasks: elsewhere([waitingRow]) });
+  act(() => tab.control().onResume(TASK.id));
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
+  assert.deepEqual(
+    tab.control().mainTabs.tab,
+    agentTab(AGENT_ID),
+    "gone back to, the tab last viewed there, though an agent waits",
+  );
+
+  act(() => tab.control().mainTabs.onChoose(MAIN_TAB.OVERVIEW));
+  tab.stand({ tasks: elsewhere([waitingRow]) });
+  act(() => tab.control().onResume(TASK.id));
+  tab.stand({ tasks: { ...OPEN, tasks: [waitingRow], taskAgents: followed, listed: true } });
+  assert.equal(
+    tab.control().mainTabs.tab,
+    MAIN_TAB.OVERVIEW,
+    "its details too, where it was left on them",
   );
 });
 
@@ -1459,7 +1510,7 @@ test("in a narrow room a Vespin link to another task's panel item opens that ite
   );
   tab.stand({ tasks: OPEN });
   await settle();
-  assert.deepEqual(panelOf(tab), { open: true, tab: changesTab(AGENT_ID) });
+  assert.deepEqual(panelOf(tab), { open: true, tab: PULLS });
 });
 
 test('Show panel on a plan whose strip holds no tab opens the tab last closed there, else asks for the "+" at the toggle, as a first launch does with no tab standing', async () => {
@@ -1792,11 +1843,7 @@ test("a Vespin link keyed by the agent alone opens on the agent's task, and on t
   open(`/agent/${UNREAD}/changes`);
   await settle();
   assert.equal(tab.control().agentView.agentId, UNREAD, "an agent not read stands on its page");
-  assert.notDeepEqual(
-    panelOf(tab).tab,
-    changesTab(UNREAD),
-    "and opens no tab of a panel it may not hold",
-  );
+  assert.notDeepEqual(panelOf(tab).tab, PULLS, "and opens no tab of a panel it may not hold");
 
   open(`/agent/${ELSEWHERE}`);
   await settle();
@@ -1844,10 +1891,10 @@ test("a Vespin link to an agent's worker opens the worker's own tab in the task'
     agentTab(AGENT_ID),
     "the worker's agent's tab opens with it, which draws the worker",
   );
-  assert.deepEqual(panelOf(tab), { open: true, tab: changesTab(AGENT_ID) });
+  assert.deepEqual(panelOf(tab), { open: true, tab: PULLS });
 });
 
-test("a link to an agent's Pull request tab, on a pull request another of the task's agents shares whose tab is open, opens that tab rather than a second, unless that agent was archived", async () => {
+test("a link an earlier version wrote to an agent's Pull request tab opens the one tab of the pull request the agent's row names, whichever of the agents sharing it the link names", async () => {
   const EARLIER = { ...RUNNING_AGENT, id: "5e3b6f1d-2a10-4c7a-9a55-7b0f5f3e2c1d", createdAt: 2 };
 
   const shared = {
@@ -1861,22 +1908,18 @@ test("a link to an agent's Pull request tab, on a pull request another of the ta
     changedFiles: 2,
   };
 
-  const archived = { ...EARLIER, archivedAt: 5 };
-
   // Both agents' rows keep the pull request they share, which the list carries beside them.
-  const sharing = (agents: readonly AgentSummary[]): WrittenTasksView => ({
-    ...withAgents(agents),
-    agentPullRequests: agents.map((agent) => ({
-      agentId: agent.id,
-      taskId: TASK.id,
-      pullRequest: shared,
-    })),
+  const tab = mount({
+    shown: true,
+    tasks: {
+      ...withAgents([EARLIER, RUNNING_AGENT]),
+      agentPullRequests: [EARLIER, RUNNING_AGENT].map((agent) => ({
+        agentId: agent.id,
+        taskId: TASK.id,
+        pullRequest: shared,
+      })),
+    },
   });
-
-  const tab = mount(
-    { shown: true, tasks: sharing([EARLIER, RUNNING_AGENT]) },
-    { [ACT_KIND.AGENTS_ARCHIVE]: () => Promise.resolve({ agent: archived }) },
-  );
 
   await settle();
 
@@ -1890,15 +1933,41 @@ test("a link to an agent's Pull request tab, on a pull request another of the ta
   open(EARLIER.id);
   open(AGENT_ID);
 
-  assert.deepEqual(panelOf(tab), { open: true, tab: changesTab(EARLIER.id) });
-  assert.deepEqual(tab.control().sidePanel.changes, [changesTab(EARLIER.id)]);
+  const sharedTab = changesTab({ repository: "acme/relay", number: 41 });
+  assert.deepEqual(panelOf(tab), { open: true, tab: sharedTab });
+  assert.deepEqual(tab.control().sidePanel.changes, [sharedTab]);
+});
 
-  // Archived, the earlier agent's tab is no longer drawn, so the link opens the later agent's own.
-  tab.stand({ tasks: sharing([archived, RUNNING_AGENT]) });
-  await act(() => tab.control().agents.onArchive(EARLIER.id, true));
+test("a link an earlier version wrote to an agent's Pull request tab, opened before the task list first answers, waits for it and opens the pull request the agent's row names", async () => {
+  const pullRequest = {
+    number: 41,
+    title: "Teammate invitations",
+    url: "https://github.com/acme/relay/pull/41",
+    state: PULL_REQUEST_STATE.OPEN,
+    checks: CHECK_SUMMARY.PASSING,
+    additions: 12,
+    deletions: 3,
+    changedFiles: 2,
+  };
+
+  const tab = mount({ shown: true, listUnanswered: true, tasks: withAgents([RUNNING_AGENT]) });
   await settle();
-  open(AGENT_ID);
-  assert.deepEqual(panelOf(tab), { open: true, tab: changesTab(AGENT_ID) });
+
+  act(() =>
+    tab
+      .control()
+      .onOpenLink(linkAt(`${LINK_ORIGIN}/acme/task/${TASK.id}/agent/${AGENT_ID}/changes`)),
+  );
+  tab.stand({
+    tasks: {
+      ...withAgents([RUNNING_AGENT]),
+      agentPullRequests: [{ agentId: AGENT_ID, taskId: TASK.id, pullRequest }],
+    },
+  });
+  await settle();
+
+  const opened = changesTab({ repository: "acme/relay", number: 41 });
+  assert.deepEqual(panelOf(tab), { open: true, tab: opened });
 });
 
 test("a Vespin link to an agent's message opens the agent and asks its tab to bring the message into view, each ask its own, let go once answered", async () => {
@@ -1916,7 +1985,7 @@ test("a Vespin link to an agent's message opens the agent and asks its tab to br
   assert.equal(tab.control().messageReveal, undefined);
 });
 
-test("a Vespin link to a review thread opens its agent's Pull request tab on the view it names and asks the tab to bring the thread into view, each ask its own, let go once taken", async () => {
+test("a Vespin link to a review thread opens the tab of the pull request its agent's row names on the view it names and asks the tab to bring the thread into view, each ask its own, let go once taken", async () => {
   const tab = mount({ shown: true, tasks: withAgents([RUNNING_AGENT]) });
   await settle();
 
@@ -1925,22 +1994,19 @@ test("a Vespin link to a review thread opens its agent's Pull request tab on the
 
   act(() => tab.control().onOpenLink(link(PULL_REQUEST_THREAD_VIEW.FILES)));
   const first = tab.control().threadReveal;
-  const files = ofPullRequestTab(tab.control().sidePanel.pullRequestViews, changesTab(AGENT_ID));
+  const files = ofPullRequest(tab.control().sidePanel.pullRequestViews, RELAY_42);
   act(() => tab.control().onOpenLink(link(PULL_REQUEST_THREAD_VIEW.CONVERSATION)));
   const second = tab.control().threadReveal;
 
-  const conversation = ofPullRequestTab(
-    tab.control().sidePanel.pullRequestViews,
-    changesTab(AGENT_ID),
-  );
+  const conversation = ofPullRequest(tab.control().sidePanel.pullRequestViews, RELAY_42);
 
   act(() => tab.control().onThreadRevealed(1));
   const stale = tab.control().threadReveal;
   act(() => tab.control().onThreadRevealed(2));
 
-  assert.deepEqual(panelOf(tab), { open: true, tab: changesTab(AGENT_ID) });
+  assert.deepEqual(panelOf(tab), { open: true, tab: PULLS });
   assert.deepEqual(first, {
-    agentId: AGENT_ID,
+    pullRequest: RELAY_42,
     threadId: "PRRT_1",
     view: PULL_REQUEST_THREAD_VIEW.FILES,
     ask: 1,
@@ -1987,8 +2053,8 @@ const WORKER_PANEL = {
   panel: { open: true, tab: subagentTab("toolu_1", { agent: AGENT_ID, task: "" }) },
 };
 
-const CHANGES_PANEL = { panel: { open: true, tab: changesTab(AGENT_ID) }, thread: undefined };
-const THREAD_PANEL = { panel: { open: true, tab: changesTab(AGENT_ID) }, thread: "PRRT_1" };
+const CHANGES_PANEL = { panel: { open: true, tab: PULLS }, thread: undefined };
+const THREAD_PANEL = { panel: { open: true, tab: PULLS }, thread: "PRRT_1" };
 
 test.each([
   ["an agent's link", AGENT_AT, AGENT_COLUMN],
@@ -2218,7 +2284,7 @@ test("a page loaded at an agent's Changes under its task lands on its route, whi
   const entries = tab.entries();
   await settle();
 
-  assert.deepEqual(panelOf(tab), { open: true, tab: changesTab(AGENT_ID) });
+  assert.deepEqual(panelOf(tab), { open: true, tab: PULLS });
   assert.equal(tab.at(), task);
   assert.equal(tab.entries(), entries, "the step takes the loaded entry in place");
 });
@@ -3606,9 +3672,10 @@ test("an agent profile opens its task on the agent it stages, beside the agent's
     checks.control().agents.agents?.map((agent) => agent.title),
     ["Add teammate invitations"],
   );
-  assert.deepEqual(checks.control().sidePanel.tab, changesTab(FIXTURE_AGENT_ID));
+  const fixturePullRequest = { repository: "ada/relay", number: 214 };
+  assert.deepEqual(checks.control().sidePanel.tab, changesTab(fixturePullRequest));
   assert.equal(
-    checks.control().sidePanel.pullRequestViews.get(FIXTURE_AGENT_ID)?.get(undefined),
+    ofPullRequest(checks.control().sidePanel.pullRequestViews, fixturePullRequest),
     PULL_REQUEST_VIEW.CHECKS,
   );
   assert.deepEqual(file.control().sidePanel.tab, fileTab("src/members/invite.ts"));
@@ -4354,7 +4421,7 @@ test("a task started, with an agent or without, leaves a hidden side panel hidde
   assert.equal(tab.control().sidePanel.open, false, "the plan does not open beside the agent");
 });
 
-test("New task's agent opens alone, no plan beside it, and the task left draws no panel until asked, since a tab standing opens none", async () => {
+test("New task's agent opens alone, no plan beside it, and the task left opens again with its panel as it was left", async () => {
   const started = { ...RUNNING_AGENT, taskId: OTHER_TASK_ID };
 
   const tab = mount(
@@ -4374,7 +4441,7 @@ test("New task's agent opens alone, no plan beside it, and the task left draws n
 
   tab.stand({ tasks: OPEN });
   await settle();
-  assert.deepEqual(panelOf(tab), { open: false, tab: FILE }, "the task left keeps its tab, shut");
+  assert.deepEqual(panelOf(tab), { open: true, tab: FILE }, "the task left opens on its tab again");
 });
 
 test("New task's agent stands on its task before the task's agents or its transcript are read", async () => {
@@ -4696,7 +4763,7 @@ test("a task with no agent opens on a new agent's draft, which closes once left 
   assert.equal(tab.control().agents.draft, undefined, "the empty draft left is let go");
   assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW]);
 
-  // Left for another task, the task opens on a new agent's draft again on coming back, its details let go.
+  // Left for another task on its draft, the task opens on a new agent's draft again on coming back, as it was left.
   openDraft(tab);
   tab.stand({ tasks: { ...OPEN, activeTaskId: OTHER_TASK_ID } });
   await settle();
@@ -4710,12 +4777,14 @@ test("a task with no agent opens on a new agent's draft, which closes once left 
   // And one left for another place, as Settings hides the tasks, from the details it was opened over.
   act(() => column().onChoose(MAIN_TAB.OVERVIEW));
   await settle();
-  openDraft(tab);
+  const left = openDraft(tab);
   tab.stand({ shown: false });
   await settle();
   tab.stand({ shown: true });
   await settle();
-  assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW], "the draft left for Settings is let go");
+  const fresh = tab.control().agents.draft;
+  assert.ok(fresh !== undefined && fresh.id !== left.id, "the draft left for Settings is let go");
+  assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, draftTab(fresh.id)], "and a new one stands");
 
   const written = openDraft(tab);
   act(() => tab.control().agents.onDraftHeld((now) => ({ ...now, text: "Fix login." })));
@@ -4890,7 +4959,7 @@ it.effect(
       yield* landed;
       const panel = () => tab.control().sidePanel;
       const file = fileTab(FILE_REF.path);
-      const pulls = changesTab(AGENT_ID);
+      const pulls = PULLS;
       act(() => panel().onOpenFile(FILE_REF));
       yield* passing(Duration.seconds(30));
       // The file is left half a minute after it opened, between any two minutes the window counts.
@@ -4969,12 +5038,12 @@ it.effect(
     Effect.gen(function* () {
       const clock = yield* Clock.Clock;
       const listed = {};
-      const pulls = changesTab(AGENT_ID);
+      const pulls = PULLS;
       serveClock(clock);
       const first = mount({ shown: true, tasks: OPEN }, listed);
       yield* landed;
-      // Note that another agent's Pull request tab is shown last, so the first is not the one shown.
-      const shown = changesTab("9d2b7b5f-4e3f-4e9c-9c77-7a5d8b3f4c32");
+      // Note that another pull request's tab is shown last, so the first is not the one shown.
+      const shown = changesTab({ repository: "acme/relay", number: 43 });
       act(() => first.control().sidePanel.onChoose(pulls));
       act(() => first.control().sidePanel.onChoose(shown));
       yield* landed;
@@ -5090,16 +5159,6 @@ it.effect(
       assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, agentTab(AGENT_ID), agentTab(UNSEEN_ID)]);
     }),
 );
-
-test("a pinned tab of one agent's opened while the column shows another shows its agent's column, whose strip alone draws it", async () => {
-  const tab = mount({ shown: true, tasks: withAgents(IDLE_AGENTS) });
-  await settle();
-  act(() => tab.control().mainTabs.onChoose(agentTab(FINISHED_ID)));
-  act(() => tab.control().onOpenPinnedTab({ task: TASK.id, tab: PULLS, label: "#1", at: 1 }));
-  await settle();
-  assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID));
-  assert.deepEqual(tab.control().sidePanel.tab, PULLS);
-});
 
 test("New task over Home under Admin opens its dialog, since Home's composer is not on screen", () => {
   const tab = mount({ shown: true, admin: true });

@@ -48,7 +48,7 @@ import {
   runLookAtThreadPicture,
 } from "../../tasks/picture-look.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
-import { CODER, CODER_REFUSAL } from "./bounds.js";
+import { CODER_REFUSAL } from "./bounds.js";
 import {
   DESCRIPTION_EDIT_REFUSAL,
   type DescriptionEditResult,
@@ -64,7 +64,7 @@ import {
   pullRequestRejected,
 } from "./pull-request.js";
 import type { SummaryModelOf } from "./replay-summary.js";
-import { runShowImage } from "./show-image.js";
+import { runShowMedia } from "./show-media.js";
 
 /** What the doors that reach an agent's session or the store's writer read of the deployment, as the web function serving the MCP server builds them (`../workspace-mcp/door-seams.ts`). */
 export interface AgentDoorSeams {
@@ -317,7 +317,7 @@ export function runAgentShowPage(
     const binding = {
       userId: admitted.target.userId,
       taskId,
-      sandbox: { door: sandbox, checkout: CODER.CHECKOUT_PATH },
+      sandbox,
     };
 
     return yield* runShowPage(binding, input, {
@@ -330,11 +330,11 @@ export function runAgentShowPage(
   );
 }
 
-/** Runs one `show_image` call: the pictures read from the agent's sandbox through the door given and kept beside its transcript. */
-export function runAgentShowImage(
+/** Runs one `show_media` call: the pictures read from the agent's sandbox through the door given and kept beside its transcript. */
+export function runAgentShowMedia(
   admitted: AdmittedConversation,
   input: UnparsedWireValue,
   sandbox: InboxSandboxDoor,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
-  return runShowImage({ target: admitted.target, sandbox, checkout: CODER.CHECKOUT_PATH }, input);
+  return runShowMedia({ target: admitted.target, sandbox }, input);
 }

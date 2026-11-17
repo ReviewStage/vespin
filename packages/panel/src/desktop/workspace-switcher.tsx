@@ -152,7 +152,7 @@ export function WorkspaceSwitcher({
   const personal = tasks.workspaces[0]?.id === listed.id;
 
   return (
-    <div className="sidebar-workspace flex flex-none items-center gap-control-gap">
+    <div className="sidebar-workspace flex flex-none items-center">
       <NavItem
         // The name a reader hears says who shares it too, since the label stands for the button's text.
         aria-label={[

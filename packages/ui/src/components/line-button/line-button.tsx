@@ -70,9 +70,9 @@ const ROW_BOX = "min-h-[28px] py-0.5 px-1 rounded-ui-6 text-muted-foreground";
  * coarse pointer, its words still centered), so a narrow column whose
  * caller lets its words wrap grows the row around them; its words are in
  * the caption's type and the muted ink, held in by a hairline at its ends,
- * lit under the pointer and deeper under the press. A quote is two lines
- * and then cut short, its ink coming up under the pointer and fading back
- * under the press. A band across a card is filled faintly under the
+ * lit under the pointer and deeper under the press. A quote is drawn
+ * whole, however many lines it takes, its ink coming up under the pointer
+ * and fading back under the press. A band across a card is filled faintly under the
  * pointer, its words coming up to the full ink and underlined under the
  * pointer or the keyboard, as a link's are, so it reads as the way to the
  * lines it names, and filled deeper under the press. Note that a hover here
@@ -83,7 +83,7 @@ const ROW_BOX = "min-h-[28px] py-0.5 px-1 rounded-ui-6 text-muted-foreground";
  */
 const LINE_LOOK = {
   row: `${ROW_BOX} pointer-coarse:min-h-touch data-[look=row]:text-caption hover:not-active:bg-fill-strong active:bg-fill-pressed data-[brightens=true]:hover:text-foreground`,
-  quote: "line-clamp-2 [line-clamp:2] wrap-anywhere hover:text-foreground active:opacity-70",
+  quote: "wrap-anywhere hover:text-foreground active:opacity-70",
   band: "decoration-1 underline-offset-[0.24em] hover:bg-muted hover:text-foreground hover:underline focus-visible:text-foreground focus-visible:underline active:bg-fill-pressed",
 } as const satisfies Record<LineButtonLook, string>;
 

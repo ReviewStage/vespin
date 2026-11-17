@@ -70,7 +70,8 @@
       "type": "array",
       "items": {
         "type": "integer",
-        "minimum": 0
+        "minimum": 0,
+        "exclusiveMaximum": 50
       },
       "maxItems": 50,
       "description": "The steps of a do the member did, by their places from 0: every one for done."

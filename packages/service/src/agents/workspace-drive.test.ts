@@ -135,11 +135,15 @@ it.layer(getTestDB())("a workspace's drive", (it) => {
         assert.deepEqual(commands.filter(isPrune), []);
         assert.deepEqual(memory.state.deleted, [name]);
         assert.deepEqual(yield* workspaceDriveRepositories(workspace.workspaceId), ["acme/relay"]);
-        // The fill's sandbox is billed to the workspace, under no agent.
+        // The fill's sandbox is billed to the workspace, under no agent and no member.
         const owned = yield* sandboxOwner(name);
         assert.deepEqual(
-          Option.map(owned, ({ organizationId, agentId }) => ({ organizationId, agentId })),
-          Option.some({ organizationId: workspace.workspaceId, agentId: null }),
+          Option.map(owned, ({ organizationId, agentId, userId }) => ({
+            organizationId,
+            agentId,
+            userId,
+          })),
+          Option.some({ organizationId: workspace.workspaceId, agentId: null, userId: null }),
         );
       }),
   );

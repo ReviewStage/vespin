@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { RUN_EVENT, TURN_FAILURE } from "@repo/features/turn-run";
+import { Option } from "effect";
 import { test } from "vitest";
 import { NATIVE_ENDING, NATIVE_MOMENT, PLAN_STATUS } from "./native-moments.js";
 import {
@@ -9,7 +10,7 @@ import {
   turnProgressed,
   withCallAccounts,
 } from "./native-projection.js";
-import { toolAnswerSettlement } from "./runner-moments.js";
+import { runnerMoments, toolAnswerSettlement } from "./runner-moments.js";
 
 test("an unknown tool's call settled with a new input, as Codex settles one, keeps the input that names the tool it called", () => {
   const result = projectMoments(
@@ -502,5 +503,60 @@ test("a turn whose launch lost its session goes on once in a replayed launch, an
   assert.deepEqual(
     [kinds(first.writes), kinds(second.writes)],
     [[{ kind: NATIVE_WRITE.RETRY, replay: true }], [{ kind: NATIVE_WRITE.FAILED, replay: false }]],
+  );
+});
+
+test("a command the runner marks killed out of memory, in a batch before its answer's, settles its call marked with the sandbox's memory, and the next call unmarked", () => {
+  const context = {
+    conversationId: "c_projection",
+    now: 0,
+    attempt: 1,
+    queuedTurnId: undefined,
+    model: undefined,
+    ownKey: false,
+    registered: () => true,
+    report: () => undefined,
+  };
+
+  const answer = toolAnswerSettlement(
+    { workspaceTool: false, text: "Exit code 137", output: "Exit code 137" },
+    true,
+  );
+
+  const marked = runnerMoments({
+    type: "vespin_runner_out_of_memory",
+    callId: "call_typecheck",
+    memoryGb: 4,
+  }).pipe(Option.getOrElse(() => []));
+
+  const first = projectMoments(
+    heldProjection(null),
+    [
+      { kind: NATIVE_MOMENT.TOOL_STARTED, callId: "call_typecheck", name: "Bash", input: {} },
+      ...marked,
+    ],
+    { ...context, sequence: 0 },
+  );
+
+  const second = projectMoments(
+    first.state,
+    [
+      { kind: NATIVE_MOMENT.TOOL_SETTLED, callId: "call_typecheck", settlement: answer },
+      { kind: NATIVE_MOMENT.TOOL_STARTED, callId: "call_retry", name: "Bash", input: {} },
+      { kind: NATIVE_MOMENT.TOOL_SETTLED, callId: "call_retry", settlement: answer },
+    ],
+    { ...context, sequence: 1 },
+  );
+
+  assert.deepEqual(
+    second.writes.flatMap((write) =>
+      write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.TOOL_CALL_SETTLED
+        ? [[write.event.callId, write.event.settlement.outOfMemory]]
+        : [],
+    ),
+    [
+      ["call_typecheck", { memoryGb: 4 }],
+      ["call_retry", undefined],
+    ],
   );
 });

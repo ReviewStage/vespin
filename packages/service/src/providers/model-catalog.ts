@@ -94,6 +94,18 @@ const BATCH_SLUG_SUFFIX = "-batch";
 const isModelProvider = Schema.is(Schema.Literals(Object.values(MODEL_PROVIDER)));
 
 /**
+ * The providers whose models are read from AI Gateway's catalog. Cursor's
+ * are not: they run on Cursor's harness alone, on the account's Cursor key,
+ * and are offered from a pinned list of their own (`cursor-models.ts`), to
+ * the accounts and clients that list is for, so a `cursor/` slug the
+ * gateway may list is never offered to every caller.
+ */
+const GATEWAY_PROVIDERS: ReadonlySet<ModelProvider> = new Set([
+  MODEL_PROVIDER.ANTHROPIC,
+  MODEL_PROVIDER.OPENAI,
+]);
+
+/**
  * What a model's tokens cost, in dollars per token as the catalog lists
  * them: the input the model read, the output it wrote, the input its
  * prefix cache answered, and the input written to that cache, the last two
@@ -343,11 +355,13 @@ function contextWindowsOf(
   };
 }
 
-/** The entry as an offered model, or nothing for one we do not offer: a batch slug, a fast slug where its provider's fast option is not confirmed, and an Ultrafast id, which is ours alone (`ultrafastModelOf`). */
+/** The entry as an offered model, or nothing for one we do not offer: a batch slug, a provider whose models are not the gateway's to offer (`GATEWAY_PROVIDERS`), a fast slug where its provider's fast option is not confirmed, and an Ultrafast id, which is ours alone (`ultrafastModelOf`). */
 function offeredModel(entry: CatalogEntry): OfferedModel | undefined {
   const named = providerModelOf(entry.id);
 
   if (named === undefined || entry.id.endsWith(BATCH_SLUG_SUFFIX)) return undefined;
+
+  if (!GATEWAY_PROVIDERS.has(named.provider)) return undefined;
 
   if (named.speed === MODEL_SPEED.FAST && !FAST_PROVIDERS.has(named.provider)) return undefined;
 
@@ -598,21 +612,6 @@ export function validateModelChoice(
     model: model.id,
     effort: choice.effort,
     ...(standard ? { contextWindow: CONTEXT_WINDOW.STANDARD } : undefined),
-  });
-}
-
-/** The choice checked against the instance's catalog as the account is offered it (`offeredToAccount`): accepted, refused, or the catalog unavailable. */
-export function acceptedModelChoice(
-  choice: ModelChoice,
-  fast: AccountFastOffer,
-): Effect.Effect<ModelChoice, ModelChoiceRefused | ModelCatalogUnavailable, ModelCatalog> {
-  return Effect.gen(function* () {
-    const catalog = yield* ModelCatalog;
-    const offered = offeredToAccount(yield* catalog.read, fast);
-
-    return yield* Effect.fromResult(validateModelChoice(offered, choice)).pipe(
-      Effect.mapError((reason) => new ModelChoiceRefused({ reason, offered })),
-    );
   });
 }
 
