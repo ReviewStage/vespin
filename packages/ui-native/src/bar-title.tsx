@@ -1,7 +1,14 @@
-// bar-title.tsx -- a page's name in its bar with a muted line under it, such as an agent's state and model, in a compact window's stack and in a split view's detail column.
+// bar-title.tsx -- a page's name in its bar with a muted line under it, such as an agent's state and model: UIKit's own subtitle in a compact window's stack, and a split view's detail column's title.
 
-import { Button, HStack, Image, Spacer, Text as SwiftUIText, VStack } from "@expo/ui/swift-ui";
-import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
+import {
+  Button,
+  Host,
+  HStack,
+  Image,
+  Spacer,
+  Text as SwiftUIText,
+  VStack,
+} from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
   accessibilityIdentifier,
@@ -9,16 +16,14 @@ import {
   buttonStyle,
   font,
   foregroundStyle,
-  frame,
   lineLimit,
 } from "@expo/ui/swift-ui/modifiers";
-import { SymbolView } from "expo-symbols";
-import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
-import { InlineHost } from "./inline-host.js";
+import { StyleSheet } from "react-native";
+import { GLYPH, glyphImage } from "./glyph.js";
+import { BAR_KIND, barSubtitle } from "./interactions.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
-import { BAR_TITLE, TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
+import { MARK_SIZE } from "./tokens/space.js";
+import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What stands under a page's name in its bar: its words, and what a press on them opens with what VoiceOver says it does, where they open anything. */
 export type BarSubtitle = {
@@ -28,16 +33,12 @@ export type BarSubtitle = {
   readonly label?: string | undefined;
 };
 
-/** What the line's press is found by in the app's flows, in either bar. */
+/** What the line's press is found by in the app's flows, in a split view's column bar. */
 const BAR_SUBTITLE_ID = "bar-subtitle";
 
-/** What a compact bar keeps either side of its title view: the screen's edge, one round glass button (Back, or ⋯), and a gap before the words. */
-const BAR_SIDE = SPACE.EDGE + PRESS_SIZE + SPACE.ROW;
-
 const styles = StyleSheet.create({
-  stack: { alignItems: "center" },
-  line: { flexDirection: "row", alignItems: "center", gap: 2 },
-  words: { flexShrink: 1 },
+  // A host of no size, which draws nothing and takes no touch.
+  probe: { position: "absolute", width: 0, height: 0 },
 });
 
 /** What VoiceOver hears for the line: its press's label, then its words. */
@@ -46,90 +47,18 @@ function spokenLine(subtitle: BarSubtitle): string {
 }
 
 /**
- * A compact window's stack bar's title with a line under it, as Mail names
- * a mailbox's count under its name: the name in the bar's ink, and the
- * line small and muted, with a chevron after it where a press on it opens
- * something. Note that it stands as the stack's title view, which React
- * Native lays out at its own size, since the stack's own title has no line
- * under it; and that the press is a SwiftUI button laid over the words,
- * because a React Native press in the stack's title view dims as a finger
- * lands and never hears it lift (the Mac's shots of #9466), while a
- * SwiftUI host there is UIKit's own view, which the bar hands its touches,
- * as the workspace switcher's beside it takes them. Its width is capped to
- * the room between the bar's two buttons, since React Native measures a
- * title view at its words' own width, which at the accessibility sizes ran
- * into the ⋯'s glass, where the stack's own title would cut short.
+ * The words under a compact page's title in the native stack's bar, as Mail
+ * names a mailbox's count under its name: UIKit's own subtitle, written by
+ * `barSubtitle` from a host of no size, for a page whose content is React
+ * Native's own, such as the agent's transcript, so no `Screen` carries it.
+ * Note that it stays mounted with empty words, which draw no line, so the
+ * line comes and goes without the host being made again.
  */
-export function StackBarTitle({
-  title,
-  subtitle,
-}: {
-  readonly title: string;
-  readonly subtitle: BarSubtitle;
-}) {
-  const colors = useColors();
-  const { width } = useWindowDimensions();
-  const pressed = subtitle.onPress !== undefined;
-
-  const drawn = (
-    <View
-      style={[styles.stack, { maxWidth: Math.max(0, width - 2 * BAR_SIDE) }]}
-      accessibilityElementsHidden={pressed}
-      importantForAccessibility={pressed ? "no-hide-descendants" : "auto"}
-    >
-      <Text
-        numberOfLines={1}
-        accessibilityRole="header"
-        style={{ ...BAR_TITLE.SCREEN, color: colors.TEXT }}
-        maxFontSizeMultiplier={1.4}
-      >
-        {title}
-      </Text>
-      <View style={styles.line} accessible={!pressed} accessibilityLabel={subtitle.words}>
-        <Text
-          numberOfLines={1}
-          style={[styles.words, { fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }]}
-          maxFontSizeMultiplier={1.4}
-        >
-          {subtitle.words}
-        </Text>
-        {pressed ? (
-          <SymbolView
-            name={glyphSymbol(GLYPH.UNFOLDED)}
-            size={MARK_SIZE.GLYPH - 6}
-            weight="semibold"
-            tintColor={colors.TEXT_MUTED}
-            accessibilityElementsHidden
-          />
-        ) : null}
-      </View>
-    </View>
-  );
-
-  if (!pressed) return drawn;
-
+export function StackSubtitle({ words }: { readonly words: string }) {
   return (
-    <View>
-      {drawn}
-      {/* Note that the button draws nothing of its own, so the words under it are the one drawing of the title, and it spans them whole, so a press anywhere on the name or the line opens what the line names. */}
-      <InlineHost style={StyleSheet.absoluteFill}>
-        <Button
-          onPress={subtitle.onPress}
-          modifiers={[
-            buttonStyle("plain"),
-            accessibilityLabel(`${title}, ${spokenLine(subtitle)}`),
-            accessibilityIdentifier(BAR_SUBTITLE_ID),
-          ]}
-        >
-          <Spacer
-            modifiers={[
-              frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
-              SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-            ]}
-          />
-        </Button>
-      </InlineHost>
-    </View>
+    <Host style={styles.probe} modifiers={[barSubtitle(BAR_KIND.STACK, words)]}>
+      <Spacer />
+    </Host>
   );
 }
 
