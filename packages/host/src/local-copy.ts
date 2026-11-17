@@ -197,6 +197,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
       } else {
         yield* legacy.follow(refused.kept, refused.moves);
       }
+
       yield* Effect.forkIn(
         Stream.runForEach(refused.moves, () => keep),
         scope,
