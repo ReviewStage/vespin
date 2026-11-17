@@ -100,22 +100,28 @@ export function actContent(
 /**
  * What a menu's act holds: as `actContent`, or, where it says more under its
  * words, such as when a reminder comes due, its words over that line beside
- * its glyph, which a system menu draws as its title and subtitle.
+ * its glyph, or its photo where it has one, which a system menu draws as its
+ * title and subtitle.
  */
 export function menuActContent(
   label: string,
   glyph: Glyph | undefined,
   detail: string | undefined,
   color?: string,
+  photo?: string,
 ): { readonly label: string } | { readonly children: ReactElement } {
-  if (detail === undefined) return actContent(label, glyph, undefined, color);
+  if (detail === undefined) return actContent(label, glyph, undefined, color, photo);
 
   return {
     children: (
       <>
         <Text>{label}</Text>
         <Text>{detail}</Text>
-        {glyph === undefined ? null : <GlyphImage glyph={glyph} menuColor={color} />}
+        {photo !== undefined ? (
+          <MenuPhoto photo={photo} />
+        ) : glyph === undefined ? null : (
+          <GlyphImage glyph={glyph} menuColor={color} />
+        )}
       </>
     ),
   };

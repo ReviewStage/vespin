@@ -416,11 +416,9 @@ export {
 export {
   newWorkspaceAction,
   SWITCHER_LOOK,
-  SWITCHER_PRESENTATION,
   type SwitcherAccount,
   type SwitcherAction,
   type SwitcherLook,
-  type SwitcherPresentation,
   WorkspaceSwitcher,
   WorkspaceSwitcherItem,
 } from "./workspace-switcher.js";
