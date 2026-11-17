@@ -139,9 +139,7 @@ const withSlackMentions = Effect.fn("web/slackMentions")(function* (
     if (mention?.kind !== MENTION_KIND.PERSON) continue;
     const member = yield* isWorkspaceMember(mention.userId, organizationId);
 
-    const slackId = member
-      ? yield* reach.bot.memberSlackId(organizationId, mention.userId)
-      : Option.none<string>();
+    const slackId = member ? yield* reach.bot.memberSlackId(mention.userId) : Option.none<string>();
 
     const written = Option.match(slackId, {
       onNone: () => mentionName(link.label),
@@ -178,9 +176,9 @@ const postedMessage = Effect.fn("web/slackAgentPost")(function* (
     }
 
     if (input.thread === undefined) {
-      posted = yield* bot.dm(agent.organizationId, userId, content);
+      posted = yield* bot.dm(userId, content);
     } else {
-      const slackId = yield* bot.memberSlackId(agent.organizationId, userId);
+      const slackId = yield* bot.memberSlackId(userId);
 
       if (Option.isNone(slackId)) return Result.fail<string>(SLACK_MESSAGE_REFUSAL.NO_SLACK_ID);
       // Note that a user id as the channel writes to the bot's own conversation with them.

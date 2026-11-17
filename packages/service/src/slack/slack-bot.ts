@@ -252,7 +252,6 @@ export interface SlackWorkspaceBot {
   ) => Effect.Effect<readonly SlackThreadMessage[], SlackBotFailure>;
   /** The member's Slack user id in the workspace's connected team, kept or looked up as `dm` finds it; nothing where none is known or anything failed. */
   readonly memberSlackId: (
-    organizationId: string,
     userId: string,
   ) => Effect.Effect<Option.Option<string>, never, DatabaseServices>;
   /** The name Slack shows for the user, their display name, else their real name, else their handle; nothing where the read failed. */
@@ -791,7 +790,7 @@ function slackWorkspaceBotOver(
         // Note that Slack answers a channel's history newest first, so it is turned to read in order.
         Effect.map((answer) => threadMessagesOf(answer).slice(0, limit).toReversed()),
       ),
-    memberSlackId: (organizationId, userId) =>
+    memberSlackId: (userId) =>
       Effect.gen(function* () {
         const installation = yield* workspaceSlackInstallation(organizationId);
 

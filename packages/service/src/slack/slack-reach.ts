@@ -4,9 +4,11 @@
  * Every Slack tool an agent is offered (`send_slack_message`,
  * `list_slack_channels`, `read_slack`, `react_slack`) asks here first.
  *
- * - The deployment must hold the bot, and the agent's workspace must have
- *   connected it to the team the bot's token answers for (`auth.test`), so
- *   one workspace's agent never acts in another's Slack.
+ * - The agent's workspace must hold its own bot token, granted when it
+ *   installed the Slack app, and every call is made on it
+ *   (`SlackBot.forWorkspace`), so one workspace's agent never acts in
+ *   another's Slack; the team it answers for (`auth.test`) names the bot's
+ *   own user.
  * - A channel is one the bot is in (`conversations.list`, `member`),
  *   private or not. Note that what an agent reads in a private channel
  *   lands in its transcript, which anyone who can open the task reads.
@@ -20,19 +22,15 @@ import type { Agent } from "@repo/database/models/agent-store";
 import {
   currentSlackThread,
   type SlackThread,
-  workspaceSlackInstallation,
 } from "@repo/database/models/slack-installation-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { Effect, Option, Result } from "effect";
-import { SlackBot, type SlackBotService, type SlackChannel } from "./slack-bot.js";
+import { SlackBot, type SlackChannel, type SlackWorkspaceBot } from "./slack-bot.js";
 
 /** Why a Slack tool did not act, in words the model can act on. */
 export const SLACK_REACH_REFUSAL = {
-  NO_BOT: "Refused: this deployment has no Slack bot.",
   NOT_CONNECTED:
     "Refused: your workspace has not connected the Slack bot; an owner or admin connects it under Settings.",
-  OTHER_TEAM:
-    "Refused: your workspace connected the Slack bot to another Slack team than the one it now answers for; an owner or admin connects it again under Settings.",
   UNREACHABLE: "Refused: Slack did not answer; try again in a minute.",
   NOT_IN_CHANNEL: `Refused: the Slack bot is not in that channel. ${AGENT_TOOL.LIST_SLACK_CHANNELS} lists where it is; ask a person to add the bot to the channel.`,
 } as const;
@@ -41,7 +39,7 @@ export type SlackReachRefusal = (typeof SLACK_REACH_REFUSAL)[keyof typeof SLACK_
 
 /** What a Slack tool acts through once the workspace is reached: the bot, the team, the agent, and its current thread where it has one. */
 export interface SlackReach {
-  readonly bot: SlackBotService;
+  readonly bot: SlackWorkspaceBot;
   readonly agent: Agent;
   readonly botUserId: string | undefined;
   readonly thread: Option.Option<SlackThread>;
@@ -66,9 +64,8 @@ function channelNamed(channels: readonly SlackChannel[], named: string): SlackCh
 }
 
 /**
- * The agent's workspace reached in Slack: the bot held, the workspace's
- * installation present, and its team the one the bot answers for; the
- * refusal's words otherwise.
+ * The agent's workspace reached in Slack: its own bot connected, and the
+ * team its token answers for read; the refusal's words otherwise.
  */
 export const reachSlack = Effect.fn("web/reachSlack")(function* (
   agent: Agent,
@@ -77,12 +74,9 @@ export const reachSlack = Effect.fn("web/reachSlack")(function* (
   StoreFailure,
   SlackBot | DatabaseServices
 > {
-  const bot = yield* SlackBot;
+  const bot = yield* (yield* SlackBot).forWorkspace(agent.organizationId);
 
-  if (!bot.configured) return Result.fail(SLACK_REACH_REFUSAL.NO_BOT);
-  const installation = yield* workspaceSlackInstallation(agent.organizationId);
-
-  if (Option.isNone(installation)) return Result.fail(SLACK_REACH_REFUSAL.NOT_CONNECTED);
+  if (!bot.connected) return Result.fail(SLACK_REACH_REFUSAL.NOT_CONNECTED);
 
   const team = yield* bot.team.pipe(
     Effect.map(Option.some),
@@ -95,9 +89,6 @@ export const reachSlack = Effect.fn("web/reachSlack")(function* (
   );
 
   if (Option.isNone(team)) return Result.fail(SLACK_REACH_REFUSAL.UNREACHABLE);
-
-  if (team.value.id !== installation.value.teamId)
-    return Result.fail(SLACK_REACH_REFUSAL.OTHER_TEAM);
   const thread = yield* currentSlackThread(agent.id);
 
   return Result.succeed({ bot, agent, botUserId: team.value.botUserId, thread });

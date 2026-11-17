@@ -217,7 +217,7 @@ const readMessages = Effect.fn("web/slackReadMessages")(function* (
   messages: readonly SlackThreadMessage[],
 ) {
   const names = yield* authorNames(reach, messages);
-  const own = yield* reach.bot.memberSlackId(reach.agent.organizationId, reach.agent.userId);
+  const own = yield* reach.bot.memberSlackId(reach.agent.userId);
 
   return messages.map((message): WireRecord => {
     const byBot =

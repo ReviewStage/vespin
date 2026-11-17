@@ -94,14 +94,14 @@ const openAgent = (connected: boolean) =>
   });
 
 it.layer(getTestDB())("an agent's Slack tools as the bot", (it) => {
-  it.effect("a workspace that never connected the Slack bot is refused", () =>
+  it.effect("a workspace that holds no Slack bot token is refused", () =>
     Effect.gen(function* () {
       const caller = yield* openAgent(false);
 
       const sent = yield* runSendSlackMessage(
         { caller },
         { text: "Hello.", channel: CHANNEL },
-      ).pipe(Effect.provideService(SlackBot, slackBotOver(slackWithChannel)));
+      ).pipe(Effect.provideService(SlackBot, slackBotOver(undefined)));
 
       assert.deepEqual(sent, {
         status: ACTION_RESULT_STATUS.REJECTED,
