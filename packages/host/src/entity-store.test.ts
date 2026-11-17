@@ -262,6 +262,27 @@ it.effect("a write waiting for the service is written within half a second of it
 );
 
 it.effect(
+  "where no local database takes the messages refused, the file keeps them within half a second of moving",
+  () =>
+    Effect.gen(function* () {
+      const directory = yield* temporaryDirectoryScoped("entity-store-");
+      const moves = yield* PubSub.unbounded<void>();
+      let refused: readonly unknown[] = [];
+      const first = yield* opened(directory, DANA);
+      yield* first.store.refused.follow(() => refused, Stream.fromPubSub(moves));
+      yield* Effect.yieldNow;
+
+      refused = [{ id: "line-1", text: "Rebase on main" }];
+      yield* PubSub.publish(moves, undefined);
+      yield* TestClock.adjust("500 millis");
+      yield* writtenText(directory);
+
+      assert.deepEqual(JSON.parse(yield* openedText(directory)).refused, refused);
+      yield* first.closed;
+    }).pipe(Effect.provide(files)),
+);
+
+it.effect(
   "the messages refused an older build kept are handed out until the local database takes them, and the file is then written without them",
   () =>
     Effect.gen(function* () {

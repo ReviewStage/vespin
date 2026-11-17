@@ -95,7 +95,7 @@ import {
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "./kept-content.js";
 import { shutdownStepsFlushingEvents } from "./lifecycle.js";
 import { liveSocketClient } from "./live-socket.js";
-import { localCopy } from "./local-copy.js";
+import { keptInFile, localCopy } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
 import { HOST_NODE_CAPABILITY } from "./node-capabilities.js";
 import { offlineRefusedCount } from "./queued-writes.js";
@@ -790,7 +790,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
      * after `entities.sealed` laid its writes back, so it keeps them as they
      * stand: the messages refused laid back from it, or, the first time, from
      * what an older build kept in `entities.sealed`. A host with no database
-     * lays those back from the file alone.
+     * lays those back from the file, which keeps them as they move.
      */
     const openLocal = Effect.gen(function* () {
       const signedInId = account.signedIn() ? accountId() : undefined;
@@ -798,9 +798,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       if (signedInId === undefined) return;
       const refused = entities?.store.refused;
 
-      if (local === undefined) {
-        return yield* agents.refused.restored(signedInId, refused?.entries ?? []);
-      }
+      if (local === undefined) return yield* keptInFile(signedInId, agents.refused, refused);
 
       // Note that the waiting writes were laid back from `entities.sealed` already, so none is handed over here.
       const sealed = { queue: [], refused };

@@ -1045,6 +1045,7 @@ it.effect(
         queue: [],
         refused: {
           entries: JSON.parse(JSON.stringify(before.refused.kept())),
+          follow: () => Effect.void,
           imported: Effect.sync(() => {
             imported = true;
           }),
