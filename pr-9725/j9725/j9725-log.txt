@@ -1,0 +1,30 @@
+== bundle P9725 base ec8f586b8c
+  built ec8f586b8c base app Vmain3.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+9725-iphone-light list bounds: 22 199 48 199 menu 0 177 44 221 44 190 180 208
+9725-iphone-light list: fails 0 shots 3 
+9725-iphone-light sub bounds: 22 372 48 372 menu 0 350 44 394 44 363 158 381
+9725-iphone-light sub: fails 0 shots 2 
+9725-iphone-dark list bounds: 22 199 48 199 menu 0 177 44 221 44 190 180 208
+9725-iphone-dark list: fails 0 shots 3 
+9725-iphone-dark sub bounds: 22 372 48 372 menu 0 350 44 394 44 363 158 381
+9725-iphone-dark sub: fails 0 shots 2 
+9725-ipad26-light list bounds: 312 208 338 208 menu 290 186 334 230 334 199 470 217
+9725-ipad26-light list: fails 0 shots 3 
+9725-ipad26-light sub bounds: 632 343 658 343 menu 610 321 654 365 654 334 769 352
+9725-ipad26-light sub: fails 0 shots 2 
+9725-ipad26-dark list bounds: 312 208 338 208 menu 290 186 334 230 334 199 470 217
+9725-ipad26-dark list: fails 0 shots 3 
+9725-ipad26-dark sub bounds: 632 343 658 343 menu 610 321 654 365 654 334 769 352
+9725-ipad26-dark sub: fails 0 shots 2 
+== bundle P9727 base 5eaf5295f1
+  built 5eaf5295f1 base app Vmain3.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+9727-iphone-light glyph: 25 604 1 0 title 44 595 224 613
+9727-iphone-light tap: fails 0 shots 1  | nodes labeled with the name 1, left of the title 0
