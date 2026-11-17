@@ -1,3 +1,4 @@
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import type { InstalledSkillSummary } from "@repo/features/installed-skill-route-wire";
 import {
   INSTALLED_SKILL_CALL_FAILURE,
@@ -8,6 +9,7 @@ import {
   MAC_SKILL_APP,
   type MacSkillApp,
 } from "@repo/features/installed-skill-wire";
+import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { failureLine } from "@repo/features/skills-settings-words";
 import type { Workspace } from "@repo/features/workspace-wire";
@@ -15,7 +17,6 @@ import { ACT_KIND } from "@repo/host/acts";
 import type { MacSkill } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
 import {
-  Badge,
   Checkbox,
   DIALOG_SIZE,
   DIALOG_TONE,
@@ -23,10 +24,13 @@ import {
   DialogActions,
   ErrorState,
   GAP,
+  GlyphSlot,
+  Inline,
   SETTINGS_ROW_CONTROLS,
   SettingsLine,
   SettingsRow,
   SettingsRowMark,
+  SettingsRowsFold,
   SettingsSection,
   SpinnerRegion,
   Stack,
@@ -39,12 +43,15 @@ import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { askAct } from "../act.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
+import { HarnessMark } from "../harness-marks.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { SkillMark } from "../tasks/skill-ref.js";
 import { pressTakeBack, type TakeBackWrite } from "../undo-stack.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import {
+  leftOutLine,
   MAC_SKILLS_LINE,
   type MacSkillsReview,
   macSkillsReview,
@@ -181,13 +188,48 @@ function OfferedRow({
 function SkippedRow({ skipped }: { skipped: SkippedSkill }): React.JSX.Element {
   return (
     <SettingsRow
+      leading={
+        <SettingsRowMark>
+          <AppMark app={skipped.app} />
+        </SettingsRowMark>
+      }
       label={<ReplayMask>{skipped.name}</ReplayMask>}
-      description={skipped.from}
-      controls={SETTINGS_ROW_CONTROLS.BESIDE}
-    >
-      {() => <Badge>{skipped.why}</Badge>}
-    </SettingsRow>
+      description={skipped.why}
+    />
   );
+}
+
+/** The skills left out, folded under one row saying how many, closed until it is opened. */
+function LeftOutFold({ skipped }: { skipped: readonly SkippedSkill[] }): React.JSX.Element {
+  return (
+    <SettingsSection>
+      <SettingsRowsFold
+        label={MAC_SKILLS_LINE.SHOW_LEFT_OUT}
+        head={(chevron) => (
+          <SettingsRow
+            label={MAC_SKILLS_LINE.LEFT_OUT}
+            description={leftOutLine(skipped.length)}
+            end={() => chevron}
+          />
+        )}
+        rows={skipped.map((each) => <SkippedRow key={each.folder} skipped={each} />)}
+      />
+    </SettingsSection>
+  );
+}
+
+/** The mark of the agent whose skills folder a skill was found in, the folder agents share drawn as a folder. */
+function AppMark({ app }: { app: MacSkillApp }): React.JSX.Element {
+  switch (app) {
+    case MAC_SKILL_APP.AGENTS:
+      return <EntityGlyph kind={ENTITY_KIND.FOLDER} />;
+    case MAC_SKILL_APP.CLAUDE_CODE:
+      return <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />;
+    case MAC_SKILL_APP.CODEX:
+      return <HarnessMark provider={MODEL_PROVIDER.OPENAI} />;
+    case MAC_SKILL_APP.CURSOR:
+      return <HarnessMark provider={MODEL_PROVIDER.CURSOR} />;
+  }
 }
 
 /**
@@ -196,25 +238,30 @@ function SkippedRow({ skipped }: { skipped: SkippedSkill }): React.JSX.Element {
  * because the settings search must find no group of a dialog's.
  */
 function GroupHead({
+  app,
   title,
   caption,
   children,
 }: {
+  app: MacSkillApp;
   title: string;
-  caption?: string;
+  caption: string;
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
     <Stack gap={GAP.ITEM}>
       <Stack gap={GAP.NONE}>
-        <Text variant={TEXT_VARIANT.SECTION} as={TEXT_ELEMENT.H3}>
-          {title}
-        </Text>
-        {caption === undefined ? null : (
-          <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-            <ReplayMask>{caption}</ReplayMask>
+        <Inline gap={GAP.ICON}>
+          <GlyphSlot>
+            <AppMark app={app} />
+          </GlyphSlot>
+          <Text variant={TEXT_VARIANT.SECTION} as={TEXT_ELEMENT.H3}>
+            {title}
           </Text>
-        )}
+        </Inline>
+        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+          <ReplayMask>{caption}</ReplayMask>
+        </Text>
       </Stack>
       <SettingsSection>{children}</SettingsSection>
     </Stack>
@@ -243,7 +290,7 @@ function ReviewBody({
     <Stack gap={GAP.SECTION}>
       <Text>{summaryLine(review)}</Text>
       {review.groups.map((group) => (
-        <GroupHead key={group.app} title={group.title} caption={group.folder}>
+        <GroupHead key={group.app} app={group.app} title={group.title} caption={group.folder}>
           {group.offered.map((skill) => (
             <OfferedRow
               key={skill.folder}
@@ -254,13 +301,7 @@ function ReviewBody({
           ))}
         </GroupHead>
       ))}
-      {review.skipped.length === 0 ? null : (
-        <GroupHead title={MAC_SKILLS_LINE.LEFT_OUT}>
-          {review.skipped.map((skipped) => (
-            <SkippedRow key={skipped.folder} skipped={skipped} />
-          ))}
-        </GroupHead>
-      )}
+      {review.skipped.length === 0 ? null : <LeftOutFold skipped={review.skipped} />}
     </Stack>
   );
 }

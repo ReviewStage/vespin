@@ -14,7 +14,7 @@ import { macSkillsReview, summaryLine } from "./mac-skills-model.js";
 /**
  * Bring in from your Mac judged without drawing: a skill whose name the
  * reader already has left out, never renamed; a second skill of a name
- * found earlier left out too; each folder grouped with what it offers; and
+ * found earlier in the folders' order left out, the first offered; each folder grouped with what it offers; and
  * every skill left out listed apart, by its folder and why. Synthetic skills
  * and folders throughout.
  */
@@ -79,11 +79,11 @@ test("a name the reader already has, or one found earlier, is left out rather th
     ],
   );
   assert.deepEqual(
-    review.skipped.map(({ name, from, why }) => [name, from, why]),
+    review.skipped.map(({ name, app, why }) => [name, app, why]),
     [
-      ["pr-review", "Claude Code", "Already have one"],
-      ["flaky-tests", "Codex", "Already have one"],
-      ["leaky", "Agents folder", "Holds a credential"],
+      ["pr-review", MAC_SKILL_APP.CLAUDE_CODE, "You already have a skill with this name"],
+      ["flaky-tests", MAC_SKILL_APP.CODEX, "Same name as a skill above, which is the one offered"],
+      ["leaky", MAC_SKILL_APP.AGENTS, "Holds something that looks like a credential"],
     ],
   );
   assert.equal(summaryLine(review), "Found 2 skills to bring in, and left out 3.");

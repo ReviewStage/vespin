@@ -23,8 +23,10 @@ import type { MacSkill, MacSkills } from "@repo/host/contract";
 /** Why a skill on the Mac is left out: the install's own refusals, or a name the reader already has. */
 export const MAC_SKILL_SKIPPED = {
   ...INSTALLED_SKILL_REFUSAL,
-  /** The reader already has a skill of its name, or one of the Mac's took it first. */
+  /** The reader already has a skill of its name. */
   NAME_HELD: "name-held",
+  /** A skill of its name was found earlier on the Mac, which is the one offered. */
+  NAME_FOUND_EARLIER: "name-found-earlier",
 } as const;
 
 export type MacSkillSkipped = (typeof MAC_SKILL_SKIPPED)[keyof typeof MAC_SKILL_SKIPPED];
@@ -38,15 +40,16 @@ export const MAC_SKILLS_LINE = {
   READING: "Reading your agents' skills folders",
   READ_FAILED: "Your Mac's skills folders could not be read.",
   LEFT_OUT: "Left out",
+  SHOW_LEFT_OUT: "Skills left out",
   NONE_FOUND: "No skills found in your agents' skills folders.",
   BRINGING: "Bringing in",
 } as const;
 
-/** One skill left out: its name, the folder it was found in by name, and why, in a word or two. */
+/** One skill left out: its name, the folder it was found in, and why, in a few words. */
 export interface SkippedSkill {
+  readonly app: MacSkillApp;
   readonly name: string;
   readonly folder: string;
-  readonly from: string;
   readonly why: string;
 }
 
@@ -69,15 +72,17 @@ export interface MacSkillsReview {
 function whyLeft(reason: MacSkillSkipped): string {
   switch (reason) {
     case MAC_SKILL_SKIPPED.NAME_HELD:
-      return "Already have one";
+      return "You already have a skill with this name";
+    case MAC_SKILL_SKIPPED.NAME_FOUND_EARLIER:
+      return "Same name as a skill above, which is the one offered";
     case MAC_SKILL_SKIPPED.NO_SKILL_FILE:
-      return "No SKILL.md";
+      return "Has no SKILL.md";
     case MAC_SKILL_SKIPPED.SKILL_FILE_INVALID:
-      return "No name or description";
+      return "Its SKILL.md has no valid name or description";
     case MAC_SKILL_SKIPPED.TOO_LARGE:
-      return "Too large";
+      return "Larger than 3 MB or 100 files";
     case MAC_SKILL_SKIPPED.CREDENTIAL:
-      return "Holds a credential";
+      return "Holds something that looks like a credential";
   }
 }
 
@@ -86,12 +91,7 @@ function skippedOf(
   left: { readonly app: MacSkillApp; readonly name: string; readonly folder: string },
   reason: MacSkillSkipped,
 ): SkippedSkill {
-  return {
-    name: left.name,
-    folder: left.folder,
-    from: MAC_SKILL_APP_NAME[left.app],
-    why: whyLeft(reason),
-  };
+  return { app: left.app, name: left.name, folder: left.folder, why: whyLeft(reason) };
 }
 
 /** What the Mac's skills folders offer the reader, weighed against the names of their own skills. */
@@ -99,18 +99,21 @@ export function macSkillsReview(
   read: MacSkills,
   personal: readonly InstalledSkillSummary[],
 ): MacSkillsReview {
-  const taken = new Set(personal.map((skill) => skill.name));
+  const held = new Set(personal.map((skill) => skill.name));
+  const found = new Set<string>();
   const offered: MacSkill[] = [];
   const skipped: SkippedSkill[] = [];
 
+  // Note that the first of a name in the folders' order is the one offered: the folder agents share, then each agent's.
   for (const skill of read.skills) {
-    if (taken.has(skill.name)) {
+    if (held.has(skill.name)) {
       skipped.push(skippedOf(skill, MAC_SKILL_SKIPPED.NAME_HELD));
-      continue;
+    } else if (found.has(skill.name)) {
+      skipped.push(skippedOf(skill, MAC_SKILL_SKIPPED.NAME_FOUND_EARLIER));
+    } else {
+      found.add(skill.name);
+      offered.push(skill);
     }
-
-    taken.add(skill.name);
-    offered.push(skill);
   }
 
   for (const left of read.left) {
@@ -130,6 +133,11 @@ export function macSkillsReview(
 /** "3 skills", or "1 skill". */
 export function skillCount(count: number): string {
   return `${count} skill${count === 1 ? "" : "s"}`;
+}
+
+/** "3 skills not brought in": the folded Left out's line. */
+export function leftOutLine(count: number): string {
+  return `${skillCount(count)} not brought in`;
 }
 
 /** The line over the review: how many it found to bring in, and how many it left out. */
