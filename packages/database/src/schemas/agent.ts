@@ -126,7 +126,8 @@ import { task } from "./task.js";
  * GitHub records its base.
  *
  * `kind` is what the agent is (`AGENT_KIND`): a coder, as every agent
- * started now is and every row from before the column reads, or a pilot,
+ * started on a task is and every row from before the column reads; a
+ * manager, which works across the workspace's tasks; or a pilot,
  * as Pilot started before it was removed, which every reader treats as a
  * coder.
  *
@@ -350,7 +351,7 @@ export const agentTable = pgTable(
      * longer is moves nothing of. 0 before the first.
      */
     runnerLaunch: bigint("runner_launch", { mode: "number" }).notNull().default(0),
-    /** What the agent is (`AGENT_KIND`): a coder; a pilot from before Pilot was removed, read as a coder; a coder for every row from before the column. */
+    /** What the agent is (`AGENT_KIND`): a coder; a manager; a pilot from before Pilot was removed, read as a coder; a coder for every row from before the column. */
     kind: text("kind").$type<AgentKind>().notNull().default(AGENT_KIND.CODER),
     /** Where the agent's runner and checkout live; a Vercel Sandbox for every row from before the column. */
     machine: text("machine").$type<AgentMachineKind>().notNull().default(AGENT_MACHINE.VERCEL),

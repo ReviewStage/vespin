@@ -5,8 +5,10 @@ import {
   AGENT_ARCHIVER,
   AGENT_AUTHOR,
   AGENT_BRIEF,
+  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_PAYER,
+  type AgentKind,
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
   type PullRequestState,
@@ -827,6 +829,40 @@ it.layer(getTestDB())("the coding-agent store's agents read by id", (it) => {
             Option.isSome(yield* readAgent(teammate, agentId)),
           ],
           [true, true, [], true],
+        );
+      }),
+  );
+
+  it.effect(
+    "an agent started as a manager is stored as one, and one started with no kind as a coder",
+    () =>
+      Effect.gen(function* () {
+        const starter = yield* openAccount;
+        const workspace = yield* openWorkspace(starter);
+        const task = yield* createTask(starter, { organizationId: workspace, name: "Billing" });
+
+        const start = (kind?: AgentKind) =>
+          createAgent(starter, {
+            taskId: task.id,
+            descriptionSnapshot: "# Billing",
+            prompt: null,
+            idempotencyKey: randomUUID(),
+            model: "anthropic/claude-opus-5.5",
+            effort: "high",
+            repository: null,
+            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+            kind,
+          }).pipe(Effect.map((started) => Option.getOrThrow(started).agent.id));
+
+        const manager = yield* start(AGENT_KIND.MANAGER);
+        const coder = yield* start();
+
+        assert.deepEqual(
+          [
+            Option.getOrThrow(yield* readAgent(starter, manager)).kind,
+            Option.getOrThrow(yield* readAgent(starter, coder)).kind,
+          ],
+          ["manager", "coder"],
         );
       }),
   );

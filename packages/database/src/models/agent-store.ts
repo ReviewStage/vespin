@@ -216,7 +216,7 @@ export interface Agent {
   readonly author: AgentAuthor | null;
   /** How its repository was reached as it started: the workspace's GitHub App, or its starter's own token. */
   readonly githubAccess: GitHubAccess;
-  /** What the agent is: a coder; a pilot stored before Pilot was removed, which every reader treats as a coder. */
+  /** What the agent is: a coder; a manager; a pilot stored before Pilot was removed, which every reader treats as a coder. */
   readonly kind: AgentKind;
   readonly createdAt: Date;
   /** Where its runner runs: a Vercel Sandbox, or its starter's Mac; a Vercel Sandbox where unsaid. */
@@ -336,6 +336,8 @@ export type NewAgent = AgentPlace & {
   readonly deviceId?: string | undefined;
   /** How its tool calls are answered from its first turn; full access where none is named. */
   readonly permissionMode?: AgentPermissionMode | undefined;
+  /** What the agent is; a coder where none is named. */
+  readonly kind?: AgentKind | undefined;
 };
 
 /** A repository a Start names for the agent beside its own: `owner/name` as reached, and the branch its checkout is cloned at, none for its default branch. */
@@ -2378,7 +2380,7 @@ export function createAgent(
           mentionedServers: storedServers(started.mentionedServers ?? []),
           githubAccess: started.githubAccess ?? GITHUB_ACCESS.APP,
           payer: started.payer ?? null,
-          kind: AGENT_KIND.CODER,
+          kind: started.kind ?? AGENT_KIND.CODER,
           machine: started.machine ?? AGENT_MACHINE.VERCEL,
           deviceId: started.deviceId ?? null,
           permissionMode: started.permissionMode ?? AGENT_PERMISSION_MODE.FULL_ACCESS,
