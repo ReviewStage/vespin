@@ -14,6 +14,7 @@ import {
 import { heardFromAnotherAccount } from "@repo/database/models/machine-command-store";
 import { readMessageByClientId } from "@repo/database/models/message-reads";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import { updateTask } from "@repo/database/models/task-store";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
@@ -25,6 +26,7 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
+import { TASK_STATUS } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import {
   type GitHubLineMetadata,
@@ -462,6 +464,29 @@ test("a review submitted, a comment on a pull request, a failed check suite or c
     reason: "CI_FAILURE",
   });
 
+  // The pull request merged, or closed without merging, as of when GitHub says it closed.
+  for (const [merged, kind] of [
+    [true, AGENT_WAKE.MERGED],
+    [false, AGENT_WAKE.CLOSED],
+  ] as const) {
+    const closed = dequeued(ref, "", { state: "closed", merged }, "closed");
+    const closedAt = { ...closed.pull_request, closed_at: new Date(MADE_AT).toISOString() };
+
+    assert.deepEqual(
+      agentWakeOf("pull_request", unparsedWire({ ...closed, pull_request: closedAt }), 7),
+      {
+        kind,
+        repository: RELAY_FULL_NAME,
+        branches: [ref],
+        pullRequest: 41,
+        url: `https://github.com/${RELAY_FULL_NAME}/pull/41`,
+        by: "octocat",
+        byId: "583231",
+        at: MADE_AT,
+      },
+    );
+  }
+
   for (const [event, payload] of [
     ["pull_request_review", reviewDelivery(ref, "octocat", "edited")],
     // Taken out by hand, as the agent's own `gh pr merge --disable-auto` takes it out.
@@ -717,6 +742,53 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
           sentText(agentSessions.sent[0]?.message.message).includes("@octocat requested changes"),
         );
         assert.ok(sentText(agentSessions.sent[1]?.message.message).includes("@octocat commented"));
+      }),
+  );
+
+  it.effect(
+    "a pull request merged is told to its idle agent, and to none whose task already stands Done",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, agent, ref } = yield* openAgent;
+        yield* endedTurn(owner, agent.conversationId, MADE_AT - 60_000);
+        const github = githubReaching(INSTALLATIONS).layer;
+
+        const merged: AgentWake = {
+          kind: AGENT_WAKE.MERGED,
+          repository: RELAY_FULL_NAME,
+          branches: [ref],
+          pullRequest: 41,
+          url: `https://github.com/${RELAY_FULL_NAME}/pull/41`,
+          by: "octocat",
+          at: MADE_AT,
+        };
+
+        const told = yield* wakeAgents(
+          agentSessions.sessionsFor,
+          merged,
+          randomUUID(),
+          APP_BOT,
+        ).pipe(Effect.provide(github));
+
+        assert.equal(told, 1);
+        assert.ok(
+          sentText(agentSessions.sent[0]?.message.message).includes(
+            "@octocat merged your pull request [@#41](https://github.com/Acme/Relay/pull/41).",
+          ),
+        );
+
+        // The developer closed the task by hand, which archived nothing: a turn there would reopen it.
+        yield* updateTask(owner, agent.taskId, { status: TASK_STATUS.DONE });
+
+        const again = yield* wakeAgents(
+          agentSessions.sessionsFor,
+          merged,
+          randomUUID(),
+          APP_BOT,
+        ).pipe(Effect.provide(github));
+
+        assert.equal(again, 0);
       }),
   );
 

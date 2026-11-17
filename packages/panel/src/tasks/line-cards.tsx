@@ -1,6 +1,7 @@
 import {
   CHECK_STATE,
   type CheckState,
+  PULL_REQUEST_STATE,
   REVIEW_STATE,
   type ReviewState,
 } from "@repo/features/agent-wire";
@@ -25,6 +26,7 @@ import {
   type EventNote,
   EventNotes,
   OneLine,
+  PULL_REQUEST_GLYPH,
   SUBJECT_FIT,
   type SubjectFit,
   SubjectLine,
@@ -249,9 +251,14 @@ const MARK_INK = {
   FAILED: "text-destructive",
   PASSED: "text-complete",
   QUIET: "text-muted-foreground",
+  MERGED: "text-merged",
 } as const;
 
 type MarkInk = (typeof MARK_INK)[keyof typeof MARK_INK];
+
+/** The Pull request tab's glyphs for a pull request merged and one closed, which a line saying so wears. */
+const MergedGlyph = PULL_REQUEST_GLYPH[PULL_REQUEST_STATE.MERGED];
+const ClosedGlyph = PULL_REQUEST_GLYPH[PULL_REQUEST_STATE.CLOSED];
 
 /** A mark in a card's icon's seat, at the size and in the seat the Pull request tab's badge stands in. */
 function CardMark({ ink, children }: { ink: MarkInk; children: ReactNode }): React.JSX.Element {
@@ -274,7 +281,7 @@ function checksStanding(line: GitHubLineMetadata, words: string): CheckState {
   return nonePassed ? CHECK_STATE.SKIPPED : CHECK_STATE.PASSED;
 }
 
-/** What a GitHub line wears in its card's icon's seat: a review's verdict as the Pull request tab's badge, a comment's speech mark, a check event's one failed glyph, a skip's quiet slash, or a pass's check, or the failed glyph for the merge queue taking the pull request out. */
+/** What a GitHub line wears in its card's icon's seat: a review's verdict as the Pull request tab's badge, a comment's speech mark, a check event's one failed glyph, a skip's quiet slash, or a pass's check, the failed glyph for the merge queue taking the pull request out, or the Pull request tab's own glyph in GitHub's color for one merged or closed. */
 function GitHubLineMark({
   line,
   words,
@@ -298,6 +305,18 @@ function GitHubLineMark({
       return <ChecksMark standing={checksStanding(line, words)} />;
     case GITHUB_LINE_EVENT.DEQUEUED:
       return <ChecksMark standing={CHECK_STATE.FAILED} />;
+    case GITHUB_LINE_EVENT.MERGED:
+      return (
+        <CardMark ink={MARK_INK.MERGED}>
+          <MergedGlyph />
+        </CardMark>
+      );
+    case GITHUB_LINE_EVENT.CLOSED:
+      return (
+        <CardMark ink={MARK_INK.FAILED}>
+          <ClosedGlyph />
+        </CardMark>
+      );
   }
 }
 
