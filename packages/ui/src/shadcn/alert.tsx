@@ -44,8 +44,9 @@ import { STATUS_TONE, type StatusTone } from "../status-tone.js";
 const alertVariants = cva("ui-banner flex-none @container/ui-banner", {
   variants: {
     look: {
+      // Note that a strip stands a pane bar high, padded as `PaneBar` is, because it heads a column as a pane bar does and stands level with the one beside it.
       strip:
-        "border-b border-banner-strip-edge bg-banner-strip py-banner-strip-block pr-banner-strip-end pl-banner-strip-start",
+        "box-border min-h-pane-bar border-b border-banner-strip-edge bg-banner-strip py-tight-gap pr-banner-strip-end pl-banner-strip-start",
       card: "box-border p-banner-card pl-banner-card-start",
       row: "",
       inset: "py-banner-strip-block pr-banner-strip-end pl-banner-strip-start",
