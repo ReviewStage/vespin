@@ -171,7 +171,13 @@ import {
 } from "./kept-content.js";
 import { drawnAs } from "./list-moves.js";
 import { type HeldAnswers, heldSlice, rowWriteOn } from "./live-collection.js";
-import { confirmWrite, FOLLOW_BACKOFF, type TxWait } from "./live-follow.js";
+import {
+  confirmWrite,
+  FOLLOW_BACKOFF,
+  followTakingRows,
+  restarting,
+  type TxWait,
+} from "./live-follow.js";
 import { pushLive } from "./live-push.js";
 import {
   type ListDrawing,
@@ -936,14 +942,18 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     };
   }
 
-  const decodeHistory = Schema.decodeUnknownOption(TASK_HISTORY_READ.rows);
   /** How to wait for a write's transaction on each task's held history, while its follow stands. */
   const historyTxWaits = new Map<string, TxWait>();
 
   /**
    * Follows `taskId`'s newest page of history live until let go, each page
    * laid over the older ones held (`withNewestPage`) and told through
-   * `answers`, and its wait for a write's transaction kept while it stands.
+   * `answers` before its transactions are carried on to a write waiting for
+   * them (`followTakingRows`), so a restore confirmed on the history finds
+   * its version already told, and its wait for a write's transaction kept
+   * while it stands. A follow that stops is followed again (`restarting`),
+   * and a task the service refuses for good is followed no longer, until
+   * every window lets it go and one holds it anew.
    */
   function followHistory(taskId: string, answers: HeldAnswers<DescriptionRevisionsAnswer>) {
     // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
@@ -951,26 +961,43 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     /** The wait this follow handed last, so letting it go takes back its own alone. */
     let handed: TxWait | undefined;
 
-    return pushLive({
-      seal: (poll, after) =>
-        gate() && userId !== undefined
-          ? sealedLive(TASK_HISTORY_READ, { id: taskId, userId }, poll, after)
-          : Effect.succeed({ ...LIVE_SIGNED_OUT, gone: true }),
-      decode: (rows) => Option.map(decodeHistory(rows), revisionsOfLiveRows),
-      publish: (page) =>
-        Effect.sync(() =>
-          page === undefined
-            ? answers.unanswered()
-            : answers.answered(withNewestPage(answers.rows(), page)),
-        ),
-      // Note that a follow let go takes back only the wait it handed, since a retry's follow may have handed its own first.
-      onTxWait: (wait) => {
-        if (wait !== undefined) {
-          handed = wait;
-          historyTxWaits.set(taskId, wait);
-        } else if (historyTxWaits.get(taskId) === handed) historyTxWaits.delete(taskId);
-      },
+    const seal = (poll: boolean, after?: string) =>
+      gate() && userId !== undefined
+        ? sealedLive(TASK_HISTORY_READ, { id: taskId, userId }, poll, after)
+        : Effect.succeed({ ...LIVE_SIGNED_OUT, gone: true });
+
+    const attempt = Effect.gen(function* () {
+      const first = yield* seal(false);
+
+      if ("failure" in first) {
+        answers.unanswered();
+
+        return first.gone !== true;
+      }
+
+      yield* followTakingRows(
+        {
+          poll: (after) => seal(true, after),
+          // Note that a follow let go takes back only the wait it handed, since a retry's follow may have handed its own first.
+          onTxWait: (wait) => {
+            if (wait !== undefined) {
+              handed = wait;
+              historyTxWaits.set(taskId, wait);
+            } else if (historyTxWaits.get(taskId) === handed) historyTxWaits.delete(taskId);
+          },
+        },
+        first,
+        TASK_HISTORY_READ.rows,
+        (rows) =>
+          Effect.sync(() =>
+            answers.answered(withNewestPage(answers.rows(), revisionsOfLiveRows(rows))),
+          ),
+      ).pipe(Effect.ignore);
+
+      return true;
     });
+
+    return restarting(attempt);
   }
 
   /**

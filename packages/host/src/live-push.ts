@@ -5,7 +5,6 @@ import {
   liveRows,
   resealWait,
   type SealedRead,
-  type TxWait,
   waitOrRegained,
 } from "./live-follow.js";
 
@@ -24,7 +23,9 @@ import {
  * for good, one naming nothing the account reaches, is published as a
  * failure and ends there, so a read held of a plan or an agent the reader
  * cannot reach is not asked again for as long as it is held. Only the value
- * is published.
+ * is published. It hands no wait for a write's transaction, since a value is
+ * published after its answer's transactions are carried on; a read a write
+ * confirms on is followed by `followTakingRows`.
  */
 
 /** A read the service did not answer, `gone` where the read names nothing the account reaches. */
@@ -36,8 +37,6 @@ export interface LivePushDependencies<Part extends string, Value> {
   readonly decode: (rows: Readonly<Record<Part, readonly unknown[]>>) => Option.Option<Value>;
   /** Takes the value as it now stands each time it moves, or that it could not be followed. */
   readonly publish: (value: Value | undefined) => Effect.Effect<void>;
-  /** Handed how to wait for a write's transaction on the read where it has one, and none once it is let go (`liveRows`). */
-  readonly onTxWait?: (wait: TxWait | undefined) => void;
 }
 
 /** The read followed until interrupted, each change published, or until the service refuses it for good. */
@@ -63,13 +62,7 @@ export function pushLive<Part extends string, Value>(
 
     let published = false;
 
-    const rows = liveRows(
-      {
-        poll: (after) => dependencies.seal(true, after),
-        ...(dependencies.onTxWait === undefined ? undefined : { onTxWait: dependencies.onTxWait }),
-      },
-      sealed,
-    );
+    const rows = liveRows({ poll: (after) => dependencies.seal(true, after) }, sealed);
 
     yield* Stream.runForEach(rows, (read) =>
       Option.match(dependencies.decode(read), {

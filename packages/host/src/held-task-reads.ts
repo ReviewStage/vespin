@@ -3,7 +3,7 @@ import { type LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import type { TaskRecordLiveAnswer } from "@repo/features/task-record-live";
 import type { Task } from "@repo/features/task-wire";
 import { type HeldTask, TASK_CALL_FAILURE, type TaskCallFailure } from "@repo/features/tasks-view";
-import { Effect, Equal, FiberMap, Option, Queue, Schedule, type Scope, Stream } from "effect";
+import { Effect, Equal, FiberMap, Option, Queue, Schedule, type Scope } from "effect";
 import { type AppHeldTasks, NO_KEYS_HELD } from "./app-state.js";
 import { type HeldAnswers, heldSlice } from "./live-collection.js";
 import {
@@ -13,7 +13,7 @@ import {
   type LiveFailure,
   type TxWait,
 } from "./live-follow.js";
-import { taskRecordMoves } from "./task-record-follow.js";
+import { followTaskRecord } from "./task-record-follow.js";
 
 /**
  * held-task-reads.ts -- each task's description the windows opened, held per task, so a task opened again draws its description in its first frame.
@@ -213,7 +213,7 @@ export const heldTaskReads = /* @__PURE__ */ Effect.fn("host/heldTaskReads")(fun
       if ("failure" in sealed) return yield* Effect.fail(sealed);
       let delivered = false;
 
-      const moves = taskRecordMoves(
+      yield* followTaskRecord(
         {
           poll: (after) => seal(true, after),
           onTxWait: (wait) => {
@@ -221,16 +221,14 @@ export const heldTaskReads = /* @__PURE__ */ Effect.fn("host/heldTaskReads")(fun
           },
         },
         sealed,
-      );
+        ({ descriptionSavedAt }) =>
+          Effect.sync(() => {
+            delivered = true;
 
-      yield* Stream.runForEach(moves, ({ descriptionSavedAt }) =>
-        Effect.sync(() => {
-          delivered = true;
-
-          if (descriptionSavedAt === undefined) return;
-          entry.descriptionSavedAt = descriptionSavedAt;
-          entry.ask();
-        }),
+            if (descriptionSavedAt === undefined) return;
+            entry.descriptionSavedAt = descriptionSavedAt;
+            entry.ask();
+          }),
       ).pipe(Effect.ignore);
 
       if (!delivered)
