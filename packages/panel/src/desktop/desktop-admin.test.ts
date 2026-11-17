@@ -150,6 +150,7 @@ test("a section stands under the place's own toolbar, titled Admin, with Open in
   assert.deepEqual(sections(page), [
     { name: "Overview", chosen: false },
     { name: "Cost", chosen: false },
+    { name: "Billing", chosen: false },
     { name: "Reliability", chosen: false },
     { name: "Agents", chosen: false },
     { name: "Tools", chosen: false },
