@@ -470,8 +470,8 @@ export function AnswerFields({
     <Toolbar>
       {card}
       <Toolbar.Content>
-        {/* Note that a flexible spacer stands before Done, as Settings' stands it at the bar's trailing edge, because iOS 26 sizes a keyboard item to its content and centers a lone one, so a `Spacer` inside it collapsed. */}
-        <ToolbarItem placement="keyboard" spacerBefore="flexible">
+        {/* Note that a flexible space stands before Done in one group, as Settings' stands it at the bar's trailing edge, because iOS 26 centers a keyboard bar's lone item, which neither a `Spacer` inside it nor a `ToolbarSpacer` moved. */}
+        <ToolbarItem placement="keyboard" spacerBefore>
           <SwiftUIButton label={KEYBOARD_DONE} onPress={() => void focused.current?.blur()} />
         </ToolbarItem>
       </Toolbar.Content>
