@@ -33,9 +33,9 @@
  * still reads (`tolerantReads`), so an update that changes one shape costs
  * only its rows, and those are read whole. A store saves lists that moved at most every
  * `SAVE_EVERY`, or only at the moments the shell names where it names any
- * (`KeptListsDue`, the phone's app going to the background), the writes
- * waiting for the service `QUEUE_SETTLE` after they move, and both once
- * more as it closes; a sign-out forgets it,
+ * (`KeptListsDue`, the phone's app going to the background), the messages
+ * refused `QUEUE_SETTLE` after they move, and both once more as it closes;
+ * a sign-out forgets it,
  * which deletes the file. Rows
  * kept where none of them moved but where they stand (`keepUnmoved`), as the
  * task list's sync id moving alone, are written only beside the next save of
@@ -44,16 +44,21 @@
  * every row that moved since it, and the rows the file kept at that id are
  * the very rows the service held there.
  *
- * Beside the lists it keeps the row writes made while the service could not
- * be reached, as the sync engine hands them out (`EntityPool.queued`) and
- * takes them back at the next launch (`requeue`): each a write's name, its
- * idempotency key, and its input. They are the account's own, so they
- * outlast a build of other row shapes where they still read, and leave with
- * the file at a sign-out. So do the messages the service refused that wait
- * on the member's Retry, Edit, or Delete, as the agents' record of messages
- * on their way hands them out (`agent-queue-writes.ts`): their words, their
+ * Beside the lists it keeps the messages the service refused that wait on
+ * the member's Retry, Edit, or Delete, as the agents' record of messages on
+ * their way hands them out (`agent-queue-writes.ts`): their words, their
  * key, their files' names, and why they did not go, each kept in the form
- * that record reads back, which this file holds unread.
+ * that record reads back, which this file holds unread. They are the
+ * account's own, so they outlast a build of other row shapes where they
+ * still read, and leave with the file at a sign-out.
+ *
+ * The row writes waiting for the service are kept in the local database's
+ * outbox alone (`local-queues.ts`). A file an older build kept may still
+ * hold them (`queue`): the store hands them out for the account's own file
+ * (`queue.entries`), for the local database to import once, and carries
+ * them through every save until it says they were imported
+ * (`queue.imported`), so a database that would not open never leaves them
+ * nowhere on disk.
  */
 
 import { AUTOMATIONS_READ } from "@repo/features/automation-live";
@@ -99,9 +104,9 @@ export const ENTITY_STORE_FILE_NAME = "entities.sealed";
 const SAVE_EVERY = Duration.seconds(30);
 
 /**
- * How long a store waits once the writes waiting for the service moved
- * before it writes them, so a burst of them is written once. Note that it is
- * short, since they are what a crash would lose.
+ * How long a store waits once the messages refused moved before it writes
+ * them, so a burst of them is written once. Note that it is short, since
+ * they are what a crash would lose.
  */
 const QUEUE_SETTLE = Duration.millis(500);
 
@@ -162,7 +167,7 @@ const keptRowsSchema = Schema.Struct({
 /** Each kept read's rows, as a read hands them to the store and takes them back. */
 export type KeptRows = typeof keptRowsSchema.Type;
 
-/** A row write waiting for the service, as the engine hands it out: its name, its key, and its input in its declaration's kept form. */
+/** A row write waiting for the service as an older build kept it here: its name, its key, and its input in its declaration's kept form. */
 const queuedEntrySchema = Schema.Struct({
   name: Schema.String,
   key: Schema.String,
@@ -180,16 +185,16 @@ const keptReadsSchema = Schema.Struct({
   [KEPT_READ.INBOX]: Schema.optionalKey(keptRowsSchema.fields[KEPT_READ.INBOX]),
 });
 
-/** What the file holds once opened: whose it is, the shapes its rows were kept at, the rows, the writes waiting, and the messages refused. */
+/** What the file holds once opened: whose it is, the shapes its rows were kept at, the rows, the writes an older build kept waiting until they are imported, and the messages refused. */
 const keptSchema = Schema.Struct({
   hash: Schema.String,
   accountId: Schema.String,
   reads: keptReadsSchema,
-  queue: Schema.Array(queuedEntrySchema),
+  queue: Schema.optionalKey(Schema.Array(queuedEntrySchema)),
   refused: Schema.optionalKey(Schema.Array(Schema.Unknown)),
 });
 
-/** The file opened as far as its account and its waiting writes, whatever shapes its rows were kept at. */
+/** The file opened as far as its account, the writes an older build kept waiting in it, and its messages refused, whatever shapes its rows were kept at. */
 const envelopeSchema = Schema.Struct({
   hash: Schema.String,
   accountId: Schema.String,
@@ -343,12 +348,20 @@ export interface EntityStore {
     workspaceId: string,
     rows: KeptRows[Read][string],
   ) => Effect.Effect<void>;
-  /** The row writes waiting for the service as the file held them when the store opened, oldest first. */
-  readonly queue: readonly QueuedEntry[];
+  /** The row writes waiting for the service an older build kept in the account's own file, for the local database to import once; none where the file was there but would not read, so nothing is marked imported before it does. */
+  readonly queue: SealedWrites | undefined;
   /** The messages the service refused as the file held them when the store opened, each in the form its reader kept it in. */
   readonly refused: readonly unknown[];
   /** Deletes the file and keeps nothing more, as a sign-out does. */
   readonly forget: Effect.Effect<void>;
+}
+
+/** The row writes an older build kept waiting in the file: carried through every save until `imported`, then never written again. */
+export interface SealedWrites {
+  /** The writes as the file held them when the store opened, oldest first. */
+  readonly entries: readonly QueuedEntry[];
+  /** Tells the store the local database holds them now, so its next save leaves them out. */
+  readonly imported: Effect.Effect<void>;
 }
 
 export interface EntityStoreOptions {
@@ -358,11 +371,7 @@ export interface EntityStoreOptions {
   readonly cipher: SecretCipher;
   /** The account signed in, whose lists alone the file may hold. */
   readonly accountId: string;
-  /** The row writes waiting for the service now, oldest first, which every save keeps beside the lists. */
-  readonly queued?: () => readonly QueuedEntry[];
-  /** Each moving of `queued`, which has the store write them `QUEUE_SETTLE` later. */
-  readonly queueMoves?: Stream.Stream<void>;
-  /** The messages the service refused now, each in the form its reader keeps it in, which every save keeps beside the writes waiting. */
+  /** The messages the service refused now, each in the form its reader keeps it in, which every save keeps beside the lists. */
   readonly refused?: () => readonly unknown[];
   /** Each moving of `refused`, which has the store write them `QUEUE_SETTLE` later. */
   readonly refusedMoves?: Stream.Stream<void>;
@@ -420,7 +429,7 @@ function sealedText(cipher: SecretCipher, plain: string): string {
   return cipher.sealText?.(plain) ?? Base64.encode(cipher.encrypt(plain));
 }
 
-/** The file's text opened and read as far as its account and its waiting writes, or none where it will not open or is not a store's. */
+/** The file's text opened and read as far as its account, its older waiting writes, and its messages refused, or none where it will not open or is not a store's. */
 function opened(cipher: SecretCipher, text: string): Envelope | undefined {
   const sealed = text.trim();
   const { openText } = cipher;
@@ -466,10 +475,8 @@ export function openEntityStore(
     const services = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
     const hash = yield* keptRowsHash;
 
-    const text = yield* Effect.orElseSucceed(
-      readSettingsFileText(directory, ENTITY_STORE_FILE_NAME),
-      () => undefined,
-    );
+    const textRead = yield* Effect.result(readSettingsFileText(directory, ENTITY_STORE_FILE_NAME));
+    const text = Result.getOrUndefined(textRead);
 
     const read = text === undefined ? undefined : opened(cipher, text);
     const ours = read !== undefined && read.accountId === accountId;
@@ -487,23 +494,25 @@ export function openEntityStore(
     // Note that a file that is not this account's, or will not open, is deleted before anything reads it, so no other account's rows are ever drawn.
     if (text !== undefined && kept === undefined) yield* removed(directory);
     const stored: Partial<KeptRows> = kept ?? {};
-    // Note that the account's own waiting writes outlast other row shapes, and are kept again at the next save.
-    const queue: readonly QueuedEntry[] = ours ? (read.queue ?? []) : [];
-    const queued = options.queued ?? (() => queue);
+    // Note that the account's own waiting writes an older build kept outlast other row shapes, for the local database to import.
+    const legacyQueue: readonly QueuedEntry[] = ours ? (read.queue ?? []) : [];
+    /** The older waiting writes each save still carries, until the local database imported them. */
+    let queueCarried = legacyQueue;
+    // Note that the account's own messages refused outlast other row shapes, and are kept again at the next save.
     const refusedKept: readonly unknown[] = ours ? (read.refused ?? []) : [];
     const refusedNow = options.refused ?? (() => refusedKept);
-    /** What waits on the member or the service, the writes waiting and the messages refused, as one text a save compares. */
-    const waitingNow = () => JSON.stringify([queued(), refusedNow()]);
+    /** What waits on the member, the messages refused, as one text a save compares. */
+    const waitingNow = () => JSON.stringify(refusedNow());
     let reads: Partial<KeptRows> = stored;
 
     // Note that rows kept at other shapes are written again at the next save, at these shapes and under this hash, so the next launch reads them whole.
     let dirty =
       tolerant !== undefined ||
-      (kept === undefined && (queue.length > 0 || refusedKept.length > 0));
+      (kept === undefined && (legacyQueue.length > 0 || refusedKept.length > 0));
 
     /** Whether rows kept since the last save moved nothing but where they stand (`keepUnmoved`), which only a save of something that moved, or the last, writes. */
     let unmoved = false;
-    let savedQueue = JSON.stringify([queue, refusedKept]);
+    let savedRefused = JSON.stringify(refusedKept);
     let forgotten = false;
     const lock = yield* Semaphore.make(1);
     let savedAt = yield* Clock.currentTimeMillis;
@@ -511,19 +520,20 @@ export function openEntityStore(
     const save = (closing: boolean) =>
       lock.withPermits(1)(
         Effect.flatMap(Clock.currentTimeMillis, (now) => {
-          const waiting = queued();
           const refused = refusedNow();
-          const waitingText = JSON.stringify([waiting, refused]);
+          const waitingText = JSON.stringify(refused);
           const listsDue = dirty && (closing || now - savedAt >= Duration.toMillis(SAVE_EVERY));
-          const moved = listsDue || waitingText !== savedQueue;
+          const moved = listsDue || waitingText !== savedRefused;
 
           if (!(moved || (closing && unmoved)) || forgotten) return Effect.void;
           dirty = false;
           unmoved = false;
-          savedQueue = waitingText;
+          savedRefused = waitingText;
           savedAt = now;
 
-          return encodeKept({ hash, accountId, reads, queue: waiting, refused }).pipe(
+          const queue = queueCarried.length > 0 ? { queue: queueCarried } : undefined;
+
+          return encodeKept({ hash, accountId, reads, ...queue, refused }).pipe(
             Effect.map((plain) => sealedText(cipher, plain)),
             Effect.flatMap((sealed) =>
               writeSettingsFileAtomic(directory, sealed, undefined, ENTITY_STORE_FILE_NAME),
@@ -542,15 +552,15 @@ export function openEntityStore(
     const woken = Effect.asVoid(Queue.offer(wake, undefined));
 
     /**
-     * The saver: once the writes waiting moved, a save `QUEUE_SETTLE` later;
+     * The saver: once the messages refused moved, a save `QUEUE_SETTLE` later;
      * once lists moved, where the shell names no moments of its own, one when `SAVE_EVERY` has passed since the last save,
-     * sooner where the writes waiting move meanwhile; otherwise asleep until
+     * sooner where the messages refused move meanwhile; otherwise asleep until
      * woken. Note that it ends once the store is forgotten, since nothing it
      * would save is kept.
      */
     const saver = Effect.gen(function* () {
       while (!forgotten) {
-        if (waitingNow() !== savedQueue) {
+        if (waitingNow() !== savedRefused) {
           yield* Effect.sleep(QUEUE_SETTLE);
         } else if (dirty && options.listsDue === undefined) {
           const left = savedAt + Duration.toMillis(SAVE_EVERY) - (yield* Clock.currentTimeMillis);
@@ -568,15 +578,6 @@ export function openEntityStore(
         yield* save(false);
       }
     });
-
-    if (options.queueMoves !== undefined) {
-      yield* Effect.forkScoped(
-        Stream.runForEach(options.queueMoves, () => woken),
-        {
-          startImmediately: true,
-        },
-      );
-    }
 
     if (options.refusedMoves !== undefined) {
       yield* Effect.forkScoped(
@@ -605,7 +606,14 @@ export function openEntityStore(
 
     return {
       stored: (read) => stored[read],
-      queue,
+      queue: Result.isFailure(textRead)
+        ? undefined
+        : {
+            entries: legacyQueue,
+            imported: Effect.sync(() => {
+              queueCarried = [];
+            }),
+          },
       refused: refusedKept,
       keep: (kept, rows) =>
         Effect.andThen(

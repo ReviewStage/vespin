@@ -3,8 +3,7 @@ import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
-import { entityPool, type FieldChange, fieldKind, type WriteDeclaration } from "@repo/sync";
-import { Effect, Exit, Layer, Path, PubSub, Result, Schema, Scope, Stream } from "effect";
+import { Effect, Exit, Layer, Path, PubSub, Result, Scope, Stream } from "effect";
 import { Base64 } from "effect/encoding";
 import * as FileSystem from "effect/FileSystem";
 import { TestClock } from "effect/testing";
@@ -254,45 +253,34 @@ it.effect(
     }).pipe(Effect.provide(files)),
 );
 
-/** A plan's row as the waiting write below renames it. */
-interface Row {
-  readonly id: string;
-  readonly name: string;
-}
+it.effect(
+  "the writes an older build kept waiting are carried through every save until the local database imported them",
+  () =>
+    Effect.gen(function* () {
+      const directory = yield* temporaryDirectoryScoped("entity-store-");
+      const waiting = [{ name: "tasks.rename", key: "rename-old", input: { taskId: "t1" } }];
+      const kept = { hash: "an older build's", accountId: DANA, reads: {}, queue: waiting };
+      const sealed = Base64.encode(testCipher().encrypt(JSON.stringify(kept)));
+      yield* (yield* FileSystem.FileSystem).writeFileString(yield* fileOf(directory), sealed);
 
-it.effect("a write waiting for the service is written within half a second of its queuing", () =>
-  Effect.gen(function* () {
-    const directory = yield* temporaryDirectoryScoped("entity-store-");
-    const pool = yield* entityPool({ mintKey: () => "rename-1", replayRefused: Effect.void });
+      // Note that each launch keeps a list, so its quit saves the file whole.
+      const upgraded = yield* opened(directory, DANA);
+      yield* upgraded.store.keep(KEPT_READ.TASK_LIST, LIST);
+      yield* upgraded.closed;
 
-    const rename: WriteDeclaration<Row, FieldChange<Row>, string, string> = {
-      kind: fieldKind((row: Row) => row.id),
-      keys: () => ["1"],
-      change: (name) => () => ({ name }),
-      send: () => Effect.succeed({ refused: "unreachable", unanswered: true as const }),
-      queue: { name: "plans.rename", input: Schema.String, queued: () => "waits" },
-    };
+      const imported = yield* opened(directory, DANA);
+      const queue = imported.store.queue;
+      assert.ok(queue, "a file that read hands out its queue");
+      yield* queue.imported;
+      yield* imported.store.keep(KEPT_READ.INBOX, INBOX);
+      yield* imported.closed;
 
-    const scope = yield* Scope.make();
-    yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
-    yield* Scope.provide(scope)(
-      openEntityStore({
-        directory,
-        cipher: testCipher(),
-        accountId: DANA,
-        queued: pool.queued,
-        queueMoves: pool.queueMoves,
-      }),
-    );
-    yield* pool.write(rename, "Invites");
+      const after = yield* opened(directory, DANA);
+      yield* after.closed;
 
-    yield* TestClock.adjust("500 millis");
-    yield* writtenText(directory);
-
-    assert.deepEqual(JSON.parse(yield* openedText(directory)).queue, [
-      { name: "plans.rename", key: "rename-1", input: "Invites" },
-    ]);
-  }).pipe(Effect.provide(files)),
+      assert.deepEqual(queue.entries, waiting);
+      assert.deepEqual(after.store.queue?.entries, []);
+    }).pipe(Effect.provide(files)),
 );
 
 it.effect(

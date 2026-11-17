@@ -49,14 +49,16 @@ import {
 } from "@repo/features/tasks-view";
 import { GATEWAY_METHOD } from "@repo/gateway";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
-import { type EntityPool, entityPool } from "@repo/sync";
+import { entityPool } from "@repo/sync";
 import { isRecord, type WireValue } from "@repo/wire";
-import { Deferred, Duration, Effect, Exit, Fiber, Layer, Scope } from "effect";
+import { Deferred, Duration, Effect, Exit, Fiber, Layer, Scope, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppDescriptionComments } from "./app-state.js";
 import type { TasksClient } from "./compose-tasks.js";
 import { KEPT_READ, openEntityStore } from "./entity-store.js";
 import { FIXTURE_IDS, FIXTURE_PAGE } from "./fixture-stage.js";
+import { localCopy } from "./local-copy.js";
+import { nodeSqliteDriverLayer } from "./node/index.js";
 import { memoryFileSystem } from "./testing/memory-file-system.js";
 import { polledLive } from "./testing/polled-live.js";
 import { agentListRow } from "./testing/task-list-rows.js";
@@ -348,6 +350,29 @@ it.effect(
     }),
 );
 
+/** The platform a launch keeps its waiting writes on: Node's files and `node:sqlite`. */
+const LOCAL_PLATFORM = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, nodeSqliteDriverLayer);
+
+/** One launch of Dana's account over `directory`: a pool whose waiting writes, each sent under `key`, are kept in the local database, and the writes it held at the last quit, to lay back. */
+const launchedOver = (directory: string, key: string) =>
+  Effect.gen(function* () {
+    const copy = yield* localCopy(directory);
+
+    const pool = yield* entityPool({
+      mintKey: () => key,
+      replayRefused: Effect.void,
+      store: copy.store,
+    });
+
+    const waiting = yield* copy.open(
+      "user-dana",
+      { kept: () => [], moves: Stream.empty },
+      { queue: undefined },
+    );
+
+    return { pool, waiting };
+  });
+
 it.effect(
   "a rename the service did not answer stays drawn through a relaunch on the same disk, and is sent once more under its key",
   () =>
@@ -355,20 +380,11 @@ it.effect(
       const directory = yield* temporaryDirectoryScoped("tasks-queue-");
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
       service.renameUntaken = WRITE_UNTAKEN.UNANSWERED;
-      const options = { mintKey: () => "rename-key", replayRefused: Effect.void };
-
-      const opened = (pool: EntityPool) =>
-        openEntityStore({
-          directory,
-          cipher: testCipher(),
-          accountId: "user-dana",
-          queued: pool.queued,
-        });
+      const launched = launchedOver(directory, "rename-key");
 
       const quit = yield* Scope.make();
-      const before = yield* Scope.provide(quit)(entityPool(options));
-      const kept = yield* Scope.provide(quit)(opened(before));
-      const first = yield* Scope.provide(quit)(subject(service, { entities: kept, pool: before }));
+      const before = yield* Scope.provide(quit)(launched);
+      const first = yield* Scope.provide(quit)(subject(service, { pool: before.pool }));
       yield* first.call("TASKS_REFRESH", undefined);
       yield* first.listed();
 
@@ -379,10 +395,9 @@ it.effect(
 
       yield* Scope.close(quit, Exit.void);
 
-      const pool = yield* entityPool(options);
-      const entities = yield* opened(pool);
-      const relaunched = yield* subject(service, { entities, pool });
-      yield* pool.requeue(entities.queue, relaunched.tasks.queueable);
+      const { pool, waiting } = yield* launched;
+      const relaunched = yield* subject(service, { pool });
+      yield* pool.requeue(waiting, relaunched.tasks.queueable);
       service.renameUntaken = undefined;
       yield* relaunched.call("TASKS_REFRESH", undefined);
       yield* relaunched.listed();
@@ -395,7 +410,7 @@ it.effect(
       );
       assert.deepEqual(service.renameKeys, ["rename-key", "rename-key"]);
       assert.deepEqual(pool.queued(), []);
-    }).pipe(Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer))),
+    }).pipe(Effect.provide(LOCAL_PLATFORM)),
 );
 
 it.effect(
@@ -444,20 +459,11 @@ it.effect(
         failure: TASK_CALL_FAILURE.UNANSWERED,
         untaken: WRITE_UNTAKEN.UNANSWERED,
       };
-      const options = { mintKey: () => "start-key", replayRefused: Effect.void };
-
-      const opened = (pool: EntityPool) =>
-        openEntityStore({
-          directory,
-          cipher: testCipher(),
-          accountId: "user-dana",
-          queued: pool.queued,
-        });
+      const launched = launchedOver(directory, "start-key");
 
       const quit = yield* Scope.make();
-      const before = yield* Scope.provide(quit)(entityPool(options));
-      const kept = yield* Scope.provide(quit)(opened(before));
-      const first = yield* Scope.provide(quit)(subject(service, { entities: kept, pool: before }));
+      const before = yield* Scope.provide(quit)(launched);
+      const first = yield* Scope.provide(quit)(subject(service, { pool: before.pool }));
       yield* first.call("TASKS_REFRESH", undefined);
       yield* first.listed();
 
@@ -469,10 +475,9 @@ it.effect(
       const waiting = first.last();
       yield* Scope.close(quit, Exit.void);
 
-      const pool = yield* entityPool(options);
-      const entities = yield* opened(pool);
-      const relaunched = yield* subject(service, { entities, pool });
-      yield* pool.requeue(entities.queue, relaunched.tasks.queueable);
+      const { pool, waiting: kept } = yield* launched;
+      const relaunched = yield* subject(service, { pool });
+      yield* pool.requeue(kept, relaunched.tasks.queueable);
       const made = { ...task(INVITES, "Invitation expiry", "", 30), createdAt: 3_000 };
       service.tasks = [...service.tasks, made];
       service.createAnswer = { ok: true, answer: { task: made } };
@@ -494,7 +499,7 @@ it.effect(
         [INVITES, BILLING],
       );
       assert.deepEqual(pool.queued(), []);
-    }).pipe(Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer))),
+    }).pipe(Effect.provide(LOCAL_PLATFORM)),
 );
 
 it.effect(

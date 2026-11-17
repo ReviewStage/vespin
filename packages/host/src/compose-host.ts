@@ -368,8 +368,8 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     );
 
     /**
-     * The signed-in account's local database (`local-copy.ts`), written and
-     * read by nothing in this release: only where the platform has a driver,
+     * The signed-in account's local database (`local-copy.ts`), the only
+     * place the pool's waiting writes are kept: only where the platform has a driver,
      * the Mac and the iPhone, and the run needs an account, so neither a
      * browser tab nor a fixture run keeps one.
      */
@@ -386,7 +386,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
      * them (`@repo/sync`). Where the run needs an account, a row write
      * that may wait for the service is sent under a key of the host's own
      * minting and waits while the service does not answer: kept on disk
-     * beside the lists where they are kept (`openEntities`), and in a
+     * in the local database where the host has one (`openLocal`), and in a
      * browser tab for the tab's life alone, and sent again only as the
      * account that asked it. A fixture run keeps none waiting.
      */
@@ -773,25 +773,31 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         directory: kernel.stateRoot,
         cipher: tokenCipher,
         accountId: signedInId,
-        queued: pool.queued,
-        queueMoves: pool.queueMoves,
         refused: agents.refused.kept,
         refusedMoves: agents.refused.moves,
         ...(Option.isSome(listsDue) ? { listsDue: listsDue.value } : undefined),
       }).pipe(Scope.provide(scope), Effect.provideContext(fileSystemContext));
 
       entities = { store, scope };
-      // Note that the writes kept waiting, and the messages refused, are laid back before any read draws, so the first answer draws under them.
-      yield* pool.requeue(store.queue, [...tasks.queueable, ...agents.queueable]);
+      // Note that the messages refused are laid back before any read draws, so the first answer draws under them.
       yield* agents.refused.restored(signedInId, store.refused);
     });
 
-    /** The signed-in account's local database opened where the host has one, after `entities.sealed` laid its queues back, so it keeps them as they stand. */
+    /**
+     * The signed-in account's local database opened where the host has one,
+     * after `entities.sealed` laid its refused messages back, so it keeps
+     * them as they stand, and its waiting writes laid back over the pool
+     * before any read draws, so the first answer draws under them: the
+     * outbox's, which imports once the queue an older build kept in
+     * `entities.sealed`.
+     */
     const openLocal = Effect.gen(function* () {
       const signedInId = account.signedIn() ? accountId() : undefined;
 
       if (local === undefined || signedInId === undefined) return;
-      yield* local.open(signedInId, agents.refused);
+      const sealed = { queue: entities?.store.queue };
+      const waiting = yield* local.open(signedInId, agents.refused, sealed);
+      yield* pool.requeue(waiting, [...tasks.queueable, ...agents.queueable]);
     });
 
     /** The store forgotten, its file deleted, as a sign-out does; a file no store stands over is deleted too. */
