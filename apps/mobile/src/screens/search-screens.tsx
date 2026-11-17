@@ -67,6 +67,7 @@ import { PLUS_TAB, SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
 import { useRemind } from "./inbox-remind.js";
 import { InboxItemRows, ThreadColumn } from "./inbox-screens.js";
 import {
+  type AgentArchiving,
   StatusQuestionAsk,
   TaskAgentRow,
   TaskRows,
@@ -185,7 +186,7 @@ function FoundList({
   selected,
   onOpen,
   remindMenu,
-  onArchiveAgent,
+  archiving,
   scopes,
   empty,
 }: {
@@ -202,8 +203,8 @@ function FoundList({
   readonly onOpen: (id: string) => void;
   /** Remind me's times on a thread found, as the Inbox's row offers them. */
   readonly remindMenu: (item: InboxItem) => RowSubmenu;
-  /** Asks to archive an agent found, once it rests, as a task's Agents do. */
-  readonly onArchiveAgent: (agentId: string) => void;
+  /** Archive on an agent found, once it rests, asked first by its row, as a task's Agents ask. */
+  readonly archiving: AgentArchiving;
   /** The scopes the results list under, standing as the list's first row. */
   readonly scopes: ListScopes;
   /** What stands over the list while the scope found nothing. */
@@ -280,7 +281,7 @@ function FoundList({
               line={line}
               task={found.tasksById.get(line.agent.taskId)}
               named
-              onArchive={onArchiveAgent}
+              archiving={archiving}
             />
           ))}
         </ListSection>
@@ -313,7 +314,7 @@ function useSearchScreen(
   const doors = useTaskRowDoors(found.listing.workspace?.id);
   const { listing, status, deletion } = useListingAsks(found.listing, doors);
   const remind = useRemind();
-  const archiveAsk = useAgentArchiveAsk();
+  const archiving = useAgentArchiveAsk();
   const routes = foundRoutes(found);
   const onTab = useOnTab();
 
@@ -364,7 +365,7 @@ function useSearchScreen(
       selected={pick?.picked?.id}
       onOpen={open}
       remindMenu={remind.itemMenu}
-      onArchiveAgent={archiveAsk.archive}
+      archiving={archiving}
       empty={
         !empty ? undefined : reading !== undefined ? (
           <EmptyState title={reading} symbol={GLYPH.SEARCH} loading />
@@ -379,7 +380,7 @@ function useSearchScreen(
     />
   );
 
-  return { listing, results, status, deletion, remind, archiveAsk };
+  return { listing, results, status, deletion, remind };
 }
 
 /** What a typed query finds under the Stack's bar, with the questions and sheets its rows' acts raise beside it. */
@@ -387,18 +388,13 @@ function SearchStackFound({
   leave,
   ...words
 }: SearchWords & { readonly leave: (() => void) | undefined }) {
-  const { results, status, deletion, remind, archiveAsk } = useSearchScreen(
-    words,
-    undefined,
-    leave,
-  );
+  const { results, status, deletion, remind } = useSearchScreen(words, undefined, leave);
 
   return (
     <>
       <Screen>{results}</Screen>
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
-      {archiveAsk.ask}
       {remind.sheet}
     </>
   );
@@ -594,10 +590,7 @@ function SearchSplitFound({
   picking,
   ...words
 }: SearchWords & { readonly picking: SearchPicking }) {
-  const { listing, results, status, deletion, remind, archiveAsk } = useSearchScreen(
-    words,
-    picking,
-  );
+  const { listing, results, status, deletion, remind } = useSearchScreen(words, picking);
 
   const { detail, detailBar, asks } = useSearchDetail(
     picking.picked,
@@ -617,7 +610,6 @@ function SearchSplitFound({
       />
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
-      {archiveAsk.ask}
       {remind.sheet}
       {asks}
     </>
