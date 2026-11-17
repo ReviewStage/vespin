@@ -300,7 +300,7 @@ export const touchedWhileUsed = (
 /**
  * What a base drive is filled as: the fill's sandbox's name, which is its
  * lock, the drive's name and where it is mounted, the image the sandbox
- * opens from, and its size.
+ * opens from, its size, and its tags.
  */
 export interface DriveFill {
   readonly name: string;
@@ -308,6 +308,8 @@ export interface DriveFill {
   readonly at: string;
   readonly image: string;
   readonly vcpus?: number;
+  /** The tags the fill's sandbox carries, such as the workspace it is billed to. */
+  readonly tags?: Readonly<Record<string, string>>;
   /** The user made in the fill's sandbox, so what the steps hand it is that user's on every fork. */
   readonly user?: SandboxUser;
 }
@@ -339,7 +341,7 @@ export const filledDrive = <E, R>(
         name: ask.name,
         from: { image: ask.image },
         drive: { fill: ask.drive, at: ask.at },
-        tags: {},
+        tags: ask.tags ?? {},
         ...(ask.vcpus === undefined ? undefined : { vcpus: ask.vcpus }),
         ...(ask.user === undefined ? undefined : { user: ask.user }),
         env: {},

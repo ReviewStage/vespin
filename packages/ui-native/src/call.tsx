@@ -1,4 +1,4 @@
-// call.tsx -- a voice call into an agent as the phone draws it: Talk in an agent's composer, the call's presses there while the call is into that agent, and the slim way back to the call's agent from every other screen, over the tab bar or at the foot of an iPad's app sidebar.
+// call.tsx -- a voice call into an agent as the phone draws it: what an agent's composer offers of calls (Talk, which the composer draws in Send's place), the call's presses there while the call is into that agent, and the slim way back to the call's agent from every other screen, over the tab bar or at the foot of an iPad's app sidebar.
 
 import {
   Host,
@@ -22,7 +22,7 @@ import {
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ModelProvider } from "@repo/features/models-wire";
-import { CALL_CONTROL_LABEL, TALK_LABEL } from "@repo/features/voice-call-words";
+import { CALL_CONTROL_LABEL } from "@repo/features/voice-call-words";
 import { StyleSheet } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
@@ -31,7 +31,7 @@ import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, SIDEBAR_ROW, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
-/** What a composer offers of calls: Talk at rest, or the call's presses while a call into its agent stands. */
+/** What a composer offers of calls: Talk at rest, in Send's place while its field is empty, or the call's presses before Send while a call into its agent stands. */
 export const COMPOSER_CALL = {
   TALK: "talk",
   ON_CALL: "on-call",
@@ -116,14 +116,6 @@ function CallGlyphPress({
 }
 
 /**
- * Talk, the waveform a composer offers while its field is empty, which
- * calls the composer's agent, as the panel's box offers it beside Dictate.
- */
-function TalkPress({ onTalk }: { readonly onTalk: () => void }) {
-  return <CallGlyphPress glyph={GLYPH.TALK} label={TALK_LABEL.TALK} onPress={onTalk} />;
-}
-
-/**
  * The call's presses in the panel's order: the speaker's mute, the
  * microphone's, and End call in red. A mute shows where it stands, its
  * glyph struck through while muted, and is named for what a press does;
@@ -169,11 +161,9 @@ function CallPressRow({
   );
 }
 
-/** What a composer draws of calls in its row, before Send: Talk, or the call's presses. */
-export function ComposerCallPresses({ call }: { readonly call: ComposerCall }) {
-  if (call.kind === COMPOSER_CALL.TALK) return <TalkPress onTalk={call.onTalk} />;
-
-  return <CallPressRow presses={call.presses} />;
+/** What a composer draws of a call into its agent in its row, before Send: the call's presses. */
+export function ComposerCallPresses({ presses }: { readonly presses: CallPresses }) {
+  return <CallPressRow presses={presses} />;
 }
 
 /**

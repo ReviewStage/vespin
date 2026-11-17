@@ -17,6 +17,11 @@ export {
 
 export {
   ConfirmAsk,
+  QUIET_ROW_QUESTION,
+  type RowAsker,
+  RowAsking,
+  type RowQuestion,
+  useRowAsker,
   WORDS_ASK_KIND,
   WordsAsk,
   type WordsAskAct,

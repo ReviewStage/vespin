@@ -82,7 +82,7 @@ const GITHUB_STATE = {
   },
 } as const;
 
-type GitHubState = (typeof GITHUB_STATE)[keyof typeof GITHUB_STATE];
+export type GitHubState = (typeof GITHUB_STATE)[keyof typeof GITHUB_STATE];
 
 /** Which way the workspace's GitHub stands: installed and reaching none, connected once but no longer installed, or never connected. */
 function gitHubState(installed: boolean, connected: boolean): GitHubState {
@@ -126,20 +126,31 @@ function MemberDetail({
   );
 }
 
-/** The card while the workspace `chooser` lists reaches no repository; nothing otherwise. */
-export function NoRepositoriesBanner({
-  chooser,
-}: {
-  chooser: RepositoryChooser;
-}): React.JSX.Element | null {
+/** The press that mends a workspace reaching no repository: what it says, and what it opens; and which way its GitHub stands. */
+export interface RepositoryMend {
+  readonly state: GitHubState;
+  readonly label: string;
+  readonly open: () => void;
+}
+
+/**
+ * How the reader adds a repository to the workspace `chooser` lists while it
+ * reaches none: an owner's or an admin's Connect, Reconnect, or Choose
+ * repositories, or a member's Add with your token, each opening Settings
+ * where it is done; nothing until a workspace is chosen and its listing
+ * answers, nor once it reaches one. Home's card and its starters that need
+ * a repository say it alike.
+ */
+export function useRepositoryMend(chooser: RepositoryChooser): RepositoryMend | undefined {
   const openSettings = useOpenSettings();
   const listed = useQuery(repositoryListsQuery(chooser.scope ?? EVERY_WORKSPACE)).data;
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
   const token = useQuery(githubTokenQuery(accountId)).data?.token;
-  // Note that every workspace's listing speaks for no one workspace, so the card waits for one to be chosen.
+  // Note that every workspace's listing speaks for no one workspace, so the press waits for one to be chosen.
   const { scope } = chooser;
 
-  if (scope === undefined || listed === undefined || listed.repositories.length > 0) return null;
+  if (scope === undefined || listed === undefined || listed.repositories.length > 0)
+    return undefined;
   const state = gitHubState(listed.installed, chooser.connected === true);
 
   // Note that a member with no token known to be saved, its read still out or refused among them, saves one first, on Account, since the workspace's Add repository waits on it.
@@ -152,7 +163,24 @@ export function NoRepositoriesBanner({
         }
       : { page: SETTINGS_VIEW.ACCOUNT, section: SETTINGS_SECTION.GITHUB_TOKEN };
 
-  const open = () => openSettings(destination);
+  return {
+    state,
+    label: chooser.manages ? state.label : NO_REPOSITORIES_COPY.ADD_WITH_TOKEN,
+    open: () => openSettings(destination),
+  };
+}
+
+/** The card while the workspace `chooser` lists reaches no repository; nothing otherwise. */
+export function NoRepositoriesBanner({
+  chooser,
+}: {
+  chooser: RepositoryChooser;
+}): React.JSX.Element | null {
+  const mend = useRepositoryMend(chooser);
+  const { scope } = chooser;
+
+  if (mend === undefined || scope === undefined) return null;
+  const { state, open } = mend;
 
   return (
     <Banner
@@ -164,7 +192,7 @@ export function NoRepositoriesBanner({
           icon={chooser.manages ? <ProviderMark provider={MARK_PROVIDER.GITHUB} /> : undefined}
           onClick={open}
         >
-          {chooser.manages ? state.label : NO_REPOSITORIES_COPY.ADD_WITH_TOKEN}
+          {mend.label}
         </Button>
       }
     >

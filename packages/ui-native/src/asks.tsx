@@ -1,4 +1,4 @@
-// asks.tsx -- the questions an act asks first, as the system asks them: an action sheet rising from the screen's foot in a compact window, an alert in a regular one or where words must be typed, and the alert that asks for words, such as a rename or an address.
+// asks.tsx -- the questions an act asks first, as the system asks them: one a row's act raises standing by that row, an action sheet rising from the screen's foot in a compact window, an alert in a regular one or where words must be typed, and the alert that asks for words, such as a rename or an address.
 
 import {
   Alert,
@@ -16,12 +16,15 @@ import {
   keyboardType,
   textInputAutocapitalization,
 } from "@expo/ui/swift-ui/modifiers";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactElement, type ReactNode, useEffect, useState } from "react";
 import { useWindowSizeClass } from "./use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "./window-size-class.js";
 
 /** What an act that asks first offers beside its act, and the role the system draws it in. */
 const CANCEL = { LABEL: "Cancel", ROLE: "cancel" } as const;
+
+/** The role the system draws an act that takes something away in: red. */
+const DESTRUCTIVE_ROLE = "destructive";
 
 /** A width past any window's, so the sheet's anchor fills the screen's foot whatever its width. */
 const FULL_WIDTH = 10_000;
@@ -195,6 +198,79 @@ export function ConfirmAsk(props: ConfirmAskProps) {
     <SheetConfirm {...props} />
   ) : (
     <AlertConfirm {...props} />
+  );
+}
+
+/** A question a row's own act asks first, such as a task's Permanently delete or an agent's Archive, which stands by that row. */
+export interface RowQuestion {
+  readonly title: string;
+  readonly message?: string | undefined;
+  readonly act: string;
+  readonly presented: boolean;
+  readonly onAct: () => void;
+  /** Called as the question goes, by its act, Cancel, or a tap outside it. */
+  readonly onDismiss: () => void;
+}
+
+/** What a row that asks nothing now stands by: no question, never shown. */
+export const QUIET_ROW_QUESTION: RowQuestion = {
+  title: "",
+  act: "",
+  presented: false,
+  onAct: () => undefined,
+  onDismiss: () => undefined,
+};
+
+/** One drawn row, which a question its acts raise names, so the question stands by that row and not by another drawing the same task, as Pinned and its section both do. */
+export interface RowAsker {
+  readonly row: symbol;
+}
+
+/** The drawn row a question its acts raise names, the same for as long as the row stands. */
+export function useRowAsker(): RowAsker {
+  const [asker] = useState<RowAsker>(() => ({ row: Symbol("row") }));
+
+  return asker;
+}
+
+/**
+ * A row's content with the question its own acts ask first standing by it,
+ * as iOS 26 stands a confirmation from the view that raised it: SwiftUI's
+ * confirmation dialog with the row as its source, its glass by the row on
+ * an iPhone and a popover from it on an iPad, its act red, and Cancel or a
+ * tap outside letting it go. Note that it stands around every row that can
+ * ask, asking or not, because wrapping a row only as it asks would draw
+ * its long press menu anew as the menu went, and a question raised from a
+ * screen's foot pointed at the tab bar rather than at the row it is about.
+ * It stands inside the row's own SwiftUI tree, never beside a `Screen`.
+ */
+export function RowAsking({
+  question,
+  children,
+}: {
+  readonly question: RowQuestion;
+  readonly children: ReactElement;
+}): ReactElement {
+  return (
+    <ConfirmationDialog
+      title={question.title}
+      titleVisibility="visible"
+      isPresented={question.presented}
+      onIsPresentedChange={(shown) => {
+        if (!shown) question.onDismiss();
+      }}
+    >
+      <ConfirmationDialog.Trigger>{children}</ConfirmationDialog.Trigger>
+      <ConfirmationDialog.Actions>
+        <SwiftUIButton label={question.act} role={DESTRUCTIVE_ROLE} onPress={question.onAct} />
+        <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={question.onDismiss} />
+      </ConfirmationDialog.Actions>
+      {question.message === undefined ? null : (
+        <ConfirmationDialog.Message>
+          <Text>{question.message}</Text>
+        </ConfirmationDialog.Message>
+      )}
+    </ConfirmationDialog>
   );
 }
 
