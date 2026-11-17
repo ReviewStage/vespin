@@ -2325,7 +2325,7 @@ function RunsGroup({
                 onSwitch={(disabledServers) => onDraft({ disabledServers })}
               />
               <SwitchRow
-                label="Archive finished runs"
+                label="Mark finished runs Done"
                 labelReplayUnmasked
                 checked={draft.archiveSuccessful}
                 onChange={(archiveSuccessful) => onDraft({ archiveSuccessful })}

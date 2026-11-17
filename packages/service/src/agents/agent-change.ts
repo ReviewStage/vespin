@@ -18,7 +18,7 @@
  * the running ones a member confirmed stopping, in the task's own transaction (`doneTaskArchive`), and they are let go of
  * once it commits (`archivedWithTaskLetGo`); a turn ending on a task a
  * member or an agent moved to Done or Canceled archives its agent with it
- * (`archivedWithDoneTask`); and "Archive finished runs", which a Slack agent
+ * (`archivedWithDoneTask`); and "Mark finished runs Done", which a Slack agent
  * is put away by too, archives an agent that finished well and stands as it
  * was read (`archivedUnmovedAgent`), recorded as the app's with why, since
  * no member asked for it. The last two let an agent go on its device alone,

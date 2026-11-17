@@ -79,7 +79,7 @@
  * recordings, and sound clips the agent showed with `show_media` in that turn, shared as
  * files under the thread (`SlackWorkspaceBot.upload`). A turn of an agent started
  * from Slack that finished well then
- * archives the agent under the rule an automation's "Archive finished runs"
+ * archives the agent under the rule an automation's "Mark finished runs Done"
  * archives by (`archiveFinishedAgents`), so one with a pull request or an
  * inbox item open stands, and the thread's next message brings it back; any
  * other agent, one an automation's runs go to among them, is left to its own
@@ -1186,7 +1186,7 @@ const shownUploads = Effect.fnUntraced(function* (
 
 /**
  * The agent put away once its turn finished well, under the rule an
- * automation's "Archive finished runs" archives by, read from how far its
+ * automation's "Mark finished runs Done" archives by, read from how far its
  * lines had run before its standing is read; a failure is logged by its kind
  * alone.
  */

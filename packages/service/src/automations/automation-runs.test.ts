@@ -770,7 +770,7 @@ it.layer(SUITE)("an automation's runs", (it) => {
   );
 
   it.effect(
-    "an automation that archives its successful runs archives a run's agent once its turn settled well, once, and leaves standing one that failed, one brought back by hand, one whose starter left, one waiting on the inbox until its question closes, one whose pull request is open until it merges, and every agent of an automation that does not",
+    "an automation that archives its successful runs archives a run's agent once its turn settled well, once, moving its run's task to Done, and leaves standing one that failed, one brought back by hand, one whose starter left, one waiting on the inbox until its question closes, one whose pull request is open until it merges, and every agent of an automation that does not, with their tasks",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
@@ -785,12 +785,16 @@ it.layer(SUITE)("an automation's runs", (it) => {
         const departing = yield* openAutomation({ archiveSuccessful: true, trigger: UNSCHEDULED });
         const succeeded = yield* startedNow(agentSessions, archiving.automation);
         const failed = yield* startedNow(agentSessions, archiving.automation);
+        const failedPutAway = yield* startedNow(agentSessions, archiving.automation);
         const asking = yield* startedNow(agentSessions, archiving.automation);
         const publishing = yield* startedNow(agentSessions, archiving.automation);
         const kept = yield* startedNow(agentSessions, keeping.automation);
         const orphaned = yield* startedNow(agentSessions, departing.automation);
         yield* ranTurn(archiving.owner, succeeded, TURN_STATUS.SETTLED);
         yield* ranTurn(archiving.owner, failed, TURN_STATUS.FAILED);
+        yield* ranTurn(archiving.owner, failedPutAway, TURN_STATUS.FAILED);
+        // Archived by hand, a failed run's agent still leaves its task standing.
+        yield* archiveAgent(archiving.owner, failedPutAway, true);
         yield* ranTurn(archiving.owner, asking, TURN_STATUS.SETTLED);
         yield* ranTurn(archiving.owner, publishing, TURN_STATUS.SETTLED);
         yield* ranTurn(keeping.owner, kept, TURN_STATUS.SETTLED);
@@ -827,7 +831,7 @@ it.layer(SUITE)("an automation's runs", (it) => {
 
         const reconsidered = () =>
           Effect.forEach(
-            [succeeded, failed, asking, publishing, kept, orphaned],
+            [succeeded, failed, failedPutAway, asking, publishing, kept, orphaned],
             reconsiderRunArchive,
             { discard: true },
           );
@@ -853,6 +857,30 @@ it.layer(SUITE)("an automation's runs", (it) => {
             ))[0]?.archivedAt !== null,
           ],
           [true, false, false, false, false, false],
+        );
+
+        const taskStatus = (owner: string, id: string) =>
+          Effect.gen(function* () {
+            const taskId = Option.getOrThrow(yield* readAgent(owner, id)).taskId ?? "";
+
+            return Option.getOrThrow(yield* readTask(owner, taskId)).task.status;
+          });
+
+        assert.deepEqual(
+          [
+            yield* taskStatus(archiving.owner, succeeded),
+            yield* taskStatus(archiving.owner, failed),
+            yield* taskStatus(archiving.owner, failedPutAway),
+            yield* taskStatus(archiving.owner, publishing),
+            yield* taskStatus(keeping.owner, kept),
+          ],
+          [
+            TASK_STATUS.DONE,
+            TASK_STATUS.IN_PROGRESS,
+            TASK_STATUS.IN_PROGRESS,
+            TASK_STATUS.IN_PROGRESS,
+            TASK_STATUS.IN_PROGRESS,
+          ],
         );
 
         // Brought back by hand, the agent stays; its question closed and its pull request merged later, the asking and publishing ones go.
