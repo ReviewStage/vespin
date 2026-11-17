@@ -15,7 +15,6 @@
  */
 
 import {
-  INSTALLED_SKILL_BOUNDS,
   INSTALLED_SKILL_REFUSAL,
   MAC_SKILL_APP,
   type MacSkillApp,
@@ -71,9 +70,7 @@ const macSkillSchema = EffectSchema.Struct({
   description: EffectSchema.String,
   /** Its files' bytes together. */
   bytes: EffectSchema.Number,
-  files: EffectSchema.Array(macSkillFileSchema).check(
-    EffectSchema.isMaxLength(INSTALLED_SKILL_BOUNDS.MAX_IMPORT_FILES),
-  ),
+  files: EffectSchema.Array(macSkillFileSchema),
 });
 
 export type MacSkill = typeof macSkillSchema.Type;

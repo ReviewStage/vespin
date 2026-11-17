@@ -72,17 +72,16 @@ export interface MacSkillsReview {
 function whyLeft(reason: MacSkillSkipped): string {
   switch (reason) {
     case MAC_SKILL_SKIPPED.NAME_HELD:
-      return "You already have a skill with this name";
+      return "You already have one";
     case MAC_SKILL_SKIPPED.NAME_FOUND_EARLIER:
-      return "Same name as a skill above, which is the one offered";
+      return "Duplicate";
     case MAC_SKILL_SKIPPED.NO_SKILL_FILE:
-      return "Has no SKILL.md";
     case MAC_SKILL_SKIPPED.SKILL_FILE_INVALID:
-      return "Its SKILL.md has no valid name or description";
+      return "Missing a name or description";
     case MAC_SKILL_SKIPPED.TOO_LARGE:
-      return "Larger than 3 MB or 100 files";
+      return "Too big";
     case MAC_SKILL_SKIPPED.CREDENTIAL:
-      return "Holds something that looks like a credential";
+      return "Contains a secret";
   }
 }
 
@@ -127,7 +126,16 @@ export function macSkillsReview(
     offered: offered.filter((each) => each.app === source.app),
   }));
 
-  return { groups: groups.filter((group) => group.offered.length > 0), skipped, offered };
+  // Note that the skills left out read in the folders' order, as the groups above them do, then by name.
+  const folderAt = new Map(read.sources.map((source, at) => [source.app, at]));
+
+  const sorted = [...skipped].sort(
+    (one, other) =>
+      (folderAt.get(one.app) ?? 0) - (folderAt.get(other.app) ?? 0) ||
+      one.name.localeCompare(other.name),
+  );
+
+  return { groups: groups.filter((group) => group.offered.length > 0), skipped: sorted, offered };
 }
 
 /** "3 skills", or "1 skill". */

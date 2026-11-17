@@ -78,12 +78,13 @@ test("a name the reader already has, or one found earlier, is left out rather th
       ["Codex", ["db-migrations"]],
     ],
   );
+  // Left out reads in the folders' order, then by name.
   assert.deepEqual(
     review.skipped.map(({ name, app, why }) => [name, app, why]),
     [
-      ["pr-review", MAC_SKILL_APP.CLAUDE_CODE, "You already have a skill with this name"],
-      ["flaky-tests", MAC_SKILL_APP.CODEX, "Same name as a skill above, which is the one offered"],
-      ["leaky", MAC_SKILL_APP.AGENTS, "Holds something that looks like a credential"],
+      ["leaky", MAC_SKILL_APP.AGENTS, "Contains a secret"],
+      ["pr-review", MAC_SKILL_APP.CLAUDE_CODE, "You already have one"],
+      ["flaky-tests", MAC_SKILL_APP.CODEX, "Duplicate"],
     ],
   );
   assert.equal(summaryLine(review), "Found 2 skills to bring in, and left out 3.");

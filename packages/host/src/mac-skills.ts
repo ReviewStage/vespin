@@ -158,10 +158,6 @@ const readFolder = (found: FoundFolder) =>
     const path = yield* Path.Path;
     const paths = yield* filesUnder(found.path);
 
-    if (paths.length > INSTALLED_SKILL_BOUNDS.MAX_IMPORT_FILES) {
-      return { left: INSTALLED_SKILL_REFUSAL.TOO_LARGE };
-    }
-
     const sizes = yield* Effect.forEach(paths, (each) =>
       quietly(fs.stat(path.join(found.path, each))),
     );
