@@ -3646,6 +3646,14 @@ test("a fixture run lists its first workspace's plans under the switcher, and a 
   assert.equal(window.localStorage.length, 0);
 });
 
+test("the person profile's fixture run reads the tasks as its signed-in account's, where the tasks profile's are nobody's", async () => {
+  await loadTasksFixture();
+  const run = { shown: true, fixtureMode: true };
+
+  assert.equal(mount({ ...run, profile: RUN_PROFILE.PERSON }).control().me, "user-ada");
+  assert.equal(mount({ ...run, profile: RUN_PROFILE.TASKS }).control().me, undefined);
+});
+
 test("an agent profile opens its task on the agent it stages, beside the agent's tab it names, where the tasks profile's task holds no agent", async () => {
   // The window is drawn once the synthetic tasks have landed (`App`).
   await loadTasksFixture();
