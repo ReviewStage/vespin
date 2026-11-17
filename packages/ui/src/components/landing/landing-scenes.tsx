@@ -1044,38 +1044,25 @@ export function PullRequestCard({
 }
 
 /**
- * The log turning over: its finished turn scrolling up and away and the
- * opening the story starts from arriving under it, stopping where the log
- * starts. Note that it measures the opening's place before it draws,
- * because the turn's height comes from its words.
+ * The agent's log at `step` under its tabs, or `turning` over to its
+ * opening: its finished turn scrolling up and away and the opening arriving
+ * under it, stopping where the log starts. Note that the log on show keeps
+ * one key through the turn, so its rows never enter again when the turn
+ * ends and the loop starts over; the finished turn drawn above it is a
+ * copy, whose rows stand still as they arrive. It measures the opening's
+ * place as the turn starts, because the finished turn's height comes from
+ * its words.
  */
-function LogTurn(): React.JSX.Element {
+function LogCard({ step, turning }: { step: number; turning: boolean }): React.JSX.Element {
   const reel = useRef<HTMLDivElement>(null);
   const [by, setBy] = useState(0);
 
   useLayoutEffect(() => {
-    const next = reel.current?.children[1];
+    const opening = reel.current?.lastElementChild;
 
-    if (next instanceof HTMLElement) setBy(next.offsetTop);
-  }, []);
+    setBy(turning && opening instanceof HTMLElement ? opening.offsetTop : 0);
+  }, [turning]);
 
-  return (
-    <div className="ui-landing-log-turn">
-      <div
-        ref={reel}
-        className="ui-landing-log-reel"
-        data-turning={by > 0 || undefined}
-        style={cssCustomProperties({ "--ui-landing-turn-by": `${String(by)}px` })}
-      >
-        <AgentLog step={AGENTS_STORY.LAST} />
-        <AgentLog step={0} />
-      </div>
-    </div>
-  );
-}
-
-/** The agent's log at `step` under its tabs, or `turning` over to its opening: its words, its calls, and the other agent's answers. */
-function LogCard({ step, turning }: { step: number; turning: boolean }): React.JSX.Element {
   return (
     <ColumnCard
       bar={
@@ -1087,7 +1074,19 @@ function LogCard({ step, turning }: { step: number; turning: boolean }): React.J
         />
       }
     >
-      <div className="ui-landing-log-sheet">{turning ? <LogTurn /> : <AgentLog step={step} />}</div>
+      <div className="ui-landing-log-sheet">
+        <div className="ui-landing-log-turn">
+          <div
+            ref={reel}
+            className="ui-landing-log-reel"
+            data-turning={(turning && by > 0) || undefined}
+            style={cssCustomProperties({ "--ui-landing-turn-by": `${String(by)}px` })}
+          >
+            {turning ? <AgentLog key="finished" step={AGENTS_STORY.LAST} /> : null}
+            <AgentLog key="on-show" step={turning ? 0 : step} />
+          </div>
+        </div>
+      </div>
     </ColumnCard>
   );
 }

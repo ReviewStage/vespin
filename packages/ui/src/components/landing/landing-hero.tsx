@@ -1179,7 +1179,7 @@ const BEAT = {
 
 /** How long each beat holds, in milliseconds, by its place in `BEAT`: long enough to read what it adds. */
 const STORY_BEATS: readonly number[] = [
-  1800, 4600, 900, 800, 800, 1000, 2000, 1400, 1100, 1300, 1100, 1300, 3600, 1800,
+  1800, 5800, 900, 800, 800, 1000, 2000, 1400, 1100, 1300, 1100, 1300, 3600, 1800,
 ];
 
 /** The task the member types on Home and starts. */

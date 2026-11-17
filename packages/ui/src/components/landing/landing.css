@@ -2077,12 +2077,17 @@
 }
 
 @layer components {
-  /* The team log turning over (`LogTurn`): its finished turn and the
+  /* The team log turning over (`LogCard`): its finished turn and the
      opening under it, scrolled up by the finished turn's height, so the
      opening stops where the log starts. */
   .ui-landing-log-turn {
     height: 100%;
     overflow: hidden;
+  }
+
+  /* The finished turn above the opening is a copy, its rows already in. */
+  .ui-landing-log-reel > :first-child:not(:last-child) .ui-landing-enter {
+    animation: none;
   }
 
   .ui-landing-log-reel[data-turning] {
