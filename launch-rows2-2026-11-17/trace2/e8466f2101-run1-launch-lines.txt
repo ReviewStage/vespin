@@ -1,0 +1,20 @@
+2026-11-17 09:17:21.304 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] bundle-start +0 ms js wall=1794925041304 perf=398515279
+2026-11-17 09:17:21.306 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] rows-variant-full +2 ms js wall=1794925041306 perf=398515281
+2026-11-17 09:17:22.122 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] entry-modules-loaded +818 ms js wall=1794925042122 perf=398516098
+2026-11-17 09:17:22.348 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] root-layout-loaded +1044 ms js wall=1794925042348 perf=398516324
+2026-11-17 09:17:22.449 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] host-start +1145 ms js wall=1794925042449 perf=398516424
+2026-11-17 09:17:22.486 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] host-standing +1183 ms js wall=1794925042487 perf=398516462
+2026-11-17 09:17:22.489 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] document-written +1185 ms js wall=1794925042489 perf=398516464
+2026-11-17 09:17:22.687 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] inbox-rows-render +1383 ms js wall=1794925042687 perf=398516662
+2026-11-17 09:17:22.699 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] inbox-row-render#1 +1395 ms js wall=1794925042699 perf=398516674
+2026-11-17 09:17:22.821 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] inbox-row-render#5 +1518 ms js wall=1794925042822 perf=398516797
+2026-11-17 09:17:22.945 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] inbox-row-render#10 +1641 ms js wall=1794925042945 perf=398516921
+2026-11-17 09:17:23.017 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] inbox-row-render#11 +1713 ms js wall=1794925043017 perf=398516992
+2026-11-17 09:17:23.132 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] inbox-row-render#15 +1828 ms js wall=1794925043132 perf=398517107
+2026-11-17 09:17:23.255 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] inbox-row-render#20 +1951 ms js wall=1794925043255 perf=398517230
+2026-11-17 09:17:23.454 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] splash-hide +2150 ms js wall=1794925043454 perf=398517429
+2026-11-17 09:17:23.454 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] rnStartupTiming {} perfNow=398517429
+2026-11-17 09:17:25.290 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] first-row-appear +3986 ms js wall=1794925045290 perf=398519266
+2026-11-17 09:17:25.291 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] row-appear#1 +3987 ms js wall=1794925045291 perf=398519266
+2026-11-17 09:17:25.291 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] row-appear#5 +3987 ms js wall=1794925045291 perf=398519266
+2026-11-17 09:17:25.291 E  Vespin[37850:ccc5476] [com.facebook.react.log:javascript] [launch] row-appear#10 +3987 ms js wall=1794925045291 perf=398519266

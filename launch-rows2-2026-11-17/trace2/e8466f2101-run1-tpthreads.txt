@@ -1,0 +1,492 @@
+threads: Main Thread (0xccc490f) (Vespin, pid: 37850) = 1521 samples; com.facebook.react.runtime.JavaScript (0xccc5476) (Vespin, pid: 37850) = 1405 samples; Vespin (0xccc52a8) (Vespin, pid: 37850) = 1322 samples; hades (0xccc5478) (Vespin, pid: 37850) = 49 samples; Vespin (0xccc52f5) (Vespin, pid: 37850) = 39 samples; Vespin (0xccc52e1) (Vespin, pid: 37850) = 35 samples; Vespin (0xccc52ee) (Vespin, pid: 37850) = 33 samples; Vespin (0xccc52fe) (Vespin, pid: 37850) = 29 samples
+
+=== Main Thread (0xccc490f) (Vespin, pid: 37850) whole trace (908-14361 ms): 1521 ms sampled
+-- self
+   797.0 ms  52.4%  swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::
+    25.0 ms   1.6%  objc_msgSend
+    23.0 ms   1.5%  <deduplicated_symbol>
+    10.0 ms   0.7%  _platform_memmove
+     9.0 ms   0.6%  getMethodNoSuper_nolock(objc_class*, objc_selector*)
+     9.0 ms   0.6%  mach_msg2_trap
+     9.0 ms   0.6%  __open
+     9.0 ms   0.6%  std::__1::pair<facebook::react::ShadowViewMutation*, std::__1::back_insert_iterator<std::__1::vector<facebook::react::ShadowViewMutation, st
+     9.0 ms   0.6%  pthread_setspecific
+     8.0 ms   0.5%  getMethodFromRelativeList(relative_list_list_t<method_list_t>*, objc_selector*)
+     7.0 ms   0.5%  __openat
+     7.0 ms   0.5%  getContextDescriptor(swift::TargetMetadata<swift::InProcess> const*)
+     7.0 ms   0.5%  swift::_getWitnessTable(swift::TargetProtocolConformanceDescriptor<swift::InProcess> const*, swift::TargetMetadata<swift::InProcess> const*,
+     7.0 ms   0.5%  swift::Demangle::__runtime::Demangler::demangleType(__swift::__runtime::llvm::StringRef, std::__1::function<swift::Demangle::__runtime::Node
+     7.0 ms   0.5%  madvise
+     7.0 ms   0.5%  std::__1::vector<facebook::react::ShadowViewMutation, std::__1::allocator<facebook::react::ShadowViewMutation>>::__swap_out_circular_buffer(
+     6.0 ms   0.4%  find(_:key:filter:)
+     6.0 ms   0.4%  _platform_memset
+     6.0 ms   0.4%  _xzm_xzone_malloc_tiny
+     6.0 ms   0.4%  swift::MetadataCacheKey::operator==(swift::MetadataCacheKey const&) const
+     6.0 ms   0.4%  _xzm_malloc_tc
+     5.0 ms   0.3%  method_t* getMethodFromListArray<method_list_t**>(method_list_t**, unsigned int, objc_selector*)
+     5.0 ms   0.3%  std::__1::pair<swift::GenericCacheEntry*, swift::MetadataResponse> swift::LockingConcurrentMap<swift::GenericCacheEntry, swift::LockingConcu
+     5.0 ms   0.3%  __kdebug_trace64
+     4.0 ms   0.3%  getSuperclassForMaybeIncompleteMetadata(swift::TargetMetadata<swift::InProcess> const*, std::__1::optional<swift::MetadataState>, bool)
+     4.0 ms   0.3%  std::__1::pair<swift::HashMapElementWrapper<swift::GenericCacheEntry>*, unsigned int> swift::ConcurrentReadableHashMap<swift::HashMapElement
+     4.0 ms   0.3%  swift_release
+     4.0 ms   0.3%  swift::SubstGenericParametersFromMetadata::buildDescriptorPath(swift::TargetContextDescriptor<swift::InProcess> const*, swift::Demangle::__r
+     4.0 ms   0.3%  cache_getImp
+     4.0 ms   0.3%  swift::Demangle::__runtime::TypeDecoder<(anonymous namespace)::DecodedMetadataBuilder>::decodeMangledType(swift::Demangle::__runtime::Node*,
+-- inclusive
+  1377.0 ms  90.5%  GSEventRunModal
+  1377.0 ms  90.5%  UIApplicationMain
+  1377.0 ms  90.5%  _CFRunLoopRunSpecificWithOptions
+  1377.0 ms  90.5%  __CFRunLoopRun
+  1377.0 ms  90.5%  main
+  1377.0 ms  90.5%  0x1c52e82bc
+  1375.0 ms  90.4%  start_sim
+  1374.0 ms  90.3%  start
+  1113.0 ms  73.2%  <deduplicated_symbol>
+   830.0 ms  54.6%  swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::
+   807.0 ms  53.1%  UC::DriverCore::continueProcessing()
+   802.0 ms  52.7%  _UIUpdateSequenceRunNext
+   800.0 ms  52.6%  schedulerStepScheduledMainSectionContinue
+   786.0 ms  51.7%  __CFRunLoopDoSource0
+   785.0 ms  51.6%  __CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE0_PERFORM_FUNCTION__
+   785.0 ms  51.6%  __CFRunLoopDoSources0
+   692.0 ms  45.5%  CA::Layer::perform_update_(CA::Layer*, CALayer*, unsigned int, CA::LayerUpdateReason, CA::Transaction*)
+   690.0 ms  45.4%  -[CALayer layoutSublayers]
+   690.0 ms  45.4%  -[UIView(CALayerDelegate) layoutSublayersOfLayer:]
+   689.0 ms  45.3%  CA::Layer::update_if_needed_(CA::Transaction*, CA::LayerUpdateReason)
+   687.0 ms  45.2%  0x1c52ee960
+   687.0 ms  45.2%  0x1c52eee10
+   667.0 ms  43.9%  __setupUpdateSequence_block_invoke_2
+   667.0 ms  43.9%  _UIApplicationFlushCATransaction
+   629.0 ms  41.4%  +[UIView(Animation) performWithoutAnimation:]
+   622.0 ms  40.9%  -[UIView(Hierarchy) layoutBelowIfNeeded]
+   594.0 ms  39.1%  CA::Transaction::commit()
+   593.0 ms  39.0%  CA::Context::commit_transaction(CA::Transaction*, double, double*)
+   593.0 ms  39.0%  CA::Transaction::flush()
+   591.0 ms  38.9%  CA::Transaction::flush_as_runloop_observer(bool)
+   580.0 ms  38.1%  CA::Layer::layout_and_display_if_needed(CA::Transaction*)
+   573.0 ms  37.7%  AG::Graph::UpdateStack::update()
+   569.0 ms  37.4%  __81-[_UINavigationParallaxTransition _animateOrCreatePropertyAnimatorForTransition:]_block_invoke
+   569.0 ms  37.4%  __81-[_UINavigationParallaxTransition _animateOrCreatePropertyAnimatorForTransition:]_block_invoke_2
+   569.0 ms  37.4%  +[UIView _performBlockDelayingTriggeringResponderEvents:forScene:]
+   567.0 ms  37.3%  -[_UINavigationParallaxTransition _animateOrCreatePropertyAnimatorForTransition:]
+   567.0 ms  37.3%  -[_UINavigationParallaxTransition interruptibleAnimatorForTransition:]
+   565.0 ms  37.1%  -[UIPercentDrivenInteractiveTransition _startInterruptibleTransition:]
+   564.0 ms  37.1%  -[UIPercentDrivenInteractiveTransition startInteractiveTransition:]
+   561.0 ms  36.9%  ___UIViewControllerTransitioningRunCustomTransitionWithRequest_block_invoke_3
+-- suspects (inclusive ms, top matching frame)
+   widget reload: none
+   App Group / file write: 16 ms of samples; top frame __open (9 ms)
+   Handoff / Spotlight: none
+   SwiftUI list layout: 548 ms of samples; top frame LayoutEngineBox.sizeThatFits(_:) (439 ms)
+   image decode: none
+   Hermes / JS: 5 ms of samples; top frame facebook::react::EventEmitter::dispatchEvent(std::__1::basic_string<char, std::__1::char_traits<char (2 ms)
+   Yoga / Fabric: 498 ms of samples; top frame -[RCTMountingManager initiateTransaction:] (496 ms)
+
+=== Main Thread (0xccc490f) (Vespin, pid: 37850) window 2436-4272 ms: 1057 ms sampled
+-- self
+   550.0 ms  52.0%  swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::
+    17.0 ms   1.6%  <deduplicated_symbol>
+    17.0 ms   1.6%  objc_msgSend
+     9.0 ms   0.9%  _platform_memmove
+     8.0 ms   0.8%  pthread_setspecific
+     6.0 ms   0.6%  swift::Demangle::__runtime::Demangler::demangleType(__swift::__runtime::llvm::StringRef, std::__1::function<swift::Demangle::__runtime::Node
+     6.0 ms   0.6%  _xzm_xzone_malloc_tiny
+     6.0 ms   0.6%  swift::MetadataCacheKey::operator==(swift::MetadataCacheKey const&) const
+     6.0 ms   0.6%  swift::_getWitnessTable(swift::TargetProtocolConformanceDescriptor<swift::InProcess> const*, swift::TargetMetadata<swift::InProcess> const*,
+     5.0 ms   0.5%  getMethodFromRelativeList(relative_list_list_t<method_list_t>*, objc_selector*)
+     5.0 ms   0.5%  getContextDescriptor(swift::TargetMetadata<swift::InProcess> const*)
+     5.0 ms   0.5%  std::__1::pair<swift::GenericCacheEntry*, swift::MetadataResponse> swift::LockingConcurrentMap<swift::GenericCacheEntry, swift::LockingConcu
+     5.0 ms   0.5%  _xzm_malloc_tc
+     5.0 ms   0.5%  getMethodNoSuper_nolock(objc_class*, objc_selector*)
+     5.0 ms   0.5%  __open
+     5.0 ms   0.5%  _platform_memset
+     5.0 ms   0.5%  find(_:key:filter:)
+     4.0 ms   0.4%  swift_retain
+     4.0 ms   0.4%  swift::Demangle::__runtime::Demangler::demangleOperator()
+     4.0 ms   0.4%  madvise
+     3.0 ms   0.3%  cache_getImp
+     3.0 ms   0.3%  getSuperclassForMaybeIncompleteMetadata(swift::TargetMetadata<swift::InProcess> const*, std::__1::optional<swift::MetadataState>, bool)
+     3.0 ms   0.3%  swift_getObjCClassMetadata
+     3.0 ms   0.3%  tryCast(swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> co
+     3.0 ms   0.3%  swift::Demangle::__runtime::Node::addChild(swift::Demangle::__runtime::Node*, swift::Demangle::__runtime::NodeFactory&)
+     3.0 ms   0.3%  swift::Demangle::__runtime::TypeDecoder<(anonymous namespace)::DecodedMetadataBuilder>::decodeMangledType(swift::Demangle::__runtime::Node*,
+     3.0 ms   0.3%  _platform_strlen
+     3.0 ms   0.3%  _xzm_free_tc
+     3.0 ms   0.3%  DYLD-STUB$$malloc_type_malloc
+     3.0 ms   0.3%  __openat
+-- inclusive
+   913.0 ms  86.4%  _CFRunLoopRunSpecificWithOptions
+   913.0 ms  86.4%  0x1c52e82bc
+   913.0 ms  86.4%  GSEventRunModal
+   913.0 ms  86.4%  __CFRunLoopRun
+   913.0 ms  86.4%  UIApplicationMain
+   913.0 ms  86.4%  main
+   911.0 ms  86.2%  start_sim
+   910.0 ms  86.1%  start
+   791.0 ms  74.8%  <deduplicated_symbol>
+   636.0 ms  60.2%  CA::Layer::perform_update_(CA::Layer*, CALayer*, unsigned int, CA::LayerUpdateReason, CA::Transaction*)
+   636.0 ms  60.2%  0x1c52ee960
+   636.0 ms  60.2%  0x1c52eee10
+   635.0 ms  60.1%  -[CALayer layoutSublayers]
+   635.0 ms  60.1%  -[UIView(CALayerDelegate) layoutSublayersOfLayer:]
+   633.0 ms  59.9%  CA::Layer::update_if_needed_(CA::Transaction*, CA::LayerUpdateReason)
+   628.0 ms  59.4%  +[UIView(Animation) performWithoutAnimation:]
+   600.0 ms  56.8%  -[UIView(Hierarchy) layoutBelowIfNeeded]
+   574.0 ms  54.3%  swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::
+   569.0 ms  53.8%  __81-[_UINavigationParallaxTransition _animateOrCreatePropertyAnimatorForTransition:]_block_invoke
+   569.0 ms  53.8%  __81-[_UINavigationParallaxTransition _animateOrCreatePropertyAnimatorForTransition:]_block_invoke_2
+   569.0 ms  53.8%  +[UIView _performBlockDelayingTriggeringResponderEvents:forScene:]
+   567.0 ms  53.6%  -[_UINavigationParallaxTransition _animateOrCreatePropertyAnimatorForTransition:]
+   567.0 ms  53.6%  -[_UINavigationParallaxTransition interruptibleAnimatorForTransition:]
+   565.0 ms  53.5%  -[UIPercentDrivenInteractiveTransition _startInterruptibleTransition:]
+   564.0 ms  53.4%  -[UIPercentDrivenInteractiveTransition startInteractiveTransition:]
+   561.0 ms  53.1%  ___UIViewControllerTransitioningRunCustomTransitionWithRequest_block_invoke_3
+   558.0 ms  52.8%  _UIUpdateSequenceRunNext
+   558.0 ms  52.8%  +[UIKeyboardSceneDelegate _pinInputViewsForKeyboardSceneDelegate:onBehalfOfResponder:duringBlock:]
+   557.0 ms  52.7%  ___UIViewControllerTransitioningRunCustomTransitionWithRequest_block_invoke_2
+   556.0 ms  52.6%  +[UIView(Animation) _setAlongsideAnimations:toRunByEndOfBlock:animated:]
+   555.0 ms  52.5%  schedulerStepScheduledMainSectionContinue
+   555.0 ms  52.5%  -[_UIViewControllerTransitionConductor startDeferredTransitionIfNeeded]
+   555.0 ms  52.5%  -[_UIViewControllerTransitionConductor _startCustomTransition:]
+   554.0 ms  52.4%  UC::DriverCore::continueProcessing()
+   554.0 ms  52.4%  _UIViewControllerTransitioningRunCustomTransitionWithRequest
+   553.0 ms  52.3%  CA::Context::commit_transaction(CA::Transaction*, double, double*)
+   553.0 ms  52.3%  CA::Transaction::commit()
+   553.0 ms  52.3%  __CFRUNLOOP_IS_CALLING_OUT_TO_A_SOURCE0_PERFORM_FUNCTION__
+   553.0 ms  52.3%  __CFRunLoopDoSource0
+   552.0 ms  52.2%  CA::Transaction::flush()
+-- suspects (inclusive ms, top matching frame)
+   widget reload: none
+   App Group / file write: 8 ms of samples; top frame __open (5 ms)
+   Handoff / Spotlight: none
+   SwiftUI list layout: 473 ms of samples; top frame LayoutEngineBox.sizeThatFits(_:) (366 ms)
+   image decode: none
+   Hermes / JS: 1 ms of samples; top frame facebook::react::EventEmitter::dispatchEvent(std::__1::basic_string<char, std::__1::char_traits<char (1 ms)
+   Yoga / Fabric: 357 ms of samples; top frame -[RCTMountingManager initiateTransaction:] (356 ms)
+
+=== com.facebook.react.runtime.JavaScript (0xccc5476) (Vespin, pid: 37850) whole trace (447-14563 ms): 1405 ms sampled
+-- self
+   364.0 ms  25.9%  hermes::vm::CallResult<hermes::vm::HermesValue, (hermes::vm::detail::CallResultSpecialize)2> hermes::vm::Interpreter::interpretFunction<fals
+   315.0 ms  22.4%  swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::
+    67.0 ms   4.8%  hermes::vm::JSObject::getComputedPrimitiveDescriptor(hermes::vm::Handle<hermes::vm::JSObject>, hermes::vm::Runtime&, hermes::vm::Handle<herm
+    57.0 ms   4.1%  hermes::vm::JSObject::getComputedWithReceiver_RJS(hermes::vm::Handle<hermes::vm::JSObject>, hermes::vm::Runtime&, hermes::vm::Handle<hermes:
+    42.0 ms   3.0%  hermes::vm::strictEqualityTest(hermes::vm::HermesValue, hermes::vm::HermesValue)
+    27.0 ms   1.9%  _platform_memmove
+    22.0 ms   1.6%  hermes::vm::IdentifierTable::getSymbolHandleFromPrimitive(hermes::vm::Runtime&, hermes::vm::PseudoHandle<hermes::vm::StringPrimitive>)
+    21.0 ms   1.5%  hermes::vm::doGetByIdSlowPath_RJS(hermes::vm::Runtime&, hermes::vm::PinnedHermesValue*, hermes::inst::Inst const*, hermes::vm::CodeBlock*, u
+    20.0 ms   1.4%  hermes::vm::Interpreter::caseIteratorNext(hermes::vm::Runtime&, hermes::vm::PinnedHermesValue*, hermes::inst::Inst const*)
+    13.0 ms   0.9%  OUTLINED_FUNCTION_10
+    13.0 ms   0.9%  hermes::vm::JSObject::getNamedDescriptorUnsafe(hermes::vm::Handle<hermes::vm::JSObject>, hermes::vm::Runtime&, hermes::vm::SymbolID, hermes:
+    13.0 ms   0.9%  unsigned int hermes::vm::detail::IdentifierHashTable::lookupString<char16_t>(llvh::ArrayRef<char16_t>, unsigned int, bool) const
+    11.0 ms   0.8%  hermes::vm::StringView::castToCharPtr() const
+    11.0 ms   0.8%  hermes::vm::toString_RJS(hermes::vm::Runtime&, hermes::vm::Handle<hermes::vm::HermesValue>)
+     9.0 ms   0.6%  hermes::vm::toBoolean(hermes::vm::HermesValue)
+     9.0 ms   0.6%  hermes::vm::RuntimeModule::createSymbolFromStringIDMayAllocate(unsigned int, hermes::StringTableEntry const&, hermes::OptValue<unsigned int>
+     8.0 ms   0.6%  void hermes::vm::SlotVisitor::visit<hermes::vm::HadesGC::EvacAcceptor<false>>(hermes::vm::HadesGC::EvacAcceptor<false>&, hermes::vm::GCCell*
+     8.0 ms   0.6%  OUTLINED_FUNCTION_18
+     7.0 ms   0.5%  OUTLINED_FUNCTION_72
+     7.0 ms   0.5%  hermes::vm::Interpreter::createObjectFromBuffer(hermes::vm::Runtime&, hermes::vm::CodeBlock*, hermes::vm::Handle<hermes::vm::JSObject>, unsi
+     6.0 ms   0.4%  std::__1::pair<hermes::vm::StringView::const_iterator, hermes::vm::StringView::const_iterator> std::__1::__search_random_access_impl[abi:nn1
+     6.0 ms   0.4%  hermes::vm::CompressedPointer hermes::vm::HadesGC::EvacAcceptor<false>::forwardCell<hermes::vm::CompressedPointer>(hermes::vm::GCCell*)
+     6.0 ms   0.4%  hermes::vm::JSObject::getNamedWithReceiver_RJS(hermes::vm::Handle<hermes::vm::JSObject>, hermes::vm::Runtime&, hermes::vm::SymbolID, hermes:
+     6.0 ms   0.4%  bool llvh::DenseMapBase<llvh::SmallDenseMap<hermes::vm::detail::Transition, hermes::vm::WeakRef<hermes::vm::HiddenClass>, 8u, llvh::DenseMap
+     5.0 ms   0.4%  hermes::vm::NativeFunction::_nativeCall(hermes::vm::NativeFunction*, hermes::vm::Runtime&)
+     5.0 ms   0.4%  hermes::vm::RuntimeModule::getSymbolIDFromStringIDMayAllocate(unsigned int)
+     5.0 ms   0.4%  hermes::vm::JSArray::createNoAllocPropStorage(hermes::vm::Runtime&, hermes::vm::Handle<hermes::vm::JSObject>, hermes::vm::Handle<hermes::vm:
+     5.0 ms   0.4%  OUTLINED_FUNCTION_9
+     5.0 ms   0.4%  hermes::vm::IdentifierTable::getStringPrim(hermes::vm::Runtime&, hermes::vm::SymbolID)
+     5.0 ms   0.4%  _platform_strlen
+-- inclusive
+  1301.0 ms  92.6%  _CFRunLoopRunSpecificWithOptions
+  1301.0 ms  92.6%  +[RCTJSThreadManager runRunLoop]
+  1301.0 ms  92.6%  thread_start
+  1301.0 ms  92.6%  __CFRunLoopRun
+  1301.0 ms  92.6%  _pthread_start
+  1301.0 ms  92.6%  __NSThread__start__
+  1296.0 ms  92.2%  __CFRunLoopDoBlocks
+  1295.0 ms  92.2%  invocation function for block in facebook::react::RCTMessageThread::runAsync(std::__1::function<void ()>)
+  1295.0 ms  92.2%  facebook::react::RuntimeScheduler_Modern::runEventLoopTick(facebook::jsi::Runtime&, facebook::react::Task&)
+  1295.0 ms  92.2%  _ZNSt3__110__function6__funcIZZN8facebook5react13ReactInstanceC1ENS_10unique_ptrINS3_9JSRuntimeENS_14default_deleteIS6_EEEENS_10shared_ptrIN
+  1295.0 ms  92.2%  __CFRUNLOOP_IS_CALLING_OUT_TO_A_BLOCK__
+  1295.0 ms  92.2%  facebook::react::tryAndReturnError(std::__1::function<void ()> const&)
+  1295.0 ms  92.2%  facebook::react::RuntimeScheduler_Modern::runEventLoop(facebook::jsi::Runtime&)
+  1295.0 ms  92.2%  std::__1::__function::__func<facebook::react::RCTMessageThread::runOnQueue(std::__1::function<void ()>&&)::$_0, std::__1::allocator<facebook
+  1232.0 ms  87.7%  hermes::vm::Runtime::interpretFunctionImpl(hermes::vm::CodeBlock*)
+  1231.0 ms  87.6%  hermes::vm::CallResult<hermes::vm::HermesValue, (hermes::vm::detail::CallResultSpecialize)2> hermes::vm::Interpreter::interpretFunction<fals
+  1223.0 ms  87.0%  facebook::react::Task::execute(facebook::jsi::Runtime&, bool)
+  1223.0 ms  87.0%  facebook::react::RuntimeScheduler_Modern::executeTask(facebook::jsi::Runtime&, facebook::react::Task&, bool)
+  1146.0 ms  81.6%  hermes::vm::JSFunction::_callImpl(hermes::vm::Handle<hermes::vm::Callable>, hermes::vm::Runtime&)
+   942.0 ms  67.0%  hermes::vm::NativeFunction::_nativeCall(hermes::vm::NativeFunction*, hermes::vm::Runtime&)
+   941.0 ms  67.0%  hermes::vm::Interpreter::handleCallSlowPath(hermes::vm::Runtime&, hermes::vm::PinnedHermesValue*)
+   888.0 ms  63.2%  facebook::hermes::(anonymous namespace)::HermesRuntimeImpl::call(facebook::jsi::Function const&, facebook::jsi::Value const&, facebook::jsi:
+   883.0 ms  62.8%  hermes::vm::BoundFunction::_boundCall(hermes::vm::BoundFunction*, hermes::vm::Runtime&)
+   648.0 ms  46.1%  hermes::vm::Callable::executeCall3(hermes::vm::Handle<hermes::vm::Callable>, hermes::vm::Runtime&, hermes::vm::Handle<hermes::vm::HermesValu
+   639.0 ms  45.5%  hermes::vm::arrayPrototypeMap(void*, hermes::vm::Runtime&)
+   336.0 ms  23.9%  hermes::vm::Interpreter::caseGetByVal(hermes::vm::Runtime&, hermes::vm::PinnedHermesValue*, hermes::inst::Inst const*)
+   330.0 ms  23.5%  hermes::vm::JSObject::getComputedWithReceiver_RJS(hermes::vm::Handle<hermes::vm::JSObject>, hermes::vm::Runtime&, hermes::vm::Handle<hermes:
+   319.0 ms  22.7%  swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::
+   310.0 ms  22.1%  specialized implicit closure #1 in static JavaScriptActor.assumeIsolated<A>(_:)
+   274.0 ms  19.5%  facebook::hermes::(anonymous namespace)::HermesRuntimeImpl::evaluateJavaScriptWithSourceMap(std::__1::shared_ptr<facebook::jsi::Buffer const
+   274.0 ms  19.5%  facebook::hermes::(anonymous namespace)::HermesRuntimeImpl::evaluateJavaScript(std::__1::shared_ptr<facebook::jsi::Buffer const> const&, std
+   272.0 ms  19.4%  hermes::vm::Runtime::runBytecode(std::__1::shared_ptr<hermes::hbc::BCProviderBase>&&, hermes::vm::RuntimeModuleFlags, llvh::StringRef, herme
+   272.0 ms  19.4%  std::__1::__function::__func<facebook::react::ReactInstance::loadScript(std::__1::unique_ptr<facebook::react::JSBigString const, std::__1::d
+   272.0 ms  19.4%  hermes::vm::Callable::executeCall0(hermes::vm::Handle<hermes::vm::Callable>, hermes::vm::Runtime&, hermes::vm::Handle<hermes::vm::HermesValu
+   235.0 ms  16.7%  swift_conformsToProtocolWithExecutionContext
+   235.0 ms  16.7%  swift::_conformsToProtocol(swift::OpaqueValue const*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptorRef<swi
+   229.0 ms  16.3%  tryCast(swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> co
+   229.0 ms  16.3%  swift_dynamicCast
+   228.0 ms  16.2%  hermes::vm::FinalizableNativeFunction::_callImpl(hermes::vm::Handle<hermes::vm::Callable>, hermes::vm::Runtime&)
+   227.0 ms  16.2%  facebook::hermes::(anonymous namespace)::HermesRuntimeImpl::HFContext::func(void*, hermes::vm::Runtime&)
+-- suspects (inclusive ms, top matching frame)
+   widget reload: none
+   App Group / file write: 5 ms of samples; top frame specialized FileSystemModule.writeToFile(_:content:options:) (2 ms)
+   Handoff / Spotlight: none
+   SwiftUI list layout: 1 ms of samples; top frame DataListForEachProps.init() (1 ms)
+   image decode: none
+   Hermes / JS: 1297 ms of samples; top frame facebook::react::RuntimeScheduler_Modern::runEventLoopTick(facebook::jsi::Runtime&, facebook::react: (1295 ms)
+   Yoga / Fabric: 17 ms of samples; top frame facebook::react::RootShadowNode::layoutIfNeeded(std::__1::vector<facebook::react::LayoutableShadowNo (7 ms)
+
+=== com.facebook.react.runtime.JavaScript (0xccc5476) (Vespin, pid: 37850) window 2436-4272 ms: 8 ms sampled
+-- self
+     3.0 ms  37.5%  swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::
+     1.0 ms  12.5%  hermes::vm::JSArray::createNoAllocPropStorage(hermes::vm::Runtime&, hermes::vm::Handle<hermes::vm::JSObject>, hermes::vm::Handle<hermes::vm:
+     1.0 ms  12.5%  DYLD-STUB$$pthread_getspecific
+     1.0 ms  12.5%  CAFrameRateRangeToFrameIntervalRange(CAFrameRateRange, double, unsigned char, bool, bool, bool)
+     1.0 ms  12.5%  hermes::vm::CallResult<hermes::vm::HermesValue, (hermes::vm::detail::CallResultSpecialize)2> hermes::vm::Interpreter::interpretFunction<fals
+     1.0 ms  12.5%  void hermes::vm::SlotVisitor::visit<hermes::vm::HadesGC::EvacAcceptor<false>>(hermes::vm::HadesGC::EvacAcceptor<false>&, hermes::vm::GCCell*
+-- inclusive
+     8.0 ms 100.0%  _CFRunLoopRunSpecificWithOptions
+     8.0 ms 100.0%  +[RCTJSThreadManager runRunLoop]
+     8.0 ms 100.0%  thread_start
+     8.0 ms 100.0%  __CFRunLoopRun
+     8.0 ms 100.0%  _pthread_start
+     8.0 ms 100.0%  __NSThread__start__
+     7.0 ms  87.5%  __CFRunLoopDoBlocks
+     6.0 ms  75.0%  invocation function for block in facebook::react::RCTMessageThread::runAsync(std::__1::function<void ()>)
+     6.0 ms  75.0%  facebook::react::RuntimeScheduler_Modern::runEventLoopTick(facebook::jsi::Runtime&, facebook::react::Task&)
+     6.0 ms  75.0%  _ZNSt3__110__function6__funcIZZN8facebook5react13ReactInstanceC1ENS_10unique_ptrINS3_9JSRuntimeENS_14default_deleteIS6_EEEENS_10shared_ptrIN
+     6.0 ms  75.0%  __CFRUNLOOP_IS_CALLING_OUT_TO_A_BLOCK__
+     6.0 ms  75.0%  facebook::react::tryAndReturnError(std::__1::function<void ()> const&)
+     6.0 ms  75.0%  facebook::react::Task::execute(facebook::jsi::Runtime&, bool)
+     6.0 ms  75.0%  facebook::react::RuntimeScheduler_Modern::runEventLoop(facebook::jsi::Runtime&)
+     6.0 ms  75.0%  std::__1::__function::__func<facebook::react::RCTMessageThread::runOnQueue(std::__1::function<void ()>&&)::$_0, std::__1::allocator<facebook
+     6.0 ms  75.0%  facebook::react::RuntimeScheduler_Modern::executeTask(facebook::jsi::Runtime&, facebook::react::Task&, bool)
+     5.0 ms  62.5%  hermes::vm::CallResult<hermes::vm::HermesValue, (hermes::vm::detail::CallResultSpecialize)2> hermes::vm::Interpreter::interpretFunction<fals
+     5.0 ms  62.5%  hermes::vm::Runtime::interpretFunctionImpl(hermes::vm::CodeBlock*)
+     5.0 ms  62.5%  hermes::vm::JSFunction::_callImpl(hermes::vm::Handle<hermes::vm::Callable>, hermes::vm::Runtime&)
+     5.0 ms  62.5%  facebook::hermes::(anonymous namespace)::HermesRuntimeImpl::call(facebook::jsi::Function const&, facebook::jsi::Value const&, facebook::jsi:
+     4.0 ms  50.0%  hermes::vm::FinalizableNativeFunction::_callImpl(hermes::vm::Handle<hermes::vm::Callable>, hermes::vm::Runtime&)
+     4.0 ms  50.0%  facebook::hermes::(anonymous namespace)::HermesRuntimeImpl::HFContext::func(void*, hermes::vm::Runtime&)
+     4.0 ms  50.0%  std::__1::__function::__func<facebook::react::TimerManager::callTimer(int)::$_0, std::__1::allocator<facebook::react::TimerManager::callTime
+     4.0 ms  50.0%  std::__1::function<facebook::jsi::Value (facebook::jsi::Runtime&, facebook::jsi::Value const&, facebook::jsi::Value const*, unsigned long)>:
+     4.0 ms  50.0%  hermes::vm::NativeFunction::_nativeCall(hermes::vm::NativeFunction*, hermes::vm::Runtime&)
+     3.0 ms  37.5%  closure #1 in closure #1 in call #1 (context:thisPtr:argumentsPtr:argumentsCount:resultPtr:) in createFunctionClosure(runtime:_:)
+     3.0 ms  37.5%  hermes::vm::Interpreter::handleCallSlowPath(hermes::vm::Runtime&, hermes::vm::PinnedHermesValue*)
+     3.0 ms  37.5%  DynamicArrayType.cast(jsValue:appContext:)
+     3.0 ms  37.5%  specialized implicit closure #1 in static JavaScriptActor.assumeIsolated<A>(_:)
+     3.0 ms  37.5%  protocol witness for AnyDynamicType.cast(jsValue:appContext:) in conformance DynamicArrayType
+     3.0 ms  37.5%  partial apply for specialized closure #1 in JavaScriptRuntime.adaptingSyncFunction(_:)
+     3.0 ms  37.5%  swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::
+     3.0 ms  37.5%  @objc call #1 (context:thisPtr:argumentsPtr:argumentsCount:resultPtr:) in createFunctionClosure(runtime:_:)
+     3.0 ms  37.5%  std::__1::__invoke_result_impl<void, expo::createHostFunction(facebook::jsi::IRuntime&, facebook::jsi::PropNameID const&, expo::HostFunction
+     3.0 ms  37.5%  DynamicConvertibleType.cast(jsValue:appContext:)
+     3.0 ms  37.5%  partial apply for closure #1 in DynamicArrayType.cast(jsValue:appContext:)
+     3.0 ms  37.5%  JavaScriptArray.map<A>(_:)
+     3.0 ms  37.5%  AsyncFunctionDefinition.call(_:this:arguments:callback:)
+     3.0 ms  37.5%  specialized closure #1 in JavaScriptRuntime.adaptingSyncFunction(_:)
+     3.0 ms  37.5%  partial apply for closure #1 in AsyncFunctionDefinition.build(appContext:)
+-- suspects (inclusive ms, top matching frame)
+   widget reload: none
+   App Group / file write: none
+   Handoff / Spotlight: none
+   SwiftUI list layout: none
+   image decode: none
+   Hermes / JS: 6 ms of samples; top frame facebook::react::RuntimeScheduler_Modern::runEventLoopTick(facebook::jsi::Runtime&, facebook::react: (6 ms)
+   Yoga / Fabric: 2 ms of samples; top frame std::__1::__function::__func<facebook::react::Scheduler::Scheduler(facebook::react::SchedulerToolbox (2 ms)
+
+=== Vespin (0xccc52a8) (Vespin, pid: 37850) whole trace (1636-14298 ms): 1322 ms sampled
+-- self
+  1045.0 ms  79.0%  swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::
+    55.0 ms   4.2%  _swift_class_getSuperclass
+    47.0 ms   3.6%  getContextDescriptor(swift::TargetMetadata<swift::InProcess> const*)
+    43.0 ms   3.3%  getSuperclassForMaybeIncompleteMetadata(swift::TargetMetadata<swift::InProcess> const*, std::__1::optional<swift::MetadataState>, bool)
+    28.0 ms   2.1%  swift::equalContexts(swift::TargetContextDescriptor<swift::InProcess> const*, swift::TargetContextDescriptor<swift::InProcess> const*)
+    20.0 ms   1.5%  swift::MetadataResponse performOnMetadataCache<swift::MetadataResponse, swift_checkMetadataState::CheckStateCallbacks>(swift::TargetMetadata
+    15.0 ms   1.1%  swift_getObjCClassMetadata
+    11.0 ms   0.8%  swift::TargetMetadata<swift::InProcess>::isCanonicalStaticallySpecializedGenericMetadata() const
+    10.0 ms   0.8%  getCache(swift::TargetTypeContextDescriptor<swift::InProcess> const&)
+     8.0 ms   0.6%  swift::MetadataCacheEntryBase<swift::GenericCacheEntry, void const*>::awaitSatisfyingState(swift::ConcurrencyControl&, swift::MetadataReques
+     7.0 ms   0.5%  swift::MetadataCacheKey::operator==(swift::MetadataCacheKey const&) const
+     5.0 ms   0.4%  std::__1::pair<swift::HashMapElementWrapper<swift::GenericCacheEntry>*, unsigned int> swift::ConcurrentReadableHashMap<swift::HashMapElement
+     4.0 ms   0.3%  swift::MetadataCacheEntryBase<(anonymous namespace)::SingletonMetadataCacheEntry, int>::awaitSatisfyingState(swift::ConcurrencyControl&, swi
+     3.0 ms   0.2%  <deduplicated_symbol>
+     2.0 ms   0.2%  AG::LayoutDescriptor::Builder::visit_case(AG::swift::metadata const*, AG::swift::field_record const&, unsigned int)
+     2.0 ms   0.2%  swift_checkMetadataState
+     1.0 ms   0.1%  type metadata accessor for ContinuationCompletion<JavaScriptRef<JavaScriptValue>>
+     1.0 ms   0.1%  swift::TypeLookupError::TypeLookupError<swift::TypeLookupError swift::TypeLookupErrorImpl<int, char const*, char const*>(char const*, int, c
+     1.0 ms   0.1%  objc::lookup8(unsigned char const*, unsigned long, unsigned long long)
+     1.0 ms   0.1%  AG::LayoutDescriptor::Builder::should_visit_fields(AG::swift::metadata const*, bool)
+     1.0 ms   0.1%  os_unfair_lock_lock_with_options
+     1.0 ms   0.1%  swift::_checkGenericRequirements(__swift::__runtime::llvm::ArrayRef<swift::GenericParamDescriptor>, __swift::__runtime::llvm::ArrayRef<swift
+     1.0 ms   0.1%  swift::MetadataPackOrValue* __swift::__runtime::llvm::SmallVectorImpl<swift::MetadataPackOrValue>::insert<swift::MetadataPackOrValue const*,
+     1.0 ms   0.1%  swift::ABI::trailing_objects_internal::TrailingObjectsImpl<4, swift::TargetClassDescriptor<swift::InProcess>, swift::ABI::TrailingObjects<sw
+     1.0 ms   0.1%  _findExtendedTypeContextDescriptor(swift::TargetContextDescriptor<swift::InProcess> const*, swift::Demangle::__runtime::Demangler&, swift::D
+     1.0 ms   0.1%  _platform_memmove
+     1.0 ms   0.1%  swift_getTypeByMangledNode
+     1.0 ms   0.1%  std::__1::__function::__func<swift::ResolveAsSymbolicReference, swift::Demangle::__runtime::Node* (swift::Demangle::__runtime::SymbolicRefer
+     1.0 ms   0.1%  _platform_memcmp
+     1.0 ms   0.1%  _xzm_malloc_tc
+-- inclusive
+  1322.0 ms 100.0%  <deduplicated_symbol>
+  1318.0 ms  99.7%  _pthread_wqthread
+  1318.0 ms  99.7%  start_wqthread
+  1317.0 ms  99.6%  AG::(anonymous namespace)::TypeDescriptorCache::drain_queue(void*)
+  1317.0 ms  99.6%  AG::LayoutDescriptor::make_layout(AG::swift::metadata const*, AGComparisonMode, AG::LayoutDescriptor::HeapMode)
+  1317.0 ms  99.6%  _dispatch_worker_thread2
+  1317.0 ms  99.6%  _dispatch_root_queue_drain
+  1317.0 ms  99.6%  _dispatch_client_callout
+  1301.0 ms  98.4%  AG::LayoutDescriptor::Builder::should_visit_fields(AG::swift::metadata const*, bool)
+  1291.0 ms  97.7%  swift_conformsToProtocol
+  1259.0 ms  95.2%  swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::
+   940.0 ms  71.1%  AG::swift::metadata::visit(AG::swift::metadata_visitor&) const
+   939.0 ms  71.0%  AG::swift::metadata_visitor::visit_field(AG::swift::metadata const*, AG::swift::field_record const&, unsigned long, unsigned long)
+   924.0 ms  69.9%  AG::LayoutDescriptor::Builder::visit_element(AG::swift::metadata const*, AG::swift::metadata::ref_kind, unsigned long, unsigned long)
+   921.0 ms  69.7%  AG::(anonymous namespace)::TypeDescriptorCache::fetch(AG::swift::metadata const*, unsigned int, AG::LayoutDescriptor::HeapMode, int)
+   269.0 ms  20.3%  swift::_checkGenericRequirements(__swift::__runtime::llvm::ArrayRef<swift::GenericParamDescriptor>, __swift::__runtime::llvm::ArrayRef<swift
+   265.0 ms  20.0%  swift_conformsToProtocolWithExecutionContext
+   265.0 ms  20.0%  swift::_conformsToProtocol(swift::OpaqueValue const*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptorRef<swi
+   257.0 ms  19.4%  swift::TargetProtocolConformanceDescriptor<swift::InProcess>::getWitnessTable(swift::TargetMetadata<swift::InProcess> const*, swift::Conform
+   253.0 ms  19.1%  AG::swift::metadata::equatable() const
+   157.0 ms  11.9%  getSuperclassForMaybeIncompleteMetadata(swift::TargetMetadata<swift::InProcess> const*, std::__1::optional<swift::MetadataState>, bool)
+   149.0 ms  11.3%  AG::LayoutDescriptor::Builder::visit_case(AG::swift::metadata const*, AG::swift::field_record const&, unsigned int)
+    66.0 ms   5.0%  swift_checkMetadataState
+    55.0 ms   4.2%  _swift_class_getSuperclass
+    47.0 ms   3.6%  getContextDescriptor(swift::TargetMetadata<swift::InProcess> const*)
+    43.0 ms   3.3%  swift::MetadataResponse performOnMetadataCache<swift::MetadataResponse, swift_checkMetadataState::CheckStateCallbacks>(swift::TargetMetadata
+    28.0 ms   2.1%  swift::equalContexts(swift::TargetContextDescriptor<swift::InProcess> const*, swift::TargetContextDescriptor<swift::InProcess> const*)
+    26.0 ms   2.0%  swift_getTypeByMangledName
+    26.0 ms   2.0%  swift_getTypeByMangledNameImpl(swift::MetadataRequest, __swift::__runtime::llvm::StringRef, void const* const*, std::__1::function<void cons
+    25.0 ms   1.9%  swift_getTypeByMangledNameInContextImpl(char const*, unsigned long, swift::TargetContextDescriptor<swift::InProcess> const*, void const* con
+    24.0 ms   1.8%  swift_getTypeByMangledNodeImpl(swift::MetadataRequest, swift::Demangle::__runtime::Demangler&, swift::Demangle::__runtime::Node*, void const
+    24.0 ms   1.8%  swift_getTypeByMangledNode
+    22.0 ms   1.7%  swift::Demangle::__runtime::TypeDecoder<(anonymous namespace)::DecodedMetadataBuilder>::decodeMangledType(swift::Demangle::__runtime::Node*,
+    22.0 ms   1.7%  AG::swift::metadata::mangled_type_name_ref(char const*, bool, AG::swift::metadata::ref_kind*) const
+    21.0 ms   1.6%  (anonymous namespace)::DecodedMetadataBuilder::createBoundGenericType(swift::TargetContextDescriptor<swift::InProcess> const*, __swift::__ru
+    20.0 ms   1.5%  _gatherGenericParameters(swift::TargetContextDescriptor<swift::InProcess> const*, __swift::__runtime::llvm::ArrayRef<swift::MetadataPackOrVa
+    15.0 ms   1.1%  swift_getObjCClassMetadata
+    11.0 ms   0.8%  swift::TargetMetadata<swift::InProcess>::isCanonicalStaticallySpecializedGenericMetadata() const
+    10.0 ms   0.8%  getCache(swift::TargetTypeContextDescriptor<swift::InProcess> const&)
+     8.0 ms   0.6%  swift::MetadataCacheEntryBase<swift::GenericCacheEntry, void const*>::awaitSatisfyingState(swift::ConcurrencyControl&, swift::MetadataReques
+-- suspects (inclusive ms, top matching frame)
+   widget reload: none
+   App Group / file write: none
+   Handoff / Spotlight: none
+   SwiftUI list layout: none
+   image decode: none
+   Hermes / JS: none
+   Yoga / Fabric: none
+
+=== Vespin (0xccc52a8) (Vespin, pid: 37850) window 2436-4272 ms: 139 ms sampled
+-- self
+   101.0 ms  72.7%  swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::
+    13.0 ms   9.4%  getContextDescriptor(swift::TargetMetadata<swift::InProcess> const*)
+     6.0 ms   4.3%  _swift_class_getSuperclass
+     5.0 ms   3.6%  getSuperclassForMaybeIncompleteMetadata(swift::TargetMetadata<swift::InProcess> const*, std::__1::optional<swift::MetadataState>, bool)
+     3.0 ms   2.2%  swift::equalContexts(swift::TargetContextDescriptor<swift::InProcess> const*, swift::TargetContextDescriptor<swift::InProcess> const*)
+     2.0 ms   1.4%  swift::MetadataCacheEntryBase<(anonymous namespace)::SingletonMetadataCacheEntry, int>::awaitSatisfyingState(swift::ConcurrencyControl&, swi
+     2.0 ms   1.4%  swift::MetadataResponse performOnMetadataCache<swift::MetadataResponse, swift_checkMetadataState::CheckStateCallbacks>(swift::TargetMetadata
+     1.0 ms   0.7%  swift::MetadataCacheEntryBase<swift::GenericCacheEntry, void const*>::awaitSatisfyingState(swift::ConcurrencyControl&, swift::MetadataReques
+     1.0 ms   0.7%  swift_getObjCClassMetadata
+     1.0 ms   0.7%  swift::TypeLookupError::TypeLookupError<swift::TypeLookupError swift::TypeLookupErrorImpl<int, char const*, char const*>(char const*, int, c
+     1.0 ms   0.7%  <deduplicated_symbol>
+     1.0 ms   0.7%  swift::TargetMetadata<swift::InProcess>::isCanonicalStaticallySpecializedGenericMetadata() const
+     1.0 ms   0.7%  objc::lookup8(unsigned char const*, unsigned long, unsigned long long)
+     1.0 ms   0.7%  AG::LayoutDescriptor::Builder::should_visit_fields(AG::swift::metadata const*, bool)
+-- inclusive
+   139.0 ms 100.0%  _pthread_wqthread
+   139.0 ms 100.0%  _dispatch_client_callout
+   139.0 ms 100.0%  AG::(anonymous namespace)::TypeDescriptorCache::drain_queue(void*)
+   139.0 ms 100.0%  AG::LayoutDescriptor::make_layout(AG::swift::metadata const*, AGComparisonMode, AG::LayoutDescriptor::HeapMode)
+   139.0 ms 100.0%  <deduplicated_symbol>
+   139.0 ms 100.0%  _dispatch_worker_thread2
+   139.0 ms 100.0%  _dispatch_root_queue_drain
+   139.0 ms 100.0%  start_wqthread
+   137.0 ms  98.6%  AG::LayoutDescriptor::Builder::should_visit_fields(AG::swift::metadata const*, bool)
+   133.0 ms  95.7%  swift_conformsToProtocol
+   131.0 ms  94.2%  swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::
+   106.0 ms  76.3%  AG::swift::metadata_visitor::visit_field(AG::swift::metadata const*, AG::swift::field_record const&, unsigned long, unsigned long)
+   106.0 ms  76.3%  AG::swift::metadata::visit(AG::swift::metadata_visitor&) const
+   104.0 ms  74.8%  AG::(anonymous namespace)::TypeDescriptorCache::fetch(AG::swift::metadata const*, unsigned int, AG::LayoutDescriptor::HeapMode, int)
+   104.0 ms  74.8%  AG::LayoutDescriptor::Builder::visit_element(AG::swift::metadata const*, AG::swift::metadata::ref_kind, unsigned long, unsigned long)
+    45.0 ms  32.4%  AG::LayoutDescriptor::Builder::visit_case(AG::swift::metadata const*, AG::swift::field_record const&, unsigned int)
+    27.0 ms  19.4%  AG::swift::metadata::equatable() const
+    24.0 ms  17.3%  swift::_conformsToProtocol(swift::OpaqueValue const*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptorRef<swi
+    24.0 ms  17.3%  swift::_checkGenericRequirements(__swift::__runtime::llvm::ArrayRef<swift::GenericParamDescriptor>, __swift::__runtime::llvm::ArrayRef<swift
+    24.0 ms  17.3%  swift_conformsToProtocolWithExecutionContext
+    20.0 ms  14.4%  swift::TargetProtocolConformanceDescriptor<swift::InProcess>::getWitnessTable(swift::TargetMetadata<swift::InProcess> const*, swift::Conform
+    15.0 ms  10.8%  getSuperclassForMaybeIncompleteMetadata(swift::TargetMetadata<swift::InProcess> const*, std::__1::optional<swift::MetadataState>, bool)
+    13.0 ms   9.4%  getContextDescriptor(swift::TargetMetadata<swift::InProcess> const*)
+     6.0 ms   4.3%  _swift_class_getSuperclass
+     5.0 ms   3.6%  AG::swift::metadata::mangled_type_name_ref(char const*, bool, AG::swift::metadata::ref_kind*) const
+     5.0 ms   3.6%  swift_getTypeByMangledNodeImpl(swift::MetadataRequest, swift::Demangle::__runtime::Demangler&, swift::Demangle::__runtime::Node*, void const
+     5.0 ms   3.6%  _gatherGenericParameters(swift::TargetContextDescriptor<swift::InProcess> const*, __swift::__runtime::llvm::ArrayRef<swift::MetadataPackOrVa
+     5.0 ms   3.6%  swift::Demangle::__runtime::TypeDecoder<(anonymous namespace)::DecodedMetadataBuilder>::decodeMangledType(swift::Demangle::__runtime::Node*,
+     5.0 ms   3.6%  swift_getTypeByMangledName
+     5.0 ms   3.6%  swift_getTypeByMangledNode
+     5.0 ms   3.6%  swift_getTypeByMangledNameInContextImpl(char const*, unsigned long, swift::TargetContextDescriptor<swift::InProcess> const*, void const* con
+     5.0 ms   3.6%  (anonymous namespace)::DecodedMetadataBuilder::createBoundGenericType(swift::TargetContextDescriptor<swift::InProcess> const*, __swift::__ru
+     5.0 ms   3.6%  swift_getTypeByMangledNameImpl(swift::MetadataRequest, __swift::__runtime::llvm::StringRef, void const* const*, std::__1::function<void cons
+     4.0 ms   2.9%  swift_checkMetadataState
+     3.0 ms   2.2%  swift::MetadataResponse performOnMetadataCache<swift::MetadataResponse, swift_checkMetadataState::CheckStateCallbacks>(swift::TargetMetadata
+     3.0 ms   2.2%  swift::equalContexts(swift::TargetContextDescriptor<swift::InProcess> const*, swift::TargetContextDescriptor<swift::InProcess> const*)
+     2.0 ms   1.4%  swift::MetadataCacheEntryBase<(anonymous namespace)::SingletonMetadataCacheEntry, int>::awaitSatisfyingState(swift::ConcurrencyControl&, swi
+     2.0 ms   1.4%  dyld4::APIs::_dyld_find_protocol_conformance(void const*, void const*, void const*) const
+     1.0 ms   0.7%  swift::MetadataCacheEntryBase<swift::GenericCacheEntry, void const*>::awaitSatisfyingState(swift::ConcurrencyControl&, swift::MetadataReques
+     1.0 ms   0.7%  swift_getObjCClassMetadata
+-- suspects (inclusive ms, top matching frame)
+   widget reload: none
+   App Group / file write: none
+   Handoff / Spotlight: none
+   SwiftUI list layout: none
+   image decode: none
+   Hermes / JS: none
+   Yoga / Fabric: none
+
+=== hades (0xccc5478) (Vespin, pid: 37850) whole trace (483-2204 ms): 49 ms sampled
+-- self
+    17.0 ms  34.7%  hermes::vm::HadesGC::incrementalMark(unsigned long)
+    10.0 ms  20.4%  hermes::vm::HadesGC::MarkAcceptor::acceptHeap(hermes::vm::GCCell*, void const*)
+     9.0 ms  18.4%  hermes::vm::HadesGC::MarkAcceptor::accept(hermes::vm::GCHermesValueBaseImpl<hermes::vm::SmallHermesValueAdaptor>&)
+     6.0 ms  12.2%  hermes::vm::HadesGC::OldGen::sweepNext(bool)
+     4.0 ms   8.2%  std::__1::stack<hermes::vm::GCCell*, std::__1::vector<hermes::vm::GCCell*, std::__1::allocator<hermes::vm::GCCell*>>>::push[abi:nn190102](he
+     2.0 ms   4.1%  __psynch_cvwait
+     1.0 ms   2.0%  __psynch_mutexdrop
+-- inclusive
+    49.0 ms 100.0%  void* std::__1::__thread_proxy[abi:nn190102]<std::__1::tuple<std::__1::unique_ptr<std::__1::__thread_struct, std::__1::default_delete<std::_
+    49.0 ms 100.0%  _pthread_start
+    49.0 ms 100.0%  std::__1::__function::__func<hermes::vm::HadesGC::collectOGInBackground()::$_0, std::__1::allocator<hermes::vm::HadesGC::collectOGInBackgrou
+    49.0 ms 100.0%  hermes::vm::HadesGC::Executor::worker()
+    49.0 ms 100.0%  thread_start
+    46.0 ms  93.9%  hermes::vm::HadesGC::incrementalCollect(bool)
+    40.0 ms  81.6%  hermes::vm::HadesGC::incrementalMark(unsigned long)
+    13.0 ms  26.5%  hermes::vm::HadesGC::MarkAcceptor::acceptHeap(hermes::vm::GCCell*, void const*)
+     9.0 ms  18.4%  hermes::vm::HadesGC::MarkAcceptor::accept(hermes::vm::GCHermesValueBaseImpl<hermes::vm::SmallHermesValueAdaptor>&)
+     6.0 ms  12.2%  hermes::vm::HadesGC::OldGen::sweepNext(bool)
+     4.0 ms   8.2%  std::__1::stack<hermes::vm::GCCell*, std::__1::vector<hermes::vm::GCCell*, std::__1::allocator<hermes::vm::GCCell*>>>::push[abi:nn190102](he
+     2.0 ms   4.1%  _pthread_cond_wait
+     2.0 ms   4.1%  __psynch_cvwait
+     2.0 ms   4.1%  std::__1::condition_variable::wait(std::__1::unique_lock<std::__1::mutex>&)
+     1.0 ms   2.0%  _pthread_mutex_firstfit_wake
+     1.0 ms   2.0%  std::__1::recursive_mutex::unlock()
+     1.0 ms   2.0%  __psynch_mutexdrop
+     1.0 ms   2.0%  _pthread_mutex_firstfit_unlock_slow
+-- suspects (inclusive ms, top matching frame)
+   widget reload: none
+   App Group / file write: none
+   Handoff / Spotlight: none
+   SwiftUI list layout: none
+   image decode: none
+   Hermes / JS: 49 ms of samples; top frame void* std::__1::__thread_proxy[abi:nn190102]<std::__1::tuple<std::__1::unique_ptr<std::__1::__thread (49 ms)
+   Yoga / Fabric: none
+
+=== hades (0xccc5478) (Vespin, pid: 37850) window 2436-4272 ms: 0 ms sampled

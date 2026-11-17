@@ -1,0 +1,4 @@
+e8466f2101-run1: export 0 81 MB; cut yes; threads 5; main 1057; js 8
+e8466f2101-run1: tpthreads window 2436..4272 ms,      492 lines
+e8466f2101-run2: export 0 97 MB; cut yes; threads 3; main 1220; js 21
+e8466f2101-run2: tpthreads window 2003..3579 ms,      551 lines

@@ -1,0 +1,24 @@
+window: splash-hide..first-row-appear 2.003s..3.579s after the trace's start 2026-11-17T09:20:53.809-05:00; 1 sample = 1 ms
+samples per thread of pid 8473: Main Thread: 1220; Vespin: 61; com.facebook.react.runtime.JavaScript: 21
+
+== Main Thread: 1220 samples
+-- self top 30
+-- inclusive top 30
+
+== com.facebook.react.runtime.JavaScript: 21 samples
+-- self top 30
+-- inclusive top 30
+
+== Vespin: 61 samples
+-- self top 30
+-- inclusive top 30
+
+== suspects (samples whose stack names one, per thread; absent = 0)
+WidgetCenter reloadTimelines: 0
+App Group file I/O: 0
+NSUserActivity: 0
+CSSearchableIndex: 0
+SwiftUI List / UICollectionView first layout: 0
+self-sizing: 0
+DataListForEach: 0
+ImageIO decoding: 0
