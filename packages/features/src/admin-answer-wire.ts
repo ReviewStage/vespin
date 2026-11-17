@@ -313,6 +313,8 @@ export interface AdminUserDetail {
   };
   /** What a maintainer supports the account from: `admin-account.ts`. */
   support: AdminAccountSupport;
+  /** Its sandbox usage this month, from the usage ledger. */
+  sandboxUsage: AdminAccountSandboxUsage;
 }
 
 /* ----- The Users roster (`@repo/service/admin/admin-users`) ----- */
@@ -622,6 +624,62 @@ export interface AdminWorkspaceDetail {
   workspace: AdminWorkspaceRow;
   /** Every member, owners first, then the earliest to join. */
   members: AdminWorkspaceMember[];
+  /** Its sandbox usage from the usage ledger, and what it would be billed. */
+  billing: AdminWorkspaceBilling;
+}
+
+/* ----- Sandbox usage, from the usage ledger (`@repo/service/admin/admin-billing`) ----- */
+
+/**
+ * One UTC month of a workspace's sandbox usage, in dollars: what it used,
+ * the allowance every workspace is given free each month, and what it would
+ * be billed past that, never below zero.
+ */
+export interface AdminBillingFigures {
+  usageUsd: number;
+  includedUsd: number;
+  billableUsd: number;
+}
+
+export interface AdminWorkspaceBillingMonth extends AdminBillingFigures {
+  /** The UTC month, as `YYYY-MM`. */
+  month: string;
+}
+
+/** What one member's sandboxes used of a workspace in a month. */
+export interface AdminBillingMemberUsage {
+  /** The member the usage was for; null for usage that was no member's, as a drive's fill is. */
+  userId: string | null;
+  /** Their account; null for no member, or where the account is gone. */
+  account: AdminWorkspaceOwner | null;
+  usageUsd: number;
+}
+
+export interface AdminWorkspaceBilling {
+  /** The current UTC month, as `YYYY-MM`. */
+  currentMonth: string;
+  /** Every month the ledger holds usage for, newest first, the current month always among them. */
+  months: AdminWorkspaceBillingMonth[];
+  /** Whether the start gate would refuse it a cloud agent now: past the allowance this month, with no billing set up. */
+  wouldRefuse: boolean;
+  /** The current month's usage by member, most first, the usage that was no member's as one row. */
+  members: AdminBillingMemberUsage[];
+}
+
+/** What one account's sandboxes used of one workspace in a month. */
+export interface AdminAccountWorkspaceUsage {
+  id: string;
+  /** The workspace's name as its members read it; a personal one goes by its owner's name. */
+  name: string;
+  personal: boolean;
+  usageUsd: number;
+}
+
+/** One account's sandbox usage in the current UTC month, by workspace, most first. */
+export interface AdminAccountSandboxUsage {
+  /** The UTC month, as `YYYY-MM`. */
+  month: string;
+  workspaces: AdminAccountWorkspaceUsage[];
 }
 
 /* ----- One account's support sections (`@repo/service/admin/admin-account`) ----- */

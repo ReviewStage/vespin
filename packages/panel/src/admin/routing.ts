@@ -5,6 +5,7 @@ import {
   ADMIN_METRICS_WINDOW,
   ADMIN_METRICS_WINDOW_DEFAULT,
   ADMIN_METRICS_WINDOW_PARAM,
+  ADMIN_MONTH_PARAM,
   ADMIN_PAGE_PATH,
   ADMIN_RELIABILITY_WINDOWS,
   ADMIN_USER_ID_PARAM,
@@ -13,6 +14,7 @@ import {
   ADMIN_WORKSPACE_ID_PARAM,
   ADMIN_WORKSPACES_KIND,
   ADMIN_WORKSPACES_KIND_PARAM,
+  type AdminBillingQuery,
   type AdminDayQuery,
   type AdminMetricsWindow,
   type AdminUserQuery,
@@ -57,6 +59,7 @@ export const SEARCH_DEBOUNCE_MS = 250;
 export const ADMIN_TAB = {
   DASHBOARD: "dashboard",
   COST: "cost",
+  BILLING: "billing",
   RELIABILITY: "reliability",
   AGENTS: "agents",
   TOOLS: "tools",
@@ -292,6 +295,11 @@ export function accountReadQuery(id: string, windowDays: AdminMetricsWindow): Ad
   };
 }
 
+/** The Billing read's query: the current month rides as no param. */
+export function billingReadQuery(month: string | undefined): AdminBillingQuery {
+  return month === undefined ? {} : { [ADMIN_MONTH_PARAM]: month };
+}
+
 /** One workspace's read query. */
 export function workspaceReadQuery(id: string): AdminWorkspaceQuery {
   return { [ADMIN_WORKSPACE_ID_PARAM]: id };
@@ -340,6 +348,8 @@ export function adminLinkFields(view: AdminView): AdminLinkFieldsResult {
       return { day: view.day };
     case ADMIN_TAB.COST:
       return { section: ADMIN_LINK_SECTION.COST };
+    case ADMIN_TAB.BILLING:
+      return { section: ADMIN_LINK_SECTION.BILLING };
     case ADMIN_TAB.RELIABILITY:
       return { section: ADMIN_LINK_SECTION.RELIABILITY };
     case ADMIN_TAB.AGENTS:

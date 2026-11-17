@@ -30,6 +30,7 @@ const UNANSWERED: AdminReads = {
   catalog: unanswered,
   metrics: unanswered,
   cost: unanswered,
+  billing: unanswered,
   reliability: unanswered,
   users: unanswered,
   user: unanswered,
