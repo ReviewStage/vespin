@@ -202,6 +202,18 @@ describe("markdownBlocks", () => {
     ]);
   });
 
+  // A description's Mermaid fence drew as its code on iOS where the panel draws its diagram, and a transcript still being written must not redraw one at each word.
+  it("draws a Mermaid fence as its diagram where the words are read for diagrams, and as code elsewhere", () => {
+    const words = "```mermaid\nflowchart LR\n  A --> B\n```";
+
+    expect(markdownBlocks(words, { ...READING, diagrams: true })).toEqual([
+      { kind: MARKDOWN_BLOCK.DIAGRAM, code: "flowchart LR\n  A --> B" },
+    ]);
+    expect(markdownBlocks(words, READING)).toEqual([
+      { kind: MARKDOWN_BLOCK.CODE, text: "flowchart LR\n  A --> B" },
+    ]);
+  });
+
   it("draws words nested too deep to parse as one block of plain text", () => {
     const deep = `${">".repeat(8000)} **hi**`;
     expect(markdownBlocks(deep, READING)).toEqual([{ kind: MARKDOWN_BLOCK.CODE, text: deep }]);

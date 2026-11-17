@@ -948,6 +948,7 @@ export function WordsRow({
             linkStanding={linkStanding}
             hidesHtml={hidesHtml}
             headings
+            diagrams
           />
         </ChangedWords>
       </View>

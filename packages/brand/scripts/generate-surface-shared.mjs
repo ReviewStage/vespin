@@ -123,8 +123,9 @@ const MOTION_PANE = "cubic-bezier(0.2, 0, 0, 1)";
 // (OVERLAY) and the light ground under them (CHIP_HOVER), the strong fill the
 // member's own message sits on (FILL_STRONG), the gray a neutral swipe
 // action fills with under white words (ACTION_FILL) and the red a swipe that
-// takes something away fills with under them (DANGER_FILL), the inks, and the
-// status inks.
+// takes something away fills with under them (DANGER_FILL), the inks, the
+// status inks, and a chip's face and strong edge, which a Mermaid diagram's
+// boxes are drawn in as the panel's are (CHIP, CHIP_EDGE_STRONG).
 // The rest (a focus ring, a chip's selection) are the desktop's and the
 // site's, which SwiftUI's own control states stand in for on iOS.
 const NATIVE_ROLES = [
@@ -139,6 +140,8 @@ const NATIVE_ROLES = [
   "SIDEBAR_INK",
   "WELL",
   "CHIP_EDGE",
+  "CHIP",
+  "CHIP_EDGE_STRONG",
   "FILL_STRONG",
   "ACTION_FILL",
   "DANGER_FILL",
