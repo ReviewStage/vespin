@@ -1,0 +1,21 @@
+== bundle UPMAIN base 1a2f40e273
+  built 1a2f40e273 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+== bundle UPHEAD base 12ad288ee8
+  built 12ad288ee8 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+1-main-signed-in: fails 0 shots 1 
+  after step 1 (main) settings.json: tokenCipher='M1p6HBHr5a7Enb3w18+OAptNcCWUxh22Sb9NdqXthnDjeeS4Cw8IsKQle6/CK/mR6H7+wNvtGwbGjNG8jFOcoA1qBGHENFyI5haq0qBla/whZGDT77Y9/qXrTMninzAYYQTb'; long token-like strings left in the file: 0
+  installed 12ad288ee8 over main's app without an uninstall
+2-head-first-launch: fails 0 shots 1 
+  after step 2 (head) settings.json: tokenCipher='token-vault'; long token-like strings left in the file: 0
+3-head-relaunch: fails 0 shots 1 
+  after step 3 settings.json: tokenCipher='token-vault'; long token-like strings left in the file: 0
+5-sign-out: fails 0 shots 2 
+  after step 5 settings.json: tokenCipher=None; long token-like strings left in the file: 0
