@@ -407,9 +407,18 @@ export function NewTaskComposer({
     refused !== undefined ? refused.card.sectionId : newTask.preset?.sectionId,
   );
 
+  // A section is the card's workspace's, so the owner's switch, as Home's, lets it go for good, in the render that
+  // brings it; the workspace first resolving keeps one chosen before the workspaces were read.
+  const [sectionScope, setSectionScope] = useState(workspaceId);
+
+  if (workspaceId !== sectionScope) {
+    if (sectionScope !== undefined) setSectionId(undefined);
+    setSectionScope(workspaceId);
+  }
+
   const sections = useTaskSections();
 
-  // Note that a section is the card's workspace's, so a switch of workspace lets it go, as a section deleted meanwhile is.
+  // Note that a section deleted meanwhile, or another workspace's, files nothing.
   const section = forAutomation
     ? undefined
     : sections.sections.find((each) => each.id === sectionId && each.workspaceId === workspaceId);
