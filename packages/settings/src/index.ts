@@ -62,6 +62,15 @@ export {
 } from "./experiments.js";
 
 export {
+  GITHUB_WAKE,
+  GITHUB_WAKE_LIST,
+  type GitHubWake,
+  githubWakesOffFrom,
+  githubWakesOffWith,
+  isGitHubWakesOffJson,
+} from "./github-wakes.js";
+
+export {
   INTRO,
   INTROS_SHIPPED_AT,
   type Intro,

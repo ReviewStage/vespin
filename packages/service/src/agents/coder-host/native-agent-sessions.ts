@@ -15,10 +15,12 @@
  * Code's appended to its prompt, Codex's as its `developer_instructions`.
  */
 
+import { readAccountPreferences } from "@repo/database/models/account-store";
 import { type Agent, hasRepository } from "@repo/database/models/agent-store";
 import { readNativeSequence } from "@repo/database/models/native-projection-store";
 import { readTaskHeader } from "@repo/database/models/task-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { githubWakesOffFrom } from "@repo/settings";
 import { Effect, Layer, Option } from "effect";
 import { deploymentOrigin } from "../../deployment-origin.js";
 import { logStoreFailure } from "../../http/store-failure.js";
@@ -75,7 +77,7 @@ const nativeCoderInstructions = (
     const target = { userId, conversationId: agent.conversationId };
 
     // Note that we read these together, because none waits on another.
-    const [authorship, workspace, taskNumber, standing] = yield* Effect.all(
+    const [authorship, workspace, taskNumber, standing, preferences] = yield* Effect.all(
       [
         hasRepository(agent) ? agentAuthorship(target, agent) : Effect.succeed(undefined),
         workspaceStepOf(userId, agent.organizationId).pipe(
@@ -84,6 +86,11 @@ const nativeCoderInstructions = (
         ),
         agentTaskNumber(userId, agent),
         standingOfAgent(Option.some(agent)),
+        // A read that fails leaves every kind on, as an account that chose nothing has them.
+        readAccountPreferences(agent.userId).pipe(
+          Effect.tapError(logStoreFailure),
+          Effect.orElseSucceed(() => undefined),
+        ),
       ],
       { concurrency: "unbounded" },
     );
@@ -95,6 +102,7 @@ const nativeCoderInstructions = (
       standing,
       harness,
       place,
+      wakesOff: githubWakesOffFrom(preferences?.preferences.githubWakesOff),
     });
   });
 

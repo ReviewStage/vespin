@@ -32,6 +32,7 @@ export const accountPreferencesAnswerSchema = EffectSchema.Struct({
   turnNotifications: EffectSchema.optionalKey(EffectSchema.Unknown),
   onboardingSurvey: EffectSchema.optionalKey(EffectSchema.Unknown),
   introsSeen: EffectSchema.optionalKey(EffectSchema.Unknown),
+  githubWakesOff: EffectSchema.optionalKey(EffectSchema.Unknown),
   agent: EffectSchema.optionalKey(EffectSchema.Unknown),
   chaptersModel: EffectSchema.optionalKey(EffectSchema.Unknown),
   experiments: EffectSchema.optionalKey(
@@ -62,6 +63,7 @@ export const accountPreferencesWriteSchema = EffectSchema.Struct({
   turnNotifications: EffectSchema.optionalKey(EffectSchema.Unknown),
   onboardingSurvey: EffectSchema.optionalKey(EffectSchema.Unknown),
   introsSeen: EffectSchema.optionalKey(EffectSchema.Unknown),
+  githubWakesOff: EffectSchema.optionalKey(EffectSchema.Unknown),
   agent: EffectSchema.optionalKey(EffectSchema.Unknown),
   chaptersModel: EffectSchema.optionalKey(EffectSchema.Unknown),
   experiments: EffectSchema.optionalKey(EffectSchema.Unknown),

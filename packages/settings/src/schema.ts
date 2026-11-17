@@ -45,6 +45,7 @@ import {
   INLINE_DIFF,
   INLINE_DIFF_LABEL,
 } from "./diff-view.js";
+import { isGitHubWakesOffJson } from "./github-wakes.js";
 import { isIntrosSeenJson } from "./intros.js";
 import {
   isKeepAwake,
@@ -644,6 +645,23 @@ export const APP_SETTING_SCHEMA = {
     // Nothing to run per write: each page reads it as it draws its intro.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     guard: isIntrosSeenJson,
+  }),
+  /*
+   * Which kinds of GitHub activity on an agent's pull request no longer
+   * wake the account's agents, as the JSON list of their ids
+   * (`github-wakes.ts`); nothing stored reads as every kind on. An account
+   * preference riding a part of the snapshot of its own, since the service
+   * reads it as a delivery arrives; drawn by Preferences › Agents' Wake agents on GitHub
+   * activity row (`github-wakes-row.tsx`), a switch to each kind.
+   */
+  githubWakesOff: hiddenSetting({
+    field: "githubWakesOff",
+    id: APP_SETTING_ID.GITHUB_WAKES_OFF,
+    page: SETTINGS_PAGE.PREFERENCES,
+    order: 940,
+    // Nothing to run per write: the service reads it as a delivery arrives and as an agent's session starts.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    guard: isGitHubWakesOffJson,
   }),
   lineNumbers: toggleSetting({
     field: "lineNumbers",

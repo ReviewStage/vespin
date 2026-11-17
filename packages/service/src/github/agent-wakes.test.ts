@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { recordAgentRepositoryHead } from "@repo/database/models/agent-repositories";
 import {
   type AgentLatestTurn,
@@ -746,7 +747,7 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
   );
 
   it.effect(
-    "a pull request merged is told to its idle agent, and to none whose task already stands Done",
+    "a pull request merged is told to its idle agent, and to none whose starter turned merges off or whose task already stands Done",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
@@ -764,6 +765,18 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
           at: MADE_AT,
         };
 
+        // The starter turned merges off in Preferences › Agents, and then back on.
+        yield* writeAccountPreferences(owner, { githubWakesOff: '["closed"]' });
+
+        const off = yield* wakeAgents(
+          agentSessions.sessionsFor,
+          merged,
+          randomUUID(),
+          APP_BOT,
+        ).pipe(Effect.provide(github));
+
+        yield* writeAccountPreferences(owner, { githubWakesOff: "[]" });
+
         const told = yield* wakeAgents(
           agentSessions.sessionsFor,
           merged,
@@ -771,7 +784,7 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
           APP_BOT,
         ).pipe(Effect.provide(github));
 
-        assert.equal(told, 1);
+        assert.deepEqual([off, told], [0, 1]);
         assert.ok(
           sentText(agentSessions.sent[0]?.message.message).includes(
             "@octocat merged your pull request [@#41](https://github.com/Acme/Relay/pull/41).",

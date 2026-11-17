@@ -68,6 +68,7 @@ export const APP_SETTING_ID = {
   ASK_SOUND: "ask_sound",
   TURN_NOTIFICATIONS: "turn_notifications",
   PULL_REQUEST_OPEN: "pull_request_open",
+  GITHUB_WAKES_OFF: "github_wakes_off",
 } as const;
 
 export type AppSettingId = (typeof APP_SETTING_ID)[keyof typeof APP_SETTING_ID];
