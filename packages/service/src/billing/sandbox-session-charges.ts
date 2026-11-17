@@ -1,5 +1,11 @@
 /**
- * sandbox-session-charges.ts -- once a day, every ended session of a sandbox we opened for a workspace charged to it in the usage ledger, at what Vercel bills us for it.
+ * sandbox-session-charges.ts -- every ended session of a sandbox we opened for a workspace charged to it in the usage ledger, at what Vercel bills us for it: as its sandbox is deleted, and once a day for the rest.
+ *
+ * Vercel forgets a deleted sandbox's sessions, and a resume deletes the
+ * stopped sandbox it makes again on its own drive, so most sessions are
+ * charged as their sandbox is deleted: the adapter reads them just before
+ * and hands them to `EndedSessionsOnDelete`, which the deployment answers
+ * with `endedSessionsChargedOnDelete`.
  *
  * Vercel's scheduler calls this once a day (the root `vercel.json`;
  * `maintenance/usage-ledger-app.ts`). It reads every session the project's
@@ -16,24 +22,26 @@
  * passed by. It always runs, whether or not billing is live.
  */
 
+import type { DatabaseServices } from "@repo/database/core/query";
 import { sandboxOwnersNamed } from "@repo/database/models/sandbox-owners";
 import { recordUsageCharges, type UsageCharge } from "@repo/database/models/usage-charges";
 import { USAGE_KIND } from "@repo/database/usage-vocabulary";
-import { Sandbox } from "@repo/sandbox";
-import { Clock, Duration, Effect } from "effect";
+import { EndedSessionsOnDelete, Sandbox, type SandboxSession } from "@repo/sandbox";
+import { Cause, Clock, Duration, Effect, Layer } from "effect";
 import { pricedSession } from "./sandbox-session-price.js";
 
 /**
- * How far back each run reads, by when a session was created: twice the 24
- * hours a session runs at most, so a session that ended since the last run
- * is read whenever it began, and a run missed is read over by the next.
+ * How far back each daily run reads, by when a session was created: the 24
+ * hours a session runs at most, and two days past it, so a session that
+ * ended since the last run is read whenever it began, even where the run
+ * before it was missed.
  */
-const READ_BACK = Duration.hours(48);
+const READ_BACK = Duration.hours(72);
 
 /** How many of the sandbox names passed by a log line names. */
 const NAMED_IN_LOG = 5;
 
-/** What a run did: how many ended sessions it read, how many it newly charged, and how many it passed by, with no owner or no rate. */
+/** What a charge did: how many ended sessions it was handed, how many it newly charged, and how many it passed by, with no owner or no rate. */
 interface SandboxSessionChargeRun {
   readonly ended: number;
   readonly charged: number;
@@ -41,12 +49,11 @@ interface SandboxSessionChargeRun {
   readonly unpriced: number;
 }
 
-/** Every ended session read within `READ_BACK` charged to its sandbox's workspace, those already charged left be. */
-export const chargeEndedSandboxSessions = Effect.fn("web/chargeEndedSandboxSessions")(function* () {
-  const now = yield* Clock.currentTimeMillis;
-  const sandbox = yield* Sandbox;
-  const read = yield* sandbox.sessionsSince(now - Duration.toMillis(READ_BACK));
-  const ended = read.filter((session) => session.ended !== undefined);
+/** The ended sessions given charged to their sandboxes' workspaces, those already charged left be; one with no owner or no rate is logged and passed by. */
+const chargedSessions = Effect.fn("web/chargedSandboxSessions")(function* (
+  sessions: readonly SandboxSession[],
+) {
+  const ended = sessions.filter((session) => session.ended !== undefined);
   const names = new Set(ended.flatMap((session) => session.sandboxName ?? []));
   const owners = yield* sandboxOwnersNamed([...names]);
   const charges: UsageCharge[] = [];
@@ -90,8 +97,6 @@ export const chargeEndedSandboxSessions = Effect.fn("web/chargeEndedSandboxSessi
     );
   }
 
-  yield* Effect.logInfo(`sandbox sessions charged: ${charged} of ${ended.length} ended`);
-
   const run: SandboxSessionChargeRun = {
     ended: ended.length,
     charged,
@@ -101,3 +106,39 @@ export const chargeEndedSandboxSessions = Effect.fn("web/chargeEndedSandboxSessi
 
   return run;
 });
+
+/** Every ended session read within `READ_BACK` charged to its sandbox's workspace, those already charged left be: the daily sweep for sandboxes never deleted. */
+export const chargeEndedSandboxSessions = Effect.fn("web/chargeEndedSandboxSessions")(function* () {
+  const now = yield* Clock.currentTimeMillis;
+  const read = yield* (yield* Sandbox).sessionsSince(now - Duration.toMillis(READ_BACK));
+  const run = yield* chargedSessions(read);
+
+  yield* Effect.logInfo(`sandbox sessions charged: ${run.charged} of ${run.ended} ended`);
+
+  return run;
+});
+
+/**
+ * `EndedSessionsOnDelete` as the deployment answers it: the sessions charged
+ * over the database the deployment reads, a charge that failed logged and let
+ * be, so a delete never waits on more than the ledger's write nor fails for
+ * it. A session it missed is charged by the daily sweep only while its
+ * sandbox stands, which it no longer does, so it goes uncharged.
+ */
+export const endedSessionsChargedOnDelete = Layer.effect(
+  EndedSessionsOnDelete,
+  Effect.gen(function* () {
+    const database = yield* Effect.context<DatabaseServices>();
+
+    return (sessions: readonly SandboxSession[]) =>
+      chargedSessions(sessions).pipe(
+        Effect.provideContext(database),
+        Effect.catchCause((cause) =>
+          Effect.logWarning(
+            `a deleted sandbox's sessions were not charged: ${Cause.pretty(cause)}`,
+          ),
+        ),
+        Effect.asVoid,
+      );
+  }),
+);

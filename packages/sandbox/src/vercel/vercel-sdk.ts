@@ -61,10 +61,11 @@ import {
   Predicate,
   Redacted,
   Result,
+  Schedule,
   Schema,
 } from "effect";
 import { HttpClient } from "effect/http";
-import { SANDBOX_IDLE, Sandbox, type SandboxService } from "../sandbox.js";
+import { EndedSessionsOnDelete, SANDBOX_IDLE, Sandbox, type SandboxService } from "../sandbox.js";
 import {
   COMMAND_GONE,
   type CommandAsk,
@@ -215,6 +216,15 @@ const SESSIONS_API = {
   ORDER: "desc",
 } as const;
 
+/**
+ * How a delete waits on a session it stopped before reading what it used:
+ * Vercel answers a stop at once and stops the session after, which took up
+ * to 21 seconds of 38 stops read on Nov 17, 2026 (2.7 at the median), and
+ * only a stopped session's figures are whole. One still not stopped by the
+ * last read is left uncharged.
+ */
+const STOP_WAIT = { POLL: Duration.seconds(1), TRIES: 30 } as const;
+
 /** How a session Vercel lists ended, by its status; one still up, or on its way, ended in none. */
 const SESSION_END_OF_VERCEL: ReadonlyMap<string, SessionEnd> = new Map([
   ["stopped", SESSION_END.STOPPED],
@@ -357,6 +367,12 @@ const SessionPageSchema = Schema.Struct({
 });
 
 type ListedSession = (typeof SessionPageSchema.Type)["sessions"][number];
+
+/** Vercel's answer to a list of sessions that was no page of them, read as the call's refusal (`sdkFailure`). */
+class SessionsUnread extends Data.TaggedError("SessionsUnread")<{
+  readonly status: number;
+  readonly text: string;
+}> {}
 
 /** Where a sandbox's own PTY server is served: Vercel's sandbox domain, as it addresses a sandbox's routes, on a secure socket. */
 const SANDBOX_SHELL_ADDRESS = {
@@ -518,6 +534,8 @@ function refused(
  * tried a 429, a 5xx, and a failure to connect again by then.
  */
 function sdkFailure(call: SandboxCall, cause: unknown): Refused {
+  if (cause instanceof SessionsUnread) return refused(call, cause);
+
   if (cause instanceof APIError) {
     return refused(call, { status: cause.response.status, text: cause.text ?? "" });
   }
@@ -730,12 +748,18 @@ function noneToResume(cause: unknown): boolean {
  * that the sandbox's own drive is left standing, for the create to mount
  * again.
  */
-async function clearedStale(name: string, under: Under, signal: AbortSignal): Promise<boolean> {
+async function clearedStale(
+  name: string,
+  under: Under,
+  signal: AbortSignal,
+  captures: DeleteCapture[],
+): Promise<boolean> {
   const stale = await SdkSandbox.get({ ...under, name, resume: false, signal }).catch(
     absentIfNotFound,
   );
 
   if (stale === undefined) return false;
+  captures.push(await captured(name, under, signal));
   await stale.delete({ signal }).catch(absentIfNotFound);
 
   return true;
@@ -751,15 +775,19 @@ async function replacedOnOwnDrive(
   name: string,
   under: Under,
   signal: AbortSignal,
+  captures: DeleteCapture[],
 ): Promise<boolean> {
-  const [standing, own] = await Promise.all([
+  // Note that the sessions are read beside the lookups rather than after, so a resume waits on no read of its own.
+  const [standing, own, read] = await Promise.all([
     SdkSandbox.get({ ...under, name, resume: false, signal }).catch(absentIfNotFound),
     Drive.get({ ...under, name: ownDriveName(name), signal }).catch(absentIfNotFound),
+    captured(name, under, signal),
   ]);
 
   if (standing === undefined || own === undefined) return false;
 
   if (STATUS_OF_VERCEL.get(standing.status) !== SANDBOX_STATUS.STOPPED) return false;
+  captures.push(read);
   await standing.delete({ deleteOrphanSnapshots: true, signal }).catch(absentIfNotFound);
 
   return true;
@@ -936,6 +964,87 @@ function sessionOfListed(listed: ListedSession): SandboxSession {
   };
 }
 
+/** One page of the sessions Vercel lists, the project's or the named sandbox's, newest first, from the cursor given or the first. */
+async function sessionPageListed(
+  under: Under,
+  query: { readonly name?: string | undefined; readonly cursor?: string | undefined },
+  signal: AbortSignal,
+) {
+  const url = new URL(`${SESSIONS_API.BASE}${SESSIONS_API.PATH}`);
+  url.searchParams.set("project", under.projectId);
+  url.searchParams.set("teamId", under.teamId);
+  url.searchParams.set("limit", String(SESSIONS_API.PAGE));
+  url.searchParams.set("sortOrder", SESSIONS_API.ORDER);
+
+  if (query.name !== undefined) url.searchParams.set("name", query.name);
+
+  if (query.cursor !== undefined) url.searchParams.set("cursor", query.cursor);
+
+  const response = await under.fetch(url.toString(), {
+    headers: { authorization: `Bearer ${under.token}` },
+    signal,
+  });
+
+  const answered = { status: response.status, text: await response.text() };
+  const page = readSessionPage(unparsedWire(valueFromJsonText(answered.text)));
+
+  if (!succeeded(answered.status) || Result.isFailure(page)) throw new SessionsUnread(answered);
+
+  return page.success;
+}
+
+/** Every session of the named sandbox, every page of them. */
+async function sandboxSessions(
+  name: string,
+  under: Under,
+  signal: AbortSignal,
+): Promise<readonly SandboxSession[]> {
+  const found: SandboxSession[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await sessionPageListed(under, { name, cursor }, signal);
+    found.push(...page.sessions.map(sessionOfListed));
+    cursor = page.pagination.next ?? undefined;
+  } while (cursor !== undefined);
+
+  return found;
+}
+
+/** What was read of a sandbox's ended sessions just before its delete: the sessions, or why they could not be read. */
+type DeleteCapture =
+  | { readonly name: string; readonly sessions: readonly SandboxSession[] }
+  | { readonly name: string; readonly unread: Refused };
+
+/** The named sandbox's ended sessions, read before its delete; never throws, so a delete goes on whatever the read answered. */
+function captured(name: string, under: Under, signal: AbortSignal): Promise<DeleteCapture> {
+  return sandboxSessions(name, under, signal).then(
+    (sessions) => ({ name, sessions: sessions.filter((each) => each.ended !== undefined) }),
+    (cause: unknown) => ({ name, unread: sdkFailure(SANDBOX_CALL.SESSIONS, cause) }),
+  );
+}
+
+/**
+ * The ended sessions read before deletes handed to `EndedSessionsOnDelete`.
+ * Note that a read that failed is logged and the delete it came before
+ * stands, because a sandbox kept for its figures would hold a name a resume
+ * needs; its sessions go uncharged.
+ */
+const handedOn = (captures: readonly DeleteCapture[]) =>
+  Effect.gen(function* () {
+    const hand = yield* EndedSessionsOnDelete;
+
+    for (const capture of captures) {
+      if ("unread" in capture) {
+        yield* Effect.logWarning(
+          `the sessions of ${capture.name} were not read before its delete, so they go uncharged: ${neutralOf(capture.unread).message}`,
+        );
+      } else if (capture.sessions.length > 0) {
+        yield* hand(capture.sessions);
+      }
+    }
+  });
+
 /** `Sandbox` over the SDK, under the token `SandboxToken` reads afresh for each call and the `fetch` `SandboxFetch` names, its PTY reached over the HTTP client given. */
 function vercelSandbox(
   readToken: OidcTokenRead,
@@ -1074,33 +1183,7 @@ function vercelSandbox(
 
   /** One page of the project's sessions, newest first, from the cursor given or the first. */
   const sessionPage = (cursor: string | undefined) =>
-    Effect.flatMap(credentials(SANDBOX_CALL.SESSIONS), (under) =>
-      Effect.flatMap(
-        sdkCall(SANDBOX_CALL.SESSIONS, async (signal) => {
-          const url = new URL(`${SESSIONS_API.BASE}${SESSIONS_API.PATH}`);
-          url.searchParams.set("project", under.projectId);
-          url.searchParams.set("teamId", under.teamId);
-          url.searchParams.set("limit", String(SESSIONS_API.PAGE));
-          url.searchParams.set("sortOrder", SESSIONS_API.ORDER);
-
-          if (cursor !== undefined) url.searchParams.set("cursor", cursor);
-
-          const response = await under.fetch(url.toString(), {
-            headers: { authorization: `Bearer ${under.token}` },
-            signal,
-          });
-
-          return { status: response.status, text: await response.text() };
-        }),
-        (answered) => {
-          const page = readSessionPage(unparsedWire(valueFromJsonText(answered.text)));
-
-          return succeeded(answered.status) && Result.isSuccess(page)
-            ? Effect.succeed(page.success)
-            : Effect.fail(refused(SANDBOX_CALL.SESSIONS, answered));
-        },
-      ),
-    );
+    asked(SANDBOX_CALL.SESSIONS, (signal, under) => sessionPageListed(under, { cursor }, signal));
 
   /**
    * The sessions created at or after `since`, read a page at a time until a
@@ -1122,6 +1205,41 @@ function vercelSandbox(
 
       return found;
     });
+
+  /**
+   * The named sandbox's ended sessions, read just before its delete: its
+   * running session stopped first, and the sessions read again until none is
+   * still on its way down, at most `STOP_WAIT.TRIES` times. A sandbox gone
+   * has none, and a read that failed says so rather than failing the delete.
+   */
+  const endedBeforeDelete = (name: string): Effect.Effect<DeleteCapture> =>
+    Effect.gen(function* () {
+      const sandbox = yield* found(SANDBOX_CALL.STOP, name).pipe(
+        Effect.map(Option.some),
+        Effect.catchIf(isGone, () => Effect.succeed(Option.none<SdkSandbox>())),
+      );
+
+      if (Option.isNone(sandbox)) return { name, sessions: [] };
+      const session = sandbox.value.currentSession();
+
+      if (UP_STATUSES.has(STATUS_OF_VERCEL.get(session.status))) {
+        yield* sdkCall(SANDBOX_CALL.STOP, (signal) => session.stop({ signal })).pipe(
+          Effect.catchIf(sessionGone, () => Effect.void),
+        );
+      }
+
+      const sessions = yield* asked(SANDBOX_CALL.SESSIONS, (signal, under) =>
+        sandboxSessions(name, under, signal),
+      ).pipe(
+        Effect.repeat({
+          schedule: Schedule.spaced(STOP_WAIT.POLL),
+          until: (read) => read.every((each) => each.ended !== undefined),
+          times: STOP_WAIT.TRIES,
+        }),
+      );
+
+      return { name, sessions: sessions.filter((each) => each.ended !== undefined) };
+    }).pipe(Effect.catch((unread) => Effect.succeed<DeleteCapture>({ name, unread })));
 
   return {
     listTagged: (tag, value) => said(listTagged(tag, value)),
@@ -1186,8 +1304,10 @@ function vercelSandbox(
           openedOf,
         ),
       ),
-    getOrCreate: (ask, onCreate) =>
-      said(
+    getOrCreate: (ask, onCreate) => {
+      const captures: DeleteCapture[] = [];
+
+      return said(
         Effect.map(
           Effect.andThen(
             resizedWhileStopped(ask),
@@ -1198,7 +1318,7 @@ function vercelSandbox(
               const replaced =
                 ask.drive !== undefined &&
                 "own" in ask.drive &&
-                (await replacedOnOwnDrive(ask.name, under, signal));
+                (await replacedOnOwnDrive(ask.name, under, signal, captures));
 
               if (ask.drive !== undefined && !replaced) {
                 const standing = await SdkSandbox.get({
@@ -1239,7 +1359,7 @@ function vercelSandbox(
                     // A sandbox standing with its snapshot gone is replaced by a fresh one under its name.
                     if (!snapshotGoneFailure(cause)) throw cause;
 
-                    if (!(await clearedStale(ask.name, under, signal))) throw cause;
+                    if (!(await clearedStale(ask.name, under, signal, captures))) throw cause;
 
                     return await gotOrCreated();
                   });
@@ -1273,29 +1393,33 @@ function vercelSandbox(
           ),
           openedOf,
         ),
-      ),
+      ).pipe(Effect.ensuring(handedOn(captures)));
+    },
     delete: (name) =>
       said(
-        asked(SANDBOX_CALL.DELETE, async (signal, under) => {
-          // Note that the lookup asks no resume, because a sandbox on its way out is never woken to be deleted.
-          const [sandbox, own] = await Promise.all([
-            SdkSandbox.get({ ...under, name, resume: false, signal }).catch(absentIfNotFound),
-            Drive.get({ ...under, name: ownDriveName(name), signal }).catch(absentIfNotFound),
-          ]);
+        Effect.andThen(
+          Effect.flatMap(endedBeforeDelete(name), (capture) => handedOn([capture])),
+          asked(SANDBOX_CALL.DELETE, async (signal, under) => {
+            // Note that the lookup asks no resume, because a sandbox on its way out is never woken to be deleted.
+            const [sandbox, own] = await Promise.all([
+              SdkSandbox.get({ ...under, name, resume: false, signal }).catch(absentIfNotFound),
+              Drive.get({ ...under, name: ownDriveName(name), signal }).catch(absentIfNotFound),
+            ]);
 
-          if (own !== undefined) {
-            // Vercel refuses to delete a drive mounted in a running sandbox, and a stop lets go of it at once.
-            const session = sandbox?.currentSession();
+            if (own !== undefined) {
+              // Vercel refuses to delete a drive mounted in a running sandbox, and a stop lets go of it at once.
+              const session = sandbox?.currentSession();
 
-            if (session !== undefined && UP_STATUSES.has(STATUS_OF_VERCEL.get(session.status))) {
-              await session.stop({ signal });
+              if (session !== undefined && UP_STATUSES.has(STATUS_OF_VERCEL.get(session.status))) {
+                await session.stop({ signal });
+              }
+
+              await own.delete({ signal });
             }
 
-            await own.delete({ signal });
-          }
-
-          await sandbox?.delete({ deleteOrphanSnapshots: true, signal });
-        }).pipe(Effect.catchIf(isGone, () => Effect.void)),
+            await sandbox?.delete({ deleteOrphanSnapshots: true, signal });
+          }),
+        ).pipe(Effect.catchIf(isGone, () => Effect.void)),
       ),
     deleteDrive: (name) =>
       said(

@@ -21,7 +21,7 @@ export const usageKindSchema = Schema.Literals(Object.values(USAGE_KIND));
 /**
  * What a sandbox session's charge was priced from: Vercel's figures for the
  * session as its list answered them, and the region's rates applied, in
- * micro-dollars an hour. Times are epoch milliseconds; a figure Vercel did
+ * micro-dollars an hour, and for transfer a GB of egress. Times are epoch milliseconds; a figure Vercel did
  * not answer is null, as the CPU time of a session that failed or was
  * aborted is.
  */
@@ -40,6 +40,7 @@ export const SandboxSessionFiguresSchema = Schema.Struct({
   egressBytes: Schema.NullOr(Schema.Number),
   cpuMicroUsdPerHour: Schema.Number,
   memoryMicroUsdPerGbHour: Schema.Number,
+  transferMicroUsdPerGb: Schema.Number,
 });
 
 export type SandboxSessionFigures = typeof SandboxSessionFiguresSchema.Type;

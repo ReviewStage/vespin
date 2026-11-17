@@ -13,7 +13,7 @@
  */
 
 import { Clock, Duration, Effect, Layer, Predicate, Redacted, Result } from "effect";
-import { SANDBOX_IDLE, Sandbox, type SandboxService } from "../sandbox.js";
+import { EndedSessionsOnDelete, SANDBOX_IDLE, Sandbox, type SandboxService } from "../sandbox.js";
 import {
   COMMAND_GONE,
   type CommandAsk,
@@ -479,7 +479,15 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
       scripted(
         SANDBOX_CALL.DELETE,
         name,
-        Effect.sync(() => {
+        Effect.gen(function* () {
+          // As a provider does, the sandbox's sessions go with it, its ended ones handed on first.
+          const gone = state.sessions.filter((session) => session.sandboxName === name);
+          const ended = gone.filter((session) => session.ended !== undefined);
+
+          if (ended.length > 0) yield* (yield* EndedSessionsOnDelete)(ended);
+
+          for (const session of gone) state.sessions.splice(state.sessions.indexOf(session), 1);
+
           if (state.sandboxes.delete(name)) state.deleted.push(name);
 
           if (state.drives.delete(ownDriveName(name))) state.deletedDrives.push(ownDriveName(name));

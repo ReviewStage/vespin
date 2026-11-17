@@ -4,10 +4,10 @@
 
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { Duration, Effect, Layer, Predicate } from "effect";
+import { Duration, Effect, Fiber, Layer, Predicate } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
-import { Sandbox, type SandboxService } from "../sandbox.js";
+import { EndedSessionsOnDelete, Sandbox, type SandboxService } from "../sandbox.js";
 import { SANDBOX_CALL, type SandboxCall, type SandboxError } from "../vocabulary.js";
 import {
   driveAnswered,
@@ -364,6 +364,65 @@ const sandboxAnswer = (method: string) =>
 /** Whether a call was one on a drive. */
 const onDrive = (url: URL) => url.pathname.includes("/drives/");
 
+/** Whether a call was a list of sessions. */
+const onSessions = (url: URL) => url.pathname.endsWith("/v2/sandboxes/sessions");
+
+/** A page of one session of the fixture's sandbox, as the list answers it, in the status given. */
+const sessionListed = (status: string) =>
+  Response.json({
+    sessions: [
+      {
+        ...sandboxFound(RUNNING_SANDBOX).session,
+        status,
+        sourceSandboxName: NAME,
+        ...(status === "stopped"
+          ? { duration: 60_000, activeCpuDurationMs: 9_000, stoppedAt: CREATED_AT + 60_000 }
+          : undefined),
+      },
+    ],
+    pagination: { count: 1, next: null },
+  });
+
+it.effect(
+  "a get-or-create that makes a stopped sandbox again on its own drive hands the ended sessions of the one it deletes on",
+  () =>
+    Effect.gen(function* () {
+      const handed: string[] = [];
+      let deleted = false;
+
+      const api = yield* apiOver((url, init) => {
+        const at = new URL(url);
+
+        if (onDrive(at))
+          return Response.json(driveAnswered({ id: "drv_own", name: `${NAME}-drive` }));
+
+        if (onSessions(at)) return sessionListed("stopped");
+
+        if (init.method === "DELETE") {
+          deleted = true;
+
+          return Response.json(sandboxDeleted(STOPPED_SANDBOX));
+        }
+
+        if (init.method === "POST") return Response.json(sandboxFound(RUNNING_SANDBOX));
+
+        return deleted ? refusedWith(404)() : Response.json(sandboxFound(STOPPED_SANDBOX));
+      });
+
+      const opened = yield* api
+        .getOrCreate({ ...CREATE_ASK, drive: { own: true, at: "/vercel/sandbox/work" } })
+        .pipe(
+          Effect.provideService(EndedSessionsOnDelete, (sessions) =>
+            Effect.sync(() => handed.push(...sessions.map((each) => each.id))),
+          ),
+        );
+
+      assert.equal(deleted, true);
+      assert.equal(opened.running, SESSION);
+      assert.deepEqual(handed, [SESSION]);
+    }),
+);
+
 it.effect(
   "a delete wakes no stopped sandbox, takes its orphan snapshots, counts one gone as deleted, and names Vercel's refusal",
   () =>
@@ -381,8 +440,13 @@ it.effect(
       });
 
       yield* api.delete(NAME);
-      const [lookup, deletion] = asked.filter((each) => !onDrive(each.url));
-      assert.equal(lookup?.url.searchParams.get("resume"), "false");
+      const onSandbox = asked.filter((each) => !onDrive(each.url) && !onSessions(each.url));
+      const lookups = onSandbox.filter((each) => each.method === "GET");
+      const [deletion] = onSandbox.filter((each) => each.method === "DELETE");
+      assert.deepEqual(
+        lookups.map((each) => each.url.searchParams.get("resume")),
+        lookups.map(() => "false"),
+      );
       assert.equal(deletion?.method, "DELETE");
       assert.equal(deletion?.url.searchParams.get("deleteOrphanSnapshots"), "true");
 
@@ -398,10 +462,12 @@ it.effect(
 );
 
 it.effect(
-  "a delete of a sandbox that owns a drive stops its running session, then deletes the drive it owns, then the sandbox",
+  "a delete stops a running session, waits until it stopped, hands its ended sessions on, then deletes the drive the sandbox owns, then the sandbox",
   () =>
     Effect.gen(function* () {
       const writes: string[] = [];
+      const handed: string[] = [];
+      let status = "running";
 
       const api = yield* apiOver((url, init) => {
         const method = init.method ?? "GET";
@@ -415,16 +481,41 @@ it.effect(
         }
 
         if (pathname.endsWith("/stop")) {
-          return Response.json(sessionAnswered({ id: SESSION, status: "stopped" }));
+          status = "stopping";
+
+          return Response.json(sessionAnswered({ id: SESSION, status }));
+        }
+
+        if (onSessions(new URL(url))) {
+          // The session is still stopping at the first read, and stopped by the next.
+          const listed = sessionListed(status);
+          status = "stopped";
+
+          return listed;
         }
 
         return Response.json(
-          method === "DELETE" ? sandboxDeleted(RUNNING_SANDBOX) : sandboxFound(RUNNING_SANDBOX),
+          method === "DELETE"
+            ? sandboxDeleted(RUNNING_SANDBOX)
+            : sandboxFound({ ...RUNNING_SANDBOX, status }),
         );
       });
 
-      yield* api.delete(NAME);
+      const deleted = yield* Effect.forkChild(
+        api.delete(NAME).pipe(
+          Effect.provideService(EndedSessionsOnDelete, (sessions) =>
+            // Each session is named with how many writes came before it, so it is seen handed on before either delete.
+            Effect.sync(() =>
+              handed.push(...sessions.map((each) => `${each.id} after ${writes.length}`)),
+            ),
+          ),
+        ),
+      );
 
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* Fiber.join(deleted);
+
+      assert.deepEqual(handed, [`${SESSION} after 1`]);
       assert.deepEqual(writes, [
         `POST /v2/sandboxes/sessions/${SESSION}/stop`,
         `DELETE /v2/sandboxes/drives/${NAME}-drive`,
