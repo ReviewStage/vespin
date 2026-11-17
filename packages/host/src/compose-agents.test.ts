@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { NodePath } from "@effect/platform-node";
+import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { ServiceReach } from "@repo/features";
 import { type AgentBoot, BOOT_PHASE } from "@repo/features/agent-boot";
@@ -29,6 +29,7 @@ import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LIVE_SIGNED_OUT, type TranscriptNowAnswer } from "@repo/features/live-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { GATEWAY_METHOD } from "@repo/gateway";
+import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { entityPool } from "@repo/sync";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -47,6 +48,8 @@ import { TestClock } from "effect/testing";
 import { KEPT_CHARACTERS } from "./account-items-follow.js";
 import type { AppTranscript } from "./app-state.js";
 import { KEPT_READ, openEntityStore } from "./entity-store.js";
+import { localCopy, type SealedRefusals } from "./local-copy.js";
+import { nodeSqliteDriverLayer } from "./node/index.js";
 import { taskListCollections } from "./task-list-collections.js";
 import {
   type ACCOUNT_PARTS,
@@ -966,31 +969,109 @@ it.effect(
     }),
 );
 
+/** The platform a local database stands on here: Node's SQLite over a disk of the test's own. */
+const localPlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, nodeSqliteDriverLayer);
+
+/** Dana's local database over `stateRoot` opened as a sign-in opens it, laying back `harness`'s refused messages, and `sealed`'s where its table holds none. */
+function signedInLocal(
+  stateRoot: string,
+  harness: Effect.Success<ReturnType<typeof queueFollowed>>,
+  sealed?: SealedRefusals,
+) {
+  return Effect.gen(function* () {
+    const scope = yield* Scope.make();
+    const local = yield* localCopy(stateRoot).pipe(Scope.provide(scope));
+    yield* local.open("user-dana", harness.refused, sealed);
+    yield* settled;
+
+    return { local, quit: Scope.close(scope, Exit.void) };
+  });
+}
+
+/** The refused messages the agent's held transcript last drew. */
+function refusedDrawn(harness: Effect.Success<ReturnType<typeof queueFollowed>>) {
+  return (harness.held().at(-1)?.sending ?? []).map(({ text, clientKey, refused }) => ({
+    text,
+    clientKey,
+    failure: refused?.failure,
+  }));
+}
+
+/** `SENT` as it is drawn refused, under the key it went under. */
+const SENT_REFUSED = {
+  text: SENT.text,
+  clientKey: SENT.clientKey,
+  failure: AGENT_CALL_FAILURE.UNANSWERED,
+};
+
+/** A held transcript whose message `SENT` the service refused. */
+const refusedSent = Effect.gen(function* () {
+  const harness = yield* queueFollowed();
+  harness.answerMessage({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+  yield* harness.acts.AGENTS_MESSAGE(SENT);
+  yield* settled;
+
+  return harness;
+});
+
 it.effect(
-  "a message the service refused is drawn where it went again after a relaunch, from what the account's store kept, its key the one it went under",
+  "a message the service refused is drawn where it went again after a relaunch, from the account's local database, its key the one it went under",
   () =>
     Effect.gen(function* () {
+      const stateRoot = yield* temporaryDirectoryScoped("compose-agents-local-");
       const before = yield* queueFollowed();
+      const first = yield* signedInLocal(stateRoot, before);
       before.answerMessage({ failure: AGENT_CALL_FAILURE.UNANSWERED });
       yield* before.acts.AGENTS_MESSAGE(SENT);
       yield* settled;
-      // Note that what the store keeps goes through JSON, as the sealed file does.
-      const kept = JSON.parse(JSON.stringify(before.refused.kept()));
+      yield* first.quit;
 
       const after = yield* queueFollowed();
-      yield* after.refused.restored("user-dana", kept);
-      yield* settled;
+      yield* (yield* signedInLocal(stateRoot, after)).quit;
+      assert.deepEqual(refusedDrawn(after), [SENT_REFUSED]);
+    }).pipe(Effect.provide(localPlatform)),
+);
 
-      const drawn = after.held().at(-1)?.sending ?? [];
-      assert.deepEqual(
-        drawn.map(({ text, clientKey, refused }) => ({
-          text,
-          clientKey,
-          failure: refused?.failure,
-        })),
-        [{ text: SENT.text, clientKey: SENT.clientKey, failure: AGENT_CALL_FAILURE.UNANSWERED }],
-      );
-    }),
+it.effect(
+  "a message refused that an older build kept in entities.sealed is drawn after the upgrade, taken into the local database once, and the file told to drop it",
+  () =>
+    Effect.gen(function* () {
+      const stateRoot = yield* temporaryDirectoryScoped("compose-agents-local-");
+      const before = yield* refusedSent;
+      let imported = false;
+
+      // Note that what the file kept went through JSON, as the sealed file does.
+      const sealed: SealedRefusals = {
+        entries: JSON.parse(JSON.stringify(before.refused.kept())),
+        imported: Effect.sync(() => {
+          imported = true;
+        }),
+      };
+
+      const upgraded = yield* queueFollowed();
+      yield* (yield* signedInLocal(stateRoot, upgraded, sealed)).quit;
+      assert.deepEqual(refusedDrawn(upgraded), [SENT_REFUSED]);
+      assert.equal(imported, true);
+
+      const relaunched = yield* queueFollowed();
+      yield* (yield* signedInLocal(stateRoot, relaunched)).quit;
+      assert.deepEqual(refusedDrawn(relaunched), [SENT_REFUSED]);
+    }).pipe(Effect.provide(localPlatform)),
+);
+
+it.effect("a message refused is let go at a sign-out, and drawn no more at the next sign-in", () =>
+  Effect.gen(function* () {
+    const stateRoot = yield* temporaryDirectoryScoped("compose-agents-local-");
+    const before = yield* refusedSent;
+    const first = yield* signedInLocal(stateRoot, before);
+    yield* before.refused.forgotten;
+    yield* first.local.forget;
+    yield* first.quit;
+
+    const after = yield* queueFollowed();
+    yield* (yield* signedInLocal(stateRoot, after)).quit;
+    assert.deepEqual(refusedDrawn(after), []);
+  }).pipe(Effect.provide(localPlatform)),
 );
 
 it.effect(

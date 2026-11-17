@@ -368,8 +368,10 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     );
 
     /**
-     * The signed-in account's local database (`local-copy.ts`), written and
-     * read by nothing in this release: only where the platform has a driver,
+     * The signed-in account's local database (`local-copy.ts`), written as
+     * the pool moves and the one place the messages refused are kept, while
+     * the lists and the waiting writes still draw from `entities.sealed`:
+     * only where the platform has a driver,
      * the Mac and the iPhone, and the run needs an account, so neither a
      * browser tab nor a fixture run keeps one.
      */
@@ -775,23 +777,32 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         accountId: signedInId,
         queued: pool.queued,
         queueMoves: pool.queueMoves,
-        refused: agents.refused.kept,
-        refusedMoves: agents.refused.moves,
         ...(Option.isSome(listsDue) ? { listsDue: listsDue.value } : undefined),
       }).pipe(Scope.provide(scope), Effect.provideContext(fileSystemContext));
 
       entities = { store, scope };
-      // Note that the writes kept waiting, and the messages refused, are laid back before any read draws, so the first answer draws under them.
+      // Note that the writes kept waiting are laid back before any read draws, so the first answer draws under them.
       yield* pool.requeue(store.queue, [...tasks.queueable, ...agents.queueable]);
-      yield* agents.refused.restored(signedInId, store.refused);
     });
 
-    /** The signed-in account's local database opened where the host has one, after `entities.sealed` laid its queues back, so it keeps them as they stand. */
+    /**
+     * The signed-in account's local database opened where the host has one,
+     * after `entities.sealed` laid its writes back, so it keeps them as they
+     * stand: the messages refused laid back from it, or, the first time, from
+     * what an older build kept in `entities.sealed`. A host with no database
+     * lays those back from the file alone.
+     */
     const openLocal = Effect.gen(function* () {
       const signedInId = account.signedIn() ? accountId() : undefined;
 
-      if (local === undefined || signedInId === undefined) return;
-      yield* local.open(signedInId, agents.refused);
+      if (signedInId === undefined) return;
+      const sealed = entities?.store.refused;
+
+      if (local === undefined) {
+        return yield* agents.refused.restored(signedInId, sealed?.entries ?? []);
+      }
+
+      yield* local.open(signedInId, agents.refused, sealed);
     });
 
     /** The store forgotten, its file deleted, as a sign-out does; a file no store stands over is deleted too. */
