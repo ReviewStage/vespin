@@ -30,6 +30,8 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { type FiledTask, filedTaskOf } from "@repo/features/tasks-model";
+import type { VoiceCallInto } from "@repo/features/voice-call-session";
+import { TALK_LABEL } from "@repo/features/voice-call-words";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
@@ -79,6 +81,7 @@ import { useAttachedPictures } from "../use-attached-pictures.js";
 import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
 import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
+import { type NewAgentTalk, useNewAgentTalk } from "../voice-call.js";
 
 /** The panel's words for the sheets, their capsules, their menus, and their acts. */
 const WORDS = {
@@ -139,19 +142,31 @@ const LANDING = {
 
 type Landing = (typeof LANDING)[keyof typeof LANDING];
 
-/** The sheet's bar: its name, the system's ✕ at its leading edge (Cancel to VoiceOver), and Start at its trailing one, lit once there are words or pictures to send and while no start is out, with File for later before it on New task; and the ask the ✕ or a swipe down raises while the sheet holds a draft. */
+/**
+ * The sheet's bar: its name, the system's ✕ at its leading edge (Cancel to
+ * VoiceOver), and Start at its trailing one, lit once there are words or
+ * pictures to send and while no start is out, with File for later before it
+ * on New task; and the ask the ✕ or a swipe down raises while the sheet
+ * holds a draft. While the sheet holds nothing, Talk stands in Start's
+ * place where the sheet offers it, the waveform on the same button, as an
+ * agent's composer puts Talk in Send's (Dean, Nov 17), with the question it
+ * asks first while another call stands.
+ */
 function SheetBar({
   title,
   ready,
   onStart,
   file,
   kept,
+  talk,
 }: {
   readonly title: string;
   readonly ready: boolean;
   readonly onStart: () => void;
   readonly file?: FileForLater | undefined;
   readonly kept: KeptWords;
+  /** Talk while the sheet holds nothing, and whether it may be pressed; none where the sheet offers no Talk or holds something to start on. */
+  readonly talk?: { readonly talk: NewAgentTalk; readonly ready: boolean } | undefined;
 }) {
   const colors = useColors();
   const close = useCloseSheet(kept);
@@ -187,15 +202,27 @@ function SheetBar({
             {WORDS.FILE_FOR_LATER}
           </Stack.Toolbar.Button>
         )}
-        <Stack.Toolbar.Button
-          icon={glyphSymbol(GLYPH.SEND)}
-          variant="prominent"
-          tintColor={colors.ACCENT}
-          accessibilityLabel={WORDS.START}
-          disabled={!ready}
-          onPress={onStart}
-        />
+        {talk === undefined ? (
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(GLYPH.SEND)}
+            variant="prominent"
+            tintColor={colors.ACCENT}
+            accessibilityLabel={WORDS.START}
+            disabled={!ready}
+            onPress={onStart}
+          />
+        ) : (
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(GLYPH.TALK)}
+            variant="prominent"
+            tintColor={colors.ACCENT}
+            accessibilityLabel={TALK_LABEL.TALK}
+            disabled={!talk.ready}
+            onPress={talk.talk.onTalk}
+          />
+        )}
       </Stack.Toolbar>
+      {talk === undefined ? null : <ConfirmAsk destructive {...talk.talk.switching} />}
       <ConfirmAsk
         title={DISCARD_WORDS.QUESTION}
         act={DISCARD_WORDS.DISCARD}
@@ -376,6 +403,8 @@ type UseSheetStartResult = {
     start: () => Promise<StartAnswer>,
     refusal?: string | undefined,
     brief?: string | undefined,
+    /** Talk's call, opened on the agent the start made once it lands; none for a start on words. */
+    called?: ((into: VoiceCallInto) => void) | undefined,
   ) => void;
 };
 
@@ -544,6 +573,7 @@ function useClosingStart(
     start: () => Promise<StartAnswer>,
     refusal?: string | undefined,
     brief?: string | undefined,
+    called?: ((into: VoiceCallInto) => void) | undefined,
   ) => {
     if (sent) return;
 
@@ -579,6 +609,12 @@ function useClosingStart(
           const answer = started.answer;
 
           if (answer === undefined || "refused" in answer) return;
+
+          // Note that Talk's call opens on the agent it started wherever the reader went meanwhile, since the call's way back reaches it from any screen.
+          if (called !== undefined && answer.agentId !== undefined) {
+            called({ agentId: answer.agentId, taskId: answer.taskId });
+          }
+
           // Note that the task opens only while the reader stands where Start left them, on the same route with the same row selected, so a page they opened or a row they picked meanwhile stands.
           const now = standingIn(presenting, 0);
 
@@ -587,8 +623,11 @@ function useClosingStart(
             onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: answer.taskId })),
           );
 
-          // Note that New task lands on the task's page alone, its new agent standing in its Agents section, while New agent goes on to the agent it started, titled by its brief as the sheet's start names it, so Back returns to the task.
-          if (landing !== LANDING.AGENT || answer.agentId === undefined) return;
+          // Note that New task lands on the task's page alone, its new agent standing in its Agents section, while New agent and Talk go on to the agent it started, titled by its brief as the sheet's start names it, so Back returns to the task.
+          if ((landing !== LANDING.AGENT && called === undefined) || answer.agentId === undefined) {
+            return;
+          }
+
           const title = brief === undefined ? "" : cardTitle(brief);
           router.push({
             pathname: onTab(iosAgentRoute(answer.agentId)),
@@ -686,6 +725,20 @@ export function NewAgentScreen({
       : { refused: result.failure.text };
   };
 
+  // Talk starts the agent blank on the sheet's chips and calls it once it lands; a suggestion's sheet offers none.
+  const talk = useNewAgentTalk(
+    () =>
+      new Promise<VoiceCallInto | undefined>((called) =>
+        closing.go(
+          () =>
+            startAgent({ prompt: undefined, attachments: undefined, picked: pick.picked, runsOn }),
+          undefined,
+          undefined,
+          called,
+        ),
+      ),
+  );
+
   // Note that New agent's own start closes the sheet at once, as New task's does, while a suggestion's keeps it up until the service answers, since it goes through the suggestion once, as the panel's draft sends one.
   const start = () =>
     opened === undefined
@@ -714,6 +767,11 @@ export function NewAgentScreen({
         ready={drafted && placed && !starting}
         onStart={start}
         kept={kept}
+        talk={
+          talk === undefined || drafted || opened !== undefined
+            ? undefined
+            : { talk, ready: !starting }
+        }
       />
       <FocusedComposeSheet
         title={
@@ -1032,6 +1090,26 @@ export function NewTaskScreen({
     if (filed !== undefined) go(() => fileTask({ filed, ...place }));
   };
 
+  // Talk starts the task and its agent blank on the sheet's chips and calls the agent once it lands.
+  const talk = useNewAgentTalk(
+    () =>
+      new Promise<VoiceCallInto | undefined>((called) =>
+        go(
+          () =>
+            startTask({
+              prompt: undefined,
+              attachments: undefined,
+              picked: pick.picked,
+              runsOn,
+              ...place,
+            }),
+          undefined,
+          undefined,
+          called,
+        ),
+      ),
+  );
+
   return (
     <>
       <SheetBar
@@ -1040,6 +1118,7 @@ export function NewTaskScreen({
         onStart={start}
         file={{ ready: filed !== undefined && placed && !starting, onFile: file }}
         kept={kept}
+        talk={talk === undefined || drafted ? undefined : { talk, ready: placed && !starting }}
       />
       <FocusedComposeSheet
         head={head}

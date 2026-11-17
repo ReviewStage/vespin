@@ -1,7 +1,7 @@
 import {
   PROVIDER_KEY_PROVIDER,
-  PROVIDER_KEY_STATUS,
   type ProviderKeySummary,
+  savesOpenAiKey,
 } from "@repo/features/provider-key-wire";
 import { agentKeyLink } from "@repo/settings/settings-views";
 import { useQuery } from "@tanstack/react-query";
@@ -43,11 +43,7 @@ const OpenAiKeyContext = createContext<OpenAiKey>(OPENAI_KEY.UNKNOWN);
  * decrypt is refused as none, while one OpenAI refused is still tried.
  */
 function keyOf(keys: readonly ProviderKeySummary[]): OpenAiKey {
-  const key = keys.find((one) => one.provider === PROVIDER_KEY_PROVIDER.OPENAI);
-
-  return key === undefined || key.status === PROVIDER_KEY_STATUS.UNREADABLE
-    ? OPENAI_KEY.MISSING
-    : OPENAI_KEY.SAVED;
+  return savesOpenAiKey(keys) ? OPENAI_KEY.SAVED : OPENAI_KEY.MISSING;
 }
 
 /** Holds the signed-in account's keys and hands whether it has an OpenAI one to everything under it. */
