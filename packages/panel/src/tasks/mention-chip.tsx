@@ -44,6 +44,7 @@ import {
   type Mention,
   type MentionLines,
   type MentionPlace,
+  mentionChipLabel,
   mentionName,
   type NumberedTaskIdOf,
   pageRepositoryOf,
@@ -640,15 +641,9 @@ function MentionChip({
       ? written
       : chipName(mention, written, bare, known, standing, heading, doors.place.repository));
 
-  // Note that a pull request's chip names its number alone, its state mark beside it, since its title fades mid-word in a chip; its card keeps the title.
+  // Note that a pull request's chip names its key alone, its state mark beside it (`mentionChipLabel`).
   const pull = mention.kind === MENTION_KIND.LINK ? pullRequestAddressOf(mention.url) : undefined;
-
-  // Note that a key off another repository (`relay#42`) keeps its repository, which says which one it is.
-  // Note that only a key naming the link's own number is trimmed, so words that merely start with another `#12` stay as written.
-  const label =
-    pull === undefined
-      ? name
-      : (new RegExp(`^\\S*#${pull.number}(?=\\s)`, "u").exec(name)?.[0] ?? name);
+  const label = mentionChipLabel(mention, name);
 
   // Note that a short name read as one entity is kept whole with its mark and state, since one broken at its `/`, `-`, or space reads as two entities: a pull request GitHub answered for, called by its key alone; a task called by its key; a person; and a server or its tool.
   const whole =
