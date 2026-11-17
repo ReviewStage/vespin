@@ -461,6 +461,9 @@ importers:
       '@config-plugins/react-native-webrtc':
         specifier: 15.0.2
         version: 15.0.2(expo@58.0.23)
+      '@expo/plist':
+        specifier: 0.10.1
+        version: 0.10.1
       '@expo/ui':
         specifier: 58.0.27
         version: 58.0.27(patch_hash=19e0a7e1bd96ce3634a1506cf9858cbe79c70a8e39739dfbac58c6a9e8ff4d68)(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
