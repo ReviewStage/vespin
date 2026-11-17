@@ -82,3 +82,23 @@ export function linkFace(href: string, words: string): LinkFace {
 
   return bare === undefined ? { words, bare: false } : { words: bare, bare: true };
 }
+
+/** Where in a link's words the part a reader is shown stands. */
+export interface SaidSpan {
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * The part of a link's words that its face says, where its words are its
+ * own web address: past its scheme and short of a trailing slash, as
+ * `linkFace` says it; nothing for any other link. An editor holding the
+ * words draws only this part, so a bare address reads as it does drawn.
+ */
+export function saidSpanOf(href: string, words: string): SaidSpan | undefined {
+  if (bareUrl(href) === undefined || !saysOwnAddress(href, words)) return undefined;
+  const start = WEB_SCHEME.exec(words)?.[0].length ?? 0;
+  const end = words.endsWith("/") && words.length - 1 > start ? words.length - 1 : words.length;
+
+  return { start, end };
+}

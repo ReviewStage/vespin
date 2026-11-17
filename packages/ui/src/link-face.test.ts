@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { linkFace } from "./link-face.js";
+import { linkFace, saidSpanOf } from "./link-face.js";
 
 /**
  * link-face.test.ts -- a bare address says itself whole but for its scheme,
- * and a labeled link says its label. Synthetic addresses.
+ * and a labeled link says its label; an editor holding a bare address's
+ * words shows the part its face says. Synthetic addresses.
  */
 
 test("a link whose words are its address says it whole, without its scheme or trailing slash, however the words spell it", () => {
@@ -40,4 +41,13 @@ test("a labeled link, or an address that is not the web's, says its words", () =
     words: "file:///Users/someone/notes.md",
     bare: false,
   });
+});
+
+test("the part of a bare address's words its face says stands past the scheme and short of a trailing slash, and a labeled link has none", () => {
+  const words = "https://example.com/guides/";
+
+  assert.deepEqual(saidSpanOf(words, words), { start: 8, end: words.length - 1 });
+  assert.deepEqual(saidSpanOf("https://example.com", "example.com"), { start: 0, end: 11 });
+  assert.equal(saidSpanOf("https://example.com/guides", "the guides"), undefined);
+  assert.equal(saidSpanOf("mailto:someone@example.com", "mailto:someone@example.com"), undefined);
 });
