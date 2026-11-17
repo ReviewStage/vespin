@@ -1,0 +1,18 @@
+built main abb0302864 + #9737 e29784e623 as 2ee8826ba2
+install 0
+curve 09:02:44 28791 MB
+curve 09:03:14 26471 MB
+curve 09:03:44 26036 MB
+curve 09:04:16 26122 MB
+curve 09:04:47 25853 MB
+curve 09:05:18 25721 MB
+curve 09:05:48 25644 MB
+curve 09:06:19 25370 MB
+curve 09:06:49 25114 MB
+curve 09:07:22 24318 MB
+curve 09:07:53 23952 MB
+curve 09:08:23 24010 MB
+curve 09:08:53 23844 MB
+BUILD EXIT 0 09:09:24
+/Users/deanstratakos/vespin-ipad-agent/Vn9737.app: replacing existing signature
+live-activity: fails 0 shots 3 
