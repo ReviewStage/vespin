@@ -68,8 +68,13 @@ interface DiagramPicture {
 /** A fence's drawing: its picture, `null` where Mermaid could not draw it, or none while it is drawn. */
 type Drawing = DiagramPicture | null | undefined;
 
-/** Each picture drawn, by whether it was drawn dark and then by its code, oldest first. */
-const drawn = new Map<boolean, Map<string, DiagramPicture | null>>();
+/**
+ * Each picture drawn, by the palette it was drawn in and then by its code,
+ * oldest first. Note that it is kept by the palette itself, one of
+ * `useColors`' few, rather than by the appearance alone, so a diagram drawn
+ * before Increase Contrast was turned on is drawn again in the new colors.
+ */
+const drawn = new Map<BrandColors, Map<string, DiagramPicture | null>>();
 
 /** What is told when a picture lands. */
 const listeners = new Set<() => void>();
@@ -80,9 +85,9 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-/** A drawing kept as the newest in its appearance, the oldest past the bound let go. */
-function keep(dark: boolean, code: string, drawing: DiagramPicture | null): void {
-  const held = drawn.get(dark) ?? new Map<string, DiagramPicture | null>();
+/** A drawing kept as the newest in its palette, the oldest past the bound let go. */
+function keep(palette: BrandColors, code: string, drawing: DiagramPicture | null): void {
+  const held = drawn.get(palette) ?? new Map<string, DiagramPicture | null>();
   held.delete(code);
   held.set(code, drawing);
 
@@ -91,15 +96,16 @@ function keep(dark: boolean, code: string, drawing: DiagramPicture | null): void
     held.delete(oldest);
   }
 
-  drawn.set(dark, held);
+  drawn.set(palette, held);
 
   for (const listener of listeners) listener();
 }
 
-/** One fence waiting to be drawn, or being drawn: its number, its code, and the appearance it is drawn in. */
+/** One fence waiting to be drawn, or being drawn: its number, its code, the palette it is drawn in, and whether that palette is dark. */
 interface Asked {
   readonly id: number;
   readonly code: string;
+  readonly palette: BrandColors;
   readonly dark: boolean;
 }
 
@@ -108,10 +114,13 @@ interface DiagramPage {
   readonly injectJavaScript: (script: string) => void;
 }
 
-/** What asks the renderer for a fence's picture in the window's appearance. */
-type AskDiagram = (code: string) => void;
+/** What a renderer offers the fences inside it: the palette it draws in, by which their pictures are kept, and what asks it for one. */
+interface DiagramAsking {
+  readonly palette: BrandColors;
+  readonly ask: (code: string) => void;
+}
 
-const DiagramAskContext = createContext<AskDiagram | undefined>(undefined);
+const DiagramAskContext = createContext<DiagramAsking | undefined>(undefined);
 
 /** A navigation the page may make: none but standing where it was handed in. */
 function staysHandedIn(request: WebViewNavigation): boolean {
@@ -123,9 +132,10 @@ function staysHandedIn(request: WebViewNavigation): boolean {
  * one for its page, each sent once the page stands ready: what is asked,
  * the fence being drawn, and the page drawing them, once it stands.
  */
-function drawingQueue(colors: () => BrandColors) {
+function drawingQueue() {
   const waiting: Asked[] = [];
   let ready = false;
+  let gone = false;
   let page: DiagramPage | null = null;
   let drawing: Asked | undefined;
   let next = 0;
@@ -136,7 +146,7 @@ function drawingQueue(colors: () => BrandColors) {
 
     if (asked === undefined) return;
     drawing = asked;
-    const palette = colors();
+    const { palette } = asked;
     const theme = diagramThemeVariablesOf((role) => palette[ROLE_COLOR[role]], asked.dark);
     page.injectJavaScript(diagramAskScript({ id: asked.id, code: asked.code, theme }));
   };
@@ -146,14 +156,21 @@ function drawingQueue(colors: () => BrandColors) {
       page = view;
       pump();
     },
-    ask: (code: string, dark: boolean) => {
-      if (drawn.get(dark)?.has(code) === true) return;
+    ask: (code: string, palette: BrandColors, dark: boolean) => {
+      if (drawn.get(palette)?.has(code) === true) return;
 
-      if (drawing?.code === code && drawing.dark === dark) return;
+      // Note that a fence asked once the page is lost stands as its code at once, as those it held do, since no page will draw it.
+      if (gone) {
+        keep(palette, code, null);
 
-      if (waiting.some((each) => each.code === code && each.dark === dark)) return;
+        return;
+      }
+
+      if (drawing?.code === code && drawing.palette === palette) return;
+
+      if (waiting.some((each) => each.code === code && each.palette === palette)) return;
       next += 1;
-      waiting.push({ id: next, code, dark });
+      waiting.push({ id: next, code, palette, dark });
       pump();
     },
     answered: (answer: DiagramAnswer) => {
@@ -165,19 +182,20 @@ function drawingQueue(colors: () => BrandColors) {
             ? { source: answer.picture, size: { width: answer.width, height: answer.height } }
             : null;
 
-        keep(drawing.dark, drawing.code, picture);
+        keep(drawing.palette, drawing.code, picture);
         drawing = undefined;
       }
 
       pump();
     },
-    // Note that a page that could not load, or whose process the system ended, draws nothing more, so every fence it held stands as its code rather than spinning.
+    // Note that a page that could not load, or whose process the system ended, draws nothing more, so every fence it held, and every one asked after, stands as its code rather than spinning.
     lost: () => {
       const held = drawing === undefined ? waiting.splice(0) : [drawing, ...waiting.splice(0)];
       drawing = undefined;
       ready = false;
+      gone = true;
 
-      for (const each of held) keep(each.dark, each.code, null);
+      for (const each of held) keep(each.palette, each.code, null);
     },
   };
 }
@@ -192,22 +210,20 @@ function drawingQueue(colors: () => BrandColors) {
  * can load, send, or open anything.
  */
 export function DiagramRenderer({ children }: { readonly children: ReactNode }) {
-  const colors = useColors();
-  const [palette] = useState(() => ({ now: colors }));
-  palette.now = colors;
-  const [queue] = useState(() => drawingQueue(() => palette.now));
+  const palette = useColors();
+  const [queue] = useState(drawingQueue);
   const [needed, setNeeded] = useState(false);
   const [document] = useState(() => diagramDocument(mermaidSource));
   const dark = useColorScheme() === "dark";
 
-  const ask: AskDiagram = (code) => {
-    if (drawn.get(dark)?.has(code) === true) return;
+  const ask = (code: string) => {
+    if (drawn.get(palette)?.has(code) === true) return;
     setNeeded(true);
-    queue.ask(code, dark);
+    queue.ask(code, palette, dark);
   };
 
   return (
-    <DiagramAskContext.Provider value={ask}>
+    <DiagramAskContext.Provider value={{ palette, ask }}>
       {children}
       {needed ? (
         <WebView
@@ -238,18 +254,20 @@ export function DiagramRenderer({ children }: { readonly children: ReactNode }) 
   );
 }
 
-/** A fence's drawing in the window's appearance, asked of the renderer around it once; none while it is drawn, and `null` where it could not be. */
+/** A fence's drawing in the palette of the renderer around it, asked of that renderer once; none while it is drawn, and `null` where it could not be. */
 function useDiagram(code: string): Drawing {
-  const ask = useContext(DiagramAskContext);
-  const dark = useColorScheme() === "dark";
-  const held = useSyncExternalStore(subscribe, () => drawn.get(dark)?.get(code));
+  const asking = useContext(DiagramAskContext);
+
+  const held = useSyncExternalStore(subscribe, () =>
+    asking === undefined ? undefined : drawn.get(asking.palette)?.get(code),
+  );
 
   useEffect(() => {
-    if (held === undefined) ask?.(code);
-  }, [ask, code, held]);
+    if (held === undefined) asking?.ask(code);
+  }, [asking, code, held]);
 
   // Note that words drawn with no renderer around them, which nothing asks, stand as their code.
-  return ask === undefined ? null : held;
+  return asking === undefined ? null : held;
 }
 
 /**
