@@ -202,36 +202,32 @@ export function MenuChip(props: MenuChipProps) {
   );
 }
 
-/** What picking a choice chooses, as its option is tagged: its id, or its label where it has none. */
-function choiceValue(choice: MenuChoice): string {
-  return choice.id ?? choice.label;
-}
-
 /**
  * A capsule menu's group as SwiftUI's own single choice: an inline picker,
  * its options standing in the menu with the one chosen checked, as the
- * system checks it, its label left to the group's section. Note that a
- * pick of the option already chosen sends nothing, as the system's picker
- * answers only a change.
+ * system checks it, its label left to the group's section. Note that each
+ * option is tagged by its place in the group, never its label or id, so two
+ * choices of one name, such as two Macs both called MacBook Pro, stay two;
+ * and that a pick of the option already chosen sends nothing, as the
+ * system's picker answers only a change.
  */
 function GroupPicker({ group }: { readonly group: ChipMenuGroup }) {
   const colors = useColors();
-  const chosen = group.choices.find((choice) => choice.on);
+  const chosen = group.choices.findIndex((choice) => choice.on);
 
   return (
     <Picker
       label={group.title ?? ""}
-      {...(chosen === undefined ? {} : { selection: choiceValue(chosen) })}
-      onSelectionChange={(value: string) =>
-        group.choices.find((choice) => choiceValue(choice) === value)?.onPress()
-      }
+      {...(chosen === -1 ? {} : { selection: String(chosen) })}
+      onSelectionChange={(value: string) => group.choices[Number(value)]?.onPress()}
       modifiers={[pickerStyle("inline"), labelsHidden()]}
     >
-      {group.choices.map((choice) => (
+      {group.choices.map((choice, at) => (
         <PickOption
-          key={choiceValue(choice)}
+          // Note that an option is keyed by its place, as it is tagged, since two may share a name.
+          key={at}
           label={choice.label}
-          value={choiceValue(choice)}
+          value={String(at)}
           glyph={choice.symbol}
           color={choiceColor(choice, colors)}
           photo={choice.photo}
