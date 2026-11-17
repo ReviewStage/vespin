@@ -20,7 +20,7 @@
  * (`endVoiceCall`).
  */
 
-import { UNTITLED_TASK_NAME } from "@repo/features/task-wire";
+import { TASK_PRIORITY, TASK_STATUS, UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { and, asc, eq, exists, isNull, not, or, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
@@ -292,9 +292,10 @@ const deleteAgentById = SqlSchema.void({
 
 /**
  * The caller's task deleted where it holds nothing a member or an agent put
- * there: still untitled, with no description, brief, or page, no agent left
- * on it, archived ones included, no comment, and no parent, sub-task, or
- * block either way. Nothing for any other.
+ * there: still untitled, to do, unweighed, and unassigned or assigned to the
+ * caller as their start assigns it, with no description, brief, or page, no
+ * agent left on it, archived ones included, no comment, and no parent,
+ * sub-task, or block either way. Nothing for any other.
  */
 const deleteEmptyTask = SqlSchema.void({
   Request: Schema.Struct({ callerId: Schema.String, taskId: Schema.String }),
@@ -307,6 +308,9 @@ const deleteEmptyTask = SqlSchema.void({
           eq(task.id, taskId),
           eq(task.userId, callerId),
           eq(task.name, UNTITLED_TASK_NAME),
+          eq(task.status, TASK_STATUS.TODO),
+          eq(task.priority, TASK_PRIORITY.NONE),
+          or(isNull(task.assigneeId), eq(task.assigneeId, callerId)),
           eq(task.description, ""),
           isNull(task.brief),
           isNull(task.parentTaskId),
