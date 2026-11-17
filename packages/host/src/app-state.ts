@@ -161,6 +161,8 @@ export const RUN_PROFILE = {
   SETTINGS_MCP: "settings-mcp",
   /** The same account, Settings on Skills: its team's and its own. */
   SETTINGS_SKILLS: "settings-skills",
+  /** The same account, an owner, Settings on its team's Billing with billing on: $12.40 of usage, $10 included, $2.40 owed. */
+  SETTINGS_BILLING: "settings-billing",
   /** The same account, Settings on its team's memory. */
   SETTINGS_MEMORY: "settings-memory",
   /** The same account, an admin, opened at launch on Admin's Overview. */
