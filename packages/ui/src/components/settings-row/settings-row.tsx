@@ -439,16 +439,19 @@ export function SettingsRowAction({ children }: { children: ReactNode }): React.
 export function SettingsRowUsage({
   rows,
   heard,
+  checking,
   alignWith,
 }: {
   rows: readonly UsageMeterRow[];
   heard?: string | undefined;
+  /** What it says while its reading is asked again, shimmering in the heard line's place. */
+  checking?: string | undefined;
   /** Every row of the meters in the rows around it, which these line up with as one table (`UsageMeters`). */
   alignWith?: readonly UsageMeterRow[] | undefined;
 }): React.JSX.Element {
   return (
     <span className="ui-settings-row-usage mt-ui-6 block">
-      <UsageMeters rows={rows} heard={heard} alignWith={alignWith} />
+      <UsageMeters rows={rows} heard={heard} checking={checking} alignWith={alignWith} />
     </span>
   );
 }

@@ -132,6 +132,8 @@ export const CREDENTIAL_WORDS = {
   SIGNED_OUT: SIGNED_OUT_WORDS,
   ADD: "Add plan or key",
   REFRESH_USAGE: "Refresh usage",
+  REFRESHING_USAGE: "Refreshing usage",
+  REFRESH_USAGE_FAILED: "Couldn't refresh usage. Try again.",
   ADD_KEY: "Add key",
   AT_LIMIT: "At its limit",
   BACK_AT: "back at",
