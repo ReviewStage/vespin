@@ -129,13 +129,15 @@ function AdminDashboardPage({
   // Note that Better Auth answers a refused sign-out as a result rather than a
   // throw, so the refusal is thrown here: the session still stands, and
   // nothing past this may say it is gone. Each screen withdraws its reads
-  // around it (`useAdminSignOut`).
+  // around it (`useAdminSignOut`). The fixture's admin holds no session, so
+  // its Sign out ends none, leaving whatever session the tab holds standing.
   const signOut = useCallback(async () => {
+    if (fixtureViewer !== undefined) return;
     const { error } = await authClient.signOut();
 
     if (error) throw new Error("The sign-out was refused.");
     SIGN_IN_CHOSEN.write(false);
-  }, []);
+  }, [fixtureViewer]);
 
   const withdraw = useAdminSignOut(signOut);
 
