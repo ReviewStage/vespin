@@ -52,9 +52,11 @@
  *
  * The row writes waiting for the service are kept in the local database's
  * outbox alone (`local-queues.ts`). A file an older build kept may still
- * hold them (`queue`): the store reads them for the account's own file
- * (`legacyQueue`), for the local database to import once, and never writes
- * them again.
+ * hold them (`queue`): the store hands them out for the account's own file
+ * (`queue.entries`), for the local database to import once, and carries
+ * them through every save until it says they were imported
+ * (`queue.imported`), so a database that would not open never leaves them
+ * nowhere on disk.
  */
 
 import { AUTOMATIONS_READ } from "@repo/features/automation-live";
@@ -177,11 +179,12 @@ const keptReadsSchema = Schema.Struct({
   [KEPT_READ.INBOX]: Schema.optionalKey(keptRowsSchema.fields[KEPT_READ.INBOX]),
 });
 
-/** What the file holds once opened: whose it is, the shapes its rows were kept at, the rows, and the messages refused. */
+/** What the file holds once opened: whose it is, the shapes its rows were kept at, the rows, the writes an older build kept waiting until they are imported, and the messages refused. */
 const keptSchema = Schema.Struct({
   hash: Schema.String,
   accountId: Schema.String,
   reads: keptReadsSchema,
+  queue: Schema.optionalKey(Schema.Array(queuedEntrySchema)),
   refused: Schema.optionalKey(Schema.Array(Schema.Unknown)),
 });
 
@@ -222,13 +225,24 @@ export interface EntityStore {
     workspaceId: string,
     rows: KeptRows[Read][string],
   ) => Effect.Effect<void>;
-  /** The row writes waiting for the service an older build kept in the account's own file, oldest first, read for the local database to import once and never written again. */
-  readonly legacyQueue: readonly QueuedEntry[];
+  /** The row writes waiting for the service an older build kept in the account's own file, for the local database to import once. */
+  readonly queue: SealedWrites;
   /** The messages the service refused as the file held them when the store opened, each in the form its reader kept it in. */
   readonly refused: readonly unknown[];
   /** Deletes the file and keeps nothing more, as a sign-out does. */
   readonly forget: Effect.Effect<void>;
 }
+
+/** The row writes an older build kept waiting in the file: carried through every save until `imported`, then never written again. */
+export interface SealedWrites {
+  /** The writes as the file held them when the store opened, oldest first. */
+  readonly entries: readonly QueuedEntry[];
+  /** Tells the store the local database holds them now, so its next save leaves them out. */
+  readonly imported: Effect.Effect<void>;
+}
+
+/** No older waiting writes, as a host with no file, or a file that held none, hands the local database. */
+export const NO_SEALED_WRITES: SealedWrites = { entries: [], imported: Effect.void };
 
 export interface EntityStoreOptions {
   /** The state root the settings file stands in. */
@@ -356,13 +370,15 @@ export function openEntityStore(
     const stored: Partial<KeptRows> = kept ?? {};
     // Note that the account's own waiting writes an older build kept outlast other row shapes, for the local database to import.
     const legacyQueue: readonly QueuedEntry[] = ours ? (read.queue ?? []) : [];
+    /** The older waiting writes each save still carries, until the local database imported them. */
+    let queueCarried = legacyQueue;
     // Note that the account's own messages refused outlast other row shapes, and are kept again at the next save.
     const refusedKept: readonly unknown[] = ours ? (read.refused ?? []) : [];
     const refusedNow = options.refused ?? (() => refusedKept);
     /** What waits on the member, the messages refused, as one text a save compares. */
     const waitingNow = () => JSON.stringify(refusedNow());
     let reads: Partial<KeptRows> = stored;
-    let dirty = kept === undefined && refusedKept.length > 0;
+    let dirty = kept === undefined && (legacyQueue.length > 0 || refusedKept.length > 0);
     /** Whether rows kept since the last save moved nothing but where they stand (`keepUnmoved`), which only a save of something that moved, or the last, writes. */
     let unmoved = false;
     let savedRefused = JSON.stringify(refusedKept);
@@ -384,7 +400,9 @@ export function openEntityStore(
           savedRefused = waitingText;
           savedAt = now;
 
-          return encodeKept({ hash, accountId, reads, refused }).pipe(
+          const queue = queueCarried.length > 0 ? { queue: queueCarried } : undefined;
+
+          return encodeKept({ hash, accountId, reads, ...queue, refused }).pipe(
             Effect.map((plain) => sealedText(cipher, plain)),
             Effect.flatMap((sealed) =>
               writeSettingsFileAtomic(directory, sealed, undefined, ENTITY_STORE_FILE_NAME),
@@ -457,7 +475,12 @@ export function openEntityStore(
 
     return {
       stored: (read) => stored[read],
-      legacyQueue,
+      queue: {
+        entries: legacyQueue,
+        imported: Effect.sync(() => {
+          queueCarried = [];
+        }),
+      },
       refused: refusedKept,
       keep: (kept, rows) =>
         Effect.andThen(

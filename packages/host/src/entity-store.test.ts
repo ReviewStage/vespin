@@ -217,6 +217,35 @@ it.effect(
 );
 
 it.effect(
+  "the writes an older build kept waiting are carried through every save until the local database imported them",
+  () =>
+    Effect.gen(function* () {
+      const directory = yield* temporaryDirectoryScoped("entity-store-");
+      const waiting = [{ name: "tasks.rename", key: "rename-old", input: { taskId: "t1" } }];
+      const kept = { hash: "an older build's", accountId: DANA, reads: {}, queue: waiting };
+      const sealed = Base64.encode(testCipher().encrypt(JSON.stringify(kept)));
+      yield* (yield* FileSystem.FileSystem).writeFileString(yield* fileOf(directory), sealed);
+
+      // Note that each launch keeps a list, so its quit saves the file whole.
+      const upgraded = yield* opened(directory, DANA);
+      yield* upgraded.store.keep(KEPT_READ.TASK_LIST, LIST);
+      yield* upgraded.closed;
+
+      const imported = yield* opened(directory, DANA);
+      const carried = imported.store.queue.entries;
+      yield* imported.store.queue.imported;
+      yield* imported.store.keep(KEPT_READ.INBOX, INBOX);
+      yield* imported.closed;
+
+      const after = yield* opened(directory, DANA);
+      yield* after.closed;
+
+      assert.deepEqual(carried, waiting);
+      assert.deepEqual(after.store.queue.entries, []);
+    }).pipe(Effect.provide(files)),
+);
+
+it.effect(
   "the messages refused are written within half a second of moving, and read back at the next launch by the same account alone",
   () =>
     Effect.gen(function* () {
