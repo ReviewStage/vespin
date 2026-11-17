@@ -2530,7 +2530,8 @@ svg.lucide {
   translate: 0 -50%;
 }
 
-/* The button shows only while the pointer is over the description. Beside
+/* The button shows only while the pointer is over the description, its
+   gutters on either side of the column included, as Notion's does. Beside
    the margin's cards, where no count stands, it stands centered in the gap
    before them, which is as wide as the gutter. */
 .comment-block-button {
@@ -2548,7 +2549,7 @@ svg.lucide {
 }
 
 @media (hover: hover) {
-  .description-body:hover .comment-block-button {
+  .description-document-body:hover .comment-block-button {
     opacity: 1;
   }
 }
