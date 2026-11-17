@@ -150,6 +150,7 @@ it.layer(getTestDB())("a member's live activity", (it) => {
           aps: {
             timestamp: 0,
             event: "start",
+            "input-push-token": 1,
             "attributes-type": "AgentsActivityAttributes",
             attributes: {},
             "content-state": {
