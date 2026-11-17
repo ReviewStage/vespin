@@ -1,8 +1,7 @@
-// detail-stack.ts -- the pages each place pushes over its detail inside the detail's own column, in a window wide enough for three columns, as Mail opens a message's related pages beside its list with a Back there.
+// detail-stack.ts -- the pages each place pushes over its detail inside the detail's own column, in a regular window's split view, as Mail opens a message's related pages beside its list with a Back there.
 
 import { IOS_TAB, type IosTab, iosRouteOnTab } from "@repo/features/ios-app-links";
-import { useThreeColumns } from "@repo/ui-native";
-import { type Href, useFocusEffect, useIsFocused, useRouter } from "expo-router";
+import { type Href, useFocusEffect, useRouter } from "expo-router";
 import {
   createContext,
   useCallback,
@@ -12,13 +11,7 @@ import {
   useRef,
   useSyncExternalStore,
 } from "react";
-import {
-  placeOfRoute,
-  placeRoute,
-  SIDEBAR_PLACE,
-  type SidebarPlace,
-} from "./screens/app-sidebar.js";
-import { useOwnTab } from "./tab-route.js";
+import { SIDEBAR_PLACE, type SidebarPlace } from "./screens/app-sidebar.js";
 
 /** What a page pushed over the detail is, as the route a compact window pushes for it names it. */
 export const PUSHED_PAGE = {
@@ -99,22 +92,6 @@ export type HeldPage = { readonly key: string; readonly page: PushedPage };
 /** A place's pushed pages, oldest first, and the detail they were pushed over, by its root's key (`useStackRoot`). */
 export type PlaceStack = { readonly over: string | undefined; readonly pages: readonly HeldPage[] };
 
-/**
- * The first segment under a tab's `tasks` route of each page that stands in
- * the detail's stack rather than over the window, as the router names them
- * (`tasks/agent/[id]`, `tasks/comments/[id]`, …).
- */
-const STACKED_ROUTE = {
-  AGENT: "agent",
-  PAGE: "page",
-  COMMENTS: "comments",
-  HISTORY: "history",
-  VERSION: "version",
-} as const;
-
-/** The tabs' route every stacked page stands under. */
-const TASKS_SEGMENT = "tasks";
-
 const EMPTY: PlaceStack = { over: undefined, pages: [] };
 
 /** The tab whose stack each place's routes stand on. */
@@ -135,7 +112,7 @@ const listeners = new Set<() => void>();
 /** The last key handed out, so each page pushed is named apart from every other. */
 let serial = 0;
 
-/** The place whose detail a view stands in; none outside a three-column split view's detail. */
+/** The place whose detail a view stands in; none outside a split view's detail. */
 const DetailPlace = createContext<SidebarPlace | undefined>(undefined);
 
 /** The key of the pushed page a view stands in; none in the detail's root. */
@@ -414,7 +391,7 @@ export function useDetailCovered(): boolean {
   });
 }
 
-/** The place whose detail stands in front, as the split view showing it says: the three-column split, or a two-column tab root; none while no split view stands in front. */
+/** The place whose detail stands in front, as the tab root showing its split view says; none while no split view stands in front. */
 let front: SidebarPlace | undefined;
 
 /** Names the place whose detail stands in front, so the menu bar's Back pops its pages; none as its split view steps behind or leaves. */
@@ -426,39 +403,22 @@ function standDetailFront(place: SidebarPlace | undefined): void {
 }
 
 /**
- * Stands a place's detail in front while its split view is shown, so the
- * menu bar's Back pops the pages pushed over it. Note that stepping back
- * clears the front only while this place still holds it, because another
- * split view, such as the next tab's, may already have named its own in the
- * same switch.
+ * Stands a tab root's detail in front while its tab is focused, so the menu
+ * bar's Back pops the pages pushed over it. Note that leaving clears the
+ * front only while this place still holds it, because the next tab's root
+ * may already have named its own in the same switch. Note too that it hears
+ * focus through an effect rather than reading it, because a read would draw
+ * the whole root again on every tab switch.
  */
-export function useStandDetailFront(place: SidebarPlace, shown: boolean): void {
-  useEffect(() => {
-    if (!shown) return;
-    standDetailFront(place);
-
-    return () => {
-      if (front === place) standDetailFront(undefined);
-    };
-  }, [place, shown]);
-}
-
-/**
- * Stands a tab root's detail in front while its tab is focused and `shown`
- * holds, as `useStandDetailFront` does. Note that it hears focus through an
- * effect rather than reading it, because a read would draw the whole root
- * again on every tab switch, and hand the split view its columns anew.
- */
-export function useStandFocusedDetailFront(place: SidebarPlace, shown: boolean): void {
+export function useStandFocusedDetailFront(place: SidebarPlace): void {
   useFocusEffect(
     useCallback(() => {
-      if (!shown) return;
       standDetailFront(place);
 
       return () => {
         if (front === place) standDetailFront(undefined);
       };
-    }, [place, shown]),
+    }, [place]),
   );
 }
 
@@ -488,72 +448,26 @@ export function popDetailFront(): void {
   if (top !== undefined) popDetail(front, top.key);
 }
 
-/** Whether a tab's route (its segments under the tab's group) is a page the detail's stack stands, as an agent's or a pull request's. */
-export function isStackedRoute(segments: readonly string[]): boolean {
-  const [first, second] = segments;
-
-  return first === TASKS_SEGMENT && Object.values(STACKED_ROUTE).some((head) => head === second);
+/**
+ * Whether a place's detail stands its own stack in a window this wide: in a
+ * regular window, the places whose root draws a split view (the Inbox and
+ * Tasks; Search's results stand alone).
+ */
+function standsStack(regular: boolean, place: SidebarPlace): boolean {
+  return regular && place !== SIDEBAR_PLACE.SEARCH;
 }
 
 /**
- * Whether a stacked page's route stands aside for its tab's split view. In a
- * window wide enough for three columns it pushes its page over the detail
- * of its own tab's place and pops itself off the router's stack, so a link,
- * a notification, or a press outside the detail lands where a press in the
- * detail would, as `useHandToSplit` hands a thread or a task to its list.
- * Nothing is handed while `page` is none. Note that the page is pushed once
- * however often the route draws, since the router pops it a few renders
- * after the push. Note too that only the page in front hands over, as
- * `useHandToSplit` does, because the hand-off pops every page above the
- * tab's root: a turn to three columns under a sheet, or under another page
- * pushed over this one, would close them and drop their drafts. A page
- * behind keeps drawing, and hands over once it next comes in front.
+ * Keeps the page in front as the window turns compact, where no place's
+ * detail stands a stack, as Mail keeps the open message across a fold: the
+ * top page of the place standing is pushed onto its tab's router stack,
+ * over the row its list keeps picked, and each place's stack is let go.
+ * Note that only the top page is pushed, because Back from it then lands on
+ * the row it was opened from rather than on each page under it.
  */
-export function useHandToDetail(page: PushedPage | undefined): boolean {
+export function useStackToRoutes(regular: boolean, place: SidebarPlace | undefined): void {
   const router = useRouter();
-  const focused = useIsFocused();
-  const handing = useThreeColumns() && focused;
-  const own = useOwnTab();
-  const place = placeOfRoute(own) ?? SIDEBAR_PLACE.TASKS;
-  const handed = useRef(false);
-
-  useEffect(() => {
-    if (!handing || page === undefined || handed.current) return;
-    handed.current = true;
-    pushDetail(place, page);
-    router.dismissTo(placeRoute(place));
-  }, [handing, page, place, router]);
-
-  return handing;
-}
-
-/** How wide the window stands, which says whether a place's detail stands a stack of its own. */
-export type StackLayout = { readonly threeColumns: boolean; readonly regular: boolean };
-
-/**
- * Whether a place's detail stands its own stack in a window this wide:
- * every place's beside the app sidebar, and in a two-column window the
- * places whose root draws a split view (the Inbox and Tasks; Search's
- * results stand alone there).
- */
-function standsStack(layout: StackLayout, place: SidebarPlace): boolean {
-  return layout.threeColumns || (layout.regular && place !== SIDEBAR_PLACE.SEARCH);
-}
-
-/**
- * Keeps the page in front as the window narrows past where its place's
- * detail stands a stack, as Mail keeps the open message across a fold or a
- * rotation: the top page of the place standing is pushed onto its tab's
- * router stack, over the row its list keeps picked, and each place whose
- * stack no longer stands is let go. A turn from landscape to portrait keeps
- * the Inbox's and Tasks' pages in their column, since the two-column split
- * view stands them too. Note that only the top page is pushed, because Back
- * from it then lands on the row it was opened from rather than on each page
- * under it.
- */
-export function useStackToRoutes(layout: StackLayout, place: SidebarPlace | undefined): void {
-  const router = useRouter();
-  const was = useRef(layout);
+  const was = useRef(regular);
   const standing = useRef(place);
 
   // Note that the place is read through a ref the commit writes, so a tab's switch alone narrows nothing.
@@ -563,7 +477,7 @@ export function useStackToRoutes(layout: StackLayout, place: SidebarPlace | unde
 
   useEffect(() => {
     const before = was.current;
-    was.current = layout;
+    was.current = regular;
 
     const shown = standing.current;
     const top = shown === undefined ? undefined : stackOf(shown).pages.at(-1);
@@ -572,12 +486,12 @@ export function useStackToRoutes(layout: StackLayout, place: SidebarPlace | unde
       shown !== undefined &&
       top !== undefined &&
       standsStack(before, shown) &&
-      !standsStack(layout, shown);
+      !standsStack(regular, shown);
 
     for (const each of Object.values(SIDEBAR_PLACE)) {
-      if (standsStack(before, each) && !standsStack(layout, each)) clearDetail(each);
+      if (standsStack(before, each) && !standsStack(regular, each)) clearDetail(each);
     }
 
     if (pushes) router.push(routeOf(top.page, PLACE_TAB[shown]));
-  }, [layout.threeColumns, layout.regular, router]);
+  }, [regular, router]);
 }

@@ -73,7 +73,6 @@ import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
 import { useAgentPullRequests, useFollowedAgent, useShownAgent } from "../agents/use-agent.js";
-import { PUSHED_PAGE, useHandToDetail } from "../detail-stack.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import {
   type PullRequestKey,
@@ -355,8 +354,8 @@ function PullRequestToolbar({
  * head stands Merge under the title, and as a split button where the
  * repository merges more than one way.
  * The bar's ⋯ menu opens it on GitHub, where its diff and comments are
- * read. In a window wide enough for three columns it stands pushed over
- * the split view's detail instead (`PullRequestPage`'s `inColumn`).
+ * read. Opened from a split view's detail, it stands pushed over that
+ * detail instead (`PullRequestPage`'s `inColumn`).
  */
 export function PullRequestScreen() {
   const {
@@ -380,10 +379,6 @@ export function PullRequestScreen() {
     number: Number(number),
   };
 
-  const handed = useHandToDetail({ kind: PUSHED_PAGE.PULL_REQUEST, ...key, agentId: agent });
-
-  if (handed) return null;
-
   return <PullRequestPage pullRequest={key} agentId={agent} />;
 }
 
@@ -400,12 +395,6 @@ export function AgentPullRequestScreen() {
   const agent = useShownAgent(id);
   const [listed] = useAgentPullRequests(id);
   const key = iosAgentPullRequestOf(agent, listed, pulled);
-
-  const handed = useHandToDetail(
-    key === undefined ? undefined : { kind: PUSHED_PAGE.PULL_REQUEST, ...key, agentId: id },
-  );
-
-  if (handed) return null;
 
   if (key === undefined) {
     return (

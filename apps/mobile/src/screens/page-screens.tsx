@@ -17,7 +17,6 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { usePageHtml } from "../agents/use-agent.js";
-import { PUSHED_PAGE, useHandToDetail } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari } from "../open-link.js";
 import { useSurfaceOpen } from "../surface-open.js";
@@ -155,17 +154,6 @@ export function TaskPageScreen() {
     version: string;
     title: string;
   }>();
-
-  const handed = useHandToDetail({
-    kind: PUSHED_PAGE.TASK_PAGE,
-    pageId: id,
-    taskId: task,
-    workspaceId: workspace === "" ? undefined : workspace,
-    version: Number(version),
-    title,
-  });
-
-  if (handed) return null;
 
   return (
     <TaskPage

@@ -77,16 +77,12 @@ import {
   type Scope,
   Screen,
   SplitView,
-  scopeMenu,
-  scopeSubtitle,
   THREAD_MEDIA,
   type ThreadMedia,
   type ThreadMessage,
   ThreadPage,
   ThreadPreview,
-  UNDER_SPLIT_SCREEN,
   useColors,
-  useThreeColumns,
   useToday,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -120,7 +116,7 @@ import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberFaces, useMemberPictures } from "../member-pictures.js";
 import { NotificationAsk } from "../notification-ask.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
-import { useHandColumns, useInFront } from "../place-columns.js";
+import { useInFront } from "../place-columns.js";
 import { useReplyDrawnCount } from "../reply-drawn.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
@@ -134,8 +130,8 @@ import {
   PLUS_TAB,
   SIDEBAR_PLACE,
   useComposeAction,
+  useDetailColumnBar,
   useListColumn,
-  usePortraitDetailBar,
 } from "./app-sidebar.js";
 import { useDetailStackColumn } from "./detail-stack-column.js";
 import {
@@ -162,12 +158,6 @@ const SCOPE_LABEL = "Filter";
 
 /** The scopes whose pill carries its count, the two that say how much waits. */
 const COUNTED_SCOPES: ReadonlySet<InboxShow> = new Set([INBOX_SHOW.NEEDS_ME, INBOX_SHOW.OPEN]);
-
-/** The scopes that narrow Open, which the filter button stands filled for and the bar names under its title, as Mail's filters do; All widens it instead, so it names no filter. */
-const NARROWING_SCOPES: ReadonlySet<InboxShow> = new Set([
-  INBOX_SHOW.NEEDS_ME,
-  INBOX_SHOW.REMINDERS,
-]);
 
 /** The bar's menu of the Inbox's other acts, a round glass ⋯ as iOS draws a toolbar's menu. */
 const MORE = { label: "More", symbol: GLYPH.MORE } as const;
@@ -224,7 +214,7 @@ type InboxRowsProps = {
   readonly onResolve: (item: InboxItem) => void;
   /** The list's Select mode, while it stands in one. */
   readonly choosing?: RowChoosing | undefined;
-  /** The Inbox's scopes, standing as the list's first row; none beside the app sidebar, where they stand as the bar's filter. */
+  /** The Inbox's scopes, standing as the list's first row. */
   readonly scopes?: ListScopes | undefined;
   /** What stands over the list while it lists no thread: why, and the way on. */
   readonly empty?: ReactNode | undefined;
@@ -1083,7 +1073,7 @@ function ThreadNotDrawn({
  * pushed screen reads it, so a link to a thread of a workspace the list does
  * not show still opens it, and one still read, refused, or missing says so.
  */
-export function ThreadColumn({
+function ThreadColumn({
   id,
   remindMenu,
   onOpen,
@@ -1317,12 +1307,9 @@ function InboxStackList(held: InboxHeld) {
 
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the list
 // under its scopes' menu picker, since the column cuts segments short, with
-// its search and ⋯ menu in its bar and the selected thread beside it. Where
-// the window is wide enough for three columns, the two are handed to the
-// tabs' one split view, which stands them beside the app sidebar, as Mail
-// stands its mailboxes, a mailbox's mail, and a message, and this root draws
-// nothing of its own under it; otherwise the root stands its own split view.
-// The Stack's header steps aside, since the split view draws each column's
+// its search and ⋯ menu in its bar and the selected thread beside it, in the
+// tab's own split view beside the system's tab sidebar, as Mail stands a
+// mailbox's mail beside a message. The Stack's header steps aside, since the split view draws each column's
 // navigation bar itself.
 function InboxSplitScreen({
   selected,
@@ -1347,7 +1334,6 @@ function InboxSplitScreen({
     chooseStart,
   } = useInboxScreen(held, selected);
 
-  const threeColumns = useThreeColumns();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
 
   // Note that the iPad's K and J step through the rows the list column shows now, its scope and its search as they stand, from the thread beside it, as the panel's step through the list on screen; never while a page pushed over the thread covers it, since a pick would take that page away.
@@ -1363,7 +1349,7 @@ function InboxSplitScreen({
 
   const rows = (
     <InboxRows
-      scopes={threeColumns ? undefined : { label: SCOPE_LABEL, scopes, look: SCOPE_LOOK.MENU }}
+      scopes={{ label: SCOPE_LABEL, scopes, look: SCOPE_LOOK.MENU }}
       look={LIST_LOOK.PLAIN}
       listed={listing.listed}
       readerId={listing.readerId}
@@ -1390,7 +1376,6 @@ function InboxSplitScreen({
     />
   );
 
-  // Note that beside the app sidebar the scopes leave the list for Mail's filter button in its bar, so the list starts at its first thread; a two-column window keeps the menu picker over the list.
   const list = {
     // Note that the list stands its scopes as its first row, so they scroll away with the rows, over its empty state too, which stands as its one row.
     view: rows,
@@ -1399,11 +1384,6 @@ function InboxSplitScreen({
       choosing === undefined
         ? {
             title: INBOX_TITLE,
-            // Note that beside the app sidebar the scope leaves the list for the filter button, so the bar names a narrowing one under its title, as Mail's "Filtered by: Unread"; elsewhere the scopes stand over the list and say it themselves.
-            titleLine: threeColumns ? scopeSubtitle(scopes, NARROWING_SCOPES.has(show)) : undefined,
-            filter: threeColumns
-              ? scopeMenu(SCOPE_LABEL, scopes, NARROWING_SCOPES.has(show))
-              : undefined,
             menu,
             search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
           }
@@ -1427,31 +1407,23 @@ function InboxSplitScreen({
 
   const first = useListColumn(list);
   useStackRoot(SIDEBAR_PLACE.INBOX, selected);
-  // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
+  // Note that the split view stands the detail's own stack, as Mail opens a message's related pages beside its list.
   const stack = useDetailStackColumn(SIDEBAR_PLACE.INBOX, { id: selected }, true);
-  // Note that the menu bar's Back pops the pages over this two-column detail while it's shown; three columns name theirs in `AppSplit`.
-  useStandFocusedDetailFront(SIDEBAR_PLACE.INBOX, !threeColumns);
-  const firstDetailBar = usePortraitDetailBar(detailBar);
-  useHandColumns(
-    SIDEBAR_PLACE.INBOX,
-    threeColumns
-      ? { content: list.view, contentBar: list.bar, detail, detailBar, root: selected }
-      : undefined,
-  );
+  // Note that the menu bar's Back pops the pages over this detail while it's shown.
+  useStandFocusedDetailFront(SIDEBAR_PLACE.INBOX);
+  const firstDetailBar = useDetailColumnBar(detailBar);
 
   return (
     <>
-      <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
-      {threeColumns ? null : (
-        <Screen>
-          <SplitView
-            {...first}
-            detail={stack.wrap(detail)}
-            detailBar={firstDetailBar}
-            detailStack={stack.detailStack}
-          />
-        </Screen>
-      )}
+      <Stack.Screen options={{ headerShown: false }} />
+      <Screen>
+        <SplitView
+          {...first}
+          detail={stack.wrap(detail)}
+          detailBar={firstDetailBar}
+          detailStack={stack.detailStack}
+        />
+      </Screen>
     </>
   );
 }

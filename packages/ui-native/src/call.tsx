@@ -1,4 +1,4 @@
-// call.tsx -- a voice call into an agent as the phone draws it: what an agent's composer offers of calls (Talk, which the composer draws in Send's place), the call's presses there while the call is into that agent, and the slim way back to the call's agent from every other screen, over the tab bar or at the foot of an iPad's app sidebar.
+// call.tsx -- a voice call into an agent as the phone draws it: what an agent's composer offers of calls (Talk, which the composer draws in Send's place), the call's presses there while the call is into that agent, and the slim way back to the call's agent from every other screen, over the tab bar.
 
 import {
   Host,
@@ -13,7 +13,6 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHint,
   accessibilityLabel,
-  background,
   buttonStyle,
   font,
   foregroundStyle,
@@ -28,7 +27,7 @@ import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { AgentTile } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, RADIUS, SIDEBAR_ROW, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What a composer offers of calls: Talk at rest, in Send's place while its field is empty, or the call's presses before Send while a call into its agent stands. */
@@ -174,9 +173,8 @@ export function ComposerCallPresses({ presses }: { readonly presses: CallPresses
  * the microphone's mute and End call. It carries no words of the
  * conversation and decides nothing: every press is handed back to its
  * owner, which holds the call. It stands over the tab bar
- * (`CallAccessory`), at the foot of the app sidebar where the tab bar is
- * hidden (`CallSidebarFoot`), and over the composer of an agent the call is
- * not into, where the tab bar steps aside.
+ * (`CallAccessory`), and over the composer of an agent the call is not
+ * into, where the tab bar steps aside.
  */
 export function CallCardRow({
   call,
@@ -257,40 +255,5 @@ export function CallAccessory({
         <CallCardRow call={call} inline={inline} onOpen={onOpen} />
       </VStack>
     </Host>
-  );
-}
-
-/**
- * The way back to a call's agent at the foot of the app sidebar, where a
- * window wide enough for three columns hides the tab bar and its accessory,
- * as the panel docks its call card at the sidebar's foot: the full row on a
- * rounded card set in from the sidebar's edges as a selected row's fill is.
- * Note that the card is the panel's translucent `FILL_STRONG`, as a selected
- * row's is, because the sidebar stands on the system's glass, which an
- * opaque gray matched and vanished into.
- */
-export function CallSidebarFoot({
-  call,
-  onOpen,
-}: {
-  readonly call: StandingCallCard;
-  readonly onOpen: () => void;
-}) {
-  const colors = useColors();
-
-  return (
-    <VStack
-      modifiers={[
-        // Note that the row stands only a little inside its card above and below, because its presses already stand Apple's least target.
-        padding({ horizontal: SIDEBAR_ROW.SIDE, vertical: SPACE.TIGHT }),
-        background(
-          colors.FILL_STRONG,
-          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD }),
-        ),
-        padding({ horizontal: SIDEBAR_ROW.EDGE, bottom: SIDEBAR_ROW.EDGE }),
-      ]}
-    >
-      <CallCardRow call={call} onOpen={onOpen} />
-    </VStack>
   );
 }

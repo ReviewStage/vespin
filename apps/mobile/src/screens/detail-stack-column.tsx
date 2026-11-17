@@ -1,4 +1,4 @@
-// detail-stack-column.tsx -- a place's detail as a split view stands it with its own stack of pushed pages, in three columns beside the app sidebar and in two beside the list alike.
+// detail-stack-column.tsx -- a place's detail as a tab's split view stands it beside its list, with its own stack of pushed pages.
 
 import type { DetailStack } from "@repo/ui-native";
 import { type ComponentType, createContext, type ReactNode, useContext, useEffect } from "react";
@@ -68,15 +68,13 @@ function stackPages(
 }
 
 /**
- * A place's detail as a split view stands it with its own stack, in three
- * columns beside the app sidebar and in two beside the list alike: `wrap`
+ * A place's detail as a split view stands it with its own stack: `wrap`
  * stands the detail's root in its place, so a page it opens is pushed over
  * it there, and `detailStack` is what `SplitView` takes. `root` names what
  * the detail stands for, such as the picked thread, and the pages pushed
  * over another root are let go, so a row picked again later opens on its
- * own page alone; none while the split view doesn't know it yet, as in the
- * frame a rotation first stands the app sidebar, which lets nothing go. The
- * root stands in front only while no page covers it.
+ * own page alone; none while the split view doesn't know it yet, which
+ * lets nothing go. The root stands in front only while no page covers it.
  */
 export function useDetailStackColumn(
   place: SidebarPlace,

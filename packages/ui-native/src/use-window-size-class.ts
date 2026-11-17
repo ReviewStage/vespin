@@ -1,13 +1,8 @@
 // use-window-size-class.ts -- the size class of the window the app is drawn in, live across a fold, a rotation, or a resize, once the window has settled.
 
 import { useSyncExternalStore } from "react";
-import { Dimensions, type ScaledSize, useWindowDimensions } from "react-native";
-import {
-  standsThreeColumns,
-  WINDOW_SIZE_CLASS,
-  type WindowSizeClass,
-  windowSizeClass,
-} from "./window-size-class.js";
+import { Dimensions, type ScaledSize } from "react-native";
+import { type WindowSizeClass, windowSizeClass } from "./window-size-class.js";
 
 /**
  * How long a new size class must hold before the app takes it. A fold, an
@@ -73,12 +68,4 @@ function subscribe(listener: () => void) {
 /** The window's size class, which every reader takes in the same render once it has held for `SETTLE_MS`. */
 export function useWindowSizeClass(): WindowSizeClass {
   return useSyncExternalStore(subscribe, () => settled);
-}
-
-/** Whether the window the app is drawn in stands three columns: a regular window wide enough, live as its width is. */
-export function useThreeColumns(): boolean {
-  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
-  const { width } = useWindowDimensions();
-
-  return regular && standsThreeColumns(width);
 }

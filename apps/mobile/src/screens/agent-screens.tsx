@@ -134,13 +134,7 @@ import {
 } from "../agents/use-suggestions.js";
 import { useTranscriptCopy } from "../agents/use-transcript-copy.js";
 import { useWarmAgent } from "../agents/use-warm-agent.js";
-import {
-  PUSHED_PAGE,
-  useDetailCovered,
-  useDetailLeave,
-  useDetailPush,
-  useHandToDetail,
-} from "../detail-stack.js";
+import { PUSHED_PAGE, useDetailCovered, useDetailLeave, useDetailPush } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import {
@@ -658,9 +652,9 @@ function columnBarOf(doors: AgentBarDoors): ColumnBar {
  * waits behind it as the member's Follow-up behavior says, and Stop stands
  * in Send's place while the agent works. The + is a menu (`agentAddMenu`):
  * Photos, Options, the permission mode, and Fast. A `/` typed offers the
- * task's skills over the field. In a window wide enough for three columns
- * it stands pushed over the split view's detail instead (`AgentConversation`'s
- * `inColumn`), beside the sidebar and the list.
+ * task's skills over the field. Opened from a split view's detail, it
+ * stands pushed over that detail instead (`AgentConversation`'s
+ * `inColumn`), beside the list.
  */
 export function AgentScreen() {
   const {
@@ -675,16 +669,6 @@ export function AgentScreen() {
     /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
     brief?: string;
   }>();
-
-  const handed = useHandToDetail({
-    kind: PUSHED_PAGE.AGENT,
-    agentId: id,
-    suggestedBy,
-    button,
-    brief,
-  });
-
-  if (handed) return null;
 
   return <AgentConversation id={id} suggestedBy={suggestedBy} button={button} brief={brief} />;
 }
@@ -1288,16 +1272,6 @@ export function AgentPageScreen() {
     version: string;
     title: string;
   }>();
-
-  const handed = useHandToDetail({
-    kind: PUSHED_PAGE.AGENT_PAGE,
-    agentId: id,
-    pageId: page,
-    version: Number(version),
-    title,
-  });
-
-  if (handed) return null;
 
   return <AgentPage agentId={id} pageId={page} version={Number(version)} title={title} />;
 }

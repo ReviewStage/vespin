@@ -27,7 +27,7 @@ import {
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { PUSHED_PAGE, useDetailCovered, useDetailLeave, useHandToDetail } from "../detail-stack.js";
+import { PUSHED_PAGE, useDetailCovered, useDetailLeave } from "../detail-stack.js";
 import { useFocusShown } from "../focus-shown.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
@@ -213,14 +213,11 @@ function quoteOf(quote: string, anchored: boolean): string {
  * said standing in the field's head. The task's path stands small in
  * the bar, as a page of the task's does, and the bar's trailing button
  * resolves the thread, or reopens it once resolved, as the panel's check
- * on its first comment does. In a window wide enough for three columns it
- * stands pushed over the split view's detail instead.
+ * on its first comment does. Opened from a split view's detail, it stands
+ * pushed over that detail instead.
  */
 export function CommentThreadScreen() {
   const { id = "", task: taskId = "" } = useLocalSearchParams<{ id: string; task: string }>();
-  const handed = useHandToDetail({ kind: PUSHED_PAGE.COMMENTS, threadId: id, taskId });
-
-  if (handed) return null;
 
   return <CommentThread threadId={id} taskId={taskId} />;
 }
@@ -397,17 +394,6 @@ export function NewCommentScreen() {
     quote: string;
     again?: string;
   }>();
-
-  const handed = useHandToDetail({
-    kind: PUSHED_PAGE.NEW_COMMENT,
-    taskId,
-    from,
-    to,
-    quote,
-    again,
-  });
-
-  if (handed) return null;
 
   return <NewComment taskId={taskId} from={from} to={to} quote={quote} again={again} />;
 }
