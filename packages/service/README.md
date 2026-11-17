@@ -2778,6 +2778,23 @@ repository no agent of the workspace started in for 30 days
 (`src/agents/workspace-drive-builds.ts`) prunes that drive, and comes again
 shortly where a fill holds it.
 
+Vercel's sandbox sessions are charged to the usage ledger (`usage_charge`) in
+two ways (`src/billing/sandbox-session-charges.ts`, priced at Vercel's Pro
+rates for the session's region in `src/billing/sandbox-session-price.ts`).
+Vercel forgets a deleted sandbox's sessions, and a resume deletes the stopped
+sandbox it makes again on its own drive, so the Vercel adapter reads a
+sandbox's ended sessions just before any delete of it, stopping a running one
+first, and hands them to `EndedSessionsOnDelete`, which this runtime answers
+by charging them; a read that fails is logged and the delete goes on. Once a
+day, at 06:00 UTC, the `usage-ledger` schedule calls
+`apps/web/server/routes/maintenance/usage-ledger.ts` under the same
+`CRON_SECRET` and charges every ended session the project created in the last
+72 hours, for sandboxes never deleted. The ledger takes an item once by its
+kind and source id, so the two never double-count, and a session no
+`sandbox_owner` row names is logged and passed by. It always runs, whether or
+not billing is live. Each daily job's endpoint is
+`src/maintenance/scheduled-call-app.ts` over its own path and job.
+
 The sweep ends what no request will. `MaintenanceSweeps`
 (`src/maintenance/maintenance-sweep.ts`) runs its sweeps in turn and
 answers what each did; one that fails is logged and answered as failed while

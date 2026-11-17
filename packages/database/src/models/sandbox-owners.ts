@@ -8,8 +8,8 @@
  * the row keeps the instant the sandbox was first opened under its name.
  */
 
-import { eq } from "drizzle-orm";
-import { type Option, Schema } from "effect";
+import { eq, inArray } from "drizzle-orm";
+import { Effect, type Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
 import { sandboxOwnerTable } from "../schemas/sandbox-owner.js";
@@ -25,6 +25,14 @@ const OwnerSchema = Schema.Struct({
 
 /** Whom a sandbox is billed to: its workspace, and the agent and member it was opened for, null where none. */
 export type SandboxOwner = typeof OwnerSchema.Type;
+
+const OWNER_COLUMNS = {
+  sandboxName: sandboxOwnerTable.sandboxName,
+  organizationId: sandboxOwnerTable.organizationId,
+  agentId: sandboxOwnerTable.agentId,
+  userId: sandboxOwnerTable.userId,
+  createdAt: sandboxOwnerTable.createdAt,
+};
 
 const insertOwner = SqlSchema.void({
   Request: OwnerSchema,
@@ -43,15 +51,21 @@ const findOwner = SqlSchema.findOneOption({
   execute: (sandboxName) =>
     Database.use((db) =>
       db
-        .select({
-          sandboxName: sandboxOwnerTable.sandboxName,
-          organizationId: sandboxOwnerTable.organizationId,
-          agentId: sandboxOwnerTable.agentId,
-          userId: sandboxOwnerTable.userId,
-          createdAt: sandboxOwnerTable.createdAt,
-        })
+        .select(OWNER_COLUMNS)
         .from(sandboxOwnerTable)
         .where(eq(sandboxOwnerTable.sandboxName, sandboxName)),
+    ),
+});
+
+const findOwners = SqlSchema.findAll({
+  Request: Schema.Array(Schema.String),
+  Result: OwnerSchema,
+  execute: (sandboxNames) =>
+    Database.use((db) =>
+      db
+        .select(OWNER_COLUMNS)
+        .from(sandboxOwnerTable)
+        .where(inArray(sandboxOwnerTable.sandboxName, [...sandboxNames])),
     ),
 });
 
@@ -63,4 +77,16 @@ export function recordSandboxOwner(owner: SandboxOwner): AgentStoreEffect<void> 
 /** Whom the sandbox under the name is billed to; none where no record names it. */
 export function sandboxOwner(sandboxName: string): AgentStoreEffect<Option.Option<SandboxOwner>> {
   return findOwner(sandboxName);
+}
+
+/** Whom each of the named sandboxes is billed to, by name; a name no record names is left out. */
+export function sandboxOwnersNamed(
+  sandboxNames: readonly string[],
+): AgentStoreEffect<ReadonlyMap<string, SandboxOwner>> {
+  if (sandboxNames.length === 0) return Effect.succeed(new Map());
+
+  return Effect.map(
+    findOwners(sandboxNames),
+    (owners) => new Map(owners.map((owner) => [owner.sandboxName, owner])),
+  );
 }

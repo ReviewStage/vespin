@@ -141,6 +141,7 @@ const DECLARED_TABLES = [
   "task_section",
   "task_section_entry",
   "turns",
+  "usage_charge",
   "user",
   "verification",
   "voice_call",
