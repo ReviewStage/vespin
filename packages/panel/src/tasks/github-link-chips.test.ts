@@ -276,40 +276,40 @@ function standingsHeld(asked: readonly AnyAct[]) {
   );
 }
 
-/** Each chip drawn: the name it says, the state after it, and the pull request's mark it wears, if any. */
+/** Each chip drawn: the name it says, the state a screen reader hears after it, and the pull request's mark it wears, if any. */
 function chips(container: HTMLElement): [string | null, string | null, string | undefined][] {
   return [...container.querySelectorAll<HTMLElement>("[data-mention-ref]")].map((chip) => [
     chip.querySelector(".ui-inline-ref-label")?.textContent ?? null,
-    chip.querySelector(".ui-inline-ref-state")?.textContent ?? null,
+    chip.querySelector(".ui-visually-hidden:last-child")?.textContent ?? null,
     chip.querySelector<SVGElement>("[data-pull-request-mark]")?.dataset.pullRequestState,
   ]);
 }
 
-/** Each chip drawn: the name it says, the state after it, and the issue's mark it wears, if any, by its state and the words a reader who cannot see it hears. */
+/** Each chip drawn: the name it says, the state a screen reader hears after it, and the issue's mark it wears, if any, by its state and the words a reader who cannot see it hears. */
 function issueChips(container: HTMLElement): (string | null | undefined)[][] {
   return [...container.querySelectorAll<HTMLElement>("[data-mention-ref]")].map((chip) => {
     const mark = chip.querySelector<SVGElement>("[data-issue-mark]");
 
     return [
       chip.querySelector(".ui-inline-ref-label")?.textContent ?? null,
-      chip.querySelector(".ui-inline-ref-state")?.textContent ?? null,
+      chip.querySelector(".ui-visually-hidden:last-child")?.textContent ?? null,
       mark?.dataset.issueState,
       mark?.getAttribute("aria-label"),
     ];
   });
 }
 
-test("a pull request's link says its number and wears its state's mark, never its state's word, as the plan's workspace's GitHub App answers them, whatever its label, and never its repository", async () => {
+test("a pull request's link says its number, live title, and state, wearing its mark, as the plan's workspace's GitHub App answers them, whatever its label, and never its repository", async () => {
   const { container, asked } = await drawn(
     `Lands after ${MERGED}, [@#42](${MERGED}), [the expiry change](${MERGED}), ${ELSEWHERE}, and ${UNREACHED}.`,
     ACME_WITH_GITHUB,
   );
 
   assert.deepEqual(chips(container), [
-    ["#42", null, PULL_REQUEST_STATE.MERGED],
-    ["#42", null, PULL_REQUEST_STATE.MERGED],
-    ["#42", null, PULL_REQUEST_STATE.MERGED],
-    ["#5", null, PULL_REQUEST_STATE.OPEN],
+    ["#42", "Merged", PULL_REQUEST_STATE.MERGED],
+    ["#42", "Merged", PULL_REQUEST_STATE.MERGED],
+    ["#42", "Merged", PULL_REQUEST_STATE.MERGED],
+    ["#5", "Open", PULL_REQUEST_STATE.OPEN],
     ["secret#7", null, undefined],
   ]);
   // Note that the three chips of one pull request hold its one read.
@@ -320,15 +320,10 @@ test("a pull request's link says its number and wears its state's mark, never it
   ]);
 });
 
-test("an open pull request GitHub's merge queue holds wears the queued mark as a chip, and says Queued as a row standing alone", async () => {
+test("an open pull request GitHub's merge queue holds says Queued and wears the queued mark, as a chip and as a row standing alone", async () => {
   const { container } = await drawn(`Queued behind ${QUEUED}.`, ACME_WITH_GITHUB);
 
-  assert.deepEqual(chips(container), [["#46", null, "queued"]]);
-  // Note that the word the chip no longer draws is still heard, since its mark is hidden from a screen reader.
-  assert.equal(
-    container.querySelector("[data-mention-ref] .ui-visually-hidden:last-child")?.textContent,
-    "Queued",
-  );
+  assert.deepEqual(chips(container), [["#46", "Queued", "queued"]]);
 
   act(() => root?.unmount());
   root = undefined;

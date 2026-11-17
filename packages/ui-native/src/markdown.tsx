@@ -227,7 +227,6 @@ type StandingLook = {
   readonly glyph: Glyph;
   readonly tone: StatusTone;
   readonly name: string;
-  readonly state: string | undefined;
   /** What VoiceOver hears: its kind, the name it now shows, and its state. */
   readonly heard: string;
 };
@@ -243,10 +242,8 @@ function standingHeard(chip: MarkdownChip, name: string, state: string | undefin
 /**
  * How a chip of a GitHub page stands, as the panel's chip draws it: a pull
  * request by its number alone, its title fading mid-word in a chip, with
- * its state's mark, its words heard but never drawn, since a word landing
- * once GitHub answers shifts the line it stands in; an issue by its number
- * and title, with its state's mark and words; none where GitHub has
- * answered nothing of it.
+ * its state's mark, its words heard alone; an issue by its number and
+ * title, likewise; none where GitHub has answered nothing of it.
  */
 function standingLook(chip: MarkdownChip, drawing: Drawing): StandingLook | undefined {
   const standing = chip.github === undefined ? undefined : drawing.linkStanding(chip.github);
@@ -259,7 +256,6 @@ function standingLook(chip: MarkdownChip, drawing: Drawing): StandingLook | unde
       ...look,
       glyph: look.symbol,
       name,
-      state: undefined,
       heard: standingHeard(chip, name, standing.state),
     };
   }
@@ -269,7 +265,7 @@ function standingLook(chip: MarkdownChip, drawing: Drawing): StandingLook | unde
     const name = `#${standing.issue.number} ${standing.title}`;
     const heard = standingHeard(chip, name, standing.state);
 
-    return { ...look, glyph: look.symbol, name, state: standing.state, heard };
+    return { ...look, glyph: look.symbol, name, heard };
   }
 
   return undefined;
@@ -341,11 +337,6 @@ function MentionChip({
         >
           {standing?.name ?? chip.name}
         </Text>
-        {standing?.state === undefined ? null : (
-          <Text numberOfLines={1} style={{ fontSize: size, color: colors.TEXT_MUTED }}>
-            {standing.state}
-          </Text>
-        )}
       </Press>
     </View>
   );

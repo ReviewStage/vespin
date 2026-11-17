@@ -227,13 +227,13 @@ async function inbox(options: {
   return { container, asked };
 }
 
-/** The chips the chosen item's words draw, by the name each says and the state its pull request's mark wears. */
-function chips(container: HTMLElement): [string | null, string | undefined][] {
+/** The chips the chosen item's words draw, by the name each says and the state a screen reader hears after it. */
+function chips(container: HTMLElement): [string | null, string | null][] {
   return [
     ...container.querySelectorAll<HTMLElement>("[data-inbox-message-text] [data-mention-ref]"),
   ].map((chip) => [
     chip.querySelector(".ui-inline-ref-label")?.textContent ?? null,
-    chip.querySelector<SVGElement>("[data-pull-request-mark]")?.dataset.pullRequestState,
+    chip.querySelector(".ui-visually-hidden:last-child")?.textContent ?? null,
   ]);
 }
 
@@ -253,7 +253,7 @@ test("a plan's item in the window's Inbox reads its links through the plan's wor
   });
 
   // Note that the item's words stand once the account's inbox read reaches its query.
-  await vi.waitFor(() => assert.deepEqual(chips(container), [["#42", PULL_REQUEST_STATE.MERGED]]));
+  await vi.waitFor(() => assert.deepEqual(chips(container), [["#42", "Merged"]]));
   assert.deepEqual(readThrough(asked), [`workspace-acme ${PULL}`]);
 });
 
@@ -267,6 +267,6 @@ test("an item of a workspace an older service answered with no slug still reads 
     workspaces: [ACME, unslugged],
   });
 
-  await vi.waitFor(() => assert.deepEqual(chips(container), [["#5", PULL_REQUEST_STATE.MERGED]]));
+  await vi.waitFor(() => assert.deepEqual(chips(container), [["#5", "Merged"]]));
   assert.deepEqual(readThrough(asked), [`workspace-globex ${LEDGER_PULL}`]);
 });

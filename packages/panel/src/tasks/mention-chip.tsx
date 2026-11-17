@@ -120,11 +120,9 @@ import {
  * go to (`server-card.tsx`); a page of an integration's, a Linear
  * issue say, wears the integration's mark and opens the page in the
  * browser, its card saying its address. A pull request's chip and a GitHub
- * issue's wear GitHub's mark for the state it stands in, and an issue's
- * says that state after its name too, as the workspace's own GitHub App
- * answers them on the service (`use-link-standing.ts`); a pull request's
- * says it by its mark alone, since a word landing once GitHub answers
- * shifts the line it stands in. A pull request or a GitHub issue GitHub
+ * issue's wear GitHub's mark for the state it stands in, heard but never
+ * drawn in words, so no word lands late and shifts the line, as the
+ * workspace's GitHub App answers them (`use-link-standing.ts`). A pull request or a GitHub issue GitHub
  * answered for is then called by its number alone, `#42`, its repository's
  * name before it where that is not the task's, `relay#42`, whatever words
  * its link was written with, so a pasted address, an agent's `[@#42](…)`,
@@ -657,11 +655,6 @@ function MentionChip({
     (github !== undefined && pull !== undefined) || keyed || WHOLE_KINDS.has(mention.kind);
 
   const state = mentionState(mention, doors);
-
-  // Note that a pull request's chip draws its state by its mark alone, its card in words, and a screen reader still hears it, since the mark is hidden from one.
-  const drawn = standing?.pullRequest === undefined;
-  const stated = drawn ? standing?.state : undefined;
-  const stateHeard = drawn ? undefined : standing?.state;
   const machineId = mention.kind === MENTION_KIND.MACHINE ? mention.machineId : undefined;
   const machineWorkspace = readLink(target)?.workspace ?? doors.place.workspace;
   const machinePress = useMachinePress(machineId, machineWorkspace);
@@ -707,8 +700,8 @@ function MentionChip({
       name={whole ? INLINE_REF_NAME.WHOLE : INLINE_REF_NAME.NAME}
       before={ownerOf(mention, target, doors)}
       mark={machineMark}
-      heard={ownerHeard ?? stateHeard}
-      state={told ?? stated}
+      heard={ownerHeard ?? standing?.state}
+      state={told}
       gone={state === MENTION_STATE.GONE}
       onPress={
         press === undefined
@@ -725,7 +718,6 @@ function MentionChip({
       data-mention-ref=""
       data-kind={mention.kind}
       data-state={state}
-      data-stated={stated === undefined ? undefined : ""}
     />
   );
 }
