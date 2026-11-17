@@ -1,4 +1,4 @@
-# failure-notice.yaml -- a write the service refuses: the row put back, the failure notice rising at the window's foot with the refusal's words and Try again, Try again refused once more, the notice swiped away, and a refusal inside Add a follower's sheet and inside Settings standing in that sheet.
+# failure-notice.yaml -- a write the service refuses: the row put back, the failure notice dropping in under the top bar with the refusal's words and Try again, Try again refused once more, the notice swiped away, and a refusal inside Add a follower's sheet and inside Settings standing in that sheet.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -49,11 +49,11 @@ appId: dev.vespin.ios
     id: "failure-notice-retry"
 - assertVisible: "The task could not be unpinned\\..*"
 - assertVisible: "Pinned"
-# A swipe down puts the notice away well before its six seconds are up.
-# Note that a swipe Maestro starts from an element ends at 90% of the
-# screen's height, which a regular window's notice, standing at the foot with
-# no tab bar under it, already stands past; so there it is swiped from its
-# own place, 95% down, to the screen's foot.
+# A swipe up puts the notice away well before its six seconds are up.
+# Note that a swipe Maestro starts from an element ends at 10% of the
+# screen's height, which a regular window's notice, standing under the top
+# bar of a shorter screen, already stands near; so there it is swiped from
+# its own place, 12% down, to the screen's top.
 - runFlow:
     when:
       notVisible: "Select a task"
@@ -61,14 +61,14 @@ appId: dev.vespin.ios
       - swipe:
           from:
             id: "failure-notice"
-          direction: DOWN
+          direction: UP
 - runFlow:
     when:
       visible: "Select a task"
     commands:
       - swipe:
-          start: "50%, 95%"
-          end: "50%, 99%"
+          start: "50%, 12%"
+          end: "50%, 2%"
 - extendedWaitUntil:
     notVisible: "The task could not be unpinned\\..*"
     timeout: 3000

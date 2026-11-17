@@ -1,4 +1,4 @@
-// failure-notice.tsx -- the app's one notice: a banner of Liquid Glass that rises at the window's foot, over its bars, with a refusal's words and a Try again, a write that went with its Undo, or says once that the phone is offline, read aloud by VoiceOver and let go on its own.
+// failure-notice.tsx -- the app's one notice: a banner of Liquid Glass that drops in under the top bar, with a refusal's words and a Try again, a write that went with its Undo, or says once that the phone is offline, read aloud by VoiceOver and let go on its own.
 
 import { Host, HStack, Image, Spacer, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -15,6 +15,7 @@ import {
   layoutPriority,
   lineLimit,
   offset,
+  opacity,
   padding,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -26,15 +27,12 @@ import {
   useEffect,
   useId,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import {
   AccessibilityInfo,
-  Animated,
-  type HostInstance,
-  type LayoutChangeEvent,
   PanResponder,
+  Platform,
   StyleSheet,
   useWindowDimensions,
   View,
@@ -51,10 +49,9 @@ import {
   noticeOnline,
   type ShownNotice,
 } from "./failure-notice-model.js";
-import { BAR_GLASS, useKeyboardHeight } from "./glass-bar.js";
+import { BAR_GLASS } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { BUZZ, buzz } from "./haptics.js";
-import { FootRoomProvider, LiftBarsProvider, type NoticeLift, useLiftBars } from "./notice-lift.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -70,7 +67,7 @@ const STANDS_FOR = {
   SCREEN_READER: 10_000,
 } as const;
 
-/** How far the banner travels up from below the window's foot as it arrives, in points. */
+/** How far the banner travels down from above its place as it arrives, in points. */
 const ARRIVAL = 120;
 
 /** How long it takes to slide in or out, in milliseconds, as the system's own banners do. */
@@ -79,8 +76,21 @@ const SLIDE_MS = 280;
 /** The banner's own room above and below its line, in points, which its press's 44 pt target reaches into. */
 const BANNER_INSET = SPACE.ROW + 2;
 
-/** How far a swipe down must carry the banner before it lets it go, in points. */
+/** How far a swipe up must carry the banner before it lets it go, in points. */
 const SWIPE_AWAY = 24;
+
+/**
+ * How tall UIKit's navigation bar stands, in points, under the status bar:
+ * on an iPad, on an iPhone held upright and on its side, and in a sheet,
+ * which draws its own taller bar from its own top. The banner stands under
+ * it, so it never covers the bar's title or its buttons.
+ */
+const NAVIGATION_BAR = {
+  PAD: 50,
+  PHONE: 44,
+  PHONE_LANDSCAPE: 32,
+  SHEET: 56,
+} as const;
 
 /** The glyph each notice leads with. */
 const NOTICE_SYMBOL = {
@@ -90,9 +100,9 @@ const NOTICE_SYMBOL = {
 } as const satisfies Record<ShownNotice["kind"], Glyph>;
 
 const styles = StyleSheet.create({
-  // The banner's column, across the window's foot and taking no touch outside the banner itself.
+  // The banner's column, across its place under the top bar and taking no touch outside the banner itself.
   edge: { position: "absolute", left: 0, right: 0 },
-  lane: { paddingHorizontal: SPACE.ROW + 2, paddingBottom: SPACE.TIGHT, alignItems: "center" },
+  lane: { paddingHorizontal: SPACE.ROW + 2, paddingTop: SPACE.TIGHT, alignItems: "center" },
   banner: { width: "100%", maxWidth: 560 },
   // A sheet's own frame, which its banner stands over.
   layer: { flex: 1 },
@@ -144,8 +154,9 @@ function noticePress(
 
 /**
  * The banner's words, its glyph, and Try again or Undo, in the system's
- * glass, standing `ARRIVAL` below its place until it has `arrived`, and
- * sliding between the two. Note that SwiftUI slides it, not React Native,
+ * glass, standing `ARRIVAL` above its place, unseen, until it has
+ * `arrived`, and sliding and fading between the two, or only fading where
+ * the reader reduces motion. Note that SwiftUI moves it, not React Native,
  * because its accessibility frames stay where its host was laid out: a
  * React Native transform moved what was drawn but left Undo's frame where
  * the banner was not, so a tap aimed by it, as Maestro aims one, missed it.
@@ -160,6 +171,7 @@ function NoticeBody({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+  const reduceMotion = useReduceMotion();
   // Note that a refusal draws as a problem line does, the attention glyph over the muted ink, rather than danger's red: it asks for a second try, not alarm.
   const refused = notice.kind === NOTICE_KIND.REFUSED;
   const ink = refused ? colors.ATTENTION : colors.TEXT_MUTED;
@@ -175,7 +187,8 @@ function NoticeBody({
           // Note that the banner contains its pieces as elements of their own, because an identifier on a plain stack passes down to them and stood over Try again's own.
           accessibilityElement("contain"),
           accessibilityIdentifier("failure-notice"),
-          offset({ y: arrived ? 0 : ARRIVAL }),
+          offset({ y: arrived || reduceMotion ? 0 : -ARRIVAL }),
+          opacity(arrived ? 1 : 0),
           animation(Animation.easeInOut({ duration: SLIDE_MS / 1000 }), arrived),
         ]}
       >
@@ -221,106 +234,79 @@ function NoticeBody({
 }
 
 /**
- * How far above its place's foot the banner stands. Note that the keyboard
- * covers the safe area and the tab bar alike, so with it up the banner stands
- * on the keyboard, over a bar only where one rides it; else over the bar in
- * front where it was measured in the window, which counts a tab bar under
- * it; else over its height above the safe area, as a column's composer
- * stands; else over the window's own bar, such as the tab bar. A form sheet
- * standing short of the window's foot has no safe area of its own there.
+ * How far below its place's top the banner stands: under the top bar, as
+ * UIKit draws it, and under the status bar where the place is the window,
+ * whose safe area holds it. A sheet draws its own bar from its own top.
  */
-function bannerFoot({
-  keyboard,
-  safeBottom,
-  lift,
-  footRoom,
-  placeFoot,
-}: {
-  readonly keyboard: number;
-  readonly safeBottom: number;
-  readonly lift: NoticeLift | undefined;
-  readonly footRoom: number;
-  readonly placeFoot: number;
-}): number {
-  if (keyboard > 0) return Math.max(0, keyboard - placeFoot) + (lift?.room ?? 0);
+function useBannerTop(sheet: boolean): number {
+  const { top: safeTop } = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
 
-  if (lift?.foot !== undefined) return Math.max(0, lift.foot - placeFoot);
+  if (sheet) return NAVIGATION_BAR.SHEET;
 
-  const safe = placeFoot > 0 ? 0 : safeBottom;
+  if (Platform.OS === "ios" && Platform.isPad) return safeTop + NAVIGATION_BAR.PAD;
 
-  return safe + (lift === undefined ? footRoom : lift.room);
+  return safeTop + (width > height ? NAVIGATION_BAR.PHONE_LANDSCAPE : NAVIGATION_BAR.PHONE);
 }
 
 /**
- * The banner: rises at the window's foot as a notice arrives, over the
- * composer or the tab bar there, as Mail and Messages stand Undo over their
- * bars, so it never covers the heading or the search field it speaks of; or
- * fades in where the reader reduces motion. It stands until its time is up,
- * a swipe down, or its Try again or Undo, and sinks away. With the keyboard
- * up it stands over the keyboard, and over a bar riding it. Note that it stands over the
- * app's root view, above the tabs, and passes every touch outside it
- * through to the screen under it; it does not stand in a window of its own
- * (`FullWindowOverlay`), because on iOS 27.2 that window never drew, so no
- * notice showed at all. A sheet open over the root would cover it, so a
- * sheet draws its own (`FailureNoticeLayer`), and the notice stands in the
- * one on top.
+ * The banner: drops in under the top bar as a notice arrives, as the
+ * system's own banners drop in from the top, and stands until its time is
+ * up, a swipe up, or its Try again or Undo, then rises away. Note that it
+ * stands over its place, the app's root view or a sheet, and passes every
+ * touch outside it through to the screen under it; it does not stand in a
+ * window of its own (`FullWindowOverlay`), because on iOS 27.2 that window
+ * never drew, so no notice showed at all. A sheet open over the root would
+ * cover it, so a sheet draws its own (`FailureNoticeLayer`), and the notice
+ * stands in the one on top.
  */
 function NoticeBanner({
   notice,
   onGone,
-  lift,
-  footRoom,
-  placeFoot,
+  sheet,
 }: {
   readonly notice: ShownNotice | undefined;
   readonly onGone: (serial: number) => void;
-  /** The bar in front at the foot of the place the banner stands in, which it stands over; none where none stands. */
-  readonly lift: NoticeLift | undefined;
-  /** The room the window's own bar takes at its foot where no screen's bar stands, such as a compact window's tab bar. */
-  readonly footRoom: number;
-  /** How far the place's own foot stands above the window's, in points: none for the root or a sheet to the window's foot, more for an iPad's form sheet. */
-  readonly placeFoot: number;
+  /** Whether its place is a sheet, which draws its own bar from its own top, rather than the window. */
+  readonly sheet: boolean;
 }) {
-  const reduceMotion = useReduceMotion();
-  const keyboard = useKeyboardHeight();
-  const { bottom: safeBottom, left, right } = useSafeAreaInsets();
-  const [place] = useState(() => new Animated.Value(0));
+  const top = useBannerTop(sheet);
+  const { left, right } = useSafeAreaInsets();
   const [drawn, setDrawn] = useState<ShownNotice | undefined>(notice);
-  // Whether the banner stands in its place, or below it as it arrives and leaves.
-  const [lowered, setLowered] = useState(false);
+  // Whether the banner stands in its place, or above it as it arrives and leaves.
+  const [arrived, setArrived] = useState(false);
+  // The notice let go, rising away until it is gone.
+  const [leaving, setLeaving] = useState<number | undefined>(undefined);
 
-  const leave = useCallback(
-    (serial: number) => {
-      place.stopAnimation();
-      setLowered(false);
-      Animated.timing(place, {
-        toValue: 0,
-        duration: SLIDE_MS,
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished) onGone(serial);
-      });
-    },
-    [place, onGone],
-  );
+  const leave = useCallback((serial: number) => {
+    setArrived(false);
+    setLeaving(serial);
+  }, []);
 
-  // A new notice arrives over whatever stood, said aloud once, and goes on its own once its time is up; one let go while it stands slides away.
   useEffect(() => {
-    if (notice === undefined) {
-      setLowered(false);
-      Animated.timing(place, { toValue: 0, duration: SLIDE_MS, useNativeDriver: true }).start(
-        ({ finished }) => finished && setDrawn(undefined),
-      );
+    if (leaving === undefined) return;
 
-      return;
+    const rose = setTimeout(() => onGone(leaving), SLIDE_MS);
+
+    return () => clearTimeout(rose);
+  }, [leaving, onGone]);
+
+  // A new notice arrives over whatever stood, said aloud once, and goes on its own once its time is up; one let go while it stands rises away.
+  useEffect(() => {
+    setLeaving(undefined);
+
+    if (notice === undefined) {
+      setArrived(false);
+      const rose = setTimeout(() => setDrawn(undefined), SLIDE_MS);
+
+      return () => clearTimeout(rose);
     }
 
     setDrawn(notice);
-    setLowered(false);
-    place.setValue(0);
+    setArrived(false);
     AccessibilityInfo.announceForAccessibility(notice.words);
     let live = true;
-    let stay: Animated.CompositeAnimation | undefined;
+    let stay: ReturnType<typeof setTimeout> | undefined;
 
     const arrive = (reading: boolean) => {
       if (!live) return;
@@ -331,33 +317,25 @@ function NoticeBanner({
           ? STANDS_FOR.WORDS
           : STANDS_FOR.WITH_PRESS;
 
-      // Note that the notice's stay is a pause after its fade in, so a swipe, a newer notice, or a sheet taking it stops both as one, and it leaves as a swipe has it leave.
-      setLowered(true);
-      stay = Animated.sequence([
-        Animated.timing(place, { toValue: 1, duration: SLIDE_MS, useNativeDriver: true }),
-        Animated.delay(stands),
-      ]);
-      stay.start(({ finished }) => {
-        if (finished && live) leave(notice.serial);
-      });
+      setArrived(true);
+      stay = setTimeout(() => leave(notice.serial), SLIDE_MS + stands);
     };
 
     AccessibilityInfo.isScreenReaderEnabled().then(arrive, () => arrive(false));
 
-    // Note that the whole sequence stops, its delay included, which runs on a value of its own; else a banner that handed its notice to a sheet would still let it go when its own stay ran out.
+    // Note that its stay stops with it, so a banner that handed its notice to a sheet, or took a newer one, never lets that one go when the old stay runs out.
     return () => {
       live = false;
-      stay?.stop();
-      place.stopAnimation();
+      clearTimeout(stay);
     };
-  }, [notice, place, leave]);
+  }, [notice, leave]);
 
   const swipe = useMemo(
     () =>
       PanResponder.create({
-        onMoveShouldSetPanResponder: (_, { dy }) => dy > 4,
+        onMoveShouldSetPanResponder: (_, { dy }) => dy < -4,
         onPanResponderRelease: (_, { dy }) => {
-          if (dy > SWIPE_AWAY && drawn !== undefined) leave(drawn.serial);
+          if (dy < -SWIPE_AWAY && drawn !== undefined) leave(drawn.serial);
         },
       }),
     [drawn, leave],
@@ -371,19 +349,17 @@ function NoticeBanner({
     noticePress(drawn)?.act();
   };
 
-  const foot = bannerFoot({ keyboard, safeBottom, lift, footRoom, placeFoot });
-
-  // Note that the banner keeps the window's side safe areas, so it stands short of a tab rail beside it, as the folded iPhone Duo stands one, as a docked composer does.
+  // Note that the banner keeps the window's side safe areas, so it stands short of a tab rail beside it, as the folded iPhone Duo stands one.
   return (
-    <View pointerEvents="box-none" style={[styles.edge, { bottom: foot, left, right }]}>
-      <Animated.View
-        style={[styles.lane, { opacity: place }]}
+    <View pointerEvents="box-none" style={[styles.edge, { top, left, right }]}>
+      <View
+        style={styles.lane}
         pointerEvents="box-none"
         accessibilityLiveRegion="polite"
         {...swipe.panHandlers}
       >
-        <NoticeBody notice={drawn} arrived={lowered || reduceMotion} onPress={press} />
-      </Animated.View>
+        <NoticeBody notice={drawn} arrived={arrived} onPress={press} />
+      </View>
     </View>
   );
 }
@@ -399,10 +375,7 @@ function NoticeBanner({
  */
 export function FailureNoticeProvider({ children }: { readonly children: ReactNode }) {
   const [state, setState] = useState(NO_NOTICE);
-  // The room the window's own bar takes at its foot, which the layout holding the bar sets (`useNoticeFootRoom`).
-  const [footRoom, setFootRoom] = useState(0);
   const [layers, setLayers] = useState<readonly string[]>([]);
-  const { bars, lift } = useLiftBars();
 
   const notices = useMemo<FailureNotices>(
     () => ({
@@ -431,30 +404,23 @@ export function FailureNoticeProvider({ children }: { readonly children: ReactNo
 
   return (
     <Notices.Provider value={notices}>
-      <LiftBarsProvider value={bars}>
-        <FootRoomProvider value={setFootRoom}>
-          <Stage.Provider value={stage}>
-            {children}
-            <NoticeBanner
-              notice={top === undefined ? state.shown : undefined}
-              onGone={gone}
-              lift={lift}
-              footRoom={footRoom}
-              placeFoot={0}
-            />
-          </Stage.Provider>
-        </FootRoomProvider>
-      </LiftBarsProvider>
+      <Stage.Provider value={stage}>
+        {children}
+        <NoticeBanner
+          notice={top === undefined ? state.shown : undefined}
+          onGone={gone}
+          sheet={false}
+        />
+      </Stage.Provider>
     </Notices.Provider>
   );
 }
 
 /**
  * A sheet's own place for the notice: wraps the sheet's screens, and draws
- * the notice over them while this sheet is the one on top, so a write
- * refused inside a sheet, or under it, is seen rather than hidden behind it.
- * It keeps the bars drawn in the sheet apart from the root's, so its notice
- * stands over the sheet's own composer, never one on the screen under it.
+ * the notice over them, under the sheet's own bar, while this sheet is the
+ * one on top, so a write refused inside a sheet, or under it, is seen rather
+ * than hidden behind it.
  */
 export function FailureNoticeLayer({
   children,
@@ -470,29 +436,13 @@ export function FailureNoticeLayer({
   if (stage === undefined) throw new Error("A sheet drew a notice layer outside its provider.");
 
   const { enter, top, shown, gone } = stage;
-  const { bars, lift } = useLiftBars();
-  const sheet = useRef<HostInstance>(null);
-  const { height: windowHeight } = useWindowDimensions();
-  const [placeFoot, setPlaceFoot] = useState(0);
 
   useEffect(() => (inFront ? enter(layer) : undefined), [enter, layer, inFront]);
 
-  // Note that a form sheet on an iPad stands short of the window's foot, which the window's measures of the bars under it are taken from.
-  const onLayout = (_event: LayoutChangeEvent) =>
-    sheet.current?.measureInWindow((_x, y, _width, height) =>
-      setPlaceFoot(Math.max(0, windowHeight - (y + height))),
-    );
-
   return (
-    <View ref={sheet} style={styles.layer} onLayout={onLayout}>
-      <LiftBarsProvider value={bars}>{children}</LiftBarsProvider>
-      <NoticeBanner
-        notice={top === layer ? shown : undefined}
-        onGone={gone}
-        lift={lift}
-        footRoom={0}
-        placeFoot={placeFoot}
-      />
+    <View style={styles.layer}>
+      {children}
+      <NoticeBanner notice={top === layer ? shown : undefined} onGone={gone} sheet />
     </View>
   );
 }

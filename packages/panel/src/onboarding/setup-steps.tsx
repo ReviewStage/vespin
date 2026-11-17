@@ -4,10 +4,15 @@ import { ACT_KIND } from "@repo/host/acts";
 import {
   APP_SETTING_SCHEMA,
   SETUP_AUDIENCE,
+  SETUP_GATE,
+  SETUP_STEP,
   type SetupAudience,
+  type SetupGate,
   type SetupPlace,
+  setupGate,
   setupPlaceFrom,
   setupPlaceStored,
+  setupSteps,
 } from "@repo/settings";
 import {
   AuthPage,
@@ -37,7 +42,6 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectAppSettingsView, selectWorkspacesFailed } from "../use-app-state.js";
 import { keptKey, useKept } from "../use-kept.js";
 import { GITHUB_PURPOSE, GitHubSetup } from "./setup-github.js";
-import { SETUP_GATE, SETUP_STEP, type SetupGate, setupGate, setupSteps } from "./setup-model.js";
 import { SurveyQuestions, useSurvey } from "./setup-survey.js";
 import { TeamForm, useTeamForm } from "./setup-team.js";
 import { TOOLS_PURPOSE, ToolRows } from "./setup-tools.js";

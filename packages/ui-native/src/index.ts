@@ -22,10 +22,6 @@ export {
   RowAsking,
   type RowQuestion,
   useRowAsker,
-  WORDS_ASK_KIND,
-  WordsAsk,
-  type WordsAskAct,
-  type WordsAskKind,
 } from "./asks.js";
 
 export { AuthPage } from "./auth-page.js";
@@ -196,8 +192,6 @@ export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-
 
 export { useMinute, useToday } from "./minute.js";
 
-export { useNoticeFootRoom } from "./notice-lift.js";
-
 export { SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
@@ -323,7 +317,16 @@ export {
 
 export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
-export { askForName, type NameAsk, shareWords } from "./system-asks.js";
+export {
+  askForName,
+  askForWords,
+  type NameAsk,
+  shareWords,
+  WORDS_KIND,
+  type WordsAct,
+  type WordsAsk,
+  type WordsKind,
+} from "./system-asks.js";
 
 export {
   AGENT_ROW_STATE,
@@ -365,7 +368,7 @@ export {
 
 export { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 
-export { MARK_SIZE, SPACE, TAB_BAR_ROOM } from "./tokens/space.js";
+export { MARK_SIZE, SPACE } from "./tokens/space.js";
 
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
@@ -403,7 +406,7 @@ export {
   useAsyncAction,
 } from "./use-async-action.js";
 
-export { useTabRail, useThreeColumns, useWindowSizeClass } from "./use-window-size-class.js";
+export { useThreeColumns, useWindowSizeClass } from "./use-window-size-class.js";
 
 export { Video } from "./video.js";
 

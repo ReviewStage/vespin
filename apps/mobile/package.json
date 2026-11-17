@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@config-plugins/react-native-webrtc": "15.0.2",
+    "@expo/plist": "0.10.1",
     "@expo/ui": "58.0.27",
     "@formatjs/intl-datetimeformat": "8.0.3",
     "@formatjs/intl-getcanonicallocales": "3.3.1",

@@ -24,7 +24,6 @@ import {
   foregroundStyle,
   frame,
   lineLimit,
-  onGeometryChange,
   opacity,
   padding,
   tint,
@@ -45,7 +44,6 @@ import {
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
-import { useNoticeLift } from "./notice-lift.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
@@ -53,9 +51,6 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The send button's round, in points. */
 const SEND_SIZE = 32;
-
-/** How tall a column's composer stands at its foot with its gap before it is measured, a bare field's, which the app's notice stands over, in points. */
-const COMPOSER_FOOT_UNMEASURED = SEND_SIZE + 2 * (SPACE.ROW + 2) + SPACE.ROW;
 
 /**
  * A press's frame in the composer's row: Apple's least target, its mark
@@ -520,16 +515,10 @@ export function Composer(props: ComposerProps) {
  * The same composer at the foot of a SwiftUI column, such as a split view's
  * detail, where no React Native bar can stand: its pieces in a row of the
  * system's own glass, rounded as the bar is (`BAR_GLASS`), taking pictures
- * dropped on it as the bar does. While its column is the one in front
- * (`shown`), the app's notice stands over it, as tall as it stands, its head
- * of queued messages or a held call included.
+ * dropped on it as the bar does.
  */
-export function ComposerFoot(props: ComposerProps & { readonly shown: boolean }) {
+export function ComposerFoot(props: ComposerProps) {
   const { onDropPictures } = props;
-  const [room, setRoom] = useState(COMPOSER_FOOT_UNMEASURED);
-  useNoticeLift({ room }, props.shown);
-
-  const measured = onGeometryChange(({ height }) => setRoom(height + SPACE.ROW));
 
   const glass = [
     padding({ all: BAR_EDGE }),
@@ -552,9 +541,9 @@ export function ComposerFoot(props: ComposerProps & { readonly shown: boolean })
       </VStack>
     );
 
-  // Note that what stands over the composer is measured with it, so the notice stands over both, and the composer keeps its place under it whether or not anything stands there, so its field is never drawn anew as the queue comes and goes.
+  // Note that the composer keeps its place under what stands over it whether or not anything stands there, so its field is never drawn anew as the queue comes and goes.
   return (
-    <VStack spacing={SPACE.TIGHT * 2} modifiers={[measured]}>
+    <VStack spacing={SPACE.TIGHT * 2}>
       {props.above === undefined ? null : (
         <VStack modifiers={[padding({ horizontal: BAR_MARGIN })]}>{props.above}</VStack>
       )}
