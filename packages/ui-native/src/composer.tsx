@@ -36,11 +36,11 @@ import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import {
   BAR_EDGE,
+  BAR_GLASS,
   BAR_MARGIN,
   BAR_ROW_SPACING,
   BarHead,
   GlassBar,
-  useBarGlass,
 } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
@@ -519,8 +519,7 @@ export function Composer(props: ComposerProps) {
 /**
  * The same composer at the foot of a SwiftUI column, such as a split view's
  * detail, where no React Native bar can stand: its pieces in a row of the
- * system's own glass, rounded as the bar is, or solid where the reader
- * reduces transparency, as the bar stands (`useBarGlass`), taking pictures
+ * system's own glass, rounded as the bar is (`BAR_GLASS`), taking pictures
  * dropped on it as the bar does. While its column is the one in front
  * (`shown`), the app's notice stands over it, as tall as it stands, its head
  * of queued messages or a held call included.
@@ -534,7 +533,7 @@ export function ComposerFoot(props: ComposerProps & { readonly shown: boolean })
 
   const glass = [
     padding({ all: BAR_EDGE }),
-    ...useBarGlass(),
+    ...BAR_GLASS,
     padding({ horizontal: BAR_MARGIN, bottom: SPACE.ROW }),
     ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
   ];

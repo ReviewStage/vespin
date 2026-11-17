@@ -1,15 +1,26 @@
 // video.tsx -- a video a message carried, played in iOS's own player through expo-video, at its own shape held to the media's one rule, or saying so where its bytes did not land.
 
+import { HStack, Image, Button as SwiftUIButton, Text as SwiftUIText } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
+import {
+  accessibilityHint,
+  accessibilityLabel,
+  buttonStyle,
+  controlSize,
+  font,
+  lineLimit,
+  monospacedDigit,
+  tint,
+} from "@expo/ui/swift-ui/modifiers";
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { playheadText } from "@repo/features/time-format";
-import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import { SymbolView } from "expo-symbols";
 import { useVideoPlayer, type VideoPlayer, type VideoPlayerStatus, VideoView } from "expo-video";
 import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import { useAccessibilitySize, useReduceTransparency } from "./accessibility.js";
-import { GLYPH, glyphSymbol } from "./glyph.js";
+import { useAccessibilitySize } from "./accessibility.js";
+import { GLYPH, glyphImage } from "./glyph.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
+import { InlineHost } from "./inline-host.js";
 import { KEPT_KIND } from "./keep-model.js";
 import { MediaBox } from "./media-box.js";
 import { MediaFailed } from "./media-failed.js";
@@ -17,7 +28,7 @@ import { type MediaSize, mediaFrame } from "./media-frame.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
-import { TEXT_SIZE } from "./tokens/type.js";
+import { TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
 
 /** What a video says where the system's player cannot play it, such as a WebM, which iOS's player has no reader for. */
 const CANNOT_PLAY = "This video can't play here.";
@@ -27,9 +38,6 @@ const VIDEO_PLAYER_ID = "video-player";
 
 /** What a video not yet played is heard to do, as a press on its play mark starts it in place. */
 const PLAYS_IN_PLACE = "Plays the video";
-
-/** How tall the play mark's capsule stands at least, a press target's height. */
-const PLAY_MARK_HEIGHT = 44;
 
 /** What Open in Safari is heard to do. */
 const OPENS_IN_SAFARI = "Opens the video in Safari";
@@ -50,18 +58,6 @@ const styles = StyleSheet.create({
   },
   spinner: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
   playMark: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
-  // Note that the capsule grows with its length's words at the accessibility sizes, and never stands wider than a narrow tile.
-  playFace: {
-    minHeight: PLAY_MARK_HEIGHT,
-    maxWidth: "90%",
-    minWidth: PLAY_MARK_HEIGHT,
-    paddingHorizontal: SPACE.ROW,
-    borderRadius: PLAY_MARK_HEIGHT / 2,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: SPACE.TIGHT,
-  },
   // Note that at an accessibility size an unplayable well grows with its words rather than holding the film's shape, which would cut them off.
   grown: { aspectRatio: undefined, minHeight: 120, overflow: "visible" },
 });
@@ -109,10 +105,9 @@ function usePlayedOnce(player: VideoPlayer, source: string): boolean {
 /**
  * A video's play mark over its first frame until it is first played, as
  * Messages and Photos mark a video so it never reads as a picture: the play
- * glyph and how long it runs in one round glass, which starts it in place
- * where the system's own controls take over. Where glass is off, the
- * capsule stands in the raised surface with a hairline, as Jump to latest
- * does.
+ * glyph and how long it runs in the system's glass capsule, which starts it
+ * in place where the system's own controls take over. iOS draws its glass
+ * solid where the reader turned on Reduce Transparency.
  */
 function PlayMark({
   label,
@@ -125,61 +120,37 @@ function PlayMark({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
-  const solid = useReduceTransparency() || !isLiquidGlassAvailable();
-
-  const face = (
-    <>
-      <SymbolView
-        name={glyphSymbol(GLYPH.RUN)}
-        size={MARK_SIZE.GLYPH + 2}
-        weight="semibold"
-        tintColor={colors.TEXT}
-        accessibilityElementsHidden
-      />
-      {runs === undefined ? null : (
-        <Text
-          numberOfLines={1}
-          style={{
-            fontSize: TEXT_SIZE.FOOTNOTE,
-            fontWeight: "600",
-            fontVariant: ["tabular-nums"],
-            color: colors.TEXT,
-          }}
-        >
-          {runs}
-        </Text>
-      )}
-    </>
-  );
 
   return (
     <View style={styles.playMark} pointerEvents="box-none">
-      <Press
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel={runs === undefined ? label : `${label}, ${runs}`}
-        accessibilityHint={PLAYS_IN_PLACE}
-        hitSlop={SPACE.TIGHT}
-      >
-        {solid ? (
-          <View
-            style={[
-              styles.playFace,
-              {
-                backgroundColor: colors.SURFACE,
-                borderColor: colors.TEXT_MUTED,
-                borderWidth: StyleSheet.hairlineWidth,
-              },
-            ]}
-          >
-            {face}
-          </View>
-        ) : (
-          <GlassView glassEffectStyle="regular" isInteractive style={styles.playFace}>
-            {face}
-          </GlassView>
-        )}
-      </Press>
+      <InlineHost matchContents>
+        <SwiftUIButton
+          onPress={onPress}
+          modifiers={[
+            buttonStyle("glass"),
+            SwiftModifiers.buttonBorderShape("capsule"),
+            controlSize("large"),
+            tint(colors.TEXT),
+            accessibilityLabel(runs === undefined ? label : `${label}, ${runs}`),
+            accessibilityHint(PLAYS_IN_PLACE),
+          ]}
+        >
+          <HStack spacing={SPACE.TIGHT}>
+            <Image {...glyphImage(GLYPH.RUN)} size={MARK_SIZE.GLYPH + 2} />
+            {runs === undefined ? null : (
+              <SwiftUIText
+                modifiers={[
+                  font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" }),
+                  monospacedDigit(),
+                  lineLimit(1),
+                ]}
+              >
+                {runs}
+              </SwiftUIText>
+            )}
+          </HStack>
+        </SwiftUIButton>
+      </InlineHost>
     </View>
   );
 }

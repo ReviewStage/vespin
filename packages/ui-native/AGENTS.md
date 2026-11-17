@@ -72,8 +72,8 @@ builds a control of its own.
   and the marks (`UnreadDot`, `NeedsYouDot`,
   `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
-  asset catalog holds). `GlassBar` is a bar of Liquid
-  Glass through `expo-glass-effect`, `GlassDock` the screen that pins one
+  asset catalog holds). `GlassBar` is a bar of the
+  system's Liquid Glass (`BAR_GLASS`, SwiftUI's `glassEffect`), `GlassDock` the screen that pins one
   over its foot above the keyboard, and `Composer` the rounded field a
   thread or a transcript ends with, in one, or `ComposerFoot`, the same
   field at a SwiftUI column's foot in the system's own glass, where no React
@@ -375,9 +375,9 @@ here once, so a screen gets them by composing these pieces.
 
 - **Settings** come from `accessibility.ts`, one store per setting shared by
   every component: `useReduceMotion` (a custom motion is left out, as Jump to
-  latest's scroll), `useReduceTransparency` (`GlassBar` and Jump to latest
-  stand solid on `SURFACE` inside a `TEXT_MUTED` edge, which holds 3:1 where
-  the brand's strong edge does not), `useIncreaseContrast` (`useColors`
+  latest's scroll), `useReduceTransparency` (a short sheet's
+  ground; the system's glass on every bar and glass button goes solid on its
+  own), `useIncreaseContrast` (`useColors`
   gives the quiet inks the body's, the hairline the quiet ink,
   and danger the words' ink). Bold Text and Button Shapes need nothing of
   ours: SwiftUI's text styles and React Native's system face take Bold Text,

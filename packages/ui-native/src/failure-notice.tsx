@@ -51,7 +51,7 @@ import {
   noticeOnline,
   type ShownNotice,
 } from "./failure-notice-model.js";
-import { useBarGlass, useKeyboardHeight } from "./glass-bar.js";
+import { BAR_GLASS, useKeyboardHeight } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { BUZZ, buzz } from "./haptics.js";
 import { FootRoomProvider, LiftBarsProvider, type NoticeLift, useLiftBars } from "./notice-lift.js";
@@ -164,7 +164,6 @@ function NoticeBody({
   const refused = notice.kind === NOTICE_KIND.REFUSED;
   const ink = refused ? colors.ATTENTION : colors.TEXT_MUTED;
   const press = noticePress(notice);
-  const glass = useBarGlass();
 
   return (
     <Host matchContents={{ vertical: true }} style={styles.banner}>
@@ -172,7 +171,7 @@ function NoticeBody({
         spacing={SPACE.ROW}
         modifiers={[
           padding({ leading: SPACE.EDGE, trailing: SPACE.ROW, vertical: BANNER_INSET }),
-          ...glass,
+          ...BAR_GLASS,
           // Note that the banner contains its pieces as elements of their own, because an identifier on a plain stack passes down to them and stood over Try again's own.
           accessibilityElement("contain"),
           accessibilityIdentifier("failure-notice"),
