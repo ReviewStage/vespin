@@ -1,0 +1,24 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow dbmermaidf
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run flow when ".*Would Like to Send You Notifications.*" is visible...
+Run flow when ".*Would Like to Send You Notifications.*" is visible... SKIPPED
+Assert that "Inbox" is visible... COMPLETED
+Tap on "Tasks"... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Scrolling DOWN until "Show code" is visible with speed 40, visibility percentage 100%, timeout 30000 ms, with centering disabled... COMPLETED
+Wait for animation to end within 6000 ms... COMPLETED
+Take screenshot mermaidf-0-page... COMPLETED
+Tap on "Diagram: .*"... COMPLETED
+Assert that "Done" is visible... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Assert that "Rollout" is not visible... COMPLETED
+Take screenshot mermaidf-1-fullscreen... COMPLETED
+Tap on "Done"... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Assert that "Rollout" is visible... COMPLETED
+Take screenshot mermaidf-2-back... COMPLETED
