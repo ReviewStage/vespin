@@ -2800,7 +2800,7 @@ sandbox it makes again on its own drive, so the Vercel adapter reads a
 sandbox's ended sessions just before any delete of it, stopping a running one
 first, and hands them to `EndedSessionsOnDelete`, which this runtime answers
 by charging them; a read that fails is logged and the delete goes on. Once a
-day, at 06:00 UTC, the `usage-ledger` schedule calls
+day, at 00:05 UTC, the `usage-ledger` schedule calls
 `apps/web/server/routes/maintenance/usage-ledger.ts` under the same
 `CRON_SECRET` and charges every ended session the project created in the last
 72 hours, for sandboxes never deleted. The ledger takes an item once by its
@@ -2808,6 +2808,25 @@ kind and source id, so the two never double-count, and a session no
 `sandbox_owner` row names is logged and passed by. It always runs, whether or
 not billing is live. Each daily job's endpoint is
 `src/maintenance/scheduled-call-app.ts` over its own path and job.
+
+The same daily call then sends every charge not yet sent to Metronome
+(`src/billing/usage-sending.ts`, over `src/billing/metronome.ts`), which rates
+and invoices it: each workspace is one Metronome customer, its ingest alias
+the workspace's id, with one contract on our rate card from the 1st of the
+month it was made in, billed on the 1st with a recurring credit of the
+included usage. Both are made the first time a workspace has usage to send
+and kept in `workspace_billing`. Each charge is one event whose transaction id
+is the charge's id, so Metronome counts one sent twice once, and a charge is
+stamped `sent_at` once Metronome took it. The call runs at 00:05 UTC, so a
+month's last day reaches Metronome within the 24 hours it waits before it
+finalizes the month's invoice. Without `METRONOME_API_TOKEN`,
+`METRONOME_RATE_CARD_ID`, and `METRONOME_CREDIT_PRODUCT_ID`
+(`src/billing/billing-environment.ts`) nothing is sent, and the ledger is
+written all the same. Metronome's webhook
+(`apps/web/server/routes/billing/metronome-webhook.ts`,
+`src/billing/metronome-webhook-app.ts`) is verified under
+`METRONOME_WEBHOOK_SECRET` and logs an invoice Metronome failed to hand to
+Stripe as an error; every other event is acknowledged unread.
 
 The sweep ends what no request will. `MaintenanceSweeps`
 (`src/maintenance/maintenance-sweep.ts`) runs its sweeps in turn and
