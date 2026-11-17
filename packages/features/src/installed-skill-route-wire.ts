@@ -206,7 +206,8 @@ export const installedSkillInstallRequestSchema = EffectSchema.Struct({
 const importedPathSchema = EffectSchema.String.check(
   EffectSchema.isMinLength(1),
   EffectSchema.isMaxLength(INSTALLED_SKILL_BOUNDS.MAX_IMPORT_PATH_CHARS),
-  EffectSchema.isPattern(/^(?!\/)(?!(?:.*\/)?\.\.?(?:\/|$))[^\\]+$/u),
+  // Note that the segment check spans any character, a newline among them, so no line break hides a `..` from it.
+  EffectSchema.isPattern(/^(?!\/)(?![\s\S]*(?:^|\/)\.\.?(?:\/|$))[^\\]+$/u),
   // Note that a NUL is refused here, since the store's text column can hold none.
   EffectSchema.makeFilter((path) => !path.includes(String.fromCharCode(0))),
 );

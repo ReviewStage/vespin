@@ -49,12 +49,14 @@ const PASTE_BODY_BYTES = INSTALLED_SKILL_PASTE_MAX_CHARS * 6 + 16_384;
 
 /**
  * A body past this is no skill's folder: its files' bound in base64, which
- * spends four characters on three bytes, and room for every file's path and
- * the rest of the frame; under a function's 4.5 MB body.
+ * spends four characters on three bytes, every file's path at six bytes a
+ * character, the most JSON spends on one (`\u0000`), and the rest of the
+ * frame; under a function's 4.5 MB body.
  */
 const IMPORT_BODY_BYTES =
   Math.ceil(INSTALLED_SKILL_BOUNDS.MAX_IMPORT_BYTES / 3) * 4 +
-  INSTALLED_SKILL_BOUNDS.MAX_IMPORT_FILES * (INSTALLED_SKILL_BOUNDS.MAX_IMPORT_PATH_CHARS + 64) +
+  INSTALLED_SKILL_BOUNDS.MAX_IMPORT_FILES *
+    (INSTALLED_SKILL_BOUNDS.MAX_IMPORT_PATH_CHARS * 6 + 64) +
   16_384;
 
 /** A removal carries nothing, so a body past this is none. */

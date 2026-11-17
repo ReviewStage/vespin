@@ -65,12 +65,14 @@ export function madeFromMac(
   const markdown = main === undefined ? "" : fileText(main.bytes);
   const own = skillHead(markdown, folderName(asked.mac.folder));
   const name = asked.name ?? own.name;
-  const total = sent.reduce((bytes, file) => bytes + file.bytes.byteLength, 0);
+  // Note that the checks read the files as they are written, a renamed `SKILL.md` among them, since its new name may take it past a bound.
+  const files = name === own.name ? sent : renamedFiles(sent, markdown, name, own.description);
+  const total = files.reduce((bytes, file) => bytes + file.bytes.byteLength, 0);
 
   const refusal =
     total > INSTALLED_SKILL_BOUNDS.MAX_IMPORT_BYTES
       ? INSTALLED_SKILL_REFUSAL.TOO_LARGE
-      : skillRefusal({ name, description: own.description }, sent);
+      : skillRefusal({ name, description: own.description }, files);
 
   if (refusal !== undefined) {
     return Effect.fail(
@@ -83,6 +85,6 @@ export function madeFromMac(
     description: own.description,
     userInvocable: own.userInvocable,
     source: { type: INSTALLED_SKILL_SOURCE.TEXT, mac: asked.mac },
-    files: name === own.name ? sent : renamedFiles(sent, markdown, name, own.description),
+    files,
   });
 }

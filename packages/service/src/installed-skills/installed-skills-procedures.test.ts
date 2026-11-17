@@ -850,10 +850,14 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
             skillRefusal: INSTALLED_SKILL_REFUSAL.CREDENTIAL,
           },
         );
-        assert.equal(
-          (yield* importFolder({ "SKILL.md": notes, "../escape.sh": "rm" })).status,
-          HOSTED_HTTP_STATUS.BAD_REQUEST,
-        );
+
+        for (const climbing of ["../escape.sh", "a\n/../escape.sh"]) {
+          assert.equal(
+            (yield* importFolder({ "SKILL.md": notes, [climbing]: "rm" })).status,
+            HOSTED_HTTP_STATUS.BAD_REQUEST,
+            JSON.stringify(climbing),
+          );
+        }
       }),
   );
 });
