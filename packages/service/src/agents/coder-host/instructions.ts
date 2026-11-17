@@ -194,6 +194,12 @@ function namingLines(repository: string | null, ownTask: OwnTask, workspace: str
   ];
 }
 
+/** Which ends of a queued pull request reach the agent as no message: its merge, or the merge queue taking it out. */
+interface QueueUntold {
+  readonly merged: boolean;
+  readonly dequeued: boolean;
+}
+
 /**
  * What the agent is told of its task's status, which nothing but an agent
  * or the developer moves, so a task left In progress stands in the
@@ -208,12 +214,19 @@ function namingLines(repository: string | null, ownTask: OwnTask, workspace: str
  * App's access as a message from GitHub (`../../github/agent-wakes.ts`),
  * which it marks the task Done on where that finishes the work; one on its
  * starter's own token, or whose starter turned that wake off, hears of no
- * merge, so it books a wakeup to see it land.
+ * merge, so it books a wakeup to see it land, as one does whose starter
+ * turned off the merge queue taking it out.
  */
-function statusLines(publishes: boolean, mergeUntold: boolean): string[] {
-  const watch = mergeUntold
-    ? ` Nothing tells you a pull request merged, so after you queue one, book a wakeup with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` to check.`
-    : "";
+function statusLines(publishes: boolean, untold: QueueUntold): string[] {
+  const missed = [
+    ...(untold.merged ? ["a pull request merged"] : []),
+    ...(untold.dequeued ? ["the merge queue took one out"] : []),
+  ];
+
+  const watch =
+    missed.length === 0
+      ? ""
+      : ` Nothing tells you ${missed.join(" or ")}, so after you queue one, book a wakeup with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` to check.`;
 
   const done = publishes
     ? `Mark it Done before your last message, once your pull requests merged or closed, no ask is open on the task, and no other agent on it is at work; work with no pull request is finished once its result is ready.${watch}`
@@ -277,7 +290,11 @@ export function coderInstructions(
         ]
       : []),
     `Save screenshots under \`${machine.sharedFiles}/\` and show them with \`${AGENT_TOOL.SHOW_MEDIA}\`.`,
-    ...statusLines(publishes, memberToken || wakesOff.includes(GITHUB_WAKE.CLOSED)),
+    ...statusLines(publishes, {
+      merged: memberToken || wakesOff.includes(GITHUB_WAKE.CLOSED),
+      // Note that an agent on its starter's own token keeps the line it was told before, which names the merge alone.
+      dequeued: !memberToken && wakesOff.includes(GITHUB_WAKE.DEQUEUED),
+    }),
     ...namingLines(repository, ownTask, workspace),
   ];
 
