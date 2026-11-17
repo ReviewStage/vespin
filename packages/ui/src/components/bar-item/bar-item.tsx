@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
+import { cn } from "../../cn.js";
 import { pulseOnPress } from "../../press-pulse.js";
+import { STATUS_TONE } from "../../status-tone.js";
 import { cappedCount } from "../count-figure/count-figure.js";
 
 /**
@@ -16,8 +18,10 @@ import { cappedCount } from "../count-figure/count-figure.js";
  * A `count` of what waits on the reader there stands as a badge on the
  * glyph's top corner, the figure alone, drawn "99+" past 99 (`cappedCount`), and is said after the item's name
  * with its noun ("Inbox, 3 need you"); it is left out at none. It is a
- * NavItem's needs-you count (`STATUS_TONE.ATTENTION`) turned inside out, so a
- * place reads the same in the bar as in a column of places.
+ * NavItem's count turned inside out, in its tone: the needs-you fill
+ * (`STATUS_TONE.ATTENTION`) unless it is a tally (`STATUS_TONE.NEUTRAL`),
+ * drawn in the muted ink's fill, so a place reads the same in the bar as in
+ * a column of places.
  *
  * A phone's bar floats its places in one pill (`BarItems`), beside the one
  * action the bar offers (`BarAction`), a round press in the primary fill,
@@ -37,20 +41,30 @@ const BAR_ACTION =
   "ui-bar-action flex size-bar-action flex-none items-center justify-center rounded-ui-full border-0 bg-primary text-primary-foreground shadow-floating-edge disabled:opacity-disabled [&_svg]:size-ui-24";
 
 /**
- * What waits on the reader, as a badge on the glyph's top corner: a
- * NavItem's needs-you count turned inside out, its figures in white on the
- * needs-you fill the "!" disc is drawn in, in even figures, growing away from
- * the glyph as it lengthens. A ring of the ground the bar stands on parts it
- * from the glyph's strokes.
+ * What a place counts, as a badge on the glyph's top corner: a NavItem's
+ * count turned inside out, in even figures, growing away from the glyph as
+ * it lengthens. A ring of the ground the bar stands on parts it from the
+ * glyph's strokes.
  */
 const BAR_ITEM_COUNT =
-  "absolute -top-ui-4 left-bar-count-reach h-caption-leading min-w-caption-leading rounded-ui-full bg-attention-fill px-ui-4 text-center text-caption font-emphasis text-on-attention tabular-nums shadow-bar-count-ring";
+  "absolute -top-ui-4 left-bar-count-reach h-caption-leading min-w-caption-leading rounded-ui-full px-ui-4 text-center text-caption font-emphasis tabular-nums shadow-bar-count-ring";
 
-/** What waits on the reader in a place: its figure and what it counts, as a reader hears it after the figure. */
+/** The tones a bar's count is drawn in: what needs the reader in white on the needs-you fill the "!" disc is drawn in, and a tally in the ground's ink on the muted ink. */
+const BAR_COUNT_TONE = {
+  [STATUS_TONE.ATTENTION]: "bg-attention-fill text-on-attention",
+  [STATUS_TONE.NEUTRAL]: "bg-muted-foreground text-ground",
+} as const;
+
+/** The tone a bar's count is drawn in. */
+export type BarCountTone = keyof typeof BAR_COUNT_TONE;
+
+/** What a place counts: its figure, what it counts, as a reader hears it after the figure, and its tone. */
 export interface BarCount {
   readonly value: number;
   /** Said after the figure to a reader, "need you"; the figure alone where absent. */
   readonly noun?: string | undefined;
+  /** What needs the reader where absent; neutral for a tally. */
+  readonly tone?: BarCountTone | undefined;
 }
 
 export interface BarItemProps {
@@ -95,7 +109,11 @@ export function BarItem({
     >
       <span className="relative flex [&_svg]:size-ui-20" aria-hidden="true">
         {icon}
-        {counted ? <span className={BAR_ITEM_COUNT}>{cappedCount(count.value)}</span> : null}
+        {counted ? (
+          <span className={cn(BAR_ITEM_COUNT, BAR_COUNT_TONE[count.tone ?? STATUS_TONE.ATTENTION])}>
+            {cappedCount(count.value)}
+          </span>
+        ) : null}
       </span>
       <span>
         {children}

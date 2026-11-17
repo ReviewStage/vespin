@@ -6,7 +6,7 @@ import {
   inboxCounts,
 } from "@repo/features/inbox-list-model";
 import type { AppInboxTask, AppInboxTaskHolding } from "@repo/host/app-state";
-import { type NavCount, STATUS_TONE, type StatusTone, useMinute } from "@repo/ui";
+import { type BarCount, type BarCountTone, STATUS_TONE, useMinute } from "@repo/ui";
 import { useMemo } from "react";
 import { useInboxTaskHoldings, useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -70,16 +70,16 @@ const SHOW_TONE = {
   [INBOX_SHOW.OPEN]: STATUS_TONE.ATTENTION,
   [INBOX_SHOW.ALL]: STATUS_TONE.NEUTRAL,
   [INBOX_SHOW.REMINDERS]: STATUS_TONE.NEUTRAL,
-} as const satisfies Record<InboxShow, StatusTone>;
+} as const satisfies Record<InboxShow, BarCountTone>;
 
 /**
- * The Inbox's count as its row and a phone's bar draw it: how many items
+ * The Inbox's count as its row and a phone's bar draw it, each in its tone: how many items
  * the scope the Inbox shows lists, addressed to whom its Addressed to names
  * (`inboxCounts`), so Questions counts what waits on the developer and Open
  * what they are not done with, read with that scope's words and tone; it
  * follows the view as the Inbox's menu changes it. None while signed out.
  */
-export function useInboxViewCount(tasks: TasksControl): NavCount {
+export function useInboxViewCount(tasks: TasksControl): BarCount {
   const now = useMinute();
   const { show, whose } = useInboxViewChoices();
   const { groups } = useListedInboxGroups(tasks);
