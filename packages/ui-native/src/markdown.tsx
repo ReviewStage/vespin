@@ -243,8 +243,10 @@ function standingHeard(chip: MarkdownChip, name: string, state: string | undefin
 /**
  * How a chip of a GitHub page stands, as the panel's chip draws it: a pull
  * request by its number alone, its title fading mid-word in a chip, with
- * its state's mark and words; an issue by its number and title, with its
- * state's mark and words; none where GitHub has answered nothing of it.
+ * its state's mark, its words heard but never drawn, since a word landing
+ * once GitHub answers shifts the line it stands in; an issue by its number
+ * and title, with its state's mark and words; none where GitHub has
+ * answered nothing of it.
  */
 function standingLook(chip: MarkdownChip, drawing: Drawing): StandingLook | undefined {
   const standing = chip.github === undefined ? undefined : drawing.linkStanding(chip.github);
@@ -257,7 +259,7 @@ function standingLook(chip: MarkdownChip, drawing: Drawing): StandingLook | unde
       ...look,
       glyph: look.symbol,
       name,
-      state: standing.state,
+      state: undefined,
       heard: standingHeard(chip, name, standing.state),
     };
   }
