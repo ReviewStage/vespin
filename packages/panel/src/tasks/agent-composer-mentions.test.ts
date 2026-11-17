@@ -1594,6 +1594,11 @@ it.effect(
           '.mention-menu [aria-label="Agents"] [role="option"]',
         ) ?? assert.fail("the list offers the agent");
 
+      // Note that the words typed are searched for tasks too, after a pause on the window's own timer rather than this test's clock (`use-service-task-search.ts`), so the count is taken once that search went, or under load it lands while the pointer rests and reads as the card's.
+      yield* Effect.promise(() =>
+        vi.waitFor(() => assert.ok(told.some((request) => request.kind === ACT_KIND.TASKS_SEARCH))),
+      );
+
       const reads = told.length;
       // Note that the hint's wait runs on this test's clock, so the pointer rests as the clock moves.
       act(() => {
