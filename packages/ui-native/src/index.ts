@@ -52,6 +52,7 @@ export {
   CallAccessory,
   CallCardRow,
   type CallPresses,
+  CallSidebarFoot,
   COMPOSER_CALL,
   type ComposerCall,
   type StandingCallCard,

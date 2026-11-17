@@ -11,7 +11,9 @@ import { workspaceIdSchema } from "./task-wire.js";
  * whether the deployment holds the bot at all, and the team it is
  * connected to; `POST /api/workspaces/slack-bot/connect` connects it, and
  * `POST /api/workspaces/slack-bot/disconnect` disconnects it, each answering
- * the same. `POST /api/workspaces/slack-bot/notifications` turns the
+ * the same. `POST /api/workspaces/slack-bot/install` answers where the
+ * browser goes to install our Slack app into the workspace's Slack instead
+ * (Add to Slack), which connects the bot once Slack returns. `POST /api/workspaces/slack-bot/notifications` turns the
  * reader's own Slack notifications on or off, which is theirs alone and
  * holds in every workspace. An owner or admin names the repository an agent
  * started from Slack works in where its message names none, for the
@@ -27,6 +29,11 @@ export const WORKSPACE_SLACK_BOT_QUERY = { WORKSPACE_ID: "workspaceId" } as cons
 /** The workspace whose Slack bot is read, connected, or disconnected (POST body, or the read's query). */
 export const workspaceSlackBotRequestSchema = EffectSchema.Struct({
   workspaceId: workspaceIdSchema,
+});
+
+/** Where the browser goes to Add to Slack: Slack's authorize address for our Slack app, carrying the single-use intent Slack returns with. */
+export const workspaceSlackBotInstallAnswerSchema = EffectSchema.Struct({
+  url: EffectSchema.String.check(EffectSchema.isNonEmpty()),
 });
 
 /** The Slack team a workspace's bot is connected to: Slack's id for it and its name. */

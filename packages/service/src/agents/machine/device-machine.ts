@@ -742,6 +742,16 @@ function deviceMachineOver(
             : undefined,
       ),
 
+    checkoutPath: (session) =>
+      Effect.gen(function* () {
+        const pin = yield* pinOfSession(session);
+
+        if (Option.isNone(pin)) return yield* unavailable();
+        const { userId, agentId, deviceId } = pin.value;
+
+        return (yield* layoutOf(userId, agentId, deviceId)).checkoutPath;
+      }),
+
     // Note that the file goes in a files line of its own, which its Mac settles once it wrote it, and the
     // write waits on that as a read waits on its answer, so the agent never reads before the file stands; a
     // line the Mac has not taken by then is withdrawn, so a Mac back later writes nothing no one waits on.

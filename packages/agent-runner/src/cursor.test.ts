@@ -238,6 +238,7 @@ it.effect(
       assert.deepEqual(cursor.environment, [
         {
           PLAYWRIGHT_BROWSERS_PATH: "0",
+          NODE_PATH: "/usr/local/lib/node_modules",
           [RUNNER_ENV.BEARER]: undefined,
           [RUNNER_ENV.CLAUDE_TOKEN]: undefined,
           [RUNNER_ENV.API_KEY]: undefined,

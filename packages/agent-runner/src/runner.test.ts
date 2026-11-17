@@ -1809,12 +1809,14 @@ it.effect(
       const {
         [RUNNER_ENV.CLAUDE_TOKEN]: token,
         PLAYWRIGHT_BROWSERS_PATH: browsers,
+        NODE_PATH: nodePath,
         ...shared
       } = launchedAs(sandbox).environment;
 
       assert.deepEqual(launchedAs(host), { ...launchedAs(sandbox), environment: shared });
       assert.equal(token, CLAUDE_TOKEN);
       assert.equal(browsers, "0");
+      assert.equal(nodePath, "/usr/local/lib/node_modules");
       assert.equal(sandbox?.sandbox?.enabled, false);
     }),
 );

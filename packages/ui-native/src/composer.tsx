@@ -33,7 +33,14 @@ import { longPasteIn } from "@repo/features/long-paste";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
-import { BAR_EDGE, BAR_ROW_SPACING, BarHead, GlassBar, useBarGlass } from "./glass-bar.js";
+import {
+  BAR_EDGE,
+  BAR_MARGIN,
+  BAR_ROW_SPACING,
+  BarHead,
+  GlassBar,
+  useBarGlass,
+} from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
@@ -508,7 +515,7 @@ export function ComposerFoot(props: ComposerProps & { readonly shown: boolean })
   const glass = [
     padding({ all: BAR_EDGE }),
     ...useBarGlass(),
-    padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
+    padding({ horizontal: BAR_MARGIN, bottom: SPACE.ROW }),
     ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
   ];
 
@@ -530,7 +537,7 @@ export function ComposerFoot(props: ComposerProps & { readonly shown: boolean })
   return (
     <VStack spacing={SPACE.TIGHT * 2} modifiers={[measured]}>
       {props.above === undefined ? null : (
-        <VStack modifiers={[padding({ horizontal: SPACE.ROW + 2 })]}>{props.above}</VStack>
+        <VStack modifiers={[padding({ horizontal: BAR_MARGIN })]}>{props.above}</VStack>
       )}
       {foot}
     </VStack>
