@@ -16,6 +16,7 @@ import type { DeviceSeams } from "./compose-mobile.js";
 import { expoFileSystem, hostStateRootIn } from "./expo-file-system.js";
 import { expoSqliteDriver } from "./expo-sqlite-driver.js";
 import { keychainCipher } from "./keychain-cipher.js";
+import { keychainTokens } from "./keychain-tokens.js";
 import { openRelaySocket } from "./relay-socket.js";
 import { keepShareToken } from "./share-token-module.js";
 
@@ -55,6 +56,7 @@ export function deviceSeams(): DeviceSeams {
     openSocket: openRelaySocket,
     onAppActiveChanged,
     cipher: keychainCipher,
+    tokenVault: keychainTokens,
     authSession: webAuthSession,
     keepShareToken,
     localDatabaseDriver: expoSqliteDriver(openDatabaseSync),

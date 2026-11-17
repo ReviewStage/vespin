@@ -21,4 +21,8 @@ export {
 
 export { type RunMode, runModeFor, sentryReportingEnabled } from "./run-mode.js";
 
-export type { SecretCipher, TokenVault } from "./settings-store.js";
+export {
+  EncryptedStorageUnavailable,
+  type SecretCipher,
+  type TokenVault,
+} from "./settings-store.js";
