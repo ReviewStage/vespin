@@ -1,6 +1,6 @@
-// queued-lines.tsx -- the messages queued behind an agent's turn, standing in a glass of their own over its composer, as the panel stands its queue over the box: each with Steer and Delete, a long press offering them with Edit, Move Up and Move Down, a drag putting one in another place, one being edited muted with Cancel, and Resume while the queue stands paused.
+// queued-lines.tsx -- the messages queued behind an agent's turn, standing in a glass of their own over its composer, as the panel stands its queue over the box: each with Steer and Delete, a long press offering them with Edit, Move Up and Move Down, one being edited muted with Cancel, and Resume while the queue stands paused.
 
-import { Button, HStack, Image, List, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
@@ -10,17 +10,8 @@ import {
   foregroundStyle,
   frame,
   lineLimit,
-  listRowBackground,
-  listRowInsets,
-  listRowSeparator,
-  listStyle,
-  moveDisabled,
-  onGeometryChange,
   padding,
-  scrollContentBackground,
 } from "@expo/ui/swift-ui/modifiers";
-import { useState } from "react";
-import { useWindowDimensions } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { useBarGlass } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
@@ -29,7 +20,7 @@ import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
-/** The panel's words for a queued message's acts, and the long press's two for its drag. */
+/** The panel's words for a queued message's acts, and the long press's two for its place. */
 const WORDS = {
   STEER: "Steer",
   EDIT: "Edit",
@@ -46,14 +37,8 @@ const QUEUED_LINES_LARGE = 3;
 /** How many queued messages stand in sight before the rest scroll, as the panel's dock stands about three. */
 const LINES_IN_SIGHT = 3;
 
-/** How tall a queued message stands at an accessibility size before it is measured, its few lines over its acts, in rows of a press's height. */
+/** How tall a queued message stands at an accessibility size, its few lines over its acts, in rows of a press's height, which the scroll a long queue stands in counts by. */
 const LARGE_ROW_PRESSES = 2.5;
-
-/** The most of the window's height the queue takes, so the composer and the keyboard always keep the rest. */
-const MOST_OF_WINDOW = 0.25;
-
-/** The most of the window's height one row past that share stands whole in, as a message of a few lines at the largest text sizes stands, before it too is cut and scrolls. */
-const MOST_FOR_ONE_ROW = 0.5;
 
 /** One message waiting behind the turn, which its starter may steer, move, or delete. */
 export type QueuedLine = {
@@ -73,7 +58,7 @@ type QueuedLinesProps = {
   readonly onSteer?: ((id: string) => void) | undefined;
   /** Asks to take a queued message out of the queue; Delete is not offered where none is given. */
   readonly onDelete?: ((id: string) => void) | undefined;
-  /** Puts the message at `from` at `to`, as the panel's drag drops it; no drag, Move Up, or Move Down where none is given. */
+  /** Puts the message at `from` at `to`, as the panel's drag drops it; no Move Up or Move Down where none is given. */
   readonly onMove?: ((from: number, to: number) => void) | undefined;
   /** Lets a paused queue hand its messages on again; Resume is not offered where none is given. */
   readonly onResume?: (() => void) | undefined;
@@ -212,32 +197,6 @@ function heldActs(
   ];
 }
 
-/**
- * How tall the list of messages stands, in a window `windowHeight` tall: the first
- * few rows whole, as tall as each was measured, and no more of them than the
- * window's share holds, but always the first, so a row is never cut through
- * its words, unless it alone stands past half the window; the rest scroll.
- */
-function sightHeight(rows: readonly number[], windowHeight: number): number {
-  const most = windowHeight * MOST_OF_WINDOW;
-  const first = rows[0] ?? 0;
-
-  if (first > most) return Math.min(first, windowHeight * MOST_FOR_ONE_ROW);
-  let height = 0;
-
-  for (const row of rows.slice(0, LINES_IN_SIGHT)) {
-    if (height > 0 && height + row > most) break;
-    height += row;
-  }
-
-  return height;
-}
-
-/** Where a message dragged from `from` lands, as the panel's move takes it, from SwiftUI's destination, which counts the places before the message is taken out. */
-function landing(from: number, destination: number): number {
-  return destination > from ? destination - 1 : destination;
-}
-
 /** One queued message's row: the queue's glyph, its words on one line, or a few past the accessibility sizes with its acts under them, and Steer and Delete. */
 function QueuedRow({
   line,
@@ -308,13 +267,13 @@ function QueuedRow({
  * its composer in a glass of their own, as the panel's queue dock stands
  * over its box: each on one line led by the panel's queued glyph, with
  * Steer, which sends it into the turn now, and Delete. A long press on a
- * line offers the same with Move Up and Move Down, each only where a line
- * stands to pass, and a line held and dragged takes another place, as a
- * Reminders list's rows do. Why the queue stands paused heads them, with
- * Resume. Note that the lines stand in SwiftUI's own list, so the drag is
- * the system's, and about three stand in sight before the rest scroll, so a
- * long queue, an accessibility size, or the keyboard never pushes the
- * composer off the screen.
+ * line offers the same with Edit, Move Up and Move Down, each only where a
+ * line stands to pass, and one being edited stands muted with Cancel. Why
+ * the queue stands paused heads them, with Resume. Note
+ * that the lines stand at the height their words take, and past three they
+ * scroll, so a long queue never pushes the composer off the screen; no line
+ * is dragged, since SwiftUI drags a row only in its list, which cannot size
+ * itself to its rows and cut them.
  */
 export function QueuedLines({
   lines,
@@ -329,30 +288,36 @@ export function QueuedLines({
   const colors = useColors();
   const large = useAccessibilitySize();
   const press = useScaledSize(PRESS_SIZE);
-  const screen = useWindowDimensions();
   const glass = useBarGlass();
-  // How tall each message's row stood when last laid out, by its id.
-  const [measured, setMeasured] = useState<ReadonlyMap<string, number>>(new Map());
 
   if (lines.length === 0 && paused === undefined) return null;
 
-  // Note that a row not yet laid out counts as tall as a row of its size stands, so the list never opens short of it.
-  const unmeasured = large ? press * LARGE_ROW_PRESSES : press;
-  const rows = lines.map((line) => measured.get(line.id) ?? unmeasured);
-  const height = sightHeight(rows, screen.height);
+  const row = large ? press * LARGE_ROW_PRESSES : press;
+  const rowLook = [padding({ leading: SPACE.ROW, trailing: SPACE.TIGHT })];
 
-  const measure = (id: string) =>
-    onGeometryChange(({ height: next }) =>
-      setMeasured((held) => (held.get(id) === next ? held : new Map(held).set(id, next))),
-    );
+  const stack = (
+    <VStack spacing={0}>
+      {lines.map((line, index) => (
+        <VStack key={line.id} modifiers={rowLook}>
+          <QueuedRow
+            line={line}
+            acts={heldActs(line, index, lines.length, {
+              onSteer,
+              onDelete,
+              onMove,
+              onEdit,
+              onCancelEdit,
+            })}
+            onSteer={onSteer}
+            onDelete={onDelete}
+            onCancelEdit={onCancelEdit}
+          />
+        </VStack>
+      ))}
+    </VStack>
+  );
 
-  const rowLook = [
-    listRowBackground("clear"),
-    listRowInsets({ leading: SPACE.ROW, trailing: SPACE.TIGHT, top: 0, bottom: 0 }),
-    listRowSeparator("hidden"),
-  ];
-
-  // Note that why the queue paused stands over the list rather than in it, so it takes the height its words wrap to, which no row's measure foretells.
+  // Note that a queue past three lines scrolls, as tall as three rows of its size stand.
   return (
     <VStack spacing={0} modifiers={[padding({ vertical: SPACE.TIGHT }), ...glass]}>
       {paused === undefined ? null : (
@@ -374,50 +339,10 @@ export function QueuedLines({
           )}
         </HStack>
       )}
-      {lines.length === 0 ? null : (
-        <List
-          modifiers={[
-            listStyle("plain"),
-            scrollContentBackground("hidden"),
-            // Note that the list always scrolls, since past its first few rows, or the window's share, the rest wait below them.
-            frame({ height }),
-          ]}
-        >
-          <List.ForEach
-            data={lines}
-            keyExtractor={(line) => line.id}
-            recycling={false}
-            {...(onMove === undefined
-              ? {}
-              : {
-                  onMove: (sources: number[], destination: number) => {
-                    const from = sources[0];
-
-                    if (from !== undefined) onMove(from, landing(from, destination));
-                  },
-                })}
-          >
-            {({ item, index }) => (
-              <VStack
-                modifiers={[...rowLook, moveDisabled(item.editing === true), measure(item.id)]}
-              >
-                <QueuedRow
-                  line={item}
-                  acts={heldActs(item, index, lines.length, {
-                    onSteer,
-                    onDelete,
-                    onMove,
-                    onEdit,
-                    onCancelEdit,
-                  })}
-                  onSteer={onSteer}
-                  onDelete={onDelete}
-                  onCancelEdit={onCancelEdit}
-                />
-              </VStack>
-            )}
-          </List.ForEach>
-        </List>
+      {lines.length > LINES_IN_SIGHT ? (
+        <ScrollView modifiers={[frame({ height: row * LINES_IN_SIGHT })]}>{stack}</ScrollView>
+      ) : (
+        stack
       )}
     </VStack>
   );
