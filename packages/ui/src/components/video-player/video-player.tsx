@@ -102,11 +102,12 @@ import { Tooltip } from "../tooltip/hint.js";
  * its size is read it says it as `--ui-video-natural-width` and
  * `--ui-video-natural-height`, plain numbers the place may fit it by.
  *
- * A recording keeps its place wherever it is drawn (`useMediaPlace`, as a
- * sound clip's does), so the same recording drawn again, in the viewer an
- * Expand opens or in a player drawn anew, starts where it was left, and a
- * player played again after another moved the same recording, as the
- * inline one after the viewer closes, goes on from there.
+ * A recording keeps its place and its speed wherever it is drawn
+ * (`useMediaPlace`, as a sound clip's does), so the same recording drawn
+ * again, in the viewer an Expand opens or in a player drawn anew, starts
+ * where it was left at the speed it played at, and a player played again
+ * after another moved the same recording, as the inline one after the
+ * viewer closes, goes on from there.
  *
  * Until its first frame's size is read, the frame holds the shape it will
  * take, its known size or a screenshot's (`LOADING_SIZE`), on the veil, the
@@ -692,7 +693,7 @@ export function VideoPlayer({
   // Note that whether it starts is read once, as it mounts, because a video hears autoplay only then.
   const [starts] = useState(() => viewer && !motionHeld());
 
-  // Note that a read keeps the place unless `moved` says it moved nothing, as a change of speed, which must not claim another player's place.
+  // Note that a read keeps the place unless `moved` says it moved nothing, as a change of speed, which keeps the speed alone so it claims no other player's place.
   const read = (shown: HTMLVideoElement, moved = true) => {
     const duration = Number.isFinite(shown.duration) ? shown.duration : 0;
     // Note that the time is held within the length, because the seek that reads a length stands past it a moment.
@@ -704,6 +705,7 @@ export function VideoPlayer({
     });
 
     if (moved) kept.keep(shown);
+    else kept.keepSpeed(shown);
   };
 
   // While it plays, its place is read on every frame, so the scrubber and the playhead glide rather than step at each `timeupdate`.
