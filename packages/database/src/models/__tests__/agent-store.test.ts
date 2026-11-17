@@ -765,6 +765,31 @@ it.layer(getTestDB())("the coding-agent store's agents read by id", (it) => {
   );
 
   it.effect(
+    "an agent on no task is read by id by a member of its workspace, and as none for an account outside it",
+    () =>
+      Effect.gen(function* () {
+        const starter = yield* openAccount;
+        const teammate = yield* openAccount;
+        const outsider = yield* openAccount;
+        const workspace = yield* openWorkspace(starter);
+        yield* joinWorkspace(workspace, teammate);
+        yield* openWorkspace(outsider);
+        const { agentId } = yield* workspaceAgent(starter, workspace);
+        yield* Effect.flatMap(Database, (db) =>
+          db.update(agentTable).set({ taskId: null }).where(eq(agentTable.id, agentId)),
+        );
+
+        assert.deepEqual(
+          [
+            Option.map(yield* readVisibleAgent(teammate, agentId), (agent) => agent.id),
+            yield* readVisibleAgent(outsider, agentId),
+          ],
+          [Option.some(agentId), Option.none()],
+        );
+      }),
+  );
+
+  it.effect(
     "an agent the App reaches, on a task on its starter's own token, is read by id by its starter and by no teammate who does not see the task, while the read an agent makes of itself keeps the agent's reach alone",
     () =>
       Effect.gen(function* () {
