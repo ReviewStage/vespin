@@ -3,7 +3,7 @@ import { BulletList, TaskList } from "@tiptap/extension-list";
 import { MarkdownManager } from "@tiptap/markdown";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { diffArrays } from "diff";
-import type { NamesChip } from "./contract.js";
+import type { ChipsRead } from "./contract.js";
 import { withMentions } from "./mention-node.js";
 
 /**
@@ -164,7 +164,7 @@ export function documentManager(extensions: AnyExtension[]): MarkdownManager {
 export function documentOpened(
   manager: MarkdownManager,
   markdown: string,
-  namesChip?: NamesChip | undefined,
+  chips?: ChipsRead | undefined,
 ): OpenedDocument {
   const blocks: JSONContent[] = [];
   const sources: string[] = [];
@@ -183,7 +183,7 @@ export function documentOpened(
       const [block] = parsed;
       blocks.push(
         parsed.length === 1 && block !== undefined
-          ? withMentions(block, namesChip)
+          ? withMentions(block, chips)
           : { type: RawBlock.name, attrs: { source } },
       );
       sources.push(source);
@@ -412,11 +412,11 @@ export function documentTook(
   held: HeldSources,
   sent: string,
   merged: string,
-  namesChip?: NamesChip | undefined,
+  chips?: ChipsRead | undefined,
 ): TakenDocument {
-  const sentOpened = documentOpened(manager, sent, namesChip);
+  const sentOpened = documentOpened(manager, sent, chips);
   const was = [...sentOpened.sources];
-  const now = documentOpened(manager, merged, namesChip);
+  const now = documentOpened(manager, merged, chips);
   const current: string[] = [];
   // Note that a block holding a picture still being kept counts as changed since, because it writes as if the picture were not there, and a block put in its place would lose it.
   editor.state.doc.forEach((node) => {

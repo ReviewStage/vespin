@@ -142,6 +142,13 @@
   box-decoration-break: clone;
 }
 
+/* A web address written as its own link leaves out its scheme and a
+   trailing slash in the editor as the read view does, but where the caret
+   stands in it (`bare-addresses.ts`). */
+.description-document-text .description-address-fold {
+  display: none;
+}
+
 /* What the empty block under the caret says, drawn before its words: the
    empty description's own words, an empty line how to open the `/` menu, an empty
    heading its level's name (`description-editor.ts`'s `placeholderOf`). */
