@@ -11,6 +11,7 @@
 
 import { saidSpanOf } from "@repo/ui/link-face";
 import { Extension } from "@tiptap/core";
+import type { Node as PmNode } from "@tiptap/pm/model";
 import { type EditorState, Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
@@ -22,23 +23,58 @@ const ADDRESS_FOLD_CLASS = "description-address-fold";
 
 const FOLD = { class: ADDRESS_FOLD_CLASS } as const;
 
+/** One link's words in a block: where they stand, its target, and the words, however many runs of formatting or comment marks they are split into. */
+interface LinkRun {
+  readonly from: number;
+  readonly to: number;
+  readonly href: string;
+  readonly words: string;
+}
+
+/** Each link's whole words in the block standing at `at`, runs under one target that meet read as one. */
+function linkRunsOf(block: PmNode, at: number): readonly LinkRun[] {
+  const runs: LinkRun[] = [];
+
+  block.forEach((child, offset) => {
+    const link = child.isText
+      ? child.marks.find((mark) => mark.type.name === LINK_MARK)
+      : undefined;
+
+    if (link === undefined) return;
+    const from = at + 1 + offset;
+    const href = String(link.attrs.href ?? "");
+    const last = runs.at(-1);
+    const words = child.text ?? "";
+
+    if (last !== undefined && last.href === href && last.to === from) {
+      runs[runs.length - 1] = { ...last, to: from + words.length, words: last.words + words };
+    } else {
+      runs.push({ from, to: from + words.length, href, words });
+    }
+  });
+
+  return runs;
+}
+
 /** The parts of each bare address in the text that its face leaves out, but in a link the selection touches. */
 function foldsOf(state: EditorState): DecorationSet {
   const { from, to } = state.selection;
   const folds: Decoration[] = [];
 
   state.doc.descendants((node, at) => {
-    if (!node.isText) return true;
-    const link = node.marks.find((mark) => mark.type.name === LINK_MARK);
-    const words = node.text ?? "";
-    const end = at + words.length;
-    const said = link === undefined ? undefined : saidSpanOf(String(link.attrs.href ?? ""), words);
+    if (!node.isTextblock) return true;
 
-    if (said === undefined || (from <= end && to >= at)) return false;
+    for (const run of linkRunsOf(node, at)) {
+      const said = saidSpanOf(run.href, run.words);
 
-    if (said.start > 0) folds.push(Decoration.inline(at, at + said.start, FOLD));
+      if (said === undefined || (from <= run.to && to >= run.from)) continue;
 
-    if (said.end < words.length) folds.push(Decoration.inline(at + said.end, end, FOLD));
+      if (said.start > 0) folds.push(Decoration.inline(run.from, run.from + said.start, FOLD));
+
+      if (said.end < run.words.length) {
+        folds.push(Decoration.inline(run.from + said.end, run.to, FOLD));
+      }
+    }
 
     return false;
   });
