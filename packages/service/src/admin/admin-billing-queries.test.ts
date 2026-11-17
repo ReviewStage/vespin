@@ -55,6 +55,7 @@ function sessionCharge(
       egressBytes: null,
       cpuMicroUsdPerHour: 128_000,
       memoryMicroUsdPerGbHour: 21_200,
+      transferMicroUsdPerGb: 0,
     },
     amountMicroUsd: usd * 1_000_000,
     occurredAt: new Date(occurredAt),
