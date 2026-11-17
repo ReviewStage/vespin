@@ -1,5 +1,5 @@
+import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
-  Badge,
   BUTTON_VARIANT,
   Button,
   Checkbox,
@@ -8,14 +8,18 @@ import {
   DIALOG_TONE,
   Dialog,
   DialogActions,
+  FolderIcon,
   GAP,
+  GlyphSlot,
+  HarnessMark,
+  Inline,
   PlusIcon,
   SETTINGS_ROW_CONTROLS,
-  SETTINGS_ROW_STATE,
   SettingsPage,
   SettingsRow,
   SettingsRowMark,
   SettingsRowStateLine,
+  SettingsRowsFold,
   SettingsSection,
   SpinnerRegion,
   STATUS_TONE,
@@ -32,6 +36,9 @@ import {
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { type ReactNode, useEffect, useState } from "react";
+import codexOneX from "../../../../packages/panel/marks/codex-16.png";
+import codexTwoX from "../../../../packages/panel/marks/codex-32.png";
+import codexThreeX from "../../../../packages/panel/marks/codex-48.png";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -63,59 +70,111 @@ interface Found {
   readonly folder: string;
   readonly name: string;
   readonly description: string;
-  readonly renamedFrom?: string;
 }
 
-/** One agent's skills folder, with what it offers. */
+const AGENT = { AGENTS: "agents", CLAUDE: "claude", CODEX: "codex" } as const;
+
+type Agent = (typeof AGENT)[keyof typeof AGENT];
+
+/** One folder's skills. */
 interface Group {
+  readonly agent: Agent;
   readonly title: string;
   readonly folder: string;
   readonly offered: readonly Found[];
 }
 
+/** Skills in a folder, made up, by name and what each does. */
+function skillsIn(
+  folder: string,
+  skills: readonly (readonly [string, string])[],
+): readonly Found[] {
+  return skills.map(([name, description]) => ({ folder: `${folder}/${name}`, name, description }));
+}
+
 const GROUPS: readonly Group[] = [
   {
+    agent: AGENT.AGENTS,
     title: "Agents folder",
     folder: "~/.agents/skills",
-    offered: [
-      {
-        folder: "~/.agents/skills/storybook-snapshots",
-        name: "storybook-snapshots",
-        description: "Updates Storybook snapshots and explains each visual change.",
-      },
-    ],
+    offered: skillsIn("~/.agents/skills", [
+      ["storybook-snapshots", "Updates Storybook snapshots and explains each visual change."],
+      ["frontend-design", "Builds polished, accessible interfaces from a sketch or a spec."],
+      ["changelog-writer", "Writes a changelog entry for each merged pull request."],
+      ["api-contract-check", "Compares an OpenAPI spec against the handlers that serve it."],
+      ["dependency-bump", "Upgrades one dependency at a time and runs the tests between."],
+      ["sql-explain", "Reads a slow query's plan and suggests the index it needs."],
+    ]),
   },
   {
+    agent: AGENT.CLAUDE,
     title: "Claude Code",
     folder: "~/.claude/skills",
-    offered: [
-      {
-        folder: "~/.claude/skills/flaky-test-hunter",
-        name: "flaky-test-hunter",
-        description: "Reruns a failing test in isolation to tell a flaky one from a broken one.",
-      },
-    ],
+    offered: skillsIn("~/.claude/skills", [
+      [
+        "flaky-test-hunter",
+        "Reruns a failing test in isolation to tell a flaky one from a broken one.",
+      ],
+      ["incident-notes", "Turns an incident channel into a timeline and a list of follow-ups."],
+      ["pr-description", "Drafts a pull request's description from its commits and diff."],
+      ["release-checklist", "Walks through the release steps and stops at the first that fails."],
+      ["security-review", "Looks for injection, auth, and secrets mistakes in a diff."],
+      ["test-gap-finder", "Lists the changed lines no test touches."],
+      ["translation-sync", "Finds strings missing from each locale and drafts them."],
+      ["type-tightener", "Replaces any and loose casts with the types the code already proves."],
+    ]),
   },
   {
+    agent: AGENT.CODEX,
     title: "Codex",
     folder: "~/.codex/skills",
-    offered: [
-      {
-        folder: "~/.codex/skills/db-migrations",
-        name: "db-migrations",
-        description:
-          "Writes reversible Postgres migrations and checks them against a scratch copy.",
-      },
-    ],
+    offered: skillsIn("~/.codex/skills", [
+      [
+        "db-migrations",
+        "Writes reversible Postgres migrations and checks them against a scratch copy.",
+      ],
+      ["log-triage", "Groups a log's errors by cause and ranks them by how often they happen."],
+      ["perf-profile", "Profiles a slow endpoint and points at the hottest frames."],
+      ["readme-refresh", "Brings a README's setup steps back in line with the scripts."],
+      ["shell-hardening", "Adds set -euo pipefail and quoting to a shell script."],
+    ]),
   },
 ];
 
 /** Every skill left out, with the folder it came from and why. */
 const LEFT_OUT = [
-  { name: "pr-review", from: "Claude Code", why: "Already have one" },
-  { name: "release-notes", from: "Claude Code", why: "Already have one" },
-  { name: "vendor-docs", from: "Codex", why: "Too large" },
+  { name: "pr-review", agent: AGENT.CLAUDE, why: "You already have a skill with this name" },
+  { name: "release-notes", agent: AGENT.CLAUDE, why: "You already have a skill with this name" },
+  { name: "code-style", agent: AGENT.AGENTS, why: "You already have a skill with this name" },
+  {
+    name: "changelog-writer",
+    agent: AGENT.CLAUDE,
+    why: "Same name as a skill above, which is the one offered",
+  },
+  {
+    name: "flaky-test-hunter",
+    agent: AGENT.CODEX,
+    why: "Same name as a skill above, which is the one offered",
+  },
+  { name: "vendor-docs", agent: AGENT.CODEX, why: "Larger than 3 MB or 100 files" },
+  { name: "scratch", agent: AGENT.CLAUDE, why: "Its SKILL.md has no valid name or description" },
+  { name: "deploy-keys", agent: AGENT.AGENTS, why: "Holds something that looks like a credential" },
 ] as const;
+
+/** The Codex mark's art, as the desktop's build copies it. */
+const CODEX_ART = { oneX: codexOneX, twoX: codexTwoX, threeX: codexThreeX };
+
+/** The mark of the agent whose skills folder a skill was found in, the folder agents share drawn as a folder. */
+function AgentMark({ agent }: { agent: Agent }): React.JSX.Element {
+  switch (agent) {
+    case AGENT.AGENTS:
+      return <FolderIcon />;
+    case AGENT.CLAUDE:
+      return <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />;
+    case AGENT.CODEX:
+      return <HarnessMark provider={MODEL_PROVIDER.OPENAI} codexArt={CODEX_ART} />;
+  }
+}
 
 const OFFERED = GROUPS.flatMap((group) => group.offered);
 
@@ -169,27 +228,32 @@ function SkillRow({
   );
 }
 
-/** A group of the card's rows under its heading and the line under that. */
+/** A group of the card's rows under its heading, led by its agent's mark, and the folder under that. */
 function GroupHead({
+  agent,
   title,
   caption,
   children,
 }: {
+  agent: Agent;
   title: string;
-  caption?: string;
+  caption: string;
   children: ReactNode;
 }): React.JSX.Element {
   return (
     <Stack gap={GAP.ITEM}>
       <Stack gap={GAP.NONE}>
-        <Text variant={TEXT_VARIANT.SECTION} as={TEXT_ELEMENT.H3}>
-          {title}
-        </Text>
-        {caption === undefined ? null : (
-          <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-            {caption}
+        <Inline gap={GAP.ICON}>
+          <GlyphSlot>
+            <AgentMark agent={agent} />
+          </GlyphSlot>
+          <Text variant={TEXT_VARIANT.SECTION} as={TEXT_ELEMENT.H3}>
+            {title}
           </Text>
-        )}
+        </Inline>
+        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+          {caption}
+        </Text>
       </Stack>
       <SettingsSection>{children}</SettingsSection>
     </Stack>
@@ -208,7 +272,7 @@ function Review({
     <Stack gap={GAP.SECTION}>
       <Text>{`Found ${skillCount(OFFERED.length)} to bring in, and left out ${LEFT_OUT.length}.`}</Text>
       {GROUPS.map((group) => (
-        <GroupHead key={group.title} title={group.title} caption={group.folder}>
+        <GroupHead key={group.title} agent={group.agent} title={group.title} caption={group.folder}>
           {group.offered.map((skill) => (
             <SettingsRow
               key={skill.folder}
@@ -218,22 +282,8 @@ function Review({
                 </SettingsRowMark>
               }
               label={skill.name}
-              adornment={
-                skill.renamedFrom === undefined ? undefined : (
-                  <Badge tone={STATUS_TONE.ATTENTION}>Renamed</Badge>
-                )
-              }
               controls={SETTINGS_ROW_CONTROLS.BESIDE}
-              description={
-                <>
-                  {skill.description}
-                  {skill.renamedFrom === undefined ? null : (
-                    <SettingsRowStateLine block state={SETTINGS_ROW_STATE.ATTENTION}>
-                      {`You already have a ${skill.renamedFrom}`}
-                    </SettingsRowStateLine>
-                  )}
-                </>
-              }
+              description={skill.description}
             >
               {() => (
                 <Checkbox
@@ -246,18 +296,30 @@ function Review({
           ))}
         </GroupHead>
       ))}
-      <GroupHead title="Left out">
-        {LEFT_OUT.map((row) => (
-          <SettingsRow
-            key={`${row.from}/${row.name}`}
-            label={row.name}
-            description={row.from}
-            controls={SETTINGS_ROW_CONTROLS.BESIDE}
-          >
-            {() => <Badge>{row.why}</Badge>}
-          </SettingsRow>
-        ))}
-      </GroupHead>
+      <SettingsSection>
+        <SettingsRowsFold
+          label="Skills left out"
+          head={(chevron) => (
+            <SettingsRow
+              label="Left out"
+              description={`${skillCount(LEFT_OUT.length)} not brought in`}
+              end={() => chevron}
+            />
+          )}
+          rows={LEFT_OUT.map((row) => (
+            <SettingsRow
+              key={`${row.agent}/${row.name}`}
+              leading={
+                <SettingsRowMark>
+                  <AgentMark agent={row.agent} />
+                </SettingsRowMark>
+              }
+              label={row.name}
+              description={row.why}
+            />
+          ))}
+        />
+      </SettingsSection>
     </Stack>
   );
 }
