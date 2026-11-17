@@ -2282,7 +2282,8 @@ function OverviewComments({
  * cost most of the page, follow behind it.
  */
 function useSectionsShown(taskId: string): boolean {
-  return useDeferredValue(taskId, undefined) === taskId;
+  // Note that the first value is null, since React reads an undefined one as none given and defers nothing.
+  return useDeferredValue<string | null>(taskId, null) === taskId;
 }
 
 function OverviewPage({
