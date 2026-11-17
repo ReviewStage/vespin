@@ -122,8 +122,7 @@ builds a control of its own.
   `markdown-model.ts`, which reads each link as the panel's chip does
   (`linkMention`, `readLink`): a `vespin.dev` place goes to the screen's
   `onOpenPlace`, any other web address to Safari.
-- **This is the one workspace that imports `@expo/ui` or `expo-glass-effect`,
-  or builds a control from React Native's pieces.** Everywhere else
+- **This is the one workspace that imports `@expo/ui`, or builds a control from React Native's pieces.** Everywhere else
   `vespin/no-raw-press-outside-ui-native` refuses them, and a press prop
   on a React Native primitive, with no disable comment allowed (root
   `AGENTS.md`'s Layout). When a screen needs a piece this package lacks, add
