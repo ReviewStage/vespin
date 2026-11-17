@@ -52,7 +52,7 @@ import { Fragment, type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent, emojiContent, menuActContent, menuLabel } from "./glyph-label.js";
+import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { cellFocusRingOff, dragLink } from "./interactions.js";
 import {
@@ -150,8 +150,6 @@ export type MenuChoice = {
   readonly tone?: StatusTone | undefined;
   /** A person's photo, as a file on this device, drawn round in the glyph's place, as the panel's assignee menu leads each member with their face. */
   readonly photo?: string | undefined;
-  /** An emoji drawn in the glyph's place, as a section's sidebar row leads with the one its member chose. */
-  readonly emoji?: string | undefined;
   readonly on: boolean;
   readonly onPress: () => void;
 };
@@ -290,10 +288,8 @@ export function choiceColor(choice: MenuChoice, colors: BrandColors): string | u
   return choice.tone === undefined ? undefined : toneColor(colors, choice.tone);
 }
 
-/** What a menu's choice holds: its words beside its emoji, or its photo, or its glyph in its tone, or its words alone. */
+/** What a menu's choice holds: its words beside its photo, or its glyph in its tone, or its words alone. */
 export function choiceContent(choice: MenuChoice, colors: BrandColors) {
-  if (choice.emoji !== undefined) return emojiContent(choice.label, choice.emoji);
-
   return actContent(
     choice.label,
     choice.symbol,
