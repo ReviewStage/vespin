@@ -115,15 +115,25 @@
 }
 
 /* The account's row at the column's foot (`sidebar-foot.tsx`) stands on the
-   head's lines: its face, at the workspace tile's size, is centered where
-   the rows' glyphs are and its name starts where theirs do, by the head's
-   own overhang, and Send feedback and Settings meet edge to edge at its end
-   (`sidebar-foot-end`), so they stand under Back and Forward. */
+   head's lines: one control high, as the head is, its face, at the
+   workspace tile's size, centered where the rows' glyphs are and its name
+   starting where theirs do, by the head's own overhang, and Send feedback
+   and Settings meeting edge to edge at its end (`sidebar-foot-end`), so they
+   stand under Back and Forward. */
 .desktop-sidebar .sidebar-account-row > .ui-nav-item {
   --sidebar-account-overhang: calc((var(--spacing-avatar-row) - var(--ui-control-icon)) / 2);
 
+  min-height: var(--ui-control-height);
   gap: calc(var(--ui-icon-gap) - var(--sidebar-account-overhang));
+  padding-block: 0;
   padding-inline-start: calc(var(--ui-row-inset) - var(--sidebar-account-overhang));
+}
+
+/* As the head's top is level with the work's sheet beside it, the foot's
+   row ends level with the sheet's bottom edge, a sheet's gap above the
+   window's rather than the column's inset. A drawer has no sheet beside it. */
+:where(:root):not([data-ui-room="narrow"]) .desktop-sidebar .sidebar-foot {
+  margin-bottom: calc(var(--sheet-gap) - var(--column-inset));
 }
 
 /* Note that the strip over it keeps a top row's hairline the work's own row
