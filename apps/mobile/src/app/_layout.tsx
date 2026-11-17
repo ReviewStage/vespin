@@ -238,7 +238,8 @@ function GuardedScreens() {
       >
         <Stack.Protected guard={signedIn && !updateNeeded}>
           <Stack.Screen name="index" />
-          <Stack.Screen name="(tabs)" />
+          {/* Note that the tabs stand at once, with no push, because the launch reaches them by the index route's redirect, which the stack animated as a push: the Inbox's list was laid out again on every frame of the slide, holding the splash and the first frame about 1.5 s on a cold launch; a sign-in reaches them the same way, and a link opens inside them, so nothing else ever slid them in. */}
+          <Stack.Screen name="(tabs)" options={{ animation: "none" }} />
           {/* Note that each sheet's title is named here as well as on its screen, so it never reads the route's name, which New task has kept when opened from the tab bar's round +. */}
           <Stack.Screen
             name={SHEET_ROUTE.SETTINGS}
