@@ -1,0 +1,8 @@
+== bundle SIGNb50 base 14bc129e19
+  built 14bc129e19 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+b50 (14bc129e19): fails 0 shots 21 
+  b50 log lines:   104556
