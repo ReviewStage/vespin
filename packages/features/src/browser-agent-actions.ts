@@ -256,17 +256,44 @@ const coordinate = (axis: string) =>
   );
 
 const scrollDelta = (direction: string) =>
-  Schema.optionalKey(
-    describeWire(
-      Schema.Number.check(
-        Schema.isBetween({
-          minimum: -BROWSER_AGENT_LIMITS.SCROLL_MAX_PIXELS,
-          maximum: BROWSER_AGENT_LIMITS.SCROLL_MAX_PIXELS,
-        }),
-      ),
-      `How far to scroll ${direction}, in CSS pixels; 0 when left out.`,
+  describeWire(
+    Schema.Number.check(
+      Schema.isBetween({
+        minimum: -BROWSER_AGENT_LIMITS.SCROLL_MAX_PIXELS,
+        maximum: BROWSER_AGENT_LIMITS.SCROLL_MAX_PIXELS,
+      }),
     ),
+    `How far to scroll ${direction}, in CSS pixels; 0 for none.`,
   );
+
+/** Where a click lands: an element by its ref, or a point on the visible page. */
+const clickTarget = describeWire(
+  Schema.Union([
+    Schema.Struct({ ref }),
+    Schema.Struct({
+      x: coordinate("distance from the left"),
+      y: coordinate("distance from the top"),
+    }),
+  ]),
+  "Where the click lands: {ref} for an element by the ref a snapshot printed, or {x, y} for a point on the visible page.",
+);
+
+/** What a scroll turns: an element scrolled into view by its ref, or the page by a distance. */
+const scrollBy = describeWire(
+  Schema.Union([
+    Schema.Struct({
+      ref: describeWire(
+        Schema.String.check(Schema.isPattern(REF_PATTERN)),
+        "An element to scroll into view, by the ref a snapshot printed beside it.",
+      ),
+    }),
+    Schema.Struct({
+      deltaX: scrollDelta("right, or left where negative"),
+      deltaY: scrollDelta("down, or up where negative"),
+    }),
+  ]),
+  "What to scroll: {ref} to bring an element into view, or {deltaX, deltaY} to turn the wheel over the page by that distance.",
+);
 
 const listAction = Schema.Struct({ action: Schema.Literal(BROWSER_AGENT_ACTION.LIST) });
 
@@ -298,17 +325,8 @@ const tabAction = Schema.Struct({
 const clickAction = Schema.Struct({
   action: Schema.Literal(BROWSER_AGENT_ACTION.CLICK),
   tab,
-  ref: Schema.optionalKey(ref),
-  x: Schema.optionalKey(coordinate("distance from the left")),
-  y: Schema.optionalKey(coordinate("distance from the top")),
-}).check(
-  Schema.makeFilter((click) =>
-    (click.ref === undefined) !== (click.x === undefined && click.y === undefined) &&
-    (click.x === undefined) === (click.y === undefined)
-      ? true
-      : "a click names a ref, or both x and y",
-  ),
-);
+  target: clickTarget,
+});
 
 const typeAction = Schema.Struct({
   action: Schema.Literal(BROWSER_AGENT_ACTION.TYPE),
@@ -362,21 +380,8 @@ const keyAction = Schema.Struct({
 const scrollAction = Schema.Struct({
   action: Schema.Literal(BROWSER_AGENT_ACTION.SCROLL),
   tab,
-  deltaX: scrollDelta("right, or left where negative"),
-  deltaY: scrollDelta("down, or up where negative"),
-  ref: Schema.optionalKey(
-    describeWire(
-      Schema.String.check(Schema.isPattern(REF_PATTERN)),
-      "An element to scroll into view, by its ref, in place of a distance.",
-    ),
-  ),
-}).check(
-  Schema.makeFilter((scroll) =>
-    (scroll.ref === undefined) !== (scroll.deltaX === undefined && scroll.deltaY === undefined)
-      ? true
-      : "a scroll names a ref, or a distance",
-  ),
-);
+  by: scrollBy,
+});
 
 const waitAction = Schema.Struct({
   action: Schema.Literal(BROWSER_AGENT_ACTION.WAIT),

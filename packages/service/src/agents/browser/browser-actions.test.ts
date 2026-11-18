@@ -166,12 +166,12 @@ it.effect("each action sends the browser's own commands, on the tab's flattened 
     const ran = yield* run(peer, [
       { action: BROWSER_AGENT_ACTION.OPEN, name: "app", url: "http://localhost:3000/" },
       { action: BROWSER_AGENT_ACTION.NAVIGATE, tab: "app", url: "https://example.com/" },
-      { action: BROWSER_AGENT_ACTION.CLICK, tab: "app", x: 40, y: 60 },
+      { action: BROWSER_AGENT_ACTION.CLICK, tab: "app", target: { x: 40, y: 60 } },
       { action: BROWSER_AGENT_ACTION.TYPE, tab: "app", text: "héllo" },
       { action: BROWSER_AGENT_ACTION.KEY, tab: "app", key: "Enter" },
       { action: BROWSER_AGENT_ACTION.KEY, tab: "app", key: "a", modifiers: ["control"] },
       { action: BROWSER_AGENT_ACTION.KEY, tab: "app", key: "a", modifiers: ["shift"] },
-      { action: BROWSER_AGENT_ACTION.SCROLL, tab: "app", deltaY: 300 },
+      { action: BROWSER_AGENT_ACTION.SCROLL, tab: "app", by: { deltaX: 0, deltaY: 300 } },
       { action: BROWSER_AGENT_ACTION.BACK, tab: "app" },
       { action: BROWSER_AGENT_ACTION.CLOSE, tab: "app" },
       { action: BROWSER_AGENT_ACTION.LIST },
@@ -348,8 +348,8 @@ it.effect(
       ]);
 
       const clicked = yield* run(peer, [
-        { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", ref: "e42" },
-        { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", ref: "e99" },
+        { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", target: { ref: "e42" } },
+        { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", target: { ref: "e99" } },
       ]);
 
       assert.deepEqual(snapshotted.steps, [
@@ -411,13 +411,13 @@ it.effect("a ref whose middle another element covers fails before it is clicked"
     );
 
     const covered = yield* run(peer, [
-      { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", ref: "e42" },
+      { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", target: { ref: "e42" } },
     ]);
 
     const pressedBefore = sent.filter((command) => command.params.type === "mousePressed").length;
 
     const clear = yield* run(peer, [
-      { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", ref: "e5" },
+      { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", target: { ref: "e5" } },
     ]);
 
     assert.match(failureOf(covered.steps[0]) ?? "", /^e42 is covered at its middle by a div/u);
@@ -547,7 +547,7 @@ it.effect(
       );
 
       const slow = yield* Effect.forkChild(
-        run(peer, [{ action: BROWSER_AGENT_ACTION.CLICK, tab, x: 1, y: 1 }]),
+        run(peer, [{ action: BROWSER_AGENT_ACTION.CLICK, tab, target: { x: 1, y: 1 } }]),
       );
 
       yield* TestClock.adjust(Duration.millis(BROWSER_AGENT_LIMITS.ACTION_TIMEOUT_MS));
@@ -910,11 +910,11 @@ it.effect(
       const ran = yield* run(
         peer,
         [
-          { action: BROWSER_AGENT_ACTION.CLICK, tab, ref: "e42" },
+          { action: BROWSER_AGENT_ACTION.CLICK, tab, target: { ref: "e42" } },
           { action: BROWSER_AGENT_ACTION.TYPE, tab, ref: "e7", text: "dean@example.com" },
           { action: BROWSER_AGENT_ACTION.TYPE, tab, text: "hello" },
-          { action: BROWSER_AGENT_ACTION.CLICK, tab, x: 5, y: 6 },
-          { action: BROWSER_AGENT_ACTION.SCROLL, tab, deltaY: 300 },
+          { action: BROWSER_AGENT_ACTION.CLICK, tab, target: { x: 5, y: 6 } },
+          { action: BROWSER_AGENT_ACTION.SCROLL, tab, by: { deltaX: 0, deltaY: 300 } },
         ],
         cursor,
       );
@@ -1001,7 +1001,11 @@ it.effect(
           .map((command) => String(command.params.type));
 
       const clicking = yield* Effect.forkChild(
-        run(peer, [{ action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", x: 40, y: 60 }], cursor),
+        run(
+          peer,
+          [{ action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", target: { x: 40, y: 60 } }],
+          cursor,
+        ),
       );
 
       yield* TestClock.adjust(Duration.subtract(BROWSER_CURSOR_BEAT, Duration.millis(1)));
@@ -1058,7 +1062,7 @@ it.effect(
 
       const running = yield* Effect.forkChild(
         run(peer, [
-          { action: BROWSER_AGENT_ACTION.CLICK, tab, x: 40, y: 60 },
+          { action: BROWSER_AGENT_ACTION.CLICK, tab, target: { x: 40, y: 60 } },
           { action: BROWSER_AGENT_ACTION.WAIT, tab },
           { action: BROWSER_AGENT_ACTION.SNAPSHOT, tab },
         ]),
@@ -1099,7 +1103,7 @@ it.effect("a wait after a click is let go by a loading iframe the page removes m
 
     const running = yield* Effect.forkChild(
       run(peer, [
-        { action: BROWSER_AGENT_ACTION.CLICK, tab, x: 40, y: 60 },
+        { action: BROWSER_AGENT_ACTION.CLICK, tab, target: { x: 40, y: 60 } },
         { action: BROWSER_AGENT_ACTION.WAIT, tab, timeoutMs: 2_000 },
       ]),
     );
@@ -1136,7 +1140,7 @@ it.effect(
 
       const clicked = yield* Effect.forkChild(
         run(peer, [
-          { action: BROWSER_AGENT_ACTION.CLICK, tab, x: 40, y: 60 },
+          { action: BROWSER_AGENT_ACTION.CLICK, tab, target: { x: 40, y: 60 } },
           { action: BROWSER_AGENT_ACTION.WAIT, tab },
         ]),
       );
@@ -1214,7 +1218,7 @@ it.effect(
         ).length;
 
       const click = [
-        { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", x: 40, y: 60 },
+        { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", target: { x: 40, y: 60 } },
       ] as const;
 
       const reported: BrowserCursorMove[] = [];

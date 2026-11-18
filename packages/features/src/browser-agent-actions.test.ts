@@ -47,19 +47,21 @@ test("an action on a tab names it, and each open in a call names its own", () =>
   assert.equal(readsActions([open("docs"), open("docs")]), false);
 });
 
-test("a click names a ref or a whole point, and a scroll a ref or a distance", () => {
+test("a click targets a ref or a whole point, and a scroll a ref or a whole distance", () => {
   const click = { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-1" };
   assert.equal(readsAction(click), false);
-  assert.equal(readsAction({ ...click, x: 10 }), false);
-  assert.equal(readsAction({ ...click, ref: "e4", x: 10, y: 20 }), false);
-  assert.equal(readsAction({ ...click, ref: "button" }), false);
-  assert.equal(readsAction({ ...click, ref: "e4" }), true);
-  assert.equal(readsAction({ ...click, x: 10, y: 20 }), true);
+  assert.equal(readsAction({ ...click, ref: "e4" }), false);
+  assert.equal(readsAction({ ...click, target: { x: 10 } }), false);
+  assert.equal(readsAction({ ...click, target: { ref: "button" } }), false);
+  assert.equal(readsAction({ ...click, target: { ref: "e4" } }), true);
+  assert.equal(readsAction({ ...click, target: { x: 10, y: 20 } }), true);
 
   const scroll = { action: BROWSER_AGENT_ACTION.SCROLL, tab: "page-1" };
   assert.equal(readsAction(scroll), false);
-  assert.equal(readsAction({ ...scroll, ref: "e4", deltaY: 300 }), false);
-  assert.equal(readsAction({ ...scroll, deltaY: -300 }), true);
+  assert.equal(readsAction({ ...scroll, deltaY: -300 }), false);
+  assert.equal(readsAction({ ...scroll, by: { deltaY: -300 } }), false);
+  assert.equal(readsAction({ ...scroll, by: { ref: "e4" } }), true);
+  assert.equal(readsAction({ ...scroll, by: { deltaX: 0, deltaY: -300 } }), true);
 });
 
 test("a select names a dropdown's ref and an option", () => {
