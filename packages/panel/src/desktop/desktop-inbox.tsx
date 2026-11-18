@@ -1,6 +1,12 @@
 import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentInboxMessagedView } from "@repo/features/agent-view";
-import { type InboxHolder, type InboxListed, NOTHING_HERE } from "@repo/features/inbox-list-model";
+import {
+  holderTask,
+  type InboxAnyHolder,
+  type InboxHolder,
+  type InboxListed,
+  NOTHING_HERE,
+} from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import type { DescriptionMention } from "@repo/features/mention-link";
@@ -67,7 +73,7 @@ import {
 import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { useAgentPullRequestAddress } from "../tasks/use-agent-pull-request.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import { useInboxListing } from "../tasks/use-inbox-listing.js";
+import { onTask, useInboxListing } from "../tasks/use-inbox-listing.js";
 import { useNodOnOpen, useReadOnOpen } from "../tasks/use-inbox-read-marks.js";
 import { useInboxItemOpenSpan, useInboxOpenSpan } from "../tasks/use-inbox-spans.js";
 import {
@@ -260,17 +266,20 @@ export const DesktopInbox = memo(function DesktopInbox({
   const timeOpen = useInboxItemOpenSpan(chosen?.item.id, live.read);
   useInboxOpenSpan(listedRows.length);
 
-  // A row's press opens its item, the keyboard following it.
-  const open = (listed: InboxListed) => {
-    timeOpen(listed.item.id);
+  // A row's press opens its item, the keyboard following it; one on no task opens its agent instead (`useInboxListing`'s `choose`).
+  const open = (listed: InboxListed<InboxAnyHolder>) => {
+    const onItsTask = onTask(listed) !== undefined;
+
+    if (onItsTask) timeOpen(listed.item.id);
     choose(listed);
-    columns.onOpen(listed.item.id);
+
+    if (onItsTask) columns.onOpen(listed.item.id);
   };
 
   const { onMark: markItem } = marks;
 
   // K and J choose the item above or below, the keyboard following it to its row.
-  const step = (listed: InboxListed) => {
+  const step = (listed: InboxListed<InboxAnyHolder>) => {
     timeOpen(listed.item.id);
     choose(listed);
     columns.onStep();
@@ -303,7 +312,9 @@ export const DesktopInbox = memo(function DesktopInbox({
         // chosen nor listed, so its task is read from the chosen item, then the listed groups, then its agent.
         const taskId =
           (chosen?.item.id === item.id ? chosen.holder.task.id : undefined) ??
-          standing.find(({ items }) => items.some((each) => each.id === item.id))?.holder.task.id ??
+          holderTask(
+            standing.find(({ items }) => items.some((each) => each.id === item.id))?.holder,
+          )?.id ??
           tasks.liveAgents?.find((agent) => agent.id === item.agentId)?.taskId ??
           undefined;
 

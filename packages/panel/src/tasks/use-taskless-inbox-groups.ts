@@ -1,0 +1,115 @@
+/**
+ * use-taskless-inbox-groups.ts -- the threads of agents on no task, as the window's Inbox lists them: each agent's items under the agent, named as every place names it.
+ *
+ * The account's feed tells an item on no task under the agent that posted
+ * it (`AppInboxItems`'s `agents`). Each such agent is named from the task
+ * list where it carries it, and else from its one read by its id
+ * (`agentPageQueryOptions`), so its row leads with the agent's name where a
+ * task's row leads with the task's. An agent not read yet, or of another
+ * workspace than the one listed, lists nothing, as a task not listed yet
+ * lists nothing; every workspace's stands while none is listed, as every
+ * task's does (`use-inbox-slices.ts`).
+ */
+
+import type { AgentPageAnswerView } from "@repo/features/agent-view";
+import type { ListedAgent } from "@repo/features/agent-wire";
+import {
+  agentHolder,
+  type InboxAgentHolder,
+  type InboxGroup,
+  type InboxHolderAgent,
+  inboxGroup,
+} from "@repo/features/inbox-list-model";
+import { agentName } from "@repo/features/model-label";
+import type { CatalogModel } from "@repo/features/models-wire";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { useMemo, useRef } from "react";
+import { inboxItemsQuery } from "../live-reads.js";
+import { agentPageQueryOptions } from "./agent-reads.js";
+
+/** No agent on no task holding items. */
+const NO_GROUPS: readonly InboxGroup<InboxAgentHolder>[] = [];
+
+/** No agent's items, before the feed first answers. */
+const NO_AGENTS: Readonly<Record<string, readonly unknown[]>> = {};
+
+/** An agent as an Inbox names it, from what the list or its own read holds of it. */
+type NamedSource = Pick<ListedAgent, "id" | "workspaceId" | "repository"> &
+  Parameters<typeof agentName>[0];
+
+/** The agents the reads answered, each as its page names it. Note that it is one function for every render, so the reads' answers are combined again only as they move. */
+function answeredAgents(
+  reads: readonly { readonly data?: AgentPageAnswerView | undefined }[],
+): readonly NamedSource[] {
+  return reads.flatMap(({ data }) => (data === undefined || "failure" in data ? [] : [data.agent]));
+}
+
+/** Whether two namings of an agent say the same, so its holder, and every row drawn of it, stays as it was. */
+function sameAgent(a: InboxHolderAgent, b: InboxHolderAgent): boolean {
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.model === b.model &&
+    a.workspaceId === b.workspaceId &&
+    a.repository === b.repository
+  );
+}
+
+/**
+ * Every agent on no task the feed holds items of in `workspaceId`, or in any
+ * while none is named, each with its items, the agents named from `listed`
+ * first and else from their own read.
+ */
+export function useTasklessInboxGroups(
+  workspaceId: string | undefined,
+  listed: readonly ListedAgent[] | undefined,
+  models: readonly CatalogModel[] | undefined,
+): readonly InboxGroup<InboxAgentHolder>[] {
+  const fed = useQuery(inboxItemsQuery()).data?.agents;
+  const ids = useMemo(() => Object.keys(fed ?? NO_AGENTS), [fed]);
+
+  const byId = useMemo(
+    () => new Map((listed ?? []).map((agent) => [agent.id, agent] as const)),
+    [listed],
+  );
+
+  // Note that only an agent the list does not carry is read by its id.
+  const unlisted = ids.filter((id) => !byId.has(id));
+
+  const pages = useQueries({
+    queries: unlisted.map((agentId) => agentPageQueryOptions(agentId)),
+    combine: answeredAgents,
+  });
+
+  // The holders named last, by agent, so an agent named the same is held by the very holder it was.
+  const kept = useRef(new Map<string, InboxHolderAgent>());
+
+  return useMemo(() => {
+    if (fed === undefined) return NO_GROUPS;
+    const sources = new Map<string, NamedSource>(byId);
+
+    for (const page of pages) if (!sources.has(page.id)) sources.set(page.id, page);
+
+    return Object.entries(fed).flatMap(([agentId, items]) => {
+      const source = sources.get(agentId);
+
+      if (source === undefined) return [];
+
+      if (workspaceId !== undefined && source.workspaceId !== workspaceId) return [];
+
+      const named: InboxHolderAgent = {
+        id: agentId,
+        name: agentName(source, models),
+        model: source.model,
+        workspaceId: source.workspaceId,
+        repository: source.repository,
+      };
+
+      const was = kept.current.get(agentId);
+      const agent = was !== undefined && sameAgent(was, named) ? was : named;
+      kept.current.set(agentId, agent);
+
+      return [inboxGroup(agentHolder(agent), items)];
+    });
+  }, [fed, workspaceId, byId, pages, models]);
+}

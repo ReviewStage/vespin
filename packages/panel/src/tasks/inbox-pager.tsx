@@ -1,4 +1,5 @@
 import {
+  type InboxAnyHolder,
   type InboxListed,
   type InboxListView,
   inboxEnds,
@@ -41,11 +42,11 @@ export interface InboxPagerPlace {
 }
 
 /** The chosen item's place among the rows drawn and the steps either side of it; none where the steps do not hold the chosen item. */
-export function useInboxPager(
-  steps: InboxListView,
-  rows: InboxListView,
+export function useInboxPager<Holder extends InboxAnyHolder>(
+  steps: InboxListView<Holder>,
+  rows: InboxListView<Holder>,
   chosen: string | undefined,
-  onChoose: (listed: InboxListed) => void,
+  onChoose: (listed: InboxListed<Holder>) => void,
   place: InboxPagerPlace,
 ): InboxPager | undefined {
   const at = inboxSteps(steps, chosen);

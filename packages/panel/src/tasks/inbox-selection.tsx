@@ -1,5 +1,5 @@
 import { RESOLVE } from "@repo/features/inbox-ask-words";
-import { type InboxListed, isUnread } from "@repo/features/inbox-list-model";
+import { type InboxAnyHolder, type InboxListed, isUnread } from "@repo/features/inbox-list-model";
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import { markedNote } from "@repo/features/inbox-write-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -37,7 +37,7 @@ import type { MarkSaying } from "./use-inbox-read-marks.js";
 
 /** Marks one listed item read or unread, answering whether the service took it, with what refused it where it did not. */
 export type InboxListMark = (
-  listed: InboxListed,
+  listed: InboxListed<InboxAnyHolder>,
   unread: boolean,
   saying?: MarkSaying,
 ) => Promise<Kept>;
@@ -57,7 +57,7 @@ export function useInboxSelection({
   onPick,
 }: {
   /** The items chosen, in the order the list draws them. */
-  listed: readonly InboxListed[];
+  listed: readonly InboxListed<InboxAnyHolder>[];
   onClear: () => void;
   /** Marks one item read or unread, answering whether the service took it; none where the list offers no mark. */
   onMark?: InboxListMark | undefined;
@@ -77,7 +77,7 @@ export function useInboxSelection({
   const { mark: pressMark } = useInboxPresses();
 
   // Note that each item's mark goes on its own, there being no act marking several.
-  const markAll = (marking: readonly InboxListed[], unread: boolean) => {
+  const markAll = (marking: readonly InboxListed<InboxAnyHolder>[], unread: boolean) => {
     if (onMark === undefined || marking.length === 0) return;
 
     const pressed = pressMark(

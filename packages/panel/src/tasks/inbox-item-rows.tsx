@@ -1,4 +1,4 @@
-import type { InboxListed } from "@repo/features/inbox-list-model";
+import type { InboxAnyHolder, InboxListed } from "@repo/features/inbox-list-model";
 import { LIST_INSET, List } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { type RefObject, useState } from "react";
@@ -9,7 +9,7 @@ import { useInboxResolver } from "./inbox-close.js";
 import { useInboxRowPresses } from "./inbox-columns.js";
 import { InboxItemRow, inboxRowDraft } from "./inbox-list.js";
 import { useInboxRowActs } from "./inbox-row-acts.js";
-import { choiceOf } from "./use-inbox-listing.js";
+import { choiceOf, onTask } from "./use-inbox-listing.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
@@ -75,7 +75,13 @@ export function InboxItemRows({
 
   // Note that the press stands across draws, as the acts' doors do, so a row is drawn again only where its item moves.
   const inbox = useInboxDoor(tasks);
-  const open = useSteadyDoor((each: InboxListed) => inbox.openItem(choiceOf(each)));
+
+  // Note that these rows list only threads on a task (`openItems` over the tasks' groups), so one on no task opens nothing here.
+  const open = useSteadyDoor((each: InboxListed<InboxAnyHolder>) => {
+    const held = onTask(each);
+
+    if (held !== undefined) inbox.openItem(choiceOf(held));
+  });
 
   return (
     <>

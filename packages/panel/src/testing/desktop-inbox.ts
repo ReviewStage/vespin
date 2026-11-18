@@ -299,6 +299,8 @@ class InboxWorld {
   listedAgents: readonly AgentSummary[] = [AGENT];
   /** Each task's inbox as the service answers a read of it from the start. */
   inboxes = new Map<string, readonly InboxItem[]>();
+  /** Each agent on no task's items, by the agent, as the account's feed holds them. */
+  tasklessInboxes = new Map<string, readonly InboxItem[]>();
   /** Moves main's list of the tasks holding items, as its read of the account would. */
   setHolding: (holding: readonly AppInboxTaskHolding[]) => void = () => undefined;
   /** Moves the account's list of tasks, as an archive on another Mac would. */
@@ -519,7 +521,14 @@ function feedNow(): AppHostRead<AppInboxItems> {
     [...world.inboxes].filter(([id, items]) => items.length > 0 && !world.feedLeavesOut.has(id)),
   );
 
-  return { rows: { [INBOX_SCOPE_KIND.TASK]: holding } };
+  const agents = Object.fromEntries(world.tasklessInboxes);
+
+  return {
+    rows:
+      world.tasklessInboxes.size === 0
+        ? { [INBOX_SCOPE_KIND.TASK]: holding }
+        : { [INBOX_SCOPE_KIND.TASK]: holding, agents },
+  };
 }
 
 /** The account's feed delivered to the window as it now stands, as main delivers a move of it. */
@@ -541,6 +550,7 @@ beforeEach(() => {
     [BILLING.id, [THRESHOLD, RETRY]],
     [INVITES.id, [EXPIRY]],
   ]);
+  world.tasklessInboxes = new Map();
   world.startRead = undefined;
   world.taskPages = new Map([[BILLING.id, [FUNNEL]]]);
   world.listedAgents = [AGENT];
@@ -669,6 +679,8 @@ afterEach(() => {
 interface Asked {
   readonly shownTasks: string[];
   readonly shownAgents: [string, string][];
+  /** The agents on no task it opened, by their own pages. */
+  readonly openedAgents: string[];
   /** The agents whose transcripts it was asked to show beside the item, in the panel. */
   readonly previewedAgents: string[];
   /** How many times the window was asked to leave it, through its routed exits (`leavingBy`). */
@@ -759,6 +771,7 @@ export function mount({
   const asked: Asked = {
     shownTasks: [],
     shownAgents: [],
+    openedAgents: [],
     previewedAgents: [],
     closed: 0,
     newTasks: 0,
@@ -851,6 +864,12 @@ export function mount({
         },
       }),
       onShowAgent: (taskId, agentId) => asked.shownAgents.push([taskId, agentId]),
+      agentView: {
+        ...tasksControl().agentView,
+        onOpen: (agentId) => {
+          asked.openedAgents.push(agentId);
+        },
+      },
     });
 
     const inbox =

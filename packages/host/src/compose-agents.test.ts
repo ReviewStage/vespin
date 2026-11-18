@@ -2151,6 +2151,39 @@ it.effect(
 );
 
 it.effect(
+  "an item whose stamp names no task is told under the agent that posted it, and leaves it once its stamp names a task",
+  () =>
+    Effect.gen(function* () {
+      const { open, sealItems, live, accountItems } = yield* subject();
+      sealItems(LIVE_ANSWERED);
+      yield* open;
+      yield* settled;
+      const taskless = { ...stampOf(OTHER_ITEM, OTHER_TASK_ID), taskId: null };
+      deliverItems(live, [stampOf(HELD_ITEM, TASK_ID), taskless], [HELD_ITEM, OTHER_ITEM]);
+      yield* toldTimes(accountItems, 1);
+
+      deliverItems(live, [stampOf(HELD_ITEM, TASK_ID), stampOf(OTHER_ITEM, OTHER_TASK_ID)], []);
+      yield* nextPoll;
+      yield* toldTimes(accountItems, 2);
+
+      assert.deepEqual(accountItems(), [
+        {
+          rows: {
+            [INBOX_SCOPE_KIND.TASK]: { [TASK_ID]: [HELD_ITEM] },
+            agents: { [OTHER_ITEM.agentId]: [OTHER_ITEM] },
+          },
+        },
+        {
+          rows: {
+            [INBOX_SCOPE_KIND.TASK]: { [TASK_ID]: [HELD_ITEM], [OTHER_TASK_ID]: [OTHER_ITEM] },
+            agents: {},
+          },
+        },
+      ]);
+    }),
+);
+
+it.effect(
   "the account's items asked past a sync id that stands still longer than a hold are asked whole once, and take what moved behind it",
   () =>
     Effect.gen(function* () {
