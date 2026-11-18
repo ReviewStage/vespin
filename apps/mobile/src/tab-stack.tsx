@@ -6,6 +6,14 @@ import { Stack } from "expo-router";
 /** How many screens pushed over a screen let it rest in React's Activity: one, so the screen right under the one in front rests. */
 const COVERED_SCREENS_REST = 1;
 
+/** The tab roots that stand a split view under no header of the stack's: the Inbox's and Tasks', by their routes in the stack. */
+const SPLIT_ROOT = {
+  INBOX: "inbox/index",
+  TASKS: "tasks/index",
+} as const;
+
+const SPLIT_ROOTS: ReadonlySet<string> = new Set(Object.values(SPLIT_ROOT));
+
 /**
  * Every tab's stack: the system's own headers with no ground of their own
  * and no rule under them, never a large title, each screen's name small and
@@ -25,6 +33,13 @@ const COVERED_SCREENS_REST = 1;
  * thread or an agent is opened from stands right under it, and it
  * re-rendered whole on every change to the app's state, a keystroke in the
  * reply or a Send among them.
+ *
+ * The Inbox's and Tasks' roots stand no header of the stack's from their
+ * first frame. Note that this is said here rather than only by the root's
+ * own `Stack.Screen`, because that applies a frame after the root mounts, and
+ * a split view mounting under the header's frame on iPadOS 26 kept its height
+ * as a gap above both columns: Tasks', mounted on its first visit with its
+ * rows already read, where the Inbox's mounts behind the launch's wait.
  */
 export function TabStack() {
   const colors = useColors();
@@ -33,14 +48,15 @@ export function TabStack() {
   return (
     <Stack
       activityEnabled={COVERED_SCREENS_REST}
-      screenOptions={{
+      screenOptions={({ route }) => ({
         headerUserInterfaceStyle: scheme,
         headerTintColor: colors.TEXT,
         headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         headerBackButtonDisplayMode: "minimal",
         headerShadowVisible: false,
         contentStyle: { backgroundColor: colors.GROUND },
-      }}
+        ...(SPLIT_ROOTS.has(route.name) && { headerShown: false }),
+      })}
     />
   );
 }
