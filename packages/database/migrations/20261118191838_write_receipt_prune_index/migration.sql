@@ -1,0 +1,1 @@
+CREATE INDEX "write_receipt_user_written" ON "write_receipt" ("user_id","written_at");

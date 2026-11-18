@@ -1,4 +1,4 @@
-import { pgTable, primaryKey, text } from "drizzle-orm/pg-core";
+import { index, pgTable, primaryKey, text } from "drizzle-orm/pg-core";
 import { timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 
@@ -23,5 +23,8 @@ export const writeReceipt = pgTable(
     /** When the write was taken, which bounds how long its key is held. */
     writtenAt: timestamptz("written_at").notNull(),
   },
-  (table) => [primaryKey({ columns: [table.userId, table.key] })],
+  (table) => [
+    primaryKey({ columns: [table.userId, table.key] }),
+    index("write_receipt_user_written").on(table.userId, table.writtenAt),
+  ],
 );
