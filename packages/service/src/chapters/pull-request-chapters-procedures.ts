@@ -342,6 +342,12 @@ function generatorOf(keys: readonly OwnKey[]): ChaptersGenerator {
   };
 }
 
+/** The providers the member may generate chapters on, by an API key of theirs that opens, in the providers' own order; none where they saved none. */
+export const chaptersProvidersFor = (userId: string) =>
+  Effect.map(ownKeysFor(userId), (keys): readonly ModelProvider[] =>
+    PROVIDER_ORDER.filter((provider) => keys.some((own) => own.provider === provider)),
+  );
+
 /** What the member's Generate stands on: nothing to run on where they saved no API key. */
 export const generatorFor = (userId: string) => Effect.map(ownKeysFor(userId), generatorOf);
 

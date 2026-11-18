@@ -736,6 +736,49 @@ export const unconnectedProviders = /* @__PURE__ */ Effect.fnUntraced(function* 
   return missing;
 });
 
+/** The kinds of credential that may pay for an account's agent, as a tool names them: never which one, nor anything of it. */
+export const PAYER_KIND = {
+  SUBSCRIPTION: "subscription",
+  API_KEY: "api_key",
+} as const;
+
+export type PayerKind = (typeof PAYER_KIND)[keyof typeof PAYER_KIND];
+
+/**
+ * The kinds of credential the account keeps that may pay for its agents on
+ * each provider's models, as `providerRuntimeChoice` reads them: a
+ * subscription where one of its plans is kept (Cursor keeps none), an API
+ * key where one is saved or a Preview's stand-in answers for it; none where
+ * nothing pays, as `unconnectedProviders` marks it.
+ */
+export const providerPayerKinds = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  read?: AccountKeyRows,
+): Effect.fn.Return<
+  ReadonlyMap<ModelProvider, readonly PayerKind[]>,
+  StoreFailure,
+  DatabaseServices
+> {
+  const rows = yield* keyRowsOf(userId, read);
+  const environment = yield* deploymentEnvironment;
+  const ring = environment?.providerKeyEncryptionKeys;
+  const kinds = new Map<ModelProvider, readonly PayerKind[]>();
+
+  for (const provider of Object.values(MODEL_PROVIDER)) {
+    const plan =
+      provider !== MODEL_PROVIDER.CURSOR && keptPlans(userId, provider, ring, rows).length > 0;
+
+    const key = yield* keepsApiKey(userId, provider, rows, environment);
+
+    kinds.set(provider, [
+      ...(plan ? [PAYER_KIND.SUBSCRIPTION] : []),
+      ...(key ? [PAYER_KIND.API_KEY] : []),
+    ]);
+  }
+
+  return kinds;
+});
+
 /** The models offered the account, each of a provider no credential of its pays for marked so (`unconnectedProviders`). */
 export const markedUnconnected = /* @__PURE__ */ Effect.fnUntraced(function* <
   Model extends { readonly provider: ModelProvider },

@@ -234,6 +234,7 @@ import {
   callerWorkspaceId,
   cutOnLine,
   LIST_AGENTS_TOOL,
+  LIST_MODELS_REFUSAL,
   LIST_TASKS_TOOL,
   orStoreRefusal,
   queueRecord,
@@ -330,6 +331,7 @@ import {
 import {
   agentChaptersGenerate,
   agentChaptersRead,
+  chaptersProvidersFor,
   repositoryChaptersGenerate,
   repositoryChaptersRead,
 } from "../chapters/pull-request-chapters-procedures.js";
@@ -871,15 +873,30 @@ const MEMBER_LIST_MODELS_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.LIST_MODELS,
   description:
     "List the models the member may start an agent on, as they are offered them: each with its " +
-    "catalog id, the model's name to say it by, the efforts it lists, and its contextWindows, " +
+    "catalog id, the model's name to say it by, the efforts it lists, its contextWindows, " +
     "the standard and the long with each one's size in tokens and what the long one costs as a " +
-    "multiple of the standard price, or none where it runs on one window; and the member's " +
-    "default model, effort, and the window it runs on, which a start naming neither runs on, " +
-    "and whether it is still offered. The models are the member's own, the same in every " +
-    "workspace.",
+    "multiple of the standard price, or none where it runs on one window, and its payers, the " +
+    "kinds of credential the member keeps that pay for it (subscription, api_key, both, or none " +
+    "where nothing does); the member's default model, effort, and the window it runs on, which " +
+    "a start naming neither runs on, and whether it is still offered; and chaptersProviders, " +
+    "the providers whose API key the member saved, which " +
+    `${MEMBER_MCP_TOOL.GENERATE_PULL_REQUEST_CHAPTERS} may run on, none where they saved none. ` +
+    "The models are the member's own, the same in every workspace.",
   input: NoInputSchema,
   annotations: READ_ONLY,
-  run: () => Effect.flatMap(AdmittedMember, (member) => runListMemberModels(member.userId)),
+  run: () =>
+    Effect.flatMap(AdmittedMember, (member) =>
+      Effect.gen(function* () {
+        const listed = yield* runListMemberModels(member.userId);
+
+        if (listed.status !== ACTION_RESULT_STATUS.ACCEPTED) return listed;
+        const providers = yield* Effect.result(chaptersProvidersFor(member.userId));
+
+        if (Result.isFailure(providers)) return agentToolRejected(LIST_MODELS_REFUSAL.UNAVAILABLE);
+
+        return { ...listed, chaptersProviders: [...providers.success] };
+      }),
+    ),
 });
 
 const ReadPageInputSchema = Schema.Struct({
