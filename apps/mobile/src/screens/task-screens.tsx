@@ -28,7 +28,7 @@ import {
   agentRunsOnWords,
   agentStillWriting,
   agentTree,
-  type StartedAgentsCount,
+  type StartedAgentsStanding,
 } from "@repo/features/task-agents-model";
 import {
   CHANGE_REPOSITORY,
@@ -1765,7 +1765,7 @@ export function TaskAgentRow({
 type AgentNest = {
   readonly depth: number;
   readonly fold: RowFold | undefined;
-  readonly started: StartedAgentsCount | undefined;
+  readonly started: StartedAgentsStanding | undefined;
 };
 
 /**

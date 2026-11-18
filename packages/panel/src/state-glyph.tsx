@@ -73,6 +73,15 @@ function FailedMark({ hinted }: { hinted: boolean }): React.JSX.Element {
   );
 }
 
+/** The failed mark at the end of a row that tells of a failure under it rather than its own, its hint saying whose (`words`, "1 agent it started failed"). */
+export function failedUnderMark(words: string): React.JSX.Element {
+  return (
+    <Tooltip label={words}>
+      <FailedRowMark />
+    </Tooltip>
+  );
+}
+
 /** The mark at the end of a row or a tab whose work stands in `state`: the failed mark once it failed, nothing otherwise. */
 export function stateEndMark(state: GlyphState, hinted: boolean): React.JSX.Element | undefined {
   return state === GLYPH_STATE.FAILED ? <FailedMark hinted={hinted} /> : undefined;

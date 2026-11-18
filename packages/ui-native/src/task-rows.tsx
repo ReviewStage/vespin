@@ -37,7 +37,12 @@ import { needsYouWords } from "@repo/features/inbox-list-model";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
-import type { StartedAgentsCount } from "@repo/features/task-agents-model";
+import {
+  STARTED_STANDING,
+  type StartedAgentsStanding,
+  startedHeard,
+  startedShown,
+} from "@repo/features/task-agents-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard } from "@repo/features/time-format";
@@ -66,15 +71,7 @@ import {
   useNestColumn,
 } from "./list-row.js";
 import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
-import {
-  AgentTile,
-  Avatar,
-  type Face,
-  FailedMark,
-  ProgressCount,
-  ToneGlyph,
-  WorkingMark,
-} from "./marks.js";
+import { AgentTile, Avatar, type Face, FailedMark, ToneGlyph, WorkingMark } from "./marks.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
@@ -265,8 +262,8 @@ type AgentRowProps = {
   readonly depth?: number | undefined;
   /** The fold of the agents it started, where it started any: whether they stand open under it, and what its chevron's press does. Its caller holds it and draws them as rows of their own under it, a level deeper. */
   readonly fold?: RowFold | undefined;
-  /** How many of the agents it started have finished, of all of them, as a task counts its sub-tasks; none where it started none. */
-  readonly started?: StartedAgentsCount | undefined;
+  /** Where the agents it started stand, at every depth; none where it started none. */
+  readonly started?: StartedAgentsStanding | undefined;
 };
 
 /** Whether an agent's row says the agents it started stand open under it, as a task's row says its sub-tasks. */
@@ -276,11 +273,6 @@ const STARTED_HIDDEN = "Agents it started hidden";
 /** What an agent's fold is heard as, folded and open, naming the agent. */
 function startedFold(name: string): FoldWords {
   return { show: `Show agents started by ${name}`, hide: `Hide agents started by ${name}` };
-}
-
-/** What an agent's count of the agents it started is heard as in its figures' place. */
-function startedHeard(finished: number, total: number): string {
-  return `${finished} of ${total} ${total === 1 ? "agent" : "agents"} it started finished`;
 }
 
 /** What an agent row is heard as: its name, then where it stands, where it runs, its task, the agents it started, its pull request, what of it needs you, and whether the agents it started stand open. */
@@ -294,7 +286,8 @@ function agentHeard(props: AgentRowProps) {
       state === AGENT_ROW_STATE.FAILED && GLYPH_STATE_WORDS[GLYPH_STATE.FAILED],
       runsOn,
       task,
-      started !== undefined && startedHeard(started.finished, started.total),
+      (started?.working ?? 0) > 0 && startedHeard(started?.working ?? 0, STARTED_STANDING.WORKING),
+      (started?.failed ?? 0) > 0 && startedHeard(started?.failed ?? 0, STARTED_STANDING.FAILED),
       pullRequest !== undefined &&
         `Pull request #${pullRequest.number}, ${pullRequestMarkLabel(pullRequest)}`,
       waiting > 0 && needsYouWords(waiting),
@@ -344,8 +337,14 @@ function pullRequestActions(pullRequest: AgentRowProps["pullRequest"]): readonly
   ];
 }
 
-/** What an agent's line says of its state: the spinner and Working, or the alert and Failed. */
-function AgentStateWords({ working }: { readonly working: boolean }) {
+/** What an agent's line says of a state, its own or the agents' it started: the spinner or the alert, then its words (Working, Failed, "2 working"). */
+function AgentStateWords({
+  working,
+  words,
+}: {
+  readonly working: boolean;
+  readonly words: string;
+}) {
   const colors = useColors();
 
   return (
@@ -358,7 +357,7 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
           foregroundStyle(colors.TEXT_MUTED),
         ]}
       >
-        {working ? GLYPH_STATE_WORDS[GLYPH_STATE.WORKING] : GLYPH_STATE_WORDS[GLYPH_STATE.FAILED]}
+        {words}
       </Text>
     </HStack>
   );
@@ -367,7 +366,7 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
 /**
  * One agent on a task, as a row: its tile, its name with where it runs at
  * the line's end, and under them what it is doing, how many of the agents
- * it started have finished, its pull request, and how many of its threads
+ * it started, at every depth, still work and failed, its pull request, and how many of its threads
  * wait on the reader, in the accent, since they want you. An agent that
  * started others leads with the fold a parent task's row leads with, whose
  * press opens them; its caller draws them as rows of their own under it, a
@@ -378,7 +377,9 @@ export function AgentRow(props: AgentRowProps) {
   const depth = props.depth ?? 0;
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
-  const told = !resting || pullRequest !== undefined || started !== undefined;
+  const startedWorking = started?.working ?? 0;
+  const startedFailed = started?.failed ?? 0;
+  const told = !resting || pullRequest !== undefined || startedWorking + startedFailed > 0;
   // Note that the facts stand one to a line at the accessibility sizes (`RowLine`), where the needs-you count leads its own line with no separator, and the tile grows with the title.
   const stacked = useAccessibilitySize();
   const tile = useScaledSize(MARK_SIZE.LEAD);
@@ -435,12 +436,26 @@ export function AgentRow(props: AgentRowProps) {
               {LINE_PART.trim()}
             </Text>
           )}
-          {resting ? null : <AgentStateWords working={state === AGENT_ROW_STATE.WORKING} />}
-          {started === undefined ? null : (
-            <ProgressCount
-              done={started.finished}
-              total={started.total}
-              heard={startedHeard(started.finished, started.total)}
+          {resting ? null : (
+            <AgentStateWords
+              working={state === AGENT_ROW_STATE.WORKING}
+              words={
+                state === AGENT_ROW_STATE.WORKING
+                  ? GLYPH_STATE_WORDS[GLYPH_STATE.WORKING]
+                  : GLYPH_STATE_WORDS[GLYPH_STATE.FAILED]
+              }
+            />
+          )}
+          {startedWorking === 0 ? null : (
+            <AgentStateWords
+              working
+              words={startedShown(startedWorking, STARTED_STANDING.WORKING)}
+            />
+          )}
+          {startedFailed === 0 ? null : (
+            <AgentStateWords
+              working={false}
+              words={startedShown(startedFailed, STARTED_STANDING.FAILED)}
             />
           )}
           {pullRequest === undefined ? null : <PullRequestMark pullRequest={pullRequest} />}
