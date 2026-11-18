@@ -152,6 +152,8 @@ export interface DeviceSeams {
   readonly keepShareToken: KeepIssuedToken;
   /** The SQLite the account's local database opens on (`expo-sqlite-driver.ts`); a device without one keeps no local database. */
   readonly localDatabaseDriver?: LocalDatabaseDriverSeam;
+  /** Where the host's own lines go beside the console: the next crash or error report's trail (`crash-reports.ts`), or nowhere. */
+  readonly keepLine?: (message: string) => void;
 }
 
 /** What the app hands the composition. */
@@ -225,7 +227,10 @@ function seamLayers(options: MobileHostOptions) {
     // The app has no environment to read an override from.
     Layer.succeed(Environment, ConfigProvider.fromEnv({ env: {} })),
     Layer.succeed(IdSource, { create: device.createId }),
-    reporterLayer(report),
+    reporterLayer((message) => {
+      report(message);
+      device.keepLine?.(message);
+    }),
     Layer.succeed(ShutdownSignal, { notify: undefined }),
     Layer.succeed(ServiceOrigin, SERVICE_ORIGIN),
     Layer.succeed(TerminalSocket, device.openSocket),
