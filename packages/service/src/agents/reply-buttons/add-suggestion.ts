@@ -24,7 +24,7 @@ import {
   replyButtonLinkOf,
 } from "@repo/features/reply-button-wire";
 import type { WireRecord } from "@repo/wire";
-import { describeWire } from "@repo/wire/effect";
+import { describeWire, readEither } from "@repo/wire/effect";
 import { DateTime, Effect, Option, Result, Schema } from "effect";
 import { ACTION_RESULT_STATUS, type UnparsedWireValue, wireUuidSchema } from "../../core.js";
 import { ModelChoiceRefused } from "../../providers/model-catalog.js";
@@ -47,79 +47,99 @@ import { acceptedAgentChoice } from "../coder-host/start.js";
 import { workspaceAgent } from "../workspace-agents.js";
 import { workspaceStepOf } from "../written-mentions.js";
 
+/** What a suggestion's action takes, in words, so a call refused for its shape is fixed in one retry. */
+const ACTION_WORDS =
+  'Give a label and an action: {kind: "start", prompt, branch where your task works in a ' +
+  'repository, and optionally title, and model with effort} or {kind: "send", agentId, text}, ' +
+  "and no other field.";
+
 /** Why a button was not made, in the words the model reads. */
 export const ADD_SUGGESTION_REFUSAL = {
-  UNREADABLE:
-    "Not added: give a label and exactly one of start or send, and a model with its effort or neither.",
+  MODEL_WITHOUT_EFFORT:
+    "Not added: a start's model and effort are given together or not at all; give action.effort " +
+    "with action.model, or leave both out.",
   NOT_AGENT: "Not added: only a coding agent puts a suggestion in its reply.",
   NO_AGENT: "Not added: no agent of your workspace has that id.",
   SELF: "Not added: a suggestion never sends to you; suggest a new agent instead, or say it yourself.",
   MODELS_UNREAD: "Not added: the models offered could not be read; try again.",
 } as const;
 
+/** One action a suggestion sets off, by its kind, with only the fields that kind takes; it reads as the button keeps it. */
+const SUGGESTION_ACTION_INPUT = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal(REPLY_BUTTON_ACTION.START),
+    prompt: describeWire(
+      START_PROMPT,
+      "The brief the new agent is handed as its first message: everything it needs to start " +
+        "on its work, since it knows nothing else of yours.",
+    ),
+    title: Schema.optionalKey(
+      describeWire(START_TITLE, "The new agent's title; leave it out to have it named."),
+    ),
+    branch: Schema.optionalKey(
+      describeWire(
+        START_BRANCH,
+        "The branch of the task's repository to clone its checkout at, such as the " +
+          "repository's default branch, which must be on GitHub when the button is pressed. " +
+          "Required where the task works in a repository; leave it out for a task with none.",
+      ),
+    ),
+    model: Schema.optionalKey(
+      describeWire(
+        modelChoiceSchema.fields.model,
+        `The model to run on, by its catalog id, as ${AGENT_TOOL.LIST_MODELS} lists it; ` +
+          "leave it out with the effort for the default of the member who sends it.",
+      ),
+    ),
+    effort: Schema.optionalKey(
+      describeWire(
+        modelChoiceSchema.fields.effort,
+        "The reasoning effort, as the model lists it; given with the model or not at all.",
+      ),
+    ),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal(REPLY_BUTTON_ACTION.SEND),
+    agentId: describeWire(
+      wireUuidSchema,
+      `Another agent of your workspace, by the id ${AGENT_TOOL.LIST_AGENTS} answered.`,
+    ),
+    text: describeWire(
+      Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(MAX_MESSAGE_WORDS_CHARS)),
+      "The words sent to it, as the member who sends them.",
+    ),
+  }),
+]);
+
+/**
+ * A suggestion names its label and its action. Note that the action is
+ * nested under `action`, because a tool's input must be an object at its
+ * top, and that `label` stays flat, because released panels read it there
+ * to name a stored call's row.
+ */
 const ADD_SUGGESTION_INPUT = Schema.Struct({
   label: describeWire(
     Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(REPLY_BUTTON_BOUNDS.MAX_LABEL_CHARS)),
     "The suggestion's words, a short action in sentence case, such as Wire up the invite email: " +
       `at most ${REPLY_BUTTON_BOUNDS.MAX_LABEL_CHARS} characters, saying what it sets off.`,
   ),
-  start: Schema.optionalKey(
-    describeWire(
-      Schema.Struct({
-        prompt: describeWire(
-          START_PROMPT,
-          "The brief the new agent is handed as its first message: everything it needs to start " +
-            "on its work, since it knows nothing else of yours.",
-        ),
-        title: Schema.optionalKey(
-          describeWire(START_TITLE, "The new agent's title; leave it out to have it named."),
-        ),
-        branch: Schema.optionalKey(
-          describeWire(
-            START_BRANCH,
-            "The branch of the task's repository to clone its checkout at, such as the " +
-              "repository's default branch, which must be on GitHub when the button is pressed. " +
-              "Required where the task works in a repository; leave it out for a task with none.",
-          ),
-        ),
-        model: Schema.optionalKey(
-          describeWire(
-            modelChoiceSchema.fields.model,
-            `The model to run on, by its catalog id, as ${AGENT_TOOL.LIST_MODELS} lists it; ` +
-              "leave it out with the effort for the default of the member who sends it.",
-          ),
-        ),
-        effort: Schema.optionalKey(
-          describeWire(
-            modelChoiceSchema.fields.effort,
-            "The reasoning effort, as the model lists it; given with the model or not at all.",
-          ),
-        ),
-      }),
-      "Suggest a new agent on the task you work on, started as the member who sends it, where " +
-        "their agents on the task run.",
-    ),
-  ),
-  send: Schema.optionalKey(
-    describeWire(
-      Schema.Struct({
-        agentId: describeWire(
-          wireUuidSchema,
-          `Another agent of your workspace, by the id ${AGENT_TOOL.LIST_AGENTS} answered.`,
-        ),
-        text: describeWire(
-          Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(MAX_MESSAGE_WORDS_CHARS)),
-          "The words sent to it, as the member who sends them.",
-        ),
-      }),
-      "Suggest words for an agent that is already running, sent as the member who sends them.",
-    ),
+  action: describeWire(
+    SUGGESTION_ACTION_INPUT,
+    "What it sets off, by its kind, with only the fields that kind takes: start, a new agent on " +
+      "the task you work on, started as the member who sends it, where their agents on the task " +
+      "run; or send, words for an agent that is already running, sent as the member who sends " +
+      "them.",
   ),
 });
 
-const readAsked = Schema.decodeUnknownResult(ADD_SUGGESTION_INPUT);
+const readAsked = readEither(ADD_SUGGESTION_INPUT);
 
-type Asked = typeof ADD_SUGGESTION_INPUT.Type;
+/** Why an input did not read, naming the field it failed at and what an action takes. */
+function unreadable(path: readonly (string | number)[]): string {
+  const at = path.join(".");
+
+  return `Not added: the input did not read${at === "" ? "" : ` at ${at}`}. ${ACTION_WORDS}`;
+}
 
 /** `add_suggestion` as a coding agent is offered it: its name, its words, and its input. */
 export const ADD_SUGGESTION_TOOL = {
@@ -131,27 +151,12 @@ export const ADD_SUGGESTION_TOOL = {
     "agent's, may edit it, and sends it as themselves; nothing runs until they do. Use it " +
     "where your reply or a thread names a next step that runs apart from your own work, such " +
     "as a follow-up found along the way, rather than asking the developer to start it by hand; " +
-    "never for what you will do yourself. Give its label and exactly one of start or send. " +
+    "never for what you will do yourself. Give its label and its action, a start or a send. " +
     "Write the link it answers in your reply, or in a thread's message, as `[<label>](<link>)` at " +
     "the end of the line it is about, where the developer sees it as the suggestion. A suggestion " +
     "is sent once, whoever sends it, and what it reaches reads that you suggested it.",
   inputSchema: ADD_SUGGESTION_INPUT,
 } as const;
-
-/** What a suggestion sets off, as the button keeps it, from what the agent asked; the start's choice already checked. */
-function actionOf(asked: Asked): ReplyButtonAction | undefined {
-  const { start, send } = asked;
-
-  if (start !== undefined && send === undefined) {
-    return { kind: REPLY_BUTTON_ACTION.START, ...start };
-  }
-
-  if (send !== undefined && start === undefined) {
-    return { kind: REPLY_BUTTON_ACTION.SEND, agentId: send.agentId, text: send.text };
-  }
-
-  return undefined;
-}
 
 /** Why a start's model is refused, said with the models offered; none where the member's choice stands. */
 const startChoiceRefusal = (userId: string, action: ReplyButtonAction) =>
@@ -174,16 +179,19 @@ export function runAddSuggestion(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readAsked(input);
-  const action = Result.isSuccess(asked) ? actionOf(asked.success) : undefined;
+
+  if (Result.isFailure(asked)) {
+    return Effect.succeed(agentToolRejected(unreadable(asked.failure.path)));
+  }
+
+  const { label, action } = asked.success;
 
   // A choice is one thing: a model without its effort, or the reverse, names nothing to run on.
   if (
-    !Result.isSuccess(asked) ||
-    action === undefined ||
-    (action.kind === REPLY_BUTTON_ACTION.START &&
-      (action.model === undefined) !== (action.effort === undefined))
+    action.kind === REPLY_BUTTON_ACTION.START &&
+    (action.model === undefined) !== (action.effort === undefined)
   ) {
-    return Effect.succeed(agentToolRejected(ADD_SUGGESTION_REFUSAL.UNREADABLE));
+    return Effect.succeed(agentToolRejected(ADD_SUGGESTION_REFUSAL.MODEL_WITHOUT_EFFORT));
   }
 
   const agent = callerAgent(call.caller);
@@ -219,7 +227,6 @@ export function runAddSuggestion(
 
       if (refused !== undefined) return agentToolRejected(refused);
       const now = yield* DateTime.nowAsDate;
-      const label = asked.success.label;
       const buttonId = yield* makeReplyButton(agent.id, label, action, now);
       const step = yield* workspaceStepOf(userId, workspace.value);
 
