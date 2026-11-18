@@ -49,10 +49,11 @@ import { mcpClientsQuery, mcpClientsRetryMutation } from "../live-reads.js";
 import { appStateQuery, selectAccount, selectCapability } from "../use-app-state.js";
 import { ReadFailed } from "./marks.js";
 import { useMcpClientRevoke } from "./mcp-clients-section.js";
+import { MenuRow } from "./menu-row.js";
 import { SECTION as SECTION_HEAD, settingsSectionHead } from "./settings-sections.js";
 
 /**
- * cli-section.tsx -- Settings › our MCP & CLI's CLI section: the `vespin` command's sign-in, with Sign out everywhere once it holds one, and its install, to copy and, in the desktop app, run here as VS Code installs `code`.
+ * cli-section.tsx -- Settings › our MCP & CLI's CLI section: the `vespin` command's sign-in, with Sign out everywhere, in its ⋯, once it holds one, and its install, to copy and, in the desktop app, run here as VS Code installs `code`.
  *
  * The section stands as the MCP section over it does: what is connected
  * first, then how to connect. Until the command signs in, a line says so
@@ -73,7 +74,7 @@ import { SECTION as SECTION_HEAD, settingsSectionHead } from "./settings-section
  * (`LIVE_READ.MCP_CLIENTS`, the MCP section's read, which this section
  * narrows to `vespin-cli` and that one leaves out of its list). With none, it shows
  * `vespin login` to copy. With one, its row names the account and when the
- * command was last active, and Sign out everywhere revokes the grant, asking
+ * command was last active, and Sign out everywhere, in the row's ⋯, revokes the grant, asking
  * first in the confirm dialog as an agent's Disconnect does: every token the
  * command holds for the account goes, so every computer it is signed in on
  * is signed out, though an access token it already holds keeps working until
@@ -98,6 +99,7 @@ const PAGE_LINE = {
   WAITING: `Waiting for the ${PRODUCT_NAME.toLowerCase()} command to sign in`,
   LOGIN_COMMAND: "Sign-in command",
   SIGNED_IN: CLI_WORDS.SIGNED_IN,
+  SIGNED_IN_THING: "Command-line sign-in",
   SIGN_OUT: CLI_WORDS.SIGN_OUT,
   SIGNING_OUT: CLI_WORDS.SIGNING_OUT,
   SIGN_OUT_REFUSED: CLI_WORDS.SIGN_OUT_REFUSED,
@@ -322,17 +324,15 @@ function SignedInRow({
 
   return (
     <>
-      <SettingsRow
-        label={<ReplayMask>{email}</ReplayMask>}
-        description={<GrantLine grant={grant} />}
-        error={refusedShown(rejection, FAILURE_SURFACE.MCP_CLIENT_REVOKE)}
-      >
-        {() => (
-          <Button variant={BUTTON_VARIANT.OUTLINE} onClick={confirm.ask}>
-            {PAGE_LINE.SIGN_OUT}
-          </Button>
-        )}
-      </SettingsRow>
+      <MenuRow
+        thing={PAGE_LINE.SIGNED_IN_THING}
+        actions={[{ label: PAGE_LINE.SIGN_OUT, danger: true, onSelect: confirm.ask }]}
+        row={{
+          label: <ReplayMask>{email}</ReplayMask>,
+          description: <GrantLine grant={grant} />,
+          error: refusedShown(rejection, FAILURE_SURFACE.MCP_CLIENT_REVOKE),
+        }}
+      />
       <ConfirmDialog
         open
         confirm={confirm}

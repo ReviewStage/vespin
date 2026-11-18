@@ -22,14 +22,15 @@ import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handState, holdGitHubToken } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { holdMotion, releaseMotion } from "../testing/motion-held.js";
+import { chooseMenuItem } from "../testing/phone-head.js";
 import { AccountSection } from "./account-section.js";
 
 /**
  * Settings › Profile's GitHub personal access token row and its dialog, over
  * a bridge answering as the host would, the token held on app state and each
  * write's answer laid there: the row offers Add with no token and
- * Manage with one, drawn as its hint, login, and expiry; a pasted token is
- * sent once from a password field; Disconnect asks first; a refused
+ * a ⋯ with one, whose row says whose token it is, its end, and its expiry; a
+ * pasted token is sent once from a password field; Disconnect, in the ⋯, asks first; a refused
  * save says why in a short label. Synthetic tokens.
  */
 
@@ -154,15 +155,24 @@ async function mountAndOpen(open = true): Promise<void> {
   await vi.waitFor(() =>
     assert.equal(
       [...document.querySelectorAll("button")].some((each) =>
-        ["Add", "Manage", "Retry"].includes(each.textContent ?? ""),
-      ),
+        ["Add", "Retry"].includes(each.textContent ?? ""),
+      ) || document.querySelector(MORE) !== null,
       true,
     ),
   );
 
   if (!open) return;
-  act(() => button(stored === null ? "Add" : "Manage").click());
+
+  if (stored === null) act(() => button("Add").click());
   await settle();
+}
+
+const MORE = '[aria-label="GitHub personal access token actions"]';
+
+/** The row's ⋯, opened. */
+function openMore(): void {
+  const more = document.querySelector<HTMLButtonElement>(MORE) ?? assert.fail("no ⋯ on the row");
+  act(() => more.click());
 }
 
 const dialog = () => document.querySelector('[role="dialog"]') ?? assert.fail("no dialog");
@@ -175,6 +185,9 @@ const tokenField = () => {
 
   return label?.control instanceof HTMLInputElement ? label.control : null;
 };
+
+const drawn = (words: string) =>
+  [...document.querySelectorAll("button")].some((each) => each.textContent === words);
 
 const button = (words: string, within: ParentNode = document) =>
   [...within.querySelectorAll<HTMLButtonElement>("button")].find(
@@ -207,102 +220,54 @@ test("with no token the row offers Add, and a token pasted into the field is sen
   );
   // Note that the form gives way once the token the host lays after the save reaches its query.
   await vi.waitFor(() => assert.equal(tokenField() === null, true, "the field closes"));
-  act(() => button("Done").click());
   assert.match(
     document.body.textContent ?? "",
-    /GitHub personal access tokenghp_…wxyz\u00a0·\u00a0octo-member Expires\u00a0/u,
+    /octo-member's token ending ghp_…wxyz, expires [A-Z][a-z]{2} \d{1,2}, \d{4}/u,
   );
-  button("Manage");
+  assert.ok(document.querySelector(MORE), "the saved token has a ⋯");
+  assert.equal(document.querySelector('[role="dialog"]'), null, "the dialog closes once kept");
   assert.ok(!document.body.innerHTML.includes(PASTED), "the page holds the token nowhere");
 });
 
-test("a token's expiry is one unbreakable unit and no fact on the row's line carries a dot at its edge", async () => {
+test("a saved token's row tells its facts masked and with no dot, and its ⋯ holds Disconnect, which asks first, then takes it away", async () => {
   stored = KEPT;
   await mountAndOpen(false);
+  assert.equal(drawn("Manage"), false, "no Manage button stands on the row");
+  assert.equal(drawn("Disconnect"), false, "Disconnect is not beside the row");
 
-  const facts = [
-    ...(document.querySelector(".ui-settings-row-description .ui-inline")?.children ?? []),
-  ].map((each) => each.textContent ?? "");
-
-  const expiry = facts.find((each) => each.startsWith("Expires"));
-  assert.match(expiry ?? "", /^Expires\u00a0[A-Z][a-z]{2}\u00a0\d{1,2},\u00a0\d{4} $/u);
-  assert.deepEqual(
-    facts.filter((each) => /^·|·$/u.test(each)),
-    [],
+  const facts = [...document.querySelectorAll("*")].findLast((node) =>
+    node.textContent?.startsWith("octo-member's token ending"),
   );
-});
 
-test("the dialog opens with the token field focused, and Disconnect's question going back to a form leaves it there", async () => {
-  await mountAndOpen();
-  assert.ok(document.activeElement === tokenField(), "the field takes focus as the card opens");
-  await paste(PASTED);
-  act(() => button("Done").click());
-  await settle();
+  assert.ok(facts, "the row tells the token's facts");
+  assert.ok(!(facts.textContent ?? "").includes("·"), "no dot divides them");
+  assert.equal(showsInReplay(facts), false, "the facts are masked");
 
-  act(() => button("Manage").click());
+  openMore();
+  chooseMenuItem("Disconnect");
   await settle();
-  assert.equal(tokenField() === null, true);
-  act(() => {
-    button("Disconnect", dialog()).focus();
-    button("Disconnect", dialog()).click();
-  });
+  assert.equal(sent.filter((each) => each.kind === ACT_KIND.GITHUB_TOKEN_REMOVE).length, 0);
+  const question = document.querySelector('[role="alertdialog"]') ?? assert.fail("no question");
+  assert.match(question.textContent ?? "", /Disconnect your GitHub token\?/u);
+  assert.match(question.textContent ?? "", /Vespin deletes the token it holds/u);
+
+  act(() => button("Cancel", question).click());
+  await settle();
+  assert.equal(sent.filter((each) => each.kind === ACT_KIND.GITHUB_TOKEN_REMOVE).length, 0);
+
+  openMore();
+  chooseMenuItem("Disconnect");
   await settle();
   act(() =>
     button(
       "Disconnect token",
-      dialog().querySelector<HTMLElement>('[role="group"]') ?? dialog(),
+      document.querySelector('[role="alertdialog"]') ?? assert.fail("no question"),
     ).click(),
   );
   await settle();
-  // Note that the form stands once the token the host lays after the removal reaches its query.
-  await vi.waitFor(() =>
-    assert.equal(document.activeElement === tokenField(), true, "the form drawn again has focus"),
-  );
-});
-
-test("a saved token's Manage opens it with Disconnect, which asks at the dialog's foot, then takes it away", async () => {
-  stored = KEPT;
-  await mountAndOpen();
-  assert.equal(tokenField() === null, true);
-
-  // The dialog shows its own words in the screen recording, so the token's facts are masked again inside it.
-  const drawnAt = (words: string) =>
-    [...dialog().querySelectorAll("*")].findLast((node) => node.textContent === words);
-
-  assert.equal(showsInReplay(drawnAt("ghp_…wxyz")), false, "the hint is masked");
-  assert.equal(showsInReplay(drawnAt("octo-member")), false, "the login is masked");
-  const asked = () => dialog().querySelector<HTMLElement>('[role="group"]');
-
-  // Note that the press is made from Disconnect holding focus, as a pointer's or a key's press is.
-  act(() => {
-    button("Disconnect", dialog()).focus();
-    button("Disconnect", dialog()).click();
-  });
-  await settle();
-  assert.equal(sent.filter((each) => each.kind === ACT_KIND.GITHUB_TOKEN_REMOVE).length, 0);
-  assert.equal(document.querySelector('[role="alertdialog"]'), null, "no card opens over it");
-  const question = asked() ?? assert.fail("no question at the foot");
-  assert.match(question.textContent ?? "", /Disconnect your GitHub token\?/u);
-  // The question has a one-line body saying what goes.
-  assert.match(question.textContent ?? "", /Vespin deletes the token it holds/u);
-  assert.doesNotMatch(dialog().textContent ?? "", /Done/u, "the foot is the question");
-  assert.ok(document.activeElement === button("Cancel", question), "Cancel takes focus");
-
-  act(() => button("Cancel", question).click());
-  await settle();
-  assert.equal(asked(), null, "Cancel takes the question back");
-  assert.match(dialog().textContent ?? "", /Done/u, "and the dialog stays");
-  assert.ok(
-    document.activeElement === button("Disconnect", dialog()),
-    "focus goes back to Disconnect",
-  );
-
-  act(() => button("Disconnect", dialog()).click());
-  await settle();
-  act(() => button("Disconnect token", asked() ?? assert.fail()).click());
-  await settle();
   assert.equal(sent.filter((each) => each.kind === ACT_KIND.GITHUB_TOKEN_REMOVE).length, 1);
-  await vi.waitFor(() => assert.equal(tokenField() !== null, true, "the field stands again"));
+  await vi.waitFor(() => button("Add"));
+  assert.equal(document.querySelector('[role="dialog"]'), null, "Add's dialog stays shut");
 });
 
 test("each refused save says why and what to do next, and keeps the field", async () => {
@@ -341,7 +306,7 @@ test("a saved token GitHub rejected says to disconnect it and add a new one", as
   await mountAndOpen();
 
   assert.match(
-    dialog().textContent ?? "",
+    document.body.textContent ?? "",
     /GitHub rejected this token\. Disconnect it and add a new one\./u,
   );
 });
@@ -351,7 +316,7 @@ test("a saved token Vespin can no longer read says to disconnect it and add it a
   await mountAndOpen();
 
   assert.match(
-    dialog().textContent ?? "",
+    document.body.textContent ?? "",
     /Can no longer be read\. Disconnect it and add it again\./u,
   );
 });
@@ -377,17 +342,12 @@ test("a read that went unanswered says so as an alert with Retry in place of Add
 test("a token the host clears, as a sign-out does, is drawn no more", async () => {
   stored = KEPT;
   await mountAndOpen(false);
-  button("Manage");
+  assert.ok(document.querySelector(MORE));
 
   cleared = true;
   act(() => layToken());
   await settle();
-  await vi.waitFor(() =>
-    assert.equal(
-      [...document.querySelectorAll("button")].some((each) => each.textContent === "Manage"),
-      false,
-    ),
-  );
+  await vi.waitFor(() => assert.equal(document.querySelector(MORE) === null, true));
   assert.ok(!(document.body.textContent ?? "").includes("octo-member"), "the token is gone");
 });
 
@@ -418,14 +378,11 @@ test("the row draws no other account's token when Profile is drawn for another a
 
   draw(ADA.id);
   await settle();
-  await vi.waitFor(() => button("Manage"));
+  await vi.waitFor(() => assert.ok(document.querySelector(MORE)));
 
   draw("user-bea");
   await settle();
-  assert.equal(
-    [...container.querySelectorAll("button")].some((each) => each.textContent === "Manage"),
-    false,
-  );
+  assert.equal(container.querySelector(MORE) === null, true);
   assert.ok(!(container.textContent ?? "").includes("octo-member"), "Ada's token is gone");
 });
 

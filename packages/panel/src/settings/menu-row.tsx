@@ -11,6 +11,7 @@ import {
   type SettingsRowControl,
   type SettingsRowControls,
   type SettingsRowIndent,
+  type SettingsRowLead,
   Tooltip,
   useMenu,
 } from "@repo/ui";
@@ -59,6 +60,8 @@ interface MenuRowWords {
   below?: ReactNode;
   /** The provider's or service's mark the row leads with. */
   leading?: ReactNode;
+  /** How wide the lead's column is, where the row stands under one whose face is wider than a mark. */
+  lead?: SettingsRowLead;
   control?: ReactNode;
   /** A control drawn from the row's ids, where the row's words and error must describe it. */
   describedControl?: (control: SettingsRowControl) => ReactNode;
@@ -195,6 +198,7 @@ export function MenuRow({
         ) : (
           <SettingsRow
             indent={row.indent}
+            lead={row.lead}
             leading={row.leading}
             label={row.label}
             adornment={row.adornment}
