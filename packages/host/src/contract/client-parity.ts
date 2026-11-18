@@ -165,8 +165,8 @@ const IOS = {
   CODE_COLOR: byDesign(
     "iOS's host colors no code (compose-mobile.ts answers plainCodeLines), so a fenced block draws plain in mono",
   ),
-  DESCRIPTION_EDIT: byDesign(
-    "iOS reads a description and comments on it; editing it, and the pictures an edit adds, stay on the desktop and the web",
+  DESCRIPTION_PICTURES: notYet(
+    "iOS edits a description's words; adding a picture to it from Photos is the desktop's and the web's for now",
   ),
   PAGE_SOURCE: byDesign(
     "iOS draws a page in its sealed view; the page tab's source view is the desktop's and the web's",
@@ -429,7 +429,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_BLOCK]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_SET_PARENT]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_CHANGE_RELATION]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_EDIT]: panel(IOS.DESCRIPTION_EDIT),
+  [PORT_ACT_KIND.TASKS_EDIT]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_UNFOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_SET_FOLLOWER_MACHINES]: EVERYWHERE,
@@ -473,7 +473,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_HISTORY_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_HISTORY_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PICTURE_READ]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_PICTURE_KEEP]: panel(IOS.DESCRIPTION_EDIT),
+  [PORT_ACT_KIND.TASKS_PICTURE_KEEP]: panel(IOS.DESCRIPTION_PICTURES),
   [PORT_ACT_KIND.TASKS_COMMENTS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_COMMENTS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_COMMENT_START]: EVERYWHERE,

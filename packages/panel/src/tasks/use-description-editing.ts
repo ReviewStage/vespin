@@ -18,6 +18,7 @@ import {
   leavingSave,
   pendingSave,
 } from "@repo/features/description-edit-model";
+import { type ConflictWords, KEEP_MINE } from "@repo/features/description-edit-words";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TasksEditAnswer } from "@repo/features/tasks-view";
 import { STATUS_TONE, useWait } from "@repo/ui";
@@ -38,7 +39,7 @@ import {
   selectSignedIn,
 } from "../use-app-state.js";
 import type { DescriptionEditMutation } from "./description-edit-mutation.js";
-import { type ConflictWords, conflictWords, type EditPlace } from "./edit-ref.js";
+import { conflictWords, type EditPlace } from "./edit-ref.js";
 
 /**
  * use-description-editing.ts -- the open task's one editor: whether its text is open, which block the keyboard stands on, and its saves as the developer pauses.
@@ -92,7 +93,7 @@ function mark<Key>(marks: Store<readonly Key[]>, key: Key, unsaved: boolean): vo
 const LEFT_UNSAVED = {
   WORDS: "Your description edits could not be saved.",
   RETRY: "Retry",
-  KEEP_MINE: "Keep mine",
+  KEEP_MINE,
 } as const;
 
 /** What a task's words are saved through once it is left: its id, the account that wrote them and the one signed in as it asks, its save, who its conflict is named for, and where they are kept and said. */

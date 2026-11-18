@@ -201,6 +201,7 @@ import {
 } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { PLUS_TAB, useComposeAction, useDetailColumnBar, useListColumn } from "./app-sidebar.js";
+import { EDIT_DESCRIPTION_ROUTE } from "./description-edit-screens.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
@@ -237,6 +238,9 @@ const WORDS = {
   TRY_AGAIN: "Try again",
   PAGES: "Pages",
   DESCRIPTION: "Description",
+  /** The press at the Description header's end that opens it to edit, as Notes' and Reminders' sections end. */
+  EDIT: "Edit",
+  EDIT_DESCRIPTION: "Edit description",
   /** What a task's page says under Description where the task has none, rather than leaving the page blank under its headers. */
   NO_DESCRIPTION: "No description yet",
   CREATED_BY: "Created by",
@@ -1104,6 +1108,8 @@ function headPicture(group: TaskTreeGroup): string | undefined {
 /** What a task's ⋯ asks first, what opens New task for a sub-task of it, and what opens its Task relation sheet. */
 interface TaskMenuDoors extends TaskRowDoors {
   readonly askDelete: (task: TaskSummary) => void;
+  /** Opens Edit description, where the workspace's descriptions stand on; none where they stand off. */
+  readonly editDescription: ((task: TaskSummary) => void) | undefined;
   readonly newSubTask: (task: TaskSummary) => void;
   readonly openRelation: OpenRelation;
 }
@@ -1124,6 +1130,16 @@ function historyActions(
   ];
 }
 
+/** Edit description as a task's ⋯ offers it, none where the workspace's descriptions stand off. */
+function editActions(
+  task: TaskSummary,
+  open: ((task: TaskSummary) => void) | undefined,
+): BarMenu["actions"] {
+  if (open === undefined) return [];
+
+  return [{ label: WORDS.EDIT_DESCRIPTION, symbol: GLYPH.EDIT, onPress: () => open(task) }];
+}
+
 /** Move to workspace as a task's ⋯ offers it, none where its door is closed. */
 function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
   return open === undefined
@@ -1134,8 +1150,8 @@ function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
 /**
  * What a task's ⋯ holds, the panel's acts in four groups set apart by the
  * system's rule, as Reminders and Mail group a list's ⋯: where the task is
- * (Copy link, Open in browser); the task itself (Rename, Version history
- * where the workspace's descriptions stand on, Move to workspace where the
+ * (Copy link, Open in browser); the task itself (Rename, Edit description and
+ * Version history where the workspace's descriptions stand on, Move to workspace where the
  * reader may move it); where it stands among tasks (New sub-task, Remove
  * parent where it has one, Task relation, its section and its repository);
  * and Permanently delete, red, alone, which asks first. Its status is the
@@ -1168,6 +1184,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
             symbol: GLYPH.RENAME,
             onPress: () => askRename(task, overview.rename),
           },
+          ...editActions(task, doors.editDescription),
           ...historyActions(task, doors.history),
           ...moveActions(doors.moveDoor(task)),
         ],
@@ -1239,6 +1256,22 @@ function useNewAgent(): (task: TaskSummary) => void {
   const router = useRouter();
 
   return (task) => router.push({ pathname: "/start-agent", params: { task: task.id } });
+}
+
+/** Opens Edit description over a task where its workspace's descriptions stand on, as the panel's description opens to edit in place; none where they stand off. */
+function useEditDescriptionDoor(
+  workspaceId: string | undefined,
+): ((task: TaskSummary) => void) | undefined {
+  const router = useRouter();
+
+  const { data: descriptions = false } = useQuery({
+    ...appStateQuery,
+    select: selectWorkspaceExperiment(workspaceId, EXPERIMENT.DESCRIPTIONS),
+  });
+
+  if (!descriptions) return undefined;
+
+  return (task) => router.push({ pathname: EDIT_DESCRIPTION_ROUTE, params: { task: task.id } });
 }
 
 /** Opens a task's version history where its workspace's descriptions stand on, as the panel's Version history opens it; none where they stand off. */
@@ -1886,6 +1919,13 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
   );
 }
 
+/** Edit at the Description header's end: its word, what it is heard as, and the sheet it opens. */
+interface SectionEdit {
+  readonly label: string;
+  readonly heard: string;
+  readonly onPress: () => void;
+}
+
 /** What a long press on a block of the description offers, and how its count of open comments is heard. */
 const COMMENT_WORDS = {
   COMMENT: "Comment",
@@ -1903,9 +1943,12 @@ const COMMENT_WORDS = {
 function OverviewDescription({
   overview,
   body,
+  edit,
 }: {
   readonly overview: TaskOverview;
   readonly body: string;
+  /** Edit at the header's end; none where the description can't be edited here. */
+  readonly edit: SectionEdit | undefined;
 }) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
@@ -1932,7 +1975,7 @@ function OverviewDescription({
 
   if (blocks.length === 0) {
     return (
-      <ListSection title={WORDS.DESCRIPTION}>
+      <ListSection title={WORDS.DESCRIPTION} act={edit}>
         <WordsRow
           words={body}
           repository={task.repository}
@@ -1947,7 +1990,7 @@ function OverviewDescription({
   }
 
   return (
-    <ListSection title={WORDS.DESCRIPTION}>
+    <ListSection title={WORDS.DESCRIPTION} act={edit}>
       {blocks.map((block, index) => {
         const standing = onBlocks.get(block.from) ?? [];
         const oldest = standing[0];
@@ -2171,6 +2214,13 @@ function OverviewPage({
   });
 
   const threads = useTaskComments(descriptions ? task.id : undefined);
+  const editDoor = useEditDescriptionDoor(task.workspaceId);
+
+  const edit: SectionEdit | undefined =
+    editDoor === undefined
+      ? undefined
+      : { label: WORDS.EDIT, heard: WORDS.EDIT_DESCRIPTION, onPress: () => editDoor(task) };
+
   const related = new Set(overview.tasks.map((each) => each.id));
   const agents = new Set(overview.agents.map(({ agent }) => agent.id));
   const commented = new Set(threads.map((thread) => thread.id));
@@ -2197,11 +2247,11 @@ function OverviewPage({
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
       ) : document === undefined ? null : document.description.body.trim() === "" ? (
-        <ListSection title={WORDS.DESCRIPTION} footer={WORDS.NO_DESCRIPTION}>
+        <ListSection title={WORDS.DESCRIPTION} footer={WORDS.NO_DESCRIPTION} act={edit}>
           {null}
         </ListSection>
       ) : (
-        <OverviewDescription overview={overview} body={document.description.body} />
+        <OverviewDescription overview={overview} body={document.description.body} edit={edit} />
       )}
       {sections && descriptions ? <OverviewComments taskId={task.id} threads={threads} /> : null}
     </RowList>
@@ -2315,6 +2365,7 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
   const { setStatus, askDelete } = doors;
   const overview = held === undefined ? undefined : { ...held, setStatus };
   const history = useHistoryDoor(overview?.task.workspaceId);
+  const editDescription = useEditDescriptionDoor(overview?.task.workspaceId);
   const read = useTasksRead();
   const archiving = useAgentArchiveAsk();
   const { refreshTasks } = useInboxActs();
@@ -2346,7 +2397,14 @@ function useTaskDetail(selected: string | undefined, doors: TaskDetailDoors): Ta
       : {
           acts,
           menu: menuWithout(
-            taskMenu(overview, { askDelete, newSubTask, history, openRelation, moveDoor }),
+            taskMenu(overview, {
+              askDelete,
+              newSubTask,
+              history,
+              editDescription,
+              openRelation,
+              moveDoor,
+            }),
             acts,
           ),
           path: {
@@ -2474,6 +2532,7 @@ export function TaskScreen() {
   const archiving = useAgentArchiveAsk();
   const read = useTasksRead();
   const history = useHistoryDoor(overview?.task.workspaceId);
+  const editDescription = useEditDescriptionDoor(overview?.task.workspaceId);
 
   const menu =
     overview === undefined
@@ -2482,6 +2541,7 @@ export function TaskScreen() {
           askDelete: deletion.askDelete,
           newSubTask,
           history,
+          editDescription,
           openRelation,
           moveDoor,
         });
