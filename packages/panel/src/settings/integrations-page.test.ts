@@ -89,7 +89,10 @@ let refuseRename = false;
 const standing = new Map<IntegrationProvider, IntegrationStatus>();
 
 /** What a provider's server answered when asked for its tools, over the tools it lists. */
-const toolReads = new Map<IntegrationProvider, IntegrationToolsView>();
+const toolReads = new Map<
+  IntegrationProvider,
+  IntegrationToolsView | Promise<IntegrationToolsView>
+>();
 
 /** One call the page made on the act port, by its kind, with what it carried. */
 type PortCall = {
@@ -731,22 +734,27 @@ test("a server's own error stands quoted on a plain line under our sentence, nev
     (provider) => provider !== INTEGRATION_PROVIDER.SLACK,
   );
   standing.set(INTEGRATION_PROVIDER.SLACK, INTEGRATION_STATUS.CONNECTED);
-  toolReads.set(INTEGRATION_PROVIDER.SLACK, {
+  const tools = Promise.withResolvers<IntegrationToolsView>();
+  toolReads.set(INTEGRATION_PROVIDER.SLACK, tools.promise);
+  const page = await mount();
+
+  tools.resolve({
     problem: {
       reason: INTEGRATION_TOOLS_PROBLEM.REJECTED,
       message: "App is not enabled for Slack MCP server access",
     },
   });
-  const page = await mount();
 
-  const lines = [...rowNamed(page, "Slack").querySelectorAll(".ui-settings-row-state")].map(
-    (line) => [line.textContent, line.getAttribute("data-state")],
-  );
+  await vi.waitFor(() => {
+    const lines = [...rowNamed(page, "Slack").querySelectorAll(".ui-settings-row-state")].map(
+      (line) => [line.textContent, line.getAttribute("data-state")],
+    );
 
-  assert.deepEqual(lines, [
-    ["Slack could not be reached.", "attention"],
-    ["Slack said: “App is not enabled for Slack MCP server access”", "plain"],
-  ]);
+    assert.deepEqual(lines, [
+      ["Slack could not be reached.", "attention"],
+      ["Slack said: “App is not enabled for Slack MCP server access”", "plain"],
+    ]);
+  });
 });
 
 test("a connection whose tools could not be read says so in the attention tint, and Retry reads them again", async () => {
