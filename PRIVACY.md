@@ -313,7 +313,10 @@ your Mac.
 
 The Vespin iOS app sends Sentry error reports, crash reports (a crash is sent
 the next time you open the app, a crash as the app starts, before its first
-screen, among them), and reports of a screen that could not be drawn. It uses Sentry's default data collection, so reports may include error
+screen, among them), reports of a screen that could not be drawn, and a report
+of each sign-in that ended without signing you in, naming the provider (Google
+or GitHub) and how it ended, with the app's own lines about its sign-in before
+it. It uses Sentry's default data collection, so reports may include error
 messages, stack traces, the addresses of the app's own requests, device and
 iOS details, the app's version and build, and your IP address. A report
 naming a sign-in token in an address is dropped, and reports name your
