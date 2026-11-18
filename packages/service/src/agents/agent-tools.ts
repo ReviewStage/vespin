@@ -1685,7 +1685,7 @@ export function runListAgents(
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const { caller } = call;
   const ownTask = callerTask(caller);
-  const narrowed = listedFilter(input, ownTask);
+  const narrowed = listedFilter(input);
 
   if (Result.isFailure(narrowed)) return Effect.succeed(agentToolRejected(narrowed.failure));
 

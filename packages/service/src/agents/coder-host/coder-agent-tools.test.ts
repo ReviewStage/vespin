@@ -854,7 +854,7 @@ async function openWorkspaces() {
   };
 }
 
-test("list_agents names every other agent of the caller's workspace, on any task and by any member, each with its task, archived ones marked, and none of another workspace's; it narrows to one task by its id or to the caller's own", async () => {
+test("list_agents names every other agent of the caller's workspace, on any task and by any member, each with its task, archived ones marked, and none of another workspace's; it narrows to one task by its id and refuses the retired thisTask", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -895,15 +895,14 @@ test("list_agents names every other agent of the caller's workspace, on any task
   assert.deepEqual((await call(AGENT_TOOL.LIST_AGENTS, { taskId: tasks.billing })).agents, [
     teammates,
   ]);
-  assert.deepEqual((await call(AGENT_TOOL.LIST_AGENTS, { thisTask: true })).agents, [archived]);
-  assert.deepEqual(await call(AGENT_TOOL.LIST_AGENTS, { taskId: tasks.billing, thisTask: true }), {
+  assert.deepEqual(await call(AGENT_TOOL.LIST_AGENTS, { thisTask: true }), {
     status: ACTION_RESULT_STATUS.REJECTED,
-    reason: AGENT_LIST_FILTER_REFUSAL.BOTH,
+    reason: AGENT_LIST_FILTER_REFUSAL.THIS_TASK_KEY,
   });
   assert.equal(agentSessions.sent.length, 0, "a list sends nothing");
 });
 
-test("list_agents narrows by archive, by whose agents, by an automation's runs, and by where their task stands, refusing a starter named both ways or by no person", async () => {
+test("list_agents narrows by archive, by whose agents, by an automation's runs, and by where their task stands, refusing a starter named by no person or by the retired mine", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -936,16 +935,14 @@ test("list_agents narrows by archive, by whose agents, by an automation's runs, 
   assert.deepEqual(await idsOf({}), [agents.archived.id, sweeper.id, agents.teammates.id]);
   assert.deepEqual(await idsOf({ archived: true }), [agents.archived.id]);
   assert.deepEqual(await idsOf({ archived: false }), [sweeper.id, agents.teammates.id]);
-  assert.deepEqual(await idsOf({ mine: true }), [agents.archived.id, sweeper.id]);
   assert.deepEqual(await idsOf({ startedBy: bobsLink }), [agents.teammates.id]);
   assert.deepEqual(await idsOf({ automation: true }), [sweeper.id]);
   assert.deepEqual(await idsOf({ automation: false }), [agents.archived.id, agents.teammates.id]);
   assert.deepEqual(await idsOf({ automationId }), [sweeper.id]);
   assert.deepEqual(await idsOf({ taskStatus: TASK_STATUS.DONE }), [agents.teammates.id]);
-  assert.deepEqual(await idsOf({ mine: true, archived: false }), [sweeper.id]);
-  assert.deepEqual(await call(AGENT_TOOL.LIST_AGENTS, { mine: true, startedBy: bobsLink }), {
+  assert.deepEqual(await call(AGENT_TOOL.LIST_AGENTS, { mine: true }), {
     status: ACTION_RESULT_STATUS.REJECTED,
-    reason: AGENT_LIST_FILTER_REFUSAL.BOTH_STARTERS,
+    reason: AGENT_LIST_FILTER_REFUSAL.MINE_KEY,
   });
   assert.deepEqual(await call(AGENT_TOOL.LIST_AGENTS, { startedBy: "Bob" }), {
     status: ACTION_RESULT_STATUS.REJECTED,
