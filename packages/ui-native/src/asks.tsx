@@ -1,4 +1,4 @@
-// asks.tsx -- the questions an act asks first, as the system asks them: one a row's act raises standing by that row, UIKit's own action sheet rising from the screen's foot in a compact window, its alert in a regular one, SwiftUI's alert where words must be typed, and the alert that asks for words, such as a rename or an address.
+// asks.tsx -- the questions an act asks first, as the system asks them: one a row's act raises standing by that row, an action sheet rising from the screen's foot in a compact window, an alert in a regular one or where words must be typed, and the alert that asks for words, such as a rename or an address.
 
 import {
   Alert,
@@ -16,15 +16,7 @@ import {
   keyboardType,
   textInputAutocapitalization,
 } from "@expo/ui/swift-ui/modifiers";
-import {
-  type ReactElement,
-  type ReactNode,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
-import { ActionSheetIOS, type ActionSheetIOSOptions, Alert as SystemAlert } from "react-native";
+import { type ReactElement, type ReactNode, useEffect, useState } from "react";
 import { WORDS_KIND, type WordsKind } from "./system-asks.js";
 import { useWindowSizeClass } from "./use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "./window-size-class.js";
@@ -35,11 +27,14 @@ const CANCEL = { LABEL: "Cancel", ROLE: "cancel" } as const;
 /** The role the system draws an act that takes something away in: red. */
 const DESTRUCTIVE_ROLE = "destructive";
 
+/** A width past any window's, so the sheet's anchor fills the screen's foot whatever its width. */
+const FULL_WIDTH = 10_000;
+
 /** Where an ask's host stands: the size of nothing, so a screen draws it beside whatever it shows. */
 const NO_SIZE = { position: "absolute" } as const;
 
-/** Where an action sheet's act and Cancel stand among its buttons: the act first, as iOS leads with it. */
-const SHEET_BUTTON = { ACT: 0, CANCEL: 1 } as const;
+/** Where an action sheet's host stands: along the screen's foot, so the sheet rises from there. */
+const FOOT = { position: "absolute", left: 0, right: 0, bottom: 0, height: 1 } as const;
 
 type ConfirmAskProps = {
   /** The question, as the panel's confirm asks it: "Remove from the merge queue?" */
@@ -65,12 +60,20 @@ type ConfirmAskProps = {
 };
 
 /** An ask's trigger, which a screen never sees: the ask is presented by its `presented`, from a press anywhere. */
-function HiddenTrigger(): ReactNode {
-  return <Text modifiers={[frame({ width: 0, height: 0 })]}>{""}</Text>;
+function HiddenTrigger({ wide }: { readonly wide: boolean }): ReactNode {
+  return (
+    <Text
+      modifiers={[
+        wide ? frame({ maxWidth: FULL_WIDTH, maxHeight: 0 }) : frame({ width: 0, height: 0 }),
+      ]}
+    >
+      {""}
+    </Text>
+  );
 }
 
-/** The ask whose act is gated by typed words, as SwiftUI's alert: its question, what it costs, the gate's field, Cancel, and its act, dimmed until the gate's words are typed, which UIKit's own alert can't do from React Native. */
-function GatedConfirm({
+/** The ask as the system's alert: its question, what it costs, the typed gate's field, Cancel, and its act, dimmed until the gate's words are typed. */
+function AlertConfirm({
   title,
   message,
   act,
@@ -101,7 +104,7 @@ function GatedConfirm({
         }}
       >
         <Alert.Trigger>
-          <HiddenTrigger />
+          <HiddenTrigger wide={false} />
         </Alert.Trigger>
         <Alert.Actions>
           {gate === undefined ? null : (
@@ -134,16 +137,8 @@ function GatedConfirm({
   );
 }
 
-/**
- * The ask as UIKit's own question, raised as it's presented: in a compact
- * window an action sheet from the screen's foot, its act first, red where
- * it takes something away, and the system's own Cancel; in a regular one an
- * alert with Cancel and its act. Note that it's raised once each time
- * `presented` turns true, and that an answer coming after the caller let
- * the question go, after the ask unmounted, or to an earlier question acts
- * on nothing, since UIKit's question can't be taken down from React Native.
- */
-function SystemConfirm({
+/** The ask as the system's action sheet, rising from the screen's foot: its question and what it costs, its act first, and the system's own Cancel. */
+function SheetConfirm({
   title,
   message,
   act,
@@ -151,70 +146,36 @@ function SystemConfirm({
   presented,
   onAct,
   onDismiss,
-  compact,
-}: ConfirmAskProps & { readonly compact: boolean }) {
-  // The newest answers, which an answer reads as it lands.
-  const live = useRef({ onAct, onDismiss });
-  useEffect(() => {
-    live.current = { onAct, onDismiss };
-  });
-  // The question raised and still answerable, by its own token: none once `presented` turns false or the ask unmounts, so a second run of the effect never raises it twice, and an answer to an earlier question, or one landing after the ask went, acts on nothing.
-  const standing = useRef<symbol | undefined>(undefined);
-
-  // Note that the token is let go during the commit that lets the question go or unmounts the ask, in a layout effect, so no native answer landing before the passive effects run can still act.
-  useLayoutEffect(() => {
-    if (!presented) standing.current = undefined;
-
-    return () => {
-      standing.current = undefined;
-    };
-  }, [presented]);
-
-  useEffect(() => {
-    if (!presented || standing.current !== undefined) return;
-
-    const raise = Symbol("raise");
-    standing.current = raise;
-
-    const answer = (acted: boolean) => {
-      if (standing.current !== raise) return;
-
-      const now = live.current;
-
-      if (acted) now.onAct();
-
-      now.onDismiss();
-    };
-
-    if (compact) {
-      // Note that a sheet with nothing taken away names no button red, the act standing first in the system's own ink.
-      const sheet: ActionSheetIOSOptions = {
-        title,
-        message,
-        options: [act, CANCEL.LABEL],
-        cancelButtonIndex: SHEET_BUTTON.CANCEL,
-        destructiveButtonIndex: destructive ? SHEET_BUTTON.ACT : [],
-      };
-
-      ActionSheetIOS.showActionSheetWithOptions(sheet, (index) =>
-        answer(index === SHEET_BUTTON.ACT),
-      );
-
-      return;
-    }
-
-    SystemAlert.alert(title, message, [
-      { text: CANCEL.LABEL, style: CANCEL.ROLE, onPress: () => answer(false) },
-      {
-        text: act,
-        style: destructive ? DESTRUCTIVE_ROLE : "default",
-        isPreferred: true,
-        onPress: () => answer(true),
-      },
-    ]);
-  }, [presented, compact, title, message, act, destructive]);
-
-  return null;
+}: ConfirmAskProps) {
+  return (
+    <Host style={FOOT}>
+      <ConfirmationDialog
+        title={title}
+        titleVisibility="visible"
+        isPresented={presented}
+        onIsPresentedChange={(shown) => {
+          if (!shown) onDismiss();
+        }}
+      >
+        <ConfirmationDialog.Trigger>
+          <HiddenTrigger wide />
+        </ConfirmationDialog.Trigger>
+        <ConfirmationDialog.Actions>
+          <SwiftUIButton
+            label={act}
+            role={destructive ? "destructive" : "default"}
+            onPress={onAct}
+          />
+          <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={onDismiss} />
+        </ConfirmationDialog.Actions>
+        {message === undefined ? null : (
+          <ConfirmationDialog.Message>
+            <Text>{message}</Text>
+          </ConfirmationDialog.Message>
+        )}
+      </ConfirmationDialog>
+    </Host>
+  );
 }
 
 /**
@@ -226,20 +187,18 @@ function SystemConfirm({
  * iPad draws an action sheet as a popover from the view that presents it,
  * and the act is pressed in a bar, a menu or the menu bar, which no view of
  * ours stands on; an alert stands centered whatever presents it, as Apple's
- * own iPad asks with no source do. Both are UIKit's own, raised through
- * React Native (`Alert.alert`, `ActionSheetIOS`), with no view of ours;
- * only an ask gated by typed words stands as SwiftUI's alert, in a host of
- * its own, so a screen draws it beside whatever it shows: beside its
- * `Screen`, never inside that host, where an ask once took every press and
- * key on the screen.
+ * own iPad asks with no source do. It stands in a host of its own, so a
+ * screen draws it beside whatever it shows: beside its `Screen`, never
+ * inside that host, where an ask once took every press and key on the
+ * screen.
  */
 export function ConfirmAsk(props: ConfirmAskProps) {
   const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
 
-  return props.gate === undefined ? (
-    <SystemConfirm {...props} compact={compact} />
+  return compact && props.gate === undefined ? (
+    <SheetConfirm {...props} />
   ) : (
-    <GatedConfirm {...props} />
+    <AlertConfirm {...props} />
   );
 }
 
