@@ -1,0 +1,14 @@
+flows: /Users/deanstratakos/vespin-ipad-agent/flows/p9745-deny.yaml:1 /Users/deanstratakos/vespin-ipad-agent/flows/p9745-allow.yaml:1 
+== bundle P9745q base 729b410b20
+  built 729b410b20 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+probe1-iphone-deny: fails 1 shots 7 Tap on id: settings-notifications... FAILED
+  probe1-iphone-deny stream: 555153 lines, 640 naming dev.vespin.ios or authoriz
+probe1-iphone-allow: fails 1 shots 7 Tap on id: settings-notifications... FAILED
+  probe1-iphone-allow stream: 567952 lines, 644 naming dev.vespin.ios or authoriz
+probe3-ipad-f-ask-lane: fails 0 shots 2 
+  probe3-ipad-g-fresh-after-lane stream: 1171 lines, 193 naming dev.vespin.ios or authoriz
+probe3-ipad-g-fresh-after-lane: shot 1

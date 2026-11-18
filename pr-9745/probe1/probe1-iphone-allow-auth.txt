@@ -1,0 +1,644 @@
+2026-11-18 07:37:32.588 Df SpringBoard[17694:11c4b01c] [com.apple.duetexpertd.atx:general] -[ATXWidgetDescriptorCache _queue_fetchAllDescriptorMetadataWithError:]: could not find descriptor matching Extension bundle id: dev.vespin.ios.AgentsLiveActivity; kind: InboxWidget;  that was present in cached metadata
+2026-11-18 07:37:32.704 Df SpringBoard[17694:11c4da34] [com.apple.duetexpertd.atx:general] -[ATXWidgetDescriptorCache _queue_fetchAllDescriptorMetadataWithError:]: could not find descriptor matching Extension bundle id: dev.vespin.ios.AgentsLiveActivity; kind: InboxWidget;  that was present in cached metadata
+2026-11-18 07:37:43.617 Df SpringBoard[17694:11c5114a] [com.apple.duetexpertd.atx:general] -[ATXWidgetDescriptorCache _queue_fetchAllDescriptorMetadataWithError:]: could not find descriptor matching Extension bundle id: dev.vespin.ios.AgentsLiveActivity; kind: InboxWidget;  that was present in cached metadata
+2026-11-18 07:37:51.870 Df SpringBoard[17694:11c4da35] [com.apple.FrontBoard:Common] [FBSystemService] Request received from CoreSimulatorBr.17725 to terminate application dev.vespin.ios: "Termination requested by simulator host"
+    "<LSApplicationProxy: 0x118b4e4c0> dev.vespin.ios file:///Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/515C2404-875A-47ED-832B-F1644A4739E7/Vjr3P9745q.app/ <dev.vespin.ios <installed >:0>"
+2026-11-18 07:37:52.962 Df SpringBoard[17694:11c5114a] [com.apple.frontboard.ApplicationLibrary:observer] -[FBSApplicationLibrary applicationsWillUninstall:] dev.vespin.ios
+    "<LSPlugInKitProxy: 0x11295b600> pluginID=dev.vespin.ios.AgentsLiveActivity UUID=B5230E60-F945-4928-9EE9-E6D213E8A748 version=0.1",
+    "<LSPlugInKitProxy: 0x112958700> pluginID=dev.vespin.ios.ShareExtension UUID=974B51BA-6263-4448-A1FA-08D68FAFD5B9 version=0.1",
+    "<LSPlugInKitProxy: 0x11295ab00> pluginID=dev.vespin.ios.NotificationContent UUID=2BBA545A-EAA5-414B-8E96-7ED5697D2A88 version=0.1",
+    "<LSPlugInKitProxy: 0x11295b200> pluginID=dev.vespin.ios.NotificationService UUID=0197A2E9-D75A-4DD8-92B1-F3E68EC507A2 version=0.1"
+    "<LSApplicationProxy: 0x118b4e4c0> dev.vespin.ios file:///Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/515C2404-875A-47ED-832B-F1644A4739E7/Vjr3P9745q.app/ <dev.vespin.ios <installed >:0>"
+2026-11-18 07:37:53.093 Df SpringBoard[17694:11c5114e] [com.apple.frontboard.ApplicationLibrary:observer] -[FBSApplicationLibrary applicationsDidUninstall:] dev.vespin.ios
+2026-11-18 07:37:53.094 Df SpringBoard[17694:11c5114e] [com.apple.frontboard.ApplicationLibrary:default] Removed application: <SBApplicationInfo: 0x1149fb600; dev.vespin.ios (Vespin)>
+2026-11-18 07:37:53.094 Df SpringBoard[17694:11c2c905] [com.apple.appinstallation:TransactionLog] dev.vespin.ios/Unknown Persona:10:12:3:1:Application removed for reason: Removed from the system.
+2026-11-18 07:37:53.094 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Widgets] handleRemovedDataSource:<SBApplication: 0x10b61d100; dev.vespin.ios> {
+} ofIcon:<SBApplicationIcon: 0x11f068e40; uniqueIdentifier: dev.vespin.ios; bundleID: dev.vespin.ios>
+2026-11-18 07:37:53.095 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Icon] Reload icon image of dev.vespin.ios for reason 'active data source did change'
+2026-11-18 07:37:53.095 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SBWorkspaceTerminateApplication: dev.vespin.ios: "uninstalling app"
+2026-11-18 07:37:53.099 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:AppShortcuts] dev.vespin.ios: Updating app shortcut store...
+2026-11-18 07:37:53.099 Df SpringBoard[17694:11c5114a] [com.apple.SpringBoard:AppShortcuts] dev.vespin.ios: Saving...
+2026-11-18 07:37:53.099 Df SpringBoard[17694:11c5114a] [com.apple.SpringBoard:AppShortcuts] dev.vespin.ios: SBApplicationShortcutStore doesn't need truncation (truncation reason: _saveQueue_save); there are 0 application shortcut items.
+2026-11-18 07:37:53.107 Df SpringBoard[17694:11c4da35] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Application uninstalled using default data provider
+2026-11-18 07:37:53.107 Df SpringBoard[17694:11c4da35] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Remove data provider
+2026-11-18 07:37:53.107 Df SpringBoard[17694:11c4da35] [com.apple.UserNotifications:AttachmentsRepository] Removing all attachments for bundle 'dev.vespin.ios'
+2026-11-18 07:37:53.108 Df SpringBoard[17694:11c4da35] [com.apple.UserNotifications:DataStore] No unique identifier for bundleID dev.vespin.ios found; adding a mapping to DC15F341-3ED4-4A2E-8FA6-DA0EC40FE366
+2026-11-18 07:37:53.110 E  SpringBoard[17694:11c4da35] [com.apple.UserNotifications:RemoteNotifications] [dev.vespin.ios] Push registration with a nil environment was encountered, will not invalidate token
+2026-11-18 07:37:53.111 Df SpringBoard[17694:11c4da35] [com.apple.UserNotifications:LocalNotifications] [dev.vespin.ios] Remove all pending notification dictionaries
+2026-11-18 07:37:53.111 Df SpringBoard[17694:11c4da35] [com.apple.UserNotifications:DataStore] Removing library mapping for dev.vespin.ios
+    "dev.vespin.ios"
+    "dev.vespin.ios"
+2026-11-18 07:37:53.114 Df SpringBoard[17694:11c2c905] [com.apple.SplashBoard:FileManifest] [<XBApplicationSnapshotManifestImpl: 0x1127f4480> [dev.vespin.ios]] endTrackingImageDeletions
+2026-11-18 07:37:53.114 Df SpringBoard[17694:11c2c905] [com.apple.SplashBoard:FileManifest] <XBApplicationSnapshotManifestImpl: 0x1127f4480> [dev.vespin.ios] Deleting snapshots: (
+2026-11-18 07:37:53.114 Df SpringBoard[17694:11c2c905] [com.apple.SplashBoard:FileManifest] <XBApplicationSnapshotManifestImpl: 0x1127f4480> [dev.vespin.ios] Deleting snapshot <XBApplicationSnapshot: 0x10b4d81c0; …5A1992B613E8> [dev.vespin.ios] for reason: _contentType: GeneratedDefault(1)
+2026-11-18 07:37:53.114 Df SpringBoard[17694:11c2c905] [com.apple.SplashBoard:FileManifest] <XBApplicationSnapshotManifestImpl: 0x1127f4480> [dev.vespin.ios] Deleting snapshot <XBApplicationSnapshot: 0x10b4db480; …E9DB01AC9506> [dev.vespin.ios] for reason: _contentType: GeneratedDefault(1)
+2026-11-18 07:37:53.114 Df SpringBoard[17694:11c2c905] [com.apple.SplashBoard:FileManifest] <XBApplicationSnapshotManifestImpl: 0x1127f4480> [dev.vespin.ios] Deleting snapshot <XBApplicationSnapshot: 0x10b4db640; …55A8D91B5C30> [dev.vespin.ios] for reason: _contentType: GeneratedDefault(1)
+2026-11-18 07:37:53.114 Df SpringBoard[17694:11c2c905] [com.apple.SplashBoard:FileManifest] <XBApplicationSnapshotManifestImpl: 0x1127f4480> [dev.vespin.ios] Deleting snapshot <XBApplicationSnapshot: 0x10b4d9880; …1A8A1075DF7E> [dev.vespin.ios] for reason: _contentType: GeneratedDefault(1)
+2026-11-18 07:37:53.114 Df SpringBoard[17694:11c2c905] [com.apple.SplashBoard:FileManifest] <XBApplicationSnapshotManifestImpl: 0x1127f4480> [dev.vespin.ios] Deleting paths: (
+    "/Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/780D87E7-6542-4F1C-A5B8-100222101028/Library/SplashBoard/Snapshots/dev.vespin.ios - {DEFAULT GROUP}/C1AF6E22-E395-422F-A8B6-5A1992B613E8@3x.ktx",
+    "/Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/780D87E7-6542-4F1C-A5B8-100222101028/Library/SplashBoard/Snapshots/dev.vespin.ios - {DEFAULT GROUP}/72B09C00-B85D-4CAB-A8CB-E9DB01AC9506@3x.ktx",
+    "/Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/780D87E7-6542-4F1C-A5B8-100222101028/Library/SplashBoard/Snapshots/dev.vespin.ios - {DEFAULT GROUP}/C97A0210-89AE-4A82-A796-55A8D91B5C30@3x.ktx",
+    "/Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/780D87E7-6542-4F1C-A5B8-100222101028/Library/SplashBoard/Snapshots/dev.vespin.ios - {DEFAULT GROUP}/5624A3A4-63D8-4AD5-B3ED-1A8A1075DF7E@3x.ktx"
+2026-11-18 07:37:54.127 Df SpringBoard[17694:11c5504c] [com.apple.SplashBoard:FileManifest] <XBApplicationSnapshotManifestImpl: 0x1127f4480> [dev.vespin.ios] We don't have any snapshots, so we're clearing our manifest data.
+2026-11-18 07:37:54.130 Df SpringBoard[17694:11c5114a] [com.apple.duetexpertd.atx:general] -[ATXWidgetDescriptorCache _queue_fetchAllDescriptorMetadataWithError:]: could not find descriptor matching Extension bundle id: dev.vespin.ios.AgentsLiveActivity; kind: InboxWidget;  that was present in cached metadata
+		DELETION dev.vespin.ios
+2026-11-18 07:37:54.214 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] termination assertion acquired for dev.vespin.ios (app not found)
+2026-11-18 07:37:54.309 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] termination assertion released for dev.vespin.ios (app not found)
+    "<LSPlugInKitProxy: 0x107e38500> pluginID=dev.vespin.ios.ShareExtension UUID=8C24849B-21AF-4D72-89F0-6FF2979EF31F version=0.1",
+    "<LSPlugInKitProxy: 0x107e38300> pluginID=dev.vespin.ios.NotificationContent UUID=72CE7606-9BA4-4D86-B2C9-D303301C1849 version=0.1",
+    "<LSPlugInKitProxy: 0x107e38000> pluginID=dev.vespin.ios.NotificationService UUID=5DAEF0B7-20ED-4F76-8C1A-73DEC4C51D33 version=0.1",
+    "<LSPlugInKitProxy: 0x11295b100> pluginID=dev.vespin.ios.AgentsLiveActivity UUID=8EFA700E-9975-43DA-ACED-4FD7D3F1532F version=0.1"
+    "<LSApplicationProxy: 0x118b4edc0> dev.vespin.ios file:///Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/9508ADD3-2CD8-4BA4-8D8B-CAF9FF5056DA/dev.vespin.ios-1795005472490.app/ <dev.vespin.ios <placeholder >:1>"
+2026-11-18 07:37:54.332 Df SpringBoard[17694:11c5504c] [com.apple.frontboard.ApplicationLibrary:observer] -[FBSApplicationLibrary applicationInstallsDidStart:] dev.vespin.ios
+2026-11-18 07:37:54.332 Df SpringBoard[17694:11c5504c] [com.apple.frontboard.ApplicationLibrary:default] Added placeholder: <SBApplicationPlaceholderProxy: 0x1127d3680; dev.vespin.ios (Vespin); LSInstallType: StoreDownload>
+    "<SBApplicationPlaceholderProxy: 0x1127d3680; dev.vespin.ios (Vespin); LSInstallType: StoreDownload>"
+2026-11-18 07:37:54.332 Df SpringBoard[17694:11c2c905] [com.apple.appinstallation:TransactionLog] dev.vespin.ios/Unknown Persona:10:0:1:1:Placeholder add BEGIN
+2026-11-18 07:37:54.333 Df SpringBoard[17694:11c5114a] [com.apple.launchservices:progress] #LSInstallProgressList add subscriber: <_NSProgressSubscriber: 0x118b67300> publishingString: dev.vespin.ios
+2026-11-18 07:37:54.333 Df SpringBoard[17694:11c5114a] [com.apple.launchservices:progress] Subscribing to progress for app dev.vespin.ios,
+2026-11-18 07:37:54.333 E  SpringBoard[17694:11c5114a] [com.apple.frontboard.ApplicationLibrary:placeholder] Non-demoted placeholder for dev.vespin.ios has no associated NSProgress!
+2026-11-18 07:37:54.349 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Icon] <<SBLeafIcon:0x118b4e4c0 [dev.vespin.ios]>> Changing active data source: <SBApplicationIcon: 0x118b4e4c0; uniqueIdentifier: dev.vespin.ios; bundleID: dev.vespin.ios>
+2026-11-18 07:37:54.349 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Icon] <<SBLeafIcon:0x118b4e4c0 [dev.vespin.ios]>> Changing from data souce: (null) to data source:dev.vespin.ios.
+2026-11-18 07:37:54.349 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Icon] Reload icon image of dev.vespin.ios for reason 'active data source did change'
+2026-11-18 07:37:54.349 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Icon] icon model preparing to add icon to designated location: <SBApplicationIcon: 0x118b4e4c0; uniqueIdentifier: dev.vespin.ios; bundleID: dev.vespin.ios>
+    "dev.vespin.ios"
+    "<LSApplicationProxy: 0x11f06a280> dev.vespin.ios file:///Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/9508ADD3-2CD8-4BA4-8D8B-CAF9FF5056DA/dev.vespin.ios-1795005472490.app/ <dev.vespin.ios <placeholder >:1>"
+2026-11-18 07:37:54.364 Df SpringBoard[17694:11c4da35] [com.apple.frontboard.ApplicationLibrary:observer] -[FBSApplicationLibrary applicationInstallsDidStart:] dev.vespin.ios
+2026-11-18 07:37:54.364 E  SpringBoard[17694:11c4da35] [com.apple.frontboard.ApplicationLibrary:placeholder] Non-demoted placeholder for dev.vespin.ios has no associated NSProgress!
+2026-11-18 07:37:54.370 Df SpringBoard[17694:11c2c905] [com.apple.appinstallation:TransactionLog] dev.vespin.ios/Unknown Persona:10:1:3:1:Created icon for placeholder.
+    "<SBApplicationPlaceholder: 0x1175b36f0; bundleIdentifier: dev.vespin.ios; displayName: Vespin>"
+2026-11-18 07:37:54.371 Df SpringBoard[17694:11c2c905] [com.apple.launchservices:progress] Got progress <NSProgress: dev.vespin.ios phase=InstallingPlaceholder; state=Finished; finalPhase=Installing; fractionCompleted=0.000000> for app dev.vespin.ios,
+2026-11-18 07:37:54.381 Df SpringBoard[17694:11c2c905] [com.apple.appinstallation:TransactionLog] dev.vespin.ios/Unknown Persona:10:2:3:1:Reloading icon image.
+2026-11-18 07:37:54.381 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Icon] Reload icon image of dev.vespin.ios for reason 'active data source did generate image'
+2026-11-18 07:37:54.382 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] termination assertion acquired for dev.vespin.ios (app not found)
+2026-11-18 07:37:54.383 Df SpringBoard[17694:11c2c905] [com.apple.appinstallation:TransactionLog] dev.vespin.ios/Unknown Persona:10:2:3:1:Reloading icon image.
+2026-11-18 07:37:54.383 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Icon] Reload icon image of dev.vespin.ios for reason 'active data source did generate image'
+2026-11-18 07:37:54.385 Df SpringBoard[17694:11c2c905] [com.apple.appinstallation:TransactionLog] dev.vespin.ios/Unknown Persona:10:2:3:1:Reloading icon image.
+2026-11-18 07:37:54.385 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Icon] Reload icon image of dev.vespin.ios for reason 'active data source did generate image'
+2026-11-18 07:37:54.602 Df SpringBoard[17694:11c5114e] (Search) Retaining invisible app:{ bundleID: dev.vespin.ios, URL: file:///Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/9508ADD3-2CD8-4BA4-8D8B-CAF9FF5056DA/dev.vespin.ios-1795005472490.app/ }
+2026-11-18 07:37:54.757 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] termination assertion released for dev.vespin.ios (app not found)
+    "<LSPlugInKitProxy: 0x10b61e700> pluginID=dev.vespin.ios.NotificationContent UUID=188CFB40-C939-4DEE-9663-A4364F094C8A version=0.1",
+    "<LSPlugInKitProxy: 0x10b61c900> pluginID=dev.vespin.ios.ShareExtension UUID=EB7A8B30-C705-44A3-9C08-3A37E7F90C44 version=0.1",
+    "<LSPlugInKitProxy: 0x10b61cc00> pluginID=dev.vespin.ios.NotificationService UUID=D0256CBA-D243-47E2-ACE0-C70064CF3135 version=0.1",
+    "<LSPlugInKitProxy: 0x10b61c700> pluginID=dev.vespin.ios.AgentsLiveActivity UUID=3FE9B129-796A-4947-B743-50A01749EC4E version=0.1"
+2026-11-18 07:37:54.770 Df SpringBoard[17694:11c2c905] [com.apple.launchservices:progress] Unpublishing progress block called for app dev.vespin.ios
+2026-11-18 07:37:54.770 Df SpringBoard[17694:11c5114a] [com.apple.launchservices:progress] #LSInstallProgressList remove subscriber: <_NSProgressSubscriber: 0x118b67300> publishingString: dev.vespin.ios
+    <EXConcreteExtension: 0x112584d20> {id = dev.vespin.ios.NotificationContent},
+    "<LSApplicationProxy: 0x11f068d80> dev.vespin.ios file:///Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/22783574-44B6-4F2C-B3D9-3391C3807FEF/dev.vespin.ios-1795005472490.app/ <dev.vespin.ios <installed >:0>"
+2026-11-18 07:37:54.779 Df SpringBoard[17694:11c5504c] [com.apple.UserNotificationsUI:Extensions] Loaded extension dev.vespin.ios.NotificationContent for categories [ inbox-decide, inbox-reply ] with attributes: {
+2026-11-18 07:37:54.781 Df SpringBoard[17694:11c5114e] [com.apple.appinstallation:TransactionLog] dev.vespin.ios/Unknown Persona:5:8:3:1:applicationsDidInstall <LSApplicationProxy: 0x11f06a880> dev.vespin.ios file:///Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/22783574-44B6-4F2C-B3D9-3391C3807FEF/dev.vespin.ios-1795005472490.app/ <dev.vespin.ios <installed >:0>
+2026-11-18 07:37:54.781 Df SpringBoard[17694:11c5114e] [com.apple.frontboard.ApplicationLibrary:observer] -[FBSApplicationLibrary applicationsDidInstall:] dev.vespin.ios
+2026-11-18 07:37:54.781 Df SpringBoard[17694:11c5114e] [com.apple.frontboard.ApplicationLibrary:default] Removed placeholder: <SBApplicationPlaceholderProxy: 0x1127d3680; dev.vespin.ios (Vespin); LSInstallType: StoreDownload>
+2026-11-18 07:37:54.783 Df SpringBoard[17694:11c5114e] [com.apple.SpringBoard:Common] dev.vespin.ios updated restrictionReason: 0
+2026-11-18 07:37:54.785 Df SpringBoard[17694:11c5114e] [com.apple.frontboard.ApplicationLibrary:default] Added application: <SBApplicationInfo: 0x1149fbc00; dev.vespin.ios (Vespin)>
+    "<SBApplicationPlaceholderProxy: 0x1127d3680; dev.vespin.ios (Vespin); LSInstallType: StoreDownload>"
+2026-11-18 07:37:54.785 Df SpringBoard[17694:11c2c905] [com.apple.appinstallation:TransactionLog] dev.vespin.ios/Unknown Persona:10:4:1:1:Placeholder remove BEGIN
+2026-11-18 07:37:54.785 Df SpringBoard[17694:11c2c905] [com.apple.appinstallation:TransactionLog] dev.vespin.ios/Unknown Persona:10:10:3:1:Application added
+    "dev.vespin.ios"
+2026-11-18 07:37:54.786 Df SpringBoard[17694:11c5114e] [com.apple.SplashBoard:FileManifest] dev.vespin.ios Manifest is empty; purging everything at /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/51D9F0A6-424D-4176-91CC-856BDA7433FE/Library/SplashBoard/Snapshots
+    "dev.vespin.ios"
+2026-11-18 07:37:54.789 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Widgets] handleRemovedDataSource:<SBApplicationPlaceholder: 0x1175b36f0; bundleIdentifier: dev.vespin.ios; displayName: Vespin; progress: 100%; state: Finished> ofIcon:<SBApplicationIcon: 0x118b4e4c0; uniqueIdentifier: dev.vespin.ios; bundleID: dev.vespin.ios>
+2026-11-18 07:37:54.789 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Icon] <<SBLeafIcon:0x118b4e4c0 [dev.vespin.ios]>> Changing active data source: <SBApplicationIcon: 0x118b4e4c0; uniqueIdentifier: dev.vespin.ios; bundleID: dev.vespin.ios>
+2026-11-18 07:37:54.789 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Icon] <<SBLeafIcon:0x118b4e4c0 [dev.vespin.ios]>> Changing from data souce: dev.vespin.ios to data source:dev.vespin.ios.
+2026-11-18 07:37:54.790 Df SpringBoard[17694:11c5114e] [com.apple.SplashBoard:Capture] Processing launch request <XBLaunchStateRequest: 0x11f44eb50> for app: dev.vespin.ios.
+2026-11-18 07:37:54.790 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Icon] Reload icon image of dev.vespin.ios for reason 'active data source did change'
+2026-11-18 07:37:54.790 Df SpringBoard[17694:11c5114e] [com.apple.SplashBoard:Capture] Processing launch request <XBLaunchStateRequest: 0x11f44de30> for app: dev.vespin.ios.
+    "<SBApplicationPlaceholder: 0x1175b36f0; bundleIdentifier: dev.vespin.ios; displayName: Vespin; progress: 100%; state: Finished>"
+2026-11-18 07:37:54.790 Df SpringBoard[17694:11c5114e] [com.apple.SplashBoard:Capture] Processing launch request <XBLaunchStateRequest: 0x11f44cd90> for app: dev.vespin.ios.
+2026-11-18 07:37:54.790 Df SpringBoard[17694:11c5114e] [com.apple.SplashBoard:Capture] Processing launch request <XBLaunchStateRequest: 0x11f44d490> for app: dev.vespin.ios.
+2026-11-18 07:37:54.791 Df SpringBoard[17694:11c4da35] [com.apple.SplashBoard:Capture] Asynchronously generating image data for request: <XBLaunchStateRequest: 0x11f44eb50; groupID: dev.vespin.ios - {DEFAULT GROUP}; statusBar: normal; refSize: {402, 874}; orientation: Portrait; userInterfaceStyle: Light>
+2026-11-18 07:37:54.793 Df SpringBoard[17694:11c5114a] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Application installed using default data provider
+2026-11-18 07:37:54.793 Df SpringBoard[17694:11c4da35] [com.apple.SplashBoard:Capture] Validating resource SplashScreen.storyboardc in NSBundle </Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/22783574-44B6-4F2C-B3D9-3391C3807FEF/dev.vespin.ios-1795005472490.app> (not yet loaded)
+    "dev.vespin.ios"
+    "dev.vespin.ios"
+2026-11-18 07:37:54.835 Df SpringBoard[17694:11c55ed7] [com.apple.SplashBoard:Capture] Image generation complete for: <XBLaunchStateRequest: 0x11f44eb50; groupID: dev.vespin.ios - {DEFAULT GROUP}; statusBar: normal; refSize: {402, 874}; orientation: Portrait; userInterfaceStyle: Light>
+2026-11-18 07:37:54.835 Df SpringBoard[17694:11c4da35] [com.apple.SplashBoard:Capture] Asynchronously generating image data for request: <XBLaunchStateRequest: 0x11f44de30; groupID: dev.vespin.ios - {DEFAULT GROUP}; statusBar: normal; refSize: {402, 874}; orientation: Portrait; userInterfaceStyle: Dark>
+2026-11-18 07:37:54.836 Df SpringBoard[17694:11c5504c] [com.apple.SplashBoard:FileManifest] <XBApplicationSnapshotManifestImpl: 0x11f106c80> [dev.vespin.ios] Snapshot data for <XBApplicationSnapshot: 0x118db7b80; …AE71C78DB87F> [dev.vespin.ios] written to file: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/51D9F0A6-424D-4176-91CC-856BDA7433FE/Library/SplashBoard/Snapshots/dev.vespin.ios - {DEFAULT GROUP}/565337C9-E1FD-4A89-843F-AE71C78DB87F@3x.ktx
+2026-11-18 07:37:54.836 Df SpringBoard[17694:11c4da35] [com.apple.SplashBoard:Capture] Validating resource SplashScreen.storyboardc in NSBundle </Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/22783574-44B6-4F2C-B3D9-3391C3807FEF/dev.vespin.ios-1795005472490.app> (not yet loaded)
+2026-11-18 07:37:54.863 Df SpringBoard[17694:11c55d45] [com.apple.SplashBoard:Capture] Image generation complete for: <XBLaunchStateRequest: 0x11f44de30; groupID: dev.vespin.ios - {DEFAULT GROUP}; statusBar: normal; refSize: {402, 874}; orientation: Portrait; userInterfaceStyle: Dark>
+2026-11-18 07:37:54.863 Df SpringBoard[17694:11c4da35] [com.apple.SplashBoard:Capture] Asynchronously generating image data for request: <XBLaunchStateRequest: 0x11f44cd90; groupID: dev.vespin.ios - {DEFAULT GROUP}; statusBar: hidden; refSize: {402, 874}; naturalSize: {874, 402}; orientation: LandscapeLeft; userInterfaceStyle: Light>
+2026-11-18 07:37:54.863 Df SpringBoard[17694:11c5114e] [com.apple.SplashBoard:FileManifest] <XBApplicationSnapshotManifestImpl: 0x11f106c80> [dev.vespin.ios] Snapshot data for <XBApplicationSnapshot: 0x118db79c0; …1F546289CDAE> [dev.vespin.ios] written to file: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/51D9F0A6-424D-4176-91CC-856BDA7433FE/Library/SplashBoard/Snapshots/dev.vespin.ios - {DEFAULT GROUP}/8E77210C-3E85-4BE7-A10F-1F546289CDAE@3x.ktx
+2026-11-18 07:37:54.864 Df SpringBoard[17694:11c4da35] [com.apple.SplashBoard:Capture] Validating resource SplashScreen.storyboardc in NSBundle </Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/22783574-44B6-4F2C-B3D9-3391C3807FEF/dev.vespin.ios-1795005472490.app> (not yet loaded)
+2026-11-18 07:37:54.894 Df SpringBoard[17694:11c55ed7] [com.apple.SplashBoard:Capture] Image generation complete for: <XBLaunchStateRequest: 0x11f44cd90; groupID: dev.vespin.ios - {DEFAULT GROUP}; statusBar: hidden; refSize: {402, 874}; naturalSize: {874, 402}; orientation: LandscapeLeft; userInterfaceStyle: Light>
+2026-11-18 07:37:54.894 Df SpringBoard[17694:11c4da35] [com.apple.SplashBoard:Capture] Asynchronously generating image data for request: <XBLaunchStateRequest: 0x11f44d490; groupID: dev.vespin.ios - {DEFAULT GROUP}; statusBar: hidden; refSize: {402, 874}; naturalSize: {874, 402}; orientation: LandscapeLeft; userInterfaceStyle: Dark>
+2026-11-18 07:37:54.894 Df SpringBoard[17694:11c4da35] [com.apple.SplashBoard:Capture] Validating resource SplashScreen.storyboardc in NSBundle </Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/22783574-44B6-4F2C-B3D9-3391C3807FEF/dev.vespin.ios-1795005472490.app> (not yet loaded)
+2026-11-18 07:37:54.894 Df SpringBoard[17694:11c5114e] [com.apple.SplashBoard:FileManifest] <XBApplicationSnapshotManifestImpl: 0x11f106c80> [dev.vespin.ios] Snapshot data for <XBApplicationSnapshot: 0x118db6f40; …3B5CEF186712> [dev.vespin.ios] written to file: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/51D9F0A6-424D-4176-91CC-856BDA7433FE/Library/SplashBoard/Snapshots/dev.vespin.ios - {DEFAULT GROUP}/A4D80E22-01F3-4F61-A0DF-3B5CEF186712@3x.ktx
+2026-11-18 07:37:54.921 Df SpringBoard[17694:11c55edb] [com.apple.SplashBoard:Capture] Image generation complete for: <XBLaunchStateRequest: 0x11f44d490; groupID: dev.vespin.ios - {DEFAULT GROUP}; statusBar: hidden; refSize: {402, 874}; naturalSize: {874, 402}; orientation: LandscapeLeft; userInterfaceStyle: Dark>
+2026-11-18 07:37:54.921 Df SpringBoard[17694:11c55ed7] [com.apple.SplashBoard:FileManifest] <XBApplicationSnapshotManifestImpl: 0x11f106c80> [dev.vespin.ios] Snapshot data for <XBApplicationSnapshot: 0x118db7640; …0162DAB29620> [dev.vespin.ios] written to file: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/51D9F0A6-424D-4176-91CC-856BDA7433FE/Library/SplashBoard/Snapshots/dev.vespin.ios - {DEFAULT GROUP}/560ED3A7-824C-4C42-8E52-0162DAB29620@3x.ktx
+		INSERT dev.vespin.ios
+2026-11-18 07:37:55.323 Df SpringBoard[17694:11c5114a] [com.apple.FrontBoard:Common] [FBSystemService][0x7684] Received request to open "dev.vespin.ios" from CoreSimulatorBr:17725.
+2026-11-18 07:37:55.323 Df SpringBoard[17694:11c5114a] [com.apple.FrontBoard:Common] [FBSystemService][0x7684] Activation request for dev.vespin.ios contained LSCacheGUID 534E3533-DB80-4D57-804E-9B59ABF37C04 and LSSequenceNumber 2188.
+2026-11-18 07:37:55.323 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:Common] [FBSystemService][0x7684] Activation request for dev.vespin.ios will wait 10.00s for app availability, with retry every 2.00s.
+2026-11-18 07:37:55.323 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:Common] [FBSystemService][0x7684] Attempting activation of dev.vespin.ios with {UUID: 534E3533-DB80-4D57-804E-9B59ABF37C04, Sequence: 2188} vs {UUID: 534E3533-DB80-4D57-804E-9B59ABF37C04, Sequence: 2188}
+2026-11-18 07:37:55.323 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Workspace] Received trusted open application request for "dev.vespin.ios" from <FBProcess: 0x107f34c00; osservice<com.apple.CoreSimulator.bridge>:17725(v100A6BA7)>.
+2026-11-18 07:37:55.324 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] Executing request: <SBMainWorkspaceTransitionRequest: 0x1174b6c60; eventLabel: OpenApplication(sceneID:dev.vespin.ios-default)ForRequester(CoreSimulatorBr.17725); display: Main; source: FBSystemService>
+2026-11-18 07:37:55.324 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:Common] [FBWorkspaceEvent] Executing: <FBWorkspaceEvent: 0x10b66ada0; OpenApplication(sceneID:dev.vespin.ios-default)ForRequester(CoreSimulatorBr.17725)>
+    "sceneID:dev.vespin.ios-default" = 1;
+<SBMainWorkspaceTransitionRequest: 0x1174b6c60; eventLabel: OpenApplication(sceneID:dev.vespin.ios-default)ForRequester(CoreSimulatorBr.17725); display: Main; source: FBSystemService> {
+        SBLayoutRolePrimary = <SBDeviceApplicationSceneEntity: 0x114b9c3c0; ID: sceneID:dev.vespin.ios-default; layoutRole: primary>;
+2026-11-18 07:37:55.328 Df SpringBoard[17694:11c2c905] [preflight:SceneHostedPreflight] [Source: ScreenTime] dev.vespin.ios requires preflight: false
+2026-11-18 07:37:55.329 Df SpringBoard[17694:11c2c905] [preflight:SceneHostedPreflight] [Source: AppMigration] dev.vespin.ios requires preflight: false
+2026-11-18 07:37:55.329 Df SpringBoard[17694:11c2c905] [preflight:SceneHostedPreflight] [Source: TCCs] dev.vespin.ios requires preflight: false
+2026-11-18 07:37:55.330 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] Generating initialization context on main thread for: dev.vespin.ios
+2026-11-18 07:37:55.330 Df SpringBoard[17694:11c55ed7] [com.apple.FrontBoard:Process] Asked to bootstrap a new process with identity: app<dev.vespin.ios((null))>
+2026-11-18 07:37:55.330 Df SpringBoard[17694:11c55ed7] [com.apple.FrontBoard:Process] Creating process (sync=true) with identity: app<dev.vespin.ios((null))>
+2026-11-18 07:37:55.330 Df SpringBoard[17694:11c55ed7] [com.apple.FrontBoard:ProcessWorkspace] Created <FBWorkspace: 0x1174b6a80; <FBApplicationProcess: 0x118e7a100; app<dev.vespin.ios>:<invalid>>>
+2026-11-18 07:37:55.330 Df SpringBoard[17694:11c55ed7] [com.apple.FrontBoard:Process] Bootstrapping app<dev.vespin.ios> with intent foreground-interactive
+2026-11-18 07:37:55.348 Df SpringBoard[17694:11c4da35] [com.apple.runningboard:process] Hit the server for a process handle 73838e500017ed4 that resolved to: [app<dev.vespin.ios((null))>:98004]
+2026-11-18 07:37:55.348 Df SpringBoard[17694:11c4da35] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:37:55.348 Df SpringBoard[17694:11c55ed7] [com.apple.FrontBoard:Process] [app<dev.vespin.ios>:98004] Bootstrap success!
+2026-11-18 07:37:55.349 Df SpringBoard[17694:11c55ed7] [com.apple.FrontBoard:Process] [app<dev.vespin.ios>:98004] Setting process task state to: Running
+2026-11-18 07:37:55.349 Df SpringBoard[17694:11c55ed7] [com.apple.FrontBoard:Process] [app<dev.vespin.ios>:98004] Setting process visibility to: Foreground
+2026-11-18 07:37:55.349 Df SpringBoard[17694:11c55ed7] [com.apple.FrontBoard:ProcessWorkspace] [app<dev.vespin.ios>:98004] Registering event dispatcher after bootstrap
+2026-11-18 07:37:55.349 Df SpringBoard[17694:11c55ed7] [com.apple.FrontBoard:ProcessWorkspace] [app<dev.vespin.ios>:98004] Initial launch state: FV-Focal[100].
+2026-11-18 07:37:55.349 Df SpringBoard[17694:11c55ed7] [com.apple.runningboard:process] Starting death monitoring for handle [app<dev.vespin.ios((null))>:98004]
+2026-11-18 07:37:55.349 Df SpringBoard[17694:11c55ed7] [com.apple.FrontBoard:Process] Adding: <FBApplicationProcess: 0x118e7a100; app<dev.vespin.ios>:98004(v100CDB14)>
+2026-11-18 07:37:55.351 Df SpringBoard[17694:11c5114a] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Foreground app will not request ephemeral notifications
+2026-11-18 07:37:55.351 Df SpringBoard[17694:11c55d59] [com.apple.UserNotifications:RemoteNotifications] [dev.vespin.ios] dev.vespin.ios application state changed to <RBSProcessState| task:running-active debug:none endowmentNamespace:[
+2026-11-18 07:37:55.352 Df SpringBoard[17694:11c55d59] [com.apple.UserNotifications:RemoteNotifications] [dev.vespin.ios] Ignore becoming foreground for application without push registration
+2026-11-18 07:37:55.359 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) sceneID:dev.vespin.ios-default hasParent:YES contentState:notReady hasRule:NO wantsRule:NO
+2026-11-18 07:37:55.359 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) outcome:(no change) sceneID:dev.vespin.ios-default
+2026-11-18 07:37:55.359 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:dev.vespin.ios-default] init without scene; waiting for scene creation
+2026-11-18 07:37:55.359 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:dev.vespin.ios-default] tearing down vc for overlay: 0x0
+2026-11-18 07:37:55.360 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) sceneID:dev.vespin.ios-default hasParent:YES contentState:notReady hasRule:NO wantsRule:NO
+2026-11-18 07:37:55.360 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didMoveToParentViewController) outcome:(no change) sceneID:dev.vespin.ios-default
+2026-11-18 07:37:55.360 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:AppSwitcher] <SBFullScreenSwitcherLiveContentOverlayCoordinator: 0x1127bc100> Adding SwitcherScene overlay for: <SBAppLayout: 0x11f61c620; primary: dev.vespin.ios:default; environment: main>, animated: NO
+        sceneID:dev.vespin.ios-default
+        dev.vespin.ios
+    "dev.vespin.ios"
+    "sceneID:dev.vespin.ios-default"
+    Switcher: ownsHomeGesture; FGActive; homeAffordanceDrawingSuppressed: Y->N; suppressedBundles: (none)->dev.vespin.ios; suppressedScenes: 0->1,
+2026-11-18 07:37:55.370 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] [DeviceSceneHandle] sceneID:dev.vespin.ios-default display=Main bounds={{0, 0}, {402, 874}} sceneFrame={{0, 0}, {402, 874}} capability=.None
+2026-11-18 07:37:55.370 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:TraitsArbiter] [DeviceSceneHandle] Did set interfaceOrientation[1] on scene with identifier[sceneID:dev.vespin.ios-default]
+2026-11-18 07:37:55.371 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:ContinuitySession] modifying scene setting userInterfaceStyle to Light displayIdentity: Main forSceneManagers: Main <SBDeviceApplicationSceneHandle: 0x11f7bd180; sceneID: sceneID:dev.vespin.ios-default; scenePointer: 0x0>
+2026-11-18 07:37:55.376 Df SpringBoard[17694:11c55edb] [com.apple.duetexpertd.atx:general] -[ATXWidgetDescriptorCache _queue_fetchAllDescriptorMetadataWithError:]: could not find descriptor matching Extension bundle id: dev.vespin.ios.AgentsLiveActivity; kind: InboxWidget;  that was present in cached metadata
+2026-11-18 07:37:55.376 Df SpringBoard[17694:11c2c905] [preflight:SceneHostedPreflight] [Source: ScreenTime] dev.vespin.ios requires preflight: false
+2026-11-18 07:37:55.376 Df SpringBoard[17694:11c2c905] [preflight:SceneHostedPreflight] [Source: AppMigration] dev.vespin.ios requires preflight: false
+2026-11-18 07:37:55.376 Df SpringBoard[17694:11c2c905] [preflight:SceneHostedPreflight] [Source: TCCs] dev.vespin.ios requires preflight: false
+2026-11-18 07:37:55.376 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] [SBApplicationSceneUpdateTransaction] dev.vespin.ios requiresPreflight: false false (null)
+2026-11-18 07:37:55.377 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] [SBApplicationSceneUpdateTransaction] dev.vespin.ios not running preflight as not restricted
+2026-11-18 07:37:55.380 Df SpringBoard[17694:11c2c905] [preflight:SceneHostedPreflight] [Preflighter: ScreenTime] dev.vespin.ios requires preflight: false
+2026-11-18 07:37:55.381 Df SpringBoard[17694:11c2c905] [preflight:SceneHostedPreflight] [Preflighter: AppMigration] dev.vespin.ios requires preflight: false
+2026-11-18 07:37:55.381 Df SpringBoard[17694:11c2c905] [preflight:SceneHostedPreflight] [Preflighter: TCCs] dev.vespin.ios requires preflight: false
+2026-11-18 07:37:55.381 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:AppProtection] <BSCompoundAssertion:0x114b9c960> (SBApplicationAppProtectionAssistant: 0x11f5a2f00 - dev.vespin.ios) acquire for reason:NULL scene acq:0x10b72a8c0 count:1
+2026-11-18 07:37:55.381 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:AppProtection] Informing <APSystemAppOutlet: 0x10a771950> that <APApplication: dev.vespin.ios> will become foreground visible
+2026-11-18 07:37:55.381 Df SpringBoard[17694:11c2c905] [com.apple.appprotection:framework] scene will become FG visible for <APApplication: dev.vespin.ios>
+2026-11-18 07:37:55.381 Df SpringBoard[17694:11c2c905] [com.apple.appprotection:framework] auth result for <APApplication: dev.vespin.ios>: true (null)
+2026-11-18 07:37:55.381 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:dev.vespin.ios-default] didCreateScene
+2026-11-18 07:37:55.381 Df SpringBoard[17694:11c2c905] [preflight:SceneHostedPreflight] [Preflighter: ScreenTime] dev.vespin.ios requires preflight: false
+2026-11-18 07:37:55.381 Df SpringBoard[17694:11c2c905] [preflight:SceneHostedPreflight] [Preflighter: AppMigration] dev.vespin.ios requires preflight: false
+2026-11-18 07:37:55.382 Df SpringBoard[17694:11c2c905] [preflight:SceneHostedPreflight] [Preflighter: TCCs] dev.vespin.ios requires preflight: false
+2026-11-18 07:37:55.382 Df SpringBoard[17694:11c2c905] [preflight:PreflightSceneExtension] sceneID:dev.vespin.ios-default: returning requiresPreflight FALSE as there's no highestPriorityPreflightSource
+2026-11-18 07:37:55.382 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:AppRestrictionsOverlay] [sceneID:dev.vespin.ios-default] tearing down vc for overlay: 0x0
+2026-11-18 07:37:55.382 Df SpringBoard[17694:11c2c905] [com.apple.UIKit:KBProxyForwarding] <StateMachine:0x11f5189c0> Created with presentation environment: <0x1188e7030:<_UISceneKeyboardProxyLayerForwardingPresentationScene: 0x1188e7030> Tracking scene: <FBScene: 0x107e38300; FBSceneManager:sceneID:dev.vespin.ios-default>>
+2026-11-18 07:37:55.383 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] [DeviceSceneHandle] sceneID:dev.vespin.ios-default display=Main bounds={{0, 0}, {402, 874}} sceneFrame={{0, 0}, {402, 874}} capability=.None
+    "com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default"
+2026-11-18 07:37:55.383 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:TraitsArbiter] [DeviceSceneHandle] Did set interfaceOrientation[1] on scene with identifier[sceneID:dev.vespin.ios-default]
+2026-11-18 07:37:55.383 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:ContinuitySession] modifying scene setting userInterfaceStyle to Light displayIdentity: Main forSceneManagers: Main <SBDeviceApplicationSceneHandle: 0x11f7bd180; sceneID: sceneID:dev.vespin.ios-default; scenePointer: 0x107e38300>
+2026-11-18 07:37:55.383 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] No capture application found for the dev.vespin.ios, launchCameraCapture: NO, isCaptureApplication: NO
+2026-11-18 07:37:55.384 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:Process] Asked to bootstrap a new process with identity: app<dev.vespin.ios((null))>
+2026-11-18 07:37:55.384 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:Process] Did not create a new process: A process for app<dev.vespin.ios((null))> already exists.
+2026-11-18 07:37:55.384 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:ProcessScene] [0x11f0692c0:(FBSceneManager):sceneID:dev.vespin.ios-default] Initialized with connection: 0x118b655f0.
+2026-11-18 07:37:55.384 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:ProcessWorkspace] [app<dev.vespin.ios>:98004] Registered new scene: <FBWorkspaceScene: 0x11f0692c0; (FBSceneManager):sceneID:dev.vespin.ios-default> (fromRemnant = 0)
+2026-11-18 07:37:55.384 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:dev.vespin.ios-default][1] Scene activated.
+2026-11-18 07:37:55.384 Df SpringBoard[17694:11c5114a] [com.apple.FrontBoard:ProcessWorkspace] [app<dev.vespin.ios>:98004] Workspace interruption policy did change: reconnect
+2026-11-18 07:37:55.384 Df SpringBoard[17694:11c2c905] [com.apple.UIKit:SceneDeactivation] Now tracking: <FBScene: 0x107e38300; FBSceneManager:sceneID:dev.vespin.ios-default>
+2026-11-18 07:37:55.384 Df SpringBoard[17694:11c2c905] [com.apple.UIKit:SceneDeactivation] [sceneID:dev.vespin.ios-default] Setting deactivation reasons to: 'systemAnimation' for reason: scene settings update - settings are eligible for deactivation reasons.
+2026-11-18 07:37:55.384 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:dev.vespin.ios-default] scene content state changed: preparing
+2026-11-18 07:37:55.384 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) sceneID:dev.vespin.ios-default hasParent:YES contentState:preparing hasRule:NO wantsRule:YES
+2026-11-18 07:37:55.387 E  SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] invalid pid for scene sceneID:dev.vespin.ios-default, returning nil target
+2026-11-18 07:37:55.387 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) outcome:(wanted, but focusTarget is nil) sceneID:dev.vespin.ios-default
+2026-11-18 07:37:55.388 Df SpringBoard[17694:11c5114a] [com.apple.FrontBoard:ProcessScene] [0x11f0692c0:(FBSceneManager):sceneID:dev.vespin.ios-default] Scene lifecycle state did change: Foreground
+2026-11-18 07:37:55.388 Df SpringBoard[17694:11c5114a] [com.apple.FrontBoard:ProcessScene] [0x11f0692c0:(FBSceneManager):sceneID:dev.vespin.ios-default] Scene state did change: FV-Focal[100].
+2026-11-18 07:37:55.389 Df SpringBoard[17694:11c5114a] [com.apple.FrontBoard:ProcessWorkspace] [app<dev.vespin.ios>:98004] Workspace state did change: XX-None[0] --> FV-Focal[100] (assertion acquired).
+<SBTransitionSwitcherModifierEvent: 0x118e79200; type: MainTransition; transitionID: 2EC96360-D2EA-4542-8C37-294668FB1464; phase: Prepare; animated: YES; fromAppLayout: 0x0; toAppLayout: <SBAppLayout: 0x11f61c620; primary: dev.vespin.ios:default; environment: main>; fromEnvironmentMode: home-screen; toEnvironmentMode: application; fromSpaceConfiguration: undefined; toSpaceConfiguration: full; pendingTermination: {(
+	    <SBIconOverlayVisibilitySwitcherEventResponse: 0x11f519980; visible: YES; appLayout: <SBAppLayout: 0x11f61c620; primary: dev.vespin.ios:default; environment: main>>;
+2026-11-18 07:37:55.434 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Icon] Creating ISIcon on main thread for app dev.vespin.ios
+<SBTransitionSwitcherModifierEvent: 0x118e79200; type: MainTransition; transitionID: 2EC96360-D2EA-4542-8C37-294668FB1464; phase: Animate; animated: YES; fromAppLayout: 0x0; toAppLayout: <SBAppLayout: 0x11f61c620; primary: dev.vespin.ios:default; environment: main>; fromEnvironmentMode: home-screen; toEnvironmentMode: application; fromSpaceConfiguration: undefined; toSpaceConfiguration: full; pendingTermination: {(
+2026-11-18 07:37:55.456 Df SpringBoard[17694:11c5504c] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:37:55.509 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] Application process state changed for dev.vespin.ios: <SBApplicationProcessState: 0x11262f2c0; pid: 98004; taskState: Running; visibility: Foreground>
+2026-11-18 07:37:55.509 Df SpringBoard[17694:11c55ec7] [com.apple.chrono:ChronoServices] noting foreground launch for dev.vespin.ios with widget extension; trigger metadata query
+2026-11-18 07:37:55.514 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] Returning cached initialization context for dev.vespin.ios
+2026-11-18 07:37:55.545 Df SpringBoard[17694:11c5114e] [com.apple.runningboard:process] Hit the server for a process handle 134227f100017efd that resolved to: [extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66]:98045]
+2026-11-18 07:37:55.545 Df SpringBoard[17694:11c5114e] [com.apple.runningboard:monitor] Received state update for 98045 (extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66], running-suspended-NotVisible
+2026-11-18 07:37:55.545 Df SpringBoard[17694:11c5114e] [com.apple.runningboard:monitor] Received state update for 98045 (extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66], running-active-NotVisible
+2026-11-18 07:37:55.643 Df SpringBoard[17694:11c2c905] [com.apple.UIKit:SceneDeactivation] [sceneID:dev.vespin.ios-default] Setting deactivation reasons to: '(none)' for reason: updateAllScenesForBand - Assertion removed.
+2026-11-18 07:37:55.653 Df SpringBoard[17694:11c55d45] [com.apple.runningboard:monitor] Received state update for 98045 (extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66], running-active-NotVisible
+2026-11-18 07:37:55.914 Df SpringBoard[17694:11c5114e] [com.apple.runningboard:monitor] Received state update for 98045 (extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66], running-active-NotVisible
+<SBTransitionSwitcherModifierEvent: 0x118e7ab80; type: MainTransition; transitionID: 2EC96360-D2EA-4542-8C37-294668FB1464; phase: Complete; animated: YES; fromAppLayout: 0x0; toAppLayout: <SBAppLayout: 0x11f61c620; primary: dev.vespin.ios:default; environment: main>; fromEnvironmentMode: home-screen; toEnvironmentMode: application; fromSpaceConfiguration: undefined; toSpaceConfiguration: full; pendingTermination: {(
+		    <SBIconOverlayVisibilitySwitcherEventResponse: 0x120de4100; visible: NO; appLayout: <SBAppLayout: 0x11f61c620; primary: dev.vespin.ios:default; environment: main>>;
+		    <SBIconViewVisibilitySwitcherEventResponse: 0x118c63020; visible: YES; animationSettings: 0x0; appLayout: <SBAppLayout: 0x11f61c620; primary: dev.vespin.ios:default; environment: main>>;
+		    <SBMatchMoveToIconViewSwitcherEventResponse: 0x118a0c600; active: NO; appLayout: <SBAppLayout: 0x11f61c620; primary: dev.vespin.ios:default; environment: main>>;
+2026-11-18 07:37:56.022 Df SpringBoard[17694:11c55ec7] [com.apple.runningboard:monitor] Received state update for 98045 (extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66], running-suspended-NotVisible
+2026-11-18 07:37:56.262 Df SpringBoard[17694:11c55062] [com.apple.runningboard:monitor] Received state update for 98045 (extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66], running-active-NotVisible
+2026-11-18 07:37:56.313 Df SpringBoard[17694:11c55062] [com.apple.FrontBoard:Process] Asked to bootstrap a new process for handle: [extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66]:98045]
+2026-11-18 07:37:56.313 Df SpringBoard[17694:11c55062] [com.apple.FrontBoard:Process] Creating process (sync=true) for handle: [extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66]:98045]
+2026-11-18 07:37:56.314 Df SpringBoard[17694:11c55062] [com.apple.FrontBoard:ProcessWorkspace] [extension<dev.vespin.ios.AgentsLiveActivity:98045] Registering event dispatcher at init
+2026-11-18 07:37:56.314 Df SpringBoard[17694:11c55062] [com.apple.FrontBoard:ProcessWorkspace] Created <FBWorkspace: 0x118c403c0; <FBExtensionProcess: 0x118e70c40; extension<dev.vespin.ios.AgentsLiveActivity:98045(v100CDB63); typeID: com.apple.widgetkit-extension>>
+2026-11-18 07:37:56.314 Df SpringBoard[17694:11c55062] [com.apple.FrontBoard:Process] Bootstrapping extension<dev.vespin.ios.AgentsLiveActivity
+2026-11-18 07:37:56.315 Df SpringBoard[17694:11c55062] [com.apple.FrontBoard:Process] [extension<dev.vespin.ios.AgentsLiveActivity:98045] Bootstrap success!
+2026-11-18 07:37:56.315 Df SpringBoard[17694:11c55062] [com.apple.runningboard:process] Starting death monitoring for handle [extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66]:98045]
+2026-11-18 07:37:56.315 Df SpringBoard[17694:11c55062] [com.apple.FrontBoard:Process] Adding: <FBExtensionProcess: 0x118e70c40; extension<dev.vespin.ios.AgentsLiveActivity:98045(v100CDB63)>
+2026-11-18 07:37:56.365 Df SpringBoard[17694:11c5114e] [com.apple.runningboard:monitor] Received state update for 98045 (extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66], running-active-NotVisible
+2026-11-18 07:37:57.339 Df SpringBoard[17694:11c55eda] [com.apple.runningboard:monitor] Received state update for 98045 (extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66], running-active-NotVisible
+2026-11-18 07:37:57.441 Df SpringBoard[17694:11c55eda] [com.apple.runningboard:monitor] Received state update for 98045 (extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66], running-suspended-NotVisible
+2026-11-18 07:37:57.441 Df SpringBoard[17694:11c5114e] [com.apple.FrontBoard:Process] [extension<dev.vespin.ios.AgentsLiveActivity:98045] Setting process task state to: Suspended
+2026-11-18 07:37:58.146 Df Vespin[98004:11c56024] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Creating a user notification center
+2026-11-18 07:37:58.157 Df SpringBoard[17694:11c5114e] [com.apple.SpringBoard:Common] Fetching initialization context for: dev.vespin.ios
+2026-11-18 07:37:58.157 Df SpringBoard[17694:11c5114e] [com.apple.SpringBoard:Common] Returning cached initialization context for dev.vespin.ios
+2026-11-18 07:37:58.157 Df SpringBoard[17694:11c5114e] [com.apple.SpringBoard:Common] Returning cached initialization context for dev.vespin.ios
+2026-11-18 07:37:58.159 Df Vespin[98004:11c56480] [com.apple.runningboard:connection] Identity resolved as app<dev.vespin.ios((null))>
+2026-11-18 07:37:58.159 Df SpringBoard[17694:11c55ec7] [com.apple.FrontBoard:ProcessWorkspace] [app<dev.vespin.ios>:98004] Connection established.
+2026-11-18 07:37:58.160 Df SpringBoard[17694:11c55ec7] [com.apple.FrontBoard:ProcessWorkspace] [app<dev.vespin.ios>:98004] created proxy of <BSXPCServiceConnectionProxy<FBSWorkspaceServiceServerInterface>: 0x11276af00>
+2026-11-18 07:37:58.160 Df SpringBoard[17694:11c5114e] [com.apple.FrontBoard:Process] [app<dev.vespin.ios>:98004] Connection to remote process established!
+2026-11-18 07:37:58.160 Df SpringBoard[17694:11c5114e] [com.apple.FrontBoard:ProcessScene] [0x11f0692c0:(FBSceneManager):sceneID:dev.vespin.ios-default] Sending scene action [Create Active][0xb96] to process 0x118e7a100 (watchdog: 597.19s)
+2026-11-18 07:37:58.160 Df SpringBoard[17694:11c5114e] [com.apple.FrontBoard:ProcessScene] [0x11f0692c0:(FBSceneManager):sceneID:dev.vespin.ios-default] Sending scene create.
+2026-11-18 07:37:58.162 Df SpringBoard[17694:11c5114e] [com.apple.FrontBoard:ProcessWorkspace] received incoming handshake : process=<FBApplicationProcess: 0x118e7a100; app<dev.vespin.ios>:98004(v100CDB14); taskState: Running; visibility: Foreground> remote=<BSAuditToken: 0x11f51cf40; AUID: 501; EUID: 501; EGID: 20; RUID: 501; RGID: 20; PID: 98004; ASID: 100056; PIDVersion: 269277972> remnants=0
+2026-11-18 07:37:58.165 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:dev.vespin.ios-default] Client process connected: [app<dev.vespin.ios((null))>:98004]
+2026-11-18 07:37:58.165 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:HostedScenePolicy] Host window scene changed for sceneID:dev.vespin.ios-default: <SBWindowScene: 0x10b760f00; scene: "<FBSScene: 0x10b6b90e0; identifier: SB-main>"; persistentIdentifier: SB-main>
+2026-11-18 07:37:58.166 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:ResourceConditions] Considering foreground scene <FBScene: 0x107e38300; FBSceneManager:sceneID:dev.vespin.ios-default> with handle=[app<dev.vespin.ios((null))>:98004] (isApp=YES) and parentScene=(null)
+2026-11-18 07:37:58.166 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:ResourceConditions] Setting resource conditions for scene=<FBScene: 0x107e38300; FBSceneManager:sceneID:dev.vespin.ios-default> to memoryPressure=normal
+2026-11-18 07:37:58.168 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:SuspendedUnderLock] Started observing hosted policy component for sceneID:dev.vespin.ios-default
+2026-11-18 07:37:58.168 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] [coordinator] didAddExternalForegroundApplicationSceneHandle pid:98004 scene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default now:<recentPIDs: [98004]; recentSceneIdentityTokensByPID: {98004: [com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default]}>
+2026-11-18 07:37:58.169 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(clientConnected) sceneID:dev.vespin.ios-default hasParent:YES contentState:preparing hasRule:NO wantsRule:YES
+2026-11-18 07:37:58.169 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] deferFromSBWindowScene: adding rule for <token: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default; pid: 98004>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(clientConnected) outcome:(wanted, created) sceneID:dev.vespin.ios-default
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] Application process state changed for dev.vespin.ios: <SBApplicationProcessState: 0x1125a02e0; pid: 98004; taskState: Running; visibility: Foreground>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e9dd0-com.apple.SpringBoard.SceneWorkspace.PrototypeTools] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e8d20-com.apple.SpringBoard.SceneWorkspace.DruidUI] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e8ea0-com.apple.SpringBoard.SceneWorkspace.FullKeyboardAccessUI] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e9fb0-com.apple.SpringBoard.SceneWorkspace.SiriHUD] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e9ce0-com.apple.SpringBoard.SceneWorkspace.AudioHUD] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e9b00-com.apple.SpringBoard.SceneWorkspace.PerfPowerHUD] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e8db0-com.apple.SpringBoard.SceneWorkspace.InputUI] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e9ec0-com.apple.SpringBoard.SceneWorkspace.GlitchHUD] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e9080-com.apple.SpringBoard.SceneWorkspace.AssistiveTouchUI] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4ea0a0-com.apple.SpringBoard.SceneWorkspace.AssistantIslandStageCoordinator] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e8c60-com.apple.SpringBoard.SceneWorkspace.OverlayUI] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e8f90-com.apple.SpringBoard.SceneWorkspace.VoiceControlUI] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e9950-com.apple.SpringBoard.SceneWorkspace.EyedropperUI] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e9bf0-com.apple.SpringBoard.SceneWorkspace.InternalPerfPowerHUD] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e9a10-com.apple.SpringBoard.SceneWorkspace.Moments] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.171 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] SceneWorkspaceDelegate[0x10b4e9170-com.apple.SpringBoard.SceneWorkspace.AccessibilityUIServerUI] client did connect with handshake: <FBSceneClientHandshake:0x1125a0300; [app<dev.vespin.ios((null))>:98004] remnants=0>
+2026-11-18 07:37:58.173 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] deliveryChainDidUpdate: scene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default in windowScene:SB-main
+2026-11-18 07:37:58.502 Df SpringBoard[17694:11c55eda] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:37:58.507 Df Vespin[98004:11c56024] [com.apple.BacklightServices:scenes] 0x10d8eefd0 setDelegate:<0x10d8eea60 _UIBacklightEnvironment> hasDelegate:YES for environment:sceneID:dev.vespin.ios-default
+2026-11-18 07:37:58.515 Df Vespin[98004:11c56024] [com.apple.BackBoard:EventDelivery] [BKSHIDEventObserver] 0x10d936ca0 _UIKeyWindowSceneObserver-0x10d8eea90 setToken:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default
+2026-11-18 07:37:58.515 Df Vespin[98004:11c56024] [com.apple.UIKit:KeyWindow] Scene target of keyboard event deferring environment did change: target=1; ancestor=0; scene: UIWindowScene: 0x10da44f00; scene identity: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default
+2026-11-18 07:37:58.515 Df Vespin[98004:11c56024] [com.apple.UIKit:KeyWindow] Scene became target of keyboard event deferring environment: UIWindowScene: 0x10da44f00; scene identity: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default
+2026-11-18 07:37:58.516 Df Vespin[98004:11c56024] [com.apple.BackBoard:EventDelivery] [BKSHIDEventObserver] 0x10d935b90  setToken:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default
+2026-11-18 07:37:58.516 Df Vespin[98004:11c56024] [com.apple.UIKit:KeyboardFocusAssistant] Event deferring policy changed: finalScene:N->Y (token: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.520 Df Vespin[98004:11c56024] [com.apple.UIKit:KeyboardScene] Requesting keyboard scene for (FBSceneManager):sceneID:dev.vespin.ios-default
+2026-11-18 07:37:58.522 Df SpringBoard[17694:11c5114e] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:37:58.523 Df SpringBoard[17694:11c55eda] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:37:58.527 Df SpringBoard[17694:11c5114e] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:37:58.575 Df Vespin[98004:11c56494] [com.apple.containermanager:xpc] Requesting app group container lookup; personaid = 4294967295, type = NOPERSONA, name = <unknown>, origin [pid = 0, personaid = 0], proximate [pid = 0, personaid = 0], identifier = group.dev.vespin.ios, euid = 501, uid = 501, platform = 7
+2026-11-18 07:37:58.589 Df Vespin[98004:11c56024] [com.apple.UIKit:KeyWindow] Window did become application key: UIWindow: 0x10e815000; contextId: 0x39815628; scene identity: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default
+2026-11-18 07:37:58.590 Df Vespin[98004:11c56482] [com.apple.BackBoard:EventDelivery] policyStatus:<0x10d935b90; _UIKeyboardFocusAssistant-0x10ae12220; fb/FBSceneManager:sceneID%3Adev.vespin.ios-default; <ancestor; generation: 127; finalStringToken>> was:<target; generation: 126; finalStringToken>
+2026-11-18 07:37:58.590 Df Vespin[98004:11c56482] [com.apple.BackBoard:EventDelivery] policyStatus:<0x10d936ca0; _UIKeyWindowSceneObserver-0x10d8eea90; fb/FBSceneManager:sceneID%3Adev.vespin.ios-default; <ancestor; generation: 127; finalStringToken>> was:<target; generation: 126; finalStringToken>
+2026-11-18 07:37:58.591 Df SpringBoard[17694:11c5114e] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:37:58.591 Df Vespin[98004:11c56024] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:dev.vespin.ios-default  persistentID: 03C04E00-3154-4AF5-AFA1-543C0729B0E3
+2026-11-18 07:37:58.611 Df SpringBoard[17694:11c55d45] [com.apple.FrontBoard:ProcessScene] [0x11f0692c0:(FBSceneManager):sceneID:dev.vespin.ios-default] Scene action [Create Active][0xb96] completed with success: 1
+2026-11-18 07:37:58.613 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:dev.vespin.ios-default] scene content state changed: ready
+2026-11-18 07:37:58.616 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:dev.vespin.ios-default] Setting parent scene: SSK.primary.root(mainDisplay):SB-main
+2026-11-18 07:37:58.616 Df SpringBoard[17694:11c55d45] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:37:58.630 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:dev.vespin.ios-default] propagating 8 settings from SSK.primary.root(mainDisplay):SB-main
+2026-11-18 07:37:58.633 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:ResourceConditions] Considering foreground scene <FBScene: 0x107e38300; FBSceneManager:sceneID:dev.vespin.ios-default> with handle=[app<dev.vespin.ios((null))>:98004] (isApp=YES) and parentScene=SSK.primary.root(mainDisplay):SB-main
+2026-11-18 07:37:58.637 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:dev.vespin.ios-default] Removing parent scene.
+2026-11-18 07:37:58.637 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:dev.vespin.ios-default] Setting parent scene: SSK.primary.root(mainDisplay):SB-main
+2026-11-18 07:37:58.638 Df SpringBoard[17694:11c2c905] [com.apple.FrontBoard:Scene] [(FBSceneManager):sceneID:dev.vespin.ios-default] propagating 8 settings from SSK.primary.root(mainDisplay):SB-main
+2026-11-18 07:37:58.639 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) sceneID:dev.vespin.ios-default hasParent:YES contentState:ready hasRule:YES wantsRule:YES
+2026-11-18 07:37:58.639 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] _updateDeferringRules(didUpdateContentState) outcome:(no change) sceneID:dev.vespin.ios-default
+<SBSceneReadySwitcherModifierEvent: 0x11f5f8180; type: SceneReady; appLayout: <SBAppLayout: 0x11f61c620; primary: dev.vespin.ios:default; environment: main> {
+    continuousExposeIdentifier = dev.vespin.ios;
+        primary = <SBDisplayItem: 0x120d3a300; type: App; bundleIdentifier: dev.vespin.ios; uniqueIdentifier: sceneID:dev.vespin.ios-default>;
+2026-11-18 07:37:58.639 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:AppResize] updating _lastInteractedResizableSceneHandle: sceneID:dev.vespin.ios-default
+2026-11-18 07:37:58.641 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] [coordinator] userFocusRequestForScene: requesting target <environment: keyboardFocus; target: <token: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default; pid: 98004>> for reason:inflexible windowing app is foreground
+2026-11-18 07:37:58.646 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:HostedScenePolicy] Hosting assertion requested for sceneID:dev.vespin.ios-default (valid: YES) with policy Default, reason: SBSwitcherController
+2026-11-18 07:37:58.646 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:HostedScenePolicy] Hosting policy changed for sceneID:dev.vespin.ios-default: NotApplicable -> Enforce
+2026-11-18 07:37:58.646 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:SuspendedUnderLock] Suspension under lock policy updated for sceneID:dev.vespin.ios-default: Enforce
+2026-11-18 07:37:58.646 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Common] Front display did change: <SBApplication: 0x10b61e200; dev.vespin.ios>
+2026-11-18 07:37:58.647 Df Vespin[98004:11c56024] [com.apple.UIKit:KeyboardFocusAssistant] Event deferring policy changed: finalScene:Y->Y (token: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.647 Df Vespin[98004:11c56024] [com.apple.UIKit:KeyWindow] Scene became target of keyboard event deferring environment: UIWindowScene: 0x10da44f00; scene identity: com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default
+2026-11-18 07:37:58.656 Df Vespin[98004:11c56024] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:dev.vespin.ios-default  persistentID: 03C04E00-3154-4AF5-AFA1-543C0729B0E3
+2026-11-18 07:37:58.673 Df Vespin[98004:11c56024] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:dev.vespin.ios-default  persistentID: 03C04E00-3154-4AF5-AFA1-543C0729B0E3
+2026-11-18 07:37:58.714 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.717 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Should send trait collection or coordinate space update, interface style 1 -> 1, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.724 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.732 Df Vespin[98004:11c56024] [com.apple.BacklightServices:scenes] 0x10d8ee6a0 setDelegate:<0x10d8ee730 _UIBacklightEnvironment> hasDelegate:YES for environment:KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default
+2026-11-18 07:37:58.732 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.732 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.735 Df Vespin[98004:11c56024] [com.apple.BackBoard:EventDelivery] [BKSHIDEventObserver] 0x10d9bcb60 _UIKeyWindowSceneObserver-0x10d8eff00 setToken:com.apple.UIKit.KeyboardManagement.hosted/com.apple.InputUI.keyboard:KeyboardInputScene-com.apple.frontboard.systemappservices%2FFBSceneManager%3AsceneID%253Adev.vespin.ios-default
+2026-11-18 07:37:58.735 Df Vespin[98004:11c56024] [com.apple.BackBoard:EventDelivery] policyStatus:<0x10d9bcb60; _UIKeyWindowSceneObserver-0x10d8eff00; com.apple.UIKit.KeyboardManagement.hosted/com.apple.InputUI.keyboard:KeyboardInputScene-com.apple.frontboard.systemappservices%2FFBSceneManager%3AsceneID%253Adev.vespin.ios-default; <none; generation: 0>> was:<target; generation: 127>
+2026-11-18 07:37:58.740 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.740 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.740 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.740 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.740 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.740 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.740 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.740 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.740 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.741 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.743 Df Vespin[98004:11c56024] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:dev.vespin.ios-default  persistentID: 03C04E00-3154-4AF5-AFA1-543C0729B0E3
+2026-11-18 07:37:58.747 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Scene did update interface style to 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.747 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.747 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.747 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.753 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 0, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.795 Df SpringBoard[17694:11c55eda] [com.apple.runningboard:monitor] Received state update for 98045 (extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66], running-suspended-NotVisible
+2026-11-18 07:37:58.828 Df Vespin[98004:11c56024] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:dev.vespin.ios-default  persistentID: 03C04E00-3154-4AF5-AFA1-543C0729B0E3
+2026-11-18 07:37:58.828 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Scene did update interface style to 1, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.828 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Push traits update to screen for new style 1, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:37:58.852 Df Vespin[98004:11c56024] [com.apple.UIKit:KeyboardScene] Keyboard scene for com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default successfully connected: com.apple.UIKit.KeyboardManagement.hosted/com.apple.InputUI.keyboard:KeyboardInputScene-com.apple.frontboard.systemappservices%2FFBSceneManager%3AsceneID%253Adev.vespin.ios-default
+2026-11-18 07:37:58.852 Df Vespin[98004:11c56024] [com.apple.UIKit:KeyboardScene] reloadInputViews for keyboard scene com.apple.UIKit.KeyboardManagement.hosted/com.apple.InputUI.keyboard:KeyboardInputScene-com.apple.frontboard.systemappservices%2FFBSceneManager%3AsceneID%253Adev.vespin.ios-default
+2026-11-18 07:37:58.852 Df Vespin[98004:11c56024] [com.apple.UIKit:KeyboardSceneDelegate] Try reloading input views for responder:(nil) requiresKB:N force:Y scene-identity:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default
+2026-11-18 07:37:58.855 Df Vespin[98004:11c56024] [com.apple.UIKit:KeyboardSceneDelegate] Reloading input views for key-window scene responder:(nil) requiresKB:N force:Y scene-identity:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default
+2026-11-18 07:37:58.876 Df SpringBoard[17694:11c55d45] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:37:59.060 Df SpringBoard[17694:11c55eda] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:37:59.203 Df SpringBoard[17694:11c55eda] [com.apple.FrontBoard:ProcessWorkspace] [app<dev.vespin.ios>:98004] Dropping launch assertion.
+2026-11-18 07:37:59.313 Df SpringBoard[17694:11c55ec5] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:37:59.695 Df Vespin[98004:11c5647f] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings (async)
+2026-11-18 07:37:59.711 Df SpringBoard[17694:11c5114e] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings
+2026-11-18 07:37:59.711 Df SpringBoard[17694:11c5114e] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:37:59.711 Df SpringBoard[17694:11c5114e] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:37:59.711 Df SpringBoard[17694:11c5114e] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:37:59.711 Df SpringBoard[17694:11c5114e] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 0 ]
+2026-11-18 07:37:59.711 Df SpringBoard[17694:11c5114e] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 0 ]
+2026-11-18 07:37:59.711 Df Vespin[98004:11c5647e] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Got notification settings [ hasResult: 1 hasCompletionHandler: 1 ]
+2026-11-18 07:37:59.713 Df Vespin[98004:11c56481] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification categories (async)
+2026-11-18 07:37:59.719 Df SpringBoard[17694:11c55ec5] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification categories
+2026-11-18 07:37:59.713 Df Vespin[98004:11c5647f] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings (async)
+2026-11-18 07:37:59.719 Df SpringBoard[17694:11c55ec5] [com.apple.UserNotifications:DataStore] No unique identifier for bundleID dev.vespin.ios found; adding a mapping to 9877BFA4-26B1-49CA-95D6-BC759BDF862B
+2026-11-18 07:37:59.723 Df SpringBoard[17694:11c55ec5] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings
+2026-11-18 07:37:59.723 Df SpringBoard[17694:11c55ec5] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:37:59.723 Df SpringBoard[17694:11c55ec5] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:37:59.723 Df SpringBoard[17694:11c55ec5] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:37:59.723 Df SpringBoard[17694:11c55ec5] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 0 ]
+2026-11-18 07:37:59.723 Df SpringBoard[17694:11c55ec5] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 0 ]
+2026-11-18 07:37:59.723 Df Vespin[98004:11c5647e] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Got 0 notification categories [ hasCompletionHandler: 1 ]
+2026-11-18 07:37:59.725 Df Vespin[98004:11c5647e] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Got notification settings [ hasResult: 1 hasCompletionHandler: 1 ]
+2026-11-18 07:37:59.725 Df Vespin[98004:11c56927] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Setting 1 notification categories
+2026-11-18 07:37:59.726 Df SpringBoard[17694:11c55ec5] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Setting 1 notification categories
+2026-11-18 07:37:59.733 Df Vespin[98004:11c56480] [com.apple.corespotlight:index] Submitting donation: {CSInlineDonation[async]: "dev.vespin.ios" delete-all} (0 bytes with 0 enqueued)
+2026-11-18 07:37:59.738 Df Vespin[98004:11c56591] [com.apple.corespotlight:index] Performing donation: {CSInlineDonation[async]: "dev.vespin.ios" delete-all}
+2026-11-18 07:37:59.788 Df Vespin[98004:11c56482] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Setting 2 notification categories
+2026-11-18 07:37:59.789 Df SpringBoard[17694:11c5114e] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Setting 2 notification categories
+2026-11-18 07:37:59.829 Df Vespin[98004:11c56591] [com.apple.Biome:BiomeCascade] Requesting new set donation <AppIntentsIndexedEntity:sourceIdentifier=dev.vespin.ios:[NoSetCreation]>
+2026-11-18 07:37:59.837 Df SpringBoard[17694:11c5114e] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:37:59.840 Df SpringBoard[17694:11c55062] [com.apple.runningboard:monitor] Received state update for 98045 (extension<dev.vespin.ios.AgentsLiveActivity[config:6E69CA09-34E3-3493-B8FC-B5021E1ACB71]((null):20155)>[uuid:75C7585F-2ABF-4D5D-B66D-9491CE094D66], running-suspended-NotVisible
+2026-11-18 07:37:59.959 Df Vespin[98004:11c5647f] [com.apple.activitykit:pushToken] Push tokens changed: ["dev.vespin.ios::pushToStart": 128 bytes]
+2026-11-18 07:38:00.098 Df Vespin[98004:11c56591] [com.apple.Biome:BiomeCascade] Service responded to request for new donation <AppIntentsIndexedEntity:sourceIdentifier=dev.vespin.ios:[NoSetCreation]> with Canceled
+2026-11-18 07:38:00.098 Df Vespin[98004:11c56591] [com.apple.corespotlight:index] {CSInlineDonation[async]: "dev.vespin.ios" delete-all}: Set existence required and no set exists, skipping donation
+2026-11-18 07:38:00.098 Df Vespin[98004:11c56591] [com.apple.corespotlight:index] Completed donation: {CSInlineDonation[async]: "dev.vespin.ios" delete-all} result: success
+2026-11-18 07:38:04.366 Df Vespin[98004:11c56481] [com.apple.FileURL:default] kExcludedFromBackupXattrName set on path: /Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Data/Application/51D9F0A6-424D-4176-91CC-856BDA7433FE/Library/HTTPStorages/dev.vespin.ios
+2026-11-18 07:38:04.373 Df Vespin[98004:11c56483] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings (async)
+2026-11-18 07:38:04.373 Df SpringBoard[17694:11c55ec5] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings
+2026-11-18 07:38:04.373 Df SpringBoard[17694:11c55ec5] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:04.373 Df SpringBoard[17694:11c55ec5] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:04.373 Df SpringBoard[17694:11c55ec5] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:04.374 Df SpringBoard[17694:11c55ec5] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 0 ]
+2026-11-18 07:38:04.374 Df SpringBoard[17694:11c55ec5] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 0 ]
+2026-11-18 07:38:04.374 Df Vespin[98004:11c5647f] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Got notification settings [ hasResult: 1 hasCompletionHandler: 1 ]
+2026-11-18 07:38:04.395 Df SpringBoard[17694:11c55eda] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:38:06.336 Df Vespin[98004:11c56d41] [com.apple.corespotlight:index] Submitting donation: {CSInlineDonation[async]: "dev.vespin.ios" delete-all} (0 bytes with 0 enqueued)
+2026-11-18 07:38:06.336 Df Vespin[98004:11c56481] [com.apple.corespotlight:index] Performing donation: {CSInlineDonation[async]: "dev.vespin.ios" delete-all}
+2026-11-18 07:38:06.336 Df Vespin[98004:11c56481] [com.apple.Biome:BiomeCascade] Requesting new set donation <AppIntentsIndexedEntity:sourceIdentifier=dev.vespin.ios:[NoSetCreation]>
+2026-11-18 07:38:06.338 Df Vespin[98004:11c56481] [com.apple.Biome:BiomeCascade] Service responded to request for new donation <AppIntentsIndexedEntity:sourceIdentifier=dev.vespin.ios:[NoSetCreation]> with Canceled
+2026-11-18 07:38:06.338 Df Vespin[98004:11c56481] [com.apple.corespotlight:index] {CSInlineDonation[async]: "dev.vespin.ios" delete-all}: Set existence required and no set exists, skipping donation
+2026-11-18 07:38:06.338 Df Vespin[98004:11c56481] [com.apple.corespotlight:index] Completed donation: {CSInlineDonation[async]: "dev.vespin.ios" delete-all} result: success
+2026-11-18 07:38:06.339 Df Vespin[98004:11c56481] [dev.vespin.ios:spotlight] Spotlight's delete-all was answered
+2026-11-18 07:38:06.764 Df Vespin[98004:11c56481] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Requesting authorization with options 7
+2026-11-18 07:38:06.765 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Requesting authorization with options 7
+2026-11-18 07:38:06.769 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Requesting authorization with options 7
+2026-11-18 07:38:06.769 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:DataProvider] [dev.vespin.ios] Getting notification settings
+2026-11-18 07:38:06.769 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:06.769 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:06.769 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:06.769 Df SpringBoard[17694:11c55ed9] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:06.770 Df SpringBoard[17694:11c55ed9] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 0 ]
+2026-11-18 07:38:06.770 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 0 ]
+2026-11-18 07:38:06.770 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Got effective section info [ hasResult: 0 ]
+2026-11-18 07:38:06.770 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Got notification settings [ hasResult: 1 ]
+2026-11-18 07:38:06.780 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Request notification user authorization prompt
+2026-11-18 07:38:06.780 Df SpringBoard[17694:11c2c905] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Show notification user authorization prompt
+    ++AlertItems: ownsHomeGesture; FGActive; suppressedBundles: dev.vespin.ios; suppressedScenes: 1,
+    Switcher: ownsHomeGesture: Y->N; FGActive->FGInactive; suppressedBundles: dev.vespin.ios; suppressedScenes: 1,
+2026-11-18 07:38:06.899 Df SpringBoard[17694:11c2c905] [com.apple.UIKit:SceneDeactivation] [sceneID:dev.vespin.ios-default] Setting deactivation reasons to: '(none)' for reason: scene settings update - settings are eligible for deactivation reasons.
+2026-11-18 07:38:06.901 Df Vespin[98004:11c56024] [com.apple.runningboard:process] Hit the server for a process handle 73838e500017ed4 that resolved to: [app<dev.vespin.ios((null))>:98004]
+2026-11-18 07:38:06.901 Df Vespin[98004:11c56024] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:dev.vespin.ios-default  persistentID: 03C04E00-3154-4AF5-AFA1-543C0729B0E3
+    SystemAperture: ownsHomeGesture; FGActive; suppressedBundles: dev.vespin.ios; suppressedScenes: 1,
+    Switcher: ownsHomeGesture: N->Y; FGInactive->FGActive; suppressedBundles: dev.vespin.ios; suppressedScenes: 1,
+2026-11-18 07:38:07.790 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Approved by user
+2026-11-18 07:38:07.790 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:DataProvider] [dev.vespin.ios] Requesting authorization status: 2 options: 7 scheduledDelivery: NO
+2026-11-18 07:38:07.790 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Update settings [authorizationStatus: 2 authorizationOptions: 7 authorizationExpirationDate: (null) scheduledDelivery: NO]
+2026-11-18 07:38:07.790 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Create default data provider (requiresTopics=0, defaultTopics=0)
+2026-11-18 07:38:07.791 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:KeyboardFocus] deliveryChainDidUpdate: scene:com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default in windowScene:SB-main
+2026-11-18 07:38:07.798 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:07.798 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:07.798 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:07.798 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:07.798 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 0 ]
+2026-11-18 07:38:07.798 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 0 ]
+2026-11-18 07:38:07.798 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Got effective section info [ hasResult: 0 ]
+2026-11-18 07:38:07.799 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:General] BBDataProvider: Data provider <dev.vespin.ios> is missing sort descriptors -- section will not be sorted!
+2026-11-18 07:38:07.799 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Connection] com.apple.usernotificationsserver.DefaultDataProviderFactory updating data provider proxy for section dev.vespin.ios
+2026-11-18 07:38:07.799 Df SpringBoard[17694:11c55062] [com.apple.BulletinBoard:Connection] com.apple.usernotificationsserver.DefaultDataProviderFactory adding new data provider proxy for section dev.vespin.ios
+2026-11-18 07:38:07.799 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Connection] BBDataProviderManager adding data provider <BBRemoteDataProvider 0x11f290000; dev.vespin.ios> to BBServer
+2026-11-18 07:38:07.800 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Settings] Section settings for data provider dev.vespin.ios: <BBSectionInfo: 0x11258df80> Section dev.vespin.ios <BBSectionInfoSettings: 0x11258f840> Section settings: authorized = Not determined, authorization expiration date = (null), last user granted authorization date = (null), mute configuration = (null), notification center = YES, lock screen = YES, scheduled delivery = NO, remote notifications = YES, announce setting = Disabled, summarization = YES, prioritization = YES, shows on external devices = YES, shows custom settings = NO, content preview setting = Default Setting, Alert style = Banner, Push settings = [s:---] [e:---], grouping = Default (unmanaged) 'Vespin' 'Vespin'
+2026-11-18 07:38:07.800 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Settings] Persisting changes for dev.vespin.ios
+2026-11-18 07:38:07.801 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Did create default data provider
+2026-11-18 07:38:07.801 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Getting section info
+2026-11-18 07:38:07.801 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:Settings] Getting sectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:07.801 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting section info
+2026-11-18 07:38:07.801 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Icon] Removing dev.vespin.ios from list of apps with allowed badges
+2026-11-18 07:38:07.801 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:DataProvider] [dev.vespin.ios] data provider loaded
+2026-11-18 07:38:07.802 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Default data provider section info did change
+2026-11-18 07:38:07.801 Df SpringBoard[17694:11c58cc9] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested section info (sync)
+2026-11-18 07:38:07.802 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Notify observers that user notifications settings were updated
+2026-11-18 07:38:07.802 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:LocalNotifications] [dev.vespin.ios] Disable visible user notifications for remote notifications
+2026-11-18 07:38:07.802 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:DataStore] [dev.vespin.ios] Remove all delivered notifications that are no longer valid
+2026-11-18 07:38:07.802 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:07.802 Df SpringBoard[17694:11c58cc9] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got section infos [ result: 1 ]
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got section info [ hasResult: 1 ]
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Got section info [ hasResult: 1 ]
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Update Section info
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Getting section info
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:Settings] Getting sectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:07.802 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:RemoteNotifications] Calcualate topics because user notification settings authorization changed
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c55062] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c55062] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 1 ]
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 1 ]
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting section info
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c58cc9] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested section info (sync)
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Settings] SettingsGateway changed section settings: dev.vespin.ios
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Settings] [dev.vespin.ios] Saving updated section info changed: {sectionInfoSettings: {authorizationStatus: notDetermined -> authorized, pushSettings: [s:---] [e:---] -> [s:BSA] [e:BSA]}}
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Settings] [dev.vespin.ios] 	Old = <BBSectionInfo: 0x118b4db00> Section dev.vespin.ios <BBSectionInfoSettings: 0x115aab300> Section settings: authorized = Not determined, authorization expiration date = (null), last user granted authorization date = (null), mute configuration = (null), notification center = YES, lock screen = YES, scheduled delivery = NO, remote notifications = YES, announce setting = Disabled, summarization = YES, prioritization = YES, shows on external devices = YES, shows custom settings = NO, content preview setting = Default Setting, Alert style = Banner, Push settings = [s:---] [e:---], grouping = Default (unmanaged) 'Vespin' 'Vespin'
+2026-11-18 07:38:07.803 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Settings] [dev.vespin.ios] 	New = <BBSectionInfo: 0x118b4da40> Section dev.vespin.ios <BBSectionInfoSettings: 0x118b4fc00> Section settings: authorized = Authorized, authorization expiration date = (null), last user granted authorization date = (null), mute configuration = (null), notification center = YES, lock screen = YES, scheduled delivery = NO, remote notifications = YES, announce setting = Disabled, summarization = YES, prioritization = YES, shows on external devices = YES, shows custom settings = NO, content preview setting = Default Setting, Alert style = Banner, Push settings = [s:BSA] [e:BSA], grouping = Default (unmanaged) 'Vespin' 'Vespin'
+2026-11-18 07:38:07.804 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Settings] Persisting changes for dev.vespin.ios
+2026-11-18 07:38:07.805 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:General] BBServer: Update bulletins in section dev.vespin.ios for feed 1
+2026-11-18 07:38:07.805 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:Icon] Adding dev.vespin.ios to list of apps with allowed badges
+2026-11-18 07:38:07.805 E  SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:General] BBRemoteDataProvider: <BBDataProviderIdentity 0x120c34e00; dev.vespin.ios> does not respond to noteSectionInfoDidChange:
+2026-11-18 07:38:07.805 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Default data provider section info did change
+2026-11-18 07:38:07.805 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] User notification settings were enabled
+2026-11-18 07:38:07.805 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Notify observers that user notifications settings were updated
+2026-11-18 07:38:07.805 Df SpringBoard[17694:11c58cc9] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got section infos [ result: 1 ]
+2026-11-18 07:38:07.805 Df Vespin[98004:11c56481] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Requested authorization [ didGrant: 1 hasError: 0 hasCompletionHandler: 1 ]
+2026-11-18 07:38:07.805 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got section info [ hasResult: 1 ]
+2026-11-18 07:38:07.805 Df Vespin[98004:11c56927] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings (async)
+2026-11-18 07:38:07.805 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Got section info [ hasResult: 1 ]
+2026-11-18 07:38:07.805 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:07.805 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Authorization granted: 1
+2026-11-18 07:38:07.805 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:DataProviderFactory] [dev.vespin.ios] Purging invalid notification records
+2026-11-18 07:38:07.805 Df SpringBoard[17694:11c55062] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:07.805 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:LocalNotifications] [dev.vespin.ios] Load 0 pending notification dictionaries
+2026-11-18 07:38:07.806 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings
+2026-11-18 07:38:07.805 Df SpringBoard[17694:11c55062] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 1 ]
+2026-11-18 07:38:07.806 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:07.806 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 1 ]
+2026-11-18 07:38:07.806 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:07.806 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:LocalNotifications] [dev.vespin.ios] Load last local notification fire date: (null)
+2026-11-18 07:38:07.806 Df SpringBoard[17694:11c58cc9] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:07.806 Df Vespin[98004:11c56927] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Got notification settings [ hasResult: 1 hasCompletionHandler: 1 ]
+2026-11-18 07:38:07.806 Df SpringBoard[17694:11c58cc9] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 1 ]
+2026-11-18 07:38:07.806 Df SpringBoard[17694:11c58cc9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 1 ]
+2026-11-18 07:38:07.806 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:LocalNotifications] [dev.vespin.ios] Update timers for 0 pending notifications (monitoring: 0)
+2026-11-18 07:38:07.806 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:LocalNotifications] [dev.vespin.ios] Invalidate persistent timer
+2026-11-18 07:38:07.807 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:LocalNotifications] [dev.vespin.ios] Load last local notification fire date: (null)
+2026-11-18 07:38:07.807 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:LocalNotifications] [dev.vespin.ios] Find next notification with current trigger date after last fire date 0001-12-31 19:03:58.000 -045602
+2026-11-18 07:38:07.807 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:LocalNotifications] [dev.vespin.ios] No upcoming local notifications
+2026-11-18 07:38:07.807 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:DataStore] [dev.vespin.ios] Remove all delivered notifications that are no longer valid
+2026-11-18 07:38:07.807 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:07.807 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:07.807 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:LocalNotifications] [dev.vespin.ios] Update regions for 0 pending notifications
+2026-11-18 07:38:07.807 Df SpringBoard[17694:11c55062] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:07.807 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:RemoteNotifications] [dev.vespin.ios] Update enabled user notifications for remote notifications: YES
+2026-11-18 07:38:07.808 Df SpringBoard[17694:11c55062] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 1 ]
+2026-11-18 07:38:07.808 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 1 ]
+2026-11-18 07:38:07.808 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:07.808 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:07.808 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:RemoteNotifications] [dev.vespin.ios] Enable user notifications for remote notifications
+2026-11-18 07:38:07.808 Df SpringBoard[17694:11c55062] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:07.808 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:LocalNotifications] [dev.vespin.ios] Enabled visible user notifications for remote notifications
+2026-11-18 07:38:07.808 Df SpringBoard[17694:11c55062] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 1 ]
+2026-11-18 07:38:07.808 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 1 ]
+2026-11-18 07:38:07.808 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:RemoteNotifications] Calcualate topics because user notification settings authorization changed
+2026-11-18 07:38:07.809 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:DataStore] [dev.vespin.ios] Remove all delivered notifications that are no longer valid
+2026-11-18 07:38:07.809 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:07.809 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:07.809 Df SpringBoard[17694:11c55062] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:07.810 Df SpringBoard[17694:11c55062] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 1 ]
+2026-11-18 07:38:07.810 Df Vespin[98004:11c56481] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings (async)
+2026-11-18 07:38:07.810 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 1 ]
+2026-11-18 07:38:07.810 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:07.810 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:07.810 Df SpringBoard[17694:11c55062] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:07.810 Df SpringBoard[17694:11c55062] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 1 ]
+2026-11-18 07:38:07.810 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings
+2026-11-18 07:38:07.810 Df SpringBoard[17694:11c55062] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 1 ]
+2026-11-18 07:38:07.810 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:07.810 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:07.810 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:07.810 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 1 ]
+2026-11-18 07:38:07.810 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 1 ]
+2026-11-18 07:38:07.811 Df Vespin[98004:11c56927] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Got notification settings [ hasResult: 1 hasCompletionHandler: 1 ]
+2026-11-18 07:38:07.811 Df Vespin[98004:11c56481] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings (async)
+2026-11-18 07:38:07.811 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings
+2026-11-18 07:38:07.811 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:07.811 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:07.811 Df Vespin[98004:11c56927] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Got notification settings [ hasResult: 1 hasCompletionHandler: 1 ]
+2026-11-18 07:38:07.811 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:07.811 Df Vespin[98004:11c56481] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings (async)
+2026-11-18 07:38:07.811 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 1 ]
+2026-11-18 07:38:07.811 Df SpringBoard[17694:11c55eda] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 1 ]
+2026-11-18 07:38:07.811 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:DataProvider] [dev.vespin.ios] Returning 0 bulletins since Wed Nov 11 07:38:07 2026 (max 500)
+2026-11-18 07:38:07.811 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:General] BBServer: Section dev.vespin.ios responded with 0 bulletin requests to feed 1
+2026-11-18 07:38:07.811 Df SpringBoard[17694:11c55eda] [com.apple.BulletinBoard:SectionUpdates] Updating section dev.vespin.ios with 0 new bulletins
+2026-11-18 07:38:07.811 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings
+2026-11-18 07:38:07.811 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:07.812 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:07.812 Df Vespin[98004:11c56d41] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Got notification settings [ hasResult: 1 hasCompletionHandler: 1 ]
+2026-11-18 07:38:07.812 Df SpringBoard[17694:11c58cd3] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:07.812 Df SpringBoard[17694:11c58cd3] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 1 ]
+2026-11-18 07:38:07.812 Df SpringBoard[17694:11c58cd3] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 1 ]
+2026-11-18 07:38:07.813 Df SpringBoard[17694:11c58cc6] [com.apple.BulletinBoard:BulletinDelivery] Observer for NCBulletinNotificationSource: Delivering noteBulletinsLoadedForSectionID: dev.vespin.ios
+    "dev.vespin.ios"
+    "dev.vespin.ios"
+    "dev.vespin.ios"
+    "dev.vespin.ios"
+    <UNNotificationSource: 0x11f59d8c0; identifier: dev.vespin.ios isHidden: NO, displayName: Vespin, icon: <UNNotificationIcon: 0x10b5bfc20; iconInfo: dev.vespin.ios; iconInfoType: Application Identifier; shouldSuppressMask: 0>, source settings: <UNNotificationSourceSettings: 0x11f5fb5a0; notification settings: <UNNotificationSettings: 0x118c40e60; authorizationStatus: Authorized, notificationCenterSetting: Enabled, soundSetting: Enabled, badgeSetting: Enabled, lockScreenSetting: Enabled, carPlaySetting: NotSupported, remoteNotifications: Enabled, announcementSetting: Disabled, criticalAlertSetting: NotSupported, timeSensitiveSetting: NotSupported, alertSetting: Enabled, scheduledDeliverySetting: Disabled, directMessagesSetting: NotSupported, summarizationSetting: Enabled, prioritizationSetting: Enabled, showsPreviewsSetting: Always, alertStyle: Banner, groupingSetting: Default providesAppNotificationSettings: No> topic settings: (
+    <UNNotificationSource: 0x10439c840; identifier: dev.vespin.ios isHidden: NO, displayName: Vespin, icon: <UNNotificationIcon: 0x104297aa0; iconInfo: dev.vespin.ios; iconInfoType: Application Identifier; shouldSuppressMask: 0>, source settings: <UNNotificationSourceSettings: 0x1043effc0; notification settings: <UNNotificationSettings: 0x10438ac60; authorizationStatus: Authorized, notificationCenterSetting: Enabled, soundSetting: Enabled, badgeSetting: Enabled, lockScreenSetting: Enabled, carPlaySetting: NotSupported, remoteNotifications: Enabled, announcementSetting: Disabled, criticalAlertSetting: NotSupported, timeSensitiveSetting: NotSupported, alertSetting: Enabled, scheduledDeliverySetting: Disabled, directMessagesSetting: NotSupported, summarizationSetting: Enabled, prioritizationSetting: Enabled, showsPreviewsSetting: Always, alertStyle: Banner, groupingSetting: Default providesAppNotificationSettings: No> topic settings: (
+2026-11-18 07:38:07.815 Df usernotificationsd[20173:11c58cd5] [com.apple.ReplicatorServices:replicatorClient] Adding record batch of size 63 with 1 records: [id: dev.vespin.ios; zone: sender_sources; clientID: com.apple.UserNotifications.RemoteNotifications; ownership: local]
+2026-11-18 07:38:07.816 Df SpringBoard[17694:11c2c905] [com.apple.UserNotificationsKit:Lists] Destination CSCombinedListViewController updating notification section settings for section dev.vespin.ios
+    "dev.vespin.ios"
+    "dev.vespin.ios"
+    "dev.vespin.ios"
+    "dev.vespin.ios"
+    <UNNotificationSource: 0x11f59e6c0; identifier: dev.vespin.ios isHidden: NO, displayName: Vespin, icon: <UNNotificationIcon: 0x1125cf320; iconInfo: dev.vespin.ios; iconInfoType: Application Identifier; shouldSuppressMask: 0>, source settings: <UNNotificationSourceSettings: 0x11f5f9140; notification settings: <UNNotificationSettings: 0x118c435c0; authorizationStatus: Authorized, notificationCenterSetting: Enabled, soundSetting: Enabled, badgeSetting: Enabled, lockScreenSetting: Enabled, carPlaySetting: NotSupported, remoteNotifications: Enabled, announcementSetting: Disabled, criticalAlertSetting: NotSupported, timeSensitiveSetting: NotSupported, alertSetting: Enabled, scheduledDeliverySetting: Disabled, directMessagesSetting: NotSupported, summarizationSetting: Enabled, prioritizationSetting: Enabled, showsPreviewsSetting: Always, alertStyle: Banner, groupingSetting: Default providesAppNotificationSettings: No> topic settings: (
+    <UNNotificationSource: 0x10439cfc0; identifier: dev.vespin.ios isHidden: NO, displayName: Vespin, icon: <UNNotificationIcon: 0x104297aa0; iconInfo: dev.vespin.ios; iconInfoType: Application Identifier; shouldSuppressMask: 0>, source settings: <UNNotificationSourceSettings: 0x1043eff30; notification settings: <UNNotificationSettings: 0x10438ac60; authorizationStatus: Authorized, notificationCenterSetting: Enabled, soundSetting: Enabled, badgeSetting: Enabled, lockScreenSetting: Enabled, carPlaySetting: NotSupported, remoteNotifications: Enabled, announcementSetting: Disabled, criticalAlertSetting: NotSupported, timeSensitiveSetting: NotSupported, alertSetting: Enabled, scheduledDeliverySetting: Disabled, directMessagesSetting: NotSupported, summarizationSetting: Enabled, prioritizationSetting: Enabled, showsPreviewsSetting: Always, alertStyle: Banner, groupingSetting: Default providesAppNotificationSettings: No> topic settings: (
+2026-11-18 07:38:07.817 Df usernotificationsd[20173:11c58cd5] [com.apple.ReplicatorServices:replicatorClient] Adding record batch of size 63 with 1 records: [id: dev.vespin.ios; zone: sender_sources; clientID: com.apple.UserNotifications.RemoteNotifications; ownership: local]
+2026-11-18 07:38:07.819 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:LocalNotifications] [dev.vespin.ios] Setting 0 monitored regions [ stop: 0 start: 0 ]
+2026-11-18 07:38:07.820 Df SpringBoard[17694:11c2c905] [com.apple.UserNotificationsKit:Lists] Notification List [NCNotificationStructuredListViewController] updating notification section settings for section dev.vespin.ios
+    "dev.vespin.ios"
+2026-11-18 07:38:07.824 Df SpringBoard[17694:11c55edb] [com.apple.UserNotifications:RemoteNotifications] [dev.vespin.ios] Request per-app token with token identifier 99061002-0DA8-482D-86B0-B2E40B4D1840
+    "dev.vespin.ios"
+2026-11-18 07:38:07.825 Df SpringBoard[17694:11c55edb] [com.apple.apsd:connection] <APSConnection: 0x1176bbc00>: Requesting per-app token for topic dev.vespin.ios and identifier 99061002-0DA8-482D-86B0-B2E40B4D1840
+    "dev.vespin.ios"
+    "dev.vespin.ios"
+2026-11-18 07:38:07.831 Df SpringBoard[17694:11c2c905] [com.apple.UserNotificationsKit:Lists] Destination CSCombinedListViewController updating notification section settings for section dev.vespin.ios
+2026-11-18 07:38:07.831 Df SpringBoard[17694:11c2c905] [com.apple.UserNotificationsKit:Lists] Notification List [NCNotificationStructuredListViewController] updating notification section settings for section dev.vespin.ios
+2026-11-18 07:38:07.832 Df SpringBoard[17694:11c2c905] [com.apple.UserNotificationsKit:Lists] Critical Section [NCNotificationStructuredSectionList] showing notifications for dev.vespin.ios on Shows In Notification Center Turned ON
+2026-11-18 07:38:07.832 Df SpringBoard[17694:11c2c905] [com.apple.UserNotificationsKit:Lists] Persistent Section [NCNotificationStructuredSectionList] showing notifications for dev.vespin.ios on Shows In Notification Center Turned ON
+2026-11-18 07:38:07.832 Df SpringBoard[17694:11c2c905] [com.apple.UserNotificationsKit:Lists] Prominent Incoming Section [NCNotificationStructuredSectionList] showing notifications for dev.vespin.ios on Shows In Notification Center Turned ON
+2026-11-18 07:38:07.832 Df SpringBoard[17694:11c2c905] [com.apple.UserNotificationsKit:Lists] Incoming Section [NCNotificationStructuredSectionList] showing notifications for dev.vespin.ios on Shows In Notification Center Turned ON
+2026-11-18 07:38:07.832 Df SpringBoard[17694:11c2c905] [com.apple.UserNotificationsKit:Lists] History Section [NCNotificationCombinedSectionList] showing notifications for dev.vespin.ios on Shows In Notification Center Turned ON
+2026-11-18 07:38:07.832 Df SpringBoard[17694:11c2c905] [com.apple.UserNotificationsKit:Lists] Notification List [NCNotificationStructuredListViewController] notifications loaded for section dev.vespin.ios
+2026-11-18 07:38:07.833 Df SpringBoard[17694:11c2c905] [com.apple.UserNotificationsUIKit:ScrollPosition] Section is loaded, skip scrolling to systemPreferred S for notificationsLoaded on section dev.vespin.ios
+2026-11-18 07:38:07.867 Df SpringBoard[17694:11c55edb] [com.apple.apsd:connection] <APSConnection: 0x1176bbc00> Received token <808f17d2 74980edb 6d80d484 022a5cf8 609b454f 2b4bf19a 3a8b2acb 32d2c3de b01f396b 251e5beb 1179aa49 ae5661c1 197f4f4d d808a673 4aaaae4e baa10175 760fcdf8 96f825c6 5f845340 5f41c870> forTopic dev.vespin.ios identifier 99061002-0DA8-482D-86B0-B2E40B4D1840
+2026-11-18 07:38:07.867 Df SpringBoard[17694:11c55edb] [com.apple.apsd:connection] <APSConnection: 0x1176bbc00> calling <UNCRemoteNotificationServer: 0x10a57f720> for received token {length = 80, bytes = 0x808f17d2 74980edb 6d80d484 022a5cf8 ... 5f845340 5f41c870 } for topic dev.vespin.ios identifier 99061002-0DA8-482D-86B0-B2E40B4D1840
+2026-11-18 07:38:07.867 Df SpringBoard[17694:11c58cc6] [com.apple.UserNotifications:RemoteNotifications] Received new per-app token [80] for topic dev.vespin.ios
+2026-11-18 07:38:07.868 Df SpringBoard[17694:11c58cc6] [com.apple.UserNotifications:RemoteNotifications] Send per-app token [80] to client for topic dev.vespin.ios
+2026-11-18 07:38:07.868 Df SpringBoard[17694:11c55edb] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Sending received device token to 0 connections
+2026-11-18 07:38:07.868 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Sending received device token to 1 connections
+2026-11-18 07:38:08.207 Df SpringBoard[17694:11c2c905] [com.apple.UIKit:SceneDeactivation] [sceneID:dev.vespin.ios-default] Setting deactivation reasons to: 'systemModalAlert' for reason: scene settings update - settings are eligible for deactivation reasons.
+2026-11-18 07:38:08.207 Df SpringBoard[17694:11c2c905] [com.apple.UIKit:SceneDeactivation] [sceneID:dev.vespin.ios-default] Setting deactivation reasons to: '(none)' for reason: updateAllScenesForBand - Assertion removed.
+2026-11-18 07:38:08.208 Df Vespin[98004:11c56024] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:dev.vespin.ios-default  persistentID: 03C04E00-3154-4AF5-AFA1-543C0729B0E3
+2026-11-18 07:38:08.212 Df Vespin[98004:11c56024] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:dev.vespin.ios-default  persistentID: 03C04E00-3154-4AF5-AFA1-543C0729B0E3
+2026-11-18 07:38:08.214 Df SpringBoard[17694:11c55edb] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:38:08.219 Df Vespin[98004:11c56481] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings (async)
+2026-11-18 07:38:08.220 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings
+2026-11-18 07:38:08.220 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:08.220 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:08.220 Df SpringBoard[17694:11c55ed9] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:08.220 Df SpringBoard[17694:11c55ed9] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 1 ]
+2026-11-18 07:38:08.220 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 1 ]
+2026-11-18 07:38:08.220 Df Vespin[98004:11c56927] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Got notification settings [ hasResult: 1 hasCompletionHandler: 1 ]
+2026-11-18 07:38:08.220 Df Vespin[98004:11c56481] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings (async)
+2026-11-18 07:38:08.221 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings
+2026-11-18 07:38:08.221 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:08.221 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:08.221 Df SpringBoard[17694:11c55ed9] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:08.222 Df Vespin[98004:11c5647f] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Got notification settings [ hasResult: 1 hasCompletionHandler: 1 ]
+2026-11-18 07:38:08.221 Df SpringBoard[17694:11c55ed9] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 1 ]
+2026-11-18 07:38:08.222 Df Vespin[98004:11c56481] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings (async)
+2026-11-18 07:38:08.221 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 1 ]
+2026-11-18 07:38:08.222 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Getting notification settings
+2026-11-18 07:38:08.222 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Settings] Getting effectiveSectionInfo for section identifier: dev.vespin.ios
+2026-11-18 07:38:08.222 Df Vespin[98004:11c56024] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:dev.vespin.ios-default  persistentID: 03C04E00-3154-4AF5-AFA1-543C0729B0E3
+2026-11-18 07:38:08.222 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Getting effective section info
+2026-11-18 07:38:08.222 Df SpringBoard[17694:11c55ed9] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Getting requested effective section info (sync)
+2026-11-18 07:38:08.223 Df Vespin[98004:11c56024] [com.apple.UIKit:AppLifecycle] sceneOfRecord: sceneID: sceneID:dev.vespin.ios-default  persistentID: 03C04E00-3154-4AF5-AFA1-543C0729B0E3
+2026-11-18 07:38:08.223 Df SpringBoard[17694:11c55ed9] [com.apple.BulletinBoard:Connection] [dev.vespin.ios] Got effective section info [ result: 1 ]
+2026-11-18 07:38:08.223 Df Vespin[98004:11c5647f] [com.apple.UserNotifications:Connections] [dev.vespin.ios] Got notification settings [ hasResult: 1 hasCompletionHandler: 1 ]
+2026-11-18 07:38:08.223 Df SpringBoard[17694:11c55ed9] [com.apple.UserNotifications:Settings] [dev.vespin.ios] Got effective section info [ hasResult: 1 ]
+2026-11-18 07:38:08.448 Df SpringBoard[17694:11c58cc6] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:38:10.069 Df SpringBoard[17694:11c58cd3] [com.apple.runningboard:monitor] Received state update for 98004 (app<dev.vespin.ios((null))>, running-active-Visible
+2026-11-18 07:38:10.344 Df Vespin[98004:11c56024] [com.apple.UIKit:InterfaceStyle] Not push traits update to screen for new style 1, <_UIKeyboardInputScene: 0x10e93d900> (KeyboardInputScene-com.apple.frontboard.systemappservices/FBSceneManager:sceneID%3Adev.vespin.ios-default)
+2026-11-18 07:38:47.915 Df SpringBoard[17694:11c2c905] [com.apple.SpringBoard:ResourceConditions] Considering foreground scene <FBScene: 0x107e38300; FBSceneManager:sceneID:dev.vespin.ios-default> with handle=[app<dev.vespin.ios((null))>:98004] (isApp=YES) and parentScene=SSK.primary.root(mainDisplay):SB-main
+    <EXConcreteExtension: 0x107ed97a0> {id = dev.vespin.ios.NotificationContent},
+2026-11-18 07:38:48.454 Df SpringBoard[17694:11c68086] [com.apple.UserNotificationsUI:Extensions] Loaded extension dev.vespin.ios.NotificationContent for categories [ inbox-decide, inbox-reply ] with attributes: {
+    <EXConcreteExtension: 0x10a57d7a0> {id = dev.vespin.ios.NotificationContent},
+2026-11-18 07:38:48.534 Df SpringBoard[17694:11c68086] [com.apple.UserNotificationsUI:Extensions] Loaded extension dev.vespin.ios.NotificationContent for categories [ inbox-decide, inbox-reply ] with attributes: {
+    "dev.vespin.ios"
+    "dev.vespin.ios"
