@@ -557,7 +557,11 @@ export interface PageHtml {
 }
 
 /** One version of a page the agent showed on its task, read whole once through the host (`ACT_KIND.TASKS_PAGE_HTML`) as its frame reads it on the Mac; reading until the task is known, and read again on `again` after a read that failed. */
-export function usePageHtml(taskId: string | undefined, pageId: string, version: number): PageHtml {
+export function usePageHtml(
+  taskId: string | undefined,
+  pageId: string,
+  version: number | undefined,
+): PageHtml {
   const acts = useHostActs();
   const [read, setRead] = useState<PageRead>({ reading: true });
   // Note that each ask to read again counts up, which the read below depends on, so Try again reads the page anew rather than leaving the failure standing.
@@ -567,7 +571,7 @@ export function usePageHtml(taskId: string | undefined, pageId: string, version:
     let current = true;
     setRead({ reading: true });
 
-    if (taskId === undefined) return;
+    if (taskId === undefined || version === undefined) return;
     acts[ACT_KIND.TASKS_PAGE_HTML]({ taskId, pageId, version }).then(
       (answer) => {
         if (!current) return;

@@ -137,7 +137,7 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
-import { PageScreen } from "./page-screens.js";
+import { openedVersion, PageScreen } from "./page-screens.js";
 
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
 const UNLISTED_AGENT = "Agent";
@@ -1051,7 +1051,7 @@ export function AgentPageScreen() {
     title: string;
   }>();
 
-  return <AgentPage agentId={id} pageId={page} version={Number(version)} title={title} />;
+  return <AgentPage agentId={id} pageId={page} version={openedVersion(version)} title={title} />;
 }
 
 /** A page the agent showed, by the agent, the page, and its version. */
@@ -1063,7 +1063,7 @@ function AgentPage({
 }: {
   readonly agentId: string;
   readonly pageId: string;
-  readonly version: number;
+  readonly version: number | undefined;
   readonly title: string;
 }) {
   const agent = useFollowedAgent(agentId);
