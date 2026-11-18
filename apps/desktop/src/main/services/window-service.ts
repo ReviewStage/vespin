@@ -28,6 +28,7 @@ import {
   screen,
   session,
   type WebContents,
+  WebContentsView,
 } from "electron";
 import type { BuildLabelMenu } from "../app-menu";
 import { whenPageGone } from "../ipc/page-gone";
@@ -45,6 +46,7 @@ import {
   RENDERER_SCHEME,
   rendererResponse,
 } from "../window/renderer-protocol";
+import { migrateRendererStorage } from "../window/renderer-storage";
 import { grantWindowPermissions } from "../window/window-permissions";
 import { windowPushes } from "../window/window-pushes";
 import { PanelWindows, zoomFactorOf, zoomSteer } from "../window/zoom";
@@ -137,6 +139,20 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
 
   const preloadPath = path.join(config.resourceDirectory, "preload.js");
   const rendererDirectory = path.join(config.resourceDirectory, "renderer");
+
+  async function carryRendererStorage(): Promise<void> {
+    const view = new WebContentsView({
+      webPreferences: { javascript: false, sandbox: true, contextIsolation: true },
+    });
+
+    try {
+      await migrateRendererStorage(view.webContents, path.join(rendererDirectory, "index.html"));
+    } catch {
+      config.report("Could not migrate storage from the previous renderer origin.");
+    } finally {
+      if (!view.webContents.isDestroyed()) view.webContents.close();
+    }
+  }
 
   const panels = new PanelManager({
     runMode,
@@ -441,6 +457,9 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
       session.defaultSession.protocol.handle(RENDERER_SCHEME, (request) =>
         rendererResponse(request, rendererDirectory, (url) => net.fetch(url)),
       );
+      await carryRendererStorage();
+
+      if (!launchStanding()) return;
       // A plan's pages are read through the host on the account's bearer, so the frame holds an address alone.
       session.defaultSession.protocol.handle(PAGE_SCHEME, (request) =>
         run(pageResponse(request.url, operator.host.tasksPage)),
