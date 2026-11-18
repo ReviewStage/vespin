@@ -21,8 +21,7 @@ export const CLOUD_ENVIRONMENT_HEAD = {
 
 /** What Sandbox says: its caption, its row, and why a member who is no owner or admin cannot change it. */
 export const SANDBOX_SIZE_WORDS = {
-  CAPTION:
-    "Applies to every cloud agent in this workspace: new agents use it right away, and existing ones the next time they start.",
+  CAPTION: "Running cloud agents switch to a new size the next time they start.",
   SIZE: "Size",
   DEFAULT: "Default",
   LOCKED: "Only an owner or admin can change this",
