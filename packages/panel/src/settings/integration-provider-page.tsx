@@ -16,15 +16,15 @@ import {
   BUTTON_VARIANT,
   Button,
   GAP,
+  ProviderMark,
   SETTINGS_ROW_MARK_WIDTH,
   SETTINGS_SKELETON_CONTROL,
+  SettingsRow,
+  SettingsRowMark,
   SettingsSection,
   type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
   Stack,
-  TEXT_TONE,
-  TEXT_VARIANT,
-  Text,
 } from "@repo/ui";
 import { PlusIcon } from "@repo/ui/icons";
 import { grantedBySignIn } from "../integration-grant.js";
@@ -61,11 +61,12 @@ import { SECTION, settingsSectionHead } from "./settings-sections.js";
  *
  * A provider the account holds nothing at stands as the list's own row
  * for it, with Connect, so a link landing here before the sign-in does
- * still offers it; one the deployment does not offer says so.
+ * still offers it; one the deployment does not offer says it isn't
+ * available here, as Workspace's pages do.
  */
 
-/** What the page says where the deployment does not offer the provider to the account. */
-const NOT_OFFERED = (name: string) => `${name} is not available to your account.`;
+/** What the page says where the deployment does not offer the provider to the account, as a link written for another deployment lands on it. */
+const NOT_OFFERED = (name: string) => `${name} isn't available here.`;
 
 /** What Add account says in the accounts' head, and while its sign-in is begun. */
 const ADD_ACCOUNT = {
@@ -84,15 +85,6 @@ const PROVIDER_SKELETON: readonly SettingsSectionSkeletonLayout[] = [
     rows: [{ described: true, controls: [SETTINGS_SKELETON_CONTROL.BUTTON] }],
   },
 ];
-
-/** A line the page says in its sections' place, in a description's muted words. */
-function PageNote({ children }: { children: string }): React.JSX.Element {
-  return (
-    <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-      {children}
-    </Text>
-  );
-}
 
 /** Whether the service holds the account a server names, connected or expired. */
 function heldBy(statuses: IntegrationStatuses, server: string): boolean {
@@ -145,7 +137,21 @@ export function IntegrationProviderPage({
     );
   }
 
-  if (status === INTEGRATION_STATUS.UNAVAILABLE) return <PageNote>{NOT_OFFERED(name)}</PageNote>;
+  if (status === INTEGRATION_STATUS.UNAVAILABLE) {
+    return (
+      <SettingsSection>
+        <SettingsRow
+          leading={
+            <SettingsRowMark>
+              <ProviderMark provider={provider} />
+            </SettingsRowMark>
+          }
+          label={name}
+          description={NOT_OFFERED(name)}
+        />
+      </SettingsSection>
+    );
+  }
 
   const rows = serverRows({
     statusOf: statuses.statusOf,

@@ -499,9 +499,13 @@ async function confirm(verb: string): Promise<string | null> {
   return dialog.textContent;
 }
 
-test("a provider the deployment does not offer the account has no row, and every one it offers has its Connect", async () => {
+test("a provider the deployment does not offer the account has no row, and its page says it isn't available here, while every one it offers has its Connect", async () => {
   withheld = [INTEGRATION_PROVIDER.SLACK];
   const page = await mount();
+  const slack = await mount(false, INTEGRATION_PROVIDER.SLACK);
+
+  assert.equal(lineOf(rowNamed(slack, "Slack")), "Slack isn't available here.");
+  assert.deepEqual(rowButtons(rowNamed(slack, "Slack")), []);
 
   assert.deepEqual(rowNames(page), [
     "Executor",
