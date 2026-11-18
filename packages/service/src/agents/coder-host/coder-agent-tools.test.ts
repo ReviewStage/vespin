@@ -1543,6 +1543,7 @@ test("start_agent hands over a prompt and a note each as long as a start allows,
     { taskId: agents.caller.taskId, prompt, note },
     "call-longest",
   );
+
   assert.equal(started.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(started));
   assert.equal(agentSessions.sent.length, 1);
   const message = sentWords(agentSessions.sent[0]?.body);
@@ -2041,11 +2042,13 @@ test("list_models answers exactly the choices start_agent takes, as the caller's
     ),
     String(fast.reason),
   );
+
   const unnamed = await call(
     AGENT_TOOL.START_AGENT,
     { taskId: agents.caller.taskId, prompt: PROMPT },
     "call-default",
   );
+
   assert.ok(isRecord(unnamed.agent), JSON.stringify(unnamed));
   assert.deepEqual(
     [unnamed.agent.model, unnamed.agent.effort],
@@ -2102,11 +2105,13 @@ test("list_models says the default is no longer offered where the catalog droppe
     contextWindow: null,
     offered: false,
   });
+
   const unnamed = await call(
     AGENT_TOOL.START_AGENT,
     { taskId: agents.caller.taskId, prompt: PROMPT },
     "call-default",
   );
+
   assert.equal(unnamed.status, ACTION_RESULT_STATUS.REJECTED);
   assert.equal(agentSessions.sent.length, 0);
 
@@ -2351,10 +2356,12 @@ test("start_agent refuses a coder continuing the agent that started it, directly
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.STARTER_CONTINUE },
   );
   assert.equal(agentSessions.sent.length, 0, "no refusal opens a session");
+
   const forked = await call(AGENT_TOOL.START_AGENT, {
     taskId: starter.taskId,
     from: { agentId: starter.id, messageId },
   });
+
   assert.equal(forked.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(forked));
 });
 
@@ -2390,14 +2397,17 @@ test("start_agent continuing an agent started on a branch clones the new agent a
     { taskId: held.taskId, from: { agentId: held.id } },
     "call-held",
   );
+
   const stored = await storedStart(caller.userId, onHeld);
   assert.equal(stored.startedFrom?.agentId, held.id);
   assert.equal(stored.startBranch, STACKED_BRANCH);
+
   const onGone = await call(
     AGENT_TOOL.START_AGENT,
     { taskId: gone.taskId, from: { agentId: gone.id } },
     "call-gone",
   );
+
   assert.equal((await storedStart(caller.userId, onGone)).startBranch, null);
 });
 
