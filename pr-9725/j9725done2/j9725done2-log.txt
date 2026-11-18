@@ -1,0 +1,13 @@
+== bundle P25d2 base 269d009d4e
+  built 269d009d4e base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+weekly bounds: 22 199 48 199 menu 0 177 44 221 44 190 180 208
+teammate bounds: 58 528 76 528 menu 44 506 72 550 72 519 217 537
+q9725done: dropped (0e8a24a7 23:36 UTC); main 269d009d4e
+head-iphone-light-qpagechip: fails 0 shots 4 
+head-iphone-light-qpagechip: tap 'Done' RUNNING 07:53:59.426000, COMPLETED +7946 ms (Maestro settles before COMPLETED); 'Mark as Done?' seen +8097 ms from RUNNING; sheet head-iphone-light-qpagechip-after-tap.png, 60 tiles every 50 ms from 200 ms before RUNNING
+head-iphone-light-qfold: fails PARSE (an unquoted ${...} inside a {...} flow map, line 11) 
+head-iphone-light-qfold: tap at 40,528 (ring 44..72); sub-tasks before folded, after shown; status menu after none; PASS
