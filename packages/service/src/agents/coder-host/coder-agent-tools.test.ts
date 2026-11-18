@@ -1365,7 +1365,12 @@ test("start_agent leaves an unassigned backlog task's assignee and status as the
 
   const started = await call(
     AGENT_TOOL.START_AGENT,
-    { taskId: filed.id, prompt: "Bill by seat.", runsOn: { machine: AGENT_MACHINE.VERCEL } },
+    {
+      taskId: filed.id,
+      branch: DEFAULT_BRANCH,
+      prompt: "Bill by seat.",
+      runsOn: { machine: AGENT_MACHINE.VERCEL },
+    },
     "call-start-filed",
   );
 

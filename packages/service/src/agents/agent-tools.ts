@@ -2352,7 +2352,12 @@ export function runStartAgent(
           ? yield* branchNeededRefusal(caller, taskId, asked.success.branch, "Not started")
           : undefined;
 
-      if (branchless !== undefined) return agentToolRejected(branchless);
+      // Note that a call run again after its start landed answers what it made, even where its task has since gained a repository.
+      if (branchless !== undefined) {
+        const before = yield* startedBefore(call);
+
+        return Option.isSome(before) ? before.value : agentToolRejected(branchless);
+      }
 
       // A start from another agent lands in that agent's own place, its task.
       const landing = from === undefined ? undefined : yield* sourceLanding(caller, from, taskId);
