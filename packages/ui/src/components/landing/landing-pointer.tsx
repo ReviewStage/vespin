@@ -14,8 +14,8 @@ import { cssCustomProperties } from "../../css.js";
  * control: no reader is told of it.
  */
 
-/** A point in a scene, in pixels from its top left. */
-type Point = { readonly x: number; readonly y: number };
+/** A point in a scene, in pixels from its top left, and whether the pointer jumps there rather than gliding, as it does when the scene resizes under it. */
+type Point = { readonly x: number; readonly y: number; readonly jump: boolean };
 
 /** Where the pointer rests while a story aims at nothing, as shares of the scene's width and height. */
 const REST = { X: 0.82, Y: 0.84 } as const;
@@ -27,7 +27,8 @@ const REACH_PX = 120;
  * Where the pointer stands in `scene` aiming at `target`, a selector in the
  * scene's markup, or nothing to rest; nothing before the scene is first
  * measured. Note that we measure after each `beat` draws, because what it
- * aims at moves as the scene changes.
+ * aims at moves as the scene changes, and again as the scene resizes, as a
+ * hero scaled to its room settles or a phone turns.
  */
 export function usePointer(
   scene: RefObject<HTMLElement | null>,
@@ -40,25 +41,46 @@ export function usePointer(
   useLayoutEffect(() => {
     const root = scene.current;
 
-    if (!root) return;
-    const box = root.getBoundingClientRect();
+    if (!root) return undefined;
 
-    if (target === null) {
-      setPoint({ x: box.width * REST.X, y: box.height * REST.Y });
+    let size = { width: 0, height: 0 };
 
-      return;
-    }
+    const measure = (jump: boolean): void => {
+      const box = root.getBoundingClientRect();
 
-    const found = root.querySelector(target);
+      size = { width: box.width, height: box.height };
 
-    // Note that a target gone, the page it was on given way, keeps the pointer where it pressed.
-    if (found === null) return;
-    const rect = found.getBoundingClientRect();
+      if (target === null) {
+        setPoint({ x: box.width * REST.X, y: box.height * REST.Y, jump });
 
-    setPoint({
-      x: rect.left - box.left + Math.min(rect.width / 2, REACH_PX),
-      y: rect.top - box.top + rect.height / 2,
+        return;
+      }
+
+      const found = root.querySelector(target);
+
+      // Note that a target gone, the page it was on given way, keeps the pointer where it pressed.
+      if (found === null) return;
+      const rect = found.getBoundingClientRect();
+
+      setPoint({
+        x: rect.left - box.left + Math.min(rect.width / 2, REACH_PX),
+        y: rect.top - box.top + rect.height / 2,
+        jump,
+      });
+    };
+
+    measure(false);
+
+    // Note that the observer calls back as it starts watching too, so only a size changed since moves the pointer, lest it cut short the glide this beat began.
+    const watch = new ResizeObserver(() => {
+      const box = root.getBoundingClientRect();
+
+      if (box.width !== size.width || box.height !== size.height) measure(true);
     });
+
+    watch.observe(root);
+
+    return () => watch.disconnect();
   }, [scene, target, beat]);
 
   return point;
@@ -78,6 +100,7 @@ export function DemoPointer({
     <span
       className="ui-landing-pointer"
       aria-hidden="true"
+      data-jump={point.jump || undefined}
       style={cssCustomProperties({
         "--ui-landing-pointer-x": `${point.x}px`,
         "--ui-landing-pointer-y": `${point.y}px`,

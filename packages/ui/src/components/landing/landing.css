@@ -1047,6 +1047,13 @@
     transition: transform var(--ui-duration-shape) var(--ui-motion-pane);
   }
 
+  /* A scene resized under the pointer, as the hero settles into its room,
+     moves it without a glide: no story moved it. */
+  .ui-landing-pointer[data-jump],
+  .ui-landing-pointer[data-jump] .ui-landing-pointer-down {
+    transition: none;
+  }
+
   /* off-scale: the pointer's own size, a desktop arrow's */
   .ui-landing-pointer-arrow {
     display: block;
@@ -1674,12 +1681,19 @@
     line-height: var(--ui-type-caption-leading);
   }
 
+  /* A call's verb and the agent it names keep whole, and what it said takes
+     the next line where the row is too narrow to hold it, as on a phone. */
   .ui-landing-call-words {
     display: inline-flex;
     flex: 1;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: var(--ui-tight-gap);
     min-width: 0;
+  }
+
+  .ui-landing-call-words > :not(:last-child) {
+    flex: none;
   }
 
   .ui-landing-call-verb {
@@ -2014,6 +2028,26 @@
       .ui-landing-card[data-aside="false"] {
       grid-column: 1 / -1;
       margin-top: 0;
+    }
+
+    /* On a phone the thread's options stack taller than the screen, so the
+       thread opens at its latest, as the app's does: it stands on its foot,
+       its start scrolled off the top, so the options, the composer, and the
+       pointer on them stay inside the screen, and the card keeps one height
+       through the loop. */
+    .ui-landing-stage[data-scene="inbox"] .ui-landing-card {
+      height: 620px;
+    }
+
+    .ui-landing-demo-thread {
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      overflow: clip;
+    }
+
+    .ui-landing-demo-thread > * {
+      flex-shrink: 0;
     }
 
     .ui-landing-stage[data-scene="devices"] {
