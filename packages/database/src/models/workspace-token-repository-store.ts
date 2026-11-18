@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, not, type SQL, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
-import { SqlSchema } from "effect/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
 import { workspaceTokenRepository } from "../schemas/workspace-token-repository.js";
 import { InstantColumnSchema } from "./columns.js";
@@ -15,7 +15,9 @@ import { workspaceReachableBy } from "./workspace-store.js";
  * account is a member of that workspace, so no account reads or changes
  * another workspace's. A repository is one however its name's letters are
  * cased, as GitHub's names are: adding one already added keeps the first
- * add, and removing one that is gone moves nothing. Who may remove one, its
+ * add, and removing one that is gone moves nothing. A row whose adder is no
+ * longer a member of the workspace is read as gone, since their token no
+ * longer acts for it, and the next add replaces it. Who may remove one, its
  * adder or a workspace's owner or admin, is the caller's to decide; the
  * store answers who added it.
  */
@@ -39,6 +41,12 @@ function namedRepository(repository: string): SQL {
   return sql`lower(${workspaceTokenRepository.repository}) = lower(${repository})`;
 }
 
+/** The row's adder still a member of its workspace, so their token still acts for it. */
+const ADDER_STANDS = workspaceReachableBy(
+  workspaceTokenRepository.addedByUserId,
+  workspaceTokenRepository.organizationId,
+);
+
 const PlaceSchema = Schema.Struct({ userId: Schema.String, organizationId: Schema.String });
 
 const KeySchema = Schema.Struct({ ...PlaceSchema.fields, repository: Schema.String });
@@ -59,6 +67,7 @@ const findRows = SqlSchema.findAll({
           and(
             eq(workspaceTokenRepository.organizationId, place.organizationId),
             workspaceReachableBy(place.userId, workspaceTokenRepository.organizationId),
+            ADDER_STANDS,
           ),
         )
         .orderBy(desc(workspaceTokenRepository.addedAt), asc(workspaceTokenRepository.repository)),
@@ -78,6 +87,23 @@ const findAdder = SqlSchema.findOneOption({
             eq(workspaceTokenRepository.organizationId, key.organizationId),
             namedRepository(key.repository),
             workspaceReachableBy(key.userId, workspaceTokenRepository.organizationId),
+            ADDER_STANDS,
+          ),
+        ),
+    ),
+});
+
+const deleteLeftRow = SqlSchema.void({
+  Request: Schema.Struct({ organizationId: Schema.String, repository: Schema.String }),
+  execute: (key) =>
+    Database.use((db) =>
+      db
+        .delete(workspaceTokenRepository)
+        .where(
+          and(
+            eq(workspaceTokenRepository.organizationId, key.organizationId),
+            namedRepository(key.repository),
+            not(ADDER_STANDS),
           ),
         ),
     ),
@@ -132,7 +158,8 @@ export function listWorkspaceTokenRepositories(
 
 /**
  * Adds the repository to the workspace as the account's, at the instant
- * given; a repository already added keeps its first adder. The caller has
+ * given; a repository already added keeps its first adder while they are
+ * still a member, and is taken over from one who left. The caller has
  * already checked the account is a member and its token may push to it.
  */
 export function addWorkspaceTokenRepository(
@@ -141,7 +168,14 @@ export function addWorkspaceTokenRepository(
   repository: string,
   now: Date,
 ): TaskStoreEffect<void> {
-  return insertRow({ userId, organizationId, repository, now });
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.andThen(
+        deleteLeftRow({ organizationId, repository }),
+        insertRow({ userId, organizationId, repository, now }),
+      ),
+    ),
+  );
 }
 
 /** Who added the repository to the workspace; nothing where it is not added, or the account is not a member. */
