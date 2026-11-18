@@ -16,7 +16,7 @@ appId: dev.vespin.ios
     timeout: 30000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Workspace settings"
+- tapOn: "Manage"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Add repositories"
