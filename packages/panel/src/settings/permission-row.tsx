@@ -11,7 +11,9 @@ import {
   SettingsRowMark,
   type SettingsRowState,
   SettingsRowStateLine,
+  SettingsSavedMark,
   useMenu,
+  VisuallyHidden,
 } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
@@ -22,7 +24,7 @@ import { ActionMenu } from "../desktop/action-menu.js";
  *
  * Every permission reads the same way: its glyph, its name, and under it
  * what the app needs it for. One that is allowed says nothing more and ends
- * in a ⋯ holding Open System Settings, the one place its answer changes.
+ * in a green ✓ and a ⋯ holding Open System Settings, the one place its answer changes.
  * One that is not says so first, "Not allowed." in the attention tint before
  * its purpose, and ends in the one press that fixes it: Allow… where macOS
  * has not been asked, which raises its own prompt or its pane, or Open
@@ -110,8 +112,18 @@ function PermissionPress({
   onAllow: (() => Promise<void> | void) | undefined;
   onOpenSettings: (() => void) | undefined;
 }): React.JSX.Element | null {
-  if (standing === PERMISSION_STANDING.UNKNOWN || standing === PERMISSION_STANDING.ALLOWED) {
+  if (standing === PERMISSION_STANDING.UNKNOWN) {
     return null;
+  }
+
+  // Note that the ✓ names itself "Allowed", because an allowed row's description says nothing of its standing.
+  if (standing === PERMISSION_STANDING.ALLOWED) {
+    return (
+      <>
+        <SettingsSavedMark />
+        <VisuallyHidden>Allowed</VisuallyHidden>
+      </>
+    );
   }
 
   if (standing === PERMISSION_STANDING.ASK && onAllow !== undefined) {
