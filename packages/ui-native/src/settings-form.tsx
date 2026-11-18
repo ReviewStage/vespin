@@ -44,13 +44,14 @@ import {
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReactElement, ReactNode } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, GlyphImage } from "./glyph-label.js";
 import type { IntegrationMarkAsset } from "./integration-marks.js";
-import { Avatar } from "./marks.js";
+import { Avatar, HarnessMark } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { PRESS_SIZE, SPACE } from "./tokens/space.js";
@@ -720,6 +721,8 @@ export type PickOption = {
   readonly label: string;
   /** What picking it does, in the muted ink under its name, such as a permission mode's; none for none. */
   readonly hint?: string | undefined;
+  /** The panel's glyph the option leads with in a menu, such as a permission mode's; none for none. */
+  readonly symbol?: Glyph | undefined;
 };
 
 type PickRowsProps = {
@@ -1174,6 +1177,8 @@ type NoteAct = { readonly label: string; readonly onPress: () => void };
 type NoteRowProps = {
   /** The glyph before the words, in the muted ink, such as a machine's kind. */
   readonly symbol?: Glyph | undefined;
+  /** The harness a credential's row stands for, whose mark leads it in the glyph's place, as the panel leads a plan's and a key's rows with its provider's logo. */
+  readonly harness?: ModelProvider | undefined;
   /** The note's own words, such as a memory's, drawn whole however many lines they take. */
   readonly words: string;
   /** What it is, under its words in the body's ink, such as a skill's description. */
@@ -1201,7 +1206,16 @@ type NoteRowProps = {
  * VoiceOver hears the row as one element, its words then its line, and
  * offers its acts among its actions.
  */
-export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: NoteRowProps) {
+export function NoteRow({
+  symbol,
+  harness,
+  words,
+  detail,
+  line,
+  onPress,
+  edit,
+  remove,
+}: NoteRowProps) {
   const colors = useColors();
   const leadSize = useScaledSize(LEAD_GLYPH_SIZE);
 
@@ -1231,7 +1245,9 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
       spacing={SPACE.ROW}
       modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
     >
-      {symbol === undefined ? null : (
+      {harness !== undefined ? (
+        <HarnessMark provider={harness} size={leadSize} />
+      ) : symbol === undefined ? null : (
         <Image {...glyphImage(symbol)} size={leadSize} color={colors.TEXT_MUTED} />
       )}
       {lines}

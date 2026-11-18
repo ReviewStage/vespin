@@ -1,5 +1,9 @@
 // glyph.ts -- every glyph the app draws, by what it marks: the panel's own Lucide glyph for each place and its own task status marks from the app's asset catalog, and the few iOS draws its own way as SF Symbols.
 
+import {
+  AGENT_PERMISSION_MODE,
+  type AgentPermissionMode,
+} from "@repo/features/agent-approval-wire";
 import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
 import {
   TASK_SECTION_GLYPH,
@@ -283,6 +287,13 @@ const SECTION_GLYPH: Readonly<Record<TaskSectionGlyph, Glyph>> = {
   [TASK_SECTION_GLYPH.HEART]: lucide(LUCIDE_SYMBOL.HEART),
   [TASK_SECTION_GLYPH.CIRCLE]: lucide(LUCIDE_SYMBOL.CIRCLE),
 };
+
+/** The glyph each permission mode wears, the panel's own (`MODE_GLYPH`): a hand, a shield round an ellipsis, a shield round a "!". */
+export const PERMISSION_MODE_GLYPH = {
+  [AGENT_PERMISSION_MODE.ASK]: GLYPH.ASK_FIRST,
+  [AGENT_PERMISSION_MODE.AUTO]: GLYPH.AUTO_APPROVE,
+  [AGENT_PERMISSION_MODE.FULL_ACCESS]: GLYPH.FULL_ACCESS,
+} as const satisfies Record<AgentPermissionMode, Glyph>;
 
 /** Whether a glyph's name is one the section icon picker suggests. */
 function isSectionGlyph(name: string): name is TaskSectionGlyph {

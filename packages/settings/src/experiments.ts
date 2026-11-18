@@ -107,7 +107,8 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.CURSOR,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
-    listed: true,
+    // Note that Cursor is unlisted until a Cursor run that goes silent ends its turn, since a new member's first agent hung on one (Nov 18).
+    listed: false,
     name: "Cursor",
     detail: "Run agents on Cursor's harness and models, on your own Cursor API key.",
     owner: "Dean",

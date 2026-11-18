@@ -154,6 +154,7 @@ function HarnessSection({
     ? plans.map((plan) => (
         <NoteRow
           key={plan.id}
+          harness={provider}
           words={names.get(plan.id) ?? HARNESS_PLAN[provider].planName}
           line={planProblemWords(provider, plan, now) ?? WORDS.CONNECTED}
           remove={{
@@ -173,6 +174,7 @@ function HarnessSection({
   const keyRows = keysOf(answer, provider).map((key) => (
     <NoteRow
       key={key.id}
+      harness={provider}
       words={key.label ?? apiKeyName(key)}
       line={keyLineWords(provider, key) ?? WORDS.CONNECTED}
       remove={{

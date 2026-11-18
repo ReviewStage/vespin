@@ -2,52 +2,47 @@
  * chosen-workspace.ts -- the workspace the phone works in, chosen in Settings and remembered across launches, as the panel keeps its window's choice (`@repo/panel`'s `chosen-workspace.ts`).
  *
  * The service is told the workspace on each request, so the host keeps no
- * workspace of its own; the choice is the device's, kept in the app's
- * `NSUserDefaults` through React Native's `Settings`, and every screen
- * reading it hears a new choice as it is made, the Inbox's among them. A
+ * workspace of its own; the choice is the device's, held in memory and kept
+ * in the app's `NSUserDefaults` through React Native's `Settings` for the
+ * next launch, and every screen reading it hears a new choice as it is
+ * made, the Inbox's among them. A
  * choice no longer listed, a workspace left or deleted, falls back to the
  * account's first, which the host lists first, as the panel's does.
  */
 
 import type { Workspace } from "@repo/features/workspace-wire";
-import { changeSignal } from "@repo/ui-native";
+import { heldValue, useHeldValue } from "@repo/ui-native";
 import { Predicate } from "effect";
-import { useSyncExternalStore } from "react";
 import { Settings } from "react-native";
 
 /** The defaults key the choice is kept under. */
 const CHOSEN_WORKSPACE_KEY = "chosenWorkspace";
 
-/** The id kept, or none where nothing was ever chosen. */
-function keptChoice(): string | undefined {
+/** The id kept at launch, or none where nothing was ever chosen. */
+function launchChoice(): string | undefined {
   const kept: unknown = Settings.get(CHOSEN_WORKSPACE_KEY);
 
   return Predicate.isString(kept) ? kept : undefined;
 }
 
-/** The screens reading the choice, each told when it is made here. */
-const chosen = changeSignal();
-
 /**
- * Calls `listener` each time the kept choice changes until the returned
- * function stops it. Note that a choice made here is told to the readers
- * directly, because React Native's settings manager hears no change of the
- * defaults it wrote itself, and `watchKeys` only one made elsewhere.
+ * The choice as the phone holds it now. Note that it is held here rather
+ * than read back from React Native's `Settings`, because that module's copy
+ * of the defaults takes every key from each change the defaults report,
+ * and its own write lands on the native side only later; a default another
+ * piece of the app wrote in between, as the host and the Swift modules do as
+ * the app opens, reported the old choice back over the new one, so a switch
+ * sprang back, or held off until a relaunch read the defaults afresh. Only
+ * this module writes the choice, so what it holds is the choice.
  */
-function watchChoice(listener: () => void): () => void {
-  const stop = chosen.subscribe(listener);
-  const watching = Settings.watchKeys([CHOSEN_WORKSPACE_KEY], listener);
+const choice = heldValue(launchChoice());
 
-  return () => {
-    stop();
-    Settings.clearWatch(watching);
-  };
-}
-
-/** Keeps `id` as the workspace the phone works in, and tells every screen reading it. */
+/** Keeps `id` as the workspace the phone works in, for this launch and the next, and tells every screen reading it. */
 function choose(id: string): void {
+  if (choice.read() === id) return;
+
   Settings.set({ [CHOSEN_WORKSPACE_KEY]: id });
-  chosen.tell();
+  choice.set(id);
 }
 
 /**
@@ -56,7 +51,7 @@ function choose(id: string): void {
  * forward again without overriding a newer choice made since.
  */
 export function chooseOver(over: string, next: string): void {
-  if (keptChoice() === over) choose(next);
+  if (choice.read() === over) choose(next);
 }
 
 type UseChosenWorkspaceResult = {
@@ -66,7 +61,7 @@ type UseChosenWorkspaceResult = {
 
 /** The workspace the phone works in, among `workspaces`, and the choice of another, which is kept and heard by every screen reading it. */
 export function useChosenWorkspace(workspaces: readonly Workspace[]): UseChosenWorkspaceResult {
-  const kept = useSyncExternalStore(watchChoice, keptChoice);
+  const kept = useHeldValue(choice);
   const chosen = workspaces.find((workspace) => workspace.id === kept) ?? workspaces[0];
 
   return { chosen, choose };
