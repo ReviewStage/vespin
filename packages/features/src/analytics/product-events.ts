@@ -118,6 +118,7 @@ export const PRODUCT_EVENT_PROPERTY = {
   STANDING_SECONDS: "standing_seconds",
   APP_BUILD: "app_build",
   FIRST_ROWS: "first_rows",
+  READY_AFTER: "ready_after",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -461,6 +462,14 @@ export const PRODUCT_FIRST_ROWS = {
 
 export type ProductFirstRows = (typeof PRODUCT_FIRST_ROWS)[keyof typeof PRODUCT_FIRST_ROWS];
 
+/** What an Inbox first shown waited from: the app's launch, or a sign-in's return, which a launch signed out waits through. */
+export const PRODUCT_READY_AFTER = {
+  LAUNCH: "launch",
+  SIGN_IN: "sign_in",
+} as const;
+
+export type ProductReadyAfter = (typeof PRODUCT_READY_AFTER)[keyof typeof PRODUCT_READY_AFTER];
+
 const PRODUCT_LAUNCH_LADDER: readonly ProductLaunchSeconds[] = Object.values(
   PRODUCT_LAUNCH_SECONDS,
 ).sort((left, right) => right - left);
@@ -540,6 +549,7 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.APP_BUILD]: string;
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: ProductFirstRows;
+  [PRODUCT_EVENT_PROPERTY.READY_AFTER]: ProductReadyAfter;
 }
 
 /**
@@ -579,6 +589,7 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.MIRROR_FAILURE]: Object.values(MIRROR_FAILURE),
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
+  [PRODUCT_EVENT_PROPERTY.READY_AFTER]: Object.values(PRODUCT_READY_AFTER),
 } as const satisfies Record<EnumeratedProductEventProperty, readonly string[]>;
 
 /**
@@ -639,6 +650,7 @@ const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.STANDING_SECONDS,
     PRODUCT_EVENT_PROPERTY.APP_BUILD,
     PRODUCT_EVENT_PROPERTY.FIRST_ROWS,
+    PRODUCT_EVENT_PROPERTY.READY_AFTER,
   ],
 } as const satisfies { readonly [Name in ProductEventName]?: readonly ProductEventProperty[] };
 
