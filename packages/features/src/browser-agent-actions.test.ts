@@ -64,6 +64,15 @@ test("a click targets a ref or a whole point, and a scroll a ref or a whole dist
   assert.equal(readsAction({ ...scroll, by: { deltaX: 0, deltaY: -300 } }), true);
 });
 
+test("a type targets a field's ref or, by name, the focused element", () => {
+  const type = { action: BROWSER_AGENT_ACTION.TYPE, tab: "page-1", text: "hello" };
+  assert.equal(readsAction(type), false);
+  assert.equal(readsAction({ ...type, ref: "e4" }), false);
+  assert.equal(readsAction({ ...type, target: { focused: false } }), false);
+  assert.equal(readsAction({ ...type, target: { ref: "e4" } }), true);
+  assert.equal(readsAction({ ...type, target: { focused: true } }), true);
+});
+
 test("a select names a dropdown's ref and an option", () => {
   const select = { action: BROWSER_AGENT_ACTION.SELECT, tab: "page-1" };
   assert.equal(readsAction({ ...select, ref: "e7", option: "Option 2" }), true);

@@ -197,6 +197,10 @@ const ACTION_FIELD_WORDS: ReadonlyMap<unknown, string> = new Map([
     "A click takes `tab` and `target`, either {ref} for an element or {x, y} for a point, and no other field.",
   ],
   [
+    BROWSER_AGENT_ACTION.TYPE,
+    "A type takes `tab`, `text`, and `target`, either {ref} for a field or {focused: true} for the element that has the focus, and no other field.",
+  ],
+  [
     BROWSER_AGENT_ACTION.SCROLL,
     "A scroll takes `tab` and `by`, either {ref} to bring an element into view or {deltaX, deltaY} for a distance, and no other field.",
   ],
