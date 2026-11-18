@@ -1054,7 +1054,8 @@ export const START_LEAVES_TASK_WORDS =
 export const START_PAYER_WORDS =
   "No start names who pays: each turn of a cloud agent runs on the first of the member's " +
   "subscriptions and API keys for the model's provider, in the order Settings keeps them, that " +
-  "has room (where none has, its first API key), and moves to the next when one hits its limit, " +
+  "has room (where none has, its first API key, or with no key the subscription whose limit " +
+  "resets soonest), and moves to the next when one hits its limit, " +
   "which may switch it between a subscription and an API key; an agent on a device runs on that " +
   "machine's own login whatever the member keeps.";
 
