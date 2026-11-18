@@ -2344,10 +2344,12 @@ export function DescriptionCommentLayer({
           ? undefined
           : selection.getRangeAt(0).getBoundingClientRect();
 
-      if (words === undefined) return { top: 0, middle: 0 };
+      if (words === undefined || pending === undefined) return { top: 0, middle: 0 };
       const top = words.top - element.getBoundingClientRect().top;
+      // Note that the selection collapses as the card takes the caret, so the words' line is kept for the thread they began.
+      startedOn.current = { pending, top, middle: top + words.height / 2 };
 
-      return { top, middle: top + words.height / 2 };
+      return startedOn.current;
     },
     [pending],
   );
