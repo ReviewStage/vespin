@@ -5,7 +5,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
-import { CALL_RENDERER_URL, PANEL_RENDERER_URL, rendererResponse } from "./renderer-protocol";
+import {
+  CALL_RENDERER_URL,
+  PANEL_RENDERER_URL,
+  RENDERER_SCHEME_PRIVILEGES,
+  rendererResponse,
+} from "./renderer-protocol";
 
 const ORIGIN = "app-renderer://desktop";
 
@@ -37,6 +42,27 @@ test("serves the call window on a separate zoom host from the panel", async () =
   expect(new URL(CALL_RENDERER_URL).hostname).not.toBe(new URL(PANEL_RENDERER_URL).hostname);
   expect(response.status).toBe(200);
   expect(await response.text()).toBe("<title>Call</title>");
+});
+
+test("serves streaming media without requiring a content length", async () => {
+  await using directory = await mkdtempDisposable(path.join(tmpdir(), "vespin-renderer-"));
+  const clip = Uint8Array.of(1, 2, 3);
+  await writeFile(path.join(directory.path, "sample.m4a"), clip);
+
+  const fileResponse = new Response(new Blob([clip], { type: "audio/x-m4a" }).stream(), {
+    headers: { "Content-Type": "audio/x-m4a" },
+  });
+
+  const response = await rendererResponse(
+    { method: "GET", url: `${ORIGIN}/sample.m4a` },
+    directory.path,
+    async () => fileResponse,
+  );
+
+  expect(RENDERER_SCHEME_PRIVILEGES.privileges?.stream).toBe(true);
+  expect(response.headers.get("content-length")).toBeNull();
+  expect(response.headers.get("content-type")).toBe("audio/x-m4a");
+  expect(new Uint8Array(await response.arrayBuffer())).toEqual(clip);
 });
 
 test.each(["/../outside.txt", "/%2e%2e%2foutside.txt", "//outside.txt"])(
