@@ -1798,14 +1798,13 @@ const MessageAgentInputSchema = Schema.Struct({
     "What to tell the agent, as the member's own words: it reads them as a message the member " +
       "typed in its composer.",
   ),
-  queue: Schema.optionalKey(
-    describeWire(
-      Schema.Boolean,
-      "true to queue it behind the agent's turn, as the composer's ⌘↩ would, rather than steer " +
-        "it into the turn under way: it waits unsent, and goes as the member's next message once " +
-        "the turn and every message queued before it are over, at once where the agent stands " +
-        "idle. Any member who may message the agent queues to it.",
-    ),
+  queue: describeWire(
+    Schema.Boolean,
+    "false to steer it into the turn under way, as the composer's ↩ would, or start a turn on " +
+      "an idle agent; true to queue it behind the agent's turn, as the composer's ⌘↩ would: it " +
+      "waits unsent, and goes as the member's next message once the turn and every message " +
+      "queued before it are over, at once where the agent stands idle. Any member who may " +
+      "message the agent queues to it.",
   ),
 });
 
@@ -1886,7 +1885,7 @@ const memberMessage = (call: AgentCall, { agentId, text, queue }: MessageAgentIn
 
       if (Option.isSome(settled)) return agentToolRejected(settled.value);
 
-      if (queue === true) return yield* memberQueue(call, userId, agent, text);
+      if (queue) return yield* memberQueue(call, userId, agent, text);
 
       const sent = yield* Effect.result(
         steerMemberWords(call.writer, userId, agent, { text, clientKey: call.clientKey }),
@@ -1914,7 +1913,7 @@ const MEMBER_MESSAGE_AGENT_TOOL = memberMcpTool({
     `the task with ${MEMBER_MCP_TOOL.UPDATE_TASK} first. Each ` +
     "call sends a message of its own, so call it once for each. Answers `accepted` once the " +
     "agent's session has taken it, without waiting for it to act or reply, or `rejected` and " +
-    "why nothing was sent. With queue, it waits behind the agent's turn instead, and answers " +
+    "why nothing was sent. With queue true, it waits behind the agent's turn instead, and answers " +
     "`accepted` with `delivery` `queued` and how many messages stand `ahead` of it, or " +
     `\`handed-on\` where the agent stood idle and it goes at once, unconfirmed, since a refusal puts it back and pauses the queue; and \`paused\` with why where ` +
     `the queue stands paused, which sends nothing until ${MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE} resumes it. ` +
