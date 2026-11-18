@@ -1,0 +1,23 @@
+probe rows 510, commands 86, frames 2713
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle
+send-text | 6 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | 188 | 1479 | 1479 | 1009
+send-photo | 6 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | 648 | 987 | 987 | 1130
+send-agent | 2 | None | None | 0 | 0 | 0 | 0 | None | 0 | 0 | -15 | None | None | -2
+
+most rendered components per path (summed over its taps):
+send-text: 
+send-photo: 
+send-agent: 
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+send-text: 
+send-photo: 
+send-agent: 
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+send-text: markdown 0.0, rest 0.0
+send-photo: markdown 0.0, rest 0.0
+send-agent: markdown 0.0, rest 0.0
+
+whole run: 33s, 40 commits, 26336 components rendered, 2194 ms of stalls over 5 stalls
+events: topHeaderHeightChange×30, topLoad×9, topLoadEnd×9, topLoadStart×9, topTransitionProgress×4, topFinishTransitioning×4, topInsetsChange×3, topWillAppear×3, topGlobalEvent×2, topAppear×2, topTabSelected×1, topOverlap×1, topDidAppear×1, topFirstFrameRender×1, topTouchStart×1

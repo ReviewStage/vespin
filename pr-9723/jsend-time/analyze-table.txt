@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/tmp/jsend-analyze.py", line 276, in <module>
+    main()
+  File "/tmp/jsend-analyze.py", line 141, in main
+    probe = load_probe()
+  File "/tmp/jsend-analyze.py", line 26, in load_probe
+    with open(os.path.join(OUT, "probe.jsonl")) as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/Users/deanstratakos/vespin-perf/jsend-time/probe.jsonl'
