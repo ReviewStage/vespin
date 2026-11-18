@@ -1,4 +1,4 @@
-# new-agent.yaml -- New agent on a task: its compose sheet opened from the task page, the words typed, the model picked from its capsule over the keyboard, and the agent started, its page opened.
+# new-agent.yaml -- New agent on a task: its page opened from the task page, the words typed, the model picked from its capsule under the composer's field, and the agent started, its page opened.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -31,7 +31,7 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: new-agent-sheet
 - inputText: "Add a Resend button beside each pending invite."
-# The keyboard is lowered by a drag on the sheet's page (`ComposeSheet`).
+# The keyboard is lowered by a drag on the page over the composer (`StartPage`).
 - runFlow:
     file: subflows/lower-keyboard.yaml
 # The model's capsule says the model and its effort, "Opus 5.5 · High", the
@@ -46,7 +46,7 @@ appId: dev.vespin.ios
 - assertVisible: "Sonnet 5.5.*"
 - waitForAnimationToEnd
 - takeScreenshot: new-agent-picked
-- tapOn: "Start"
+- tapOn: "Send"
 - extendedWaitUntil:
     notVisible: "Ask to make changes"
     timeout: 5000
