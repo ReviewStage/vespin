@@ -6,6 +6,7 @@ import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
   ANSWER_TONE,
+  INBOX_LINE,
   INBOX_MEDIA,
   INBOX_NOT_READ,
   INBOX_READ_MARK,
@@ -37,7 +38,7 @@ import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link
 import { agentName as agentNameOf, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
-import type { TaskSummary } from "@repo/features/task-wire";
+import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import {
   CHOOSE_AN_ITEM_WORDS,
   NO_RESULTS_HINT,
@@ -77,6 +78,7 @@ import {
   SCOPE_LOOK,
   type Scope,
   Screen,
+  SkeletonRegion,
   SplitView,
   THREAD_MEDIA,
   type ThreadMedia,
@@ -90,12 +92,14 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useWindowDimensions } from "react-native";
 import { useAppReadyCount } from "../app-ready.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import {
+  type InboxListing,
   useInboxActs,
   useInboxListing,
   useInboxScope,
@@ -203,6 +207,8 @@ type InboxRowsProps = {
   readonly scopes?: ListScopes | undefined;
   /** What stands over the list while it lists no thread: why, and the way on. */
   readonly empty?: ReactNode | undefined;
+  /** How many skeleton rows stand in the threads' place while the feed is on its first read with none to list; none once it lists or answered. */
+  readonly skeleton?: number | undefined;
   /** Starts Select mode with the threads the system ticked at once, such as by a two-finger drag. */
   readonly onChooseStart: (ids: readonly string[]) => void;
 };
@@ -228,6 +234,7 @@ function InboxRows({
   choosing,
   scopes,
   empty,
+  skeleton,
   onChooseStart,
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
@@ -242,19 +249,80 @@ function InboxRows({
       choosing={choosing}
       lead={<NotificationAsk />}
       scopes={scopes}
-      empty={empty}
+      empty={skeleton === undefined ? empty : undefined}
       onChooseStart={onChooseStart}
     >
-      <InboxItemRows
-        listed={listed}
-        readerId={readerId}
-        pictureOf={pictureOf}
-        onMark={onMark}
-        remindMenu={remindMenu}
-        onResolve={onResolve}
-      />
+      {skeleton === undefined ? (
+        <InboxItemRows
+          listed={listed}
+          readerId={readerId}
+          pictureOf={pictureOf}
+          onMark={onMark}
+          remindMenu={remindMenu}
+          onResolve={onResolve}
+        />
+      ) : (
+        <InboxSkeleton count={skeleton} />
+      )}
     </RowList>
   );
+}
+
+/** The words a skeleton row stands its placeholder bars in, each about as long as a thread's own, so the bars read as the rows to come. */
+const SKELETON_WORDS = {
+  TASK: "A task's name",
+  TITLE: "A thread's title, as its row stands it",
+  SUMMARY: "What the thread asks of the reader",
+} as const;
+
+/** About how tall a thread's row stands at the default text size (`ROW_INSET.THREAD_VERTICAL` above and below its three lines), which one screen's worth of skeleton rows is counted by. */
+const THREAD_ROW_POINTS = 76;
+
+/**
+ * The Inbox while its feed is on its first read with no thread to list, as
+ * Mail stands its list before it reads: `count` of the Inbox's own rows,
+ * a task's line over a title and what it asks, their words standing as
+ * SwiftUI's placeholder bars (`SkeletonRegion`), so the list has its shape
+ * from the first frame and its rows take the bars' places as they land.
+ */
+function InboxSkeleton({ count }: { readonly count: number }) {
+  return (
+    <SkeletonRegion>
+      {Array.from({ length: count }, (_, at) => (
+        <ListRow
+          key={at}
+          id={String(at)}
+          title={SKELETON_WORDS.TITLE}
+          task={{ name: SKELETON_WORDS.TASK, status: TASK_STATUS.TODO }}
+          line={INBOX_LINE.SAID}
+          summary={SKELETON_WORDS.SUMMARY}
+        />
+      ))}
+    </SkeletonRegion>
+  );
+}
+
+/**
+ * How many skeleton rows the Inbox stands while its feed is on its first
+ * read and lists nothing, under no search: as many as the scope holds where
+ * that is known, up to one screen's worth, else one screen's worth; none
+ * once it lists a thread or the feed answered or failed.
+ */
+function useSkeletonRows(
+  listing: InboxListing,
+  show: InboxShow,
+  search: string,
+): number | undefined {
+  const { height } = useWindowDimensions();
+
+  const reading =
+    listing.listed.length === 0 && listing.feed === INBOX_FEED.READING && search.trim() === "";
+
+  if (!reading) return undefined;
+  const screenful = Math.ceil(height / THREAD_ROW_POINTS);
+  const known = listing.counts[show];
+
+  return known > 0 ? Math.min(known, screenful) : screenful;
 }
 
 /**
@@ -1106,6 +1174,7 @@ type InboxHeld = {
 function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
   const listing = useInboxListing({ show, search, chosen });
+  const skeleton = useSkeletonRows(listing, show, search);
   // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
   useAppReadyCount(listing.listed.length > 0 || listing.feed === INBOX_FEED.ANSWERED);
   const acts = useInboxActs();
@@ -1152,6 +1221,7 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
     search,
     setSearch,
     listing,
+    skeleton,
     acts,
     scopes,
     menu,
@@ -1178,6 +1248,7 @@ function InboxStackList(held: InboxHeld) {
     search,
     setSearch,
     listing,
+    skeleton,
     acts,
     scopes,
     menu,
@@ -1287,6 +1358,7 @@ function InboxStackList(held: InboxHeld) {
           onResolve={acts.resolve}
           choosing={choosing?.rows}
           onChooseStart={chooseStart}
+          skeleton={skeleton}
           empty={
             listing.listed.length === 0 ? (
               <InboxEmpty
@@ -1326,6 +1398,7 @@ function InboxSplitScreen({
     search,
     setSearch,
     listing,
+    skeleton,
     acts,
     scopes,
     menu,
@@ -1360,6 +1433,7 @@ function InboxSplitScreen({
       onResolve={acts.resolve}
       choosing={choosing?.rows}
       onChooseStart={chooseStart}
+      skeleton={skeleton}
       empty={
         listing.listed.length === 0 ? (
           <InboxEmpty
