@@ -1252,11 +1252,7 @@ export function NoteRow({
       )}
       {lines}
       <Spacer />
-      {pressed !== undefined ? (
-        <GoesMark goes={PUSH_ROW_GOES.PAGE} />
-      ) : remove === undefined ? null : (
-        <RowMoreMenu acts={[{ ...remove, symbol: NOTE_REMOVE.SYMBOL, destructive: true }]} />
-      )}
+      {pressed === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.PAGE} />}
     </HStack>
   );
 
