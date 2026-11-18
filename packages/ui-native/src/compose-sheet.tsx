@@ -6,11 +6,11 @@ import {
   HStack,
   Image,
   Menu,
+  Picker,
   ScrollView,
   Section,
   Button as SwiftUIButton,
   Text,
-  Toggle,
   VStack,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -25,10 +25,12 @@ import {
   font,
   foregroundStyle,
   frame,
+  labelsHidden,
   lineLimit,
   type ModifierConfig,
   menuIndicator,
   padding,
+  pickerStyle,
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -45,9 +47,9 @@ import {
 import { WORDS_LOOK, WordsField } from "./form-rows.js";
 import { DockRow, GlassDock, useDockRoom } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent } from "./glyph-label.js";
+import { actContent, PickOption } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
-import { choiceContent, type MenuChoice } from "./list-row.js";
+import { choiceColor, type MenuChoice } from "./list-row.js";
 import { HarnessMark } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
@@ -180,14 +182,7 @@ export function MenuChip(props: MenuChipProps) {
       {menu.groups.map((group, at) => (
         // Note that a group is keyed by its place, since a group may have no heading.
         <Section key={at} {...(group.title === undefined ? {} : { title: group.title })}>
-          {group.choices.map((choice) => (
-            <Toggle
-              key={choice.id ?? choice.label}
-              {...choiceContent(choice, colors)}
-              isOn={choice.on}
-              onIsOnChange={() => choice.onPress()}
-            />
-          ))}
+          <GroupPicker group={group} />
         </Section>
       ))}
       {actions.length === 0 ? null : <Divider />}
@@ -204,6 +199,41 @@ export function MenuChip(props: MenuChipProps) {
         <BarMenuButton key={submenu.label} menu={submenu} />
       ))}
     </Menu>
+  );
+}
+
+/**
+ * A capsule menu's group as SwiftUI's own single choice: an inline picker,
+ * its options standing in the menu with the one chosen checked, as the
+ * system checks it, its label left to the group's section. Note that each
+ * option is tagged by its place in the group, never its label or id, so two
+ * choices of one name, such as two Macs both called MacBook Pro, stay two;
+ * and that a pick of the option already chosen sends nothing, as the
+ * system's picker answers only a change.
+ */
+function GroupPicker({ group }: { readonly group: ChipMenuGroup }) {
+  const colors = useColors();
+  const chosen = group.choices.findIndex((choice) => choice.on);
+
+  return (
+    <Picker
+      label={group.title ?? ""}
+      {...(chosen === -1 ? {} : { selection: String(chosen) })}
+      onSelectionChange={(value: string) => group.choices[Number(value)]?.onPress()}
+      modifiers={[pickerStyle("inline"), labelsHidden()]}
+    >
+      {group.choices.map((choice, at) => (
+        <PickOption
+          // Note that an option is keyed by its place, as it is tagged, since two may share a name.
+          key={at}
+          label={choice.label}
+          value={String(at)}
+          glyph={choice.symbol}
+          color={choiceColor(choice, colors)}
+          photo={choice.photo}
+        />
+      ))}
+    </Picker>
   );
 }
 
@@ -232,8 +262,6 @@ export type ComposeAdd = {
 };
 
 type ComposeSheetProps = {
-  /** Whether the sheet is the screen in front, which the app's notice stands over its bar of capsules while it holds (`GlassDock`'s `shown`). */
-  readonly shown: boolean;
   /** The line over the words, such as who suggested them; none for a draft of the member's own. */
   readonly title?: string | undefined;
   /** What stands over the words, such as the task the new one is related to, as capsules. */
@@ -369,11 +397,10 @@ function ComposeAddPress({ add }: { readonly add: ComposeAdd }) {
  * window. The sheet's own bar holds Cancel and Start.
  */
 export function ComposeSheet(props: ComposeSheetProps) {
-  const { add, chips, onDropPictures, shown } = props;
+  const { add, chips, onDropPictures } = props;
 
   return (
     <GlassDock
-      shown={shown}
       bar={
         <DockRow modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}>
           <ComposeAddPress add={add} />

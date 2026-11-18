@@ -3,11 +3,17 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   APP_SETTING_SCHEMA,
+  GITHUB_PURPOSE,
   SETUP_AUDIENCE,
+  SETUP_GATE,
+  SETUP_STEP,
   type SetupAudience,
+  type SetupGate,
   type SetupPlace,
+  setupGate,
   setupPlaceFrom,
   setupPlaceStored,
+  setupSteps,
 } from "@repo/settings";
 import {
   AuthPage,
@@ -36,8 +42,7 @@ import { DELETE_WORDS } from "../settings/workspace-page.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectAppSettingsView, selectWorkspacesFailed } from "../use-app-state.js";
 import { keptKey, useKept } from "../use-kept.js";
-import { GITHUB_PURPOSE, GitHubSetup } from "./setup-github.js";
-import { SETUP_GATE, SETUP_STEP, type SetupGate, setupGate, setupSteps } from "./setup-model.js";
+import { GitHubSetup } from "./setup-github.js";
 import { SurveyQuestions, useSurvey } from "./setup-survey.js";
 import { TeamForm, useTeamForm } from "./setup-team.js";
 import { TOOLS_PURPOSE, ToolRows } from "./setup-tools.js";
@@ -194,7 +199,8 @@ interface SetupStepsProps {
 
 /** The step setup stands at. */
 function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.Element {
-  const { mutate: updateSetting } = useMutation(actMutation(ACT_KIND.SETTING_UPDATE));
+  const placing = useMutation(actMutation(ACT_KIND.SETTING_UPDATE));
+  const { mutate: updateSetting } = placing;
   const { mutateAsync: signOut } = useMutation(actMutation(ACT_KIND.ACCOUNT_SIGN_OUT));
 
   // Note that a refused or failed delete is logged on the mutation rather than the call, because Finish has let the app in and setup is gone by the time it answers.
@@ -209,7 +215,14 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
 
   const [, , keepFinished] = useKept(SETUP_FINISHED, []);
   const stored = useQuery({ ...appStateQuery, select: selectAppSettingsView }).data?.setupPlace;
-  const kept = setupPlaceFrom(stored);
+
+  // Note that the place a move asked for is drawn while it is out, as the docs' Optimistic Updates guide draws a mutation's `variables`, so a step's press never stands on the step it left until the account's place comes back.
+  const asked =
+    placing.isPending && placing.variables.field === APP_SETTING_SCHEMA.setupPlace.field
+      ? setupPlaceFrom(placing.variables.value)
+      : undefined;
+
+  const kept = asked ?? setupPlaceFrom(stored);
 
   const workspacesFailed =
     useQuery({ ...appStateQuery, select: selectWorkspacesFailed }).data === true;
@@ -221,9 +234,12 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
   const personal = tasks.newTask.workspaces.find((workspace) => workspace.personal === true)?.id;
   // Note that each move is merged over the last one written, because two may land before the account's place comes back, as a team's workspace made and the step after it do.
   const written = useRef<SetupPlace | undefined>(undefined);
+  const placeOut = asked !== undefined;
+
+  // Note that the stored place is taken up only while no move is out, because an older move landing meanwhile would otherwise put back the place a newer one left, and the next move would merge over a place other than the one drawn.
   useEffect(() => {
-    written.current = setupPlaceFrom(stored);
-  }, [stored]);
+    if (!placeOut) written.current = setupPlaceFrom(stored);
+  }, [stored, placeOut]);
 
   const keep = useCallback(
     (next: SetupPlace) => {

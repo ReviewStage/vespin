@@ -37,7 +37,8 @@ import {
  * accounts or channels, folds them with `SettingsRowsFold`: the same
  * chevron, which the head row stands last in its `end`, and the rows after it in a box of
  * their own, each a row of the card in its own right, ruled as the card's
- * own (settings-section.css). Note that a closed fold hides its rows rather
+ * own (settings-section.css). They open and close on the same motion, the
+ * box being the fold's body. Note that a closed fold hides its rows rather
  * than letting them go, because a row keeps what it is waiting on, such as
  * a refusal still to be said under a picker, while the fold is closed.
  */
@@ -127,7 +128,8 @@ export function SettingsFoldRow({
  * pressed: `head` draws the row, handed the chevron (named `label`) to
  * stand last in the row's `end`, or, where there are no `rows` to fold, the
  * chevron's room alone, so the controls of every row in the card end in one
- * column whether it folds or not. A head that stands its chevron among its
+ * column whether it folds or not; where no row of the section draws a glyph
+ * there, that room stands nowhere (`SettingsRowActSlot`). A head that stands its chevron among its
  * controls, before its ⋯, rather than last asks for no room (`room` false),
  * since its ⋯ already ends the row's column, and is handed nothing where it
  * folds nothing. Each new `opened` opens it, as a link landing on what it
@@ -152,30 +154,38 @@ export function SettingsRowsFold({
   opened?: number | undefined;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+  const { state, details } = useDisclosureFold(false, { open, onOpenChange: setOpen });
   const folds = rows !== undefined && rows !== null && rows !== false;
   useEffect(() => {
     if (opened !== undefined) setOpen(true);
   }, [opened]);
 
   return (
-    <>
+    <DisclosureScope state={state}>
       {head(
         folds ? (
           <IconButton
-            icon={<DisclosureChevron open={open} />}
+            icon={<DisclosureChevron />}
             label={label}
-            aria-expanded={open}
-            onClick={() => setOpen(!open)}
+            aria-expanded={state.open}
+            onClick={state.toggle}
           />
         ) : room ? (
           <SettingsRowActSlot />
         ) : null,
       )}
+      {/* Note that the rows stay drawn while closed, only hidden, so each keeps what it waits on; the body is the root's own child, which disclosure.css unrolls and rolls up. */}
       {folds ? (
-        <div className="ui-settings-rows-fold" hidden={!open}>
-          {rows}
+        <div
+          className="ui-settings-rows-fold"
+          hidden={!state.drawn}
+          data-disclosure={details["data-disclosure"]}
+        >
+          <div ref={state.body} className="ui-disclosure-body" inert={state.leaving}>
+            {rows}
+          </div>
         </div>
       ) : null}
-    </>
+    </DisclosureScope>
   );
 }

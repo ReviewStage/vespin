@@ -138,6 +138,8 @@ export interface SettingsSearchEntry {
  */
 export type SettingsSearchInput = SettingsRowsInput & {
   workspace?: Workspace | undefined;
+  /** Whether the Billing page stands: billing is on and the reader manages the workspace shown. */
+  billing?: boolean | undefined;
 };
 
 /**
@@ -400,8 +402,12 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           haystack: ["Workspace URL", "Change URL slug link address workspace"],
         }
       : undefined,
-    // The window's own chords, fixed rather than chosen, listed below them; a gated feature's only while its experiment is on.
-    ...shownShortcutGroups(input.settings.experiments, input.capabilities).flatMap((group) => [
+    // The window's own chords, fixed rather than chosen, listed below them; a gated feature's only while its experiment is on, and the Inbox's only while the account keeps one.
+    ...shownShortcutGroups(
+      input.settings.experiments,
+      input.capabilities,
+      input.settings.inbox !== false,
+    ).flatMap((group) => [
       ...group.commands.map((command) => ({
         id: command,
         label: shortcutLabel(command, input.settings.experiments),
@@ -492,7 +498,7 @@ export function settingsSearchEntries(input: SettingsSearchInput): readonly Sett
   const fixed = [...settingsSectionEntries(input), ...fixedEntries(input)];
 
   const pages = SETTINGS_PAGE_LIST.filter((page) =>
-    settingsPageShown(page, input.capabilities, input.settings.experiments),
+    settingsPageShown(page, input.capabilities, input.settings.experiments, input.billing === true),
   );
 
   return pages
@@ -517,7 +523,12 @@ export interface SettingsSearchCorpus {
 export function settingsSearchCorpus(input: SettingsSearchInput): SettingsSearchCorpus {
   return {
     pages: SETTINGS_PAGE_LIST.filter((page) =>
-      settingsPageShown(page, input.capabilities, input.settings.experiments),
+      settingsPageShown(
+        page,
+        input.capabilities,
+        input.settings.experiments,
+        input.billing === true,
+      ),
     ),
     entries: settingsSearchEntries(input),
   };

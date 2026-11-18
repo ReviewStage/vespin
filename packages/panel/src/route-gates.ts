@@ -31,6 +31,7 @@ import {
 import {
   appStateIn,
   appStateQuery,
+  selectInboxOn,
   selectListedTasks,
   selectSettingsHeld,
   selectStoredExperimentChoices,
@@ -53,6 +54,8 @@ export interface RouteAccess {
   readonly workspaces: readonly GateWorkspace[];
   /** The step the listed workspace's address names it by, which a person's page naming none of the reader's opens under; none while none is listed. */
   readonly listed: string | undefined;
+  /** Whether the account keeps an Inbox (`selectInboxOn`), which stands while the settings are unread. */
+  readonly inbox: boolean;
 }
 
 /** The access before the window's state is read: Admin waits on it, as a page an experiment holds waits on the settings. */
@@ -62,6 +65,7 @@ export const UNREAD_ROUTE_ACCESS: RouteAccess = {
   experimentsRead: false,
   workspaces: NO_WORKSPACES,
   listed: undefined,
+  inbox: true,
 };
 
 /** The window's access by the document `client` holds now, for a route's `beforeLoad`, which cannot wait a render. */
@@ -78,6 +82,7 @@ export function routeAccessNow(client: QueryClient): RouteAccess {
     workspaces,
     // Note that a reading off the state alone lists the first workspace, as the window does with none kept.
     listed: stepOf(workspaces[0]),
+    inbox: state === undefined || selectInboxOn(state),
   };
 }
 
@@ -117,6 +122,7 @@ export function useRouteAccess(): RouteAccess {
   const experimentsRead = useQuery({ ...appStateQuery, select: selectSettingsHeld }).data === true;
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
   const listed = stepOf(useKeptChoice(workspaces));
+  const inbox = useQuery({ ...appStateQuery, select: selectInboxOn }).data ?? true;
 
   return useMemo(
     (): RouteAccess => ({
@@ -125,8 +131,9 @@ export function useRouteAccess(): RouteAccess {
       experimentsRead,
       workspaces,
       listed,
+      inbox,
     }),
-    [admin, experiments, experimentsRead, workspaces, listed],
+    [admin, experiments, experimentsRead, workspaces, listed, inbox],
   );
 }
 
@@ -189,6 +196,11 @@ export function mergeQueueRouteStands(workspace: string, access: RouteAccess): b
   if (!workspaceRouteStands(workspace, access)) return false;
 
   return !access.experimentsRead || experimentOn(access.experiments, EXPERIMENT.MERGE_QUEUE);
+}
+
+/** Whether the Inbox stands: under one of the reader's workspaces, while the account keeps one. */
+export function inboxRouteStands(workspace: string, access: RouteAccess): boolean {
+  return access.inbox && workspaceRouteStands(workspace, access);
 }
 
 /** The same path under the workspace whose address step is `workspace`, in place of the step it names first. */

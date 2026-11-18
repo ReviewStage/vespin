@@ -74,10 +74,17 @@ import {
   selectTaskListListed,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
-import { BUZZ, QUIET_ROW_QUESTION, type RowAsker, type RowQuestion } from "@repo/ui-native";
+import {
+  BUZZ,
+  heldValue,
+  QUIET_ROW_QUESTION,
+  type RowAsker,
+  type RowQuestion,
+  useHeldValue,
+} from "@repo/ui-native";
 import { caseWhen, coalesce, gt, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
@@ -151,25 +158,8 @@ function workingAgentsIn(
 /** A status a press set and the service has not yet drawn, by the task, as the panel draws a row's write before its answer. */
 type HeldStatuses = ReadonlyMap<string, TaskStatus>;
 
-/** The statuses pressed and not yet drawn, which every screen reads. */
-let heldStatuses: HeldStatuses = new Map();
-
-/** The screens reading them, each told as one is pressed or let go. */
-const statusReaders = new Set<() => void>();
-
-function holdStatuses(next: HeldStatuses): void {
-  heldStatuses = next;
-
-  for (const reader of statusReaders) reader();
-}
-
-function watchStatuses(reader: () => void): () => void {
-  statusReaders.add(reader);
-
-  return () => {
-    statusReaders.delete(reader);
-  };
-}
+/** The statuses pressed and not yet drawn, which every screen reads, each told as one is pressed or let go. */
+const heldStatuses = heldValue<HeldStatuses>(new Map());
 
 /** The tasks as the screens draw them: each with the status a press set over the one the document holds. */
 function withHeld(tasks: readonly TaskSummary[], held: HeldStatuses): readonly TaskSummary[] {
@@ -196,7 +186,7 @@ type UseStatusWritesResult = {
 function useStatusWrites(tasks: readonly TaskSummary[]): UseStatusWritesResult {
   const acts = useHostActs();
   const write = useWrite();
-  const held = useSyncExternalStore(watchStatuses, () => heldStatuses);
+  const held = useHeldValue(heldStatuses);
   // A status the document now holds is its own, and stands without the press's.
   useEffect(() => {
     const drawn = [...held].filter(([id, status]) =>
@@ -204,16 +194,20 @@ function useStatusWrites(tasks: readonly TaskSummary[]): UseStatusWritesResult {
     );
 
     if (drawn.length === 0) return;
-    holdStatuses(new Map([...heldStatuses].filter(([id]) => !drawn.some(([at]) => at === id))));
+    heldStatuses.set(
+      new Map([...heldStatuses.read()].filter(([id]) => !drawn.some(([at]) => at === id))),
+    );
   }, [tasks, held]);
 
   const setStatus: SetStatus = (taskId, status, stopAgents) => {
-    const letGo = () => holdStatuses(new Map([...heldStatuses].filter(([id]) => id !== taskId)));
+    const letGo = () =>
+      heldStatuses.set(new Map([...heldStatuses.read()].filter(([id]) => id !== taskId)));
+
     const stopping = stopAgents === undefined ? undefined : { stopAgents };
     // Note that each attempt, Try again's among them, draws the status before it sends it and lets it go once it is not kept.
     write(
       () => {
-        holdStatuses(new Map(heldStatuses).set(taskId, status));
+        heldStatuses.set(new Map(heldStatuses.read()).set(taskId, status));
 
         return acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, status, ...stopping }).then(
           (landed) => {

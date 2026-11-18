@@ -111,12 +111,6 @@ export function keptFileTimed(cipher: SecretCipher): SecretCipher {
 
 /** The check: the vectors, the round trips both ways and a changed sealing refused, the timings, and the check's key deleted. */
 function runSealCheck(): void {
-  if (sealerModule === undefined) {
-    logLine("FAIL the native sealer is not in this build");
-
-    return;
-  }
-
   const lines = sealerModule.vectorLines();
   lines.forEach(logLine);
   const keys = keychainKey(CHECK_KEY_ITEM);
@@ -132,7 +126,7 @@ function runSealCheck(): void {
       () => openText?.(Base64.encode(noble.encrypt(text))) === text,
     ),
     checked(
-      "a native sealing opens in noble, as a build without the module opens it",
+      "a native sealing opens in noble, the bytes the same",
       () =>
         sealText !== undefined &&
         noble.decrypt(Result.getOrThrow(Base64.decode(sealText(text)))) === text,

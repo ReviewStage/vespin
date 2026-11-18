@@ -1,7 +1,7 @@
 import { WHOLE_PART } from "@repo/features/agent-parts";
 import { CHECK_SUMMARY, PART_CUT_FIELD, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
-import { MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
+import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
 import { describe, expect, it } from "vitest";
 import {
   NO_TOGGLES,
@@ -409,6 +409,49 @@ describe("transcriptItems", () => {
       expect(items.some((item) => item.kind === TRANSCRIPT_ITEM.CALL)).toBe(false);
     },
   );
+  it("keeps the turn a call handed the agent open while the agent still writes it, though the voice's line stands after it, and folds its words once it ends", () => {
+    const call = (author: string) => ({
+      author,
+      channel: MESSAGE_CHANNEL.VOICE,
+      voice_session_id: "call-1",
+    });
+
+    const transcript = (finished: boolean) =>
+      transcriptItems(
+        [
+          {
+            id: "ask",
+            role: MESSAGE_ROLE.USER,
+            parts: [{ type: "text", text: "Run the tests." }],
+            metadata: { ...call(MESSAGE_AUTHOR.DEVELOPER), delegation_id: "delegation-1" },
+          },
+          {
+            id: "work",
+            role: MESSAGE_ROLE.ASSISTANT,
+            parts: [{ type: "text", text: "Two tests failed." }],
+            startedAt: 0,
+            ...(finished ? { finishedAt: 1 } : undefined),
+          },
+          {
+            id: "ack",
+            role: MESSAGE_ROLE.ASSISTANT,
+            parts: [{ type: "text", text: "On it." }],
+            metadata: call(MESSAGE_AUTHOR.VOICE_MODEL),
+          },
+        ],
+        { writing: !finished, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
+      );
+
+    const turn = (finished: boolean) =>
+      transcript(finished).flatMap((item) =>
+        item.place.message !== "work"
+          ? []
+          : [item.kind === TRANSCRIPT_ITEM.FOLD ? item.summary : item.kind],
+      );
+
+    expect(turn(false)).toEqual([TRANSCRIPT_ITEM.WORDS]);
+    expect(turn(true)).toEqual(["Written reply", TRANSCRIPT_ITEM.FOOT]);
+  });
 });
 
 describe("withWaitingLine", () => {

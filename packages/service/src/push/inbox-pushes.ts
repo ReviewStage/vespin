@@ -1,15 +1,20 @@
 /**
- * inbox-pushes.ts -- what the service pushes to a member's phone: an Inbox post that waits on them, its notification cleared once it settles, and a run of theirs that failed.
+ * inbox-pushes.ts -- what the service pushes to a member's phone: an Inbox post that waits on them, its notification cleared once it settles, a run of theirs that failed, and, where they keep no Inbox, one that finished.
  *
  * Three kinds of news reach a phone (`PUSH_KIND`, `@repo/features/inbox-push-wire`), each its own so one can
  * be dropped alone: an agent's post that asks the member something, a
  * decide, do, or answer; any other post of an agent's on a thread that
- * waits on them; and a turn of an agent they started that failed. A thread
+ * waits on them; and a turn of an agent they started that ended. A thread
  * waits on one member (`inboxItemWaitsOn`: the member its agent addressed
  * it to, else its task's assignee, else the agent's starter), as its Slack
  * DM does (`../slack/thread-dms.ts`), and only that member's phones are
- * pushed. A turn the member stopped, or one that finished well, pushes
- * nothing. Whether a phone takes the push is the member's own grant of iOS
+ * pushed. A turn that failed pushes its starter. One that finished well
+ * pushes them only where they keep no Inbox (`@repo/settings`'s `inbox`
+ * off): their agents then ask in their reply rather than on a thread, so
+ * the turn's end is the news a post would have been, and its alert says the
+ * reply's opening words. Where the Inbox is on, a finished turn pushes
+ * nothing, since what needs the member comes as a post. A turn the member
+ * stopped pushes nothing. Whether a phone takes the push is the member's own grant of iOS
  * notification permission and iOS's settings: no switch of ours is read,
  * the desktop's `turnNotifications` among them (`@repo/host/agent-notices`).
  *
@@ -23,10 +28,14 @@
  * (`PUSH_CATEGORY`): a decide that takes one option offers each as a button,
  * whose labels the payload's `options` carries for the app to set on that
  * notification alone, since a category's actions are otherwise fixed; any other
- * post offers a reply typed in place; a failed run, none. Its collapse id is
- * the thread's, so a later post on a thread replaces the one before it on the
+ * post offers a reply typed in place; a turn that ended, none. Its collapse id is
+ * the thread's, or the agent's for a turn, so a later post on a thread, or a
+ * later turn of an agent, replaces the one before it on the
  * lock screen, and the app removes it by that id, which iOS names the
- * delivered notification by. Its badge is the member's Inbox count as the
+ * delivered notification by. A finished turn's alert goes as a failed one's
+ * does (`PUSH_KIND.RUN_FAILED`), saying its own words, since that is the
+ * kind a released app opens the agent from, and a kind of its own would
+ * open nothing there. Its badge is the member's Inbox count as the
  * desktop's Dock counts it (`inboxWaitingCount`).
  *
  * Once a thread settles anywhere, an ask answered or withdrawn, a notice
@@ -45,7 +54,8 @@
  * (`releaseHeldPushes`) and sends it to the phones set to away, composed
  * afresh from the thread or the agent as it then stands, if it still waits
  * on them: a thread still open on them with its ask unanswered, or its post
- * unread, or an agent still standing on the turn that failed. What was
+ * unread, or an agent still standing on the turn that failed, or on the turn
+ * that finished while its member still keeps no Inbox. What was
  * settled meanwhile is never sent. A settled thread's background push is
  * never held, since it only clears what a phone already shows.
  *
@@ -60,14 +70,15 @@
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { readAccountPreferences } from "@repo/database/models/account-store";
 import { type Agent, readAgent, readAgentOfConversation } from "@repo/database/models/agent-store";
 import {
-  holdFailedTurnPush,
   holdThreadPush,
+  holdTurnPush,
   type TakenHold,
   takeAbsentHolds,
 } from "@repo/database/models/held-push-store";
-import { latestTurnsOf } from "@repo/database/models/message-reads";
+import { latestTurnsOf, readMessageByClientId } from "@repo/database/models/message-reads";
 import { readLastActive } from "@repo/database/models/presence-store";
 import { listPushDevices, type PushDevice } from "@repo/database/models/push-device-store";
 import type { SettledAgentTurn } from "@repo/database/models/writer";
@@ -92,6 +103,8 @@ import { PRESENCE } from "@repo/features/presence-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
 import { TURN_STATUS } from "@repo/wire";
 import { Clock, Effect, Option } from "effect";
+import { lastSaid } from "../agents/coder-host/starter-report.js";
+import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { TURN_FAILURE } from "../core.js";
 import {
   inboxItemWaitsOn,
@@ -113,6 +126,9 @@ const PAYLOAD_BOUND = { BYTES: 4096, SPARE: 64 } as const;
 
 /** What a failed run's alert says under the agent's name, as the desktop's notification says it. */
 const RUN_FAILED_BODY = "Your agent failed.";
+
+/** What a finished turn's alert says under the agent's name where its reply said nothing. */
+const TURN_FINISHED_BODY = "Your agent finished.";
 
 /** The most holds one sweep takes, and how many it sends at once; the rest wait for the next minute's. */
 const HELD_PUSH_SWEEP = { BATCH: 100, CONCURRENCY: 8 } as const;
@@ -239,7 +255,7 @@ function memberPresent(userId: string, now: number) {
 function holdFor(userId: string, subject: HoldSubject) {
   return "itemId" in subject
     ? holdThreadPush(userId, subject.itemId)
-    : holdFailedTurnPush(userId, subject.agentId, subject.turnId);
+    : holdTurnPush(userId, subject.agentId, subject.turnId);
 }
 
 /**
@@ -353,29 +369,71 @@ function threadPostNotification(
   });
 }
 
-/** The alert about the agent's failed turn, the failure word it was settled with: its name over the words the desktop says. */
-function failedTurnNotification(agent: Agent, turnId: string, failure: string | null) {
+/** The alert about the agent's turn that ended, saying the words given under its name; a tap opens the agent. */
+function agentTurnNotification(agent: Agent, turnId: string, body: string) {
   return (badge: number): MemberNotification => ({
     pushType: APNS_PUSH_TYPE.ALERT,
     collapseId: agent.id,
     payload: {
       aps: {
-        // A run its plan's usage limit stopped is told so, not that it failed.
-        alert: alertOf(
-          agentName(agent),
-          failure === TURN_FAILURE.PLAN_LIMIT ? LIMIT_REACHED_WORDS : RUN_FAILED_BODY,
-        ),
+        alert: alertOf(agentName(agent), body),
         "thread-id": agent.taskId,
         category: PUSH_CATEGORY.RUN_FAILED,
         "mutable-content": 1,
         sound: "default",
         badge,
       },
+      // Note that a finished turn goes as this kind too, since it is the one a released app opens the agent from.
       kind: PUSH_KIND.RUN_FAILED,
       agentId: agent.id,
       taskId: agent.taskId,
       turnId,
     },
+  });
+}
+
+/** Whether the member keeps no Inbox: the setting turned off, where nothing stored reads as on. */
+function inboxOff(userId: string) {
+  return Effect.map(readAccountPreferences(userId), (row) => row?.preferences.inbox === false);
+}
+
+/** The opening words of the reply the agent's turn ended with, as an alert's body says them; the finished turn's own words where it said nothing. */
+function replyWords(agent: Agent, turnId: string) {
+  return Effect.map(
+    readMessageByClientId(agent.userId, agent.conversationId, CODER_TOOL_SET, turnId),
+    (journal) => {
+      const [newest] = journal.ok ? journal.value : [];
+      const said = newest === undefined ? undefined : lastSaid(newest.message);
+      const words = said === undefined ? "" : bodyWords(said);
+
+      return words === "" ? TURN_FINISHED_BODY : words;
+    },
+  );
+}
+
+/**
+ * The alert about the agent's turn as it ended: a failed one says why, as
+ * the desktop's notification does, and one that finished well says its
+ * reply's opening words where its member keeps no Inbox; none for any
+ * other end.
+ */
+function turnNotification(
+  agent: Agent,
+  turn: { readonly id: string; readonly status: string; readonly failure: string | null },
+) {
+  return Effect.gen(function* () {
+    if (turn.status === TURN_STATUS.FAILED) {
+      // A run its plan's usage limit stopped is told so, not that it failed.
+      const body = turn.failure === TURN_FAILURE.PLAN_LIMIT ? LIMIT_REACHED_WORDS : RUN_FAILED_BODY;
+
+      return Option.some(agentTurnNotification(agent, turn.id, body));
+    }
+
+    if (turn.status !== TURN_STATUS.SETTLED || !(yield* inboxOff(agent.userId))) {
+      return Option.none<(badge: number) => MemberNotification>();
+    }
+
+    return Option.some(agentTurnNotification(agent, turn.id, yield* replyWords(agent, turn.id)));
   });
 }
 
@@ -423,25 +481,34 @@ export function pushThreadSettled(
 }
 
 /**
- * Pushes the member who started the agent that its turn failed, saying the
- * agent's name; nothing for a turn that finished well or that a Stop ended,
- * which is the member's own, or for an agent that is gone. A later failure
- * of the same agent replaces the one before it on the lock screen.
+ * Pushes the member who started the agent that its turn ended, saying the
+ * agent's name: one that failed, and one that finished well where the
+ * member keeps no Inbox, over its reply's opening words; nothing for a turn
+ * a Stop ended, which is the member's own, a finished one where they keep
+ * an Inbox, or an agent that is gone. A later turn of the same agent
+ * replaces the one before it on the lock screen.
  */
-export function pushFailedTurn(
+export function pushSettledTurn(
   turn: SettledAgentTurn,
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
-  if (turn.status !== TURN_STATUS.FAILED) return Effect.void;
+  if (turn.status !== TURN_STATUS.FAILED && turn.status !== TURN_STATUS.SETTLED) {
+    return Effect.void;
+  }
 
   return Effect.gen(function* () {
     const found = yield* readAgentOfConversation(turn.userId, turn.conversationId);
 
     if (Option.isNone(found)) return;
     const agent = found.value;
-    yield* pushToMember(agent.userId, failedTurnNotification(agent, turn.turnId, turn.failure), {
-      agentId: agent.id,
-      turnId: turn.turnId,
+
+    const compose = yield* turnNotification(agent, {
+      id: turn.turnId,
+      status: turn.status,
+      failure: turn.failure,
     });
+
+    if (Option.isNone(compose)) return;
+    yield* pushToMember(agent.userId, compose.value, { agentId: agent.id, turnId: turn.turnId });
   });
 }
 
@@ -471,20 +538,20 @@ function stillWaitingPost(userId: string, itemId: string) {
   });
 }
 
-/** The agent a held failed turn's alert tells of, read again, with the failure word its turn was settled with: none where a later turn followed it or the agent is gone. */
-function stillFailedAgent(userId: string, agentId: string, turnId: string) {
+/** The alert a held turn tells of, composed afresh where its agent still stands on that turn and it still pushes; none where a later turn followed it or the agent is gone. */
+function stillStandingTurn(userId: string, agentId: string, turnId: string) {
   return Effect.gen(function* () {
     const agent = yield* readAgent(userId, agentId);
 
-    if (Option.isNone(agent)) return Option.none<{ agent: Agent; failure: string | null }>();
+    if (Option.isNone(agent)) return Option.none<(badge: number) => MemberNotification>();
 
     const latest = (yield* latestTurnsOf(userId, [agent.value.conversationId])).get(
       agent.value.conversationId,
     );
 
-    return latest?.id === turnId && latest.status === TURN_STATUS.FAILED
-      ? Option.some({ agent: agent.value, failure: latest.failure })
-      : Option.none<{ agent: Agent; failure: string | null }>();
+    return latest?.id === turnId
+      ? yield* turnNotification(agent.value, latest)
+      : Option.none<(badge: number) => MemberNotification>();
   });
 }
 
@@ -500,11 +567,8 @@ function heldNotification(hold: TakenHold) {
     }
 
     if (agentId === null || turnId === null) return Option.none();
-    const failed = yield* stillFailedAgent(userId, agentId, turnId);
 
-    return Option.map(failed, ({ agent, failure }) =>
-      failedTurnNotification(agent, turnId, failure),
-    );
+    return yield* stillStandingTurn(userId, agentId, turnId);
   });
 }
 

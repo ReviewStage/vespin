@@ -280,11 +280,11 @@ export function roleAmong(roles: readonly WorkspaceRole[]): SQL {
 }
 
 /**
- * The condition that the account is a member of the workspace: a literal id,
- * or the column of a row the statement reads, such as a task's own
+ * The condition that the account is a member of the workspace: each a literal
+ * id, or the column of a row the statement reads, such as a task's own
  * `organization_id`, so a statement gates on membership in its own where clause.
  */
-function memberOfWorkspace(userId: string, organizationId: string | SQLWrapper): SQL {
+function memberOfWorkspace(userId: string | SQLWrapper, organizationId: string | SQLWrapper): SQL {
   return exists(
     queryBuilder
       .select({ one: member.id })
@@ -786,8 +786,11 @@ function isOwnPersonalOrganization(
   return Effect.map(findOwnedPersonalOrganization({ userId, organizationId }), Option.isSome);
 }
 
-/** The condition that the account is a member of the workspace a statement names, by its id or a column standing for it. */
-export function workspaceReachableBy(userId: string, organizationId: string | SQLWrapper): SQL {
+/** The condition that the account is a member of the workspace a statement names, each by its id or a column standing for it. */
+export function workspaceReachableBy(
+  userId: string | SQLWrapper,
+  organizationId: string | SQLWrapper,
+): SQL {
   return memberOfWorkspace(userId, organizationId);
 }
 

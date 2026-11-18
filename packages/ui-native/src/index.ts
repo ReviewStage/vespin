@@ -22,15 +22,11 @@ export {
   RowAsking,
   type RowQuestion,
   useRowAsker,
-  WORDS_ASK_KIND,
-  WordsAsk,
-  type WordsAskAct,
-  type WordsAskKind,
 } from "./asks.js";
 
 export { AuthPage } from "./auth-page.js";
 
-export { type BarSubtitle, StackBarTitle } from "./bar-title.js";
+export { type BarSubtitle, StackSubtitle } from "./bar-title.js";
 
 export { BRAND_MARK_ASSET, BrandMark } from "./brand-mark.js";
 
@@ -57,7 +53,6 @@ export {
   CallAccessory,
   CallCardRow,
   type CallPresses,
-  CallSidebarFoot,
   COMPOSER_CALL,
   type ComposerCall,
   type StandingCallCard,
@@ -134,6 +129,8 @@ export {
 
 export { type Keeping, KeepingProvider } from "./held-menu.js";
 
+export { changeSignal, heldValue, useHeldValue } from "./held-value.js";
+
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 
 export { INTEGRATION_MARK_ASSET, type IntegrationMarkAsset } from "./integration-marks.js";
@@ -195,8 +192,6 @@ export {
 export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
 
 export { useMinute, useToday } from "./minute.js";
-
-export { useNoticeFootRoom } from "./notice-lift.js";
 
 export { SwitchRow } from "./option-rows.js";
 
@@ -299,20 +294,10 @@ export {
   type BarPath,
   type BarSearch,
   type ColumnBar,
-  DetailPage,
-  type DetailStack,
-  type DetailStackPage,
   groupKey,
-  HostedFill,
   isBarMenu,
-  KeptColumns,
-  type KeptView,
   menuWithout,
-  SplitOverTabs,
   SplitView,
-  scopeMenu,
-  scopeSubtitle,
-  UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 
 export {
@@ -323,14 +308,22 @@ export {
 
 export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
-export { askForName, type NameAsk, shareWords } from "./system-asks.js";
+export {
+  askForName,
+  askForWords,
+  type NameAsk,
+  shareWords,
+  WORDS_KIND,
+  type WordsAct,
+  type WordsAsk,
+  type WordsKind,
+} from "./system-asks.js";
 
 export {
   AGENT_ROW_STATE,
   AgentRow,
   type AgentRowState,
   FailedReadRow,
-  GroupRow,
   LINK_ROW_TONE,
   LinkRow,
   type LinkRowTone,
@@ -365,7 +358,7 @@ export {
 
 export { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 
-export { MARK_SIZE, SPACE, TAB_BAR_ROOM } from "./tokens/space.js";
+export { MARK_SIZE, SPACE } from "./tokens/space.js";
 
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
@@ -403,7 +396,7 @@ export {
   useAsyncAction,
 } from "./use-async-action.js";
 
-export { useTabRail, useThreeColumns, useWindowSizeClass } from "./use-window-size-class.js";
+export { useWindowSizeClass } from "./use-window-size-class.js";
 
 export { Video } from "./video.js";
 
@@ -416,11 +409,9 @@ export {
 export {
   newWorkspaceAction,
   SWITCHER_LOOK,
-  SWITCHER_PRESENTATION,
   type SwitcherAccount,
   type SwitcherAction,
   type SwitcherLook,
-  type SwitcherPresentation,
   WorkspaceSwitcher,
   WorkspaceSwitcherItem,
 } from "./workspace-switcher.js";

@@ -39,6 +39,7 @@ import {
   SOURCE_READ_GUARD_RULE,
   TEST_SOURCE,
 } from "./shared/test-guard.ts";
+import { WRITE_MUTATION_GUARD_RULE } from "./shared/write-mutation-guard.ts";
 
 /**
  * The design system's guards have no escape hatch: oxlint honors every
@@ -67,7 +68,8 @@ import {
  * which has no way past it, on any of the panel's or the design system's own
  * TypeScript files
  * holding one that would silence `no-follow-outside-host-read`, which has no
- * way past it, on any TypeScript file that spells
+ * way past it, or `write-through-mutation`, whose baseline is the only way
+ * past it, on any TypeScript file that spells
  * a retired name and holds one that would silence `retired`, whose retired
  * file's baseline is the only way past it, on a vendored shadcn component
  * holding one that would silence `no-shadcn-focus-ring`, on any TypeScript
@@ -274,6 +276,13 @@ const GUARDS = [
     sources: TYPESCRIPT_SOURCE,
     watches: (absolute: string) => isWatchedSource(path.relative(REPOSITORY_ROOT, absolute)),
     remedy: "Read server data through a live read's query (packages/panel/src/live-reads.ts)",
+  },
+  {
+    rule: WRITE_MUTATION_GUARD_RULE,
+    sources: TYPESCRIPT_SOURCE,
+    watches: (absolute: string) => isWatchedSource(path.relative(REPOSITORY_ROOT, absolute)),
+    remedy:
+      "Send the write through `useMutation(actMutation(…))` or `pressMutation` (packages/panel/src/act-mutations.ts) and draw its `variables` while it is pending",
   },
   {
     rule: RETIRED_GUARD_RULE,

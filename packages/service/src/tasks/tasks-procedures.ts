@@ -281,6 +281,12 @@ const startedAgentOn = (
           refusal.localAgentRefusal === LOCAL_AGENT_REFUSAL.NOT_OWNER
             ? undefined
             : { localAgentRefusal: refusal.localAgentRefusal }),
+          ...(refusal.billingRefusal === undefined
+            ? undefined
+            : { billingRefusal: refusal.billingRefusal }),
+          ...(refusal.billingManager === undefined
+            ? undefined
+            : { billingManager: refusal.billingManager }),
         };
 
         return { task: task, agentRefusal } satisfies TaskStartAnswer;

@@ -493,11 +493,16 @@ export type SlackAgentThread = SlackThread & {
   readonly userId: string;
 };
 
-/** A thread to keep for an agent: where it came from, and the turn its first message posted where it posted one. */
+/** A thread to keep for an agent: where it came from, the turn its first message posted where it posted one, and the member's message that started the agent and is being worked on where one did. */
 export type NewSlackAgentThread = SlackAgentThread & {
   readonly origin: SlackThreadOrigin;
   readonly postedTurnId?: string;
+  readonly startTs?: string;
+  readonly workingTs?: string;
 };
+
+/** A message in a Slack thread the bot marks: the thread it stands in, and its own timestamp. */
+export type SlackThreadMessageAt = SlackThread & { readonly ts: string };
 
 const insertAgentThread = SqlSchema.void({
   Request: Schema.Struct({
@@ -508,6 +513,8 @@ const insertAgentThread = SqlSchema.void({
     userId: Schema.String,
     postedTurnId: Schema.NullOr(Schema.String),
     origin: Schema.Literals(Object.values(SLACK_THREAD_ORIGIN)),
+    startTs: Schema.NullOr(Schema.String),
+    workingTs: Schema.NullOr(Schema.String),
     now: Schema.Date,
   }),
   execute: (row) =>
@@ -522,6 +529,8 @@ const insertAgentThread = SqlSchema.void({
           userId: row.userId,
           postedTurnId: row.postedTurnId,
           origin: row.origin,
+          startTs: row.startTs,
+          workingTs: row.workingTs,
           createdAt: row.now,
           activeAt: row.now,
         })
@@ -535,13 +544,20 @@ const updateAgentThread = SqlSchema.void({
     fromAgentId: Schema.String,
     agentId: Schema.String,
     userId: Schema.String,
+    workingTs: Schema.String,
     now: Schema.Date,
   }),
   execute: (row) =>
     Database.use((db) =>
       db
         .update(slackAgentThread)
-        .set({ agentId: row.agentId, userId: row.userId, postedTurnId: null, activeAt: row.now })
+        .set({
+          agentId: row.agentId,
+          userId: row.userId,
+          postedTurnId: null,
+          workingTs: row.workingTs,
+          activeAt: row.now,
+        })
         .where(
           and(
             eq(slackAgentThread.organizationId, row.organizationId),
@@ -633,6 +649,24 @@ const claimThreadTurn = SqlSchema.findOneOption({
     ),
 });
 
+const findCurrentThread = SqlSchema.findOneOption({
+  Request: Schema.Struct({ agentId: Schema.String }),
+  Result: SlackThreadSchema,
+  execute: ({ agentId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          organizationId: slackAgentThread.organizationId,
+          channelId: slackAgentThread.channelId,
+          threadTs: slackAgentThread.threadTs,
+        })
+        .from(slackAgentThread)
+        .where(eq(slackAgentThread.agentId, agentId))
+        .orderBy(desc(slackAgentThread.activeAt), desc(slackAgentThread.threadTs))
+        .limit(1),
+    ),
+});
+
 const findSlackStart = SqlSchema.findOneOption({
   Request: Schema.Struct({ agentId: Schema.String }),
   Result: Schema.Struct({ threadTs: Schema.String }),
@@ -648,6 +682,85 @@ const findSlackStart = SqlSchema.findOneOption({
           ),
         )
         .limit(1),
+    ),
+});
+
+/** The message that started the agent in the thread kept as its start, or the thread's first message where a thread kept before it was recorded names none. */
+const findStartMessage = SqlSchema.findOneOption({
+  Request: Schema.Struct({ agentId: Schema.String }),
+  Result: Schema.Struct({ ...SlackThreadSchema.fields, ts: Schema.String }),
+  execute: ({ agentId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          organizationId: slackAgentThread.organizationId,
+          channelId: slackAgentThread.channelId,
+          threadTs: slackAgentThread.threadTs,
+          ts: sql<string>`coalesce(${slackAgentThread.startTs}, ${slackAgentThread.threadTs})`,
+        })
+        .from(slackAgentThread)
+        .where(
+          and(
+            eq(slackAgentThread.agentId, agentId),
+            eq(slackAgentThread.origin, SLACK_THREAD_ORIGIN.START),
+          ),
+        )
+        .limit(1),
+    ),
+});
+
+const markWorking = SqlSchema.void({
+  Request: Schema.Struct({ ...SlackThreadSchema.fields, ts: Schema.String }),
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .update(slackAgentThread)
+        .set({ workingTs: row.ts })
+        .where(
+          and(
+            eq(slackAgentThread.organizationId, row.organizationId),
+            eq(slackAgentThread.channelId, row.channelId),
+            eq(slackAgentThread.threadTs, row.threadTs),
+          ),
+        ),
+    ),
+});
+
+const findWorking = SqlSchema.findAll({
+  Request: Schema.Struct({ agentId: Schema.String }),
+  Result: Schema.Struct({ ...SlackThreadSchema.fields, ts: Schema.String }),
+  execute: ({ agentId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          organizationId: slackAgentThread.organizationId,
+          channelId: slackAgentThread.channelId,
+          threadTs: slackAgentThread.threadTs,
+          ts: sql<string>`${slackAgentThread.workingTs}`,
+        })
+        .from(slackAgentThread)
+        .where(and(eq(slackAgentThread.agentId, agentId), isNotNull(slackAgentThread.workingTs))),
+    ),
+});
+
+/** The thread's mark cleared only while it still names the message read, so a message marked since stands. */
+const clearWorking = SqlSchema.findAll({
+  Request: Schema.Struct({ ...SlackThreadSchema.fields, ts: Schema.String }),
+  Result: Schema.Struct({ ts: Schema.String }),
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .update(slackAgentThread)
+        .set({ workingTs: null })
+        .where(
+          and(
+            eq(slackAgentThread.organizationId, row.organizationId),
+            eq(slackAgentThread.channelId, row.channelId),
+            eq(slackAgentThread.threadTs, row.threadTs),
+            eq(slackAgentThread.workingTs, row.ts),
+          ),
+        )
+        .returning({ ts: slackAgentThread.threadTs }),
     ),
 });
 
@@ -1001,13 +1114,19 @@ export function slackStartRepository(
  */
 export function recordSlackAgentThread(thread: NewSlackAgentThread): TaskStoreEffect<void> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    insertAgentThread({ ...thread, postedTurnId: thread.postedTurnId ?? null, now }),
+    insertAgentThread({
+      ...thread,
+      postedTurnId: thread.postedTurnId ?? null,
+      startTs: thread.startTs ?? null,
+      workingTs: thread.workingTs ?? null,
+      now,
+    }),
   );
 }
 
-/** Moves the thread from the agent it was kept for to the one that continues it, started by the member named, as that agent's current thread, so its later messages and settled turns go there; a thread moved to another agent since stands. */
+/** Moves the thread from the agent it was kept for to the one that continues it, started by the member named, as that agent's current thread, so its later messages and settled turns go there, with the message that continued it marked as being worked on; a thread moved to another agent since stands. */
 export function moveSlackAgentThread(
-  thread: SlackAgentThread & { readonly fromAgentId: string },
+  thread: SlackAgentThread & { readonly fromAgentId: string; readonly workingTs: string },
 ): TaskStoreEffect<void> {
   return Effect.flatMap(DateTime.nowAsDate, (now) => updateAgentThread({ ...thread, now }));
 }
@@ -1032,6 +1151,35 @@ export function claimSlackThreadTurn(
   turnId: string,
 ): TaskStoreEffect<Option.Option<SlackThread>> {
   return claimThreadTurn({ agentId, turnId });
+}
+
+/** The agent's current thread, the one kept, moved, or written in latest, as a turn is posted in; nothing for an agent no thread speaks for. */
+export function currentSlackThread(agentId: string): TaskStoreEffect<Option.Option<SlackThread>> {
+  return findCurrentThread({ agentId });
+}
+
+/** The member's message the agent was started from, or that the agent it continues was; nothing for an agent no Slack message started. */
+export function slackStartMessage(
+  agentId: string,
+): TaskStoreEffect<Option.Option<SlackThreadMessageAt>> {
+  return findStartMessage({ agentId });
+}
+
+/** Marks the message as the one the thread's agent is working on, in place of any marked before. */
+export function markSlackThreadWorking(message: SlackThreadMessageAt): TaskStoreEffect<void> {
+  return markWorking(message);
+}
+
+/** The messages the agent's threads mark as being worked on; none where no thread marks one. */
+export function slackWorkingMessages(
+  agentId: string,
+): TaskStoreEffect<readonly SlackThreadMessageAt[]> {
+  return findWorking({ agentId });
+}
+
+/** Clears the thread's mark where it still names the message, answering whether it did; false where another message was marked since. */
+export function clearSlackThreadWorking(message: SlackThreadMessageAt): TaskStoreEffect<boolean> {
+  return Effect.map(clearWorking(message), (cleared) => cleared.length > 0);
 }
 
 /** Whether the agent was started from a Slack message, or continues one that was: a started thread is kept for it. */

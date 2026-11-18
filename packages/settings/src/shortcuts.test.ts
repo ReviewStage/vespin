@@ -84,7 +84,7 @@ test("every key that answers in place stands in exactly one group of the Keyboar
 });
 
 test("the Keyboard shortcuts page names the window's Escape once, for every layer it closes", () => {
-  const groups = shownShortcutGroups({}, Object.values(HOST_CAPABILITY));
+  const groups = shownShortcutGroups({}, Object.values(HOST_CAPABILITY), true);
 
   const escapes = [
     ...groups.flatMap((group) => [
@@ -102,7 +102,7 @@ test("the Keyboard shortcuts page names the window's Escape once, for every laye
 
 test("the tab switcher's keys are listed only where the desktop app's switcher stands", () => {
   const listed = (capabilities: readonly HostCapability[]) =>
-    shownShortcutGroups({}, capabilities).flatMap((group) => group.keys);
+    shownShortcutGroups({}, capabilities, true).flatMap((group) => group.keys);
 
   assert.ok(listed([HOST_CAPABILITY.DESKTOP_APP]).includes(IN_CONTEXT_KEY.SWITCHER_GO));
   assert.equal(listed([]).includes(IN_CONTEXT_KEY.SWITCHER_GO), false);

@@ -90,9 +90,11 @@ for (const { path, page, marked } of PAGES) {
 test("the landing offers the web app beside the download, and nothing in its scenes to press", () => {
   const body = drawn(App).querySelector("main");
 
-  // A scene's controls are a picture of the app: none of them may take the keyboard.
+  // A scene's controls are a picture of the app: none of them may take the keyboard. The hero's app alone is live, a region the reader clicks through.
   const pressable = Array.from(body?.querySelectorAll("button, [tabindex]") ?? []).filter(
-    (control) => control.closest("[inert]") === null,
+    (control) =>
+      control.closest("[inert]") === null &&
+      control.closest('[aria-label="The Mac app, live: click through it"]') === null,
   );
 
   assert.deepEqual(
@@ -102,9 +104,12 @@ test("the landing offers the web app beside the download, and nothing in its sce
   assert.deepEqual(links(body), [
     "Backed by Y Combinator -> https://www.ycombinator.com/companies/vespin",
     "Download for macOS -> https://github.com/ReviewStage/vespin/releases/latest/download/Vespin.dmg",
-    `or sign in on the web -> ${PANEL_PATH}`,
+    `Continue on web -> ${PANEL_PATH}`,
+    "Learn more → -> /guides/how-the-vespin-inbox-works",
+    "Connect an agent → -> /docs/install#connect-an-agent",
+    "Get the apps → -> /docs/install#download-for-mac",
     "Download for macOS -> https://github.com/ReviewStage/vespin/releases/latest/download/Vespin.dmg",
-    "View on GitHub -> https://github.com/ReviewStage/vespin",
+    "GitHub -> https://github.com/ReviewStage/vespin",
   ]);
 });
 

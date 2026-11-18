@@ -81,7 +81,7 @@ export function useSettingsAccount(): BarAccount | undefined {
  * opens Settings, as Notion's one workspace button does, on every tab, since
  * each acts on the chosen workspace; the account's photo, opening Settings,
  * only before the account's workspaces are read. A split view
- * stands the switcher in its own bar or the app sidebar's list instead
+ * stands the switcher in its list column's bar instead
  * (`screens/app-sidebar.tsx`).
  */
 export function SettingsBarButton({ switcher }: { readonly switcher?: SwitcherProps | undefined }) {

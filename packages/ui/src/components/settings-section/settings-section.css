@@ -38,10 +38,11 @@
   }
 
   /* The rows a row folds under it (`SettingsRowsFold`) stand in a box of
-     their own, ruled as the card's own: each from the row above it, the
-     first from the head row, an inset row from its inset edge. The box
-     draws no rule, and a closed one stands nowhere. */
-  .ui-settings-rows-fold {
+     their own, its fold's body, ruled as the card's own: each from the row
+     above it, the first from the head row, an inset row from its inset
+     edge. The box draws no rule, and a closed one stands nowhere. */
+  .ui-settings-rows-fold,
+  .ui-settings-rows-fold > .ui-disclosure-body {
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -54,23 +55,38 @@
   /* A fold opened under a row of another fold, as a machine's apps under its
      Computer use, draws no rule of its own: its rows rule themselves, inset. */
   .ui-settings-section-card > .ui-settings-rows-fold,
-  .ui-settings-rows-fold > .ui-settings-rows-fold {
+  .ui-settings-rows-fold > .ui-disclosure-body > .ui-settings-rows-fold {
     border-top: none;
   }
 
-  .ui-settings-rows-fold > * {
+  .ui-settings-rows-fold > .ui-disclosure-body > * {
     border-top: 1px solid var(--ui-color-border);
   }
 
-  .ui-settings-rows-fold > *:not(.ui-settings-row):has(> .ui-settings-row[data-indent="mark"]),
   .ui-settings-rows-fold
+    > .ui-disclosure-body
+    > *:not(.ui-settings-row):has(> .ui-settings-row[data-indent="mark"]),
+  .ui-settings-rows-fold
+    > .ui-disclosure-body
     > *:not(.ui-settings-row):has(> .ui-settings-row[data-indent="mark-twice"]) {
     border-top: none;
   }
 
-  .ui-settings-rows-fold > * > .ui-settings-row[data-indent="mark"],
-  .ui-settings-rows-fold > * > .ui-settings-row[data-indent="mark-twice"] {
+  .ui-settings-rows-fold > .ui-disclosure-body > * > .ui-settings-row[data-indent="mark"],
+  .ui-settings-rows-fold > .ui-disclosure-body > * > .ui-settings-row[data-indent="mark-twice"] {
     border-top: 1px solid var(--ui-color-border);
+  }
+
+  /* A row's end that holds only the room of a ⋯ or a chevron it lacks
+     (`SettingsRowActSlot`, a fold's with nothing to fold) keeps that room
+     only while another row of its section draws a glyph in that column;
+     where none does, it stands nowhere, gap and all, so a row's last
+     control, a Connect, ends at the card's padding rather than short of it.
+     Note that this stays here rather than in the row, because only the
+     section can see whether any of its rows ends in a glyph. */
+  .ui-settings-section:not(:has(.ui-settings-row-end > :not(.ui-settings-row-act-slot)))
+  .ui-settings-row-end:not(:has(> :not(.ui-settings-row-act-slot))) {
+    display: none;
   }
 
   /* The rows a setting reveals (reveal.css) are ruled as the card's own,

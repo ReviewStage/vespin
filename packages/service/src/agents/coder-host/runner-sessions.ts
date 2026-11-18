@@ -1700,7 +1700,8 @@ export const runnerSessions = <
           opened.memoryOn !== standing.memoryOn ||
           (opened.turnEndOn ?? false) !== standing.turnEndOn ||
           (opened.replyButtonsOn ?? false) !== standing.replyButtonsOn ||
-          (opened.computerUseOn ?? false) !== standing.computerUseOn
+          (opened.computerUseOn ?? false) !== standing.computerUseOn ||
+          (opened.inboxOn ?? true) !== standing.inboxOn
         );
       });
 

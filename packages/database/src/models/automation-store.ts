@@ -1,3 +1,4 @@
+import { AGENT_MACHINE, type AgentRunsOnRequest } from "@repo/features/agent-wire";
 import type { AutomationPresetName } from "@repo/features/automation-presets";
 import {
   AUTOMATION_RUN_STATUS,
@@ -91,6 +92,9 @@ const AutomationRowSchema = Schema.Struct({
   slackDelivery: Schema.Boolean,
   // Note that a preset is read as any text, since a row may hold one this release does not know.
   preset: Schema.NullOr(Schema.String),
+  // Note that the machine is read as any text, since a row may hold one this release does not know, which reads as none.
+  runsOnMachine: Schema.NullOr(Schema.String),
+  runsOnDeviceId: Schema.NullOr(Schema.String),
   createdAt: InstantColumnSchema,
   updatedAt: InstantColumnSchema,
 });
@@ -115,9 +119,30 @@ export const AUTOMATION_COLUMNS = {
   archiveSuccessful: automation.archiveSuccessful,
   slackDelivery: automation.slackDelivery,
   preset: automation.preset,
+  runsOnMachine: automation.runsOnMachine,
+  runsOnDeviceId: automation.runsOnDeviceId,
   createdAt: automation.createdAt,
   updatedAt: automation.updatedAt,
 };
+
+/** The machine an automation's runs start on, as a Start names it; none where it was made naming none, or its row holds a machine this release does not know or a device with no id. */
+export function automationRunsOn(made: Automation): AgentRunsOnRequest | null {
+  if (made.runsOnMachine === AGENT_MACHINE.VERCEL) return { machine: AGENT_MACHINE.VERCEL };
+
+  if (made.runsOnMachine === AGENT_MACHINE.DEVICE && made.runsOnDeviceId !== null) {
+    return { machine: AGENT_MACHINE.DEVICE, deviceId: made.runsOnDeviceId };
+  }
+
+  return null;
+}
+
+/** The columns a machine is kept in: the machine, and a device's id beside it, both null for none. */
+function runsOnColumns(runsOn: AgentRunsOnRequest | null) {
+  return {
+    runsOnMachine: runsOn?.machine ?? null,
+    runsOnDeviceId: runsOn?.machine === AGENT_MACHINE.DEVICE ? runsOn.deviceId : null,
+  };
+}
 
 /** What making an automation takes: its workspace and repositories, what fires it and what it starts, its guards, when a schedule is first due, and a webhook's secret hash. */
 export interface NewAutomation {
@@ -142,6 +167,8 @@ export interface NewAutomation {
   readonly slackDelivery?: boolean;
   /** The suggestion it is made from; none where left out. No change names it again. */
   readonly preset?: AutomationPresetName | null;
+  /** The machine its runs start on; none where left out, so a run is placed as a Start naming none is. */
+  readonly runsOn?: AgentRunsOnRequest | null;
 }
 
 /**
@@ -163,6 +190,8 @@ export interface AutomationChanges {
   readonly targetAgentId?: string | null;
   readonly archiveSuccessful?: boolean;
   readonly slackDelivery?: boolean;
+  /** The machine its runs start on, null for none, which places a run as a Start naming none is. */
+  readonly runsOn?: AgentRunsOnRequest | null;
 }
 
 const RunRowSchema = Schema.Struct({
@@ -341,6 +370,8 @@ const insertAutomation = SqlSchema.findAll({
     archiveSuccessful: Schema.Boolean,
     slackDelivery: Schema.Boolean,
     preset: Schema.NullOr(Schema.String),
+    runsOnMachine: Schema.NullOr(Schema.Literals(Object.values(AGENT_MACHINE))),
+    runsOnDeviceId: Schema.NullOr(Schema.String),
     now: Schema.Date,
   }),
   Result: WrittenSchema,
@@ -359,6 +390,8 @@ const insertAutomation = SqlSchema.findAll({
           archiveSuccessful: row.archiveSuccessful,
           slackDelivery: row.slackDelivery,
           preset: row.preset,
+          runsOnMachine: row.runsOnMachine,
+          runsOnDeviceId: row.runsOnDeviceId,
           name: row.name,
           enabled: true,
           ...triggerColumns(row.trigger, row.nextRunAt, row.webhookSecretHash),
@@ -423,6 +456,8 @@ const writeAutomation = SqlSchema.findAll({
     targetAgentId: Schema.optionalKey(Schema.NullOr(Schema.String)),
     archiveSuccessful: Schema.optionalKey(Schema.Boolean),
     slackDelivery: Schema.optionalKey(Schema.Boolean),
+    runsOnMachine: Schema.optionalKey(Schema.NullOr(Schema.Literals(Object.values(AGENT_MACHINE)))),
+    runsOnDeviceId: Schema.optionalKey(Schema.NullOr(Schema.String)),
     now: Schema.Date,
   }),
   Result: WrittenSchema,
@@ -1012,8 +1047,10 @@ export function createAutomationCommitted(
     if (!(yield* isWorkspaceMember(userId, made.organizationId))) return Option.none();
     const now = yield* DateTime.nowAsDate;
 
+    const { runsOn, ...rest } = made;
+
     const [row] = yield* insertAutomation({
-      ...made,
+      ...rest,
       userId,
       repositories: made.repositories ?? [],
       scope: made.scope ?? AUTOMATION_SCOPE.PERSONAL,
@@ -1022,6 +1059,7 @@ export function createAutomationCommitted(
       archiveSuccessful: made.archiveSuccessful ?? true,
       slackDelivery: made.slackDelivery ?? false,
       preset: made.preset ?? null,
+      ...runsOnColumns(runsOn ?? null),
       now,
     });
 
@@ -1090,7 +1128,16 @@ export function updateAutomationCommitted(
 ): TaskStoreEffect<Option.Option<AutomationCommitted>> {
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
-    const [written] = yield* writeAutomation({ ...changes, userId, id, access, now });
+    const { runsOn, ...rest } = changes;
+
+    const [written] = yield* writeAutomation({
+      ...rest,
+      ...(runsOn === undefined ? undefined : runsOnColumns(runsOn)),
+      userId,
+      id,
+      access,
+      now,
+    });
 
     if (written === undefined) return Option.none();
     const { txid } = written;

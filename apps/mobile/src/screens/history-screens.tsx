@@ -14,7 +14,6 @@ import { readingWords, showMoreWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   BUZZ,
-  DetailPage,
   EmptyState,
   GLYPH,
   LIST_LOOK,
@@ -33,7 +32,6 @@ import {
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useState } from "react";
-import { PUSHED_PAGE, useDetailLeave, useDetailPush, useHandToDetail } from "../detail-stack.js";
 import { useHostActs, useListedAgents } from "../host/host-provider.js";
 import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
@@ -97,29 +95,17 @@ const RESTORE_BAR = "Restore";
  * version under its writer, what it did and when, the newest marked
  * Current, and Show more under them while older versions stand unread. A
  * press opens the version whole. The host follows the history while the
- * screen stands, so a save lands at its head as it lands. In a window wide
- * enough for three columns it stands pushed over the split view's detail
- * instead, and a version opens over it there.
+ * screen stands, so a save lands at its head as it lands.
  */
 export function HistoryScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
-  const handed = useHandToDetail({ kind: PUSHED_PAGE.HISTORY, taskId: id });
-
-  if (handed) return null;
 
   return <History taskId={id} />;
 }
 
-/** A task description's version history, as `HistoryScreen` describes it; `inColumn` pushed over a split view's detail. */
-export function History({
-  taskId: id,
-  inColumn = false,
-}: {
-  readonly taskId: string;
-  readonly inColumn?: boolean | undefined;
-}) {
+/** A task description's version history, as `HistoryScreen` describes it. */
+function History({ taskId: id }: { readonly taskId: string }) {
   const router = useRouter();
-  const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
   const history = useTaskHistory(id);
   const pictureOf = useMemberPictures();
@@ -165,16 +151,7 @@ export function History({
               now={now}
               current={line.seq === newest}
               first={index === 0}
-              onPress={() => {
-                const version = {
-                  kind: PUSHED_PAGE.VERSION,
-                  taskId: id,
-                  seq: line.seq,
-                  at: line.lastEdit.at,
-                  newest,
-                } as const;
-
-                if (toDetail(version)) return;
+              onPress={() =>
                 router.push({
                   pathname: onOwnTab(VERSION_ROUTE),
                   params: {
@@ -183,8 +160,8 @@ export function History({
                     at: String(line.lastEdit.at),
                     newest: String(newest),
                   },
-                });
-              }}
+                })
+              }
             />
           ))}
           {earlier === undefined ? null : (
@@ -202,8 +179,6 @@ export function History({
         </ListSection>
       </RowList>
     );
-
-  if (inColumn) return <DetailPage bar={{ name: VERSION_HISTORY_WORDS.TITLE }}>{body}</DetailPage>;
 
   return (
     <>
@@ -233,14 +208,6 @@ export function VersionScreen() {
   const savedAt = Number(at);
   const newest = versionNumber(spelledNewest);
   const opened = Number.isFinite(savedAt) && at !== undefined ? savedAt : undefined;
-
-  const handed = useHandToDetail(
-    seq === undefined
-      ? undefined
-      : { kind: PUSHED_PAGE.VERSION, taskId: id, seq, at: opened, newest },
-  );
-
-  if (handed && seq !== undefined) return null;
 
   if (seq === undefined) {
     return (
@@ -296,21 +263,18 @@ function VersionWords({
   );
 }
 
-/** One version and its restore; `at` its latest save, which titles it, and `newest` the description as it stands, which a restore's Undo puts back, each none where the route did not carry it; `inColumn` pushed over a split view's detail, where a restore that went goes back in its column. */
-export function Version({
+/** One version and its restore; `at` its latest save, which titles it, and `newest` the description as it stands, which a restore's Undo puts back, each none where the route did not carry it. */
+function Version({
   taskId,
   seq,
   at,
   newest,
-  inColumn = false,
 }: {
   readonly taskId: string;
   readonly seq: number;
   readonly at: number | undefined;
   readonly newest: number | undefined;
-  readonly inColumn?: boolean | undefined;
 }) {
-  const detail = useDetailLeave();
   const colors = useColors();
   const router = useRouter();
   const navigation = useNavigation();
@@ -374,10 +338,8 @@ export function Version({
         notices.say({ kind: NOTICE_KIND.DONE, words: VERSION_HISTORY_WORDS.RESTORED, undo }),
     }).then(() => setRestoring(false));
 
-    // Note that the screen goes back as the restore is sent rather than once it lands, which waits on the service and then on the change reaching the app: the description takes the version as it arrives, Restored stands with its Undo then, and a refusal says why in the failure notice. In a column it leaves only while it stands on top of its stack.
-    if (detail !== undefined) {
-      if (detail.onTop()) detail.leave();
-    } else if (navigation.isFocused()) router.back();
+    // Note that the screen goes back as the restore is sent rather than once it lands, which waits on the service and then on the change reaching the app: the description takes the version as it arrives, Restored stands with its Undo then, and a refusal says why in the failure notice.
+    if (navigation.isFocused()) router.back();
   };
 
   const body = version.isPending ? (
@@ -400,18 +362,6 @@ export function Version({
   );
 
   const name = at === undefined ? VERSION_HISTORY_WORDS.TITLE : dayAndTimeText(at);
-
-  if (inColumn) {
-    // Note that Restore stands dimmed on the description as it stands, heard as already current, as the compact bar keeps it, rather than leaving the column's bar.
-    const restoreAct = {
-      label: current ? VERSION_HISTORY_WORDS.ALREADY_CURRENT : VERSION_HISTORY_WORDS.RESTORE,
-      symbol: GLYPH.RESTORE,
-      disabled: current || read === undefined || restoring,
-      onPress: restore,
-    };
-
-    return <DetailPage bar={{ name, acts: [restoreAct] }}>{body}</DetailPage>;
-  }
 
   return (
     <>

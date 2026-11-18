@@ -7,8 +7,8 @@
  * it and a command started as that user, a short command, a PTY, a network
  * policy, a snapshot, its tags and its public ports — is asked here, of the
  * SDK at the version the catalog pins, which loads in a function's bundle.
- * The project's sessions, which the SDK lists only a sandbox at a time, are
- * listed of Vercel's REST API itself under the same token (`SESSIONS_API`).
+ * A sandbox's sessions are listed of Vercel's REST API itself under the
+ * same token (`SESSIONS_API`).
  * The SDK tries a 429, a 5xx, and a failure to connect again before it answers (a
  * 429 waits out Vercel's `Retry-After` up to 20 seconds), so nothing here
  * tries again.
@@ -200,12 +200,11 @@ const SANDBOX_API = {
 } as const;
 
 /**
- * The project's sessions as Vercel's REST API lists them, newest first, a
+ * A sandbox's sessions as Vercel's REST API lists them, newest first, a
  * page at a time. Note that the list is asked of the API itself, because
- * `@vercel/sandbox` lists only one sandbox's sessions and does not export
- * the client beneath it; the call goes under the same token and `fetch` as
- * the SDK's, though without the SDK's own retries, which a caller reading
- * again on a later day stands in for.
+ * `@vercel/sandbox` does not export the client beneath it; the call goes
+ * under the same token and `fetch` as the SDK's, though without the SDK's
+ * own retries, which a caller's delivery again stands in for.
  */
 const SESSIONS_API = {
   /** Vercel's API, and the list's path under it, as the SDK's own client joins them. */
@@ -978,7 +977,7 @@ function sessionOfListed(listed: ListedSession): SandboxSession {
 /** One page of the sessions Vercel lists, the project's or the named sandbox's, newest first, from the cursor given or the first. */
 async function sessionPageListed(
   under: Under,
-  query: { readonly name?: string | undefined; readonly cursor?: string | undefined },
+  query: { readonly name: string; readonly cursor?: string | undefined },
   signal: AbortSignal,
 ) {
   const url = new URL(`${SESSIONS_API.BASE}${SESSIONS_API.PATH}`);
@@ -987,7 +986,7 @@ async function sessionPageListed(
   url.searchParams.set("limit", String(SESSIONS_API.PAGE));
   url.searchParams.set("sortOrder", SESSIONS_API.ORDER);
 
-  if (query.name !== undefined) url.searchParams.set("name", query.name);
+  url.searchParams.set("name", query.name);
 
   if (query.cursor !== undefined) url.searchParams.set("cursor", query.cursor);
 
@@ -1217,31 +1216,6 @@ function vercelSandbox(
           .toSorted((first, second) => (second.createdAt ?? 0) - (first.createdAt ?? 0)),
     );
 
-  /** One page of the project's sessions, newest first, from the cursor given or the first. */
-  const sessionPage = (cursor: string | undefined) =>
-    asked(SANDBOX_CALL.SESSIONS, (signal, under) => sessionPageListed(under, { cursor }, signal));
-
-  /**
-   * The sessions created at or after `since`, read a page at a time until a
-   * page reaches past it: the list runs newest first, so a page naming one
-   * older than `since` is the last that names any newer.
-   */
-  const sessionsSince = (since: number) =>
-    Effect.gen(function* () {
-      const found: SandboxSession[] = [];
-      let cursor: string | undefined;
-
-      do {
-        const page = yield* sessionPage(cursor);
-        const newer = page.sessions.filter((listed) => listed.createdAt >= since);
-        found.push(...newer.map(sessionOfListed));
-        cursor =
-          newer.length === page.sessions.length ? (page.pagination.next ?? undefined) : undefined;
-      } while (cursor !== undefined);
-
-      return found;
-    });
-
   /**
    * The named sandbox's ended sessions, read just before its delete: its
    * running session stopped first, and the sessions read again until none is
@@ -1293,7 +1267,13 @@ function vercelSandbox(
 
   return {
     listTagged: (tag, value) => said(listTagged(tag, value)),
-    sessionsSince: (since) => said(sessionsSince(since)),
+    sessionsOf: (name) =>
+      said(
+        asked(SANDBOX_CALL.SESSIONS, (signal, under) => sandboxSessions(name, under, signal)).pipe(
+          // A sandbox gone took its sessions with it.
+          Effect.catchIf(isGone, () => Effect.succeed<readonly SandboxSession[]>([])),
+        ),
+      ),
     get: (name) =>
       said(
         found(SANDBOX_CALL.GET, name).pipe(

@@ -180,6 +180,7 @@ function mount(
     openWorkspaceGitHub: (taskId) => remedies.push(`workspace-github:${taskId}`),
     openGitHub: (url) => remedies.push(`github:${url}`),
     chooseRepository: (taskId) => remedies.push(`choose:${taskId}`),
+    openBilling: () => undefined,
     moveTask: (taskId, workspaceId) => {
       remedies.push(`move:${taskId}:${workspaceId}`);
 

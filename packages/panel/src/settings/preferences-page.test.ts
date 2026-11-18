@@ -2,14 +2,16 @@
 
 import assert from "node:assert/strict";
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
+import type { SoundChoiceAnswerView } from "@repo/features/agent-view";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { LINK_OPEN } from "@repo/features/link-open";
+import { SOUND_CLIP_SLOT } from "@repo/features/sound-clip-wire";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppWorkspaceIntegrations } from "@repo/host/app-state";
 import { SETTINGS_ACT_KIND } from "@repo/host/contract";
-import { SOUND_WHEN } from "@repo/settings";
+import { APP_SETTING_SCHEMA, SOUND_WHEN } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { NOTIFICATIONS_STATUS } from "@repo/settings/settings-controls";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
@@ -18,10 +20,11 @@ import { UPDATE_STATUS } from "@repo/settings/update";
 import { appSettingsView } from "@repo/settings/wire";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { COMPLETION_SOUND } from "@repo/wire/app-settings";
+import { Predicate } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { fakeActPort, quietHold } from "../testing/app-bridge.js";
+import { fakeActPort, fakeActPortCalls, quietHold } from "../testing/app-bridge.js";
 import { DESKTOP_CAPABILITIES, handHostReads } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { SettingsPanel, type SettingsPanelProps } from "./settings-panel.js";
@@ -315,4 +318,82 @@ test("each sound lists the account's own sounds by name, the one it plays chosen
   assert.ok(ask.includes("Add a sound…"));
   assert.equal(actsOf(page, "When an agent finishes: Glass"), "Rename…Delete");
   assert.ok(page.textContent?.includes("Your sounds"));
+});
+
+test("a sound of the account's own picked for a sound is named by its pop-up at once, while the service is asked, and a later pick replaces it once answered", async () => {
+  const page = draw(
+    SIGNED_IN,
+    appSettingsView(
+      appSettingsWire(
+        settingsView({ soundWhen: SOUND_WHEN.ALWAYS, completionSound: COMPLETION_SOUND.CUSTOM }),
+      ),
+    ),
+  );
+
+  const rain = { id: "sound-rain", name: "Rain on tin", sha256: "a-hash" };
+
+  const preferencesWith = (ask: string | undefined) => ({
+    rows: {
+      agent: undefined,
+      chaptersModel: CHAPTERS_MODEL.HAIKU,
+      slackNotifications: true,
+      sounds: { list: [rain], choices: { finish: rain.id, ask } },
+    },
+  });
+
+  // The service answers the choice only once the test lets it.
+  const choosing = Promise.withResolvers<SoundChoiceAnswerView>();
+
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.SOUND_CHOOSE]: () => choosing.promise,
+  });
+  act(() => reads.deliverPreferences(preferencesWith(undefined)));
+  // The finish plays it already, so its pop-up naming it says the sounds landed.
+  await vi.waitFor(() => menuOf(page, `When an agent finishes: ${rain.name}`));
+
+  /** Picks the option whose words start with `words` from the ask's pop-up named `chip`. */
+  const pick = (chip: string, words: string) => {
+    const opener =
+      page.querySelector<HTMLButtonElement>(
+        `button[aria-label="When something needs you: ${chip}"]`,
+      ) ?? assert.fail(`the ask's pop-up names ${chip}`);
+
+    act(() => opener.click());
+    const menu = document.getElementById(opener.getAttribute("aria-controls") ?? "");
+
+    const option =
+      [...(menu?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])].find((each) =>
+        each.textContent?.startsWith(words),
+      ) ?? assert.fail(`${words} is offered`);
+
+    act(() => option.click());
+  };
+
+  pick("Knock", rain.name);
+  // The host draws the choice over the account's row the moment it is asked.
+  act(() => reads.deliverPreferences(preferencesWith(rain.id)));
+
+  await vi.waitFor(() =>
+    assert.ok(
+      page.querySelector(`button[aria-label="When something needs you: ${rain.name}"]`),
+      "named by the sound picked while the service is asked",
+    ),
+  );
+
+  // A built-in sound picked while the choice is out is the one that stands once it answers.
+  pick(rain.name, "Ping");
+  await act(async () => choosing.resolve({ slot: SOUND_CLIP_SLOT.ASK, id: rain.id }));
+  await act(async () => undefined);
+
+  const askWrites = written.filter(
+    (each) =>
+      Predicate.hasProperty(each, "field") && each.field === APP_SETTING_SCHEMA.askSound.field,
+  );
+
+  assert.equal(askWrites.length, 1, "the own sound is not stored over the later pick");
+  assert.equal(
+    page.querySelector(`button[aria-label="When something needs you: ${rain.name}"]`),
+    null,
+  );
 });

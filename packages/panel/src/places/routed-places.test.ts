@@ -36,6 +36,7 @@ const ACCESS: RouteAccess = {
   experimentsRead: true,
   workspaces: [{ id: "workspace-acme", slug: "acme", formerSlugs: [] }],
   listed: "acme",
+  inbox: true,
 };
 
 /** A window where everything a step names is still there, under Acme listed. */

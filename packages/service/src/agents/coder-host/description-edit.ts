@@ -34,13 +34,7 @@ import { trimmedText } from "@repo/features/text-schema";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { Data, Effect, Option, Result, Schema } from "effect";
 import { SqlClient } from "effect/sql";
-import {
-  ACTION_RESULT_STATUS,
-  EXCESS_KEYS,
-  isRecord,
-  type UnparsedWireValue,
-  wireUuidSchema,
-} from "../../core.js";
+import { ACTION_RESULT_STATUS, EXCESS_KEYS, isRecord, type UnparsedWireValue } from "../../core.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import {
   DESCRIPTION_SAVE_REFUSAL,
@@ -50,6 +44,7 @@ import {
   saveNotes,
 } from "../../tasks/description-notes.js";
 import { placeholderLinksWords } from "../link-rule.js";
+import { TASK_REF_INPUT, TASK_REF_WORDS } from "../task-ref.js";
 
 import { type InboxSandboxDoor, readSandboxBodyFile } from "./inbox-image.js";
 
@@ -132,7 +127,7 @@ const picturesSchema = Schema.Array(pictureSchema).check(
 
 const readPictures = readEither(picturesSchema);
 
-const editedTaskSchema = Schema.Struct({ taskId: wireUuidSchema });
+const editedTaskSchema = Schema.Struct({ taskId: TASK_REF_INPUT });
 
 // The call's notes and pictures stand beside its task, and are read on their own.
 const readEditedTask = readEither(editedTaskSchema, { excess: EXCESS_KEYS.DROP });
@@ -140,8 +135,8 @@ const readEditedTask = readEither(editedTaskSchema, { excess: EXCESS_KEYS.DROP }
 /** What a call carries: the task whose description it edits, the notetaker's notes, and the pictures only an agent adds. */
 const EDIT_DESCRIPTION_INPUT = Schema.Struct({
   taskId: describeWire(
-    wireUuidSchema,
-    `The task whose description to edit, your own or another of your workspace, by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
+    TASK_REF_INPUT,
+    `The task whose description to edit, your own or another of your workspace, by ${TASK_REF_WORDS}.`,
   ),
   ...descriptionNotesSchema.fields,
   pictures: Schema.optionalKey(
@@ -175,7 +170,7 @@ export const DESCRIPTION_EDIT_REFUSAL = {
   UNREADABLE: "Not saved: the notes do not read under the notes' schema.",
   TOO_MANY: `Not saved: a turn may take at most ${DESCRIPTION_EDIT.MAX_NOTES_PER_TURN} notes on the description. Go on, and name what you would have noted in your message.`,
   UNAVAILABLE: "Not saved: the service could not reach its store.",
-  NO_TASK_NAMED: `Not saved: name the task whose description to edit as taskId, by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
+  NO_TASK_NAMED: `Not saved: name the task whose description to edit as taskId, by ${TASK_REF_WORDS}.`,
   NO_TASK: `Not saved: no task of your workspace has that id; ${AGENT_TOOL.LIST_TASKS} names them.`,
   NO_TURN:
     "Not saved: your turn is not recorded yet, so its notes cannot be counted. Try again in a moment.",

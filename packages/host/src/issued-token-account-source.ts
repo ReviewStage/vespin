@@ -87,6 +87,7 @@ export function issuedTokenAccountSourceLayer<E, R>(
 
       return {
         tokenCipher: opened.tokenCipher,
+        ...(opened.tokenVault === undefined ? undefined : { tokenVault: opened.tokenVault }),
         open: (host: AccountSourceHost) =>
           opened.open({ ...host, store: tellingStore(host.store, sink) }),
       };

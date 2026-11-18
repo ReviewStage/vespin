@@ -32,6 +32,7 @@ import {
   type DialogConfirm,
   ExternalIcon,
   OutsideSteps,
+  Reveal,
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
   SettingsBlock,
@@ -401,7 +402,7 @@ function ThisMacRow({
         )}
       </SettingsRow>
       {/* Note that a host that dies as it starts says nothing itself, so the row says why agents can't run here. */}
-      {on && wontStart && !setupFailed ? (
+      <Reveal shown={on && wontStart && !setupFailed}>
         <SettingsRow
           label={null}
           description={
@@ -410,9 +411,9 @@ function ThisMacRow({
             </SettingsRowStateLine>
           }
         />
-      ) : null}
+      </Reveal>
       {/* Note that macOS holds a registered agent until the member allows it, and only System Settings can, so the line opens it there. */}
-      {on && needsApproval ? (
+      <Reveal shown={on && needsApproval}>
         <SettingsRow
           label={null}
           description={
@@ -431,7 +432,7 @@ function ThisMacRow({
             </Button>
           )}
         </SettingsRow>
-      ) : null}
+      </Reveal>
     </>
   );
 }

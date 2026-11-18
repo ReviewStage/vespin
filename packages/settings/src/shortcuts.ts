@@ -214,7 +214,7 @@ export const SHORTCUT_KEY = {
   // A bare V is Files changed's own, marking the file stood on viewed; no app command holds it.
   V: { accelerator: "V", glyph: "V", key: "v", code: "KeyV" },
   L: { accelerator: "L", glyph: "L", key: "l", code: "KeyL" },
-  // ⌘E, ⇧⌘X, and the digits but 0 are the writing chords' own (`WRITING_SHORTCUTS`); no app command holds them.
+  // ⌘E, ⇧⌘X, and the digits but 0 are the writing chords' own (`WRITING_SHORTCUTS`), and ⌃ with a digit the workspace switcher's (`WORKSPACE_CHORDS`); no app command holds them.
   E: { accelerator: "E", glyph: "E", key: "e", code: "KeyE" },
   X: { accelerator: "X", glyph: "X", key: "x", code: "KeyX" },
   // ⌘Z and ⇧⌘Z are a field's own undo and redo, which the keymap leaves to it.
@@ -223,6 +223,9 @@ export const SHORTCUT_KEY = {
   ONE: { accelerator: "1", glyph: "1", key: "1", code: "Digit1" },
   TWO: { accelerator: "2", glyph: "2", key: "2", code: "Digit2" },
   THREE: { accelerator: "3", glyph: "3", key: "3", code: "Digit3" },
+  FOUR: { accelerator: "4", glyph: "4", key: "4", code: "Digit4" },
+  FIVE: { accelerator: "5", glyph: "5", key: "5", code: "Digit5" },
+  SIX: { accelerator: "6", glyph: "6", key: "6", code: "Digit6" },
   SEVEN: { accelerator: "7", glyph: "7", key: "7", code: "Digit7" },
   EIGHT: { accelerator: "8", glyph: "8", key: "8", code: "Digit8" },
   NINE: { accelerator: "9", glyph: "9", key: "9", code: "Digit9" },
@@ -367,10 +370,12 @@ function modifierGlyph(name: string): string {
  * carries, since a menu's bare key would take the letter from every field.
  * Control joins only the system's own ⌃⌘F, and the `switching` chords,
  * since a Control chord is otherwise a text field's caret move. A
- * `switching` chord is Control and its key without Command, ⌃Tab as every
- * browser's and editor's tab switcher has it: the switcher answers it
- * itself, from the press to the ⌃'s release (`tab-switcher.tsx` in
- * `@repo/panel`), so the keymap leaves it, as it leaves the layered Escape.
+ * `switching` chord is Control and its key without Command, which a
+ * switcher answers itself, so the keymap leaves it, as it leaves the layered
+ * Escape: ⌃Tab as every browser's and editor's tab switcher has it, from the
+ * press to the ⌃'s release (`tab-switcher.tsx` in `@repo/panel`), and ⌃1
+ * through ⌃9 for the account's workspaces in the order the workspace menu
+ * lists them, as Conductor switches its own (`workspace-keys.ts`).
  */
 interface PressedChord {
   key: ShortcutKey;
@@ -421,6 +426,14 @@ export interface AppShortcut {
    * experiment's is not.
    */
   capability?: HostCapability;
+  /**
+   * Whether the command is the Inbox's. While the account keeps no Inbox
+   * (`APP_SETTING_SCHEMA.inbox`), it is in none of the window's lists; the
+   * menu bar, whose process reads no choice of the account's, draws it only
+   * where the focused window offers it, which a window keeping no Inbox does
+   * not.
+   */
+  inbox?: true;
 }
 
 /**
@@ -652,7 +665,7 @@ export const APP_SHORTCUTS = {
     chord: { key: SHORTCUT_KEY.ESCAPE, bare: true },
   },
   [APP_COMMAND.HOME]: { label: "Home", chord: { key: SHORTCUT_KEY.H, shift: true } },
-  [APP_COMMAND.INBOX]: { label: "Inbox", chord: { key: SHORTCUT_KEY.I, shift: true } },
+  [APP_COMMAND.INBOX]: { label: "Inbox", chord: { key: SHORTCUT_KEY.I, shift: true }, inbox: true },
   // Note that the Tasks page takes ⇧⌘B, for the Board it once was alone, because ⇧⌘T reopens a closed tab.
   [APP_COMMAND.TASKS]: { label: "Tasks", chord: { key: SHORTCUT_KEY.B, shift: true } },
   [APP_COMMAND.EXIT_AGENT_THREADS]: {
@@ -662,10 +675,12 @@ export const APP_SHORTCUTS = {
   [APP_COMMAND.PREVIOUS_INBOX_ITEM]: {
     label: "Previous inbox item",
     chord: { key: SHORTCUT_KEY.K, plain: true },
+    inbox: true,
   },
   [APP_COMMAND.NEXT_INBOX_ITEM]: {
     label: "Next inbox item",
     chord: { key: SHORTCUT_KEY.J, plain: true },
+    inbox: true,
   },
   [APP_COMMAND.REPLY_TO_SELECTION]: {
     label: "Reply to selection",
@@ -736,6 +751,7 @@ export const IN_CONTEXT_KEY = {
   SWITCHER_NEXT: "in-context-switcher-next",
   SWITCHER_PREVIOUS: "in-context-switcher-previous",
   SWITCHER_GO: "in-context-switcher-go",
+  WORKSPACE_BY_NUMBER: "in-context-workspace-by-number",
   VIEWER_PREVIOUS: "in-context-viewer-previous",
   VIEWER_NEXT: "in-context-viewer-next",
   VIEWER_ZOOM_IN: "in-context-viewer-zoom-in",
@@ -776,6 +792,7 @@ export interface InContextShortcut {
  * (`window-escape.ts` in `@repo/panel`); an Inbox ask's options by their number
  * (`inbox-ask-controls.tsx`); a tab strip's arrows and Delete (`tabs.tsx` in
  * `@repo/ui`); the tab switcher's keys while ⌃ is held (`tab-switcher.tsx`);
+ * the workspace switcher's ⌃1 through ⌃9 (`workspace-keys.ts`);
  * the file viewer's arrows and its picture's zoom (`attachment-viewer.tsx`,
  * `zoom-image.tsx` in `@repo/ui`); a video player's keys while focus is in
  * it (`video-player.tsx` in `@repo/ui`); ⌘K over selected words for a link
@@ -816,6 +833,13 @@ export const IN_CONTEXT_SHORTCUTS = {
   [IN_CONTEXT_KEY.SWITCHER_GO]: {
     label: "Go to chosen card",
     chord: { key: SHORTCUT_KEY.ENTER, plain: true },
+    capability: HOST_CAPABILITY.DESKTOP_APP,
+  },
+  // Note that ⌃ and a digit is a desktop app's alone, because a browser on Windows and Linux keeps Ctrl and a digit for its own tabs.
+  [IN_CONTEXT_KEY.WORKSPACE_BY_NUMBER]: {
+    label: "Switch to workspace by its number",
+    chord: { key: SHORTCUT_KEY.ONE, control: true, switching: true },
+    through: { key: SHORTCUT_KEY.NINE, control: true, switching: true },
     capability: HOST_CAPABILITY.DESKTOP_APP,
   },
   [IN_CONTEXT_KEY.VIEWER_PREVIOUS]: {
@@ -984,6 +1008,7 @@ export const APP_SHORTCUT_GROUPS = [
       IN_CONTEXT_KEY.SWITCHER_NEXT,
       IN_CONTEXT_KEY.SWITCHER_PREVIOUS,
       IN_CONTEXT_KEY.SWITCHER_GO,
+      IN_CONTEXT_KEY.WORKSPACE_BY_NUMBER,
     ],
     commands: [
       APP_COMMAND.BACK,
@@ -1380,6 +1405,13 @@ export function shortcutShown(
   return experimentStands && capabilityStands;
 }
 
+/** Whether a keyed command is the Inbox's (`AppShortcut.inbox`), which stands only while the account keeps one. */
+export function shortcutOfInbox(command: KeyedCommand): boolean {
+  const shortcut: AppShortcut = APP_SHORTCUTS[command];
+
+  return shortcut.inbox === true;
+}
+
 /** The workspace experiment a keyed command stands on, where it is one's: a window offers it only while its own workspace has it on. */
 export function shortcutWorkspaceExperiment(
   command: KeyedCommand,
@@ -1429,13 +1461,15 @@ export function inContextShown(
 /**
  * The shortcut groups as the Keyboard shortcuts page and its settings search
  * list them: only the commands that stand for the account's experiments and
- * the platform's capabilities, none the layered Escape reaches, which the
+ * the platform's capabilities, none of the Inbox's where the account keeps
+ * none (`inbox`), none the layered Escape reaches, which the
  * group's one Escape key names for them all, and only the keys in place the
  * platform offers.
  */
 export function shownShortcutGroups(
   experiments: ExperimentChoices,
   capabilities: readonly HostCapability[],
+  inbox: boolean,
 ): readonly {
   readonly title: string;
   readonly commands: readonly KeyedCommand[];
@@ -1447,7 +1481,8 @@ export function shownShortcutGroups(
       commands: group.commands.filter(
         (command) =>
           !shortcutLayered(APP_SHORTCUTS[command].chord) &&
-          shortcutShown(command, experiments, capabilities),
+          shortcutShown(command, experiments, capabilities) &&
+          (inbox || !shortcutOfInbox(command)),
       ),
       keys: group.keys.filter((key) => inContextShown(key, capabilities)),
     };
@@ -1613,7 +1648,10 @@ function heldAsChord(chord: PressedChord, event: ShortcutKeyPress): boolean {
  * modifiers, and the key. The character is read where it can be,
  * which is what the menu bar matches too, and the physical key where Option
  * has changed the character, or where a plain chord's key is read by its
- * place because Shift changes its character. A key with an unshifted character answers
+ * place because Shift changes its character, or where the chord is a
+ * switcher's, whose keys stand where the hand finds them on every layout:
+ * ⌃2 is the second workspace's on a French keyboard too, where the key types
+ * é without Shift. A key with an unshifted character answers
  * either character, Shift held or not, because which of the two needs Shift
  * is the keyboard layout's to say.
  */
@@ -1627,7 +1665,11 @@ export function shortcutMatches(shortcut: ShortcutChord, event: ShortcutKeyPress
 
   if (!shiftFree && event.shiftKey !== (chord.shift === true)) return false;
 
-  if (event.altKey || (chord.plain === true && chord.key.placed === true)) {
+  if (
+    event.altKey ||
+    chord.switching === true ||
+    (chord.plain === true && chord.key.placed === true)
+  ) {
     return event.code === chord.key.code;
   }
 
@@ -1654,6 +1696,30 @@ export function filesChangedKeyFor(event: ShortcutKeyPress): FilesChangedKey | u
 /** The Chapters key whose chord a key press is, or nothing. */
 export function chaptersKeyFor(event: ShortcutKeyPress): ChaptersKey | undefined {
   return CHAPTERS_KEYS.find((key) => shortcutMatches(CHAPTERS_SHORTCUTS[key].chord, event));
+}
+
+/**
+ * The workspace switcher's chords, ⌃1 through ⌃9, in the order the workspace
+ * menu lists the workspaces they switch to: the first chord the first
+ * workspace's, and a tenth workspace on reached by none.
+ */
+export const WORKSPACE_CHORDS: readonly ShortcutChord[] = [
+  SHORTCUT_KEY.ONE,
+  SHORTCUT_KEY.TWO,
+  SHORTCUT_KEY.THREE,
+  SHORTCUT_KEY.FOUR,
+  SHORTCUT_KEY.FIVE,
+  SHORTCUT_KEY.SIX,
+  SHORTCUT_KEY.SEVEN,
+  SHORTCUT_KEY.EIGHT,
+  SHORTCUT_KEY.NINE,
+].map((key) => ({ key, control: true, switching: true }));
+
+/** Where in the workspace menu's order the workspace a key press switches to stands, 0 for ⌃1, or nothing where the press is none of `WORKSPACE_CHORDS`. */
+export function workspaceIndexFor(event: ShortcutKeyPress): number | undefined {
+  const index = WORKSPACE_CHORDS.findIndex((chord) => shortcutMatches(chord, event));
+
+  return index === -1 ? undefined : index;
 }
 
 /** Whether the keymap leaves the chord to the window's own Escape, which closes the nearest thing open. */

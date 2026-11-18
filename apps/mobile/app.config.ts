@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
+import plist, { type PlistValue } from "@expo/plist";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
 import {
@@ -166,14 +167,6 @@ type ExtensionFile = { readonly FROM: string; readonly NAME: string; readonly AS
 
 // The name an extension's copy of a file is built under.
 const copiedName = ({ NAME, AS }: ExtensionFile) => AS ?? NAME;
-
-/** A value an extension's Info.plist or entitlements hold. */
-type PlistValue =
-  | string
-  | boolean
-  | number
-  | readonly string[]
-  | { readonly [key: string]: PlistValue };
 
 /**
  * An app extension the app embeds: its target, the bundle id automatic
@@ -413,10 +406,8 @@ const SENTRY_LAUNCH_ENVIRONMENT: SentryEnvironment = SENTRY.RELEASED ? "producti
 // starts the native half again on its own options, and off for a fixture run.
 // Note that the JavaScript filters cannot reach this window, so it sends only
 // what a native crash report holds, with no request breadcrumbs. A build
-// without a DSN, a local or simulator one, starts nothing natively: the empty
-// DSN is refused, and so is the start's `{}` fallback, which left the SDK
-// starting on no options at all and faulting at launch, so the patched
-// `RNSentrySDK` returns instead (`pnpm-workspace.yaml`'s patch for it).
+// without a DSN, a local or simulator one, gets no native start at all
+// (`useNativeInit` off), since the SDK's start faults on an empty DSN.
 const SENTRY_LAUNCH_OPTIONS = {
   dsn: SENTRY.DSN,
   enabled: SENTRY.DSN !== "",
@@ -562,55 +553,12 @@ const writeSymbolSet = (catalog: string, name: string, svg: string) => {
   writeFileSync(join(symbolSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
 };
 
-// A string as plist XML's text.
-const plistText = (text: string) =>
-  text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-
-// A plist value as XML, indented by `depth` tabs.
-const plistXml = (value: PlistValue, depth: number): string => {
-  const indent = "\t".repeat(depth);
-
-  if (Predicate.isString(value)) return `${indent}<string>${plistText(value)}</string>`;
-
-  if (Predicate.isBoolean(value)) return `${indent}<${value}/>`;
-
-  // Note that a whole number is a plist integer and any other a real, such as a content extension's size ratio.
-  if (Predicate.isNumber(value))
-    return Number.isInteger(value)
-      ? `${indent}<integer>${value}</integer>`
-      : `${indent}<real>${value}</real>`;
-
-  if (Array.isArray(value))
-    return `${indent}<array>\n${value.map((item) => plistXml(item, depth + 1)).join("\n")}\n${indent}</array>`;
-
-  // SAFETY: the branches above take every PlistValue but a dictionary.
-  return `${indent}<dict>\n${plistEntries(value as Record<string, PlistValue>, depth + 1)}\n${indent}</dict>`;
-};
-
-// A dictionary's keys and values as XML, each key at `depth` tabs.
-const plistEntries = (entries: Readonly<Record<string, PlistValue>>, depth: number): string =>
-  Object.entries(entries)
-    .map(
-      ([key, value]) =>
-        `${"\t".repeat(depth)}<key>${plistText(key)}</key>\n${plistXml(value, depth)}`,
-    )
-    .join("\n");
-
-// A whole plist document of one dictionary.
-const plistDocument = (entries: Readonly<Record<string, PlistValue>>) =>
-  `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
-<plist version="1.0">
-${plistXml(entries, 0)}
-</plist>
-`;
-
 // An extension's Info.plist: its extension point and, where it has them, its
 // principal class and attributes, the app's version and build, which App
 // Store Connect refuses an extension to differ from, the App Group where it
 // shares it, and its own keys over the rest.
 const extensionPlist = (extension: AppExtension, version: string, build: string) =>
-  plistDocument({
+  plist.build({
     CFBundleDevelopmentRegion: "$(DEVELOPMENT_LANGUAGE)",
     CFBundleDisplayName: extension.TARGET,
     CFBundleExecutable: "$(EXECUTABLE_NAME)",
@@ -678,7 +626,7 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
       if (extension.ENTITLEMENTS !== undefined)
         writeFileSync(
           join(folder, extensionEntitlementsName(extension)),
-          plistDocument(extension.ENTITLEMENTS),
+          plist.build(extension.ENTITLEMENTS),
         );
 
       if (catalogued) {
@@ -974,13 +922,10 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
         `webcredentials:${ASSOCIATED_DOMAIN}`,
         `activitycontinuation:${ASSOCIATED_DOMAIN}`,
       ],
-      // The TestFlight build takes its pushes from production APNs, which
-      // the distribution profile release-ios.yml exports it with allows; a
-      // simulator build is unsigned and carries no entitlement at all.
       // The App Group it shares files with its extensions through, and the
       // Keychain group it shares the share sheet's token through, after its own.
+      // Its APNs environment is expo-notifications' plugin's, below.
       entitlements: {
-        "aps-environment": "production",
         ...APP_GROUP_ENTITLEMENTS,
         [KEYCHAIN_GROUPS_ENTITLEMENT]: [
           `$(AppIdentifierPrefix)${BUNDLE_IDENTIFIER}`,
@@ -991,8 +936,6 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // asking on every build: the app's one cipher of its own (the host's
       // sealed files, `keychain-cipher.ts`) protects only its own data at
       // rest, and everything on the wire is the system's HTTPS.
-      // iOS wakes the app for a settled thread's background push, which
-      // clears its notification (`src/notification-task.ts`).
       // The member's running agents stand in a Live Activity the service
       // starts and updates by push (`live-activity/`).
       // A call into an agent keeps on with the screen locked or another app
@@ -1002,7 +945,7 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // app is kept running for a call alone.
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
-        UIBackgroundModes: ["remote-notification", "audio"],
+        UIBackgroundModes: ["audio"],
         NSSupportsLiveActivities: true,
         // A screen handed over from another of the member's devices arrives
         // as our own activity type, spelled again in Swift
@@ -1021,6 +964,14 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
     },
     plugins: [
       "expo-router",
+      // The TestFlight build takes its pushes from production APNs
+      // (`aps-environment`), which the distribution profile release-ios.yml
+      // exports it with allows; a simulator build is unsigned and carries no
+      // entitlement at all. iOS wakes the app for a settled thread's
+      // background push, which clears its notification
+      // (`src/notification-task.ts`), so the plugin adds the
+      // `remote-notification` background mode beside `audio`.
+      ["expo-notifications", { mode: "production", enableBackgroundRemoteNotifications: true }],
       // A message's photo is picked in the system's photo picker, which reads
       // only what the person picks, so the camera is never asked for. Both
       // purpose strings are still named here, since the picker's plugin
@@ -1057,7 +1008,7 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
           project: SENTRY.PROJECT,
           url: SENTRY.URL,
           disableAutoUpload: !process.env.SENTRY_AUTH_TOKEN,
-          useNativeInit: true,
+          useNativeInit: SENTRY.DSN !== "",
           options: SENTRY_LAUNCH_OPTIONS,
         },
       ],

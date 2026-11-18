@@ -1,8 +1,8 @@
 /**
  * scheduled-call-app.ts -- a job Vercel's cron calls once a day, as its one path answers it: a GET under the deployment's `CRON_SECRET`, answered with what the job did.
  *
- * Each daily job's group (`workspace-drive-cleanup-app.ts`,
- * `usage-ledger-app.ts`) is this with its path and its job. The secret is
+ * Each daily job's group (`workspace-drive-cleanup-app.ts`) is this with its
+ * path and its job. The secret is
  * compared in constant time, as the minute sweep's is; a deployment missing
  * it answers unavailable and runs nothing, and a call that is not a GET or
  * not the cron's runs nothing.

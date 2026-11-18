@@ -33,13 +33,14 @@ import { sandboxDeleteInOnePlaceRule } from "./rules/sandbox-delete-in-one-place
 import { settingsRowEndRule } from "./rules/settings-row-end.ts";
 import { settingsSectionDeclaredRule } from "./rules/settings-section-declared.ts";
 import { skeletonThroughComponentsRule } from "./rules/skeleton-through-components.ts";
+import { writeThroughMutationRule } from "./rules/write-through-mutation.ts";
 
 /**
  * Oxlint rules that catch code or tests that silently do nothing or wipe data,
  * and the design system's guards against controls and headings built outside `@repo/ui`, and the iOS app's against controls built outside `@repo/ui-native` and an ask drawn inside a screen's host,
  * forms the browser checks with its own bubble, loading skeletons that copy the surface they stand for, buttons that wait on a press without saying so, buttons that open a page, placeholders that end in an ellipsis,
  * popovers that close on a press through a listener of their own, view choices stored by hand rather than through `useKept`, a follow
- * opened beside the live reads' queries, a vendored
+ * opened beside the live reads' queries, a write sent outside a mutation that would draw it ahead of its answer, a vendored
  * shadcn component hiding the keyboard's ring, a script asking the OS whether to move rather than the motion tokens, a settings row's ⋯ or chevron standing among the controls that drop below its words, a box writing to a started agent reading that agent outside `useAgentBox`, a page handing a shared row the menu, rename, selection or state its row component builds, a menu item's key printed by a flag of its caller's rather than the shortcut target, an agent archived or brought back outside `agents/agent-change.ts`, an agent's sandbox deleted anywhere but the one place that owns deleting it, a request to GitHub's API sent around `@repo/github` or a member's saved GitHub token opened outside its `GitHubMemberTokens` implementation, and the classes, glyphs and patterns phase 2 retired coming back; and the testing policy's
  * guards against a test that mocks a module of this repository, runs less than it declares, or reads source text.
  */
@@ -79,6 +80,7 @@ const antiSlopPlugin = eslintCompatPlugin({
     "settings-row-end": settingsRowEndRule,
     "settings-section-declared": settingsSectionDeclaredRule,
     "skeleton-through-components": skeletonThroughComponentsRule,
+    "write-through-mutation": writeThroughMutationRule,
   },
 });
 

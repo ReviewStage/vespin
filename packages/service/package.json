@@ -157,7 +157,10 @@
     "./member-mcp/resource": "./src/member-mcp/resource.js",
     "./maintenance/maintenance-bounds": "./src/maintenance/maintenance-bounds.js",
     "./maintenance/maintenance-sweep": "./src/maintenance/maintenance-sweep.js",
-    "./maintenance/usage-ledger-app": "./src/maintenance/usage-ledger-app.js",
+    "./billing/metronome-webhook-app": "./src/billing/metronome-webhook-app.js",
+    "./billing/stripe-webhook-app": "./src/billing/stripe-webhook-app.js",
+    "./billing/usage-queue-bounds": "./src/billing/usage-queue-bounds.js",
+    "./billing/usage-queues": "./src/billing/usage-queues.js",
     "./maintenance/workspace-drive-cleanup-app": "./src/maintenance/workspace-drive-cleanup-app.js",
     "./observability/caller-trace": "./src/observability/caller-trace.js",
     "./observability/sentry": "./src/observability/sentry.js",
@@ -217,8 +220,8 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "4.0.105",
-    "@ai-sdk/openai": "4.0.118",
+    "@ai-sdk/anthropic": "4.0.106",
+    "@ai-sdk/openai": "4.0.121",
     "@better-auth/cimd": "1.7.7",
     "@better-auth/drizzle-adapter": "1.7.7",
     "@better-auth/electron": "1.7.7",

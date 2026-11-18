@@ -22,7 +22,11 @@ import { workspaceDriveBuildsFromEnvironment } from "./agents/workspace-drive-bu
 import { bearerCallersLayer } from "./auth/bearer-callers.js";
 import { signInRevocationFromEnvironment } from "./auth/sign-in-revocation.js";
 import { automationCadenceFromEnvironment } from "./automations/automation-cadence.js";
-import { endedSessionsChargedOnDelete } from "./billing/sandbox-session-charges.js";
+import { billingEnvironment } from "./billing/billing-environment.js";
+import {
+  endedSessionsChargedOnDelete,
+  usageQueuesFromEnvironment,
+} from "./billing/usage-queues.js";
 import { webSqlClient } from "./db/sql-client.js";
 import { hostedEnvironment } from "./environment.js";
 import { productAnalyticsFromEnvironment } from "./events/server-events.js";
@@ -92,6 +96,22 @@ const slackBot = slackBotFromEnvironment.pipe(
 const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transport));
 
 /**
+ * `UsageQueues` publishes each sandbox's usage check and each charge's send
+ * (`billing/usage-queues.ts`); off Vercel it delivers them in this process,
+ * over the ledger, the edge's sandboxes, and Metronome it is built on here.
+ */
+const usageQueues = usageQueuesFromEnvironment.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      webSqlClient,
+      FetchHttpClient.layer,
+      billingEnvironment,
+      Layer.effect(Sandbox, Effect.service(Sandbox)),
+    ),
+  ),
+);
+
+/**
  * The services every web function's and every agent's effects run against. A
  * function reaches this layer only through its edge's runtime, so a service
  * added here is built once per instance rather than once per invocation.
@@ -149,6 +169,9 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
  * `InvitationMail` is the one place the Resend key and the sender a
  * workspace invitation is emailed from are read (`accounts/invitation-mail.ts`).
  *
+ * `BillingEnvironment` is the one place the Metronome account usage is sent
+ * to, and its webhook's secret, are read (`billing/billing-environment.ts`).
+ *
  * `ApnsSender` is the one place the deployment's APNs key is read
  * (`push/apns.ts`), over one HTTP/2 connection per Apple gateway that the
  * instance keeps for its life (`push/apns-http2.ts`), so every push an
@@ -179,11 +202,13 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
 export const webServices = Layer.mergeAll(
   // The sandboxes are the edge's to pick, which provides its provider's adapter beneath these.
   Layer.effect(Sandbox, Effect.service(Sandbox)),
-  // A deleted sandbox's ended sessions, read by the adapter just before its delete, are charged to the ledger.
-  endedSessionsChargedOnDelete.pipe(Layer.provide(webSqlClient)),
+  // A deleted sandbox's ended sessions, read by the adapter just before its delete, are charged to the ledger and published to be sent.
+  endedSessionsChargedOnDelete.pipe(Layer.provide(Layer.merge(webSqlClient, usageQueues))),
+  usageQueues,
   FetchHttpClient.layer,
   webSqlClient,
   hostedEnvironment,
+  billingEnvironment,
   githubApp,
   signInRevocationFromEnvironment.pipe(Layer.provide(githubApp)),
   settledTurnListener.pipe(

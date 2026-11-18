@@ -302,20 +302,17 @@ export function QuickAddLines({
  * title in the name's, so it reads as the row it is about to be; a chip
  * whose column the list does not draw stands after the title, so each
  * stays in reach. An add still out stands as its row, its name muted, and
- * why one was refused in the name's cell. After a run of a list's rows
- * drawing only those near the view (`afterRun`), as a task's Sub-tasks
- * stand, it holds each column as wide as the run's rows do and starts at
- * their gutter.
+ * why one was refused in the name's cell. It stands beside a run of a
+ * list's rows drawing only those near the view, the Tasks page's group's
+ * or a task's Sub-tasks', so it holds each column as wide as the run's
+ * rows do and starts at their gutter, as every one of them does.
  */
-export function rowQuickAddLine(
-  properties: readonly TaskRowCell[],
-  afterRun = false,
-): QuickAddLine {
+export function rowQuickAddLine(properties: readonly TaskRowCell[]): QuickAddLine {
   return ({ draft, pending, refused }) => (
     <TaskRowDraft
       cells={properties}
-      placed={afterRun}
-      edges={afterRun ? TASK_ROW_EDGES.LIST : TASK_ROW_EDGES.UNCHOSEN}
+      placed
+      edges={TASK_ROW_EDGES.LIST}
       content={
         draft === undefined
           ? {}

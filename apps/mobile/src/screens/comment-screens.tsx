@@ -2,7 +2,6 @@
 
 import { type DescriptionBlock, descriptionBlocks } from "@repo/features/description-blocks";
 import { COMMENT_NOTE } from "@repo/features/description-comment-notes";
-import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { agentName, providerOf } from "@repo/features/model-label";
 import { readFailedWords, readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
@@ -12,10 +11,9 @@ import {
   BAR_TITLE,
   BUTTON_LOOK,
   Composer,
-  ComposerFoot,
-  DetailPage,
   EmptyState,
   GLYPH,
+  GlassDock,
   glyphSymbol,
   NOTICE_KIND,
   PATH_PART,
@@ -25,12 +23,10 @@ import {
   useFailureNotices,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { PUSHED_PAGE, useDetailCovered, useDetailLeave, useHandToDetail } from "../detail-stack.js";
-import { FocusedDock, useFocusShown } from "../focus-shown.js";
+import { useEffect, useMemo, useState } from "react";
+import { useFocusShown } from "../focus-shown.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
-import { useInFront } from "../place-columns.js";
 import { useOnOwnTab } from "../tab-route.js";
 import {
   type CommentReply,
@@ -100,8 +96,7 @@ type Reopening = {
  * opens before the service has taken it, so a refusal reopens its field only
  * where the person still looks at it, and says so in the failure notice
  * anywhere else; and that the thread's own page does the reopening, since
- * only it knows where it now stands, in the tab's stack or a split view's
- * detail, after a rotation moved it.
+ * only it knows where it now stands on its tab's stack.
  */
 const standingThreads = new Map<string, (reopening: Reopening) => void>();
 
@@ -212,31 +207,24 @@ function quoteOf(quote: string, anchored: boolean): string {
  * said standing in the field's head. The task's path stands small in
  * the bar, as a page of the task's does, and the bar's trailing button
  * resolves the thread, or reopens it once resolved, as the panel's check
- * on its first comment does. In a window wide enough for three columns it
- * stands pushed over the split view's detail instead.
+ * on its first comment does. Opened from a split view's detail, it is
+ * pushed on the tab's own stack over the whole window, as a compact window
+ * pushes it.
  */
 export function CommentThreadScreen() {
   const { id = "", task: taskId = "" } = useLocalSearchParams<{ id: string; task: string }>();
-  const handed = useHandToDetail({ kind: PUSHED_PAGE.COMMENTS, threadId: id, taskId });
-
-  if (handed) return null;
 
   return <CommentThread threadId={id} taskId={taskId} />;
 }
 
-/** One thread of a task's description, as `CommentThreadScreen` describes it; `inColumn` pushed over a split view's detail, its reply field at the column's foot. */
-export function CommentThread({
+/** One thread of a task's description, as `CommentThreadScreen` describes it. */
+function CommentThread({
   threadId: id,
   taskId,
-  inColumn = false,
 }: {
   readonly threadId: string;
   readonly taskId: string;
-  readonly inColumn?: boolean | undefined;
 }) {
-  const columnShown = useInFront();
-  const covered = useDetailCovered();
-  const inFront = columnShown && !covered;
   const colors = useColors();
   const overview = useTaskOverview(taskId);
   const openLink = useOpenLink(overview?.task.workspaceId);
@@ -249,20 +237,13 @@ export function CommentThread({
 
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
-  const detail = useDetailLeave();
-  // Note that a thread stands only while it is in front, since a page pushed over it, in the tab's stack or a split view's detail, or another tab, keeps it mounted.
-  const standing = useFocusShown() && inFront;
+  // Note that a thread stands only while it is in front, since a page pushed over it on the tab's stack, or another tab, keeps it mounted.
+  const standing = useFocusShown();
 
   useEffect(() => {
     if (!standing) return;
 
     const reopen = (reopening: Reopening) => {
-      if (detail !== undefined) {
-        detail.replace({ kind: PUSHED_PAGE.NEW_COMMENT, ...reopening });
-
-        return;
-      }
-
       const { taskId: task, ...span } = reopening;
       router.replace({ pathname: onOwnTab("/tasks/comments/new"), params: { task, ...span } });
     };
@@ -279,7 +260,7 @@ export function CommentThread({
     return () => {
       standingThreads.delete(id);
     };
-  }, [standing, id, detail, router, onOwnTab]);
+  }, [standing, id, router, onOwnTab]);
 
   const agents = new Map(
     (overview?.agents ?? []).map(
@@ -302,14 +283,7 @@ export function CommentThread({
     onDropPictures: reply.pictures.drop,
   };
 
-  // Note that a split view's detail bar stands Resolve or Reopen among the page's acts, as a compact window's toolbar stands it, since a column draws no stack toolbar.
-  const settleAct = (shown: DescriptionCommentThread) => ({
-    label: threadOpen(shown) ? WORDS.RESOLVE : WORDS.REOPEN,
-    symbol: threadOpen(shown) ? GLYPH.CHECK : GLYPH.RESTORE,
-    onPress: () => settle(shown),
-  });
-
-  const page = (foot?: ReactNode) =>
+  const page =
     thread === undefined ? undefined : (
       <ThreadPage
         quoted
@@ -320,21 +294,8 @@ export function CommentThread({
         repository={task?.repository}
         onOpenLink={openLink}
         standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}
-        acts={inColumn ? [settleAct(thread)] : undefined}
-        foot={foot}
       />
     );
-
-  // Note that the thread's page draws its own path in a column's bar, so the column's bar names it only while no thread stands.
-  if (inColumn) {
-    return (
-      <DetailPage bar={thread === undefined ? { path: { path, status: task?.status } } : {}}>
-        {page(<ComposerFoot {...composer} shown={inFront} />) ?? (
-          <ThreadMissing taskId={taskId} overview={overview} />
-        )}
-      </DetailPage>
-    );
-  }
 
   return (
     <>
@@ -358,9 +319,9 @@ export function CommentThread({
           <ThreadMissing taskId={taskId} overview={overview} />
         </Screen>
       ) : (
-        <FocusedDock bar={<Composer {...composer} />}>
-          <Screen>{page()}</Screen>
-        </FocusedDock>
+        <GlassDock bar={<Composer {...composer} />}>
+          <Screen>{page}</Screen>
+        </GlassDock>
       )}
     </>
   );
@@ -378,9 +339,7 @@ export function CommentThread({
  * notice anywhere else. The block is kept as it stood
  * when the screen first found it, so an edit elsewhere in the description
  * never takes the field away; where the route names no block of the
- * description as read, it says so. In a window wide enough for three
- * columns it stands pushed over the split view's detail instead, and the
- * thread it starts takes its place there.
+ * description as read, it says so.
  */
 export function NewCommentScreen() {
   const {
@@ -397,28 +356,16 @@ export function NewCommentScreen() {
     again?: string;
   }>();
 
-  const handed = useHandToDetail({
-    kind: PUSHED_PAGE.NEW_COMMENT,
-    taskId,
-    from,
-    to,
-    quote,
-    again,
-  });
-
-  if (handed) return null;
-
   return <NewComment taskId={taskId} from={from} to={to} quote={quote} again={again} />;
 }
 
-/** A new thread on one block of a task's description, as `NewCommentScreen` describes it; `inColumn` pushed over a split view's detail, its field at the column's foot. */
-export function NewComment({
+/** A new thread on one block of a task's description, as `NewCommentScreen` describes it. */
+function NewComment({
   taskId,
   from,
   to,
   quote,
   again,
-  inColumn = false,
 }: {
   readonly taskId: string;
   readonly from: string;
@@ -426,13 +373,8 @@ export function NewComment({
   readonly quote: string;
   /** The thread id a refused start went under, whose field this opens again on the block it was measured on. */
   readonly again?: string | undefined;
-  readonly inColumn?: boolean | undefined;
 }) {
-  const columnShown = useInFront();
-  const covered = useDetailCovered();
-  const inFront = columnShown && !covered;
   const router = useRouter();
-  const detail = useDetailLeave();
   const onOwnTab = useOnOwnTab();
   const colors = useColors();
   const overview = useTaskOverview(taskId);
@@ -493,13 +435,6 @@ export function NewComment({
     // Note that the same words sent again go under the same thread's id, so a refusal parked for an earlier send of them is let go rather than reopening this one.
     earlyRefusals.delete(threadId);
     openingThreads.add(threadId);
-
-    if (detail !== undefined) {
-      detail.replace({ kind: PUSHED_PAGE.COMMENTS, threadId, taskId: task });
-
-      return;
-    }
-
     router.replace({ pathname: onOwnTab("/tasks/comments/[id]"), params: { id: threadId, task } });
   };
 
@@ -517,7 +452,7 @@ export function NewComment({
 
   const empty = <BlockState overview={overview} />;
 
-  const page = (foot?: ReactNode) =>
+  const page =
     block === undefined ? undefined : (
       <ThreadPage
         quoted
@@ -527,20 +462,8 @@ export function NewComment({
         messages={[]}
         repository={overview?.task.repository}
         onOpenLink={openLink}
-        foot={foot}
       />
     );
-
-  // Note that the thread's page draws its own path in a column's bar, so the column's bar names it only while no block stands.
-  if (inColumn) {
-    return (
-      <DetailPage
-        bar={block === undefined ? { path: { path, status: overview?.task.status } } : {}}
-      >
-        {page(<ComposerFoot {...composer} shown={inFront} />) ?? empty}
-      </DetailPage>
-    );
-  }
 
   return (
     <>
@@ -553,9 +476,9 @@ export function NewComment({
       {block === undefined ? (
         <Screen>{empty}</Screen>
       ) : (
-        <FocusedDock bar={<Composer {...composer} />}>
-          <Screen>{page()}</Screen>
-        </FocusedDock>
+        <GlassDock bar={<Composer {...composer} />}>
+          <Screen>{page}</Screen>
+        </GlassDock>
       )}
     </>
   );

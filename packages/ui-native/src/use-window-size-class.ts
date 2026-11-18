@@ -1,14 +1,8 @@
 // use-window-size-class.ts -- the size class of the window the app is drawn in, live across a fold, a rotation, or a resize, once the window has settled.
 
 import { useSyncExternalStore } from "react";
-import { Dimensions, type ScaledSize, useWindowDimensions } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  standsThreeColumns,
-  WINDOW_SIZE_CLASS,
-  type WindowSizeClass,
-  windowSizeClass,
-} from "./window-size-class.js";
+import { Dimensions, type ScaledSize } from "react-native";
+import { type WindowSizeClass, windowSizeClass } from "./window-size-class.js";
 
 /**
  * How long a new size class must hold before the app takes it. A fold, an
@@ -74,28 +68,4 @@ function subscribe(listener: () => void) {
 /** The window's size class, which every reader takes in the same render once it has held for `SETTLE_MS`. */
 export function useWindowSizeClass(): WindowSizeClass {
   return useSyncExternalStore(subscribe, () => settled);
-}
-
-/** Whether the window the app is drawn in stands three columns: a regular window wide enough, live as its width is. */
-export function useThreeColumns(): boolean {
-  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
-  const { width } = useWindowDimensions();
-
-  return regular && standsThreeColumns(width);
-}
-
-/**
- * Whether the system stands a compact window's tabs as a rail at its side
- * rather than a bar at its foot, as iOS 27 does on the folded iPhone Duo's
- * outer display, where the clock and the rail share a column at the right
- * edge. Note that it is read from the window's shape and its side safe area,
- * since no API says where the tab bar stands: a portrait window holding
- * chrome at its side, which a portrait iPhone never does, while a landscape
- * iPhone's side insets are the sensor's and its tabs still stand at the foot.
- */
-export function useTabRail(): boolean {
-  const { width, height } = useWindowDimensions();
-  const { left, right } = useSafeAreaInsets();
-
-  return height > width && (left > 0 || right > 0);
 }

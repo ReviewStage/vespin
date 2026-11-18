@@ -10,7 +10,7 @@ import {
   type SettingsRowsInput,
 } from "@repo/settings";
 import { NOTIFICATIONS_STATUS, type NotificationsControl } from "@repo/settings/settings-controls";
-import { IconButton, SettingsSection, Tooltip } from "@repo/ui";
+import { IconButton, Reveal, SettingsSection, Tooltip } from "@repo/ui";
 import { playCompletionSound } from "@repo/ui/completion-sound";
 import { PlayIcon } from "@repo/ui/icons";
 import { appPlatform } from "../app-platform.js";
@@ -111,8 +111,9 @@ export function SoundsSection({
           onTurned={onTurned}
         />
         {clips.drawn}
-        {notifying && notifications.status === NOTIFICATIONS_STATUS.OFF ? (
-          onMac ? (
+        {/* Note that each line comes with turning notifications on, so each unrolls in with it rather than popping. */}
+        <Reveal shown={notifying && notifications.status === NOTIFICATIONS_STATUS.OFF}>
+          {onMac ? (
             <NotificationsOff
               words={
                 notifications.packaged
@@ -123,11 +124,13 @@ export function SoundsSection({
             />
           ) : (
             <NotificationsOff words={NOTIFICATIONS_OFF_WORDS.browser} />
-          )
-        ) : null}
-        {notifying && !onMac && notifications.status === NOTIFICATIONS_STATUS.UNKNOWN ? (
+          )}
+        </Reveal>
+        <Reveal
+          shown={notifying && !onMac && notifications.status === NOTIFICATIONS_STATUS.UNKNOWN}
+        >
           <NotificationsOff words={NOTIFICATIONS_OFF_WORDS.unasked} onAllow={ask} />
-        ) : null}
+        </Reveal>
         <SlackNotificationsRow workspaces={workspaces} />
       </SettingsSection>
       {clips.list}

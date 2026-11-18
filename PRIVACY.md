@@ -144,7 +144,12 @@ and the scopes it was granted; we delete them when the workspace disconnects
 the bot, when the app is uninstalled from that Slack or its token revoked
 there, and with the workspace. The bot also keeps your Slack user id, and
 messages you send the bot, with the earlier messages of that Slack thread, are
-handed to an agent. If you allow an app such as Claude Code or Cursor to connect to our MCP
+handed to an agent. Your workspace's agents can also read, post, and react as the bot in
+any Slack channel it has been added to, private channels included, so
+messages in those channels may reach the agent that reads them, its
+transcript, and its traces. A private channel's messages an agent reads land
+in its transcript, which anyone who can open the task can read, whether or
+not they are in that channel. If you allow an app such as Claude Code or Cursor to connect to our MCP
 server, we store a record of the app, your consent, and hashed tokens.
 
 ### Commands on your Mac
@@ -308,7 +313,10 @@ your Mac.
 
 The Vespin iOS app sends Sentry error reports, crash reports (a crash is sent
 the next time you open the app, a crash as the app starts, before its first
-screen, among them), and reports of a screen that could not be drawn. It uses Sentry's default data collection, so reports may include error
+screen, among them), reports of a screen that could not be drawn, and a report
+of each sign-in that ended without signing you in, naming the provider (Google
+or GitHub) and how it ended, with the app's own lines about its sign-in before
+it. It uses Sentry's default data collection, so reports may include error
 messages, stack traces, the addresses of the app's own requests, device and
 iOS details, the app's version and build, and your IP address. A report
 naming a sign-in token in an address is dropped, and reports name your
@@ -447,16 +455,15 @@ encrypted under a key of Vespin's own: like the rest of your files, it is
 protected by your Mac's disk encryption (FileVault) where you turn it on. The
 app deletes it when you sign out. The Vespin iOS app keeps the same database
 on your iPhone, in its own storage, protected by the iPhone's Data
-Protection, and deletes it when you sign out. Your sign-in tokens are still
-kept encrypted under a key in the macOS Keychain, or in the iPhone's
-Keychain, which never leaves that iPhone.
+Protection, and deletes it when you sign out. On the Mac your sign-in tokens
+are kept encrypted under a key in the macOS Keychain. On the iPhone they are
+kept in the iPhone's Keychain itself, readable after the phone's first unlock
+since it started, never synced to iCloud or moved to another device, and
+deleted when you sign out; an update moves tokens an earlier version of the
+app kept encrypted in its own files into the Keychain the first time it
+opens.
 
-An older build kept the same lists, waiting changes, and undelivered
-messages in one file, `entities.sealed`, encrypted under a key in the
-Keychain. The app moves the waiting changes and undelivered messages from
-it into the database once, writes the lists out of it, and deletes the file
-when you sign out; a coming release deletes it for good. Transcripts
-and pictures you open are held in memory only.
+Transcripts and pictures you open are held in memory only.
 
 ### Spotlight and Handoff on your iPhone
 
@@ -474,13 +481,16 @@ its title and its vespin.dev link, so Handoff can offer it on your other
 devices signed in to the same Apple Account. iOS hands them to those devices
 directly, and the app does not offer them to Siri suggestions or to search.
 
-### Members' pictures on your iPhone
+### Members' and workspaces' pictures on your iPhone
 
 So a menu can lead each member of a workspace with their face, such as a
-task's Assignee menu, the Vespin iOS app keeps a small copy of each member's
-sign-in picture as a file in its caches on your iPhone or iPad. It downloads
-each one from the Google or GitHub address the app already draws it from,
-sends it nowhere else, and keeps it only in the caches iOS may clear when the
+task's Assignee menu, and each of your workspaces with its photo, such as the
+workspace switcher, the Vespin iOS app keeps a small copy of each member's
+sign-in picture, your own included, and of each of your workspaces' photos as
+a file in its caches on your iPhone or iPad. It downloads a sign-in picture
+from the Google or GitHub address the app already draws it from, and writes a
+workspace's photo from the copy the app already holds, sends neither
+anywhere else, and keeps them only in the caches iOS may clear when the
 device needs room; deleting the app deletes them.
 
 ## 3\. Legal basis for processing
@@ -552,7 +562,12 @@ data with:
   performance monitoring), Resend (email: for onboarding emails and product updates,
   Resend is told your email address, your first name, when you signed up, whether
   you accepted a workspace invitation, and on which days you started a task),
-  and Slack (feedback, setup answers, and Vespin's Slack bot).
+  Metronome (billing: each workspace's id and what each of its agents' cloud
+  sandbox sessions cost, which Metronome totals into the workspace's monthly
+  usage), Stripe (billing: the card and billing details a workspace's owner or
+  admin gives it to pay the workspace's invoices, which Metronome hands it
+  with each workspace's monthly usage total), and Slack (feedback, setup
+  answers, and Vespin's Slack bot).
 - **Integrations and connected apps:** the services and MCP clients you connect
   receive what your agents send them, or what our tools answer, and keep it
   under their own policies.

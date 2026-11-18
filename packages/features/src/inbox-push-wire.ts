@@ -25,7 +25,7 @@ export const PUSH_KIND = {
   ASK: "ask",
   /** Any other post of an agent's on a thread that waits on the member. */
   POST: "post",
-  /** A turn of an agent the member started that failed. */
+  /** A turn of an agent the member started that failed, or that finished where the member keeps no Inbox: either opens the agent. */
   RUN_FAILED: "run-failed",
   /** A thread settled, so its delivered notification is removed; a background push. */
   SETTLED: "settled",
@@ -39,7 +39,7 @@ export const PUSH_CATEGORY = {
   DECIDE: "inbox-decide",
   /** Any other post: a reply typed in place. */
   REPLY: "inbox-reply",
-  /** A failed run: no action but opening the agent. */
+  /** A turn that ended, failed or finished: no action but opening the agent. */
   RUN_FAILED: "agent-run-failed",
 } as const;
 
@@ -80,7 +80,7 @@ const threadPushSchema = EffectSchema.Struct({
   recommended: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
 });
 
-/** A push about an agent's failed turn. */
+/** A push about an agent's turn that failed, or finished where its member keeps no Inbox. */
 const runFailedPushSchema = EffectSchema.Struct({
   kind: EffectSchema.Literal(PUSH_KIND.RUN_FAILED),
   agentId: idSchema,

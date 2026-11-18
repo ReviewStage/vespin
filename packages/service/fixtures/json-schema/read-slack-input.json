@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "properties": {
+    "channel": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A channel the bot is in, by the id or name list_slack_channels answered, or your own thread's channel."
+    },
+    "thread": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The `ts` of the message a thread hangs from, to read that thread; leave it out for the channel's latest messages."
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50,
+      "description": "How many messages to read, 1 to 50; 15 where left out."
+    }
+  },
+  "required": [
+    "channel"
+  ],
+  "additionalProperties": false
+}

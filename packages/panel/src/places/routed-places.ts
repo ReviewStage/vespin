@@ -55,6 +55,7 @@ import {
 } from "../links-at-hand.js";
 import {
   adminRouteStands,
+  inboxRouteStands,
   mergeQueueRouteStands,
   type RouteAccess,
   settingsPageRouteStands,
@@ -93,10 +94,11 @@ export const NARROW_BACK = {
 
 type NarrowBack = (typeof NARROW_BACK)[keyof typeof NARROW_BACK];
 
-/** What a place a narrow room stands another in the place of opens it with: the listed workspace's address step, and the Inbox's door, which stands it in the step's place where told to. */
+/** What a place a narrow room stands another in the place of opens it with: the listed workspace's address step, the Inbox's door, which stands it in the step's place where told to, and whether the account keeps an Inbox for it to open. */
 interface NarrowInsteadDoors {
   readonly workspace: string;
   readonly openInbox: (at: InboxAt, replace?: boolean) => void;
+  readonly inbox: boolean;
 }
 
 /** A route of the panel's tree, by its id. */
@@ -614,8 +616,10 @@ export const ROUTED_PLACE = {
     links: ({ listed }) => [stepLink({ kind: LINK_DESTINATION.HOME }, LINK_THING.HOME, listed)],
     narrowBack: undefined,
     // A phone has no Home: wherever the window would stand on it, the Inbox's list takes its step in place (`mobile-bar.tsx`), so Back never lands on a Home that would only leave again.
-    narrowInstead: ({ workspace, openInbox }) =>
-      openInbox({ workspace, narrowed: undefined }, true),
+    // Note that an account keeping no Inbox stands on Home instead, since the Inbox's route would only send it back.
+    narrowInstead: ({ workspace, openInbox, inbox }) => {
+      if (inbox) openInbox({ workspace, narrowed: undefined }, true);
+    },
     surfaces: () => [{ surface: PRODUCT_SURFACE.HOME }],
     draft: noDraft,
   },
@@ -644,7 +648,9 @@ export const ROUTED_PLACE = {
   INBOX: {
     routes: ["/places/$workspace/inbox"],
     claims: everyAddress,
-    gate: workspaceGate,
+    // Note that it stands only while the account keeps an Inbox, so Back and Forward pass over it once it is off.
+    gate: (params, access) =>
+      params.workspace === undefined ? access.inbox : inboxRouteStands(params.workspace, access),
     // Note that an Inbox narrowed to a task is passed over once the task is deleted, as the task's own step is.
     stillThere: (params, search, there) => {
       const narrowed = params.taskId ?? search.get("task") ?? undefined;

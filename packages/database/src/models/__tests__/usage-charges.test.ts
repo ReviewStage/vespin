@@ -1,5 +1,5 @@
 /**
- * usage-charges.test.ts -- the usage ledger over a real dialect: an item is charged once however often it is recorded, and a month's totals hold only that workspace's charges in that UTC month. Synthetic accounts, workspaces, and sessions throughout.
+ * usage-charges.test.ts -- the usage ledger over a real dialect: an item is charged once however often it is recorded, a month's totals hold only that workspace's charges in that UTC month, and the charges not yet sent are read by their row ids or their items' ids until each is stamped sent. Synthetic accounts, workspaces, and sessions throughout.
  */
 
 import assert from "node:assert/strict";
@@ -11,8 +11,12 @@ import { user } from "../../schemas/auth.js";
 import { getTestDB, openWorkspace } from "../../testing/index.js";
 import { USAGE_KIND } from "../../usage-vocabulary.js";
 import {
+  markUsageChargesSent,
   recordUsageCharges,
   type UsageCharge,
+  unsentChargeIdsOf,
+  unsentSandboxChargeIds,
+  unsentUsageChargesOf,
   workspaceMonthMemberTotals,
   workspaceMonthTotals,
 } from "../usage-charges.js";
@@ -122,6 +126,75 @@ it.layer(getTestDB())("the usage ledger", (it) => {
           [null, 70],
         ]),
       );
+    }),
+  );
+
+  it.effect(
+    "reads the charges not yet sent by their row ids or their items' ids, and none once stamped sent",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openAccount;
+        const acme = yield* openWorkspace(owner);
+
+        const charges = [
+          sessionCharge(acme, owner, 100, "2026-11-10T00:00:00Z"),
+          sessionCharge(acme, owner, 200, "2026-11-11T00:00:00Z"),
+        ];
+
+        yield* recordUsageCharges(charges);
+        const sources = charges.map((charge) => charge.sourceId);
+        const ids = yield* unsentChargeIdsOf(USAGE_KIND.SANDBOX_SESSION, [...sources, "sbx_none"]);
+        const unsent = yield* unsentUsageChargesOf([...ids, randomUUID()]);
+
+        assert.deepEqual(unsent.map((charge) => charge.amountMicroUsd).toSorted(), [100, 200]);
+        assert.deepEqual(
+          unsent.map((charge) => charge.organizationId),
+          [acme, acme],
+        );
+
+        yield* markUsageChargesSent(ids.slice(0, 1), NOVEMBER);
+
+        assert.deepEqual(
+          yield* unsentChargeIdsOf(USAGE_KIND.SANDBOX_SESSION, sources),
+          ids.slice(1),
+        );
+        assert.deepEqual(
+          (yield* unsentUsageChargesOf(ids)).map((charge) => charge.id),
+          ids.slice(1),
+        );
+      }),
+  );
+
+  it.effect("reads a sandbox's session charges not yet sent by its name alone", () =>
+    Effect.gen(function* () {
+      const owner = yield* openAccount;
+      const acme = yield* openWorkspace(owner);
+      const sandboxName = `agent-sandbox-${randomUUID()}`;
+
+      const ofSandbox = (amountMicroUsd: number) => {
+        const made = sessionCharge(acme, owner, amountMicroUsd, "2026-11-10T00:00:00Z");
+
+        return { ...made, figures: { ...made.figures, sandboxName } };
+      };
+
+      const charges = [
+        ofSandbox(100),
+        ofSandbox(200),
+        sessionCharge(acme, owner, 300, "2026-11-10T00:00:00Z"),
+      ];
+
+      yield* recordUsageCharges(charges);
+
+      const ids = yield* unsentChargeIdsOf(
+        USAGE_KIND.SANDBOX_SESSION,
+        charges.slice(0, 2).map((charge) => charge.sourceId),
+      );
+
+      assert.deepEqual(yield* unsentSandboxChargeIds(sandboxName), ids);
+
+      yield* markUsageChargesSent(ids.slice(0, 1), NOVEMBER);
+
+      assert.deepEqual(yield* unsentSandboxChargeIds(sandboxName), ids.slice(1));
     }),
   );
 });

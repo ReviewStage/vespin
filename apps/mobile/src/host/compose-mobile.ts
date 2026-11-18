@@ -27,11 +27,12 @@
 
 import { createORPCClient } from "@orpc/client";
 import { type AuthSession, authSessionConsent } from "@repo/credentials";
+import { GITHUB_INSTALL_LANDING } from "@repo/features";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
 import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
 import { LINK_ORIGIN } from "@repo/features/link-home";
 import type { OpenTerminalSocket } from "@repo/features/relay-socket";
-import type { SecretCipher as SecretCipherSeam } from "@repo/host";
+import type { SecretCipher as SecretCipherSeam, TokenVault } from "@repo/host";
 import { runModeFor } from "@repo/host";
 import {
   ACT_PORT_CROSSING,
@@ -77,9 +78,9 @@ import {
   IdSource,
   issuedTokenAccountSourceLayer,
   type KeepIssuedToken,
-  KeptListsDue,
   OAUTH_ACCOUNT_CLIENT,
   oauthAccountSourceLayerFor,
+  PlatformTokenVault,
   RunMode,
   reporterLayer,
   SecretCipher,
@@ -92,7 +93,7 @@ import {
 import { LocalDatabaseDriver, type LocalDatabaseDriverSeam } from "@repo/host/local-database";
 import { effectServiceLayer } from "@repo/host/service-layer";
 import { plainCodeLines } from "@repo/host/task-code-remote";
-import { Cause, ConfigProvider, Context, Effect, Layer, Path, Queue, Stream } from "effect";
+import { Cause, ConfigProvider, Context, Effect, Layer, Path, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as HttpClient from "effect/http/HttpClient";
 import { fixtureActs, stageFixture } from "./fixture-host.js";
@@ -135,18 +136,24 @@ export interface DeviceSeams {
   readonly createId: () => string;
   /** Opens an address outside the app; a sign-in's in the system's authentication sheet, which closes on the page it names as its landing. */
   readonly openExternal: (url: string, landing?: string) => Promise<void>;
+  /** Opens a connection's install in the system's authentication sheet, closed on the page it names as its landing, answering only once the sheet closes. */
+  readonly openSheet: (url: string, landing: string) => Promise<void>;
   /** Opens a relay socket, which the terminals and the live reads ride. */
   readonly openSocket: OpenTerminalSocket;
   /** Whether the app is in the foreground, at each change, for as long as the subscription stands. */
   readonly onAppActiveChanged: (listener: (active: boolean) => void) => () => void;
-  /** What the account's tokens are sealed with in the settings file. */
+  /** What the account's tokens were sealed with in the settings file by builds before `tokenVault`, which opens them once to move them. */
   readonly cipher: SecretCipherSeam;
+  /** Where the Keychain keeps the account's tokens (`keychain-tokens.ts`); a device without one seals them with `cipher`. */
+  readonly tokenVault?: TokenVault;
   /** Where a sign-in's authorization page is shown and its redirect caught. */
   readonly authSession: AuthSession;
   /** Keeps each access token the account is issued where the share sheet reads it, or removes it, answering whether the Keychain took it (`share-token-module.ts`). */
   readonly keepShareToken: KeepIssuedToken;
   /** The SQLite the account's local database opens on (`expo-sqlite-driver.ts`); a device without one keeps no local database. */
   readonly localDatabaseDriver?: LocalDatabaseDriverSeam;
+  /** Where the host's own lines go beside the console: the next crash or error report's trail (`crash-reports.ts`), or nowhere. */
+  readonly keepLine?: (message: string) => void;
 }
 
 /** What the app hands the composition. */
@@ -161,6 +168,8 @@ export interface MobileHostOptions {
   readonly fixtureUpdateNeeded?: boolean | undefined;
   /** Whether a fixture run holds an ask of Ada's MacBook for an agent's command, which `-machineAsk true` asks; never in a live run. */
   readonly fixtureMachineAsk?: boolean | undefined;
+  /** Whether a fixture run's account stands as one that started setup and hasn't finished it, which `-setupOwed true` asks; never in a live run. */
+  readonly fixtureSetupOwed?: boolean | undefined;
   /** Whether a fixture run's act port refuses the writes a flow presses, which `-refuseWrites true` asks; never in a live run. */
   readonly fixtureRefusesWrites?: boolean | undefined;
   /** This build's version, as the app's config names it. */
@@ -186,34 +195,24 @@ const report = (message: string): void => {
 };
 
 /**
- * The account's two seams, as the phone answers them: the tokens sealed
- * under the Keychain's key (`keychain-cipher.ts`), and each sign-in shown in
+ * The account's seams, as the phone answers them: the tokens kept in the
+ * Keychain (`keychain-tokens.ts`), the cipher an older build sealed them
+ * with, which opens them once to move them there, and each sign-in shown in
  * the system's authentication session, which returns on the `ios` client's
  * one registered callback (`@repo/features/ios-sign-in-wire`).
  */
 function accountSeams(device: DeviceSeams) {
-  return Layer.merge(
+  return Layer.mergeAll(
     Layer.succeed(SecretCipher, device.cipher),
+    device.tokenVault === undefined
+      ? Layer.empty
+      : Layer.succeed(PlatformTokenVault, device.tokenVault),
     Layer.succeed(SignInConsent, {
       open: authSessionConsent({
         callbackUrl: IOS_OAUTH_CALLBACK_URL,
         session: device.authSession,
       }),
     }),
-  );
-}
-
-/** Each time the app leaves the foreground, when the host writes the account's kept lists (`KeptListsDue`), rather than every thirty seconds while the member taps. */
-function appLeaves(device: DeviceSeams): Stream.Stream<void> {
-  return Stream.callback<void>((queue) =>
-    Effect.acquireRelease(
-      Effect.sync(() =>
-        device.onAppActiveChanged((active) => {
-          if (!active) Queue.offerUnsafe(queue, undefined);
-        }),
-      ),
-      (unsubscribe) => Effect.sync(unsubscribe),
-    ),
   );
 }
 
@@ -228,11 +227,13 @@ function seamLayers(options: MobileHostOptions) {
     // The app has no environment to read an override from.
     Layer.succeed(Environment, ConfigProvider.fromEnv({ env: {} })),
     Layer.succeed(IdSource, { create: device.createId }),
-    reporterLayer(report),
+    reporterLayer((message) => {
+      report(message);
+      device.keepLine?.(message);
+    }),
     Layer.succeed(ShutdownSignal, { notify: undefined }),
     Layer.succeed(ServiceOrigin, SERVICE_ORIGIN),
     Layer.succeed(TerminalSocket, device.openSocket),
-    Layer.succeed(KeptListsDue, appLeaves(device)),
     device.localDatabaseDriver === undefined
       ? Layer.empty
       : Layer.succeed(LocalDatabaseDriver, device.localDatabaseDriver),
@@ -282,7 +283,12 @@ function portDependencies(
       openExternal,
       serviceBaseUrl: SERVICE_ORIGIN,
     },
-    workspaces: { openExternal },
+    // GitHub's install opens in the authentication sheet, closed as it lands on the service's page, and answers once the sheet closes, so the screen reads again the repositories it reached.
+    workspaces: {
+      openExternal: (url, landing) =>
+        landing === undefined ? openExternal(url) : device.openSheet(url, landing),
+      githubLanding: `${SERVICE_ORIGIN}${GITHUB_INSTALL_LANDING.PATH}`,
+    },
   };
 }
 
@@ -355,10 +361,15 @@ const servedActPort = (
  * otherwise. The store drops a patch that says nothing new, so laying the
  * same data twice settles rather than loops.
  */
-const stagedFixture = (state: AppStateStore, updateNeeded: boolean, machineAsk: boolean) =>
+const stagedFixture = (
+  state: AppStateStore,
+  updateNeeded: boolean,
+  machineAsk: boolean,
+  setupOwed: boolean,
+) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
-      stageFixture(state, updateNeeded, machineAsk);
+      stageFixture(state, updateNeeded, machineAsk, setupOwed);
       yield* publishAppStateChanges(
         state,
         () => Effect.sync(() => stageFixture(state, updateNeeded)),
@@ -513,6 +524,7 @@ export function composeMobile(
               mobile.state,
               options.fixtureUpdateNeeded === true,
               options.fixtureMachineAsk === true,
+              options.fixtureSetupOwed === true,
             );
 
       return Layer.provideMerge(staged, standing);

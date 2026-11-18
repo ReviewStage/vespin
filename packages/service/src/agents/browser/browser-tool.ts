@@ -113,9 +113,10 @@ export const BROWSER_TOOL = {
     `${BROWSER_AGENT_LIMITS.MAX_ACTIONS} actions, run in order. Take a snapshot for ` +
     "the refs before you click or type on an element. Choose in a native dropdown, a select " +
     "the snapshot shows as a combobox or listbox, with select on its ref and the option's " +
-    "label, since no click reaches its popup. An action that leaves out its tab acts on the tab " +
-    "the action before it acted on in the same call only, so open and go on in one call; a new " +
-    "call names its tab. To show the developer a flow, record it: record starts a video of what " +
+    "label, since no click reaches its popup. Every action on a tab names it, by the id list or " +
+    "open answered; an open names its new tab too, such as docs, so later actions in the same " +
+    "call pass that name to go on in it. To show the developer a flow, record it: record " +
+    "starts a video of what " +
     `the browser shows, your pointer drawn on it, up to ${BROWSER_AGENT_LIMITS.RECORDING_MAX_SECONDS} seconds and across calls, ` +
     "and stop_recording, with a caption, keeps it in your transcript; stop it before your turn " +
     "ends, or it is lost. Its answer names the video's path in your sandbox until your next " +
@@ -189,6 +190,37 @@ export const BROWSER_TOOL_REFUSAL = {
   NO_SANDBOX: "Not run: your sandbox could not be opened. The call may be made again.",
 } as const;
 
+/** What an action whose fields take one of several forms takes, in words, so a call it refused is fixed in one retry. */
+const ACTION_FIELD_WORDS: ReadonlyMap<unknown, string> = new Map([
+  [
+    BROWSER_AGENT_ACTION.CLICK,
+    "A click takes `tab` and `target`, either {ref} for an element or {x, y} for a point, and no other field.",
+  ],
+  [
+    BROWSER_AGENT_ACTION.TYPE,
+    "A type takes `tab`, `text`, and `target`, either {ref} for a field or {focused: true} for the element that has the focus, and no other field.",
+  ],
+  [
+    BROWSER_AGENT_ACTION.SCROLL,
+    "A scroll takes `tab` and `by`, either {ref} to bring an element into view or {deltaX, deltaY} for a distance, and no other field.",
+  ],
+]);
+
+/** Why an input did not read, naming the field it failed at and, for an action of several forms, what that action takes. */
+function unreadable(input: UnparsedWireValue, path: readonly (string | number)[]): string {
+  const at = path.join(".");
+  const [, index] = path;
+  const actions = isRecord(input) && Array.isArray(input.actions) ? input.actions : [];
+  const named = Predicate.isNumber(index) ? actions.at(index) : undefined;
+  const takes = isRecord(named) ? ACTION_FIELD_WORDS.get(named.action) : undefined;
+
+  return (
+    `Not run: the input did not read${at === "" ? "" : ` at ${at}`}. ` +
+    (takes ??
+      `Name 1 to ${BROWSER_AGENT_LIMITS.MAX_ACTIONS} actions, each as the tool's input says.`)
+  );
+}
+
 /** What a call runs under: the session whose sandbox its browser is in, the conversation its tabs belong to, and the transcript its screenshots are kept beside. */
 export interface BrowserCall {
   /** The session whose sandbox the browser runs in: the root's own (`browserSessionOf`). */
@@ -216,29 +248,24 @@ function drivenWords(tab: string): string {
 
 /**
  * The first action that acts on a tab a member drives, and that tab, read
- * ahead of the run as the run itself names tabs: a tab left out is the one
- * the action before acted on, a tab just opened is driven by no one, and a
- * closed one leaves the next to name its own.
+ * ahead of the run: a tab named by an `open` earlier in the call was just
+ * opened, and no one drives it.
  */
 function firstDriven(
   actions: readonly BrowserAgentAction[],
   driven: ReadonlySet<string>,
 ): { readonly index: number; readonly tab: string } | undefined {
-  // Note that `null` is a tab this call opened, whose id is not known until it runs.
-  let tab: string | null | undefined;
+  const opened = new Set<string>();
 
   for (const [index, action] of actions.entries()) {
     if (action.action === BROWSER_AGENT_ACTION.LIST || isRecordingAction(action)) continue;
 
     if (action.action === BROWSER_AGENT_ACTION.OPEN) {
-      tab = null;
+      opened.add(action.name);
       continue;
     }
 
-    const named = action.tab ?? tab;
-
-    if (Predicate.isString(named) && driven.has(named)) return { index, tab: named };
-    tab = action.action === BROWSER_AGENT_ACTION.CLOSE ? undefined : named;
+    if (!opened.has(action.tab) && driven.has(action.tab)) return { index, tab: action.tab };
   }
 
   return undefined;
@@ -646,14 +673,7 @@ export function runBrowserTool(
   const read = readInput(input);
 
   if (Result.isFailure(read)) {
-    const at = read.failure.path.join(".");
-
-    return Effect.succeed(
-      browserNotRun(
-        `Not run: the input did not read${at === "" ? "" : ` at ${at}`}. Name 1 to ` +
-          `${BROWSER_AGENT_LIMITS.MAX_ACTIONS} actions, each as the tool's input says.`,
-      ),
-    );
+    return Effect.succeed(browserNotRun(unreadable(input, read.failure.path)));
   }
 
   const { actions } = read.success;

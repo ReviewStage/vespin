@@ -18,6 +18,7 @@ import { useRef, useState } from "react";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
 import { unreadShown } from "../failure-report.js";
+import { useInboxOn } from "../inbox-on.js";
 import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { NAMED_ORDER, useNamedTasks } from "../task-list-collections.js";
@@ -133,11 +134,19 @@ function recentTasks(tasks: readonly TaskSummary[], room: ShellRoom): TaskSummar
  * Inbox landing over Recent. Note that a later read of a holder newly listed
  * leaves what stands in place, because only the first read holds the page.
  */
-function useArriving(tasks: TasksControl, read: WaitingItems, waiting: number): boolean {
+function useArriving(
+  tasks: TasksControl,
+  read: WaitingItems,
+  waiting: number,
+  inboxOn: boolean,
+): boolean {
   const reading = !tasks.listRead && !tasks.listFailed;
   const [opened] = useState(reading);
   const [heard, setHeard] = useState(false);
-  const inboxOut = opened && !heard && waiting === 0 && read.reading && !tasks.listFailed;
+
+  // Note that an account keeping no Inbox waits on no Inbox read, since no section of it lands.
+  const inboxOut =
+    inboxOn && opened && !heard && waiting === 0 && read.reading && !tasks.listFailed;
 
   if (tasks.listRead && !inboxOut && !heard) setHeard(true);
 
@@ -307,7 +316,9 @@ export function DesktopHome({
   // Note that the clock moves with the minute, so an item whose reminder comes due joins the section without a read.
   const now = useMinute();
   const waiting = read.items.filter(({ item }) => waitsOnReaderNow(item, tasks.me, now));
-  const arriving = useArriving(tasks, read, waiting.length);
+  // Note that an account that turned its Inbox off is shown no Inbox section, its agents asking in their replies.
+  const inboxOn = useInboxOn();
+  const arriving = useArriving(tasks, read, waiting.length, inboxOn);
   const fresh = welcomed(tasks, useListsTask(undefined));
 
   return (
@@ -324,7 +335,7 @@ export function DesktopHome({
               {/* The Inbox's rows name who started each agent, and Recent's who is on each task, read against the listed workspace's members. */}
               <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
                 <PersonBody reading={false}>
-                  <HomeInbox tasks={tasks} read={read} waiting={waiting} />
+                  {inboxOn ? <HomeInbox tasks={tasks} read={read} waiting={waiting} /> : null}
                   <HomeRecent tasks={tasks} room={room} staged={staged} />
                 </PersonBody>
               </MemberDirectory>

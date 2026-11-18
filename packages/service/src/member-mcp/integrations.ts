@@ -57,6 +57,12 @@ const TOOLS: ToolsCache = new Map();
 /** Why a call did nothing, in words for one acting for the member. */
 const MEMBER_INTEGRATION_REFUSAL = {
   NO_ACCOUNT: `Not done: the member holds no such account; ${MEMBER_MCP_TOOL.LIST_INTEGRATIONS} names theirs, each by its connection.`,
+  NO_ACCOUNT_TO_CONNECT: `Not done: the member holds no such account at that provider. Pass account {connection} with a connection name ${MEMBER_MCP_TOOL.LIST_INTEGRATIONS} answered for it, or the provider's own name, such as notion, for its first account; or account {add: true} for another account.`,
+  UNAVAILABLE_TO_CONNECT:
+    "Not done: that integration is not offered to the member on this deployment, it is " +
+    "GitHub, whose sign-in is the member's own, account {add: true} named a provider that " +
+    "takes one account alone or already holds as many as it takes (pass account {connection} " +
+    "to sign one in again), or it could not be reached just now.",
   UNAVAILABLE:
     "Not done: that integration is not offered to the member on this deployment, it holds as " +
     "many accounts as it takes, it is GitHub, whose sign-in is the member's own, or it could " +
@@ -100,7 +106,7 @@ const accepted = <A extends object, R>(
   );
 
 /** One account at a provider a call names: the provider its connection name is of, and that name. */
-const namedAccount = (provider: string, connection: string | undefined) =>
+const namedAccount = (provider: string, connection: string) =>
   requestedAccount({ params: { provider }, query: { connection } });
 
 /** Where every one of the member's integrations stands, each sign-in under way settled first, as the desktop's read settles it. */
@@ -114,31 +120,30 @@ export const listIntegrationsAsMember = () =>
     );
   });
 
-/** What a connect names: the provider, the account to sign in again, or a new one. */
+/** What a connect names: the provider, and either the account to sign in by its connection name or a new one. */
 export interface IntegrationConnectAsked {
   readonly provider: string;
-  readonly connection?: string | undefined;
-  readonly add?: boolean | undefined;
+  readonly account: { readonly connection: string } | { readonly add: true };
 }
 
 /** The address the member opens in their browser to sign in to one account at a provider, and the account it signs in; the sign-in itself is theirs to finish. */
-export const connectIntegrationAsMember = ({
-  provider,
-  connection,
-  add,
-}: IntegrationConnectAsked) =>
+export const connectIntegrationAsMember = ({ provider, account }: IntegrationConnectAsked) =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
+    const adding = "add" in account;
 
-    const work = Effect.flatMap(namedAccount(provider, connection), (asked) =>
-      beginConnect(integrationAccountSeams(), member.userId, asked, add === true, member.baseURL),
+    // Note that a new account's name is minted by the sign-in, so the provider's own stands in for it here.
+    const work = Effect.flatMap(
+      namedAccount(provider, adding ? provider : account.connection),
+      (asked) =>
+        beginConnect(integrationAccountSeams(), member.userId, asked, adding, member.baseURL),
     );
 
     // Note that the transaction is the window's to wait on, so the agent is answered the address and the account alone.
     return yield* accepted(
       Effect.map(work, ({ url, connection: signedIn }) => ({ url, connection: signedIn })),
-      MEMBER_INTEGRATION_REFUSAL.NO_ACCOUNT,
-      MEMBER_INTEGRATION_REFUSAL.UNAVAILABLE,
+      MEMBER_INTEGRATION_REFUSAL.NO_ACCOUNT_TO_CONNECT,
+      MEMBER_INTEGRATION_REFUSAL.UNAVAILABLE_TO_CONNECT,
     );
   });
 

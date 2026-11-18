@@ -34,7 +34,7 @@ import type { AccountSourceSeam } from "../account-source.js";
 import type { ComputerUseHelperSeam } from "../computer-use-helper.js";
 import type { LaunchdJob } from "../daemon/launchd-job.js";
 import type { RunMode as RunModeFacts } from "../run-mode.js";
-import type { SecretCipher as SecretCipherSeam } from "../settings-store.js";
+import type { SecretCipher as SecretCipherSeam, TokenVault } from "../settings-store.js";
 
 /** The app's own application-state root, given explicitly. */
 export class StateRoot extends Context.Service<StateRoot, string>()("@repo/host/StateRoot") {}
@@ -72,6 +72,16 @@ export class SecretCipher extends Context.Service<SecretCipher, SecretCipherSeam
   "@repo/host/SecretCipher",
 ) {}
 
+/**
+ * Where the platform keeps the account's tokens itself, as the iPhone's
+ * Keychain does through `expo-secure-store`, which the OAuth source hands the
+ * settings store in its cipher's place where the shell provides one. The
+ * desktop provides none, so its tokens stay sealed by `SecretCipher`.
+ */
+export class PlatformTokenVault extends Context.Service<PlatformTokenVault, TokenVault>()(
+  "@repo/host/PlatformTokenVault",
+) {}
+
 /** The ids the host mints for its own records. */
 export interface IdSourceSeam {
   readonly create: () => string;
@@ -104,19 +114,6 @@ export class SettingsChangedElsewhere extends Context.Service<
   SettingsChangedElsewhere,
   Stream.Stream<void>
 >()("@repo/host/SettingsChangedElsewhere") {}
-
-/**
- * Each moment the shell asks the account's kept lists written
- * (`entity-store.ts`): on the phone, the app going to the background. A host
- * handed it writes the lists that moved only then and as the store closes,
- * never on the store's own timer, because the phone seals the file in
- * JavaScript, about half a second a save for a large account, which a timer
- * firing while the member taps would stand in front of the tap. It is
- * optional: the desktop seals with the system's own cipher and provides none.
- */
-export class KeptListsDue extends Context.Service<KeptListsDue, Stream.Stream<void>>()(
-  "@repo/host/KeptListsDue",
-) {}
 
 /**
  * A terminal's relay WebSocket. It arrives rather than being built here,

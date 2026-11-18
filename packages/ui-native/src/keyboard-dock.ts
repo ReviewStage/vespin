@@ -1,6 +1,6 @@
-// keyboard-dock.ts -- the app's native dock (`apps/mobile/modules/keyboard-dock`), which lifts the bar at a screen's foot with the keyboard frame by frame and tells how far the keyboard stands over it; none where this build does not carry it.
+// keyboard-dock.ts -- the app's native dock (`apps/mobile/modules/keyboard-dock`), which lifts the bar at a screen's foot with the keyboard frame by frame and tells how far the keyboard stands over it.
 
-import { requireNativeView, requireOptionalNativeModule } from "expo";
+import { requireNativeView } from "expo";
 import type { ComponentType, ReactNode } from "react";
 import type { NativeSyntheticEvent, StyleProp, ViewStyle } from "react-native";
 
@@ -19,12 +19,6 @@ interface KeyboardDockAreaProps {
 /** The name the native module registers under, which its Swift names too. */
 const MODULE = "KeyboardDock";
 
-/**
- * The native dock, where this build carries it. Note that its view is asked
- * for only once its module stands, since a build without it would otherwise
- * draw an empty box where the screen should be.
- */
-export const KeyboardDockArea: ComponentType<KeyboardDockAreaProps> | undefined =
-  requireOptionalNativeModule(MODULE) === null
-    ? undefined
-    : requireNativeView<KeyboardDockAreaProps>(MODULE);
+/** The native dock, the app's own local module, autolinked into every build of the app. */
+export const KeyboardDockArea: ComponentType<KeyboardDockAreaProps> =
+  requireNativeView<KeyboardDockAreaProps>(MODULE);

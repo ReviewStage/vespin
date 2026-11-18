@@ -5,7 +5,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 48,
-      "description": "The workspace, by the slug list_workspaces answered, whose skills to list or whose GitHub installation reads a source; leave it out where the member belongs to one workspace alone."
+      "description": "The workspace whose skills to list or whose GitHub installation reads a source, by the slug list_workspaces answered."
     },
     "source": {
       "type": "string",
@@ -20,35 +20,77 @@
       ],
       "description": "Whose the skills are: personal, the member's alone in every workspace they belong to; or workspace, offered to the agents of every member of the workspace, never in the member's personal workspace."
     },
-    "skills": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
-      "description": "From a GitHub source, the skills to install by name, as preview_skill_install listed them; at least one."
-    },
-    "sha": {
-      "type": "string",
-      "minLength": 40,
-      "maxLength": 40,
-      "pattern": "^[0-9a-f]{40}$",
-      "description": "From a GitHub source, the commit preview_skill_install answered, so the files installed are the ones the member was shown."
-    },
-    "name": {
-      "type": "string",
-      "minLength": 1,
-      "description": "For a skill's text, the name to install it by; its frontmatter's where left out."
-    },
-    "description": {
-      "type": "string",
-      "minLength": 1,
-      "description": "For a skill's text, the summary to install it by, which tells agents when to use it; its frontmatter's where left out."
+    "install": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "source"
+              ]
+            },
+            "skills": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "minItems": 1,
+              "description": "The skills to install by name, as preview_skill_install listed them; at least one."
+            },
+            "sha": {
+              "type": "string",
+              "minLength": 40,
+              "maxLength": 40,
+              "pattern": "^[0-9a-f]{40}$",
+              "description": "The commit preview_skill_install answered, so the files installed are the ones the member was shown."
+            }
+          },
+          "required": [
+            "kind",
+            "skills",
+            "sha"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "text"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The name to install the skill by, such as the one preview_skill_install read from its frontmatter."
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The summary to install the skill by, which tells agents when to use it, such as the one preview_skill_install read from its frontmatter."
+            }
+          },
+          "required": [
+            "kind",
+            "name",
+            "summary"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "What to install, by the kind preview_skill_install answered for the source: source with the skills and the commit sha it answered, or text with the name and summary to install the skill by."
     }
   },
   "required": [
+    "workspace",
     "source",
-    "scope"
+    "scope",
+    "install"
   ],
   "additionalProperties": false
 }

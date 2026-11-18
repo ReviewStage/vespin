@@ -1,11 +1,17 @@
 {
   "type": "object",
   "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace the task stands in, by the slug list_workspaces answered: required with a key, and with an id the workspace that must hold the task; leave it out with an id for whichever workspace it stands in."
+    },
     "taskId": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 36,
-      "description": "The task's id, as list_tasks or list_agents answered it."
+      "maxLength": 64,
+      "description": "The task, by its id as list_tasks or list_agents answered it, or by its key, such as ACME-42."
     },
     "name": {
       "type": "string",
@@ -83,13 +89,13 @@
         {
           "type": "string",
           "minLength": 1,
-          "maxLength": 36
+          "maxLength": 64
         },
         {
           "type": "null"
         }
       ],
-      "description": "The task to make it a child of, by the id list_tasks answered: a task of your workspace working in the same repository, and neither this task nor one of its sub-tasks; where its agents run stays its own. null takes it out from under its parent, to stand at the top."
+      "description": "The task to make it a child of, by the id list_tasks answered or its key, such as ACME-42: a task of your workspace working in the same repository, and neither this task nor one of its sub-tasks; where its agents run stays its own. null takes it out from under its parent, to stand at the top."
     },
     "blockedBy": {
       "type": "object",
@@ -99,17 +105,17 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 36
+            "maxLength": 64
           },
           "maxItems": 50,
-          "description": "Tasks to add to its blocked-by (the tasks it waits on), by the id list_tasks answered."
+          "description": "Tasks to add to its blocked-by (the tasks it waits on), each by the id list_tasks answered or its key, such as ACME-42."
         },
         "remove": {
           "type": "array",
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 36
+            "maxLength": 64
           },
           "maxItems": 50,
           "description": "Tasks to take away from its blocked-by (the tasks it waits on); one that is not there is left as it is."
@@ -127,17 +133,17 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 36
+            "maxLength": 64
           },
           "maxItems": 50,
-          "description": "Tasks to add to its blocks (the tasks that wait on it), by the id list_tasks answered."
+          "description": "Tasks to add to its blocks (the tasks that wait on it), each by the id list_tasks answered or its key, such as ACME-42."
         },
         "remove": {
           "type": "array",
           "items": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 36
+            "maxLength": 64
           },
           "maxItems": 50,
           "description": "Tasks to take away from its blocks (the tasks that wait on it); one that is not there is left as it is."

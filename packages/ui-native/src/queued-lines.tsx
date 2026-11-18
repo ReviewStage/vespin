@@ -13,7 +13,7 @@ import {
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
-import { useBarGlass } from "./glass-bar.js";
+import { BAR_GLASS } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { type HeldAct, HeldSwiftMenu } from "./held-menu.js";
 import { useColors } from "./tokens/colors.js";
@@ -288,7 +288,6 @@ export function QueuedLines({
   const colors = useColors();
   const large = useAccessibilitySize();
   const press = useScaledSize(PRESS_SIZE);
-  const glass = useBarGlass();
 
   if (lines.length === 0 && paused === undefined) return null;
 
@@ -319,7 +318,7 @@ export function QueuedLines({
 
   // Note that a queue past three lines scrolls, as tall as three rows of its size stand.
   return (
-    <VStack spacing={0} modifiers={[padding({ vertical: SPACE.TIGHT }), ...glass]}>
+    <VStack spacing={0} modifiers={[padding({ vertical: SPACE.TIGHT }), ...BAR_GLASS]}>
       {paused === undefined ? null : (
         <HStack
           spacing={SPACE.ROW}

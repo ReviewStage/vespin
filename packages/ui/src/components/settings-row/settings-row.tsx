@@ -371,7 +371,7 @@ export function SettingsRow({
             <div className={cn(wraps ? MAIN_CLASS.WRAPPING : MAIN_CLASS.PLAIN, top)}>{words}</div>
             <div
               className={cn(
-                "ui-settings-row-end flex flex-none items-center gap-control-gap empty:hidden",
+                "ui-settings-row-end flex-none items-center gap-control-gap empty:hidden",
                 top,
               )}
             >
@@ -383,8 +383,8 @@ export function SettingsRow({
           <div
             className={
               led
-                ? "ui-settings-row-below mt-ui-8 min-w-0 ps-settings-row-words-inset"
-                : "ui-settings-row-below mt-ui-8 min-w-0"
+                ? "ui-settings-row-below min-w-0 ps-settings-row-words-inset"
+                : "ui-settings-row-below min-w-0"
             }
             data-led={led}
           >
@@ -521,7 +521,11 @@ export function SettingsRowValue({ children }: { children: ReactNode }): React.J
   );
 }
 
-/** The room of a row's ⋯ on a row with none, so every row's value ends in one column. */
+/**
+ * The room of a row's ⋯ on a row with none, so every row's value ends in one
+ * column; where no row of its section ends in a glyph, it and the row's end
+ * stand nowhere (`settings-section.css`), so no row keeps blank room.
+ */
 export function SettingsRowActSlot(): React.JSX.Element {
   return <span className="ui-settings-row-act-slot w-control flex-none" aria-hidden="true" />;
 }

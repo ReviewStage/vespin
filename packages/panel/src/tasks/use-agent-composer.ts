@@ -131,7 +131,6 @@ export interface AgentComposerControl {
   sent: readonly SentLine[];
 }
 
-/** No send's call waiting on its answer. */
 const NOTHING_ASKING: ReadonlySet<string> = new Set();
 
 interface Held {
@@ -540,15 +539,18 @@ export function useAgentComposer(input: {
     if (lead !== undefined) onLeadSent?.();
   };
 
-  // Note that a suggestion's words are sent through it rather than as a
-  // line of the box's own, since the service sends them once, under the
-  // suggestion's key, and the transcript reads them back as its line. The
-  // box holds them until that send answers: a send refused, or one another
-  // member landed first, leaves them in the box, saying why in a toast. The
-  // host sends it behind the agent's messages still on their way, as every
-  // send to the agent goes, so the agent takes them in the order they were sent.
+  // Whether a suggestion's send is out, which holds the box.
   const [suggesting, setSuggesting] = useState(false);
 
+  /**
+   * Note that a suggestion's words are sent through it rather than as a
+   * line of the box's own, since the service sends them once, under the
+   * suggestion's key, and the transcript reads them back as its line. The
+   * box holds them until that send answers: a send refused, or one another
+   * member landed first, leaves them in the box, saying why in a toast. The
+   * host sends it behind the agent's messages still on their way, as every
+   * send to the agent goes, so the agent takes them in the order they were sent.
+   */
   const sendThroughSuggestion = (
     suggestion: DraftSuggestion,
     text: string,
@@ -711,7 +713,6 @@ export function useAgentComposer(input: {
     });
   };
 
-  /** Lets a refused line go, sending nothing. */
   const dropLine = (id: string) => {
     if (refusedLine(id) === undefined) return;
     latest.current.unsend(agentId, id);
