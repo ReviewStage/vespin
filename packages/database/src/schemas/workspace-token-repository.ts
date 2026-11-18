@@ -13,7 +13,7 @@ import { organization, user } from "./auth.js";
  * the token: each member's own token is read again at each use. A workspace
  * whose installation comes to reach the repository keeps the row and lists
  * it no longer, since the App wins. The row leaves with its workspace, or
- * with the account that added it or its membership of the workspace.
+ * with the account that added it.
  */
 export const workspaceTokenRepository = pgTable(
   "workspace_token_repository",
