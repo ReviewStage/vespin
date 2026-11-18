@@ -943,6 +943,11 @@ function MemoryList({
     <SettingsSection anchor={SETTINGS_SEARCH_ROW.MEMORY} frame={SETTINGS_SECTION_FRAME.NONE}>
       <Stack gap={GAP.SECTION}>
         <Stack gap={GAP.CONTROL}>
+          <Inline justify={JUSTIFY.END}>
+            <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />} onClick={editor.add}>
+              {ADD_MEMORY}
+            </Button>
+          </Inline>
           <SearchLine>
             <SearchField
               label={MEMORY_PAGE_WORDS.SEARCH}
@@ -954,9 +959,6 @@ function MemoryList({
               {...(found.length === 0 ? {} : { tally: { count: listed.length } })}
             />
             <PeopleFilter field={KEPT_BY} people={keepers} kept={kept} onKept={setKept} />
-            <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />} onClick={editor.add}>
-              {ADD_MEMORY}
-            </Button>
           </SearchLine>
           <PeopleFilterChips field={KEPT_BY} people={keepersOf(all)} kept={kept} onKept={setKept} />
           {memories.length === 0 ? null : (
