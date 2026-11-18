@@ -336,8 +336,12 @@ it.layer(getTestDB())("the browser tool", (it) => {
             conversationId,
             {
               actions: [
-                { action: BROWSER_AGENT_ACTION.OPEN, url: "http://localhost:3000/" },
-                { action: BROWSER_AGENT_ACTION.NAVIGATE, url: "http://localhost:3000/login" },
+                { action: BROWSER_AGENT_ACTION.OPEN, name: "app", url: "http://localhost:3000/" },
+                {
+                  action: BROWSER_AGENT_ACTION.NAVIGATE,
+                  tab: "app",
+                  url: "http://localhost:3000/login",
+                },
               ],
             },
             layer,
@@ -459,7 +463,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
           actions: [
             { action: BROWSER_AGENT_ACTION.CLICK, tab: "tab-free", x: 10, y: 10 },
             { action: BROWSER_AGENT_ACTION.CLICK, tab: "tab-driven", x: 20, y: 20 },
-            { action: BROWSER_AGENT_ACTION.TYPE, text: "hello" },
+            { action: BROWSER_AGENT_ACTION.TYPE, tab: "tab-free", text: "hello" },
           ],
         };
 
@@ -650,8 +654,8 @@ it.layer(getTestDB())("the browser tool", (it) => {
             conversationId,
             {
               actions: [
-                { action: BROWSER_AGENT_ACTION.OPEN, url: "https://shop.test/" },
-                { action: BROWSER_AGENT_ACTION.OPEN, url: "http://localhost:3000/" },
+                { action: BROWSER_AGENT_ACTION.OPEN, name: "shop", url: "https://shop.test/" },
+                { action: BROWSER_AGENT_ACTION.OPEN, name: "app", url: "http://localhost:3000/" },
               ],
             },
             layer,
@@ -706,8 +710,8 @@ it.layer(getTestDB())("the browser tool", (it) => {
             {
               actions: [
                 { action: BROWSER_AGENT_ACTION.CLICK, tab: page.targetId, x: 40.5, y: 60 },
-                { action: BROWSER_AGENT_ACTION.OPEN, url: "https://new.test/" },
-                { action: BROWSER_AGENT_ACTION.CLICK, x: 1, y: 2 },
+                { action: BROWSER_AGENT_ACTION.OPEN, name: "new", url: "https://new.test/" },
+                { action: BROWSER_AGENT_ACTION.CLICK, tab: "new", x: 1, y: 2 },
               ],
             },
             layer,
@@ -767,7 +771,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
             conversationId,
             {
               actions: [
-                { action: BROWSER_AGENT_ACTION.OPEN, url },
+                { action: BROWSER_AGENT_ACTION.OPEN, name: "app", url },
                 { action: BROWSER_AGENT_ACTION.LIST },
               ],
             },
@@ -806,9 +810,9 @@ it.layer(getTestDB())("the browser tool", (it) => {
           conversationId,
           {
             actions: [
-              { action: BROWSER_AGENT_ACTION.OPEN, url },
+              { action: BROWSER_AGENT_ACTION.OPEN, name: "inbox", url },
               { action: BROWSER_AGENT_ACTION.LIST },
-              { action: BROWSER_AGENT_ACTION.CLICK, x: 10, y: 10 },
+              { action: BROWSER_AGENT_ACTION.CLICK, tab: "inbox", x: 10, y: 10 },
             ],
           },
           agentBrowserTestLayer(peer, SESSION),
@@ -909,7 +913,9 @@ it.layer(getTestDB())("the browser tool", (it) => {
         );
 
         const input = unparsedWire({
-          actions: [{ action: BROWSER_AGENT_ACTION.OPEN, url: "http://localhost:3000/" }],
+          actions: [
+            { action: BROWSER_AGENT_ACTION.OPEN, name: "app", url: "http://localhost:3000/" },
+          ],
         });
 
         const first = yield* runBrowserTool(
@@ -1072,7 +1078,9 @@ it.layer(getTestDB())("the browser tool", (it) => {
 
       const result = yield* call(
         conversationId,
-        { actions: [{ action: BROWSER_AGENT_ACTION.OPEN, url: "https://shop.test/" }] },
+        {
+          actions: [{ action: BROWSER_AGENT_ACTION.OPEN, name: "shop", url: "https://shop.test/" }],
+        },
         noSandboxBrowserLayer,
       );
 

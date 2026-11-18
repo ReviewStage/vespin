@@ -23,7 +23,7 @@ test("an address that is not http or https is refused", () => {
     "chrome://settings",
     "localhost:3000",
   ]) {
-    assert.equal(readsAction({ action: BROWSER_AGENT_ACTION.OPEN, url }), false, url);
+    assert.equal(readsAction({ action: BROWSER_AGENT_ACTION.OPEN, name: "app", url }), false, url);
     assert.equal(
       readsAction({ action: BROWSER_AGENT_ACTION.NAVIGATE, tab: "page-1", url }),
       false,
@@ -32,9 +32,19 @@ test("an address that is not http or https is refused", () => {
   }
 
   assert.equal(
-    readsAction({ action: BROWSER_AGENT_ACTION.OPEN, url: "http://localhost:3000/" }),
+    readsAction({ action: BROWSER_AGENT_ACTION.OPEN, name: "app", url: "http://localhost:3000/" }),
     true,
   );
+});
+
+test("an action on a tab names it, and each open in a call names its own", () => {
+  const url = "http://localhost:3000/";
+  const open = (name: string) => ({ action: BROWSER_AGENT_ACTION.OPEN, name, url });
+  assert.equal(readsAction({ action: BROWSER_AGENT_ACTION.SNAPSHOT }), false);
+  assert.equal(readsAction({ action: BROWSER_AGENT_ACTION.OPEN, url }), false);
+  assert.equal(readsAction(open("Docs")), false);
+  assert.equal(readsActions([open("docs"), open("app")]), true);
+  assert.equal(readsActions([open("docs"), open("docs")]), false);
 });
 
 test("a click names a ref or a whole point, and a scroll a ref or a distance", () => {
@@ -46,7 +56,7 @@ test("a click names a ref or a whole point, and a scroll a ref or a distance", (
   assert.equal(readsAction({ ...click, ref: "e4" }), true);
   assert.equal(readsAction({ ...click, x: 10, y: 20 }), true);
 
-  const scroll = { action: BROWSER_AGENT_ACTION.SCROLL };
+  const scroll = { action: BROWSER_AGENT_ACTION.SCROLL, tab: "page-1" };
   assert.equal(readsAction(scroll), false);
   assert.equal(readsAction({ ...scroll, ref: "e4", deltaY: 300 }), false);
   assert.equal(readsAction({ ...scroll, deltaY: -300 }), true);

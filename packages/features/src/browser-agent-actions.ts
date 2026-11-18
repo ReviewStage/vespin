@@ -3,10 +3,11 @@
  *
  * The vocabulary speaks of tabs and pages, never of where the browser runs.
  * A tab is named by its id, the DevTools protocol's
- * target id as `list` and `open` answer it; an action that names none acts
- * on the tab the action before it in the same sequence acted on, so a
- * sequence can open a tab and go on in it. An element is named by a ref a
- * snapshot printed, `e` and the node's backend id, which stays the same for
+ * target id as `list` and `open` answer it, and every action on a tab names
+ * it. An `open` names its new tab too, so an action after it in the same
+ * sequence passes that name before the tab's id is known; a name is
+ * lowercase and a tab id never is, so the two cannot be confused. An
+ * element is named by a ref a snapshot printed, `e` and the node's backend id, which stays the same for
  * as long as the element is on the page, so a ref from one call is good in
  * the next. Addresses are http and https alone, as a Browser tab's are
  * (`browser-acts.ts`).
@@ -209,6 +210,9 @@ const REF_PREFIX = "e";
 
 const REF_PATTERN = /^e\d{1,12}$/u;
 
+/** A name an `open` gives its tab within one call, which no tab id matches, ids being uppercase. */
+const TAB_NAME_PATTERN = /^[a-z][a-z0-9-]{0,31}$/u;
+
 /** The ref a snapshot prints for an element, by its backend node id. */
 export function browserRefOf(backendNodeId: number): string {
   return `${REF_PREFIX}${backendNodeId}`;
@@ -221,11 +225,14 @@ export function backendNodeIdOf(ref: string): number {
 
 const tabId = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(128));
 
-const tab = Schema.optionalKey(
-  describeWire(
-    tabId,
-    "The tab, by its id as list or open answered it; left out for the tab the action before it in this call acted on.",
-  ),
+const tab = describeWire(
+  tabId,
+  "The tab, by its id as list or open answered it, or by the name an open earlier in this call gave it.",
+);
+
+const tabName = describeWire(
+  Schema.String.check(Schema.isPattern(TAB_NAME_PATTERN)),
+  "A name for the new tab, such as docs, that a later action in this call passes as its tab; lowercase letters, digits, and dashes, starting with a letter. A later call names the tab by the id open answered.",
 );
 
 const address = describeWire(
@@ -265,6 +272,7 @@ const listAction = Schema.Struct({ action: Schema.Literal(BROWSER_AGENT_ACTION.L
 
 const openAction = Schema.Struct({
   action: Schema.Literal(BROWSER_AGENT_ACTION.OPEN),
+  name: tabName,
   url: address,
 });
 
@@ -416,6 +424,13 @@ export type BrowserAgentAction = typeof browserAgentActionSchema.Type;
 export const browserAgentActionsSchema = Schema.Array(browserAgentActionSchema).check(
   Schema.isMinLength(1),
   Schema.isMaxLength(BROWSER_AGENT_LIMITS.MAX_ACTIONS),
+  Schema.makeFilter((actions) => {
+    const names = actions.flatMap((action) =>
+      action.action === BROWSER_AGENT_ACTION.OPEN ? [action.name] : [],
+    );
+
+    return new Set(names).size === names.length || "each open in one call takes its own name";
+  }),
 );
 
 const shown = Schema.String.check(Schema.isMaxLength(BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS));
