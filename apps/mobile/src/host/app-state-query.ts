@@ -25,7 +25,11 @@ import {
   followAppStateOver,
   shareAppState,
 } from "@repo/host/app-state-reads";
-import { type TaskListCollections, taskListFollowing } from "@repo/host/task-list-following";
+import {
+  type TaskListCollections,
+  type TaskListFollowing,
+  taskListFollowing,
+} from "@repo/host/task-list-following";
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
 
 /** The one key the document is held under in the app's client. */
@@ -56,14 +60,15 @@ export interface FollowedAppStateInto extends FollowedAppState {
  * the first whole read, then each delivery laid over what is held. The task
  * list's collections take the lists the whole read answers beside the
  * document, and the rows each delivery carries beside it, heard from before
- * the read is asked.
+ * the read is asked. Note that the collections may be made before the host
+ * stands (`taskList`), so the screens drawn while it starts read the same
+ * ones its first read fills.
  */
 export function followAppStateInto(
   bridge: AppStateBridgeReads,
   client: QueryClient,
+  taskList: TaskListFollowing = taskListFollowing(),
 ): FollowedAppStateInto {
-  const taskList = taskListFollowing();
-
   const followed = followAppStateOver(
     bridge,
     (state) => {
