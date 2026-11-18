@@ -109,7 +109,7 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.MANAGERS,
     scope: EXPERIMENT_SCOPE.WORKSPACE,
-    listed: false,
+    listed: true,
     name: "Managers",
     detail:
       "A long-lived agent that delegates work across your workspace to agents it starts and follows.",
