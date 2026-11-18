@@ -277,7 +277,7 @@ The agent's pull request: its state, checks, reviewers, and changed files, or on
 
 ### start_agent
 
-Starts an agent on a task, or from another agent on its task. Make a new task first with `create_task`. Answers once its session opens, which can take a minute or two. The agent doesn't report back to the caller.
+Starts an agent on a task, or from another agent on its task. Make a new task first with `create_task`. Answers once its session opens, which can take a minute or two. The agent doesn't report back to the caller. No start names who pays: each turn of a cloud agent runs on the first of your subscriptions and API keys for the model's provider that has room, and moves to the next when one hits its limit, which can switch between a subscription and a key.
 
 | Input | Type | Description |
 | --- | --- | --- |
@@ -432,7 +432,7 @@ Stops a run action.
 
 ### list_models
 
-The models you're offered, with their efforts, and your default.
+The models you're offered, with their efforts, the kinds of credential that pay for each (subscription, API key, both, or none), and your default.
 
 No inputs.
 
