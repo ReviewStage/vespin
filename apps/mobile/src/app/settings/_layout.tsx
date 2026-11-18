@@ -46,6 +46,8 @@ export default function SettingsLayout() {
           name="workspace"
           options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.WORKSPACE] }}
         />
+        <Stack.Screen name="member" />
+        <Stack.Screen name="invitation" />
         <Stack.Screen name="github" options={{ title: GITHUB_WORDS.NAME }} />
         <Stack.Screen name="notifications" options={{ title: PUSH_NOTIFICATIONS_TITLE }} />
         <Stack.Screen

@@ -13,7 +13,13 @@ import { useEffect, useState } from "react";
 import { AppState } from "react-native";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostCount } from "./host/host-provider.js";
-import { launchStood, sinceLaunch } from "./launch-phases.js";
+import {
+  LAUNCH_PHASE,
+  type LaunchPhase,
+  launchPhaseMs,
+  launchStood,
+  sinceLaunch,
+} from "./launch-phases.js";
 import { launchLeftFront } from "./launch-state.js";
 
 /** Whether this launch has counted, or let go of, its first Inbox, which it does once. */
@@ -62,8 +68,10 @@ export function noteSignedIn(): void {
  * Counts, once a launch, the time from React Native's start to the first
  * commit in which the Inbox shows the feed's answer, its rows or that it
  * holds none, as `app:ready` with that time on a rung of
- * `productLaunchSeconds` and nothing else: never how many rows, which
- * threads, or the time itself. Note that the rows the current scope lists
+ * `productLaunchSeconds`, and beside it, on the same rungs, when the launch
+ * reached each of its phases (`launch-phases.ts`), so a slow launch says
+ * where its time went: never how many rows, which threads, or a time
+ * itself. Note that the rows the current scope lists
  * aren't asked for, since an account whose Open scope is empty would never
  * count, and that a launch that began in the background, a push or a Live
  * Activity's wake, or went there before the Inbox answered, counts nothing,
@@ -117,8 +125,21 @@ export function useAppReadyCount(shown: boolean): void {
     // Note that the host's start is said for a launch alone, since a sign-in's wait begins long after it.
     const stood = after === PRODUCT_READY_AFTER.LAUNCH ? launchStood() : undefined;
 
+    // Note that each phase is said for a launch alone, as the host's start is.
+    const phase = (reachedPhase: LaunchPhase) =>
+      after === PRODUCT_READY_AFTER.LAUNCH ? launchPhaseMs(reachedPhase) : undefined;
+
+    const evaluated = phase(LAUNCH_PHASE.EVALUATED);
+    const account = phase(LAUNCH_PHASE.ACCOUNT);
+    const local = phase(LAUNCH_PHASE.LOCAL);
+
     count(PRODUCT_SURFACE_EVENT.APP_READY, {
       launch_seconds: productLaunchSeconds(elapsed),
+      ...(evaluated === undefined
+        ? undefined
+        : { evaluated_seconds: productLaunchSeconds(evaluated) }),
+      ...(account === undefined ? undefined : { account_seconds: productLaunchSeconds(account) }),
+      ...(local === undefined ? undefined : { local_seconds: productLaunchSeconds(local) }),
       ...(stood?.ms === undefined
         ? undefined
         : { standing_seconds: productLaunchSeconds(stood.ms) }),

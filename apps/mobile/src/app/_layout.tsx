@@ -29,6 +29,7 @@ import { HostProvider } from "../host/host-provider.js";
 import { useHostConnectLink } from "../host-connect-link.js";
 import { useInboxWidget } from "../inbox-widget/use-inbox-widget.js";
 import { useKeeping } from "../keeping.js";
+import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
@@ -46,6 +47,9 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
 // The splash stands until the host's first screen has drawn (`HostProvider`), rather than going with expo-router's own hide over a blank screen.
 holdSplash();
+
+// Note that the root layout evaluates after every module it imports, so this is when the bundle's eager modules have run.
+noteLaunchPhase(LAUNCH_PHASE.EVALUATED);
 
 /**
  * The navigators' theme: react-navigation's own for the color scheme, its

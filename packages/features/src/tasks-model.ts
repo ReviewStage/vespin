@@ -1,12 +1,6 @@
 import { encodedPath, GITHUB_ORIGIN } from "./link-grammar.js";
 import { PRODUCT_NAME } from "./product-name.js";
-import {
-  TASK_BOUNDS,
-  TASK_STATUS,
-  type Task,
-  type TaskStatus,
-  type TaskSummary,
-} from "./task-wire.js";
+import { TASK_STATUS, type Task, type TaskStatus, type TaskSummary } from "./task-wire.js";
 import {
   type HeldTask,
   type RepositoryCallFailure,
@@ -392,30 +386,6 @@ export function deleteAgentWords(name: string, archived: boolean): StopAgentsWor
     body: archived ? lost : `${lost} To keep it out of the way instead, archive it.`,
     verb: "Permanently delete agent",
   };
-}
-
-/** A task filed for later from words typed: its name, and its brief where the words say more than the name. */
-export interface FiledTask {
-  readonly name: string;
-  readonly brief?: string;
-}
-
-/**
- * The task File for later files from the words a New task holds: named by
- * their first line, cut to the bound a name takes, and handed the words
- * whole as its brief where they say more than that name, so the agent a
- * member starts on it later reads all of them; none where they are blank.
- */
-export function filedTaskOf(words: string): FiledTask | undefined {
-  const kept = words.trim();
-
-  if (kept === "") return undefined;
-  const line = kept.split("\n", 1)[0]?.trim() ?? "";
-  const name = line.slice(0, TASK_BOUNDS.MAX_NAME_CHARS).trim();
-
-  if (name === kept) return { name };
-
-  return { name, brief: kept.slice(0, TASK_BOUNDS.MAX_BRIEF_CHARS) };
 }
 
 /** One task's status as a press asks for it, or as its Undo puts it back. */
