@@ -82,6 +82,7 @@ export const QUERY_ROOT = {
   MAC_RUN_ACTIONS: "mac-run-actions",
   /** What this Mac spends on the app, read every few seconds while the Resources popover stands open (`desktop/mac-resources.tsx`). */
   MAC_RESOURCES: "mac-resources",
+  MAC_SKILLS: "mac-skills",
   /** One version of a plan, as its version history draws it (`tasks/use-description-history.ts`). */
   TASK_REVISION: "task-revision",
   /** A picture the window reads (`picture-query.ts`'s `pictureQuery`), by what it belongs to and its id there. */

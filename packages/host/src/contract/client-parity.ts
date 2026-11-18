@@ -76,6 +76,7 @@ const WEB = {
     "A tab cannot run sips; Safari decodes a HEIC itself, and another browser says to export it as JPEG",
   ),
   MAC_RESOURCES: byDesign("A tab cannot read the Mac's process table"),
+  MAC_SKILLS: byDesign("A tab cannot read the skills folders in the Mac's home folder"),
   MENU_BAR: byDesign("A browser has no menu bar to dim"),
   MICROPHONE: byDesign("The browser asks for the microphone and picks its route itself"),
   NOTIFICATIONS: byDesign("The browser's own prompt asks for notifications"),
@@ -358,6 +359,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.INSTALLED_SKILLS_READ]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_PREVIEW]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_INSTALL]: EVERYWHERE,
+  [PORT_ACT_KIND.INSTALLED_SKILLS_IMPORT]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_REMOVE]: EVERYWHERE,
 
   [PORT_ACT_KIND.INTEGRATIONS_FOLLOW]: EVERYWHERE,
@@ -381,6 +383,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MAC_PHOTO_TO_JPEG]: desktopOnly(WEB.MAC_PHOTO, IOS.DESKTOP_ONLY),
 
   [PORT_ACT_KIND.MAC_RESOURCES_READ]: desktopOnly(WEB.MAC_RESOURCES, IOS.DESKTOP_ONLY),
+
+  [PORT_ACT_KIND.MAC_SKILLS_READ]: desktopOnly(WEB.MAC_SKILLS, IOS.DESKTOP_ONLY),
 
   [PORT_ACT_KIND.MAC_SHELL_MIRROR]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.MAC_SHELL_OPEN]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),

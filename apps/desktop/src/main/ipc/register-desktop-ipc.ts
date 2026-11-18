@@ -42,6 +42,7 @@ import { installCli } from "../native/cli-install";
 import { photoAsJpeg } from "../native/mac-photo";
 import { readMacResources } from "../native/mac-resources";
 import { spawnMacShell } from "../native/mac-shell";
+import { readThisMacSkills } from "../native/mac-skills";
 import { nativeHelperPath } from "../native/native-helper";
 import type { DesktopServices } from "../services/compose-desktop";
 import { windowPushes } from "../window/window-pushes";
@@ -49,6 +50,7 @@ import { cliProcedures } from "./cli-acts";
 import { macAppProcedures } from "./mac-app-acts";
 import { macPhotoProcedures } from "./mac-photo-acts";
 import { macResourcesProcedures } from "./mac-resources-acts";
+import { macSkillsProcedures } from "./mac-skill-acts";
 import { macTerminalProcedures } from "./mac-terminal-acts";
 import { whenPageGone } from "./page-gone";
 import { updateProcedures } from "./update-acts";
@@ -149,6 +151,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
     ...cliProcedures({ install: () => installCli(config.hostedServiceBaseUrl) }),
     ...macPhotoProcedures({ toJpeg: photoAsJpeg }),
     ...macResourcesProcedures({ read: readMacResources }),
+    ...macSkillsProcedures({ read: readThisMacSkills }),
     ...macShellProcedures<WebContents>({
       mirror: (agentId) => operator.host.mirrorEnsure({ agentId }),
       // A local agent's worktree, where the host has made it on this Mac (`mac-terminal-acts.ts` reads it the same way).

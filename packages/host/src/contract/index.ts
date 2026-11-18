@@ -24,6 +24,7 @@ import { macAppActsContract } from "./mac-apps.js";
 import { macPhotoActsContract } from "./mac-photos.js";
 import { macResourcesActsContract } from "./mac-resources.js";
 import { macShellActsContract } from "./mac-shells.js";
+import { macSkillsActsContract } from "./mac-skills.js";
 import { macTerminalActsContract } from "./mac-terminals.js";
 import { MACHINE_COMMAND_ACTS, machineCommandActsContract } from "./machine-commands.js";
 import { PORT_FORWARD_ACTS, portForwardActsContract } from "./port-forwards.js";
@@ -102,6 +103,7 @@ export {
   MAC_PHOTO_ACT_KIND,
   MAC_RESOURCES_ACT_KIND,
   MAC_SHELL_ACT_KIND,
+  MAC_SKILLS_ACT_KIND,
   MAC_TERMINAL_ACT_KIND,
   type MacShellActKind,
   PLATFORM_PORT_ACT_KIND,
@@ -132,6 +134,14 @@ export {
 } from "./mac-resources.js";
 
 export type { MacRunActionShell } from "./mac-shells.js";
+
+export {
+  MAC_SKILL_FOLDER,
+  type MacSkill,
+  type MacSkillLeftOut,
+  type MacSkills,
+  type MacSkillsRead,
+} from "./mac-skills.js";
 
 export { type ComputerUseStatus, MACHINE_COMMAND_ACTS, type MacApp } from "./machine-commands.js";
 
@@ -232,6 +242,7 @@ export const actContract = {
   ...machineCommandActsContract,
   ...macPhotoActsContract,
   ...macResourcesActsContract,
+  ...macSkillsActsContract,
   ...macShellActsContract,
   ...macTerminalActsContract,
   ...portForwardActsContract,
