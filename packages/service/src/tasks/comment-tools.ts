@@ -22,6 +22,7 @@ import {
 } from "@repo/features/description-comment-wire";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
+import { TASK_REF_INPUT, TASK_REF_WORDS } from "../agents/task-ref.js";
 import { EXPERIMENT_OFF_REFUSAL, type ExperimentsOn } from "../agents/workspace-experiment-on.js";
 import {
   ACTION_RESULT_STATUS,
@@ -60,7 +61,7 @@ export interface CommentToolBinding {
 export const COMMENT_TOOL_REFUSAL = {
   UNREADABLE: "The input is not one this tool takes.",
   NO_STATUS: `Name which threads to read as status: ${Object.values(DESCRIPTION_COMMENT_STATUS).join(" or ")}.`,
-  NO_TASK_NAMED: `Name the task whose comments to act on as taskId, by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
+  NO_TASK_NAMED: `Name the task whose comments to act on as taskId, by ${TASK_REF_WORDS}.`,
   NO_THREAD: "No thread of this task has that id; read_comments lists them.",
   NO_TASK: `No task of your workspace has that id; ${AGENT_TOOL.LIST_TASKS} names them.`,
   RESOLVED: `The thread is resolved; reopen it with ${AGENT_TOOL.UPDATE_COMMENT} before replying.`,
@@ -69,14 +70,14 @@ export const COMMENT_TOOL_REFUSAL = {
 
 /** The task a call names, whose description's comments it acts on. */
 const TASK_ID = describeWire(
-  wireUuidSchema,
-  `The task whose description's comments to act on, your own or another of your workspace, by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
+  TASK_REF_INPUT,
+  `The task whose description's comments to act on, your own or another of your workspace, by ${TASK_REF_WORDS}.`,
 );
 
 const THREAD_ID = describeWire(wireUuidSchema, "The thread's id, as read_comments lists it.");
 
 // The call's other fields stand beside its task, and are read on their own.
-const readCommentedTask = readEither(Schema.Struct({ taskId: wireUuidSchema }), {
+const readCommentedTask = readEither(Schema.Struct({ taskId: TASK_REF_INPUT }), {
   excess: EXCESS_KEYS.DROP,
 });
 
@@ -119,8 +120,8 @@ const UPDATE_INPUT = Schema.Struct({
 
 /** The task a call names where the workspace has Task descriptions off, whose pages' comments it acts on. */
 const PAGES_TASK_ID = describeWire(
-  wireUuidSchema,
-  `The task whose pages' comments to act on, your own or another of your workspace, by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
+  TASK_REF_INPUT,
+  `The task whose pages' comments to act on, your own or another of your workspace, by ${TASK_REF_WORDS}.`,
 );
 
 /** `read_comments`'s input where the workspace has Task descriptions off: a page's threads alone, so the page is named. */

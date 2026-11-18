@@ -3561,7 +3561,12 @@ test("update_task refuses a task of another workspace its starter is also in, a 
     await call(AGENT_TOOL.UPDATE_TASK, { taskId: strangersTask, name: "Mine now" }),
     rejected(UPDATE_TASK_REFUSAL.NO_TASK),
   );
-  assert.deepEqual(await settle("Billing"), rejected(UPDATE_TASK_REFUSAL.UNREADABLE));
+  assert.deepEqual(
+    await settle("Billing"),
+    rejected(
+      "Not run: name the task in taskId by the id list_tasks answered or its key, such as ACME-42.",
+    ),
+  );
   assert.deepEqual(
     await call(AGENT_TOOL.UPDATE_TASK, { taskId: tasks.billing }),
     rejected(UPDATE_TASK_REFUSAL.UNREADABLE),
@@ -4897,6 +4902,53 @@ test("a Codex agent on its Mac's own sign-in lists its GPT models alone with no 
   assert.equal(
     Option.getOrThrow(await database.run(readAgent(onApiKey.userId, onApiKey.id))).model,
     SOL_ULTRAFAST,
+  );
+});
+
+test("update_task names its task and the tasks it blocks by their keys, read in the caller's workspace, and refuses a key of another workspace's prefix", async () => {
+  const { workspaceId, plans: taskIds, agents } = await openWorkspaces();
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
+
+  const keyOf = async (taskId: string) => {
+    const read = await call(AGENT_TOOL.READ_TASK, { taskId });
+
+    assert.ok(isRecord(read.task) && isWireString(read.task.key), JSON.stringify(read));
+
+    return read.task.key;
+  };
+
+  const billing = await keyOf(taskIds.billing);
+  const invitations = await keyOf(taskIds.invitations);
+
+  const changed = await call(AGENT_TOOL.UPDATE_TASK, {
+    taskId: billing,
+    priority: TASK_PRIORITY.HIGH,
+    blocks: { add: [invitations] },
+  });
+
+  assert.equal(changed.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(changed));
+  assert.ok(isRecord(changed.task), JSON.stringify(changed));
+  assert.deepEqual(
+    [changed.task.id, changed.task.priority, changed.task.blocks],
+    [
+      taskIds.billing,
+      TASK_PRIORITY.HIGH,
+      [{ id: taskIds.invitations, name: "Teammate invitations", status: TASK_STATUS.TODO }],
+    ],
+  );
+
+  // A key of another prefix names another workspace's task by its number, so it is refused, naming the caller's.
+  const [prefix, number] = billing.split("-");
+  const otherPrefix = prefix === "ZZZZ" ? "YYYY" : "ZZZZ";
+  assert.deepEqual(
+    await call(AGENT_TOOL.UPDATE_TASK, { taskId: `${otherPrefix}-${number}`, name: "Renamed" }),
+    {
+      status: ACTION_RESULT_STATUS.REJECTED,
+      reason:
+        `Not run: the key in taskId names no task of your workspace, whose keys open with ${prefix}-; ` +
+        `name it by a key such as ${billing}, or by the id list_tasks answered.`,
+    },
   );
 });
 

@@ -13,10 +13,17 @@
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { taskIdOfNumber } from "@repo/database/models/task-number-store";
-import { cliTaskRefOf } from "@repo/features/cli-task-ref";
+import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { cliTaskRefOf, taskRefSchema } from "@repo/features/cli-task-ref";
 import { taskKeyPrefix } from "@repo/features/workspace-key";
-import { Effect, Option, Result } from "effect";
+import { Effect, Match, Option, Result } from "effect";
 import { workspaceNamingOf } from "./written-mentions.js";
+
+/** A task a tool's input names, by its id or its key, read by `taskIdOfRef`. */
+export const TASK_REF_INPUT = taskRefSchema;
+
+/** How a tool's input words a task it names, after "by". */
+export const TASK_REF_WORDS = `the id ${AGENT_TOOL.LIST_TASKS} answered or its key, such as ACME-42`;
 
 /** Why a task's id or key names no task of the caller's workspace. */
 export const TASK_REF_MISS = {
@@ -68,5 +75,59 @@ export function taskIdOfRef(
       onNone: () => Result.fail({ kind: TASK_REF_MISS.NO_TASK }),
       onSome: (id) => Result.succeed(id),
     });
+  });
+}
+
+/**
+ * Why a task a tool's input names is none of the caller's workspace, in the
+ * tool's own opening (such as "Not run") and naming the input it read, so one
+ * retry fixes the call.
+ */
+export function taskRefRefusal(opening: string, field: string, miss: TaskRefMiss): string {
+  return Match.value(miss).pipe(
+    Match.discriminatorsExhaustive("kind")({
+      [TASK_REF_MISS.UNREADABLE]: () =>
+        `${opening}: name the task in ${field} by ${TASK_REF_WORDS}.`,
+      [TASK_REF_MISS.NO_TASK]: () =>
+        `${opening}: no task of your workspace has the id or key ${field} names; ` +
+        `${AGENT_TOOL.LIST_TASKS} names them.`,
+      [TASK_REF_MISS.OTHER_PREFIX]: ({ prefix, key }) =>
+        `${opening}: the key in ${field} names no task of your workspace, whose keys open with ` +
+        `${prefix}-; name it by a key such as ${key}, or by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
+    }),
+  );
+}
+
+/** The task a tool's input names in one of its fields, by id or key, as its id; or the refusal, in the tool's opening. */
+export function taskIdOfInput(
+  userId: string,
+  workspaceId: string,
+  named: { readonly opening: string; readonly field: string },
+  written: string,
+): Effect.Effect<Result.Result<string, string>, StoreFailure, DatabaseServices> {
+  return Effect.map(
+    taskIdOfRef(userId, workspaceId, written),
+    Result.mapError((miss) => taskRefRefusal(named.opening, named.field, miss)),
+  );
+}
+
+/** The tasks a tool's input names in one of its fields, by id or key, as ids in their order; or the first one's refusal, in the tool's opening. */
+export function taskIdsOfInput(
+  userId: string,
+  workspaceId: string,
+  named: { readonly opening: string; readonly field: string },
+  written: readonly string[],
+): Effect.Effect<Result.Result<string[], string>, StoreFailure, DatabaseServices> {
+  return Effect.gen(function* () {
+    const ids: string[] = [];
+
+    for (const one of written) {
+      const id = yield* taskIdOfInput(userId, workspaceId, named, one);
+
+      if (Result.isFailure(id)) return Result.fail(id.failure);
+      ids.push(id.success);
+    }
+
+    return Result.succeed(ids);
   });
 }

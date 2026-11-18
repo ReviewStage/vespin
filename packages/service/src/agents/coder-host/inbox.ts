@@ -76,6 +76,7 @@ import {
 import { pushThreadPost, pushThreadSettled } from "../../push/inbox-pushes.js";
 import { dmThreadPost, settleThreadDms, threadStandsOpen } from "../../slack/thread-dms.js";
 import { placeholderLinksWords } from "../link-rule.js";
+import { taskIdOfInput } from "../task-ref.js";
 
 import {
   type InboxSandboxDoor,
@@ -185,7 +186,7 @@ export const INBOX_TOOLS = {
     name: INBOX_TOOL.LIST,
     description:
       `List threads one line each: every one still open, then the latest ${INBOX_BOUNDS.MAX_SETTLED_TOLD} settled, each the latest changed first, with its id, which ${INBOX_TOOL.READ} takes, where it stands, and an open ask or an answer. ` +
-      `of names whose threads: an agent of your workspace as {agentId}, your own agentId for your own threads, or a task as {taskId}; status lists only those standing there. ` +
+      `of names whose threads: an agent of your workspace as {agentId}, your own agentId for your own threads, or a task as {taskId}, by its id or its key, such as ACME-42; status lists only those standing there. ` +
       `You only read another agent's threads: ${INBOX_TOOL.POST} and ${INBOX_TOOL.WITHDRAW} keep to your own, and a member's answer there reaches that agent, never you. ` +
       "List them to learn what the developer already decided or is still asked, rather than asking again.",
     inputSchema: inboxListInputSchema,
@@ -363,7 +364,7 @@ export const INBOX_REFUSAL = {
     `Not posted: field "${label}" is ${type}, yet names options or recommended, which only a select takes; make it a select, or leave both out.`,
   UNREADABLE_WITHDRAW: "Not withdrawn: name the thread's key and why you withdraw its ask.",
   UNREADABLE_LIST:
-    'Not listed: name whose threads as of, either {"agentId": "<id>"} for one agent of your workspace, your own agentId (in your instructions\' own values) for your own, or {"taskId": "<id>"} for one task of it, never both, and status, where you name one, as open, answered, or closed.',
+    'Not listed: name whose threads as of, either {"agentId": "<id>"} for one agent of your workspace, your own agentId (in your instructions\' own values) for your own, or {"taskId": "<id or key>"} for one task of it, never both, and status, where you name one, as open, answered, or closed.',
   UNREADABLE_READ:
     "Not read: name the thread by threadId as list_threads answered it, and before only as a page's older answered it.",
   NO_THREAD:
@@ -1140,6 +1141,11 @@ function orUnavailable<A>(
   );
 }
 
+/** A list's answer: its threads one line each, as the agent reads them. */
+function listedOf(read: readonly InboxItem[], agent: ThreadPoster): InboxListResult {
+  return { status: ACTION_RESULT_STATUS.ACCEPTED, threads: rowsOf(read, agent.agentId) };
+}
+
 /**
  * Lists threads as the agent, one line each, of the agent or task its input
  * names: its own, by its own agentId, or one other agent's or one task's of
@@ -1157,16 +1163,31 @@ export function listThreads(
   const { of, status } = asked.success;
   const reader = { userId: agent.userId, workspaceId: agent.organizationId };
 
-  const items =
-    "agentId" in of && of.agentId === agent.agentId
-      ? agentInboxItems(agent, status)
-      : agentReachedInboxItems(reader, of, status);
-
   return orUnavailable(
-    Effect.map(items, (read) => ({
-      status: ACTION_RESULT_STATUS.ACCEPTED,
-      threads: rowsOf(read, agent.agentId),
-    })),
+    Effect.gen(function* () {
+      if ("agentId" in of && of.agentId === agent.agentId) {
+        return listedOf(yield* agentInboxItems(agent, status), agent);
+      }
+
+      if ("agentId" in of) {
+        return listedOf(yield* agentReachedInboxItems(reader, of, status), agent);
+      }
+
+      // A task named by its key is read in the agent's workspace alone.
+      const task = yield* taskIdOfInput(
+        agent.userId,
+        agent.organizationId,
+        { opening: "Not listed", field: "of.taskId" },
+        of.taskId,
+      );
+
+      if (Result.isFailure(task)) return inboxRejected(task.failure);
+
+      return listedOf(
+        yield* agentReachedInboxItems(reader, { taskId: task.success }, status),
+        agent,
+      );
+    }),
   );
 }
 

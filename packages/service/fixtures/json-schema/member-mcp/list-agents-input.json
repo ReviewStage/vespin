@@ -10,8 +10,8 @@
     "taskId": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 36,
-      "description": "Only the agents on this task, by the id a listed agent's task answered; leave it out for the whole workspace."
+      "maxLength": 64,
+      "description": "Only the agents on this task, by the id a listed agent's task answered or its key, such as ACME-42; leave it out for the whole workspace."
     },
     "words": {
       "type": "string",

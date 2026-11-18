@@ -1222,8 +1222,19 @@ it.effect(
         taskId,
         notes: [{ kind: NOTE_KIND.ADD, section: "Problem", text: "Invoices lag too." }],
       });
-      yield* call(MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, status: TASK_STATUS.IN_PROGRESS });
       // A key without its workspace is refused; one read in its workspace is the task made, and a blocker of it moved to its sub-task in one call.
+      assert.match(
+        yield* refused(MEMBER_MCP_TOOL.UPDATE_TASK, {
+          taskId: made.task.key,
+          status: TASK_STATUS.IN_PROGRESS,
+        }),
+        /name that workspace in workspace/u,
+      );
+      yield* call(MEMBER_MCP_TOOL.UPDATE_TASK, {
+        workspace: own,
+        taskId: made.task.key,
+        status: TASK_STATUS.IN_PROGRESS,
+      });
       assert.match(
         yield* refused(MEMBER_MCP_TOOL.READ_TASK, { taskId: made.task.key }),
         /name that workspace in workspace/u,

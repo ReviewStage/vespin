@@ -12,7 +12,7 @@ import { MEMBER_MCP_TOOL } from "@repo/features/member-mcp-tool";
 import { TASK_RELATION_KIND, taskRelationChangeRequestSchema } from "@repo/features/task-wire";
 import { describeWire } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
-import { type UnparsedWireValue, type WireRecord, wireUuidSchema } from "../core.js";
+import type { UnparsedWireValue, WireRecord } from "../core.js";
 import { moveTaskRelation } from "../tasks/task-relation.js";
 import {
   type AgentCall,
@@ -24,11 +24,12 @@ import {
   taskUpdateAnswer,
   UPDATE_TASK_REFUSAL,
 } from "./agent-tools.js";
+import { TASK_REF_INPUT, taskIdOfInput } from "./task-ref.js";
 
 /** Why a relation's move changed nothing, in words the model can act on. */
 const CHANGE_TASK_RELATION_REFUSAL = {
   UNREADABLE:
-    `Not run: name the task and the other task by the ids ${AGENT_TOOL.LIST_TASKS} answered, ` +
+    `Not run: name the task and the other task by the ids ${AGENT_TOOL.LIST_TASKS} answered or their keys, ` +
     `and two different kinds (${Object.values(TASK_RELATION_KIND).join(", ")}) to move the ` +
     "relation from and to.",
   NO_OTHER:
@@ -48,12 +49,14 @@ const CHANGE_TASK_RELATION_REFUSAL = {
 /** A relation's move names the task, the other task, and the kinds the other stands to it in before and after. */
 export const CHANGE_TASK_RELATION_INPUT = Schema.Struct({
   taskId: describeWire(
-    wireUuidSchema,
-    `The task whose relation to move, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
+    TASK_REF_INPUT,
+    `The task whose relation to move, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered, or by ` +
+      "its key, such as ACME-42, with the workspace it stands in.",
   ),
   otherTaskId: describeWire(
-    wireUuidSchema,
-    `The other task of the relation, in the same workspace, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
+    TASK_REF_INPUT,
+    `The other task of the relation, in the same workspace, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} ` +
+      "answered or by its key.",
   ),
   from: describeWire(
     taskRelationChangeRequestSchema.fields.from,
@@ -85,19 +88,38 @@ export function runChangeTaskRelation(
     return Effect.succeed(agentToolRejected(CHANGE_TASK_RELATION_REFUSAL.UNREADABLE));
   }
 
-  const { taskId, otherTaskId, from, to } = asked.success;
+  const { from, to } = asked.success;
 
   return orStoreRefusal(
     Effect.gen(function* () {
       const userId = callerUserId(call.caller);
       const workspace = yield* callerWorkspace(call.caller);
+
+      if (Option.isNone(workspace)) return agentToolRejected(UPDATE_TASK_REFUSAL.NO_TASK);
+
+      // Each task may be named by its key, read in the caller's workspace alone.
+      const named = yield* taskIdOfInput(
+        userId,
+        workspace.value,
+        { opening: "Not run", field: "taskId" },
+        asked.success.taskId,
+      );
+
+      if (Result.isFailure(named)) return agentToolRejected(named.failure);
+
+      const other = yield* taskIdOfInput(
+        userId,
+        workspace.value,
+        { opening: "Not run", field: "otherTaskId" },
+        asked.success.otherTaskId,
+      );
+
+      if (Result.isFailure(other)) return agentToolRejected(other.failure);
+      const taskId = named.success;
+      const otherTaskId = other.success;
       const read = yield* readTask(userId, taskId);
 
-      if (
-        Option.isNone(workspace) ||
-        Option.isNone(read) ||
-        read.value.task.workspaceId !== workspace.value
-      ) {
+      if (Option.isNone(read) || read.value.task.workspaceId !== workspace.value) {
         return agentToolRejected(UPDATE_TASK_REFUSAL.NO_TASK);
       }
 

@@ -10,7 +10,17 @@
  * `read_task`).
  */
 
+import { Schema } from "effect";
 import { isWireUuid } from "./service-wire.js";
+
+/** The longest task a ref names: an id, or a key of a workspace's prefix, a hyphen, and a number. */
+const MAX_TASK_REF_CHARS = 64;
+
+/** A task named on the wire by its id or its key, as written, read by `cliTaskRefOf`. */
+export const taskRefSchema = Schema.String.check(
+  Schema.isNonEmpty(),
+  Schema.isMaxLength(MAX_TASK_REF_CHARS),
+);
 
 /** A task's key or its bare number: an optional prefix of letters and digits and a hyphen, then the number. */
 const TASK_NUMBER = /^(?:([\p{L}\p{N}]+)-)?(\d+)$/u;
