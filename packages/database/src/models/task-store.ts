@@ -140,7 +140,7 @@ export interface TaskDeleteGuard<R = never> {
   readonly standing?: TaskStandingGuard<R>;
 }
 
-/** How a delete that stopped no agent itself reads the task's unarchived agents under their conversations' locks, and what it runs there before anything is deleted. */
+/** How a delete that stopped no agent itself reads every agent of the task under their conversations' locks, and what it runs there before anything is deleted. */
 export interface TaskStandingGuard<R> {
   /** Whether they all stand stopped; false refuses the delete, nothing run. */
   readonly standsStopped: (
@@ -1739,16 +1739,21 @@ const TaskArchivedAgentSchema = Schema.Struct({
 
 /**
  * The task's agents still standing unarchived, or the one named among them,
- * each with its conversation locked, the lock every write of its lines and
+ * or every agent of it, archived ones too, where `withArchived` asks, each
+ * with its conversation locked, the lock every write of its lines and
  * turns takes, in the conversations' order, so two turns ending on one task
  * never wait on each other. A line handed to an agent stands awaiting from before
  * its runtime hears it (`dispatch-claim.ts`), so the caller's guard reads
  * such an agent at work.
  */
 const lockStandingAgents = SqlSchema.findAll({
-  Request: Schema.Struct({ taskId: Schema.String, agentId: Schema.optionalKey(Schema.String) }),
+  Request: Schema.Struct({
+    taskId: Schema.String,
+    agentId: Schema.optionalKey(Schema.String),
+    withArchived: Schema.optionalKey(Schema.Boolean),
+  }),
   Result: TaskStandingAgentSchema,
-  execute: ({ taskId, agentId }) =>
+  execute: ({ taskId, agentId, withArchived }) =>
     Database.use((db) =>
       db
         .select({
@@ -1763,7 +1768,7 @@ const lockStandingAgents = SqlSchema.findAll({
           and(
             eq(agentTable.taskId, taskId),
             agentId === undefined ? undefined : eq(agentTable.id, agentId),
-            isNull(agentTable.archivedAt),
+            withArchived === true ? undefined : isNull(agentTable.archivedAt),
           ),
         )
         .orderBy(conversations.id)
@@ -2491,8 +2496,8 @@ export function archiveAgentOfDoneTask<R = never>(
  * them, such as retiring their sessions, it does before, and the stopped
  * set re-checked here is what keeps an agent started meanwhile, whose
  * session it never touched, standing. A
- * caller that stopped none itself has the task's unarchived agents read
- * again under their conversations' locks too, so one a message set to work
+ * caller that stopped none itself has every agent of the task, archived
+ * ones too, read again under their conversations' locks, so one a message set to work
  * after the caller read it stopped refuses the delete, and runs what it
  * does to them, such as retiring their sessions, under those locks once they
  * read stopped, so a refused delete has touched no session.
@@ -2530,7 +2535,8 @@ export function deleteTaskCommitted<R = never>(
         const conversationIds = agents.map((agent) => agent.conversationId);
 
         if (guard?.standing !== undefined) {
-          const standing = yield* lockStandingAgents({ taskId });
+          // Note that archived agents are locked and read too, because a message may bring one back meanwhile.
+          const standing = yield* lockStandingAgents({ taskId, withArchived: true });
 
           if (!(yield* guard.standing.standsStopped(standing))) {
             return yield* new TaskAgentUnstopped();

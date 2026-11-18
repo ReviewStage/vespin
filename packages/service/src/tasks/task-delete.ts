@@ -99,14 +99,12 @@ export const deleteTaskOfStoppedAgents = /* @__PURE__ */ Effect.fnUntraced(funct
 
   const stopped = yield* hostedStoreOrUnavailable(
     standsStopped(
-      agents
-        .filter(({ archivedAt }) => archivedAt === null)
-        .map((agent) => ({
-          id: agent.id,
-          conversationId: agent.conversationId,
-          createdAt: agent.createdAt,
-          blank: startedBlank(agent),
-        })),
+      agents.map((agent) => ({
+        id: agent.id,
+        conversationId: agent.conversationId,
+        createdAt: agent.createdAt,
+        blank: startedBlank(agent),
+      })),
     ),
   );
 
