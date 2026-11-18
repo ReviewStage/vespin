@@ -21,7 +21,6 @@ export const MENU_COMMAND = {
   TASKS: "tasks",
   SEARCH: "search",
   SIDEBAR: "sidebar",
-  DETAIL_ONLY: "detailOnly",
   BACK: "back",
   PREVIOUS_ITEM: "previousItem",
   NEXT_ITEM: "nextItem",
