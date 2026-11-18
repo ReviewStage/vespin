@@ -227,7 +227,7 @@ const SETTINGS_SECTIONS = {
   [SECTION.BILLING_STATUS]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.BILLING,
-    head: "Payment",
+    head: "Billing",
     words: "billing set up manage card payment invoices stripe portal failed blocked",
     drawn: billingShown,
   },
