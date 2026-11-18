@@ -41,7 +41,6 @@ import type {
   TaskFileRequest,
   TaskSkillsAnswer,
   TaskTreeAnswer,
-  TaskTreeRequest,
 } from "@repo/features/task-wire";
 import { managesWorkspace } from "@repo/features/workspace-role";
 import { DateTime, Effect, Option, Result } from "effect";
@@ -56,7 +55,7 @@ import {
 } from "../http/http-effect.js";
 import { readRepositoryFileWindow } from "../tasks/task-file.js";
 import { readWorkspaceSkills } from "../tasks/task-skills.js";
-import { readRepositoryTree } from "../tasks/task-tree.js";
+import { type RepositoryTreeRead, readRepositoryTree } from "../tasks/task-tree.js";
 import {
   GitHubApp,
   type GitHubWorkspaceReadFailure,
@@ -353,7 +352,7 @@ export const readPlaceFile = /* @__PURE__ */ Effect.fnUntraced(function* (
 export const readPlaceTree = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   named: Omit<RepositoryPlace, "member">,
-  folder: TaskTreeRequest,
+  folder: RepositoryTreeRead,
 ): Effect.fn.Return<TaskTreeAnswer, HostedRefusal, WorkspaceRepositoriesServices> {
   const place = yield* memberPlace(userId, named);
 

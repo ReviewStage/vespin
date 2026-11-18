@@ -25,6 +25,7 @@ import { readTaskFile } from "./task-file.js";
 const SIDE = { owner: "octo-member", name: "side", defaultBranch: "main" } as const;
 const SIDE_FULL_NAME = `${SIDE.owner}/${SIDE.name}`;
 const HEAD = "a".repeat(40);
+const FEATURE = { branch: "feature/side", head: "b".repeat(40) } as const;
 const README = { path: "README.md", firstLine: 1, lastLine: 1 } as const;
 
 /** GitHub answering the member's token on the repository, its head, and its README; the README read refused 401 where `refused` says so. */
@@ -42,6 +43,12 @@ const onMemberToken =
       return Response.json({ object: { type: "commit", sha: HEAD } });
     }
 
+    if (
+      pathname === `/repos/${SIDE_FULL_NAME}/git/ref/heads%2F${encodeURIComponent(FEATURE.branch)}`
+    ) {
+      return Response.json({ object: { type: "commit", sha: FEATURE.head } });
+    }
+
     if (pathname !== `/repos/${SIDE_FULL_NAME}/contents/README.md`) return;
 
     if (refused) return Response.json({ message: "Bad credentials" }, { status: 401 });
@@ -50,12 +57,13 @@ const onMemberToken =
     return Response.json({ type: "file", size: 7, encoding: "base64", content });
   };
 
-const readReadme = (refused: boolean) =>
+const readReadme = (refused: boolean, ref?: string) =>
   Effect.gen(function* () {
     const github = githubReaching([], GITHUB_APP_WITH_TOKENS, {}, onMemberToken(refused));
     const userId = yield* openTokenMember();
     const task = yield* startTask(userId, { name: "Side work", repository: SIDE_FULL_NAME });
-    const answer = yield* readTaskFile(userId, task.id, README).pipe(Effect.provide(github.layer));
+    const request = ref === undefined ? README : { ...README, ref };
+    const answer = yield* readTaskFile(userId, task.id, request).pipe(Effect.provide(github.layer));
 
     return { userId, answer: Option.getOrUndefined(answer), sent: github.sent };
   });
@@ -73,6 +81,19 @@ it.layer(getTestDB())("a task's file on the member's own token", (it) => {
       assert.equal(contents.headers.get("authorization"), `Bearer ${GITHUB_FIXTURE_MEMBER.TOKEN}`);
       assert.equal(contents.headers.get("accept"), "application/vnd.github.v3+json");
       assert.equal(contents.headers.get("x-github-api-version"), "2022-11-28");
+    }),
+  );
+
+  it.effect("a read naming a branch reads at that branch's head and names its commit", () =>
+    Effect.gen(function* () {
+      const { answer, sent } = yield* readReadme(false, FEATURE.branch);
+
+      assert.ok(answer !== undefined && "file" in answer);
+      assert.equal(answer.file.branch, FEATURE.branch);
+      assert.equal(answer.file.commit, FEATURE.head);
+      const contents = sent.find((one) => one.url.includes("/contents/README.md"));
+      assert.ok(contents);
+      assert.equal(new URL(contents.url).searchParams.get("ref"), FEATURE.head);
     }),
   );
 
