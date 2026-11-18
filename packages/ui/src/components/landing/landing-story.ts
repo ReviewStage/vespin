@@ -150,7 +150,7 @@ export function useTyping(words: string, typing: boolean, typed: boolean): strin
       if (at > words.length) return;
       setCount(at);
       const key = words.charAt(at);
-      const wait = (key === " " ? 90 : 30) + ((at * 37) % 40);
+      const wait = (key === " " ? 70 : 24) + ((at * 37) % 30);
       timer = setTimeout(() => next(at + 1), wait);
     };
 

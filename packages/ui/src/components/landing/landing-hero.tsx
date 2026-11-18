@@ -85,6 +85,8 @@ import {
   useLandingMember,
   WorkspaceFace,
 } from "./landing-desktop.js";
+import { MovingList } from "./landing-motion.js";
+import { DemoPointer, usePointer } from "./landing-pointer.js";
 import { PullRequestCard } from "./landing-scenes.js";
 import { MINUTE, STORY_NOW, still, useTimeline, useTyping } from "./landing-story.js";
 
@@ -101,12 +103,12 @@ import { MINUTE, STORY_NOW, still, useTimeline, useTyping } from "./landing-stor
  * the page is wide enough, and scaled down whole on a phone.
  *
  * It is a picture, never a control: nothing in it takes a press, a key, or
- * a scroll. It plays one story on the scene clock (`useTimeline`): the
- * member asks the task's agent for a follow-up, the agent works through its
- * calls, asks a question in the Inbox, the member answers it there, and the
- * agent finishes and opens its pull request. A transcript grows from its
- * foot, its oldest turns passing under its top edge, as the app's does
- * while it follows a running agent.
+ * a scroll. It plays one story on the scene clock (`useTimeline`), a
+ * pointer pressing where the member would (`landing-pointer.tsx`): a task
+ * typed and started from Home, its agent working through its calls and
+ * asking a question in the Inbox, the answer sent there, and the agent
+ * finishing and opening its pull request, the app back on Home as it
+ * opened. Its lists move as the app's do (`landing-motion.tsx`).
  */
 
 /** The surface the app draws at: the Mac app's own, dark. */
@@ -1154,37 +1156,87 @@ function TaskPage({
 
 /**
  * The story's beats, in order, each held its own while (`STORY_BEATS`).
- * It opens on Home and ends there: the member types a task and starts it,
- * the agent works, asks a question in the Inbox, is answered, finishes and
- * opens its pull request, and the app goes back to Home, where the finished
- * task has left the list and the answered question the Inbox, so its last
- * frame is its first and the loop never cuts.
+ * It opens on Home and ends there: the pointer presses into Home's box and
+ * the member types a task and starts it, the agent works and asks a
+ * question, the pointer opens the Inbox, picks an answer and sends it,
+ * goes back to the task, which finishes and opens its pull request, and
+ * presses Home, where the finished task has left the list and the answered
+ * question the Inbox, then comes to rest where it began, so the last frame
+ * is the first and the loop never cuts.
  */
 const BEAT = {
   HOME: 0,
-  TYPE: 1,
-  START: 2,
-  READ: 3,
-  EDIT: 4,
-  TEST: 5,
-  ASK: 6,
-  INBOX: 7,
-  PICK: 8,
-  ANSWER: 9,
-  BACK: 10,
-  FIX: 11,
-  DONE: 12,
-  HOME_AGAIN: 13,
+  AIM_FIELD: 1,
+  TYPE: 2,
+  AIM_START: 3,
+  START: 4,
+  READ: 5,
+  EDIT: 6,
+  TEST: 7,
+  ASK: 8,
+  INBOX: 9,
+  AIM_PICK: 10,
+  PICK: 11,
+  AIM_ANSWER: 12,
+  ANSWER: 13,
+  AIM_BACK: 14,
+  BACK: 15,
+  FIX: 16,
+  DONE: 17,
+  AIM_HOME: 18,
+  HOME_AGAIN: 19,
+  SETTLE: 20,
 } as const;
 
-/** How long each beat holds, in milliseconds, by its place in `BEAT`: long enough to read what it adds. */
+/** How long each beat holds, in milliseconds, by its place in `BEAT`: long enough for the pointer's move, the typing, or the reading it holds. */
 const STORY_BEATS: readonly number[] = [
-  1800, 5800, 900, 800, 800, 1000, 2000, 1400, 1100, 1300, 1100, 1300, 3600, 1800,
+  900, 700, 3300, 700, 900, 700, 700, 900, 1700, 900, 700, 600, 700, 900, 800, 900, 1100, 2800, 800,
+  900, 1000,
 ];
 
+/** What the pointer aims at each beat, by a selector in the app's markup, or nothing to rest; a target gone keeps it where it pressed. */
+const POINTER_AIM = new Map<number, string | null>([
+  [BEAT.HOME, null],
+  [BEAT.AIM_FIELD, ".ui-hero-home textarea"],
+  [BEAT.TYPE, ".ui-hero-home textarea"],
+  [BEAT.AIM_START, '.ui-hero-home button[aria-label="Send"]'],
+  [BEAT.START, '.ui-hero-home button[aria-label="Send"]'],
+  [BEAT.ASK, '.ui-hero-agent-foot [aria-label="Inbox"] li'],
+  [BEAT.INBOX, '.ui-hero-agent-foot [aria-label="Inbox"] li'],
+  [BEAT.AIM_PICK, '.ui-hero-thread [data-value="both"]'],
+  [BEAT.PICK, '.ui-hero-thread [data-value="both"]'],
+  [BEAT.AIM_ANSWER, '.ui-hero-thread button[aria-label="Send"]'],
+  [BEAT.ANSWER, '.ui-hero-thread button[aria-label="Send"]'],
+  [BEAT.AIM_BACK, '.ui-hero-sidebar [aria-label="Pinned"] li'],
+  [BEAT.BACK, '.ui-hero-sidebar [aria-label="Pinned"] li'],
+  [BEAT.AIM_HOME, ".ui-hero-sidebar .sidebar-places > :nth-child(2)"],
+  [BEAT.HOME_AGAIN, ".ui-hero-sidebar .sidebar-places > :nth-child(2)"],
+]);
+
+/** The beats a press lands on: into the box, start, the Inbox, the answer, send, the task, and Home. */
+const PRESSES: ReadonlySet<number> = new Set([
+  BEAT.TYPE,
+  BEAT.START,
+  BEAT.INBOX,
+  BEAT.PICK,
+  BEAT.ANSWER,
+  BEAT.BACK,
+  BEAT.HOME_AGAIN,
+]);
+
+/** Where the pointer aims at `beat`: what the beat names, or where it pressed last while the screen answers. */
+function pointerTarget(beat: number): string | null {
+  for (let at = beat; at >= 0; at -= 1) {
+    const aim = POINTER_AIM.get(at);
+
+    if (aim !== undefined) return aim;
+  }
+
+  return null;
+}
+
 /** The task the member types on Home and starts. */
-const TASK_ASK =
-  "Remind invitees after three days if they haven't joined, and let invites be withdrawn.";
+const TASK_ASK = "Remind invitees after three days, and let invites be withdrawn.";
 
 /** The option the member picks in the Inbox. */
 const PICKED = "both";
@@ -1358,6 +1410,7 @@ export function LandingHeroApp(): React.JSX.Element {
   const beat = useTimeline(app, STORY_BEATS);
   const typed = useTyping(TASK_ASK, beat === BEAT.TYPE, false);
   const view = storyView(beat);
+  const point = usePointer(fit.ref, pointerTarget(beat), beat);
   // Note that the story's task stands in the list from its start until the app goes back to Home, as a finished task leaves it.
   const started = beat >= BEAT.START && beat < BEAT.HOME_AGAIN;
   const tasks = started ? [storyTask(beat), ...TASKS] : TASKS;
@@ -1368,8 +1421,8 @@ export function LandingHeroApp(): React.JSX.Element {
     sent: beat >= BEAT.ANSWER,
   };
 
-  // Note that the question reaches the Inbox when the agent asks it and leaves once answered and the app is back on Home.
-  const asked = beat >= BEAT.ASK && beat < BEAT.HOME_AGAIN;
+  // Note that the question reaches the Inbox when the agent asks it and is resolved out of it as the answer is sent.
+  const asked = beat >= BEAT.ASK && beat < BEAT.ANSWER;
   const items = ITEMS.filter((item) => item.id !== QUESTION_ID || asked);
 
   const settledLine = (item: Item) =>
@@ -1380,8 +1433,11 @@ export function LandingHeroApp(): React.JSX.Element {
   ).length;
 
   const inboxRows = (current: string | null) => (
-    <List label="Inbox items">
-      {items.map((each) => (
+    <MovingList
+      label="Inbox items"
+      items={items}
+      keyOf={(each) => each.id}
+      row={(each) => (
         <InboxRow
           key={each.id}
           item={each}
@@ -1390,12 +1446,13 @@ export function LandingHeroApp(): React.JSX.Element {
           current={each.id === current}
           onOpen={still}
         />
-      ))}
-    </List>
+      )}
+    />
   );
 
   const inboxPage = (): ReactNode => {
-    const item = items.find((each) => each.id === QUESTION_ID);
+    // Note that the thread stays open on its answer once the question has left the list.
+    const item = ITEMS.find((each) => each.id === QUESTION_ID);
     const task = tasks.find((each) => each.id === item?.task);
 
     return (
@@ -1451,7 +1508,7 @@ export function LandingHeroApp(): React.JSX.Element {
     if (view.place === DESKTOP_PLACE.HOME) {
       return (
         <HomePage
-          draft={beat === BEAT.TYPE ? typed : ""}
+          draft={beat === BEAT.TYPE ? typed : beat === BEAT.AIM_START ? TASK_ASK : ""}
           typing={beat === BEAT.TYPE}
           inbox={
             <section className="ui-hero-home-section">
@@ -1489,6 +1546,7 @@ export function LandingHeroApp(): React.JSX.Element {
           {page()}
         </main>
       </div>
+      <DemoPointer point={point} pressed={PRESSES.has(beat)} />
     </section>
   );
 }

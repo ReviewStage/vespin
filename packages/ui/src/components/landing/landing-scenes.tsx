@@ -2,14 +2,7 @@ import { AUTOMATION_TRIGGER } from "@repo/features/automation-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
-import {
-  type ReactNode,
-  type RefObject,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
 import {
   CheckIcon,
@@ -93,7 +86,9 @@ import {
   useLandingTeammate,
 } from "./landing-desktop.js";
 import { LandingPhone, LandingWindow } from "./landing-devices.js";
+import { MovingList } from "./landing-motion.js";
 import { heldStill } from "./landing-paint.js";
+import { DemoPointer, usePointer } from "./landing-pointer.js";
 import { MINUTE, STORY_NOW, still, useStory, useTimeline, useTyping } from "./landing-story.js";
 
 /**
@@ -616,8 +611,8 @@ function ColumnCard({
  * The Inbox demo's beats, in order: the list, the question arriving, the
  * pointer going to it and pressing, the thread opening, the pointer picking
  * an option, pressing into the note and typing it, pressing send, the
- * answer standing in the thread, the list again with the question
- * settled, and the question resolved out of it, the list as it opened.
+ * answer standing in the thread, the question resolved out of the list
+ * behind it, and the list again as it opened, held before the loop.
  */
 const INBOX_BEAT = {
   LIST: 0,
@@ -634,12 +629,11 @@ const INBOX_BEAT = {
   SENT: 11,
   BACK: 12,
   HOLD: 13,
-  RESOLVE: 14,
 } as const;
 
 /** How long each beat holds, in milliseconds, by its place in `INBOX_BEAT`: long enough for the pointer's move or the typing it holds. */
 const INBOX_DURATIONS: readonly number[] = [
-  900, 1000, 700, 350, 650, 700, 450, 700, 1100, 700, 350, 800, 1000, 1400, 900,
+  900, 1000, 700, 350, 650, 700, 450, 700, 1100, 700, 350, 800, 1000, 1400,
 ];
 
 /** What the pointer rests on at each beat: the row, the picked option, the note, the send, or nothing. */
@@ -677,8 +671,9 @@ function pressedAt(beat: number): boolean {
   );
 }
 
-/** The element the pointer goes to for `aim`, found in the scene's own markup. */
-const AIM_TARGET: Readonly<Record<Exclude<PointerAim, typeof POINTER_AIM.REST>, string>> = {
+/** The element the pointer goes to for `aim`, found in the scene's own markup, or nothing at rest. */
+const AIM_TARGET: Readonly<Record<PointerAim, string | null>> = {
+  [POINTER_AIM.REST]: null,
   [POINTER_AIM.ROW]: ".ui-landing-demo-list li",
   [POINTER_AIM.PICK]: `.ui-landing-demo-thread [data-value="${QUESTION.PICK}"]`,
   [POINTER_AIM.NOTE]: ".ui-landing-demo-thread textarea",
@@ -691,10 +686,8 @@ function listStep(beat: number): number {
 
   if (beat < INBOX_BEAT.PRESS_ROW) return 1;
 
-  if (beat < INBOX_BEAT.BACK) return 2;
-
-  // Note that the settled question resolves and leaves the list, which then stands as the demo opened, so the loop starts over without a cut.
-  if (beat < INBOX_BEAT.RESOLVE) return 5;
+  // Note that the answered question is resolved and leaves the list as it is sent, so the list the thread slides back to stands as the demo opened and the loop starts over without a cut.
+  if (beat < INBOX_BEAT.SENT) return 2;
 
   return 0;
 }
@@ -708,71 +701,6 @@ function threadStep(beat: number): number {
   return 5;
 }
 
-/** A point in the scene, in pixels from its top left. */
-type Point = { readonly x: number; readonly y: number };
-
-/**
- * Where the pointer stands at `aim`: the middle of its target as the scene
- * draws it now, or a corner of the screen at rest. Note that we measure
- * after each beat draws, because the target moves as the thread opens.
- */
-function usePointer(scene: RefObject<HTMLDivElement | null>, aim: PointerAim, beat: number): Point {
-  const [point, setPoint] = useState<Point>({ x: 0, y: 0 });
-
-  useEffect(() => {
-    const root = scene.current;
-
-    if (!root) return;
-    const box = root.getBoundingClientRect();
-    const target = aim === POINTER_AIM.REST ? null : root.querySelector(AIM_TARGET[aim]);
-
-    if (target === null) {
-      setPoint({ x: box.width * 0.82, y: box.height * 0.84 });
-
-      return;
-    }
-
-    const rect = target.getBoundingClientRect();
-    setPoint({
-      x: rect.left - box.left + Math.min(rect.width / 2, 120),
-      y: rect.top - box.top + rect.height / 2,
-    });
-  }, [scene, aim, beat]);
-
-  return point;
-}
-
-/**
- * The demo's pointer: an arrow at `point`, pressing where `pressed`. A
- * picture, never a control. Note that it moves across and down on two
- * boxes eased apart, so its path bows as a hand's does rather than running
- * straight.
- */
-function DemoPointer({ point, pressed }: { point: Point; pressed: boolean }): React.JSX.Element {
-  return (
-    <span
-      className="ui-landing-pointer"
-      aria-hidden="true"
-      style={cssCustomProperties({
-        "--ui-landing-pointer-x": `${point.x}px`,
-        "--ui-landing-pointer-y": `${point.y}px`,
-      })}
-    >
-      <span className="ui-landing-pointer-down">
-        <svg
-          className="ui-landing-pointer-arrow"
-          viewBox="0 0 16 20"
-          aria-hidden="true"
-          focusable="false"
-          data-pressed={pressed || undefined}
-        >
-          <path d="M1 1v15.5l4.2-4.1 2.9 6.6 2.6-1.1-2.9-6.5H14L1 1z" />
-        </svg>
-      </span>
-    </span>
-  );
-}
-
 /**
  * The Inbox as one screen, looping: the list, a question arriving on top,
  * the pointer opening it, picking an option, writing a note, and sending,
@@ -784,7 +712,7 @@ function InboxScene(): React.JSX.Element {
   const beat = useTimeline(ref, INBOX_DURATIONS);
   const open = beat >= INBOX_BEAT.OPEN && beat < INBOX_BEAT.BACK;
   const aim = pointerAim(beat);
-  const point = usePointer(ref, aim, beat);
+  const point = usePointer(ref, AIM_TARGET[aim], beat);
 
   const pressed = pressedAt(beat);
   const note = useTyping(QUESTION.NOTE, beat === INBOX_BEAT.TYPE, beat > INBOX_BEAT.TYPE);
@@ -819,11 +747,12 @@ function InboxScene(): React.JSX.Element {
         >
           <div className="ui-landing-demo" data-open={open}>
             <div className="ui-landing-demo-list ui-landing-rows">
-              <List label="Inbox items">
-                {inboxItems(listStep(beat)).map((item) => (
-                  <InboxRow key={item.id} item={item} />
-                ))}
-              </List>
+              <MovingList
+                label="Inbox items"
+                items={inboxItems(listStep(beat))}
+                keyOf={(item) => item.id}
+                row={(item) => <InboxRow key={item.id} item={item} />}
+              />
             </div>
             <div className="ui-landing-demo-thread">
               <QuestionThread

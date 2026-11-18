@@ -396,11 +396,15 @@
 
   /* The places and My tasks scroll under the workspace, the account's foot
      standing still, as the panel's sidebar does. */
+  /* Note that the body keeps a little room past each side, because a
+     current row's ring stands just outside it and the clip would cut it. */
   .ui-hero-sidebar-body {
     display: flex;
     flex: 1;
     flex-direction: column;
     min-height: 0;
+    margin-inline: -2px;
+    padding-inline: 2px;
     overflow: hidden;
     scrollbar-width: none;
   }
