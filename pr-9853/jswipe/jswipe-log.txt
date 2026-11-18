@@ -1,0 +1,28 @@
+== bundle SWIPE base b3e83430dc
+  built b3e83430dc base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+swipe (b3e83430dc): fails 0 shots 3 
+  tree after the swipe (44 elements); around the row:
+    Sub-tasks @[16,267][342,282]
+    New agent @[342,294][386,338]
+    Agents, 1 @[16,308][342,324]
+    Agents @[16,308][59,324]
+    1 @[65,308][74,324]
+    ClawdMark @[16,343][34,361]
+    Fix ledger rounding @[44,343][176,361]
+    Cloud @[336,348][348,357]
+    Cloud @[352,345][386,359]
+    1 needs you @[44,363][116,379]
+    Vertical scroll bar, 1 page @[369,116][399,791]
+    Vertical scroll bar, 1 page @[369,116][399,791]
+    Toolbar @[0,0][402,874]
+    Tab Bar @[0,791][402,874]
+    Inbox @[25,795][125,849]
+    Tasks @[115,795][216,849]
+    Search @[206,795][307,849]
+    Search @[243,808][270,835]
+    New task @[319,791][381,853]
+    Toolbar @[0,0][402,874]
