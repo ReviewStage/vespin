@@ -3290,9 +3290,22 @@ const READ_INBOX_TOOL = memberMcpTool({
     }),
 });
 
+/** What a call meets that leaves out a reply's field: what each reply takes, so one retry fixes it. */
+const ANSWER_FIELD_MISSING =
+  `Not answered: answer.reply "${INBOX_REPLY.CHOSE}" takes choices (the option labels); ` +
+  `"${INBOX_REPLY.SUBMITTED}" takes values (each field by its label); "${INBOX_REPLY.DONE}" ` +
+  `and "${INBOX_REPLY.NOT_DONE}" take steps (the places of the steps done, from 0); ` +
+  `"${INBOX_REPLY.ANSWERED}" takes none, its words in note.`;
+
+/** A reply's own field, refused in those words where it is left out. */
+const answerField = <S extends Schema.Top>(schema: S, description: string) =>
+  describeWire(schema, description).pipe(
+    Schema.annotateKey({ messageMissingKey: ANSWER_FIELD_MISSING }),
+  );
+
 /** The steps of a do the member did, by their places from 0, which done and not done alike carry. */
 const DONE_STEPS = (words: string) =>
-  describeWire(
+  answerField(
     inboxAnswersSchema.fields.steps.schema,
     `The steps of the ${INBOX_ASK.DO} the member did, by their places from 0: ${words}`,
   );
@@ -3301,7 +3314,7 @@ const DONE_STEPS = (words: string) =>
 const AskAnswerSchema = Schema.Union([
   Schema.Struct({
     reply: Schema.Literal(INBOX_REPLY.CHOSE),
-    choices: describeWire(
+    choices: answerField(
       inboxAnswersSchema.fields.choices.schema,
       "The labels of the options the member picks: one, or several where the ask lets several " +
         "be picked.",
@@ -3310,7 +3323,7 @@ const AskAnswerSchema = Schema.Union([
   Schema.Struct({ reply: Schema.Literal(INBOX_REPLY.ANSWERED) }),
   Schema.Struct({
     reply: Schema.Literal(INBOX_REPLY.SUBMITTED),
-    values: describeWire(
+    values: answerField(
       inboxAnswersSchema.fields.values.schema,
       "The fields the member fills: each by its field's label, with words, a number, one of a " +
         "select's options, or true or false, as its type asks; every required field filled.",
