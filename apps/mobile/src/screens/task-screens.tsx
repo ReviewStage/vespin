@@ -165,7 +165,7 @@ import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js"
 import { stackMenuItems } from "../stack-bar-menu.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useOnOwnTab, useOnTab } from "../tab-route.js";
+import { useOnOwnTab } from "../tab-route.js";
 import {
   threadComments,
   threadOpen,
@@ -1681,7 +1681,7 @@ export function TaskAgentRow({
   readonly archiving?: AgentArchiving | undefined;
 }) {
   const router = useRouter();
-  const onTab = useOnTab();
+  const onOwnTab = useOnOwnTab();
   const acts = useAgentRowActs();
   const asker = useRowAsker();
   const { agent, waiting, pullRequest } = line;
@@ -1732,7 +1732,7 @@ export function TaskAgentRow({
                 }
 
                 const key = { workspaceId: agent.workspaceId, ...named };
-                router.push(onTab(iosRepositoryPullRequestRoute(key, agent.id)));
+                router.push(onOwnTab(iosRepositoryPullRequestRoute(key, agent.id)));
               },
             }
       }
@@ -2156,7 +2156,6 @@ function OverviewPage({
   readonly entered: boolean;
 }) {
   const router = useRouter();
-  const onTab = useOnTab();
   const onOwnTab = useOnOwnTab();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
@@ -2175,8 +2174,8 @@ function OverviewPage({
   // A related task opens on its own Overview, an agent on its page, where its transcript and its composer stand, and a comment thread on its own.
   const open = (id: string) => {
     if (related.has(id))
-      router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id })));
-    else if (agents.has(id)) router.push(onTab(iosAgentRoute(id)));
+      router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id })));
+    else if (agents.has(id)) router.push(onOwnTab(iosAgentRoute(id)));
     else if (commented.has(id))
       router.push({ pathname: onOwnTab("/tasks/comments/[id]"), params: { id, task: task.id } });
   };

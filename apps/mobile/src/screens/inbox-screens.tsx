@@ -115,7 +115,7 @@ import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useOnOwnTab, useOnTab } from "../tab-route.js";
+import { useOnOwnTab } from "../tab-route.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { PLUS_TAB, useComposeAction, useDetailColumnBar, useListColumn } from "./app-sidebar.js";
@@ -737,7 +737,6 @@ function ThreadDetail({
   useScreenActivity((all) => threadActivity(listed, all));
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
-  const onTab = useOnTab();
 
   // Whether this thread still stands, so a start that answers after the reader left it opens nothing over where they went.
   const shown = useRef(false);
@@ -793,18 +792,20 @@ function ThreadDetail({
   // Note that a split view's detail bar stands the thread's main acts as glyphs, as Mail's stands Reply and Trash, and ⋯ keeps the rest; a compact window's stack keeps them all in ⋯.
   const acts = threadActs(item, answer, doors);
 
-  // Note that the path opens its task and its agent as pages pushed over the thread on its tab's stack, as the panel's crumbs open them, where the window stands a split view, the path heading the page over its title; a compact window's stack names the thread as its title, which can hold no menu, so there they lead the ⋯ menu instead, headed by the path.
+  // Note that the path opens its task and its agent as pages pushed over the thread on the stack it stands on, in any window, as the panel's crumbs open them, where the window stands a split view, the path heading the page over its title; a compact window's stack names the thread as its title, which can hold no menu, so there they lead the ⋯ menu instead, headed by the path.
   const pathActions = [
     {
       label: PATH_OPENS.TASK,
       symbol: GLYPH.TASK,
       onPress: () =>
-        router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: holder.task.id }))),
+        router.push(
+          onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: holder.task.id })),
+        ),
     },
     {
       label: PATH_OPENS.AGENT,
       symbol: GLYPH.AGENT,
-      onPress: () => router.push(onTab(iosAgentRoute(item.agentId))),
+      onPress: () => router.push(onOwnTab(iosAgentRoute(item.agentId))),
     },
   ] as const;
 
