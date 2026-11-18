@@ -1,0 +1,8 @@
+== bundle P9959 base 5a2d04b627
+  built 5a2d04b627 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-pull-request: fails 1 shots 7 Tap on ".*#128 Invite a teammate by email"... FAILED
+ipad26-light-pull-request: fails 1 shots 2 Tap on "Merge", Below "The dialog takes an address and a role.*"... FAILED
