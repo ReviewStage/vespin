@@ -1,0 +1,10 @@
+== bundle PJTURNA base 20b01cbc3a
+  built 20b01cbc3a base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+ipad27-light-frot-a3: fails 1 shots 1 Assert that "Recorded the invite flow.*" is visible... FAILED
+ipad27-light-frot-b: fails 1 shots 1 Assert that "Recorded the invite flow.*" is visible... FAILED
+ipad26-light-frot-a3: fails TIMEOUT (watchdog; steps 0, shots 1) 
+ipad26-light-frot-b: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
