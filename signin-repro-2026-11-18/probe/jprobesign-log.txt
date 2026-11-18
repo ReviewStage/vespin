@@ -1,0 +1,25 @@
+Auto-merging apps/mobile/src/host/auth-session.ts
+[detached HEAD b638d183e7] chore(mobile): probe the sign-in sheet's ends, never merged
+ Author: Dean Stratakos <29683763+dastratakos@users.noreply.github.com>
+ Date: Wed Nov 18 05:39:26 2026 +0000
+ 2 files changed, 35 insertions(+), 1 deletion(-)
+== bundle PRBmain base 8b16691826
+  built 8b16691826 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+main google (8b16691826): fails 0 shots 28 
+  main google PROBE lines: 24
+main github (8b16691826): fails 0 shots 28 
+  main github PROBE lines: 24
+== bundle PRBb50 base b638d183e7
+  built b638d183e7 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+b50 google (b638d183e7): fails 0 shots 28 
+  b50 google PROBE lines: 24
+b50 github (b638d183e7): fails 0 shots 28 
+  b50 github PROBE lines: 24
