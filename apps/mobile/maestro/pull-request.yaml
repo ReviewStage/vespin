@@ -36,7 +36,13 @@ env:
           duration: 400
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-card
-- tapOn: "Merge"
+# Note that the card's Merge is found below the words its row follows,
+# because while the transcript lays out its rows a fresh row can stand
+# at the top of the tree for a moment, and on a 26.5 iPad the tap went
+# there, past the card; the words' row ends that moment.
+- tapOn:
+    text: "Merge"
+    below: "The dialog takes an address and a role.*"
 - assertVisible: "Merge this pull request?"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-card-merge
