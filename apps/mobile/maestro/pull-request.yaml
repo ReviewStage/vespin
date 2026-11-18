@@ -24,10 +24,13 @@ env:
     timeout: 30000
 # The card offers Merge beside Review, which asks first. Note that the
 # transcript is dragged at three quarters across the screen rather than at
-# its center, which on a landscape iPad is the list column beside it.
+# its center, which on a landscape iPad is the list column beside it, and
+# until the words the card's row follows are in sight rather than Merge,
+# because a landscape iPad opens with the card under the top bar, where
+# Merge reads as visible but takes no tap.
 - repeat:
     while:
-      notVisible: "Merge"
+      notVisible: "The dialog takes an address and a role.*"
     times: 10
     commands:
       - swipe:
