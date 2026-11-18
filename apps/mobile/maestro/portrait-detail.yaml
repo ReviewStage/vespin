@@ -59,10 +59,10 @@ onFlowComplete:
           timeout: 5000
       - assertVisible: "Agents"
       - takeScreenshot: portrait-agent-back
-      # A tap on the agent's row's second line, where its pull request's
-      # number stands, opens the agent too, never the pull request.
+      # A tap on the agent's row, one element with its pull request's
+      # number in its line, opens the agent, never the pull request.
       - tapOn:
-          text: "#128"
+          text: "Build teammate invitations"
           retryTapIfNoChange: false
       - extendedWaitUntil:
           visible: "Add a way to resend an invite that expired."

@@ -477,8 +477,8 @@ env:
 # working agent's offers Open and Stop. Note that the swipe starts on the
 # row, one element whose center is the row's, and takes 900 ms, as the
 # leading swipe above does, since a quick one reads as a tap and opens the
-# agent. A full swipe only asks, since Archive never runs on one, so the
-# ask is what the flow waits for.
+# agent. A full swipe only opens the row, since Archive never runs on one,
+# so the flow taps Archive and waits for its ask.
 - tapOn: "Ledger rounding"
 - extendedWaitUntil:
     visible: "Created by .*"
@@ -496,9 +496,7 @@ env:
     duration: 900
 - waitForAnimationToEnd
 - takeScreenshot: task-agent-swipe-resting
-- tapOn:
-    text: "Archive"
-    optional: true
+- tapOn: "Archive"
 - assertVisible: "Archive agent?"
 - takeScreenshot: task-agent-archive-ask
 - runFlow:

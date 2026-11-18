@@ -269,6 +269,10 @@ type AgentRowProps = {
   readonly started?: StartedAgentsCount | undefined;
 };
 
+/** Whether an agent's row says the agents it started stand open under it, as a task's row says its sub-tasks. */
+const STARTED_SHOWN = "Agents it started shown";
+const STARTED_HIDDEN = "Agents it started hidden";
+
 /** What an agent's fold is heard as, folded and open, naming the agent. */
 function startedFold(name: string): FoldWords {
   return { show: `Show agents started by ${name}`, hide: `Hide agents started by ${name}` };
@@ -277,6 +281,26 @@ function startedFold(name: string): FoldWords {
 /** What an agent's count of the agents it started is heard as in its figures' place. */
 function startedHeard(finished: number, total: number): string {
   return `${finished} of ${total} ${total === 1 ? "agent" : "agents"} it started finished`;
+}
+
+/** What an agent row is heard as: its name, then where it stands, where it runs, its task, the agents it started, its pull request, what of it needs you, and whether the agents it started stand open. */
+function agentHeard(props: AgentRowProps) {
+  const { name, state, runsOn, task, started, pullRequest, waiting, fold } = props;
+
+  return {
+    label: name,
+    value: [
+      state === AGENT_ROW_STATE.WORKING && GLYPH_STATE_WORDS[GLYPH_STATE.WORKING],
+      state === AGENT_ROW_STATE.FAILED && GLYPH_STATE_WORDS[GLYPH_STATE.FAILED],
+      runsOn,
+      task,
+      started !== undefined && startedHeard(started.finished, started.total),
+      pullRequest !== undefined &&
+        `Pull request #${pullRequest.number}, ${pullRequestMarkLabel(pullRequest)}`,
+      waiting > 0 && needsYouWords(waiting),
+      fold !== undefined && (fold.open ? STARTED_SHOWN : STARTED_HIDDEN),
+    ],
+  };
 }
 
 /** An agent's pull request in its line: its state's glyph and its number, which the row's long-press menu opens. */
@@ -448,6 +472,7 @@ export function AgentRow(props: AgentRowProps) {
       ]}
       preview={props.preview}
       question={props.question}
+      heard={agentHeard(props)}
     />
   );
 }
