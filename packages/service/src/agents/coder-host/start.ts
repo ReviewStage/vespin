@@ -207,7 +207,8 @@ import {
  * account's default, which only
  * Settings writes. Where the agent runs is the place the ask names, else
  * its source's, else its starter's default (`machineOfStart`); unlike a
- * choice, a place the ask names is kept as the starter's last pick. Who reaches the agent is the caller's: the route holds the developer's
+ * choice, a place a Start by hand names is kept as the starter's last pick,
+ * though never one a tool's call names. Who reaches the agent is the caller's: the route holds the developer's
  * own bearer, and a coding agent's tool acts as the
  * deployment for the account; the agent's harness answers the opening, and
  * the cancel that stops a continue's source, either way
@@ -273,7 +274,7 @@ export type StartAsk = StartPlace & {
   readonly permissionMode?: AgentPermissionMode | undefined;
   /** The suggestion in another agent's reply the brief was sent from, which the first line keeps (`reply-buttons/press.ts`); none for every other Start. */
   readonly suggestedBy?: SuggestedBy | undefined;
-  /** Whether a tool's call asks (`start_agent`), which leaves the task's assignee and status as they stand; none for a Start by hand or an automation's. */
+  /** Whether a tool's call asks (`start_agent`), which leaves the task's assignee and status as they stand and keeps no Runs on pick; none for a Start by hand or an automation's. */
   readonly byTool?: boolean | undefined;
 };
 
@@ -844,13 +845,15 @@ const machineOfStart = Effect.fnUntraced(function* (
 /**
  * The place a Start named, kept as its starter's last pick, which a later
  * Start naming none and a task an agent makes for them run at; nothing for
- * a Start that named none. Note that a pick that fails to keep fails
- * nothing, because the agent already stands.
+ * a Start that named none, or for a tool's call (`start_agent`), whose
+ * place is the caller's for that one agent and never the member's pick.
+ * Note that a pick that fails to keep fails nothing, because the agent
+ * already stands.
  */
-const keptPick = (userId: string, runsOn: AgentRunsOnRequest | undefined) =>
-  runsOn === undefined
+const keptPick = (userId: string, ask: Pick<StartAsk, "runsOn" | "byTool">) =>
+  ask.runsOn === undefined || ask.byTool === true
     ? Effect.void
-    : keepRunsOnPick(userId, runsOn).pipe(
+    : keepRunsOnPick(userId, ask.runsOn).pipe(
         Effect.catch((failure) =>
           Effect.logWarning(`the last Runs on pick could not be kept: ${failure._tag}`),
         ),
@@ -1104,7 +1107,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
     );
   }).pipe(
     // A place named is kept only once the agent stands for good, so a refused opening changes no pick.
-    Effect.andThen(keptPick(userId, ask.runsOn)),
+    Effect.andThen(keptPick(userId, ask)),
   );
 
   // The source's transcript is the new agent's own before its first open forks it, and a continue's
