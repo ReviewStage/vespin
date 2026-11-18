@@ -1,0 +1,14 @@
+== bundle MFL2 base a05bb07df2
+  built a05bb07df2 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+== head a05bb07df2
+head-4b-tall-1: fails 0 shots 2 
+head-4b-tall-1: launch RUNNING 02:30:53.911000, sheet from 28.073s into the recording, 60 tiles every 50 ms
+head-4b-tall-2: fails 0 shots 2 
+head-4b-tall-2: launch RUNNING 02:31:49.645000, sheet from 23.941s into the recording, 60 tiles every 50 ms
+head-1-transcript-open: fails 0 shots 4 
+head-2-jump: fails 0 shots 2 
+app log: act port failures 0; JS errors 0
