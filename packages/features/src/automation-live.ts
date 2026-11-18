@@ -311,7 +311,11 @@ function runsOnOfRow(row: {
 }): AgentRunsOnRequest | null {
   if (row.runsOnMachine === AGENT_MACHINE.VERCEL) return { machine: AGENT_MACHINE.VERCEL };
 
-  if (row.runsOnMachine === AGENT_MACHINE.DEVICE && typeof row.runsOnDeviceId === "string") {
+  if (
+    row.runsOnMachine === AGENT_MACHINE.DEVICE &&
+    row.runsOnDeviceId !== null &&
+    row.runsOnDeviceId !== undefined
+  ) {
     return { machine: AGENT_MACHINE.DEVICE, deviceId: row.runsOnDeviceId };
   }
 
