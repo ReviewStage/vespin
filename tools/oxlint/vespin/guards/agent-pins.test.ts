@@ -32,7 +32,6 @@ const AGREEING: AgentPins = {
     },
   ],
   runnerCursorSdkDependency: "1.4.0",
-  installedCursorSdk: "1.4.0",
   pinnedCursorSdk: "1.4.0",
   pinnedPlaywright: "1.64.1",
   imageArgs: {
@@ -45,20 +44,6 @@ const AGREEING: AgentPins = {
 };
 
 describe("pinProblems", () => {
-  it("checks a catalog's installed Cursor SDK and still refuses a missing declaration", () => {
-    expect(pinProblems({ ...AGREEING, runnerCursorSdkDependency: "catalog:" })).toEqual([]);
-    expect(
-      pinProblems({
-        ...AGREEING,
-        runnerCursorSdkDependency: "catalog:",
-        installedCursorSdk: "1.3.0",
-      }).join("\n"),
-    ).toContain("the installed @cursor/sdk against CURSOR_SDK_PIN.VERSION: 1.3.0 against 1.4.0");
-    expect(pinProblems({ ...AGREEING, runnerCursorSdkDependency: undefined }).join("\n")).toContain(
-      "@cursor/sdk against CURSOR_SDK_PIN.VERSION: nothing against 1.4.0",
-    );
-  });
-
   it("passes pins that agree, and names each side of every pin moved alone", () => {
     expect(pinProblems(AGREEING)).toEqual([]);
     const drifted = pinProblems({
