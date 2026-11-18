@@ -1,0 +1,37 @@
+built main 5a2d04b627 + #natrot 8226f7ee64 as b7994aa4a9
+install 0
+curve 11:13:56 27444 MB
+curve 11:14:26 24944 MB
+curve 11:14:57 24462 MB
+curve 11:15:28 24676 MB
+curve 11:15:59 24409 MB
+curve 11:16:29 25230 MB
+curve 11:17:01 25139 MB
+curve 11:17:32 25070 MB
+curve 11:18:02 24811 MB
+curve 11:18:32 24312 MB
+curve 11:19:06 24088 MB
+curve 11:19:37 23419 MB
+curve 11:20:08 22939 MB
+curve 11:20:38 22720 MB
+curve 11:21:08 22336 MB
+curve 11:21:40 22187 MB
+BUILD EXIT 0 11:22:10
+actool: 2 warnings or errors
+/Users/deanstratakos/vespin-ipad-agent/Vjnatrot.app: replacing existing signature
+n-plain-ipad26-a3: fails 0 shots 6 
+  n-plain-ipad26-a3 probe lines: 1
+n-plain-ipad26-b: fails 0 shots 1 
+  n-plain-ipad26-b probe lines: 1
+n-plain-ipad27-a3: fails 0 shots 6 
+  n-plain-ipad27-a3 probe lines: 1
+n-plain-ipad27-b: fails 0 shots 1 
+  n-plain-ipad27-b probe lines: 1
+n-relayout-ipad26-a3: fails 0 shots 6 
+  n-relayout-ipad26-a3 probe lines: 1
+n-relayout-ipad26-b: fails 0 shots 1 
+  n-relayout-ipad26-b probe lines: 1
+n-relayout-ipad27-a3: fails 0 shots 6 
+  n-relayout-ipad27-a3 probe lines: 1
+n-relayout-ipad27-b: fails 0 shots 1 
+  n-relayout-ipad27-b probe lines: 1
