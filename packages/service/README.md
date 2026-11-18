@@ -1489,7 +1489,7 @@ through the same guards and start a Run now takes, reaching the new
 agent's session as the deployment acting for the starter; and `list_models`, the models and efforts the agent's starter may
 start one on and their default, read from the one source a start is checked
 against (`accountModelChoices` in `src/agents/coder-host/start.ts`), so a
-choice it lists is one `start_agent` takes. A list, a read, or a start of an agent, a list of tasks,
+choice it lists is one `start_agent` takes; and `list_machines`, where a start may run an agent (the cloud and the starter's own Macs and hosts, each with the `runsOn` to pass) and the machines `run_on_mac` and `computer` may reach from the conversation, by the rule they route by (`src/agents/machines-tool.ts`). A list, a read, or a start of an agent, a list of tasks,
 `show_page`, and `read_page` answer each thing's mention ready to write, `[@name](link)` under
 the workspace's slug (`src/agents/written-mentions.ts`), and the agent's
 instructions show it the mention of every kind it names, under its own

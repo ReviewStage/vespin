@@ -171,6 +171,7 @@ import {
   storedComputerOutput,
 } from "../computer-tool.js";
 import { machineCommandNotRun, RUN_ON_MAC_TOOL, runOnMacTool } from "../machine-command.js";
+import { LIST_MACHINES_TOOL, runAgentListMachines } from "../machines-tool.js";
 import {
   FORGET_MEMORY_TOOL,
   LIST_MEMORIES_TOOL,
@@ -608,6 +609,11 @@ const CATALOG = [
   }),
   agentTool(UPDATE_AGENT_TOOL, runUpdateAgent),
   agentTool(LIST_MODELS_TOOL, runListModels),
+  served(LIST_MACHINES_TOOL, (admitted, input, { standing }) =>
+    Option.isNone(standing.agent)
+      ? Effect.succeed(agentToolRejected(CODER_REFUSAL.NO_AGENT))
+      : runAgentListMachines(standing.agent.value.userId, admitted.target, input),
+  ),
   // Tasks and sections.
   agentTool(LIST_TASKS_TOOL, runListTasks),
   agentTool(READ_TASK_TOOL, runReadTask, { ...LOADED, variant: readTaskToolOf }),

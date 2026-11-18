@@ -188,6 +188,7 @@ import { AUTOMATION_TOOL_REFUSAL } from "../automation-tools.js";
 import { AgentBrowser } from "../browser/agent-browser.js";
 import { COMPUTER_TOOL } from "../computer-tool.js";
 import { RUN_ON_MAC_TOOL } from "../machine-command.js";
+import { LIST_MACHINES_TOOL } from "../machines-tool.js";
 import { FORGET_MEMORY_TOOL, LIST_MEMORIES_TOOL } from "../memory-tools.js";
 import { ADD_SUGGESTION_REFUSAL, ADD_SUGGESTION_TOOL } from "../reply-buttons/add-suggestion.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
@@ -1478,6 +1479,43 @@ test("start_agent naming a device by its name runs on the caller's member's own 
   assert.deepEqual([stored.machine, stored.deviceId], [AGENT_MACHINE.DEVICE, studio]);
 });
 
+test("list_machines lists the cloud and the starter's own devices to start on, and only machines the agent's Mac tools may reach, a teammate's in neither", async () => {
+  const { workspaceId, agents } = await openWorkspaces();
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
+  const [studio, garage] = [randomUUID(), randomUUID()];
+
+  await database.run(
+    Effect.gen(function* () {
+      yield* registerDevice(agents.caller.userId, { id: studio, name: "Studio", ...DEVICE_LAYOUT });
+      yield* registerDevice(agents.teammates.userId, {
+        id: garage,
+        name: "Garage",
+        ...DEVICE_LAYOUT,
+      });
+    }),
+  );
+
+  const listed = await call(AGENT_TOOL.LIST_MACHINES, {});
+
+  assert.equal(listed.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(listed));
+  assert.deepEqual(listed.runsOn, [
+    { runsOn: { machine: AGENT_MACHINE.VERCEL }, name: "Cloud", online: true },
+    {
+      runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId: studio },
+      id: studio,
+      name: "Studio",
+      kind: "mac",
+      online: true,
+    },
+  ]);
+  assert.ok(Array.isArray(listed.macTools), JSON.stringify(listed));
+  assert.deepEqual(
+    listed.macTools.map((machine) => (isRecord(machine) ? machine.id : undefined)),
+    [studio],
+  );
+});
+
 test("start_agent hands over a prompt and a note each as long as a start allows, whole in the agent's first message, and refuses either past it, starting nothing", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
@@ -1651,6 +1689,10 @@ test("list_workspace_members shows the model the recorded input", async () => {
     "list-workspace-members-input",
     LIST_WORKSPACE_MEMBERS_TOOL.inputSchema,
   );
+});
+
+test("list_machines shows the model the recorded input", async () => {
+  await settleJsonSchemaGolden(GOLDEN_ROOT, "list-machines-input", LIST_MACHINES_TOOL.inputSchema);
 });
 
 test("list_memories and forget_memory show the model the recorded input", async () => {

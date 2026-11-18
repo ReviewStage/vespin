@@ -1494,6 +1494,8 @@ const AGENT_TOOL_VIEWS = {
     answeredCall(CALL_KIND.RUN_AUTOMATION, input, output, "automation", "name"),
   [AGENT_TOOL.LIST_MODELS]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_MODELS, input, output, undefined),
+  [AGENT_TOOL.LIST_MACHINES]: ({ input, output }) =>
+    namedCall(CALL_KIND.LIST_MACHINES, input, output, undefined),
   [AGENT_TOOL.SAVE_MEMORY]: SAVE_MEMORY_CALL,
   [AGENT_TOOL.SEARCH_MEMORY]: SEARCH_MEMORY_CALL,
   [AGENT_TOOL.LIST_MEMORIES]: ({ input, output }) =>
