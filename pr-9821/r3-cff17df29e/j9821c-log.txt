@@ -1,0 +1,30 @@
+ok /Users/deanstratakos/vespin-ipad-agent/out/s9821c/m/apps/mobile/maestro/portrait-detail-probe.yaml
+ok /Users/deanstratakos/vespin-ipad-agent/out/s9821c/mm/apps/mobile/maestro/portrait-detail-probe.yaml
+ok /Users/deanstratakos/vespin-ipad-agent/out/s9821c/mm/apps/mobile/maestro/portrait-detail-noretry.yaml
+== bundle P9821c base cff17df29e
+  built cff17df29e base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+ipad26-light-navigation: fails 2 shots 9   Assert that "Settings, .*" is visible... FAILED
+ipad26-light-portrait-detail: fails 3 shots 7     Assert that "PROBE: the row tap did not open the agent" is visible... FAILED
+ipad26-light-back: fails 0 shots 3 
+ipad26-dark-navigation: fails 2 shots 9   Assert that "Settings, .*" is visible... FAILED
+ipad26-dark-portrait-detail: fails 3 shots 7     Assert that "PROBE: the row tap did not open the agent" is visible... FAILED
+ipad26-dark-back: fails 0 shots 3 
+ipad27-light-navigation: fails 0 shots 8 
+ipad27-light-portrait-detail: fails 3 shots 7     Assert that "PROBE: the row tap did not open the agent" is visible... FAILED
+ipad27-light-back: fails 0 shots 3 
+ipad27-dark-navigation: fails 0 shots 8 
+ipad27-dark-portrait-detail: fails 3 shots 7     Assert that "PROBE: the row tap did not open the agent" is visible... FAILED
+ipad27-dark-back: fails 0 shots 3 
+== bundle M9821c base 07fa2fbfa5
+  built 07fa2fbfa5 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+main baseline at 07fa2fbfa5
+main-ipad26-light-portrait-detail: fails 3 shots 7     Assert that "PROBE: the row tap did not open the agent" is visible... FAILED
+main-ipad26-light-portrait-detail-noretry: fails 3 shots 7     Assert that "PROBE: the row tap did not open the agent" is visible... FAILED
