@@ -5,8 +5,8 @@
  * shares (`manager-wire.ts`). The card asks its name, kept as typed, since
  * no generated title ever replaces a Manager's; the repositories it works
  * in, one or more, picked from New task's own list (`RepositoriesChip`),
- * the first picked its checkout; where it runs, New task's Runs on chip on
- * the member's last pick (`runs-on.tsx`); and its model and effort, the
+ * the first picked its checkout; its Machine, where it runs, New task's
+ * Runs on chip on the member's last pick (`runs-on.tsx`); and its model and effort, the
  * agent box's model chip on the account's default until one is picked. It
  * asks no charter: the Manager introduces itself on its first turn. Create
  * makes it in the sidebar's workspace (`AGENTS_CREATE_MANAGER`), reads the
@@ -218,10 +218,7 @@ export function useNewManagerDialog({
             />
           )}
         </FormField>
-        <FormField
-          label="Repositories"
-          description="The first is the one it checks out; it works in all of them."
-        >
+        <FormField label="Repositories">
           {(control) => (
             <RepositoriesChip
               place={CHIP_PLACE.FIELD}
@@ -233,7 +230,7 @@ export function useNewManagerDialog({
             />
           )}
         </FormField>
-        <FormField label="Runs on">
+        <FormField label="Machine">
           {() => (
             <NewTaskRunsOnChip
               devices={devices}
@@ -291,7 +288,7 @@ export function useNewManagerDialog({
       setName("");
       setRepositories([]);
       setPicked(undefined);
-      // Note that the devices and the catalog are read as the card opens, so Runs on and Model list them as they stand.
+      // Note that the devices and the catalog are read as the card opens, so Machine and Model list them as they stand.
       newTask.readModels();
       confirm.ask();
     },
