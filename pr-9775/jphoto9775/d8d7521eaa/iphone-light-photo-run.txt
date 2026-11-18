@@ -1,0 +1,29 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fphoto9775
+Set orientation PORTRAIT... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow.*" is visible... COMPLETED
+Tap on id: workspace-switcher... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Workspace settings|Settings…"... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on (Optional) id: settings-workspace... WARNED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-1-workspace-before...WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+ COMPLETED
+Tap on "(Add|Change) photo"... COMPLETED
+Swipe from (50%, 99%) to (50%, 99%) in 4000 ms... COMPLETED
+Take screenshot ${P}-2-picker... COMPLETED
+Tap on point (17%, 22%)... COMPLETED
+Swipe from (50%, 99%) to (50%, 99%) in 3000 ms... COMPLETED
+Take screenshot ${P}-3-picked... COMPLETED
+Tap on (Optional) "Choose|Done|Add"... WARNED
+Swipe from (50%, 99%) to (50%, 99%) in 5000 ms... COMPLETED
+Take screenshot ${P}-4-after... COMPLETED
+Assert that ".*(could not|couldn.t|failed).*" is not visible... COMPLETED
