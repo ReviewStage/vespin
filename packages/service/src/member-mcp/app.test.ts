@@ -957,7 +957,10 @@ it.effect(
           [MEMBER_MCP_TOOL.RUN_AUTOMATION, { automationId }],
           [MEMBER_MCP_TOOL.DELETE_AUTOMATION, { automationId }],
           [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP, { workspace }],
-          [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP, { workspace, script: "Planted." }],
+          [
+            MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP,
+            { workspace, target: { kind: "workspace" }, script: "Planted." },
+          ],
           [
             MEMBER_MCP_TOOL.EDIT_RUN_ACTION,
             {
