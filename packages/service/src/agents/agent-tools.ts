@@ -136,6 +136,7 @@ import { callEntry, cutText, lineWords, senderName } from "./coder-host/replay.j
 import type { SummaryModelOf } from "./coder-host/replay-summary.js";
 import {
   accountModelChoices,
+  accountModelPayers,
   placeOfAgent,
   type StartWhere,
   startAgent,
@@ -1013,6 +1014,8 @@ export const LIST_MODELS_TOOL = {
     "member you act for is offered them: each with its catalog id, its name, its efforts, and " +
     "its contextWindows, the standard and the long with each one's size in tokens and what the " +
     "long one costs as a multiple of the standard price, or none where it runs on one window; " +
+    "and its payers, the kinds of credential the member keeps that pay for it (subscription, " +
+    "api_key, both, or none where nothing does); " +
     "and the member's default, which a start naming neither runs on, with the window it runs on. " +
     "Call it before you name a model, an effort, or a context window, such as one the developer " +
     `named in their own words. Name an agentId to list instead what that agent may move to with ` +
@@ -3143,10 +3146,11 @@ const contextWindowsListed = (windows: ContextWindows | undefined) =>
 /** The models the member is offered, narrowed to what the agent's route runs where one is named, with the member's default and whether it is among them. */
 const modelsListed = (userId: string, route: NativeRoute | undefined) =>
   Effect.gen(function* () {
-    const choices = yield* Effect.result(accountModelChoices(userId));
+    const read = yield* Effect.result(accountModelPayers(userId));
 
-    if (Result.isFailure(choices)) return agentToolRejected(LIST_MODELS_REFUSAL.UNAVAILABLE);
-    const { offered, defaultChoice } = choices.success;
+    if (Result.isFailure(read)) return agentToolRejected(LIST_MODELS_REFUSAL.UNAVAILABLE);
+    const { choices, payers } = read.success;
+    const { offered, defaultChoice } = choices;
     const listed = runtimeModels(offered, route?.runtime, route?.payer);
 
     return {
@@ -3156,6 +3160,8 @@ const modelsListed = (userId: string, route: NativeRoute | undefined) =>
         name: modelLabel(model.id, offered),
         efforts: [...model.efforts],
         contextWindows: contextWindowsListed(model.contextWindows),
+        // Note that a payer is named by its kind alone, never which credential or anything of it.
+        payers: [...(payers.get(model.provider) ?? [])],
       })),
       default: {
         model: defaultChoice.model,
@@ -3175,7 +3181,8 @@ const modelsListed = (userId: string, route: NativeRoute | undefined) =>
 /**
  * One call of `list_models`: the models the caller's member may start an
  * agent on, each by its catalog id, the name to say it by, its efforts, and
- * the context windows a choice of it takes, and the member's default choice,
+ * the context windows a choice of it takes, and the kinds of credential that
+ * may pay for it, and the member's default choice,
  * the window it runs on, and whether it is still offered, read from
  * the one source a start is checked against (`accountModelChoices`), so a
  * choice listed is one `start_agent` takes. It names nothing of the call's.

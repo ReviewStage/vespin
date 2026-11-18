@@ -59,6 +59,7 @@ import { NOTE_KIND } from "@repo/features/description-notes";
 import { INBOX_ANSWER_LEAD, INBOX_ASK, INBOX_REPLY, INBOX_STATUS } from "@repo/features/inbox-wire";
 import { INSTALLED_SKILL_SCOPE } from "@repo/features/installed-skill-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
 import {
@@ -2323,6 +2324,36 @@ const decodeVariableNames = Schema.decodeUnknownSync(
 
 /** The server standing with a ring a set variable is sealed under, as a deployment's. */
 const keyedStanding = memberMcpStanding({ keyRing: AGENT_KEY_RING });
+
+it.effect(
+  "list_models names the providers a member may generate chapters on, by the API keys they saved alone",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch, services } = yield* keyedStanding;
+      const member = yield* Effect.promise(() => signUp(auth));
+
+      yield* connectAgentApiKeys(member.userId, {
+        providers: [PROVIDER_KEY_PROVIDER.OPENAI],
+      }).pipe(Effect.provide(services));
+
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
+      const answer = yield* Effect.promise(async () =>
+        decodeAnswer(await client.callTool({ name: MEMBER_MCP_TOOL.LIST_MODELS, arguments: {} })),
+      );
+
+      yield* Effect.promise(() => client.close());
+      assert.deepEqual(JSON.parse(answer.content[0].text).chaptersProviders, ["openai"]);
+    }),
+);
 
 it.effect(
   "an owner sets and deletes a workspace environment variable its agents are handed, no answer carrying its value; a plain member reads its name and is refused a set",

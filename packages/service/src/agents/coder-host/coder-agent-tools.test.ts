@@ -27,6 +27,7 @@ import { linkIntegrationInstallation } from "@repo/database/models/integration-i
 import { listMemories } from "@repo/database/models/memory-store";
 import {
   listProviderKeyRows,
+  saveProviderKey,
   setProviderKeyFastAccess,
 } from "@repo/database/models/provider-key-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
@@ -1917,8 +1918,20 @@ test("list_models answers exactly the choices start_agent takes, as the caller's
   assert.deepEqual(listed, {
     status: ACTION_RESULT_STATUS.ACCEPTED,
     models: [
-      { id: OPUS, name: "Opus 5.5", efforts: ["low", "medium", "high", "max"], contextWindows: [] },
-      { id: SOL, name: "GPT-6.1 Sol", efforts: ["low", "high"], contextWindows: [] },
+      {
+        id: OPUS,
+        name: "Opus 5.5",
+        efforts: ["low", "medium", "high", "max"],
+        contextWindows: [],
+        payers: ["api_key"],
+      },
+      {
+        id: SOL,
+        name: "GPT-6.1 Sol",
+        efforts: ["low", "high"],
+        contextWindows: [],
+        payers: ["api_key"],
+      },
     ],
     default: {
       model: OPUS,
@@ -1966,6 +1979,29 @@ test("list_models answers exactly the choices start_agent takes, as the caller's
   assert.deepEqual(
     [unnamed.agent.model, unnamed.agent.effort],
     [AGENT_DEFAULT_CHOICE.model, AGENT_DEFAULT_CHOICE.effort],
+  );
+
+  // A Claude subscription the starter adds beside its key is a second payer of Claude's models alone, named by kind.
+  await database.run(
+    saveProviderKey(
+      owner,
+      PROVIDER_KEY_PROVIDER.ANTHROPIC,
+      PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+      { keyVersion: 1, sealedDataKey: "sealed-data-key", sealedKey: "sealed-setup-token" },
+      "sk-ant-oat01…fake",
+      null,
+      new Date(0),
+    ),
+  );
+  const withPlan = await call(AGENT_TOOL.LIST_MODELS, {});
+  assert.deepEqual(
+    Array.isArray(withPlan.models)
+      ? withPlan.models.map((model) => isRecord(model) && [model.id, model.payers])
+      : [],
+    [
+      [OPUS, ["subscription", "api_key"]],
+      [SOL, ["api_key"]],
+    ],
   );
 });
 

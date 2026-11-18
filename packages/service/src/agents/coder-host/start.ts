@@ -52,7 +52,11 @@ import { HOSTED_API_VERSION } from "@repo/features/client-identity";
 import { descriptionMarkdown } from "@repo/features/description-markdown";
 import type { GitHubAccess } from "@repo/features/github-repositories-wire";
 import { automationRun } from "@repo/features/model-label";
-import { agentFallbackChoice, type ModelChoice } from "@repo/features/models-wire";
+import {
+  agentFallbackChoice,
+  type ModelChoice,
+  type ModelProvider,
+} from "@repo/features/models-wire";
 import type { Task } from "@repo/features/task-wire";
 import { bothInOrder, causeKind, failureKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
@@ -119,6 +123,8 @@ import {
   localAgentRuntimeChoice,
   markedUnconnected,
   modelRuntimeOf,
+  type PayerKind,
+  providerPayerKinds,
 } from "./agent-runtime-choice.js";
 import { startBoot } from "./boot.js";
 import type { NativeRuntime } from "./native-runtime.js";
@@ -299,6 +305,27 @@ export interface AccountModelChoices {
  */
 export const accountModelChoices = (userId: string) =>
   Effect.map(modelChoicesRead(userId), (read) => read.choices);
+
+/**
+ * The account's choices as `accountModelChoices` reads them, and beside
+ * them the kinds of credential that may pay for each provider's models
+ * (`providerPayerKinds`), decided from the one read of its credentials.
+ */
+export const accountModelPayers = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+): Effect.fn.Return<
+  {
+    readonly choices: AccountModelChoices;
+    readonly payers: ReadonlyMap<ModelProvider, readonly PayerKind[]>;
+  },
+  HostedRefusal,
+  DatabaseServices | ModelCatalog
+> {
+  const { choices, keys } = yield* modelChoicesRead(userId);
+  const payers = yield* hostedStoreOrUnavailable(providerPayerKinds(userId, keys));
+
+  return { choices, payers };
+});
 
 /**
  * The account's choices as `accountModelChoices` reads them, with its
