@@ -132,10 +132,14 @@ export class TaskIdTaken extends Data.TaggedError("TaskIdTaken") {}
 /** A coding agent stands at work that a delete was not told was stopped: one started on the task, or handed a message, while it or the others were stopped. */
 export class TaskAgentUnstopped extends Data.TaggedError("TaskAgentUnstopped") {}
 
-/** What a delete that stopped the task's agents first tells it. */
-export interface TaskDeleteGuard {
-  /** The agents the caller stopped; any other standing refuses the delete. */
+/** What a delete tells it of the task's agents: the ones it stopped or found stopped, and, where it stopped none itself, how it reads them stopped under their locks. */
+export interface TaskDeleteGuard<R = never> {
+  /** The agents the caller stopped, or read as stopped; any other standing refuses the delete. */
   readonly stoppedAgentIds: ReadonlySet<string>;
+  /** Whether the task's unarchived agents, read under their conversations' locks, all stand stopped; false refuses the delete. Left out where the caller stopped each itself. */
+  readonly standsStopped?: (
+    agents: readonly TaskStandingAgent[],
+  ) => Effect.Effect<boolean, StoreFailure, R>;
 }
 
 /**
@@ -2476,25 +2480,28 @@ export function archiveAgentOfDoneTask<R = never>(
  * past the database, so the lock is held only for these statements: what a
  * caller does to the agents it stopped, such as retiring their sessions,
  * it does before, and the stopped set re-checked here is what keeps an
- * agent started meanwhile, whose session it never touched, standing.
+ * agent started meanwhile, whose session it never touched, standing. A
+ * caller that stopped none itself has the task's unarchived agents read
+ * again under their conversations' locks too, so one a message set to work
+ * after the caller read it stopped refuses the delete.
  */
-export function deleteTask(
+export function deleteTask<R = never>(
   userId: string,
   taskId: string,
-  guard?: TaskDeleteGuard,
-): Effect.Effect<boolean, TaskStoreFailure | TaskAgentUnstopped, DatabaseServices> {
+  guard?: TaskDeleteGuard<R>,
+): Effect.Effect<boolean, TaskStoreFailure | TaskAgentUnstopped, DatabaseServices | R> {
   return Effect.map(deleteTaskCommitted(userId, taskId, guard), Option.isSome);
 }
 
 /** A task deleted, as `deleteTask` deletes one, and the transaction its row went in; none where the account reached no such task. */
-export function deleteTaskCommitted(
+export function deleteTaskCommitted<R = never>(
   userId: string,
   taskId: string,
-  guard?: TaskDeleteGuard,
+  guard?: TaskDeleteGuard<R>,
 ): Effect.Effect<
   Option.Option<{ readonly txid: string }>,
   TaskStoreFailure | TaskAgentUnstopped,
-  DatabaseServices
+  DatabaseServices | R
 > {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
@@ -2505,6 +2512,13 @@ export function deleteTaskCommitted(
         const agents = yield* findAgentConversations({ userId, taskId });
 
         if (guard !== undefined && agents.some(({ id }) => !guard.stoppedAgentIds.has(id))) {
+          return yield* new TaskAgentUnstopped();
+        }
+
+        if (
+          guard?.standsStopped !== undefined &&
+          !(yield* guard.standsStopped(yield* lockStandingAgents({ taskId })))
+        ) {
           return yield* new TaskAgentUnstopped();
         }
 

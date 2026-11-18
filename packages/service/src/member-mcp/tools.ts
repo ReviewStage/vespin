@@ -220,9 +220,9 @@ import {
   runReadAgentChanges,
 } from "../agents/agent-changes-tool.js";
 import {
-  deletedAgent,
+  deletedStoppedAgent,
   resumedAgentSandbox,
-  rewoundAgentById,
+  rewoundStoppedAgentById,
   warmedAgent,
 } from "../agents/agent-lifecycle.js";
 import { agentPullRequestAction } from "../agents/agent-pull-request-procedures.js";
@@ -405,7 +405,7 @@ import {
   DESCRIPTION_SAVE_STATUS,
   restoreRevision,
 } from "../tasks/description-notes.js";
-import { deleteTaskStoppingAgents } from "../tasks/task-delete.js";
+import { deleteTaskOfStoppedAgents } from "../tasks/task-delete.js";
 import { readTaskFile } from "../tasks/task-file.js";
 import { settledTaskRefusal } from "../tasks/task-finish.js";
 import { readTaskTree } from "../tasks/task-tree.js";
@@ -1397,31 +1397,21 @@ const MEMBER_CHANGE_TASK_RELATION_TOOL = memberMcpTool({
 /** Why a task was not deleted, in words the agent can act on; the task stands in each. */
 const DELETE_TASK_REFUSAL = {
   NO_TASK: `Not deleted: the member can open no task with that id; ${MEMBER_MCP_TOOL.LIST_TASKS} names them.`,
-  NOT_READY:
-    "Not deleted: an agent of that task has a turn still coming up, or was started while the " +
-    "others were stopped, so there is no turn to stop yet; call again in a moment.",
-  NOT_PERMITTED:
-    "Not deleted: an agent of that task runs on another member's own subscription, so only " +
-    "they and their agents can stop it.",
-  NATIVE_NOT_HERE:
-    "Not deleted: an agent of that task runs on Claude Code or Codex, which cannot be reached " +
-    "from here to stop its turn yet; the member deletes the task from the app.",
+  AT_WORK:
+    "Not deleted: an agent of that task is starting or running, and a delete stops none. " +
+    `Stop each with ${MEMBER_MCP_TOOL.STOP_AGENT} (${MEMBER_MCP_TOOL.LIST_AGENTS} with the ` +
+    "taskId names each agent's status), then delete the task again.",
   UNAVAILABLE:
-    "Not deleted: the service could not stop every agent of that task just now. The call may " +
-    "be made again.",
+    "Not deleted: the service could not delete that task just now. The call may be made again.",
 } as const;
 
-/** A delete's refusal in the agent's words (`deleteTaskStoppingAgents`). */
+/** A delete's refusal in the agent's words (`deleteTaskOfStoppedAgents`). */
 function deleteTaskRefusalWords(refusal: HostedRefusal): string {
   switch (refusal.error) {
     case HOSTED_API_ERROR.NOT_FOUND:
       return DELETE_TASK_REFUSAL.NO_TASK;
     case HOSTED_API_ERROR.AGENT_NOT_READY:
-      return DELETE_TASK_REFUSAL.NOT_READY;
-    case HOSTED_API_ERROR.NOT_PERMITTED:
-      return DELETE_TASK_REFUSAL.NOT_PERMITTED;
-    case HOSTED_API_ERROR.NATIVE_AGENT_NOT_HERE:
-      return DELETE_TASK_REFUSAL.NATIVE_NOT_HERE;
+      return DELETE_TASK_REFUSAL.AT_WORK;
     default:
       return DELETE_TASK_REFUSAL.UNAVAILABLE;
   }
@@ -1436,18 +1426,19 @@ const DeleteTaskInputSchema = Schema.Struct({
 
 /**
  * `delete_task`: a task deleted as the app's Permanently delete deletes one,
- * through the operation its procedure runs (`deleteTaskStoppingAgents`), on
- * the member's own standing, so the tool deletes what the app lets them
- * delete and nothing more.
+ * on the member's own standing, so the tool deletes what the app lets them
+ * delete and nothing more, but stopping no agent (`deleteTaskOfStoppedAgents`):
+ * only `stop_agent` stops one.
  */
 const MEMBER_DELETE_TASK_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.DELETE_TASK,
   description:
     "Delete a task the member can open for good, by its id, a teammate's included, in " +
     "whichever of the member's workspaces it stands, as the app's Permanently delete would: " +
-    "every agent on it is stopped first, then the task goes with everything on it, its " +
-    "agents and their transcripts among it, and none of it can be brought back. A delete refused " +
-    "leaves the task standing, though agents it stopped before the refusal stay stopped. " +
+    "the task goes with everything on it, its agents and their transcripts among it, and none " +
+    "of it can be brought back. It stops no agent: while any agent on the task is starting or " +
+    `running it is refused, and ${MEMBER_MCP_TOOL.STOP_AGENT} stops each first. A delete ` +
+    "refused leaves the task and its agents as they stood. " +
     "Delete one only when the member asks for it, and mark one done or canceled with " +
     `${MEMBER_MCP_TOOL.UPDATE_TASK}'s status where they only want it out of the way. ` +
     "Answers `accepted` with the task's id, or `rejected` and why.",
@@ -1458,7 +1449,7 @@ const MEMBER_DELETE_TASK_TOOL = memberMcpTool({
       (userId) => readTaskWorkspace(userId, taskId),
       DELETE_TASK_REFUSAL.NO_TASK,
       (call) =>
-        deleteTaskStoppingAgents(call.writer, callerUserId(call.caller), taskId).pipe(
+        deleteTaskOfStoppedAgents(callerUserId(call.caller), taskId).pipe(
           Effect.map(() => ({ status: ACTION_RESULT_STATUS.ACCEPTED, taskId })),
           Effect.catch((refusal) =>
             Effect.succeed(agentToolRejected(deleteTaskRefusalWords(refusal))),
@@ -2583,9 +2574,9 @@ const AGENT_LIFECYCLE_REFUSAL = {
   STARTER_ONLY: (verb: string) =>
     `Not ${verb}: only the member who started that agent may do that, since it runs on their ` +
     "own GitHub token, subscription, or Mac.",
-  NOT_STOPPED:
-    "Not deleted: the agent could not be stopped first, or a message woke it again. Stop it " +
-    `with ${MEMBER_MCP_TOOL.STOP_AGENT}, or try again in a moment.`,
+  AT_WORK: (verb: string) =>
+    `Not ${verb}: the agent is starting or running, and this stops nothing. Stop it with ` +
+    `${MEMBER_MCP_TOOL.STOP_AGENT}, then call this again.`,
   RETIRED: "Not woken: that agent is archived, and an archived agent's sandbox is not woken.",
   SNAPSHOT_GONE: "Not woken: the sandbox's snapshot is gone, so nothing can resume it.",
   UNAVAILABLE: (verb: string) =>
@@ -2604,7 +2595,7 @@ function lifecycleRefusalWords(refusal: HostedRefusal, verb: LifecycleVerb) {
     case HOSTED_API_ERROR.NOT_PERMITTED:
       return AGENT_LIFECYCLE_REFUSAL.STARTER_ONLY(verb);
     case HOSTED_API_ERROR.AGENT_NOT_READY:
-      return AGENT_LIFECYCLE_REFUSAL.NOT_STOPPED;
+      return AGENT_LIFECYCLE_REFUSAL.AT_WORK(verb);
     case HOSTED_API_ERROR.AGENT_RETIRED:
       return AGENT_LIFECYCLE_REFUSAL.RETIRED;
     case HOSTED_API_ERROR.SANDBOX_SNAPSHOT_GONE:
@@ -2643,7 +2634,8 @@ const REWIND_AGENT_TOOL = memberMcpTool({
   description:
     "Rewind a coding agent the member can see, by its id, as the member's own Rewind would: " +
     "it is taken back to just before one of the lines sent to it, as though that line and " +
-    "everything after it were never said, and whatever it is doing stops first. Its checkout " +
+    "everything after it were never said. It stops nothing: an agent starting or running is " +
+    `refused, and ${MEMBER_MCP_TOOL.STOP_AGENT} stops it first. Its checkout ` +
     "and branch are left as they stand: only the conversation goes back. Name the line by the " +
     `lineId ${MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT} names on it; a line sent while a turn was working is ` +
     "refused. Only the member who started an agent rewinds one on their own GitHub token, " +
@@ -2653,7 +2645,7 @@ const REWIND_AGENT_TOOL = memberMcpTool({
   annotations: { readOnlyHint: false, destructiveHint: true },
   run: ({ agentId, lineId }) =>
     lifecycleAsMember(LIFECYCLE_VERB.REWOUND, (userId) =>
-      Effect.map(rewoundAgentById(userId, agentId, lineId), (agent) => ({
+      Effect.map(rewoundStoppedAgentById(userId, agentId, lineId), (agent) => ({
         status: ACTION_RESULT_STATUS.ACCEPTED,
         agent: { id: agent.id, title: agent.title ?? agent.model, status: agent.status },
       })),
@@ -2664,17 +2656,18 @@ const DELETE_AGENT_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.DELETE_AGENT,
   description:
     "Delete a coding agent the member can see, by its id, for good, as the member's own " +
-    "Delete agent would: one still working is stopped first, then its transcript is deleted " +
-    "and its session ended, and nothing brings it back. Its branch and pull request on " +
+    "Delete agent would: its transcript is deleted and its session ended, and nothing brings " +
+    "it back. It stops nothing: an agent starting or running is refused, and " +
+    `${MEMBER_MCP_TOOL.STOP_AGENT} stops it first. Its branch and pull request on ` +
     "GitHub stay. Any member who can see an agent may delete it, as in the app. Delete only an " +
     "agent the member asked you to; to put one away and keep it, archive it with " +
     `${MEMBER_MCP_TOOL.ARCHIVE_AGENT} instead. Answers \`accepted\` once it is deleted, or ` +
-    "`rejected` and why, such as a stop that did not take.",
+    "`rejected` and why.",
   input: AgentIdInputSchema,
   annotations: DESTRUCTIVE,
   run: ({ agentId }) =>
     lifecycleAsMember(LIFECYCLE_VERB.DELETED, (userId) =>
-      Effect.as(deletedAgent(MEMBER_WRITER, userId, agentId), {
+      Effect.as(deletedStoppedAgent(userId, agentId), {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         deleted: true,
       }),
