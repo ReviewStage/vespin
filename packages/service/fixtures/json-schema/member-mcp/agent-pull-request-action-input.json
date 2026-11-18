@@ -10,7 +10,7 @@
     "number": {
       "type": "integer",
       "minimum": 1,
-      "description": "Another pull request of the agent's repository, by its number, such as one stacked on its own; leave it out for the agent's own pull request."
+      "description": "The pull request of the agent's repository to change, by its number: the agent's own, which read_agent_changes answers, or another, such as one stacked on it."
     },
     "change": {
       "anyOf": [
@@ -695,6 +695,7 @@
   },
   "required": [
     "agentId",
+    "number",
     "change"
   ],
   "additionalProperties": false
