@@ -5,7 +5,6 @@ import {
   CLOUD_ENVIRONMENT_HEAD,
   CLOUD_SCRIPT_WORDS,
   SANDBOX_SIZE_WORDS,
-  SECRET_VARIABLE_WORDS,
   scriptLastRunWords,
   setByVespinNote,
   VARIABLE_WORDS,
@@ -34,7 +33,6 @@ import { ACT_KIND } from "@repo/host/acts";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   ActionRow,
-  askForSecret,
   askForWords,
   BUZZ,
   ConfirmAsk,
@@ -58,20 +56,16 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { useRouter } from "expo-router";
 import { type ReactNode, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
+import { cloudSetupKey, sandboxSizeKey, variablesKey } from "../../cloud-environment-query.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
+import { SETTINGS_ROUTE } from "../../settings-button.js";
 import { useWrite, WRITE_SUBJECT } from "../../use-write.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
-
-/** The reads the page asks the host for as it opens, each kept under the account and the workspace. */
-const QUERY_ROOT = {
-  SIZE: "cloud-environment-size",
-  VARIABLES: "cloud-environment-variables",
-  SETUP: "cloud-environment-setup",
-} as const;
 
 /** What the size's menu says of each size, the one a workspace starts at marked as the default, as the panel's select tags it. */
 const SIZE_OPTIONS = SANDBOX_VCPU_SIZES.map((vcpus) => ({
@@ -191,8 +185,9 @@ function CloudEnvironmentPage({
   const [asked, setAsked] = useState<SandboxVcpus | undefined>(undefined);
   const [deleting, setDeleting] = useState<WorkspaceVariable | undefined>(undefined);
   const [addRefusal, setAddRefusal] = useState<string | undefined>(undefined);
-  const sizeKey: QueryKey = [QUERY_ROOT.SIZE, accountId, workspaceId];
-  const variablesKey: QueryKey = [QUERY_ROOT.VARIABLES, accountId, workspaceId];
+  const router = useRouter();
+  const sizeKey = sandboxSizeKey(accountId, workspaceId);
+  const listKey = variablesKey(accountId, workspaceId);
 
   const size = useQuery({
     queryKey: sizeKey,
@@ -201,13 +196,13 @@ function CloudEnvironmentPage({
   });
 
   const environment = useQuery({
-    queryKey: variablesKey,
+    queryKey: listKey,
     queryFn: () => acts[ACT_KIND.WORKSPACE_ENVIRONMENT_LIST]({ workspaceId }),
     retry: false,
   });
 
   const setup = useQuery({
-    queryKey: [QUERY_ROOT.SETUP, accountId, workspaceId],
+    queryKey: cloudSetupKey(accountId, workspaceId),
     queryFn: () => acts[ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]({ workspaceId }),
     retry: false,
   });
@@ -237,18 +232,7 @@ function CloudEnvironmentPage({
     ).then(() => setAsked(undefined));
   };
 
-  const saveSecret = (name: string, value: string) =>
-    void write(
-      () =>
-        acts[ACT_KIND.WORKSPACE_ENVIRONMENT_SAVE]({
-          workspaceId,
-          secret: true,
-          variables: [{ name, value }],
-        }).then(drawn<WorkspaceEnvironmentAnswer>(variablesKey)),
-      { retry: true, went: BUZZ.SUCCESS },
-    );
-
-  // Note that a name is checked before its value is asked for, so a name the service would refuse, or one saved already, says why under Variables and asks for nothing typed in vain.
+  // Note that a name is checked before its value's sheet opens, so a name the service would refuse, or one saved already, says why under Variables and asks for nothing typed in vain.
   const addVariable = (saved: readonly WorkspaceVariable[]) =>
     askForWords({
       title: VARIABLE_WORDS.ADD,
@@ -261,12 +245,7 @@ function CloudEnvironmentPage({
             setAddRefusal(problem);
 
             if (problem !== undefined) return;
-            askForSecret({
-              title: VARIABLE_WORDS.ADD_VALUE(name),
-              message: SECRET_VARIABLE_WORDS.DETAIL,
-              act: VARIABLE_WORDS.ADD_ACT,
-              onSecret: (value) => saveSecret(name, value),
-            });
+            router.push({ pathname: SETTINGS_ROUTE.VARIABLE_VALUE, params: { workspaceId, name } });
           },
         },
       ],
@@ -276,7 +255,7 @@ function CloudEnvironmentPage({
     void write(
       () =>
         acts[ACT_KIND.WORKSPACE_ENVIRONMENT_DELETE]({ workspaceId, name }).then(
-          drawn<WorkspaceEnvironmentAnswer>(variablesKey),
+          drawn<WorkspaceEnvironmentAnswer>(listKey),
         ),
       { retry: true, went: BUZZ.SUCCESS },
     );

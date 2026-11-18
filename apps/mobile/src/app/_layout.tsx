@@ -84,6 +84,7 @@ const SHEET_ROUTE = {
   NEW_WORKSPACE: "new-workspace",
   AGENT_KEY: "agent-key",
   CHATGPT_SIGN_IN: "chatgpt-sign-in",
+  VARIABLE_VALUE: "variable-value",
 } as const;
 
 /** The sheets, each drawn on the lifted ground in dark. */
@@ -259,6 +260,10 @@ function GuardedScreens() {
           <Stack.Screen
             name={SHEET_ROUTE.NEW_WORKSPACE}
             options={{ presentation: sheetPresentation, title: "New workspace" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.VARIABLE_VALUE}
+            options={{ ...shortSheet, title: "Add variable" }}
           />
         </Stack.Protected>
         {/* Note that setup stands with no push, in the tabs' place, as the tabs do, since nothing slides it in. */}

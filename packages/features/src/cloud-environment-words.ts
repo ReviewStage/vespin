@@ -40,8 +40,7 @@ export const VARIABLE_WORDS = {
   DELETE: "Delete variable",
   ADD: "Add variable",
   NEXT: "Next",
-  ADD_ACT: "Add",
-  ADD_VALUE: (name: string) => `Value of ${name}`,
+  VALUE: "Value",
   NAME_SPELLING: "Use letters, digits, and _, not starting with a digit.",
 } as const;
 
