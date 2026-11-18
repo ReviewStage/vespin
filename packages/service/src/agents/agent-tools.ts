@@ -94,6 +94,7 @@ import { SqlClient } from "effect/sql";
 import {
   ACTION_RESULT_STATUS,
   HOSTED_API_ERROR,
+  isRecord,
   isStoredToolPart,
   MESSAGE_ROLE,
   type StoredUIMessage,
@@ -397,8 +398,9 @@ export const START_AGENT_REFUSAL = {
     "Not started: an agent on a task works in the task's own repository; leave repository out " +
     "where you start it on a task, or from another agent.",
   NEW_TASK:
-    `Not started: start_agent no longer makes a task; make it with ${AGENT_TOOL.CREATE_TASK}, then ` +
+    `Not started: start_agent takes no newTask; make the task with ${AGENT_TOOL.CREATE_TASK}, then ` +
     "start the agent on it by its taskId.",
+  TASK_KEY: "Not started: start_agent takes no task; pass what the agent should do as prompt.",
   NO_SUCH_TASK: `Not started: no task of your workspace has that id; ${AGENT_TOOL.LIST_TASKS} names them.`,
   NO_BRANCH:
     "Not started: the task's repository has no such branch on GitHub. Push it first, or name a " +
@@ -901,16 +903,18 @@ const readTaskUpdate = Schema.decodeUnknownResult(UPDATE_TASK_CALL);
 /**
  * A start as a call carries it: the coding agent's input, and the repository
  * of the task a member's call makes, which the member's own tool names
- * (`member-mcp/tools.ts`). One the app made under the tool's earlier words
- * names its prompt `task`, and one made before `create_task` may name a
- * `newTask`, which is read only to be refused with where to go now.
+ * (`member-mcp/tools.ts`).
  */
 const START_AGENT_CALL = Schema.Struct({
   ...START_AGENT_INPUT.fields,
   repository: Schema.optionalKey(Schema.NullOr(githubRepositoryFullNameSchema)),
-  task: Schema.optionalKey(START_PROMPT),
-  newTask: Schema.optionalKey(Schema.Unknown),
 });
+
+/** The keys earlier words of the tool taught, each refused with the one it meant: the prompt once named `task`, and the `newTask` a start named before `create_task` made tasks. */
+const RETIRED_START_KEYS = [
+  { key: "task", refusal: START_AGENT_REFUSAL.TASK_KEY },
+  { key: "newTask", refusal: START_AGENT_REFUSAL.NEW_TASK },
+] as const;
 
 const readStart = Schema.decodeUnknownResult(START_AGENT_CALL);
 
@@ -2182,9 +2186,8 @@ function startInputRefusal(
   }
 
   if (from === undefined) return undefined;
-  const prompt = start.prompt ?? start.task;
 
-  if (prompt !== undefined || start.branch !== undefined) {
+  if (start.prompt !== undefined || start.branch !== undefined) {
     return START_AGENT_REFUSAL.FROM_WITH_PROMPT;
   }
 
@@ -2235,9 +2238,9 @@ const runsOnOfStart = Effect.fnUntraced(function* (
  * it starts from, or, for a caller on no task naming none, a task made for
  * it (`startTaskOf`), or why nothing was started; a fresh start never
  * lands on no task. Only a continue or a fork of an agent on no task does,
- * in that agent's own place. A call naming `newTask`, as a
- * start did before `create_task` made tasks, is refused with where to go
- * now, rather than started on the caller's own task. Note that a start from another agent
+ * in that agent's own place. A call naming a key the tool's earlier words
+ * taught is refused with the key it meant (`RETIRED_START_KEYS`), rather
+ * than started without it. Note that a start from another agent
  * can take tens of seconds, a copy of its work and a summary of its
  * transcript among them, which the call is let run: our MCP server's function runs
  * a tool to the function's own bound, and the copy and the summary each hold
@@ -2247,6 +2250,11 @@ export function runStartAgent(
   call: AgentCall,
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
+  const retired = isRecord(input)
+    ? RETIRED_START_KEYS.find(({ key }) => input[key] !== undefined)
+    : undefined;
+
+  if (retired !== undefined) return Effect.succeed(agentToolRejected(retired.refusal));
   const asked = readStart(input);
 
   // A choice is one thing: a model without its effort, or the reverse, names nothing to run on.
@@ -2257,16 +2265,12 @@ export function runStartAgent(
     return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.UNREADABLE));
   }
 
-  if (asked.success.newTask !== undefined) {
-    return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NEW_TASK));
-  }
-
   const { model, effort, from } = asked.success;
   const { caller, agentSessions } = call;
   const refused = startInputRefusal(caller, asked.success);
 
   if (refused !== undefined) return Effect.succeed(agentToolRejected(refused));
-  const prompt = asked.success.prompt ?? asked.success.task;
+  const { prompt } = asked.success;
   const choice = model !== undefined && effort !== undefined ? { model, effort } : undefined;
   const named = asked.success.taskId;
   const ownTask = callerTask(caller);

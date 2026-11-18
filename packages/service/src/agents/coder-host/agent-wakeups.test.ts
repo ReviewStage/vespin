@@ -275,38 +275,25 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
   );
 
   it.effect(
-    "a booking in the words of Claude Code's own ScheduleWakeup, its delay under another name or as a string and its prompt as reason, is booked as the described one",
+    "a booking in the words of Claude Code's own ScheduleWakeup is refused with the described key it meant, and books nothing",
     () =>
       Effect.gen(function* () {
         yield* TestClock.setTime(OPENED.getTime());
         const queue = recordingQueue();
-        const agentSessions = fakeAgentSessions();
-        const { agent, sessionId } = yield* openAgent;
+        const { agent } = yield* openAgent;
 
-        const asked = [
-          { delaySeconds: 600, reason: "Read the checks on pull request #42." },
-          { delaySeconds: "600", prompt: "Read the checks on pull request #43." },
-          { delay_seconds: "600", reason: "Read the checks on pull request #44." },
-          { seconds: "600", prompt: "Read the checks on pull request #45." },
-          { minutes: "10", reason: "Read the checks on pull request #46." },
-        ];
+        const refused = yield* schedule(
+          agent,
+          { minutes: 10, prompt: "Read the checks on pull request #46." },
+          queue,
+        );
 
-        for (const input of asked) {
-          const booked = yield* schedule(agent, input, queue);
-          assert.deepEqual(booked, {
-            status: ACTION_RESULT_STATUS.ACCEPTED,
-            wakeup: { at: "2026-10-21T12:10:00.000Z", delaySeconds: 600 },
-          });
-          yield* deliver(agentSessions, queue.published.at(-1));
-        }
-
-        assert.deepEqual(sentTo(agentSessions, sessionId), [
-          "Read the checks on pull request #42.",
-          "Read the checks on pull request #43.",
-          "Read the checks on pull request #44.",
-          "Read the checks on pull request #45.",
-          "Read the checks on pull request #46.",
-        ]);
+        assert.deepEqual(refused, {
+          status: ACTION_RESULT_STATUS.REJECTED,
+          reason:
+            "Not booked: schedule_wakeup takes no minutes; pass the delay as delaySeconds, a whole number of seconds.",
+        });
+        assert.deepEqual(queue.published, []);
       }),
   );
 

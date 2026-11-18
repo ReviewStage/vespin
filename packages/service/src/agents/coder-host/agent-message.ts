@@ -76,6 +76,8 @@ export const MESSAGE_AGENT_REFUSAL = {
     `Not sent: agentId is not an agent's id; pass the id ${AGENT_TOOL.LIST_AGENTS} answered, ` +
     "or the one a message from the agent closed with.",
   EMPTY: "Not sent: the text is empty; say what to tell the agent.",
+  /** Claude Code's own messaging tools name their words `message`, which its agents carry here from habit. */
+  MESSAGE_KEY: "Not sent: message_agent takes no message; pass what to tell the agent as text.",
   /** The message's own length, so the agent knows how much to cut. */
   TOO_LONG: (length: number) =>
     `Not sent: the text is ${length} characters, over the ${MAX_MESSAGE_WORDS_CHARS} one message ` +
@@ -137,15 +139,15 @@ const readAgentId = Schema.decodeUnknownResult(wireUuidSchema);
 /**
  * The call's id and words, each read apart so the refusal names the one
  * that failed: a malformed id, empty words, or words over the bound, told
- * with their length. The words are read under `text`, or under `message`
- * where no `text` stands.
+ * with their length.
  */
 function readMessage(
   input: UnparsedWireValue,
 ): Result.Result<{ readonly agentId: string; readonly text: string }, string> {
   if (!isRecord(input)) return Result.fail(MESSAGE_AGENT_REFUSAL.UNREADABLE);
-  // Note that `message` is read too, because Claude Code's own messaging tools name their words so and its agents carry that name here.
-  const words = input.text ?? input.message;
+
+  if (input.message !== undefined) return Result.fail(MESSAGE_AGENT_REFUSAL.MESSAGE_KEY);
+  const words = input.text;
 
   if (!Predicate.isString(words)) return Result.fail(MESSAGE_AGENT_REFUSAL.UNREADABLE);
   const agentId = readAgentId(input.agentId);
