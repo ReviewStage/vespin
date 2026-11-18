@@ -26,6 +26,10 @@
  * - A channel change takes an owner or admin, and puts the bot in a public
  *   channel or takes it out of one, forgetting the channel's repository as
  *   it leaves, and names or clears the channel's default repository.
+ * - An update makes any of those three at once, all or nothing: it checks
+ *   the role and reaches every repository first, then writes its rows in one
+ *   transaction whose last step asks Slack to join or leave the channel, so
+ *   a refusal anywhere leaves every setting as it stood.
  *
  * The read answers an owner or admin the team's channels as Slack lists
  * them, each with its default repository; a member is answered none. A
@@ -55,8 +59,9 @@ import type {
   workspaceSlackBotChannelRequestSchema,
 } from "@repo/features/slack-bot-wire";
 import { managesWorkspace } from "@repo/features/workspace-role";
-import { Effect, Option } from "effect";
+import { Data, Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
+import * as SqlClient from "effect/sql/SqlClient";
 import { answeredWorkspace, managedWorkspace } from "../accounts/workspace-access.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { workspaceRepository } from "../github/workspace-repository.js";
@@ -74,6 +79,16 @@ export type SlackChannelChange = Omit<
   typeof workspaceSlackBotChannelRequestSchema.Type,
   "workspaceId"
 >;
+
+/** The settings one update names, each left out where it stays as it stands. */
+export interface SlackBotUpdate {
+  readonly notifications?: boolean;
+  readonly defaultRepository?: string | null;
+  readonly channel?: SlackChannelChange;
+}
+
+/** Slack refused the join or leave an update asked, which rolls its rows back. */
+class SlackChannelRefused extends Data.TaggedError("SlackChannelRefused") {}
 
 /** What a write that names a repository reaches: the store, the bot, and GitHub through the App. */
 type SlackBotWriteServices =
@@ -291,6 +306,90 @@ export const changeSlackChannel = Effect.fn("web/changeSlackChannel")(function* 
       writeSlackChannelRepository(workspace.id, channelId, repository),
     );
   }
+
+  return withTxid(yield* workspaceSlackBot(workspace, userId), txid);
+});
+
+/**
+ * The member's switch, the workspace's default repository, and one channel
+ * set together or not at all. Note that every check (the role, the bot
+ * connected, each repository GitHub reaches) runs before the transaction,
+ * and Slack's join or leave runs last inside it, because Slack's is the one
+ * write no rollback undoes: a refusal from it rolls back the rows.
+ */
+export const updateSlackBot = Effect.fn("web/updateSlackBot")(function* (
+  userId: string,
+  workspaceId: string,
+  update: SlackBotUpdate,
+): Effect.fn.Return<WorkspaceSlackBot, HostedRefusal, SlackBotWriteServices> {
+  const { notifications, defaultRepository, channel } = update;
+  const manages = defaultRepository !== undefined || channel !== undefined;
+
+  const { workspace, bot } = manages
+    ? yield* connectedWorkspace(userId, workspaceId)
+    : { workspace: yield* answeredWorkspace(userId, workspaceId), bot: undefined };
+
+  const reachedDefault =
+    defaultRepository === undefined
+      ? undefined
+      : yield* reachedRepository(workspace.id, userId, defaultRepository);
+
+  // A channel the bot leaves keeps no repository, so a later join starts from the workspace's.
+  const channelRepository =
+    channel === undefined
+      ? undefined
+      : channel.member === false
+        ? null
+        : channel.repository === undefined
+          ? undefined
+          : yield* reachedRepository(workspace.id, userId, channel.repository);
+
+  const written = Effect.gen(function* () {
+    let txid = Option.none<string>();
+
+    if (notifications !== undefined) {
+      txid = Option.some(yield* writeSlackNotifications(userId, notifications));
+    }
+
+    if (reachedDefault !== undefined) {
+      txid = Option.orElse(
+        yield* writeSlackDefaultRepository(workspace.id, reachedDefault),
+        () => txid,
+      );
+    }
+
+    if (channel !== undefined && channelRepository !== undefined) {
+      txid = Option.orElse(
+        yield* writeSlackChannelRepository(workspace.id, channel.channelId, channelRepository),
+        () => txid,
+      );
+    }
+
+    return txid;
+  });
+
+  const membership = (txid: Option.Option<string>) =>
+    Effect.gen(function* () {
+      if (channel?.member === undefined || bot === undefined) return txid;
+
+      const done = channel.member
+        ? yield* bot.join(channel.channelId)
+        : yield* bot.leave(channel.channelId);
+
+      return done ? txid : yield* Effect.fail(new SlackChannelRefused());
+    });
+
+  const client = yield* SqlClient.SqlClient;
+
+  const txid = yield* client
+    .withTransaction(Effect.flatMap(written, membership))
+    .pipe(
+      Effect.catch((failure) =>
+        failure instanceof SlackChannelRefused
+          ? Effect.fail(HOSTED_REFUSAL.UNAVAILABLE)
+          : hostedStoreOrUnavailable(Effect.fail(failure)),
+      ),
+    );
 
   return withTxid(yield* workspaceSlackBot(workspace, userId), txid);
 });

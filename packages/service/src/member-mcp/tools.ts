@@ -370,13 +370,7 @@ import type { PageLinks } from "../pages/page-links.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
 import type { SlackApp } from "../slack/slack-app.js";
 import type { SlackBot } from "../slack/slack-bot.js";
-import {
-  changeSlackChannel,
-  disconnectSlackBot,
-  readSlackBot,
-  setSlackDefaultRepository,
-  setSlackNotifications,
-} from "../slack/slack-bot-operations.js";
+import { disconnectSlackBot, readSlackBot, updateSlackBot } from "../slack/slack-bot-operations.js";
 import {
   COMMENT_TOOL_REFUSAL,
   commentAnswerRead,
@@ -5478,37 +5472,22 @@ const UpdateSlackBotInputSchema = Schema.Struct({
 const UPDATE_SLACK_BOT_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.UPDATE_SLACK_BOT,
   description:
-    "Set the workspace's own Slack bot as its Settings do, each change optional and made in " +
-    "this order: the member's own notifications from it (any member), the workspace's default " +
-    "repository for Slack starts, and one channel, putting the bot in a public channel or " +
-    "taking it out and naming or clearing its default repository (an owner or admin alone, and " +
-    "only once the bot is connected). Connecting and disconnecting the bot is not done here. " +
-    `${WORKSPACE_WORDS} Answers \`accepted\` with the bot as it then stands, as ` +
-    `${MEMBER_MCP_TOOL.READ_SLACK_BOT} reads it, or \`rejected\` and why, the changes before ` +
-    "the refused one standing.",
+    "Set the workspace's own Slack bot as its Settings do, each change optional and all made " +
+    "together or none: the member's own notifications from it (any member), the workspace's " +
+    "default repository for Slack starts, and one channel, putting the bot in a public channel " +
+    "or taking it out and naming or clearing its default repository (an owner or admin alone, " +
+    "and only once the bot is connected). Connecting and disconnecting the bot is not done " +
+    `here. ${WORKSPACE_WORDS} Answers \`accepted\` with the bot as it then stands, as ` +
+    `${MEMBER_MCP_TOOL.READ_SLACK_BOT} reads it, or \`rejected\` and why, with nothing changed.`,
   input: UpdateSlackBotInputSchema,
   annotations: DESTRUCTIVE,
-  run: ({ workspace, notifications, defaultRepository, channel }) =>
+  run: ({ workspace, ...update }) =>
     asMemberInWorkspace(workspace, (userId, workspaceId) =>
-      Effect.gen(function* () {
-        let slackBot: WorkspaceSlackBot | undefined;
-
-        if (notifications !== undefined) {
-          slackBot = yield* setSlackNotifications(userId, workspaceId, notifications);
-        }
-
-        if (defaultRepository !== undefined) {
-          slackBot = yield* setSlackDefaultRepository(userId, workspaceId, defaultRepository);
-        }
-
-        if (channel !== undefined) {
-          slackBot = yield* changeSlackChannel(userId, workspaceId, channel);
-        }
-
-        slackBot ??= yield* readSlackBot(userId, workspaceId);
-
-        return { status: ACTION_RESULT_STATUS.ACCEPTED, slackBot: slackBotRecord(slackBot) };
-      }).pipe(
+      updateSlackBot(userId, workspaceId, update).pipe(
+        Effect.map((slackBot) => ({
+          status: ACTION_RESULT_STATUS.ACCEPTED,
+          slackBot: slackBotRecord(slackBot),
+        })),
         Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
       ),
     ),

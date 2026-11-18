@@ -9,9 +9,11 @@ import {
 import {
   linkSlackInstallation,
   saveSlackBotToken,
+  slackNotificationsOn,
 } from "@repo/database/models/slack-installation-store";
 import { member, organization, user } from "@repo/database/schemas/auth";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
+import { HOSTED_API_ERROR } from "@repo/features";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { ConfigProvider, DateTime, Effect, Layer, Option, Redacted, Result } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
@@ -19,6 +21,7 @@ import {
   beginIntegrationSignIn,
   completeIntegrationSignIn,
 } from "../integrations/integration-store.js";
+import { NO_GITHUB } from "../testing/github-app-fake.js";
 import {
   CONNECTOR_ASKED_NOTHING,
   firstIntegrationAccount,
@@ -32,7 +35,7 @@ import {
   slackBotFromEnvironment,
   slackBotOver,
 } from "./slack-bot.js";
-import { readSlackBot } from "./slack-bot-operations.js";
+import { readSlackBot, updateSlackBot } from "./slack-bot-operations.js";
 
 /**
  * Our Slack bot writing to a member, over a real store and a fake
@@ -42,7 +45,8 @@ import { readSlackBot } from "./slack-bot-operations.js";
  * failing whoever asked. Each workspace's calls are made on the token its
  * own install granted, and one that holds none writes nothing. Settings
  * offers the bot only where the deployment holds both the key ring that
- * opens a token and our Slack app whose install grants one.
+ * opens a token and our Slack app whose install grants one. An update
+ * that Slack refuses part of changes none of it.
  *
  * Synthetic accounts, workspaces, and Slack ids throughout.
  */
@@ -281,6 +285,40 @@ it.layer(getTestDB())("the Slack bot", (it) => {
           [],
         ),
       ),
+    ),
+  );
+
+  it.effect("changes no setting of an update where Slack refuses the channel it joins", () =>
+    Effect.gen(function* () {
+      const owner = yield* openAccount(`${randomUUID()}@app.test`);
+      const workspace = yield* openWorkspace(owner);
+      yield* linkSlackInstallation({
+        organizationId: workspace,
+        teamId: "T0001",
+        teamName: "Team",
+        userId: owner,
+      });
+
+      const refused = yield* Effect.flip(
+        updateSlackBot(owner, workspace, {
+          notifications: false,
+          channel: { channelId: "C0001", member: true },
+        }),
+      );
+
+      assert.equal(refused.error, HOSTED_API_ERROR.UNAVAILABLE);
+      assert.equal(yield* slackNotificationsOn(owner), true);
+    }).pipe(
+      Effect.provideService(
+        SlackBot,
+        slackBotOver((method, args, memberSubject) =>
+          method === "conversations.join"
+            ? Effect.fail(new SlackBotFailure({ method, code: "channel_not_found" }))
+            : fakeSlack(method, args, memberSubject),
+        ),
+      ),
+      Effect.provideService(SlackApp, slackAppService(undefined, [])),
+      Effect.provide(NO_GITHUB),
     ),
   );
 });
