@@ -279,6 +279,8 @@ export {
   WorkspaceRow,
 } from "./settings-form.js";
 
+export { SkeletonRegion } from "./skeleton.js";
+
 export {
   type BarAction,
   type BarFootItem,
