@@ -2070,7 +2070,6 @@ const TOOL_TARGETS: ReadonlyMap<string, (call: TargetedCall) => ToolTarget | und
   [AGENT_TOOL.SHOW_PAGE, shownPage],
   [AGENT_TOOL.READ_PAGE, readPage],
   [AGENT_TOOL.READ_AGENT, namedAgent],
-  [AGENT_TOOL.READ_AGENT_CHANGES, namedAgent],
   [AGENT_TOOL.MESSAGE_AGENT, namedAgent],
   [AGENT_TOOL.START_AGENT, startedAgent],
   [RETIRED_TOOL.UNARCHIVE_AGENT, namedAgent],

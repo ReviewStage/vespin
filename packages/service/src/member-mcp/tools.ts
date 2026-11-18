@@ -214,8 +214,8 @@ import {
 import {
   READ_AGENT_CHANGES_INPUT,
   READ_AGENT_CHANGES_WORDS,
-} from "../agents/agent-changes-spec.js";
-import { runReadAgentChanges } from "../agents/agent-changes-tool.js";
+  runReadAgentChanges,
+} from "../agents/agent-changes-tool.js";
 import {
   deletedAgent,
   resumedAgentSandbox,
