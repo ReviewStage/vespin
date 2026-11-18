@@ -295,6 +295,17 @@
     }
   }
 
+  /* A fold's head row is pressed whole (`SettingsFoldRow`,
+     `SettingsRowsFold`), so the pointer says so over all of it but what it
+     grows below, the fold's body among them, which folds nothing. */
+  .ui-settings-row[data-folds="true"] {
+    cursor: var(--ui-cursor-press);
+  }
+
+  .ui-settings-row[data-folds="true"] .ui-settings-row-below {
+    cursor: auto;
+  }
+
   /* Note that the glyph a mark holds is sized here rather than by a utility
      on the mark, because the glyph is another component's, whose own
      utilities a parent's child selector in the utilities layer would beat. */

@@ -40,7 +40,7 @@ import { replayMaskedError } from "./marks.js";
  * quiet `IconButton`. A row given its words (`row`) stands in `@repo/ui`'s
  * `SettingsRow`, its control among the row's controls and the ⋯ in the
  * row's `end`, which keeps to the name's line at any width, or, where it folds
- * lines open under its words, in `SettingsFoldRow`, its ⋯ before the chevron;
+ * lines open under its words, in `SettingsFoldRow`, its ⋯ after the fold's ⌄;
  * one given `children` still draws them in the window's own row, until its
  * page moves.
  */
@@ -75,7 +75,7 @@ interface MenuRowWords {
   align?: SettingsRowAlign;
   /** Whether the row stands inset under the row above, one of its things, as GitHub's accounts stand under GitHub's. */
   indent?: SettingsRowIndent;
-  /** What the row folds open under its words from a chevron after its ⋯ (`SettingsFoldRow`), the chevron's name, and whether it starts open. */
+  /** What the row folds open under its words from a press on the row or the ⌄ before its ⋯ (`SettingsFoldRow`), the ⌄'s name, and whether it starts open. */
   fold?: { body: ReactNode; label: string; defaultOpen: boolean };
   /** What stands last in the row's end, after its ⋯: the chevron of the rows it folds (`SettingsRowsFold`), or the room of a ⋯ or a chevron it lacks, so its column lines up with the rows around it. */
   end?: ReactNode;

@@ -68,9 +68,10 @@ import { CatalogSection } from "../section";
  * its row with a refusal under that, and accounts indented under their
  * provider's row; and accounts that fold their repositories open under
  * their words, one open from the start with a long name among them, one
- * of 24 that scrolls its list, one with a ⋯ before its chevron whose repositories its token reaches, at a page's measure and
- * narrower than 380px; and integrations that fold the rows they own under
- * their own row, closed until pressed, beside one that owns none; and an
+ * of 24 that scrolls its list, one with its ⋯ after its ⌄ whose repositories its token reaches, at a page's measure and
+ * narrower than 380px, each opened by a press anywhere on its row; and
+ * integrations that fold the rows they own under their own row, closed
+ * until pressed, beside one that owns none; and an
  * emptied script's row, a red Delete script standing in its Save's place;
  * and integrations' rows that each open a page, pressed anywhere and ending
  * in a ›, one connected and one needing its Reconnect, at a page's measure
@@ -560,8 +561,8 @@ function RowsFoldRows(): React.JSX.Element {
             leading={<Mark provider={MARK_PROVIDER.SLACK} />}
             end={() => (
               <>
-                <MoreButton thing="Slack" />
                 {chevron}
+                <MoreButton thing="Slack" />
               </>
             )}
           >
@@ -599,8 +600,8 @@ function RowsFoldRows(): React.JSX.Element {
             leading={<Mark provider={MARK_PROVIDER.SENTRY} />}
             end={() => (
               <>
-                <MoreButton thing="Sentry" />
                 {chevron}
+                <MoreButton thing="Sentry" />
               </>
             )}
           />
