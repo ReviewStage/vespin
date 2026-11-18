@@ -136,10 +136,20 @@ export class TaskAgentUnstopped extends Data.TaggedError("TaskAgentUnstopped") {
 export interface TaskDeleteGuard<R = never> {
   /** The agents the caller stopped, or read as stopped; any other standing refuses the delete. */
   readonly stoppedAgentIds: ReadonlySet<string>;
-  /** Whether the task's unarchived agents, read under their conversations' locks, all stand stopped; false refuses the delete. Left out where the caller stopped each itself. */
-  readonly standsStopped?: (
+  /** Left out where the caller stopped each agent itself and retired their sessions before. */
+  readonly standing?: TaskStandingGuard<R>;
+}
+
+/** How a delete that stopped no agent itself reads the task's unarchived agents under their conversations' locks, and what it runs there before anything is deleted. */
+export interface TaskStandingGuard<R> {
+  /** Whether they all stand stopped; false refuses the delete, nothing run. */
+  readonly standsStopped: (
     agents: readonly TaskStandingAgent[],
   ) => Effect.Effect<boolean, StoreFailure, R>;
+  /** Run under those locks once they read stopped, given every agent's conversation. */
+  readonly beforeDelete: (
+    conversationIds: readonly string[],
+  ) => Effect.Effect<void, StoreFailure, R>;
 }
 
 /**
@@ -2476,14 +2486,16 @@ export function archiveAgentOfDoneTask<R = never>(
  * and the delete fails with `TaskAgentUnstopped` where any other stands. The
  * task's row is locked before the agents are read, so a Start racing the
  * delete either landed its agent before the read, which then refuses, or
- * waits on the lock and finds no task to start on. Nothing here reaches
- * past the database, so the lock is held only for these statements: what a
- * caller does to the agents it stopped, such as retiring their sessions,
- * it does before, and the stopped set re-checked here is what keeps an
- * agent started meanwhile, whose session it never touched, standing. A
+ * waits on the lock and finds no task to start on. A caller that stopped
+ * the agents itself keeps the lock to these statements: what it does to
+ * them, such as retiring their sessions, it does before, and the stopped
+ * set re-checked here is what keeps an agent started meanwhile, whose
+ * session it never touched, standing. A
  * caller that stopped none itself has the task's unarchived agents read
  * again under their conversations' locks too, so one a message set to work
- * after the caller read it stopped refuses the delete.
+ * after the caller read it stopped refuses the delete, and runs what it
+ * does to them, such as retiring their sessions, under those locks once they
+ * read stopped, so a refused delete has touched no session.
  */
 export function deleteTask<R = never>(
   userId: string,
@@ -2515,14 +2527,18 @@ export function deleteTaskCommitted<R = never>(
           return yield* new TaskAgentUnstopped();
         }
 
-        if (
-          guard?.standsStopped !== undefined &&
-          !(yield* guard.standsStopped(yield* lockStandingAgents({ taskId })))
-        ) {
-          return yield* new TaskAgentUnstopped();
+        const conversationIds = agents.map((agent) => agent.conversationId);
+
+        if (guard?.standing !== undefined) {
+          const standing = yield* lockStandingAgents({ taskId });
+
+          if (!(yield* guard.standing.standsStopped(standing))) {
+            return yield* new TaskAgentUnstopped();
+          }
+
+          yield* guard.standing.beforeDelete(conversationIds);
         }
 
-        const conversationIds = agents.map((agent) => agent.conversationId);
         const removed = yield* removeTask({ userId, taskId });
 
         if (Option.isNone(removed)) return Option.none();

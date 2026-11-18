@@ -14,8 +14,10 @@
  * stops nothing, since only `stop_agent` stops an agent: it is refused while
  * any agent of the task is starting or running, read first so a refusal
  * touches nothing, and read again under the task's and the agents' locks at
- * the delete, so one a message set to work meanwhile still refuses it. Each
- * door reads its own input and answers in its own words.
+ * the delete, so one a message set to work meanwhile still refuses it; the
+ * sessions are retired there, under those locks, as an agent's delete
+ * retires its one, so a refused delete has retired none. Each door reads its
+ * own input and answers in its own words.
  *
  * The Stops and the retires reach the agents' sessions for the account the
  * caller resolved to (`coder-host/runtime-sessions.ts`), the retires a
@@ -108,16 +110,14 @@ export const deleteTaskOfStoppedAgents = /* @__PURE__ */ Effect.fnUntraced(funct
     ),
   );
 
-  // A refusal read before the sessions are retired leaves every agent as it stood.
   if (!stopped) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
-  yield* hostedStoreOrUnavailable(
-    retiredBeforeDelete(retiring)(agents.map(({ conversationId }) => conversationId)),
-  );
 
+  // Note that the sessions are retired under the agents' locks once they read stopped there, because an
+  // agent a message set to work since the read above would otherwise lose its session to a delete then refused.
   const deleted = yield* hostedStoreOrUnavailable(
     deleteTaskCommitted(userId, taskId, {
       stoppedAgentIds: new Set(agents.map(({ id }) => id)),
-      standsStopped,
+      standing: { standsStopped, beforeDelete: retiredBeforeDelete(retiring) },
     }).pipe(Effect.catchTag("TaskAgentUnstopped", () => Effect.succeed(undefined))),
   );
 
