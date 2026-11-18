@@ -1877,6 +1877,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
           agentId: agent.id,
           from: "start",
         });
+
         const lineId = decodeTranscript(JSON.parse(read.content[0].text)).transcript.at(-1)?.lineId;
         assert.ok(lineId !== undefined, "the Start's line names its lineId");
 
