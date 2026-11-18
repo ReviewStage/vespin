@@ -207,11 +207,11 @@ function holderOf({ item, taskId }: HeldItem): { readonly agents: boolean; reado
   return taskId === null ? { agents: true, id: item.agentId } : { agents: false, id: taskId };
 }
 
+/** One kind of holder's lists, by the plan's or the agent's id, as the feed tells them. */
+type HolderLists = AppInboxItems[typeof INBOX_SCOPE_KIND.TASK];
+
 /** One kind of holder's lists as `told` tells them: the plans', or the agents' on no plan. */
-function toldOf(
-  told: AppInboxItems,
-  agents: boolean,
-): Readonly<Record<string, readonly InboxItem[]>> {
+function toldOf(told: AppInboxItems, agents: boolean): HolderLists {
   return agents ? (told.agents ?? {}) : told[INBOX_SCOPE_KIND.TASK];
 }
 
