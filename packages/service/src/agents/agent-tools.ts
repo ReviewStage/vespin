@@ -2618,10 +2618,18 @@ export function runUpdateTask(
       // The change itself is confirmed as the app's is (`taskChangeAsked`), an archive stopping the task's agents but the caller.
       const asked = archived === undefined ? changes : { ...changes, archived };
 
+      // Note that a move into progress assigns no one, because only `assignee` changes who is on the task.
       const confirmed =
         Object.keys(asked).length === 0
           ? undefined
-          : yield* Effect.result(taskChangeAsked(userId, taskId, asked, callerAgent(caller)?.id));
+          : yield* Effect.result(
+              taskChangeAsked(
+                userId,
+                taskId,
+                { ...asked, assignsMover: false },
+                callerAgent(caller)?.id,
+              ),
+            );
 
       if (confirmed !== undefined && Result.isFailure(confirmed)) {
         return agentToolRejected(changeRefusalWords(confirmed.failure));

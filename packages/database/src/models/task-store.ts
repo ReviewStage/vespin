@@ -241,6 +241,8 @@ export interface TaskChanges {
   readonly priority?: TaskPriority;
   /** The member the task is assigned to, who must be a member of its workspace, or of the one it moves to; null for no one. */
   readonly assigneeId?: string | null;
+  /** False where a move into progress assigns no one the change does not name, as a tool's `update_task` asks; the app's own change leaves it out and assigns its mover. */
+  readonly assignsMover?: boolean;
 }
 
 /** How a task's repository was reached, as a write takes it. */
@@ -1991,7 +1993,7 @@ const taskStatusMoved = Effect.fnUntraced(function* <R, E2, R2>(
  * not a save: the document's `updatedAt` and the list's order stand. The pin
  * and the read mark are the account's own and no other member's. A task no one is assigned to
  * that the change moves into progress is assigned to the account, unless the
- * change names an assignee of its own. A change that moves the task to Done
+ * change names an assignee of its own or `assignsMover` is false. A change that moves the task to Done
  * or Canceled settles its open inbox items, and one that moves it off them
  * to work again leaves those items settled (`inbox-settle.ts`).
  *
@@ -2099,6 +2101,7 @@ export function updateTaskCommitted<E = never, R = never, RA = never>(
         // A task no one is on is its mover's once it moves into progress, as Linear's start assigns;
         // an assignee the change names wins, and one taken off a task already in progress stays off.
         const startedBy =
+          changes.assignsMover !== false &&
           changes.assigneeId === undefined &&
           changes.status === TASK_STATUS.IN_PROGRESS &&
           locked.value.status !== TASK_STATUS.IN_PROGRESS &&
