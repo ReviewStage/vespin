@@ -22,7 +22,7 @@ import {
   type AdminPromptSection,
   type AdminTurnPipeline,
 } from "@repo/features/admin-catalog-wire";
-import { AGENT_BRIEF } from "@repo/features/agent-wire";
+import { AGENT_BRIEF, AGENT_MACHINE } from "@repo/features/agent-wire";
 import { SANDBOX_IDLE } from "@repo/sandbox";
 import { Clock, Duration, Effect, Option } from "effect";
 import { AGENT_WAKEUP } from "../agents/coder-host/agent-wakeup-bounds.js";
@@ -49,6 +49,11 @@ const PLACEHOLDER_REPOSITORY = "acme/app";
 const PLACEHOLDER_TASK = {
   link: "https://vespin.dev/acme/task/1",
   id: "00000000-0000-4000-8000-000000000000",
+} as const;
+
+const PLACEHOLDER_AGENT = {
+  id: "00000000-0000-4000-8000-000000000001",
+  runsOn: { machine: AGENT_MACHINE.VERCEL },
 } as const;
 
 /**
@@ -231,6 +236,7 @@ function prompts(): AdminCatalogPrompt[] {
         PLACEHOLDER_REPOSITORY,
         AGENT_BRIEF.DESCRIPTION,
         PLACEHOLDER_TASK,
+        PLACEHOLDER_AGENT,
         PLACEHOLDER_STANDING,
         undefined,
         null,

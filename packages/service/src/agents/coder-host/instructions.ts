@@ -2,7 +2,12 @@ import { SHARED_FILES_DIRECTORY } from "@repo/agent-runner/pins";
 import { type Agent, agentBriefOf } from "@repo/database/models/agent-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
-import { AGENT_BRIEF, AGENT_MACHINE, type AgentBrief } from "@repo/features/agent-wire";
+import {
+  AGENT_BRIEF,
+  AGENT_MACHINE,
+  type AgentBrief,
+  type AgentRunsOnRequest,
+} from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { LINK_DESTINATION, linkOf, taskLinkStep } from "@repo/features/link-grammar";
 import { LINK_ORIGIN } from "@repo/features/link-home";
@@ -98,6 +103,30 @@ function machineLines(machine: CoderMachine, repository: boolean): string[] {
         ]
       : []),
   ];
+}
+
+/**
+ * The agent's own values, as a tool input that asks for them takes them:
+ * its id, its task's id, where it runs as `start_agent`'s `runsOn` names
+ * it, its repository, and the branch it was cloned at. Note that they sit in
+ * the instructions, since none changes over a session, so the prompt cache
+ * holds them; the branch it pushes to is its own to read with git.
+ */
+function ownLine(
+  ownTask: OwnTask,
+  own: OwnAgent,
+  repository: string | null,
+  startBranch: string | null,
+): string {
+  const values = [
+    `agentId \`${own.id}\``,
+    `taskId \`${ownTask.id}\``,
+    ...(own.runsOn === null ? [] : [`runsOn \`${JSON.stringify(own.runsOn)}\``]),
+    ...(repository === null ? [] : [`repository \`${repository}\``]),
+    ...(repository === null || startBranch === null ? [] : [`branch \`${startBranch}\``]),
+  ];
+
+  return `Your own values, for a tool input that asks for yours: ${values.join(", ")}.`;
 }
 
 /** Whose the agent's commits are, the developer's or the App's bot's, and the trailer naming the other as co-author where one is handed. */
@@ -269,6 +298,7 @@ export function coderInstructions(
   repository: string | null,
   brief: AgentBrief,
   ownTask: OwnTask,
+  own: OwnAgent,
   standing: AgentStanding,
   authorship: CommitAuthorship | undefined = undefined,
   startBranch: string | null = null,
@@ -293,6 +323,7 @@ export function coderInstructions(
     repository === null
       ? `You work in no repository. Your folder is \`${machine.checkoutPath}\`; ${shell} starts there.`
       : `The GitHub repository \`${repository}\` is checked out at \`${machine.checkoutPath}\`${branch}; ${shell} starts there.`,
+    ownLine(ownTask, own, repository, startBranch),
     ...machineLines(machine, repository !== null),
     ...(posts ? [UNCLEAR_LINE] : []),
     ...(publishes ? publishLines(authorship, startBranch, memberToken, wakesOff, posts) : []),
@@ -326,6 +357,21 @@ export function coderInstructions(
 export interface OwnTask {
   readonly link: string;
   readonly id: string;
+}
+
+/** The agent itself: its id, and where it runs as `start_agent`'s `runsOn` names it; none for a local agent whose device is gone. */
+export interface OwnAgent {
+  readonly id: string;
+  readonly runsOn: AgentRunsOnRequest | null;
+}
+
+/** Where the agent its row names runs, as `start_agent`'s `runsOn` names it. */
+function runsOnOf(agent: Agent): AgentRunsOnRequest | null {
+  if (agent.machine !== AGENT_MACHINE.DEVICE) return { machine: AGENT_MACHINE.VERCEL };
+
+  return agent.deviceId === null || agent.deviceId === undefined
+    ? null
+    : { machine: AGENT_MACHINE.DEVICE, deviceId: agent.deviceId };
 }
 
 /** What an agent's instructions are composed on beyond its row. */
@@ -372,6 +418,7 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
     agent.repository,
     agentBriefOf(agent),
     ownTask,
+    { id: agent.id, runsOn: runsOnOf(agent) },
     context.standing,
     context.authorship,
     agent.startBranch,
