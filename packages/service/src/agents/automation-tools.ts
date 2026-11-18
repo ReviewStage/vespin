@@ -109,13 +109,15 @@ export const AUTOMATION_TOOL_REFUSAL = {
     '{"kind":"schedule","at":"<YYYY-MM-DDTHH:mm>","timezone":"<IANA zone>"}, a GitHub event ' +
     'as {"kind":"github","event":"<event>"}, or a Sentry event as ' +
     '{"kind":"integration","provider":"sentry","event":"alert-triggered"}; repositories as ' +
-    `owner/name, [] for none; and a model with one of its efforts, as ${AGENT_TOOL.LIST_MODELS} answers them.`,
+    `owner/name, [] for none; a model with one of its efforts, as ${AGENT_TOOL.LIST_MODELS} answers them; ` +
+    "scope as personal or workspace; and archiveSuccessful and slackDelivery as true or false.",
   MISSING_CREATE:
-    "Not made: every automation names its repositories, model, and effort; none is taken from " +
-    "where you work or from the developer's defaults. repositories is an array of owner/name the " +
-    "workspace's GitHub installation reaches, the one you work in among them where the run " +
-    "should work there, or [] for none; model is a catalog id and effort one of its efforts, as " +
-    `${AGENT_TOOL.LIST_MODELS} answers them. Missing:`,
+    "Not made: every automation names its repositories, model, effort, scope, archiveSuccessful, " +
+    "and slackDelivery; none is taken from where you work or from the developer's defaults. " +
+    "repositories is an array of owner/name the workspace's GitHub installation reaches, the one " +
+    "you work in among them where the run should work there, or [] for none; model is a catalog " +
+    `id and effort one of its efforts, as ${AGENT_TOOL.LIST_MODELS} answers them; scope is ` +
+    "personal or workspace; archiveSuccessful and slackDelivery are true or false. Missing:",
   UNREADABLE_UPDATE:
     `Not run: name the automation by the id ${AGENT_TOOL.LIST_AUTOMATIONS} answered, and at ` +
     "least one change, a model with its effort, both or neither.",
@@ -152,13 +154,13 @@ export const AUTOMATION_TOOL_REFUSAL = {
   SLACK_NOT_CONNECTED:
     `Not run: the workspace has not connected ${PRODUCT_NAME}'s Slack bot, so no run's result ` +
     "could be sent on Slack. A workspace owner or admin connects it in Workspace settings; " +
-    "leave slackDelivery out until that is done.",
+    "pass slackDelivery false until that is done.",
   NO_AGENT:
     "Not run: no agent of your workspace has that agentId to hand each run to; " +
     `${AGENT_TOOL.LIST_AGENTS} names them, or leave agentId out for a new agent each run.`,
   WORKSPACE_SCOPE:
     "Not run: this is the developer's personal workspace, where every automation is theirs " +
-    "alone; leave scope out or name personal.",
+    "alone; name scope personal.",
   INVALID:
     `Not run: ${PRODUCT_NAME} does not take the automation as asked. Check the trigger, the repositories, ` +
     "the scope, and the agentId.",
@@ -214,7 +216,7 @@ const SERVERS = describeWire(
 
 const SCOPE = describeWire(
   automationScopeSchema,
-  "personal, the default, is its creator's; workspace is every member's.",
+  "personal is its creator's alone; workspace is every member's.",
 );
 
 const ARCHIVE_SUCCESSFUL = describeWire(
@@ -244,7 +246,7 @@ const LIST_AUTOMATIONS_INPUT = Schema.Struct({
   ),
 });
 
-/** An automation as both tools take it: create needs its name, prompt, trigger, repositories, model, and effort, and update takes any of them. */
+/** An automation as both tools take it: create needs all but disabledServers and agentId, and update takes any of them. */
 const AUTOMATION_FIELDS = {
   name: automationCreateRequestSchema.fields.name,
   prompt: PROMPT,
@@ -262,7 +264,17 @@ const AUTOMATION_FIELDS = {
 const CREATE_AUTOMATION_INPUT = Schema.Struct(
   Struct.mapOmit(
     AUTOMATION_FIELDS,
-    ["name", "prompt", "trigger", "repositories", "model", "effort"],
+    [
+      "name",
+      "prompt",
+      "trigger",
+      "repositories",
+      "model",
+      "effort",
+      "scope",
+      "archiveSuccessful",
+      "slackDelivery",
+    ],
     Schema.optionalKey,
   ),
 );
@@ -283,7 +295,14 @@ const DELETE_AUTOMATION_INPUT = Schema.Struct({ automationId: AUTOMATION_ID });
 const RUN_AUTOMATION_INPUT = Schema.Struct({ automationId: AUTOMATION_ID });
 
 /** What create_automation takes from the caller alone, never from where it works or its starter's defaults. */
-const CREATE_REQUIRED = ["repositories", "model", "effort"] as const;
+const CREATE_REQUIRED = [
+  "repositories",
+  "model",
+  "effort",
+  "scope",
+  "archiveSuccessful",
+  "slackDelivery",
+] as const;
 
 const readListAsked = Schema.decodeUnknownResult(LIST_AUTOMATIONS_INPUT);
 const readCreateAsked = Schema.decodeUnknownResult(CREATE_AUTOMATION_INPUT);
@@ -313,8 +332,9 @@ export const CREATE_AUTOMATION_TOOL = {
     `page would: each time its trigger fires, ${PRODUCT_NAME} starts an agent on its prompt, in its ` +
     "repositories or in none, on its creator's keys and connections, on a task of its own with no one watching, or " +
     "hands the run to the one agent named. It is on as it is made, and runs as the developer. " +
-    "Name its repositories, model, and effort: none is taken from where you work or the " +
-    `developer's defaults, and ${AGENT_TOOL.LIST_MODELS} answers the models and efforts. ` +
+    "Name its repositories, model, effort, scope, archiveSuccessful, and slackDelivery: none is " +
+    "taken from where you work or the developer's defaults, and " +
+    `${AGENT_TOOL.LIST_MODELS} answers the models and efforts. ` +
     `One fired by Sentry needs ${PRODUCT_NAME}'s Sentry integration installed on the workspace first. ` +
     "Make one when the developer asks for it, never otherwise on your own, and read " +
     `${AGENT_TOOL.LIST_AUTOMATIONS} first so you make none they already have.`,
@@ -742,12 +762,10 @@ export function runCreateAutomation(
           name: made.name,
           trigger: made.trigger,
           action,
-          ...(made.scope === undefined ? undefined : { scope: made.scope }),
+          scope: made.scope,
           ...(landing.success === undefined ? undefined : { target: landing.success }),
-          ...(made.archiveSuccessful === undefined
-            ? undefined
-            : { archiveSuccessful: made.archiveSuccessful }),
-          ...(made.slackDelivery === undefined ? undefined : { slackDelivery: made.slackDelivery }),
+          archiveSuccessful: made.archiveSuccessful,
+          slackDelivery: made.slackDelivery,
         },
         SERVER_AUTOMATION_SOURCE.AGENT,
       ).pipe(Effect.result);
