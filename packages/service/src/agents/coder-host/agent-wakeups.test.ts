@@ -188,7 +188,7 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
 
         const booked = yield* schedule(
           agent,
-          { delaySeconds: 600, prompt: "Read the checks on pull request #42." },
+          { stop: false, delaySeconds: 600, prompt: "Read the checks on pull request #42." },
           queue,
         );
 
@@ -232,7 +232,7 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
   );
 
   it.effect(
-    "booking again replaces the wakeup and stop cancels it, so the message published before sends nothing, and a delay outside the bounds is held to them",
+    "booking again replaces the wakeup and stop: true alone cancels it, so the message published before sends nothing, a delay outside the bounds is held to them, and a call that names no choice books nothing",
     () =>
       Effect.gen(function* () {
         yield* TestClock.setTime(OPENED.getTime());
@@ -240,22 +240,51 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
         const agentSessions = fakeAgentSessions();
         const { agent, sessionId } = yield* openAgent;
 
-        yield* schedule(agent, { delaySeconds: 60, prompt: "The first booking." }, queue);
-        yield* schedule(agent, { delaySeconds: 120, prompt: "The second booking." }, queue);
+        yield* schedule(
+          agent,
+          { stop: false, delaySeconds: 60, prompt: "The first booking." },
+          queue,
+        );
+        yield* schedule(
+          agent,
+          { stop: false, delaySeconds: 120, prompt: "The second booking." },
+          queue,
+        );
         yield* deliver(agentSessions, queue.published[0]);
         assert.deepEqual(sentTo(agentSessions, sessionId), [], "the first booking is replaced");
         yield* deliver(agentSessions, queue.published[1]);
         assert.deepEqual(sentTo(agentSessions, sessionId), ["The second booking."]);
 
-        yield* schedule(agent, { delaySeconds: 60, prompt: "Canceled before it came." }, queue);
-        // A cancel reads nothing else, so a key it does not name, or a booking field out of bounds, stops it all the same.
-        const stopped = yield* schedule(agent, { stop: true, minutes: 10, delaySeconds: 0 }, queue);
+        yield* schedule(
+          agent,
+          { stop: false, delaySeconds: 60, prompt: "Canceled before it came." },
+          queue,
+        );
+        // A cancel takes no booking field, so one naming a delay is refused and leaves the wakeup standing until a plain stop.
+        const mixed = yield* schedule(agent, { stop: true, delaySeconds: 60 }, queue);
+        assert.deepEqual(mixed, {
+          status: ACTION_RESULT_STATUS.REJECTED,
+          reason:
+            "Not canceled: stop: true takes no delaySeconds; leave it out to cancel, or pass stop: false to book.",
+        });
+
+        const stopped = yield* schedule(agent, { stop: true }, queue);
         assert.deepEqual(stopped, { status: ACTION_RESULT_STATUS.ACCEPTED, wakeup: null });
         yield* deliver(agentSessions, queue.published[2]);
         assert.deepEqual(sentTo(agentSessions, sessionId), ["The second booking."]);
 
-        const short = yield* schedule(agent, { delaySeconds: 5, prompt: "Too soon." }, queue);
-        const long = yield* schedule(agent, { delaySeconds: 700_000, prompt: "Too late." }, queue);
+        const short = yield* schedule(
+          agent,
+          { stop: false, delaySeconds: 5, prompt: "Too soon." },
+          queue,
+        );
+
+        const long = yield* schedule(
+          agent,
+          { stop: false, delaySeconds: 700_000, prompt: "Too late." },
+          queue,
+        );
+
         // SAFETY: a wakeup the tool books answers under `wakeup`, its delay in seconds.
         assert.equal(
           (short as { wakeup: { delaySeconds: number } }).wakeup.delaySeconds,
@@ -270,8 +299,17 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
           queue.published.slice(3).map(({ delay }) => Duration.toSeconds(delay)),
           [WAKEUP_DELAY.MIN_SECONDS, WAKEUP_DELAY.MAX_SECONDS],
         );
-        const noPrompt = yield* schedule(agent, { delaySeconds: 60 }, queue);
+        const noPrompt = yield* schedule(agent, { stop: false, delaySeconds: 60 }, queue);
         assert.equal(noPrompt.status, ACTION_RESULT_STATUS.REJECTED);
+
+        // Leaving stop out no longer means a booking: the call names its choice or books nothing.
+        const noStop = yield* schedule(agent, { delaySeconds: 60, prompt: "Which?" }, queue);
+        assert.deepEqual(noStop, {
+          status: ACTION_RESULT_STATUS.REJECTED,
+          reason:
+            "Not booked: stop is required, true or false; pass stop: false with delaySeconds and prompt to book a wakeup, or stop: true and nothing else to cancel the one you booked.",
+        });
+        assert.equal(queue.published.length, 5);
       }),
   );
 
@@ -307,7 +345,11 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
         const refusing = fakeAgentSessions(true);
         const agentSessions = fakeAgentSessions();
         const { agent, sessionId } = yield* openAgent;
-        yield* schedule(agent, { delaySeconds: 60, prompt: "Check the deploy." }, queue);
+        yield* schedule(
+          agent,
+          { stop: false, delaySeconds: 60, prompt: "Check the deploy." },
+          queue,
+        );
 
         const failed = yield* Effect.exit(deliver(refusing, queue.published[0]));
         assert.equal(failed._tag, "Failure");
@@ -322,11 +364,11 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
       const queue = recordingQueue();
       const agentSessions = fakeAgentSessions();
       const { agent, sessionId } = yield* openAgent;
-      yield* schedule(agent, { delaySeconds: 60, prompt: "Booked and taken." }, queue);
+      yield* schedule(agent, { stop: false, delaySeconds: 60, prompt: "Booked and taken." }, queue);
 
       const refused = yield* schedule(
         agent,
-        { delaySeconds: 60, prompt: "Never taken." },
+        { stop: false, delaySeconds: 60, prompt: "Never taken." },
         recordingQueue(true),
       );
 
@@ -346,7 +388,7 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
         const { owner, agent, sessionId } = yield* openAgent;
         yield* schedule(
           agent,
-          { delaySeconds: 60, prompt: "Read the checks on pull request #42." },
+          { stop: false, delaySeconds: 60, prompt: "Read the checks on pull request #42." },
           queue,
         );
         const standing = Option.getOrThrow(yield* readAgent(owner, agent.id));
