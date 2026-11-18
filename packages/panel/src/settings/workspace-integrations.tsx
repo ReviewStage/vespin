@@ -1,3 +1,4 @@
+import { githubHoldsWords } from "@repo/features/github-holds-words";
 import { INTEGRATION_NAME, INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type {
@@ -236,19 +237,17 @@ function useGitHubLine(
     if (!logins.has(login.toLowerCase())) logins.set(login.toLowerCase(), login);
   }
 
-  if (logins.size === 0)
-    return unconnectedLine(INTEGRATION_PROVIDER.GITHUB, managesWorkspace(workspace));
-
-  const names = andList([...logins.values()]);
-
   // Note that the count waits on every list it adds up, so it never counts a part as the whole.
-  if ((connections.length > 0 && accounts === undefined) || !tokenListed) return names;
+  const counted = !((connections.length > 0 && accounts === undefined) || !tokenListed);
 
   const count =
     (accounts ?? []).reduce((sum, each) => sum + each.repositories.length, 0) +
     repositories.listed.length;
 
-  return `${names}, ${countWords(count, TERM.REPOSITORY)}`;
+  return (
+    githubHoldsWords([...logins.values()], counted ? count : undefined) ??
+    unconnectedLine(INTEGRATION_PROVIDER.GITHUB, managesWorkspace(workspace))
+  );
 }
 
 /**
