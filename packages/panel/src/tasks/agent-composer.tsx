@@ -176,20 +176,12 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * and a press opens the `SKILL.md` of (`skill-picker.tsx`).
  *
  * The foot folds as the card narrows as every message box's does
- * (`message-box.tsx`): the ⋯ takes in the context ring and the microphone,
- * then the model chip draws its harness's mark alone, then the + folds in
- * too. The field and the round Send or Stop always stand whole.
+ * (`message-box.tsx`).
  *
  * New task's composer is this same box over a start rather than a message
- * (`new-task-composer.tsx`): its owner names what the box asks for and
- * calls its round button (`wording`), stands its Runs on chip after the "+" (`tools`), handed whether the card is too narrow for its words,
- * holds Start while it cannot start (`sendable`), hears the keys the field leaves (`onKey`),
- * says what Escape does (`onLeave`), hands its workspace's mentions and
- * the chosen repository's skills to its `@` and `/` lists, and hands the
- * MCP servers' switches its first agent starts with, which its "+" menu
- * opens as an agent's does, with no Built in section, since no agent has
- * started yet, and after them Task relation, which its owner hands the
- * menu (`plus`).
+ * (`new-task-composer.tsx`), its owner handing what differs through the
+ * props below. Its "+" menu's MCP servers have no Built in section, since
+ * no agent has started yet.
  *
  * An Inbox thread's reply is this same box too (`inbox-answer-box.tsx`),
  * writing to the thread's agent. What the box reads off a started agent,
@@ -197,10 +189,7 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * owner, and its place and forwarding chips, both owners read through one
  * hook (`agent-box.tsx`'s `useAgentBox`) and spread onto the box as it is,
  * so a chip added there stands on both (`[check: vespin/agent-box-reads-agent]`).
- * Its owner hands what only an answer has (`answer`), an open question's controls
- * over the field, the checkbox that starts a new thread under the card, Send
- * lit by a pick as by words and reading Got it or Start thread in words, what
- * an unfinished answer lacks, and why a reply did not go. Its Send never
+ * Its owner hands what only an answer has (`answer`). Its Send never
  * stands Stop, and a File tab's mention is laid into the agent's own box
  * rather than an answer's.
  */
@@ -439,7 +428,7 @@ export function AgentComposer({
   mode?: AgentModeControl | undefined;
   /** How many of the agent's tool calls wait on an answer, which a message sent now denies. */
   approvalsWaiting?: number;
-  /** Starts the agent's harness on a fresh session (`/clear`), answering whether the service took it; none where the box runs no session commands, as New task's and a draft agent's, which have no session yet and run `/model` alone, and `/goal` where they start an agent on their words (`startsGoal`). */
+  /** Starts the agent's harness on a fresh session (`/clear`), answering whether the service took it; none where the box has no session yet, as New task's and a draft agent's. */
   onClear?: (() => Promise<boolean>) | undefined;
   /** Whether the box, with no session yet, starts an agent whose first message may set its goal (`/goal`), as New task's and a draft agent's do; not one whose words are wrapped in a brief or a note before the agent reads them. */
   startsGoal?: boolean | undefined;
@@ -578,8 +567,8 @@ export function AgentComposer({
       ? undefined
       : sendNote.reason === FAILURE_REASON.CONTINUE_IN_CLOUD
         ? continuedInCloud(composer.notedLine, onContinueInCloud)
-        : // Note that a move's retry is the box's as the move lands, and only while the refusal it
-          // was pressed for still stands, so an edit or a later send meanwhile is never sent over.
+        : // Note that a move's retry goes only while the refusal it was pressed for still stands,
+          // so an edit or a later send meanwhile is never sent over.
           repositoryRemedy(sendNote, () => {
             if (latest.current.note === sendNote) latest.current.retry();
           });
@@ -630,13 +619,10 @@ export function AgentComposer({
 
   const sendLabel = wording?.send ?? BUTTON.SEND;
 
-  // Note that a held box gives up the caret, because a field that takes no
-  // words, and a Send disabled under the press, can hold none; a send made
-  // from the box hands it back as soon as the box takes words again, which
-  // is at once where the send holds nothing, as an agent's never does, and
-  // as the answer lands where it holds the box, unless the caret went
-  // somewhere else meanwhile: to another field, or to a press or a menu in
-  // the box's own foot, such as the model chip's search.
+  // Note that a held box gives up the caret, because a disabled field and
+  // Send can hold none. A send made from the box hands it back once the box
+  // takes words again, unless the caret went somewhere else meanwhile, even
+  // to a press in the box's own foot.
   const refocus = useRef(false);
   const [sends, setSends] = useState(0);
   useEffect(() => {
