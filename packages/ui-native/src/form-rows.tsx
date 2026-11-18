@@ -6,7 +6,6 @@ import {
   Image,
   Picker,
   SecureField,
-  Text,
   TextField,
   type TextFieldRef,
   useNativeState,
@@ -22,7 +21,6 @@ import {
   lineLimit,
   listRowBackground,
   pickerStyle,
-  tag,
   textInputAutocapitalization,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -31,6 +29,7 @@ import { useEffect, useRef } from "react";
 import { type AttachedPicture, AttachedPictures } from "./composer-head.js";
 import { forgetField, noteFieldFocus } from "./field-focus.js";
 import { GLYPH, glyphImage } from "./glyph.js";
+import { PickOption as PickedOption } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
 import type { PickOption } from "./settings-form.js";
 import { useColors } from "./tokens/colors.js";
@@ -252,7 +251,8 @@ type PickRowProps = {
 /**
  * A choice among many, such as a repository or a model, as the system's menu
  * picker draws it in a Form's row: its name, and what is picked at its end in
- * the muted ink, opening the menu of every option on a press.
+ * the muted ink, opening the menu of every option on a press, each led by
+ * its glyph where it has one, as the panel's picker leads a permission mode.
  */
 export function MenuPickRow({ label, options, picked, onPick }: PickRowProps) {
   const colors = useColors();
@@ -267,9 +267,12 @@ export function MenuPickRow({ label, options, picked, onPick }: PickRowProps) {
       modifiers={[pickerStyle("menu"), tint(colors.TEXT_MUTED), listRowBackground(colors.RAISED)]}
     >
       {options.map((option) => (
-        <Text key={option.id} modifiers={[tag(option.id)]}>
-          {option.label}
-        </Text>
+        <PickedOption
+          key={option.id}
+          label={option.label}
+          value={option.id}
+          glyph={option.symbol}
+        />
       ))}
     </Picker>
   );

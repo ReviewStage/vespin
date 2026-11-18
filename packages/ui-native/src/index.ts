@@ -112,6 +112,7 @@ export {
   glyphSymbol,
   type LucideSymbol,
   type MarkLook,
+  PERMISSION_MODE_GLYPH,
   runsOnGlyph,
   sectionEmoji,
   sectionGlyph,
