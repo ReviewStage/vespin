@@ -49,15 +49,13 @@ import { workspaceStepOf } from "../written-mentions.js";
 
 /** What a suggestion's action takes, in words, so a call refused for its shape is fixed in one retry. */
 const ACTION_WORDS =
-  'Give a label and an action: {kind: "start", prompt, branch where your task works in a ' +
-  'repository, and optionally title, and model with effort} or {kind: "send", agentId, text}, ' +
+  'Give a label and an action: {kind: "start", prompt, model and effort as ' +
+  `${AGENT_TOOL.LIST_MODELS} lists them, branch where your task works in a repository, and ` +
+  'optionally title} or {kind: "send", agentId, text}, ' +
   "and no other field.";
 
 /** Why a button was not made, in the words the model reads. */
 export const ADD_SUGGESTION_REFUSAL = {
-  MODEL_WITHOUT_EFFORT:
-    "Not added: a start's model and effort are given together or not at all; give action.effort " +
-    "with action.model, or leave both out.",
   NOT_AGENT: "Not added: only a coding agent puts a suggestion in its reply.",
   NO_AGENT: "Not added: no agent of your workspace has that id.",
   SELF: "Not added: a suggestion never sends to you; suggest a new agent instead, or say it yourself.",
@@ -84,18 +82,13 @@ const SUGGESTION_ACTION_INPUT = Schema.Union([
           "Required where the task works in a repository; leave it out for a task with none.",
       ),
     ),
-    model: Schema.optionalKey(
-      describeWire(
-        modelChoiceSchema.fields.model,
-        `The model to run on, by its catalog id, as ${AGENT_TOOL.LIST_MODELS} lists it; ` +
-          "leave it out with the effort for the default of the member who sends it.",
-      ),
+    model: describeWire(
+      modelChoiceSchema.fields.model,
+      `The model to run on, by its catalog id, as ${AGENT_TOOL.LIST_MODELS} lists it.`,
     ),
-    effort: Schema.optionalKey(
-      describeWire(
-        modelChoiceSchema.fields.effort,
-        "The reasoning effort, as the model lists it; given with the model or not at all.",
-      ),
+    effort: describeWire(
+      modelChoiceSchema.fields.effort,
+      "The reasoning effort, as the model lists it.",
     ),
   }),
   Schema.Struct({
@@ -158,11 +151,18 @@ export const ADD_SUGGESTION_TOOL = {
   inputSchema: ADD_SUGGESTION_INPUT,
 } as const;
 
-/** Why a start's model is refused, said with the models offered; none where the member's choice stands. */
+/** Why a start's model is refused, said with the models offered; none where it is offered, or the suggestion is no start. */
 const startChoiceRefusal = (userId: string, action: ReplyButtonAction) =>
   Effect.gen(function* () {
-    if (action.kind !== REPLY_BUTTON_ACTION.START || action.model === undefined) return undefined;
-    const choice = { model: action.model, effort: action.effort ?? "" };
+    if (
+      action.kind !== REPLY_BUTTON_ACTION.START ||
+      action.model === undefined ||
+      action.effort === undefined
+    ) {
+      return undefined;
+    }
+
+    const choice = { model: action.model, effort: action.effort };
     const accepted = yield* acceptedAgentChoice(userId, choice).pipe(Effect.result);
 
     if (Result.isSuccess(accepted)) return undefined;
@@ -185,14 +185,6 @@ export function runAddSuggestion(
   }
 
   const { label, action } = asked.success;
-
-  // A choice is one thing: a model without its effort, or the reverse, names nothing to run on.
-  if (
-    action.kind === REPLY_BUTTON_ACTION.START &&
-    (action.model === undefined) !== (action.effort === undefined)
-  ) {
-    return Effect.succeed(agentToolRejected(ADD_SUGGESTION_REFUSAL.MODEL_WITHOUT_EFFORT));
-  }
 
   const agent = callerAgent(call.caller);
 

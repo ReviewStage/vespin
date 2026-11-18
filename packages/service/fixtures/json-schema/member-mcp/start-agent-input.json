@@ -36,13 +36,22 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 200,
-      "description": "The model to run on, by its catalog id (such as anthropic/claude-opus-5.5); leave it out with the effort for the member's default."
+      "description": "The model to run on, by its catalog id (such as anthropic/claude-opus-5.5), as list_models lists it. Every start names it but one with from, which runs on the model of the agent it starts from unless it names another."
     },
     "effort": {
       "type": "string",
       "minLength": 1,
       "maxLength": 200,
       "description": "The reasoning effort, as the model lists it (such as high); given with the model or not at all."
+    },
+    "permissionMode": {
+      "type": "string",
+      "enum": [
+        "full_access",
+        "ask",
+        "auto"
+      ],
+      "description": "How the agent's tool calls are answered: full_access runs every one unasked, ask asks a member before a file edit or a shell command, and auto leaves each to the harness's own review, which asks where it cannot decide. A Cursor model takes auto or full_access, and another mode on it is refused. Every start names it, one with from included."
     },
     "runsOn": {
       "anyOf": [
@@ -166,7 +175,8 @@
     }
   },
   "required": [
-    "taskId"
+    "taskId",
+    "permissionMode"
   ],
   "additionalProperties": false
 }
