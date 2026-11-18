@@ -261,13 +261,13 @@ function ClientLine({ client }: { client: McpClient }): React.JSX.Element {
       <ReplayMask>{mcpClientDestinations(client)}</ReplayMask>
       {client.allowedAt === null ? null : (
         <>
-          {" · Allowed "}
+          {", allowed "}
           <Time at={client.allowedAt} look={TIME_LOOK.PROVENANCE} />
         </>
       )}
       {client.lastRefreshedAt === null ? null : (
         <>
-          {" · Active "}
+          {", active "}
           <Time at={client.lastRefreshedAt} look={TIME_LOOK.AGO} />
         </>
       )}
@@ -503,7 +503,7 @@ function ConnectRows({
       />
       {arrived === undefined ? null : (
         <SettingsLine>
-          <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
+          <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN}>
             <ReplayWords masked={arrived.name !== null}>{mcpClientName(arrived)}</ReplayWords> is
             connected.
           </SettingsRowStateLine>

@@ -253,11 +253,7 @@ function StateRows(): React.JSX.Element {
             <Mark provider={MARK_PROVIDER.GITHUB} />
           </SettingsRowMark>
         }
-        description={
-          <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-            Connected
-          </SettingsRowStateLine>
-        }
+        description="2 accounts, 14 repositories"
       >
         {() => <Button variant={BUTTON_VARIANT.OUTLINE}>Manage</Button>}
       </SettingsRow>
@@ -305,9 +301,11 @@ function FactsLine(): React.JSX.Element {
   return (
     <Inline justify={JUSTIFY.BETWEEN}>
       <SettingsFacts>
-        <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>Connected</SettingsRowStateLine>
-        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} font={TEXT_FONT.MONO}>
-          sk-…a1b2
+        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT}>
+          <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} font={TEXT_FONT.MONO}>
+            sk-…a1b2
+          </Text>
+          , added Oct 12
         </Text>
       </SettingsFacts>
       <Button variant={BUTTON_VARIANT.OUTLINE}>
@@ -505,11 +503,7 @@ function RowsFoldRows(): React.JSX.Element {
         head={(chevron) => (
           <SettingsRow
             label="GitHub"
-            description={
-              <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-                Connected
-              </SettingsRowStateLine>
-            }
+            description="Pull requests and repositories"
             leading={<Mark provider={MARK_PROVIDER.GITHUB} />}
             end={() => chevron}
           >
@@ -553,11 +547,7 @@ function RowsFoldRows(): React.JSX.Element {
         head={(chevron) => (
           <SettingsRow
             label="Slack"
-            description={
-              <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-                Connected
-              </SettingsRowStateLine>
-            }
+            description="Agents read and post in your channels"
             leading={<Mark provider={MARK_PROVIDER.SLACK} />}
             end={() => (
               <>
@@ -592,11 +582,7 @@ function RowsFoldRows(): React.JSX.Element {
         head={(chevron) => (
           <SettingsRow
             label="Sentry"
-            description={
-              <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-                Connected
-              </SettingsRowStateLine>
-            }
+            description="Issues, events, and releases"
             leading={<Mark provider={MARK_PROVIDER.SENTRY} />}
             end={() => (
               <>

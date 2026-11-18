@@ -461,7 +461,7 @@ test("the workspace's skills stand before the account's own, each with its sourc
   const headings = [...document.querySelectorAll("h2")].map((each) => each.textContent);
   assert.deepEqual(headings, ["Stage", "Only you"]);
   const text = document.body.textContent ?? "";
-  assert.match(text, /release-notes describedacme\/agent-skills @ 3f9c2e1 · by Dean/u);
+  assert.match(text, /release-notes describedacme\/agent-skills @ 3f9c2e1, installed by Dean/u);
   assert.match(text, /pr-style describedPasted/u);
 });
 
@@ -471,7 +471,7 @@ test("a skill's description stands alone, its source line under it as the row's 
   const row = rowOf("release-notes");
   assert.equal(
     row.querySelector(".ui-settings-row-state")?.textContent,
-    "acme/agent-skills @ 3f9c2e1 · by Dean",
+    "acme/agent-skills @ 3f9c2e1, installed by Dean",
   );
   assert.equal(
     row.querySelector(".ui-settings-row-description")?.firstChild?.textContent,

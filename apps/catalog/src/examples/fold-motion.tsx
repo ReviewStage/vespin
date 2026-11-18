@@ -4,11 +4,9 @@ import {
   ProviderMark,
   RepositoryLines,
   SETTINGS_ROW_INDENT,
-  SETTINGS_ROW_STATE,
   SettingsFoldRow,
   SettingsPage,
   SettingsRow,
-  SettingsRowStateLine,
   SettingsRowsFold,
   SettingsSection,
 } from "@repo/ui";
@@ -40,9 +38,7 @@ function Connected({
     <SettingsRow
       label={label}
       leading={<Mark provider={provider} />}
-      description={
-        <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>Connected</SettingsRowStateLine>
-      }
+      description="Issues, events, and releases"
     />
   );
 }
@@ -58,11 +54,7 @@ function FoldingPage(): React.JSX.Element {
             <SettingsRow
               label="GitHub"
               leading={<Mark provider={MARK_PROVIDER.GITHUB} />}
-              description={
-                <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-                  Connected
-                </SettingsRowStateLine>
-              }
+              description="Pull requests and repositories"
               end={() => chevron}
             />
           )}

@@ -1028,7 +1028,6 @@
   );
   --spacing-settings-row-words-inset: var(--ui-settings-row-words-inset);
   --spacing-settings-row-mark: var(--ui-settings-row-mark-size, 20px); /* off-scale: a mark */
-  --spacing-settings-row-state-dot: 6px; /* off-scale: a connected row's dot */
 
   /* Pages (`collection-page`, `detail-page`, `public-page`, `auth-page`).
      A page's measure and inset are its own sheet's custom properties, which

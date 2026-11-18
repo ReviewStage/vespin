@@ -123,12 +123,10 @@ function sectionSkeleton(installs: boolean): readonly SettingsSectionSkeletonLay
 /** The install row's line once the command is installed: its version, and where the shell will not find it, that its folder needs adding. */
 function InstalledLine({ version, onPath }: { version: string; onPath: boolean }) {
   return onPath ? (
-    <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-      Installed · v{version}
-    </SettingsRowStateLine>
+    `Installed, version ${version}`
   ) : (
     <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
-      Installed · v{version} · Add {CLI_LINK_FOLDER} to your PATH
+      Installed, version {version}. Add {CLI_LINK_FOLDER} to your PATH
     </SettingsRowStateLine>
   );
 }
@@ -291,7 +289,7 @@ function GrantLine({ grant }: { grant: McpClient }): React.JSX.Element {
       {PAGE_LINE.SIGNED_IN}
       {grant.lastRefreshedAt !== null ? (
         <>
-          {" · Active "}
+          {", active "}
           <Time at={grant.lastRefreshedAt} look={TIME_LOOK.AGO} />
         </>
       ) : grant.allowedAt !== null ? (

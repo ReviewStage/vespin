@@ -26,8 +26,6 @@ import {
   PageThumb,
   PROVIDER_MARK_SIZE,
   ProviderMark,
-  SETTINGS_ROW_STATE,
-  SettingsRowStateLine,
   SettingsSection,
   STATUS_TONE,
   Stack,
@@ -137,9 +135,7 @@ const CREDENTIAL_ROWS: readonly ChoiceOption<string>[] = [
     value: "plan",
     label: "Claude plan",
     mark: <ProviderMark provider={MARK_PROVIDER.CLAUDE} size={PROVIDER_MARK_SIZE.ROW} />,
-    state: (
-      <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>Connected</SettingsRowStateLine>
-    ),
+    state: "Signed in as ada@example.com",
     aside: <Button variant={BUTTON_VARIANT.QUIET}>Disconnect</Button>,
   },
   {
