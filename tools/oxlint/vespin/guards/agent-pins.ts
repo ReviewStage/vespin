@@ -57,6 +57,7 @@ export interface AgentPins {
   readonly hostCursorPins: readonly HostCliPin[];
   /** The Cursor SDK the runner's `package.json` names, which it is typed against. */
   readonly runnerCursorSdkDependency: string | undefined;
+  readonly installedCursorSdk: string;
   readonly pinnedCursorSdk: string;
   readonly pinnedPlaywright: string;
   /** The Dockerfile's `ARG`s by name, as their defaults read. */
@@ -87,7 +88,14 @@ export function pinProblems(pins: AgentPins): readonly string[] {
   differ("CODEX_PROTOCOL_VERSION against CODEX_PIN.VERSION", pins.codexProtocol, pins.pinnedCodex);
   differ(
     `${RUNNER}/package.json's ${CURSOR_SDK} against CURSOR_SDK_PIN.VERSION`,
-    pins.runnerCursorSdkDependency,
+    pins.runnerCursorSdkDependency?.startsWith("catalog:")
+      ? pins.installedCursorSdk
+      : pins.runnerCursorSdkDependency,
+    pins.pinnedCursorSdk,
+  );
+  differ(
+    `the installed ${CURSOR_SDK} against CURSOR_SDK_PIN.VERSION`,
+    pins.installedCursorSdk,
     pins.pinnedCursorSdk,
   );
   const hostPins = [
@@ -188,6 +196,7 @@ async function readPins(root: string): Promise<AgentPins> {
   const runnerDev = record(manifest.devDependencies, "devDependencies");
   const cursorDependency = runnerDev[CURSOR_SDK];
   const sdk = installedManifest(root, RUNNER, SDK);
+  const cursorSdk = readJson(root, `${RUNNER}/node_modules/${CURSOR_SDK}/package.json`);
   const dependency = runner[SDK];
   return {
     runnerSdkDependency: typeof dependency === "string" ? dependency : undefined,
@@ -201,6 +210,7 @@ async function readPins(root: string): Promise<AgentPins> {
     hostCodexPins: hostCliPins(pins, "CODEX_MAC_PIN", "CODEX_LINUX_PINS"),
     hostCursorPins: hostCursorPins(pins),
     runnerCursorSdkDependency: typeof cursorDependency === "string" ? cursorDependency : undefined,
+    installedCursorSdk: text(cursorSdk.version, `${CURSOR_SDK}'s version`),
     pinnedCursorSdk: text(cursor.VERSION, "CURSOR_SDK_PIN.VERSION"),
     pinnedPlaywright: text(playwright.VERSION, "PLAYWRIGHT_PIN.VERSION"),
     imageArgs: dockerfileArgs(root),
