@@ -7,10 +7,9 @@
  * VS Code keeps them, and desktop.css divides their width by the same zoom
  * (`--zoom`), so the title bar's own buttons clear them at every size.
  *
- * Note that Chromium remembers a zoom per origin, and every window here loads
- * a file of this build's, so one window's zoom reaches every window. Each
- * panel is set to the same absolute factor, never stepped from its own, so
- * that memory has nothing to add to.
+ * Chromium shares zoom across panels on the same host. The call card has its
+ * own host and stays at its fixed size. Each panel is set to the same absolute
+ * factor, never stepped from its own.
  */
 
 import { APP_SETTING_SCHEMA, type ZoomPercent, zoomFactor } from "@repo/settings";

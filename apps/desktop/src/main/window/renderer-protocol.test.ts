@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
-import { rendererResponse } from "./renderer-protocol";
+import { CALL_RENDERER_URL, PANEL_RENDERER_URL, rendererResponse } from "./renderer-protocol";
 
 const ORIGIN = "app-renderer://desktop";
 
@@ -26,6 +26,17 @@ test("serves an encoded bundled asset with a query string", async () => {
 
   expect(response.status).toBe(200);
   expect(await response.text()).toBe("export const ready = true;");
+});
+
+test("serves the call window on a separate zoom host from the panel", async () => {
+  await using directory = await mkdtempDisposable(path.join(tmpdir(), "vespin-renderer-"));
+  await writeFile(path.join(directory.path, "call.html"), "<title>Call</title>");
+
+  const response = await get(CALL_RENDERER_URL, directory.path);
+
+  expect(new URL(CALL_RENDERER_URL).hostname).not.toBe(new URL(PANEL_RENDERER_URL).hostname);
+  expect(response.status).toBe(200);
+  expect(await response.text()).toBe("<title>Call</title>");
 });
 
 test.each(["/../outside.txt", "/%2e%2e%2foutside.txt", "//outside.txt"])(
