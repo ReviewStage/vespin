@@ -292,6 +292,10 @@ import { sessionsRouter } from "../agents/coder-host/runtime-sessions.js";
 import { steerMemberWords } from "../agents/coder-host/steer.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import {
+  MEMBER_LIST_MACHINES_DESCRIPTION,
+  runMemberListMachines,
+} from "../agents/machines-tool.js";
+import {
   type MemoryCall,
   runListMemories,
   runRecall,
@@ -897,6 +901,14 @@ const MEMBER_LIST_MODELS_TOOL = memberMcpTool({
         return { ...listed, chaptersProviders: [...providers.success] };
       }),
     ),
+});
+
+const MEMBER_LIST_MACHINES_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_MACHINES,
+  description: MEMBER_LIST_MACHINES_DESCRIPTION,
+  input: NoInputSchema,
+  annotations: READ_ONLY,
+  run: () => Effect.flatMap(AdmittedMember, (member) => runMemberListMachines(member.userId)),
 });
 
 const ReadPageInputSchema = Schema.Struct({
@@ -5919,6 +5931,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   READ_TASK_FILE_TOOL,
   LIST_TASK_FOLDER_TOOL,
   MEMBER_LIST_MODELS_TOOL,
+  MEMBER_LIST_MACHINES_TOOL,
   UPDATE_PREFERENCES_TOOL,
   MEMBER_CREATE_TASK_TOOL,
   MEMBER_UPDATE_TASK_TOOL,

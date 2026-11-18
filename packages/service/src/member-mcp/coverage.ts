@@ -110,6 +110,7 @@ export const MEMBER_MCP_COVERAGE = {
     ],
   },
   [MEMBER_MCP_TOOL.LIST_MODELS]: { models: ["list"], account: ["preferences"] },
+  [MEMBER_MCP_TOOL.LIST_MACHINES]: { hosts: ["list", "presence"] },
   [MEMBER_MCP_TOOL.UPDATE_PREFERENCES]: { account: ["writePreferences"] },
   [MEMBER_MCP_TOOL.READ_PAGE]: { taskFiles: ["pages", "page"], agentPages: ["list", "version"] },
   [MEMBER_MCP_TOOL.READ_TASK_FILE]: { taskFiles: ["file"] },
@@ -338,8 +339,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   githubToken: { read: SECRET, save: SECRET, remove: SECRET },
   hosts: {
-    list: INTERNAL,
-    presence: INTERNAL,
     // The apps a member's machines always allow are offered in an agent's `@` list; a member's agent reads its own machine's with `computer`.
     allowedApps: SCREEN_ONLY,
     remove: INTERNAL,

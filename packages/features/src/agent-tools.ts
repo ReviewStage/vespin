@@ -50,6 +50,8 @@ export const AGENT_TOOL = {
   RUN_AUTOMATION: "run_automation",
   // The models an agent may be started on, named for any agent offered `start_agent`.
   LIST_MODELS: "list_models",
+  // The machines a start may run an agent on, and those the Mac tools may reach.
+  LIST_MACHINES: "list_machines",
   // The workspace's shared memory, which a coding agent keeps and searches.
   SAVE_MEMORY: "save_memory",
   SEARCH_MEMORY: "search_memory",

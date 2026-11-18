@@ -77,6 +77,8 @@ export const CALL_KIND = {
   UNARCHIVE_AGENT: "unarchive-agent",
   /** A list of the models a coding agent may be started on (`list_models`). */
   LIST_MODELS: "list-models",
+  /** A list of the machines an agent may run on and reach (`list_machines`). */
+  LIST_MACHINES: "list-machines",
   STOP_AGENT: "stop-agent",
   /** The ports a server listens on in a coding agent's own sandbox listed (`list_ports`). */
   LIST_PORTS: "list-ports",
@@ -207,6 +209,7 @@ export const CALL_WORDS = {
   [CALL_KIND.ARCHIVE_AGENT]: { verb: "Archived the agent", code: false },
   [CALL_KIND.UNARCHIVE_AGENT]: { verb: "Unarchived the agent", code: false },
   [CALL_KIND.LIST_MODELS]: { verb: "Listed the models", code: false },
+  [CALL_KIND.LIST_MACHINES]: { verb: "Listed the machines", code: false },
   [CALL_KIND.STOP_AGENT]: { verb: "Stopped the agent", code: false },
   [CALL_KIND.LIST_PORTS]: { verb: "Listed the ports", code: false },
   [CALL_KIND.SHARE_PORT]: { verb: "Shared port", code: true },

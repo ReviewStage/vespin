@@ -443,6 +443,7 @@ const AGENT_TOOLS = [
   "archive_agent",
   "unarchive_agent",
   "list_models",
+  "list_machines",
   "list_tasks",
   "read_task",
   "create_task",
