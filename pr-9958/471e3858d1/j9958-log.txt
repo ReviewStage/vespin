@@ -1,0 +1,10 @@
+== bundle P9958 base 471e3858d1
+  built 471e3858d1 base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+ipad26-light-portrait-detail: fails 0 shots 7 
+ipad26-light-navigation: fails 0 shots 8 
+ipad26-dark-portrait-detail: fails 0 shots 7 
+ipad26-dark-navigation: fails 0 shots 8 

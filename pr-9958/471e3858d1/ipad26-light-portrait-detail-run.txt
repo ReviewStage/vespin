@@ -1,0 +1,77 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad26 - iOS 26.5 - ABD9B3FE-4859-40A8-85F9-63B98B47142F
+ > Flow portrait-detail
+  > On Flow Complete
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Run flow when "Choose an item" is visible...
+  Set orientation PORTRAIT... COMPLETED
+  Wait for animation to end within 5000 ms... COMPLETED
+  Assert that "Recorded the invite flow" is visible... COMPLETED
+  Take screenshot portrait-inbox... COMPLETED
+  Run subflows/tab.yaml...
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+      Assert that "${TAB}" is visible... COMPLETED
+      Tap on "${TAB}", Index: -1... COMPLETED
+    Run flow when true is true... COMPLETED
+    Wait for animation to end... COMPLETED
+  Run subflows/tab.yaml... COMPLETED
+  Assert that "Pinned" is visible... COMPLETED
+  Assert that "Choose an item" is visible... COMPLETED
+  Take screenshot portrait-tasks... COMPLETED
+  Tap on "Teammate invitations"... COMPLETED
+  Assert that "Agents" is visible... COMPLETED
+  Wait for animation to end within 5000 ms... COMPLETED
+  Take screenshot portrait-task... COMPLETED
+  Tap on "Build teammate invitations"... COMPLETED
+  Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+  Wait for animation to end within 5000 ms... COMPLETED
+  Take screenshot portrait-agent... COMPLETED
+  Tap on id: BackButton... COMPLETED
+  Wait for animation to end within 5000 ms... COMPLETED
+  Assert that "Agents" is visible... COMPLETED
+  Take screenshot portrait-agent-back... COMPLETED
+  Tap on "Build teammate invitations"... COMPLETED
+  Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+  Assert that "Ready to merge" is not visible... COMPLETED
+  Tap on id: BackButton... COMPLETED
+  Wait for animation to end within 5000 ms... COMPLETED
+  Assert that "Agents" is visible... COMPLETED
+  Run subflows/row-menu.yaml...
+    Run to-row.yaml...
+      Run flow when ${FLOATING_TABS != 'true'} is true...
+      Run flow when false is true... SKIPPED
+      Run flow when ${FLOATING_TABS == 'true'} is true...
+        Repeat while "${ROW}" is not visible (up to 20 times)...
+        Repeat while "${ROW}" is not visible (up to 20 times)... SKIPPED
+        Assert that "${ROW}" is visible... COMPLETED
+      Run flow when true is true... COMPLETED
+      Run clear-of-tabs.yaml...
+        Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+        Run flow when "Build teammate invitations", Above id: search-tab is not visible and false is true... SKIPPED
+        Wait for animation to end... COMPLETED
+      Run clear-of-tabs.yaml... COMPLETED
+    Run to-row.yaml... COMPLETED
+    Long press on "${ROW}"... COMPLETED
+    Assert that "${ITEM}" is visible... COMPLETED
+    Wait for animation to end... COMPLETED
+  Run subflows/row-menu.yaml... COMPLETED
+  Tap on "Open pull request(, .*)?"... COMPLETED
+  Assert that "Ready to merge" is visible... COMPLETED
+  Wait for animation to end within 5000 ms... COMPLETED
+  Take screenshot portrait-pull-request... COMPLETED
+  Tap on id: BackButton... COMPLETED
+  Wait for animation to end within 5000 ms... COMPLETED
+  Assert that "Agents" is visible... COMPLETED
+  Take screenshot portrait-pull-request-back... COMPLETED
+Run flow when "Choose an item" is visible... COMPLETED
+Set orientation PORTRAIT... COMPLETED
