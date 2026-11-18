@@ -57,7 +57,7 @@ export function ChipSymbol({
   );
 }
 
-/** A picture over the letters it stands in for, which give way once it has drawn and come back where it fails. */
+/** A picture, or the letters it stands in for where there is none or it failed; nothing while it loads, so the letters never show first. */
 function PictureOverLetters({
   address,
   size,
@@ -75,7 +75,6 @@ function PictureOverLetters({
   readonly letters: string;
   readonly letterScale: number;
 }) {
-  const [drawn, setDrawn] = useState<string | undefined>(undefined);
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const shown = address !== undefined && address !== failed;
   const box = { width: size, height: size, borderRadius: corner, overflow: "hidden" } as const;
@@ -87,7 +86,7 @@ function PictureOverLetters({
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
     >
-      {shown && address === drawn ? null : (
+      {shown ? null : (
         <>
           <View style={[box, { position: "absolute", backgroundColor: ground }]} />
           <Text
@@ -101,7 +100,6 @@ function PictureOverLetters({
       {shown ? (
         <Photo
           source={{ uri: address }}
-          onLoad={() => setDrawn(address)}
           onError={() => setFailed(address)}
           style={[box, { position: "absolute" }]}
         />
