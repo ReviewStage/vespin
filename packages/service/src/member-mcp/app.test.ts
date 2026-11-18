@@ -1070,11 +1070,11 @@ it.effect(
       const { auth, fetch, services } = yield* standing;
       const member = yield* Effect.promise(() => signUp(auth));
 
-      const agentId = yield* Effect.gen(function* () {
+      const { agentId, own } = yield* Effect.gen(function* () {
         const own = yield* openWorkspace(member.userId);
         yield* descriptionsIn(own, member.userId, true);
 
-        return yield* openAgentOnOwnTask(member.userId, own);
+        return { agentId: yield* openAgentOnOwnTask(member.userId, own), own };
       }).pipe(Effect.provide(services));
 
       const token = yield* Effect.promise(() =>
@@ -1140,8 +1140,15 @@ it.effect(
         notes: [{ kind: NOTE_KIND.ADD, section: "Problem", text: "Invoices lag too." }],
       });
       yield* call(MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, status: TASK_STATUS.IN_PROGRESS });
-      // A task found by its key is the one made; a blocker of it moved to its sub-task in one call.
-      const found = decodeMade(yield* call(MEMBER_MCP_TOOL.FIND_TASK, { task: made.task.key }));
+      // A key without its workspace is refused; one read in its workspace is the task made, and a blocker of it moved to its sub-task in one call.
+      assert.match(
+        yield* refused(MEMBER_MCP_TOOL.READ_TASK, { taskId: made.task.key }),
+        /name that workspace in workspace/u,
+      );
+
+      const found = decodeMade(
+        yield* call(MEMBER_MCP_TOOL.READ_TASK, { workspace: own, taskId: made.task.key }),
+      );
 
       const blockerId = decodeMade(
         yield* call(MEMBER_MCP_TOOL.CREATE_TASK, { name: "Invoice lag" }),

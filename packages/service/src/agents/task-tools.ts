@@ -1,10 +1,12 @@
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { taskIdOfNumber } from "@repo/database/models/task-number-store";
 import {
   readTask,
   type TaskAssigneeNotMember,
   type TaskIdTaken,
 } from "@repo/database/models/task-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { cliTaskRefOf } from "@repo/features/cli-task-ref";
 import { githubRepositoryFullNameSchema } from "@repo/features/github-repositories-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
@@ -68,7 +70,9 @@ import { workspaceNamingOf } from "./written-mentions.js";
  *
  * Every coding agent is offered the same `read_task`,
  * one implementation, beside `list_tasks` (`agent-tools.ts`), which
- * names the tasks it reads by id. It reads any task of the caller's
+ * names the tasks it reads by id; a key such as `ACME-42` names its number
+ * in the caller's workspace (`cliTaskRefOf`, `taskIdOfNumber`), its prefix
+ * never checked, since it follows the workspace's name. It reads any task of the caller's
  * workspace, a teammate's included, as the member the
  * caller acts for could open it in the sidebar, read on that member's
  * standing now; a task of another workspace is none of the caller's, even
@@ -93,16 +97,24 @@ import { workspaceNamingOf } from "./written-mentions.js";
 /** The most characters of a description a read answers, about ten thousand tokens: the rest is counted, never sent. */
 export const DESCRIPTION_TEXT_READ_CHARS = 40_000;
 
+/** The longest task a read names: an id, or a key of a workspace's prefix, a hyphen, and a number. */
+const MAX_TASK_REF_CHARS = 64;
+
 /** Why a read answered nothing, in words the model can act on. */
 export const READ_TASK_REFUSAL = {
-  UNREADABLE: `Not read: name the task by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
-  NO_TASK: `Not read: no task of your workspace has that id; ${AGENT_TOOL.LIST_TASKS} names them.`,
+  UNREADABLE:
+    `Not read: name the task in taskId by the id ${AGENT_TOOL.LIST_TASKS} answered or by its ` +
+    "key, such as ACME-42.",
+  NO_TASK:
+    "Not read: no task of your workspace has that id or key; " +
+    `${AGENT_TOOL.LIST_TASKS} names them.`,
 } as const;
 
 const READ_TASK_INPUT = Schema.Struct({
   taskId: describeWire(
-    wireUuidSchema,
-    `The task to read, by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
+    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(MAX_TASK_REF_CHARS)),
+    `The task to read, by the id ${AGENT_TOOL.LIST_TASKS} answered or by its key, such as ` +
+      "ACME-42; a key's prefix is not checked, since it follows the workspace's name.",
   ),
 });
 
@@ -122,7 +134,7 @@ export function readTaskToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
   return {
     name: AGENT_TOOL.READ_TASK,
     description:
-      "Read one task of your workspace by its id, a teammate's included: its " +
+      "Read one task of your workspace by its id or its key, a teammate's included: its " +
       "key, name, status, priority, repository, who started it (startedBy, and startedByUserId to " +
       "link them by), whether it is the task you work on, the brief the developer started it with, " +
       "the tasks it is blocked by and the tasks it blocks, its followers" +
@@ -146,12 +158,11 @@ export function runReadTask(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   const asked = readTaskAsked(input);
+  const ref = Result.isSuccess(asked) ? cliTaskRefOf(asked.success.taskId) : undefined;
 
-  if (Result.isFailure(asked)) {
+  if (ref === undefined) {
     return Effect.succeed(agentToolRejected(READ_TASK_REFUSAL.UNREADABLE));
   }
-
-  const { taskId } = asked.success;
 
   return orStoreRefusal(
     Effect.gen(function* () {
@@ -162,7 +173,16 @@ export function runReadTask(
       }
 
       const userId = callerUserId(call.caller);
-      const stored = yield* readTask(userId, taskId);
+
+      // A key names its number in the caller's workspace, as a link's step does.
+      const taskId =
+        "id" in ref
+          ? Option.some(ref.id)
+          : yield* taskIdOfNumber(userId, workspace.value, ref.number);
+
+      if (Option.isNone(taskId)) return agentToolRejected(READ_TASK_REFUSAL.NO_TASK);
+
+      const stored = yield* readTask(userId, taskId.value);
 
       // A task of another workspace, even one the member is also in, is none of the caller's.
       if (Option.isNone(stored) || stored.value.task.workspaceId !== workspace.value) {
