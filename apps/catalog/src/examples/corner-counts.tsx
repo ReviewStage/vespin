@@ -75,7 +75,7 @@ function CornerCounts(): React.JSX.Element {
       </Inline>
       <Inline gap={GAP.CONTROL}>
         <CornerBadge mark={<FlaskConicalIcon />}>
-          <Chip look={CHIP_LOOK.FIELD} width={CHIP_WIDTH.AUTO} chevron aria-label="Runs on: Cloud">
+          <Chip look={CHIP_LOOK.FIELD} width={CHIP_WIDTH.AUTO} chevron aria-label="Machine: Cloud">
             <GLYPH.CLOUD />
             <ChipName>Cloud</ChipName>
           </Chip>

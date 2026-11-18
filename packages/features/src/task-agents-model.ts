@@ -373,9 +373,9 @@ export function agentTree<Entry>(
   return rows;
 }
 
-/** What the Runs on menu, its chips, and an agent's row say of where it runs. */
+/** What the Machine menu, its chips, and an agent's row say of where it runs. */
 export const RUNS_ON_WORDS = {
-  LABEL: "Runs on",
+  LABEL: "Machine",
   CLOUD: "Cloud",
   ONLINE: "Online",
   OFFLINE: "Offline",
