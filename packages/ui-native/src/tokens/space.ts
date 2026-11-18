@@ -26,10 +26,10 @@ export const MARK_SIZE = {
   UNREAD: 9,
   /** A row's end dot, such as a task's thread that needs you. */
   DOT: 6,
-  /** A row's leading mark, a status ring or an ask's glyph, and a chip's. */
-  GLYPH: 14,
+  /** A row's leading mark, a status ring or an ask's glyph, and a chip's, sized to stand beside the body style's words. */
+  GLYPH: 16,
   /** The column a row's leading mark stands centered in. */
-  LEAD: 18,
+  LEAD: 20,
   /** A writer's face or tile beside a message's name. */
   WRITER: 20,
   /** An avatar on its own, such as a person's on their page. */
@@ -78,10 +78,10 @@ export const ROW_INSET = {
   PLAIN: SPACE.EDGE,
   /** Where the words, and the hairline under them, start from the screen's edge. */
   TEXT: SPACE.EDGE + MARK_SIZE.LEAD + SPACE.ROW,
-  /** A row's top and bottom. */
-  VERTICAL: 9,
+  /** A row's top and bottom, so a row of one line in the body style stands 44 pt tall, as iOS's own list rows stand. */
+  VERTICAL: 11,
   /** An Inbox thread's top and bottom, roomier than a task's, as Mail's message rows stand. */
-  THREAD_VERTICAL: 11,
+  THREAD_VERTICAL: 12,
   /** Between an Inbox thread's title and the line under it, as Mail's subject sits under its sender. */
   THREAD_LINE_GAP: 3,
   /** Between an Inbox thread's title and its preview where its task leads it, as the panel's description stands 2 px under its title, the task's line and the title standing flush. */

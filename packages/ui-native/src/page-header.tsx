@@ -5,6 +5,7 @@ import {
   accessibilityAddTraits,
   font,
   foregroundStyle,
+  layoutPriority,
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
@@ -55,7 +56,7 @@ export type PageFollowing = {
 };
 
 /**
- * A page's heading in 20 pt semibold, heard as a heading, the bar above it
+ * A page's heading in the page heading's style, semibold, heard as a heading, the bar above it
  * holding its path; under it a task's status, priority, and assignee as
  * small chips, one to a line at an accessibility size, each opening the
  * menu of its field's values where it carries one, and a line in the
@@ -77,10 +78,15 @@ export function PageHeader(props: PageHeaderProps) {
     <>
       {status === undefined ? null : <StatusChip status={status} menu={menus?.status} />}
       {priority === undefined ? null : <PriorityChip priority={priority} menu={menus?.priority} />}
-      {assignee === undefined ? null : assignee.nobody ? (
-        <FieldChip label={assignee.name} symbol={GLYPH.UNASSIGNED} menu={menus?.assignee} />
-      ) : (
-        <FieldChip label={assignee.name} face={assignee} menu={menus?.assignee} />
+      {/* Note that the assignee's chip gives way first, its name cut short, so the status and the priority always read whole where a long name runs the row past a phone's width. */}
+      {assignee === undefined ? null : (
+        <HStack modifiers={[layoutPriority(-1)]}>
+          {assignee.nobody ? (
+            <FieldChip label={assignee.name} symbol={GLYPH.UNASSIGNED} menu={menus?.assignee} />
+          ) : (
+            <FieldChip label={assignee.name} face={assignee} menu={menus?.assignee} />
+          )}
+        </HStack>
       )}
     </>
   );

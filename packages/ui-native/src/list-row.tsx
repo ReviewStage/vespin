@@ -1,4 +1,4 @@
-// list-row.tsx -- the rows the Inbox and Tasks draw: plain and edge to edge, a 14 pt leading mark, a 15 pt title over a 13 pt muted line, and a hairline inset to the words.
+// list-row.tsx -- the rows the Inbox and Tasks draw: plain and edge to edge, a leading mark, a title in the body style over a muted subheadline line, and a hairline inset to the words.
 
 import {
   Button,
@@ -331,7 +331,7 @@ function rowSubmenu(submenu: RowSubmenu, colors: BrandColors, ink?: string) {
   );
 }
 
-/** A row's time, 12 pt in the muted ink and tabular figures, as the panel's rows end. */
+/** A row's time, in the time's style, in the muted ink and tabular figures, as the panel's rows end. Note that it keeps its whole width, so a long title is what cuts short, as Mail's date stands whole beside a sender. */
 export function RowTime({ at, now }: { readonly at: number; readonly now: number | undefined }) {
   const colors = useColors();
 
@@ -341,6 +341,7 @@ export function RowTime({ at, now }: { readonly at: number; readonly now: number
         font({ textStyle: TYPE_ROLE.TIME }),
         monospacedDigit(),
         foregroundStyle(colors.TEXT_MUTED),
+        fixedSize(),
       ]}
     >
       {sinceText(at, now ?? Date.now())}
@@ -368,6 +369,7 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
           monospacedDigit(),
           foregroundStyle(colors.ACCENT_TEXT),
           accessibilityLabel(`${REMIND_WORDS.DUE} ${words}`),
+          fixedSize(),
         ]}
       >
         {words}
@@ -711,7 +713,7 @@ function titleInk(colors: BrandColors, unread: boolean, done: boolean): string {
   return unread ? colors.TEXT : colors.TEXT_BODY;
 }
 
-/** A line's glyph at the line's 13 pt, growing with Dynamic Type, in its tone's ink: the accent's for an ask that waits on you, the muted ink for the rest. It is never heard, since the line's words say what it marks. */
+/** A line's glyph at the line's size, growing with Dynamic Type, in its tone's ink: the accent's for an ask that waits on you, the muted ink for the rest. It is never heard, since the line's words say what it marks. */
 function LineGlyph({ line }: { readonly line: InboxLineKind | undefined }) {
   const look = line === undefined ? undefined : INBOX_LINE_LOOK[line];
 
@@ -852,8 +854,9 @@ function ThreadLine(props: ListRowProps & { readonly flush: boolean }) {
  * One Inbox thread, in the panel's three lines and their hierarchy: its
  * task, the status ring and the task's name, the row's largest words, with
  * the time at the line's end and the copper dot in the margin while it is
- * unread; its title in 15 pt under it, semibold while unread; and the glyph
- * and words of what it asks in the 13 pt line, the title and that line
+ * unread; its title under it in the subject's style, semibold while
+ * unread; and the glyph and words of what it asks in the muted line under
+ * that, as Mail's sender, subject and preview stand, the title and that line
  * standing flush with the ring, as the panel's lead row stands. An agent's
  * own thread, which has no task, stands in two, the glyph of what it asks
  * leading its title, with the time at the title's end and the dot beside it. A teammate's face stands before the time on a thread
@@ -883,8 +886,9 @@ export function ListRow(props: ListRowProps) {
     </HStack>
   );
 
+  // Note that the title under a task's line is its subject, a step under the line that leads it, as Mail's subject stands under its sender.
   const titleModifiers = [
-    font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "semibold" : "regular" }),
+    font({ textStyle: TYPE_ROLE.ROW_SUBJECT, weight: unread ? "semibold" : "regular" }),
     foregroundStyle(titleInk(colors, unread, done)),
     lineLimit(lines.title),
   ];
@@ -1184,7 +1188,7 @@ export function useNestColumn(): number {
 
 /**
  * One task on a single line, as Linear's rows stand: its status ring, its
- * name in 15 pt, semibold while it has news, and at the line's end what its
+ * name in the row title's style, semibold while it has news, and at the line's end what its
  * agents say and its key, as the panel's task rows draw it, with no unread
  * dot and no priority's mark, which the task's own Priority chip says. Its
  * ring stands at the list's edge, where an Inbox row's ring stands past the
