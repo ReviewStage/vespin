@@ -3674,20 +3674,28 @@ test("message_agent hands another agent of the workspace the words under the sen
   );
 });
 
-test("add_suggestion keeps the start or the send a suggestion runs, answers the link the agent writes it by, and refuses a send to the agent itself", async () => {
+test("add_suggestion keeps the start or the send a suggestion runs, answers the link the agent writes it by, and refuses a send to the agent itself or a field its kind does not take", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const owner = agents.caller.userId;
   await turnExperiment(workspaceId, owner, EXPERIMENT.REPLY_BUTTONS, true);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
-  const start = { prompt: PROMPT, branch: DEFAULT_BRANCH, model: OPUS, effort: "high" };
-  const send = { agentId: agents.teammates.id, text: NOTE };
 
-  for (const [label, asked] of [
-    ["Send the reminder", { start }],
-    ["Tell billing", { send }],
+  const start = {
+    kind: REPLY_BUTTON_ACTION.START,
+    prompt: PROMPT,
+    branch: DEFAULT_BRANCH,
+    model: OPUS,
+    effort: "high",
+  };
+
+  const send = { kind: REPLY_BUTTON_ACTION.SEND, agentId: agents.teammates.id, text: NOTE };
+
+  for (const [label, action] of [
+    ["Send the reminder", start],
+    ["Tell billing", send],
   ] as const) {
-    const made = await call(AGENT_TOOL.ADD_SUGGESTION, { label, ...asked }, label);
+    const made = await call(AGENT_TOOL.ADD_SUGGESTION, { label, action }, label);
     assert.equal(made.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(made));
     const link = readReplyButtonLink(String(made.link));
     assert.equal(link?.agentId, agents.caller.id);
@@ -3696,22 +3704,13 @@ test("add_suggestion keeps the start or the send a suggestion runs, answers the 
       await database.run(readReplyButton(owner, link?.buttonId ?? "")),
     );
 
-    assert.deepEqual(
-      { label: kept.label, action: kept.action },
-      {
-        label,
-        action:
-          "start" in asked
-            ? { kind: REPLY_BUTTON_ACTION.START, ...start }
-            : { kind: REPLY_BUTTON_ACTION.SEND, ...send },
-      },
-    );
+    assert.deepEqual({ label: kept.label, action: kept.action }, { label, action });
   }
 
   assert.deepEqual(
     await call(
       AGENT_TOOL.ADD_SUGGESTION,
-      { label: "Tell myself", send: { agentId: agents.caller.id, text: NOTE } },
+      { label: "Tell myself", action: { ...send, agentId: agents.caller.id } },
       "self",
     ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: ADD_SUGGESTION_REFUSAL.SELF },
@@ -3720,12 +3719,22 @@ test("add_suggestion keeps the start or the send a suggestion runs, answers the 
   // A start on a task with a repository names its branch, never left to the default.
   const branchless = await call(
     AGENT_TOOL.ADD_SUGGESTION,
-    { label: "Send it", start: { prompt: PROMPT } },
+    { label: "Send it", action: { kind: REPLY_BUTTON_ACTION.START, prompt: PROMPT } },
     "branchless",
   );
 
   assert.equal(branchless.status, ACTION_RESULT_STATUS.REJECTED);
   assert.match(String(branchless.reason), new RegExp(`${RELAY_FULL_NAME}.*branch`, "u"));
+
+  // A field the action's kind does not take is refused by where it stands, never dropped.
+  const mixed = await call(
+    AGENT_TOOL.ADD_SUGGESTION,
+    { label: "Send it", action: { ...send, prompt: PROMPT } },
+    "mixed",
+  );
+
+  assert.equal(mixed.status, ACTION_RESULT_STATUS.REJECTED);
+  assert.match(String(mixed.reason), /at action\b.*kind: "send", agentId, text/u);
 });
 
 test("message_agent refuses an archived agent, naming unarchive_agent, and leaves it archived", async () => {

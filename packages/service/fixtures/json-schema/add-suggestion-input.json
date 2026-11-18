@@ -7,73 +7,91 @@
       "maxLength": 60,
       "description": "The suggestion's words, a short action in sentence case, such as Wire up the invite email: at most 60 characters, saying what it sets off."
     },
-    "start": {
-      "type": "object",
-      "properties": {
-        "prompt": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 64000,
-          "description": "The brief the new agent is handed as its first message: everything it needs to start on its work, since it knows nothing else of yours."
+    "action": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "start"
+              ]
+            },
+            "prompt": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64000,
+              "description": "The brief the new agent is handed as its first message: everything it needs to start on its work, since it knows nothing else of yours."
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80,
+              "description": "The new agent's title; leave it out to have it named."
+            },
+            "branch": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[^\\s~^:?*[\\\\]+$",
+              "description": "The branch of the task's repository to clone its checkout at, such as the repository's default branch, which must be on GitHub when the button is pressed. Required where the task works in a repository; leave it out for a task with none."
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "The model to run on, by its catalog id, as list_models lists it; leave it out with the effort for the default of the member who sends it."
+            },
+            "effort": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "The reasoning effort, as the model lists it; given with the model or not at all."
+            }
+          },
+          "required": [
+            "kind",
+            "prompt"
+          ],
+          "additionalProperties": false
         },
-        "title": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 80,
-          "description": "The new agent's title; leave it out to have it named."
-        },
-        "branch": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 255,
-          "pattern": "^[^\\s~^:?*[\\\\]+$",
-          "description": "The branch of the task's repository to clone its checkout at, such as the repository's default branch, which must be on GitHub when the button is pressed. Required where the task works in a repository; leave it out for a task with none."
-        },
-        "model": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 200,
-          "description": "The model to run on, by its catalog id, as list_models lists it; leave it out with the effort for the default of the member who sends it."
-        },
-        "effort": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 200,
-          "description": "The reasoning effort, as the model lists it; given with the model or not at all."
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "send"
+              ]
+            },
+            "agentId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36,
+              "description": "Another agent of your workspace, by the id list_agents answered."
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 15000,
+              "description": "The words sent to it, as the member who sends them."
+            }
+          },
+          "required": [
+            "kind",
+            "agentId",
+            "text"
+          ],
+          "additionalProperties": false
         }
-      },
-      "required": [
-        "prompt"
       ],
-      "additionalProperties": false,
-      "description": "Suggest a new agent on the task you work on, started as the member who sends it, where their agents on the task run."
-    },
-    "send": {
-      "type": "object",
-      "properties": {
-        "agentId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 36,
-          "description": "Another agent of your workspace, by the id list_agents answered."
-        },
-        "text": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 15000,
-          "description": "The words sent to it, as the member who sends them."
-        }
-      },
-      "required": [
-        "agentId",
-        "text"
-      ],
-      "additionalProperties": false,
-      "description": "Suggest words for an agent that is already running, sent as the member who sends them."
+      "description": "What it sets off, by its kind, with only the fields that kind takes: start, a new agent on the task you work on, started as the member who sends it, where their agents on the task run; or send, words for an agent that is already running, sent as the member who sends them."
     }
   },
   "required": [
-    "label"
+    "label",
+    "action"
   ],
   "additionalProperties": false
 }
