@@ -212,6 +212,7 @@ import { SIDEBAR_WIDTH, type SidebarCollapse, sidebarInSight } from "./sidebar-c
 import { type CountNoun, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
 import { SidebarFoot } from "./sidebar-foot.js";
 import { SidebarInboxRow } from "./sidebar-inbox-row.js";
+import { SidebarManagers } from "./sidebar-managers.js";
 import { SidebarPinnedTab } from "./sidebar-pinned-tab.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import {
@@ -2176,6 +2177,8 @@ function SidebarColumn({
   const openAutomations = () => automations.open();
   const openMergeQueue = () => mergeQueue.open();
   const openAdmin = () => admin.open();
+  // A Manager stands on no task, so its row opens its own page.
+  const openManager = (agentId: string) => arriveFor(() => tasks.agentView.onOpen(agentId));
   const goHome = () => arriveFor(() => tasks.onGoHome());
   // Home is the place of no task bound, standing on its own route. New task's
   // composer is on it, so its row draws no Draft pencil for the words shown there.
@@ -2686,6 +2689,13 @@ function SidebarColumn({
                     {...motionRows()}
                   >
                     {places}
+                    {/* Managers stands above everything the workspace's tasks fill, where the workspace has them on. */}
+                    <SidebarManagers
+                      tasks={tasks}
+                      folds={folds}
+                      inSight={overlay.inSight}
+                      onOpen={chosen(openManager)}
+                    />
                     {/* Pinned stands once something is pinned, or, while the account keeps sections, as the place a carried row drops in, and leaves after its exit once neither holds. */}
                     <LeavingGroups
                       groups={

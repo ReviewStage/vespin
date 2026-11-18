@@ -1628,6 +1628,7 @@ const AgentsOfWorkspaceSchema = Schema.Struct({
   includeArchived: Schema.Boolean,
   archivedOnly: Schema.Boolean,
   onTaskOnly: Schema.Boolean,
+  kind: Schema.NullOr(Schema.Literals(Object.values(AGENT_KIND))),
   startedBy: Schema.NullOr(Schema.String),
   automation: Schema.NullOr(Schema.Boolean),
   automationId: Schema.NullOr(Schema.String),
@@ -1676,6 +1677,7 @@ function ofReachedWorkspace(request: typeof AgentsOfWorkspaceSchema.Type) {
     agentVisibleTo(userId),
     eq(agentTable.organizationId, organizationId),
     request.onTaskOnly ? isNotNull(agentTable.taskId) : undefined,
+    request.kind === null ? undefined : eq(agentTable.kind, request.kind),
     request.startedBy === null ? undefined : eq(agentTable.userId, request.startedBy),
     request.includeArchived ? undefined : isNull(agentTable.archivedAt),
     request.archivedOnly ? isNotNull(agentTable.archivedAt) : undefined,
@@ -2538,6 +2540,8 @@ interface WorkspaceAgentsAsked {
   readonly archivedOnly?: boolean;
   /** Only the agents on a task, for a reader that reads none on no task; every agent where unsaid. */
   readonly onTaskOnly?: boolean;
+  /** Only the agents of this kind, as the sidebar's Managers asks for its own; every kind where unsaid. */
+  readonly kind?: AgentKind;
   /** Only the agents this member started, by their account's id; every member's where unsaid. */
   readonly startedBy?: string;
   /** Only the agents an automation's run started where true, only those started otherwise where false; both where unsaid. */
@@ -2566,6 +2570,7 @@ function workspaceRequest(userId: string, organizationId: string, options: Works
     includeArchived: options.includeArchived ?? false,
     archivedOnly: options.archivedOnly ?? false,
     onTaskOnly: options.onTaskOnly ?? false,
+    kind: options.kind ?? null,
     startedBy: options.startedBy ?? null,
     automation: options.automation ?? null,
     automationId: options.automationId ?? null,

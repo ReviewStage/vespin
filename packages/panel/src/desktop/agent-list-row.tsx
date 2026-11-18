@@ -108,6 +108,7 @@ export function AgentListRow({
   place,
   more,
   settled = false,
+  current = false,
   depth,
   nest,
   fold,
@@ -137,6 +138,8 @@ export function AgentListRow({
   more?: boolean | undefined;
   /** Whether it stands settled beside the agents still listed, its name in the muted ink: an archived agent. */
   settled?: boolean | undefined;
+  /** Whether it is the agent its window stands open on, its own page, in the current fill, as a sidebar marks its open row. */
+  current?: boolean | undefined;
   /** How deep it stands nested under the agent that started it: at the top unless said. */
   depth?: number | undefined;
   /** Where it stands among the agents nested beside it, in a list that nests them; none in one that nests none. */
@@ -242,6 +245,7 @@ export function AgentListRow({
       }
       more={more}
       settled={settled}
+      current={current}
       hint={card === undefined || editing ? undefined : { Hint: RowHint, label: name }}
       onOpen={onPress}
       pressRef={press}

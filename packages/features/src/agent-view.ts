@@ -9,6 +9,7 @@ import type { QueuedMessage } from "./agent-queue-wire.js";
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
+  AGENT_KIND,
   agentAnswerSchema,
   agentArchiveRequestSchema,
   agentBeforeSchema,
@@ -706,6 +707,8 @@ export const agentWorkspaceListParamsSchema = EffectSchema.Struct({
   ),
   /** Lists the archived agents among the rest, each carrying its `archivedAt`. */
   includeArchived: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** Only the agents of this kind, as the sidebar's Managers asks for its own. */
+  kind: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(AGENT_KIND))),
 });
 
 export type AgentWorkspaceListParams = typeof agentWorkspaceListParamsSchema.Type;
