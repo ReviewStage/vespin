@@ -7,6 +7,7 @@ import { SIGN_IN_FAILURE, SIGN_IN_FAILURE_WORDS, type SignInFailure } from "@rep
 import { ACT_KIND } from "@repo/host/acts";
 import { AuthPage, PROVIDER_MARK_ASSET, ProviderButton, Screen } from "@repo/ui-native";
 import { useState } from "react";
+import { noteSignedIn } from "../app-ready.js";
 import { reportSignInEnd, SIGN_IN_END } from "../crash-reports.js";
 import { useHostActs } from "../host/host-provider.js";
 
@@ -47,7 +48,11 @@ export default function SignInScreen() {
 
           if (answer.account.status !== ACCOUNT_STATUS.SIGNED_IN) {
             reportSignInEnd(provider, SIGN_IN_END.CLOSED);
+
+            return;
           }
+
+          noteSignedIn();
         },
         (refusal) => {
           reportSignInEnd(
