@@ -190,6 +190,33 @@ export const BROWSER_TOOL_REFUSAL = {
   NO_SANDBOX: "Not run: your sandbox could not be opened. The call may be made again.",
 } as const;
 
+/** What an action whose fields take one of several forms takes, in words, so a call it refused is fixed in one retry. */
+const ACTION_FIELD_WORDS: ReadonlyMap<unknown, string> = new Map([
+  [
+    BROWSER_AGENT_ACTION.CLICK,
+    "A click takes `tab` and `target`, either {ref} for an element or {x, y} for a point, and no other field.",
+  ],
+  [
+    BROWSER_AGENT_ACTION.SCROLL,
+    "A scroll takes `tab` and `by`, either {ref} to bring an element into view or {deltaX, deltaY} for a distance, and no other field.",
+  ],
+]);
+
+/** Why an input did not read, naming the field it failed at and, for an action of several forms, what that action takes. */
+function unreadable(input: UnparsedWireValue, path: readonly (string | number)[]): string {
+  const at = path.join(".");
+  const [, index] = path;
+  const actions = isRecord(input) && Array.isArray(input.actions) ? input.actions : [];
+  const named = Predicate.isNumber(index) ? actions.at(index) : undefined;
+  const takes = isRecord(named) ? ACTION_FIELD_WORDS.get(named.action) : undefined;
+
+  return (
+    `Not run: the input did not read${at === "" ? "" : ` at ${at}`}. ` +
+    (takes ??
+      `Name 1 to ${BROWSER_AGENT_LIMITS.MAX_ACTIONS} actions, each as the tool's input says.`)
+  );
+}
+
 /** What a call runs under: the session whose sandbox its browser is in, the conversation its tabs belong to, and the transcript its screenshots are kept beside. */
 export interface BrowserCall {
   /** The session whose sandbox the browser runs in: the root's own (`browserSessionOf`). */
@@ -642,14 +669,7 @@ export function runBrowserTool(
   const read = readInput(input);
 
   if (Result.isFailure(read)) {
-    const at = read.failure.path.join(".");
-
-    return Effect.succeed(
-      browserNotRun(
-        `Not run: the input did not read${at === "" ? "" : ` at ${at}`}. Name 1 to ` +
-          `${BROWSER_AGENT_LIMITS.MAX_ACTIONS} actions, each as the tool's input says.`,
-      ),
-    );
+    return Effect.succeed(browserNotRun(unreadable(input, read.failure.path)));
   }
 
   const { actions } = read.success;

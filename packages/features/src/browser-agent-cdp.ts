@@ -1067,11 +1067,11 @@ function pressKey(page: Page, key: string, modifiers: readonly (keyof typeof MOD
 /** Scrolls an element into view, or turns the wheel over the middle of the visible page. */
 function scroll<R>(
   page: Page,
-  by: { readonly deltaX?: number; readonly deltaY?: number; readonly ref?: string },
+  by: { readonly ref: string } | { readonly deltaX: number; readonly deltaY: number },
   cursor: BrowserCursor<R> | undefined,
 ) {
   return Effect.gen(function* () {
-    if (by.ref !== undefined) {
+    if ("ref" in by) {
       yield* page
         .send("DOM.scrollIntoViewIfNeeded", { backendNodeId: backendNodeIdOf(by.ref) })
         .pipe(Effect.mapError(refusedSaying(goneRef(by.ref))));
@@ -1087,8 +1087,8 @@ function scroll<R>(
       type: "mouseWheel",
       x: middle.x,
       y: middle.y,
-      deltaX: by.deltaX ?? 0,
-      deltaY: by.deltaY ?? 0,
+      deltaX: by.deltaX,
+      deltaY: by.deltaY,
     });
   });
 }
@@ -1386,12 +1386,14 @@ function onPage<R>(
         actedOn(action.action, tab),
       );
     case BROWSER_AGENT_ACTION.CLICK: {
-      const ref = action.ref;
+      const { target } = action;
 
       const at =
-        ref === undefined
-          ? Effect.succeed({ x: action.x ?? 0, y: action.y ?? 0 })
-          : Effect.tap(pointOfRef(page, ref), (point) => assertUncovered(page, ref, point));
+        "ref" in target
+          ? Effect.tap(pointOfRef(page, target.ref), (point) =>
+              assertUncovered(page, target.ref, point),
+            )
+          : Effect.succeed({ x: target.x, y: target.y });
 
       return Effect.as(
         Effect.flatMap(at, (point) => clickAt(page, cursor, point)),
@@ -1415,7 +1417,7 @@ function onPage<R>(
         actedOn(action.action, tab),
       );
     case BROWSER_AGENT_ACTION.SCROLL:
-      return Effect.as(scroll(page, action, cursor), actedOn(action.action, tab));
+      return Effect.as(scroll(page, action.by, cursor), actedOn(action.action, tab));
     case BROWSER_AGENT_ACTION.WAIT: {
       const ref = action.ref;
 
