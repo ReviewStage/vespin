@@ -1,4 +1,4 @@
-// renderer-protocol.ts -- serve the desktop's bundled renderer assets on their own origin.
+// renderer-protocol.ts -- serve the desktop's bundled renderer assets on dedicated origins.
 
 import { realpath } from "node:fs/promises";
 import path from "node:path";
@@ -6,11 +6,11 @@ import { pathToFileURL } from "node:url";
 import type { CustomScheme } from "electron";
 
 export const RENDERER_SCHEME = "app-renderer";
-const RENDERER_ORIGIN = `${RENDERER_SCHEME}://desktop`;
-const ASSET_PREFIX = `${RENDERER_ORIGIN}/`;
+const PANEL_PREFIX = `${RENDERER_SCHEME}://desktop/`;
+const CALL_PREFIX = `${RENDERER_SCHEME}://call/`;
 
-export const PANEL_RENDERER_URL = `${ASSET_PREFIX}index.html`;
-export const CALL_RENDERER_URL = `${ASSET_PREFIX}call.html`;
+export const PANEL_RENDERER_URL = `${PANEL_PREFIX}index.html`;
+export const CALL_RENDERER_URL = `${CALL_PREFIX}call.html`;
 
 export const RENDERER_SCHEME_PRIVILEGES: CustomScheme = {
   scheme: RENDERER_SCHEME,
@@ -18,11 +18,13 @@ export const RENDERER_SCHEME_PRIVILEGES: CustomScheme = {
 };
 
 function assetPath(url: string): string | undefined {
-  if (!url.startsWith(ASSET_PREFIX)) return undefined;
+  const prefix = [PANEL_PREFIX, CALL_PREFIX].find((prefix) => url.startsWith(prefix));
+
+  if (prefix === undefined) return undefined;
 
   try {
     // Read the raw path before a URL parser can normalize dot segments.
-    const name = decodeURIComponent(url.slice(ASSET_PREFIX.length).split(/[?#]/, 1)[0] ?? "");
+    const name = decodeURIComponent(url.slice(prefix.length).split(/[?#]/, 1)[0] ?? "");
 
     if (
       !name ||
