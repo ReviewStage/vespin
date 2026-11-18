@@ -1,24 +1,30 @@
 import {
   PUSH_NOTIFY,
+  PUSH_PROVIDER,
   type PushEnvironment,
   type PushNotify,
+  type PushProvider,
 } from "@repo/features/push-device-wire";
 import { index, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { createdAt, timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 
 /**
- * push-device.ts -- one of an account's phones that takes pushes: its APNs device token, the gateway the token belongs to, and the app Apple issued it to.
+ * push-device.ts -- one of an account's phones that takes pushes: its device token, the push service and gateway the token belongs to, and the app it was issued to.
  *
- * A phone is the iOS app signed in to the account, which registers the raw
- * device token Apple handed it on every start and unregisters it on sign-out
- * (`@repo/features/push-device-wire`). A token belongs to one phone, so it
+ * A phone is the iOS or Android app signed in to the account, which
+ * registers the device token Apple or FCM handed it on every start and
+ * unregisters it on sign-out (`@repo/features/push-device-wire`); `provider`
+ * says whose it is (`PUSH_PROVIDER`), and a row from before Android is
+ * Apple's. A token belongs to one phone, so it
  * is one row per gateway: a register under an account that already holds it
  * only stamps `last_seen_at`, and one under another account moves the row
- * to that account, since the phone is now signed in there. The sender
+ * to that account, since the phone is now signed in there. Apple's sender
  * (`packages/service/src/push/apns.ts`) addresses the token on the gateway
- * `environment` names, under `bundle_id` as its topic, and deletes the row
- * when Apple says the token will never take another push. The row belongs
+ * `environment` names, under `bundle_id` as its topic, and FCM's
+ * (`packages/service/src/push/fcm.ts`) through the deployment's Firebase
+ * project; each deletes the row when its service says the token will never
+ * take another push. The row belongs
  * to the account and leaves with it.
  *
  * `notify` is the phone's own "Notify me" (`PUSH_NOTIFY`), which the app's
@@ -38,11 +44,13 @@ export const pushDevice = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    /** The device token as Apple handed it to the app, in lower-case hex. */
+    /** The device token as its service handed it to the app: Apple's in lower-case hex, FCM's as sent. */
     token: text("token").notNull(),
+    /** The push service the token belongs to (`PUSH_PROVIDER`). */
+    provider: text("provider").$type<PushProvider>().notNull().default(PUSH_PROVIDER.APNS),
     /** Which of Apple's gateways the token belongs to (`PUSH_ENVIRONMENT`). */
     environment: text("environment").$type<PushEnvironment>().notNull(),
-    /** The app Apple issued the token to, which a push names as its topic. */
+    /** The app the token was issued to: an iOS bundle id, which an APNs push names as its topic, or an Android package name. */
     bundleId: text("bundle_id").notNull(),
     createdAt: createdAt(),
     /** When the phone last registered. */

@@ -31,7 +31,7 @@
  * rather than the status heard, so a settle rolled back hands on nothing.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { type SettledAgentTurn, SettledTurnListener } from "@repo/database/models/writer";
 import type { Sandbox } from "@repo/sandbox";
 import { Context, Effect, Layer, Option } from "effect";
@@ -44,6 +44,7 @@ import type { GitHubApp } from "../../github/github-app.js";
 import { postTurnToGitHub } from "../../github/github-mentions.js";
 import { afterResponse } from "../../http/after-response.js";
 import { ApnsSender } from "../../push/apns.js";
+import { FcmSender } from "../../push/fcm.js";
 import { pushSettledTurn } from "../../push/inbox-pushes.js";
 import { LIVE_ACTIVITY_CAUSE, refreshLiveActivity } from "../../push/live-activities.js";
 import { postTurnToSlack } from "../../slack/slack-agent-starts.js";
@@ -67,8 +68,9 @@ export const outsideTransaction = <A, E>(
  * read once as the layer is built: the agents' sessions as the deployment acting for the
  * agent's account, GitHub, which a send to an agent on a repository asks
  * whether its starter still reaches it, and the workspace's Slack bot; and
- * the deployment's APNs sender where the layer is built over one, read
- * optionally, so a runtime without one pushes nothing.
+ * the deployment's APNs and FCM senders where the layer is built over
+ * them, each read optionally, so a runtime without one pushes no phone of
+ * its service; the Live Activity is Apple's alone.
  */
 export const settledTurnListener: Layer.Layer<
   SettledTurnListener,
@@ -82,6 +84,18 @@ export const settledTurnListener: Layer.Layer<
     >();
 
     const apns = yield* Effect.serviceOption(ApnsSender);
+    const fcm = yield* Effect.serviceOption(FcmSender);
+
+    /** The push with each sender the layer was built over, so it reaches every phone a sender stands for. */
+    const withSenders = (push: Effect.Effect<void, StoreFailure, DatabaseServices>) => {
+      const throughApple = Option.isSome(apns)
+        ? Effect.provideService(push, ApnsSender, apns.value)
+        : push;
+
+      return Option.isSome(fcm)
+        ? Effect.provideService(throughApple, FcmSender, fcm.value)
+        : throughApple;
+    };
 
     const reported = (turn: SettledAgentTurn) =>
       afterResponse(
@@ -107,13 +121,9 @@ export const settledTurnListener: Layer.Layer<
     const pushed = (turn: SettledAgentTurn) =>
       afterResponse(
         "a settled turn's push",
-        Option.match(apns, {
-          onNone: () => Effect.void,
-          onSome: (sender) =>
-            outsideTransaction(
-              pushSettledTurn(turn).pipe(Effect.provideService(ApnsSender, sender)),
-            ),
-        }),
+        Option.isNone(apns) && Option.isNone(fcm)
+          ? Effect.void
+          : outsideTransaction(withSenders(pushSettledTurn(turn))),
       );
 
     const refreshed = (turn: SettledAgentTurn) =>
