@@ -25,24 +25,31 @@
  * names none, so a call made again is a second answer, which an ask no
  * longer open refuses, or a second message. A refusal is told in words the
  * outside agent can act on: an answer that does not fit its ask in the
- * check's own words.
+ * check's own words. A call that would hand a line to an agent whose task
+ * stands done or canceled is refused before anything is written
+ * (`unlessSettled`), since the turn it starts would reopen the task.
  */
 
 import { randomUUID } from "node:crypto";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { readVisibleAgent } from "@repo/database/models/agent-store";
 import { storeWriter } from "@repo/database/models/writer";
 import {
   INBOX_MESSAGE_AUTHOR,
+  INBOX_REPLY,
   INBOX_STATUS,
   type InboxAnswers,
   type InboxItem,
   type InboxMessage,
+  inboxAnswerHeard,
+  inboxAnswersReply,
   inboxStartTitle,
   inboxWaitsOn,
   openAskOf,
   threadNeedsReader,
 } from "@repo/features/inbox-wire";
 import { MEMBER_MCP_TOOL } from "@repo/features/member-mcp-tool";
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Option } from "effect";
 import { agentToolRejected, orStoreRefusal } from "../agents/agent-tools.js";
 import { settledMessages, threadLineOf } from "../agents/coder-host/inbox.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
@@ -57,7 +64,13 @@ import {
   remindAsMember,
   startAsMember,
 } from "../inbox/inbox-procedures.js";
-import { INBOX_ASK_ANSWER, markInboxRead, workspaceInboxItems } from "../inbox/inbox-store.js";
+import {
+  INBOX_ASK_ANSWER,
+  markInboxRead,
+  readInboxItem,
+  workspaceInboxItems,
+} from "../inbox/inbox-store.js";
+import { settledTaskRefusal } from "../tasks/task-finish.js";
 
 /** The inbox tools by name, each the name a model calls it by. */
 const MEMBER_INBOX_TOOL = {
@@ -163,6 +176,48 @@ function accepted(item: InboxItem, userId: string): WireRecord {
   return { status: ACTION_RESULT_STATUS.ACCEPTED, thread: threadOf(item, userId) };
 }
 
+/**
+ * The call made unless it would wake an agent whose task stands done or
+ * canceled, which is refused in `settledTaskRefusal`'s words: a tool never
+ * reopens a task, so the outside agent moves it first. Only a call that
+ * hands an agent a line is held, the agent `agentOf` names; a thread or an
+ * agent the member does not reach is left to the call, which refuses it in
+ * its own words.
+ */
+function unlessSettled<R>(
+  userId: string,
+  agentOf: Effect.Effect<Option.Option<string>, StoreFailure, DatabaseServices>,
+  call: Effect.Effect<WireRecord, never, R>,
+) {
+  return orStoreRefusal(
+    Effect.gen(function* () {
+      const agentId = yield* agentOf;
+
+      if (Option.isNone(agentId)) return yield* call;
+      const agent = yield* readVisibleAgent(userId, agentId.value);
+
+      if (Option.isNone(agent)) return yield* call;
+      const settled = yield* settledTaskRefusal(userId, agent.value.taskId);
+
+      return Option.isSome(settled) ? agentToolRejected(settled.value) : yield* call;
+    }),
+  );
+}
+
+/** The agent of the thread, where the member reaches it and the call would hand that agent a line (`wakes`). */
+function wakingThreadAgent(userId: string, threadId: string, wakes: (item: InboxItem) => boolean) {
+  return Effect.map(
+    readInboxItem(userId, threadId),
+    Option.flatMap(({ item }) => (wakes(item) ? Option.some(item.agentId) : Option.none())),
+  );
+}
+
+/** Whether a nod or a close without words reaches the thread's agent: only where it waits on the member's answer (`inboxAnswerHeard`). */
+const heardBare = (item: InboxItem) => inboxAnswerHeard(item, { reply: INBOX_REPLY.ACKNOWLEDGED });
+
+/** A message on a thread reaches its agent whatever the thread holds. */
+const always = () => true;
+
 /** A hand-off's refusal in the outside agent's words: a thread the member does not reach, an agent only its starter reaches, or one that could not be told now. */
 function refusedAs(refusal: HostedRefusal): WireRecord {
   switch (refusal.error) {
@@ -213,7 +268,10 @@ export function answerAskAsMember(
     answers: asked.answers,
   };
 
-  return answerAsMember(WRITER, userId, asked.threadId, sent).pipe(
+  const reply = inboxAnswersReply(asked.answers, asked.note);
+  const wakes = (item: InboxItem) => inboxAnswerHeard(item, reply);
+
+  const answered = answerAsMember(WRITER, userId, asked.threadId, sent).pipe(
     Effect.map((answered) => {
       if (answered.outcome === INBOX_ASK_ANSWER.NOT_OPEN) {
         return agentToolRejected(MEMBER_INBOX_REFUSAL.NOT_OPEN);
@@ -227,6 +285,8 @@ export function answerAskAsMember(
     }),
     Effect.catch((refusal) => Effect.succeed(refusedAs(refusal))),
   );
+
+  return unlessSettled(userId, wakingThreadAgent(userId, asked.threadId, wakes), answered);
 }
 
 /** The member's Got it on an open thread that holds no ask, at the revision read, handed to its agent where the notice asks to be heard back; refused where the thread holds an ask or moved on since. */
@@ -236,7 +296,7 @@ export function acknowledgeThreadAsMember(
 ) {
   const sent = { revision: asked.revision, clientKey: randomUUID() };
 
-  return acknowledgeAsMember(WRITER, userId, asked.threadId, sent).pipe(
+  const acknowledged = acknowledgeAsMember(WRITER, userId, asked.threadId, sent).pipe(
     Effect.map(({ item, taken }) =>
       taken ? accepted(item, userId) : agentToolRejected(MEMBER_INBOX_REFUSAL.UNSEEN),
     ),
@@ -248,6 +308,8 @@ export function acknowledgeThreadAsMember(
       ),
     ),
   );
+
+  return unlessSettled(userId, wakingThreadAgent(userId, asked.threadId, heardBare), acknowledged);
 }
 
 /** The member's message on a thread, open or settled, handed to its agent; it answers no ask. */
@@ -257,10 +319,12 @@ export function replyAsMember(
 ) {
   const sent = { text: asked.text, clientKey: randomUUID(), attachments: [] };
 
-  return messageAsMember(WRITER, userId, asked.threadId, sent).pipe(
+  const replied = messageAsMember(WRITER, userId, asked.threadId, sent).pipe(
     Effect.map(({ item }) => accepted(item, userId)),
     Effect.catch((refusal) => Effect.succeed(refusedAs(refusal))),
   );
+
+  return unlessSettled(userId, wakingThreadAgent(userId, asked.threadId, always), replied);
 }
 
 /** The member's close of an open thread without an answer, at the revision read, handed to its agent where it waits on one; refused where the thread moved on since. */
@@ -270,12 +334,14 @@ export function closeThreadAsMember(
 ) {
   const sent = { revision: asked.revision, clientKey: randomUUID() };
 
-  return closeAsMember(WRITER, userId, asked.threadId, sent).pipe(
+  const closed = closeAsMember(WRITER, userId, asked.threadId, sent).pipe(
     Effect.map(({ item, taken }) =>
       taken ? accepted(item, userId) : agentToolRejected(MEMBER_INBOX_REFUSAL.MOVED),
     ),
     Effect.catch((refusal) => Effect.succeed(refusedAs(refusal))),
   );
+
+  return unlessSettled(userId, wakingThreadAgent(userId, asked.threadId, heardBare), closed);
 }
 
 /** A new thread the member starts with an agent they may message, its first message handed to the agent; its subject, where they name none, stands for the message's first line until it is titled. */
@@ -292,7 +358,7 @@ export function startThreadAsMember(
     attachments: [],
   };
 
-  return startAsMember({}, WRITER, userId, sent).pipe(
+  const started = startAsMember({}, WRITER, userId, sent).pipe(
     Effect.map(({ item }) => accepted(item, userId)),
     Effect.catch((refusal) =>
       Effect.succeed(
@@ -302,6 +368,8 @@ export function startThreadAsMember(
       ),
     ),
   );
+
+  return unlessSettled(userId, Effect.succeed(Option.some(asked.agentId)), started);
 }
 
 /** The member's own read of a thread written: read, or unread until they read it again; no agent hears of it. */
