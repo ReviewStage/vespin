@@ -590,6 +590,68 @@
     "slackDelivery": {
       "type": "boolean",
       "description": "Send each run's result to the member on Slack from Vespin's bot, so the run's agent needs no Slack of its own; the workspace must have the bot connected."
+    },
+    "runsOn": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "machine": {
+              "type": "string",
+              "enum": [
+                "vercel"
+              ]
+            }
+          },
+          "required": [
+            "machine"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "machine": {
+              "type": "string",
+              "enum": [
+                "device"
+              ]
+            },
+            "deviceId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 36
+            }
+          },
+          "required": [
+            "machine",
+            "deviceId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "machine": {
+              "type": "string",
+              "enum": [
+                "device"
+              ]
+            },
+            "device": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "machine",
+            "device"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "Where each run's agent starts: {\"machine\":\"vercel\"} for the cloud, or {\"machine\":\"device\",\"device\":\"<name>\"} for one of the automation's creator's own devices (a Mac or a host) by its name, or {\"machine\":\"device\",\"deviceId\":\"<id>\"} by its id; list_machines lists each place with the runsOn to pass. A run that fires while its device is offline fails. It places each agent a run starts: a run handed to the one agent named runs where that agent already runs."
     }
   },
   "required": [

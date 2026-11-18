@@ -79,7 +79,13 @@ export function automationsProcedures(seams: AutomationsProcedureSeams) {
 
     /** An automation made on a workspace of the account's with the repositories its runs work in. */
     create: automations.create.effect(function* ({ input: made, context: { userId } }) {
-      const created = yield* createAutomationAs(userId, made, SERVER_AUTOMATION_SOURCE.MEMBER);
+      // Note that the automations page names no machine, so its runs are placed as a Start naming none is.
+      const created = yield* createAutomationAs(
+        userId,
+        made,
+        SERVER_AUTOMATION_SOURCE.MEMBER,
+        null,
+      );
 
       return {
         automation: created.automation,
@@ -115,6 +121,8 @@ export function automationsProcedures(seams: AutomationsProcedureSeams) {
         standing.value,
         asked,
         SERVER_AUTOMATION_SOURCE.MEMBER,
+        // Note that the automations page names no machine, so the one standing stays.
+        undefined,
       );
 
       return {

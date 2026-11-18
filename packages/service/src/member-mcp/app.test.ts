@@ -975,6 +975,7 @@ it.effect(
               scope: "personal",
               archiveSuccessful: false,
               slackDelivery: false,
+              runsOn: { machine: "vercel" },
             },
           ],
           [MEMBER_MCP_TOOL.UPDATE_AUTOMATION, { automationId, name: "Renamed" }],
@@ -1281,6 +1282,7 @@ it.effect(
           scope: "personal",
           archiveSuccessful: false,
           slackDelivery: false,
+          runsOn: { machine: "vercel" },
         }),
       ).automation.id;
 
