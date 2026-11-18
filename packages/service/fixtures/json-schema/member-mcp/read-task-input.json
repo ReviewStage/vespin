@@ -11,7 +11,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 64,
-      "description": "The task to read, by the id list_tasks answered or by its key, such as ACME-42; a key's prefix is not checked, since it follows the workspace's name."
+      "description": "The task to read, by the id list_tasks answered or by its key, such as ACME-42, whose prefix must be its workspace's."
     }
   },
   "required": [
