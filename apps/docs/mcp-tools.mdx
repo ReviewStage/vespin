@@ -207,7 +207,7 @@ Reads a page an agent showed on a task: its title, version, and HTML.
 | Input | Type | Description |
 | --- | --- | --- |
 | `pageId` | string, required | The page's id, as a mention of it or a link to it names. (1–36 characters) |
-| `version` | integer | The version to read, by its number; leave it out for the newest. (at least 1) |
+| `version` | integer or `newest`, required | The version to read: its number, as show_page's answer or a mention of the page names it, or "newest" for the newest there is. (a number at least 1) |
 
 ### read_task_file
 

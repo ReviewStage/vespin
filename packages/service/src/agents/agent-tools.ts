@@ -376,10 +376,14 @@ export const STOP_AGENT_REFUSAL = {
 /** The most characters of a page's HTML a read answers, about ten thousand tokens: the rest is counted, never sent. */
 export const READ_PAGE_CHARS = 40_000;
 
+/** The version a page read names in words rather than by its number. */
+export const READ_PAGE_VERSION = {
+  NEWEST: "newest",
+} as const;
+
 /** Why a page read answered nothing, in words the model can act on. */
 export const READ_PAGE_REFUSAL = {
-  UNREADABLE:
-    "Not read: name the page by its id, and a version as a whole number from 1, or none for the newest.",
+  UNREADABLE: `Not read: name the page by its id in pageId, and the version to read in version: a whole number from 1, or "${READ_PAGE_VERSION.NEWEST}" for the newest.`,
   NO_PAGE:
     "Not read: no page of a task of your workspace has that id, or that page has no such version.",
 } as const;
@@ -1141,11 +1145,12 @@ const READ_PAGE_INPUT = Schema.Struct({
     wireUuidSchema,
     `The page's id, as a mention of it, ${AGENT_TOOL.SHOW_PAGE}'s answer, or a link to it names.`,
   ),
-  version: Schema.optionalKey(
-    describeWire(
+  version: describeWire(
+    Schema.Union([
       Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
-      "The version to read, by its number; leave it out for the newest.",
-    ),
+      Schema.Literal(READ_PAGE_VERSION.NEWEST),
+    ]),
+    `The version to read: its number, as ${AGENT_TOOL.SHOW_PAGE}'s answer or a mention of the page names it, or "${READ_PAGE_VERSION.NEWEST}" for the newest there is.`,
   ),
 });
 
@@ -1154,7 +1159,8 @@ const readPageAsked = Schema.decodeUnknownResult(READ_PAGE_INPUT);
 export const READ_PAGE_TOOL = {
   name: AGENT_TOOL.READ_PAGE,
   description:
-    "Read a page an agent showed in your workspace, by its id: its title, its version and the " +
+    "Read a page an agent showed in your workspace, by its id and the version you name, its " +
+    `number or "${READ_PAGE_VERSION.NEWEST}": its title, the version read and the ` +
     "newest there is, its task, and its HTML, cut on a line at " +
     `${READ_PAGE_CHARS} characters. Read a page the developer pointed you at, or one another agent ` +
     "showed, before you build on it or revise it; revise a page of your own task by showing it " +
@@ -3563,7 +3569,13 @@ export function runReadPage(
       }
 
       const userId = callerUserId(caller);
-      const found = yield* readPageById(userId, asked.success.pageId, asked.success.version);
+      const { pageId, version } = asked.success;
+
+      const found = yield* readPageById(
+        userId,
+        pageId,
+        version === READ_PAGE_VERSION.NEWEST ? undefined : version,
+      );
 
       if (Option.isNone(found)) return agentToolRejected(READ_PAGE_REFUSAL.NO_PAGE);
       const { taskId, page, newestVersion } = found.value;

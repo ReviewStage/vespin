@@ -4226,7 +4226,7 @@ test("stop_agent answers a turn its harness says ended before its cancel as not 
   assert.equal(again.stopped, false, JSON.stringify(again));
 });
 
-test("read_page reads a page a teammate showed on another task of the caller's workspace, its newest version or one named, its HTML cut on a line to the bound, and nothing of another workspace's or a version never written", async () => {
+test("read_page reads a page a teammate showed on another task of the caller's workspace, its newest version or one named, its HTML cut on a line to the bound, and nothing of another workspace's, a version never written, or a call naming no version", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -4266,7 +4266,7 @@ test("read_page reads a page a teammate showed on another task of the caller's w
 
   const page = (answer: WireRecord) => (isRecord(answer.page) ? answer.page : {});
 
-  const newest = await call(AGENT_TOOL.READ_PAGE, { pageId: shown.id });
+  const newest = await call(AGENT_TOOL.READ_PAGE, { pageId: shown.id, version: "newest" });
   assert.equal(newest.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(newest));
   const read = page(newest);
   assert.deepEqual(
@@ -4284,11 +4284,18 @@ test("read_page reads a page a teammate showed on another task of the caller's w
   const refused = { status: ACTION_RESULT_STATUS.REJECTED, reason: READ_PAGE_REFUSAL.NO_PAGE };
   assert.deepEqual(await call(AGENT_TOOL.READ_PAGE, { pageId: shown.id, version: 3 }), refused);
   // The caller's starter is a member of the other workspace too, but the caller is not of it.
-  assert.deepEqual(await call(AGENT_TOOL.READ_PAGE, { pageId: elsewhere.id }), refused);
-  assert.deepEqual(await call(AGENT_TOOL.READ_PAGE, { pageId: shown.id, version: 0 }), {
+  assert.deepEqual(
+    await call(AGENT_TOOL.READ_PAGE, { pageId: elsewhere.id, version: "newest" }),
+    refused,
+  );
+
+  const unreadable = {
     status: ACTION_RESULT_STATUS.REJECTED,
     reason: READ_PAGE_REFUSAL.UNREADABLE,
-  });
+  };
+
+  assert.deepEqual(await call(AGENT_TOOL.READ_PAGE, { pageId: shown.id, version: 0 }), unreadable);
+  assert.deepEqual(await call(AGENT_TOOL.READ_PAGE, { pageId: shown.id }), unreadable);
 });
 
 test("create_section, update_task's sectionId, and delete_section keep the caller's starter's own sidebar sections of its workspace, as list_tasks then names them and the Mac reads them, once under the call's key, and reach no section or task of another workspace", async () => {

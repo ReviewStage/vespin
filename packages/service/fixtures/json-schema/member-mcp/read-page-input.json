@@ -8,13 +8,24 @@
       "description": "The page's id, as a mention of it or a link to it names."
     },
     "version": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "The version to read, by its number; leave it out for the newest."
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "type": "string",
+          "enum": [
+            "newest"
+          ]
+        }
+      ],
+      "description": "The version to read: its number, as show_page's answer or a mention of the page names it, or \"newest\" for the newest there is."
     }
   },
   "required": [
-    "pageId"
+    "pageId",
+    "version"
   ],
   "additionalProperties": false
 }
