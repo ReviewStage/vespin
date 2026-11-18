@@ -39,7 +39,7 @@ export function AgentTabFrame({
 
   return (
     <Fill as={FILL_ELEMENT.SECTION} ref={held} className="agent-tab relative" aria-label={label}>
-      <AgentTabBox.Provider value={box}>{children}</AgentTabBox.Provider>
+      <AgentTabBox value={box}>{children}</AgentTabBox>
     </Fill>
   );
 }

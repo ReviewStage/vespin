@@ -1311,7 +1311,7 @@ function PinnedSection({
 /**
  * The Following group, under Pinned and above the Tasks head: the tasks the
  * reader follows that no other list holds (`followingTasks`), a teammate's
- * they keep up with, newest active first, its rows naming no repository, as
+ * or one no one is on, newest active first, its rows naming no repository, as
  * Pinned's and a section's do not. It stands only
  * while it holds a task, so a task followed lands in it at once and one
  * unfollowed leaves it, as the live list moves. Its head is led by the eye
@@ -2671,7 +2671,7 @@ function SidebarColumn({
         <Fill className="sidebar-section -my-ring-reach -ms-ring-reach -me-column-inset">
           <ScrollArea ref={scroller} fade={SCROLL_FADE.BOTH}>
             <ListMotion root={body}>
-              <ChosenTasksContext.Provider value={selection.chosenOf}>
+              <ChosenTasksContext value={selection.chosenOf}>
                 <SelectionRegion
                   id={selection.regionId}
                   selection={{ selected: selection.selected, onChange: selection.onChange }}
@@ -2866,7 +2866,7 @@ function SidebarColumn({
                     </nav>
                   </div>
                 </SelectionRegion>
-              </ChosenTasksContext.Provider>
+              </ChosenTasksContext>
             </ListMotion>
           </ScrollArea>
         </Fill>

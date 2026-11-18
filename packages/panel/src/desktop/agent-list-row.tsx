@@ -1,12 +1,16 @@
 import { AGENT_BOUNDS, type AgentPullRequest, type AgentSummary } from "@repo/features/agent-wire";
 import { openerOf } from "@repo/features/link-standing-model";
 import { machineAsksByAgent } from "@repo/features/machine-ask-live";
-import type { StartedAgentsCount } from "@repo/features/task-agents-model";
+import {
+  STARTED_STANDING,
+  type StartedAgentsStanding,
+  startedHeard,
+  startedShown,
+} from "@repo/features/task-agents-model";
 import {
   InlineEdit,
   type ListRowFold,
   type ListRowNest,
-  ProgressCount,
   RowHint,
   RowHintOptions,
   TASK_ROW_CELL,
@@ -14,11 +18,13 @@ import {
   type TaskRowCell,
   TaskRowGlyph,
   Time,
+  WorkingCount,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { type ReactNode, useRef } from "react";
 import { useMachineAsks } from "../machine-asks.js";
+import { failedUnderMark } from "../state-glyph.js";
 import { RENAME_FAILED } from "../tasks/agent-model.js";
 import type { AgentSubject } from "../tasks/agent-ref.js";
 import { changesAddressOf, useChangesPeople } from "../tasks/changes-people.js";
@@ -45,15 +51,18 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * working mark while the agent works, and its name is masked in a screen
  * recording; its task is its card's to name. Its trailing run holds, in
  * turn: how many of its threads wait on the developer, as the sidebar's Inbox row counts them (`WaitingCount`);
- * how many of the agents it started have finished, of all of them, as a task
- * counts its sub-tasks (`ProgressCount`), where its list nests the agents it
- * started under it (`depth`, `nest`, `fold`) as a task's sub-tasks nest; its
+ * how many of the agents it started, at every depth, still work, led by
+ * the working mark (`WorkingCount`), where its list nests the agents it
+ * started under it (`depth`, `nest`, `fold`) as a task's sub-tasks nest,
+ * and nothing once none does; it counts no share done, as a task counts
+ * its sub-tasks, since an agent at rest may work again; its
  * pull request, where it opened one, as a chip of GitHub's mark in GitHub's
  * color for where it stands and its number (`pull-request-chip.tsx`),
  * hanging the pull request's one card, the agent whose it is and who it
  * names among what the card says (`pull-request-card.tsx`); and where it
  * runs (`runs-on.tsx`), Cloud or the device, with its failed mark once its
- * turn failed. Its time says when it last moved, and its ⋯ comes in over
+ * turn failed, or once an agent it started failed, its hint saying how
+ * many, so a fold never hides a failure. Its time says when it last moved, and its ⋯ comes in over
  * it, as a task's does.
  *
  * A press opens the agent, and its ⋯, a right-click, a long press, and the
@@ -134,8 +143,8 @@ export function AgentListRow({
   nest?: ListRowNest | undefined;
   /** The agents it started, nested under it, which it folds; none where it started none. */
   fold?: ListRowFold | undefined;
-  /** How many of the agents it started have finished, of all of them; none where it started none. */
-  started?: StartedAgentsCount | undefined;
+  /** Where the agents it started stand, at every depth; none where it started none. */
+  started?: StartedAgentsStanding | undefined;
   /** Opens the agent, as its pull request's card offers too. */
   onPress: () => void;
   onOpenPullRequest: () => void;
@@ -172,10 +181,10 @@ export function AgentListRow({
         [TASK_ROW_CELL.WAITING]: <WaitingCount count={waits + asked} />,
         [TASK_ROW_CELL.SUB_TASKS]:
           started === undefined ? null : (
-            <ProgressCount
-              done={started.finished}
-              total={started.total}
-              label={`${started.finished} of ${started.total} agents it started finished`}
+            <WorkingCount
+              count={started.working}
+              words={startedShown(started.working, STARTED_STANDING.WORKING)}
+              label={startedHeard(started.working, STARTED_STANDING.WORKING)}
             />
           ),
         [TASK_ROW_CELL.PULL_REQUESTS]:
@@ -201,7 +210,10 @@ export function AgentListRow({
         [TASK_ROW_CELL.AGENTS]: (
           <ReplayMask>
             <RunsOnPlace agent={agent} devices={macs} />
-            {agentEndMark(agent, true)}
+            {agentEndMark(agent, true) ??
+              (started === undefined || started.failed === 0
+                ? null
+                : failedUnderMark(startedHeard(started.failed, STARTED_STANDING.FAILED)))}
           </ReplayMask>
         ),
         [TASK_ROW_CELL.UPDATED]: <Time at={at} hint={false} />,

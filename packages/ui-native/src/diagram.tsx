@@ -232,7 +232,7 @@ export function DiagramRenderer({ children }: { readonly children: ReactNode }) 
   };
 
   return (
-    <DiagramAskContext.Provider value={{ palette, ask }}>
+    <DiagramAskContext value={{ palette, ask }}>
       {children}
       {needed ? (
         <WebView
@@ -259,7 +259,7 @@ export function DiagramRenderer({ children }: { readonly children: ReactNode }) 
           importantForAccessibility="no-hide-descendants"
         />
       ) : null}
-    </DiagramAskContext.Provider>
+    </DiagramAskContext>
   );
 }
 

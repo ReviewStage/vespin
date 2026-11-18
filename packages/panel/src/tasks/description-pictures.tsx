@@ -171,7 +171,7 @@ export function DescriptionPictures({
   const heading = shownId === undefined ? undefined : sectionOfPicture(text, taskId, shownId);
 
   return (
-    <DescriptionPicturesContext.Provider value={door}>
+    <DescriptionPicturesContext value={door}>
       {children}
       {viewing === undefined ? null : (
         <AttachmentViewer
@@ -182,7 +182,7 @@ export function DescriptionPictures({
           note={heading === undefined ? undefined : sectionNote?.(heading)}
         />
       )}
-    </DescriptionPicturesContext.Provider>
+    </DescriptionPicturesContext>
   );
 }
 

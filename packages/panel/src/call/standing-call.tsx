@@ -164,7 +164,7 @@ export function StandingCallProvider({
     [standing, presses, voice.levels],
   );
 
-  return <StandingCardContext.Provider value={value}>{children}</StandingCardContext.Provider>;
+  return <StandingCardContext value={value}>{children}</StandingCardContext>;
 }
 
 /**

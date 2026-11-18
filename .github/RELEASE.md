@@ -353,7 +353,9 @@ DMG whose analytics, crash reporting, or symbolication is silently missing. They
 Electron-builder writes the distribution artifacts under `artifacts/release-builder/`, and
 the publish script is what knows the asset set: it refuses to publish unless all six are
 present, refuses a tag that does not exist, and creates a published, non-draft
-release. Re-running it is safe: assets are replaced with `--clobber`.
+release. Re-running it is supported only while the release is a draft: assets are
+replaced with `--clobber` before publishing. An already published release is refused;
+bump the version and cut a new tag, or delete the release by hand before retrying.
 
 Then run the checks under "Verify after a release" above, and afterwards find out why
 Actions could not cut the release — a hand-cut release is a workflow bug left standing.

@@ -901,13 +901,13 @@ function CommentEntry({
         {lead}
         {editing === undefined ? (
           <>
-            <WordsDatesContext.Provider value={dates}>
+            <WordsDatesContext value={dates}>
               <PostedComment
                 taskId={doors.control.taskId}
                 files={entry.files ?? NO_FILES}
                 words={shown}
               />
-            </WordsDatesContext.Provider>
+            </WordsDatesContext>
           </>
         ) : (
           <CommentEditField
@@ -3169,9 +3169,9 @@ export function CommentFocusScope({
   }, [focused, onActive, onReveal, revealed, listing, focusedOn, taskId]);
 
   return (
-    <CommentFocusContext.Provider value={focus}>
-      <PendingSetter.Provider value={setPending}>{children}</PendingSetter.Provider>
-    </CommentFocusContext.Provider>
+    <CommentFocusContext value={focus}>
+      <PendingSetter value={setPending}>{children}</PendingSetter>
+    </CommentFocusContext>
   );
 }
 

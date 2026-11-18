@@ -70,7 +70,7 @@ export function AutomationDirectory({
     [automations, workspaceId, workspaceName, reading, settled, onOpen],
   );
 
-  return <ShelfContext.Provider value={shelf}>{children}</ShelfContext.Provider>;
+  return <ShelfContext value={shelf}>{children}</ShelfContext>;
 }
 
 /**

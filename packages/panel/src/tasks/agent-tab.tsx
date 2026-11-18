@@ -3776,7 +3776,7 @@ function AgentTabView({
                       <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
                         <AutomationsWanted wanted={automationLines}>
                           <ApprovalsProvider asks={approvals.asks}>
-                            <GoalConditions.Provider value={conditions}>
+                            <GoalConditions value={conditions}>
                               <AgentTranscriptView
                                 messages={lines}
                                 standingCalls={transcript.calls}
@@ -3856,7 +3856,7 @@ function AgentTabView({
                                 bringIn={bringIn}
                                 approvals={mode === undefined ? undefined : approvals}
                               />
-                            </GoalConditions.Provider>
+                            </GoalConditions>
                           </ApprovalsProvider>
                         </AutomationsWanted>
                       </ReplyDoorProvider>

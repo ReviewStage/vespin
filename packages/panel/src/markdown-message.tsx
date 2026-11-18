@@ -732,7 +732,7 @@ export const MarkdownMessage = memo(function MarkdownMessage({
   }, [link, openLink, diagrams, picture, inline]);
 
   return (
-    <FenceEdit.Provider value={edit}>
+    <FenceEdit value={edit}>
       <Markdown
         look={inline === true ? MARKDOWN_LOOK.INLINE : MARKDOWN_LOOK.NOTE}
         words={words}
@@ -742,6 +742,6 @@ export const MarkdownMessage = memo(function MarkdownMessage({
         urlTransform={link === undefined ? safeUrl : keptUrl}
         taskBox={taskBox}
       />
-    </FenceEdit.Provider>
+    </FenceEdit>
   );
 });

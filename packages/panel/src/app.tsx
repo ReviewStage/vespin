@@ -260,13 +260,13 @@ export function App(): React.JSX.Element {
   return (
     <TimeTicks>
       <OpenAiKeyProvider account={accountKey}>
-        <WindowAccountContext.Provider value={accountKey}>
+        <WindowAccountContext value={accountKey}>
           {landed ? (
             <RoutedExitsProvider>
               <AppWindow />
             </RoutedExitsProvider>
           ) : null}
-        </WindowAccountContext.Provider>
+        </WindowAccountContext>
       </OpenAiKeyProvider>
     </TimeTicks>
   );
@@ -940,7 +940,7 @@ function AppWindow(): React.JSX.Element {
                         {/* A maintainer's sign-in as the member, said above the stage on the web. */}
                         <ViewingAs />
                         {/* A failure offers no Retry while the app does not reach the service, whose reads start again once it does. */}
-                        <RetryOffered.Provider value={connected}>
+                        <RetryOffered value={connected}>
                           <div
                             ref={stage.ref}
                             className="app-stage"
@@ -952,7 +952,7 @@ function AppWindow(): React.JSX.Element {
                             style={cssCustomProperties({ "--sidebar-width": `${sidebar.width}px` })}
                           >
                             {/* The window's content. */}
-                            <ShellRoomContext.Provider value={room}>
+                            <ShellRoomContext value={room}>
                               <div className="desktop-stage">
                                 <MessageRevealProvider value={messageReveal}>
                                   <ThreadRevealProvider value={threadReveal}>
@@ -973,7 +973,7 @@ function AppWindow(): React.JSX.Element {
                                   </ThreadRevealProvider>
                                 </MessageRevealProvider>
                               </div>
-                            </ShellRoomContext.Provider>
+                            </ShellRoomContext>
                             {/* A note to the people who make the app, written in a dialog over the
           window. */}
                             <FeedbackDialog
@@ -1010,15 +1010,15 @@ function AppWindow(): React.JSX.Element {
                               doors={settingsDoors}
                             />
                             {/* The screens stood on last, Back's steps across every task, behind ⌃Tab, on a desktop app past the sign-in; in the stage's room, which names a phone's places as it stands them. */}
-                            <ShellRoomContext.Provider value={room}>
+                            <ShellRoomContext value={room}>
                               <TabSwitcher
                                 available={!accountGated}
                                 steps={history}
                                 tasks={tasks}
                               />
-                            </ShellRoomContext.Provider>
+                            </ShellRoomContext>
                           </div>
-                        </RetryOffered.Provider>
+                        </RetryOffered>
                       </ListedAutomations>
                     </GitHubConnectProvider>
                   </RepositoryRemedyProvider>

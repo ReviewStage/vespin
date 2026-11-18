@@ -2,7 +2,8 @@
  * progress-rings.tsx -- the progress ring at its start, part way, and full
  * in the working blue, the tones the agent's context ring takes, and the ring
  * beside its count as a sub-task's row and card say it, bare and as the badge
- * a Board card's pills draw.
+ * a Board card's pills draw; and, where an agent's row stands its count,
+ * the working mark beside how many of the agents it started still work.
  */
 
 import {
@@ -16,6 +17,7 @@ import {
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  WorkingCount,
 } from "@repo/ui";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -69,6 +71,12 @@ function ProgressRings(): React.JSX.Element {
           </Inline>
         </CatalogSection>
       ))}
+      <CatalogSection id="working-count" title="Agents at work, where an agent's row counts">
+        <Inline gap={GAP.SECTION}>
+          <WorkingCount count={1} words="1 working" label="1 agent it started is working" />
+          <WorkingCount count={2} words="2 working" label="2 agents it started are working" />
+        </Inline>
+      </CatalogSection>
     </>
   );
 }

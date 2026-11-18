@@ -204,7 +204,7 @@ export function EntryPictures({
   );
 
   return (
-    <EntryViewerContext.Provider value={door}>
+    <EntryViewerContext value={door}>
       {children}
       {viewing === undefined ? null : (
         <EntryViewer
@@ -215,7 +215,7 @@ export function EntryPictures({
           onClose={() => setViewing(undefined)}
         />
       )}
-    </EntryViewerContext.Provider>
+    </EntryViewerContext>
   );
 }
 

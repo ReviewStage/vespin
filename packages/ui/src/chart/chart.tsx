@@ -82,7 +82,7 @@ function ChartContainer({
   const { style, ...rest } = props;
 
   return (
-    <ChartContext.Provider value={{ config }}>
+    <ChartContext value={{ config }}>
       <div
         data-slot="chart"
         data-chart={chartId}
@@ -95,7 +95,7 @@ function ChartContainer({
           {children}
         </RechartsPrimitive.ResponsiveContainer>
       </div>
-    </ChartContext.Provider>
+    </ChartContext>
   );
 }
 

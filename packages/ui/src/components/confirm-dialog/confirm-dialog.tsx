@@ -483,7 +483,7 @@ export function FootQuestion({
         <ErrorLine error={refused ? confirm.rejection : undefined} />
       </div>
       <div className={DIALOG_ANSWERS}>
-        <DialogReplayUnmasked.Provider value={question.replayUnmasked === true}>
+        <DialogReplayUnmasked value={question.replayUnmasked === true}>
           <DialogActions
             onCancel={withdraw}
             cancelRef={cancel}
@@ -497,7 +497,7 @@ export function FootQuestion({
               onShown: answer.onShown,
             }}
           />
-        </DialogReplayUnmasked.Provider>
+        </DialogReplayUnmasked>
       </div>
     </div>,
     foot.slot,

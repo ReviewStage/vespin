@@ -277,7 +277,7 @@ export function RewindProvider({
   value: RewindDoors | undefined;
   children?: ReactNode;
 }): React.JSX.Element {
-  return <RewindContext.Provider value={value}>{children}</RewindContext.Provider>;
+  return <RewindContext value={value}>{children}</RewindContext>;
 }
 
 /** A line's Edit, after its Copy and Copy link; nothing where its tab offers no rewind, or the line opened no turn. */

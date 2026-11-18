@@ -63,9 +63,7 @@ export function SelectionRegion({
         chooser.onKeyDown(event);
       }}
     >
-      <ListSelectionContext.Provider value={chooser.selecting}>
-        {children}
-      </ListSelectionContext.Provider>
+      <ListSelectionContext value={chooser.selecting}>{children}</ListSelectionContext>
     </div>
   );
 }

@@ -220,21 +220,56 @@ export function inAgentListOrder<Entry>(
   return entries.toSorted((a, b) => started(a) - started(b));
 }
 
-/** What a task's Agents tree reads of each agent: who started it, what it was started from, and whether it still works. */
-type TreeAgent = Pick<AgentSummary, "id" | "status" | "startedByAgentId" | "from">;
+/** What a task's Agents tree reads of each agent: who started it, what it was started from, whether it still works, and why its turn failed. */
+type TreeAgent = Pick<AgentSummary, "id" | "status" | "startedByAgentId" | "from"> & {
+  readonly turn?: { readonly failure?: AgentFailure };
+};
 
-/** How many of the agents nested under a row have finished, of all of them. */
-export interface StartedAgentsCount {
-  readonly finished: number;
-  readonly total: number;
+/**
+ * Where the agents nested under a row stand, at every depth under it: how
+ * many may still write, and how many failed. Note that it counts no share
+ * done, as a task's sub-tasks do, because an agent at rest is no agent
+ * finished: a worker waiting on CI rests until its wake, and one the
+ * developer messages works again.
+ */
+export interface StartedAgentsStanding {
+  readonly working: number;
+  readonly failed: number;
+}
+
+/** How the agents under a row stand, as its count says them. */
+export const STARTED_STANDING = {
+  WORKING: "working",
+  FAILED: "failed",
+} as const;
+
+export type StartedStanding = (typeof STARTED_STANDING)[keyof typeof STARTED_STANDING];
+
+/** What a row's count of the agents under it reads as: "2 working", "1 failed". */
+export function startedShown(count: number, standing: StartedStanding): string {
+  return `${count} ${standing}`;
+}
+
+/** What a row's count of the agents under it is heard as: "2 agents it started are working", "1 agent it started failed". */
+export function startedHeard(count: number, standing: StartedStanding): string {
+  const agents = count === 1 ? "agent" : "agents";
+
+  if (standing === STARTED_STANDING.FAILED) return `${count} ${agents} it started failed`;
+
+  return `${count} ${agents} it started ${count === 1 ? "is" : "are"} working`;
+}
+
+/** Whether an agent failed by a fault of its own: failed, and not stopped by its plan's usage limit, which its user expects. */
+function agentFailedByFault(agent: Pick<TreeAgent, "status" | "turn">): boolean {
+  return agent.status === AGENT_STATUS.FAILED && agent.turn?.failure !== AGENT_FAILURE.PLAN_LIMIT;
 }
 
 /** One row of a task's Agents tree: its entry, how deep it stands, and the agents it started, counted, where it started any. */
 export interface AgentTreeRow<Entry> {
   readonly entry: Entry;
   readonly depth: number;
-  /** The agents nested under it, every one whether or not they stand open; none where it started none. */
-  readonly started?: StartedAgentsCount | undefined;
+  /** Where the agents nested under it stand, at every depth, whether or not they stand open; none where it started none. */
+  readonly started?: StartedAgentsStanding | undefined;
   /** The agents its fold passes by, at every depth under it, while it stands folded; none while it stands open or started none. */
   readonly folded?: readonly Entry[] | undefined;
 }
@@ -275,8 +310,8 @@ function closesLoop(id: string, starters: ReadonlyMap<string, string>): boolean 
  * listed agent that started it (`listedStarter`), to any depth, those under
  * a row not `open` passed by. Siblings keep the order handed in
  * (`inAgentListOrder`), and each row at the top stands where the first of
- * the agents under it, itself among them, stands. A row counts the agents nested
- * directly under it, and how many of them no longer work, and a row
+ * the agents under it, itself among them, stands. A row counts the agents
+ * nested under it, at every depth, that still work and that failed, and a row
  * standing folded names every agent its fold passes by, so what waits on
  * the developer there can still be said on it. A loop of
  * starters, which nothing writes, is cut where it closes, its agents
@@ -347,13 +382,12 @@ export function agentTree<Entry>(
       return;
     }
 
-    const finished = kids.filter((kid) => {
-      const agent = agentOf(kid);
+    const nested = kids.flatMap(everyUnder).flatMap((kid) => agentOf(kid) ?? []);
 
-      return agent !== undefined && !agentStillWriting(agent.status);
-    }).length;
-
-    const started = { finished, total: kids.length };
+    const started = {
+      working: nested.filter((agent) => agentStillWriting(agent.status)).length,
+      failed: nested.filter(agentFailedByFault).length,
+    };
 
     if (id !== undefined && open(id)) {
       rows.push({ entry, depth, started });

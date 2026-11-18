@@ -376,7 +376,7 @@ export function InboxPictures({
   );
 
   return (
-    <InboxPicturesContext.Provider value={door}>
+    <InboxPicturesContext value={door}>
       {children}
       {viewing?.itemId === itemId ? (
         <ItemViewer
@@ -387,7 +387,7 @@ export function InboxPictures({
           onClose={() => setViewing(undefined)}
         />
       ) : null}
-    </InboxPicturesContext.Provider>
+    </InboxPicturesContext>
   );
 }
 

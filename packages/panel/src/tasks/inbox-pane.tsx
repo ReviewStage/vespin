@@ -413,7 +413,7 @@ function SendingReplyWords({
   const shown = useWordFiles(attachmentChips(attachments), text, uploading);
 
   return (
-    <WordFilesContext.Provider value={shown.named}>
+    <WordFilesContext value={shown.named}>
       {shown.beside.length === 0 ? null : (
         <AttachedFileChips files={shown.beside} uploading={uploading} />
       )}
@@ -426,7 +426,7 @@ function SendingReplyWords({
         </div>
       )}
       {shown.viewer}
-    </WordFilesContext.Provider>
+    </WordFilesContext>
   );
 }
 

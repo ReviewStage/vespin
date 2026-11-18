@@ -129,9 +129,9 @@ export function TaskMentions({
   const boxes = useMemo<MentionBoxes>(() => ({ box, stand }), [box]);
 
   return (
-    <TaskMentionsContext.Provider value={value}>
-      <MentionBoxContext.Provider value={boxes}>{children}</MentionBoxContext.Provider>
-    </TaskMentionsContext.Provider>
+    <TaskMentionsContext value={value}>
+      <MentionBoxContext value={boxes}>{children}</MentionBoxContext>
+    </TaskMentionsContext>
   );
 }
 

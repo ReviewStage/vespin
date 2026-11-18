@@ -211,7 +211,7 @@ test("the agents list oldest started first, the one at work among them, each say
   assert.deepEqual(opened.agents, [OLDEST.id]);
 });
 
-test("an agent another agent started stands folded under it, the row it stands under counting how many it started finished and what waits under it, and that row's chevron opens them", () => {
+test("agents another agent started stand folded under it, the row they stand under counting how many still work, marking one that failed, and counting what waits under it, and that row's chevron opens them", () => {
   const lead = agent(
     "2a4c6e8a-0b1d-4f3a-8c5e-7a9b1c3d5e70",
     "Roll out invites",
@@ -219,8 +219,14 @@ test("an agent another agent started stands folded under it, the row it stands u
     AGENT_STATUS.RUNNING,
   );
 
-  const worker = { ...NEWEST, startedByAgentId: lead.id } satisfies AgentSummary;
-  const { host } = mount([worker, lead], { waiting: waitingOn(worker.id, 2) });
+  const worker = {
+    ...NEWEST,
+    status: AGENT_STATUS.FAILED,
+    startedByAgentId: lead.id,
+  } satisfies AgentSummary;
+
+  const busy = { ...WORKING, startedByAgentId: lead.id } satisfies AgentSummary;
+  const { host } = mount([worker, busy, lead], { waiting: waitingOn(worker.id, 2) });
   const list = host.querySelector('[aria-label="Agents"]');
   assert.ok(list !== null);
 
@@ -230,7 +236,12 @@ test("an agent another agent started stands folded under it, the row it stands u
     );
 
   assert.deepEqual(names(), ["Roll out invites"], "the worker stands folded under its lead");
-  assert.ok(list.querySelector("li")?.textContent?.includes("1/1"), "its lead counts it finished");
+  const head = list.querySelector("li");
+  assert.ok(
+    head?.textContent?.includes("1 agent it started is working"),
+    "its lead counts one at work",
+  );
+  assert.ok(head?.querySelector('[aria-label="Failed"]') !== null, "and marks the one that failed");
   assert.match(
     list.querySelector("li")?.textContent ?? "",
     /2 need you/u,
@@ -243,7 +254,7 @@ test("an agent another agent started stands folded under it, the row it stands u
 
   assert.ok(chevron !== null);
   act(() => chevron.click());
-  assert.deepEqual(names(), ["Roll out invites", "Invite email"]);
+  assert.deepEqual(names(), ["Roll out invites", "Expired invite page", "Invite email"]);
 });
 
 test("an agent's row offers the agent's menu from its ⋯, as its row on a person's page does", () => {

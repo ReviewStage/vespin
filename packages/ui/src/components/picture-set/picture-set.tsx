@@ -370,13 +370,13 @@ export function PictureSet({
         aria-label={label}
       >
         {tiles.map((tile, index) => (
-          <TilePlaceContext.Provider
+          <TilePlaceContext
             // Note that `Children.toArray` keys each tile by its caller's key, which this keeps.
             key={isValidElement(tile) ? (tile.key ?? index) : index}
             value={{ many, more: index === tiles.length - 1 ? count - tiles.length : 0 }}
           >
             {tile}
-          </TilePlaceContext.Provider>
+          </TilePlaceContext>
         ))}
       </ul>
       {count > SET_FEW ? (
