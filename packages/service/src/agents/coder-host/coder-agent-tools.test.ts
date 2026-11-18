@@ -1876,7 +1876,12 @@ test("an agent stored as a pilot, on a task stored in pilot mode, makes a child 
 
   const made = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Meter usage", parentTaskId: plans.billing, mode: TASK_MODE.PILOT },
+    {
+      name: "Meter usage",
+      status: TASK_STATUS.TODO,
+      parentTaskId: plans.billing,
+      mode: TASK_MODE.PILOT,
+    },
     "call-make",
   );
 
@@ -2652,7 +2657,7 @@ async function tasksNamed(userId: string, workspaceId: string, name: string): Pr
     .map((each) => each.id);
 }
 
-test("create_task makes a task in the caller's workspace for the member the agent acts for, on the repository it works in unless another or none is named, with the brief and description given and no agent on it, once under the call's key; start_agent then starts on it by its id", async () => {
+test("create_task makes a task in the caller's workspace for the member the agent acts for, on the repository named or none, refusing one that names no repository or status, with the brief and description given and no agent on it, once under the call's key; start_agent then starts on it by its id", async () => {
   const { workspaceId, elsewhere, plans: tasks, agents } = await openWorkspaces();
   // Bob's agent on Alice's task: the task it makes is Bob's, not the owner's of the task it works on.
   const bob = agents.teammates.userId;
@@ -2668,7 +2673,13 @@ test("create_task makes a task in the caller's workspace for the member the agen
 
   const made = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: ` ${name} `, brief: "Invites should lapse after a week.", description },
+    {
+      name: ` ${name} `,
+      repository: RELAY_FULL_NAME,
+      status: TASK_STATUS.TODO,
+      brief: "Invites should lapse after a week.",
+      description,
+    },
     "call-new",
   );
 
@@ -2706,7 +2717,7 @@ test("create_task makes a task in the caller's workspace for the member the agen
   // A call naming the field as it was named before the rename makes nothing, and says what it is named now.
   const retired = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Seats", plan: "## Goal" },
+    { name: "Seats", status: TASK_STATUS.TODO, plan: "## Goal" },
     "call-plan",
   );
 
@@ -2716,7 +2727,12 @@ test("create_task makes a task in the caller's workspace for the member the agen
   // A title in a description written with CRLF line ends is dropped as well.
   const crlf = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Seats", description: "\r\n# Seats\r\n\r\n## Goal\r\n\r\nBill by seat." },
+    {
+      name: "Seats",
+      repository: null,
+      status: TASK_STATUS.TODO,
+      description: "\r\n# Seats\r\n\r\n## Goal\r\n\r\nBill by seat.",
+    },
     "call-crlf",
   );
 
@@ -2729,7 +2745,12 @@ test("create_task makes a task in the caller's workspace for the member the agen
   // A line opening on # that is no Markdown title is the description's own, and stays.
   const kept = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Limits", description: "#define MAX 10\n\n## Goal\n\nUpdate limits." },
+    {
+      name: "Limits",
+      repository: null,
+      status: TASK_STATUS.TODO,
+      description: "#define MAX 10\n\n## Goal\n\nUpdate limits.",
+    },
     "call-define",
   );
 
@@ -2740,16 +2761,20 @@ test("create_task makes a task in the caller's workspace for the member the agen
   );
 
   // The same call run again, even twice at once, answers the task it made, and makes no second.
+  const sameAsked = { name, repository: RELAY_FULL_NAME, status: TASK_STATUS.TODO };
+
   const again = await Promise.all([
-    call(AGENT_TOOL.CREATE_TASK, { name }, "call-new"),
-    call(AGENT_TOOL.CREATE_TASK, { name }, "call-new"),
+    call(AGENT_TOOL.CREATE_TASK, sameAsked, "call-new"),
+    call(AGENT_TOOL.CREATE_TASK, sameAsked, "call-new"),
   ]);
 
   assert.deepEqual(again, [made, made]);
 
+  const raced = { name: "Raced", repository: null, status: TASK_STATUS.TODO };
+
   const racing = await Promise.all([
-    call(AGENT_TOOL.CREATE_TASK, { name: "Raced" }, "call-race"),
-    call(AGENT_TOOL.CREATE_TASK, { name: "Raced" }, "call-race"),
+    call(AGENT_TOOL.CREATE_TASK, raced, "call-race"),
+    call(AGENT_TOOL.CREATE_TASK, raced, "call-race"),
   ]);
 
   assert.ok(
@@ -2774,16 +2799,46 @@ test("create_task makes a task in the caller's workspace for the member the agen
   );
 
   // None names no repository, and one the installation does not reach makes nothing.
-  const bare = await call(AGENT_TOOL.CREATE_TASK, { name: "Bare", repository: null }, "call-bare");
+  const bare = await call(
+    AGENT_TOOL.CREATE_TASK,
+    { name: "Bare", repository: null, status: TASK_STATUS.TODO },
+    "call-bare",
+  );
+
   assert.ok(isRecord(bare.task), JSON.stringify(bare));
   assert.equal(bare.task.repository, null);
   assert.deepEqual(
-    await call(AGENT_TOOL.CREATE_TASK, { name: "Away", repository: "Acme/Elsewhere" }, "call-away"),
+    await call(
+      AGENT_TOOL.CREATE_TASK,
+      { name: "Away", repository: "Acme/Elsewhere", status: TASK_STATUS.TODO },
+      "call-away",
+    ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: UPDATE_TASK_REFUSAL.NOT_REACHABLE },
   );
   assert.deepEqual(await tasksNamed(bob, workspaceId, "Away"), []);
 
-  for (const input of [{ name: "   " }, { name: "a".repeat(TASK_BOUNDS.MAX_NAME_CHARS + 1) }, {}]) {
+  // A make that names no repository is refused, rather than given the one the agent works in, as is one that names no status.
+  assert.deepEqual(
+    await call(
+      AGENT_TOOL.CREATE_TASK,
+      { name: "Unplaced", status: TASK_STATUS.TODO },
+      "call-unplaced",
+    ),
+    { status: ACTION_RESULT_STATUS.REJECTED, reason: CREATE_TASK_REFUSAL.NO_REPOSITORY },
+  );
+  assert.deepEqual(
+    await call(AGENT_TOOL.CREATE_TASK, { name: "Unplaced", repository: null }, "call-unstanding"),
+    { status: ACTION_RESULT_STATUS.REJECTED, reason: CREATE_TASK_REFUSAL.NO_STATUS },
+  );
+  assert.deepEqual(await tasksNamed(bob, workspaceId, "Unplaced"), []);
+
+  const valid = { repository: null, status: TASK_STATUS.TODO };
+
+  for (const input of [
+    { ...valid, name: "   " },
+    { ...valid, name: "a".repeat(TASK_BOUNDS.MAX_NAME_CHARS + 1) },
+    valid,
+  ]) {
     assert.deepEqual(await call(AGENT_TOOL.CREATE_TASK, input, "call-bad"), {
       status: ACTION_RESULT_STATUS.REJECTED,
       reason: CREATE_TASK_REFUSAL.UNREADABLE,
@@ -2807,7 +2862,13 @@ test("create_task makes a task in the caller's workspace for the member the agen
 
   const planless = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Seat audit", brief: "Audit seat counts.", description: "## Goal\n\nCount seats." },
+    {
+      name: "Seat audit",
+      repository: null,
+      status: TASK_STATUS.TODO,
+      brief: "Audit seat counts.",
+      description: "## Goal\n\nCount seats.",
+    },
     "call-planless",
   );
 
@@ -2826,7 +2887,12 @@ test("an agent whose starter has left the workspace makes no task in it", async 
   const call = await peerCaller(hostOf(), agents.teammates, agentSessions.services);
   await database.run(leaveWorkspace(workspaceId, agents.teammates.userId));
 
-  const refused = await call(AGENT_TOOL.CREATE_TASK, { name: "Left behind" });
+  const refused = await call(AGENT_TOOL.CREATE_TASK, {
+    name: "Left behind",
+    repository: null,
+    status: TASK_STATUS.TODO,
+  });
+
   assert.equal(refused.status, ACTION_RESULT_STATUS.REJECTED, JSON.stringify(refused));
   assert.deepEqual(await tasksNamed(agents.caller.userId, workspaceId, "Left behind"), []);
 });
@@ -2839,7 +2905,12 @@ test("create_task makes a task with its parent, sub-tasks, and blocks in one wri
 
   const made = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Invite expiry", blocks: [tasks.invitations] },
+    {
+      name: "Invite expiry",
+      repository: null,
+      status: TASK_STATUS.TODO,
+      blocks: [tasks.invitations],
+    },
     "call-blocks",
   );
 
@@ -2868,7 +2939,7 @@ test("create_task makes a task with its parent, sub-tasks, and blocks in one wri
   // A task with a parent already takes no new one, and the task asked to be it is not left behind.
   const child = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Child", parentTaskId: tasks.invitations },
+    { name: "Child", status: TASK_STATUS.TODO, parentTaskId: tasks.invitations },
     "call-child",
   );
 
@@ -2876,7 +2947,7 @@ test("create_task makes a task with its parent, sub-tasks, and blocks in one wri
   assert.deepEqual(
     await call(
       AGENT_TOOL.CREATE_TASK,
-      { name: "Usurper", subTaskIds: [child.task.id] },
+      { name: "Usurper", status: TASK_STATUS.TODO, subTaskIds: [child.task.id] },
       "call-usurper",
     ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: CREATE_TASK_REFUSAL.PARENT_HELD },
@@ -2886,7 +2957,12 @@ test("create_task makes a task with its parent, sub-tasks, and blocks in one wri
   // A child that waits on a sibling lands with both its parent and its block.
   const waiting = await call(
     AGENT_TOOL.CREATE_TASK,
-    { name: "Waits on a sibling", parentTaskId: tasks.invitations, blockedBy: [child.task.id] },
+    {
+      name: "Waits on a sibling",
+      status: TASK_STATUS.TODO,
+      parentTaskId: tasks.invitations,
+      blockedBy: [child.task.id],
+    },
     "call-parent-and-block",
   );
 
@@ -4686,7 +4762,12 @@ test("create_task, update_task, list_tasks, and read_task carry a task's status,
   const filed = taskOf(
     await call(
       AGENT_TOOL.CREATE_TASK,
-      { name: "Refund export", status: TASK_STATUS.BACKLOG, priority: TASK_PRIORITY.HIGH },
+      {
+        name: "Refund export",
+        repository: null,
+        status: TASK_STATUS.BACKLOG,
+        priority: TASK_PRIORITY.HIGH,
+      },
       "call-filed",
     ),
   );
@@ -4745,7 +4826,11 @@ test("create_task, update_task, list_tasks, and read_task carry a task's status,
     reason: AGENT_TOOL_REFUSAL.UNREADABLE_TASKS,
   });
   assert.deepEqual(
-    await call(AGENT_TOOL.CREATE_TASK, { name: "Odd", priority: "p0" }, "call-odd"),
+    await call(
+      AGENT_TOOL.CREATE_TASK,
+      { name: "Odd", repository: null, status: TASK_STATUS.TODO, priority: "p0" },
+      "call-odd",
+    ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: CREATE_TASK_REFUSAL.UNREADABLE },
   );
 });
@@ -4772,7 +4857,12 @@ test("create_task, update_task, list_tasks, and read_task carry a task's assigne
   const filed = taskOf(
     await call(
       AGENT_TOOL.CREATE_TASK,
-      { name: "Refund export", assignee: `[@Bob](${personLink(teammates.userId)})` },
+      {
+        name: "Refund export",
+        repository: null,
+        status: TASK_STATUS.TODO,
+        assignee: `[@Bob](${personLink(teammates.userId)})`,
+      },
       "call-assigned",
     ),
   );
@@ -4794,7 +4884,11 @@ test("create_task, update_task, list_tasks, and read_task carry a task's assigne
 
   // A child made with no assignee named is no one's, though its parent has one.
   const child = taskOf(
-    await call(AGENT_TOOL.CREATE_TASK, { name: "Child", parentTaskId: filed.id }, "call-child"),
+    await call(
+      AGENT_TOOL.CREATE_TASK,
+      { name: "Child", status: TASK_STATUS.TODO, parentTaskId: filed.id },
+      "call-child",
+    ),
   );
 
   assert.ok(isWireString(child.id), JSON.stringify(child));
@@ -4853,7 +4947,12 @@ test("create_task, update_task, list_tasks, and read_task carry a task's assigne
   assert.deepEqual(
     await call(
       AGENT_TOOL.CREATE_TASK,
-      { name: "Elsewhere's", assignee: personLink(otherWorkspaces.userId) },
+      {
+        name: "Elsewhere's",
+        repository: null,
+        status: TASK_STATUS.TODO,
+        assignee: personLink(otherWorkspaces.userId),
+      },
       "call-elsewhere",
     ),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: CREATE_TASK_REFUSAL.NOT_MEMBER },

@@ -51,7 +51,6 @@ import {
   repositoryRefusalWords,
   TASK_PRIORITY_WORDS,
   taskStandingOf,
-  workedRepository,
 } from "./agent-tools.js";
 import { calledId } from "./called-id.js";
 import { assigneeIdOf, TASK_ASSIGNEE_INPUT } from "./task-assignee.js";
@@ -245,13 +244,20 @@ export function runReadTask(
 export const CREATE_TASK_REFUSAL = {
   UNREADABLE:
     `Not made: give a name of at most ${TASK_BOUNDS.MAX_NAME_CHARS} characters, a repository as ` +
-    `owner/name, null for none, or none for the one you work in, a brief of at most ` +
+    `owner/name or null for none, a brief of at most ` +
     `${TASK_BOUNDS.MAX_BRIEF_CHARS} characters or none, a description of at most ` +
     `${TASK_BOUNDS.MAX_BODY_CHARS} characters or none, a status ` +
-    `(${Object.values(TASK_STATUS).join(", ")}) or none, a priority ` +
+    `(${Object.values(TASK_STATUS).join(", ")}), a priority ` +
     `(${Object.values(TASK_PRIORITY).join(", ")}) or none, an assignee as a member's ` +
     `mention link or none, a parent task by the id ${AGENT_TOOL.LIST_TASKS} answered or none, ` +
     "and subTaskIds, blockedBy, and blocks as lists of such ids or none.",
+  NO_REPOSITORY:
+    "Not made: repository is required for a task with no parentTaskId or subTaskIds; give the " +
+    "repository its agents work in as owner/name, or null for none.",
+  NO_STATUS:
+    "Not made: status is required; give where the task stands, one of " +
+    `${Object.values(TASK_STATUS).join(", ")}, such as ${TASK_STATUS.TODO} for work to start ` +
+    `or ${TASK_STATUS.BACKLOG} for work filed for later.`,
   NOT_MEMBER:
     "Not made: that assignee is no member of the workspace, or names no person; name a member by " +
     `the mention link ${AGENT_TOOL.LIST_TASKS} hands you, or leave it out for no one.`,
@@ -295,8 +301,8 @@ const CREATE_TASK_FIELDS_BEFORE = {
     describeWire(
       Schema.NullOr(githubRepositoryFullNameSchema),
       "The GitHub repository its agents work in, as owner/name, which the workspace's GitHub " +
-        "installation must reach; null for none, and left out for the one you work in, or the " +
-        "parent's where you give a parent.",
+        "installation must reach, or null for none; required, but left out where you give a " +
+        "parentTaskId or subTaskIds, whose repository it takes.",
     ),
   ),
   brief: Schema.optionalKey(
@@ -310,11 +316,9 @@ const CREATE_TASK_FIELDS_BEFORE = {
 
 /** `create_task`'s fields after its description, which every workspace offers. */
 const CREATE_TASK_FIELDS_AFTER = {
-  status: Schema.optionalKey(
-    describeWire(
-      taskStatusSchema,
-      "Where the task stands: backlog for work filed for later; todo where left out.",
-    ),
+  status: describeWire(
+    taskStatusSchema,
+    "Where the task stands: todo for work to start, backlog for work filed for later.",
   ),
   priority: Schema.optionalKey(describeWire(taskPrioritySchema, TASK_PRIORITY_WORDS)),
   assignee: Schema.optionalKey(TASK_ASSIGNEE_INPUT),
@@ -385,6 +389,9 @@ const namesRetiredPlan = Schema.is(Schema.Struct({ plan: Schema.Unknown }));
 /** A make that names one relation, as the tool took before the tree and the blocks were lists of their own. */
 const namesRetiredRelation = Schema.is(Schema.Struct({ relation: Schema.Unknown }));
 
+/** A make that names a status, which every make must. */
+const namesStatus = Schema.is(Schema.Struct({ status: Schema.Unknown }));
+
 /** What a made task starts with, as a workspace with Task descriptions on or off words it. */
 const CREATE_TASK_STARTS_WITH = {
   on: "with their brief and a description to start from where given",
@@ -403,7 +410,7 @@ export function createTaskToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
 function createTaskWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
   return (
     "Make a task in your workspace for the developer you work for, as the sidebar's New task " +
-    "would: owned by them, on the repository named or the one you work in, " +
+    "would: owned by them, on the repository named, " +
     `${CREATE_TASK_STARTS_WITH[on.descriptionsOn ? "on" : "off"]}, and no agent on it, for work that ` +
     "should stand as a task of its own where the developer asked for one; " +
     `start an agent on it with ${AGENT_TOOL.START_AGENT}'s taskId. ` +
@@ -520,10 +527,24 @@ export function runCreateTask(
     return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.RENAMED_RELATION));
   }
 
+  if (!namesStatus(input)) {
+    return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.NO_STATUS));
+  }
+
   const asked = readCreateAsked(input);
 
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.UNREADABLE));
+  }
+
+  const { repository } = asked.success;
+
+  // A task in a tree takes the tree's repository, so only a task standing alone must name one.
+  const inTree =
+    asked.success.parentTaskId !== undefined || (asked.success.subTaskIds ?? []).length > 0;
+
+  if (repository === undefined && !inTree) {
+    return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.NO_REPOSITORY));
   }
 
   const { name, brief, description, status, priority, assignee, parentTaskId } = asked.success;
@@ -547,13 +568,6 @@ export function runCreateTask(
       const userId = callerUserId(call.caller);
       const id = calledId(userId, call.clientKey);
       const naming = yield* workspaceNamingOf(userId, workspace.value);
-      // Left out, the repository is the one the caller works in, unless the task joins a tree, whose it takes.
-      const inTree = parentTaskId !== undefined || (asked.success.subTaskIds ?? []).length > 0;
-
-      const repository =
-        asked.success.repository !== undefined || inTree
-          ? asked.success.repository
-          : yield* workedRepository(call.caller);
 
       // The call run again finds the task it made, and makes no second.
       const before = yield* readTask(userId, id);
@@ -570,7 +584,7 @@ export function runCreateTask(
               name,
               ...(repository === undefined ? undefined : { repository }),
               ...(brief === undefined ? undefined : { brief }),
-              ...(status === undefined ? undefined : { status }),
+              status,
               ...(priority === undefined ? undefined : { priority }),
               // Note that a child left without one is no one's, since an agent names who works a task, never the parent.
               assigneeId: assigneeId ?? null,

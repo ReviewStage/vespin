@@ -1244,14 +1244,7 @@ const FOLLOW_WORDS =
 const CreateTaskInputSchema = Schema.Struct({
   workspace: WORKSPACE_INPUT,
   name: CREATE_TASK_TOOL.inputSchema.fields.name,
-  repository: Schema.optionalKey(
-    describeWire(
-      Schema.NullOr(githubRepositoryFullNameSchema),
-      "The GitHub repository its agents work in, as owner/name, which the workspace's GitHub " +
-        "installation must reach; null or left out for none, or the parent's where you give a " +
-        "parent.",
-    ),
-  ),
+  repository: CREATE_TASK_TOOL.inputSchema.fields.repository,
   brief: CREATE_TASK_TOOL.inputSchema.fields.brief,
   description: CREATE_TASK_TOOL.inputSchema.fields.description,
   status: CREATE_TASK_TOOL.inputSchema.fields.status,
