@@ -15,6 +15,7 @@ import {
   reportThisMacToSentry,
 } from "./services/telemetry-service";
 import { PAGE_SCHEME_PRIVILEGES } from "./window/page-protocol";
+import { RENDERER_SCHEME_PRIVILEGES } from "./window/renderer-protocol";
 
 /**
  * The desktop client's entry: the process that draws. It owns the windows,
@@ -32,7 +33,7 @@ import { PAGE_SCHEME_PRIVILEGES } from "./window/page-protocol";
  * scope here is only what has to be settled before Electron derives anything
  * from it — the name, the paths, and the crash reporter over them — and the
  * single-instance lock, which the losing copy must lose having touched
- * nothing, the scheme a plan's pages are served on, which Electron reads
+ * nothing, the schemes renderer and plan pages are served on, which Electron reads
  * once before it is ready, and the links of ours macOS hands the app, the one
  * that launched it arriving before it is ready. Everything else is composed
  * and then started, in `main`.
@@ -91,9 +92,7 @@ const config = bootstrapDesktop({
 
 tolerateClosedStderr();
 
-// A plan's pages are served on a scheme of their own, which Electron must be
-// told of before the app is ready (`window/page-protocol.ts`).
-protocol.registerSchemesAsPrivileged([PAGE_SCHEME_PRIVILEGES]);
+protocol.registerSchemesAsPrivileged([PAGE_SCHEME_PRIVILEGES, RENDERER_SCHEME_PRIVILEGES]);
 
 // Every color the window draws is an sRGB token, and on a wide-gamut Mac
 // display Chromium's own conversion and Core Animation's land one step
