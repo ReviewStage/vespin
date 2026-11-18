@@ -892,6 +892,8 @@ const sendToAgent = Effect.fnUntraced(function* (
   }
 
   if (asleep) yield* awake(bot, agentId);
+  const permalink = yield* bot.permalink(addressed.channel, addressed.ts);
+  const attachments = yield* sharedFiles(bot, addressed.files);
 
   const message: SlackThreadMessageAt = {
     organizationId,
@@ -900,7 +902,8 @@ const sendToAgent = Effect.fnUntraced(function* (
     ts: addressed.ts,
   };
 
-  // Note that a message the agent takes into a turn already running starts none, so it is acknowledged rather than marked as worked on.
+  // Note that a message the agent takes into a turn already open starts none, so it is acknowledged rather than marked as worked on;
+  // the turn is read after the message's files are, just before the handoff, so a turn that ended meanwhile is seen as ended.
   const turns = yield* latestTurnsOfReached([agent.value.conversationId]);
   const status = turns.get(agent.value.conversationId)?.status;
   const running = status !== undefined && RUNNING_TURN_STATUSES.has(status);
@@ -910,9 +913,6 @@ const sendToAgent = Effect.fnUntraced(function* (
     yield* markSlackThreadWorking(message);
     yield* bot.react(addressed.channel, addressed.ts, STATUS_EMOJI.WORKING);
   }
-
-  const permalink = yield* bot.permalink(addressed.channel, addressed.ts);
-  const attachments = yield* sharedFiles(bot, addressed.files);
 
   const sent = yield* Effect.result(
     steerAgent(
@@ -1313,8 +1313,13 @@ const archivedWhenFinished = (bot: SlackWorkspaceBot, agent: Agent) =>
     if (outcome === undefined || !outcome.archived) return;
     const start = yield* slackStartMessage(agent.id);
 
-    if (Option.isSome(start)) {
-      yield* bot.react(start.value.channelId, start.value.ts, STATUS_EMOJI.ASLEEP);
+    if (Option.isNone(start)) return;
+    yield* bot.react(start.value.channelId, start.value.ts, STATUS_EMOJI.ASLEEP);
+    const standing = yield* readVisibleAgent(agent.userId, agent.id);
+
+    // Note that a message that brought the agent back while 💤 was added found nothing to take off, so it is taken off here.
+    if (Option.exists(standing, (read) => read.archivedAt === null)) {
+      yield* bot.unreact(start.value.channelId, start.value.ts, STATUS_EMOJI.ASLEEP);
     }
   }).pipe(
     Effect.catchCause((cause) =>
