@@ -231,6 +231,8 @@ function publishLines(
  * repository, a pull request by its own address, never a bare `#42`, its
  * task, and a thing of ours by its kind and id under the workspace's
  * address (`../link-rule.ts` says the same to other authors at length).
+ * A person is tagged by their mention link, which a teammate's words
+ * arrive behind (`../attached-files.ts`'s `senderLabel`).
  */
 function namingLines(
   repository: string | null,
@@ -249,6 +251,7 @@ function namingLines(
   return [
     `Name what the developer can open as a mention, \`[@name](target)\`, which ${PRODUCT_NAME} draws as a chip:${file} a pull request \`[@#42 Fix the refresh](https://github.com/${repository ?? EXAMPLE_REPOSITORY}/pull/42)\` (never a bare \`#42\`), or your task \`[@<its name>](${ownTask.link})\`.`,
     `Name a thing of ours by the id a tool answered, under \`${home}\`: \`/agent/<agent-id>\`, \`/task/<task-id>\`, \`/automation/<automation-id>\`, \`/person/<user-id>\`,${item} or \`/task/<task-id>/page/<page-id>\`.`,
+    "Tag a person by their mention link, never a bare `@Name`.",
   ];
 }
 
