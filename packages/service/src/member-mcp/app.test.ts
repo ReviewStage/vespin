@@ -927,7 +927,7 @@ it.effect(
           [MEMBER_MCP_TOOL.CREATE_SECTION, { workspace, title: "Planted" }],
           [MEMBER_MCP_TOOL.DELETE_SECTION, { sectionId: rows.sectionId }],
           [MEMBER_MCP_TOOL.START_AGENT, { taskId }],
-          [MEMBER_MCP_TOOL.START_AGENT, { taskId, from: { agentId } }],
+          [MEMBER_MCP_TOOL.START_AGENT, { taskId, from: { agentId, mode: "continue" } }],
           [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello.", queue: false }],
           [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello.", queue: true }],
           [

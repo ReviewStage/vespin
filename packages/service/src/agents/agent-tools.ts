@@ -375,6 +375,12 @@ export const READ_PAGE_REFUSAL = {
 /** The cloud as `start_agent`'s runsOn names it, which a device's refusal offers instead. */
 const IN_THE_CLOUD_WORDS = JSON.stringify({ machine: AGENT_MACHINE.VERCEL });
 
+/** How a start from another agent takes it over: continue it, which stops it, or fork it at one of its messages, which leaves it going on. */
+const START_FROM_MODE = {
+  CONTINUE: "continue",
+  FORK: "fork",
+} as const;
+
 /** Why a start made nothing, in words the model can act on; a choice the catalog refused is said with the choices (`choiceRefusal`). */
 export const START_AGENT_REFUSAL = {
   UNREADABLE:
@@ -389,6 +395,12 @@ export const START_AGENT_REFUSAL = {
     `Not started: name where the agent runs as runsOn: ${IN_THE_CLOUD_WORDS} for the cloud, or one ` +
     `of the member's own devices as ${AGENT_TOOL.LIST_MACHINES} lists it, with the runsOn to pass. ` +
     "Only a start with from may leave it out, to run where the agent it starts from runs.",
+  FROM_UNREADABLE:
+    "Not started: give from as " +
+    `${JSON.stringify({ agentId: "<id>", mode: START_FROM_MODE.CONTINUE })} to continue that agent, ` +
+    "which stops it, or as " +
+    `${JSON.stringify({ agentId: "<id>", mode: START_FROM_MODE.FORK, messageId: "<id>" })} to fork ` +
+    `it at one of its messages, which ${AGENT_TOOL.READ_AGENT} names, while it goes on.`,
   NO_TASK:
     "Not started: name the task to start the agent on as taskId: your own is the taskId in your " +
     `instructions' own values, another the id ${AGENT_TOOL.LIST_TASKS} answered, and with from the ` +
@@ -440,10 +452,12 @@ export const START_AGENT_REFUSAL = {
     "should hear beyond them in the note.",
   NO_MESSAGE:
     "Not started: that messageId is none of that agent's own messages; " +
-    `${AGENT_TOOL.READ_AGENT} names each entry's messageId. Leave messageId out to continue it.`,
+    `${AGENT_TOOL.READ_AGENT} names each entry's messageId. Pass mode ${START_FROM_MODE.CONTINUE} ` +
+    "to continue it instead.",
   SELF_CONTINUE:
     "Not started: an agent does not continue itself, since you are still here to go on; to try " +
-    "another direction from one of your own messages, fork yourself at its messageId.",
+    `another direction from one of your own messages, fork yourself with mode ${START_FROM_MODE.FORK} ` +
+    "at its messageId.",
   STARTER_CONTINUE:
     "Not started: you can't continue an agent that started you, directly or through the agents " +
     "between you, since your reports would still go to the agent the continue stops; tell its " +
@@ -699,6 +713,34 @@ const START_RUNS_ON = Schema.Union([
   }),
 ]);
 
+const START_FROM_AGENT_ID = describeWire(
+  wireUuidSchema,
+  `The agent to start from, by the id ${AGENT_TOOL.LIST_AGENTS} answered.`,
+);
+
+/** A start's from: the agent it takes over and how, each mode with only the fields it takes. */
+const START_FROM = Schema.Union([
+  Schema.Struct({
+    agentId: START_FROM_AGENT_ID,
+    mode: describeWire(
+      Schema.Literal(START_FROM_MODE.CONTINUE),
+      "Continue the agent from where it stands: it must have ended, and it is stopped.",
+    ),
+  }),
+  Schema.Struct({
+    agentId: START_FROM_AGENT_ID,
+    mode: describeWire(
+      Schema.Literal(START_FROM_MODE.FORK),
+      "Fork the agent at messageId: it goes on beside the new one.",
+    ),
+    messageId: describeWire(
+      wireUuidSchema,
+      `One of that agent's messages, by the messageId ${AGENT_TOOL.READ_AGENT} names on ` +
+        "an entry of its transcript, to fork it there.",
+    ),
+  }),
+]);
+
 /**
  * `start_agent`'s `prompt` and `note` as a workspace with Task descriptions on
  * or off words them: off, a start is handed no description, so its prompt
@@ -796,25 +838,12 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
     ),
     from: Schema.optionalKey(
       describeWire(
-        Schema.Struct({
-          agentId: describeWire(
-            wireUuidSchema,
-            `The agent to start from, by the id ${AGENT_TOOL.LIST_AGENTS} answered.`,
-          ),
-          messageId: Schema.optionalKey(
-            describeWire(
-              wireUuidSchema,
-              `One of that agent's messages, by the messageId ${AGENT_TOOL.READ_AGENT} names on ` +
-                "an entry of its transcript, to fork it there; leave it out to continue the agent from " +
-                "where it stands.",
-            ),
-          ),
-        }),
+        START_FROM,
         "Another agent of your workspace to take over from, on its own task: the new agent is " +
           `handed its brief, its transcript (with ${PRODUCT_NAME}'s summary of the steps that do not fit), ` +
           "and a copy of its work, runs on its model unless you name one, and hears the note after them; " +
-          "it takes no prompt and no branch. Without messageId it continues the agent, which is stopped; " +
-          "with one it forks the agent at that message, which goes on.",
+          `it takes no prompt and no branch. mode ${START_FROM_MODE.CONTINUE} continues the agent, ` +
+          `which is stopped; mode ${START_FROM_MODE.FORK} forks it at messageId, and it goes on.`,
       ),
     ),
   });
@@ -920,6 +949,16 @@ const RETIRED_START_KEYS = [
 ] as const;
 
 const readStart = Schema.decodeUnknownResult(START_AGENT_CALL);
+const readStartFrom = Schema.decodeUnknownResult(START_FROM);
+
+/** A start's from as a start takes it: the agent, and the message a fork names. */
+function startFromOf(asked: typeof START_FROM.Type | undefined): AgentStartFrom | undefined {
+  if (asked === undefined) return undefined;
+
+  return asked.mode === START_FROM_MODE.FORK
+    ? { agentId: asked.agentId, messageId: asked.messageId }
+    : { agentId: asked.agentId };
+}
 
 /** The tools as the app and every coding agent are offered them: each its name, its words, and its input schema. */
 export const LIST_AGENTS_TOOL = {
@@ -999,8 +1038,8 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
     "The agent messages you when it finishes or needs you. " +
     `A rejected model or effort lists the choices, which ${AGENT_TOOL.LIST_MODELS} lists beforehand. ` +
     "With from, it starts from another agent instead: it continues an agent (or worker) that failed, " +
-    "ended, or ran out of context, which is stopped, or forks one at a messageId to try another " +
-    "direction while it goes on; one already continued may be continued again, and the answer names " +
+    "ended, or ran out of context, with mode continue, which stops it, or forks one with mode fork at a " +
+    "messageId to try another direction while it goes on; one already continued may be continued again, and the answer names " +
     "the earlier continuations (earlierContinuations). A start from another agent copies its work " +
     "and summarizes its transcript, so it may take a minute to answer."
   );
@@ -2245,7 +2284,9 @@ function startInputRefusal(
 
   const self = from.agentId === callerAgent(caller)?.id;
 
-  return self && from.messageId === undefined ? START_AGENT_REFUSAL.SELF_CONTINUE : undefined;
+  return self && from.mode === START_FROM_MODE.CONTINUE
+    ? START_AGENT_REFUSAL.SELF_CONTINUE
+    : undefined;
 }
 
 /**
@@ -2312,6 +2353,11 @@ export function runStartAgent(
   if (retired !== undefined) return Effect.succeed(agentToolRejected(retired.refusal));
   const asked = readStart(input);
 
+  // A from that names no mode, or a mode without the fields it takes, is refused with both modes spelled out.
+  if (isRecord(input) && input.from !== undefined && Result.isFailure(readStartFrom(input.from))) {
+    return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.FROM_UNREADABLE));
+  }
+
   // A choice is one thing: a model without its effort, or the reverse, names nothing to run on.
   if (
     Result.isFailure(asked) ||
@@ -2320,7 +2366,8 @@ export function runStartAgent(
     return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.UNREADABLE));
   }
 
-  const { model, effort, from, taskId } = asked.success;
+  const { model, effort, taskId } = asked.success;
+  const from = startFromOf(asked.success.from);
 
   if (taskId === undefined) return Effect.succeed(agentToolRejected(START_AGENT_REFUSAL.NO_TASK));
 
