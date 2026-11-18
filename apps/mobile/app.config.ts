@@ -1,4 +1,4 @@
-// app.config.ts -- the iOS app's whole native configuration: Expo generates `ios/` from it on every build, and none is committed.
+// app.config.ts -- the iOS and Android app's whole native configuration: Expo generates `ios/` and `android/` from it on every build, and none is committed.
 
 import {
   copyFileSync,
@@ -26,6 +26,10 @@ import type { SentryEnvironment } from "@repo/host/sentry-environment";
 import { Predicate } from "effect";
 import type { ConfigContext, ExpoConfig } from "expo/config";
 import { IOSConfig, withDangerousMod, withXcodeProject } from "expo/config-plugins";
+// Note that the App Links are read by their source, because Expo's config
+// loader cannot follow `@repo/features`' `.js` door to it; the module imports
+// nothing for that reason.
+import { ANDROID_APP_LINK_PATTERNS } from "../../packages/features/src/android-app-links.ts";
 
 /**
  * The bundle identifier the App ID, the associated domain, and TestFlight are
@@ -360,6 +364,37 @@ const SHARE_EXTENSION: AppExtension = {
 // The build number TestFlight orders uploads by: release-ios.yml names its
 // run in it, and a local build, which never uploads, is build 1.
 const BUILD_NUMBER = process.env.VESPIN_IOS_BUILD_NUMBER ?? "1";
+
+/**
+ * The Android app: its package, permanent once uploaded to Play, the API
+ * level it targets, which Play requires of a new app since August 31, 2026
+ * (Android 16), and the one permission it asks for at run time beside the
+ * network, the notifications Android 13 and later ask the person to allow.
+ * WebRTC's plugin, which the iPhone's calls ride on, would add a call's
+ * microphone, camera, Bluetooth, audio routing, and drawing over other apps,
+ * and the photo picker's and the media library's would add reading and
+ * writing shared storage and the media library, which Android's own photo
+ * picker needs none of; each is removed from the manifest, a library's own
+ * included, until the Android app has a use for it.
+ */
+const ANDROID = {
+  PACKAGE: "dev.vespin.android",
+  TARGET_SDK: 36,
+  PERMISSIONS: ["android.permission.INTERNET", "android.permission.POST_NOTIFICATIONS"],
+  BLOCKED_PERMISSIONS: [
+    "android.permission.RECORD_AUDIO",
+    "android.permission.CAMERA",
+    "android.permission.BLUETOOTH",
+    "android.permission.MODIFY_AUDIO_SETTINGS",
+    "android.permission.SYSTEM_ALERT_WINDOW",
+    "android.permission.READ_EXTERNAL_STORAGE",
+    "android.permission.WRITE_EXTERNAL_STORAGE",
+    "android.permission.READ_MEDIA_IMAGES",
+    "android.permission.READ_MEDIA_VIDEO",
+    "android.permission.READ_MEDIA_AUDIO",
+    "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+  ],
+} as const;
 
 // The camera's purpose string. The app never opens the camera, but WebRTC's
 // library, which a call's audio rides on, links the camera's APIs, and App
@@ -905,7 +940,7 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
     scheme: URL_SCHEME,
     orientation: "default",
     userInterfaceStyle: "automatic",
-    platforms: ["ios"],
+    platforms: ["ios", "android"],
     ios: {
       bundleIdentifier: BUNDLE_IDENTIFIER,
       buildNumber: BUILD_NUMBER,
@@ -962,8 +997,34 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
         [SHARE_KEYCHAIN_GROUP_PLIST_KEY]: SHARE_KEYCHAIN_GROUP,
       },
     },
+    android: {
+      package: ANDROID.PACKAGE,
+      versionCode: Number(BUILD_NUMBER),
+      permissions: [...ANDROID.PERMISSIONS],
+      blockedPermissions: [...ANDROID.BLOCKED_PERMISSIONS],
+      // The home host's links the app draws, and the sign-in's return,
+      // claimed as App Links Android verifies against the host's Digital
+      // Asset Links (`@repo/features/android-app-links`), so they open in
+      // the app alone and the rest stay the browser's.
+      intentFilters: [
+        {
+          action: "VIEW",
+          autoVerify: true,
+          category: ["BROWSABLE", "DEFAULT"],
+          data: ANDROID_APP_LINK_PATTERNS.map((pathAdvancedPattern) => ({
+            scheme: "https",
+            host: ASSOCIATED_DOMAIN,
+            pathAdvancedPattern,
+          })),
+        },
+      ],
+    },
     plugins: [
       "expo-router",
+      // The API level the Android app targets, as Expo's own build
+      // properties name it, so a React Native release that moves its default
+      // moves this app only by a change here.
+      ["expo-build-properties", { android: { targetSdkVersion: ANDROID.TARGET_SDK } }],
       // The TestFlight build takes its pushes from production APNs
       // (`aps-environment`), which the distribution profile release-ios.yml
       // exports it with allows; a simulator build is unsigned and carries no

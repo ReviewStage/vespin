@@ -48,6 +48,13 @@
       "dependsOn": ["^transit"],
       "outputs": []
     },
+    // The same app bundled with Metro for Android, which catches a module
+    // Hermes cannot resolve there, an Android-only file among them, with no
+    // Android SDK; it runs again on the same changes as export:ios.
+    "export:android": {
+      "dependsOn": ["^transit"],
+      "outputs": []
+    },
     // A shipped bundle built and started once (`apps/host`, `apps/cli`), which
     // is what catches a bundle that cannot load, such as two top-level
     // imports of one name, before a release carries it to a machine where it

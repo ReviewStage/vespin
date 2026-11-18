@@ -1,7 +1,10 @@
 # The iOS app
 
 `apps/mobile` is Vespin's iPhone and iPad app: Expo SDK 58 on React Native
-0.88, TypeScript, iOS only in v1. It is a shell, as root `AGENTS.md`'s Layout
+0.88, TypeScript. Android is being added to the same app: `app.config.ts`
+declares its package (`dev.vespin.android`, target API 36), its App Links
+(`@repo/features/android-app-links`), and its permissions, and CI bundles it
+with Metro (`export:android`), but its screens don't draw on Android yet. It is a shell, as root `AGENTS.md`'s Layout
 says: it holds what is specific to iOS and nothing else, its logic lives in
 `packages/`, and its screens are written in React but drawn by SwiftUI through
 `@expo/ui`. Nothing under `ios/` is committed: `app.config.ts` declares the
@@ -28,6 +31,7 @@ the macOS run below. Every command here runs from `apps/mobile`.
 | `scripts/simulator-screenshots.sh [--flows inbox,tasks] <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it, or only those `--flows` names (`notification` for the notification flow), in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
 | `xcrun simctl io booted screenshot shot.png` | One screenshot of the booted simulator by hand |
 | `pnpm export:ios` | Bundle the app with Metro, as CI's Linux job does; it catches a module Hermes cannot resolve |
+| `pnpm export:android` | The same for Android, into `dist-android/`, as CI's Linux job also does |
 | `pnpm typecheck`, `pnpm test:vitest` | The TypeScript and the logic tests |
 | `pnpm prebuild -- --clean` | Regenerate `ios/` from scratch after an `app.config.ts` change |
 
@@ -58,7 +62,7 @@ with it. Touch nothing of the developer's outside the checkout.
 ## CI
 
 - **Linux** (`.github/workflows/ci.yml`) runs the typecheck, the lint, the
-  vitest tests, and `export:ios` on every pull request, through the same turbo
+  vitest tests, `export:ios`, and `export:android` on every pull request, through the same turbo
   tasks as every workspace. It is the pull request's only gate.
 - **macOS** (`.github/workflows/ios-simulators.yml`, on GitHub's `xcode-27`
   image) runs only by hand, on any branch. It generates
@@ -132,6 +136,11 @@ claims for the app; any other opens in Safari. A page another device hands
 off as its browser would, such as the Mac app's, reaches the app for any
 page of the host, since `activitycontinuation` claims the whole domain, and
 the same routing sends one the app doesn't draw on to Safari.
+
+On Android the same launch arguments arrive as the launch intent's extras,
+which the app's `launch-arguments` module reads (`modules/launch-arguments/`),
+so a Maestro flow's `launchApp` arguments and `adb shell am start -n
+dev.vespin.android/.MainActivity -e fixture inbox` both reach it.
 
 A `-fixture <profile>` launch argument (`src/host/launch-arguments.ts`)
 stands the host on the desktop's synthetic data instead of the service, the
