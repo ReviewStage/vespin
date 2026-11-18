@@ -111,7 +111,6 @@ import {
   integrationProviderSchema,
   integrationRenameRequestSchema,
 } from "@repo/features/integration-wire";
-import { commitShaSchema } from "@repo/features/link-grammar";
 import { MCP_ACCESS_TOKEN_MINUTES, mcpClientIdSchema } from "@repo/features/mcp-client-wire";
 import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
@@ -263,6 +262,7 @@ import {
   runUpdateTask,
   START_AGENT_REFUSAL,
   START_AGENT_TOOL,
+  START_BRANCH,
   START_LEAVES_TASK_WORDS,
   START_RUNS_ON,
   startAgentToolOf,
@@ -1073,6 +1073,14 @@ function taskFileAnswerOf(read: Option.Option<TaskFileAnswer | TaskTreeAnswer>) 
 
 const TASK_FILE_TASK_INPUT = memberTaskInput("The task whose repository to read");
 
+/** The branch or commit a member's read of a repository stands at, which every read names. */
+const REPOSITORY_REF_INPUT = describeWire(
+  START_BRANCH,
+  "The branch or commit to read at: a branch by its name, such as the defaultBranch " +
+    `${MEMBER_MCP_TOOL.LIST_REPOSITORIES} answers, read at its head, or a commit by its full ` +
+    "SHA, such as the head a pull request stands on.",
+);
+
 /** How a read of a task's repository words a task it names none of. */
 const TASK_FILE_TASK_WORDS = { opening: "Not read", noTask: READ_TASK_REFUSAL.NO_TASK } as const;
 
@@ -1086,23 +1094,17 @@ const ReadTaskFileInputSchema = Schema.Struct({
   firstLine: Schema.optionalKey(
     describeWire(codeLineSchema, "The first line to read, from 1; 1 where left out."),
   ),
-  commit: Schema.optionalKey(
-    describeWire(
-      commitShaSchema,
-      "The commit to read the file at, by its full SHA, such as the head a pull request stands " +
-        "on; the default branch's head where left out.",
-    ),
-  ),
+  ref: REPOSITORY_REF_INPUT,
 });
 
 const READ_TASK_FILE_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.READ_TASK_FILE,
   description:
     "Read a file of the task's repository on GitHub, for a task the member can open, by the " +
-    "task's id and the file's path, as the task's File tab shows it: read through the " +
-    "workspace's installation at the default branch's head, or at the commit you name, never " +
-    "from an agent's sandbox, which may hold work not pushed yet. Answers `accepted` with the file's " +
-    "path, the repository and the branch read, the commit read at where GitHub named one, the " +
+    "task's id, the file's path, and the branch or commit to read at, as the task's File tab " +
+    "shows it: read through the workspace's installation, never from an agent's sandbox, " +
+    "which may hold work not pushed yet. Answers `accepted` with the file's path, the " +
+    "repository and the branch or commit read, the commit read at where GitHub named one, the " +
     `line the window starts at, how many lines the whole file has, and up to ` +
     `${TASK_FILE_BOUNDS.WINDOW_LINES} of its lines, each cut at ` +
     `${TASK_FILE_BOUNDS.MAX_LINE_CHARS} characters; pass firstLine to read further. A file ` +
@@ -1110,13 +1112,13 @@ const READ_TASK_FILE_TOOL = memberMcpTool({
     `why otherwise. ${MEMBER_MCP_TOOL.LIST_TASK_FOLDER} lists a folder.`,
   input: ReadTaskFileInputSchema,
   annotations: READ_ONLY,
-  run: ({ workspace, taskId: named, path, firstLine = 1, commit }) =>
+  run: ({ workspace, taskId: named, path, firstLine = 1, ref }) =>
     onMemberTask({ workspace, taskId: named }, TASK_FILE_TASK_WORDS, ({ caller }, taskId) => {
       const window = {
         path,
         firstLine,
         lastLine: firstLine + TASK_FILE_BOUNDS.WINDOW_LINES - 1,
-        ...(commit === undefined ? undefined : { ref: commit }),
+        ref,
       };
 
       return Effect.map(readTaskFile(callerUserId(caller), taskId, window), taskFileAnswerOf);
@@ -1139,24 +1141,26 @@ const ListTaskFolderInputSchema = Schema.Struct({
         "false or left out for the folder's own entries.",
     ),
   ),
+  ref: REPOSITORY_REF_INPUT,
 });
 
 const LIST_TASK_FOLDER_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.LIST_TASK_FOLDER,
   description:
     "List a folder of the task's repository on GitHub, for a task the member can open, by the " +
-    "task's id, as the tree beside its File tab lists it: read through the workspace's " +
-    "installation at the default branch's head, never from an agent's sandbox. Answers `accepted` with " +
-    "the folder's path, the repository and the branch read, its entries in GitHub's order, " +
+    "task's id and the branch or commit to list at, as the tree beside its File tab lists it: " +
+    "read through the workspace's installation, never from an agent's sandbox. Answers " +
+    "`accepted` with the folder's path, the repository and the branch or commit read, its " +
+    "entries in GitHub's order, " +
     "each with its name and whether it is a file or a folder, and truncated true where there " +
     `were more than ${TASK_TREE_BOUNDS.MAX_ENTRIES} (or ${TASK_TREE_BOUNDS.MAX_RECURSIVE_ENTRIES} ` +
     "with recursive), or `rejected` and why. " +
     `${MEMBER_MCP_TOOL.READ_TASK_FILE} reads a file it lists.`,
   input: ListTaskFolderInputSchema,
   annotations: READ_ONLY,
-  run: ({ workspace, taskId: named, path = "", recursive }) =>
+  run: ({ workspace, taskId: named, path = "", recursive, ref }) =>
     onMemberTask({ workspace, taskId: named }, TASK_FILE_TASK_WORDS, ({ caller }, taskId) => {
-      const folder = { path, ...(recursive === true ? { recursive } : undefined) };
+      const folder = { path, ref, ...(recursive === true ? { recursive } : undefined) };
 
       return Effect.map(readTaskTree(callerUserId(caller), taskId, folder), taskFileAnswerOf);
     }),
@@ -3178,12 +3182,7 @@ const ReadRepositoryFileInputSchema = Schema.Struct({
   firstLine: Schema.optionalKey(
     describeWire(codeLineSchema, "The first line to read, from 1; 1 where left out."),
   ),
-  commit: Schema.optionalKey(
-    describeWire(
-      commitShaSchema,
-      "The commit to read the file at, by its full SHA; the default branch's head where left out.",
-    ),
-  ),
+  ref: REPOSITORY_REF_INPUT,
 });
 
 const READ_REPOSITORY_FILE_TOOL = memberMcpTool({
@@ -3191,9 +3190,9 @@ const READ_REPOSITORY_FILE_TOOL = memberMcpTool({
   description:
     "Read a file of a GitHub repository the workspace reaches, by its full name and the " +
     "file's path, with no task naming it: read through the workspace's installation, or the " +
-    "member's own token for a repository added on it, at the default branch's head or the " +
-    "commit you name. Answers `accepted` with the file's path, the repository and the branch " +
-    "read, the commit read at where GitHub named one, the line the window starts at, how many " +
+    "member's own token for a repository added on it, at the branch or commit you name. " +
+    "Answers `accepted` with the file's path, the repository and the branch or commit read, " +
+    "the commit read at where GitHub named one, the line the window starts at, how many " +
     `lines the whole file has, and up to ${TASK_FILE_BOUNDS.WINDOW_LINES} of its lines, each ` +
     `cut at ${TASK_FILE_BOUNDS.MAX_LINE_CHARS} characters; pass firstLine to read further. A ` +
     "file that may hold a secret, is too large, or is not text is refused. Answers " +
@@ -3201,7 +3200,7 @@ const READ_REPOSITORY_FILE_TOOL = memberMcpTool({
     WORKSPACE_WORDS,
   input: ReadRepositoryFileInputSchema,
   annotations: READ_ONLY,
-  run: ({ workspace, repository, path, firstLine = 1, commit }) =>
+  run: ({ workspace, repository, path, firstLine = 1, ref }) =>
     repositoryAsMember(workspace, (userId, workspaceId) =>
       Effect.flatMap(
         readPlaceFile(
@@ -3211,7 +3210,7 @@ const READ_REPOSITORY_FILE_TOOL = memberMcpTool({
             path,
             firstLine,
             lastLine: firstLine + TASK_FILE_BOUNDS.WINDOW_LINES - 1,
-            ...(commit === undefined ? undefined : { ref: commit }),
+            ref,
           },
         ),
         readOrRefused,
@@ -3235,27 +3234,29 @@ const ListRepositoryFolderInputSchema = Schema.Struct({
         "false or left out for the folder's own entries.",
     ),
   ),
+  ref: REPOSITORY_REF_INPUT,
 });
 
 const LIST_REPOSITORY_FOLDER_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.LIST_REPOSITORY_FOLDER,
   description:
     "List a folder of a GitHub repository the workspace reaches, by its full name, with no " +
-    "task naming it, at the default branch's head. Answers `accepted` with the folder's path, " +
-    "the repository and the branch read, its entries in GitHub's order, each with its name " +
+    "task naming it, at the branch or commit you name. Answers `accepted` with the folder's " +
+    "path, the repository and the branch or commit read, its entries in GitHub's order, each " +
+    "with its name " +
     "and whether it is a file or a folder, and truncated true where there were more than " +
     `${TASK_TREE_BOUNDS.MAX_ENTRIES} (or ${TASK_TREE_BOUNDS.MAX_RECURSIVE_ENTRIES} with ` +
     `recursive), or \`rejected\` and why. ${MEMBER_MCP_TOOL.READ_REPOSITORY_FILE} reads a ` +
     `file it lists. ${WORKSPACE_WORDS}`,
   input: ListRepositoryFolderInputSchema,
   annotations: READ_ONLY,
-  run: ({ workspace, repository, path = "", recursive }) =>
+  run: ({ workspace, repository, path = "", recursive, ref }) =>
     repositoryAsMember(workspace, (userId, workspaceId) =>
       Effect.flatMap(
         readPlaceTree(
           userId,
           { workspaceId, repository },
-          { path, ...(recursive === true ? { recursive } : undefined) },
+          { path, ref, ...(recursive === true ? { recursive } : undefined) },
         ),
         readOrRefused,
       ),

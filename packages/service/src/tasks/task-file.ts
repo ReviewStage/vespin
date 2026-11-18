@@ -1,5 +1,6 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { readTaskHeader, type TaskStoreFailure } from "@repo/database/models/task-store";
+import { commitShaSchema } from "@repo/features/link-grammar";
 import {
   isSecretFile,
   TASK_FILE_REFUSAL,
@@ -7,7 +8,7 @@ import {
   type TaskFileRefusal,
   type TaskFileRequest,
 } from "@repo/features/task-wire";
-import { Effect, Option } from "effect";
+import { Effect, Option, Schema } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
   GitHubApp,
@@ -51,7 +52,9 @@ import {
  * window is the file as it is now, and a file gone since reads as missing, naming the branch GitHub found nothing on. A read
  * that names a commit, as an inbox item's code reference does so that the
  * lines it points at never move, is read at that commit instead, through the
- * same reach, and names the commit where it would name the branch.
+ * same reach, and names the commit where it would name the branch. A read
+ * that names a branch, as a member's tool may, is read at that branch's head
+ * as the default branch's is.
  */
 
 /** Each reason the shared rule refuses a file, as the File tab hears it. */
@@ -185,15 +188,15 @@ const readWindow = /* @__PURE__ */ Effect.fn("web/taskFileWindow")(function* (
   const { bearer, repository: confirmed, access } = reach.reached;
   const branch = request.ref ?? confirmed.defaultBranch;
 
-  // Note that a read of the default branch reads at the commit its head
-  // stands at, and names it, so lines picked from the read are pinned to the
-  // commit they were read at; a head GitHub did not name leaves the read on
-  // the branch, naming none, since the file is still worth showing.
-  const commit =
-    request.ref ??
-    (yield* readBranchHead(bearer, confirmed, confirmed.defaultBranch).pipe(
-      Effect.catch(() => Effect.succeed(undefined)),
-    ));
+  // Note that a read of a branch reads at the commit its head stands at, and
+  // names it, so lines picked from the read are pinned to the commit they
+  // were read at; a head GitHub did not name leaves the read on the branch,
+  // naming none, since the file is still worth showing.
+  const commit = Schema.is(commitShaSchema)(branch)
+    ? branch
+    : yield* readBranchHead(bearer, confirmed, branch).pipe(
+        Effect.catch(() => Effect.succeed(undefined)),
+      );
 
   const at = commit ?? branch;
 

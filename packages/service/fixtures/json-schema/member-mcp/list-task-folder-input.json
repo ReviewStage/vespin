@@ -21,10 +21,18 @@
     "recursive": {
       "type": "boolean",
       "description": "true to list everything under the folder, each entry by its path from the folder; false or left out for the folder's own entries."
+    },
+    "ref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[^\\s~^:?*[\\\\]+$",
+      "description": "The branch or commit to read at: a branch by its name, such as the defaultBranch list_repositories answers, read at its head, or a commit by its full SHA, such as the head a pull request stands on."
     }
   },
   "required": [
-    "taskId"
+    "taskId",
+    "ref"
   ],
   "additionalProperties": false
 }

@@ -218,7 +218,7 @@ Reads a file of the task's repository on GitHub, up to 500 lines at a time. Neve
 | `taskId` | string, required | The task whose repository to read, by the id list_tasks answered. (1–36 characters) |
 | `path` | string, required | The file's path from the repository's root, such as src/index.ts. (1–1024 characters) |
 | `firstLine` | integer | The first line to read, from 1; 1 where left out. (at least 1) |
-| `commit` | string | The commit to read the file at, by its full SHA, such as the head a pull request stands on; the default branch's head where left out. (40–40 characters) |
+| `ref` | string, required | The branch or commit to read at: a branch by its name, such as the defaultBranch list_repositories answers, read at its head, or a commit by its full SHA, such as the head a pull request stands on. (1–255 characters) |
 
 ### list_task_folder
 
@@ -229,6 +229,7 @@ Lists a folder of the task's repository on GitHub.
 | `taskId` | string, required | The task whose repository to read, by the id list_tasks answered. (1–36 characters) |
 | `path` | string | The folder's path from the repository's root, such as src; the root where left out. (up to 1024 characters) |
 | `recursive` | boolean | true to list everything under the folder, each entry by its path from the folder; false or left out for the folder's own entries. |
+| `ref` | string, required | The branch or commit to read at: a branch by its name, such as the defaultBranch list_repositories answers, read at its head, or a commit by its full SHA, such as the head a pull request stands on. (1–255 characters) |
 
 ## Agents
 
@@ -656,7 +657,7 @@ Reads a file of a repository on GitHub.
 | `repository` | string, required | The repository, by its full name (owner/name), as list_repositories lists it. (up to 140 characters) |
 | `path` | string, required | The file's path from the repository's root, such as src/index.ts. (1–1024 characters) |
 | `firstLine` | integer | The first line to read, from 1; 1 where left out. (at least 1) |
-| `commit` | string | The commit to read the file at, by its full SHA; the default branch's head where left out. (40–40 characters) |
+| `ref` | string, required | The branch or commit to read at: a branch by its name, such as the defaultBranch list_repositories answers, read at its head, or a commit by its full SHA, such as the head a pull request stands on. (1–255 characters) |
 
 ### list_repository_folder
 
@@ -668,6 +669,7 @@ Lists a folder of a repository on GitHub.
 | `repository` | string, required | The repository, by its full name (owner/name), as list_repositories lists it. (up to 140 characters) |
 | `path` | string | The folder's path from the repository's root, such as src; the root where left out. (up to 1024 characters) |
 | `recursive` | boolean | true to list everything under the folder, each entry by its path from the folder; false or left out for the folder's own entries. |
+| `ref` | string, required | The branch or commit to read at: a branch by its name, such as the defaultBranch list_repositories answers, read at its head, or a commit by its full SHA, such as the head a pull request stands on. (1–255 characters) |
 
 ### read_github_issue
 
