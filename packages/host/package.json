@@ -63,12 +63,12 @@
     "@orpc/server": "catalog:",
     "@shikijs/langs": "4.6.0",
     "@shikijs/themes": "4.6.0",
-    "@tanstack/db": "1.0.0-rc.1.5",
+    "@tanstack/db": "catalog:",
     "effect": "catalog:",
     "shiki": "4.6.0"
   },
   "devDependencies": {
-    "@cursor/sdk": "1.4.0",
+    "@cursor/sdk": "catalog:",
     "@effect/vitest": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",

@@ -23,7 +23,7 @@
     "@repo/agent-runner": "workspace:*",
     "@repo/runtime": "workspace:*",
     "@types/node": "catalog:",
-    "esbuild": "0.28.2",
+    "esbuild": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

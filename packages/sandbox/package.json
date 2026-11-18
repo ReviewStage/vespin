@@ -25,7 +25,7 @@
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@types/node": "catalog:",
-    "@types/ws": "8.18.2",
+    "@types/ws": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
