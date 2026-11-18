@@ -135,7 +135,7 @@ export function ChipPopover({
   iconOnly = false,
   ...body
 }: {
-  /** What a reader hears the chip as, before its words: "Runs on". */
+  /** What a reader hears the chip as, before its words: "Machine". */
   label: string;
   glyph: ReactNode;
   words: string;

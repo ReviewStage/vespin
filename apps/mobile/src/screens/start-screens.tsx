@@ -94,7 +94,7 @@ const WORDS = {
   REPOSITORY: "Repository",
   MODEL: "Model",
   EFFORT: "Effort",
-  RUNS_ON: "Runs on",
+  RUNS_ON: "Machine",
   START: "Start",
   FILE_FOR_LATER: "File for later",
   PHOTOS: "Photos",

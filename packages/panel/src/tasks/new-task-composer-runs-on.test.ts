@@ -239,7 +239,7 @@ async function mount(offered: Offered = { devices: devicesWith() }, relation?: N
 /** The card's Runs on chip. */
 function runsOnChip(container: HTMLElement): HTMLButtonElement {
   return (
-    container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]') ??
+    container.querySelector<HTMLButtonElement>('button[aria-label^="Machine"]') ??
     assert.fail("the card draws Runs on")
   );
 }
@@ -249,7 +249,7 @@ function row(name: string): HTMLElement {
   return (
     [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((option) =>
       option.textContent?.includes(name),
-    ) ?? assert.fail(`Runs on lists ${name}`)
+    ) ?? assert.fail(`Machine lists ${name}`)
   );
 }
 
@@ -257,7 +257,7 @@ test("a task starts on the device Runs on picked, by its id, and an offline devi
   const { container, starts } = await mount();
 
   const chip = () =>
-    container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]') ??
+    container.querySelector<HTMLButtonElement>('button[aria-label^="Machine"]') ??
     assert.fail("the card draws Runs on");
 
   act(() => chip().click());
@@ -269,7 +269,7 @@ test("a task starts on the device Runs on picked, by its id, and an offline devi
   pressInComposer(container, "Enter", { metaKey: true });
   await settle();
 
-  assert.equal(chip().getAttribute("aria-label"), "Runs on: Studio");
+  assert.equal(chip().getAttribute("aria-label"), "Machine: Studio");
   assert.deepEqual(starts, [{ machine: AGENT_MACHINE.DEVICE, deviceId: STUDIO }]);
 });
 
@@ -288,7 +288,7 @@ test("a device online but still getting ready, or that couldn't set up, is liste
     ],
   });
 
-  act(() => container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]')?.click());
+  act(() => container.querySelector<HTMLButtonElement>('button[aria-label^="Machine"]')?.click());
   await settle();
 
   assert.deepEqual(
@@ -304,11 +304,11 @@ test("a device online but still getting ready, or that couldn't set up, is liste
 });
 
 test.each([
-  { standing: "offline", studio: { seenAt: 0 }, chip: "Runs on: Studio · Offline" },
+  { standing: "offline", studio: { seenAt: 0 }, chip: "Machine: Studio · Offline" },
   {
     standing: "getting ready",
     studio: { setup: DEVICE_SETUP.PREPARING },
-    chip: "Runs on: Studio · Setting up",
+    chip: "Machine: Studio · Setting up",
   },
 ])(
   "a last pick $standing as the card opens stays picked and says so, and the task starts on it, never in the cloud",
@@ -319,7 +319,7 @@ test.each([
     const { container, starts } = await mount({ devices: [{ ...online, ...studio }, builder] });
 
     const chip =
-      container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]') ??
+      container.querySelector<HTMLButtonElement>('button[aria-label^="Machine"]') ??
       assert.fail("the card draws Runs on");
 
     assert.equal(chip.getAttribute("aria-label"), label);
@@ -336,7 +336,7 @@ test("a device picked in another card reaches this one", async () => {
   const welcome = await mount(offered);
   const dialog = await mount(offered);
   act(() =>
-    dialog.container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]')?.click(),
+    dialog.container.querySelector<HTMLButtonElement>('button[aria-label^="Machine"]')?.click(),
   );
   await settle();
   act(() => row("Build host").click());
@@ -377,7 +377,7 @@ test("nothing starts before the card's own read of the devices lands, and one th
 
 test("a member whose last pick is the cloud, as every member's with no device is, starts while the card's read of the devices is still out", async () => {
   const { container, starts } = await mount({ devices: undefined, reads: READS.HOLD });
-  assert.equal(runsOnChip(container).getAttribute("aria-label"), "Runs on: Cloud");
+  assert.equal(runsOnChip(container).getAttribute("aria-label"), "Machine: Cloud");
   pressInComposer(container, "Enter", { metaKey: true });
   await settle();
 

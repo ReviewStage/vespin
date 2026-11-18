@@ -47,7 +47,7 @@ function opened(picked?: string[]): void {
   act(() =>
     root.render(
       createElement(ChipPopover, {
-        label: "Runs on",
+        label: "Machine",
         glyph: null,
         words: "Cloud",
         title: "Cloud sandbox",
@@ -68,7 +68,7 @@ function opened(picked?: string[]): void {
       }),
     ),
   );
-  act(() => container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]')?.click());
+  act(() => container.querySelector<HTMLButtonElement>('button[aria-label^="Machine"]')?.click());
 }
 
 /** The open popover's facts, each its label and its value. */
