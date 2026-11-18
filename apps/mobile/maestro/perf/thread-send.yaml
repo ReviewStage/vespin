@@ -33,8 +33,9 @@ appId: dev.vespin.ios
     commands:
       - tapOn: "Add"
       - tapOn: "Photos"
-      - waitForAnimationToEnd:
-          timeout: 3000
+      - extendedWaitUntil:
+          visible: "Photo, November.*"
+          timeout: 10000
       - tapOn:
           text: "Photo, November.*"
           index: 0
