@@ -229,7 +229,6 @@ import {
   type AgentCall,
   type AgentReadCall,
   agentToolRejected,
-  CODER_READ_AGENT_TOOL,
   callerUserId,
   callerWorkspaceId,
   cutOnLine,
@@ -244,7 +243,7 @@ import {
   runListAgents,
   runListMemberModels,
   runListTasks,
-  runReadAgent,
+  runReadAgentStanding,
   runReadPage,
   runStartAgent,
   runStopAgent,
@@ -793,10 +792,6 @@ const ReadAgentInputSchema = Schema.Struct({
     wireUuidSchema,
     `The agent's id, as ${MEMBER_MCP_TOOL.LIST_AGENTS} answered it.`,
   ),
-  from: CODER_READ_AGENT_TOOL.inputSchema.fields.from,
-  before: CODER_READ_AGENT_TOOL.inputSchema.fields.before,
-  after: CODER_READ_AGENT_TOOL.inputSchema.fields.after,
-  entries: CODER_READ_AGENT_TOOL.inputSchema.fields.entries,
 });
 
 const MEMBER_READ_AGENT_TOOL = memberMcpTool({
@@ -804,18 +799,19 @@ const MEMBER_READ_AGENT_TOOL = memberMcpTool({
   description:
     "Read one coding agent the member can see, by its id, on any task and started by any " +
     "member, in whichever of the member's workspaces it stands: what " +
-    `${MEMBER_MCP_TOOL.LIST_AGENTS} says of it, the branch it pushed and the pull request from ` +
-    `it as GitHub holds them, its state and checks among it, and ${TRANSCRIPT_PAGE_WORDS} Read ` +
-    "one to learn why an agent went quiet, what it is stuck on, what it did, or what was said " +
-    `to it and why; ${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} reads the files its pull request changes. It ` +
-    "only reads: the agent is not told. Answers `accepted` with the reading, or `rejected` and why.",
+    `${MEMBER_MCP_TOOL.LIST_AGENTS} says of it, and the messages waiting in its queue, each ` +
+    "by its id, its words cut short, how many files go with it, and whether a member holds it, " +
+    "with why the queue stands paused where it does. Read one to learn where an agent stands " +
+    `and whether it went quiet; ${MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT} reads what it said and ` +
+    `did, and ${MEMBER_MCP_TOOL.READ_AGENT_CHANGES} its branch and pull request. It only ` +
+    "reads: the agent is not told. Answers `accepted` with the reading, or `rejected` and why.",
   input: ReadAgentInputSchema,
   annotations: READ_ONLY,
   run: (asked) =>
     readAsMember(
       (userId) => agentWorkspace(userId, { id: asked.agentId }),
       AGENT_TOOL_REFUSAL.NO_AGENT,
-      (call) => runReadAgent(call, asked),
+      (call) => runReadAgentStanding(call, asked.agentId),
     ),
 });
 
@@ -849,10 +845,8 @@ const READ_AGENT_TRANSCRIPT_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT,
   description:
     "Read the whole transcript of a coding agent the member can see, by its id, or of one of " +
-    `its workers, page by page, as ${MEMBER_MCP_TOOL.READ_AGENT} pages it and in the same ` +
-    "places: each line sent to it under who sent it, what it said, and which tools it called on " +
-    "what, each of its own entries with the messageId of the message it stands in and each " +
-    "call's with its callId. Name a worker by the callId of the call that started it to page " +
+    `its workers, page by page: ${TRANSCRIPT_PAGE_WORDS} Each line sent to it also carries ` +
+    "its lineId, and each call its callId. Name a worker by the callId of the call that started it to page " +
     "through that worker's transcript instead; name a call by its messageId and callId to read " +
     "that one call whole, its input and its output or its error, which a page leaves out, each " +
     `cut on a line at ${READ_PAGE_CHARS} characters with how many were left out. It only reads: ` +
@@ -1172,7 +1166,8 @@ const sectionWorkspace = (userId: string, sectionId: string) =>
 /** How a tool that sets an agent to work tells the outside agent to follow it, since nothing reports back to it. */
 const FOLLOW_WORDS =
   "Nothing reports back to you, since an agent the member reaches from here has no starting " +
-  `agent: follow it with ${MEMBER_MCP_TOOL.READ_AGENT}, which reads what it last said and did.`;
+  `agent: follow it with ${MEMBER_MCP_TOOL.READ_AGENT}, which reads where it stands and what it ` +
+  `last did, and ${MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT}, which reads what it said.`;
 
 /** A task the member makes names the workspace it is made in, and what the agents' own make names. */
 const CreateTaskInputSchema = Schema.Struct({
@@ -2062,7 +2057,7 @@ const MEMBER_STOP_AGENT_TOOL = memberMcpTool({
     "transcript and branch kept, and a later message starts a new turn. Answers `accepted` " +
     "with the agent's status now and whether it was stopped, " +
     "`stopped` false for an agent already idle, which changes nothing, or `rejected` and why. " +
-    `${MEMBER_MCP_TOOL.READ_AGENT} reads where it stopped.`,
+    `${MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT} reads where it stopped.`,
   input: AgentIdInputSchema,
   annotations: DESTRUCTIVE,
   run: (asked) =>
@@ -2547,7 +2542,7 @@ const AGENT_LIFECYCLE_REFUSAL = {
   NO_AGENT: AGENT_TOOL_REFUSAL.NO_AGENT,
   NO_LINE:
     "Not rewound: that agent is none the member can see, is archived, or holds no line of " +
-    `that lineId; ${MEMBER_MCP_TOOL.READ_AGENT} names each line's lineId.`,
+    `that lineId; ${MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT} names each line's lineId.`,
   INSIDE_TURN:
     "Not rewound: that line was sent while a turn was working, so the agent cannot be taken " +
     "back to just before it; name a line that opened a turn.",
@@ -2604,8 +2599,8 @@ const RewindAgentInputSchema = Schema.Struct({
   agentId: AgentIdInputSchema.fields.agentId,
   lineId: describeWire(
     agentRewindRequestSchema.fields.messageId,
-    `The line to take the agent back to just before, by the lineId ${MEMBER_MCP_TOOL.READ_AGENT} ` +
-      "names on a line sent to the agent.",
+    `The line to take the agent back to just before, by the lineId ` +
+      `${MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT} names on a line sent to the agent.`,
   ),
 });
 
@@ -2616,7 +2611,7 @@ const REWIND_AGENT_TOOL = memberMcpTool({
     "it is taken back to just before one of the lines sent to it, as though that line and " +
     "everything after it were never said, and whatever it is doing stops first. Its checkout " +
     "and branch are left as they stand: only the conversation goes back. Name the line by the " +
-    `lineId ${MEMBER_MCP_TOOL.READ_AGENT} names on it; a line sent while a turn was working is ` +
+    `lineId ${MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT} names on it; a line sent while a turn was working is ` +
     "refused. Only the member who started an agent rewinds one on their own GitHub token, " +
     "subscription, or Mac. Answers `accepted` with the agent's status now, or `rejected` and " +
     `why. ${MEMBER_MCP_TOOL.MESSAGE_AGENT} then starts it again from there.`,

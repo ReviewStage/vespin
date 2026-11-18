@@ -93,11 +93,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.LIST_TASKS]: { tasks: ["list"], taskSections: ["list"] },
   [MEMBER_MCP_TOOL.READ_TASK]: { tasks: ["open", "find"] },
   [MEMBER_MCP_TOOL.LIST_AGENTS]: { agents: ["listOfWorkspace", "listOfTask"] },
-  [MEMBER_MCP_TOOL.READ_AGENT]: {
-    agents: ["read"],
-    agentPullRequests: ["pullRequest"],
-    messages: ["agentNewest", "agent"],
-  },
+  [MEMBER_MCP_TOOL.READ_AGENT]: { agents: ["read"] },
   [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: { agentPullRequests: ["pullRequest"], agents: ["changes"] },
   [MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT]: {
     messages: [
