@@ -19,7 +19,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
 import { holdExits } from "@repo/ui/testing/held-exits";
-import { act, createElement, useRef } from "react";
+import { Activity, act, createElement, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
 import type { ComposerTrigger, MentionNode } from "../description-editor/contract.js";
@@ -75,9 +75,18 @@ function mounted(chosen: MentionNode[] = []) {
   const page = document.createElement("div");
   document.body.append(page);
   root = createRoot(page);
-  act(() =>
-    root?.render(withExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), createElement(Picker))),
-  );
+
+  const show = (mode: "visible" | "hidden") =>
+    act(() =>
+      root?.render(
+        withExperiments(
+          experimentsOn(EXPERIMENT.DESCRIPTIONS),
+          createElement(Activity, { mode }, createElement(Picker)),
+        ),
+      ),
+    );
+
+  show("visible");
 
   return {
     picker: (): MentionPicker => {
@@ -86,6 +95,7 @@ function mounted(chosen: MentionNode[] = []) {
       return latest;
     },
     page,
+    show,
   };
 }
 
@@ -111,6 +121,21 @@ test("an @ list closed with Escape stays closed in its word, and opens again onc
   act(() => picker().onTrigger(undefined));
   act(() => picker().onTrigger(word("mar")));
   assert.deepEqual(rows(page), ["Margins"]);
+});
+
+test("an @ list closed with Escape opens again when the editor leaves and restores the word while its tab is hidden", async () => {
+  const { picker, show } = mounted();
+  act(() => picker().onTrigger(word("mar")));
+  act(() => picker().onKey(new KeyboardEvent("keydown", { key: "Escape", cancelable: true })));
+  assert.equal(picker().aria["aria-expanded"], "false");
+
+  // A desktop tab can stay mounted in a hidden Activity, where effects do not run.
+  show("hidden");
+  await act(async () => picker().onTrigger(undefined));
+  await act(async () => picker().onTrigger(word("mar")));
+  show("visible");
+
+  assert.equal(picker().aria["aria-expanded"], "true");
 });
 
 test("an @ list closed with Escape stays drawn, inert, with its rows while it fades, and goes once the fade has run", () => {
