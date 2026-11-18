@@ -6,14 +6,14 @@
  * its own, on Node, where no Expo module loads.
  */
 
-import type { AccountRenewalWindow } from "@repo/credentials";
-import { identity } from "effect/Function";
+import { type AccountRenewalWindow, renewalHeldBy } from "@repo/credentials";
 import { randomUUID } from "expo-crypto";
 import { Directory, File, Paths } from "expo-file-system";
 import { openURL } from "expo-linking";
 import { openDatabaseSync } from "expo-sqlite";
 import { AppState } from "react-native";
 import { keepHostLine } from "../crash-reports.js";
+import { liveActivityModule } from "../live-activity/live-activity-module.js";
 import { openSheetUntilClosed, openSignInSheet, webAuthSession } from "./auth-session.js";
 import type { DeviceSeams } from "./compose-mobile.js";
 import { expoFileSystem, hostStateRootIn } from "./expo-file-system.js";
@@ -22,6 +22,9 @@ import { keychainCipher } from "./keychain-cipher.js";
 import { keychainTokens } from "./keychain-tokens.js";
 import { openRelaySocket } from "./relay-socket.js";
 import { keepShareToken } from "./share-token-module.js";
+
+/** The name iOS files a renewal's background time under, as its logs show it. */
+const RENEWAL_HOLD = "account-renewal";
 
 /** The folder the host's files stand in: `host` under the app's Documents. */
 export function hostStateRoot(): string {
@@ -44,12 +47,16 @@ function onAppActiveChanged(listener: (active: boolean) => void): () => void {
  * When the account may renew: while the app is not in the background, as
  * React Native's `AppState` says it, since iOS may suspend a background wake
  * mid-request and the rotated refresh token it was answered would then be
- * presented again. The renewal runs as it is until a native hold keeps the
- * app running through it.
+ * presented again. A renewal that started in the foreground holds iOS's
+ * background time from its grant through the write that keeps it, so a move
+ * to the background between the two can't cut it off.
  */
 const renewalWindow: AccountRenewalWindow = {
   open: () => AppState.currentState !== "background",
-  whileFinishing: identity,
+  whileFinishing: renewalHeldBy({
+    begin: () => liveActivityModule.beginBackgroundTask(RENEWAL_HOLD),
+    end: (identifier) => liveActivityModule.endBackgroundTask(identifier),
+  }),
 };
 
 /** The device as the host reads it. */

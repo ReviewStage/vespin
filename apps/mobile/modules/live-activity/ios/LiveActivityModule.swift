@@ -33,7 +33,11 @@
 // JavaScript's next state confirms. The Inbox widget, which the same
 // extension draws, is asked to draw again (`reloadInboxWidget`) once the
 // app's JavaScript has written its snapshot into the App Group
-// (`src/inbox-widget/`), since only WidgetKit's Swift can ask.
+// (`src/inbox-widget/`), since only WidgetKit's Swift can ask. It also
+// hands JavaScript iOS's background time (`beginBackgroundTask`,
+// `endBackgroundTask`), which the account's renewal holds from its refresh
+// grant through the write that keeps it, so a move to the background
+// between the two can't lose the rotated tokens.
 
 import ActivityKit
 import ExpoModulesCore
@@ -120,6 +124,9 @@ public final class LiveActivityModule: Module {
   private var superseded: Set<String> = []
   private var watchers: [Task<Void, Never>] = []
   private var callPressObserver: NSObjectProtocol?
+  /// The background time JavaScript holds, by identifier, so an end after iOS's own expiry ends nothing twice.
+  private static var heldBackground: Set<Int> = []
+  private static let heldBackgroundLock = NSLock()
   /// Where the call's presses wait their turn, taken one at a time in the order they came.
   private var callPressQueue: AsyncStream<CallPress>.Continuation?
   /// The one task that takes the call's presses from their queue.
@@ -209,6 +216,22 @@ public final class LiveActivityModule: Module {
         return
       }
       defaults.set(data, forKey: keptPhoneKey)
+    }
+
+    // Background time asked for by name, answered as its identifier for `endBackgroundTask`; iOS's expiry gives it back where JavaScript hasn't. Note that both calls are safe off the main thread.
+    Function("beginBackgroundTask") { (name: String) -> Int in
+      let application = UIApplication.shared
+      var identifier = UIBackgroundTaskIdentifier.invalid
+      identifier = application.beginBackgroundTask(withName: name) {
+        Self.endHeldBackground(identifier.rawValue)
+      }
+      guard identifier != .invalid else { return identifier.rawValue }
+      Self.heldBackgroundLock.withLock { _ = Self.heldBackground.insert(identifier.rawValue) }
+      return identifier.rawValue
+    }
+
+    Function("endBackgroundTask") { (identifier: Int) -> Void in
+      Self.endHeldBackground(identifier)
     }
 
     // The Inbox widget's kind, as `InboxWidgetSnapshot.kind` names it in the widget extension.
@@ -380,6 +403,13 @@ public final class LiveActivityModule: Module {
     URLSession.shared.dataTask(with: request) { _, _, _ in
       DispatchQueue.main.async { application.endBackgroundTask(background) }
     }.resume()
+  }
+
+  /// Gives back background time JavaScript or iOS's expiry ends, once, whichever comes first.
+  private static func endHeldBackground(_ identifier: Int) {
+    let held = heldBackgroundLock.withLock { heldBackground.remove(identifier) != nil }
+    guard held else { return }
+    UIApplication.shared.endBackgroundTask(UIBackgroundTaskIdentifier(rawValue: identifier))
   }
 
   private static func hex(_ data: Data) -> String {

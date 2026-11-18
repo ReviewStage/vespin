@@ -1,5 +1,5 @@
 /**
- * live-activity-module.ts -- the app's native Live Activity module (`modules/live-activity/`) as JavaScript reads it: the tokens it hands on, an activity's end, the phone it sends a background token and the Stop button's stop beside, a fixture's activity, a voice call's activity and its presses, and the Inbox widget drawn again.
+ * live-activity-module.ts -- the app's native Live Activity module (`modules/live-activity/`) as JavaScript reads it: the tokens it hands on, an activity's end, the phone it sends a background token and the Stop button's stop beside, a fixture's activity, a voice call's activity and its presses, the Inbox widget drawn again, and iOS's background time.
  *
  * The module is the app's own, autolinked from `modules/`, so it stands in
  * every build of the app, and is required here as Expo's local modules are.
@@ -42,6 +42,10 @@ declare class LiveActivityModule extends NativeModule<LiveActivityEvents> {
   endCall(): Promise<void>;
   /** Has WidgetKit draw the Inbox widget again, from the snapshot the app just kept in the App Group. */
   reloadInboxWidget(): void;
+  /** Asks iOS for background time by name, answering its identifier for `endBackgroundTask`; iOS gives it back itself once it runs out. */
+  beginBackgroundTask(name: string): number;
+  /** Gives back background time `beginBackgroundTask` answered; one already given back is let be. */
+  endBackgroundTask(identifier: number): void;
 }
 
 /** The module. */
