@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import type { SDKMessage } from "@cursor/sdk";
 import { it } from "@effect/vitest";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
-import { type Cause, Effect, Fiber, Layer, Match, Queue, Stream } from "effect";
+import { type Cause, Effect, Fiber, Layer, Match, Option, Queue, Schema, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { vi } from "vitest";
 import {
@@ -317,6 +317,127 @@ it.effect(
                 data: Buffer.from(blob.data).toString("base64"),
               }),
           ),
+      );
+    }),
+);
+
+/** What the service holds of an agent that ran two turns, the second's line marked after the first's checkpoint. */
+const TWO_TURNS_HELD = [
+  {
+    type: "agent",
+    agent: {
+      agentId: SESSION,
+      cwd: CONFIG.cwd,
+      status: "idle",
+      createdAt: 0,
+      updatedAt: 0,
+      latestCheckpoint: { schemaVersion: 1, rootBlobId: "blob-second" },
+    },
+  },
+  { type: "cut", agentId: SESSION, before: LINE.FIRST, root: null },
+  { type: "checkpoint", agentId: SESSION, blobId: "blob-first", data: "Zmlyc3Q=" },
+  { type: "cut", agentId: SESSION, before: LINE.SECOND, root: "blob-first" },
+  { type: "checkpoint", agentId: SESSION, blobId: "blob-second", data: "c2Vjb25k" },
+];
+
+const LINE_AFTER_REWIND = "10000000-0000-4000-8000-000000000003";
+
+/** An agent row mirrored, read for the checkpoint it names alone. */
+const readRowCheckpoint = Schema.decodeUnknownOption(
+  Schema.Struct({
+    type: Schema.Literal("agent"),
+    agent: Schema.Struct({ latestCheckpoint: Schema.Struct({ rootBlobId: Schema.String }) }),
+  }),
+);
+
+it.effect(
+  "resumes a rewound agent from the checkpoint marked before the line dropped, and marks the line it sends next at that checkpoint",
+  () =>
+    Effect.gen(function* () {
+      const appended = fakeTranscripts(TWO_TURNS_HELD);
+      const { cursor, write, run } = yield* launch([{ messages: RECORDED_TURN }], fakeService());
+      yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL, rewindBefore: LINE.SECOND });
+      yield* write(message("Try it another way.", LINE_AFTER_REWIND));
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      vi.restoreAllMocks();
+      assert.deepEqual(
+        cursor.resumed.map(({ agentId }) => agentId),
+        [SESSION],
+      );
+      const entries = appended.flatMap(({ entries: each }) => each);
+      const [firstRow] = entries.flatMap((entry) => Option.toArray(readRowCheckpoint(entry)));
+      // The row the cut wrote goes first, ahead of the one the run's end writes.
+      assert.equal(firstRow?.agent.latestCheckpoint.rootBlobId, "blob-first");
+      assert.ok(
+        entries.some(
+          (entry) =>
+            JSON.stringify(entry) ===
+            JSON.stringify({
+              type: "cut",
+              agentId: SESSION,
+              before: LINE_AFTER_REWIND,
+              root: "blob-first",
+            }),
+        ),
+      );
+    }),
+);
+
+it.effect(
+  "resumes a fork's source agent as one of its own, under an id it mints, every entry mirrored under that id",
+  () =>
+    Effect.gen(function* () {
+      const appended = fakeTranscripts(TWO_TURNS_HELD);
+      const { cursor, write, run } = yield* launch([{ messages: RECORDED_TURN }], fakeService());
+      yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL, fork: true });
+      yield* write(message("Carry on from here.", LINE_AFTER_REWIND));
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      vi.restoreAllMocks();
+      const [resumed] = cursor.resumed.map(({ agentId }) => agentId);
+      assert.ok(resumed !== undefined && resumed !== SESSION);
+      assert.deepEqual(
+        [...new Set(appended.map(({ key }) => JSON.stringify(key)))],
+        [JSON.stringify({ projectKey: RUNNER_TRANSCRIPTS.CURSOR_PROJECT, sessionId: resumed })],
+      );
+      const entries = appended.flatMap(({ entries: each }) => each);
+      assert.ok(
+        entries.some(
+          (entry) =>
+            JSON.stringify(entry) ===
+            JSON.stringify({
+              type: "checkpoint",
+              agentId: resumed,
+              blobId: "blob-first",
+              data: "Zmlyc3Q=",
+            }),
+        ),
+      );
+    }),
+);
+
+it.effect(
+  "makes the agent anew, led by our instructions, where the line a rewind dropped was its first",
+  () =>
+    Effect.gen(function* () {
+      fakeTranscripts(TWO_TURNS_HELD);
+      const { cursor, write, run } = yield* launch([{ messages: RECORDED_TURN }], fakeService());
+      yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL, rewindBefore: LINE.FIRST });
+      yield* write(message("Start over.", LINE_AFTER_REWIND));
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      vi.restoreAllMocks();
+      assert.deepEqual(cursor.resumed, []);
+      assert.deepEqual(
+        cursor.created.map(({ agentId }) => agentId),
+        [SESSION],
+      );
+      assert.deepEqual(
+        cursor.sent.map(({ message: sent }) => sent.text),
+        [
+          "<coder_instructions>\nYou are a Vespin coding agent.\n</coder_instructions>\n\nStart over.",
+        ],
       );
     }),
 );

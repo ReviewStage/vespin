@@ -12,6 +12,14 @@
  * newest standing for each. Everything else stays in memory for the
  * launch's life.
  *
+ * Beside them the launch keeps a cut mark for each line that opens a run:
+ * the line's id and the checkpoint the agent stood at just before it (none
+ * for its first), written once and never moved. A rewind or a fork at that
+ * line points the agent's row back at the mark's checkpoint (`cutBefore`),
+ * its later blobs left in place, since each blob is named for its content;
+ * a line with no mark (one steered into a run going, or one from before
+ * marks were kept) is no cut the store can make.
+ *
  * Note that the SDK reads an agent only where its row names the checkout it
  * runs in (`scopedWorkspaceRef`), and a sandbox made anew may hold the
  * checkout at another path, so a row is answered with the launch's own
@@ -37,6 +45,7 @@ type TranscriptStore = Pick<ReturnType<typeof transcriptStore>, "append" | "load
 const CURSOR_ENTRY = {
   AGENT: "agent",
   CHECKPOINT: "checkpoint",
+  CUT: "cut",
 } as const;
 
 /** An agent's row as the pinned SDK writes it (`LocalAgentDocument`). */
@@ -54,7 +63,7 @@ const AgentRowSchema = Schema.Struct({
   sdkMetadata: Schema.optionalKey(Schema.Record(Schema.String, Schema.Unknown)),
 });
 
-/** One entry the service keeps: an agent's row as the SDK wrote it, or one checkpoint blob, base64. */
+/** One entry the service keeps: an agent's row as the SDK wrote it, one checkpoint blob, base64, or a cut mark. */
 const CursorEntrySchema = Schema.Union([
   Schema.Struct({ type: Schema.Literal(CURSOR_ENTRY.AGENT), agent: AgentRowSchema }),
   Schema.Struct({
@@ -62,6 +71,14 @@ const CursorEntrySchema = Schema.Union([
     agentId: Schema.String,
     blobId: Schema.String,
     data: Schema.String,
+  }),
+  Schema.Struct({
+    type: Schema.Literal(CURSOR_ENTRY.CUT),
+    agentId: Schema.String,
+    /** The service's id of the line whose run the mark stands before. */
+    before: Schema.String,
+    /** The checkpoint the agent stood at just before that run; none where it was the agent's first. */
+    root: Schema.NullOr(Schema.String),
   }),
 ]);
 
@@ -119,6 +136,14 @@ export interface CursorStore {
   readonly store: LocalAgentStore;
   /** Whether the store holds the agent's row, so the launch resumes it rather than making it. */
   readonly holds: (agentId: string) => boolean;
+  /** Marks the checkpoint the agent stands at as the one before the line given, which opens its next run. */
+  readonly markCut: (agentId: string, before: string) => void;
+  /**
+   * Points the agent back at the checkpoint marked before the line given,
+   * its row let go where the line was its first so the launch makes it
+   * anew; the agent is left as it is where no mark stands.
+   */
+  readonly cutBefore: (agentId: string, before: string) => void;
   /** The rows and blobs written since the last mirror, sent to the service in order; fails where the service did not take them all, what it did not take going with the next. */
   readonly mirror: Effect.Effect<void, StoreUnkept>;
 }
@@ -126,24 +151,36 @@ export interface CursorStore {
 /**
  * The store for a launch whose checkout is `cwd`, holding the entries given,
  * the service's for the agent; mirrored to `transcripts` where the launch
- * keeps its store there.
+ * keeps its store there. A fork holds them as the agent `forkAs` names,
+ * every one mirrored again under it, so the fork resumes as its own.
  */
 export function cursorStore(
   cwd: string,
-  entries: readonly CursorEntry[],
+  held: readonly CursorEntry[],
   transcripts: TranscriptStore | undefined,
+  forkAs?: string,
 ): CursorStore {
   const agents = new Map<string, LocalAgentDocument>();
   const blobs = new Map<string, { readonly agentId: string; readonly data: Uint8Array }>();
   const runs = new Map<string, LocalAgentRunDocument>();
   const events = new Map<string, LocalAgentRunEventDocument[]>();
-  const unsent: CursorEntry[] = [];
+  const cuts = new Map<string, Map<string, string | null>>();
+  const entries = forkAs === undefined ? held : held.map((entry) => ownedBy(entry, forkAs));
+  const unsent: CursorEntry[] = forkAs === undefined ? [] : [...entries];
+
+  const keepCut = (agentId: string, before: string, root: string | null) => {
+    const marks = cuts.get(agentId) ?? new Map<string, string | null>();
+    marks.set(before, root);
+    cuts.set(agentId, marks);
+  };
 
   for (const entry of entries) {
     if (entry.type === CURSOR_ENTRY.AGENT) {
       agents.set(entry.agent.agentId, entry.agent);
-    } else {
+    } else if (entry.type === CURSOR_ENTRY.CHECKPOINT) {
       blobs.set(entry.blobId, { agentId: entry.agentId, data: Buffer.from(entry.data, "base64") });
+    } else {
+      keepCut(entry.agentId, entry.before, entry.root);
     }
   }
 
@@ -162,6 +199,26 @@ export function cursorStore(
       blobId,
       data: Buffer.from(data).toString("base64"),
     });
+  };
+
+  const markCut = (agentId: string, before: string) => {
+    // A mark is never moved, so a line sent again after a relaunch keeps the checkpoint it first stood after.
+    if (cuts.get(agentId)?.has(before) === true) return;
+    const root = agents.get(agentId)?.latestCheckpoint?.rootBlobId ?? null;
+    keepCut(agentId, before, root);
+    unsent.push({ type: CURSOR_ENTRY.CUT, agentId, before, root });
+  };
+
+  const cutBefore = (agentId: string, before: string) => {
+    const marks = cuts.get(agentId);
+    const agent = agents.get(agentId);
+
+    if (marks === undefined || !marks.has(before) || agent === undefined) return;
+    const root = marks.get(before) ?? null;
+
+    // Note that the row let go is never mirrored as gone: the one the launch makes anew stands newest.
+    if (root === null) agents.delete(agentId);
+    else keepAgent({ ...agent, latestCheckpoint: { schemaVersion: 1, rootBlobId: root } });
   };
 
   // Note that a row is answered with the launch's checkout, since the SDK reads only the rows naming it.
@@ -299,7 +356,7 @@ export function cursorStore(
     }
   }).pipe(Effect.mapError(() => new StoreUnkept()));
 
-  return { store, holds: (agentId) => agents.has(agentId), mirror };
+  return { store, holds: (agentId) => agents.has(agentId), markCut, cutBefore, mirror };
 }
 
 /** The agent an entry belongs to. */
@@ -307,6 +364,13 @@ function agentOf(entry: CursorEntry | undefined): string {
   if (entry === undefined) return "";
 
   return entry.type === CURSOR_ENTRY.AGENT ? entry.agent.agentId : entry.agentId;
+}
+
+/** The entry as the agent given's own. */
+function ownedBy(entry: CursorEntry, agentId: string): CursorEntry {
+  return entry.type === CURSOR_ENTRY.AGENT
+    ? { ...entry, agent: { ...entry.agent, agentId } }
+    : { ...entry, agentId };
 }
 
 /** The entries one call carries: the first's agent's alone, from the front, up to `APPEND_BYTES`, and at least one. */

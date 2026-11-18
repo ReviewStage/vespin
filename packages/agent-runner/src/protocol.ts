@@ -718,6 +718,9 @@ const CursorPermissionModeSchema = Schema.Literals([
  * Cursor's id for the agent, which the service mints: the launch resumes it
  * where the store holds it and makes it under that id otherwise.
  */
+/** What the id of a Cursor agent we mint begins with, as the SDK's own local ids do. */
+export const CURSOR_AGENT_PREFIX = "agent-";
+
 export const CursorConfigSchema = Schema.Struct({
   harness: Schema.Literal(RUNNER_HARNESS.CURSOR),
   cwd: Schema.String,
@@ -725,6 +728,10 @@ export const CursorConfigSchema = Schema.Struct({
   agentId: Schema.optionalKey(Schema.String),
   sdk: Schema.String,
   session: Schema.String,
+  /** The service's id of a line a rewind or a fork at a message dropped: the agent is pointed back at the checkpoint marked before it (`cursor-store.ts`), and resumed as it stands where no mark does. */
+  rewindBefore: Schema.optionalKey(Schema.String),
+  /** Whether the agent resumed is another agent's, which a continued or forked agent resumes as its own under an id the launch mints. */
+  fork: Schema.optionalKey(Schema.Boolean),
   model: CursorModelSelectionSchema,
   /** Our coder instructions, which lead the first message an agent made anew is sent, and the first after its conversation is summarized (`cursor.ts`). */
   instructions: Schema.String,

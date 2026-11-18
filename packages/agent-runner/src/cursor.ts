@@ -90,6 +90,7 @@ import { mcpServersOf } from "./mcp-servers.js";
 import {
   type CheckoutSnapshot,
   type ContentBlock,
+  CURSOR_AGENT_PREFIX,
   CURSOR_SIGNED_OUT_DETAIL,
   CURSOR_SILENT_DETAIL,
   type CursorConfig,
@@ -213,6 +214,8 @@ interface CursorLaunch {
   readonly agent: CursorAgentHandle;
   readonly tools: CursorTools;
   readonly store: CursorStore;
+  /** Cursor's id for the agent the launch runs: the config's, or the one a fork minted. */
+  readonly session: string;
   state: LaunchState;
   /** Messages for the next run. */
   waiting: Outgoing[];
@@ -449,6 +452,9 @@ const sendRun = Effect.fn("agent-runner/cursor/sendRun")(function* (
     : outgoing.text;
 
   const message = outgoing.images.length === 0 ? { text } : { text, images: [...outgoing.images] };
+
+  // The checkpoint the agent stands at is where a rewind or a fork before this line resumes it.
+  if (first !== undefined) launch.store.markCut(launch.session, first);
 
   const run = yield* Effect.tryPromise({
     try: () => launch.agent.send(message, sendOptionsOf(launch)),
@@ -774,17 +780,19 @@ function takeSignal(
   }
 }
 
-/** The agent's store, as the service keeps it where the config names the store; fails where the service did not answer. */
+/** The agent's store, as the service keeps it where the config names the store, held as `session`'s where that is a fork's; fails where the service did not answer. */
 const openStore = Effect.fn("agent-runner/cursor/openStore")(function* (
   context: LaunchContext<CursorConfig>,
+  session: string,
 ) {
   const { config } = context;
 
   if (config.transcriptsUrl === undefined) return cursorStore(config.cwd, [], undefined);
   const transcripts = transcriptStore(config.transcriptsUrl, context.bearer, context.trace.headers);
   const entries = yield* restoredEntries(transcripts, config.session);
+  const forkAs = session === config.session ? undefined : session;
 
-  return cursorStore(config.cwd, entries, transcripts);
+  return cursorStore(config.cwd, entries, transcripts, forkAs);
 });
 
 /** The agent, resumed where its store holds it and made anew under the config's id otherwise, on the key given or else the SDK's own sign-in; and whether it was made. */
@@ -793,6 +801,7 @@ const openAgent = Effect.fn("agent-runner/cursor/openAgent")(function* (
   apiKey: string | undefined,
   store: CursorStore,
   tools: CursorTools,
+  session: string,
 ) {
   const { config } = context;
   const cursor = yield* CursorSdk;
@@ -801,15 +810,15 @@ const openAgent = Effect.fn("agent-runner/cursor/openAgent")(function* (
   // Our own tools are listed before the agent is made, so its first run has them.
   yield* tools.ready;
   const options = agentOptions(config, apiKey, store.store, tools.current());
-  const made = !store.holds(config.session);
+  const made = !store.holds(session);
 
   const agent = yield* context.trace.step(
     RUNNER_SPAN.CLI,
     Effect.tryPromise({
       try: () =>
         made
-          ? cursor.create(config.sdk, { ...options, agentId: config.session })
-          : cursor.resume(config.sdk, config.session, options),
+          ? cursor.create(config.sdk, { ...options, agentId: session })
+          : cursor.resume(config.sdk, session, options),
       catch: (cause) => new CursorFailed({ detail: detailOf(cause) }),
     }),
   );
@@ -853,11 +862,20 @@ export const runCursor = Effect.fn("agent-runner/runCursor")(function* (
     Effect.forkScoped,
   );
 
-  const store = yield* openStore(context).pipe(Effect.result);
+  // A fork resumes its source's agent as one of its own, under an id it mints, as Claude Code's `forkSession` does.
+  const session = config.fork === true ? `${CURSOR_AGENT_PREFIX}${randomUUID()}` : config.session;
+  const store = yield* openStore(context, session).pipe(Effect.result);
 
   if (Result.isFailure(store)) return ended(RUNNER_END.FAILED, STORE_UNREAD);
+
+  // A rewind or a fork at a message resumes the agent from the checkpoint marked before that line.
+  if (config.rewindBefore !== undefined) store.success.cutBefore(session, config.rewindBefore);
+
   const tools = yield* openCursorTools(mcpServersOf(config), context.bearer);
-  const opened = yield* openAgent(context, apiKey, store.success, tools).pipe(Effect.result);
+
+  const opened = yield* openAgent(context, apiKey, store.success, tools, session).pipe(
+    Effect.result,
+  );
 
   if (Result.isFailure(opened)) {
     yield* Effect.logWarning(
@@ -873,6 +891,7 @@ export const runCursor = Effect.fn("agent-runner/runCursor")(function* (
     agent: opened.success.agent,
     tools,
     store: store.success,
+    session,
     // Note that a warm launch is warm from its start, so one launched with no message waits for its first as one past an IDLE does.
     state: { kind: LAUNCH_STATE.IDLE, warm: config.warm === true },
     waiting: [],
