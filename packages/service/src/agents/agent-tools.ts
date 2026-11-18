@@ -1935,6 +1935,33 @@ export function queueRecord(queue: AgentQueue): WireRecord {
   };
 }
 
+/** The agent as the list reads it, read through the caller's workspace, and its queue; none where the caller cannot see it. */
+const agentStandingOf = (caller: AgentCaller, agentId: string) =>
+  Effect.gen(function* () {
+    const found = yield* workspaceAgentOf(caller, agentId);
+
+    if (Option.isNone(found)) return Option.none();
+    const { agent, task } = found.value;
+    const standing = yield* standingsOf([agent]);
+    const newest = yield* newestJournalsOf([agent]);
+
+    const reading = readAgentReading(
+      agent,
+      task,
+      standing(agent),
+      newest.get(agent.conversationId),
+      yield* offeredModels,
+    );
+
+    const queue = yield* queueOnPage(agent.id);
+
+    return Option.some({
+      agent,
+      reading: readingRecord(reading),
+      queue: queue.messages.length === 0 ? undefined : queueRecord(queue),
+    });
+  });
+
 /** One call of `read_agent`: the agent as the list reads it, its queue where messages wait in it, and the page of its transcript asked, its newest where none is named. */
 export function runReadAgent(
   call: AgentReadCall,
@@ -1949,37 +1976,44 @@ export function runReadAgent(
 
   return orStoreRefusal(
     Effect.gen(function* () {
-      const found = yield* workspaceAgentOf(call.caller, asked.success.agentId);
+      const found = yield* agentStandingOf(call.caller, asked.success.agentId);
 
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
-      const { agent, task } = found.value;
-      const standing = yield* standingsOf([agent]);
-      const newest = yield* newestJournalsOf([agent]);
-
-      const reading = readAgentReading(
-        agent,
-        task,
-        standing(agent),
-        newest.get(agent.conversationId),
-        yield* offeredModels,
-      );
-
+      const { agent, reading, queue } = found.value;
       const published = yield* publishedOf(callerUserId(call.caller), agent);
       const read = yield* transcriptPage(agent, page);
 
       if (read === undefined) return agentToolRejected(AGENT_TOOL_REFUSAL.UNREADABLE_TRANSCRIPT);
-      const queue = yield* queueOnPage(agent.id);
 
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
-        agent: readingRecord(reading),
+        agent: reading,
         ...(published === undefined
           ? undefined
           : { published: { branch: published.branch, pullRequest: published.pullRequest } }),
-        ...(queue.messages.length === 0 ? undefined : { queue: queueRecord(queue) }),
+        ...(queue === undefined ? undefined : { queue }),
         ...pageAnswer(page, read, readAgentEntry),
       };
     }),
+  );
+}
+
+/** One call of the member MCP's `read_agent`: the agent as the list reads it and its queue where messages wait in it, which leaves its transcript to `read_agent_transcript` and what it published to `read_agent_changes`. */
+export function runReadAgentStanding(
+  call: AgentReadCall,
+  agentId: string,
+): Effect.Effect<WireRecord, never, AgentToolServices> {
+  return orStoreRefusal(
+    Effect.map(agentStandingOf(call.caller, agentId), (found) =>
+      Option.match(found, {
+        onNone: () => agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT),
+        onSome: ({ reading, queue }) => ({
+          status: ACTION_RESULT_STATUS.ACCEPTED,
+          agent: reading,
+          ...(queue === undefined ? undefined : { queue }),
+        }),
+      }),
+    ),
   );
 }
 

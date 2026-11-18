@@ -245,15 +245,11 @@ Agents, newest first, 50 a page, with each one's status, model, branch, and task
 
 ### read_agent
 
-One agent: its branch, its pull request, and a page of its transcript. The agent isn't told.
+One agent: what list_agents says of it, and the messages waiting in its queue. Its transcript is read_agent_transcript's, and its branch and pull request read_agent_changes'. The agent isn't told.
 
 | Input | Type | Description |
 | --- | --- | --- |
 | `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
-| `from` | `end` \| `start` | Where to read its transcript from where neither before nor after is given: end, the default, for its newest page, or start for its first, from the message it was started with. |
-| `before` | object | The older place a page answered, to read the page of entries before it. |
-| `after` | object | The newer place a page answered, to read the page of entries after it. |
-| `entries` | integer | At most how many entries of its transcript the page holds, such as 1 for what it last said or did; as many as fit in 16000 characters when left out. (1–200) |
 
 ### read_agent_transcript
 
@@ -346,7 +342,7 @@ Takes an agent back to the moment before one of its lines. Its checkout stays as
 | Input | Type | Description |
 | --- | --- | --- |
 | `agentId` | string, required | The agent's id, as list_agents answered it. (1–36 characters) |
-| `lineId` | string, required | The line to take the agent back to the moment before, by the lineId read_agent names on a line sent to the agent. (1–128 characters) |
+| `lineId` | string, required | The line to take the agent back to the moment before, by the lineId read_agent_transcript names on a line sent to the agent. (1–128 characters) |
 
 ### delete_agent
 

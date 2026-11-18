@@ -1695,7 +1695,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
   );
 
   it.effect(
-    "an outside agent rewinds the member's agent to just before a line by the lineId read_agent names, dropping it, then deletes the agent for good",
+    "an outside agent rewinds the member's agent to just before a line by the lineId read_agent_transcript names, dropping it, then deletes the agent for good",
     () =>
       Effect.gen(function* () {
         const { owner, task, ask, mcpFetch } = yield* openTask({});
@@ -1721,7 +1721,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
           decodeTranscript(JSON.parse(read.content[0].text)).transcript;
 
         const before = transcript(
-          yield* call(MEMBER_MCP_TOOL.READ_AGENT, { agentId: agent.id, from: "start" }),
+          yield* call(MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT, { agentId: agent.id, from: "start" }),
         );
 
         const line = before.at(-1);
@@ -1736,7 +1736,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         assert.notEqual(rewound.isError, true, rewound.content[0].text);
 
         const after = transcript(
-          yield* call(MEMBER_MCP_TOOL.READ_AGENT, { agentId: agent.id, from: "start" }),
+          yield* call(MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT, { agentId: agent.id, from: "start" }),
         );
 
         const deleted = yield* call(MEMBER_MCP_TOOL.DELETE_AGENT, { agentId: agent.id });
