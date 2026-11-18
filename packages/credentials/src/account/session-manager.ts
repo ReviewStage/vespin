@@ -582,13 +582,7 @@ export class AccountSessionManager {
       );
 
       if (Result.isSuccess(next)) {
-        if (
-          !(yield* this.#storeCurrent(
-            generation,
-            mergedIdentity(renewedAccount, next.success),
-            RENEWAL_WRITE,
-          ))
-        )
+        if (!(yield* this.#storeCurrent(generation, mergedIdentity(renewedAccount, next.success))))
           return;
         yield* this.#publishChange();
 

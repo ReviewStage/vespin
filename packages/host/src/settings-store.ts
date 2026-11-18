@@ -881,10 +881,12 @@ export class SettingsStore {
   /** Returns account credentials only to the main process. */
   readAccount(): Effect.Effect<StoredAccount | undefined, PlatformError> {
     return Effect.gen({ self: this }, function* () {
-      const unwritten = this.#unwritten;
+      // Note that the held tokens are taken inside the gate, so a read answers the newest renewal's, and none a sign-out dropped while it waited.
+      if (this.#unwritten !== undefined) {
+        const held = yield* this.#keepRenewed();
 
-      // Note that held tokens a sign-out dropped while this read waited on the gate are never answered; the read goes on to what stands now.
-      if (unwritten !== undefined && (yield* this.#keepRenewed(unwritten))) return unwritten;
+        if (held !== undefined) return held;
+      }
 
       const { account } = yield* this.#load();
 
@@ -1057,32 +1059,32 @@ export class SettingsStore {
     });
   }
 
-  /** Writes renewed tokens a failed write left held, letting them go once the write lands; answers whether they were still held, which a sign-out ends. */
-  #keepRenewed(account: StoredAccount): Effect.Effect<boolean> {
-    const { accessToken, refreshToken, sessionToken } = account;
-
-    const held: AccountTokens = {
-      accessToken,
-      refreshToken,
-      ...(sessionToken ? { sessionToken } : undefined),
-    };
-
-    // Note that the tokens are checked still held inside the gate, so a sign-out that took it first is never written over.
+  /** Writes the renewed tokens a failed write left held, letting them go once the write lands, and answers them; answers none where none are held, as after a sign-out. */
+  #keepRenewed(): Effect.Effect<StoredAccount | undefined> {
     return this.#accounts.withPermits(1)(
-      Effect.suspend(() =>
-        this.#unwritten === account
-          ? Effect.as(
-              Effect.ignore(
-                Effect.tap(this.#writeAccount(account, held), () =>
-                  Effect.sync(() => {
-                    this.#unwritten = undefined;
-                  }),
-                ),
-              ),
-              true,
-            )
-          : Effect.succeed(false),
-      ),
+      Effect.suspend(() => {
+        const account = this.#unwritten;
+
+        if (account === undefined) return Effect.succeed(undefined);
+        const { accessToken, refreshToken, sessionToken } = account;
+
+        const held: AccountTokens = {
+          accessToken,
+          refreshToken,
+          ...(sessionToken ? { sessionToken } : undefined),
+        };
+
+        return Effect.as(
+          Effect.ignore(
+            Effect.tap(this.#writeAccount(account, held), () =>
+              Effect.sync(() => {
+                if (this.#unwritten === account) this.#unwritten = undefined;
+              }),
+            ),
+          ),
+          account,
+        );
+      }),
     );
   }
 

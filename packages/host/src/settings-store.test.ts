@@ -701,8 +701,10 @@ it.effect(
       const store = storeWithFailingWrites(directory, failing, vault);
       yield* store.setAccount(TEST_ACCOUNT);
 
+      // Note that the renewal also renames the account, so a reopen that reads it proves the file was written, not only the vault.
       const renewed = {
         ...TEST_ACCOUNT,
+        name: "Renewed Name",
         accessToken: "renewed-access",
         refreshToken: "renewed-refresh",
       } as const satisfies StoredAccount;
