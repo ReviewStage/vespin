@@ -4891,14 +4891,31 @@ const SANDBOX_SETUP_WORKSPACE_INPUT = Schema.optionalKey(
 
 const ReadSandboxSetupInputSchema = Schema.Struct({ workspace: SANDBOX_SETUP_WORKSPACE_INPUT });
 
+/** Which script a save replaces: the workspace's install script, or one repository's setup script. */
+const SANDBOX_SETUP_TARGET_KIND = {
+  WORKSPACE: "workspace",
+  REPOSITORY: "repository",
+} as const;
+
+const SandboxSetupTargetSchema = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal(SANDBOX_SETUP_TARGET_KIND.WORKSPACE) }),
+  Schema.Struct({
+    kind: Schema.Literal(SANDBOX_SETUP_TARGET_KIND.REPOSITORY),
+    repository: describeWire(
+      githubRepositoryFullNameSchema,
+      "The repository whose setup script to save, as owner/name.",
+    ),
+  }),
+]);
+
 const EditSandboxSetupInputSchema = Schema.Struct({
   workspace: SANDBOX_SETUP_WORKSPACE_INPUT,
-  repository: Schema.optionalKey(
-    describeWire(
-      githubRepositoryFullNameSchema,
-      "The repository whose setup script to save, as owner/name; leave it out to save the " +
-        "workspace's install script.",
-    ),
+  target: describeWire(
+    SandboxSetupTargetSchema,
+    `The script to save: kind ${SANDBOX_SETUP_TARGET_KIND.WORKSPACE} for the workspace's install ` +
+      `script, which runs once in each build of a repository's base snapshot; or kind ` +
+      `${SANDBOX_SETUP_TARGET_KIND.REPOSITORY} with repository, as owner/name, for that ` +
+      "repository's setup script, which runs once in each new agent sandbox of it.",
   ),
   script: describeWire(
     workspaceInstallScriptPutRequestSchema.fields.script,
@@ -4933,8 +4950,8 @@ const EDIT_SANDBOX_SETUP_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP,
   description:
     "Save one script of the cloud sandbox setup of a workspace the member is an owner or an " +
-    "admin of, as its Settings › Cloud environment would: the install script, or, naming a " +
-    "repository, that repository's setup script, under any casing of its name. The " +
+    "admin of, as its Settings › Cloud environment would: the target names which, the " +
+    "workspace's install script or a repository's setup script, under any casing of its name. The " +
     "script given replaces the one that stood whole, so read it first with " +
     `${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} to change part of it; an empty script removes it. ` +
     "Sandboxes already running keep the script they ran. " +
@@ -4942,15 +4959,15 @@ const EDIT_SANDBOX_SETUP_TOOL = memberMcpTool({
     "`rejected` and why.",
   input: EditSandboxSetupInputSchema,
   annotations: DESTRUCTIVE,
-  run: ({ workspace, repository, script }) =>
+  run: ({ workspace, target, script }) =>
     listAsMember(workspace, ({ caller }) =>
       sandboxSetupAnswer(
-        repository === undefined
+        target.kind === SANDBOX_SETUP_TARGET_KIND.WORKSPACE
           ? saveInstallScript(callerUserId(caller), callerWorkspaceId(caller), script)
           : saveRepositorySetup(
               callerUserId(caller),
               callerWorkspaceId(caller),
-              repository,
+              target.repository,
               script,
             ),
         (setup) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...setup }),
