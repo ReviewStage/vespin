@@ -420,7 +420,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             decide({ ...QUEUE.ask, multiple: true, recommended: ["Redis", "Redis"] }),
             INBOX_REFUSAL.SEVERAL_RECOMMENDED,
           ],
-          [answer([{ type: INBOX_FIELD.SELECT, label: "Channel" }]), INBOX_REFUSAL.SELECT_OPTIONS],
+          [answer([{ type: INBOX_FIELD.SELECT, label: "Channel" }]), INBOX_REFUSAL.UNREADABLE_POST],
           [
             answer([
               {
@@ -434,7 +434,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           ],
           [
             answer([{ type: INBOX_FIELD.TEXT, label: "Channel", recommended: "Slack" }]),
-            INBOX_REFUSAL.SELECT_RECOMMENDATION,
+            'Not posted: field "Channel" is text, yet names options or recommended, which only a select takes; make it a select, or leave both out.',
           ],
           [
             answer([

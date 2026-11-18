@@ -21,7 +21,6 @@ import {
   INBOX_TOOL,
   type InboxAnswers,
   type InboxAskInput,
-  type InboxField,
   type InboxItem,
   type InboxMessage,
   type InboxOptionMedia,
@@ -47,7 +46,14 @@ import {
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { readEither } from "@repo/wire/effect";
 import { Effect, Option, Result } from "effect";
-import { ACTION_RESULT_STATUS, EXCESS_KEYS, type UnparsedWireValue } from "../../core.js";
+import {
+  ACTION_RESULT_STATUS,
+  EXCESS_KEYS,
+  isWireString,
+  type UnparsedWireValue,
+  type WireRecord,
+  wireRecord,
+} from "../../core.js";
 import { afterResponse } from "../../http/after-response.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import {
@@ -336,7 +342,8 @@ export const INBOX_REFUSAL = {
     "Not posted: the post does not read. key is a lowercase slug of letters, digits, dots, dashes, and underscores; " +
     `body is Markdown of at most ${INBOX_BOUNDS.MAX_MESSAGE_CHARS} characters; title is one line of at most ${INBOX_BOUNDS.MAX_TITLE_CHARS}; ` +
     `ask is decide with two to ${INBOX_BOUNDS.MAX_OPTIONS} options, do with at most ${INBOX_BOUNDS.MAX_STEPS} steps, ` +
-    `or answer with one to ${INBOX_BOUNDS.MAX_FIELDS} fields or none; ` +
+    `or answer with one to ${INBOX_BOUNDS.MAX_FIELDS} fields or none, each {type, label, required} with type text, number, select, or boolean, ` +
+    `a select also naming two to ${INBOX_BOUNDS.MAX_OPTIONS} options and perhaps the one it recommends, and no other type taking options or recommended; ` +
     "an option's media is {path, caption}, {page, version} with the version show_page answered, or {url, label}.",
   NO_TITLE:
     "Not posted: you have no thread under that key, and the first post under a key names its title.",
@@ -350,10 +357,10 @@ export const INBOX_REFUSAL = {
   SEVERAL_RECOMMENDED:
     "Not posted: recommended names each label once, and several only where multiple lets them pick several.",
   FIELD_LABELS: "Not posted: an answer names each field by a label of its own.",
-  SELECT_OPTIONS:
-    "Not posted: a select field offers its options, each once, and no other field offers options.",
-  SELECT_RECOMMENDATION:
-    "Not posted: a select field's recommended names one of its options, and no other field recommends one.",
+  SELECT_OPTIONS: "Not posted: a select field names each of its options once.",
+  SELECT_RECOMMENDATION: "Not posted: a select field's recommended names one of its options.",
+  NOT_SELECT: (label: string, type: string) =>
+    `Not posted: field "${label}" is ${type}, yet names options or recommended, which only a select takes; make it a select, or leave both out.`,
   UNREADABLE_WITHDRAW: "Not withdrawn: name the thread's key and why you withdraw its ask.",
   UNREADABLE_LIST:
     'Not listed: name whose threads as of, either {"agentId": "<id>"} for one agent of your workspace, your own agentId (in your instructions\' own values) for your own, or {"taskId": "<id>"} for one task of it, never both, and status, where you name one, as open, answered, or closed.',
@@ -677,27 +684,47 @@ function distinct(labels: readonly string[]): boolean {
   return new Set(labels).size === labels.length;
 }
 
-/** An answer's fields' own refusal: a label used twice, a select with no options or one twice, options on a field that takes none, or a recommendation naming none of a select's options. */
-function fieldsRefusal(fields: readonly InboxField[]): string | undefined {
+/** The fields of an `answer` ask as the agent posts them, one variant per type. */
+type PostedFields = NonNullable<
+  Extract<InboxAskInput, { type: typeof INBOX_ASK.ANSWER }>["fields"]
+>;
+
+/** An answer's fields' own refusal: a label used twice, a select's option named twice, or a select's recommendation naming none of its options. */
+function fieldsRefusal(fields: PostedFields): string | undefined {
   if (!distinct(fields.map((field) => field.label))) return INBOX_REFUSAL.FIELD_LABELS;
 
   for (const field of fields) {
-    const options = field.options;
-    const select = field.type === INBOX_FIELD.SELECT;
+    if (field.type !== INBOX_FIELD.SELECT) continue;
 
-    if (select ? options === undefined || !distinct(options) : options !== undefined) {
-      return INBOX_REFUSAL.SELECT_OPTIONS;
-    }
+    if (!distinct(field.options)) return INBOX_REFUSAL.SELECT_OPTIONS;
 
-    if (
-      field.recommended !== undefined &&
-      !(select && options?.includes(field.recommended) === true)
-    ) {
+    if (field.recommended !== undefined && !field.options.includes(field.recommended)) {
       return INBOX_REFUSAL.SELECT_RECOMMENDATION;
     }
   }
 
   return undefined;
+}
+
+/**
+ * The first field of a post's answer that names options or a recommendation
+ * though it is no select, read from the post as sent, since the post's read
+ * drops a key a field's type does not take and would post it without them.
+ */
+function strayChoiceField(input: UnparsedWireValue): WireRecord | undefined {
+  const ask = wireRecord(wireRecord(input)?.ask);
+  const fields = ask?.type === INBOX_ASK.ANSWER ? ask.fields : undefined;
+
+  if (!Array.isArray(fields)) return undefined;
+
+  return fields
+    .map(wireRecord)
+    .find(
+      (field) =>
+        field !== undefined &&
+        field.type !== INBOX_FIELD.SELECT &&
+        ("options" in field || "recommended" in field),
+    );
 }
 
 /** An ask's own refusal, before the store is asked: a decide's label used twice, a recommendation naming none, one twice, or several where one may be picked, or an answer's fields. */
@@ -986,6 +1013,15 @@ export function postToInbox(
   const post = read.success;
 
   if (post.body.trim() === "") return Effect.succeed(inboxRejected(INBOX_REFUSAL.UNREADABLE_POST));
+  const stray = strayChoiceField(input);
+
+  if (stray !== undefined) {
+    const label = isWireString(stray.label) ? stray.label : "";
+    const type = isWireString(stray.type) ? stray.type : "untyped";
+
+    return Effect.succeed(inboxRejected(INBOX_REFUSAL.NOT_SELECT(label, type)));
+  }
+
   const refused = askRefusal(post.ask);
 
   if (refused !== undefined) return Effect.succeed(inboxRejected(refused));
