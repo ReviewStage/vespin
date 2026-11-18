@@ -38,6 +38,7 @@ import {
   menuIndicator,
   menuStyle,
   multilineTextAlignment,
+  padding,
   resizable,
   scrollContentBackground,
   scrollDismissesKeyboard,
@@ -52,7 +53,7 @@ import type { IntegrationMarkAsset } from "./integration-marks.js";
 import { Avatar } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
-import { SPACE } from "./tokens/space.js";
+import { PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 
@@ -87,6 +88,14 @@ export type PushRowGoes = (typeof PUSH_ROW_GOES)[keyof typeof PUSH_ROW_GOES];
 
 /** What VoiceOver hears a row's ⋯ as. */
 const ROW_MORE_LABEL = "More";
+
+/**
+ * How far the ⋯'s 44 pt target reaches past the glyph into the row's own
+ * room above, below and after it, in points: about half of what 44 pt
+ * stands past the glyph's line, so the target is Apple's minimum while
+ * the row stands no taller and the glyph keeps its place at the row's end.
+ */
+const ROW_MORE_REACH = 12;
 
 /** The size of the glyph leading a `MenuRow`, as a list's leading mark stands. */
 const GLYPH_SIZE = 15;
@@ -124,16 +133,30 @@ export function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
  * The ⋯ at the end of a row whose acts would otherwise hide behind a long
  * press and a swipe, such as a connection with nothing to press at its end:
  * the system's menu of them under the glyph alone, in the secondary ink, so
- * the row says it holds acts, as the panel's ⋯ does.
+ * the row says it holds acts, as the panel's ⋯ does. Note that the glyph's
+ * label takes a 44 pt frame and its shape, since only a label's shape
+ * answers a press and the glyph alone stood about 20 pt; the menu then
+ * gives back that reach (`ROW_MORE_REACH`), so the target stretches into
+ * the row's own room rather than growing it.
  */
 function RowMoreMenu({ acts }: { readonly acts: readonly MenuRowAct[] }) {
   return (
     <Menu
-      label={<Image {...glyphImage(GLYPH.MORE)} modifiers={[foregroundStyle(VALUE_INK)]} />}
+      label={
+        <Image
+          {...glyphImage(GLYPH.MORE)}
+          modifiers={[
+            foregroundStyle(VALUE_INK),
+            frame({ width: PRESS_SIZE, height: PRESS_SIZE }),
+            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          ]}
+        />
+      }
       modifiers={[
         menuStyle("button"),
         buttonStyle("plain"),
         menuIndicator("hidden"),
+        padding({ vertical: -ROW_MORE_REACH, trailing: -ROW_MORE_REACH }),
         accessibilityLabel(ROW_MORE_LABEL),
       ]}
     >
