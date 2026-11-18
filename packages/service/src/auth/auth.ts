@@ -48,7 +48,7 @@ import {
   workspaceDeletion,
 } from "./auth-policy.js";
 import { CLI_OAUTH_CLIENT, DESKTOP_OAUTH_CLIENT, IOS_OAUTH_CLIENT } from "./oauth-clients.js";
-import { offlineTokensOutliveSession } from "./offline-tokens.js";
+import { OFFLINE_TOKEN_ROTATION, offlineTokensOutliveSession } from "./offline-tokens.js";
 import { supportAccess } from "./support-access.js";
 
 const deployment = authDeployment(process.env);
@@ -120,6 +120,7 @@ const OAUTH_PROVIDER_OPTIONS = {
     IOS_OAUTH_CLIENT.id,
   ]),
   accessTokenExpiresIn: 60 * 60,
+  ...OFFLINE_TOKEN_ROTATION,
   scopes: [...OAUTH_PROVIDER_SCOPES],
   // The member MCP server is the one resource (RFC 8707) the provider
   // mints tokens for, its row written by the deployment's seeder at

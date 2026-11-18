@@ -64,6 +64,7 @@ import {
 } from "@repo/features/inbox-write-words";
 import {
   INBOX_SENDING,
+  type InboxHeldFile,
   type InboxReader,
   type InboxSending,
   inboxSendingDrawn,
@@ -180,7 +181,7 @@ export function pendingThreadFile(
   itemId: string,
   attachmentId: string,
   thread: readonly InboxMessage[] | undefined,
-): { readonly contentType: string; readonly base64: string } | undefined {
+): InboxHeldFile | undefined {
   const held = threads.read().get(itemId);
 
   return held === undefined

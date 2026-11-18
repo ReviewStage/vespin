@@ -225,16 +225,6 @@ none added, since an added highlight drew a second platter of glass over a
 button's own on iPadOS 26. No Maestro flow can drag or hover, so these are
 checked by hand on an iPad with a trackpad.
 
-## The photo scaler
-
-A workspace's photo is picked in the system's photo picker, cropped there to
-a square, and drawn at the panel's size (`WORKSPACE_PHOTO_EDGE`) as a JPEG
-within the service's bound by the app's own native module, autolinked from
-`modules/photo-scale/`, through ImageIO as the share extension scales a
-shared picture, so a HEIC from the library is read and no metadata goes with
-it (`src/workspace-photo.ts`). A build without the module says the photo
-could not be read rather than sending one at full size.
-
 ## The rich copy module
 
 A draft's Copy message puts one pasteboard item holding the body's HTML, the

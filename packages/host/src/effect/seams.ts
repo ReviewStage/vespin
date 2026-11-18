@@ -5,7 +5,7 @@
  * so a composer states the seams it reaches in its own requirements instead of
  * taking a kernel that holds all of them.
  */
-import type { OpenConsent } from "@repo/credentials";
+import type { AccountRenewalWindow, OpenConsent } from "@repo/credentials";
 import type { ProductClientPlatform } from "@repo/features/analytics";
 import type {
   DeviceArch,
@@ -81,6 +81,18 @@ export class SecretCipher extends Context.Service<SecretCipher, SecretCipherSeam
 export class PlatformTokenVault extends Context.Service<PlatformTokenVault, TokenVault>()(
   "@repo/host/PlatformTokenVault",
 ) {}
+
+/**
+ * When the account may renew, as the platform answers it: the iPhone renews
+ * only while its app stands in the foreground and keeps the app running
+ * through a renewal, since an answer it never keeps leaves a rotated refresh
+ * token that the service takes as a replay. The desktop provides none, so it
+ * renews whenever a call asks.
+ */
+export class PlatformRenewalWindow extends Context.Service<
+  PlatformRenewalWindow,
+  AccountRenewalWindow
+>()("@repo/host/PlatformRenewalWindow") {}
 
 /** The ids the host mints for its own records. */
 export interface IdSourceSeam {

@@ -26,7 +26,7 @@
  */
 
 import { createORPCClient } from "@orpc/client";
-import { type AuthSession, authSessionConsent } from "@repo/credentials";
+import { type AccountRenewalWindow, type AuthSession, authSessionConsent } from "@repo/credentials";
 import { GITHUB_INSTALL_LANDING } from "@repo/features";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
 import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
@@ -80,6 +80,7 @@ import {
   type KeepIssuedToken,
   OAUTH_ACCOUNT_CLIENT,
   oauthAccountSourceLayerFor,
+  PlatformRenewalWindow,
   PlatformTokenVault,
   RunMode,
   reporterLayer,
@@ -146,6 +147,8 @@ export interface DeviceSeams {
   readonly cipher: SecretCipherSeam;
   /** Where the Keychain keeps the account's tokens (`keychain-tokens.ts`); a device without one seals them with `cipher`. */
   readonly tokenVault?: TokenVault;
+  /** When the account may renew: only while the app is in the foreground, held running through the renewal; a device without one renews whenever a call asks. */
+  readonly renewalWindow?: AccountRenewalWindow;
   /** Where a sign-in's authorization page is shown and its redirect caught. */
   readonly authSession: AuthSession;
   /** Keeps each access token the account is issued where the share sheet reads it, or removes it, answering whether the Keychain took it (`share-token-module.ts`). */
@@ -207,6 +210,9 @@ function accountSeams(device: DeviceSeams) {
     device.tokenVault === undefined
       ? Layer.empty
       : Layer.succeed(PlatformTokenVault, device.tokenVault),
+    device.renewalWindow === undefined
+      ? Layer.empty
+      : Layer.succeed(PlatformRenewalWindow, device.renewalWindow),
     Layer.succeed(SignInConsent, {
       open: authSessionConsent({
         callbackUrl: IOS_OAUTH_CALLBACK_URL,

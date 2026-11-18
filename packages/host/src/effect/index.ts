@@ -64,6 +64,7 @@ export {
   LoopbackListener,
   MirrorPlatform,
   type MirrorPlatformSeam,
+  PlatformRenewalWindow,
   PlatformTokenVault,
   type ReportAttributes,
   RunMode,

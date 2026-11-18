@@ -1,4 +1,4 @@
-// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a view dragged out as its link, and pictures or a link dropped on a view.
+// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a list's rows set in from its sides, a view dragged out as its link, and pictures or a link dropped on a view.
 
 import {
   createModifier,
@@ -12,6 +12,7 @@ const MODIFIER = {
   CELL_FOCUS_RING_OFF: "vespinCellFocusRingOff",
   COLUMN_SUBTITLE: "vespinColumnSubtitle",
   STACK_SUBTITLE: "vespinStackSubtitle",
+  SIDE_MARGINS: "vespinSideMargins",
   DRAG_LINK: "vespinDragLink",
   DROP_PICTURES: "vespinDropPictures",
   DROP_LINK: "vespinDropLink",
@@ -41,6 +42,11 @@ export function barSubtitle(bar: BarKind, subtitle: string | undefined): Modifie
       subtitle: subtitle ?? "",
     },
   );
+}
+
+/** A scroll view's content set in from its sides by `length` points, SwiftUI's `contentMargins` for its scroll content, while the scroll view keeps its whole width, so the ground beside the content still scrolls it. */
+export function sideMargins(length: number): ModifierConfig {
+  return createModifier(MODIFIER.SIDE_MARGINS, { length });
 }
 
 /** A view dragged out as its link: another app takes it as a URL, and a place here that takes a link reads it back. */

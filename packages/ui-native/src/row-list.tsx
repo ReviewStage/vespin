@@ -40,7 +40,6 @@ import {
   padding,
   refreshable,
   scrollContentBackground,
-  scrollContentMargins,
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -60,7 +59,7 @@ import { useAnnounced, useReduceMotion, useScaledSize } from "./accessibility.js
 import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { dropLink } from "./interactions.js";
+import { dropLink, sideMargins } from "./interactions.js";
 import { RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
@@ -246,8 +245,8 @@ function ScopeRow({ scopes }: { readonly scopes: ListScopes }) {
  * the reading width stands its rows in a centered column of that width, as
  * iOS's readable content guide stands a page, so a pull request's page across
  * a landscape iPad reads as a column rather than rows 1,400 pt long. Note
- * that the column is the list's content margins (`scrollContentMargins`,
- * SwiftUI's `contentMargins` through the app's `@expo/ui` patch), never a
+ * that the column is the list's content margins (`sideMargins`, SwiftUI's
+ * `contentMargins` through the app's own module), never a
  * frame, so the list keeps the whole width and a drag, a trackpad or a pull
  * to refresh in the ground beside the column scrolls it, as Mail's and
  * Settings' do; `listSectionMargins` moved no plain list's rows. In
@@ -336,7 +335,7 @@ export function RowList({
         scrollContentBackground("hidden"),
         ...listGround(colors),
         onGeometryChange(({ width: next }) => setWidth(next)),
-        ...(sides > 0 ? [scrollContentMargins({ edges: "horizontal", length: sides })] : []),
+        ...(sides > 0 ? [sideMargins(sides)] : []),
         // Note that a page's sections stand as close as the system lets them, since its small headers already part them.
         ...(look === LIST_LOOK.DETAIL ? [listSectionSpacing("compact")] : []),
         // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.

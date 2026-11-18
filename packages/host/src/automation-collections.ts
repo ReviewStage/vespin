@@ -32,7 +32,6 @@ import type {
   AutomationCreateParams,
 } from "@repo/features/automation-view";
 import {
-  AUTOMATION_DEFAULT_GUARDS,
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
   type AutomationSummary,
@@ -92,17 +91,18 @@ export function changedFields({
 /** What a write's answer says of an automation's own columns; its newest run is the list's to say. */
 export function writtenFields(
   automation: AutomationSummary,
-): Pick<AutomationRow, "name" | "enabled" | "trigger" | "action" | "guards" | "nextRunAt"> &
+): Pick<AutomationRow, "name" | "enabled" | "trigger" | "action" | "nextRunAt"> &
   Partial<AutomationRow> {
-  const { scope, repositories, target, archiveSuccessful, slackDelivery, preset } = automation;
+  const { guards, scope, repositories, target, archiveSuccessful, slackDelivery, preset } =
+    automation;
 
   return {
     name: automation.name,
     enabled: automation.enabled,
     trigger: automation.trigger,
     action: automation.action,
-    guards: automation.guards,
     nextRunAt: automation.nextRunAt,
+    ...(guards === undefined ? undefined : { guards }),
     ...(scope === undefined ? undefined : { scope }),
     ...(repositories === undefined ? undefined : { repositories }),
     ...(target === undefined ? undefined : targetFields(target)),
@@ -132,7 +132,7 @@ export function askedRow(
     enabled: true,
     trigger: made.trigger,
     action: made.action,
-    guards: made.guards ?? AUTOMATION_DEFAULT_GUARDS,
+    ...(made.guards === undefined ? undefined : { guards: made.guards }),
     nextRunAt: null,
     organizationId: made.workspaceId ?? null,
     scope: made.scope ?? AUTOMATION_SCOPE.PERSONAL,

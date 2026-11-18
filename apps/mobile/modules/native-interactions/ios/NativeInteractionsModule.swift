@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place; and lowering the keyboard whatever field holds it.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, a column's or a stack screen's, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place; and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -18,10 +18,13 @@ private enum ModifierName {
   static let cellFocusRingOff = "vespinCellFocusRingOff"
   static let columnSubtitle = "vespinColumnSubtitle"
   static let stackSubtitle = "vespinStackSubtitle"
+  static let sideMargins = "vespinSideMargins"
   static let dragLink = "vespinDragLink"
   static let dropPictures = "vespinDropPictures"
   static let dropLink = "vespinDropLink"
-  static let all = [cellFocusRingOff, columnSubtitle, stackSubtitle, dragLink, dropPictures, dropLink]
+  static let all = [
+    cellFocusRingOff, columnSubtitle, stackSubtitle, sideMargins, dragLink, dropPictures, dropLink,
+  ]
 }
 
 /// How a dropped picture is kept for JavaScript to read: a JPEG at the quality the photo picker reads one at (`use-attached-pictures.ts`).
@@ -41,6 +44,9 @@ public final class NativeInteractionsModule: Module {
       }
       ViewModifierRegistry.register(ModifierName.stackSubtitle) { params, appContext, _ in
         return try StackSubtitleModifier(from: params, appContext: appContext)
+      }
+      ViewModifierRegistry.register(ModifierName.sideMargins) { params, appContext, _ in
+        return try SideMarginsModifier(from: params, appContext: appContext)
       }
       ViewModifierRegistry.register(ModifierName.dragLink) { params, appContext, _ in
         return try DragLinkModifier(from: params, appContext: appContext)
@@ -234,6 +240,22 @@ private final class StackSubtitleView: UIView {
       responder = current.next
     }
     return nil
+  }
+}
+
+// MARK: - Margins
+
+/// A scroll view's content set in from its sides by `length`, SwiftUI's `contentMargins(_:_:for: .scrollContent)`, while the scroll view keeps its whole width.
+///
+/// Note that a plain list wider than the reading width stands its rows in a
+/// centered column this way rather than in a frame, so a drag, a trackpad or
+/// a pull to refresh in the ground beside the column still scrolls it, as
+/// Mail's and Settings' do; `listSectionMargins` moved no plain list's rows.
+internal struct SideMarginsModifier: ViewModifier, Record {
+  @Field var length: CGFloat = 0
+
+  func body(content: Content) -> some View {
+    content.contentMargins(.horizontal, length, for: .scrollContent)
   }
 }
 

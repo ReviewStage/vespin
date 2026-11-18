@@ -28,6 +28,7 @@
  * Info.plist), so its stack traces arrive symbolicated.
  */
 
+import { RENEWAL_REFUSED } from "@repo/credentials";
 import { type AccountProvider, signedInAccountId } from "@repo/credentials/snapshot";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { sentryUser } from "@repo/features/sentry-account";
@@ -48,6 +49,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type Layer, Option, Schema } from "effect";
 import Constants from "expo-constants";
 import { useEffect } from "react";
+import { AppState } from "react-native";
 import { appStateQuery } from "./host/app-state-query.js";
 import {
   LAUNCH_SENTRY_TEST,
@@ -74,6 +76,8 @@ const MECHANISM = {
   HOST: { type: "auto.ios.host_start", handled: false },
   /** A sign-in from the sign-in screen that ended without an account. */
   SIGN_IN: { type: "auto.ios.sign_in", handled: true },
+  /** A renewal the service refused, which signs the account out. */
+  RENEWAL: { type: "auto.ios.renewal", handled: true },
 } as const;
 
 /** How a sign-in that ended without an account ended: its sheet closed, or a failure the screen says in words. */
@@ -162,10 +166,23 @@ export function reportHostFailure(cause: unknown): void {
  * Keeps one of the host's own lines on the trail the next report carries, as
  * a breadcrumb, so a report says what the host said before it: why a
  * sign-in did not finish, in the host's words and the service's refusal.
+ * The line a refused renewal writes is reported as an event besides.
  * Note that the trail's filter drops a line that names an access token.
  */
 export function keepHostLine(message: string): void {
   addBreadcrumb({ category: "host", level: "warning", message });
+
+  // Note that a refused renewal signs the phone out with nothing on screen to say why, so it is an event of its own, naming whether the app stood in the foreground.
+  if (message === RENEWAL_REFUSED) {
+    captureException(new Error(message), {
+      mechanism: MECHANISM.RENEWAL,
+      captureContext: {
+        level: "error",
+        fingerprint: ["ios.renewal_refused"],
+        tags: { app_state: AppState.currentState },
+      },
+    });
+  }
 }
 
 /**

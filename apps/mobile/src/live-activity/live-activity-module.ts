@@ -1,5 +1,5 @@
 /**
- * live-activity-module.ts -- the app's native Live Activity module (`modules/live-activity/`) as JavaScript reads it: the tokens it hands on, an activity's end, the Stop button's requests, the phone it sends a background token beside, a fixture's activity, a voice call's activity and its presses, and the Inbox widget drawn again.
+ * live-activity-module.ts -- the app's native Live Activity module (`modules/live-activity/`) as JavaScript reads it: the tokens it hands on, an activity's end, the phone it sends a background token and the Stop button's stop beside, a fixture's activity, a voice call's activity and its presses, the Inbox widget drawn again, and iOS's background time.
  *
  * The module is the app's own, autolinked from `modules/`, so it stands in
  * every build of the app, and is required here as Expo's local modules are.
@@ -23,18 +23,14 @@ type LiveActivityEvents = {
   readonly onActivityToken: (event: { readonly token: string }) => void;
   /** An activity ended or was dismissed on the phone, with its update token where it had handed one. */
   readonly onActivityEnded: (event: { readonly token?: string | null }) => void;
-  /** Stop was pressed on an agent's row; `answerStop` with its request once the stop is answered. */
-  readonly onStop: (event: { readonly request: string; readonly agentId: string }) => void;
   /** A press on the voice call's activity, named as `CALL_PRESS` names it, with the agent the activity shows. */
   readonly onCallPress: (event: { readonly press: string; readonly agentId: string }) => void;
 };
 
 declare class LiveActivityModule extends NativeModule<LiveActivityEvents> {
-  /** Takes a Stop request away once the stop is answered, whether or not it went, so the button's intent returns. */
-  answerStop(request: string): void;
   /** Starts an activity on the phone from a content state's JSON, as a fixture run does. */
   startFixture(contentState: string): Promise<void>;
-  /** Keeps the phone the service holds, as JSON (`KeptPhone`), so an update token iOS hands while the app is in the background is sent from Swift at once; none forgets it. */
+  /** Keeps the phone the service holds, as JSON (`KeptPhone`), so an update token iOS hands while the app is in the background, and a Stop pressed on the activity, are sent from Swift at once; none forgets it. */
   keepPhone(phone: string | null): void;
   /** Ends every activity of the app's at once. */
   endAll(): Promise<void>;
@@ -46,6 +42,10 @@ declare class LiveActivityModule extends NativeModule<LiveActivityEvents> {
   endCall(): Promise<void>;
   /** Has WidgetKit draw the Inbox widget again, from the snapshot the app just kept in the App Group. */
   reloadInboxWidget(): void;
+  /** Asks iOS for background time by name, answering its identifier for `endBackgroundTask`; iOS gives it back itself once it runs out. */
+  beginBackgroundTask(name: string): number;
+  /** Gives back background time `beginBackgroundTask` answered; iOS ends one whose time ran out itself, so ending it again only logs that it is gone. */
+  endBackgroundTask(identifier: number): void;
 }
 
 /** The module. */

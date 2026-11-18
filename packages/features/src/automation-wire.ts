@@ -580,7 +580,8 @@ const automationSummarySchema = EffectSchema.Struct({
   pausedReason: EffectSchema.optionalKey(EffectSchema.Null),
   trigger: automationTriggerSchema,
   action: automationActionSchema,
-  guards: automationGuardsSchema,
+  /** The limits it once ran under, which nothing reads; a service still sends them for the builds before it that require them. */
+  guards: EffectSchema.optionalKey(automationGuardsSchema),
   nextRunAt: EffectSchema.NullOr(countedNumber),
   lastRun: EffectSchema.NullOr(automationRunSummarySchema),
   createdAt: countedNumber,
