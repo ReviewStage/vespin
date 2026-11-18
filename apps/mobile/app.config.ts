@@ -12,6 +12,7 @@ import { basename, join } from "node:path";
 import plist, { type PlistValue } from "@expo/plist";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
+import { PRODUCT_MARK_SYMBOL_TEMPLATE } from "@repo/brand/product-mark-symbol";
 import {
   CLAWD_PATH,
   CURSOR_PATH,
@@ -885,6 +886,7 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
         ...LUCIDE_SYMBOL_TEMPLATES,
         ...TASK_STATUS_SYMBOL_TEMPLATES,
         ...TASK_PRIORITY_SYMBOL_TEMPLATES,
+        PRODUCT_MARK_SYMBOL_TEMPLATE,
       ])
         writeSymbolSet(catalog, name, svg);
 
