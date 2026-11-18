@@ -515,7 +515,7 @@ function ServersPopover({
     const index = picks.indexOf(row);
 
     return (
-      <RowHighlight.Provider
+      <RowHighlight
         key={row.connection}
         value={index < 0 || index === at ? undefined : () => setHighlight(index)}
       >
@@ -532,7 +532,7 @@ function ServersPopover({
           motionKey={row.connection}
           hint={{ Hint: PointerHighlight, label: row.name }}
         />
-      </RowHighlight.Provider>
+      </RowHighlight>
     );
   };
 

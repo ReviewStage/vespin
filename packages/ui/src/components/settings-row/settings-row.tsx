@@ -405,7 +405,7 @@ export function SettingsRow({
       {...landedMark(landed, LANDED.WITHIN)}
     >
       {press?.(control)}
-      <SettingsRowFoldPress.Provider value={undefined}>
+      <SettingsRowFoldPress value={undefined}>
         <Item size={density} className={indent === SETTINGS_ROW_INDENT.NONE ? undefined : "ps-0"}>
           {end === undefined ? (
             <div className={cn(wraps ? LINE_CLASS.WRAPPING : LINE_CLASS.PLAIN, top)}>{words}</div>
@@ -436,7 +436,7 @@ export function SettingsRow({
           )}
           <ErrorLine id={errorId} level={ANNOUNCE.ALERT} error={failed ? error : undefined} />
         </Item>
-      </SettingsRowFoldPress.Provider>
+      </SettingsRowFoldPress>
     </div>
   );
 }

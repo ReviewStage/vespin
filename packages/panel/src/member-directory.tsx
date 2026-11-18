@@ -104,7 +104,7 @@ export function MemberDirectory({
 }): React.JSX.Element {
   const directory = useDirectoryOf(workspace, readerId);
 
-  return <DirectoryContext.Provider value={directory}>{children}</DirectoryContext.Provider>;
+  return <DirectoryContext value={directory}>{children}</DirectoryContext>;
 }
 
 /** The directory standing around the caller: the members as read, the reader's id, and where the reads stand. */

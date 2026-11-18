@@ -3679,8 +3679,8 @@ function PullRequestTabBody({
   // Every review thread the tab draws, in the Conversation or on its line, replies and resolves on this pull request.
   const page = (
     <ThreadWritesProvider value={{ onWritten: written }}>
-      <ThreadJumpContext.Provider value={threadJumps.jumps}>
-        <AnchorsContext.Provider value={anchors.open}>
+      <ThreadJumpContext value={threadJumps.jumps}>
+        <AnchorsContext value={anchors.open}>
           <Fill
             ref={fold.root}
             className="file-view pull-request-tab"
@@ -3832,9 +3832,7 @@ function PullRequestTabBody({
                   hidden={view !== PULL_REQUEST_VIEW.CHAPTERS}
                 >
                   {chaptersSeen ? (
-                    <HandTabActionsContext.Provider
-                      value={viewActions.handFor(PULL_REQUEST_VIEW.CHAPTERS)}
-                    >
+                    <HandTabActionsContext value={viewActions.handFor(PULL_REQUEST_VIEW.CHAPTERS)}>
                       <LazyBoundary
                         fallback={
                           <SpinnerRegion delay label={PULL_REQUEST_WORDS.READING_CHAPTERS} />
@@ -3852,7 +3850,7 @@ function PullRequestTabBody({
                           lineComments={{ pending: pendingReview, onWritten: written }}
                         />
                       </LazyBoundary>
-                    </HandTabActionsContext.Provider>
+                    </HandTabActionsContext>
                   ) : null}
                 </Fill>
               </>
@@ -3864,11 +3862,9 @@ function PullRequestTabBody({
               aria-labelledby={ids(PULL_REQUEST_VIEW.FILES).tab}
               hidden={none || view !== PULL_REQUEST_VIEW.FILES}
             >
-              <DiffListTopRoomContext.Provider value={listRoom}>
+              <DiffListTopRoomContext value={listRoom}>
                 <PendingSurfaceProvider value={shown && !none && view === PULL_REQUEST_VIEW.FILES}>
-                  <HandTabActionsContext.Provider
-                    value={viewActions.handFor(PULL_REQUEST_VIEW.FILES)}
-                  >
+                  <HandTabActionsContext value={viewActions.handFor(PULL_REQUEST_VIEW.FILES)}>
                     <AgentChangesTab
                       source={source}
                       shown={shown && !none && view === PULL_REQUEST_VIEW.FILES}
@@ -3879,13 +3875,13 @@ function PullRequestTabBody({
                       reads={changes}
                       reveal={threadJumps.filesReveal}
                     />
-                  </HandTabActionsContext.Provider>
+                  </HandTabActionsContext>
                 </PendingSurfaceProvider>
-              </DiffListTopRoomContext.Provider>
+              </DiffListTopRoomContext>
             </Fill>
           </Fill>
-        </AnchorsContext.Provider>
-      </ThreadJumpContext.Provider>
+        </AnchorsContext>
+      </ThreadJumpContext>
     </ThreadWritesProvider>
   );
 

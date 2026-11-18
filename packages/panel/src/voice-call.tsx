@@ -395,7 +395,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     levels,
   };
 
-  return <VoiceCallContext.Provider value={value}>{children}</VoiceCallContext.Provider>;
+  return <VoiceCallContext value={value}>{children}</VoiceCallContext>;
 }
 
 /** The window's voice call, and what a surface may do with it. */

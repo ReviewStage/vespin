@@ -2671,7 +2671,7 @@ function SidebarColumn({
         <Fill className="sidebar-section -my-ring-reach -ms-ring-reach -me-column-inset">
           <ScrollArea ref={scroller} fade={SCROLL_FADE.BOTH}>
             <ListMotion root={body}>
-              <ChosenTasksContext.Provider value={selection.chosenOf}>
+              <ChosenTasksContext value={selection.chosenOf}>
                 <SelectionRegion
                   id={selection.regionId}
                   selection={{ selected: selection.selected, onChange: selection.onChange }}
@@ -2866,7 +2866,7 @@ function SidebarColumn({
                     </nav>
                   </div>
                 </SelectionRegion>
-              </ChosenTasksContext.Provider>
+              </ChosenTasksContext>
             </ListMotion>
           </ScrollArea>
         </Fill>

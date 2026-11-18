@@ -268,7 +268,7 @@ export function MessageWords({
   const { named, viewer } = shown;
 
   return (
-    <WordFilesContext.Provider value={named}>
+    <WordFilesContext value={named}>
       <CommentFiles
         itemId={itemId}
         files={files.filter((_, at) => shown.beside.some((chip) => chip === chips[at]))}
@@ -288,6 +288,6 @@ export function MessageWords({
         </div>
       )}
       {viewer}
-    </WordFilesContext.Provider>
+    </WordFilesContext>
   );
 }

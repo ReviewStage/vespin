@@ -1139,7 +1139,7 @@ export function RowHintOptions({
 }: RowHintOptions & { children: ReactNode }): React.JSX.Element {
   const options = useMemo((): RowHintOptions => ({ shown, command, card }), [shown, command, card]);
 
-  return <RowHintContext.Provider value={options}>{children}</RowHintContext.Provider>;
+  return <RowHintContext value={options}>{children}</RowHintContext>;
 }
 
 /**

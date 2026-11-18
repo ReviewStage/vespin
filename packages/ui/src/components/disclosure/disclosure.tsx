@@ -280,11 +280,11 @@ export function DisclosureScope({
   const frame = useContext(FrameContext);
 
   return (
-    <StateContext.Provider value={state}>
-      <ScopeFrameContext.Provider value={frame}>
-        <FrameContext.Provider value={undefined}>{children}</FrameContext.Provider>
-      </ScopeFrameContext.Provider>
-    </StateContext.Provider>
+    <StateContext value={state}>
+      <ScopeFrameContext value={frame}>
+        <FrameContext value={undefined}>{children}</FrameContext>
+      </ScopeFrameContext>
+    </StateContext>
   );
 }
 
@@ -299,7 +299,7 @@ export function DisclosureFind({
   finding: boolean;
   children: ReactNode;
 }): React.JSX.Element {
-  return <FindContext.Provider value={finding}>{children}</FindContext.Provider>;
+  return <FindContext value={finding}>{children}</FindContext>;
 }
 
 /** Whether an app's find looks through what holds the caller. */
@@ -620,7 +620,7 @@ function Frame({
           {lead}
         </div>
       )}
-      <FrameContext.Provider value={cells}>{children}</FrameContext.Provider>
+      <FrameContext value={cells}>{children}</FrameContext>
       {actions === undefined ? null : (
         // biome-ignore lint/a11y/noStaticElementInteractions: the cell's bare ground folds as the summary beside it does, for the pointer alone; the summary is the keyboard's.
         // biome-ignore lint/a11y/useKeyWithClickEvents: a key on a control inside reaches it as a click, which the cell leaves to the control.

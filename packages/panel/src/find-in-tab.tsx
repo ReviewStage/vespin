@@ -664,11 +664,11 @@ export function FindScope({
           onClose={close}
         />
       )}
-      <FindScopeContext.Provider value={doors}>
-        <FindDetailsContext.Provider value={searchesDetails}>
+      <FindScopeContext value={doors}>
+        <FindDetailsContext value={searchesDetails}>
           <DisclosureFind finding={open}>{children}</DisclosureFind>
-        </FindDetailsContext.Provider>
-      </FindScopeContext.Provider>
+        </FindDetailsContext>
+      </FindScopeContext>
     </Fill>
   );
 }

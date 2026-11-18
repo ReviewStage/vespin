@@ -403,16 +403,16 @@ export function FailureNoticeProvider({ children }: { readonly children: ReactNo
   );
 
   return (
-    <Notices.Provider value={notices}>
-      <Stage.Provider value={stage}>
+    <Notices value={notices}>
+      <Stage value={stage}>
         {children}
         <NoticeBanner
           notice={top === undefined ? state.shown : undefined}
           onGone={gone}
           sheet={false}
         />
-      </Stage.Provider>
-    </Notices.Provider>
+      </Stage>
+    </Notices>
   );
 }
 

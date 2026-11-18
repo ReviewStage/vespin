@@ -80,7 +80,7 @@ export function RevealArea({
 }): React.JSX.Element {
   const outer = useContext(RevealAreaContext);
   const area = own ? root : (outer ?? root);
-  const scoped = <RevealAreaContext.Provider value={area}>{children}</RevealAreaContext.Provider>;
+  const scoped = <RevealAreaContext value={area}>{children}</RevealAreaContext>;
 
   // Note that the area that moves is the one motion its folds ask, so an area inside another adds none of its own.
   return area === root ? (
