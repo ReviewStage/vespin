@@ -1,0 +1,121 @@
+# snappy.yaml -- MEASUREMENT ONLY: on the fixture FIXTURE names (inbox, or inbox-large for a real account's size), three cold launches to the Inbox's first rows, then five of each: the Inbox's scope switched, Settings and Workspace settings opened and put away, and the workspace switched and back, each timed step labeled "T:<path>".
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: ${FIXTURE}
+- extendedWaitUntil:
+    visible: "Open.*"
+    timeout: 30000
+- repeat:
+    times: 3
+    commands:
+      - stopApp
+      - launchApp:
+          stopApp: true
+          arguments:
+            fixture: ${FIXTURE}
+          label: "T:cold-launch"
+      - extendedWaitUntil:
+          visible: "Open.*"
+          timeout: 30000
+      - waitForAnimationToEnd:
+          timeout: 5000
+# The Inbox's scopes, from Open to All, Questions and back.
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "All"
+          retryTapIfNoChange: false
+          label: "T:scope-all"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Questions.*"
+          retryTapIfNoChange: false
+          label: "T:scope-questions"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Open.*"
+          retryTapIfNoChange: false
+          label: "T:scope-open"
+      - waitForAnimationToEnd:
+          timeout: 3000
+# Settings, from the switcher's account row, put away by a drag down.
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          id: "workspace-switcher"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Settings, .*"
+          retryTapIfNoChange: false
+          label: "T:settings-open"
+      - assertVisible: "Ada Lovelace"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - swipe:
+          start: "50%, 8%"
+          end: "50%, 95%"
+          duration: 300
+          label: "T:settings-close"
+      - assertVisible: "Open.*"
+      - waitForAnimationToEnd:
+          timeout: 3000
+# Workspace settings, from the switcher.
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          id: "workspace-switcher"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Workspace settings|Settings…"
+          retryTapIfNoChange: false
+          label: "T:workspace-settings-open"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - swipe:
+          start: "50%, 8%"
+          end: "50%, 95%"
+          duration: 300
+      - assertVisible: "Open.*"
+      - waitForAnimationToEnd:
+          timeout: 3000
+# The workspace switched to Relay, whose Inbox is empty, and back.
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          id: "workspace-switcher"
+          retryTapIfNoChange: false
+          label: "T:switcher-open"
+      - assertVisible: "Relay, 6 members"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Relay, 6 members"
+          retryTapIfNoChange: false
+          label: "T:switch-workspace"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "workspace-switcher"
+      - assertVisible: "Ada Lovelace, Personal workspace"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Ada Lovelace, Personal workspace"
+          retryTapIfNoChange: false
+          label: "T:switch-back"
+      - assertVisible: "Open.*"
+      - waitForAnimationToEnd:
+          timeout: 3000
