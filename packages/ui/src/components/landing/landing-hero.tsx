@@ -1211,6 +1211,7 @@ const POINTER_AIM = new Map<number, string | null>([
   [BEAT.BACK, '.ui-hero-sidebar [aria-label="Pinned"] li'],
   [BEAT.AIM_HOME, ".ui-hero-sidebar .sidebar-places > :nth-child(2)"],
   [BEAT.HOME_AGAIN, ".ui-hero-sidebar .sidebar-places > :nth-child(2)"],
+  [BEAT.SETTLE, null],
 ]);
 
 /** The beats a press lands on: into the box, start, the Inbox, the answer, send, the task, and Home. */
