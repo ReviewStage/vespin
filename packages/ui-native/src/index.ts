@@ -53,7 +53,6 @@ export {
   CallAccessory,
   CallCardRow,
   type CallPresses,
-  CallSidebarFoot,
   COMPOSER_CALL,
   type ComposerCall,
   type StandingCallCard,
@@ -301,14 +300,8 @@ export {
   groupKey,
   HostedFill,
   isBarMenu,
-  KeptColumns,
-  type KeptView,
   menuWithout,
-  SplitOverTabs,
   SplitView,
-  scopeMenu,
-  scopeSubtitle,
-  UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 
 export {
@@ -408,7 +401,7 @@ export {
   useAsyncAction,
 } from "./use-async-action.js";
 
-export { useThreeColumns, useWindowSizeClass } from "./use-window-size-class.js";
+export { useWindowSizeClass } from "./use-window-size-class.js";
 
 export { Video } from "./video.js";
 

@@ -33,7 +33,7 @@ import {
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useState } from "react";
-import { PUSHED_PAGE, useDetailLeave, useDetailPush, useHandToDetail } from "../detail-stack.js";
+import { PUSHED_PAGE, useDetailLeave, useDetailPush } from "../detail-stack.js";
 import { useHostActs, useListedAgents } from "../host/host-provider.js";
 import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
@@ -97,15 +97,12 @@ const RESTORE_BAR = "Restore";
  * version under its writer, what it did and when, the newest marked
  * Current, and Show more under them while older versions stand unread. A
  * press opens the version whole. The host follows the history while the
- * screen stands, so a save lands at its head as it lands. In a window wide
- * enough for three columns it stands pushed over the split view's detail
- * instead, and a version opens over it there.
+ * screen stands, so a save lands at its head as it lands. Opened from a
+ * split view's detail, it stands pushed over that detail instead, and a
+ * version opens over it there.
  */
 export function HistoryScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
-  const handed = useHandToDetail({ kind: PUSHED_PAGE.HISTORY, taskId: id });
-
-  if (handed) return null;
 
   return <History taskId={id} />;
 }
@@ -233,14 +230,6 @@ export function VersionScreen() {
   const savedAt = Number(at);
   const newest = versionNumber(spelledNewest);
   const opened = Number.isFinite(savedAt) && at !== undefined ? savedAt : undefined;
-
-  const handed = useHandToDetail(
-    seq === undefined
-      ? undefined
-      : { kind: PUSHED_PAGE.VERSION, taskId: id, seq, at: opened, newest },
-  );
-
-  if (handed && seq !== undefined) return null;
 
   if (seq === undefined) {
     return (

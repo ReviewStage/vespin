@@ -1,4 +1,4 @@
-// split-view.tsx -- a regular window's columns side by side, as SwiftUI's own NavigationSplitView: the app's sidebar, the list, and the detail, each column under a bar of its own.
+// split-view.tsx -- a regular window's columns side by side, as SwiftUI's own NavigationSplitView: the list and the detail, each column under a bar of its own.
 
 import {
   Divider,
@@ -17,13 +17,11 @@ import {
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
-  accessibilityHidden,
   background,
   buttonStyle,
   containerBackground,
   disabled,
   frame,
-  hidden,
   ignoreSafeArea,
   type ModifierConfig,
   menuIndicator,
@@ -35,51 +33,18 @@ import {
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
-import {
-  Fragment,
-  memo,
-  type ReactElement,
-  type ReactNode,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { Fragment, memo, type ReactElement, type ReactNode, useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { BarContent } from "./bar-content.js";
 import { type BarSubtitle, ColumnBarTitle } from "./bar-title.js";
-import type { Scope } from "./button.js";
-import { GLYPH, type Glyph } from "./glyph.js";
+import type { Glyph } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
-import { BAR_KIND, barSubtitle } from "./interactions.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
 import { useColors } from "./tokens/colors.js";
 
-/** What the first column holds, so it is drawn afresh as that changes. */
-const FIRST_COLUMN = { APP_SIDEBAR: "app-sidebar", LIST: "list" } as const;
-
-/** What a bar's subtitle opens with while a filter narrows its list, as Mail's does. */
-const FILTERED_BY = "Filtered by:";
-
-/** Where the split view stands against the tabs' screens: over a tab's root, or behind the page a tab pushed over it. */
-const LAYER = { FRONT: 1, BEHIND: 0 } as const;
-
-/**
- * A tab root's stack options while the split view stands over it: no bar,
- * and no ground of its own, so the split view behind shows through it while
- * a pushed page slides in over it or is swiped back off it.
- */
-export const UNDER_SPLIT_SCREEN = {
-  headerShown: false,
-  contentStyle: { backgroundColor: "transparent" },
-} as const;
-
 const layers = StyleSheet.create({
-  stand: { flex: 1 },
   fill: { flex: 1 },
-  tabs: { flex: 1 },
-  split: { ...StyleSheet.absoluteFill },
 });
 
 /**
@@ -162,8 +127,6 @@ export type BarPath = {
  */
 export type ColumnBar = {
   readonly title?: string | undefined;
-  /** A line under the list's `title`, as Mail names its filter under Inbox, drawn by the system's own bar (`barSubtitle`); never with a `name`, whose line is its `subtitle`. */
-  readonly titleLine?: string | undefined;
   /** A pushed page's name, small and inline in the ink, as a compact window's stack names an agent's page; never with a `title`. */
   readonly name?: string | undefined;
   /** A muted line under the page's `name`, such as an agent's state and model, standing with it in the bar's middle; never without a `name`. */
@@ -174,8 +137,6 @@ export type ColumnBar = {
   readonly path?: BarPath | undefined;
   /** A page's main acts as glyphs before its ⋯, as Mail's Reply and Trash stand, sharing the bar's one glass; each a button or a menu, such as Remind me's times. */
   readonly acts?: readonly BarFootItem[] | undefined;
-  /** A list's scopes as Mail's filter button before its ⋯, where the column is too narrow for segments. */
-  readonly filter?: BarMenu | undefined;
   readonly menu?: BarMenu | undefined;
   readonly action?: BarAction | undefined;
   readonly search?: BarSearch | undefined;
@@ -192,27 +153,16 @@ export function isBarMenu(item: BarFootItem): item is BarMenu {
 }
 
 type SplitViewProps = {
-  /** The app's sidebar: its places, then Pinned and the member's sections, as a `RowList` in its sidebar look. */
+  /** The tab's list, such as the Inbox's threads, as a `RowList`. */
   readonly sidebar: ReactNode;
   readonly sidebarBar?: ColumnBar | undefined;
-  /** What stands at the app sidebar's foot under its list, such as the way back to a call (`CallSidebarFoot`); drawn only beside a list, where the sidebar is the app's own. */
-  readonly sidebarFoot?: ReactNode | undefined;
-  /** The list between the sidebar and the detail, such as the Inbox's threads; two columns where none is given. */
-  readonly content?: ReactNode | undefined;
-  readonly contentBar?: ColumnBar | undefined;
   /** The selected row's page, or an `EmptyState` before one is picked. */
   readonly detail: ReactNode;
   readonly detailBar?: ColumnBar | undefined;
-  /** Names whose search the list's bar holds, such as the place the app sidebar picked, so the field takes that list's own query as it changes. */
-  readonly searchKey?: string | undefined;
-  /** Whether the sidebar stands beside the other columns; hidden, the system's own button in the next column's bar brings it back. */
+  /** Whether the list stands beside the detail; hidden, the system's own button in the detail's bar brings it back. */
   readonly sidebarShown: boolean;
-  /** Called as a person shows or hides the sidebar, with the system's button, a swipe, or a drag. */
+  /** Called as a person shows or hides the list, with the system's button, a swipe, or a drag. */
   readonly onSidebarShownChange: (shown: boolean) => void;
-  /** Whether the detail stands alone across the window, as Mail's expand button stands a message; the other columns keep their own choice under it. */
-  readonly detailOnly?: boolean | undefined;
-  /** Called as the detail stops standing alone, such as when a person brings the columns back with the system's sidebar button. */
-  readonly onDetailOnlyChange?: ((detailOnly: boolean) => void) | undefined;
   /** The pages pushed over the detail inside its own column, with a Back of its own, as Mail opens a message's related pages; the detail stands alone where none is given. */
   readonly detailStack?: DetailStack | undefined;
 };
@@ -339,38 +289,6 @@ export function barActItems(acts: readonly BarFootItem[]): ReactElement[] {
   ));
 }
 
-/**
- * A list's scopes as Mail's filter menu: each scope a choice, checked where
- * it stands, with its count only where it has one worth reading, so an empty
- * scope reads as its name alone. Note that the glyph is Mail's outline until
- * the list stands narrowed from its own default, then fills, as Mail's does
- * while a filter is on, since the bar keeps no other word of which scope is
- * shown; the caller says which, because a list's default need not be its
- * first scope, as the Inbox's Open is not.
- */
-export function scopeMenu(label: string, scopes: readonly Scope[], narrowed: boolean): BarMenu {
-  return {
-    label,
-    symbol: narrowed ? GLYPH.FILTERED : GLYPH.FILTER,
-    choices: scopes.map((scope) => ({
-      label:
-        scope.count === undefined || scope.count === 0
-          ? scope.label
-          : `${scope.label} ${scope.count}`,
-      on: scope.selected,
-      onPress: scope.onPress,
-    })),
-    actions: [],
-  };
-}
-
-/** What a bar says under its title while its filter narrows the list, as Mail's "Filtered by: Unread"; nothing while it shows the list whole. */
-export function scopeSubtitle(scopes: readonly Scope[], narrowed: boolean): string | undefined {
-  const chosen = scopes.find((scope) => scope.selected);
-
-  return narrowed && chosen !== undefined ? `${FILTERED_BY} ${chosen.label}` : undefined;
-}
-
 /** A menu with the acts and menus a bar already stands as glyphs left out, so ⋯ holds only the rest, and a group left empty drops with its rule. */
 export function menuWithout(menu: BarMenu, acts: readonly BarFootItem[]): BarMenu {
   const barred = new Set(acts.map((act) => act.label));
@@ -390,17 +308,16 @@ export function menuWithout(menu: BarMenu, acts: readonly BarFootItem[]): BarMen
 /**
  * A search field's words as the system's field holds them, started from the
  * query its list is filtered by. Note that the field is handed a query only
- * as its search changes hands or first arrives, so typing never fights its
- * own echo.
+ * as its search first arrives, so typing never fights its own echo.
  */
-function useSearchWords(search: BarSearch | undefined, searchKey: string | undefined) {
+function useSearchWords(search: BarSearch | undefined) {
   const text = useNativeState(search?.text ?? "");
   const query = search?.text ?? "";
   const searching = search !== undefined;
 
   useEffect(() => {
     text.set(query);
-  }, [searchKey, searching]);
+  }, [searching]);
 
   return text;
 }
@@ -411,7 +328,6 @@ function barHolds(bar: ColumnBar): boolean {
     bar.leading !== undefined ||
     (bar.lead ?? []).length > 0 ||
     (bar.acts ?? []).length > 0 ||
-    bar.filter !== undefined ||
     bar.path !== undefined ||
     (bar.name !== undefined && bar.subtitle !== undefined) ||
     bar.menu !== undefined ||
@@ -427,49 +343,37 @@ function barHolds(bar: ColumnBar): boolean {
  * or an alert a screen draws beside a column's page would otherwise take
  * half its height. The list and detail columns stand on the brand's
  * `GROUND`, as their lists do, so what isn't a list (a page, an empty state,
- * a scope picker over its list) never shows the system's own column color.
- * The app's sidebar paints nothing, so it stands on the system's floating
- * glass pane, as Mail's and Notes' do; a list standing first in two columns,
- * as a portrait iPad's, paints its ground, as Mail's message list stands
- * solid beside the message.
+ * a scope picker over its list) never shows the system's own column color;
+ * the list paints its ground, as Mail's message list stands solid beside
+ * the message.
  */
 function Column({
   view,
   bar = {},
   sidebar = false,
-  clear = false,
-  searchKey,
   stacked: inStack = false,
 }: {
   readonly view: ReactNode;
   readonly bar?: ColumnBar | undefined;
-  /** Whether it is the sidebar, whose search the system stands in the sidebar's own place. */
+  /** Whether it is the first column, whose search the system stands in the sidebar's own place. */
   readonly sidebar?: boolean | undefined;
-  /** Whether it paints nothing, so it stands on the system's floating glass pane, as the app's own sidebar does. */
-  readonly clear?: boolean | undefined;
-  /** Names whose search the bar holds; the field takes that one's query as it changes, and keeps what is typed otherwise. */
-  readonly searchKey?: string | undefined;
   /** Whether it stands inside the detail's own navigation stack, as its root or a page pushed over it, whose ground the stack paints too. */
   readonly stacked?: boolean | undefined;
 }) {
   const colors = useColors();
-  const text = useSearchWords(bar.search, searchKey);
-  // Note that a list standing first, as a portrait iPad's, ends in a hairline beside the detail, as Mail's message list does, because both columns paint one ground and the system's sidebar column draws no edge of its own.
-  const ruled = sidebar && !clear;
+  const text = useSearchWords(bar.search);
+  // Note that the list ends in a hairline beside the detail, as Mail's message list does, because both columns paint one ground and the system's sidebar column draws no edge of its own.
+  const ruled = sidebar;
 
   const stacked = (
     <ZStack
       modifiers={[
         // Note that the column paints its ground itself, filling it under its bar too, because the shots showed `containerBackground` leaving a dark column at the system's black beside the list's ground, where Mail paints its columns one ground.
-        ...(clear
-          ? []
-          : [
-              frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
-              background(colors.GROUND),
-            ]),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+        background(colors.GROUND),
         // Note that a page in the detail's own stack paints the stack's ground too, because a navigation stack stands the system's own color behind each of its pages.
         ...(inStack ? [containerBackground(colors.GROUND, "navigation")] : []),
-        // Note that a list beside the app sidebar names itself bold at its bar's leading edge, as Mail names the mailbox over its list; a list standing first, as a portrait iPad's, keeps its title small in the middle, because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A page pushed over the detail names itself small and inline, as a stack's page does. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
+        // Note that the list keeps its title small in the middle, because its 320 pt bar also holds the switcher, ⋯ and the sidebar button, and a leading title folds them into an overflow. A page pushed over the detail names itself small and inline, as a stack's page does. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
         ...(bar.title !== undefined
           ? [
               navigationTitle(bar.title),
@@ -478,7 +382,6 @@ function Column({
           : bar.name !== undefined
             ? [navigationTitle(bar.name), toolbarTitleDisplayMode("inline")]
             : [toolbarTitleDisplayMode("inline")]),
-        barSubtitle(BAR_KIND.COLUMN, bar.titleLine),
       ]}
     >
       {ruled ? (
@@ -523,11 +426,6 @@ function Column({
           </ToolbarItem>
         )}
         {barActItems(bar.acts ?? [])}
-        {bar.filter === undefined ? null : (
-          <ToolbarItem placement="topBarTrailing">
-            <BarMenuItem menu={bar.filter} />
-          </ToolbarItem>
-        )}
         {bar.action === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">
             <BarActionButton action={bar.action} />
@@ -687,170 +585,39 @@ export function HostedFill({ children }: { readonly children: ReactNode }) {
   );
 }
 
-/** How long after the page stops standing alone the system's reports of the columns are its own, a little past its column slide. */
-const LEAVE_SETTLE_MS = 700;
-
-/** What a split view's columns stand as, by `NavigationSplitView`'s own names. */
-type ColumnVisibility = "automatic" | "all" | "doubleColumn" | "detailOnly";
-
 /**
- * The stretch after a split view's detail stops standing alone, while the
- * system slides the columns back: the report it sent, and whether the
- * columns have been asked for again.
- */
-type Leaving = { reported: ColumnVisibility | undefined; reasked: boolean };
-
-/**
- * Brings the columns back as the detail stops standing alone, and marks the
- * stretch while the system does it. Note that iPadOS answers the ask for all
- * three columns from the detail alone with two, the sidebar left hidden, and
- * reports only that; and that `@expo/ui` never reports the value it was asked
- * for. So two columns reported in the stretch are the system's step down, not
- * the reader hiding the sidebar: the split view asks for two, which already
- * stand, then for all three on the next frame, which the system then shows,
- * as it does for the sidebar button. Note that a report after that ask, once
- * the stretch ends, is taken as what stands, so the sidebar's state never
- * reads shown while the system keeps it hidden.
- */
-function useColumnsBack(detailOnly: boolean, settle: (reported: ColumnVisibility) => void) {
-  const leaving = useRef<Leaving | undefined>(undefined);
-  const settleNow = useRef(settle);
-  const was = useRef(detailOnly);
-  const [stepped, setStepped] = useState(false);
-
-  useLayoutEffect(() => {
-    settleNow.current = settle;
-  });
-
-  useLayoutEffect(() => {
-    const left = was.current && !detailOnly;
-
-    was.current = detailOnly;
-
-    if (!left) return;
-
-    const stretch: Leaving = { reported: undefined, reasked: false };
-
-    leaving.current = stretch;
-
-    const timer = setTimeout(() => {
-      if (leaving.current !== stretch) return;
-
-      leaving.current = undefined;
-
-      if (stretch.reported !== undefined) settleNow.current(stretch.reported);
-    }, LEAVE_SETTLE_MS);
-
-    return () => clearTimeout(timer);
-  }, [detailOnly]);
-
-  /** Takes a report the system sent while the columns come back; false once the stretch is over, so the report counts as the reader's. */
-  const tookReport = (reported: ColumnVisibility, stepsDown: boolean): boolean => {
-    const stretch = leaving.current;
-
-    if (stretch === undefined) return false;
-
-    if (stepsDown && !stretch.reasked) {
-      stretch.reasked = true;
-      setStepped(true);
-      requestAnimationFrame(() => setStepped(false));
-
-      return true;
-    }
-
-    stretch.reported = reported;
-
-    return true;
-  };
-
-  return { stepped, tookReport };
-}
-
-/**
- * The app's columns for a regular-width window, such as an iPad's or the
- * unfolded iPhone Duo's, as Mail and Files stand theirs: the app's sidebar,
- * the list it picked, and the selected row's page, or the sidebar and one
- * page where no list stands between them. The split view draws each
- * column's navigation bar itself, so the screen around it shows no header
- * of its own. Whether the sidebar stands is the caller's, so a window too
- * narrow for three columns can keep it behind the system's button, a menu
- * bar's command can toggle it, and a person's choice holds as the tabs
- * change; hidden, the list and the page share the window.
+ * A tab's columns in a regular-width window, such as an iPad's or the
+ * unfolded iPhone Duo's, beside the system's own tab sidebar, as Mail
+ * stands its message list beside the message: the tab's list and the
+ * selected row's page. The split view draws each column's navigation bar
+ * itself, so the screen around it shows no header of its own. Whether the
+ * list stands is the caller's, so a menu bar's command can toggle it and a
+ * person's choice holds as the tabs change; hidden, the page stands alone
+ * across the window.
  */
 export function SplitView({
   sidebar,
   sidebarBar,
-  sidebarFoot,
-  content,
-  contentBar,
   detail,
   detailBar,
-  searchKey,
   sidebarShown,
   onSidebarShownChange,
-  detailOnly = false,
-  onDetailOnlyChange,
   detailStack,
 }: SplitViewProps) {
-  const hidden = content === undefined ? "detailOnly" : "doubleColumn";
-
-  // Note that a two-column split view names both columns standing "doubleColumn", which is its "all".
-  const sidebarStands = (visibility: ColumnVisibility) =>
-    visibility === "all" || (content === undefined && visibility === "doubleColumn");
-
-  const back = useColumnsBack(detailOnly, (reported) =>
-    onSidebarShownChange(sidebarStands(reported)),
-  );
-
-  const shown = detailOnly ? "detailOnly" : sidebarShown && !back.stepped ? "all" : hidden;
-
   return (
     <NavigationSplitView
-      columnVisibility={shown}
+      // Note that a two-column split view names both columns standing "doubleColumn", which is its "all".
+      columnVisibility={sidebarShown ? "all" : "detailOnly"}
       onColumnVisibilityChange={(visibility) => {
         if (visibility === "automatic") return;
 
-        // Note that the detail standing alone leaves the sidebar's own choice as it was, and columns brought back by the system's button end it.
-        if (detailOnly) {
-          if (visibility !== "detailOnly") onDetailOnlyChange?.(false);
-
-          return;
-        }
-
-        // Note that a report while the columns come back is the system's, never the reader hiding the sidebar.
-        const stepsDown = sidebarShown && !sidebarStands(visibility);
-
-        if (back.tookReport(visibility, stepsDown)) return;
-
-        onSidebarShownChange(sidebarStands(visibility));
+        onSidebarShownChange(visibility === "all" || visibility === "doubleColumn");
       }}
       modifiers={[navigationSplitViewStyle("balanced")]}
     >
       <NavigationSplitView.Sidebar>
-        {/* Note that the sidebar column is drawn afresh as it changes from the app's sidebar to the list or back, so its search field starts from the list's query rather than keeping what the other held. */}
-        {/* Note that the app sidebar stands its list in a stack with its foot whether or not a foot stands, so a foot coming or going never draws the list anew, its scroll and folds lost. */}
-        <Column
-          key={content === undefined ? FIRST_COLUMN.LIST : FIRST_COLUMN.APP_SIDEBAR}
-          view={
-            content === undefined ? (
-              sidebar
-            ) : (
-              <VStack spacing={0}>
-                {sidebar}
-                {sidebarFoot}
-              </VStack>
-            )
-          }
-          bar={sidebarBar}
-          sidebar
-          clear={content !== undefined}
-        />
+        <Column view={sidebar} bar={sidebarBar} sidebar />
       </NavigationSplitView.Sidebar>
-      {content === undefined ? null : (
-        <NavigationSplitView.Content>
-          <Column view={content} bar={contentBar} searchKey={searchKey} />
-        </NavigationSplitView.Content>
-      )}
       <NavigationSplitView.Detail>
         {detailStack === undefined ? (
           <Column view={detail} bar={detailBar} />
@@ -859,77 +626,5 @@ export function SplitView({
         )}
       </NavigationSplitView.Detail>
     </NavigationSplitView>
-  );
-}
-
-/** One of the views a column keeps, by the name it is shown under. */
-export type KeptView = { readonly key: string; readonly view: ReactNode };
-
-/**
- * A column's views, one shown and the rest kept drawn behind it, hidden and
- * out of VoiceOver's reach, as the iPad's Mail keeps each mailbox's list
- * scrolled where it was left: so the list a person comes back to stands as
- * they left it, scrolled, its rows folded or not, rather than drawn anew.
- */
-export function KeptColumns({
-  shown,
-  views,
-}: {
-  readonly shown: string;
-  readonly views: readonly KeptView[];
-}) {
-  return (
-    <ZStack>
-      {views.map(({ key, view }) => (
-        <ZStack key={key} modifiers={[hidden(key !== shown), accessibilityHidden(key !== shown)]}>
-          {view}
-        </ZStack>
-      ))}
-    </ZStack>
-  );
-}
-
-/**
- * The tabs' screens with one split view standing over them, as a window
- * wide enough for three columns stands its app sidebar, so a tab's switch
- * changes only the list and the detail beside a sidebar that stays where it
- * is. The split view stands in front while a tab's root stands, and behind
- * the tabs while a tab has pushed a page over its root, which slides in over
- * the split view, since the root under it draws nothing of its own; behind,
- * it takes no touch and VoiceOver passes over it. In front, the tabs under it
- * are passed over in turn, so a page a tab pushed before, or a tab's root,
- * is never read or matched from behind the split view. With no
- * split view, the tabs stand alone in the same place, so a rotation across
- * the line keeps every tab's stack.
- */
-export function SplitOverTabs({
-  tabs,
-  split,
-  front,
-}: {
-  readonly tabs: ReactNode;
-  readonly split?: ReactNode | undefined;
-  readonly front: boolean;
-}) {
-  const layer = front ? LAYER.FRONT : LAYER.BEHIND;
-
-  return (
-    <View style={layers.stand}>
-      <View
-        style={[layers.tabs, { zIndex: LAYER.FRONT - layer }]}
-        accessibilityElementsHidden={split !== undefined && front}
-      >
-        {tabs}
-      </View>
-      {split === undefined ? null : (
-        <View
-          style={[layers.split, { zIndex: layer }]}
-          pointerEvents={front ? "auto" : "none"}
-          accessibilityElementsHidden={!front}
-        >
-          {split}
-        </View>
-      )}
-    </View>
   );
 }

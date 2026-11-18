@@ -225,25 +225,6 @@ export function taskTree(input: TaskTreeInput): TaskTree {
 }
 
 /**
- * The groups a wide window's app sidebar lists as places of their own, as
- * Mail lists its mailboxes: Pinned, Following, and each of the member's
- * sections, in the tree's order, each counted by its rows. The repository
- * groups stay under Tasks, which lists every group.
- */
-export function taskTreeCollections(tree: TaskTree): readonly TaskTreeGroup[] {
-  return [
-    ...(tree.pinned === undefined ? [] : [tree.pinned]),
-    ...(tree.following === undefined ? [] : [tree.following]),
-    ...tree.sections,
-  ];
-}
-
-/** The collection a sidebar row picked, by its key; none where the tree no longer holds it, such as a section deleted or the last pin taken off. */
-export function taskTreeCollection(tree: TaskTree, key: string): TaskTreeGroup | undefined {
-  return taskTreeCollections(tree).find((group) => group.key === key);
-}
-
-/**
  * The workspace's tasks a search finds, whatever their status, newest
  * updated first, as ⌘K finds a task: every word typed in its name, its key
  * (`ACME-42`), or its repository. None for a search of no words.

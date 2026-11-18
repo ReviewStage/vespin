@@ -1,4 +1,4 @@
-# tab.yaml -- opens the tab `TAB` names (Inbox, Tasks, or Search): by its id, which the iPhone's tab bar and the app sidebar carry, or on an iPad by its name, last in the tree, in its floating bar, which carries no id.
+# tab.yaml -- opens the tab `TAB` names (Inbox, Tasks, or Search): by its id, which the iPhone's tab bar carries, or on an iPad by its name, last in the tree, in its floating bar or tab sidebar, which carry no id.
 #
 # Note that a tab is never tapped by its name alone where an id stands,
 # because a list's title and a back button share the name and come first in

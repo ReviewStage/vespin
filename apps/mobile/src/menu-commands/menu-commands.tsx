@@ -34,13 +34,7 @@ import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAgentPinned, selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
-import {
-  BUZZ,
-  ConfirmAsk,
-  useThreeColumns,
-  useWindowSizeClass,
-  WINDOW_SIZE_CLASS,
-} from "@repo/ui-native";
+import { BUZZ, ConfirmAsk, useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
 import { and, eq, isUndefined, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
@@ -53,7 +47,6 @@ import {
 } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAgentRowActs } from "../agents/use-agent.js";
-import { useDetailOnly } from "../detail-only.js";
 import {
   DETAIL_FRONT,
   PUSHED_PAGE,
@@ -347,13 +340,9 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   const workspaceNames = workspaces.map(({ name }) => name);
   const chosenWorkspace = workspaces.findIndex(({ id }) => id === switcher?.chosen.id);
   const sidebar = useSidebarShown();
-  // Note that Show or Hide Sidebar acts in any regular window, on the app sidebar where three columns stand and on the list beside its detail where two do.
+  // Note that Show or Hide Sidebar acts in any regular window, on the list beside its detail, and Expand Page stands the detail alone by hiding that list, as a two-column split view's own button does.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const sidebarStands = signedIn && regular;
-  const detailOnly = useDetailOnly();
-  // Note that Expand Page acts only where the detail can stand alone, a window wide enough for three columns.
-  const threeColumns = useThreeColumns();
-  const detailStands = signedIn && threeColumns;
 
   // Note that Back pops a page pushed over the detail in front, else a page the tab pushed over the window, as a stack's own Back does; never a sheet, which closes with its own Done or Cancel.
   const detailFront = useDetailFront();
@@ -373,7 +362,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
     ...subject.enabled,
     ...(workspaces.length > 0 ? [MENU_COMMAND.SWITCH_WORKSPACE] : []),
     ...(sidebarStands ? [MENU_COMMAND.SIDEBAR] : []),
-    ...(detailStands ? [MENU_COMMAND.DETAIL_ONLY] : []),
+    ...(sidebarStands ? [MENU_COMMAND.DETAIL_ONLY] : []),
     ...(backs ? [MENU_COMMAND.BACK] : []),
     ...(signedIn && steps.previous !== undefined ? [MENU_COMMAND.PREVIOUS_ITEM] : []),
     ...(signedIn && steps.next !== undefined ? [MENU_COMMAND.NEXT_ITEM] : []),
@@ -381,9 +370,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
 
   const toggled = [
     ...subject.toggled,
-    // Note that a detail standing alone hides the sidebar whatever its own choice, so the menu offers Show Sidebar then.
-    ...(sidebarStands && (!sidebar.shown || detailOnly.alone) ? [MENU_COMMAND.SIDEBAR] : []),
-    ...(detailStands && detailOnly.alone ? [MENU_COMMAND.DETAIL_ONLY] : []),
+    ...(sidebarStands && !sidebar.shown ? [MENU_COMMAND.SIDEBAR, MENU_COMMAND.DETAIL_ONLY] : []),
   ];
 
   const working = useWorkingAgents(subject.task?.id);
@@ -477,16 +464,8 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         // Note that Search is opened asking for its field's focus, since the system activates it only as its tab is tapped.
         return router.navigate({ pathname: "/search", params: { [SEARCH_FOCUS_PARAM]: "1" } });
       case MENU_COMMAND.SIDEBAR:
-        // Note that Show Sidebar over a detail standing alone brings the columns back with the sidebar, as the system's sidebar button does.
-        if (detailOnly.alone) {
-          detailOnly.setAlone(false);
-
-          return sidebar.setShown(true);
-        }
-
-        return sidebar.toggle();
       case MENU_COMMAND.DETAIL_ONLY:
-        return detailOnly.toggle();
+        return sidebar.toggle();
       case MENU_COMMAND.BACK: {
         if (detailFront === DETAIL_FRONT.PUSHED) return popDetailFront();
 

@@ -18,28 +18,16 @@ builds a control of its own.
   `WordsRow` for its description), `GroupRow` (a place a regular window's
   sidebar opens, such as the Inbox with its count, at Mail's mailbox
   measures: its glyph a step over its 17 pt name, the count muted, and a
-  rounded selection fill set in from the sidebar's edges), `SplitView` (the app's
-  sidebar, the list, and the detail, or the list and the detail, each column
-  under its own `ColumnBar`: its inline title, what leads it such as the
-  workspace switcher, its `lead` glyphs such as Mail's expand button (the
-  detail alone, `detailOnly`) and compose,
+  rounded selection fill set in from the sidebar's edges), `SplitView` (a tab's list
+  and its detail beside the system's tab sidebar, each column under its own
+  `ColumnBar`: its inline title, what leads it such as the workspace
+  switcher, its `lead` glyphs such as compose,
   a path, a page's main acts as glyphs in the bar's one glass before its ⋯
   (two or three, dimmed rather than gone with nothing picked, the rest left
-  in ⋯ by `menuWithout`), a list's scopes as Mail's filter button
-  (`scopeMenu`, beside the app sidebar only), a line under its title
-  (`titleLine`) such as the narrowing scope's "Filtered by:" line (`scopeSubtitle`), as
-  Mail's, which `Screen`'s `subtitle` sets under a compact screen's stack bar
-  too (`barSubtitle`: SwiftUI's `navigationSubtitle` for a column, the
-  stack's `UINavigationItem.subtitle` for a screen, each standing whether
-  or not it has words, since a modifier coming or going redraws all under
-  it), a
+  in ⋯ by `menuWithout`), a
   `BarMenu` such as the ⋯ menu, an
-  act, a search, and the acts at its foot, the sidebar shown or hidden as its
-  caller says, and `SplitOverTabs`, the one split view a window wide enough
-  for three columns stands over the hidden tabs, in front of a tab's root and
-  behind a page the tab pushed, with `KeptColumns` keeping each tab's list
-  drawn behind the one shown; a detail is drawn alone, since a page such as
-  `ThreadPage` sets bar items SwiftUI reads from a hidden view too), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
+  act, a search, and the acts at its foot, the list shown or hidden as its
+  caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
   `ScopePicker` (a list's scopes as the system's segmented control, or its menu picker in a split view's narrow list column), `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
   answer's fields, and `AskNote` for what a send that did not go said),
@@ -198,13 +186,10 @@ navigation, tab bar, swipes, menus, sheets and glass.
   React Native scales by the reader's setting. The navigation bar's words are
   the system's fixed sizes (`BAR_TITLE`), as its own titles stand.
 - **Inline titles, no large titles.** A tab's root shows its name small and
-  inline. A split view's list column beside the app sidebar stands its title
-  bold at its bar's leading edge (`inlineLarge`), as Mail names the mailbox
-  over its list, and its search is the system's field under that title, in
-  its own column's bar (`navigationBarDrawer`), never a lone button over the
-  detail, whose bar stays the page's alone; a list standing first, as a portrait iPad's, keeps its title
-  small and inline, since its bar also holds the switcher, ⋯ and the
-  sidebar button. A pushed page shows its path (task › agent, repository › key) small
+  inline. A split view's list keeps its title small and inline too, since
+  its bar also holds the switcher, ⋯ and the sidebar button, and its search
+  is the system's field in its own column, never a lone button over the
+  detail, whose bar stays the page's alone. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading
   under it; a split view's detail column draws the same path in its bar, but
   for a thread's, which heads the page over its title (`pathInHead`), so the
@@ -238,10 +223,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   the account by its photo and name opening Settings, in every window; the account's
   photo (`AccountButton`) only before the workspaces are read, opening
   Settings, which the system stands in the same round glass, the photo
-  clipped to a circle inside. A landscape iPad's sidebar heads its
-  list with the switcher, its tile and its name, and stands no Settings gear: Settings
-  opens from the switcher's menu and ⌘,, as Notion's and Linear's iPad sidebars keep it, and
-  the account's photo leads the sidebar's bar only until the switcher can draw. Nothing draws a
+  clipped to a circle inside. Settings opens from the switcher's menu and
+  ⌘,, as Notion's and Linear's iPad apps keep it. Nothing draws a
   copy of glass, and glass is one layer: a bar's own, one glass view
   (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest), or a
   control's own glass button style in a `DockRow`, never inside a bar. A
@@ -360,9 +343,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   which pushed the page's path out of a compact bar.
 - **The tab bar** is `NativeTabs`: icons alone in a compact window, through
   its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
-  New task; a regular window's bar keeps its labels. A window wide enough
-  for three columns hides it and stands the app sidebar instead, whose
-  `GroupRow`s carry the places' names. A compact window hides it too while a
+  New task; a regular window's bar keeps its labels and is
+  `sidebarAdaptable`, so iPadOS stands it as its own tab sidebar, as Apple's
+  tab guidance has it. A compact window hides it while a
   conversation stands in front (a thread, an agent's page, or a pull
   request it opened), as Messages does, so the composer stands alone at
   the foot (the developer, Nov 12, 2026).

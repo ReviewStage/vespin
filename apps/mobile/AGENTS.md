@@ -353,21 +353,12 @@ A flow is written one way throughout:
   the compose button leading the detail's bar, as Mail stands compose over
   the message, rather than the tab bar's round +, which only a compact
   window keeps (Search's own two columns hold it in Search's bar).
-  Where the window is wide enough for three columns, an iPad's in
-  landscape, it hides the tab bar and stands the app sidebar first, as
-  Mail stands its mailboxes (`src/screens/app-sidebar.tsx`): the workspace
-  switcher heading the list, the Inbox with its count, Tasks, and Search,
-  then Pinned, Following, and each of the member's sections as one row with
-  its count, never a task's own row. A row fills the list column (Tasks
-  every group, a collection only its own tasks), the detail shows the
-  list's selection, and a task dragged onto Pinned or a section is put
-  there. The sidebar's bar holds only the system's toggle: Settings opens
-  from the switcher's menu and ⌘,. The last pick is kept
-  (`src/sidebar-pick.ts`), so a rotation and the next launch come back to
-  it. A portrait iPad and the open Duo keep the tab bar, and their Tasks
-  list draws Pinned, Following, and the sections as groups. Whether the
-  first column stands is one answer every tab shares
-  (`src/sidebar-shown.ts`).
+  The tab bar is `sidebarAdaptable`, so a regular window stands iPadOS's
+  own tab sidebar beside each tab's list and detail, as Apple's tab
+  guidance has it, and the Tasks list draws Pinned, Following, and the
+  member's sections as groups atop its list. Settings opens from the
+  switcher's menu and ⌘,. Whether the list stands beside its detail is one
+  answer every tab shares (`src/sidebar-shown.ts`).
 - **Words match the panel's**: Inbox, Tasks, New task, Mark done, ask, and
   `docs/DESIGN.md`'s copy rules.
 - **Every write goes through `useWrite`** (`src/use-write.ts`). What went
