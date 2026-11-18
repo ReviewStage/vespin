@@ -4,6 +4,7 @@ import { type IosTab, iosRouteOnTab, iosTabOfGroup } from "@repo/features/ios-ap
 import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
 import { useSegments } from "expo-router";
 import { createContext, useCallback, useContext } from "react";
+import { standingWithoutInbox, useInboxShown } from "./inbox/inbox-shown.js";
 
 /** The tab whose stack a screen stands on, which each tab's stack layout hands its screens; none outside the tabs. */
 export const OwnTabContext = createContext<IosTab | undefined>(undefined);
@@ -20,12 +21,14 @@ export function useOwnTab(): IosTab | undefined {
  * page onto the stack the person is in, while a regular window opens it on
  * its own tab, because that tab's split view selects it beside its list, as
  * it always has. Note that a route named by no tab, such as one opened from
- * a sheet over the tabs, opens on its own tab too.
+ * a sheet over the tabs, opens on its own tab too, but for a thread while
+ * the Inbox is off, which opens on Tasks' (`standingWithoutInbox`).
  */
 export function useOnTab(): (route: string) => string {
   const segments: readonly string[] = useSegments();
   const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
-  const standing = compact ? iosTabOfGroup(segments[1]) : undefined;
+  const shown = useInboxShown();
+  const standing = standingWithoutInbox(compact ? iosTabOfGroup(segments[1]) : undefined, shown);
 
   // Note that the answer holds while the tab does, so an effect that opens a route on it runs again only when the tab moves.
   return useCallback((route) => iosRouteOnTab(route, standing), [standing]);
@@ -36,10 +39,11 @@ export function useOnTab(): (route: string) => string {
  * comments, a row of its own list, or an agent's pull request, named on the
  * stack the screen stands on, so it is pushed there whatever the window; on
  * the route's own tab where the screen stands on none, as a split view's
- * column drawn over the tabs does.
+ * column drawn over the tabs does, but Tasks' for a thread while the Inbox
+ * is off.
  */
 export function useOnOwnTab(): (route: string) => string {
-  const own = useOwnTab();
+  const own = standingWithoutInbox(useOwnTab(), useInboxShown());
 
   return useCallback((route) => iosRouteOnTab(route, own), [own]);
 }

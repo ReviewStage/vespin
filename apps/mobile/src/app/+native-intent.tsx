@@ -9,8 +9,9 @@ import {
 import { readShownLink } from "@repo/features/link-grammar";
 import { openURL } from "expo-linking";
 import { handHostConnect } from "../host-connect-link.js";
+import { inboxShownKept, standingWithoutInbox } from "../inbox/inbox-shown.js";
 
-/** Where a launch with nothing to route opens: the Inbox, through the root's own redirect. */
+/** Where a launch with nothing to route opens: the Inbox, or Tasks while it is off, through the root's own redirect. */
 const HOME = "/";
 
 /** A web address, as a universal link or a page handed off from another device arrives; anything else is a route of the app's own. */
@@ -22,12 +23,17 @@ const SCHEME_PREFIX = /^[a-z][a-z0-9+.-]*:\/\//iu;
 /**
  * A route of the app's own named on its own tab, a task's on Tasks' stack
  * and a thread's on the Inbox's, since every tab mounts both and the router
- * would otherwise pick one by name; any other path as it came.
+ * would otherwise pick one by name; any other path as it came. Note that a
+ * thread opens on Tasks' stack while the Inbox is off, as the tabs last
+ * kept it, since this runs before the host has read anything on a cold
+ * launch, and the tabs stand no Inbox to open it on.
  */
 function onOwnTab(path: string): string {
   const route = `/${path.replace(SCHEME_PREFIX, "").replace(/^\/+/u, "")}`;
 
-  return iosRouteTab(route) === undefined ? path : iosRouteOnTab(route, undefined);
+  return iosRouteTab(route) === undefined
+    ? path
+    : iosRouteOnTab(route, standingWithoutInbox(undefined, inboxShownKept()));
 }
 
 /**

@@ -160,6 +160,9 @@ const MACHINE_ASKED = new WeakSet<object>();
 /** The runs whose account stands owed setup, as `-setupOwed true` asks, by the store each stages, since a stage after a press is asked with none of the launch's own. */
 const SETUP_OWED = new WeakSet<object>();
 
+/** The runs whose account stands with its Inbox turned off, as `-inboxOff true` asks, by the store each stages, since a stage after a press is asked with none of the launch's own. */
+const INBOX_OFF = new WeakSet<object>();
+
 /** Where an account owed setup stands until it moves: its first step, set up for itself. */
 const SETUP_START = setupPlaceStored({ audience: SETUP_AUDIENCE.ME, at: 0 });
 
@@ -230,6 +233,20 @@ function withSetupOwed(held: AppStateSnapshot, setupOwed: boolean): AppStateSnap
   };
 }
 
+/**
+ * The document as held, or, where the launch stands the account with its
+ * Inbox turned off, its settings read with the Inbox off, as an account that
+ * turned it off on another device holds them; as held once the run chose
+ * for itself, so a turn of Settings' switch stands.
+ */
+function withInboxOff(held: AppStateSnapshot, inboxOff: boolean): AppStateSnapshot {
+  const { settings } = held;
+
+  if (!inboxOff || settings === undefined || settings.stored.inbox !== undefined) return held;
+
+  return { ...held, settings: { ...settings, stored: { ...settings.stored, inbox: false } } };
+}
+
 function stagedNetwork(held: AppStateSnapshot, updateNeeded: boolean): AppStateSnapshot["network"] {
   if (!updateNeeded || held.network.updateNeeded === true) return held.network;
 
@@ -257,16 +274,21 @@ function stagedKeys(held: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ.P
  * shoots the screen that asks for the update (`maestro/update-needed.yaml`).
  * Where `machineAsk`, as `-machineAsk true` asks, the run holds an ask of
  * Ada's MacBook for an agent's command from then on (`maestro/machine-ask.yaml`).
+ * Where `inboxOff`, as `-inboxOff true` asks, the account reads its Inbox
+ * turned off until the run turns it on (`maestro/inbox-off.yaml`).
  */
 export function stageFixture(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   updateNeeded = false,
   machineAsk = false,
   setupOwed = false,
+  inboxOff = false,
 ): void {
   if (machineAsk) MACHINE_ASKED.add(state);
 
   if (setupOwed) SETUP_OWED.add(state);
+
+  if (inboxOff) INBOX_OFF.add(state);
 
   const snapshot = state.snapshot();
 
@@ -307,7 +329,7 @@ export function stageFixture(
   );
 
   const staged = {
-    ...withSetupOwed(reminded, SETUP_OWED.has(state)),
+    ...withInboxOff(withSetupOwed(reminded, SETUP_OWED.has(state)), INBOX_OFF.has(state)),
     tasks: listed.tasks,
     network: stagedNetwork(held, updateNeeded),
     [LIVE_READ.PROVIDER_KEYS]: stagedKeys(inbox),

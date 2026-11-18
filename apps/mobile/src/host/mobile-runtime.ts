@@ -28,6 +28,7 @@ export interface MobileHostStartOptions {
   /** Whether a fixture run holds a machine's ask for an agent's command; never in a live run. */
   readonly fixtureMachineAsk?: boolean | undefined;
   readonly fixtureSetupOwed?: boolean | undefined;
+  readonly fixtureInboxOff?: boolean | undefined;
   /** Whether a fixture run refuses the writes a flow presses; never in a live run. */
   readonly fixtureRefusesWrites?: boolean | undefined;
   /** This build's version, as the app's config names it. */
@@ -80,6 +81,7 @@ export async function startMobileHost(
         fixtureUpdateNeeded: options.fixtureUpdateNeeded,
         fixtureMachineAsk: options.fixtureMachineAsk,
         fixtureSetupOwed: options.fixtureSetupOwed,
+        fixtureInboxOff: options.fixtureInboxOff,
         fixtureRefusesWrites: options.fixtureRefusesWrites,
         appVersion: options.appVersion,
         stateRoot: options.stateRoot,

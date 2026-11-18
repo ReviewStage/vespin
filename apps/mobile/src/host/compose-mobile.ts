@@ -174,6 +174,8 @@ export interface MobileHostOptions {
   readonly fixtureMachineAsk?: boolean | undefined;
   /** Whether a fixture run's account stands as one that started setup and hasn't finished it, which `-setupOwed true` asks; never in a live run. */
   readonly fixtureSetupOwed?: boolean | undefined;
+  /** Whether a fixture run's account stands with its Inbox turned off, which `-inboxOff true` asks; never in a live run. */
+  readonly fixtureInboxOff?: boolean | undefined;
   /** Whether a fixture run's act port refuses the writes a flow presses, which `-refuseWrites true` asks; never in a live run. */
   readonly fixtureRefusesWrites?: boolean | undefined;
   /** This build's version, as the app's config names it. */
@@ -378,10 +380,11 @@ const stagedFixture = (
   updateNeeded: boolean,
   machineAsk: boolean,
   setupOwed: boolean,
+  inboxOff: boolean,
 ) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
-      stageFixture(state, updateNeeded, machineAsk, setupOwed);
+      stageFixture(state, updateNeeded, machineAsk, setupOwed, inboxOff);
       yield* publishAppStateChanges(
         state,
         () => Effect.sync(() => stageFixture(state, updateNeeded)),
@@ -537,6 +540,7 @@ export function composeMobile(
               options.fixtureUpdateNeeded === true,
               options.fixtureMachineAsk === true,
               options.fixtureSetupOwed === true,
+              options.fixtureInboxOff === true,
             );
 
       return Layer.provideMerge(staged, standing);

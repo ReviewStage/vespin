@@ -153,6 +153,7 @@ import { type ReactElement, type ReactNode, useDeferredValue, useMemo, useState 
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useKeeping } from "../keeping.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
@@ -1773,7 +1774,8 @@ type AgentNest = {
  * opened, as a task's sub-tasks are, a folded row counting the threads that
  * wait on the reader under it too, so none waits unsaid; counted while it
  * has any, its header's + New agent, which opens its sheet, and the line of
- * its threads that need you.
+ * its threads that need you, which opens the Inbox, so none while the
+ * member turned it off.
  */
 function OverviewAgents({
   overview,
@@ -1783,6 +1785,7 @@ function OverviewAgents({
   readonly archiving: AgentArchiving;
 }) {
   const router = useRouter();
+  const inboxShown = useInboxShown();
   const { task } = overview;
   const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
 
@@ -1835,7 +1838,7 @@ function OverviewAgents({
           }}
         />
       ))}
-      {overview.waitingElsewhere === 0 ? null : (
+      {overview.waitingElsewhere === 0 || !inboxShown ? null : (
         <LinkRow
           symbol={GLYPH.INBOX}
           label={threadsWaitingWords(overview.waitingElsewhere)}

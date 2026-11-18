@@ -1,4 +1,4 @@
-// agents.tsx -- Settings' Agents page: the model, effort, and speed a new agent starts on, and the rest of how agents work for the account (default permissions, follow-up behavior, commit author), drawn from the panel's own settings rows.
+// agents.tsx -- Settings' Agents page: the model, effort, and speed a new agent starts on, and the rest of how agents work for the account (default permissions, follow-up behavior, commit author, and whether they ask in the Inbox), drawn from the panel's own settings rows.
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { DEFAULT_SAVE_FAILED_NOTE } from "@repo/features/agent-refusal-words";
@@ -85,12 +85,18 @@ const DEFAULT_WORDS = {
  * default model's rows in one group as the panel's New agents section holds
  * them, then the Agents group of Preferences (follow-up behavior and the
  * commit author), each row a group of its own under the words that explain
- * it, as the schema orders their rows.
+ * it, as the schema orders their rows; then the Inbox's switch, the one row
+ * of the panel's General preferences the phone draws, since it decides
+ * where the member's agents ask.
  */
 const SCHEMA_GROUP = {
   NEW_AGENTS: { page: SETTINGS_PAGE.AGENTS, section: SETTING_SECTION.NEW_AGENTS },
   PREFERENCES: { page: SETTINGS_PAGE.PREFERENCES, section: SETTING_SECTION.AGENTS },
+  GENERAL: { page: SETTINGS_PAGE.PREFERENCES, section: SETTING_SECTION.GENERAL },
 } as const satisfies Record<string, { page: SettingsPage; section: SettingSection }>;
+
+/** The Inbox's own setting, which the phone draws as a switch. */
+const INBOX_FIELD = APP_SETTING_SCHEMA.inbox.field;
 
 /** One stored setting's row as the schema draws it on a page. */
 type SchemaRow = ReturnType<typeof settingRowsForPage>[number];
@@ -209,6 +215,21 @@ export default function AgentsScreen() {
       });
   };
 
+  // Note that the Inbox's switch goes as the choice rows do, its refusal said under its row and a refused turn redrawn from the stored choice.
+  const storeInbox = (on: boolean) => {
+    void setting
+      .run(INBOX_FIELD, String(on), () =>
+        acts[ACT_KIND.SETTING_UPDATE]({ field: INBOX_FIELD, value: on }).then(actionRefused),
+      )
+      .then((landed) => {
+        if (!landed) {
+          setSettingRounds((rounds) =>
+            new Map(rounds).set(INBOX_FIELD, (rounds.get(INBOX_FIELD) ?? 0) + 1),
+          );
+        }
+      });
+  };
+
   // Note that a schema row with no control on this platform is left out, so its group never stands empty.
   const rowsOf = (group: (typeof SCHEMA_GROUP)[keyof typeof SCHEMA_GROUP]): readonly SchemaRow[] =>
     view === undefined
@@ -219,6 +240,14 @@ export default function AgentsScreen() {
 
   const newAgentRows = rowsOf(SCHEMA_GROUP.NEW_AGENTS);
   const preferenceRows = rowsOf(SCHEMA_GROUP.PREFERENCES);
+
+  // Note that the Inbox's row stands only where the schema shows it, so the phone draws it once every window hides the Inbox it turns off.
+  const inboxRow =
+    view === undefined
+      ? undefined
+      : settingRowsForPage(SCHEMA_GROUP.GENERAL.page, SCHEMA_GROUP.GENERAL.section, view).find(
+          (row) => row.field === INBOX_FIELD,
+        );
 
   // The refusals said for a group's settings, each by its own field, under the group that holds its row.
   const refusalOf = (rows: readonly SchemaRow[], also: readonly string[] = []) =>
@@ -332,6 +361,19 @@ export default function AgentsScreen() {
               {pickRow(row)}
             </ListSection>
           ))}
+          {inboxRow === undefined || settings === undefined ? null : (
+            <ListSection
+              footer={refusalOf([inboxRow]) ?? inboxRow.entry.detail}
+              footerTone={footerToneOf(refusalOf([inboxRow]))}
+            >
+              <ToggleRow
+                key={settingRounds.get(INBOX_FIELD) ?? 0}
+                label={inboxRow.entry.label}
+                on={settings.inbox !== false}
+                onChange={storeInbox}
+              />
+            </ListSection>
+          )}
         </SettingsForm>
       </Screen>
       {removal.ask}
