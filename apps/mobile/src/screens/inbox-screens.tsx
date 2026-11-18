@@ -1378,6 +1378,7 @@ function InboxSplitScreen({
   );
 
   const list = {
+    chosen: selected !== undefined,
     // Note that the list stands its scopes as its first row, so they scroll away with the rows, over its empty state too, which stands as its one row.
     view: rows,
     // Note that Select mode names how many are chosen in the column's title, leads its bar with Select all, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.

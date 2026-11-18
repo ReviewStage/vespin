@@ -20,7 +20,12 @@ import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 const NEW_TASK = { label: "New task", symbol: GLYPH.NEW_TASK } as const;
 
 /** The list a tab's split view stands beside its detail, and its bar: its title, its menu, and its search. */
-type ListColumn = { readonly view: ReactNode; readonly bar: ColumnBar };
+type ListColumn = {
+  readonly view: ReactNode;
+  readonly bar: ColumnBar;
+  /** Whether a row is picked, whose page stands in the detail; with none, the list always stands. */
+  readonly chosen: boolean;
+};
 
 /** Whether the first column stands, and how a person shows or hides it, as every split view takes it. */
 type SidebarVisibility = {
@@ -102,10 +107,11 @@ export function useListColumn(list: ListColumn): FirstColumn {
     sidebar: list.view,
     // Note that New task leads the detail's bar instead (`useDetailColumnBar`), as in Mail, so the narrow list's bar keeps only its own acts, such as Select mode's Done, and acts it leads with, such as Select all, stand in the switcher's place, as on the iPhone, since a second leading item folds into the bar's overflow.
     sidebarBar: { ...list.bar, leading: (list.bar.lead ?? []).length > 0 ? undefined : leading },
-    sidebarShown: focused ? shown : kept,
-    // Note that only the split view in front is heard, because a tab kept behind another lays its split view out off screen, which reports its list folded, and that report stood as the person's choice once its tab came back.
+    // Note that the list always stands while no row is picked, as Mail opens a mailbox on its list, because the detail has no page to stand alone with; the split view folds its list on its own in a portrait window, which left a tab opening on "Choose an item" alone.
+    sidebarShown: !list.chosen || (focused ? shown : kept),
+    // Note that only the split view in front with a row picked is heard, because a tab kept behind another lays its split view out off screen, which reports its list folded, and a fold with nothing picked is the split view's own, never the person's choice.
     onSidebarShownChange: (next) => {
-      if (focused) setShown(next);
+      if (focused && list.chosen) setShown(next);
     },
   };
 }

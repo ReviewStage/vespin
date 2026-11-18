@@ -28,10 +28,20 @@ onFlowComplete:
       visible: "Choose an item"
     commands:
       - setOrientation: PORTRAIT
+      - waitForAnimationToEnd:
+          timeout: 5000
+      # Each tab opens on its list beside "Choose an item" while nothing is
+      # picked, the Inbox's and Tasks' alike, never on the detail alone with
+      # its list folded behind the sidebar button.
+      - assertVisible: "Recorded the invite flow"
+      - takeScreenshot: portrait-inbox
       - runFlow:
           file: subflows/tab.yaml
           env:
             TAB: Tasks
+      - assertVisible: "Pinned"
+      - assertVisible: "Choose an item"
+      - takeScreenshot: portrait-tasks
       - tapOn: "Teammate invitations"
       - assertVisible: "Agents"
       - waitForAnimationToEnd:
