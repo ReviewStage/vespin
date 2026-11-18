@@ -5,6 +5,8 @@
 # (`fixture-host.ts`'s `withInboxOff`), so no server is reached. The
 # screenshots land under the run's --test-output-dir (`takeScreenshot/`).
 appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 - launchApp:
     clearState: true
@@ -14,8 +16,20 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Teammate invitations"
     timeout: 30000
-- assertNotVisible:
-    id: "inbox-tab"
+# Note that an iPad's floating bar and tab sidebar carry no ids, so there the Inbox is looked for by its name.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - assertVisible:
+          id: "tasks-tab"
+      - assertNotVisible:
+          id: "inbox-tab"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - assertNotVisible: "Inbox"
 - assertNotVisible: "Recorded the invite flow"
 - takeScreenshot: inbox-off-tasks
 # A thread a link names still opens, on Tasks' stack, since no Inbox tab
@@ -38,19 +52,9 @@ appId: dev.vespin.ios
     visible: "Teammate invitations"
     timeout: 30000
 - runFlow:
-    when:
-      visible:
-        id: "search-tab"
-    commands:
-      - tapOn:
-          id: "search-tab"
-- runFlow:
-    when:
-      notVisible: "Search Vespin"
-    commands:
-      - tapOn:
-          text: "Search"
-          rightOf: "Tasks"
+    file: subflows/tab.yaml
+    env:
+      TAB: Search
 - tapOn: "Search Vespin"
 - inputText: "invite"
 - extendedWaitUntil:
@@ -78,4 +82,7 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Use the Inbox"
+- assertVisible:
+    text: "Use the Inbox"
+    checked: false
 - takeScreenshot: inbox-off-settings
