@@ -13,7 +13,11 @@
     "./task-status-symbols": "./src/generated/task-status-symbols.ts",
     "./product-mark-symbol": "./src/generated/product-mark-symbol.ts",
     "./assets-directory": "./scripts/assets-directory.mjs",
-    "./dmg-window": "./scripts/dmg-window.mjs"
+    "./dmg-window": "./scripts/dmg-window.mjs",
+    "./every-lucide-symbol": {
+      "types": "./scripts/every-lucide-symbol.d.mts",
+      "default": "./scripts/every-lucide-symbol.mjs"
+    }
   },
   "types": "./src/index.ts",
   "scripts": {
