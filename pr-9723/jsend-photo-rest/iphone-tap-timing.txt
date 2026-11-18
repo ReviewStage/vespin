@@ -1,0 +1,19 @@
+probe rows 2393, commands 75, frames 2475
+path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle
+send-text | 6 | topTouchEnd | 1089 | 4 | 36 | 706 | 83 | 76 | 0 | 1 | -5 | 188 | 1277 | 428
+send-photo | 6 | topTouchEnd | 643 | 6 | 94 | 2385 | 233 | 155 | 114 | 2 | -2 | 240 | 887 | 302
+
+most rendered components per path (summed over its taps):
+send-text: obj×847, View×161, Button×135, Slot×125, SlotView×125, Text×121, Image×71, VStack×70, VStackView×70, ImageView×65, RNHostView×36, Screen×30, ContextMenu×22, TextView×10
+send-photo: obj×1710, View×745, Button×640, Slot×625, SlotView×625, Image×430, RNHostView×420, VStack×375, VStackView×375, ImageView×355, Text×290, GlyphLabel×192, ContextMenu×90, Label×73
+
+slowest components per path (React's own render ms, summed over its taps, then per tap):
+send-text: ThreadDetail 17.8, Markdown 2.5, TabsScreen 0.9, GuardedScreens 0.9, MenuCommands 0.8, StandardRouterNavigator 0.6, InboxThreadScreen 0.6, SceneView 0.4, obj 0.3, TabsLayout 0.3
+send-photo: ThreadDetail 47.1, Picture 17.6, MenuCommands 0.7, GuardedScreens 0.7, SceneView 0.7, Avatar 0.5, StandardRouterNavigator 0.5, MessageView 0.5, InboxThreadScreen 0.5, ImageView 0.5
+
+markdown vs the rest (React render ms per tap, from the components' own times):
+send-text: markdown 2.5, rest 23.0
+send-photo: markdown 17.6, rest 53.1
+
+whole run: 89s, 240 commits, 76525 components rendered, 4438 ms of stalls over 29 stalls
+events: topTextChange×60, topTransitionProgress×58, topHeaderHeightChange×55, topTouchStart×21, topTouchEnd×21, topLoadStart×16, topLoad×16, topLoadEnd×16, topButtonPress×15, topGlobalEvent×14, topOverlap×7, topInsetsChange×6, topFinishTransitioning×6, topWillAppear×5, topProgress×5
