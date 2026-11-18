@@ -39,7 +39,7 @@ appId: dev.vespin.ios
           text: "Photo, November.*"
           index: 0
       - tapOn: "Done"
-      - assertVisible: "Picture.*"
+      - assertVisible: "Remove Picture.*"
       - tapOn:
           text: "Send"
           retryTapIfNoChange: false
