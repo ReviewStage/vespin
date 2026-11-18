@@ -684,6 +684,75 @@ function homeOf(way: ListMotionWay): Keyframe {
   return way === LIST_MOTION_WAY.UNROLL ? { clipPath: UNROLLED } : { transform: "none" };
 }
 
+/** The clip a row of a run stands behind, rolled up and unrolled. */
+interface UnrollEdge {
+  readonly shut: Keyframe;
+  readonly open: Keyframe;
+}
+
+/** A row as a run of unrolling rows reads it: where it stands in its list, and how tall. */
+interface UnrollRow {
+  readonly element: Element;
+  readonly top: number;
+  readonly height: number;
+}
+
+/**
+ * The clips each run of rows unrolls and rolls up between, so rows arriving
+ * or leaving together, one under the next in one list, move as one body
+ * with one edge, as a fold's does: each row is cut where that edge stands,
+ * hidden while it stands above the row and whole once it has passed its
+ * foot. A row alone is no run, and unrolls from its own top as ever.
+ */
+function unrollEdges(rows: readonly UnrollRow[]): Map<Element, UnrollEdge> {
+  const edges = new Map<Element, UnrollEdge>();
+  let run: UnrollRow[] = [];
+
+  const close = () => {
+    const first = run[0];
+    const last = run.at(-1);
+
+    // Note that a row alone keeps the clips every unrolling row rides, from its own top.
+    if (first === undefined || last === undefined || first === last) {
+      run = [];
+
+      return;
+    }
+
+    const height = last.top + last.height - first.top;
+
+    for (const row of run) {
+      const cut = row.top - first.top + row.height;
+      edges.set(row.element, {
+        shut: { clipPath: `inset(0px 0px ${cut}px 0px)` },
+        open: { clipPath: `inset(0px 0px ${cut - height}px 0px)` },
+      });
+    }
+
+    run = [];
+  };
+
+  for (const row of [...rows].sort((a, b) => a.top - b.top)) {
+    const previous = run.at(-1);
+    const list = row.element.parentElement;
+    const gap = list === null ? 0 : Number.parseFloat(getComputedStyle(list).rowGap) || 0;
+
+    if (
+      previous !== undefined &&
+      (previous.element.parentElement !== list ||
+        row.top - (previous.top + previous.height) > gap + STILL)
+    ) {
+      close();
+    }
+
+    run.push(row);
+  }
+
+  close();
+
+  return edges;
+}
+
 /**
  * Takes each leaving element out of the layout, laid over the place it is
  * drawn at, and slides it out, letting its entry go once that has played;
@@ -730,8 +799,21 @@ function playExits(
     };
   });
 
+  // Note that rows rolling up together share one edge, so a fold's rows go as one body.
+  const edges =
+    way === LIST_MOTION_WAY.UNROLL
+      ? unrollEdges(
+          placed.map(({ each, top }) => ({
+            element: each.element,
+            top,
+            height: each.element.offsetHeight,
+          })),
+        )
+      : undefined;
+
   for (const { each, top, left, width, opacity } of placed) {
     const { element, onLeft } = each;
+    const edge = edges?.get(element);
     element.style.setProperty(LEAVING_PLACE.TOP, `${top}px`);
     element.style.setProperty(LEAVING_PLACE.LEFT, `${left}px`);
     element.style.setProperty(LEAVING_PLACE.WIDTH, `${width}px`);
@@ -739,8 +821,8 @@ function playExits(
 
     const out = element.animate(
       [
-        { opacity, ...homeOf(way) },
-        { opacity: 0, ...away },
+        { opacity, ...(edge?.open ?? homeOf(way)) },
+        { opacity: 0, ...(edge?.shut ?? away) },
       ],
       { ...exit, fill: "forwards" },
     );
@@ -769,7 +851,13 @@ interface MoveTiming {
 }
 
 /** Plays a row's arrival, the way it would leave played back on the spring, added onto any motion of its own, as it fades in, `step` staggers after the first; only the fade where it does not travel. */
-function arrive(mover: Element, step: number, away: Keyframe, timing: MoveTiming): void {
+function arrive(
+  mover: Element,
+  step: number,
+  away: Keyframe,
+  timing: MoveTiming,
+  edge: UnrollEdge | undefined,
+): void {
   if (timing.arrive === undefined) return;
   const delay = timing.wait + Math.min(step, STAGGER_STEPS) * timing.stagger;
   mover.animate([{ opacity: 0 }, { opacity: 1 }], { ...timing.arrive, delay, fill: "backwards" });
@@ -777,7 +865,7 @@ function arrive(mover: Element, step: number, away: Keyframe, timing: MoveTiming
   if (!timing.travels) return;
   // Note that a clip is no offset to add onto one under way, so an unroll replaces any clip of its own.
   const unrolls = timing.way === LIST_MOTION_WAY.UNROLL;
-  mover.animate([away, homeOf(timing.way)], {
+  mover.animate([edge?.shut ?? away, edge?.open ?? homeOf(timing.way)], {
     ...timing.travel,
     delay,
     fill: "backwards",
@@ -987,7 +1075,21 @@ function playMoves(root: HTMLElement, before: Snapshot, timing: MoveTiming): voi
     return carrier === root ? { x: 0, y: 0 } : movedBy(carrier);
   };
 
-  for (const [step, mover] of seenArriving.entries()) arrive(mover, step, away, timing);
+  // Note that rows unrolling in together share one edge, so a fold's rows arrive as one body.
+  const edges =
+    timing.way === LIST_MOTION_WAY.UNROLL
+      ? unrollEdges(
+          seenArriving.map((mover) => ({
+            element: mover,
+            top: now.get(mover)?.y ?? 0,
+            height: mover instanceof HTMLElement ? mover.offsetHeight : 0,
+          })),
+        )
+      : undefined;
+
+  for (const [step, mover] of seenArriving.entries()) {
+    arrive(mover, step, away, timing, edges?.get(mover));
+  }
 
   for (const mover of movers) {
     const was = wasOf(mover);
@@ -1173,15 +1275,16 @@ class ListMotionPlayer extends Component<
     if (spring === undefined) return;
     const left = leaving.length > 0 && exit !== undefined;
     const closes = (left && way === LIST_MOTION_WAY.UNROLL) || (batch.closes && exit !== undefined);
-    // Note that the change that ends the read lands the last of it, which arrives as the rest of it did.
+    // Note that the change that ends the read lands the last of it, which arrives as the rest of it did, and rows that unroll arrive together as one body, as a fold's does.
     playMoves(root, before, {
       wait: left && !closes ? Number(exit.duration) : 0,
       travel: spring,
       close: closes ? exit : undefined,
       arrive: tokenTiming(root, MOTION_TOKEN.DURATION_QUICK, MOTION_TOKEN.EASE_EXIT),
-      stagger: reading
-        ? 0
-        : milliseconds(getComputedStyle(root).getPropertyValue(MOTION_TOKEN.ROW_STAGGER)),
+      stagger:
+        reading || way === LIST_MOTION_WAY.UNROLL
+          ? 0
+          : milliseconds(getComputedStyle(root).getPropertyValue(MOTION_TOKEN.ROW_STAGGER)),
       way,
       travels: !reading,
     });
@@ -1320,5 +1423,55 @@ export function ListMotion({
         reading={reading}
       />
     </LeavesContext.Provider>
+  );
+}
+
+/** The rows a nested list draws, those its folds let go held until they have rolled up, handed to the list that draws them. */
+function HeldRows<T>({
+  rows,
+  keyOf,
+  children,
+}: {
+  rows: readonly T[];
+  keyOf: (row: T) => string;
+  children: (drawn: readonly Drawn<T>[]) => ReactNode;
+}): React.JSX.Element {
+  return <>{children(useLeaving(rows, keyOf))}</>;
+}
+
+/**
+ * A flat list whose rows nest under rows that fold them, as an agent's
+ * started agents stand under it, moving as a fold does: the rows a row
+ * folds open unroll in together under it on the spring, one edge across
+ * them, the rows under them gliding down on it, and the rows it folds shut
+ * roll up together on the exit's tokens as the rows under them close over
+ * them (`LIST_MOTION_WAY.UNROLL`). Only a change of `folds`, what the folds
+ * stand at, plays; the list's other changes land at once, as they did. The
+ * box `root` names, around the list (its rows wearing `motionRows()` and
+ * their keys), is a motion of its own, so the caller tells the motion
+ * around it of each fold's press (`useListMotionReplay`, read outside this
+ * one), and what stands under the list moves with it.
+ */
+export function NestedRowsMotion<T>({
+  root,
+  folds,
+  rows,
+  keyOf,
+  children,
+}: {
+  root: RefObject<HTMLElement | null>;
+  /** What the folds stand at, a new value on each fold's press. */
+  folds: unknown;
+  rows: readonly T[];
+  keyOf: (row: T) => string;
+  /** Draws the list from its rows, those leaving among them. */
+  children: (drawn: readonly Drawn<T>[]) => ReactNode;
+}): React.JSX.Element {
+  return (
+    <ListMotion root={root} change={folds} way={LIST_MOTION_WAY.UNROLL}>
+      <HeldRows rows={rows} keyOf={keyOf}>
+        {children}
+      </HeldRows>
+    </ListMotion>
   );
 }

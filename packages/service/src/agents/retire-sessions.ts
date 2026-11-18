@@ -127,13 +127,13 @@ export function retireSessions(
 /**
  * What a task's or an agent's delete runs before anything goes: the sessions
  * its conversations run in, retired while those still stand, since a
- * session is found through its conversation. A task's delete
+ * session is found through its conversation. The app's task delete
  * runs it before its transaction, over the agents it stopped alone, so no
  * lock waits on a harness, and an agent started meanwhile keeps its session and
- * refuses the delete under the task's lock. An agent's delete still runs it
- * under its conversation's lock once it reads the agent stopped, since a
- * message that woke the agent would otherwise lose its session to a delete
- * then refused; the retires' own budget bounds how long they hold it.
+ * refuses the delete under the task's lock. `delete_task`, which stops no
+ * agent, and an agent's delete run it under the agents' conversation
+ * locks once they read stopped there, since a message that woke an agent
+ * would otherwise lose its session to a delete then refused; the retires' own budget bounds how long they hold it.
  */
 export function retiredBeforeDelete(
   retiring: Retiring,

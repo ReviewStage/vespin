@@ -220,7 +220,11 @@ export function SettingsPanel({
       ) : null}
 
       {view === SETTINGS_VIEW.SHORTCUTS ? (
-        <WindowShortcutSections experiments={experiments} capabilities={capabilities} />
+        <WindowShortcutSections
+          experiments={experiments}
+          capabilities={capabilities}
+          inbox={panelView?.settings.inbox !== false}
+        />
       ) : null}
     </ReplayUnmask>
   );

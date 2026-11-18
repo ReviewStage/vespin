@@ -71,7 +71,7 @@ import {
   oauthResourceRecord,
 } from "../member-mcp/resource.js";
 import { PageLinks } from "../pages/page-links.js";
-import { modelCatalogOf } from "../providers/model-catalog.js";
+import { modelCatalogOf, type OfferedModel } from "../providers/model-catalog.js";
 import { SlackApp, slackAppService } from "../slack/slack-app.js";
 import { SlackBot, slackBotOver } from "../slack/slack-bot.js";
 import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-config.js";
@@ -231,6 +231,8 @@ export interface MemberMcpStandingOptions {
   readonly github?: Layer.Layer<GitHubApp | HttpClient.HttpClient>;
   readonly integrations?: Layer.Layer<IntegrationConnect>;
   readonly keyRing?: Redacted.Redacted;
+  /** The models the catalog offers; none where left out. */
+  readonly catalog?: readonly OfferedModel[];
 }
 
 /**
@@ -253,7 +255,7 @@ export function memberMcpStanding(options: MemberMcpStandingOptions = {}) {
       Layer.succeedContext(yield* Layer.build(sqlClientOverPglite(client))),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
       options.github ?? NO_GITHUB,
-      modelCatalogOf([]),
+      modelCatalogOf(options.catalog ?? []),
       Layer.succeed(HostedEnvironment, {
         ...NO_ENVIRONMENT,
         providerKeyEncryptionKeys: options.keyRing,

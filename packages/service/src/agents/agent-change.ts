@@ -1,5 +1,5 @@
 /**
- * agent-change.ts -- an agent changed or archived, as the one operation the app's menu, `update_agent`, and the command line all run.
+ * agent-change.ts -- an agent changed or archived, as the one operation the app's menu, `update_agent`, `archive_agent`, and the command line all run.
  *
  * The app's `agents.change` names one change a call and `update_agent` may
  * name several, so a change is a partial (`AgentChanges`) written in one

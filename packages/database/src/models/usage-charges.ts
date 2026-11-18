@@ -7,16 +7,23 @@
  * the UTC calendar month, from its first instant to the next month's, and a
  * charge falls in the month its usage happened in. Every month read names
  * its workspace, so none answers another workspace's charges; the charges
- * not yet sent on to be invoiced are read across workspaces, by the one job
- * that sends them, and stamped as sent once they are.
+ * not yet sent on to be invoiced are read by their row ids, their items'
+ * ids, or their sandbox's name, across workspaces, by the usage queues that send them
+ * (`@repo/service`'s `billing/usage-queues.ts`), and stamped as sent once
+ * they are.
  */
 
-import { and, asc, eq, gt, gte, inArray, isNull, lt, min, sql, sum } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lt, min, sql, sum } from "drizzle-orm";
 import { Array as Arr, Effect, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
 import { usageChargeTable } from "../schemas/usage-charge.js";
-import { UsageFiguresSchema, usageKindSchema } from "../usage-vocabulary.js";
+import {
+  USAGE_KIND,
+  UsageFiguresSchema,
+  type UsageKind,
+  usageKindSchema,
+} from "../usage-vocabulary.js";
 import type { AgentStoreEffect } from "./agent-store.js";
 
 /**
@@ -72,12 +79,6 @@ const insertCharges = SqlSchema.findAll({
     ),
 });
 
-const UnsentRequestSchema = Schema.Struct({
-  since: Schema.Date,
-  after: Schema.NullOr(Schema.String),
-  limit: Schema.Int,
-});
-
 const UnsentSchema = Schema.Struct({
   id: Schema.String,
   organizationId: Schema.String,
@@ -90,9 +91,9 @@ const UnsentSchema = Schema.Struct({
 export type UnsentUsageCharge = typeof UnsentSchema.Type;
 
 const findUnsent = SqlSchema.findAll({
-  Request: UnsentRequestSchema,
+  Request: Schema.Struct({ ids: Schema.Array(Schema.String) }),
   Result: UnsentSchema,
-  execute: ({ since, after, limit }) =>
+  execute: ({ ids }) =>
     Database.use((db) =>
       db
         .select({
@@ -103,15 +104,47 @@ const findUnsent = SqlSchema.findAll({
           occurredAt: usageChargeTable.occurredAt,
         })
         .from(usageChargeTable)
+        .where(and(inArray(usageChargeTable.id, [...ids]), isNull(usageChargeTable.sentAt)))
+        .orderBy(asc(usageChargeTable.id)),
+    ),
+});
+
+const findUnsentOfSources = SqlSchema.findAll({
+  Request: Schema.Struct({ kind: usageKindSchema, sourceIds: Schema.Array(Schema.String) }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ kind, sourceIds }) =>
+    Database.use((db) =>
+      db
+        .select({ id: usageChargeTable.id })
+        .from(usageChargeTable)
         .where(
           and(
+            eq(usageChargeTable.kind, kind),
+            inArray(usageChargeTable.sourceId, [...sourceIds]),
             isNull(usageChargeTable.sentAt),
-            gte(usageChargeTable.occurredAt, since),
-            after === null ? undefined : gt(usageChargeTable.id, after),
           ),
         )
-        .orderBy(asc(usageChargeTable.id))
-        .limit(limit),
+        .orderBy(asc(usageChargeTable.id)),
+    ),
+});
+
+const findUnsentOfSandbox = SqlSchema.findAll({
+  Request: Schema.Struct({ sandboxName: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ sandboxName }) =>
+    Database.use((db) =>
+      db
+        .select({ id: usageChargeTable.id })
+        .from(usageChargeTable)
+        .where(
+          and(
+            eq(usageChargeTable.kind, USAGE_KIND.SANDBOX_SESSION),
+            // Note that the expression is spelled as the partial index spells it, so the read uses it.
+            sql`(${usageChargeTable.figures} ->> 'sandboxName') = ${sandboxName}`,
+            sql`${usageChargeTable.sentAt} is null`,
+          ),
+        )
+        .orderBy(asc(usageChargeTable.id)),
     ),
 });
 
@@ -221,17 +254,36 @@ export function workspaceMonthMemberTotals(
   return findMemberTotals({ organizationId, ...utcMonthOf(instant) });
 }
 
-/**
- * Up to `limit` charges not yet sent on, whose usage happened at or after
- * `since`, in the order of their ids and past the id `after` where one is
- * named, so a caller pages through them however many it leaves unsent.
- */
-export function unsentUsageCharges(page: {
-  readonly since: Date;
-  readonly after: string | null;
-  readonly limit: number;
-}): AgentStoreEffect<readonly UnsentUsageCharge[]> {
-  return findUnsent(page);
+/** The charges among the row ids named that are not yet sent on, in the order of their ids; one sent or no charge's is left out. */
+export function unsentUsageChargesOf(
+  ids: readonly string[],
+): AgentStoreEffect<readonly UnsentUsageCharge[]> {
+  if (ids.length === 0) return Effect.succeed([]);
+
+  return Effect.map(
+    Effect.forEach(Arr.chunksOf(ids, WRITE_CHUNK), (chunk) => findUnsent({ ids: chunk })),
+    (pages) => pages.flat(),
+  );
+}
+
+/** The row ids of the charges of the kind whose items are those named that are not yet sent on, whether recorded just now or before. */
+export function unsentChargeIdsOf(
+  kind: UsageKind,
+  sourceIds: readonly string[],
+): AgentStoreEffect<readonly string[]> {
+  if (sourceIds.length === 0) return Effect.succeed([]);
+
+  return Effect.map(
+    Effect.forEach(Arr.chunksOf(sourceIds, WRITE_CHUNK), (chunk) =>
+      findUnsentOfSources({ kind, sourceIds: chunk }),
+    ),
+    (rows) => rows.flat().map((row) => row.id),
+  );
+}
+
+/** The row ids of the named sandbox's session charges not yet sent on, however long ago they were recorded. */
+export function unsentSandboxChargeIds(sandboxName: string): AgentStoreEffect<readonly string[]> {
+  return Effect.map(findUnsentOfSandbox({ sandboxName }), (rows) => rows.map((row) => row.id));
 }
 
 /** When each of the workspaces' earliest charge not yet sent on happened, at or after `since`; a workspace with none is left out. */

@@ -92,6 +92,7 @@ import { MESSAGES_EXAMPLE } from "./examples/messages";
 import { MORE_BUTTONS_EXAMPLE } from "./examples/more-buttons";
 import { NAME_VALUE_ROWS_EXAMPLE } from "./examples/name-value-rows";
 import { NAV_ITEMS_EXAMPLE } from "./examples/nav-items";
+import { NESTED_ROWS_EXAMPLE } from "./examples/nested-rows";
 import { NOTE_LINES_EXAMPLE } from "./examples/note-lines";
 import { ONE_LINE_EXAMPLE } from "./examples/one-line";
 import { OVER_PANES_EXAMPLE } from "./examples/over-panes";
@@ -340,6 +341,7 @@ export const EXAMPLES: readonly Example[] = [
   RESIZE_EDGES_EXAMPLE,
   REVEALS_EXAMPLE,
   FOLD_MOTION_EXAMPLE,
+  NESTED_ROWS_EXAMPLE,
   ZOOM_IMAGES_EXAMPLE,
   MESSAGES_EXAMPLE,
   VOICE_CALLS_EXAMPLE,

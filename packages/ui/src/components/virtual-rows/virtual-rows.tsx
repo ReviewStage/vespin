@@ -220,8 +220,13 @@ export function sizeWhileShown<Item extends Element>(
   });
 }
 
+/** The room a run takes its view to have where there is no window, as a page prerendered on the server: a desktop window's, so its first rows are drawn. */
+const SERVER_RECT: Rect = { width: 1280, height: 800 };
+
 /** The room a run takes its view to have before its scroller is measured: the window's, which no view of it outgrows. */
 function windowRect(): Rect {
+  if (typeof window === "undefined") return SERVER_RECT;
+
   return { width: window.innerWidth, height: window.innerHeight };
 }
 

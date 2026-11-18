@@ -123,9 +123,8 @@ type StartDraft = {
 
 /**
  * Each new thread's draft, by the task, then the block's start and end, so
- * it outlives the screen that drew it, as a rotation hands a new comment
- * between a split view's detail and its tab's stack, each drawing its own
- * screen.
+ * it outlives the screen that drew it, as a refused start's field opens
+ * again on a screen of its own in its thread's place.
  */
 const startDrafts = new Map<string, Map<number, Map<number, StartDraft>>>();
 
@@ -616,9 +615,9 @@ export interface RefusedStart extends SentStart {
  * send answers that id before the service does, and under a key kept for as
  * long as the words stand, so the same words sent again after a lost answer
  * start one thread. The words typed are kept for the block until they are
- * sent, so a new comment handed to another screen by a rotation opens on
- * them; a refusal keeps them again with its key and why, for the field it
- * reopens, and is handed to `refused` with the id it went under.
+ * sent, so a new comment opened again on the block opens on them; a
+ * refusal keeps them again with its key and why, for the field it reopens,
+ * and is handed to `refused` with the id it went under.
  */
 export function useCommentStart(
   taskId: string,
@@ -738,7 +737,7 @@ export function useCommentStart(
       setSentLocal(start);
       setNote(undefined);
 
-      // Note that the draft goes as the send does, since the thread opens in the field's place; a refusal keeps it again below, so whichever field opens next, on this block, after a rotation or in a split view's detail, opens on the words under the same key.
+      // Note that the draft goes as the send does, since the thread opens in the field's place; a refusal keeps it again below, so whichever field opens next on this block opens on the words under the same key.
       if (startDraftOf(taskId, block) !== undefined) keepStartDraft(taskId, block, undefined);
 
       void write(

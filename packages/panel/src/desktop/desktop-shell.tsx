@@ -53,6 +53,7 @@ import { appPlatform } from "../app-platform.js";
 import { CallAgentShown, CallCardDock } from "../call/standing-call.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { MERGE_QUEUE_WORDS } from "../history-titles.js";
+import { useInboxOn } from "../inbox-on.js";
 import { useMergeQueueOn } from "../merge-queue-route.js";
 import { NewWorkspaceSteps } from "../onboarding/new-workspace-steps.js";
 import { SetupSteps, useSetupGate } from "../onboarding/setup-steps.js";
@@ -576,9 +577,11 @@ function usePlaceCommands(
     APP_COMMAND.HOME,
     pastGate && tasks.signedIn ? () => overTasks(tasks.onGoHome) : undefined,
   );
+  // The Inbox stands only while the account keeps one, so ⌘K offers it only then.
+  const inboxOn = useInboxOn();
   useAppCommand(
     APP_COMMAND.INBOX,
-    pastGate && tasks.signedIn ? () => overTasks(inbox.open) : undefined,
+    pastGate && tasks.signedIn && inboxOn ? () => overTasks(inbox.open) : undefined,
   );
   useAppCommand(
     APP_COMMAND.TASKS,

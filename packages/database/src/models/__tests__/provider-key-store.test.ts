@@ -319,7 +319,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
   );
 
   it.effect(
-    "a turn's word on a plan lands on its account's row alone, with a limit's reset, and never over an unreadable row, a sign-in saved after the turn, or invalid with verified",
+    "a turn's word on a plan lands on its account's row alone, with a limit's reset, and never over an unreadable row, a sign-in saved after the turn, invalid with verified, or a status written since with verified",
     () =>
       Effect.gen(function* () {
         const { owner, other } = yield* openAccounts;
@@ -363,6 +363,8 @@ it.layer(getTestDB())("the provider key store", (it) => {
 
         yield* write(PROVIDER_KEY_STATUS.LIMIT_REACHED, 2_000, 9_000);
         seen.push(yield* read(owner), yield* read(other));
+        yield* write(PROVIDER_KEY_STATUS.VERIFIED, 2_000);
+        seen.push(yield* read(owner));
         yield* write(PROVIDER_KEY_STATUS.INVALID, 500);
         seen.push(yield* read(owner));
         yield* write(PROVIDER_KEY_STATUS.INVALID, 2_000);
@@ -381,6 +383,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
         assert.deepEqual(seen, [
           [PROVIDER_KEY_STATUS.LIMIT_REACHED, 9_000],
           [PROVIDER_KEY_STATUS.UNVERIFIED, null],
+          [PROVIDER_KEY_STATUS.LIMIT_REACHED, 9_000],
           [PROVIDER_KEY_STATUS.LIMIT_REACHED, 9_000],
           [PROVIDER_KEY_STATUS.INVALID, null],
           [PROVIDER_KEY_STATUS.UNREADABLE, null],

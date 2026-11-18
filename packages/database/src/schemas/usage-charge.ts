@@ -47,6 +47,10 @@ export const usageChargeTable = pgTable(
       table.occurredAt,
       table.userId,
     ),
+    // A sandbox's charges not yet sent are read by its name, which its figures carry.
+    index("usage_charge_unsent_sandbox")
+      .on(sql`(${table.figures} ->> 'sandboxName')`)
+      .where(sql`${table.sentAt} is null`),
     check(
       "usage_charge_kind",
       sql`${table.kind} in (${sql.join(Object.values(USAGE_KIND).map(literal), sql`, `)})`,

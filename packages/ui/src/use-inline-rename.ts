@@ -14,6 +14,8 @@ export interface RenameWrite {
   readonly run: (subjectId: string, name: string) => void;
   /** The newest name asked, by the subject it was asked for, while out or once answered; none once let go of. */
   readonly asked: { readonly subjectId: string; readonly name: string } | undefined;
+  /** Whether the newest name asked is still out, unanswered. */
+  readonly pending: boolean;
   /** Whether the newest name asked was refused, once answered. */
   readonly refused: boolean;
   readonly reset: () => void;
@@ -21,14 +23,16 @@ export interface RenameWrite {
 
 /**
  * One surface's rename of the subject it draws, by the subject's id: whether
- * its field is open, and the name a refusal left standing beside it until the
- * next edit. Both are held for the subject they were about, so a surface
- * that moves on to another draws neither over it. Note that the field closes
- * as soon as it ends, because the new name is drawn at once, and that a
- * refusal puts the old one back by itself and reopens the field, so the name
- * that was asked for (`asked`) is not lost to a retype: a surface draws the
- * field over `asked ?? name`. Ending that field on no change, or on Escape,
- * lets the refusal go, as a new edit does. The rename is the caller's
+ * its field is open, and the name it asked for while that is out or a
+ * refusal left it standing until the next edit. Both are held for the
+ * subject they were about, so a surface that moves on to another draws
+ * neither over it. Note that the field closes as soon as it ends, because the
+ * new name is drawn at once: a surface draws its name as `asked ?? name`, so
+ * the name asked stands from the press, whether or not what it reads the
+ * name from draws a write still out, and never the old one until the answer
+ * lands. A refusal reopens the field over the name that was asked, so it is
+ * not lost to a retype. Ending that field on no change, or on Escape, lets
+ * the refusal go, as a new edit does, and the old name stands again. The rename is the caller's
  * mutation, whose newest ask alone says whether a refusal stands, so the
  * refusal of a name a later one replaced says nothing of the name drawn now.
  */
@@ -53,14 +57,15 @@ export function useInlineRename(subjectId: string | undefined, write: RenameWrit
   };
 
   const shown = subjectId !== undefined;
-  const refused = shown && write.refused && write.asked?.subjectId === subjectId;
+  const mine = shown && write.asked?.subjectId === subjectId ? write.asked : undefined;
+  const refused = mine !== undefined && write.refused;
 
   return {
     editing: shown && (editing === subjectId || refused),
     begin,
     end,
     refused,
-    asked: refused ? write.asked.name : undefined,
+    asked: write.pending || refused ? mine?.name : undefined,
   };
 }
 

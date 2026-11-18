@@ -4,7 +4,7 @@
  * Every archive lets a local agent go here once the archive stands: by hand
  * (`session-sandboxes.ts`'s `archivedInBackground`),
  * by an automation's sweep of its finished runs, and by an agent's
- * `update_agent`. The line is queued under the agent's runner lease, as
+ * `archive_agent`. The line is queued under the agent's runner lease, as
  * every line of its is (`device-agent-store.ts`'s header), and only while the
  * agent still stands archived, read under that lease: an agent unarchived
  * and messaged since queued its launch first, and the discard is left out

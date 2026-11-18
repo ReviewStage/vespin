@@ -3,10 +3,11 @@
  *
  * The vocabulary speaks of tabs and pages, never of where the browser runs.
  * A tab is named by its id, the DevTools protocol's
- * target id as `list` and `open` answer it; an action that names none acts
- * on the tab the action before it in the same sequence acted on, so a
- * sequence can open a tab and go on in it. An element is named by a ref a
- * snapshot printed, `e` and the node's backend id, which stays the same for
+ * target id as `list` and `open` answer it, and every action on a tab names
+ * it. An `open` names its new tab too, so an action after it in the same
+ * sequence passes that name before the tab's id is known; a name is
+ * lowercase and a tab id never is, so the two cannot be confused. An
+ * element is named by a ref a snapshot printed, `e` and the node's backend id, which stays the same for
  * as long as the element is on the page, so a ref from one call is good in
  * the next. Addresses are http and https alone, as a Browser tab's are
  * (`browser-acts.ts`).
@@ -209,6 +210,9 @@ const REF_PREFIX = "e";
 
 const REF_PATTERN = /^e\d{1,12}$/u;
 
+/** A name an `open` gives its tab within one call, which no tab id matches, ids being uppercase. */
+const TAB_NAME_PATTERN = /^[a-z][a-z0-9-]{0,31}$/u;
+
 /** The ref a snapshot prints for an element, by its backend node id. */
 export function browserRefOf(backendNodeId: number): string {
   return `${REF_PREFIX}${backendNodeId}`;
@@ -221,11 +225,14 @@ export function backendNodeIdOf(ref: string): number {
 
 const tabId = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(128));
 
-const tab = Schema.optionalKey(
-  describeWire(
-    tabId,
-    "The tab, by its id as list or open answered it; left out for the tab the action before it in this call acted on.",
-  ),
+const tab = describeWire(
+  tabId,
+  "The tab, by its id as list or open answered it, or by the name an open earlier in this call gave it.",
+);
+
+const tabName = describeWire(
+  Schema.String.check(Schema.isPattern(TAB_NAME_PATTERN)),
+  "A name for the new tab, such as docs, that a later action in this call passes as its tab; lowercase letters, digits, and dashes, starting with a letter. A later call names the tab by the id open answered.",
 );
 
 const address = describeWire(
@@ -249,22 +256,69 @@ const coordinate = (axis: string) =>
   );
 
 const scrollDelta = (direction: string) =>
-  Schema.optionalKey(
-    describeWire(
-      Schema.Number.check(
-        Schema.isBetween({
-          minimum: -BROWSER_AGENT_LIMITS.SCROLL_MAX_PIXELS,
-          maximum: BROWSER_AGENT_LIMITS.SCROLL_MAX_PIXELS,
-        }),
-      ),
-      `How far to scroll ${direction}, in CSS pixels; 0 when left out.`,
+  describeWire(
+    Schema.Number.check(
+      Schema.isBetween({
+        minimum: -BROWSER_AGENT_LIMITS.SCROLL_MAX_PIXELS,
+        maximum: BROWSER_AGENT_LIMITS.SCROLL_MAX_PIXELS,
+      }),
     ),
+    `How far to scroll ${direction}, in CSS pixels; 0 for none.`,
   );
+
+/** Where a click lands: an element by its ref, or a point on the visible page. */
+const clickTarget = describeWire(
+  Schema.Union([
+    Schema.Struct({ ref }),
+    Schema.Struct({
+      x: coordinate("distance from the left"),
+      y: coordinate("distance from the top"),
+    }),
+  ]),
+  "Where the click lands: {ref} for an element by the ref a snapshot printed, or {x, y} for a point on the visible page.",
+);
+
+/** Where typing lands: a field by its ref, or the element that has the focus, named as such. */
+const typeTarget = describeWire(
+  Schema.Union([
+    Schema.Struct({
+      ref: describeWire(
+        Schema.String.check(Schema.isPattern(REF_PATTERN)),
+        "The field to type into, by the ref a snapshot printed beside it.",
+      ),
+    }),
+    Schema.Struct({
+      focused: describeWire(
+        Schema.Literal(true),
+        "true, to type into the element that has the focus now.",
+      ),
+    }),
+  ]),
+  "Where the text goes: {ref} for a field by the ref a snapshot printed, or {focused: true} for the element that has the focus now.",
+);
+
+/** What a scroll turns: an element scrolled into view by its ref, or the page by a distance. */
+const scrollBy = describeWire(
+  Schema.Union([
+    Schema.Struct({
+      ref: describeWire(
+        Schema.String.check(Schema.isPattern(REF_PATTERN)),
+        "An element to scroll into view, by the ref a snapshot printed beside it.",
+      ),
+    }),
+    Schema.Struct({
+      deltaX: scrollDelta("right, or left where negative"),
+      deltaY: scrollDelta("down, or up where negative"),
+    }),
+  ]),
+  "What to scroll: {ref} to bring an element into view, or {deltaX, deltaY} to turn the wheel over the page by that distance.",
+);
 
 const listAction = Schema.Struct({ action: Schema.Literal(BROWSER_AGENT_ACTION.LIST) });
 
 const openAction = Schema.Struct({
   action: Schema.Literal(BROWSER_AGENT_ACTION.OPEN),
+  name: tabName,
   url: address,
 });
 
@@ -290,17 +344,8 @@ const tabAction = Schema.Struct({
 const clickAction = Schema.Struct({
   action: Schema.Literal(BROWSER_AGENT_ACTION.CLICK),
   tab,
-  ref: Schema.optionalKey(ref),
-  x: Schema.optionalKey(coordinate("distance from the left")),
-  y: Schema.optionalKey(coordinate("distance from the top")),
-}).check(
-  Schema.makeFilter((click) =>
-    (click.ref === undefined) !== (click.x === undefined && click.y === undefined) &&
-    (click.x === undefined) === (click.y === undefined)
-      ? true
-      : "a click names a ref, or both x and y",
-  ),
-);
+  target: clickTarget,
+});
 
 const typeAction = Schema.Struct({
   action: Schema.Literal(BROWSER_AGENT_ACTION.TYPE),
@@ -312,12 +357,7 @@ const typeAction = Schema.Struct({
     ),
     "The text to type, as it is; a key such as Enter is its own key action.",
   ),
-  ref: Schema.optionalKey(
-    describeWire(
-      Schema.String.check(Schema.isPattern(REF_PATTERN)),
-      "The field to type into, by its ref; left out for the element that has the focus.",
-    ),
-  ),
+  target: typeTarget,
 });
 
 const selectAction = Schema.Struct({
@@ -354,21 +394,8 @@ const keyAction = Schema.Struct({
 const scrollAction = Schema.Struct({
   action: Schema.Literal(BROWSER_AGENT_ACTION.SCROLL),
   tab,
-  deltaX: scrollDelta("right, or left where negative"),
-  deltaY: scrollDelta("down, or up where negative"),
-  ref: Schema.optionalKey(
-    describeWire(
-      Schema.String.check(Schema.isPattern(REF_PATTERN)),
-      "An element to scroll into view, by its ref, in place of a distance.",
-    ),
-  ),
-}).check(
-  Schema.makeFilter((scroll) =>
-    (scroll.ref === undefined) !== (scroll.deltaX === undefined && scroll.deltaY === undefined)
-      ? true
-      : "a scroll names a ref, or a distance",
-  ),
-);
+  by: scrollBy,
+});
 
 const waitAction = Schema.Struct({
   action: Schema.Literal(BROWSER_AGENT_ACTION.WAIT),
@@ -416,6 +443,13 @@ export type BrowserAgentAction = typeof browserAgentActionSchema.Type;
 export const browserAgentActionsSchema = Schema.Array(browserAgentActionSchema).check(
   Schema.isMinLength(1),
   Schema.isMaxLength(BROWSER_AGENT_LIMITS.MAX_ACTIONS),
+  Schema.makeFilter((actions) => {
+    const names = actions.flatMap((action) =>
+      action.action === BROWSER_AGENT_ACTION.OPEN ? [action.name] : [],
+    );
+
+    return new Set(names).size === names.length || "each open in one call takes its own name";
+  }),
 );
 
 const shown = Schema.String.check(Schema.isMaxLength(BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS));

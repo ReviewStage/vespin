@@ -1,30 +1,30 @@
 /**
- * usage-sending.ts -- every charge in the usage ledger not yet sent on, sent to Metronome as one usage event of its workspace and stamped sent, once a day after the ledger is read.
+ * usage-sending.ts -- the usage ledger's charges named, those not yet sent on, sent to Metronome as one usage event each of its workspace and stamped sent.
  *
- * The daily job (`maintenance/usage-ledger-app.ts`) runs this after it
- * charges the day's sessions. It reads the unsent charges a page at a time,
- * makes each workspace's Metronome customer and contract the first time it
- * has usage to send (`@repo/database/models/workspace-billing`), and sends
- * its charges `METRONOME.INGEST_BATCH` to a request, each as an event whose
- * transaction id is the charge's own id, so a charge sent twice, as one whose
- * stamp failed to be written is, is counted once
+ * The usage-sends queue's consumer (`usage-queues.ts`) runs this for the
+ * charges a message names, as they are recorded. It makes each workspace's
+ * Metronome customer and contract the first time it has usage to send
+ * (`@repo/database/models/workspace-billing`), and sends its charges
+ * `METRONOME.INGEST_BATCH` to a request, each as an event whose transaction
+ * id is the charge's own id, so a charge sent twice, as one whose stamp
+ * failed to be written or whose message came twice is, is counted once
  * (https://docs.metronome.com/api-reference/usage/ingest-events). A batch
- * Metronome took is stamped sent; one it refused, and a workspace whose
- * customer or contract could not be made, is logged and left unsent for the
- * next day's run.
+ * Metronome took is stamped sent. What Metronome may answer otherwise later,
+ * a 429, a 5xx, or no answer in time, fails the send, so the queue delivers
+ * its message again, which reads only what is still unsent; any other
+ * refusal is logged and its charges left unsent in the ledger, as
+ * Metronome's guide asks of a 4xx.
  *
- * Only charges whose usage happened within `METRONOME_BACKDATING` are read,
- * the furthest back Metronome takes an event. Where no Metronome account is
- * configured (`billing-environment.ts`), nothing is sent: the ledger is
- * written all the same, and its charges are sent once one is. It runs
- * whether or not billing is live.
+ * Where no Metronome account is configured (`billing-environment.ts`),
+ * nothing is sent: the ledger is written all the same. It runs whether or
+ * not billing is live.
  */
 
 import {
   earliestUnsentUsage,
   markUsageChargesSent,
   type UnsentUsageCharge,
-  unsentUsageCharges,
+  unsentUsageChargesOf,
 } from "@repo/database/models/usage-charges";
 import { workspaceBillings } from "@repo/database/models/workspace-billing";
 import { Array as Arr, Clock, Duration, Effect } from "effect";
@@ -38,13 +38,10 @@ import {
 } from "./metronome.js";
 import { workspaceContract } from "./workspace-contract.js";
 
-/** How far back Metronome takes a usage event; a charge older than this is never read. */
+/** How far back Metronome takes a usage event, and so how far back a contract's start is read from a workspace's unsent charges. */
 const METRONOME_BACKDATING = Duration.days(34);
 
-/** How many unsent charges one page reads. */
-const PAGE = 1000;
-
-/** What a run did: how many charges it sent, how many it left unsent for a refusal, and whether it sent at all. */
+/** What a send did: how many charges it sent, how many it left unsent for a refusal, and whether it sent at all. */
 interface UsageSendRun {
   readonly configured: boolean;
   readonly sent: number;
@@ -70,8 +67,21 @@ function described(failure: MetronomeCallFailed): string {
 }
 
 /**
+ * A call's failure handed on where Metronome may answer otherwise later, so
+ * the send fails and its message comes again; any other refusal logged in
+ * the words given and answered as false, its charges left unsent.
+ */
+function setAside(words: string) {
+  return (failure: MetronomeCallFailed) =>
+    failure.retryable
+      ? Effect.fail(failure)
+      : Effect.as(Effect.logError(`${words}: ${described(failure)}`), false);
+}
+
+/**
  * The workspaces among those named whose contract stands, each made where it
- * was missing; one that could not be made is logged and left out. A contract
+ * was missing; one Metronome refused to make is logged and left out, and one
+ * it may make later fails the send. A contract
  * made here starts on the 1st of the month of the workspace's earliest
  * unsent charge, so every charge it then sends falls within it. Note that a
  * charge in a month whose invoice Metronome has already finalized is counted
@@ -100,13 +110,9 @@ const contractedWorkspaces = Effect.fn("web/contractedWorkspaces")(function* (
       earliest.get(organizationId) ?? now,
     ).pipe(
       Effect.as(true),
-      Effect.catchTag("MetronomeCallFailed", (failure) =>
-        Effect.as(
-          Effect.logError(
-            `a workspace's Metronome contract was not made, its usage left unsent: ${described(failure)}`,
-          ),
-          false,
-        ),
+      Effect.catchTag(
+        "MetronomeCallFailed",
+        setAside("a workspace's Metronome contract was not made, its usage left unsent"),
       ),
     );
 
@@ -116,27 +122,22 @@ const contractedWorkspaces = Effect.fn("web/contractedWorkspaces")(function* (
   return contracted;
 });
 
-/** One page of unsent charges sent, those of a workspace with no contract left unsent; how many were sent and how many were not. */
-const sentPage = Effect.fn("web/sentUsagePage")(function* (
+/** The unsent charges sent, those of a workspace with no contract left unsent; how many were sent and how many were not. */
+const sentCharges = Effect.fn("web/sentUsageCharges")(function* (
   account: MetronomeAccount,
-  page: readonly UnsentUsageCharge[],
+  charges: readonly UnsentUsageCharge[],
   since: Date,
   now: Date,
 ) {
-  const workspaces = [...new Set(page.map((charge) => charge.organizationId))];
+  const workspaces = [...new Set(charges.map((charge) => charge.organizationId))];
   const contracted = yield* contractedWorkspaces(account, workspaces, since, now);
-  const sendable = page.filter((charge) => contracted.has(charge.organizationId));
+  const sendable = charges.filter((charge) => contracted.has(charge.organizationId));
   let sent = 0;
 
   for (const batch of Arr.chunksOf(sendable, METRONOME.INGEST_BATCH)) {
     const taken = yield* ingestMetronomeEvents(account, batch.map(eventOf)).pipe(
       Effect.as(true),
-      Effect.catchTag("MetronomeCallFailed", (failure) =>
-        Effect.as(
-          Effect.logError(`usage events were not sent, left unsent: ${described(failure)}`),
-          false,
-        ),
-      ),
+      Effect.catchTag("MetronomeCallFailed", setAside("usage events were not sent, left unsent")),
     );
 
     if (taken) {
@@ -148,11 +149,13 @@ const sentPage = Effect.fn("web/sentUsagePage")(function* (
     }
   }
 
-  return { sent, unsent: page.length - sent };
+  return { sent, unsent: charges.length - sent };
 });
 
-/** Every charge not yet sent, within what Metronome takes, sent to its workspace's contract and stamped sent; nothing where no Metronome account is configured. */
-export const sendUnsentUsage = Effect.fn("web/sendUnsentUsage")(function* () {
+/** The charges named that are not yet sent, sent to their workspaces' contracts and stamped sent; nothing where no Metronome account is configured. */
+export const sendUsageCharges = Effect.fn("web/sendUsageCharges")(function* (
+  chargeIds: readonly string[],
+) {
   const { metronome } = yield* BillingEnvironment;
 
   if (metronome === undefined) {
@@ -164,28 +167,16 @@ export const sendUnsentUsage = Effect.fn("web/sendUnsentUsage")(function* () {
 
   const now = new Date(yield* Clock.currentTimeMillis);
   const since = new Date(now.getTime() - Duration.toMillis(METRONOME_BACKDATING));
-  let after: string | null = null;
-  let sent = 0;
-  let unsent = 0;
+  const unsent = yield* unsentUsageChargesOf(chargeIds);
 
-  for (;;) {
-    const page: readonly UnsentUsageCharge[] = yield* unsentUsageCharges({
-      since,
-      after,
-      limit: PAGE,
-    });
+  const run: UsageSendRun = {
+    configured: true,
+    ...(unsent.length === 0
+      ? { sent: 0, unsent: 0 }
+      : yield* sentCharges(metronome, unsent, since, now)),
+  };
 
-    const last = page.at(-1);
-
-    if (last === undefined) break;
-    const run = yield* sentPage(metronome, page, since, now);
-    sent += run.sent;
-    unsent += run.unsent;
-    after = last.id;
-  }
-
-  yield* Effect.logInfo(`usage sent to Metronome: ${sent}, left unsent: ${unsent}`);
-  const run: UsageSendRun = { configured: true, sent, unsent };
+  yield* Effect.logInfo(`usage sent to Metronome: ${run.sent}, left unsent: ${run.unsent}`);
 
   return run;
 });

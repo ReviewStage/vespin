@@ -45,17 +45,20 @@ import {
 import { isRecord, unparsedWire } from "@repo/wire";
 import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { temporaryDirectory } from "@repo/wire/testing";
-import { Context, Effect } from "effect";
+import { Context, Deferred, Effect, Fiber } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import { systemError } from "effect/PlatformError";
 import { test } from "vitest";
 import {
+  EncryptedStorageUnavailable,
   type KeptProductEventDay,
   type SecretCipher,
   SettingsStore,
   type SettingsStoreOptions,
   type StoredAccount,
+  TOKENS_IN_VAULT,
+  type TokenVault,
 } from "./settings-store.js";
 import { TEST_CIPHER_PREFIX, testCipher } from "./testing/test-cipher.js";
 
@@ -165,6 +168,7 @@ function storeIn(
   directory: string,
   options: {
     cipher?: SecretCipher;
+    tokenVault?: TokenVault;
   } = {},
 ): PromisedSettingsStore {
   const config: SettingsStoreOptions = {
@@ -172,9 +176,29 @@ function storeIn(
     cipher: options.cipher ?? testCipher(),
     fileSystem: FILE_SYSTEM,
     path: PATH,
+    ...(options.tokenVault === undefined ? undefined : { tokenVault: options.tokenVault }),
   };
 
   return awaitedStoreOf(new SettingsStore(config), SERVICES);
+}
+
+/** A vault in memory, as the iPhone's Keychain keeps the tokens' text, and one that refuses every write where `refuses` says so. */
+function memoryVault(refuses = false): TokenVault & { readonly held: () => string | undefined } {
+  let held: string | undefined;
+
+  return {
+    held: () => held,
+    read: Effect.sync(() => held),
+    write: (tokens) =>
+      refuses
+        ? Effect.fail(new EncryptedStorageUnavailable())
+        : Effect.sync(() => {
+            held = tokens;
+          }),
+    clear: Effect.sync(() => {
+      held = undefined;
+    }),
+  };
 }
 
 async function readSettingsFile(directory: string): Promise<string> {
@@ -226,6 +250,8 @@ const SAMPLE_VALUE = {
   onboardingSurvey: '{"referral":"other","referralOther":"A meetup","role":"founder"}',
   introsSeen: '["inbox"]',
   githubWakesOff: '["comment"]',
+  // On is the default, so an Inbox turned off is the choice that has to survive a reopen.
+  inbox: false,
   // Each diff setting away from its default, the look a review tool's reader picked.
   lineNumbers: false,
   wordWrap: false,
@@ -502,6 +528,220 @@ test("an account's ciphertext is kept as the standard base64 of the cipher's byt
   assert.ok(isRecord(written) && isRecord(written.account), "the file holds an account");
   assert.equal(written.account.tokenCipher, sealed(JSON.stringify(tokens)));
 });
+
+test("where the platform keeps the tokens, the settings file keeps only who is signed in, and a sign-out clears the vault", async (t) => {
+  const directory = await temporaryDirectory(t, "settings-");
+  const vault = memoryVault();
+  await storeIn(directory, { tokenVault: vault }).setAccount(TEST_ACCOUNT);
+
+  const contents = await readSettingsFile(directory);
+  const reopened = storeIn(directory, { tokenVault: vault });
+
+  assert.deepEqual(await reopened.readAccount(), TEST_ACCOUNT);
+  assert.equal(contents.includes(TEST_ACCOUNT.accessToken), false);
+  assert.equal(contents.includes(TEST_ACCOUNT.refreshToken), false);
+  assert.equal(contents.includes(TEST_ACCOUNT.email), true);
+
+  await reopened.clearAccount();
+
+  assert.equal(vault.held(), undefined);
+  assert.equal(await storeIn(directory, { tokenVault: vault }).readAccount(), undefined);
+});
+
+test("tokens an older build sealed are moved into the vault on the first read, so an update signs no one out", async (t) => {
+  const directory = await temporaryDirectory(t, "settings-");
+  await storeIn(directory).setAccount(TEST_ACCOUNT);
+  const vault = memoryVault();
+
+  assert.deepEqual(await storeIn(directory, { tokenVault: vault }).readAccount(), TEST_ACCOUNT);
+
+  const written = unparsedWire(JSON.parse(await readSettingsFile(directory)));
+  assert.ok(isRecord(written) && isRecord(written.account), "the file holds an account");
+  assert.equal(written.account.tokenCipher, TOKENS_IN_VAULT);
+
+  // Note that the next launch reads the tokens from the vault alone, under a cipher that opens nothing.
+  const opensNothing: SecretCipher = {
+    ...testCipher(),
+    decrypt: () => {
+      throw new Error("The old key is gone.");
+    },
+  };
+
+  assert.deepEqual(
+    await storeIn(directory, { tokenVault: vault, cipher: opensNothing }).readAccount(),
+    TEST_ACCOUNT,
+  );
+});
+
+test("a vault that refuses the move leaves the sealed tokens as they were, read again at the next launch", async (t) => {
+  const directory = await temporaryDirectory(t, "settings-");
+  await storeIn(directory).setAccount(TEST_ACCOUNT);
+  const before = await readSettingsFile(directory);
+
+  assert.deepEqual(
+    await storeIn(directory, { tokenVault: memoryVault(true) }).readAccount(),
+    TEST_ACCOUNT,
+  );
+  assert.equal(await readSettingsFile(directory), before);
+});
+
+/** The suite's file system, but with every write of a file failing while `failing.writes` is set, as a full disk does. */
+function failingWrites(failing: { writes: boolean }): FileSystem.FileSystem {
+  return {
+    ...FILE_SYSTEM,
+    writeFileString: (filePath, data, options) =>
+      failing.writes
+        ? Effect.fail(
+            systemError({
+              // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
+              _tag: "Unknown",
+              module: "FileSystem",
+              method: "writeFileString",
+              pathOrDescriptor: filePath,
+              cause: Object.assign(new Error("ENOSPC: no space left on device"), {
+                code: "ENOSPC",
+              }),
+            }),
+          )
+        : FILE_SYSTEM.writeFileString(filePath, data, options),
+  };
+}
+
+/** A store over `directory` whose writes fail while `failing.writes` is set. */
+function storeWithFailingWrites(
+  directory: string,
+  failing: { writes: boolean },
+  tokenVault: TokenVault,
+): SettingsStore {
+  return new SettingsStore({
+    directory: () => directory,
+    cipher: testCipher(),
+    tokenVault,
+    fileSystem: failingWrites(failing),
+    path: PATH,
+  });
+}
+
+it.effect(
+  "a move whose record cannot be written still reads the account, and moves again next time",
+  () =>
+    Effect.gen(function* () {
+      const directory = yield* temporaryDirectoryScoped("settings-");
+      const failing = { writes: false };
+      const vault = memoryVault();
+      yield* new SettingsStore({
+        directory: () => directory,
+        cipher: testCipher(),
+        fileSystem: FILE_SYSTEM,
+        path: PATH,
+      }).setAccount(TEST_ACCOUNT);
+
+      failing.writes = true;
+      assert.deepEqual(
+        yield* storeWithFailingWrites(directory, failing, vault).readAccount(),
+        TEST_ACCOUNT,
+      );
+      failing.writes = false;
+
+      assert.deepEqual(
+        yield* storeWithFailingWrites(directory, failing, vault).readAccount(),
+        TEST_ACCOUNT,
+      );
+
+      const written = unparsedWire(
+        JSON.parse(yield* Effect.promise(() => readSettingsFile(directory))),
+      );
+
+      assert.ok(isRecord(written) && isRecord(written.account), "the file holds an account");
+      assert.equal(written.account.tokenCipher, TOKENS_IN_VAULT);
+    }).pipe(Effect.provide(NodeFileSystem.layer)),
+);
+
+it.effect(
+  "a sign-in whose record cannot be written never pairs the account kept with the new account's tokens",
+  () =>
+    Effect.gen(function* () {
+      const directory = yield* temporaryDirectoryScoped("settings-");
+      const failing = { writes: false };
+      const vault = memoryVault();
+      const store = storeWithFailingWrites(directory, failing, vault);
+      yield* store.setAccount(TEST_ACCOUNT);
+
+      const other = {
+        accessToken: "other-access",
+        refreshToken: "other-refresh",
+        email: "other@example.com",
+        provider: "github",
+      } as const satisfies StoredAccount;
+
+      failing.writes = true;
+      yield* Effect.flip(store.setAccount(other));
+      failing.writes = false;
+
+      const read = yield* storeWithFailingWrites(directory, failing, vault).readAccount();
+      assert.notEqual(read?.accessToken, other.accessToken);
+    }).pipe(Effect.provide(NodeFileSystem.layer)),
+);
+
+test("tokens a failed sign-out or an uninstall left in the vault are cleared by the next read that finds no one signed in", async (t) => {
+  const directory = await temporaryDirectory(t, "settings-");
+  const vault = memoryVault();
+  await Effect.runPromise(vault.write("left behind"));
+
+  assert.equal(await storeIn(directory, { tokenVault: vault }).readAccount(), undefined);
+  assert.equal(vault.held(), undefined);
+});
+
+it.effect("a sign-out while an older build's tokens are moving leaves no tokens in the vault", () =>
+  Effect.gen(function* () {
+    const directory = yield* temporaryDirectoryScoped("settings-");
+    yield* new SettingsStore({
+      directory: () => directory,
+      cipher: testCipher(),
+      fileSystem: FILE_SYSTEM,
+      path: PATH,
+    }).setAccount(TEST_ACCOUNT);
+    const entered = yield* Deferred.make<void>();
+    const release = yield* Deferred.make<void>();
+    let held: string | undefined;
+
+    // Note that the vault holds the move's write open until the sign-out has started.
+    const vault: TokenVault = {
+      read: Effect.sync(() => held),
+      write: (tokens) =>
+        Deferred.succeed(entered, undefined).pipe(
+          Effect.andThen(Deferred.await(release)),
+          Effect.andThen(
+            Effect.sync(() => {
+              held = tokens;
+            }),
+          ),
+        ),
+      clear: Effect.sync(() => {
+        held = undefined;
+      }),
+    };
+
+    const store = new SettingsStore({
+      directory: () => directory,
+      cipher: testCipher(),
+      tokenVault: vault,
+      fileSystem: FILE_SYSTEM,
+      path: PATH,
+    });
+
+    const reading = yield* Effect.forkChild(store.readAccount());
+    yield* Deferred.await(entered);
+    const signingOut = yield* Effect.forkChild(store.clearAccount());
+    yield* Effect.yieldNow;
+    yield* Deferred.succeed(release, undefined);
+    yield* Fiber.join(reading);
+    yield* Fiber.join(signingOut);
+
+    assert.equal(held, undefined);
+    assert.equal(yield* store.readAccount(), undefined);
+  }).pipe(Effect.provide(NodeFileSystem.layer)),
+);
 
 test("the Mac's session rides sealed beside the OAuth tokens, and reads back with them", async (t) => {
   const directory = await temporaryDirectory(t, "settings-");

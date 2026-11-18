@@ -36,6 +36,7 @@ import {
 import { descriptionSections } from "@repo/features/description-sections";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { Clock, Effect, Option } from "effect";
@@ -456,7 +457,12 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
 
             yield* postToInbox(
               poster,
-              unparsedWire({ key: "mockup", title: "Which mockup?", body: "Have a look." }),
+              unparsedWire({
+                key: "mockup",
+                to: `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: userId }, { workspace: "acme", repository: null })})`,
+                title: "Which mockup?",
+                body: "Have a look.",
+              }),
               noSandbox,
             );
             const [item] = yield* taskInboxItems(userId, on.taskId);
@@ -514,7 +520,10 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
           input: Readonly<Record<string, string | boolean>>,
         ) => runAgentComment(admitted, name, unparsedWire({ taskId: sibling.id, ...input }), true);
 
-        const read = yield* call(AGENT_TOOL.READ_COMMENTS, {});
+        const read = yield* call(AGENT_TOOL.READ_COMMENTS, {
+          status: DESCRIPTION_COMMENT_STATUS.OPEN,
+        });
+
         const replied = yield* call(AGENT_TOOL.REPLY_TO_COMMENT, { thread, words: "Link too." });
         const resolved = yield* call(AGENT_TOOL.UPDATE_COMMENT, { thread, resolved: true });
         const reopened = yield* call(AGENT_TOOL.UPDATE_COMMENT, { thread, resolved: false });
@@ -570,7 +579,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
         const read = yield* runAgentComment(
           admitted,
           AGENT_TOOL.READ_COMMENTS,
-          unparsedWire({ taskId: theirs.id }),
+          unparsedWire({ taskId: theirs.id, status: DESCRIPTION_COMMENT_STATUS.OPEN }),
           true,
         );
 

@@ -232,10 +232,6 @@
           "dest": "/api/default.js?route=maintenance/provider-keys-rewrap"
         },
         {
-          "src": "/api/maintenance/usage-ledger",
-          "dest": "/api/default.js?route=maintenance/usage-ledger"
-        },
-        {
           "src": "/api/maintenance/workspace-drives",
           "dest": "/api/default.js?route=maintenance/workspace-drives"
         },
@@ -550,11 +546,6 @@
     "workspace-drive-cleanup": {
       "schedule": "0 8 * * *",
       "path": "/api/maintenance/workspace-drives",
-      "requestMethod": "GET"
-    },
-    "usage-ledger": {
-      "schedule": "5 0 * * *",
-      "path": "/api/maintenance/usage-ledger",
       "requestMethod": "GET"
     }
   },

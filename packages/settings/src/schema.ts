@@ -663,6 +663,27 @@ export const APP_SETTING_SCHEMA = {
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     guard: isGitHubWakesOffJson,
   }),
+  /*
+   * Whether the account keeps an Inbox: on, as it always was, the agents on
+   * tasks assigned to it, or that it started on a task assigned to no one,
+   * post what they need of it to threads its Inbox lists; off, they are
+   * offered no thread to post and ask in their replies instead, and no
+   * window of the account draws the Inbox. Nothing stored reads as on. An
+   * account preference riding a part of the snapshot of its own, since the
+   * service reads it as an agent's session starts (`inboxOn`).
+   */
+  inbox: accountToggleSetting({
+    field: "inbox",
+    id: APP_SETTING_ID.INBOX,
+    label: "Use the Inbox",
+    default: true,
+    page: SETTINGS_PAGE.PREFERENCES,
+    section: SETTING_SECTION.GENERAL,
+    order: 306,
+    // Nothing to run per write: an agent's session reads it as it starts.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: accountDrawn,
+  }),
   lineNumbers: toggleSetting({
     field: "lineNumbers",
     id: APP_SETTING_ID.LINE_NUMBERS,

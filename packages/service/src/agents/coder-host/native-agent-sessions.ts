@@ -19,6 +19,7 @@ import { readAccountPreferences } from "@repo/database/models/account-store";
 import { type Agent, hasRepository } from "@repo/database/models/agent-store";
 import { readNativeSequence } from "@repo/database/models/native-projection-store";
 import { readTaskHeader } from "@repo/database/models/task-store";
+import { readAccountNames } from "@repo/database/models/workspace-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { githubWakesOffFrom } from "@repo/settings";
 import { Effect, Layer, Option } from "effect";
@@ -61,11 +62,19 @@ const agentTaskNumber = (userId: string, agent: Agent) =>
     Effect.orElseSucceed(() => undefined),
   );
 
+/** The name the agent's starter goes by, which its instructions name them by; none where it is not read, and they are named by id alone. */
+const agentDeveloperName = (agent: Agent) =>
+  readAccountNames([agent.userId]).pipe(
+    Effect.map((names) => names.get(agent.userId)),
+    Effect.tapError(logStoreFailure),
+    Effect.orElseSucceed(() => undefined),
+  );
+
 /**
  * Our coder instructions for an agent on the harness given, composed on
  * what its row names (`instructions.ts`'s `agentCoderInstructions`): whose its commits are and the
  * co-author trailer where its starter's choice credits one, the workspace its links are written under, the number
- * its task goes by there, and where it stands against our tools' gates, read once (`standingOfAgent`).
+ * its task goes by there, its starter's name, and where it stands against our tools' gates, read once (`standingOfAgent`).
  */
 const nativeCoderInstructions = (
   userId: string,
@@ -77,27 +86,30 @@ const nativeCoderInstructions = (
     const target = { userId, conversationId: agent.conversationId };
 
     // Note that we read these together, because none waits on another.
-    const [authorship, workspace, taskNumber, standing, preferences] = yield* Effect.all(
-      [
-        hasRepository(agent) ? agentAuthorship(target, agent) : Effect.succeed(undefined),
-        workspaceStepOf(userId, agent.organizationId).pipe(
-          Effect.tapError(logStoreFailure),
-          Effect.orElseSucceed(() => agent.organizationId),
-        ),
-        agentTaskNumber(userId, agent),
-        standingOfAgent(Option.some(agent)),
-        // A read that fails leaves every kind on, as an account that chose nothing has them.
-        readAccountPreferences(agent.userId).pipe(
-          Effect.tapError(logStoreFailure),
-          Effect.orElseSucceed(() => undefined),
-        ),
-      ],
-      { concurrency: "unbounded" },
-    );
+    const [authorship, workspace, taskNumber, developerName, standing, preferences] =
+      yield* Effect.all(
+        [
+          hasRepository(agent) ? agentAuthorship(target, agent) : Effect.succeed(undefined),
+          workspaceStepOf(userId, agent.organizationId).pipe(
+            Effect.tapError(logStoreFailure),
+            Effect.orElseSucceed(() => agent.organizationId),
+          ),
+          agentTaskNumber(userId, agent),
+          agentDeveloperName(agent),
+          standingOfAgent(Option.some(agent)),
+          // A read that fails leaves every kind on, as an account that chose nothing has them.
+          readAccountPreferences(agent.userId).pipe(
+            Effect.tapError(logStoreFailure),
+            Effect.orElseSucceed(() => undefined),
+          ),
+        ],
+        { concurrency: "unbounded" },
+      );
 
     return agentCoderInstructions(agent, {
       authorship,
       workspace,
+      developerName,
       taskNumber,
       standing,
       harness,

@@ -56,14 +56,14 @@ import { useSelectionToolbar } from "./selection-toolbar.js";
 /** The editor's class, and the inert field's before it mounts. */
 const FIELD_CLASS = "agent-composer-input";
 
+/** No commands, for a box that runs none. */
+const NO_COMMANDS: ReadonlySet<string> = new Set();
+
 /**
  * The field's room in its card, which sizes the field from one line to its
  * cap (`.agent-composer-field`, tasks.css): the editor stands in it, and so
  * does the placeholder of a box still being read.
  */
-/** No commands, for a box that runs none. */
-const NO_COMMANDS: ReadonlySet<string> = new Set();
-
 export function ComposerFieldRoom({
   ref,
   children,

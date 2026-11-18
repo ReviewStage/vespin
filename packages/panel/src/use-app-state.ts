@@ -37,6 +37,7 @@ export {
   selectExperiment,
   selectFailedRuns,
   selectInbox,
+  selectInboxOn,
   selectInboxTasks,
   selectInboxWaiting,
   selectMachineCommandDevice,

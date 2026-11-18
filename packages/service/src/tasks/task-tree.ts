@@ -26,8 +26,9 @@ import { reachTaskRepository, refused } from "./task-file.js";
  * task, then our GitHub App confirms the account reaches the task's
  * repository and mints a token for that one repository, used for the one
  * listing and going nowhere else; the listing is of the head of the
- * repository's default branch, and names it. A secret file is listed by
- * its name, as GitHub and every editor list it, because the rule a shown
+ * repository's default branch, or of the branch or commit a read names, and
+ * names it. A secret file is listed by its name, as GitHub and every editor
+ * list it, because the rule a shown
  * file is held to (`shown-file.ts`) keeps a secret file's contents
  * off the screen, and the File tab refuses to read one when it is opened;
  * a folder named as a secret file is, or one inside it, is not listed, so
@@ -43,6 +44,9 @@ import { reachTaskRepository, refused } from "./task-file.js";
  * listing saying it was cut, since it is then not the whole repository.
  */
 
+/** A folder to list: the File tab's request, and the branch or commit to list it at, the default branch's head where it names none. */
+export type RepositoryTreeRead = TaskTreeRequest & { readonly ref?: string };
+
 /** Whether a folder is, or stands inside, one whose name is a secret file's. */
 function withinSecret(path: string): boolean {
   return path.split("/").some(isSecretFile);
@@ -55,13 +59,13 @@ function insideSecret(path: string): boolean {
 
 /**
  * The folder the request names, of the task's repository as GitHub holds
- * it now, or why it is not listed; nothing where the account owns no such
- * task.
+ * it now or at the branch or commit it names, or why it is not listed;
+ * nothing where the account owns no such task.
  */
 export function readTaskTree(
   userId: string,
   taskId: string,
-  request: TaskTreeRequest,
+  request: RepositoryTreeRead,
 ): Effect.Effect<
   Option.Option<TaskTreeAnswer>,
   TaskStoreFailure,
@@ -83,8 +87,8 @@ export function readTaskTree(
 
 /**
  * The folder the request names, of a repository the workspace's
- * installation reaches, as GitHub holds it now, or why it is not listed: a
- * plan's tree read by the place its plan names, and the read of a place no
+ * installation reaches, as GitHub holds it now or at the branch or commit it
+ * names, or why it is not listed: a plan's tree read by the place its plan names, and the read of a place no
  * plan names, such as an agent an automation started, whose caller has
  * already confirmed the account is a member of the workspace.
  */
@@ -92,7 +96,7 @@ export function readRepositoryTree(
   workspaceId: string,
   repository: string,
   member: string,
-  request: TaskTreeRequest,
+  request: RepositoryTreeRead,
 ): Effect.Effect<TaskTreeAnswer, never, DatabaseServices | HttpClient.HttpClient | GitHubApp> {
   if (withinSecret(request.path)) return Effect.succeed(refused(TASK_FILE_REFUSAL.SECRET));
 
@@ -108,22 +112,27 @@ const readFolder = /* @__PURE__ */ Effect.fn("web/taskTreeFolder")(function* (
   organizationId: string,
   repository: string,
   member: string,
-  request: TaskTreeRequest,
+  request: RepositoryTreeRead,
 ) {
   const reach = yield* reachTaskRepository(organizationId, repository, member);
 
   if ("refused" in reach) return reach.refused;
   const { bearer, repository: confirmed, access } = reach.reached;
   const recursive = request.recursive === true;
+  const branch = request.ref ?? confirmed.defaultBranch;
 
-  const folder = yield* readRepositoryFolder(bearer, confirmed, request.path, recursive).pipe(
-    markRefusedToken(access),
-  );
+  const folder = yield* readRepositoryFolder(
+    bearer,
+    confirmed,
+    branch,
+    request.path,
+    recursive,
+  ).pipe(markRefusedToken(access));
 
   if (!folder.found) {
     return {
       refusal: TASK_FILE_REFUSAL.MISSING,
-      branch: confirmed.defaultBranch,
+      branch,
     } satisfies TaskTreeAnswer;
   }
 
@@ -144,7 +153,7 @@ const readFolder = /* @__PURE__ */ Effect.fn("web/taskTreeFolder")(function* (
     folder: {
       path: request.path,
       repository,
-      branch: confirmed.defaultBranch,
+      branch,
       entries,
       truncated: folder.truncated || listed.length < shown.length || listed.length > bound,
     },

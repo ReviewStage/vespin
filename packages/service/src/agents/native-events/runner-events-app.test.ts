@@ -1599,7 +1599,7 @@ it.layer(SUITE)("the runner events route", (it) => {
                   type: "tool_use",
                   id: "toolu_click",
                   name: "mcp__team__computer",
-                  input: { action: "click", app: "Simulator", element_index: 3 },
+                  input: { action: "click", app: "Simulator", target: { element_index: 3 } },
                 },
               ],
             },

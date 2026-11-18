@@ -10,7 +10,7 @@ import type { AccountProvider, AccountSnapshot } from "@repo/credentials/snapsho
 import type { AccountToken, CallCredential } from "@repo/features";
 import { Data, type Effect, type Scope, type Stream } from "effect";
 import type { RunMode } from "./run-mode.js";
-import type { SecretCipher, SettingsStore } from "./settings-store.js";
+import type { SecretCipher, SettingsStore, TokenVault } from "./settings-store.js";
 
 /**
  * A deletion Better Auth refused because the session was signed in longer
@@ -104,6 +104,8 @@ export interface AccountSourceSeam {
    * then holds no account.
    */
   readonly tokenCipher: SecretCipher | undefined;
+  /** Where the platform keeps this source's tokens itself, in the cipher's place; tokens an older build sealed with the cipher are moved into it once read. */
+  readonly tokenVault?: TokenVault | undefined;
   /** Opens the account's session over what the host built for it. */
   readonly open: (host: AccountSourceHost) => Effect.Effect<AccountSession, never, Scope.Scope>;
 }

@@ -16,7 +16,7 @@ import { readTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { slackAgentThread } from "@repo/database/schemas/slack-installation";
-import { messages } from "@repo/database/schemas/storage";
+import { messages, turns } from "@repo/database/schemas/storage";
 import {
   CONVERSATION_RUNTIME,
   type ConversationRuntime,
@@ -28,7 +28,7 @@ import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_MESSAGE_AUTHOR } from "@repo/feature
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS, UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import type { WireRecord } from "@repo/wire";
+import { TURN_STATUS, type WireRecord } from "@repo/wire";
 import { eq } from "drizzle-orm";
 import { Clock, ConfigProvider, DateTime, Effect, Layer, Option, Result } from "effect";
 import { HttpRouter } from "effect/http";
@@ -47,6 +47,7 @@ import {
   openGithubUser,
 } from "../testing/github-app-fake.js";
 import { recordingHarness } from "../testing/native-harness-fake.js";
+import { postTurnToSlack } from "./slack-agent-starts.js";
 import { SlackBot, type SlackFileTransfer, type SlackWebApi, slackBotOver } from "./slack-bot.js";
 import { slackEventsApp } from "./slack-events-app.js";
 import { dmThreadPost } from "./thread-dms.js";
@@ -64,7 +65,7 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  * is read; an uninstall of the app deletes the team's installation and its
  * members' ids; and a mention of the bot
  * starts an agent as the member Slack's email names on a task made for it,
- * replying with its link, and starts nothing for a Slack user who is no member; a message in
+ * reacting with 👀 and saying nothing, and starts nothing for a Slack user who is no member; a message in
  * the thread of an archived agent brings it back and hands it the message,
  * and one in the thread of an agent whose session ended continues it in a
  * new agent on the same task, which the thread moves to; a member's reply under the DM of an inbox
@@ -344,8 +345,13 @@ function mention(slackUserId: string, eventId: string): Request {
   return slackEvent(payload);
 }
 
-/** Slack's mention of the bot in the thread given by the Slack user given, as Slack sends it. */
-function threadMention(slackUserId: string, eventId: string, threadTs: string): Request {
+/** Slack's mention of the bot in the thread given by the Slack user given, at the timestamp given, as Slack sends it. */
+function threadMention(
+  slackUserId: string,
+  eventId: string,
+  threadTs: string,
+  ts = "1700000003.000400",
+): Request {
   const payload = {
     type: "event_callback",
     team_id: "T0001",
@@ -355,7 +361,7 @@ function threadMention(slackUserId: string, eventId: string, threadTs: string): 
       type: "app_mention",
       user: slackUserId,
       text: "<@UBOT> now make it faster",
-      ts: "1700000003.000400",
+      ts,
       thread_ts: threadTs,
       channel: "C0001",
     },
@@ -698,7 +704,7 @@ it.layer(SUITE)("our Slack route", (it) => {
   );
 
   it.effect(
-    "a mention starts an agent as the member Slack's email names, on an untitled task with a blank description in its channel's repository, reacts to it with 👀, and replies with the agent's link; one from no member starts nothing",
+    "a mention starts an agent as the member Slack's email names, on an untitled task with a blank description in its channel's repository, reacts to it with 👀 and says nothing in the thread; one from no member starts nothing",
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
@@ -758,16 +764,8 @@ it.layer(SUITE)("our Slack route", (it) => {
           .where(eq(slackAgentThread.userId, owner));
 
         assert.equal(startedAgent?.repository, "Acme/Relay");
-        // The thread links the agent at once, before its first turn settles.
-        assert.deepEqual(
-          others.map((call) => call.args.thread_ts),
-          ["1700000002.000300"],
-        );
-        assert.ok(
-          others[0]?.args.text?.startsWith("On it in Acme/Relay.") &&
-            others[0].args.text.includes(`/agent/${startedAgent?.agentId}`),
-          "the reply says where the agent works and links it",
-        );
+        // The start says nothing in the thread; the reaction shows it was heard.
+        assert.deepEqual(others, []);
         const made = Option.getOrThrow(yield* readTask(owner, startedAgent?.taskId ?? ""));
         assert.deepEqual(
           {
@@ -806,7 +804,7 @@ it.layer(SUITE)("our Slack route", (it) => {
   );
 
   it.effect(
-    "a message in the thread of an archived agent brings it back, hands it the message, and reacts with 👀",
+    "a message in the thread of an archived agent brings it back, hands it the message, reacts with 👀, and takes 💤 off the message that started it",
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
@@ -835,12 +833,85 @@ it.layer(SUITE)("our Slack route", (it) => {
           calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
           [{ channel: "C0001", timestamp: "1700000003.000400", name: "eyes" }],
         );
+        assert.deepEqual(
+          calls.flatMap((call) => (call.method === "reactions.remove" ? [call.args] : [])),
+          [{ channel: "C0001", timestamp: threadTs, name: "zzz" }],
+        );
       });
     },
   );
 
   it.effect(
-    "a message in the thread of an agent whose session ended continues it in a new agent on the same task, moves the thread to it, and links it once",
+    "a message the agent takes into a turn already running is marked with 👍, the turn's end takes 👀 off the message that started it, and that end heard late leaves the next turn's 👀",
+    () => {
+      const calls: SlackCall[] = [];
+      const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
+
+      return Effect.gen(function* () {
+        const { owner, agent, threadTs, slackUserId } = yield* openThreadAgent(
+          CONVERSATION_RUNTIME.CLAUDE_CODE,
+          false,
+        );
+
+        const first = "1700000003.000400";
+        const second = "1700000004.000500";
+        yield* answer(bot, threadMention(slackUserId, `Ev${randomUUID()}`, threadTs, first));
+        yield* answer(bot, threadMention(slackUserId, `Ev${randomUUID()}`, threadTs, second));
+
+        const added = (name: string) =>
+          calls.flatMap((call) =>
+            call.method === "reactions.add" && call.args.name === name ? [call.args.timestamp] : [],
+          );
+
+        assert.deepEqual(added("eyes"), [first]);
+        assert.deepEqual(added("+1"), [second]);
+
+        const [turn] = yield* (yield* Database)
+          .select({ id: turns.id })
+          .from(turns)
+          .where(eq(turns.conversationId, agent.conversationId));
+
+        assert.ok(turn !== undefined, "the first message started a turn");
+        yield* postTurnToSlack({
+          userId: owner,
+          conversationId: agent.conversationId,
+          turnId: turn.id,
+          status: TURN_STATUS.SETTLED,
+          failure: null,
+          ranMs: 1,
+        }).pipe(Effect.provide(bot));
+
+        const removed = () =>
+          calls.flatMap((call) => (call.method === "reactions.remove" ? [call.args] : []));
+
+        assert.deepEqual(removed(), [{ channel: "C0001", timestamp: first, name: "eyes" }]);
+
+        // The first turn's end is heard again only after a third message started the next turn.
+        yield* (yield* Database)
+          .update(turns)
+          .set({ status: TURN_STATUS.SETTLED })
+          .where(eq(turns.id, turn.id));
+        // The next turn is queued later than the first, as it would be outside a test's still clock.
+        yield* TestClock.adjust("1 second");
+        const third = "1700000005.000600";
+        yield* answer(bot, threadMention(slackUserId, `Ev${randomUUID()}`, threadTs, third));
+        yield* postTurnToSlack({
+          userId: owner,
+          conversationId: agent.conversationId,
+          turnId: turn.id,
+          status: TURN_STATUS.SETTLED,
+          failure: null,
+          ranMs: 1,
+        }).pipe(Effect.provide(bot));
+
+        assert.deepEqual(added("eyes"), [first, third]);
+        assert.deepEqual(removed(), [{ channel: "C0001", timestamp: first, name: "eyes" }]);
+      });
+    },
+  );
+
+  it.effect(
+    "a message in the thread of an agent whose session ended continues it in a new agent on the same task, moves the thread to it, and posts nothing in the thread",
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
@@ -870,10 +941,11 @@ it.layer(SUITE)("our Slack route", (it) => {
         assert.deepEqual(continued.startedFrom?.agentId, agent.id);
         assert.equal(continued.taskId, taskId, "the new agent works on the ended one's task");
         assert.deepEqual(HARNESS.heard.at(-1), { call: "open", account: owner });
-        const replies = calls.filter((call) => call.method === "chat.postMessage");
-        assert.equal(replies.length, 1);
-        assert.equal(replies[0]?.args.thread_ts, threadTs);
-        assert.match(replies[0]?.args.text ?? "", /had stopped/u);
+        assert.deepEqual(
+          calls.filter((call) => call.method === "chat.postMessage"),
+          [],
+          "the new agent speaks for itself",
+        );
         assert.deepEqual(
           calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
           [{ channel: "C0001", timestamp: "1700000003.000400", name: "eyes" }],

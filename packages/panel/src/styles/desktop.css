@@ -1859,6 +1859,15 @@ body,
   flex: 1 1 auto;
 }
 
+/* A mouse's card draws its ⋯, a compact button, at its foot's end, which
+   stands the foot that tall; the draft keeps that height, so its chips
+   stand as far under its title as a card's. A finger's card draws no ⋯. */
+@media not (pointer: coarse) {
+  .tasks-board-draft .tasks-board-card-foot {
+    min-height: var(--ui-space-24);
+  }
+}
+
 :where(:root)[data-ui-room="narrow"] .desktop-shell .tasks-board-column {
   width: auto;
   flex: 1 1 auto;

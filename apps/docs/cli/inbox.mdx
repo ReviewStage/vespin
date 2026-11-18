@@ -150,6 +150,31 @@ vespin inbox read-all [flags]
 vespin inbox read-all
 ```
 
+## vespin inbox remind
+
+Keep a thread out of your inbox until a time, then bring it back. `vespin inbox snooze` is the same command.
+
+```sh
+vespin inbox remind [flags] <thread> [<when...>]
+```
+
+| Argument or flag | What it does |
+| --- | --- |
+| `thread string` | The thread's id, as inbox list prints it |
+| `when... string` | When it comes back, such as tomorrow, fri 3pm, or nov 12 9:30am; a day alone at 9 AM (optional) |
+| `--clear` | End the reminder instead |
+
+```sh
+# Back tomorrow at 9 AM
+vespin inbox remind <thread> tomorrow
+
+# Back Friday at 3 PM
+vespin inbox snooze <thread> fri 3pm
+
+# End its reminder
+vespin inbox remind <thread> --clear
+```
+
 ## vespin inbox start
 
 Start a thread with an agent, which reaches it as a message

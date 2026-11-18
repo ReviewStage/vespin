@@ -1445,11 +1445,13 @@ the Stop button's own path (`src/agents/coder-host/stop.ts`), the agent
 staying available and an idle one answered as idle; `update_agent`, which
 renames an agent of the workspace, moves it to another model and effort the
 catalog takes, pins one on no task for the starter, or switches its MCP
-servers, every change asked in one transaction, and archives an idle agent
-of the workspace, never itself or one still working, on the rule the Archive
-agent menu keeps for the agent's starter, recording the archiving agent and
-its reason on the archived agent's row (`archived_by`), or brings one back; `read_page`, a page shown on any task
-of the workspace by its id, its HTML cut on a line to a bound, which a
+servers, every change asked in one transaction; `archive_agent`, which
+archives an agent of the workspace, never itself, on the rule the Archive
+agent menu keeps for the agent's starter, a turn still under way stopped
+first as the Stop button stops it, recording the archiving agent and its
+reason on the archived agent's row (`archived_by`), and `unarchive_agent`,
+which brings one back; `read_page`, a page shown on any task
+of the workspace by its id and the version named, its number or `newest`, its HTML cut on a line to a bound, which a
 mention of a page points the agent at; `list_tasks`, the workspace's
 open tasks, and its archived ones too where asked, each with the sidebar
 section the agent's starter keeps it in, and those sections; `read_task`
@@ -1489,7 +1491,7 @@ through the same guards and start a Run now takes, reaching the new
 agent's session as the deployment acting for the starter; and `list_models`, the models and efforts the agent's starter may
 start one on and their default, read from the one source a start is checked
 against (`accountModelChoices` in `src/agents/coder-host/start.ts`), so a
-choice it lists is one `start_agent` takes. A list, a read, or a start of an agent, a list of tasks,
+choice it lists is one `start_agent` takes; and `list_machines`, where a start may run an agent (the cloud and the starter's own Macs and hosts, each with the `runsOn` to pass) and the machines `run_on_mac` and `computer` may reach from the conversation, by the rule they route by (`src/agents/machines-tool.ts`). A list, a read, or a start of an agent, a list of tasks,
 `show_page`, and `read_page` answer each thing's mention ready to write, `[@name](link)` under
 the workspace's slug (`src/agents/written-mentions.ts`), and the agent's
 instructions show it the mention of every kind it names, under its own
@@ -2823,36 +2825,47 @@ Once a day, at 08:00 UTC, the `workspace-drive-cleanup` schedule calls
 repository no agent of the workspace started in for 30 days
 (`src/agents/workspace-drive-cleanup.ts`). The queue's consumer
 (`src/agents/workspace-drive-builds.ts`) prunes that drive, and comes again
-shortly where a fill holds it.
-
-Vercel's sandbox sessions are charged to the usage ledger (`usage_charge`) in
-two ways (`src/billing/sandbox-session-charges.ts`, priced at Vercel's Pro
-rates for the session's region in `src/billing/sandbox-session-price.ts`).
-Vercel forgets a deleted sandbox's sessions, and a resume deletes the stopped
-sandbox it makes again on its own drive, so the Vercel adapter reads a
-sandbox's ended sessions just before any delete of it, stopping a running one
-first, and hands them to `EndedSessionsOnDelete`, which this runtime answers
-by charging them; a read that fails is logged and the delete goes on. Once a
-day, at 00:05 UTC, the `usage-ledger` schedule calls
-`apps/web/server/routes/maintenance/usage-ledger.ts` under the same
-`CRON_SECRET` and charges every ended session the project created in the last
-72 hours, for sandboxes never deleted. The ledger takes an item once by its
-kind and source id, so the two never double-count, and a session no
-`sandbox_owner` row names is logged and passed by. It always runs, whether or
-not billing is live. Each daily job's endpoint is
+shortly where a fill holds it. That daily job's endpoint is
 `src/maintenance/scheduled-call-app.ts` over its own path and job.
 
-The same daily call then sends every charge not yet sent to Metronome
-(`src/billing/usage-sending.ts`, over `src/billing/metronome.ts`), which rates
-and invoices it: each workspace is one Metronome customer, its ingest alias
-the workspace's id, with one contract on our rate card from the 1st of the
-month it was made in, billed on the 1st with a recurring credit of the
-included usage. Both are made the first time a workspace has usage to send
-and kept in `workspace_billing`. Each charge is one event whose transaction id
-is the charge's id, so Metronome counts one sent twice once, and a charge is
-stamped `sent_at` once Metronome took it. The call runs at 00:05 UTC, so a
-month's last day reaches Metronome within the 24 hours it waits before it
-finalizes the month's invoice. Without `METRONOME_API_TOKEN`,
+Vercel's sandbox sessions are charged to the usage ledger (`usage_charge`)
+and sent to Metronome through two Vercel Queues topics, with no cron
+(`src/billing/usage-queues.ts`; charged in
+`src/billing/sandbox-session-charges.ts`, priced at Vercel's Pro rates for
+the session's region in `src/billing/sandbox-session-price.ts`). Vercel
+forgets a deleted sandbox's sessions, and a resume deletes the stopped sandbox
+it makes again on its own drive, so the Vercel adapter reads a sandbox's ended
+sessions just before any delete of it, stopping a running one first, and
+hands them to `EndedSessionsOnDelete`, which this runtime answers by charging
+them; a read that fails is logged and the delete goes on. For the sandboxes
+never deleted, each open of one, an agent's sandbox or a workspace drive's
+fill, records its `sandbox_owner` row and books a check on the
+`sandbox-usage-checks` topic before the sandbox is opened, delayed past its
+idle stop; an open whose check the queue did not take is refused. The check's
+consumer reads that sandbox's sessions by name, charges those that ended with
+their figures in, and books itself again five minutes on while one is still
+up or awaits its figures; a sandbox gone has nothing left to read. The ledger
+takes an item once by its kind and source id, so the two never double-count,
+and a session no `sandbox_owner` row names is logged and passed by. It always
+runs, whether or not billing is live.
+
+Every charge, the check's and a delete's, publishes the ledger ids of its
+sessions' charges not yet sent to the `usage-sends` topic, whose consumer
+sends them to Metronome (`src/billing/usage-sending.ts`, over
+`src/billing/metronome.ts`), which rates and invoices them: each workspace is
+one Metronome customer, its ingest alias the workspace's id, with one
+contract on our rate card from the 1st of the month of its earliest unsent
+charge, billed on the 1st with a recurring credit of the included usage. Both
+are made the first time a workspace has usage to send and kept in
+`workspace_billing`. Each charge is one event whose transaction id is the
+charge's id, so Metronome counts one sent twice once, and a charge is stamped
+`sent_at` once Metronome took it. A 429, a 5xx, or no answer in time fails
+the delivery and the queue delivers it again; Metronome's other refusals are
+logged and their charges left unsent. Each check also publishes every charge
+of its sandbox still unsent (read by the sandbox's name, which a charge's
+figures carry), so a send a delete failed to publish is published again by
+the sandbox's next check. The queues are Vercel's on production and on a
+Preview, and anywhere else each message is delivered in the process. Without `METRONOME_API_TOKEN`,
 `METRONOME_RATE_CARD_ID`, and `METRONOME_CREDIT_PRODUCT_ID`
 (`src/billing/billing-environment.ts`) nothing is sent, and the ledger is
 written all the same. Metronome's webhook

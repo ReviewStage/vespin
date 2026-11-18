@@ -67,11 +67,11 @@ export interface SandboxService {
     value: string,
   ) => Effect.Effect<readonly ListedSandbox[], SandboxError>;
   /**
-   * Every session of every sandbox the deployment's project ran that was
-   * created at or after `since`, in epoch milliseconds, the newest first,
-   * ended or not.
+   * Every session the named sandbox ran that the provider still holds, the
+   * newest first, ended or not; none where the sandbox is gone, since a
+   * deleted sandbox's sessions go with it.
    */
-  readonly sessionsSince: (since: number) => Effect.Effect<readonly SandboxSession[], SandboxError>;
+  readonly sessionsOf: (name: string) => Effect.Effect<readonly SandboxSession[], SandboxError>;
   /** The sandbox of that name, as it stands, without resuming it; none where there is no such sandbox. */
   readonly get: (name: string) => Effect.Effect<ListedSandbox | undefined, SandboxError>;
   /** Whether a drive of that name stands, without making one. */

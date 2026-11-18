@@ -3,7 +3,7 @@ title: "Pull requests"
 description: "Review, discuss, and merge an agent's pull request without leaving Vespin"
 ---
 
-An agent opens its pull request on GitHub as you, or as Vespin's app if you choose that in **Settings › Preferences › Commit author**. It opens it ready for review when the work is done and its checks pass, or as a draft when something is unresolved. The PR's row sits over the agent's message box, and pressing it opens the **Pull request** tab in the side panel.
+An agent opens its pull request on GitHub as you, or as Vespin's app if you choose that in **Settings › Preferences › Commit author**. The PR's row sits over the agent's message box, and pressing it opens the **Pull request** tab in the side panel.
 
 To open pull requests on GitHub instead, set **Settings › Preferences › Open pull requests in** to **GitHub**.
 
@@ -36,6 +36,6 @@ The merge button merges with the method you pick, and remembers it per repositor
 
 ## What reaches the agent
 
-With Vespin's GitHub App installed, a review, a comment on the PR, and a failed check reach the agent as messages from GitHub, drawn as cards in its transcript. The agent reads them, fixes what they ask, and pushes. On a failing check it tries up to 3 times, then tells you it stopped.
+With Vespin's GitHub App installed, a review, a comment on the PR, a failed check, and the PR's merge or close reach the agent as messages from GitHub, drawn as cards in its transcript. The agent reads them, fixes what they ask, and pushes.
 
 With a [personal access token](/install#connect-github) instead of the App, nothing wakes the agent. It reads the PR's reviews and comments itself before it ends each turn.

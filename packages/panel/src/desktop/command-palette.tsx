@@ -194,6 +194,7 @@ import {
   panelCommandOf,
 } from "../command-items.js";
 import { unreadShown } from "../failure-report.js";
+import { useInboxOn } from "../inbox-on.js";
 import { type InboxView, useInboxView } from "../inbox-route.js";
 import { type CopyLink, inSidePanel, type LinkAtHand } from "../links-at-hand.js";
 import { workspaceMembersQuery, workspaceMembersRetryMutation } from "../live-reads.js";
@@ -1024,6 +1025,7 @@ function agentRows(
   rows: TaskListRows,
   inboxWaiting: readonly AppInboxTask[],
   inboxStanding: InboxStanding,
+  inboxOn: boolean,
   doors: PanelOfferDoors,
   show: (pick: () => void) => void,
   changes: {
@@ -1040,7 +1042,11 @@ function agentRows(
   const taskName = rows.task(taskId)?.name;
   // Note that an item main says waits on the task holds its Inbox with no agent read yet.
   const waiting = inboxWaiting.find((each) => each.taskId === taskId)?.items.length ?? 0;
-  const inbox = inboxEntries(tasks.agents, waiting, () => tasks.onShowInbox({ taskId }));
+
+  // Note that an account keeping no Inbox is offered no task's Inbox to open.
+  const inbox = inboxOn
+    ? inboxEntries(tasks.agents, waiting, () => tasks.onShowInbox({ taskId }))
+    : [];
 
   const agents = agentEntries(tasks.mainTabs, tasks.agents, directory).map((entry) => ({
     ...entry,
@@ -2031,7 +2037,10 @@ export function CommandPalette({
   if (open && !available) setOpen(false);
   const [filter, setFilter] = useState<PaletteFilter>(PALETTE_FILTER.ALL);
   // Note that This task is offered only while a task is open, as its rows are (`agentRows`), since it would list nothing otherwise.
-  const filters = tasks.activeTaskId === undefined ? TASKLESS_FILTERS : PALETTE_FILTERS;
+  const offered = tasks.activeTaskId === undefined ? TASKLESS_FILTERS : PALETTE_FILTERS;
+  // Note that an account that turned its Inbox off is offered no Inbox filter, nor its items under All.
+  const inboxOn = useInboxOn();
+  const filters = inboxOn ? offered : offered.filter((each) => each !== PALETTE_FILTER.INBOX);
 
   // Note that a filter gone with its task, as This task is when the task closes under the palette, gives way to All.
   if (!filters.includes(filter)) setFilter(PALETTE_FILTER.ALL);
@@ -2388,6 +2397,7 @@ export function CommandPalette({
           rows,
           inboxWaiting,
           inboxStanding,
+          inboxOn,
           offerDoors,
           onTasks,
           changes,

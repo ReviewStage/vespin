@@ -5,13 +5,13 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 48,
-      "description": "With repository, the workspace whose GitHub installation reaches it, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+      "description": "The workspace whose GitHub installation reaches the repository, by the slug list_workspaces answered: required with repository; leave it out with agentId, whose agent settles it."
     },
     "agentId": {
       "type": "string",
       "minLength": 1,
       "maxLength": 36,
-      "description": "A coding agent whose pull request it is, by its id as list_agents answered it; leave it out to name a repository's pull request instead."
+      "description": "A coding agent whose repository the pull request is of, by its id as list_agents answered it, with number; leave it out to name the repository instead."
     },
     "repository": {
       "type": "string",
@@ -22,7 +22,7 @@
     "number": {
       "type": "integer",
       "minimum": 1,
-      "description": "The pull request's number: with repository, the one meant; with agentId, another pull request of the agent's repository, left out for the agent's own."
+      "description": "The pull request's number, in the repository that repository or agentId names. For an agent's own pull request, pass the number read_agent_changes answers."
     },
     "part": {
       "type": "string",
@@ -46,6 +46,8 @@
       "description": "With conversation or changes, the nextOffset an earlier read answered, to read the next page; leave it out for the first."
     }
   },
-  "required": [],
+  "required": [
+    "number"
+  ],
   "additionalProperties": false
 }

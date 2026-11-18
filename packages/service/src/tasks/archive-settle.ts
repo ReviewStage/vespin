@@ -7,9 +7,8 @@ import { Effect } from "effect";
  * archive-settle.ts -- what an archive or an unarchive asked of a task does, now that a task is archived no longer.
  *
  * A task stands in a status alone: Backlog, Todo, In progress, Done, or
- * Canceled. An older desktop build, or a coding agent's call from before
- * the change, still asks to archive a task or to bring one back, and the
- * request's shape is kept so neither breaks; nothing writes the task's
+ * Canceled. An older desktop build still asks to archive a task or to
+ * bring one back, and the request's shape is kept so it does not break; nothing writes the task's
  * archive stamp again. An archive settles the task instead: Done where any
  * coding agent on it, archived ones among them, has a pull request GitHub
  * reported merged, and Canceled where none does, as the migration that

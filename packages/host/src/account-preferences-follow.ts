@@ -12,6 +12,10 @@ import type {
   AgentDefaultAnswer,
   ChaptersProviderAnswer,
   ChaptersProviderWriteParams,
+  SoundChoiceAnswerView,
+  SoundChoiceParams,
+  SoundRenameParams,
+  SoundStateView,
 } from "@repo/features/agent-view";
 import { CHAPTERS_MODEL, chaptersModelOn } from "@repo/features/chapters-model-choice";
 import { type LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
@@ -51,8 +55,8 @@ import {
  * account that stored none is held as a row of nothing chosen, so a write
  * has a row to draw over before the service makes it.
  *
- * The default, the chapters model, and the switch are writes the pool draws
- * over the row at once, standing until the read carries the transaction
+ * The default, the chapters model, the switch, and a sound's rename or
+ * choice are writes the pool draws over the row at once, standing until the read carries the transaction
  * each committed in, and taken back where the service refused them.
  *
  * A read the service did not answer is told unanswered and asked for again
@@ -288,6 +292,65 @@ export function slackNotificationsWritten(
     send: (write) =>
       Effect.map(send(write), (answer) =>
         "slackBot" in answer ? { answer, txid: answer.slackBot.txid } : { refused: answer },
+      ),
+  };
+}
+
+/** One of the account's own sounds renamed, drawn at once over its row, sent as `send` asks, standing until the read carries the transaction it committed in. */
+export function soundRenamed(
+  send: (rename: SoundRenameParams) => Effect.Effect<SoundStateView>,
+  readerId: () => string | undefined,
+): WriteDeclaration<
+  AccountPreferencesPoolRow,
+  PreferencesChange,
+  SoundRenameParams,
+  SoundStateView
+> {
+  return {
+    kind: ACCOUNT_PREFERENCES,
+    keys: () => readerRow(readerId),
+    change:
+      ({ id, name }) =>
+      ({ sounds }) => ({
+        sounds: {
+          ...sounds,
+          list: sounds.list.map((sound) => (sound.id === id ? { ...sound, name } : sound)),
+        },
+      }),
+    send: (rename) =>
+      Effect.map(send(rename), (answer) =>
+        "sound" in answer ? { answer, txid: answer.txid } : { refused: answer },
+      ),
+  };
+}
+
+/**
+ * Which of the account's own sounds one of its two sounds plays, drawn at
+ * once over its row, sent as `send` asks, standing until the read carries
+ * the transaction it committed in. Note that a choice of a sound the row
+ * does not list draws nothing, because the service chooses nothing for it.
+ */
+export function soundChosen(
+  send: (choice: SoundChoiceParams) => Effect.Effect<SoundChoiceAnswerView>,
+  readerId: () => string | undefined,
+): WriteDeclaration<
+  AccountPreferencesPoolRow,
+  PreferencesChange,
+  SoundChoiceParams,
+  SoundChoiceAnswerView
+> {
+  return {
+    kind: ACCOUNT_PREFERENCES,
+    keys: () => readerRow(readerId),
+    change:
+      ({ slot, id }) =>
+      ({ sounds }) =>
+        id !== null && !sounds.list.some((sound) => sound.id === id)
+          ? {}
+          : { sounds: { ...sounds, choices: { ...sounds.choices, [slot]: id ?? undefined } } },
+    send: (choice) =>
+      Effect.map(send(choice), (answer) =>
+        "slot" in answer ? { answer, txid: answer.txid } : { refused: answer },
       ),
   };
 }

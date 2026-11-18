@@ -1,4 +1,5 @@
 import {
+  APP_SETTING_DEFAULTS,
   type AppSettingField,
   type AppSettingValue,
   DIFF_SETTING_GROUPS,
@@ -300,16 +301,19 @@ function TypeRows(): React.JSX.Element {
   const diffFontWrite = useSettingRowWrite(
     "diffFont",
     (value: FileViewSettings["diffFont"]) => value,
+    (value) => value ?? APP_SETTING_DEFAULTS.diffFont,
   );
 
   const diffFontSizeWrite = useSettingRowWrite(
     "diffFontSize",
     (value: FileViewSettings["diffFontSize"]) => value,
+    (value) => value ?? APP_SETTING_DEFAULTS.diffFontSize,
   );
 
   const diffLineHeightWrite = useSettingRowWrite(
     "diffLineHeight",
     (value: FileViewSettings["diffLineHeight"]) => value,
+    (value) => value ?? APP_SETTING_DEFAULTS.diffLineHeight,
   );
 
   const diffLigaturesWrite = useSettingRowWrite("diffLigatures", switchStored, switchDrawn, true);
@@ -361,6 +365,7 @@ function DiffRows({ roomy }: { roomy: boolean }): React.JSX.Element {
   const inlineDiffWrite = useSettingRowWrite(
     "inlineDiff",
     (value: FileViewSettings["inlineDiff"]) => value,
+    (value) => value ?? APP_SETTING_DEFAULTS.inlineDiff,
   );
 
   const diffBackgroundsWrite = useSettingRowWrite(
