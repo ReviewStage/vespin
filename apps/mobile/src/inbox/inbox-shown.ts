@@ -7,8 +7,14 @@ import { useEffect } from "react";
 import { Settings } from "react-native";
 import { appStateQuery } from "../host/app-state-query.js";
 
-/** The defaults key the last choice read is kept under, for a link that opens the app before the document is read. */
-const OFF_KEY = "inboxOff";
+/**
+ * The defaults key the last choice read is kept under, for a link that opens
+ * the app before the document is read, and the word it keeps for off. Note
+ * that it is named apart from any launch argument, since iOS lays a launch's
+ * arguments over the app's own defaults, and it keeps a word rather than a
+ * boolean, so a value from anywhere else never reads as off.
+ */
+const KEPT = { KEY: "keptInboxTab", OFF: "off", ON: "on" } as const;
 
 /**
  * Whether the account's Inbox is on, as its preferences read; on while they
@@ -30,13 +36,13 @@ export function useInboxShown(): boolean {
  */
 export function useKeepInboxShown(shown: boolean): void {
   useEffect(() => {
-    Settings.set({ [OFF_KEY]: !shown });
+    Settings.set({ [KEPT.KEY]: shown ? KEPT.ON : KEPT.OFF });
   }, [shown]);
 }
 
 /** Whether the Inbox stood on as the tabs last kept it; on before they ever did. */
 export function inboxShownKept(): boolean {
-  return Settings.get(OFF_KEY) !== true;
+  return Settings.get(KEPT.KEY) !== KEPT.OFF;
 }
 
 /**

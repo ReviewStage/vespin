@@ -13,6 +13,12 @@ env:
     arguments:
       fixture: inbox
       inboxOff: "true"
+# Note that an iPad stands in landscape, so its tab sidebar is checked too.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
 - extendedWaitUntil:
     visible: "Teammate invitations"
     timeout: 30000
