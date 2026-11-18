@@ -1,0 +1,10 @@
+flow: p9745r
+== bundle P9745r base 269d009d4e
+  built 269d009d4e base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+probe1r-iphone-deny: fails 1 shots 2 Tap on "Don.t Allow"... FAILED
+  probe1r-iphone-deny stream: 227486 lines, 640 naming dev.vespin.ios or authoriz
+  probe1r-iphone-deny grant: didGrant: 1 
