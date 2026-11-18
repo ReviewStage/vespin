@@ -1,4 +1,4 @@
-// start-screens.tsx -- the two sheets that start work, each a compose sheet as Mail's stands: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus above the keyboard; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules.
+// start-screens.tsx -- the two pages that start work, each a new conversation's page over the agent page's composer: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus under the composer's field; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules.
 
 import { hasWordsOrFiles } from "@repo/features/agent-wire";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
@@ -24,7 +24,6 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import type { VoiceCallInto } from "@repo/features/voice-call-session";
-import { TALK_LABEL } from "@repo/features/voice-call-words";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
@@ -33,7 +32,6 @@ import {
   buzz,
   Chip,
   type ChipMenuGroup,
-  ComposeSheet,
   ConfirmAsk,
   FieldChip,
   GLYPH,
@@ -44,6 +42,7 @@ import {
   type PickOption,
   runsOnGlyph,
   STATUS_MARK_SYMBOL,
+  StartPage,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -87,7 +86,6 @@ const WORDS = {
   MODEL: "Model",
   EFFORT: "Effort",
   RUNS_ON: "Machine",
-  START: "Start",
   PHOTOS: "Photos",
   TASK_RELATION: TASK_RELATION_MENU,
   RELATION: "Relation",
@@ -128,27 +126,21 @@ const LANDING = {
 type Landing = (typeof LANDING)[keyof typeof LANDING];
 
 /**
- * The sheet's bar: its name, the system's ✕ at its leading edge (Cancel to
- * VoiceOver), and Start at its trailing one, lit once there are words or
- * pictures to send and while no start is out; and the ask the ✕ or a swipe down raises while the sheet
- * holds a draft. While the sheet holds nothing, Talk stands in Start's
- * place where the sheet offers it, the waveform on the same button, as an
- * agent's composer puts Talk in Send's (Dean, Nov 17), with the question it
- * asks first while another call stands.
+ * The page's bar: its name, and the system's ✕ at its leading edge (Cancel
+ * to VoiceOver), as a new conversation's page closes; and the ask the ✕
+ * raises while the page holds a draft, and the question Talk asks first
+ * while another call stands. Start and Talk stand at the composer's end,
+ * as Send and Talk do on an agent's page.
  */
 function SheetBar({
   title,
-  ready,
-  onStart,
   kept,
   talk,
 }: {
   readonly title: string;
-  readonly ready: boolean;
-  readonly onStart: () => void;
   readonly kept: KeptWords;
-  /** Talk while the sheet holds nothing, and whether it may be pressed; none where the sheet offers no Talk or holds something to start on. */
-  readonly talk?: { readonly talk: NewAgentTalk; readonly ready: boolean } | undefined;
+  /** Talk where the page offers it, whose question stands here; none where it offers none. */
+  readonly talk?: NewAgentTalk | undefined;
 }) {
   const colors = useColors();
   const close = useCloseSheet(kept);
@@ -171,35 +163,14 @@ function SheetBar({
       {/* Note that the bar has no ground of its own, so the system draws its buttons in glass over the sheet's. */}
       <Stack.Screen options={options} />
       <Stack.Toolbar placement="left">
-        {/* Note that the sheet closes with the system's ✕, as Mail's compose sheet does, its word kept for VoiceOver. */}
+        {/* Note that the page closes with the system's ✕, as a new conversation's page does, its word kept for VoiceOver. */}
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.CLOSE)}
           accessibilityLabel={WORDS.CANCEL}
           onPress={close}
         />
       </Stack.Toolbar>
-      <Stack.Toolbar placement="right">
-        {talk === undefined ? (
-          <Stack.Toolbar.Button
-            icon={glyphSymbol(GLYPH.SEND)}
-            variant="prominent"
-            tintColor={colors.ACCENT}
-            accessibilityLabel={WORDS.START}
-            disabled={!ready}
-            onPress={onStart}
-          />
-        ) : (
-          <Stack.Toolbar.Button
-            icon={glyphSymbol(GLYPH.TALK)}
-            variant="prominent"
-            tintColor={colors.ACCENT}
-            accessibilityLabel={TALK_LABEL.TALK}
-            disabled={!talk.ready}
-            onPress={talk.talk.onTalk}
-          />
-        )}
-      </Stack.Toolbar>
-      {talk === undefined ? null : <ConfirmAsk destructive {...talk.talk.switching} />}
+      {talk === undefined ? null : <ConfirmAsk destructive {...talk.switching} />}
       <ConfirmAsk
         title={DISCARD_WORDS.QUESTION}
         act={DISCARD_WORDS.DISCARD}
@@ -269,7 +240,7 @@ function ModelChip({ pick }: { readonly pick: ModelPick }) {
 
   return (
     <MenuChip
-      look={MENU_CHIP_LOOK.DOCK}
+      look={MENU_CHIP_LOOK.COMPOSER}
       label={effort === undefined ? model : `${model}${JOINED}${effort}`}
       {...(harness === undefined ? {} : { harness })}
       menu={{ groups }}
@@ -299,7 +270,7 @@ function RunsOnChip({
 
   return (
     <MenuChip
-      look={MENU_CHIP_LOOK.DOCK}
+      look={MENU_CHIP_LOOK.COMPOSER}
       label={labelOf(options, runsOn) ?? WORDS.RUNS_ON}
       symbol={glyphOf(runsOn)}
       menu={{
@@ -336,7 +307,7 @@ function RepositoryChip({
   if (tree !== undefined) {
     return (
       <MenuChip
-        look={MENU_CHIP_LOOK.DOCK}
+        look={MENU_CHIP_LOOK.COMPOSER}
         label={tree.repository ?? NO_REPOSITORY}
         symbol={GLYPH.REPOSITORY}
       />
@@ -346,7 +317,7 @@ function RepositoryChip({
   if (repository.options.length > 0) {
     return (
       <MenuChip
-        look={MENU_CHIP_LOOK.DOCK}
+        look={MENU_CHIP_LOOK.COMPOSER}
         label={labelOf(repository.options, repository.picked) ?? WORDS.REPOSITORY}
         symbol={GLYPH.REPOSITORY}
         menu={{
@@ -365,7 +336,11 @@ function RepositoryChip({
   return (
     <>
       {repository.picked === undefined ? null : (
-        <MenuChip look={MENU_CHIP_LOOK.DOCK} label={repository.picked} symbol={GLYPH.REPOSITORY} />
+        <MenuChip
+          look={MENU_CHIP_LOOK.COMPOSER}
+          label={repository.picked}
+          symbol={GLYPH.REPOSITORY}
+        />
       )}
       {repository.failed === undefined ? null : (
         <Chip label={WORDS.TRY_AGAIN} symbol={GLYPH.RETRY} onPress={repository.retry} />
@@ -617,7 +592,7 @@ function useClosingStart(
   return { starting: sent, go };
 }
 
-/** The skills a `/` offers, as the compose sheet takes them. */
+/** The skills a `/` offers, as the start page takes them. */
 function offered(skills: SkillsOffered | undefined) {
   return skills === undefined
     ? undefined
@@ -717,16 +692,10 @@ export function NewAgentScreen({
     <>
       <SheetBar
         title={WORDS.NEW_AGENT}
-        ready={drafted && placed && !starting}
-        onStart={start}
         kept={kept}
-        talk={
-          talk === undefined || drafted || opened !== undefined
-            ? undefined
-            : { talk, ready: talk.ready && !starting }
-        }
+        talk={opened === undefined ? talk : undefined}
       />
-      <ComposeSheet
+      <StartPage
         title={
           opened === undefined
             ? undefined
@@ -741,14 +710,21 @@ export function NewAgentScreen({
           words: prompt,
           onWords: setPrompt,
           onLongPaste: pictures.pasteText,
-          testId: TEST_IDS.NEW_AGENT.WORDS,
         }}
         skills={offered(skills)}
         pictures={pictures.attached}
         onDetach={pictures.detach}
         onDropPictures={pictures.drop}
         notes={notesOf(note, pick.failed)}
-        add={{ onAdd: pictures.attach, testId: TEST_IDS.NEW_AGENT.ATTACH }}
+        add={{ onAdd: pictures.attach }}
+        ready={drafted && placed && !starting}
+        onStart={start}
+        onTalk={
+          talk === undefined || opened !== undefined || !talk.ready || starting
+            ? undefined
+            : talk.onTalk
+        }
+        testIds={{ field: TEST_IDS.NEW_AGENT.WORDS, add: TEST_IDS.NEW_AGENT.ATTACH }}
         chips={
           <>
             <ModelChip pick={pick} />
@@ -945,10 +921,10 @@ function RelationChip({ pick }: { readonly pick: RelationPick }) {
 }
 
 /**
- * New task, Home's composer as a compose sheet: the task described and the
+ * New task, Home's composer as a page of its own: the task described and the
  * pictures that go with it, the task it is related to, picked from the +
- * and shown over the words once picked, and, as capsules above the
- * keyboard, the repository it works in, the newest one the account's tasks
+ * and shown at the page's head once picked, and, as capsules under the
+ * composer's field, the repository it works in, the newest one the account's tasks
  * were about until another is picked, or its parent's in another's tree,
  * its agent's model and effort, and where its agent runs. Start makes the
  * task and starts its agent in one act, as Home does, in the workspace the
@@ -1061,25 +1037,14 @@ export function NewTaskScreen({
 
   return (
     <>
-      <SheetBar
-        title={WORDS.NEW_TASK}
-        ready={drafted && placed && !starting}
-        onStart={start}
-        kept={kept}
-        talk={
-          talk === undefined || drafted || pictures.opening
-            ? undefined
-            : { talk, ready: talk.ready && placed && !starting }
-        }
-      />
-      <ComposeSheet
+      <SheetBar title={WORDS.NEW_TASK} kept={kept} talk={talk} />
+      <StartPage
         head={head}
         words={{
           placeholder: WORDS.TASK_PLACEHOLDER,
           words: prompt,
           onWords: setPrompt,
           onLongPaste: pictures.pasteText,
-          testId: TEST_IDS.NEW_TASK.WORDS,
         }}
         skills={offered(skills)}
         pictures={pictures.attached}
@@ -1091,8 +1056,15 @@ export function NewTaskScreen({
             actions: [{ label: WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: pictures.attach }],
             submenus: related === undefined ? [] : [related],
           },
-          testId: TEST_IDS.NEW_TASK.ATTACH,
         }}
+        ready={drafted && placed && !starting}
+        onStart={start}
+        onTalk={
+          talk === undefined || pictures.opening || !talk.ready || !placed || starting
+            ? undefined
+            : talk.onTalk
+        }
+        testIds={{ field: TEST_IDS.NEW_TASK.WORDS, add: TEST_IDS.NEW_TASK.ATTACH }}
         chips={
           <>
             <RepositoryChip repository={repository} tree={tree} />

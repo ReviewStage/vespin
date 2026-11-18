@@ -7,6 +7,7 @@ import {
   Image,
   Menu,
   ProgressView,
+  ScrollView,
   TextField,
   type TextFieldSelection,
   Toggle,
@@ -170,6 +171,10 @@ type ComposerProps = {
   readonly onDropPictures?: ((uris: readonly string[], unreadable: number) => void) | undefined;
   /** Takes words pasted long enough to come as a file (`@repo/features/long-paste`), answering whether it did, so the field takes them back out of its words; they paste as words where none is given. */
   readonly onLongPaste?: ((words: string) => boolean) | undefined;
+  /** The capsules saying where and how a start runs, such as its repository and its model, in a row under the field inside the same glass, the + leading them there rather than the field; none on a conversation's composer. */
+  readonly tools?: ReactNode;
+  /** The names a flow finds the field and the + by, where its holder names its own. */
+  readonly testIds?: { readonly field: string; readonly add: string } | undefined;
 };
 
 /** What Send does while the field holds a queued message's words being edited. */
@@ -404,6 +409,8 @@ function ComposerPieces(props: ComposerProps) {
     onStop,
     stopping = false,
     onLongPaste,
+    tools,
+    testIds,
   } = props;
 
   const text = useNativeState(held ?? "");
@@ -449,7 +456,7 @@ function ComposerPieces(props: ComposerProps) {
 
   return (
     <>
-      <AddPress menu={addMenu} onAdd={onAdd} />
+      {tools === undefined ? <AddPress menu={addMenu} onAdd={onAdd} /> : null}
       <TextField
         text={text}
         placeholder={placeholder}
@@ -463,11 +470,13 @@ function ComposerPieces(props: ComposerProps) {
           padding({
             vertical: FIELD_INSET,
             trailing: FIELD_TRAILING,
-            ...(addMenu === undefined && onAdd === undefined && { leading: FIELD_LEADING }),
+            ...((tools !== undefined || (addMenu === undefined && onAdd === undefined)) && {
+              leading: FIELD_LEADING,
+            }),
           }),
           // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there.
           frame({ minHeight: PRESS_SIZE }),
-          accessibilityIdentifier("composer-field"),
+          accessibilityIdentifier(testIds?.field ?? "composer-field"),
         ]}
       />
       {call?.kind === COMPOSER_CALL.ON_CALL ? <ComposerCallPresses presses={call.presses} /> : null}
@@ -486,11 +495,37 @@ function ComposerPieces(props: ComposerProps) {
   );
 }
 
+/** How far apart a start's capsules stand in the row under the field. */
+const TOOL_SPACING = SPACE.TIGHT * 2;
+
+/**
+ * The row under the field where a composer starts work, as Claude's and
+ * ChatGPT's composers stand theirs: the + and then the capsules saying where
+ * and how the start runs, inside the composer's own glass, so the keyboard
+ * that lifts the composer can never cover them; the capsules scroll sideways
+ * where they outrun the bar.
+ */
+function ComposerTools(props: ComposerProps) {
+  const { addMenu, onAdd, tools, testIds } = props;
+
+  return (
+    <HStack spacing={TOOL_SPACING} modifiers={[padding({ leading: SPACE.TIGHT })]}>
+      <AddPress menu={addMenu} onAdd={onAdd} testId={testIds?.add} />
+      <ScrollView axes="horizontal" showsIndicators={false}>
+        <HStack spacing={TOOL_SPACING} modifiers={[padding({ trailing: SPACE.ROW })]}>
+          {tools}
+        </HStack>
+      </ScrollView>
+    </HStack>
+  );
+}
+
 /**
  * A composer in the system's Liquid Glass at the screen's foot, above the tab
  * bar: the + for what a message carries, the field, which grows with its
  * words, and Send filled with the ink, or Stop while the field is empty and
- * a turn runs. Where its holder keeps the words, the field
+ * a turn runs, and, where it starts work, the + and the start's capsules in
+ * a row under the field. Where its holder keeps the words, the field
  * follows them, so words a refused send hands back stand in it again; else
  * it empties on Send. Pictures dropped on it, on an iPad, go to its
  * holder's `onDropPictures`. It stands in a React Native bar (`GlassBar`),
@@ -503,6 +538,7 @@ export function Composer(props: ComposerProps) {
     <GlassBar
       field
       head={props.head}
+      foot={props.tools === undefined ? undefined : <ComposerTools {...props} />}
       above={props.above}
       modifiers={onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]}
     >

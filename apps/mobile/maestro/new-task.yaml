@@ -1,4 +1,4 @@
-# new-task.yaml -- New task from the tab bar's round +: Home's composer as a compose sheet, the task described, its repository picked from its capsule over the keyboard, and the task started with its agent, the agent's page opened; then a task related to another picked from the sheet's +; then a draft that Cancel asks before discarding; then a picture attached through the sheet's + Photos, which keeps the sheet as a draft too.
+# new-task.yaml -- New task from the tab bar's round +: Home's composer as a page of its own, the task described, its repository picked from its capsule under the composer's field, and the task started with its agent, the agent's page opened; then a task related to another picked from the composer's +; then a draft that Cancel asks before discarding; then a picture attached through the composer's + Photos, which keeps the page as a draft too.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -22,7 +22,7 @@ env:
 - waitForAnimationToEnd
 - takeScreenshot: new-task-sheet
 - inputText: "Let a workspace owner revoke a pending invite."
-# The keyboard is lowered by a drag on the sheet's page (`ComposeSheet`).
+# The keyboard is lowered by a drag on the page over the composer (`StartPage`).
 - runFlow:
     file: subflows/lower-keyboard.yaml
 # The repository's capsule, which says the one picked, opens a menu of what
@@ -34,7 +34,7 @@ env:
 - tapOn: "ada/ledger"
 - waitForAnimationToEnd
 - takeScreenshot: new-task-filled
-- tapOn: "Start"
+- tapOn: "Send"
 - extendedWaitUntil:
     notVisible: "Describe the task"
     timeout: 5000

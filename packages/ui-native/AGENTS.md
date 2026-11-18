@@ -37,11 +37,12 @@ builds a control of its own.
   such as an invitation's address), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, with `WordsField` (its `SECRET` look the system's secure field, for a key or
   a token pasted), `AttachRow`, and `MenuPickRow` for a form's words,
-  pictures and choices, `ComposeSheet` for a sheet that starts work (its
-  words filling the page, and the + and `MenuChip` capsule menus over the
-  keyboard, each the system's own glass button in a `DockRow` with no bar
-  around them, each capsule led by the panel's glyph or a model's harness
-  mark),
+  pictures and choices, `StartPage` for a page that starts work, as a new
+  conversation starts in Messages, ChatGPT and Claude (an empty page over
+  the agent page's own `Composer`, docked on the keyboard, with the + and
+  the `MenuChip` capsule menus in a row under its field inside the same
+  glass, so the keyboard never covers them, each capsule led by the
+  panel's glyph or a model's harness mark),
   `SwitchRow` for an agent's options, `askForName` (the system's alert a name is
   typed in, its act preferred, for a task and an agent alike), `ScriptRow` (a script read whole in the monospaced
   face),
@@ -289,7 +290,7 @@ navigation, tab bar, swipes, menus, sheets and glass.
   `Chip`, a field's chip that opens a menu, and `FollowingChip` are the
   system's own small bordered capsule; a field's chip that only says stands
   on `SURFACE` inside a hairline, since a bordered button reads as pressable.
-- **Grouped forms** (`SettingsForm` and the sheets that start work, pick
+- **Grouped forms** (`SettingsForm` and the sheets that pick
   or remind) read as iOS Settings' cards: their rows stand in the panel's
   raised fill (`RAISED`, the brand's `OVERLAY`) on the form's own ground
   (`GROUPED`: the chip's hover gray in light, black in dark), and the sheet

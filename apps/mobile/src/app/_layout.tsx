@@ -95,7 +95,14 @@ const SHEET_ROUTE = {
 const LIFTED_SHEETS: ReadonlySet<string> = new Set(Object.values(SHEET_ROUTE));
 
 /** The presentations that stand a screen in a sheet over the root, which would hide a notice drawn there. */
-const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set(["modal", "formSheet"]);
+const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set([
+  "modal",
+  "formSheet",
+  "fullScreenModal",
+]);
+
+/** The pages that start work, which open over the whole window as a new conversation does, rather than as a sheet. */
+const START_PAGE: ReadonlySet<string> = new Set([SHEET_ROUTE.START_TASK, SHEET_ROUTE.START_AGENT]);
 
 /** A sheet's place for the failure notice, which holds the notice only while the sheet is in front, so a page opened over it, as a notification opens one, shows its own refusals. Note that a screen's layout draws inside its screen's navigation, so `useFocusShown` hears the sheet's own focus. */
 function SheetNoticeLayer({ children }: { readonly children: ReactNode }) {
@@ -130,7 +137,10 @@ function screenLayout({
     children
   );
 
-  const lifted = LIFTED_SHEETS.has(route.name) && options.sheetAllowedDetents === undefined;
+  const lifted =
+    LIFTED_SHEETS.has(route.name) &&
+    !START_PAGE.has(route.name) &&
+    options.sheetAllowedDetents === undefined;
 
   return lifted ? <ElevatedGround>{placed}</ElevatedGround> : placed;
 }
@@ -228,13 +238,14 @@ function GuardedScreens() {
             name={SHEET_ROUTE.SETTINGS}
             options={{ presentation: sheetPresentation, title: "Settings" }}
           />
+          {/* Note that New task and New agent open over the whole window in every window, as Messages, ChatGPT and Claude open a new conversation, on the page's plain ground, their composer docked on the keyboard. */}
           <Stack.Screen
             name={SHEET_ROUTE.START_TASK}
-            options={{ presentation: sheetPresentation, title: "New task" }}
+            options={{ presentation: "fullScreenModal", title: "New task" }}
           />
           <Stack.Screen
             name={SHEET_ROUTE.START_AGENT}
-            options={{ presentation: sheetPresentation, title: "New agent" }}
+            options={{ presentation: "fullScreenModal", title: "New agent" }}
           />
           {/* Note that Options opens whole rather than as a short sheet, since its rows run past half the screen and half height cut Ask for approval mid-row. */}
           <Stack.Screen
