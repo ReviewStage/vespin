@@ -182,9 +182,6 @@ const HEADER_BASE64_CHARS = 16_384;
  */
 const SOUND_HEAD_BASE64_CHARS = 262_144;
 
-/** How long a `blob:` address no player holds stands before it is let go, so a row scrolled away and back plays from the one it had. */
-const BLOB_KEPT_MS = 30_000;
-
 /** The keyframes whose end takes the flash, its fade (`video-player.css`). */
 const FLASH_OUT = "ui-video-player-flash-out";
 
@@ -261,11 +258,10 @@ export function dataUrlBytes(dataUrl: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-/** A `blob:` address made of one `data:` URL, how many draw it now, and the let-go waiting once none does. */
+/** A `blob:` address made of one `data:` URL, and how many draw it now. */
 interface HeldBlob {
   readonly url: string;
   holders: number;
-  release: ReturnType<typeof setTimeout> | undefined;
 }
 
 /** The `blob:` addresses made, by the `data:` URL each was made of, one shared by everything drawing the same media. */
@@ -276,8 +272,6 @@ function holdBlob(dataUrl: string): string {
   const held = heldBlobs.get(dataUrl);
 
   if (held !== undefined) {
-    clearTimeout(held.release);
-    held.release = undefined;
     held.holders += 1;
 
     return held.url;
@@ -287,24 +281,27 @@ function holdBlob(dataUrl: string): string {
     new Blob([dataUrlBytes(dataUrl)], { type: dataUrlMediaType(dataUrl) }),
   );
 
-  heldBlobs.set(dataUrl, { url, holders: 1, release: undefined });
+  heldBlobs.set(dataUrl, { url, holders: 1 });
 
   return url;
 }
 
-/** Lets go of one hold on `dataUrl`'s address, which is revoked once none has held it for `BLOB_KEPT_MS`. */
+/**
+ * Lets go of one hold on `dataUrl`'s address, which is revoked once none
+ * holds it after the work under way, so a player drawn anew in the same
+ * commit, as a row moving between lists is, keeps it.
+ */
 function letGoBlob(dataUrl: string): void {
   const held = heldBlobs.get(dataUrl);
 
   if (held === undefined) return;
   held.holders -= 1;
 
-  if (held.holders > 0) return;
-
-  held.release = setTimeout(() => {
+  queueMicrotask(() => {
+    if (held.holders > 0 || heldBlobs.get(dataUrl) !== held) return;
     heldBlobs.delete(dataUrl);
     URL.revokeObjectURL(held.url);
-  }, BLOB_KEPT_MS);
+  });
 }
 
 /**
@@ -312,10 +309,9 @@ function letGoBlob(dataUrl: string): void {
  * made from its bytes and let go of as what draws it goes, the player or a
  * thumb's still: neither window's policy lets media load from a `data:`
  * address, nor fetch one, where both allow `blob:`. Note that one address
- * is shared by everything drawing the same media and outlives them by
- * `BLOB_KEPT_MS`, because making one decodes and copies the whole
- * recording, tens of megabytes, and a transcript's rows are drawn anew as
- * they scroll back into view.
+ * is shared by everything drawing the same media at once, the player, its
+ * thumb, and the viewer over them, because making one decodes and copies
+ * the whole recording, tens of megabytes.
  */
 export function useBlobUrl(dataUrl: string): string | undefined {
   const [url, setUrl] = useState<string>();

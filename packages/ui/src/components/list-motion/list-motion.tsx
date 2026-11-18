@@ -250,12 +250,10 @@ interface Snapshot {
   readonly frames: Map<HTMLElement, number>;
 }
 
-/** The tokens a commit over a root plays on: its exits, its glides, its arrivals, and the stagger between rows. */
+/** The tokens a commit over a root plays its exits and its glides on. */
 interface Timings {
   readonly exit: KeyframeAnimationOptions | undefined;
   readonly spring: KeyframeAnimationOptions | undefined;
-  readonly arrive: KeyframeAnimationOptions | undefined;
-  readonly stagger: number;
 }
 
 /** What the motions over one root playing one commit share: where it started from, how many have still to hear it, and the exits handed them so far. */
@@ -566,10 +564,10 @@ function placesOf(root: HTMLElement, elements: readonly Element[]): Map<Element,
  * animation engine, and tokens that leave its exits or its glides a
  * duration, as reduced motion and a capture run do not. Note that it is
  * asked before anything is measured, because measuring every row reads the
- * layout, which a commit that plays nothing never uses; and that every
- * token is read here, from one computed style, before the commit changes
- * the page, because a read after it restyles the page mid-commit, and
- * again after each exit begun between two reads.
+ * layout, which a commit that plays nothing never uses; and that both are
+ * kept for the play, from one computed style read before the commit changes
+ * the page, because a read after it restyles the page mid-commit, and again
+ * after each exit begun between two reads.
  */
 function movingTimings(root: HTMLElement): Timings | undefined {
   if (!animates(root)) return undefined;
@@ -577,14 +575,7 @@ function movingTimings(root: HTMLElement): Timings | undefined {
   const exit = styleTiming(style, MOTION_TOKEN.DURATION_EXIT, MOTION_TOKEN.EASE_EXIT);
   const spring = styleTiming(style, MOTION_TOKEN.DURATION_SPRING, MOTION_TOKEN.SPRING);
 
-  if (exit === undefined && spring === undefined) return undefined;
-
-  return {
-    exit,
-    spring,
-    arrive: styleTiming(style, MOTION_TOKEN.DURATION_QUICK, MOTION_TOKEN.EASE_EXIT),
-    stagger: milliseconds(style.getPropertyValue(MOTION_TOKEN.ROW_STAGGER)),
-  };
+  return exit === undefined && spring === undefined ? undefined : { exit, spring };
 }
 
 /** Every frame under `root`, the root itself included, outside any motion of its own inside it. */
@@ -1287,14 +1278,19 @@ class ListMotionPlayer extends Component<
 
     if (timings === undefined || spring === undefined) return;
     const left = leaving.length > 0 && exit !== undefined;
+    // Note that the arrivals' and the stagger's tokens are read here, once, only by a commit that glides, since most commits a snapshot is taken of play none.
+    const style = getComputedStyle(root);
     const closes = (left && way === LIST_MOTION_WAY.UNROLL) || (batch.closes && exit !== undefined);
     // Note that the change that ends the read lands the last of it, which arrives as the rest of it did, and rows that unroll arrive together as one body, as a fold's does.
     playMoves(root, before, {
       wait: left && !closes ? Number(exit.duration) : 0,
       travel: spring,
       close: closes ? exit : undefined,
-      arrive: timings.arrive,
-      stagger: reading || way === LIST_MOTION_WAY.UNROLL ? 0 : timings.stagger,
+      arrive: styleTiming(style, MOTION_TOKEN.DURATION_QUICK, MOTION_TOKEN.EASE_EXIT),
+      stagger:
+        reading || way === LIST_MOTION_WAY.UNROLL
+          ? 0
+          : milliseconds(style.getPropertyValue(MOTION_TOKEN.ROW_STAGGER)),
       way,
       travels: !reading,
     });
