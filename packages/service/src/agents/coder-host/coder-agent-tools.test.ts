@@ -1680,22 +1680,14 @@ test("message_agent refuses a malformed id, empty words, and words over the boun
       reason: MESSAGE_AGENT_REFUSAL.EMPTY,
     },
   );
+  assert.deepEqual(
+    await call(AGENT_TOOL.MESSAGE_AGENT, { agentId: agents.teammates.id, message: NOTE }),
+    {
+      status: ACTION_RESULT_STATUS.REJECTED,
+      reason: "Not sent: message_agent takes no message; pass what to tell the agent as text.",
+    },
+  );
   assert.equal(agentSessions.sent.length, 0, "a refusal sends nothing");
-});
-
-test("message_agent takes the words under message where no text stands, as Claude Code's agents name them", async () => {
-  const { workspaceId, agents } = await openWorkspaces();
-  const agentSessions = await fakeCoderSessions(workspaceId);
-  const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
-
-  const sent = await call(AGENT_TOOL.MESSAGE_AGENT, {
-    agentId: agents.teammates.id,
-    message: NOTE,
-  });
-
-  assert.equal(sent.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(sent));
-  const words = sentWords(agentSessions.sent.at(-1)?.body);
-  assert.ok(words.endsWith(`${NOTE}\n\n${agentMessageReplyLine(agents.caller.id)}`), words);
 });
 
 test("start_agent refuses, in words that say why and starting nothing, a picture of another agent's conversation, a video the caller recorded, one past an image's bound, pictures past a message's bound together, and more ids than a start takes", async () => {
@@ -2623,11 +2615,15 @@ test("create_task makes a task in the caller's workspace for the member the agen
     });
   }
 
-  // A start that still names a new task, as starts did before create_task, is refused with where to go.
+  // A start naming a key the tool's earlier words taught is refused with the key it meant.
   assert.deepEqual(
     await call(AGENT_TOOL.START_AGENT, { newTask: "Old way", prompt: "Sweep." }, "call-old"),
     { status: ACTION_RESULT_STATUS.REJECTED, reason: START_AGENT_REFUSAL.NEW_TASK },
   );
+  assert.deepEqual(await call(AGENT_TOOL.START_AGENT, { task: "Sweep." }, "call-old-prompt"), {
+    status: ACTION_RESULT_STATUS.REJECTED,
+    reason: "Not started: start_agent takes no task; pass what the agent should do as prompt.",
+  });
   assert.deepEqual(await tasksNamed(bob, workspaceId, "Old way"), []);
   assert.equal(agentSessions.sent.length, 1, "a refused start starts nothing");
 

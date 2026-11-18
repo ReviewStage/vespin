@@ -19,10 +19,8 @@
  * queue message is kept less the hour it is kept past due, and the instant
  * booked is answered so the agent reads what it got. Note that a call
  * written in the words of Claude Code's own `ScheduleWakeup`, its delay
- * under `seconds`, `delay_seconds`, or `minutes` or spelled as a string, and
- * its prompt under `reason`, is read as the described input, because Claude
- * Code agents write it so from habit and a refusal only costs them a step;
- * the described input names none of these, so no other agent is taught them.
+ * under `seconds`, `delay_seconds`, or `minutes`, or its prompt under
+ * `reason`, is refused with the described key it meant, so one retry books it.
  */
 
 import type { Agent } from "@repo/database/models/agent-store";
@@ -64,6 +62,8 @@ const WAKEUP_REFUSAL = {
     `Not booked: the prompt is ${length} characters, over the ${WAKEUP_PROMPT_CHARS} one may spell; cut it to fit.`,
   NOT_AGENT: "Not booked: only a coding agent books a wakeup.",
   NOT_PUBLISHED: "Not booked: the wakeup could not be scheduled just now; book it again.",
+  RENAMED: (key: string, described: string) =>
+    `Not booked: schedule_wakeup takes no ${key}; pass ${described}.`,
 } as const;
 
 const SCHEDULE_WAKEUP_INPUT = Schema.Struct({
@@ -89,42 +89,13 @@ const SCHEDULE_WAKEUP_INPUT = Schema.Struct({
 
 const readInput = Schema.decodeUnknownResult(SCHEDULE_WAKEUP_INPUT);
 
-/** The names a delay is read under, the first given winning, each with the seconds one of its unit holds: the described delaySeconds, then those Claude Code's own `ScheduleWakeup` taught its agents. */
-const DELAY_NAMES = [
-  { key: "delaySeconds", seconds: 1 },
-  { key: "delay_seconds", seconds: 1 },
-  { key: "seconds", seconds: 1 },
-  { key: "minutes", seconds: 60 },
+/** The keys Claude Code's own `ScheduleWakeup` taught its agents, each with the described input it means. */
+const CLAUDE_CODE_KEYS = [
+  { key: "delay_seconds", described: "the delay as delaySeconds, a whole number of seconds" },
+  { key: "seconds", described: "the delay as delaySeconds, a whole number of seconds" },
+  { key: "minutes", described: "the delay as delaySeconds, a whole number of seconds" },
+  { key: "reason", described: "what to do once the wakeup fires as prompt" },
 ] as const;
-
-/** A string that spells a number as that number; anything else as it came, for the schema to refuse. */
-function numberOf(value: UnparsedWireValue): UnparsedWireValue {
-  if (!Predicate.isString(value) || value.trim() === "") return value;
-  const read = Number(value);
-
-  return Number.isFinite(read) ? read : value;
-}
-
-/** The input as the described schema reads it: its delay under the first name that gives one, in whole seconds where its unit is larger, and its reason as the prompt where it names none. */
-function describedInput(input: UnparsedWireValue): UnparsedWireValue {
-  if (!isRecord(input)) return input;
-
-  const named = DELAY_NAMES.find(({ key }) => input[key] !== undefined);
-  const delay = named === undefined ? undefined : numberOf(input[named.key]);
-
-  const seconds =
-    named === undefined || named.seconds === 1 || !Predicate.isNumber(delay)
-      ? delay
-      : Math.round(delay * named.seconds);
-
-  return {
-    ...input,
-    ...(seconds === undefined ? undefined : { delaySeconds: seconds }),
-    ...(input.prompt === undefined && input.reason !== undefined
-      ? { prompt: input.reason }
-      : undefined),
-  };
-}
 
 /** `schedule_wakeup` as a coding agent is offered it: its name, its words, and its input. */
 export const SCHEDULE_WAKEUP_TOOL = {
@@ -157,8 +128,15 @@ type WakeupAsk =
   | { readonly kind: typeof WAKEUP_ASK.STOP };
 
 /** The call's input read, each refusal naming the one thing wrong. */
-function readAsk(given: UnparsedWireValue): Result.Result<WakeupAsk, string> {
-  const input = describedInput(given);
+function readAsk(input: UnparsedWireValue): Result.Result<WakeupAsk, string> {
+  const renamed = isRecord(input)
+    ? CLAUDE_CODE_KEYS.find(({ key }) => input[key] !== undefined)
+    : undefined;
+
+  if (renamed !== undefined) {
+    return Result.fail(WAKEUP_REFUSAL.RENAMED(renamed.key, renamed.described));
+  }
+
   const read = readInput(input);
 
   if (Result.isFailure(read)) {
