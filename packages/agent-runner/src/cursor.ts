@@ -367,8 +367,10 @@ const watchSilence = Effect.fn("agent-runner/cursor/watchSilence")(function* (
     const quiet = (yield* monotonicMillis) - heard.at;
 
     if (quiet >= RUNNER_UNANSWERED.SILENCE_MS && heard.calls.size === 0) break;
+
     const wait =
       heard.calls.size > 0 ? RUNNER_UNANSWERED.SILENCE_MS : RUNNER_UNANSWERED.SILENCE_MS - quiet;
+
     yield* Effect.sleep(Duration.millis(wait));
   }
 
