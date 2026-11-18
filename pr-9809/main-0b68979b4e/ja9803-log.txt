@@ -1,0 +1,14 @@
+== bundle A9803 base 0b68979b4e
+  built 0b68979b4e base app Vmain3.app (3156d3c1fa (main d084bf7b46 + #9666 + #8954 + #9721), native jn9370h; JS rebundled by jbase3 2026-11-17)
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0
+  signed 0
+iphone-light-compose: fails 0 shots 12 
+iphone-light-relation: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+iphone-dark-compose: fails 0 shots 12 
+iphone-dark-relation: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+ipad26-light-compose: fails 0 shots 12 
+ipad26-light-relation: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+ipad26-dark-compose: fails 0 shots 12 
+ipad26-dark-relation: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 

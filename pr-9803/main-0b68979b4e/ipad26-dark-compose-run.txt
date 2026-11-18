@@ -1,0 +1,90 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad26 - iOS 26.5 - ABD9B3FE-4859-40A8-85F9-63B98B47142F
+ > Flow fc9803
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Inbox" is visible... COMPLETED
+Tap on "New task"... COMPLETED
+Assert that "Describe the task" is visible... COMPLETED
+Input text Check the capsule menus.... COMPLETED
+Run subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/lower-keyboard.yaml... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-01-nt-sheet... COMPLETED
+Tap on "ada/relay"... COMPLETED
+Assert that "ada/ledger" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-02-nt-repo-menu... COMPLETED
+Tap on "ada/ledger"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "ada/ledger" is visible... COMPLETED
+Assert that "ada/relay" is not visible... COMPLETED
+Take screenshot ${P}-03-nt-repo-picked... COMPLETED
+Run flow when "Opus 5.5.*" is visible...
+  Tap on "Opus 5.5.*"... COMPLETED
+  Assert that ".*Sonnet 5.5" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot ${P}-04-nt-model-menu... COMPLETED
+  Tap on ".*Sonnet 5.5"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Assert that "Sonnet 5.5.*" is visible... COMPLETED
+  Take screenshot ${P}-05-nt-model-picked... COMPLETED
+Run flow when "Opus 5.5.*" is visible... COMPLETED
+Run flow when "Cloud.*|This Mac.*|Runs on.*" is visible...
+Run flow when "Cloud.*|This Mac.*|Runs on.*" is visible... SKIPPED
+Tap on id: new-task-attach... COMPLETED
+Tap on "Task relation"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-07-nt-relation-kinds... COMPLETED
+Tap on "Blocked by"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-08-nt-relation-tasks... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Blocked by · Teammate invitations" is visible... COMPLETED
+Take screenshot ${P}-09-nt-relation-picked... COMPLETED
+Tap on "Cancel"... COMPLETED
+Tap on (Optional) "Discard draft"... COMPLETED
+Assert that "Describe the task" is not visible... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+    Assert that "${TAB}" is visible... COMPLETED
+    Tap on "${TAB}", Index: -1... COMPLETED
+  Run flow when true is true... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Scrolling DOWN until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Scrolling DOWN until "New agent" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "New agent"... COMPLETED
+Assert that "Ask to make changes" is visible... COMPLETED
+Run subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/lower-keyboard.yaml... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-10-na-sheet... COMPLETED
+Tap on "Opus 5.5.*"... COMPLETED
+Assert that ".*Sonnet 5.5" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-11-na-model-menu... COMPLETED
+Tap on ".*Sonnet 5.5"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Sonnet 5.5.*" is visible... COMPLETED
+Take screenshot ${P}-12-na-model-picked... COMPLETED
+Run flow when "Cloud.*|This Mac.*|Runs on.*" is visible...
+Run flow when "Cloud.*|This Mac.*|Runs on.*" is visible... SKIPPED
+Run flow when "ada/relay|ada/ledger" is visible...
+Run flow when "ada/relay|ada/ledger" is visible... SKIPPED
+Wait for animation to end... COMPLETED
+Take screenshot ${P}-15-na-end... COMPLETED
