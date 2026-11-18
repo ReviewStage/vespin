@@ -29,6 +29,7 @@ import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { BROWSER_AGENT_ACTION } from "@repo/features/browser-agent-actions";
 import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
 import { INBOX_TOOL } from "@repo/features/inbox-wire";
+import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { PAGE_SANDBOX_ORIGIN } from "@repo/features/page-frame";
 import { PICTURE_MEDIA_TYPE, PICTURE_TYPE, type Picture } from "@repo/features/picture-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
@@ -577,6 +578,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           agent,
           {
             key: "invite-queue",
+            to: `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: agent.userId }, { workspace: "acme", repository: null })})`,
             title: "Which queue sends the invitation emails?",
             body: "Postgres or Redis?",
           },

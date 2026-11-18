@@ -36,6 +36,7 @@ import {
 import { descriptionSections } from "@repo/features/description-sections";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { Clock, Effect, Option } from "effect";
@@ -456,7 +457,12 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
 
             yield* postToInbox(
               poster,
-              unparsedWire({ key: "mockup", title: "Which mockup?", body: "Have a look." }),
+              unparsedWire({
+                key: "mockup",
+                to: `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: userId }, { workspace: "acme", repository: null })})`,
+                title: "Which mockup?",
+                body: "Have a look.",
+              }),
               noSandbox,
             );
             const [item] = yield* taskInboxItems(userId, on.taskId);

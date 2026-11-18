@@ -12,6 +12,7 @@ import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
 import { inboxPushOf, inboxPushResponseOf } from "@repo/features/inbox-push-wire";
 import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_REPLY } from "@repo/features/inbox-wire";
+import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { PUSH_ENVIRONMENT, PUSH_NOTIFY, type PushNotify } from "@repo/features/push-device-wire";
 import { RUN_STATUS } from "@repo/features/turn-run";
 import { TURN_ORIGIN, TURN_STATUS, unparsedWire } from "@repo/wire";
@@ -105,9 +106,10 @@ const openWorkspaceAgent = Effect.gen(function* () {
 });
 
 /** A decide on the agent's task, as `postToInbox` takes it. */
-const decide = (key: string) =>
+const decide = (key: string, userId: string) =>
   unparsedWire({
     key,
+    to: `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: userId }, { workspace: "acme", repository: null })})`,
     title: "Which queue sends the invitation emails?",
     body: "Pick one.",
     ask: { type: INBOX_ASK.DECIDE, options: [{ label: "Postgres outbox" }, { label: "Redis" }] },
@@ -152,6 +154,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
           poster,
           unparsedWire({
             key: "invite-queue",
+            to: `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: poster.userId }, { workspace: "acme", repository: null })})`,
             title: "Which queue sends the invitation emails?",
             body: "\n  The repo runs [@Postgres](https://github.com/acme/relay/blob/HEAD/db.ts) **already**.  \nPick `one`:\n\n- outbox\n- Redis",
             ask: {
@@ -251,7 +254,12 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
         const { poster } = yield* openWorkspaceAgent;
         yield* postToInbox(
           poster,
-          unparsedWire({ key: "long-plan", title: "The plan", body: paragraphs.join("\n\n") }),
+          unparsedWire({
+            key: "long-plan",
+            to: `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: poster.userId }, { workspace: "acme", repository: null })})`,
+            title: "The plan",
+            body: paragraphs.join("\n\n"),
+          }),
           noSandbox,
         );
         const [sent] = sender.sent;
@@ -389,7 +397,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
         yield* phoneSetTo(poster.userId, PUSH_NOTIFY.NEVER);
         yield* stampPresence(poster.userId);
 
-        yield* postToInbox(poster, decide("invite-queue"), noSandbox);
+        yield* postToInbox(poster, decide("invite-queue", poster.userId), noSandbox);
         assert.deepEqual(alertedTokens(sender), [always.token]);
 
         // Still present a minute later, so the sweep leaves the hold standing.
@@ -410,7 +418,7 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
     return Effect.gen(function* () {
       const { poster } = yield* openWorkspaceAgent;
       yield* stampPresence(poster.userId);
-      yield* postToInbox(poster, decide("invite-queue"), noSandbox);
+      yield* postToInbox(poster, decide("invite-queue", poster.userId), noSandbox);
       const [item] = yield* taskInboxItems(poster.userId, poster.taskId);
       const asking = item?.thread?.find((message) => message.ask?.status === INBOX_ASK_STATUS.OPEN);
       assert.ok(item !== undefined && asking !== undefined);

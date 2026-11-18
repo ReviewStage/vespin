@@ -174,9 +174,13 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 
 /** The first bytes of a PDF, as a report's file starts. */
 const PDF = new TextEncoder().encode("%PDF-1.7\n%\u00e2\u00e3\n1 0 obj\n");
 
-/** A post run as the tool runs one, over the sandbox given. */
-const post = (agent: ThreadPoster, value: WireBoundaryInput, sandbox = noSandbox) =>
-  postToInbox(agent, input(value), sandbox);
+/** A member's mention link, as `to` takes it. */
+const person = (id: string) =>
+  `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: id }, { workspace: "acme", repository: null })})`;
+
+/** A post run as the tool runs one, over the sandbox given, addressed to the agent's starter where it names no `to`. */
+const post = (agent: ThreadPoster, value: Record<string, WireBoundaryInput>, sandbox = noSandbox) =>
+  postToInbox(agent, input({ to: person(agent.userId), ...value }), sandbox);
 
 /** The one thread of the agent's task, as the task's inbox reads it. */
 const onlyItem = (agent: Pick<InboxAgent, "userId"> & { readonly taskId: string }) =>
@@ -288,16 +292,27 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "a post is addressed to the member its link names; a link naming no member of the workspace is refused and posts nothing",
+    "a post is addressed to the member its link names; a first post naming none is refused, and a later one naming none keeps the thread's; a link naming no member of the workspace is refused and posts nothing",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
-
-        const person = (id: string) =>
-          `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: id }, { workspace: "acme", repository: null })})`;
+        assert.deepEqual(yield* postToInbox(agent, input(QUEUE), noSandbox), {
+          status: ACTION_RESULT_STATUS.REJECTED,
+          reason: INBOX_REFUSAL.NO_ADDRESSEE_NAMED,
+        });
 
         const posted = yield* post(agent, { ...QUEUE, to: person(agent.userId) });
         assert.equal(posted.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(posted));
+
+        // A new ask under the key that names no `to` keeps the thread's addressee.
+        const asked = yield* postToInbox(
+          agent,
+          input({ ...QUEUE, body: "Still open." }),
+          noSandbox,
+        );
+
+        assert.equal(asked.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(asked));
+        assert.equal((yield* onlyItem(agent)).addressed, true);
 
         const agentLink = `[@Agent](${encodeMention({ kind: MENTION_KIND.AGENT, agentId: agent.agentId }, { workspace: "acme", repository: null })})`;
 
