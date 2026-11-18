@@ -52,7 +52,7 @@ import {
 } from "../sessions/agent-sessions.js";
 import { WorkspaceDriveFills } from "../workspace-drive.js";
 import { WorkspaceDriveBuilds } from "../workspace-drive-builds.js";
-import { MANAGER_OPENING, startManager } from "./manager-start.js";
+import { startManager } from "./manager-start.js";
 import { changeAgentQueue } from "./queue-change.js";
 import { type StartAsk, startAgent } from "./start.js";
 import { STEER_OUTCOME, steerMemberWords } from "./steer.js";
@@ -379,7 +379,7 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
   );
 
   it.effect(
-    "a Manager is made on no task as its creator's, named as asked and opened on its introduction, only where its workspace has Managers on, and an account outside the workspace makes none",
+    "a Manager is made on no task as its creator's, named as asked and handed nothing, so it opens no session and sends no line, only where its workspace has Managers on, and an account outside the workspace makes none",
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
@@ -421,12 +421,18 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
         const agent = Option.getOrThrow(yield* readAgent(owner, started.success.agent.id));
         assert.deepEqual(
           [agent.kind, agent.taskId, agent.organizationId, agent.userId, agent.title, agent.prompt],
-          [AGENT_KIND.MANAGER, null, workspaceId, owner, "Billing", MANAGER_OPENING],
+          [AGENT_KIND.MANAGER, null, workspaceId, owner, "Billing", null],
         );
-        assert.deepEqual(
-          opened.map((message) => message.conversationId),
-          [agent.conversationId],
-        );
+        assert.deepEqual(opened, [], "making a Manager opens no session");
+
+        const db = yield* Database;
+
+        const lines = yield* db
+          .select({ id: messages.id })
+          .from(messages)
+          .where(eq(messages.conversationId, agent.conversationId));
+
+        assert.deepEqual(lines, [], "making a Manager sends no line");
       }),
   );
 

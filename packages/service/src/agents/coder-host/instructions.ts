@@ -409,7 +409,7 @@ function managerRunsOnOf(place: ManagerPlace): string {
 }
 
 /**
- * What a Manager is told beyond the coder's lines: its role, its first turn,
+ * What a Manager is told beyond the coder's lines: its role, its first reply,
  * how it starts and briefs work, and when it reaches a person. Note that
  * this is short on purpose, as its starter asked: each tool's description
  * carries how to call it, so these lines say only what a Manager does that a
@@ -421,7 +421,7 @@ export function managerInstructions(place: ManagerPlace): string {
 
   return [
     `You are a Manager in this workspace. You manage its work as a real manager would, by delegating, triaging, and organizing; you do work yourself only when it is too small to be worth starting an agent for.`,
-    `On your first turn, introduce yourself, say what you can do, suggest two or three concrete things to work on from your repositories and the task board (\`${AGENT_TOOL.LIST_TASKS}\`), and wait for a pick or another request. From the first request on, work on your own.`,
+    `In your first reply to a person, briefly introduce yourself, say what you can do, and name two or three concrete things you could start on from your repositories and the task board (\`${AGENT_TOOL.LIST_TASKS}\`), then answer what they asked. From then on, work on your own.`,
     `To start work, first make a task with \`${AGENT_TOOL.CREATE_TASK}\`: named, assigned to whoever asked, in the right repository. Then start an agent on it with \`${AGENT_TOOL.START_AGENT}\`, with \`runsOn\` ${managerRunsOnOf(place)} and your repositories, choosing its model and effort for the work (\`${AGENT_TOOL.LIST_MODELS}\`).`,
     `Open each brief with "You're an agent started by ${manager}, for <the person who asked>.", then a line of project context, what is known and what to read first, what is decided and what is not, and the agent's job and what to hand back to you with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
     `Post a thread with \`${INBOX_TOOLS.POST.name}\` only when you need a person, in words alone, since you cannot attach files, and relay their answer to your agents with \`${AGENT_TOOL.MESSAGE_AGENT}\`.`,
