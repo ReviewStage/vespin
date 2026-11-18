@@ -926,7 +926,8 @@ it.effect(
             { agentId, change: { change: QUEUE_CHANGE.RESUME } },
           ],
           [MEMBER_MCP_TOOL.STOP_AGENT, { agentId }],
-          [MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true }],
+          [MEMBER_MCP_TOOL.ARCHIVE_AGENT, { agentId, reason: "Planted." }],
+          [MEMBER_MCP_TOOL.UNARCHIVE_AGENT, { agentId }],
           [MEMBER_MCP_TOOL.WAKE_AGENT, { agentId }],
           [MEMBER_MCP_TOOL.LIST_AGENT_PORTS, { agentId }],
           [MEMBER_MCP_TOOL.SHARE_AGENT_PORT, { agentId, port: 3000 }],
@@ -1162,7 +1163,7 @@ it.effect(
         to: TASK_RELATION_KIND.SUB_TASK,
       });
       const related = decodeRelated(yield* call(MEMBER_MCP_TOOL.READ_TASK, { taskId }));
-      yield* call(MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true, reason: "Done." });
+      yield* call(MEMBER_MCP_TOOL.ARCHIVE_AGENT, { agentId, reason: "Done." });
 
       const automationId = decodeAutomation(
         yield* call(MEMBER_MCP_TOOL.CREATE_AUTOMATION, {

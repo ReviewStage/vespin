@@ -33,8 +33,8 @@ import { connectionToolEntries } from "../../integrations/connection-tools.js";
  * The tools a coding agent's transcript may name that no agent is offered
  * now: the retired runtime's provider-run page fetch, which coding agents ran before they had
  * the hosted page read, our own hosted search on our key, since
- * replaced by the retired runtime's provider-run `web_search` on the agent's own key, the archive, unarchive, and move of a task into a
- * section since folded into `update_agent` and `update_task`, and the close
+ * replaced by the retired runtime's provider-run `web_search` on the agent's own key, the move of a task into a
+ * section since folded into `update_task`, and the close
  * of and reply on an inbox item since folded into `withdraw_ask` and
  * `post_to_inbox`, that post and its read, since named `post_thread` and
  * `read_threads`, that read, since split into `list_threads` and
@@ -51,8 +51,6 @@ import { connectionToolEntries } from "../../integrations/connection-tools.js";
 export const RETIRED_CODER_TOOL = {
   WEB_FETCH: "web_fetch",
   SEARCH_WEB: RETIRED_TOOL.SEARCH_WEB,
-  ARCHIVE_AGENT: RETIRED_TOOL.ARCHIVE_AGENT,
-  UNARCHIVE_AGENT: RETIRED_TOOL.UNARCHIVE_AGENT,
   MOVE_TASK: RETIRED_TOOL.MOVE_TASK,
   CLOSE_INBOX_ITEM: RETIRED_TOOL.CLOSE_INBOX_ITEM,
   REPLY_INBOX: RETIRED_TOOL.REPLY_INBOX,

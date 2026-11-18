@@ -129,6 +129,8 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE]: { messages: ["queue"] },
   [MEMBER_MCP_TOOL.STOP_AGENT]: { agents: ["stop"] },
   [MEMBER_MCP_TOOL.UPDATE_AGENT]: { agents: ["change"] },
+  [MEMBER_MCP_TOOL.ARCHIVE_AGENT]: { agents: ["change"] },
+  [MEMBER_MCP_TOOL.UNARCHIVE_AGENT]: { agents: ["change"] },
   [MEMBER_MCP_TOOL.REWIND_AGENT]: { agents: ["rewind"] },
   [MEMBER_MCP_TOOL.DELETE_AGENT]: { agents: ["delete"] },
   [MEMBER_MCP_TOOL.WAKE_AGENT]: { agents: ["sandboxResume", "warm"] },
