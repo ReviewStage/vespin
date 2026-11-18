@@ -133,7 +133,7 @@ export interface MemorySandboxState {
   readonly interactive: { readonly name: string; readonly running: string }[];
   /** Every running run a touch reached, in order. */
   readonly touched: { readonly name: string; readonly running: string }[];
-  /** The sessions the provider bills, which a suite puts here for `sessionsSince` to list. */
+  /** The sessions the provider bills, which a suite puts here for `sessionsOf` to list by their sandbox. */
   readonly sessions: SandboxSession[];
 }
 
@@ -380,13 +380,13 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
             .toSorted((first, second) => (second.createdAt ?? 0) - (first.createdAt ?? 0)),
         ),
       ),
-    sessionsSince: (since) =>
+    sessionsOf: (name) =>
       scripted(
         SANDBOX_CALL.SESSIONS,
-        "",
+        name,
         Effect.sync(() =>
           state.sessions
-            .filter((session) => session.createdAt >= since)
+            .filter((session) => session.sandboxName === name)
             .toSorted((first, second) => second.createdAt - first.createdAt),
         ),
       ),

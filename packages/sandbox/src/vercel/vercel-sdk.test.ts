@@ -54,7 +54,7 @@ const CALLS: readonly {
   { call: SANDBOX_CALL.TAGS, ask: (api) => api.updateTags(NAME, { sessionId: "s" }) },
   { call: SANDBOX_CALL.GET, ask: (api) => api.get(NAME) },
   { call: SANDBOX_CALL.LIST, ask: (api) => api.listTagged("sessionId", "session_fixture") },
-  { call: SANDBOX_CALL.SESSIONS, ask: (api) => api.sessionsSince(0) },
+  { call: SANDBOX_CALL.SESSIONS, ask: (api) => api.sessionsOf(NAME) },
 ];
 
 /** An error body Vercel answers a refused call with. */
@@ -607,7 +607,7 @@ it.effect(
 );
 
 it.effect(
-  "the project's sessions are read a page at a time, newest first, until a page reaches past the time asked",
+  "a sandbox's sessions are read by its name, every page of them, and a sandbox gone answers none",
   () =>
     Effect.gen(function* () {
       const hours = (count: number) => Duration.toMillis(Duration.hours(count));
@@ -654,7 +654,7 @@ it.effect(
               listed("sbx_failed", "failed", 47),
               listed("sbx_old", "stopped", 49, { duration: 60_000 }),
             ],
-            pagination: { count: 2, next: "cursor-3" },
+            pagination: { count: 2, next: null },
           },
         ],
       ]);
@@ -668,12 +668,14 @@ it.effect(
           return refusedWith(400)();
         }
 
+        if (query.get("name") !== NAME) return refusedWith(404)();
+
         const page = pages.get(query.get("cursor") ?? "first");
 
         return page === undefined ? refusedWith(500)() : Response.json(page);
       });
 
-      const sessions = yield* api.sessionsSince(now - hours(48));
+      const sessions = yield* api.sessionsOf(NAME);
 
       assert.deepEqual(asked, [null, "cursor-2"]);
       assert.deepEqual(
@@ -682,8 +684,10 @@ it.effect(
           ["sbx_up", undefined],
           ["sbx_done", "stopped"],
           ["sbx_failed", "failed"],
+          ["sbx_old", "stopped"],
         ],
       );
+      assert.deepEqual(yield* api.sessionsOf("agent-sandbox-gone"), []);
       assert.deepEqual(sessions[1], {
         id: "sbx_done",
         sandboxName: "agent-sandbox-sbx_done",

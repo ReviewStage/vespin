@@ -85,6 +85,7 @@ import {
   Layer,
   Option,
 } from "effect";
+import { bookSandboxUsageCheck } from "../billing/usage-queues.js";
 import { GitHubApp } from "../github/github-app.js";
 import { afterResponse } from "../http/after-response.js";
 import { ORGANIZATION_TAG } from "./agent-sandbox-open.js";
@@ -363,7 +364,7 @@ const lockedFill = <E, R, E2, R2>(
     const context = yield* Effect.context<DatabaseServices>();
     let cutOff = false;
 
-    // Note that the owner is recorded before the fill's sandbox is created, so none stands unbilled.
+    // Note that the owner is recorded and the usage check booked before the fill's sandbox is created, so none stands unbilled or uncharged.
     yield* recordSandboxOwner({
       sandboxName: name,
       organizationId: workspace.workspaceId,
@@ -372,6 +373,7 @@ const lockedFill = <E, R, E2, R2>(
       userId: null,
       createdAt: yield* DateTime.nowAsDate,
     });
+    yield* bookSandboxUsageCheck(name);
 
     const filled = yield* filledDrive(
       {

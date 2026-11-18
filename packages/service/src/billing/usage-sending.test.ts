@@ -1,22 +1,27 @@
 /**
- * usage-sending.test.ts -- the usage ledger's unsent charges sent to Metronome, over the test's own database and a faked Metronome: a workspace's first send makes its customer and contract, each charge goes once as an event of its workspace and is stamped sent, a 429 is tried again, a refusal leaves its charges unsent, and nothing is sent where no account is configured. Synthetic accounts, workspaces, charges, and ids throughout.
+ * usage-sending.test.ts -- the usage-sends consumer's charges sent to Metronome, over the test's own database and a faked Metronome: a workspace's first send makes its customer and contract, each charge goes once as an event of its workspace and is stamped sent, a 429 or 5xx that outlasts the retries fails the send so the queue delivers it again, another refusal is set aside with its charges left unsent, and nothing is sent where no account is configured. Synthetic accounts, workspaces, charges, and ids throughout.
  */
 
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { recordUsageCharges, unsentUsageCharges } from "@repo/database/models/usage-charges";
+import {
+  recordUsageCharges,
+  type UsageCharge,
+  unsentChargeIdsOf,
+  unsentUsageChargesOf,
+} from "@repo/database/models/usage-charges";
 import { workspaceBilling } from "@repo/database/models/workspace-billing";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
 import { USAGE_KIND } from "@repo/database/usage-vocabulary";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
-import { Effect, Fiber, Layer, Option, Redacted } from "effect";
+import { Effect, Exit, Fiber, Layer, Option, Redacted } from "effect";
 import { TestClock } from "effect/testing";
 import { BillingEnvironment, type BillingEnvironmentValues } from "./billing-environment.js";
 import type { MetronomeEvent } from "./metronome.js";
-import { sendUnsentUsage } from "./usage-sending.js";
+import { sendUsageCharges } from "./usage-sending.js";
 
 const NOW = new Date("2026-11-16T12:00:00Z");
 
@@ -123,17 +128,20 @@ function eventsOf(fake: { readonly events: readonly MetronomeEvent[] }, organiza
   return fake.events.filter((event) => event.customer_id === organizationId);
 }
 
-/** The workspace's unsent charges' row ids, by amount. */
-function acmeRows(organizationId: string) {
-  return Effect.map(
-    unsentUsageCharges({ since: new Date(0), after: null, limit: 10_000 }),
-    (page) =>
-      new Map(
-        page
-          .filter((row) => row.organizationId === organizationId)
-          .map((row) => [row.amountMicroUsd, row.id]),
-      ),
-  );
+/** The charges recorded, and their unsent rows' ids by amount. */
+function recorded(charges: readonly UsageCharge[]) {
+  return Effect.gen(function* () {
+    yield* recordUsageCharges(charges);
+
+    const ids = yield* unsentChargeIdsOf(
+      USAGE_KIND.SANDBOX_SESSION,
+      charges.map((each) => each.sourceId),
+    );
+
+    const rows = yield* unsentUsageChargesOf(ids);
+
+    return { ids, byAmount: new Map(rows.map((row) => [row.amountMicroUsd, row.id])) };
+  });
 }
 
 it.layer(getTestDB())("usage sent to Metronome", (it) => {
@@ -144,17 +152,17 @@ it.layer(getTestDB())("usage sent to Metronome", (it) => {
         yield* TestClock.setTime(NOW.getTime());
         const owner = yield* openAccount;
         const acme = yield* openWorkspace(owner);
-        yield* recordUsageCharges([
+
+        const { ids, byAmount: rows } = yield* recorded([
           // Last month's, so the contract starts on its 1st and covers it.
           charge(acme, 2_500, "2026-10-30T08:00:00Z"),
           charge(acme, 400, "2026-11-11T09:30:00Z"),
-          // Older than Metronome takes an event, so never read.
-          charge(acme, 9_000, "2026-09-01T00:00:00Z"),
         ]);
-        const rows = yield* acmeRows(acme);
+
         const fake = metronome();
 
-        const send = sendUnsentUsage().pipe(
+        // Its message delivered twice, as the queue may.
+        const send = sendUsageCharges(ids).pipe(
           Effect.provide(Layer.merge(fake.layer, Layer.succeed(BillingEnvironment, ACCOUNT))),
         );
 
@@ -226,34 +234,55 @@ it.layer(getTestDB())("usage sent to Metronome", (it) => {
       }),
   );
 
-  it.effect("tries a 429 again, and leaves a refused batch unsent for the next run", () =>
-    Effect.gen(function* () {
-      yield* TestClock.setTime(NOW.getTime());
-      const owner = yield* openAccount;
-      const acme = yield* openWorkspace(owner);
-      yield* recordUsageCharges([charge(acme, 700, "2026-11-12T00:00:00Z")]);
-      const environment = Layer.succeed(BillingEnvironment, ACCOUNT);
+  it.effect(
+    "fails a send whose 429 or 5xx outlasts the retries, so the queue delivers it again, and sets another refusal aside unsent",
+    () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW.getTime());
+        const owner = yield* openAccount;
+        const acme = yield* openWorkspace(owner);
+        const { ids } = yield* recorded([charge(acme, 700, "2026-11-12T00:00:00Z")]);
+        const environment = Layer.succeed(BillingEnvironment, ACCOUNT);
 
-      const refused = metronome((path) => (path === "/v1/ingest" ? 400 : 200));
-      yield* sendUnsentUsage().pipe(Effect.provide(Layer.merge(refused.layer, environment)));
-      assert.equal(eventsOf(refused, acme).length, 1);
+        // Metronome's answer to every ingest, and what the send did over it.
+        const sentOver = (status: number) =>
+          Effect.gen(function* () {
+            const fake = metronome((path) => (path === "/v1/ingest" ? status : 200));
 
-      const limited = metronome((path, attempt) =>
-        path === "/v1/ingest" && attempt === 1 ? 429 : 200,
-      );
+            const pending = yield* Effect.forkChild(
+              Effect.exit(
+                sendUsageCharges(ids).pipe(Effect.provide(Layer.merge(fake.layer, environment))),
+              ),
+            );
 
-      const pending = yield* Effect.forkChild(
-        sendUnsentUsage().pipe(Effect.provide(Layer.merge(limited.layer, environment))),
-      );
+            yield* TestClock.adjust("1 minute");
 
-      yield* TestClock.adjust("1 minute");
-      yield* Fiber.join(pending);
-      assert.equal(eventsOf(limited, acme).length, 2);
+            const exit = yield* Fiber.join(pending);
 
-      const after = metronome();
-      yield* sendUnsentUsage().pipe(Effect.provide(Layer.merge(after.layer, environment)));
-      assert.deepEqual(eventsOf(after, acme), []);
-    }),
+            return {
+              failed: Exit.isFailure(exit),
+              run: Exit.isSuccess(exit) ? exit.value : undefined,
+              events: eventsOf(fake, acme).length,
+            };
+          });
+
+        for (const status of [429, 503]) {
+          const { failed, events } = yield* sentOver(status);
+
+          // Tried five times, then failed for the queue to deliver again.
+          assert.deepEqual([failed, events], [true, 5]);
+        }
+
+        const refused = yield* sentOver(400);
+        assert.deepEqual(refused.run, { configured: true, sent: 0, unsent: 1 });
+        assert.equal(refused.events, 1);
+
+        const taken = yield* sentOver(200);
+        assert.deepEqual(taken.run, { configured: true, sent: 1, unsent: 0 });
+
+        // Its message again sends nothing, the charge stamped sent.
+        assert.deepEqual(yield* unsentUsageChargesOf(ids), []);
+      }),
   );
 
   it.effect("sends nothing where no Metronome account is configured", () =>
@@ -261,10 +290,10 @@ it.layer(getTestDB())("usage sent to Metronome", (it) => {
       yield* TestClock.setTime(NOW.getTime());
       const owner = yield* openAccount;
       const acme = yield* openWorkspace(owner);
-      yield* recordUsageCharges([charge(acme, 100, "2026-11-12T00:00:00Z")]);
+      const { ids } = yield* recorded([charge(acme, 100, "2026-11-12T00:00:00Z")]);
       const fake = metronome();
 
-      const run = yield* sendUnsentUsage().pipe(
+      const run = yield* sendUsageCharges(ids).pipe(
         Effect.provide(
           Layer.merge(
             fake.layer,

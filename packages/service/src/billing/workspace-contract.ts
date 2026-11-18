@@ -1,14 +1,14 @@
 /**
  * workspace-contract.ts -- a workspace's Metronome customer and contract, made the first time they are needed and kept in `workspace_billing`.
  *
- * The daily send needs them before a workspace's first usage is sent
+ * The usage send needs them before a workspace's first usage is sent
  * (`usage-sending.ts`), and setting billing up needs them before the
  * contract is linked to Stripe (`stripe-webhook-app.ts`), which can come
  * first for a workspace that has used nothing yet. The customer is recorded
  * before its contract is made, so a contract that failed to be made is made
  * on the next call on the same customer. The contract runs from the 1st of
  * the UTC month the caller names: the month of the workspace's earliest
- * unsent charge for the daily send, and the current month for a setup.
+ * unsent charge for the usage send, and the current month for a setup.
  */
 
 import {
