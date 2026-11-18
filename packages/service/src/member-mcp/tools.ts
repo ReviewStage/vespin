@@ -4535,7 +4535,7 @@ const MEMBER_AUTOMATION_FIELDS = {
     describeWire(
       automationCreateRequestSchema.fields.repositories.schema,
       "owner/name, reached by the workspace's GitHub installation; runs start in the first. [] " +
-        "for none, which a GitHub trigger cannot take. Create defaults to none.",
+        "for none, which a GitHub trigger cannot take.",
     ),
   ),
   disabledServers: Schema.optionalKey(
@@ -4599,6 +4599,7 @@ const CreateAutomationInputSchema = Schema.Struct({
   workspace: WORKSPACE_INPUT,
   ...CREATE_AUTOMATION_TOOL.inputSchema.fields,
   ...MEMBER_AUTOMATION_FIELDS,
+  repositories: MEMBER_AUTOMATION_FIELDS.repositories.schema,
 });
 
 const MEMBER_CREATE_AUTOMATION_TOOL = memberMcpTool({
@@ -4609,7 +4610,9 @@ const MEMBER_CREATE_AUTOMATION_TOOL = memberMcpTool({
     "repositories or in none, on the member's keys and connections, on a task of its own with no " +
     "one watching, or hands the run to the one agent named. It is on as it is made, runs as the " +
     "member, and the desktop shows it as one they made. It works in the repositories named, " +
-    `or in none where you name none. One fired by Sentry needs ${PRODUCT_NAME}'s Sentry ` +
+    "or in none where you name []. Name its repositories, model, and effort: none is taken " +
+    `from the member's defaults, and ${MEMBER_MCP_TOOL.LIST_MODELS} answers the models and ` +
+    `efforts. One fired by Sentry needs ${PRODUCT_NAME}'s Sentry ` +
     `integration installed on the workspace first. ${WEBHOOK_WORDS} ${WORKSPACE_WORDS} Make ` +
     `one when the member asks for it, and read ${MEMBER_MCP_TOOL.LIST_AUTOMATIONS} first so ` +
     "you make none they already have. Each call makes an automation of its own, so call it " +

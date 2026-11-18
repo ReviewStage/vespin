@@ -4949,7 +4949,15 @@ test("list_automations, create_automation, update_automation, and delete_automat
   const stranger = await peerCaller(hostOf(), agents.strangers, agentSessions.services);
   const weekly = { kind: "schedule", cron: "0 9 * * 1", timezone: "Europe/London" };
   const prompt = `Audit our agents' tool sets. ${"Read every tool's description. ".repeat(20)}`;
-  const made = { name: " Agent audit ", prompt, trigger: weekly };
+
+  const made = {
+    name: " Agent audit ",
+    prompt,
+    trigger: weekly,
+    repositories: [RELAY_FULL_NAME],
+    model: OPUS,
+    effort: "high",
+  };
 
   const automationOf = (answer: WireRecord) =>
     isRecord(answer.automation) ? answer.automation : {};
@@ -4963,7 +4971,7 @@ test("list_automations, create_automation, update_automation, and delete_automat
   const created = await call(AGENT_TOOL.CREATE_AUTOMATION, made, "call-make");
   assert.equal(created.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(created));
   const automation = automationOf(created);
-  // It works in the repository the caller works in, lands on a new agent each run, and is due.
+  // It works in the repository named, lands on a new agent each run, and is due.
   assert.deepEqual(
     [
       automation.name,
@@ -5032,9 +5040,14 @@ test("list_automations, create_automation, update_automation, and delete_automat
     await make({ trigger: { ...weekly, timezone: "Mars/Olympus" } }, "zone"),
     rejected(AUTOMATION_TOOL_REFUSAL.TIMEZONE),
   );
+  // Nothing is taken from where the caller works or its starter's defaults: each one left out is named.
   assert.deepEqual(
-    await make({ model: OPUS }, "half-choice"),
-    rejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_CREATE),
+    await call(
+      AGENT_TOOL.CREATE_AUTOMATION,
+      { name: made.name, prompt, trigger: weekly, model: OPUS },
+      "unnamed",
+    ),
+    rejected(`${AUTOMATION_TOOL_REFUSAL.MISSING_CREATE} repositories, effort.`),
   );
   const unoffered = await make({ model: SOL, effort: "high" }, "unoffered");
   assert.equal(unoffered.status, ACTION_RESULT_STATUS.REJECTED);
@@ -5205,6 +5218,9 @@ test("create_automation and update_automation take a Sentry trigger once the wor
     name: "Fix Sentry alerts",
     prompt: "Fix the error the alert names.",
     trigger: alerts,
+    repositories: [],
+    model: OPUS,
+    effort: "high",
   };
 
   const automationOf = (answer: WireRecord) =>
@@ -5228,6 +5244,9 @@ test("create_automation and update_automation take a Sentry trigger once the wor
         name: "Weekly audit",
         prompt: "Audit the errors.",
         trigger: { kind: "schedule", cron: "0 9 * * 1", timezone: "Europe/London" },
+        repositories: [],
+        model: OPUS,
+        effort: "high",
       },
       "weekly",
     ),
