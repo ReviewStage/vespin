@@ -1695,6 +1695,8 @@ const AGENT_TOOL_VIEWS = {
     };
   },
   [AGENT_TOOL.SEND_SLACK_MESSAGE]: ({ input, output }) => slackMessageView(input, output),
+  [AGENT_TOOL.LIST_WORKSPACE_MEMBERS]: ({ input, output }) =>
+    namedCall(CALL_KIND.WORKSPACE_MEMBERS, input, output, undefined),
   [AGENT_TOOL.LIST_SLACK_CHANNELS]: ({ input, output }) =>
     namedCall(CALL_KIND.SLACK_CHANNELS, input, output, undefined),
   [AGENT_TOOL.READ_SLACK]: ({ input, output }) =>
