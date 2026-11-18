@@ -1,0 +1,30 @@
+# settings-cloud-environment.yaml -- Settings › Cloud environment on the Inbox fixture: the workspace's sandbox size, its variables by name with who changed each, and its install and setup scripts read whole.
+#
+# Launched on the host's Inbox fixture, whose workspace's cloud environment
+# is staged (`@repo/host/fixture-inbox`'s `CLOUD_ENVIRONMENT`), so no server
+# is reached.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: "inbox"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: "Settings, .*"
+- waitForAnimationToEnd
+- tapOn:
+    id: "settings-cloud-environment"
+- waitForAnimationToEnd
+- assertVisible: "Sandbox"
+- assertVisible: "Variables"
+- assertVisible: "DATABASE_URL"
+- takeScreenshot: settings-cloud-environment
+- scrollUntilVisible:
+    element: "Setup scripts"
+- assertVisible: "Install software"
+- assertVisible: "ada/relay"
+- takeScreenshot: settings-cloud-environment-scripts

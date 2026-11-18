@@ -1465,6 +1465,65 @@ const MCP_CLIENTS: readonly McpClient[] = [
   },
 ];
 
+/**
+ * The fixture workspace's cloud environment, as Settings › Cloud environment
+ * reads it: a size above the default, two secrets and a config (whose
+ * value, a plain word, is the one a member may read), the install script,
+ * which last ran in the invitations agent's sandbox, and one repository's
+ * setup script. Nothing here is a credential: a secret's value is never
+ * answered.
+ */
+const CLOUD_ENVIRONMENT = {
+  SIZE: { vcpus: 4 },
+  VARIABLES: {
+    variables: [
+      {
+        name: "DATABASE_URL",
+        secret: true,
+        createdAt: LANDED - 20 * DAY,
+        updatedAt: LANDED - 2 * DAY,
+        createdBy: GRACE,
+        updatedBy: ADA,
+      },
+      {
+        name: "NODE_ENV",
+        secret: false,
+        value: "development",
+        createdAt: LANDED - 20 * DAY,
+        updatedAt: LANDED - 20 * DAY,
+        createdBy: GRACE,
+      },
+      {
+        name: "STRIPE_SECRET_KEY",
+        secret: true,
+        createdAt: LANDED - 6 * HOUR,
+        updatedAt: LANDED - 6 * HOUR,
+        createdBy: ADA,
+      },
+    ],
+  },
+  SETUP: {
+    install: {
+      script: "sudo apt-get update\nsudo apt-get install -y postgresql-client",
+      updatedAt: LANDED - 9 * DAY,
+      lastRun: {
+        ranAt: LANDED - 3 * HOUR,
+        exitCode: 0,
+        agent: { id: AGENT.INVITES, taskId: TASK.INVITES, name: "Build teammate invitations" },
+      },
+    },
+    setups: [
+      {
+        repository: "ada/relay",
+        script: "pnpm install\npnpm db:migrate",
+        updatedAt: LANDED - 4 * DAY,
+      },
+    ],
+    archives: [],
+    runActions: [],
+  },
+} as const;
+
 /** The fixture workspace's one pending invitation, a week from running out. */
 const INVITATIONS: readonly WorkspaceInvitation[] = [
   {
@@ -2794,6 +2853,11 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
 const ANSWERS: StagedAnswers = {
+  // Note that the workspace's cloud environment is read as the service answers it, and a size chosen is taken as the service takes one, though nothing here moves.
+  [ACT_KIND.WORKSPACE_SANDBOX_SIZE_READ]: () => CLOUD_ENVIRONMENT.SIZE,
+  [ACT_KIND.WORKSPACE_SANDBOX_SIZE_PUT]: ({ vcpus }) => ({ vcpus }),
+  [ACT_KIND.WORKSPACE_ENVIRONMENT_LIST]: () => CLOUD_ENVIRONMENT.VARIABLES,
+  [ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: () => CLOUD_ENVIRONMENT.SETUP,
   // Note that an ask is answered as the service answers the first answer given, which stands; the mobile fixture takes the ask off the document itself (`machineAskAppState`).
   [ACT_KIND.MACHINE_ASK_ANSWER]: ({ decision, note }) =>
     note === undefined ? { decision } : { decision, note },

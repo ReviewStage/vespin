@@ -277,6 +277,7 @@ export {
   PUSH_ROW_GOES,
   PushRow,
   type PushRowGoes,
+  ScriptRow,
   SettingsForm,
   ToggleRow,
   ValueRow,
@@ -310,8 +311,10 @@ export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
 export {
   askForName,
+  askForSecret,
   askForWords,
   type NameAsk,
+  type SecretAsk,
   shareWords,
   WORDS_KIND,
   type WordsAct,

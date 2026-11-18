@@ -1,3 +1,4 @@
+import { CLOUD_ENVIRONMENT_HEAD } from "@repo/features/cloud-environment-words";
 import { MACHINES_WORDS } from "@repo/features/machines-settings-words";
 import { SKILLS_LINE, workspaceGroupTitle } from "@repo/features/skills-settings-words";
 import type { Workspace } from "@repo/features/workspace-wire";
@@ -221,28 +222,28 @@ const SETTINGS_SECTIONS = {
   [SECTION.ENVIRONMENT_SANDBOX]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.ENVIRONMENT,
-    head: "Sandbox",
+    head: CLOUD_ENVIRONMENT_HEAD.SANDBOX,
     words: `sandbox size vcpus cpu cores memory ram gb machine larger bigger faster ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },
   [SECTION.ENVIRONMENT_VARIABLES]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.ENVIRONMENT,
-    head: "Variables",
+    head: CLOUD_ENVIRONMENT_HEAD.VARIABLES,
     words: `environment variables env vars secrets ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },
   [SECTION.ENVIRONMENT_INSTALL]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.ENVIRONMENT,
-    head: "Install software",
+    head: CLOUD_ENVIRONMENT_HEAD.INSTALL,
     words: `install script sudo apt packages tools ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },
   [SECTION.ENVIRONMENT_SETUP]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.ENVIRONMENT,
-    head: "Setup scripts",
+    head: CLOUD_ENVIRONMENT_HEAD.SETUP,
     words: `setup script repository checkout ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },

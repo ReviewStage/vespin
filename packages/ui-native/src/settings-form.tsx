@@ -1,4 +1,4 @@
-// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
+// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a script read whole, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
 
 import {
   Circle,
@@ -585,6 +585,50 @@ export function CodeRow({ code, testId }: { readonly code: string; readonly test
     >
       {code}
     </Text>
+  );
+}
+
+/**
+ * A script as it is saved, read and never edited here, such as a
+ * workspace's install script: its name, the script whole under it in the
+ * monospaced face, and a quiet line under that where one is given, such as
+ * how it last ran. VoiceOver hears it as one element, its name then the
+ * script and the line.
+ */
+export function ScriptRow({
+  name,
+  script,
+  line,
+}: {
+  readonly name: string;
+  readonly script: string;
+  readonly line?: string | undefined;
+}) {
+  const colors = useColors();
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={SPACE.TIGHT}
+      modifiers={[listRowBackground(colors.RAISED), accessibilityElement("combine")]}
+    >
+      <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.ROW_LINE, design: "monospaced" }),
+          foregroundStyle(colors.TEXT_BODY),
+        ]}
+      >
+        {script}
+      </Text>
+      {line === undefined ? null : (
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {line}
+        </Text>
+      )}
+    </VStack>
   );
 }
 
