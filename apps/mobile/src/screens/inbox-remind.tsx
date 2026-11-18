@@ -15,8 +15,9 @@ import {
   ROW_ACTION_TONE,
   type RowAction,
   type RowSubmenu,
+  useToday,
 } from "@repo/ui-native";
-import { type ReactNode, useCallback, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
 
 /** What Remind me is called and drawn with, wherever it stands: a row's swipe and long press, a thread's ⋯ menu, and Select mode's bar. */
@@ -70,14 +71,20 @@ export function useRemind(): UseRemindResult {
     [remind, remindMany],
   );
 
+  // Note that the times' words are said once a day for every menu, rather than once a row, since a time that holds through the day says the same words from any moment of it, and saying a date took each Inbox row a few ms on Hermes; only such a time says when, as Mail's "In 1 hour" says no time.
+  const today = useToday();
+
+  const details = useMemo(
+    () =>
+      REMIND_TIMES.map((time) => (time.steady ? remindWords(time.at(today), today) : undefined)),
+    [today],
+  );
+
   const menu = useCallback(
     (items: readonly InboxItem[], after?: () => void): RemindMenu => {
-      const now = Date.now();
-
-      // Note that only a time that holds through the day says when, since a row's menu is built once a day, as Mail's "In 1 hour" says no time.
-      const times: RowAction[] = REMIND_TIMES.map((time) => ({
+      const times: RowAction[] = REMIND_TIMES.map((time, at) => ({
         label: time.label,
-        detail: time.steady ? remindWords(time.at(now), now) : undefined,
+        detail: details[at],
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => send(items, time.at(Date.now()), after),
       }));
@@ -102,7 +109,7 @@ export function useRemind(): UseRemindResult {
 
       return { ...REMIND_ME, choices: [], actions: [...times, pick, ...clear] };
     },
-    [send],
+    [send, details],
   );
 
   const itemMenu = useCallback((item: InboxItem) => menu([item]), [menu]);
