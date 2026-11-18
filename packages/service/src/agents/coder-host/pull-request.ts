@@ -70,10 +70,10 @@ import { agentPublished } from "./published.js";
  * turn ends, so a comment on it finds the agent (`github/agent-wakes.ts`);
  * a refused call moves nothing.
  *
- * An agent that works in other repositories beside its own
- * (`readAgentRepositories`) names the one each call opens in, refused with
- * their names where it names none or one it does not work in; an agent in
- * one repository may leave it out, and opens as it always did. A pull
+ * Every call names the repository it opens in, its own or one it works in
+ * beside it (`readAgentRepositories`), refused with their names where it
+ * names none or one it does not work in, so no call opens in a repository
+ * the agent did not mean. A pull
  * request in an extra repository opens on the one token minted for the
  * agent's set, against the branch that repository's checkout was cloned at
  * unless it names another base, and its head is written on that
@@ -107,11 +107,9 @@ const openPullRequestInputSchema = Schema.Struct({
       Schema.isMaxLength(PULL_REQUEST_BOUNDS.MAX_BRANCH_CHARS),
     ),
   ),
-  repository: Schema.optionalKey(
-    describeWire(
-      githubRepositoryFullNameSchema,
-      "The repository to open it in, as owner/name, where you work in several; leave it out where you work in one.",
-    ),
+  repository: describeWire(
+    githubRepositoryFullNameSchema,
+    "The repository to open it in, as owner/name: your own, which your own values in your instructions name, or another you work in beside it.",
   ),
 });
 
@@ -140,7 +138,6 @@ export const OPEN_PULL_REQUEST_TOOL = {
 
 /** Why a call opened nothing, in the words the model reads. */
 const PULL_REQUEST_REFUSAL = {
-  UNREADABLE: `Not opened: the call needs head, title, and body, the title at most ${PULL_REQUEST_BOUNDS.MAX_TITLE_CHARS} characters.`,
   UNAVAILABLE: "Not opened: GitHub could not be reached. The call may be made again.",
   RATE_LIMITED:
     "Not opened: GitHub is limiting how fast requests may come. Make the call again in a minute.",
@@ -148,13 +145,22 @@ const PULL_REQUEST_REFUSAL = {
     "Not opened: GitHub refused the developer's own GitHub token on this repository. Tell them.",
 } as const;
 
-/** Why a call naming no repository, or one the agent does not work in, opened nothing, listing those it works in. */
-function repositoryRefusal(repositories: readonly AgentRepositoryEntry[]): string {
-  const listed = repositories.map((each) => `\`${each.repository}\``).join(", ");
+/** The repositories the agent works in, as a refusal lists them. */
+function listedRepositories(repositories: readonly AgentRepositoryEntry[]): string {
+  return repositories.map((each) => `\`${each.repository}\``).join(", ");
+}
 
-  return repositories.length > 1
-    ? `Not opened: you work in several repositories, so name the one to open it in as repository: ${listed}.`
-    : `Not opened: you work in ${listed} alone; name it as repository, or leave repository out.`;
+/** Why a call missing a field, or naming one out of bounds, opened nothing, listing the repositories it may name. */
+function unreadableRefusal(repositories: readonly AgentRepositoryEntry[]): string {
+  return (
+    `Not opened: the call needs head, title, body, and repository, the title at most ${PULL_REQUEST_BOUNDS.MAX_TITLE_CHARS} characters ` +
+    `and repository one you work in: ${listedRepositories(repositories)}.`
+  );
+}
+
+/** Why a call naming a repository the agent does not work in opened nothing, listing those it works in. */
+function repositoryRefusal(repositories: readonly AgentRepositoryEntry[]): string {
+  return `Not opened: name the repository to open it in as repository, one you work in: ${listedRepositories(repositories)}.`;
 }
 
 /** Why a call opened nothing where the service could not reach GitHub or its store. */
@@ -426,23 +432,15 @@ const recordOpened = (
 
 /**
  * Which of the agent's repositories (`readAgentRepositories`) the call opens
- * its pull request in: its own, where it names none or names that one,
- * answered as undefined; one it works in beside it, where it names that one;
- * else why it opened nothing, listing them, where it works in several and
- * names none, or names one it does not work in.
+ * its pull request in: its own, where it names that one, answered as
+ * undefined; one it works in beside it, where it names that one; else why it
+ * opened nothing, listing them, where it names one it does not work in.
  */
 function chosenExtra(
-  named: string | undefined,
+  named: string,
   repositories: readonly AgentRepositoryEntry[],
 ): Result.Result<AgentRepositoryEntry | undefined, string> {
   const [own, ...extras] = repositories;
-
-  if (named === undefined) {
-    return extras.length === 0
-      ? Result.succeed(undefined)
-      : Result.fail(repositoryRefusal(repositories));
-  }
-
   const lowered = named.toLowerCase();
 
   if (own === undefined || own.repository.toLowerCase() === lowered)
@@ -464,12 +462,12 @@ export const openPullRequest = /* @__PURE__ */ Effect.fn("web/openPullRequest")(
   agent: WithRepository<Agent>,
   input: UnparsedWireValue,
 ): Effect.fn.Return<PullRequestToolResult, never, CheckoutServices | DatabaseServices> {
-  const read = readInput(input);
-
-  if (Result.isFailure(read)) return pullRequestRejected(PULL_REQUEST_REFUSAL.UNREADABLE);
   const repositories = yield* Effect.result(readAgentRepositories(target.userId, agent.id));
 
   if (Result.isFailure(repositories)) return pullRequestRejected(PULL_REQUEST_REFUSAL.UNAVAILABLE);
+  const read = readInput(input);
+
+  if (Result.isFailure(read)) return pullRequestRejected(unreadableRefusal(repositories.success));
   const chosen = chosenExtra(read.success.repository, repositories.success);
 
   if (Result.isFailure(chosen)) return pullRequestRejected(chosen.failure);

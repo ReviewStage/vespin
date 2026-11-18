@@ -54,6 +54,7 @@ const INPUT = {
   head: "luke/teammate-invitations",
   title: "Expire teammate invitations",
   body: "Invitations now expire after a week.",
+  repository: RELAY_FULL_NAME,
 };
 
 /** How GitHub answers an opening, by the bearer it came on. */
@@ -261,23 +262,20 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
             Effect.provide(githubReaching([besideDocs.installation], undefined, {}, script).layer),
           );
 
-        const unnamed = yield* call(INPUT);
-        const elsewhere = yield* call({ ...INPUT, repository: "acme/web" });
-        assert.deepEqual(
-          [unnamed, elsewhere],
-          [
-            {
-              status: ACTION_RESULT_STATUS.REJECTED,
-              reason:
-                "Not opened: you work in several repositories, so name the one to open it in as repository: `Acme/Relay`, `Acme/Docs`.",
-            },
-            {
-              status: ACTION_RESULT_STATUS.REJECTED,
-              reason:
-                "Not opened: you work in several repositories, so name the one to open it in as repository: `Acme/Relay`, `Acme/Docs`.",
-            },
-          ],
-        );
+        const { repository: _, ...unnamed } = INPUT;
+        const refusals = [yield* call(unnamed), yield* call({ ...INPUT, repository: "acme/web" })];
+        assert.deepEqual(refusals, [
+          {
+            status: ACTION_RESULT_STATUS.REJECTED,
+            reason:
+              "Not opened: the call needs head, title, body, and repository, the title at most 256 characters and repository one you work in: `Acme/Relay`, `Acme/Docs`.",
+          },
+          {
+            status: ACTION_RESULT_STATUS.REJECTED,
+            reason:
+              "Not opened: name the repository to open it in as repository, one you work in: `Acme/Relay`, `Acme/Docs`.",
+          },
+        ]);
         assert.equal(openings.length, 0, "GitHub hears of no refused call");
 
         const inDocs = yield* call({ ...INPUT, repository: "acme/docs" });
