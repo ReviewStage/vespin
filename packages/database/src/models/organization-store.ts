@@ -9,7 +9,9 @@
  * member's row deleted or given a role, the organization's name or logo
  * changed, and a workspace deleted as the adapter deletes one, its members
  * and invitations and then its row, in one transaction, every other row of
- * the workspace cascading with it.
+ * the workspace cascading with it. Note that a member's row leaves with the
+ * repositories they added to the workspace on their own token, because
+ * that token no longer acts for a workspace they left.
  *
  * Who may make each write, and what the plugin's hooks did around it, are
  * the caller's to hold (`packages/service/src/accounts/`); this module keeps
@@ -23,6 +25,7 @@ import { SqlSchema } from "effect/sql";
 import * as SqlClient from "effect/sql/SqlClient";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { invitation, member, organization } from "../schemas/auth.js";
+import { workspaceTokenRepository } from "../schemas/workspace-token-repository.js";
 
 export type OrganizationStoreEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
@@ -57,6 +60,21 @@ const updateName = SqlSchema.void({
     ),
 });
 
+const deleteTokenRepositoriesOf = SqlSchema.void({
+  Request: MemberKeySchema,
+  execute: ({ organizationId, userId }) =>
+    Database.use((db) =>
+      db
+        .delete(workspaceTokenRepository)
+        .where(
+          and(
+            eq(workspaceTokenRepository.organizationId, organizationId),
+            eq(workspaceTokenRepository.addedByUserId, userId),
+          ),
+        ),
+    ),
+});
+
 const updateLogo = SqlSchema.void({
   Request: Schema.Struct({ organizationId: Schema.String, logo: Schema.NullOr(Schema.String) }),
   execute: ({ organizationId, logo }) =>
@@ -85,12 +103,19 @@ const deleteOrganizationRow = SqlSchema.void({
     Database.use((db) => db.delete(organization).where(eq(organization.id, organizationId))),
 });
 
-/** The account's membership of the workspace ended, whether removed or leaving; nothing where it is not a member. */
+/** The account's membership of the workspace ended, whether removed or leaving, and the repositories it added on its own token with it; nothing where it is not a member. */
 export function removeWorkspaceMember(
   organizationId: string,
   userId: string,
 ): OrganizationStoreEffect<void> {
-  return deleteMember({ organizationId, userId });
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.andThen(
+        deleteTokenRepositoriesOf({ organizationId, userId }),
+        deleteMember({ organizationId, userId }),
+      ),
+    ),
+  );
 }
 
 /** The account given the role in the workspace; nothing where it is not a member. */

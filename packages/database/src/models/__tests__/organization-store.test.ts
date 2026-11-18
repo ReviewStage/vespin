@@ -15,11 +15,16 @@ import {
   setWorkspaceLogo,
   setWorkspaceMemberRole,
 } from "../organization-store.js";
+import {
+  addWorkspaceTokenRepository,
+  listWorkspaceTokenRepositories,
+} from "../workspace-token-repository-store.js";
 
 /**
  * The organization plugin's rows written by the service over a real
  * dialect: a member removed or given a role in one workspace alone, a
- * handover moving both roles, a name and a photo changed, and a delete
+ * removed member's repositories added on their own token leaving with
+ * them, a handover moving both roles, a name and a photo changed, and a delete
  * taking the workspace's row, members, and invitations, and no other
  * workspace's.
  *
@@ -80,7 +85,7 @@ const rowsOf = (organizationId: string) =>
 
 it.layer(getTestDB())("the organization plugin's rows", (it) => {
   it.effect(
-    "a member is removed from, or given a role in, the one workspace named, and a handover moves both roles",
+    "a member is removed from, or given a role in, the one workspace named, their token repositories leaving with them, and a handover moves both roles",
     () =>
       Effect.gen(function* () {
         const [ada, grace] = [yield* openAccount, yield* openAccount];
@@ -88,6 +93,9 @@ it.layer(getTestDB())("the organization plugin's rows", (it) => {
         const beta = yield* openWorkspace(ada);
         yield* joinWorkspace(acme, grace);
         yield* joinWorkspace(beta, grace);
+        yield* addWorkspaceTokenRepository(grace, acme, "grace/notes", new Date(1));
+        yield* addWorkspaceTokenRepository(grace, beta, "grace/notes", new Date(1));
+        yield* addWorkspaceTokenRepository(ada, beta, "ada/site", new Date(2));
 
         yield* setWorkspaceMemberRole(acme, grace, WORKSPACE_ROLE.ADMIN);
         yield* handOverWorkspace(acme, ada, grace);
@@ -104,6 +112,14 @@ it.layer(getTestDB())("the organization plugin's rows", (it) => {
           ]),
         );
         assert.deepEqual(yield* membersOf(beta), [{ userId: ada, role: WORKSPACE_ROLE.OWNER }]);
+        assert.deepEqual(
+          (yield* listWorkspaceTokenRepositories(ada, acme)).map((row) => row.repository),
+          ["grace/notes"],
+        );
+        assert.deepEqual(
+          (yield* listWorkspaceTokenRepositories(ada, beta)).map((row) => row.repository),
+          ["ada/site"],
+        );
       }),
   );
 
